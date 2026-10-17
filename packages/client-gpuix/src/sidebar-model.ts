@@ -1,8 +1,8 @@
 import type { ThreadItemStatus } from '@funny/gpuix-ui/sidebar';
 import type { Thread } from '@funny/shared';
 
-export const SIDEBAR_ACTIVITY_LIMIT = 6;
-export const SIDEBAR_PROJECT_THREAD_LIMIT = 5;
+const SIDEBAR_ACTIVITY_LIMIT = 6;
+const SIDEBAR_PROJECT_THREAD_LIMIT = 5;
 
 export function sidebarThreadStatus(status: Thread['status']): ThreadItemStatus {
   switch (status) {

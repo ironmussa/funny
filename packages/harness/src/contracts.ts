@@ -1,6 +1,5 @@
 import type { z, ZodTypeAny } from 'zod';
 
-import type { HarnessError } from './errors.js';
 import type { HarnessEvent, HarnessEventSink } from './events.js';
 import type { SandboxExecutionHandle, SandboxExecutionRequest, SandboxIntent } from './sandbox.js';
 
@@ -184,5 +183,3 @@ export interface CoreAgentProcessLike {
   kill(): Promise<void>;
   readonly exited: boolean;
 }
-
-export type HarnessRuntimeFailure = HarnessError;

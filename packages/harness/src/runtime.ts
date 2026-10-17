@@ -10,7 +10,6 @@ export type {
   HarnessCommandResult,
   HarnessRuntime,
   HarnessRuntimeCapabilities,
-  HarnessRuntimeFailure,
   HarnessToolExposure,
   ProcessSandboxAdapter,
 } from './contracts.js';

@@ -11,7 +11,6 @@
 
 import type { Client } from '@libsql/client';
 
-import type { LLMConfig } from './llm.js';
 import { llmComplete } from './llm.js';
 import { log } from './logger.js';
 import {
@@ -24,7 +23,7 @@ import {
   updateFact,
 } from './storage.js';
 import { cosineSimilarity } from './temporal.js';
-import type { EmbeddingProvider, MemoryFact } from './types.js';
+import type { EmbeddingProvider, LLMConfig, MemoryFact } from './types.js';
 
 // ─── Result ────────────────────────────────────────────
 

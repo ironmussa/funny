@@ -115,7 +115,7 @@ const selectSelectedThreadId = (state: { selectedThreadId: string | null }) =>
 
 const NativeButton = Button;
 
-export const SIDEBAR_RETAINED_WINDOW_SIZE = 48;
+const SIDEBAR_RETAINED_WINDOW_SIZE = 48;
 const SIDEBAR_WINDOW_BUFFER = 12;
 export const THREAD_RETAINED_WINDOW_SIZE = 48;
 const THREAD_WINDOW_BUFFER = 12;

@@ -164,15 +164,6 @@ export interface OperatorProfile {
   notes?: string[];
 }
 
-export interface TeamRoster {
-  members: Array<{
-    operator: string;
-    role: string;
-    expertise: string[];
-    modules: string[];
-  }>;
-}
-
 // ─── GC config ─────────────────────────────────────────
 
 export interface GCConfig {

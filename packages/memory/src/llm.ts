@@ -10,19 +10,7 @@ import { runAsync } from '@funny/shared/async';
  */
 
 import { log } from './logger.js';
-
-// ─── Config ────────────────────────────────────────────
-
-export interface LLMConfig {
-  /** API base URL including /v1 (e.g. http://localhost:8317/v1) */
-  baseUrl: string;
-  /** Model ID (default: claude-haiku) */
-  model?: string;
-  /** Optional API key */
-  apiKey?: string;
-  /** Request timeout in ms (default: 60000) */
-  timeoutMs?: number;
-}
+import type { LLMConfig } from './types.js';
 
 // ─── Response types ────────────────────────────────────
 

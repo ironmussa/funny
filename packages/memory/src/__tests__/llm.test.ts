@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-import { llmComplete, llmHealthCheck, type LLMConfig } from '../llm.js';
+import { llmComplete, llmHealthCheck } from '../llm.js';
+import type { LLMConfig } from '../types.js';
 
 describe('llm', () => {
   const baseConfig: LLMConfig = {

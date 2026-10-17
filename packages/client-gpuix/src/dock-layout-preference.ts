@@ -7,7 +7,7 @@ import {
 
 export const NATIVE_DOCK_LAYOUT_STORAGE_KEY = 'dock-layout';
 
-export const NATIVE_DOCK_PANELS: readonly DockPanelConstraints[] = [
+const NATIVE_DOCK_PANELS: readonly DockPanelConstraints[] = [
   { id: 'navigation', defaultSize: 300, minSize: 260, maxSize: 600 },
   { id: 'conversation', minSize: 400 },
   { id: 'files', defaultSize: 300, minSize: 240, maxSize: 600 },

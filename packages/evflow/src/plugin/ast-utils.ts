@@ -1,7 +1,7 @@
 import type ts from 'typescript/lib/tsserverlibrary';
 
 /** Method names we look for on an EventModel instance */
-export const EVFLOW_METHODS = [
+const EVFLOW_METHODS = [
   'command',
   'event',
   'readModel',
@@ -14,7 +14,6 @@ export const EVFLOW_METHODS = [
   'sequence',
   'slice',
 ] as const;
-export type EvflowMethod = (typeof EVFLOW_METHODS)[number];
 
 /** Map method names to element kinds */
 export const METHOD_TO_KIND: Record<string, string> = {

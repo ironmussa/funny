@@ -14,7 +14,7 @@ import type { EmbeddingProvider } from './types.js';
 
 // ─── Ollama provider ────────────────────────────────────
 
-export class OllamaEmbeddingProvider implements EmbeddingProvider {
+class OllamaEmbeddingProvider implements EmbeddingProvider {
   constructor(
     private readonly model: string = 'nomic-embed-text',
     private readonly baseUrl: string = 'http://localhost:11434',
@@ -63,7 +63,7 @@ export class OllamaEmbeddingProvider implements EmbeddingProvider {
 
 // ─── OpenAI provider ────────────────────────────────────
 
-export class OpenAIEmbeddingProvider implements EmbeddingProvider {
+class OpenAIEmbeddingProvider implements EmbeddingProvider {
   constructor(
     private readonly apiKey: string,
     private readonly model: string = 'text-embedding-3-small',
@@ -121,7 +121,7 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
 
 // ─── Null provider (no-op fallback) ─────────────────────
 
-export class NullEmbeddingProvider implements EmbeddingProvider {
+class NullEmbeddingProvider implements EmbeddingProvider {
   async embed(_text: string): Promise<Float32Array> {
     return new Float32Array(0);
   }

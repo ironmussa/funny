@@ -5,5 +5,3 @@ export const StartSessionSchema = z.object({
   prompt: z.string().min(1).optional(),
   project_path: z.string().min(1).optional(),
 });
-
-export type StartSessionInput = z.infer<typeof StartSessionSchema>;

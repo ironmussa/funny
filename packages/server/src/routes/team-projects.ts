@@ -10,6 +10,8 @@ import { eq, and } from 'drizzle-orm';
 import { Hono } from 'hono';
 
 import { db, schema, dbGet, dbRun } from '../db/index.js';
+import { audit } from '../lib/audit.js';
+import { authorizer } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
 import { requirePermission } from '../middleware/auth.js';
 
@@ -47,6 +49,21 @@ teamProjectRoutes.post('/', requirePermission('project', 'create'), async (c) =>
   );
 
   if (!project) return c.json({ error: 'Project not found' }, 404);
+
+  // Security C3: linking shares the project with every member of the org (they
+  // inherit `viewer` through `team_projects`). Only someone who already manages
+  // the project — the owner or a project admin — may make that decision; the
+  // org-level `project:create` permission alone is not enough.
+  const userId = c.get('userId') as string;
+  if (!(await authorizer.authorize(userId, 'project', body.projectId, 'manage'))) {
+    audit({
+      action: 'authz.cross_tenant_refused',
+      actorId: userId,
+      detail: 'team-projects link refused — caller cannot manage the project',
+      meta: { projectId: body.projectId, orgId },
+    });
+    return c.json({ error: 'Only the project owner or a project admin can share it' }, 403);
+  }
 
   // Check if association already exists
   const existing = await dbGet(

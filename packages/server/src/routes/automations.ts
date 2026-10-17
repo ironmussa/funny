@@ -34,19 +34,24 @@ const createAutomationSchema = z.object({
   permissionMode: z.string().optional(),
 });
 
+// Security C1: strict allow-list. Ownership (`userId`), identity (`id`) and
+// server-managed bookkeeping (`lastRunAt`, `nextRunAt`, `source`, timestamps)
+// are never writable from the request body — unknown keys are rejected.
 const updateAutomationSchema = z
   .object({
-    projectId: z.string().optional(),
-    name: z.string().optional(),
-    prompt: z.string().optional(),
-    schedule: z.string().optional(),
-    model: z.string().optional(),
-    permissionMode: z.string().optional(),
+    projectId: z.string().min(1).optional(),
+    name: z.string().min(1).optional(),
+    prompt: z.string().min(1).optional(),
+    schedule: z.string().min(1).optional(),
+    provider: z.string().min(1).optional(),
+    model: z.string().min(1).optional(),
+    mode: z.string().min(1).optional(),
+    permissionMode: z.string().min(1).optional(),
     enabled: z.boolean().optional(),
-    maxRunHistory: z.number().optional(),
+    maxRunHistory: z.number().int().positive().optional(),
     baseBranch: z.string().nullable().optional(),
   })
-  .passthrough();
+  .strict();
 
 const updateRunTriageSchema = z.object({
   triageStatus: z.string().min(1, 'triageStatus is required'),
@@ -182,18 +187,22 @@ automationRoutes.patch('/:id', async (c) => {
 
   const parsed = await parseJsonBody(c, updateAutomationSchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const body = parsed.value;
-  const updates: Record<string, any> = {};
+  const { enabled, ...fields } = parsed.value;
 
-  for (const [key, value] of Object.entries(body)) {
-    if (value !== undefined) {
-      if (key === 'enabled') {
-        updates.enabled = value ? 1 : 0;
-      } else {
-        updates[key] = value;
-      }
-    }
+  // Moving the automation to another project re-runs the same gate as POST:
+  // the run acts on that project with the owner's identity.
+  if (
+    fields.projectId !== undefined &&
+    fields.projectId !== rows[0].projectId &&
+    !(await authorizer.authorize(userId, 'project', fields.projectId, 'view'))
+  ) {
+    return c.json({ error: 'Project not found' }, 404);
   }
+
+  const updates: Record<string, unknown> = Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined),
+  );
+  if (enabled !== undefined) updates.enabled = enabled ? 1 : 0;
 
   if (Object.keys(updates).length > 0) {
     updates.updatedAt = new Date().toISOString();

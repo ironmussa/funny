@@ -14,9 +14,11 @@
 
 import { randomBytes } from 'crypto';
 
+import { orgRoleToRole, roleAtLeast, type OrgRole, type Role } from '@funny/shared/auth/roles';
 import { eq, and, sql } from 'drizzle-orm';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
 
 import { db } from '../db/index.js';
 import { inviteLinks } from '../db/schema.js';
@@ -24,7 +26,9 @@ import { audit } from '../lib/audit.js';
 import { auth } from '../lib/auth.js';
 import { log } from '../lib/logger.js';
 import { validatePasswordStrength } from '../lib/password-policy.js';
+import { authorizer } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
+import { parseJsonBody } from '../validation/request.js';
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -322,19 +326,63 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
 
 export const inviteLinkRoutes = new Hono<ServerEnv>();
 
-// POST / — create an invite link for the active org
-inviteLinkRoutes.post('/', async (c) => {
+/** Org roles an invite link may grant — further capped at the creator's own role. */
+const INVITE_LINK_ROLES = [
+  'viewer',
+  'member',
+  'admin',
+  'owner',
+] as const satisfies readonly OrgRole[];
+
+const createInviteLinkSchema = z
+  .object({
+    role: z.enum(INVITE_LINK_ROLES).optional(),
+    expiresInDays: z.number().positive().optional(),
+    maxUses: z.number().int().positive().optional(),
+  })
+  .strict();
+
+/**
+ * Security M4: invite links are bearer credentials for joining the org, so
+ * creating, listing (exposes tokens) and revoking them takes the same bar as
+ * Better Auth's `invitation:create` — org `admin` or `owner`. Resolved from the
+ * `member` table for the active org, so it never passes on a missing org
+ * (unlike `requirePermission`, which skips when there is no active org).
+ */
+async function resolveInviteManager(
+  c: Context<ServerEnv>,
+): Promise<{ orgId: string; userId: string; role: Role } | Response> {
   const orgId = c.get('organizationId');
   if (!orgId) return c.json({ error: 'No active organization' }, 400);
+  const userId = c.get('userId') as string;
+  const role = await authorizer.effectiveRole(userId, 'org', orgId);
+  if (role === null || !roleAtLeast(role, 'admin')) {
+    audit({
+      action: 'authz.cross_tenant_refused',
+      actorId: userId,
+      detail: 'invite-link management refused — caller is not an org admin',
+      meta: { orgId, role, path: new URL(c.req.url).pathname, method: c.req.method },
+    });
+    return c.json({ error: 'Forbidden: invitation:create permission required' }, 403);
+  }
+  return { orgId, userId, role };
+}
 
-  const userId = c.get('userId');
-  const body = await c.req.json<{
-    role?: string;
-    expiresInDays?: number;
-    maxUses?: number;
-  }>();
+// POST / — create an invite link for the active org
+inviteLinkRoutes.post('/', async (c) => {
+  const manager = await resolveInviteManager(c);
+  if (manager instanceof Response) return manager;
+  const { orgId, userId } = manager;
 
-  const role = body.role || 'member';
+  const parsed = await parseJsonBody(c, createInviteLinkSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const body = parsed.value;
+
+  const role = body.role ?? 'member';
+  // A link can never grant more than the creator holds.
+  if (!roleAtLeast(manager.role, orgRoleToRole(role))) {
+    return c.json({ error: `Cannot create an invite link with role "${role}"` }, 403);
+  }
   const token = randomBytes(24).toString('base64url');
   const now = new Date().toISOString();
   const expiresAt = body.expiresInDays
@@ -377,8 +425,9 @@ inviteLinkRoutes.post('/', async (c) => {
 
 // GET / — list invite links for the active org
 inviteLinkRoutes.get('/', async (c) => {
-  const orgId = c.get('organizationId');
-  if (!orgId) return c.json({ error: 'No active organization' }, 400);
+  const manager = await resolveInviteManager(c);
+  if (manager instanceof Response) return manager;
+  const { orgId } = manager;
 
   const links = await db
     .select()
@@ -400,10 +449,9 @@ inviteLinkRoutes.get('/', async (c) => {
 
 // DELETE /:id — revoke an invite link
 inviteLinkRoutes.delete('/:id', async (c) => {
-  const orgId = c.get('organizationId');
-  if (!orgId) return c.json({ error: 'No active organization' }, 400);
-
-  const userId = c.get('userId');
+  const manager = await resolveInviteManager(c);
+  if (manager instanceof Response) return manager;
+  const { orgId, userId } = manager;
   const linkId = c.req.param('id');
   await db
     .update(inviteLinks)

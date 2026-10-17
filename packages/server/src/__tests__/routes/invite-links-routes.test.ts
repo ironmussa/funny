@@ -23,7 +23,7 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedInviteLink } from '../helpers/test-db.js';
+import { seedInviteLink, seedOrgMember } from '../helpers/test-db.js';
 
 const VALID_PASSWORD = 'Password1234';
 const orgId = 'org-acme';
@@ -41,6 +41,8 @@ describe('Invite Links Routes (Integration)', () => {
     authMockState.hasPermission = true;
     resetAuthMockUsers();
     await resetAuthMiddlewareCache();
+    // Managing invite links requires an org admin/owner membership (M4).
+    seedOrgMember(t.db as any, { organizationId: orgId, userId: adminId, role: 'admin' });
   });
 
   async function getUseCount(linkId: string): Promise<string | undefined> {
@@ -226,6 +228,56 @@ describe('Invite Links Routes (Integration)', () => {
       expect(body.useCount).toBe(0);
       expect(body.token).toMatch(/^[A-Za-z0-9_-]+$/);
       expect(body.expiresAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    });
+  });
+
+  describe('invite-link management authorization (M4)', () => {
+    const viewerId = 'invite-viewer';
+    const memberId = 'invite-member';
+
+    beforeEach(() => {
+      seedOrgMember(t.db as any, { organizationId: orgId, userId: viewerId, role: 'viewer' });
+      seedOrgMember(t.db as any, { organizationId: orgId, userId: memberId, role: 'member' });
+    });
+
+    test('an org viewer cannot create an invite link', async () => {
+      const res = await t
+        .requestAs(viewerId, 'user', { orgId })
+        .post('/api/invite-links', { role: 'viewer' });
+      expect(res.status).toBe(403);
+    });
+
+    test('a plain org member cannot create, list or revoke invite links', async () => {
+      seedInviteLink(t.db as any, { id: 'existing', organizationId: orgId, token: 'tok' });
+      const as = t.requestAs(memberId, 'user', { orgId });
+
+      expect((await as.post('/api/invite-links', { role: 'member' })).status).toBe(403);
+      expect((await as.get('/api/invite-links')).status).toBe(403);
+      expect((await as.delete('/api/invite-links/existing')).status).toBe(403);
+
+      const list = await t.requestAs(adminId, 'user', { orgId }).get('/api/invite-links');
+      expect((await list.json()).map((l: { id: string }) => l.id)).toEqual(['existing']);
+    });
+
+    test('a non-member of the active org is refused', async () => {
+      const res = await t
+        .requestAs('stranger', 'user', { orgId })
+        .post('/api/invite-links', { role: 'member' });
+      expect(res.status).toBe(403);
+    });
+
+    test('an admin cannot mint a link above their own role', async () => {
+      const res = await t
+        .requestAs(adminId, 'user', { orgId })
+        .post('/api/invite-links', { role: 'owner' });
+      expect(res.status).toBe(403);
+    });
+
+    test('an unknown role string is rejected', async () => {
+      const res = await t
+        .requestAs(adminId, 'user', { orgId })
+        .post('/api/invite-links', { role: 'superuser' });
+      expect(res.status).toBe(400);
     });
   });
 

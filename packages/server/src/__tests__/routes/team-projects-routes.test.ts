@@ -20,7 +20,7 @@ mock.module('../../lib/auth.js', () => ({
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedTeamProject } from '../helpers/test-db.js';
+import { seedProject, seedProjectMember, seedTeamProject } from '../helpers/test-db.js';
 
 describe('Team Projects Routes (Integration)', () => {
   let t: TestApp;
@@ -99,6 +99,38 @@ describe('Team Projects Routes (Integration)', () => {
 
       const list = await t.requestAs(userId, 'user', { orgId }).get('/api/team-projects');
       expect((await list.json())[0].id).toBe('p1');
+    });
+
+    test('returns 403 when linking a project the caller does not own (C3)', async () => {
+      seedProject(t.db as any, { id: 'victim-p', userId: 'victim', path: '/victim' });
+
+      const res = await t
+        .requestAs(userId, 'user', { orgId })
+        .post('/api/team-projects', { projectId: 'victim-p' });
+      expect(res.status).toBe(403);
+
+      const list = await t.requestAs(userId, 'user', { orgId }).get('/api/team-projects');
+      expect(await list.json()).toEqual([]);
+    });
+
+    test('returns 403 when the caller is only a plain collaborator on the project', async () => {
+      seedProject(t.db as any, { id: 'p-shared', userId: 'victim', path: '/shared' });
+      seedProjectMember(t.db as any, { projectId: 'p-shared', userId, role: 'member' });
+
+      const res = await t
+        .requestAs(userId, 'user', { orgId })
+        .post('/api/team-projects', { projectId: 'p-shared' });
+      expect(res.status).toBe(403);
+    });
+
+    test('a project admin collaborator may link the project', async () => {
+      seedProject(t.db as any, { id: 'p-admin', userId: 'someone', path: '/admin' });
+      seedProjectMember(t.db as any, { projectId: 'p-admin', userId, role: 'admin' });
+
+      const res = await t
+        .requestAs(userId, 'user', { orgId })
+        .post('/api/team-projects', { projectId: 'p-admin' });
+      expect(res.status).toBe(201);
     });
 
     test('returns 409 when project is already associated', async () => {

@@ -78,5 +78,22 @@ describe('project-manager service', () => {
       expect(await pm.isProjectMember('p1', 'user-3')).toBe(true);
       expect(await pm.getMemberLocalPath('p1', 'user-3')).toBe('/home/user/p3');
     });
+
+    test('lazy-created row is viewer — setting a path never escalates the role', async () => {
+      await pm.setMemberLocalPath('p1', 'user-3', '/home/user/p3');
+
+      const members = await pm.listMembers('p1');
+      expect(members.find((m) => m.userId === 'user-3')?.role).toBe('viewer');
+    });
+
+    test('updating the path keeps an existing role unchanged', async () => {
+      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'user-4', role: 'viewer' });
+
+      await pm.setMemberLocalPath('p1', 'user-4', '/home/user/p4');
+
+      const members = await pm.listMembers('p1');
+      expect(members.find((m) => m.userId === 'user-4')?.role).toBe('viewer');
+      expect(await pm.getMemberLocalPath('p1', 'user-4')).toBe('/home/user/p4');
+    });
   });
 });

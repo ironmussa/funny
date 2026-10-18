@@ -124,6 +124,48 @@ describe('Automations Routes (Integration)', () => {
       expect(body.enabled).toBe(0);
     });
 
+    test('rejects a body that tries to reassign ownership (userId) — C1', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t
+        .requestAs('user-1')
+        .patch('/api/automations/a1', { name: 'Mine', userId: 'user-2' });
+      expect(res.status).toBe(400);
+
+      // Ownership is unchanged: still the owner's, still invisible to user-2.
+      expect((await t.requestAs('user-1').get('/api/automations/a1')).status).toBe(200);
+      expect((await t.requestAs('user-2').get('/api/automations/a1')).status).toBe(404);
+    });
+
+    test('rejects server-managed fields (id, nextRunAt, source) — C1', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+
+      for (const body of [{ id: 'a-new' }, { nextRunAt: '2000-01-01' }, { source: 'api' }]) {
+        const res = await t.requestAs('user-1').patch('/api/automations/a1', body);
+        expect(res.status).toBe(400);
+      }
+      expect((await t.requestAs('user-1').get('/api/automations/a1')).status).toBe(200);
+    });
+
+    test('refuses moving the automation to a project the caller cannot access — C1', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').patch('/api/automations/a1', { projectId: 'p2' });
+      expect(res.status).toBe(404);
+
+      const after = await t.requestAs('user-1').get('/api/automations/a1');
+      expect((await after.json()).projectId).toBe('p1');
+    });
+
+    test('allows moving the automation to another project the caller owns', async () => {
+      seedProject(t.db as any, { id: 'p1b', userId: 'user-1', path: '/tmp/p1b' });
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').patch('/api/automations/a1', { projectId: 'p1b' });
+      expect(res.status).toBe(200);
+      expect((await res.json()).projectId).toBe('p1b');
+    });
+
     test('returns 404 for cross-tenant patch', async () => {
       seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
 

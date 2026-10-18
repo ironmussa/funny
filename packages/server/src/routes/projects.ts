@@ -85,6 +85,12 @@ projectRoutes.get('/', async (c) => {
   const orgId = isPersonal ? null : queryOrgId || sessionOrgId;
 
   if (orgId) {
+    // Security M2: `?orgId=` is caller-supplied — only list an org's projects
+    // to its members (the session's active org is re-checked too, so a stale
+    // active org after removal does not keep exposing the listing).
+    if ((await authorizer.effectiveRole(userId, 'org', orgId)) === null) {
+      return c.json({ error: 'Not a member of this organization' }, 403);
+    }
     const teamProjects = await projectRepo.listProjectsByOrg(orgId);
     const organizationName = c.get('organizationName') || undefined;
     const sharedProjects = teamProjects.filter((p) => p.userId !== userId);
@@ -201,12 +207,32 @@ projectRoutes.post('/', async (c) => {
   return c.json(result.value, 201);
 });
 
+/**
+ * Fields that steer the OWNER's agents on the OWNER's runner (working directory,
+ * system prompt, default permission mode). A project admin can manage shared
+ * settings but must not be able to redirect or loosen the owner's agents.
+ */
+const OWNER_ONLY_PROJECT_FIELDS = ['path', 'systemPrompt', 'defaultPermissionMode'] as const;
+
 /** PATCH /api/projects/:id — update a project */
 projectRoutes.patch('/:id', requireProjectAccess('manage'), async (c) => {
   const id = c.req.param('id');
+  const userId = c.get('userId') as string;
 
   const parsed = await parseJsonBody(c, updateProjectBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+
+  // Security M6: owner-only fields.
+  const ownerOnly = OWNER_ONLY_PROJECT_FIELDS.filter((f) => parsed.value[f] !== undefined);
+  if (ownerOnly.length > 0 && (await authorizer.effectiveRole(userId, 'project', id)) !== 'owner') {
+    return c.json(
+      {
+        error: `Only the project owner can change: ${ownerOnly.join(', ')}`,
+        code: 'project-owner-only-field',
+      },
+      403,
+    );
+  }
   const result = await projectRepo.updateProject(id, parsed.value);
 
   if (result.isErr()) {

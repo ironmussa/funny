@@ -149,10 +149,10 @@ A **scratch thread** is a lightweight, projectless thread for "bounce ideas / tr
 
 ## Authentication
 
-The app always uses [Better Auth](https://www.better-auth.com/) with cookie-based sessions. On first startup, a default admin account is created automatically:
+The app always uses [Better Auth](https://www.better-auth.com/) with cookie-based sessions. On first startup (only when no users exist yet), a default admin account is created automatically by `packages/server/src/lib/auth.ts`:
 
-- **Username:** `admin`
-- **Password:** `admin`
+- **Username:** `admin` (override with `ADMIN_USERNAME`; email defaults to `admin@local.host`, override with `ADMIN_EMAIL`)
+- **Password:** there is no static default. If `ADMIN_PASSWORD` is set and passes the password policy (`lib/password-policy.ts`: at least 10 characters with uppercase, lowercase and a digit), it is used. Otherwise a random password is generated and written to `<data dir>/admin-password.txt` (`~/.funny/admin-password.txt` by default, mode `0600`); only the file path is printed to stderr, never the password. A weak `ADMIN_PASSWORD` is rejected (audited) and falls back to a generated one. Delete the file after first login and change the password.
 
 The admin can create additional users from **Settings > Users** in the UI. Self-registration is disabled.
 

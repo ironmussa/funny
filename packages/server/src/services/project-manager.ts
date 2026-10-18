@@ -117,8 +117,13 @@ export async function isProjectMember(projectId: string, userId: string): Promis
 
 /**
  * Set the local path for a member on a project.
- * Uses upsert logic: creates the project_members record if it doesn't exist (lazy creation),
- * or updates the localPath if it does.
+ *
+ * An existing project_members row only has its `localPath` updated — the role
+ * is never touched. When no row exists (an org member opening a project shared
+ * with their org, whose access is the inherited `viewer`), the row is created
+ * with role `viewer` so recording a working directory can never escalate the
+ * caller beyond the access they already had (Security C3 — this used to mint a
+ * `member` row, i.e. `contributor`, for anyone with read access).
  */
 export async function setMemberLocalPath(
   projectId: string,
@@ -143,7 +148,7 @@ export async function setMemberLocalPath(
     await db.insert(projectMembers).values({
       projectId,
       userId,
-      role: 'member',
+      role: 'viewer',
       localPath,
       joinedAt: now,
     });

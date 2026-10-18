@@ -267,6 +267,23 @@ describe('project collaborators', () => {
       expect(res.status).toBe(403);
     });
 
+    test('setting a local path keeps the org member at viewer — no escalation (C3)', async () => {
+      seedOrgMember(t.db as any, { organizationId: 'org-1', userId: 'olga', role: 'member' });
+
+      const res = await t
+        .requestAs('olga')
+        .post('/api/projects/p1/local-path', { localPath: '/home/olga/p1' });
+      expect(res.status).toBe(200);
+
+      const { authorizer } = await import('../../lib/server-authorizer.js');
+      expect(await authorizer.effectiveRole('olga', 'project', 'p1')).toBe('viewer');
+      // Still cannot do anything that needs more than read access.
+      const cmd = await t
+        .requestAs('olga')
+        .post('/api/projects/p1/commands', { label: 'dev', command: 'bun dev' });
+      expect(cmd.status).toBe(403);
+    });
+
     test('a member of another org gets 404', async () => {
       seedOrgMember(t.db as any, { organizationId: 'org-2', userId: 'daniel' });
       expect((await t.requestAs('daniel').get('/api/projects/p1/commands')).status).toBe(404);

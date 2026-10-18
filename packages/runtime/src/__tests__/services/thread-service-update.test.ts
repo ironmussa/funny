@@ -57,7 +57,8 @@ vi.mock('../../services/agent-runner-control.js', () => ({
   cleanupThreadState: mocks.cleanupThreadState,
 }));
 
-vi.mock('@funny/core/git', () => ({
+vi.mock('@funny/core/git', async (importOriginal) => ({
+  isSafeGitRefArg: (await importOriginal<typeof import('@funny/core/git')>()).isSafeGitRefArg,
   createWorktree: mocks.createWorktree,
   findWorktreeForBranch: mocks.findWorktreeForBranch,
   removeWorktree: mocks.removeWorktree,

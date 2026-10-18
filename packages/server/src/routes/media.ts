@@ -14,12 +14,18 @@
  * The runner STILL runs the same per-user project-scope check on redemption, so
  * this endpoint does not need to re-validate the path against the filesystem —
  * it only confirms the user is authenticated and binds {path, userId, expiry}.
+ *
+ * Per-runner keys (security H1): the URL is signed with the TARGET runner's
+ * media key (`deriveRunnerMediaKey(deriveRunnerForwardingKey(root, runnerId))`),
+ * so a URL minted for runner A does not verify on runner B, and no runner ever
+ * needs the deployment-wide `RUNNER_AUTH_SECRET` to verify.
  */
 
 import {
   MEDIA_URL_DEFAULT_TTL_MS,
   buildSignedMediaUrl,
 } from '@funny/shared/auth/media-url-signature';
+import { deriveRunnerForwardingKey, deriveRunnerMediaKey } from '@funny/shared/auth/runner-keys';
 import { Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
@@ -60,7 +66,7 @@ mediaRoutes.post('/sign', async (c) => {
   const url = buildSignedMediaUrl(
     publicMediaUrl,
     { path, userId, expires: Date.now() + MEDIA_URL_DEFAULT_TTL_MS },
-    secret,
+    deriveRunnerMediaKey(deriveRunnerForwardingKey(secret, resolved.runnerId)),
   );
 
   log.info('Signed direct-media URL issued', {

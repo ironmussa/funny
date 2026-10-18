@@ -29,6 +29,7 @@ import {
   extractElementInfo,
   pickStyles,
 } from '@funny/shared/dom/extract';
+import { buildChildEnv } from '@funny/shared/lib/child-env';
 
 import { log } from '../lib/logger.js';
 import { metric, startSpan } from '../lib/telemetry.js';
@@ -241,6 +242,7 @@ class BrowserSessionManager {
 
     const proc = spawn(binary, chromeArgs, {
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: buildChildEnv(),
       detached: false,
     });
 

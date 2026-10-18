@@ -14,22 +14,20 @@
  * same millisecond don't collide), and the replay cache keyed on the nonce
  * rejects exact replays inside the skew window.
  *
- * Trust boundary — IMPORTANT. The HMAC key IS the shared secret
- * (`RUNNER_AUTH_SECRET`). So the signature only proves the sender HOLDS the
- * secret; it does NOT distinguish the server from a runner. Anyone holding
- * the secret (the server, OR any runner provisioned with it) can mint a valid
- * signature for an arbitrary `userId`. The signature therefore protects only
- * against callers WITHOUT the secret (e.g. a browser hitting a runner's HTTP
- * port directly). In a multi-runner deployment where every runner shares one
- * `RUNNER_AUTH_SECRET`, a malicious/compromised runner can impersonate any
- * user against another runner's directly-reachable HTTP port. Mitigations:
- * keep runner HTTP ports private and isolate runners from each other at the
- * network layer.
+ * Trust boundary — per-runner keys (security H1). The HMAC key is NOT the
+ * deployment-wide `RUNNER_AUTH_SECRET`; it is the TARGET runner's own
+ * forwarding key `K_r = HMAC(RUNNER_AUTH_SECRET, "funny-runner-forward:v1:" +
+ * runnerId)` (see `./runner-keys.ts`). The server derives `K_r` per request;
+ * each runner only holds its own. So the signature proves the sender holds
+ * `K_r` — the server, or runner `r` itself (which can at most impersonate users
+ * against ITSELF). A runner cannot mint a valid signature for any other runner,
+ * and `K_r` never authenticates to the server (the server's `X-Runner-Auth`
+ * branch compares against the root secret only).
  *
- * This is an ACCEPTED limitation of the shared-secret model, not a pending fix
- * — see the "Cross-runner trust boundary" note in INSTALL.md. A hard
- * cryptographic boundary would require per-runner signing keys (e.g. the
- * per-runner bearer token) or asymmetric signing; funny does not implement it.
+ * Residual: an operator-provisioned runner configured with the root secret
+ * (classic `RUNNER_AUTH_SECRET` env) can still derive every runner's key. Give
+ * the root secret only to runners you fully trust; prefer invite-token or
+ * device-link enrollment, which deliver only `K_r`. See INSTALL.md.
  */
 
 import { createHmac, randomUUID, timingSafeEqual } from 'crypto';

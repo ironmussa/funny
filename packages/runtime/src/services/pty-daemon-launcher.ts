@@ -12,6 +12,7 @@ import { existsSync, readFileSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
 
 import { sleep, waitFor } from '@funny/shared/async';
+import { buildChildEnv } from '@funny/shared/lib/child-env';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
@@ -167,10 +168,7 @@ async function doEnsureDaemonRunning(): Promise<boolean> {
     // Redirect daemon stderr to a log file so startup errors are visible
     const proc = Bun.spawn(['bun', 'run', DAEMON_ENTRY], {
       stdio: ['ignore', 'ignore', Bun.file(LOG_FILE)],
-      env: {
-        ...process.env,
-        FUNNY_DATA_DIR: DATA_DIR,
-      },
+      env: buildChildEnv({ FUNNY_DATA_DIR: DATA_DIR }),
     });
 
     // Detach — don't keep server alive waiting for daemon

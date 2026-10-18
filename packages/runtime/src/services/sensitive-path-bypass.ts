@@ -15,6 +15,8 @@ import { spawn } from 'node:child_process';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 
+import { buildChildEnv } from '@funny/shared/lib/child-env';
+
 import { log } from '../lib/logger.js';
 
 interface BypassQuery {
@@ -137,7 +139,7 @@ async function runBash(command: string, cwd: string | undefined): Promise<Bypass
   return await new Promise<BypassResult>((resolve) => {
     const child = spawn('bash', ['-lc', command], {
       cwd: cwd && cwd.length > 0 ? cwd : process.cwd(),
-      env: process.env,
+      env: buildChildEnv(),
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const stdoutChunks: Buffer[] = [];

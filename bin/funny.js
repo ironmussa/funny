@@ -90,7 +90,7 @@ const { values } = parseArgs({
     secret: {
       type: 'string',
       description:
-        'Shared RUNNER_AUTH_SECRET (must match the central server) for classic runner registration',
+        "The central server's root RUNNER_AUTH_SECRET (operator-trusted runners only; not needed with device-link or --token)",
     },
     local: {
       type: 'boolean',
@@ -139,7 +139,7 @@ Options:
   -h, --host <host>          Server host (default: 127.0.0.1)
   --team <url>               Connect this machine as a runner to a central server
   --token <token>            Runner invite token for team server registration
-  --secret <secret>          Shared RUNNER_AUTH_SECRET — classic runner registration only
+  --secret <secret>          Server root RUNNER_AUTH_SECRET — trusted runners only (optional)
   --local                    Start standalone; cannot be combined with --team
   --no-open                  Do not open the browser after local startup
   --help                     Show this help message
@@ -154,10 +154,14 @@ Runner Mode:
   "Link a runner", enter the code, and approve. The runner then receives its
   credentials automatically — no secret or token to copy.
 
-  Classic flow (advanced): you may instead supply the shared secret + an invite
-  token yourself. RUNNER_AUTH_SECRET must match the central server's value:
+  Invite token: register with a single-use token from Settings ▸ Profile. The
+  server delivers this runner its own per-runner key — no secret needed:
 
-    funny --team http://192.168.1.10:3002 --secret <secret> --token utkn_xxx
+    funny --team http://192.168.1.10:3002 --token utkn_xxx
+
+  Classic flow (operator-trusted runners only): pass the server's root
+  RUNNER_AUTH_SECRET. It must match the central server's value and lets the
+  holder derive every runner's key, so do not hand it to untrusted machines.
 
   To change the server, pass --team again with a new URL.
 
@@ -165,7 +169,7 @@ Examples:
   funny                          # Start all-in-one local app on http://127.0.0.1:3001
   funny --port 8080              # Start on custom port
   funny --team http://central:3002  # Connect via device-link enrollment (recommended)
-  funny --team http://central:3002 --secret abc123 --token utkn_xxx  # Classic flow
+  funny --team http://central:3002 --token utkn_xxx  # Invite-token flow
 
 Authentication:
   Always uses Better Auth with login page. Default admin account (admin/admin)
@@ -175,7 +179,7 @@ Environment Variables:
   PORT                       Server port
   HOST                       Server host
   RUNNER_INVITE_TOKEN        Runner invite token for --team classic flow
-  RUNNER_AUTH_SECRET         Shared secret for --team classic flow
+  RUNNER_AUTH_SECRET         Server root secret for --team classic flow (trusted runners)
   CORS_ORIGIN                Custom CORS origins (comma-separated)
   DB_MODE                    Database mode: sqlite (default) or postgres
   DATABASE_URL               PostgreSQL connection URL (when DB_MODE=postgres)
@@ -216,37 +220,25 @@ if (isTeamMode) {
 }
 
 // ── Resolve RUNNER_AUTH_SECRET ─────────────────────────────
-// RUNNER_AUTH_SECRET is a SHARED secret: in team mode the runner and the
-// central server must hold the SAME value (it's the HMAC key for the
-// forwarded-identity signature). Minting a random one here would silently
-// break every proxied request — browse, agents, git — with a 500 from the
-// server's auth middleware, because the signature would never validate.
+// RUNNER_AUTH_SECRET is the central server's ROOT secret. A runner given it
+// (classic --secret) derives its own per-runner forwarding key from it, so it
+// must match the server's value — minting a random one here would silently
+// break every proxied request because the derived key would never match.
 //
-// Default path is now device-link enrollment: with no secret and no invite
-// token, the runtime shows a code and obtains its secret from the server after
-// the operator approves it in the UI — so we must NOT abort or mint a random
-// secret there. Only standalone all-in-one mode generates its own, and the
-// classic --token flow still requires an explicit secret.
+// Runners do not need it (security H1): device-link enrollment and invite-token
+// registration both deliver the runner's own per-runner key. So in team mode we
+// never abort or mint a secret. Only standalone all-in-one mode generates one.
 
 if (!process.env.RUNNER_AUTH_SECRET) {
-  if (process.env.TEAM_SERVER_URL) {
-    // Classic invite-token flow still needs the shared secret for proxied
-    // requests, so flag a token supplied without a secret.
-    if (process.env.RUNNER_INVITE_TOKEN) {
-      console.error(
-        '\n[funny] ERROR: RUNNER_AUTH_SECRET is required when using --token in team mode.\n\n' +
-          'This runner connects to a central server and must use the SAME\n' +
-          'RUNNER_AUTH_SECRET as that server. Ask your admin for it, then pass\n' +
-          'it via flag or env:\n\n' +
-          `  funny --team ${process.env.TEAM_SERVER_URL} --secret <secret-from-admin> --token <invite-token>\n\n` +
-          'Or drop --token and use device-link enrollment (no secret needed):\n\n' +
-          `  funny --team ${process.env.TEAM_SERVER_URL}\n`,
-      );
-      process.exit(1);
-    }
-    // Device-link path: no token, no secret. Leave the secret unset — the
-    // runtime resumes persisted credentials if present, otherwise enrolls
-    // (printing a code to approve in the funny UI) and receives its secret then.
+  if (process.env.TEAM_SERVER_URL && process.env.RUNNER_INVITE_TOKEN) {
+    // Invite-token path: registration returns this runner's own key.
+    console.log(
+      '[funny] Registering with an invite token — the server delivers this runner its own key.',
+    );
+  } else if (process.env.TEAM_SERVER_URL) {
+    // Device-link path: no token, no secret. The runtime resumes persisted
+    // credentials if present, otherwise enrolls (printing a code to approve in
+    // the funny UI) and receives its per-runner key then.
     console.log(
       '[funny] No runner secret/token set — connecting via device-link enrollment.\n' +
         '        A code will be printed below; approve it in Settings ▸ Runners.',

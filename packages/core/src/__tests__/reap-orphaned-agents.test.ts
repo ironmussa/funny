@@ -27,6 +27,30 @@ describe('buildAgentChildEnv', () => {
   test('defaults the owner to the current process pid', () => {
     expect(buildAgentChildEnv()[AGENT_OWNER_ENV]).toBe(String(process.pid));
   });
+
+  test('never passes runner/server secrets to the agent (security M8)', () => {
+    const names = [
+      'RUNNER_AUTH_SECRET',
+      'RUNNER_INVITE_TOKEN',
+      'SCHEDULER_AUTH_SECRET',
+      'INGEST_WEBHOOK_SECRET',
+      'DATABASE_URL',
+      'BETTER_AUTH_SECRET',
+    ];
+    const saved = Object.fromEntries(names.map((n) => [n, process.env[n]]));
+    for (const n of names) process.env[n] = `secret-${n}`;
+    try {
+      const env = buildAgentChildEnv({ ANTHROPIC_API_KEY: 'provider-key' }, 1);
+      for (const n of names) expect(env[n]).toBeUndefined();
+      expect(env.ANTHROPIC_API_KEY).toBe('provider-key');
+      expect(env.PATH).toBe(process.env.PATH);
+    } finally {
+      for (const n of names) {
+        if (saved[n] === undefined) delete process.env[n];
+        else process.env[n] = saved[n];
+      }
+    }
+  });
 });
 
 describe('parseOwnerFromEnviron', () => {

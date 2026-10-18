@@ -32,6 +32,7 @@ import { GATEABLE_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
+import { clearRunnerKeys, configureRunnerKeys } from '../lib/runner-keys.js';
 import { resolveProviderAvailability } from '../utils/provider-detection.js';
 import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
 import { GrpcTeamTransport, type GrpcTerminalCommand } from './grpc-team-transport.js';
@@ -391,6 +392,19 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
   const session = await state.enrollment.bootstrap();
   state.runnerId = session.runnerId;
   state.runnerToken = session.token;
+  // Per-runner forwarding key + owner (security H1/H7). Kept in module state,
+  // never in process.env (M8).
+  configureRunnerKeys({
+    runnerId: session.runnerId,
+    forwardingKey: session.forwardingKey,
+    ownerUserId: session.ownerUserId,
+  });
+  if (!session.forwardingKey) {
+    log.warn('Runner has no forwarding key — proxied requests will be rejected', {
+      namespace: 'runner',
+      runnerId: session.runnerId,
+    });
+  }
 
   await connectGrpc(grpcEndpoint);
   await assignLocalProjects();
@@ -420,6 +434,7 @@ export function shutdownTeamMode(): void {
   state.runnerToken = null;
   state.enrollment?.clearSession();
   state.enrollment = null;
+  clearRunnerKeys();
 
   log.info('Runner mode shutdown', { namespace: 'runner' });
 }

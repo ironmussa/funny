@@ -15,6 +15,7 @@
  *     restore headless terminal state on startup, re-spawn PTY)
  */
 
+import { buildChildEnv, scrubSensitiveEnv } from '@funny/shared/lib/child-env';
 import { SerializeAddon } from '@xterm/addon-serialize';
 import { Terminal as HeadlessTerminal } from '@xterm/headless';
 import type { Subprocess } from 'bun';
@@ -97,7 +98,6 @@ export class HeadlessPtyBackend implements PtyBackend {
     if (!this.callbacks) return;
 
     const { exe, args } = resolveShell(shell);
-    const ptyEnv = { ...process.env, ...env };
     const effectiveCols = cols || 80;
     const effectiveRows = rows || 24;
 
@@ -117,7 +117,9 @@ export class HeadlessPtyBackend implements PtyBackend {
 
       const proc = Bun.spawn([exe, ...args], {
         cwd: cwd || process.cwd(),
-        env: ptyEnv as Record<string, string>,
+        // pty-manager already builds `env` from buildChildEnv(); scrub again as
+        // defense in depth so no caller can reintroduce runner secrets (M8).
+        env: scrubSensitiveEnv(env) as Record<string, string>,
         terminal: {
           cols: effectiveCols,
           rows: effectiveRows,
@@ -368,7 +370,7 @@ export class HeadlessPtyBackend implements PtyBackend {
       // Spawn a fresh PTY process
       const proc = Bun.spawn([exe, ...args], {
         cwd: cwd || process.cwd(),
-        env: process.env as Record<string, string>,
+        env: buildChildEnv() as Record<string, string>,
         terminal: {
           cols: effectiveCols,
           rows: effectiveRows,

@@ -1,4 +1,3 @@
-import { spawn } from 'child_process';
 /**
  * Manifest-driven ACP model discovery. Spawns a provider's ACP CLI just long
  * enough to call `initialize` + `newSession`, reads the advertised
@@ -18,6 +17,7 @@ import { runAsync } from '@funny/shared/async';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
 import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
 
+import { spawnAcpProbe } from './acp-probe-spawn.js';
 import { killProcessTree } from './base-process.js';
 
 export interface DiscoveredAcpModel {
@@ -72,26 +72,10 @@ export async function discoverAcpModels(
   const { ClientSideConnection, ndJsonStream } = SDK;
   const { command, args } = resolveSpawnCommand(manifest.spawn);
 
-  const child = spawn(command, args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    cwd,
-    env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
-    shell: process.platform === 'win32',
-    // Match long-lived ACP agents: isolate a POSIX process group so cleanup
-    // can terminate any MCP grandchildren the discovery CLI starts.
-    detached: process.platform !== 'win32',
-  });
-
-  child.stderr?.on('data', () => {});
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      child.once('spawn', resolve);
-      child.once('error', reject);
-    });
-  } catch (err) {
-    return { ok: false, reason: 'spawn_failed', message: (err as Error)?.message };
-  }
+  // Isolated process group so cleanup can terminate MCP grandchildren.
+  const spawned = await spawnAcpProbe(command, args, cwd, opts.env);
+  if (spawned.isErr()) return { ok: false, reason: 'spawn_failed', message: spawned.error };
+  const child = spawned.value;
 
   const cleanup = () => {
     killProcessTree(child);

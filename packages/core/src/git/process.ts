@@ -4,6 +4,7 @@ import { delimiter } from 'node:path';
 
 import { createConcurrencyLimiter, runAsync, waitFor } from '@funny/shared/async';
 import { processError, internal, type DomainError } from '@funny/shared/errors';
+import { buildChildEnv, scrubSensitiveEnv } from '@funny/shared/lib/child-env';
 import { ResultAsync } from 'neverthrow';
 
 /** Whether we're running under Bun (vs Node/vitest) */
@@ -14,14 +15,16 @@ const POSIX_SYSTEM_PATHS = ['/usr/local/bin', '/usr/bin', '/bin'];
 /**
  * Service managers and desktop launchers can provide a reduced PATH that omits
  * the system Git installation. Keep the inherited environment, but make the
- * standard POSIX command locations available to every Git subprocess.
+ * standard POSIX command locations available to every Git subprocess. The
+ * inherited env is scrubbed of funny infrastructure secrets (security M8): git
+ * hooks and shell commands run repository-controlled code.
  */
 export function buildProcessEnv(
   overrides?: Record<string, string>,
   inherited: NodeJS.ProcessEnv = process.env,
   platform: NodeJS.Platform = process.platform,
 ): Record<string, string | undefined> {
-  const env = { ...inherited, ...overrides };
+  const env = { ...scrubSensitiveEnv(inherited), ...overrides };
   if (platform !== 'win32') {
     const paths = (env.PATH ?? '').split(delimiter).filter(Boolean);
     for (const systemPath of POSIX_SYSTEM_PATHS) {
@@ -35,9 +38,9 @@ export function buildProcessEnv(
 function processEnvFor(
   command: string,
   overrides?: Record<string, string>,
-): Record<string, string | undefined> | undefined {
+): Record<string, string | undefined> {
   if (command === 'git') return buildProcessEnv(overrides);
-  return overrides ? { ...process.env, ...overrides } : undefined;
+  return buildChildEnv(overrides);
 }
 
 export interface ProcessResult {

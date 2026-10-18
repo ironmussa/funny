@@ -33,6 +33,8 @@
  */
 import { readdirSync, readFileSync } from 'node:fs';
 
+import { buildChildEnv } from '@funny/shared/lib/child-env';
+
 /** Env var stamped on every funny-spawned agent, holding the owner runtime PID. */
 export const AGENT_OWNER_ENV = 'FUNNY_AGENT_OWNER';
 
@@ -40,12 +42,14 @@ export const AGENT_OWNER_ENV = 'FUNNY_AGENT_OWNER';
  * Build the child `env` for an agent spawn, stamped with the owner runtime PID
  * so a later instance can identify and reap it if this runtime dies. Use this at
  * EVERY agent spawn site instead of an ad-hoc `{ ...process.env, ...extra }`.
+ * The parent env is scrubbed of funny infrastructure secrets first (security
+ * M8) — a prompt-injected agent must not be able to read them.
  */
 export function buildAgentChildEnv(
   extra?: NodeJS.ProcessEnv,
   ownerPid: number = process.pid,
 ): NodeJS.ProcessEnv {
-  return { ...process.env, ...extra, [AGENT_OWNER_ENV]: String(ownerPid) };
+  return { ...buildChildEnv(extra), [AGENT_OWNER_ENV]: String(ownerPid) } as NodeJS.ProcessEnv;
 }
 
 export interface ProcEntry {

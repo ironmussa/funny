@@ -10,6 +10,7 @@ import type {
   TestActionBoundingBox,
 } from '@funny/shared';
 import { runAsync } from '@funny/shared/async';
+import { buildChildEnv } from '@funny/shared/lib/child-env';
 
 import { log } from '../lib/logger.js';
 import { wsBroker } from './ws-broker.js';
@@ -246,6 +247,7 @@ export async function discoverTestsInFile(
     });
     const proc = Bun.spawn(['npx', 'playwright', 'test', safeFile, '--list', '--reporter=json'], {
       cwd: projectPath,
+      env: buildChildEnv(),
       stdout: 'pipe',
       stderr: 'pipe',
     });
@@ -530,7 +532,7 @@ export default defineConfig({
       ],
       {
         cwd: projectPath,
-        env: { ...process.env },
+        env: buildChildEnv(),
         stdout: 'pipe',
         stderr: 'pipe',
       },

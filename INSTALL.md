@@ -247,15 +247,17 @@ funny --team http://<central-server-ip>:3002
 └──────────────────────────────────────────────────────────┘
 ```
 
-In the funny UI you're already logged into, open **Settings ▸ Runners**, click **"Link a runner"**, enter the code, confirm the runner's hostname/OS/IP, and approve. The runner then receives its credentials automatically (a per-runner bearer token plus the shared forwarded-identity secret) and persists them to `~/.funny`. On a local machine, every team run should pass `funny --team http://<central-server-ip>:3002`; a plain `funny` still starts standalone. This works the same on a PaaS (Railway/Fly/Render) where you can't easily run a command beyond the container's start command, and behind NAT — only outbound access to the server is required.
+In the funny UI you're already logged into, open **Settings ▸ Runners**, click **"Link a runner"**, enter the code, confirm the runner's hostname/OS/IP, and approve. The runner then receives its credentials automatically (a per-runner bearer token plus its **own per-runner forwarding key** — never the server's `RUNNER_AUTH_SECRET`) and persists them to `~/.funny`. On a local machine, every team run should pass `funny --team http://<central-server-ip>:3002`; a plain `funny` still starts standalone. This works the same on a PaaS (Railway/Fly/Render) where you can't easily run a command beyond the container's start command, and behind NAT — only outbound access to the server is required.
 
-**Classic flow (advanced).** You may instead supply the shared secret and a single-use invite token yourself — see the `--secret` / `--token` options below. `RUNNER_AUTH_SECRET` must match the central server's value, or every proxied request fails.
+**Invite-token flow.** A single-use invite token (`--token`, generated in Settings ▸ Profile) also works without any shared secret: registration returns the runner's own forwarding key.
+
+**Classic flow (advanced, operator-trusted runners only).** You may instead give the runner the server's root `RUNNER_AUTH_SECRET` (`--secret`). `RUNNER_AUTH_SECRET` must match the central server's value, or every proxied request fails. The root secret lets its holder derive **every** runner's key and authenticate to the server as a runner, so only use it for runners you operate and fully trust.
 
 **Deploy a runner on Railway (one-click).** Device-link supplies credentials after approval. The runner's service config lives in [`railway.runner.json`](./railway.runner.json) (start command `sh scripts/start-railway-runner.sh`, no HTTP healthcheck). See [Railway deployment and runner tools](openwiki/operations/railway.md) for service layout, persistent storage, and npm/OpenSpec installation. To offer the in-app **"Deploy on Railway"** button (Settings ▸ Runners), publish that config once as a Railway template:
 
 1. In Railway's template composer, add a service sourced from this GitHub repo and set its Railway Config File to `/railway.runner.json`.
 2. **Attach a persistent volume** to the service mounted at `/data`, and set these variables:
-   - `TEAM_SERVER_URL` = the central server URL (the only auth-related variable — device-link delivers the bearer + forwarded-identity secret on approval, so **no** `RUNNER_AUTH_SECRET` or invite token).
+   - `TEAM_SERVER_URL` = the central server URL (the only auth-related variable — device-link delivers the bearer + the runner's own forwarding key on approval, so **no** `RUNNER_AUTH_SECRET` or invite token).
    - `FUNNY_DATA_DIR` = `/data` (so credentials, worktrees, and scratch state live on the volume).
    - `WS_TUNNEL_ONLY` = `true`.
    - `RUNNER_GRPC_ENDPOINT` = the server's dedicated gRPC endpoint, with TLS settings matching the ingress. Enable the server listener and configure connectivity as described in the [gRPC runbook](openwiki/operations/runner-grpc-runbook.md); the browser HTTP URL alone is insufficient.
@@ -281,19 +283,20 @@ After the box boots it prints its device-link code (visible in Railway's deploy 
 > - Run each runner inside a dedicated unprivileged OS user, VM, or container with only the repos it needs mounted in.
 > - Use `FUNNY_DATA_DIR` to keep runner state out of the invoking user's main `$HOME`.
 > - Firewall the runner so it can only reach the central server and the git remotes it legitimately needs.
-> - Rotate `RUNNER_AUTH_SECRET` if a central server is ever decommissioned — any party with that secret and network reach to a runner inherits the same trust level.
+> - Rotate `RUNNER_AUTH_SECRET` if a central server is ever decommissioned — any party with that secret and network reach to a runner inherits the same trust level. (Rotating it changes every per-runner key: device-link / invite-token runners must be re-linked.)
 
-> ⚠️ **Cross-runner trust boundary (accepted limitation).**
+> ⚠️ **Cross-runner trust boundary — per-runner keys.**
 >
-> All runners attached to one central server share a single `RUNNER_AUTH_SECRET`. That secret is also the HMAC key used to sign the forwarded-identity headers (`X-Forwarded-User` + `X-Forwarded-Signature`) that a runner trusts on its HTTP port. Because the signing key **is** the shared secret, the signature only proves the caller _holds the secret_ — it does **not** distinguish the central server from another runner. Therefore any party holding `RUNNER_AUTH_SECRET` (the server, or any other runner, or anyone who can read a runner's `.env`) that also has **network reach to a runner's HTTP port** can forge a valid identity for any user — including admin — and drive that runner's API as them.
+> `RUNNER_AUTH_SECRET` is the central server's **root** secret. Runners do not share it. Each runner gets its own forwarding key, derived on the server as `K_r = HMAC-SHA256(RUNNER_AUTH_SECRET, "funny-runner-forward:v1:" + runnerId)`. The server uses `K_r` for everything it sends to runner `r`: the `X-Runner-Auth` header, the forwarded-identity HMAC (`X-Forwarded-User` + `X-Forwarded-Signature`), and (through a key derived from `K_r`) the signed direct-media URLs (`/api/files/raw-signed`). Runner `r` verifies with its own `K_r` only.
 >
-> This is an **accepted limitation** of the shared-secret model, mitigated rather than eliminated:
+> - **Device-link and invite-token runners** receive only `K_r`, never the root secret. A compromised runner can therefore forge requests only against **itself**. It cannot impersonate users on another runner, and it cannot authenticate to the server as a runner: the server's `X-Runner-Auth` check compares against the root secret only. Enrolled runners authenticate to the server with their bearer token.
+> - **Classic runners configured with `RUNNER_AUTH_SECRET`** derive `K_r` themselves once they know their `runnerId`. They still hold the root secret, so they can derive every runner's key. Give the root secret only to runners you operate and fully trust.
+> - **Direct HTTP session cookies** are accepted only from the runner's **owner** (the user it is registered or approved under). Any other user is refused (`403`), and cookie auth fails closed while the owner is unknown. This includes runners that resumed from credentials stored before owner tracking existed; they regain cookie auth on their next registration. Steer-share sharees reach the owner's runner only through the server's signed delegation.
+> - **Child processes** (agents, PTY shells, commands, git hooks) never inherit `RUNNER_AUTH_SECRET`, `RUNNER_INVITE_TOKEN`, `DATABASE_URL`, `BETTER_AUTH_SECRET`, `SCHEDULER_AUTH_SECRET`, or the other funny infrastructure secrets. The runner keeps its key in memory and in the `0600` credentials file, not in its environment.
 >
-> - **Keep runners on the WS tunnel.** When `WS_TUNNEL_ONLY` is set, all traffic arrives over the outbound Socket.IO tunnel and the runner's direct HTTP port is **bound to `127.0.0.1` by default** (overridable with `RUNNER_HOST`), so no other machine can reach it. Only set `RUNNER_HTTP_URL` / bind to `0.0.0.0` when you genuinely need the direct-HTTP fallback and the network is trusted.
-> - **Use a strong secret.** The server refuses to boot with a `RUNNER_AUTH_SECRET` shorter than 32 chars; generate it with `openssl rand -hex 32`.
-> - **Isolate runners from each other** at the network layer (per-runner VLAN/firewall) if you run multiple tenants' runners on one server, so one runner cannot reach another's port even if the secret leaks.
+> **Upgrade note.** Server and runners must be upgraded together. A new server signs with `K_r`, while an old runner verifies with the root secret, so proxied requests fail with `401` until both sides run the new version. Runners enrolled through device-link before this change stored the root secret in `runner-credentials.json`. On first start, the new runner converts it to `K_r` and rewrites the file without it. Rotate `RUNNER_AUTH_SECRET` afterwards if any such runner might be untrusted, and then re-link the device-link runners.
 >
-> If you need a hard cryptographic boundary between tenants' runners (so a compromised runner _cannot_ impersonate users on another runner even with port reachability), the shared-secret model is insufficient — that requires per-runner or asymmetric signing keys, which funny does not currently implement.
+> Defense in depth still applies. Keep runners on the WS tunnel (`WS_TUNNEL_ONLY`, which binds the direct HTTP port to `127.0.0.1` by default, overridable with `RUNNER_HOST`). Use a strong root secret of at least 32 chars (`openssl rand -hex 32`).
 
 The runner machine needs:
 
@@ -314,11 +317,12 @@ funny --team http://<central-server-ip>:3002
 
 # ── Runner authentication ─────────────────────────────────
 # Device-link (recommended): leave this UNSET. The runner obtains its
-# credentials (bearer + forwarded-identity secret) when you approve its code
-# in Settings ▸ Runners, and persists them to ~/.funny.
+# credentials (bearer + its own per-runner forwarding key) when you approve its
+# code in Settings ▸ Runners, and persists them to ~/.funny.
 #
-# Classic flow only: set this to match the RUNNER_AUTH_SECRET on the central
-# server (and pair it with a --token invite). A mismatch fails every proxied
+# Classic flow only (operator-trusted runners): set this to match the
+# RUNNER_AUTH_SECRET on the central server. It is the server's ROOT secret —
+# the runner derives its own key from it. A mismatch fails every proxied
 # request.
 # RUNNER_AUTH_SECRET=<same-secret-as-central-server>
 
@@ -371,14 +375,14 @@ VITE_SERVER_URL=http://<central-server-ip>:3002
 When a runner starts with `--team <url>`, it automatically registers with the central server:
 
 1. POSTs to `/api/runners/register` with `{ name, hostname, os }` and the `RUNNER_AUTH_SECRET` as an `X-Runner-Auth` header.
-2. The server responds with a `{ runnerId, token }`. The runner stores this token and uses it for all subsequent requests (heartbeat every 15 s, task polling every 5 s, WebSocket auth).
+2. The server responds with `{ runnerId, token, ownerUserId, forwardingKey }`. `forwardingKey` is this runner's own key (see the per-runner key note above), and `ownerUserId` is the only user allowed to use direct-HTTP cookie auth. The runner stores this token and uses it for all subsequent requests (heartbeat every 15 s, task polling every 5 s, WebSocket auth).
 3. The runner connects to `/ws/runner` on the central server, authenticates with its token, and begins receiving task dispatches.
 
 Runners are **machine-scoped, not user-scoped** — a runner represents a machine. After registration, an admin associates each runner with the appropriate user's projects from the central server admin panel (`/admin/runners`).
 
 #### Multi-runner setup — one runner per user/machine
 
-All runners share the same `RUNNER_AUTH_SECRET` but each gets its own unique `runnerId` on registration. The admin then maps each runner to its owner.
+In this classic setup, each runner is given the server's root `RUNNER_AUTH_SECRET` and gets its own unique `runnerId` (and therefore its own derived forwarding key) on registration. The admin then maps each runner to its owner. Because the root secret can derive every runner's key, prefer device-link or invite tokens for machines you do not fully control.
 
 ```bash
 # Developer A — their workstation

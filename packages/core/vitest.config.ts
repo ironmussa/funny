@@ -18,6 +18,7 @@ export default defineConfig({
       '@funny/shared/funny-config-schema': path.join(shared, 'funny-config-schema.ts'),
       '@funny/shared/runner-protocol': path.join(shared, 'runner-protocol.ts'),
       '@funny/shared/thread-machine': path.join(shared, 'thread-machine.ts'),
+      '@funny/shared/lib/child-env': path.join(shared, 'lib/child-env.ts'),
       '@funny/shared/async': path.join(shared, 'async.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),
       '@funny/core/agents': path.resolve(__dirname, 'src/agents/index.ts'),

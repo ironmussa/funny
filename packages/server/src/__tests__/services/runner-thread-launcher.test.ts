@@ -13,6 +13,7 @@ import {
   TIMESTAMP_HEADER,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import type { RunnerPresencePort, RunnerRequest } from '../../services/runner-ports.js';
 import { startThreadOnRunner } from '../../services/runner-thread-launcher.js';
@@ -88,7 +89,7 @@ describe('startThreadOnRunner', () => {
     expect(h['X-Forwarded-User']).toBe('alice');
     const valid = verifyForwardedIdentity(
       { userId: 'alice', role: 'user', orgId: null, orgName: null },
-      'test-secret',
+      deriveRunnerForwardingKey('test-secret', sent[0].runnerId),
       h[SIGNATURE_HEADER],
       h[TIMESTAMP_HEADER],
       h[NONCE_HEADER],

@@ -7,8 +7,13 @@
  * about, with a fresh nonce immediately before the physical send. Any
  * identity header the caller supplied is dropped first, so a spoofed
  * `X-Forwarded-*` header can never reach a runner. The wire format is the
- * one `@funny/shared/auth/forwarded-identity` defines; the runtime verifies it
- * exactly as before.
+ * one `@funny/shared/auth/forwarded-identity` defines.
+ *
+ * Per-runner keys (security H1): both `X-Runner-Auth` and the HMAC are keyed
+ * with the TARGET runner's own forwarding key `K_r`
+ * (`deriveRunnerForwardingKey(RUNNER_AUTH_SECRET, runnerId)`), never the root
+ * secret. A runner therefore only ever sees its own key, and a request signed
+ * for runner A does not verify on runner B.
  */
 
 import {
@@ -20,6 +25,7 @@ import {
   signForwardedIdentity,
   type ForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import type { Named } from '@gdp-ts/core';
 
 import type {
@@ -41,7 +47,7 @@ export interface UnsignedRunnerRequest {
   deadlineAt?: number;
 }
 
-/** Exactly the headers `signForwardedIdentity` produces, plus the shared secret. */
+/** Exactly the headers `signForwardedIdentity` produces, plus `X-Runner-Auth`. */
 const IDENTITY_HEADERS = new Set(
   [
     'X-Forwarded-User',
@@ -68,19 +74,22 @@ function stripIdentityHeaders(headers: Record<string, string> = {}): Record<stri
 
 // Read at call time: tests set it per file, and the server may import this
 // module before the environment is final.
-function runnerAuthSecret(): string {
+function runnerForwardingKey(runnerId: string): string {
   const secret = process.env.RUNNER_AUTH_SECRET;
   if (!secret) throw new Error('RUNNER_AUTH_SECRET is not set');
-  return secret;
+  return deriveRunnerForwardingKey(secret, runnerId);
 }
 
 function identityOf(actor: RunnerActor): ForwardedIdentity {
   return { userId: actor.userId, role: actor.role, orgId: actor.orgId, orgName: actor.orgName };
 }
 
-/** Identity headers for `identity`, signed with a fresh nonce. */
-function signedIdentityHeaders(identity: ForwardedIdentity): Record<string, string> {
-  const secret = runnerAuthSecret();
+/** Identity headers for `identity` to `runnerId`, signed with a fresh nonce. */
+function signedIdentityHeaders(
+  runnerId: string,
+  identity: ForwardedIdentity,
+): Record<string, string> {
+  const secret = runnerForwardingKey(runnerId);
   const headers: Record<string, string> = {
     'X-Runner-Auth': secret,
     'X-Forwarded-User': identity.userId,
@@ -112,7 +121,11 @@ class AuthorizedRunnerRequests {
     _proof: RunnerFor<A, R>,
     request: UnsignedRunnerRequest,
   ): Promise<RunnerResponse> {
-    return this.dispatch(runner.value, request, signedIdentityHeaders(identityOf(actor.value)));
+    return this.dispatch(
+      runner.value,
+      request,
+      signedIdentityHeaders(runner.value, identityOf(actor.value)),
+    );
   }
 
   /**
@@ -134,7 +147,7 @@ class AuthorizedRunnerRequests {
     return this.dispatch(
       runner.value,
       request,
-      signedIdentityHeaders({
+      signedIdentityHeaders(runner.value, {
         ...identityOf(delegation.sharee),
         shareLevel: 'steer',
         onBehalfOfThread: delegation.threadId,
@@ -144,14 +157,16 @@ class AuthorizedRunnerRequests {
 
   /**
    * The unauthenticated MCP OAuth callback, sent only to the runner its
-   * server-signed state is bound to: shared secret, no identity.
+   * server-signed state is bound to: the runner's own key, no identity.
    */
   sendOAuthCallback<R>(
     runner: Named<R, RunnerId>,
     _proof: OAuthCallbackRunner<R>,
     request: UnsignedRunnerRequest,
   ): Promise<RunnerResponse> {
-    return this.dispatch(runner.value, request, { 'X-Runner-Auth': runnerAuthSecret() });
+    return this.dispatch(runner.value, request, {
+      'X-Runner-Auth': runnerForwardingKey(runner.value),
+    });
   }
 
   private dispatch(

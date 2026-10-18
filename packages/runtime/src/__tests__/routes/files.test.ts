@@ -12,9 +12,11 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { signMediaClaim } from '@funny/shared/auth/media-url-signature';
+import { deriveRunnerForwardingKey, deriveRunnerMediaKey } from '@funny/shared/auth/runner-keys';
 import { Hono } from 'hono';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 
+import { clearRunnerKeys, configureRunnerKeys } from '../../lib/runner-keys.js';
 import filesRoutes, { rawFileHeaders } from '../../routes/files.js';
 import type { RuntimeServiceProvider } from '../../services/service-provider.js';
 import { setServices, resetServices } from '../../services/service-registry.js';
@@ -57,6 +59,7 @@ describe('files routes — symlink escape protection', () => {
 
   afterAll(() => {
     resetServices();
+    clearRunnerKeys();
     try {
       rmSync(join(projectDir, '..'), { recursive: true, force: true });
     } catch {
@@ -311,6 +314,8 @@ describe('files routes — git blame', () => {
 
 describe('files routes — /raw-signed (transport C)', () => {
   const SECRET = 'runtime-test-secret';
+  // Security H1: media URLs are signed with THIS runner's derived media key.
+  const MEDIA_KEY = deriveRunnerMediaKey(deriveRunnerForwardingKey(SECRET, 'runner-files'));
   const USER = 'user-1';
   let projectDir: string;
   let outsideDir: string;
@@ -327,14 +332,14 @@ describe('files routes — /raw-signed (transport C)', () => {
     const expires = opts.expires ?? Date.now() + 60_000;
     const sig = signMediaClaim(
       { path: opts.signPath ?? opts.urlPath, userId: USER, expires },
-      opts.secret ?? SECRET,
+      opts.secret ?? MEDIA_KEY,
     );
     const p = new URLSearchParams({ path: opts.urlPath, u: USER, exp: String(expires), sig });
     return `/raw-signed?${p.toString()}`;
   }
 
   beforeAll(() => {
-    process.env.RUNNER_AUTH_SECRET = SECRET;
+    configureRunnerKeys({ runnerId: 'runner-files', rootSecret: SECRET });
     const tmp = mkdtempSync(join(tmpdir(), 'funny-rawsigned-test-'));
     projectDir = join(tmp, 'project');
     outsideDir = join(tmp, 'outside');
@@ -391,6 +396,17 @@ describe('files routes — /raw-signed (transport C)', () => {
 
   test('401 for a signature minted with the wrong secret', async () => {
     const res = await app.request(signedUrl({ urlPath: insideFile, secret: 'wrong-secret' }));
+    expect(res.status).toBe(401);
+  });
+
+  test('401 for a URL signed with the root secret instead of the runner key (H1)', async () => {
+    const res = await app.request(signedUrl({ urlPath: insideFile, secret: SECRET }));
+    expect(res.status).toBe(401);
+  });
+
+  test("401 for a URL signed with ANOTHER runner's media key (H1)", async () => {
+    const other = deriveRunnerMediaKey(deriveRunnerForwardingKey(SECRET, 'runner-other'));
+    const res = await app.request(signedUrl({ urlPath: insideFile, secret: other }));
     expect(res.status).toBe(401);
   });
 

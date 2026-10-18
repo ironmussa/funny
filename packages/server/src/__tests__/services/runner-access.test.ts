@@ -16,6 +16,7 @@ import {
   __resetForwardedIdentityNonceCacheForTests,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import * as auditModule from '../../lib/audit.js';
 import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
@@ -321,6 +322,8 @@ describe('AuthorizedRunnerRequests — identity signing', () => {
   function captured(port: FakeRunnerRequestPort): RunnerRequest {
     return port.requests.at(-1)!.request;
   }
+  /** Security H1: everything sent to runner `id` is keyed with its own K_r. */
+  const keyOf = (id: string) => deriveRunnerForwardingKey('test-secret', id);
 
   test('signs the named actor and the request verifies for exactly that identity', async () => {
     runner('r-alice', 'alice');
@@ -339,18 +342,32 @@ describe('AuthorizedRunnerRequests — identity signing', () => {
     expect(headers['X-Forwarded-User']).toBe('alice');
     expect(headers['X-Forwarded-Role']).toBe('admin');
     expect(headers['X-Forwarded-Org']).toBe('org-1');
-    expect(headers['X-Runner-Auth']).toBe('test-secret');
+    expect(headers['X-Runner-Auth']).toBe(keyOf('r-alice'));
     expect(headers['content-type']).toBe('application/json');
-    const verify = (userId: string) =>
+    const verify = (userId: string, key = keyOf('r-alice')) =>
       verifyForwardedIdentity(
         { userId, role: 'admin', orgId: 'org-1', orgName: null },
-        'test-secret',
+        key,
         headers[SIGNATURE_HEADER],
         headers[TIMESTAMP_HEADER],
         headers[NONCE_HEADER],
       );
     expect(verify('bob')).toBe(false);
+    // Neither the root secret nor another runner's key verifies it (H1).
+    expect(verify('alice', 'test-secret')).toBe(false);
+    expect(verify('alice', keyOf('r-other'))).toBe(false);
     expect(verify('alice')).toBe(true);
+  });
+
+  test('never sends the root RUNNER_AUTH_SECRET to a runner (security H1)', async () => {
+    runner('r-alice', 'alice');
+    const port = new FakeRunnerRequestPort();
+    port.available.add('r-alice');
+    await withRunnerFor(alice, { kind: 'projectless' }, presence, (a, r, proof) =>
+      authorizedRunnerRequests(port).send(a, r, proof, { method: 'GET', path: '/api/x' }),
+    );
+    const { headers } = captured(port);
+    expect(Object.values(headers)).not.toContain('test-secret');
   });
 
   test('drops spoofed identity headers supplied by the caller', async () => {
@@ -375,7 +392,7 @@ describe('AuthorizedRunnerRequests — identity signing', () => {
     const { headers } = captured(port);
     expect(headers['X-Forwarded-User']).toBe('alice');
     expect(headers['X-Forwarded-Role']).toBe('admin');
-    expect(headers['X-Runner-Auth']).toBe('test-secret');
+    expect(headers['X-Runner-Auth']).toBe(keyOf('r-alice'));
     expect(headers['x-forwarded-user']).toBeUndefined();
     expect(headers['x-runner-auth']).toBeUndefined();
     expect(headers[SHARE_LEVEL_HEADER]).toBeUndefined();
@@ -430,7 +447,7 @@ describe('AuthorizedRunnerRequests — identity signing', () => {
           shareLevel: 'steer',
           onBehalfOfThread: 't1',
         },
-        'test-secret',
+        keyOf('r-alice'),
         headers[SIGNATURE_HEADER],
         headers[TIMESTAMP_HEADER],
         headers[NONCE_HEADER],
@@ -438,7 +455,7 @@ describe('AuthorizedRunnerRequests — identity signing', () => {
     ).toBe(true);
   });
 
-  test('the OAuth callback variant sends the shared secret and no identity', async () => {
+  test("the OAuth callback variant sends the runner's own key and no identity", async () => {
     runner('r-gen', 'bob');
     const port = new FakeRunnerRequestPort();
     port.available.add('r-gen');
@@ -451,7 +468,7 @@ describe('AuthorizedRunnerRequests — identity signing', () => {
       }),
     );
     const { headers } = captured(port);
-    expect(headers['X-Runner-Auth']).toBe('test-secret');
+    expect(headers['X-Runner-Auth']).toBe(keyOf('r-gen'));
     expect(headers['X-Forwarded-Host']).toBe('app.test');
     expect(headers['X-Forwarded-User']).toBeUndefined();
     expect(headers[SIGNATURE_HEADER]).toBeUndefined();

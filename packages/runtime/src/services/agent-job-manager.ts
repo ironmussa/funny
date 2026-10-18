@@ -32,6 +32,7 @@ import type {
   PermissionMode,
   WSEvent,
 } from '@funny/shared';
+import { buildChildEnv } from '@funny/shared/lib/child-env';
 import { DEFAULT_MODEL, DEFAULT_PERMISSION_MODE, DEFAULT_PROVIDER } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
 
@@ -94,6 +95,8 @@ export async function spawnJob(args: SpawnArgs): Promise<Job> {
   // and unref() so the process is fully decoupled and survives the runner.
   const child = spawn('bash', ['-c', wrapper], {
     cwd: args.cwd,
+    // Agent-provided command: never inherit runner secrets (security M8).
+    env: buildChildEnv(),
     detached: true,
     stdio: 'ignore',
   });

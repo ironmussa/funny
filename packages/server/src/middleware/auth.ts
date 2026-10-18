@@ -136,7 +136,12 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
     }
   }
 
-  // ── Runner auth via shared secret ──────────────────────────────
+  // ── Runner auth via the ROOT shared secret ─────────────────────
+  // Only the deployment root `RUNNER_AUTH_SECRET` matches here — held by the
+  // server and operator-provisioned runners. A device-link / invite-token
+  // runner only knows its derived per-runner key (security H1), which never
+  // equals the root secret, so it cannot obtain `isRunner` this way; it
+  // authenticates with its bearer token (branch above) instead.
   const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET;
   if (RUNNER_AUTH_SECRET) {
     const runnerSecret = c.req.header('X-Runner-Auth');

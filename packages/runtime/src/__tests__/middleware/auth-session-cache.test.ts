@@ -43,6 +43,7 @@ vi.mock('../../lib/auth.js', () => ({
   auth: { api: { getSession: vi.fn().mockResolvedValue(null) } },
 }));
 
+import { configureRunnerKeys } from '../../lib/runner-keys.js';
 import { authMiddleware } from '../../middleware/auth.js';
 
 const sessionPayload = {
@@ -53,6 +54,8 @@ const sessionPayload = {
 let fetchSpy: ReturnType<typeof vi.spyOn>;
 
 beforeEach(() => {
+  // Cookie auth is owner-only (security H7); the session user owns this runner.
+  configureRunnerKeys({ runnerId: 'runner-1', ownerUserId: 'user-1' });
   fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue(
     new Response(JSON.stringify(sessionPayload), {
       status: 200,

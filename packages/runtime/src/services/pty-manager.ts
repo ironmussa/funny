@@ -16,6 +16,7 @@
 import { basename } from 'path';
 
 import { detectEnv } from '@funny/core';
+import { buildChildEnv } from '@funny/shared/lib/child-env';
 import { sql } from 'drizzle-orm';
 
 import { db, getConnection } from '../db/index.js';
@@ -491,7 +492,7 @@ export function spawnPty(
   const tmuxSession = backend.persistent ? `funny-${id}` : undefined;
   activeSessions.set(id, { userId, cwd, projectId, label, tmuxSession, shell: safeShell });
 
-  const spawnEnv: Record<string, string | undefined> = { ...process.env };
+  const spawnEnv: Record<string, string | undefined> = buildChildEnv();
   const detected = detectEnv(cwd, spawnEnv);
   if (detected.notes.length > 0) {
     Object.assign(spawnEnv, detected.env);

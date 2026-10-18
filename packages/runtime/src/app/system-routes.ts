@@ -3,6 +3,7 @@ import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 
 import { getNativeGit } from '@funny/core/git';
+import { buildChildEnv } from '@funny/shared/lib/child-env';
 import {
   getDefaultModel,
   getProviderModels,
@@ -423,7 +424,7 @@ export function registerSystemRoutes(app: Hono<HonoEnv>): void {
       cwd: nativeGitDir,
       stdout: 'pipe',
       stderr: 'pipe',
-      env: { ...process.env, FORCE_COLOR: '1' },
+      env: buildChildEnv({ FORCE_COLOR: '1' }),
     });
 
     const streamReader = async (stream: ReadableStream<Uint8Array>, channel: string) => {

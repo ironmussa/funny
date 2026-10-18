@@ -9,14 +9,15 @@
  * authenticate the request WITHOUT a session cookie or the shared-secret header
  * — neither of which a cross-origin `<img>`/`<video>` request carries.
  *
- * Trust model — identical to {@link signForwardedIdentity}. The HMAC key IS the
- * shared `RUNNER_AUTH_SECRET`, so the signature only proves the minter HOLDS the
- * secret (the server). It does NOT make the token a least-privilege capability:
+ * Trust model. The HMAC key is the TARGET runner's media key
+ * (`deriveRunnerMediaKey` in `./runner-keys`), derived from that runner's own
+ * forwarding key — never the deployment-wide `RUNNER_AUTH_SECRET`. The
+ * signature proves the minter holds that runner's key (the server, or the
+ * runner itself). It does NOT make the token a least-privilege capability:
  * a valid token authorizes fetching `path` as `userId` until `exp`. The runner
  * STILL enforces per-user path scope on redemption (`resolveProjectScope`) — the
  * signature is authentication, not authorization. Tokens are short-lived to
- * bound exposure from URL leakage (logs, referrer). This mirrors the accepted
- * shared-secret limitations documented in `forwarded-identity.ts`.
+ * bound exposure from URL leakage (logs, referrer).
  */
 
 import { createHmac, timingSafeEqual } from 'crypto';

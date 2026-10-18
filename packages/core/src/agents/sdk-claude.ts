@@ -8,6 +8,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
  */
 import type { SDKMessage, HookCallback, Query } from '@anthropic-ai/claude-agent-sdk';
 import { consumeAsync } from '@funny/shared/async';
+import { scrubSensitiveEnv } from '@funny/shared/lib/child-env';
 
 import { createDebugLogger } from '../debug.js';
 import { BaseAgentProcess } from './base-process.js';
@@ -184,7 +185,11 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // OS environ inherited by child processes.
     process.env.CLAUDECODE = '';
     delete process.env.CLAUDECODE;
-    const { CLAUDECODE: _cc, CLAUDE_CODE_ENTRY_POINT: _ep, ...cleanEnv } = process.env;
+    const {
+      CLAUDECODE: _cc,
+      CLAUDE_CODE_ENTRY_POINT: _ep,
+      ...cleanEnv
+    } = scrubSensitiveEnv(process.env);
     const sdkEnv = {
       ...cleanEnv,
       ...this.options.env,
@@ -288,7 +293,12 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         signal: AbortSignal;
       }) => {
         // Final CLAUDECODE strip — belt-and-suspenders with the earlier env clean
-        const { CLAUDECODE: _stripped, CLAUDE_CODE_ENTRY_POINT: _ep2, ...spawnEnv } = options.env;
+        // Re-scrub here too (security M8) in case the SDK re-merges process.env.
+        const {
+          CLAUDECODE: _stripped,
+          CLAUDE_CODE_ENTRY_POINT: _ep2,
+          ...spawnEnv
+        } = scrubSensitiveEnv(options.env);
         const child = spawn(options.command, options.args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: options.cwd,

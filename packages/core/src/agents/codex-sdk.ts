@@ -18,6 +18,7 @@ import {
   CODEX_UNSUPPORTED_COMMANDS,
   parseCodexCommand,
 } from '@funny/shared/codex-commands';
+import { buildChildEnv } from '@funny/shared/lib/child-env';
 import {
   Codex,
   type Input,
@@ -99,10 +100,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
   }
 
   protected async runProcess(): Promise<void> {
-    const env = {
-      ...process.env,
-      ...this.options.env,
-    } as Record<string, string>;
+    const env = buildChildEnv(this.options.env) as Record<string, string>;
 
     this.codex = new Codex({
       codexPathOverride: env.CODEX_BINARY_PATH || env.CODEX_BIN,
@@ -249,7 +247,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
       throw new Error('Send a message before compacting this conversation.');
     const server = new CodexAppServer(
       this.options.cwd,
-      { ...process.env, ...this.options.env },
+      buildChildEnv(this.options.env) as NodeJS.ProcessEnv,
       signal,
     );
     try {

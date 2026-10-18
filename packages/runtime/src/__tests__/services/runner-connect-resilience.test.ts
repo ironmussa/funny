@@ -57,9 +57,10 @@ describe('runner connect resilience wiring', () => {
   test('CLI bare --team uses device-link enrollment (no abort without secret)', () => {
     const src = read('bin/funny.js');
     expect(src).toMatch(/device-link enrollment/);
-    // The classic abort is gated on an invite token being present (classic flow),
-    // not on a missing secret alone — so a bare `--team` falls through to enroll.
-    expect(src).toMatch(/if \(process\.env\.RUNNER_INVITE_TOKEN\)/);
+    // Security H1: neither device-link nor an invite token needs the root
+    // secret (both deliver a per-runner key), so the CLI never aborts on it.
+    expect(src).toMatch(/process\.env\.TEAM_SERVER_URL && process\.env\.RUNNER_INVITE_TOKEN/);
+    expect(src).not.toMatch(/RUNNER_AUTH_SECRET is required when using --token/);
   });
 
   test('CLI ignores saved and inherited team config for default local start', () => {

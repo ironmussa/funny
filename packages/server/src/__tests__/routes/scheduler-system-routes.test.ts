@@ -40,15 +40,19 @@ import {
   TIMESTAMP_HEADER,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
 
-/** True when the headers carry a valid signed forwarded identity for `userId`. */
-function signedFor(userId: string, headers: Record<string, string>): boolean {
+/**
+ * True when the headers carry a valid signed forwarded identity for `userId`,
+ * keyed with the target runner's derived key (security H1).
+ */
+function signedFor(userId: string, headers: Record<string, string>, runnerId: string): boolean {
   return verifyForwardedIdentity(
     { userId, role: 'user', orgId: null, orgName: null },
-    'test-secret',
+    deriveRunnerForwardingKey('test-secret', runnerId),
     headers[SIGNATURE_HEADER],
     headers[TIMESTAMP_HEADER],
     headers[NONCE_HEADER],
@@ -197,12 +201,12 @@ describe('Scheduler System Routes (Integration)', () => {
         lastHeartbeatAt: new Date().toISOString(),
       });
 
-      tunnelFetchImpl = async (_runnerId, req) => {
+      tunnelFetchImpl = async (runnerId, req) => {
         expect(req.path).toBe('/api/scheduler/dispatch');
         expect(req.headers['X-Forwarded-User']).toBe('user-1');
         // Regression: the identity was forwarded unsigned, which the runtime
         // rejects with 401 — so every scheduler dispatch failed.
-        expect(signedFor('user-1', req.headers)).toBe(true);
+        expect(signedFor('user-1', req.headers, runnerId)).toBe(true);
         expect(JSON.parse(req.body ?? '{}')).toEqual({
           threadId: 't1',
           prompt: 'go',
@@ -577,9 +581,9 @@ describe('Scheduler System Routes (Integration)', () => {
         lastHeartbeatAt: new Date().toISOString(),
       });
 
-      tunnelFetchImpl = async (_runnerId, req) => {
+      tunnelFetchImpl = async (runnerId, req) => {
         expect(req.path).toBe('/api/scheduler/cancel/pr-cancel-1');
-        expect(signedFor('user-1', req.headers)).toBe(true);
+        expect(signedFor('user-1', req.headers, runnerId)).toBe(true);
         return { status: 200, body: null };
       };
 

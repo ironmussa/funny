@@ -18,8 +18,6 @@ export interface FakeRunnerAccessOptions {
   allowProject?: (runnerId: string, projectId: string) => boolean;
   /** Scope rule for projectless targets. Default: allowed. */
   allowProjectless?: (runnerId: string) => boolean;
-  /** Runner the identity-free OAuth callback selection returns. Default: `runner-1`. */
-  oauthRunner?: string | null;
   /** Observes every selection (user id + target), for routing assertions. */
   onSelect?: (userId: string, target: RunnerTarget) => void;
 }
@@ -43,8 +41,6 @@ export function fakeRunnerAccess(opts: FakeRunnerAccessOptions = {}): RunnerAcce
           : { ok: false, reason: 'general-runner-offline' as const };
       },
       pinnedRunnerIdsForProject: async () => null,
-      anyGeneralRunner: async () =>
-        opts.oauthRunner === undefined ? 'runner-1' : opts.oauthRunner,
     },
     verification: {
       runnerOwner: async (runnerId) => owners[runnerId] ?? null,

@@ -142,7 +142,10 @@ class AuthorizedRunnerRequests {
     );
   }
 
-  /** The unauthenticated MCP OAuth callback: shared secret, no identity. */
+  /**
+   * The unauthenticated MCP OAuth callback, sent only to the runner its
+   * server-signed state is bound to: shared secret, no identity.
+   */
   sendOAuthCallback<R>(
     runner: Named<R, RunnerId>,
     _proof: OAuthCallbackRunner<R>,

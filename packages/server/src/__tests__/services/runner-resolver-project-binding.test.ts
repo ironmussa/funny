@@ -7,12 +7,7 @@ import { describe, test, expect, beforeEach } from 'bun:test';
 
 import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
 import { findAnyRunnerForUser, findRunnerForProject } from '../../services/runner-manager.js';
-import {
-  explainUnresolved,
-  resolveAnyRunner,
-  resolveRunner,
-  uncacheThread,
-} from '../../services/runner-resolver.js';
+import { explainUnresolved, resolveRunner, uncacheThread } from '../../services/runner-resolver.js';
 import {
   __resetRunnerScopeCache,
   grantProjectRunner,
@@ -146,13 +141,6 @@ describe('dedicated runners stay inside their scope', () => {
     expect(await resolve('/api/browse/list')).toEqual({ runnerId: 'laptop' });
     expect(await resolve('/api/threads/t-scratch/message')).toEqual({ runnerId: 'laptop' });
     expect(await findAnyRunnerForUser('alice')).toBe('laptop');
-  });
-
-  test('unauthenticated callbacks never reach a dedicated runner', async () => {
-    runner('rx', 'dedicated');
-    expect(await resolveAnyRunner(presence)).toBeNull();
-    runner('laptop', 'general');
-    expect(await resolveAnyRunner(presence)).toEqual({ runnerId: 'laptop' });
   });
 });
 

@@ -19,7 +19,7 @@ export class MockTunnelTimeoutError extends Error {
 
 /**
  * Runner access that always certifies `runner-1` for `user-1` (the proxy
- * tests' default identity) and for the identity-free OAuth callback.
+ * tests' default identity). The OAuth callback is routed only by its signed state.
  */
 export function createRunnerAccessMock(
   opts: { runnerId?: string; ownerId?: string; onSelect?: (userId: string) => void } = {},
@@ -28,7 +28,6 @@ export function createRunnerAccessMock(
   return fakeRunnerAccess({
     runnerFor: () => runnerId,
     owners: { [runnerId]: opts.ownerId ?? 'user-1' },
-    oauthRunner: runnerId,
     onSelect: (userId) => opts.onSelect?.(userId),
   });
 }

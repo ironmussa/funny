@@ -7,12 +7,20 @@
  */
 
 import { badRequest } from '@funny/shared/errors';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { err } from 'neverthrow';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { startOAuthFlow, handleOAuthCallback } from '../services/mcp-oauth.js';
+
+/** Header carrying the server-minted, server-signed OAuth state. */
+const OAUTH_STATE_HEADER = 'X-Funny-OAuth-State';
+const BOUND_STATE_PATTERN = /^[A-Za-z0-9._-]{16,1024}$/;
+
+function readBoundState(value: string | undefined): string | null {
+  return value && BOUND_STATE_PATTERN.test(value) ? value : null;
+}
 import {
   listMcpServers,
   addMcpServer,
@@ -143,6 +151,29 @@ app.get('/recommended', (c) => {
   return c.json({ servers: RECOMMENDED_SERVERS });
 });
 
+/**
+ * Reconstruct the public-facing origin from forwarded headers. When requests
+ * arrive via the gRPC tunnel, c.req.url is http://localhost (no port).
+ */
+function publicCallbackBaseUrl(c: Context<HonoEnv>, serverName: string): string {
+  const fwdHost = c.req.header('X-Forwarded-Host');
+  const fwdProto = c.req.header('X-Forwarded-Proto');
+  const reqUrl = new URL(c.req.url);
+  const callbackBaseUrl = fwdHost
+    ? `${fwdProto || 'http'}://${fwdHost}`
+    : `${reqUrl.protocol}//${reqUrl.host}`;
+  log.info('OAuth start: reconstructed callback base URL', {
+    namespace: 'mcp',
+    serverName,
+    fwdHost: fwdHost ?? null,
+    fwdProto: fwdProto ?? null,
+    reqUrl: c.req.url,
+    callbackBaseUrl,
+    usedForwardedHost: Boolean(fwdHost),
+  });
+  return callbackBaseUrl;
+}
+
 // Start OAuth flow for an MCP server
 app.post('/oauth/start', async (c) => {
   const parsed = await parseJsonBody(c, mcpOAuthStartSchema);
@@ -169,34 +200,23 @@ app.post('/oauth/start', async (c) => {
       err(badRequest(`Server "${serverName}" has no URL (only HTTP servers support OAuth)`)),
     );
 
-  // Use forwarded headers to reconstruct the public-facing origin.
-  // When requests arrive via the gRPC tunnel, c.req.url is http://localhost (no port).
-  const fwdHost = c.req.header('X-Forwarded-Host');
-  const fwdProto = c.req.header('X-Forwarded-Proto');
-  const callbackBaseUrl = fwdHost
-    ? `${fwdProto || 'http'}://${fwdHost}`
-    : (() => {
-        const u = new URL(c.req.url);
-        return `${u.protocol}//${u.host}`;
-      })();
+  const callbackBaseUrl = publicCallbackBaseUrl(c, serverName);
 
-  log.info('OAuth start: reconstructed callback base URL', {
-    namespace: 'mcp',
-    serverName,
-    fwdHost: fwdHost ?? null,
-    fwdProto: fwdProto ?? null,
-    reqUrl: c.req.url,
-    callbackBaseUrl,
-    usedForwardedHost: Boolean(fwdHost),
+  // The server binds the flow to this runner + user by minting the OAuth
+  // `state` itself (H3/M3): the unauthenticated callback is then routed back
+  // here only. Without it the callback cannot be routed, so refuse up front.
+  const boundState = readBoundState(c.req.header(OAUTH_STATE_HEADER));
+  if (!boundState) {
+    return resultToResponse(
+      c,
+      err(badRequest('OAuth state binding missing — update the funny server to this version')),
+    );
+  }
+
+  const oauthResult = await startOAuthFlow(serverName, server.url, projectPath, callbackBaseUrl, {
+    ...profileOptions,
+    state: boundState,
   });
-
-  const oauthResult = await startOAuthFlow(
-    serverName,
-    server.url,
-    projectPath,
-    callbackBaseUrl,
-    profileOptions,
-  );
   if (oauthResult.isErr()) return resultToResponse(c, oauthResult);
   return c.json({ authUrl: oauthResult.value.authUrl });
 });
@@ -240,108 +260,24 @@ app.post('/oauth/token', async (c) => {
   return c.json({ ok: true });
 });
 
-// OAuth callback (called by external OAuth provider redirect — exempt from bearer auth)
+// OAuth callback (external OAuth provider redirect — exempt from bearer auth).
+// The server routes it here by its signed `state` and renders the page itself
+// (H3): this route only answers JSON, never HTML or script, so nothing a
+// runner returns is ever executed on the server's origin.
 app.get('/oauth/callback', async (c) => {
   const code = c.req.query('code');
   const state = c.req.query('state');
   const error = c.req.query('error');
 
-  // Security HI-10: harden the callback CSP and re-isolate the origin.
-  // Previously the page used an inline <script>, which required a CSP
-  // relaxation to `script-src 'unsafe-inline'` + `Cross-Origin-Opener-Policy:
-  // unsafe-none` (so the OAuth-provider popup could still see
-  // `window.opener`). That posture turned every future XSS reachable from
-  // this route into a real exploit and gave the cross-origin OAuth provider
-  // unrestricted DOM access to the opener.
-  //
-  // New shape:
-  //   - inline script removed; the page loads `/api/mcp/oauth/callback.js`
-  //     which is same-origin and authorised by `script-src 'self'`.
-  //   - the page passes status to the script via a JSON `<script
-  //     type="application/json">` element (inert, never executed).
-  //   - COOP is set to `same-origin-allow-popups`, which keeps
-  //     `window.opener` working for the opener that launched this popup
-  //     while still isolating us from the cross-origin OAuth provider's
-  //     intermediate page.
-  c.res.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-  c.res.headers.set(
-    'Content-Security-Policy',
-    "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
-  );
-
   if (error) {
-    const errorDesc = c.req.query('error_description') || error;
-    return c.html(renderCallbackPage(false, errorDesc));
+    return c.json({ success: false, error: c.req.query('error_description') || error });
   }
-
   if (!code || !state) {
-    return c.html(renderCallbackPage(false, 'Missing code or state parameter'));
+    return c.json({ success: false, error: 'Missing code or state parameter' }, 400);
   }
 
   const result = await handleOAuthCallback(code, state);
-  return c.html(renderCallbackPage(result.success, result.error));
+  return c.json({ success: result.success, error: result.error ?? null });
 });
-
-/**
- * Same-origin script loaded by the callback HTML. Reads status from the
- * inert `#mcp-oauth-status` JSON island and forwards it to the opener via
- * postMessage. Lives behind the same CSP/COOP as the HTML page.
- */
-app.get('/oauth/callback.js', (c) => {
-  c.res.headers.set('Content-Type', 'application/javascript; charset=utf-8');
-  c.res.headers.set('Cache-Control', 'public, max-age=300');
-  return c.body(`(() => {
-  try {
-    const el = document.getElementById('mcp-oauth-status');
-    if (!el) return;
-    const status = JSON.parse(el.textContent || '{}');
-    if (window.opener) {
-      window.opener.postMessage({
-        type: 'mcp-oauth-callback',
-        success: status.success === true,
-        error: typeof status.error === 'string' ? status.error : null,
-      }, window.location.origin);
-    }
-    setTimeout(() => window.close(), status.success === true ? 1500 : 5000);
-  } catch (_) {
-    /* swallow — the user already sees a status message */
-  }
-})();`);
-});
-
-/** Escape HTML special characters to prevent XSS */
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
-
-/**
- * Safely embed a JSON payload inside a `<script type="application/json">`
- * island. The only escape that matters is `</` so the parser can't be
- * tricked into closing the element early.
- */
-function escapeJsonForScriptTag(value: unknown): string {
-  return JSON.stringify(value).replace(/</g, '\\u003c');
-}
-
-function renderCallbackPage(success: boolean, error?: string): string {
-  const safeError = error ? escapeHtml(error) : 'Unknown error';
-  const status = escapeJsonForScriptTag({ success, error: error ?? null });
-  return `<!DOCTYPE html>
-<html>
-<head><title>MCP Authentication</title>
-<style>body{font-family:system-ui;display:flex;justify-content:center;align-items:center;height:100vh;margin:0;background:#0a0a0a;color:#fafafa}p{text-align:center;font-size:14px}</style>
-</head>
-<body>
-  <p>${success ? 'Authentication successful! This window will close.' : `Authentication failed: ${safeError}`}</p>
-  <script id="mcp-oauth-status" type="application/json">${status}</script>
-  <script src="/api/mcp/oauth/callback.js"></script>
-</body>
-</html>`;
-}
 
 export default app;

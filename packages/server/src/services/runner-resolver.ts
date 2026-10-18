@@ -5,9 +5,9 @@
  * STRICT ISOLATION: Every request is routed exclusively to the requesting
  * user's runner. No cross-user fallbacks. If the user has no runner
  * reachable, return null → 502. The user id is REQUIRED: there is no
- * resolution path for a request without an authenticated user, except the
- * explicit `resolveAnyRunner` used by the unauthenticated OAuth callback
- * (see `services/runner-access`).
+ * resolution path for a request without an authenticated user. The
+ * unauthenticated MCP OAuth callback is routed by its server-signed `state`
+ * to the one runner that started the flow (see `services/runner-access`).
  *
  * PROJECT ISOLATION (project-runner-binding, see runner-scope.ts):
  *   - A project pinned to a dedicated runner routes ONLY to that runner (plus
@@ -286,29 +286,6 @@ function extractThreadId(path: string): string | null {
     return gitMatch[1];
   }
 
-  return null;
-}
-
-/**
- * Find any reachable GENERAL runner, regardless of user.
- * Used for unauthenticated callbacks (e.g., MCP OAuth redirect from external provider).
- * The runtime itself validates the request (e.g., via state parameter).
- * Dedicated runners are never eligible: they must only ever see their own
- * project's traffic (project-runner-binding).
- */
-export async function resolveAnyRunner(
-  presence?: RunnerPresencePort,
-): Promise<ResolvedRunner | null> {
-  const allRunners = await db
-    .select({ id: runners.id })
-    .from(runners)
-    .where(eq(runners.role, 'general'));
-
-  for (const r of allRunners) {
-    if (presence?.isAvailable(r.id)) {
-      return { runnerId: r.id };
-    }
-  }
   return null;
 }
 

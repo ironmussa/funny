@@ -161,8 +161,9 @@ MCP OAuth callback) and `AuthorizedRunnerTerminal`, both in
 forwarded identity from the certified actor with a fresh nonce per send and drops
 every caller-supplied identity header, so handlers never build `X-Forwarded-*`
 headers. `userId` is required in `findRunnerForProject`, `resolveRunner` and
-`resolveRunnerDetailed`; `resolveAnyRunner` feeds only the `OAuthCallbackRunner`
-proof. System routes derive the signed identity from the thread or project owner
+`resolveRunnerDetailed`. The `OAuthCallbackRunner` proof is minted only for the
+runner a server-signed MCP OAuth `state` is bound to (`mintOAuthCallbackState`,
+which itself demands a `RunnerFor` proof); there is no "any runner" path. System routes derive the signed identity from the thread or project owner
 in the DB and refuse a mismatching body `userId`.
 
 Checks:

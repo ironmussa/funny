@@ -15,7 +15,7 @@ import { signMediaClaim } from '@funny/shared/auth/media-url-signature';
 import { Hono } from 'hono';
 import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 
-import filesRoutes from '../../routes/files.js';
+import filesRoutes, { rawFileHeaders } from '../../routes/files.js';
 import type { RuntimeServiceProvider } from '../../services/service-provider.js';
 import { setServices, resetServices } from '../../services/service-registry.js';
 
@@ -399,5 +399,23 @@ describe('files routes — /raw-signed (transport C)', () => {
     // out-of-scope path is still denied by the per-user scope check.
     const res = await app.request(signedUrl({ urlPath: outsideFile }));
     expect(res.status).toBe(403);
+  });
+});
+
+describe('files routes — rawFileHeaders (inline active content)', () => {
+  test('an SVG stays an image but is sandboxed and never sniffed', () => {
+    const headers = rawFileHeaders('/p/logo.svg');
+    expect(headers['Content-Type']).toBe('image/svg+xml');
+    expect(headers['X-Content-Type-Options']).toBe('nosniff');
+    expect(headers['Content-Security-Policy']).toMatch(/^sandbox\b/);
+  });
+
+  test('passive media is nosniff without a sandbox (PDF viewer keeps working)', () => {
+    for (const path of ['/p/a.png', '/p/a.pdf', '/p/a.mp4', '/p/unknown.html']) {
+      const headers = rawFileHeaders(path);
+      expect(headers['X-Content-Type-Options']).toBe('nosniff');
+      expect(headers['Content-Security-Policy']).toBeUndefined();
+    }
+    expect(rawFileHeaders('/p/unknown.html')['Content-Type']).toBe('application/octet-stream');
   });
 });

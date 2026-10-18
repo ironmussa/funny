@@ -361,6 +361,34 @@ const EXT_TO_MIME: Record<string, string> = {
   csv: 'text/csv; charset=utf-8',
 };
 
+/**
+ * Response headers for a raw file, from its (canonical) path. Exported for tests.
+ */
+export function rawFileHeaders(filePath: string): Record<string, string> {
+  const ext = filePath.includes('.')
+    ? filePath.substring(filePath.lastIndexOf('.') + 1).toLowerCase()
+    : '';
+  const contentType = EXT_TO_MIME[ext] ?? 'application/octet-stream';
+  const headers: Record<string, string> = {
+    'Content-Type': contentType,
+    'Cache-Control': 'private, max-age=60',
+    'Content-Disposition': `inline; filename="${encodeURIComponent(basename(filePath))}"`,
+    // Advertise range support so media players enable seek. Note: over the
+    // server's gRPC tunnel this header is filtered out by the proxy allowlist, so
+    // seek only works on the direct path (`/raw-signed` or direct HTTP).
+    'Accept-Ranges': 'bytes',
+    // Never let the browser re-interpret the bytes as another (active) type.
+    'X-Content-Type-Options': 'nosniff',
+  };
+  // An SVG is an active document when navigated to (scripts, links, forms):
+  // keep it renderable in `<img>` but sandbox it — opaque origin, no scripts.
+  // (Not for PDFs: a sandbox CSP breaks the browser's built-in PDF viewer.)
+  if (contentType === 'image/svg+xml') {
+    headers['Content-Security-Policy'] = "sandbox; default-src 'none'; style-src 'unsafe-inline'";
+  }
+  return headers;
+}
+
 const RAW_MAX_SIZE = 100 * 1024 * 1024; // 100MB
 
 /**
@@ -443,23 +471,10 @@ async function streamRawFile(
     );
   }
 
-  const ext = canon.canonical.includes('.')
-    ? canon.canonical.substring(canon.canonical.lastIndexOf('.') + 1).toLowerCase()
-    : '';
-  const contentType = EXT_TO_MIME[ext] ?? 'application/octet-stream';
-
   // Bun.file returns a BunFile with a Web ReadableStream — passes straight
   // through Hono/Bun's Response without a Node-stream → Web-stream cast.
   const file = Bun.file(canon.canonical);
-  const baseHeaders: Record<string, string> = {
-    'Content-Type': contentType,
-    'Cache-Control': 'private, max-age=60',
-    'Content-Disposition': `inline; filename="${encodeURIComponent(basename(canon.canonical))}"`,
-    // Advertise range support so media players enable seek. Note: over the
-    // server's gRPC tunnel this header is filtered out by the proxy allowlist, so
-    // seek only works on the direct path (`/raw-signed` or direct HTTP).
-    'Accept-Ranges': 'bytes',
-  };
+  const baseHeaders = rawFileHeaders(canon.canonical);
 
   const range = parseByteRange(c.req.header('range'), stats.size);
   if (range) {

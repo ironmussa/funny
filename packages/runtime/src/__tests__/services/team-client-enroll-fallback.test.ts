@@ -5,8 +5,8 @@
  * (e.g. left over from local dev) and no persisted credentials. The classic
  * registration is rejected with 401; instead of looping on the rejected secret
  * forever, the runner must fall back to device-link enrollment, persist the
- * delivered credentials, load the delivered forwarded-identity secret into the
- * environment, and then resume successfully.
+ * delivered credentials, install the delivered per-runner forwarding key (in
+ * module state — never in process.env, security M8/H1), and then resume.
  *
  * This drives initTeamMode end-to-end with a mocked gRPC transport, fetch, enrollment
  * client, and credentials store.
@@ -23,7 +23,8 @@ const h = vi.hoisted(() => {
     enrollRunner: vi.fn(async () => ({
       runnerId: 'r-enrolled',
       token: 'runner_enrolled',
-      forwardedSecret: 'delivered-secret',
+      forwardingKey: 'delivered-key',
+      ownerUserId: 'u-owner',
     })),
     saveRunnerCredentials: vi.fn((c: Record<string, unknown>) => {
       credStore.value = c;
@@ -67,6 +68,7 @@ vi.mock('../../services/grpc-team-transport.js', () => ({
   },
 }));
 
+import { getRunnerForwardingKey, getRunnerOwnerUserId } from '../../lib/runner-keys.js';
 import { initTeamMode, shutdownTeamMode } from '../../services/team-client.js';
 
 describe('team-client device-link fallback on 401', () => {
@@ -109,17 +111,22 @@ describe('team-client device-link fallback on 401', () => {
     expect(clearRunnerCredentials).toHaveBeenCalled();
     expect(enrollRunner).toHaveBeenCalledTimes(1);
 
-    // Delivered credentials were persisted (incl. the forwarded-identity secret).
+    // Delivered credentials were persisted (incl. the per-runner key + owner).
     expect(saveRunnerCredentials).toHaveBeenCalledWith(
       expect.objectContaining({
         serverUrl: 'http://srv.test',
         runnerId: 'r-enrolled',
         token: 'runner_enrolled',
-        forwardedSecret: 'delivered-secret',
+        forwardingKey: 'delivered-key',
+        ownerUserId: 'u-owner',
       }),
     );
 
-    // The delivered secret replaced the stale one in the environment.
-    expect(process.env.RUNNER_AUTH_SECRET).toBe('delivered-secret');
+    // The delivered key (not one derived from the stale secret) is in use, and
+    // it was NOT written into the environment children inherit (security M8).
+    expect(getRunnerForwardingKey()).toBe('delivered-key');
+    expect(getRunnerOwnerUserId()).toBe('u-owner');
+    expect(process.env.RUNNER_AUTH_SECRET).toBe('stale-secret');
+    expect(Object.values(process.env)).not.toContain('delivered-key');
   });
 });

@@ -3,6 +3,8 @@ import { existsSync, mkdirSync } from 'fs';
 import { homedir } from 'os';
 import { delimiter, dirname, join } from 'path';
 
+import { buildChildEnv } from '@funny/shared/lib/child-env';
+
 import { DATA_DIR } from '../lib/data-dir.js';
 import type { ClaudeProfileRouteOptions } from '../utils/agent-profile-options.js';
 import { resetBinaryCache } from '../utils/claude-binary.js';
@@ -143,7 +145,7 @@ export async function checkProviderAuth(
         stdio: 'ignore',
         shell: false,
         timeout: 10_000,
-        env: { ...process.env, ...profileEnv },
+        env: buildChildEnv(profileEnv),
       });
       child.once('error', () => resolve('unknown'));
       child.once('close', (code) =>

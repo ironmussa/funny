@@ -13,6 +13,8 @@ import { spawn, type ChildProcess } from 'child_process';
 import { join } from 'path';
 import { createInterface } from 'readline';
 
+import { buildChildEnv } from '@funny/shared/lib/child-env';
+
 import { log } from '../lib/logger.js';
 import type { PtyBackend, PtyBackendCallbacks } from './pty-backend.js';
 
@@ -61,6 +63,8 @@ export class NodePtyBackend implements PtyBackend {
 
     this.helperProcess = spawn(runtime, [helperPath], {
       stdio: ['pipe', 'pipe', 'pipe'],
+      // The helper forks user shells; keep runner secrets out (security M8).
+      env: buildChildEnv(),
       windowsHide: true,
     });
 

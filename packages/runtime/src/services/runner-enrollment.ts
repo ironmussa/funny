@@ -9,8 +9,9 @@ import { hostname } from 'os';
  * When a runner boots with no credentials and no token/secret, it enrolls
  * itself: it asks the server for a short user code, shows that code to the
  * operator, and polls until a logged-in user approves it in the funny UI. On
- * approval the server returns the runner's credentials (bearer + forwarded-
- * identity secret) — so the operator never hand-carries a token or secret.
+ * approval the server returns the runner's credentials (bearer + this
+ * runner's OWN forwarding key — never the deployment-wide RUNNER_AUTH_SECRET)
+ * — so the operator never hand-carries a token or secret.
  *
  * The start/poll endpoints are public (the runner has no credentials yet), so
  * this module uses a plain fetch rather than the authenticated centralFetch.
@@ -29,10 +30,25 @@ import { log } from '../lib/logger.js';
 export interface EnrolledCredentials {
   runnerId: string;
   token: string;
-  forwardedSecret: string;
+  /** Per-runner forwarding key `K_r` (see `@funny/shared/auth/runner-keys`). */
+  forwardingKey: string;
+  /** The approving user — this runner's owner. */
+  ownerUserId: string;
 }
 
 const sleep = (ms: number) => effectSleep(ms);
+
+/** The credentials an approved poll delivers (security H1: the runner's own key). */
+function toCredentials(
+  result: Extract<EnrollPollResponse, { status: 'approved' }>,
+): EnrolledCredentials {
+  return {
+    runnerId: result.runnerId,
+    token: result.token,
+    forwardingKey: result.forwardingKey || '',
+    ownerUserId: result.ownerUserId || '',
+  };
+}
 
 /** Print the user code as a prominent operator-facing banner (stdout + log). */
 function showUserCode(serverUrl: string, userCode: string): void {
@@ -124,11 +140,7 @@ export async function enrollRunner(serverUrl: string): Promise<EnrolledCredentia
           namespace: 'runner',
           runnerId: result.runnerId,
         });
-        return {
-          runnerId: result.runnerId,
-          token: result.token,
-          forwardedSecret: result.forwardedSecret,
-        };
+        return toCredentials(result);
       }
       // pending — keep polling
     }

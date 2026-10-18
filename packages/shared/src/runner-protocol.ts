@@ -172,6 +172,18 @@ export interface RunnerRegisterResponse {
   runnerId: string;
   /** Token for authenticating subsequent requests */
   token: string;
+  /**
+   * The user that owns this runner. The runner only accepts direct-HTTP
+   * session-cookie auth from this user (security H7). Optional for
+   * compatibility with older servers; absent ⇒ cookie auth stays disabled.
+   */
+  ownerUserId?: string;
+  /**
+   * This runner's OWN forwarding key (`deriveRunnerForwardingKey`) — never the
+   * deployment-wide `RUNNER_AUTH_SECRET`. Lets an invite-token runner verify
+   * proxied requests without holding the root secret.
+   */
+  forwardingKey?: string;
 }
 
 // ─── HTTP: Device-Link Enrollment ───────────────────────
@@ -179,7 +191,7 @@ export interface RunnerRegisterResponse {
 // Authorization Grant. A runner with no credentials starts an enrollment,
 // shows a short `userCode` to the operator, and polls until a logged-in user
 // approves it — at which point the runner receives its credentials (bearer +
-// forwarded-identity secret) and never needs a hand-carried token or secret.
+// its own per-runner forwarding key) and never needs a hand-carried token or secret.
 
 /** Runner → Server (public): begin a device-link enrollment. */
 export interface EnrollStartRequest {
@@ -210,7 +222,7 @@ export interface EnrollPollRequest {
  * Server → Runner: enrollment poll result. `pending` until a user approves;
  * `approved` carries the credentials exactly once (then the enrollment is
  * consumed). Mirrors the fields a runner needs to connect: the bearer token
- * and the forwarded-identity secret.
+ * and the runner's own forwarding key.
  */
 export type EnrollPollResponse =
   | { status: 'pending' }
@@ -219,8 +231,15 @@ export type EnrollPollResponse =
       runnerId: string;
       /** Bearer token for authenticating subsequent runner requests. */
       token: string;
-      /** Shared forwarded-identity secret (RUNNER_AUTH_SECRET) for proxied requests. */
-      forwardedSecret: string;
+      /**
+       * This runner's OWN forwarding key (`deriveRunnerForwardingKey`), used to
+       * verify forwarded identity / `X-Runner-Auth` / signed media URLs. It is
+       * NOT the deployment-wide `RUNNER_AUTH_SECRET` (security H1): it is only
+       * valid for this runner and never authenticates to the server.
+       */
+      forwardingKey: string;
+      /** The approving user — the runner's owner (security H7). */
+      ownerUserId: string;
     };
 
 /**

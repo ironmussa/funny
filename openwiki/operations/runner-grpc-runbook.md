@@ -30,12 +30,14 @@ This adapter boundary is intentional: replacing gRPC should require new port imp
 
 ## Configuration
 
-The runtime needs all three values in team mode:
+The runtime needs these values in team mode:
 
 ```sh
 TEAM_SERVER_URL=https://funny.example.com
 RUNNER_GRPC_ENDPOINT=grpc.funny.example.com:443
-RUNNER_AUTH_SECRET=<shared runner/server secret>
+# Optional — operator-trusted runners only. Device-link / invite-token runners
+# receive their own per-runner key instead of the server's root secret.
+# RUNNER_AUTH_SECRET=<server root secret>
 ```
 
 The central server enables and binds its dedicated HTTP/2 listener with `RUNNER_GRPC_ENABLED`, `RUNNER_GRPC_HOST`, and `RUNNER_GRPC_PORT`. Limits and liveness controls use the remaining `RUNNER_GRPC_*` values documented in `.env.example`. Public TLS/ALPN normally terminates at ingress; the server listener is private. A runtime with `TEAM_SERVER_URL` but no `RUNNER_GRPC_ENDPOINT` fails startup instead of falling back.

@@ -1,7 +1,9 @@
 import { retryAsync, sleep as effectSleep } from '@funny/shared/async';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import type { RunnerRegisterResponse } from '@funny/shared/runner-protocol';
 
 import { log } from '../lib/logger.js';
+import { resolveRunnerForwardingKey } from '../lib/runner-keys.js';
 import {
   clearRunnerCredentials,
   loadRunnerCredentials,
@@ -13,6 +15,14 @@ import { enrollRunner } from './runner-enrollment.js';
 export interface RunnerEnrollmentSession {
   runnerId: string;
   token: string;
+  /**
+   * This runner's forwarding key `K_r` (security H1): derived from an
+   * operator-supplied root secret, or delivered by the server. Null when the
+   * runner has neither (proxied requests then fail closed).
+   */
+  forwardingKey: string | null;
+  /** The owning user (security H7), or null when unknown. */
+  ownerUserId: string | null;
 }
 
 export interface RunnerAdvertisement {
@@ -108,6 +118,9 @@ export class RunnerEnrollmentClient {
       ...(options.headers as Record<string, string>),
     };
     if (this.session?.token) headers.Authorization = `Bearer ${this.session.token}`;
+    // Only an operator-provisioned runner holds the root secret. Enrolled
+    // runners authenticate with their bearer; their per-runner key is never
+    // accepted by the server as `X-Runner-Auth` (security H1).
     if (this.dependencies.env.RUNNER_AUTH_SECRET) {
       headers['X-Runner-Auth'] = this.dependencies.env.RUNNER_AUTH_SECRET;
     }
@@ -136,7 +149,13 @@ export class RunnerEnrollmentClient {
       }
 
       const data = (await res.json()) as RunnerRegisterResponse;
-      this.session = { runnerId: data.runnerId, token: data.token };
+      const session = this.makeSession({
+        runnerId: data.runnerId,
+        token: data.token,
+        forwardingKey: data.forwardingKey,
+        ownerUserId: data.ownerUserId,
+      });
+      this.session = session;
       try {
         const heartbeat = await this.verifyHeartbeat();
         if (heartbeat === 'missing') {
@@ -151,16 +170,15 @@ export class RunnerEnrollmentClient {
         serverUrl: this.serverUrl,
         runnerId: data.runnerId,
         token: data.token,
+        forwardingKey: data.forwardingKey || undefined,
+        ownerUserId: data.ownerUserId || undefined,
       });
       log.info('Registered with central server', {
         namespace: 'runner',
         runnerId: data.runnerId,
         transport: 'grpc-v2',
       });
-      return {
-        session: { runnerId: data.runnerId, token: data.token },
-        authFailed: false,
-      };
+      return { session: { ...session }, authFailed: false };
     } catch (error) {
       log.error('Failed to connect to central server', { namespace: 'runner', error });
       return { session: null, authFailed: false };
@@ -168,12 +186,10 @@ export class RunnerEnrollmentClient {
   }
 
   private async resumeSession(): Promise<RunnerEnrollmentSession | null> {
-    const credentials = this.dependencies.loadCredentials(this.serverUrl);
-    if (!credentials) return null;
-    this.session = { runnerId: credentials.runnerId, token: credentials.token };
-    if (credentials.forwardedSecret && !this.dependencies.env.RUNNER_AUTH_SECRET) {
-      this.dependencies.env.RUNNER_AUTH_SECRET = credentials.forwardedSecret;
-    }
+    const loaded = this.dependencies.loadCredentials(this.serverUrl);
+    if (!loaded) return null;
+    const credentials = this.migrateLegacyCredentials(loaded);
+    this.session = this.makeSession(credentials);
     try {
       const result = await this.verifyHeartbeat();
       if (result === 'ok') {
@@ -218,15 +234,54 @@ export class RunnerEnrollmentClient {
 
   private async enrollAndPersist(): Promise<void> {
     const credentials = await this.dependencies.enroll(this.serverUrl);
-    if (credentials.forwardedSecret) {
-      this.dependencies.env.RUNNER_AUTH_SECRET = credentials.forwardedSecret;
-    }
+    // Security M8: the key stays in module state / the 0600 credentials file —
+    // it is never written into process.env, so children cannot inherit it.
     this.dependencies.saveCredentials({
       serverUrl: this.serverUrl,
       runnerId: credentials.runnerId,
       token: credentials.token,
-      forwardedSecret: credentials.forwardedSecret || undefined,
+      forwardingKey: credentials.forwardingKey || undefined,
+      ownerUserId: credentials.ownerUserId || undefined,
     });
-    this.session = { runnerId: credentials.runnerId, token: credentials.token };
+    this.session = this.makeSession(credentials);
+  }
+
+  private makeSession(input: {
+    runnerId: string;
+    token: string;
+    forwardingKey?: string | null;
+    ownerUserId?: string | null;
+  }): RunnerEnrollmentSession {
+    return {
+      runnerId: input.runnerId,
+      token: input.token,
+      forwardingKey: resolveRunnerForwardingKey({
+        runnerId: input.runnerId,
+        rootSecret: this.dependencies.env.RUNNER_AUTH_SECRET,
+        forwardingKey: input.forwardingKey,
+      }),
+      ownerUserId: input.ownerUserId || null,
+    };
+  }
+
+  /**
+   * Pre-H1 enrollments persisted the deployment-wide RUNNER_AUTH_SECRET as
+   * `forwardedSecret`. Convert it to this runner's own key and rewrite the
+   * file without it, so the root secret no longer sits on disk here.
+   */
+  private migrateLegacyCredentials(credentials: RunnerCredentials): RunnerCredentials {
+    if (!credentials.forwardedSecret) return credentials;
+    const { forwardedSecret, ...rest } = credentials;
+    const migrated: RunnerCredentials = {
+      ...rest,
+      forwardingKey:
+        rest.forwardingKey || deriveRunnerForwardingKey(forwardedSecret, rest.runnerId),
+    };
+    this.dependencies.saveCredentials(migrated);
+    log.info('Migrated legacy runner credentials to a per-runner forwarding key', {
+      namespace: 'runner',
+      runnerId: rest.runnerId,
+    });
+    return migrated;
   }
 }

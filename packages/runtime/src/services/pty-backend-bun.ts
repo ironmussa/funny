@@ -8,6 +8,7 @@
  * No child helper process needed. Available on Linux/macOS (Bun ≥ 1.3.5).
  */
 
+import { scrubSensitiveEnv } from '@funny/shared/lib/child-env';
 import type { Subprocess } from 'bun';
 
 import { log } from '../lib/logger.js';
@@ -66,7 +67,6 @@ export class BunPtyBackend implements PtyBackend {
     if (!this.callbacks) return;
 
     const { exe, args } = resolveShell(shell);
-    const ptyEnv = { ...process.env, ...env };
 
     try {
       const callbacks = this.callbacks;
@@ -74,7 +74,9 @@ export class BunPtyBackend implements PtyBackend {
 
       const proc = Bun.spawn([exe, ...args], {
         cwd: cwd || process.cwd(),
-        env: ptyEnv as Record<string, string>,
+        // pty-manager already builds `env` from buildChildEnv(); scrub again as
+        // defense in depth so no caller can reintroduce runner secrets (M8).
+        env: scrubSensitiveEnv(env) as Record<string, string>,
         terminal: {
           cols: cols || 80,
           rows: rows || 24,

@@ -12,12 +12,12 @@
  * helper.
  */
 
-import { spawn } from 'child_process';
 import { Readable, Writable } from 'stream';
 
 import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
 import { getManifest, type GateableAcpProvider } from '@funny/shared/provider-manifests';
 
+import { spawnAcpProbe } from './acp-probe-spawn.js';
 import { killProcessTree } from './base-process.js';
 
 type AcpProvider = GateableAcpProvider;
@@ -83,31 +83,11 @@ export async function forkAcpSession(
   const { ClientSideConnection, ndJsonStream } = SDK;
   const { command, args } = resolveAcpCommand(opts.provider);
 
-  const child = spawn(command, args, {
-    stdio: ['pipe', 'pipe', 'pipe'],
-    cwd: opts.cwd,
-    env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
-    shell: process.platform === 'win32',
-    // Fork probing is short-lived, but the ACP CLI may spawn helpers. Put it
-    // in its own process group so cleanup can reap descendants too.
-    detached: process.platform !== 'win32',
-  });
-
-  // Drain stderr so the child doesn't block on a full pipe buffer.
-  child.stderr?.on('data', () => {});
-
-  try {
-    await new Promise<void>((resolve, reject) => {
-      child.once('spawn', resolve);
-      child.once('error', reject);
-    });
-  } catch (err) {
-    return {
-      ok: false,
-      reason: 'spawn_failed',
-      message: (err as Error)?.message,
-    };
-  }
+  // Fork probing is short-lived, but the ACP CLI may spawn helpers; the probe
+  // leads its own process group so cleanup can reap descendants too.
+  const spawned = await spawnAcpProbe(command, args, opts.cwd, opts.env);
+  if (spawned.isErr()) return { ok: false, reason: 'spawn_failed', message: spawned.error };
+  const child = spawned.value;
 
   const outputStream = Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>;
   const inputStream = Readable.toWeb(child.stdout!) as unknown as ReadableStream<Uint8Array>;

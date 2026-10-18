@@ -8,11 +8,12 @@
  *   - start issues a code + token; poll stays pending until approved
  *   - approve binds the runner to the approver and is single-use
  *   - poll delivers credentials exactly once, then the enrollment is consumed
- *   - the delivered forwardedSecret matches the server secret and round-trips
- *     through forwarded-identity sign/verify
+ *   - security H1: the delivered key is the runner's OWN derived forwarding key,
+ *     never the deployment-wide RUNNER_AUTH_SECRET; it round-trips with what the
+ *     server sink signs for that runner and does NOT verify for another runner
  */
 
-// Must be set before the service/routes read it (forwardedSecret source).
+// Must be set before the service/routes read it (root of the per-runner keys).
 process.env.RUNNER_AUTH_SECRET = 'test-shared-secret';
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
@@ -22,6 +23,7 @@ import {
   verifyForwardedIdentity,
   __resetForwardedIdentityNonceCacheForTests,
 } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 
@@ -89,7 +91,13 @@ describe('Runner Enrollment (device-link)', () => {
       expect(poll1.status).toBe('approved');
       if (poll1.status === 'approved') {
         expect(poll1.token).toMatch(/^runner_/);
-        expect(poll1.forwardedSecret).toBe('test-shared-secret');
+        // Security H1: never the root secret — the runner's own derived key.
+        expect(poll1.forwardingKey).not.toBe('test-shared-secret');
+        expect(JSON.stringify(poll1)).not.toContain('test-shared-secret');
+        expect(poll1.forwardingKey).toBe(
+          deriveRunnerForwardingKey('test-shared-secret', poll1.runnerId),
+        );
+        expect(poll1.ownerUserId).toBe('user-approver');
       }
 
       // Second poll must NOT re-issue (consumed).
@@ -117,7 +125,7 @@ describe('Runner Enrollment (device-link)', () => {
       expect(poll.status).toBe('invalid');
     });
 
-    test('delivered forwardedSecret round-trips through forwarded-identity', async () => {
+    test('delivered forwardingKey round-trips with the per-runner signature only', async () => {
       __resetForwardedIdentityNonceCacheForTests();
       const started = await enroll.startEnrollment({ hostname: 'h', os: 'linux', ip: '' });
       await enroll.approve(started.userCode, 'user-1');
@@ -125,18 +133,35 @@ describe('Runner Enrollment (device-link)', () => {
       expect(poll.status).toBe('approved');
       if (poll.status !== 'approved') return;
 
-      // The server signs proxied identity with its secret; the runner verifies
-      // with the delivered one. They must match for proxied requests to work.
+      // The server sink signs proxied identity with THIS runner's derived key;
+      // the runner verifies with the delivered one. They must match.
       const identity = { userId: 'user-1', role: 'user', orgId: null, orgName: null };
-      const sig = signForwardedIdentity(identity, process.env.RUNNER_AUTH_SECRET!);
+      const sig = signForwardedIdentity(
+        identity,
+        deriveRunnerForwardingKey(process.env.RUNNER_AUTH_SECRET!, poll.runnerId),
+      );
       const ok = verifyForwardedIdentity(
         identity,
-        poll.forwardedSecret,
+        poll.forwardingKey,
         sig.signature,
         sig.timestamp,
         sig.nonce,
       );
       expect(ok).toBe(true);
+
+      // A signature minted with this runner's key must not verify on another
+      // runner (and vice versa): the key is per-runner.
+      const otherKey = deriveRunnerForwardingKey(process.env.RUNNER_AUTH_SECRET!, 'other-runner');
+      const forged = signForwardedIdentity({ ...identity, userId: 'admin' }, poll.forwardingKey);
+      expect(
+        verifyForwardedIdentity(
+          { ...identity, userId: 'admin' },
+          otherKey,
+          forged.signature,
+          forged.timestamp,
+          forged.nonce,
+        ),
+      ).toBe(false);
     });
   });
 
@@ -183,7 +208,13 @@ describe('Runner Enrollment (device-link)', () => {
       const pollBody = await poll.json();
       expect(pollBody.status).toBe('approved');
       expect(pollBody.token).toMatch(/^runner_/);
-      expect(pollBody.forwardedSecret).toBe('test-shared-secret');
+      // Security H1: the wire response never carries the root secret.
+      expect(JSON.stringify(pollBody)).not.toContain('test-shared-secret');
+      expect(pollBody.forwardedSecret).toBeUndefined();
+      expect(pollBody.forwardingKey).toBe(
+        deriveRunnerForwardingKey('test-shared-secret', pollBody.runnerId),
+      );
+      expect(pollBody.ownerUserId).toBe('user-1');
     });
 
     test('POST /enroll/poll → 404 for unknown token', async () => {

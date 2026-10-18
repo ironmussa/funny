@@ -129,7 +129,8 @@ runnerRoutes.post('/enroll/poll', async (c) => {
     status: 'approved',
     runnerId: result.runnerId,
     token: result.token,
-    forwardedSecret: result.forwardedSecret,
+    forwardingKey: result.forwardingKey,
+    ownerUserId: result.ownerUserId,
   } satisfies EnrollPollResponse);
 });
 

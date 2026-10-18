@@ -27,6 +27,7 @@ import {
   TIMESTAMP_HEADER,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import { eq } from 'drizzle-orm';
 
 import * as ownershipProof from '../../modules/threads/domain/proofs/thread-owned-by.js';
@@ -506,11 +507,13 @@ describe('Thread routes — runner proxy', () => {
       expect(headers['X-Forwarded-User']).toBe('user-1');
       expect(headers['X-Forwarded-Role']).toBe('user');
       expect(headers['X-Forwarded-Org']).toBe('org-1');
-      expect(headers['X-Runner-Auth']).toBe('test-secret');
+      expect(headers['X-Runner-Auth']).toBe(
+        deriveRunnerForwardingKey('test-secret', tunnelFetch.mock.calls[0][0]),
+      );
       expect(
         verifyForwardedIdentity(
           { userId: 'user-1', role: 'user', orgId: 'org-1', orgName: null },
-          'test-secret',
+          deriveRunnerForwardingKey('test-secret', tunnelFetch.mock.calls[0][0]),
           headers[SIGNATURE_HEADER],
           headers[TIMESTAMP_HEADER],
           headers[NONCE_HEADER],
@@ -711,7 +714,7 @@ describe('Thread routes — runner proxy', () => {
       expect(
         verifyForwardedIdentity(
           { userId: 'user-1', role: 'user', orgId: 'org-1', orgName: null },
-          'test-secret',
+          deriveRunnerForwardingKey('test-secret', tunnelFetch.mock.calls[0][0]),
           request.headers[SIGNATURE_HEADER],
           request.headers[TIMESTAMP_HEADER],
           request.headers[NONCE_HEADER],

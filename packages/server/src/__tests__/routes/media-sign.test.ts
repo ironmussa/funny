@@ -2,13 +2,16 @@
  * POST /api/media/sign (transport C). Mints a signed direct-media URL only when
  * the user's runner advertised a public media URL; otherwise returns { url: null }
  * so the client falls back to the proxied (tunnel) endpoint. The signed URL must
- * verify against RUNNER_AUTH_SECRET and bind the requested path + user.
+ * verify against the target runner's derived media key (security H1 — not the
+ * root RUNNER_AUTH_SECRET, and not another runner's key) and bind the
+ * requested path + user.
  */
 import { describe, test, expect, beforeEach, afterEach, spyOn } from 'bun:test';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 import { MEDIA_SIG_PARAMS, verifyMediaUrl } from '@funny/shared/auth/media-url-signature';
+import { deriveRunnerForwardingKey, deriveRunnerMediaKey } from '@funny/shared/auth/runner-keys';
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
@@ -86,16 +89,25 @@ describe('POST /api/media/sign', () => {
     expect(u.origin).toBe('https://media.runner.example');
     expect(u.pathname).toBe('/api/files/raw-signed');
 
+    const params = {
+      path: u.searchParams.get(MEDIA_SIG_PARAMS.path),
+      userId: u.searchParams.get(MEDIA_SIG_PARAMS.userId),
+      expires: u.searchParams.get(MEDIA_SIG_PARAMS.expires),
+      signature: u.searchParams.get(MEDIA_SIG_PARAMS.signature),
+    };
     const verified = verifyMediaUrl(
-      {
-        path: u.searchParams.get(MEDIA_SIG_PARAMS.path),
-        userId: u.searchParams.get(MEDIA_SIG_PARAMS.userId),
-        expires: u.searchParams.get(MEDIA_SIG_PARAMS.expires),
-        signature: u.searchParams.get(MEDIA_SIG_PARAMS.signature),
-      },
-      'test-secret',
+      params,
+      deriveRunnerMediaKey(deriveRunnerForwardingKey('test-secret', 'runner-1')),
     );
     expect(verified.ok).toBe(true);
+    // Not verifiable with the root secret or with another runner's key.
+    expect(verifyMediaUrl(params, 'test-secret').ok).toBe(false);
+    expect(
+      verifyMediaUrl(
+        params,
+        deriveRunnerMediaKey(deriveRunnerForwardingKey('test-secret', 'runner-2')),
+      ).ok,
+    ).toBe(false);
     if (verified.ok) {
       expect(verified.claim.path).toBe('/p/x.png');
       expect(verified.claim.userId).toBe('user-1');

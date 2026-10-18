@@ -46,6 +46,7 @@ mock.module('@funny/core/git', () => ({
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
@@ -231,6 +232,24 @@ describe('authMiddleware (integration)', () => {
     );
     expect(res.status).toBe(401);
     expect((await res.json()).error).toMatch(/X-Runner-Invite-Token/);
+  });
+
+  test('root RUNNER_AUTH_SECRET as X-Runner-Auth grants isRunner', async () => {
+    const res = await app.request('/api/protected', {
+      headers: { 'X-Runner-Auth': 'auth-mw-secret' },
+    });
+    expect(res.status).toBe(200);
+    expect((await res.json()).isRunner).toBe(true);
+  });
+
+  test('an enrolled runner key (per-runner K_r) does NOT grant isRunner (security H1)', async () => {
+    // A device-link / invite-token runner only holds its derived key. Presenting
+    // it as X-Runner-Auth must not authenticate it to the server as a runner.
+    const enrolledKey = deriveRunnerForwardingKey('auth-mw-secret', 'runner-enrolled-1');
+    const res = await app.request('/api/protected', {
+      headers: { 'X-Runner-Auth': enrolledKey },
+    });
+    expect(res.status).toBe(401);
   });
 
   test('scheduler auth with X-Forwarded-User impersonates that user', async () => {

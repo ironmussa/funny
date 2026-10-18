@@ -10,6 +10,7 @@ import { describe, test, expect, beforeAll, beforeEach, afterEach, mock, spyOn }
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 import { SIGNATURE_HEADER } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import * as runnerManager from '../../services/runner-manager.js';
 import type { RunnerRequest, RunnerResponse } from '../../services/runner-ports.js';
@@ -142,7 +143,8 @@ describe('Thread creation — characterization', () => {
       const headers = tunnelFetch.mock.calls[0][1].headers;
       expect(headers['X-Forwarded-User']).toBe('user-1');
       expect(headers['X-Forwarded-Role']).toBe('user');
-      expect(headers['X-Runner-Auth']).toBe('test-secret');
+      // Security H1: the runner's own derived key, never the root secret.
+      expect(headers['X-Runner-Auth']).toBe(deriveRunnerForwardingKey('test-secret', 'runner-1'));
       expect(headers[SIGNATURE_HEADER]).toBeTruthy();
       expect(runnerManager.findRunnerForProject).toHaveBeenCalledWith('p1', 'user-1');
       expect((threadRegistry.registerThread as any).mock.calls[0][0].userId).toBe('user-1');

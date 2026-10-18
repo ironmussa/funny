@@ -34,11 +34,21 @@ export interface RunnerCredentials {
   runnerId: string;
   token: string;
   /**
-   * Shared forwarded-identity secret (RUNNER_AUTH_SECRET) delivered during
-   * device-link enrollment. Persisted so a restart can re-load it into the
-   * environment and proxied requests keep verifying — without the operator
-   * ever hand-carrying the secret. Absent for runners configured the classic
-   * way (explicit --secret / env), which already have it in the environment.
+   * This runner's OWN forwarding key `K_r` (security H1), delivered by the
+   * server at enrollment / registration. Persisted so a restart keeps
+   * verifying proxied requests without the operator hand-carrying a secret.
+   * Kept in module state at runtime (`lib/runner-keys.ts`), never in
+   * `process.env`.
+   */
+  forwardingKey?: string;
+  /** The user that owns this runner (security H7: cookie-auth allow-list). */
+  ownerUserId?: string;
+  /**
+   * LEGACY (pre-H1): older servers delivered the deployment-wide
+   * `RUNNER_AUTH_SECRET` here. On load it is converted into `forwardingKey`
+   * (`deriveRunnerForwardingKey(legacy, runnerId)`) and the caller rewrites
+   * the file without it, so the root secret no longer sits on this runner's
+   * disk. Never written by current code.
    */
   forwardedSecret?: string;
 }
@@ -47,6 +57,8 @@ const runnerCredentialsSchema = z.object({
   serverUrl: z.string().min(1),
   runnerId: z.string().min(1),
   token: z.string().min(1),
+  forwardingKey: z.string().min(1).optional(),
+  ownerUserId: z.string().min(1).optional(),
   forwardedSecret: z.string().min(1).optional(),
 });
 
@@ -80,6 +92,8 @@ export function loadRunnerCredentials(
       serverUrl: creds.serverUrl,
       runnerId: creds.runnerId,
       token: creds.token,
+      forwardingKey: creds.forwardingKey,
+      ownerUserId: creds.ownerUserId,
       forwardedSecret: creds.forwardedSecret,
     };
   } catch (err) {

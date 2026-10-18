@@ -14,6 +14,7 @@ import {
   TIMESTAMP_HEADER,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import { makeCreateThread } from '../../../modules/threads/application/create-thread.js';
 import type { ActorContext } from '../../../modules/threads/application/ports.js';
@@ -162,7 +163,7 @@ describe('remote creation adapter', () => {
     expect(
       verifyForwardedIdentity(
         { userId: 'alice', role: 'admin', orgId: 'org-1', orgName: null },
-        'test-secret',
+        deriveRunnerForwardingKey('test-secret', t.calls[0][0]),
         headers[SIGNATURE_HEADER],
         headers[TIMESTAMP_HEADER],
         headers[NONCE_HEADER],
@@ -342,7 +343,7 @@ describe('remote fork adapter', () => {
     expect(
       verifyForwardedIdentity(
         { userId: 'alice', role: 'admin', orgId: 'org-1', orgName: null },
-        'test-secret',
+        deriveRunnerForwardingKey('test-secret', t.calls[0][0]),
         headers[SIGNATURE_HEADER],
         headers[TIMESTAMP_HEADER],
         headers[NONCE_HEADER],

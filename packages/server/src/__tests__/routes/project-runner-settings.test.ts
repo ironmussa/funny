@@ -11,6 +11,7 @@ import {
   TIMESTAMP_HEADER,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import { stopProjectSessionsOnRunners } from '../../routes/project-runner-settings.js';
 import { __resetRunnerScopeCache, canRunnerAccessProject } from '../../services/runner-scope.js';
@@ -38,14 +39,20 @@ describe('Project runner settings routes', () => {
     });
   });
 
-  /** True when the headers carry a valid signed forwarded identity for `userId`. */
-  const signedFor = (userId: string, headers: Record<string, string>) =>
+  /**
+   * True when the request carries a valid signed forwarded identity for
+   * `userId`, keyed with the TARGET runner's derived key (security H1).
+   */
+  const signedFor = (
+    userId: string,
+    sentReq: { runnerId: string; headers: Record<string, string> },
+  ) =>
     verifyForwardedIdentity(
       { userId, role: 'user', orgId: null, orgName: null },
-      'test-secret',
-      headers[SIGNATURE_HEADER],
-      headers[TIMESTAMP_HEADER],
-      headers[NONCE_HEADER],
+      deriveRunnerForwardingKey('test-secret', sentReq.runnerId),
+      sentReq.headers[SIGNATURE_HEADER],
+      sentReq.headers[TIMESTAMP_HEADER],
+      sentReq.headers[NONCE_HEADER],
     );
 
   beforeEach(() => {
@@ -83,7 +90,7 @@ describe('Project runner settings routes', () => {
     // The stop is sent to the owner's revoked runner, signed as the project owner.
     expect(sent[0]!.runnerId).toBe('laptop');
     expect(sent[0]!.headers['X-Forwarded-User']).toBe('alice');
-    expect(signedFor('alice', sent[0]!.headers)).toBe(true);
+    expect(signedFor('alice', sent[0]!)).toBe(true);
 
     const get = await t.requestAs('alice').get('/api/projects/px/runner-settings');
     const body = await get.json();
@@ -117,7 +124,7 @@ describe('Project runner settings routes', () => {
     await stopProjectSessionsOnRunners({ requests }, 'px', ['bob-r', 'laptop']);
     expect(stopped).toEqual(['/api/threads/on-laptop/stop']);
     expect(sent.map((entry) => entry.runnerId)).toEqual(['laptop']);
-    expect(signedFor('alice', sent[0]!.headers)).toBe(true);
+    expect(signedFor('alice', sent[0]!)).toBe(true);
   });
 
   test("non-owners cannot read or change a project's runner binding", async () => {

@@ -7,6 +7,7 @@ import {
   __resetForwardedIdentityNonceCacheForTests,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import { Hono } from 'hono';
 
 import type { ServerEnv, UserRole } from '../../lib/types.js';
@@ -20,11 +21,13 @@ describe('gRPC proxy forwarded identity', () => {
 
   function setup(role?: UserRole) {
     const captured: Array<Record<string, string>> = [];
+    const runnerIds: string[] = [];
     const transport: ProxyTransport = {
       runnerAccess: createRunnerAccessMock(),
       requests: {
         isAvailable: () => true,
-        request: async (_runnerId, request) => {
+        request: async (runnerId, request) => {
+          runnerIds.push(runnerId);
           captured.push(
             Object.fromEntries(
               Object.entries(request.headers).map(([key, value]) => [key.toLowerCase(), value]),
@@ -41,18 +44,22 @@ describe('gRPC proxy forwarded identity', () => {
       await next();
     });
     app.all('/api/*', createProxyToRunner(transport));
-    return { app, captured };
+    // Security H1: the sink signs with the TARGET runner's derived key.
+    const keyFor = (i: number) => deriveRunnerForwardingKey('test-secret', runnerIds[i]!);
+    return { app, captured, keyFor };
   }
 
   test('signs the same role carried in the forwarded headers', async () => {
-    const { app, captured } = setup('admin');
+    const { app, captured, keyFor } = setup('admin');
     expect((await app.request('/api/projects/p1/branches')).status).toBe(200);
     const headers = captured[0]!;
     expect(headers['x-forwarded-role']).toBe('admin');
+    expect(headers['x-runner-auth']).toBe(keyFor(0));
+    expect(headers['x-runner-auth']).not.toBe('test-secret');
     expect(
       verifyForwardedIdentity(
         { userId: 'user-1', role: 'admin', orgId: null, orgName: null },
-        'test-secret',
+        keyFor(0),
         headers[SIGNATURE_HEADER.toLowerCase()],
         headers[TIMESTAMP_HEADER.toLowerCase()],
         headers[NONCE_HEADER.toLowerCase()],
@@ -61,14 +68,14 @@ describe('gRPC proxy forwarded identity', () => {
   });
 
   test('defaults the role to user', async () => {
-    const { app, captured } = setup();
+    const { app, captured, keyFor } = setup();
     expect((await app.request('/api/projects/p1/branches')).status).toBe(200);
     const headers = captured[0]!;
     expect(headers['x-forwarded-role']).toBe('user');
     expect(
       verifyForwardedIdentity(
         { userId: 'user-1', role: 'user', orgId: null, orgName: null },
-        'test-secret',
+        keyFor(0),
         headers[SIGNATURE_HEADER.toLowerCase()],
         headers[TIMESTAMP_HEADER.toLowerCase()],
         headers[NONCE_HEADER.toLowerCase()],

@@ -3,6 +3,7 @@
  * Handles registration, heartbeat, task dispatch, and project assignments.
  */
 
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import type {
   AdvertisedProvider,
   RunnerInfo,
@@ -124,6 +125,26 @@ function toRunnerInfo(
 
 // ── Registration ────────────────────────────────────────
 
+/**
+ * Registration response. Besides the bearer it carries the runner's OWN
+ * forwarding key (security H1 — never the root `RUNNER_AUTH_SECRET`), so an
+ * invite-token runner needs no shared secret, and its owner (security H7) so
+ * the runner can restrict direct cookie auth to that user.
+ */
+function registerResponse(
+  runnerId: string,
+  token: string,
+  userId: string | undefined,
+): RunnerRegisterResponse {
+  const rootSecret = process.env.RUNNER_AUTH_SECRET;
+  return {
+    runnerId,
+    token,
+    ...(userId ? { ownerUserId: userId } : {}),
+    ...(rootSecret ? { forwardingKey: deriveRunnerForwardingKey(rootSecret, runnerId) } : {}),
+  };
+}
+
 export async function registerRunner(
   req: RunnerRegisterRequest,
   userId?: string,
@@ -174,7 +195,7 @@ export async function registerRunner(
     setAdvertisedProviders(runnerId, req.providers);
     setActiveBuiltins(runnerId, req.activeBuiltins);
     setAvailableProviders(runnerId, req.availableProviders);
-    return { runnerId, token };
+    return registerResponse(runnerId, token, userId);
   }
 
   // New runner — create fresh registration
@@ -207,7 +228,7 @@ export async function registerRunner(
   setAdvertisedProviders(runnerId, req.providers);
   setActiveBuiltins(runnerId, req.activeBuiltins);
   setAvailableProviders(runnerId, req.availableProviders);
-  return { runnerId, token };
+  return registerResponse(runnerId, token, userId);
 }
 
 // ── Authentication ──────────────────────────────────────

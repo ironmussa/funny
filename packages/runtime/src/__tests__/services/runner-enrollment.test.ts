@@ -3,9 +3,9 @@
  * persistence that makes a restart transparent.
  *
  * The enrollment loop must: start, poll until approved, and return the
- * delivered credentials (bearer + forwarded-identity secret). The credentials
- * file must round-trip the forwardedSecret so a restart re-loads it without
- * re-enrolling.
+ * delivered credentials (bearer + this runner's own forwarding key + owner).
+ * The credentials file must round-trip the forwardingKey so a restart re-loads
+ * it without re-enrolling.
  */
 
 import { mkdtempSync, rmSync } from 'fs';
@@ -62,7 +62,8 @@ describe('runner-enrollment client', () => {
           status: 'approved',
           runnerId: 'runner-abc',
           token: 'runner_secrettoken',
-          forwardedSecret: 'shared-secret',
+          forwardingKey: 'runner-key',
+          ownerUserId: 'owner-1',
         });
       }
       throw new Error(`unexpected fetch: ${url}`);
@@ -76,7 +77,8 @@ describe('runner-enrollment client', () => {
     expect(creds).toEqual({
       runnerId: 'runner-abc',
       token: 'runner_secrettoken',
-      forwardedSecret: 'shared-secret',
+      forwardingKey: 'runner-key',
+      ownerUserId: 'owner-1',
     });
     expect(pollCount).toBe(2);
     // The user code was surfaced to the operator.
@@ -104,7 +106,8 @@ describe('runner-enrollment client', () => {
           status: 'approved',
           runnerId: 'runner-xyz',
           token: 'runner_tok',
-          forwardedSecret: 's',
+          forwardingKey: 's',
+          ownerUserId: 'o',
         });
       }
       throw new Error(`unexpected fetch: ${url}`);
@@ -130,13 +133,14 @@ describe('runner-credentials persistence', () => {
     rmSync(dir, { recursive: true, force: true });
   });
 
-  test('round-trips the forwardedSecret so a restart resumes', () => {
+  test('round-trips the forwardingKey + owner so a restart resumes', () => {
     saveRunnerCredentials(
       {
         serverUrl: 'http://server.test',
         runnerId: 'r1',
         token: 'runner_tok',
-        forwardedSecret: 'shared-secret',
+        forwardingKey: 'runner-key',
+        ownerUserId: 'owner-1',
       },
       dir,
     );
@@ -146,8 +150,22 @@ describe('runner-credentials persistence', () => {
       serverUrl: 'http://server.test',
       runnerId: 'r1',
       token: 'runner_tok',
-      forwardedSecret: 'shared-secret',
+      forwardingKey: 'runner-key',
+      ownerUserId: 'owner-1',
     });
+  });
+
+  test('still loads a legacy forwardedSecret so it can be migrated', () => {
+    saveRunnerCredentials(
+      {
+        serverUrl: 'http://server.test',
+        runnerId: 'r1',
+        token: 'runner_tok',
+        forwardedSecret: 'legacy-root',
+      },
+      dir,
+    );
+    expect(loadRunnerCredentials('http://server.test', dir)?.forwardedSecret).toBe('legacy-root');
   });
 
   test('credentials for a different server are ignored', () => {

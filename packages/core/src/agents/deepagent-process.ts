@@ -23,6 +23,8 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+import { buildChildEnv } from '@funny/shared/lib/child-env';
+
 import { toACPImageBlocks, type ACPImageBlock } from './acp-image.js';
 import { toACPMcpServers } from './acp-mcp.js';
 import { inferACPToolName, buildACPToolInput, extractACPToolOutput } from './acp-tool-input.js';
@@ -113,7 +115,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
     }
     // Build env — alias provider API keys so that LangChain integrations
     // (used internally by deepagents-acp) can find them.
-    const spawnEnv = { ...process.env, ...this.options.env };
+    const spawnEnv = buildChildEnv(this.options.env);
 
     // Pass system prompt via env var (CLI args have length limits)
     if (this.options.systemPrefix) {

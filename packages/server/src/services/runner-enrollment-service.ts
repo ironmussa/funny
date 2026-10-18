@@ -9,10 +9,14 @@
  *      stored).
  *   2. A logged-in user enters the `userCode` in the funny UI and `approve()`s
  *      it. Approval registers a runner under that user and stages the runner's
- *      credentials (bearer + the server's forwarded-identity secret) for one-
- *      time delivery.
+ *      bearer token for one-time delivery.
  *   3. The runner polls `pollByToken()`; once approved it receives the
- *      credentials exactly once (status pending → approved → consumed).
+ *      credentials exactly once (status pending → approved → consumed): the
+ *      bearer token plus its OWN forwarding key `K_r` (see
+ *      `@funny/shared/auth/runner-keys`). The deployment-wide
+ *      `RUNNER_AUTH_SECRET` is NEVER delivered (security H1): it would let any
+ *      logged-in user who approves a runner mint forwarded identities for every
+ *      other runner and authenticate to the server as `isRunner`.
  *
  * Enrollments self-expire after {@link ENROLLMENT_TTL_MS}; expired rows are
  * swept lazily on each entry point. This module follows the plain-async / throw
@@ -21,6 +25,7 @@
 
 import { createHash, randomInt } from 'crypto';
 
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import type { EnrollmentInfo } from '@funny/shared/runner-protocol';
 import { eq, lt, and } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -205,7 +210,14 @@ export async function approve(userCode: string, userId: string): Promise<Approve
 
 export type PollResult =
   | { status: 'pending' }
-  | { status: 'approved'; runnerId: string; token: string; forwardedSecret: string }
+  | {
+      status: 'approved';
+      runnerId: string;
+      token: string;
+      /** The runner's own derived forwarding key — never the root secret. */
+      forwardingKey: string;
+      ownerUserId: string;
+    }
   | { status: 'invalid' };
 
 /**
@@ -232,13 +244,15 @@ export async function pollByToken(pollToken: string): Promise<PollResult> {
     return { status: 'invalid' };
   }
 
-  const forwardedSecret = process.env.RUNNER_AUTH_SECRET ?? '';
-  if (!forwardedSecret) {
+  const rootSecret = process.env.RUNNER_AUTH_SECRET ?? '';
+  if (!rootSecret) {
     log.warn('Approved enrollment poll but RUNNER_AUTH_SECRET is unset on the server', {
       namespace: 'runner',
       runnerId: row.runnerId,
     });
   }
+  // Per-runner key (security H1): the runner gets K_r, never the root secret.
+  const forwardingKey = rootSecret ? deriveRunnerForwardingKey(rootSecret, row.runnerId) : '';
 
   // Deliver once: mark consumed so a re-poll can't re-issue the credentials.
   await db
@@ -250,6 +264,7 @@ export async function pollByToken(pollToken: string): Promise<PollResult> {
     status: 'approved',
     runnerId: row.runnerId,
     token: row.runnerToken,
-    forwardedSecret,
+    forwardingKey,
+    ownerUserId: row.approverUserId ?? '',
   };
 }

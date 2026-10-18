@@ -16,6 +16,7 @@ import {
   __resetForwardedIdentityNonceCacheForTests,
   verifyForwardedIdentity,
 } from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import * as auditModule from '../../lib/audit.js';
 import { setupBrowserPtyListRpc } from '../../services/socketio/browser-pty-list.js';
@@ -59,7 +60,8 @@ function fixture(opts: FixtureOptions = {}) {
 function signedFor(userId: string, headers: Record<string, string>): boolean {
   return verifyForwardedIdentity(
     { userId, role: 'user', orgId: null, orgName: null },
-    'test-secret',
+    // Security H1: signed with runner-1's derived key, not the root secret.
+    deriveRunnerForwardingKey('test-secret', 'runner-1'),
     headers[SIGNATURE_HEADER],
     headers[TIMESTAMP_HEADER],
     headers[NONCE_HEADER],
@@ -88,7 +90,9 @@ describe('browser-session sink', () => {
       data: { sessionId: 's1', url: 'https://x.test' },
     });
     expect(request.headers['X-Forwarded-User']).toBe('user-1');
-    expect(request.headers['X-Runner-Auth']).toBe('test-secret');
+    expect(request.headers['X-Runner-Auth']).toBe(
+      deriveRunnerForwardingKey('test-secret', 'runner-1'),
+    );
     expect(request.headers['content-type']).toBe('application/json');
     expect(signedFor('user-1', request.headers)).toBe(true);
     expect(signedFor('user-2', request.headers)).toBe(false);

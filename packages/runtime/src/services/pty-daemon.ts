@@ -229,6 +229,9 @@ function spawnSession(cmd: SpawnCmd): void {
     // Build a clean environment for user shell sessions.
     // Remove node_modules/.bin entries from PATH — these leak from the Bun
     // server/daemon process and can shadow user tools (e.g. npx → bunx shim).
+    // Secrets (security M8): this file is copied verbatim to dist/ and run
+    // standalone, so it cannot import @funny/shared. Its own process.env is
+    // already scrubbed — pty-daemon-launcher spawns it with buildChildEnv().
     const mergedEnv = { ...process.env, ...(cmd.env || {}) } as Record<string, string>;
     if (mergedEnv.PATH) {
       mergedEnv.PATH = mergedEnv.PATH.split(':')

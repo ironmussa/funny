@@ -13,6 +13,7 @@
 import { execute } from '@funny/core/git';
 import { runAsync, scheduleRepeating } from '@funny/shared/async';
 import { internal, type DomainError } from '@funny/shared/errors';
+import { buildChildEnv } from '@funny/shared/lib/child-env';
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
@@ -133,7 +134,7 @@ async function startCommandImpl(
     cwd,
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { ...process.env, FORCE_COLOR: '1' },
+    env: buildChildEnv({ FORCE_COLOR: '1' }),
   });
 
   const entry: RunningCommand = {

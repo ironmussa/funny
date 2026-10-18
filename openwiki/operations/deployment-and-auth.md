@@ -69,7 +69,7 @@ Auth code map:
 
 - `packages/runtime/src/lib/auth.ts` — the Better Auth instance.
 - `packages/server/src/middleware/auth.ts` — validates sessions, sets user context.
-- `packages/runtime/src/middleware/auth.ts` — validates the `X-Runner-Auth` shared secret from the server's proxy, falling back to server session validation.
+- `packages/runtime/src/middleware/auth.ts` — validates `X-Runner-Auth` and the forwarded-identity HMAC with this runner's own per-runner key (`lib/runner-keys.ts`). It falls back to server session validation, which accepts only the runner's owner.
 - `packages/client/src/stores/auth-store.ts`, `packages/client/src/lib/auth-client.ts` — client-side session state and Better Auth client (username + admin plugins).
 
 ## Per-user git identity
@@ -86,7 +86,7 @@ Tokens are encrypted at rest with **AES-256-GCM**; the encryption key auto-gener
 A runner pointed at a remote `TEAM_SERVER_URL` effectively grants that server shell execution in the runner's `$HOME` — git operations, pre-commit hooks, agent CLI spawning, PTY shells, and access to saved GitHub tokens / provider keys. Only connect runners to central servers you trust, and prefer running each runner under a dedicated OS user, VM, or container. Runner-side required configuration:
 
 - `TEAM_SERVER_URL` — required on the runner to connect it to the server.
-- `RUNNER_AUTH_SECRET` — required shared secret for runner ↔ server authentication.
+- `RUNNER_AUTH_SECRET` — the server's **root** secret (required on the server). Runners do not need it. Device-link enrollment and invite-token registration deliver a per-runner forwarding key, `K_r = HMAC(root, runnerId)`. The server signs forwarded identity, `X-Runner-Auth` and media URLs for runner `r` with `K_r`, so one runner cannot forge requests for another. Only operator-trusted runners should be given the root secret (see `packages/shared/src/auth/runner-keys.ts`).
 - `DATABASE_URL` — optional PostgreSQL connection string on the server (default: SQLite).
 
 See the "Machine B — Runner" section of [INSTALL.md](../../INSTALL.md) for the full walkthrough.

@@ -15,6 +15,7 @@ import { badRequest, internal, notFound } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
 import { ResultAsync, err } from 'neverthrow';
 
+import { getRunnerMediaKey } from '../lib/runner-keys.js';
 import { getServices } from '../services/service-registry.js';
 import { tmpAssetsDirName } from '../services/thread-context.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -515,13 +516,14 @@ app.get('/raw', async (c) => {
  *
  * This route is PUBLIC in the auth middleware (a cross-origin <img>/<video>
  * request carries no cookie or shared-secret header). Authentication is the
- * signature itself: the server minted it with `RUNNER_AUTH_SECRET`, binding the
+ * signature itself: the server minted it with THIS runner's media key (derived
+ * from its per-runner forwarding key — see runner-keys.ts), binding the
  * path + user + expiry. We re-derive the user from the verified claim and run
  * the SAME per-user project-scope check as /raw — the signature is
  * authentication, NOT authorization (see media-url-signature.ts).
  */
 app.get('/raw-signed', async (c) => {
-  const secret = process.env.RUNNER_AUTH_SECRET;
+  const secret = getRunnerMediaKey();
   if (!secret) return deny();
 
   const verified = verifyMediaUrl(

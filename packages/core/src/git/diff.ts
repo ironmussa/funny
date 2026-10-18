@@ -13,9 +13,10 @@ import type {
   NestedDirtyStats,
 } from '@funny/shared';
 import { processError, type DomainError } from '@funny/shared/errors';
-import { ResultAsync } from 'neverthrow';
+import { errAsync, ResultAsync } from 'neverthrow';
 
 import { getNativeGit } from './native.js';
+import { resolveRepoRelativePath } from './path-validation.js';
 import { gitRead } from './process.js';
 
 // ─── Helpers ────────────────────────────────────────────
@@ -721,6 +722,84 @@ export function getExternalRepoFileStats(
   );
 }
 
+type FileDiffContext = 'default' | 'full';
+
+/**
+ * Shared implementation of {@link getSingleFileDiff} / {@link getFullContextFileDiff}.
+ *
+ * Security: `rawFilePath` comes from a request (`?path=`). Absolute paths and
+ * `..` segments would let the native reader / `git diff --no-index` read any
+ * file on the host, so it is confined to `cwd` before touching disk.
+ */
+function fileDiffWithContext(
+  cwd: string,
+  rawFilePath: string,
+  staged: boolean,
+  context: FileDiffContext,
+): ResultAsync<string, DomainError> {
+  const safePath = resolveRepoRelativePath(cwd, rawFilePath);
+  if (safePath.isErr()) return errAsync(safePath.error);
+  const filePath = safePath.value;
+  return ResultAsync.fromPromise(
+    (async () =>
+      (await nativeFileDiff(cwd, filePath, staged, context)) ||
+      cliFileDiff(cwd, filePath, staged, context))(),
+    (error) => processError(String(error), 1, ''),
+  );
+}
+
+/**
+ * Native (gitoxide) single-file diff. Returns '' when the module is missing,
+ * fails, or yields nothing (e.g. an untracked file) so the caller falls back
+ * to the CLI.
+ */
+async function nativeFileDiff(
+  cwd: string,
+  filePath: string,
+  staged: boolean,
+  context: FileDiffContext,
+): Promise<string> {
+  const native = getNativeGit();
+  if (!native) return '';
+  try {
+    return context === 'full'
+      ? await native.getFullContextFileDiff(cwd, filePath, staged)
+      : await native.getSingleFileDiff(cwd, filePath, staged);
+  } catch {
+    return '';
+  }
+}
+
+/** CLI fallback for a single-file diff. `filePath` must already be validated. */
+async function cliFileDiff(
+  cwd: string,
+  filePath: string,
+  staged: boolean,
+  context: FileDiffContext,
+): Promise<string> {
+  // -U99999 includes the entire file as context around the changes.
+  const ctxArgs = context === 'full' ? ['-U99999'] : [];
+  if (!staged && (await shouldUseNoIndexDiff(cwd, filePath))) {
+    // Untracked and ignored files, and files outside a Git worktree, need a
+    // no-index diff. Guard against large/binary files because
+    // `git diff --no-index` on a multi-GB binary can hang for tens of
+    // seconds, blocking the request.
+    if (shouldSkipUntrackedDiff(cwd, filePath)) return '';
+    const noIndex = await gitRead(['diff', '--no-index', ...ctxArgs, '--', '/dev/null', filePath], {
+      cwd,
+      reject: false,
+    });
+    // --no-index exits with 1 when there are differences (expected)
+    return noIndex.stdout;
+  }
+  const stagedArgs = staged ? ['--staged'] : [];
+  const tracked = await gitRead(['diff', ...stagedArgs, ...ctxArgs, '--', filePath], {
+    cwd,
+    reject: false,
+  });
+  return tracked.exitCode === 0 ? tracked.stdout : '';
+}
+
 /**
  * Get the diff content for a single file.
  */
@@ -729,90 +808,16 @@ export function getSingleFileDiff(
   filePath: string,
   staged: boolean,
 ): ResultAsync<string, DomainError> {
-  const native = getNativeGit();
-  return ResultAsync.fromPromise(
-    (async () => {
-      // Try native module first
-      if (native) {
-        try {
-          const diff = await native.getSingleFileDiff(cwd, filePath, staged);
-          if (diff) return diff;
-          // Native returned empty — may be an untracked file; fall through to CLI
-        } catch {
-          // Native module failed — fall through to CLI
-        }
-      }
-      if (staged) {
-        const result = await gitRead(['diff', '--staged', '--', filePath], {
-          cwd,
-          reject: false,
-        });
-        return result.exitCode === 0 ? result.stdout : '';
-      }
-      if (await shouldUseNoIndexDiff(cwd, filePath)) {
-        // Untracked or ignored file — use diff --no-index. Guard against large/binary files
-        // because `git diff --no-index` on a multi-GB binary can hang for tens
-        // of seconds, blocking the request.
-        if (shouldSkipUntrackedDiff(cwd, filePath)) return '';
-        const result = await gitRead(['diff', '--no-index', '/dev/null', filePath], {
-          cwd,
-          reject: false,
-        });
-        // --no-index exits with 1 when there are differences (expected)
-        return result.stdout;
-      }
-      // Tracked, unstaged
-      const result = await gitRead(['diff', '--', filePath], { cwd, reject: false });
-      return result.exitCode === 0 ? result.stdout : '';
-    })(),
-    (error) => processError(String(error), 1, ''),
-  );
+  return fileDiffWithContext(cwd, filePath, staged, 'default');
 }
 
 /**
  * Get the diff for a single file with full file context (all lines shown).
- * Uses -U99999 to include the entire file as context around changes.
  */
 export function getFullContextFileDiff(
   cwd: string,
   filePath: string,
   staged: boolean,
 ): ResultAsync<string, DomainError> {
-  const native = getNativeGit();
-  return ResultAsync.fromPromise(
-    (async () => {
-      if (native) {
-        try {
-          const diff = await native.getFullContextFileDiff(cwd, filePath, staged);
-          if (diff) return diff;
-        } catch {
-          // Native module failed — fall through to CLI
-        }
-      }
-      if (staged) {
-        const result = await gitRead(['diff', '--staged', '-U99999', '--', filePath], {
-          cwd,
-          reject: false,
-        });
-        return result.exitCode === 0 ? result.stdout : '';
-      }
-      if (await shouldUseNoIndexDiff(cwd, filePath)) {
-        // Untracked and ignored files, and files outside a Git worktree, need a no-index
-        // diff. The latter is used by agents for temporary scripts such as
-        // SSH askpass helpers. Keep the same large/binary guard as
-        // getSingleFileDiff to prevent multi-GB binaries from hanging the call.
-        if (shouldSkipUntrackedDiff(cwd, filePath)) return '';
-        const result = await gitRead(['diff', '--no-index', '-U99999', '/dev/null', filePath], {
-          cwd,
-          reject: false,
-        });
-        // --no-index exits with 1 when there are differences (expected)
-        return result.stdout;
-      }
-      // Tracked, unstaged
-      const result = await gitRead(['diff', '-U99999', '--', filePath], { cwd, reject: false });
-      return result.exitCode === 0 ? result.stdout : '';
-    })(),
-    (error) => processError(String(error), 1, ''),
-  );
+  return fileDiffWithContext(cwd, filePath, staged, 'full');
 }

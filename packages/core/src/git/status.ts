@@ -3,12 +3,13 @@
  */
 
 import type { GitSyncState } from '@funny/shared';
-import { processError, type DomainError } from '@funny/shared/errors';
-import { ResultAsync } from 'neverthrow';
+import { badRequest, processError, type DomainError } from '@funny/shared/errors';
+import { errAsync, ResultAsync } from 'neverthrow';
 
 import { countUntrackedTextFileLines } from './diff.js';
 import { getNativeGit } from './native.js';
 import { gitRead } from './process.js';
+import { isSafeGitRefArg } from './ref-guard.js';
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -355,9 +356,14 @@ async function nativeStatusSummary(
  */
 export function getStatusSummary(
   worktreeCwd: string,
-  baseBranch?: string,
+  rawBaseBranch?: string,
   projectCwd?: string,
 ): ResultAsync<GitStatusSummary, DomainError> {
+  // Security (M7): baseBranch is persisted from user input and passed
+  // positionally to git below; a value like `--output=x` would be parsed as an
+  // option. Treat an unsafe value as "no base branch" instead of failing the
+  // whole status call.
+  const baseBranch = isSafeGitRefArg(rawBaseBranch) ? rawBaseBranch : undefined;
   // Check cache first
   const cacheKey = statusCacheKey(worktreeCwd, baseBranch, projectCwd);
   const cached = statusCache.get(cacheKey);
@@ -405,6 +411,9 @@ export function getCommittedBranchSummary(
   baseBranch: string,
   branch: string,
 ): ResultAsync<GitStatusSummary, DomainError> {
+  if (!isSafeGitRefArg(baseBranch) || !isSafeGitRefArg(branch)) {
+    return errAsync(badRequest(`Invalid git branch: ${baseBranch}...${branch}`));
+  }
   return ResultAsync.fromPromise(
     (async () => {
       // Native fast path: one in-process pass for the diff base...branch line

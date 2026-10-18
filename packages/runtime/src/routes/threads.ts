@@ -14,6 +14,7 @@ import type { DomainError } from '@funny/shared/errors';
 import { badRequest, conflict, forbidden, internal, notFound } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
+import type { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
@@ -32,6 +33,7 @@ import {
   updateQueuedMessage as updateQueuedMessageService,
 } from '../services/thread-service/messaging.js';
 import { forkAndRewind, rewindCode } from '../services/thread-service/rewind.js';
+import { extractShellEscapeCommand } from '../services/thread-service/shell-escape.js';
 import { convertToWorktree } from '../services/thread-service/update.js';
 import { uploadFile } from '../services/thread-service/upload.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -54,6 +56,25 @@ import {
 } from '../validation/schemas.js';
 
 export const threadRoutes = new Hono<HonoEnv>();
+
+type SendMessageBody = z.infer<typeof sendMessageSchema>;
+
+/**
+ * Steer-share delegation (thread-sharing-steer): the only fields a non-owner
+ * sharee may pass to `POST /:id/message`. Everything else in the schema
+ * (provider, model, permissionMode, effort, allowedTools, disallowedTools,
+ * baseBranch) mutates the OWNER's thread settings or widens what the agent may
+ * do on the owner's machine, so it is dropped for delegated requests.
+ */
+function pickSteerMessageFields(body: SendMessageBody): SendMessageBody {
+  return {
+    content: body.content,
+    images: body.images,
+    fileReferences: body.fileReferences,
+    symbolReferences: body.symbolReferences,
+    forceQueue: body.forceQueue,
+  };
+}
 
 /** Map a ThreadServiceError or unknown error to a DomainError */
 function toDomainError(error: unknown): DomainError {
@@ -145,8 +166,24 @@ threadRoutes.post('/:id/message', async (c) => {
   const threadResult = await requireThread(id, userId, steer);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
+  // A non-owner only gets here through a verified steer grant. The sharee may
+  // steer the conversation, never the owner's thread settings: drop every
+  // field that would change provider/model/permission mode/tool allow-lists/
+  // base branch (the client composer always sends them, so strip rather than
+  // reject), and refuse `!cmd` shell escapes, which would run directly on the
+  // owner's machine bypassing the agent's permission mode.
+  const isSteerDelegation = threadResult.value.userId !== userId;
+  if (isSteerDelegation && extractShellEscapeCommand(parsed.value.content) !== null) {
+    log.warn('Refused shell escape from steer sharee', { namespace: 'agent', threadId: id });
+    return resultToResponse(
+      c,
+      err(forbidden('Shell escape commands are not allowed on a shared thread')),
+    );
+  }
+  const body = isSteerDelegation ? pickSteerMessageFields(parsed.value) : parsed.value;
+
   const span = requestSpan(c, 'thread.send_message', { threadId: id });
-  const result = await sendMessage({ ...parsed.value, threadId: id, userId });
+  const result = await sendMessage({ ...body, threadId: id, userId });
   if (result.isErr()) {
     log.error('Failed to send message', {
       namespace: 'agent',

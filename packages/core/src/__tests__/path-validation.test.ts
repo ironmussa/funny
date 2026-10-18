@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from 'fs';
+import { mkdirSync, rmSync, symlinkSync, writeFileSync } from 'fs';
 import { homedir, tmpdir } from 'os';
 import { resolve, join } from 'path';
 
@@ -7,6 +7,7 @@ import {
   validatePathSync,
   pathExists,
   sanitizePath,
+  resolveRepoRelativePath,
   validateProjectPathLexical,
   validateProjectRootContainment,
   validateProjectRootPath,
@@ -110,6 +111,70 @@ describe('sanitizePath', () => {
   test('rejects absolute paths that escape base', () => {
     const result = sanitizePath(BASE_DIR, '../outside');
     expect(result.isErr()).toBe(true);
+  });
+
+  // M9: `startsWith(base)` without a separator accepted sibling directories.
+  test('rejects a sibling directory that shares the base name as a prefix', () => {
+    expect(sanitizePath('/a/proj', '../proj-secrets/key').isErr()).toBe(true);
+    expect(sanitizePath('/a/proj', '/a/proj-secrets/key').isErr()).toBe(true);
+    expect(sanitizePath('/a/proj', '/a/proj/key').isOk()).toBe(true);
+  });
+
+  describe('symlinks', () => {
+    const root = resolve(tmpdir(), 'core-sanitize-symlink');
+    const base = join(root, 'proj');
+    const outside = join(root, 'outside');
+
+    beforeAll(() => {
+      rmSync(root, { recursive: true, force: true });
+      mkdirSync(base, { recursive: true });
+      mkdirSync(outside, { recursive: true });
+      writeFileSync(join(outside, 'secret.txt'), 'secret');
+      symlinkSync(outside, join(base, 'escape-dir'));
+      symlinkSync(join(outside, 'secret.txt'), join(base, 'escape-file'));
+    });
+    afterAll(() => rmSync(root, { recursive: true, force: true }));
+
+    test('rejects a path whose parent directory is a symlink out of the base', () => {
+      expect(sanitizePath(base, 'escape-dir/secret.txt').isErr()).toBe(true);
+      expect(sanitizePath(base, 'escape-dir/not-yet-created.txt').isErr()).toBe(true);
+    });
+
+    test('rejects a final symlink out of the base when following it', () => {
+      expect(sanitizePath(base, 'escape-file', { followFinalSymlink: true }).isErr()).toBe(true);
+      // Git operations act on the link itself, so the default does not follow it.
+      expect(sanitizePath(base, 'escape-file').isOk()).toBe(true);
+    });
+
+    test('resolveRepoRelativePath rejects both symlink escapes', () => {
+      expect(resolveRepoRelativePath(base, 'escape-file').isErr()).toBe(true);
+      expect(resolveRepoRelativePath(base, 'escape-dir/secret.txt').isErr()).toBe(true);
+    });
+  });
+});
+
+// H5: file paths taken from `?path=` on the diff routes.
+describe('resolveRepoRelativePath', () => {
+  test('rejects absolute paths outside the cwd', () => {
+    expect(resolveRepoRelativePath(BASE_DIR, '/etc/passwd').isErr()).toBe(true);
+    expect(resolveRepoRelativePath(BASE_DIR, `${BASE_DIR}-secrets/x`).isErr()).toBe(true);
+  });
+
+  test('rejects ".." segments even when they stay inside the cwd', () => {
+    expect(resolveRepoRelativePath(BASE_DIR, '../../x').isErr()).toBe(true);
+    expect(resolveRepoRelativePath(BASE_DIR, 'a/../b').isErr()).toBe(true);
+  });
+
+  test('rejects empty paths and NUL bytes', () => {
+    expect(resolveRepoRelativePath(BASE_DIR, '').isErr()).toBe(true);
+    expect(resolveRepoRelativePath(BASE_DIR, 'a\0b').isErr()).toBe(true);
+  });
+
+  test('returns relative paths unchanged and relativizes absolute ones inside the cwd', () => {
+    expect(resolveRepoRelativePath(BASE_DIR, 'src/a.ts').unwrapOr(null)).toBe('src/a.ts');
+    expect(resolveRepoRelativePath(BASE_DIR, join(BASE_DIR, 'src', 'a.ts')).unwrapOr(null)).toBe(
+      join('src', 'a.ts'),
+    );
   });
 });
 

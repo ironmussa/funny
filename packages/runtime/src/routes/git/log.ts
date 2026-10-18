@@ -19,7 +19,7 @@ import {
   type GraphRef,
 } from '@funny/core/git';
 import { badRequest, type DomainError } from '@funny/shared/errors';
-import { Hono, type Context } from 'hono';
+import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { err, type Result, type ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
@@ -28,6 +28,7 @@ import { resolveIdentity, resolveThreadIdentity } from '../../services/git-servi
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
+import { gitRefSchema, validate } from '../../validation/schemas.js';
 import {
   getCachedPR,
   requireGitWorkingTree,
@@ -36,6 +37,18 @@ import {
 } from './helpers.js';
 
 export const logRoutes = new Hono<HonoEnv>();
+
+// Security (M7): every `/commit/:hash/*` handler passes `:hash` positionally to
+// git (`log`, `diff-tree`). Validate it once here so a value such as
+// `--output=/tmp/x` can never reach git as an option. Registered before the
+// handlers so it runs first for both the project and thread variants.
+const validateCommitHashParam: MiddlewareHandler<HonoEnv> = async (c, next) => {
+  const parsed = validate(gitRefSchema, c.req.param('hash'));
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  return next();
+};
+logRoutes.use('/project/:projectId/commit/:hash/*', validateCommitHashParam);
+logRoutes.use('/:threadId/commit/:hash/*', validateCommitHashParam);
 
 // ─── Shared helpers ─────────────────────────────────────
 // The project-scoped and thread-scoped log endpoints are structurally

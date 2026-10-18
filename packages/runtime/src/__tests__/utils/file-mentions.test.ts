@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync, rmSync } from 'fs';
+import { mkdirSync, writeFileSync, rmSync, symlinkSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -117,6 +117,44 @@ describe('augmentPromptWithFiles', () => {
 
     // Should be silently skipped
     expect(result).toBe('prompt');
+  });
+
+  // M9: `resolved.startsWith(resolvedBase)` accepted sibling dirs with a shared prefix.
+  test('blocks a sibling directory that shares the base name as a prefix', async () => {
+    const sibling = `${testDir}-secrets`;
+    mkdirSync(sibling, { recursive: true });
+    writeFileSync(join(sibling, 'key.txt'), 'sensitive data');
+    try {
+      const name = sibling.split(/[\\/]/).pop()!;
+      const result = await augmentPromptWithFiles(
+        'prompt',
+        [{ path: `../${name}/key.txt` }],
+        testDir,
+      );
+      expect(result).toBe('prompt');
+    } finally {
+      rmSync(sibling, { recursive: true, force: true });
+    }
+  });
+
+  test('blocks symlinks (file and folder) pointing outside the base', async () => {
+    const outsideDir = `${testDir}-outside`;
+    mkdirSync(outsideDir, { recursive: true });
+    writeFileSync(join(outsideDir, 'secret.txt'), 'sensitive data');
+    symlinkSync(join(outsideDir, 'secret.txt'), join(testDir, 'link.txt'));
+    symlinkSync(outsideDir, join(testDir, 'linkdir'));
+    mkdirSync(join(testDir, 'folder'));
+    symlinkSync(join(outsideDir, 'secret.txt'), join(testDir, 'folder', 'inner-link.txt'));
+    try {
+      const result = await augmentPromptWithFiles(
+        'prompt',
+        [{ path: 'link.txt' }, { path: 'linkdir/secret.txt' }, { path: 'folder' }],
+        testDir,
+      );
+      expect(result).not.toContain('sensitive data');
+    } finally {
+      rmSync(outsideDir, { recursive: true, force: true });
+    }
   });
 
   // ── File too large ─────────────────────────────────────────

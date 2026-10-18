@@ -4,11 +4,12 @@
 
 import { dirname, relative } from 'node:path';
 
-import { processError, type DomainError } from '@funny/shared/errors';
-import { ResultAsync } from 'neverthrow';
+import { badRequest, processError, type DomainError } from '@funny/shared/errors';
+import { errAsync, ResultAsync } from 'neverthrow';
 
 import { getNativeGit } from './native.js';
 import { execute, gitRead } from './process.js';
+import { isSafeGitRefArg, withSafeGitRef } from './ref-guard.js';
 
 // ─── Types ──────────────────────────────────────────────
 
@@ -158,6 +159,9 @@ export function getLog(
   baseBranch?: string | null,
   skip = 0,
 ): ResultAsync<GitLogEntry[], DomainError> {
+  if (baseBranch && !isSafeGitRefArg(baseBranch)) {
+    return errAsync(badRequest(`Invalid git base branch: ${baseBranch}`));
+  }
   const native = getNativeGit();
   if (native && !baseBranch && skip === 0) {
     return ResultAsync.fromPromise(
@@ -188,7 +192,7 @@ export function getLog(
     args.push(`--skip=${skip}`);
   }
   if (baseBranch) {
-    args.push(`${baseBranch}..HEAD`);
+    args.push('--end-of-options', `${baseBranch}..HEAD`);
   }
   return ResultAsync.fromPromise(
     (async () => {
@@ -686,7 +690,7 @@ async function fetchEmailMap(
   const SEP = '@@SEP@@';
   const args = ['log', `--format=%H${SEP}%ae`, '-n', String(limit)];
   if (skip > 0) args.push(`--skip=${skip}`);
-  if (baseBranch) args.push(`${baseBranch}..HEAD`);
+  if (baseBranch) args.push('--end-of-options', `${baseBranch}..HEAD`);
   const result = await gitRead(args, { cwd, reject: false });
   const map = new Map<string, string>();
   if (result.exitCode !== 0 || !result.stdout.trim()) return map;
@@ -744,29 +748,29 @@ export function getUnpulledHashes(cwd: string): ResultAsync<Set<string>, DomainE
  * Get the full commit message body (everything after the subject line) for a single commit.
  */
 export function getCommitBody(cwd: string, hash: string): ResultAsync<string, DomainError> {
-  const native = getNativeGit();
-  if (native) {
-    return ResultAsync.fromPromise(native.getCommitBody(cwd, hash), (error) =>
-      processError(String(error), 1, ''),
-    );
-  }
-  return ResultAsync.fromPromise(
-    (async () => {
-      const result = await gitRead(['log', '-1', '--format=%b', hash], {
-        cwd,
-        reject: false,
-      });
-      if (result.exitCode !== 0) return '';
-      return result.stdout.trim();
-    })(),
-    (error) => processError(String(error), 1, ''),
-  );
+  return withSafeGitRef(hash, 'commit', () => {
+    const native = getNativeGit();
+    const body = native
+      ? native.getCommitBody(cwd, hash)
+      : gitRead(['log', '-1', '--format=%b', '--end-of-options', hash], {
+          cwd,
+          reject: false,
+        }).then((r) => (r.exitCode === 0 ? r.stdout.trim() : ''));
+    return ResultAsync.fromPromise(body, (error) => processError(String(error), 1, ''));
+  });
 }
 
 /**
  * Get changed files for a specific commit (file list + line stats).
  */
 export function getCommitFiles(
+  cwd: string,
+  hash: string,
+): ResultAsync<CommitFileEntry[], DomainError> {
+  return withSafeGitRef(hash, 'commit', () => getCommitFilesUnchecked(cwd, hash));
+}
+
+function getCommitFilesUnchecked(
   cwd: string,
   hash: string,
 ): ResultAsync<CommitFileEntry[], DomainError> {
@@ -788,11 +792,11 @@ export function getCommitFiles(
     (async () => {
       // Run both commands in parallel
       const [nameStatusResult, numstatResult] = await Promise.all([
-        gitRead(['diff-tree', '--no-commit-id', '-r', '--name-status', hash], {
+        gitRead(['diff-tree', '--no-commit-id', '-r', '--name-status', '--end-of-options', hash], {
           cwd,
           reject: false,
         }),
-        gitRead(['diff-tree', '--no-commit-id', '-r', '--numstat', hash], {
+        gitRead(['diff-tree', '--no-commit-id', '-r', '--numstat', '--end-of-options', hash], {
           cwd,
           reject: false,
         }),
@@ -928,20 +932,14 @@ export function getCommitFileDiff(
   hash: string,
   filePath: string,
 ): ResultAsync<string, DomainError> {
-  const native = getNativeGit();
-  if (native) {
-    return ResultAsync.fromPromise(native.getCommitFileDiff(cwd, hash, filePath), (error) =>
-      processError(String(error), 1, ''),
-    );
-  }
-  return ResultAsync.fromPromise(
-    (async () => {
-      const result = await gitRead(['diff-tree', '-p', '--no-commit-id', hash, '--', filePath], {
-        cwd,
-        reject: false,
-      });
-      return result.exitCode === 0 ? result.stdout : '';
-    })(),
-    (error) => processError(String(error), 1, ''),
-  );
+  return withSafeGitRef(hash, 'commit', () => {
+    const native = getNativeGit();
+    const cliArgs = ['diff-tree', '-p', '--no-commit-id', '--end-of-options', hash];
+    const diff = native
+      ? native.getCommitFileDiff(cwd, hash, filePath)
+      : gitRead([...cliArgs, '--', filePath], { cwd, reject: false }).then((r) =>
+          r.exitCode === 0 ? r.stdout : '',
+        );
+    return ResultAsync.fromPromise(diff, (error) => processError(String(error), 1, ''));
+  });
 }

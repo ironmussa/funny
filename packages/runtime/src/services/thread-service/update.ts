@@ -15,6 +15,7 @@ import {
   removeBranch,
   getCurrentBranch,
   git,
+  isSafeGitRefArg,
 } from '@funny/core/git';
 import { setupWorktree } from '@funny/core/ports';
 import type { WSEvent, AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
@@ -268,10 +269,12 @@ async function autoStartIdleThread(
     // Worktree already exists or local mode: start agent directly
     let cwd = thread.worktreePath || projectPath;
 
-    // Check if local mode needs branch checkout (synchronous, no setting_up UI)
+    // Check if local mode needs branch checkout (synchronous, no setting_up UI).
+    // isSafeGitRefArg: baseBranch is user-supplied and passed positionally to
+    // fetch/checkout below, so it must never be parseable as an option.
     const needsCheckout =
       !thread.worktreePath &&
-      thread.baseBranch &&
+      isSafeGitRefArg(thread.baseBranch) &&
       thread.branch &&
       thread.baseBranch !== thread.branch;
 

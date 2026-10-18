@@ -1,7 +1,7 @@
 import { accessSync, realpathSync } from 'fs';
 import { access } from 'fs/promises';
 import { homedir } from 'os';
-import { basename, dirname, resolve, isAbsolute, sep } from 'path';
+import { basename, dirname, join, relative, resolve, isAbsolute, sep } from 'path';
 
 import { badRequest, forbidden, type DomainError } from '@funny/shared/errors';
 import { ok, err, type Result, ResultAsync } from 'neverthrow';
@@ -52,18 +52,123 @@ export async function pathExists(path: string): Promise<boolean> {
 }
 
 /**
- * Sanitizes a path to prevent directory traversal attacks.
- * Returns Result<string, DomainError>.
+ * True when `target` is `base` itself or a descendant of it. Both paths must
+ * already be absolute + normalized (and, for symlink safety, canonicalized).
+ * Compares against `base + sep` so a sibling that merely shares a prefix
+ * (`/a/proj-secrets` vs `/a/proj`) is NOT considered inside.
  */
-export function sanitizePath(basePath: string, userPath: string): Result<string, DomainError> {
+export function isPathUnder(target: string, base: string): boolean {
+  if (target === base) return true;
+  const prefix = base.endsWith(sep) ? base : base + sep;
+  return target.startsWith(prefix);
+}
+
+export interface ContainmentOptions {
+  /**
+   * When true (default) the final path component is resolved too, so a
+   * symlink whose TARGET lies outside the base is rejected. Use this for any
+   * caller that reads file content. Set to false for git operations that act
+   * on the link itself (stage/unstage/revert), where only the parent
+   * directories must stay inside the base.
+   */
+  followFinalSymlink?: boolean;
+}
+
+/**
+ * Whether the absolute path `target` stays inside `basePath`, both lexically
+ * and after resolving symlinks (realpath of the nearest existing ancestor).
+ */
+export function isContainedPath(
+  basePath: string,
+  target: string,
+  options: ContainmentOptions = {},
+): boolean {
+  const resolvedBase = resolve(basePath);
+  const resolvedTarget = resolve(target);
+  if (!isPathUnder(resolvedTarget, resolvedBase)) return false;
+  const realBase = projectPathRealpathOrAnchor(resolvedBase);
+  const realTarget =
+    options.followFinalSymlink === false && resolvedTarget !== resolvedBase
+      ? join(projectPathRealpathOrAnchor(dirname(resolvedTarget)), basename(resolvedTarget))
+      : projectPathRealpathOrAnchor(resolvedTarget);
+  return isPathUnder(realTarget, realBase);
+}
+
+/**
+ * Sanitizes a path to prevent directory traversal attacks.
+ * Rejects paths that escape `basePath` lexically (including sibling
+ * directories that merely share a name prefix) or through a symlinked parent
+ * directory. By default the final component is NOT followed, because git
+ * operations (stage/unstage/revert) act on a symlink itself, not its target.
+ * Returns the lexically-resolved path on success.
+ */
+export function sanitizePath(
+  basePath: string,
+  userPath: string,
+  options: ContainmentOptions = { followFinalSymlink: false },
+): Result<string, DomainError> {
+  if (typeof userPath !== 'string' || userPath.includes('\0')) {
+    return err(forbidden('Path traversal detected'));
+  }
   const resolvedBase = resolve(basePath);
   const normalized = resolve(resolvedBase, userPath);
 
-  if (!normalized.startsWith(resolvedBase)) {
+  if (!isContainedPath(resolvedBase, normalized, options)) {
     return err(forbidden('Path traversal detected'));
   }
 
   return ok(normalized);
+}
+
+const WINDOWS_ABSOLUTE = /^[A-Za-z]:[\\/]/;
+
+/**
+ * Validate a user-supplied file path that will be handed to git or read from
+ * disk relative to the repository `cwd`, and return it as a cwd-relative path.
+ *
+ * - Relative paths must not contain `..` segments and must not be empty.
+ * - Absolute paths are accepted only when they point inside `cwd` (clients
+ *   send the absolute path of a file the agent edited); they are converted to
+ *   a cwd-relative path. Anything else (`/etc/passwd`) is rejected.
+ * - The final location, following symlinks, must stay inside `cwd`.
+ */
+export function resolveRepoRelativePath(
+  cwd: string,
+  userPath: string,
+): Result<string, DomainError> {
+  if (typeof userPath !== 'string' || userPath.length === 0) {
+    return err(badRequest('File path must be a non-empty string'));
+  }
+  if (userPath.includes('\0')) {
+    return err(badRequest('File path contains a null byte'));
+  }
+  const resolvedCwd = resolve(cwd);
+  let rel = userPath;
+  if (isAbsolute(userPath) || WINDOWS_ABSOLUTE.test(userPath)) {
+    const abs = resolve(userPath);
+    if (isPathUnder(abs, resolvedCwd)) {
+      rel = relative(resolvedCwd, abs);
+    } else {
+      // The client may send the canonical path while cwd is reached through a
+      // symlink (or vice versa) — compare canonical forms before giving up.
+      const realCwd = projectPathRealpathOrAnchor(resolvedCwd);
+      const realAbs = projectPathRealpathOrAnchor(abs);
+      if (!isPathUnder(realAbs, realCwd)) {
+        return err(forbidden(`File path is outside the working directory: ${userPath}`));
+      }
+      rel = relative(realCwd, realAbs);
+    }
+    if (rel.length === 0) {
+      return err(badRequest('File path must point inside the working directory'));
+    }
+  }
+  if (rel.split(/[\\/]/).includes('..')) {
+    return err(forbidden('File path must not contain ".." segments'));
+  }
+  if (!isContainedPath(resolvedCwd, resolve(resolvedCwd, rel), { followFinalSymlink: true })) {
+    return err(forbidden(`File path is outside the working directory: ${userPath}`));
+  }
+  return ok(rel);
 }
 
 // ── Project-root containment (security HI-3) ────────────────
@@ -142,9 +247,7 @@ function projectPathRealpathOrAnchor(target: string): string {
 }
 
 function isUnderPath(target: string, scope: string): boolean {
-  const t = target;
-  const s = resolve(scope);
-  return t === s || t.startsWith(s + sep);
+  return isPathUnder(target, resolve(scope));
 }
 
 function isUnderPathCaseInsensitive(target: string, scope: string): boolean {

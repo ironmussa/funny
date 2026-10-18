@@ -22,6 +22,7 @@ import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.
 import {
   authorizedRunnerRequests,
   authorizedRunnerTerminal,
+  mintOAuthCallbackState,
   runnerActor,
   withOAuthCallbackRunner,
   withRunnerFor,
@@ -228,24 +229,91 @@ describe('withRunnerFor — certification against real resolution', () => {
   });
 });
 
-describe('withOAuthCallbackRunner', () => {
-  test('selects any connected general runner and certifies nothing about a user', async () => {
-    runner('r-ded', 'bob', { role: 'dedicated' });
-    runner('r-gen', 'bob');
-    const result = await withOAuthCallbackRunner(presence, async (r, proof) => ({
-      runner: r.value as string,
-      kind: proof.kind,
-    }));
-    expect(result._unsafeUnwrap()).toEqual({ runner: 'r-gen', kind: 'OAuthCallbackRunner' });
+/** Mint a callback state exactly as the proxy does: bound to a certified (actor, runner). */
+async function boundState(actor: RunnerActor, runnerId: string, now?: number): Promise<string> {
+  const minted = await withRunnerFor(
+    actor,
+    { kind: 'owned-runner', runnerId },
+    presence,
+    async (a, r, proof) => mintOAuthCallbackState(a, r, proof, now),
+  );
+  return minted._unsafeUnwrap();
+}
+
+/** Which runner (if any) the callback prover certified for `state`. */
+async function oauthRoute(state: string | undefined) {
+  let ran = 0;
+  const result = await withOAuthCallbackRunner(state, presence, async (r, proof) => {
+    ran += 1;
+    return { runner: r.value as string, kind: proof.kind };
+  });
+  return { result: result.isOk() ? result.value : result.error, ran };
+}
+
+describe('withOAuthCallbackRunner — routed only by the server-signed state (H3/M3)', () => {
+  test("a state bound to alice's runner reaches that runner, never another tenant's", async () => {
+    runner('r-bob', 'bob');
+    runner('r-alice', 'alice');
+    const state = await boundState(alice, 'r-alice');
+    expect(await oauthRoute(state)).toEqual({
+      result: { runner: 'r-alice', kind: 'OAuthCallbackRunner' },
+      ran: 1,
+    });
+    // And bob's state reaches bob's runner only.
+    expect((await oauthRoute(await boundState(bob, 'r-bob'))).result).toMatchObject({
+      runner: 'r-bob',
+    });
   });
 
-  test('fails when no general runner is connected', async () => {
-    runner('r-ded', 'bob', { role: 'dedicated' });
-    const result = await withOAuthCallbackRunner(presence, async () => 'sent');
-    expect(result._unsafeUnwrapErr()).toEqual({
-      kind: 'runner-unavailable',
-      reason: 'general-runner-offline',
+  test('a missing, unsigned, forged or tampered state reaches no runner', async () => {
+    runner('r-bob', 'bob');
+    runner('r-alice', 'alice');
+    const valid = await boundState(alice, 'r-alice');
+    const [v, , sig] = valid.split('.');
+    const retargeted = Buffer.from(
+      JSON.stringify({ u: 'bob', r: 'r-bob', e: Date.now() + 60_000, n: 'x' }),
+    ).toString('base64url');
+    for (const state of [
+      undefined,
+      '',
+      'deadbeefdeadbeefdeadbeefdeadbeef',
+      `${v}.${retargeted}.${sig}`,
+      `${valid}x`,
+    ]) {
+      expect(await oauthRoute(state)).toEqual({ result: { kind: 'oauth-state-invalid' }, ran: 0 });
+    }
+  });
+
+  test('an expired state is refused', async () => {
+    runner('r-alice', 'alice');
+    const state = await boundState(alice, 'r-alice', Date.now() - 11 * 60 * 1000);
+    expect(await oauthRoute(state)).toEqual({ result: { kind: 'oauth-state-invalid' }, ran: 0 });
+  });
+
+  test('no fallback: an offline bound runner fails even with other runners online', async () => {
+    runner('r-alice', 'alice');
+    const state = await boundState(alice, 'r-alice');
+    presence = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
+    runner('r-alice-2', 'alice');
+    runner('r-bob', 'bob');
+    expect(await oauthRoute(state)).toEqual({
+      result: { kind: 'runner-unavailable', reason: 'general-runner-offline' },
+      ran: 0,
     });
+  });
+
+  test('a bound runner that changed owner is refused and audited', async () => {
+    runner('r-x', 'alice');
+    const state = await boundState(alice, 'r-x');
+    presence.activate('r-x', { invalidate: () => {} }, 'bob');
+    const audit = spyOn(auditModule, 'audit').mockImplementation(() => {});
+    expect(await oauthRoute(state)).toMatchObject({
+      result: { kind: 'runner-unavailable' },
+      ran: 0,
+    });
+    expect(audit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'authz.cross_tenant_refused', actorId: 'alice' }),
+    );
   });
 });
 
@@ -374,7 +442,8 @@ describe('AuthorizedRunnerRequests — identity signing', () => {
     runner('r-gen', 'bob');
     const port = new FakeRunnerRequestPort();
     port.available.add('r-gen');
-    await withOAuthCallbackRunner(presence, (r, proof) =>
+    const state = await boundState(bob, 'r-gen');
+    await withOAuthCallbackRunner(state, presence, (r, proof) =>
       authorizedRunnerRequests(port).sendOAuthCallback(r, proof, {
         method: 'GET',
         path: '/api/mcp/oauth/callback?code=1',

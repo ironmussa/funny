@@ -21,13 +21,20 @@
  *   `@funny/shared/auth/forwarded-identity`.
  */
 
+import { parseStoredJson } from '@funny/shared/json-validation';
 import type { Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
+import { z } from 'zod';
 
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
+import { renderMcpOAuthCallbackPage } from '../lib/mcp-oauth-callback-page.js';
+import { neutralizeRunnerContent } from '../lib/runner-content-policy.js';
 import type { ServerEnv } from '../lib/types.js';
 import {
   authorizedRunnerRequests,
+  mintOAuthCallbackState,
+  OAUTH_STATE_HEADER,
   runnerAccess,
   runnerActor,
   type RunnerAccess,
@@ -78,10 +85,12 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
   const path = url.pathname;
 
   // MCP OAuth callback: the external provider redirects the browser here without
-  // any session cookie. The runtime validates the state parameter to ensure only
-  // the correct flow is completed. Resolve any connected general runner (no user
-  // scoping) through the identity-free `OAuthCallbackRunner` proof.
+  // any session cookie. It is routed ONLY to the runner its server-signed
+  // `state` is bound to (minted below when this server proxied `/oauth/start`),
+  // through the identity-free `OAuthCallbackRunner` proof. The page is rendered
+  // here — runner HTML is never relayed on this origin.
   const isOAuthCallback = path === '/api/mcp/oauth/callback';
+  const isOAuthStart = c.req.method === 'POST' && path === '/api/mcp/oauth/start';
 
   if (!userId && !isOAuthCallback) {
     return c.json({ error: 'Unauthorized' }, 401);
@@ -160,7 +169,9 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
       // central server's origin for the requesting user's browser.
       return new Response(tunnelBody, {
         status: tunnelResp.status,
-        headers: filterSafeRunnerResponseHeaders(new Headers(tunnelResp.headers)),
+        headers: neutralizeRunnerContent(
+          filterSafeRunnerResponseHeaders(new Headers(tunnelResp.headers)),
+        ),
       });
     } catch (tunnelErr) {
       if (
@@ -193,18 +204,7 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
   const notConnected = () =>
     c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
 
-  if (isOAuthCallback) {
-    const sent = await access.withOAuthCallbackRunner(presence, async (runner, proof) =>
-      sink.isAvailable(runner)
-        ? relay(() => sink.sendOAuthCallback(runner, proof, request), runner.value)
-        : notConnected(),
-    );
-    if (sent.isErr()) {
-      log.warn('No reachable runner for proxy request', { namespace: 'proxy', userId, path });
-      return c.json(describeResolutionFailure('general-runner-offline'), 502);
-    }
-    return sent.value;
-  }
+  if (isOAuthCallback) return handleOAuthCallback(c, url, access, presence, sink, request);
 
   const requester = runnerActor({
     userId: userId!,
@@ -249,6 +249,19 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
     presence,
     async (actor, runner, proof) => {
       if (!sink.isAvailable(runner)) return notConnected();
+      // Bind the OAuth flow this runner is about to start to (user, runner):
+      // the provider echoes the state back to the unauthenticated callback,
+      // which is then routed to this runner only. Never for a delegated send.
+      const outgoing: UnsignedRunnerRequest =
+        isOAuthStart && !delegation
+          ? {
+              ...request,
+              headers: {
+                ...request.headers,
+                [OAUTH_STATE_HEADER]: mintOAuthCallbackState(actor, runner, proof),
+              },
+            }
+          : request;
       return relay(
         () =>
           delegation
@@ -257,9 +270,9 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
                 runner,
                 proof,
                 { sharee: requester, threadId: delegation.threadId },
-                request,
+                outgoing,
               )
-            : sink.send(actor, runner, proof, request),
+            : sink.send(actor, runner, proof, outgoing),
         runner.value,
       );
     },
@@ -269,6 +282,85 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
     return c.json(describeResolutionFailure(sent.error.reason), 502);
   }
   return sent.value;
+}
+
+type OAuthCallbackSink = ReturnType<typeof authorizedRunnerRequests>;
+
+function oauthCallbackPage(
+  c: Context<ServerEnv>,
+  success: boolean,
+  error: string,
+  status: ContentfulStatusCode = 200,
+) {
+  return c.html(renderMcpOAuthCallbackPage(success, error), status);
+}
+
+/**
+ * Unauthenticated MCP OAuth callback (H3 / M3). The state's binding decides
+ * the ONE runner that may receive the provider's `code`; an invalid, forged or
+ * expired state reaches no runner at all. The runner answers with a JSON
+ * result and this server renders the page — runner bytes are never served.
+ */
+async function handleOAuthCallback(
+  c: Context<ServerEnv>,
+  url: URL,
+  access: RunnerAccess,
+  presence: RunnerPresencePort | undefined,
+  sink: OAuthCallbackSink,
+  request: UnsignedRunnerRequest,
+): Promise<Response> {
+  const state = url.searchParams.get('state') ?? undefined;
+  const providerError = url.searchParams.get('error');
+  const code = url.searchParams.get('code');
+  const sent = await access.withOAuthCallbackRunner(state, presence, async (runner, proof) => {
+    // The provider reported a failure: nothing to exchange, show it.
+    if (providerError) {
+      return oauthCallbackPage(
+        c,
+        false,
+        url.searchParams.get('error_description') || providerError,
+      );
+    }
+    if (!code) return oauthCallbackPage(c, false, 'Missing code or state parameter', 400);
+    if (!sink.isAvailable(runner)) {
+      return oauthCallbackPage(c, false, 'Your runner is not connected', 502);
+    }
+    try {
+      const resp = await sink.sendOAuthCallback(runner, proof, {
+        ...request,
+        headers: { ...request.headers, accept: 'application/json' },
+      });
+      const result = parseOAuthCallbackResult(resp.bodyEncoding === 'base64' ? null : resp.body);
+      if (!result) return oauthCallbackPage(c, false, 'Unexpected response from runner', 502);
+      return oauthCallbackPage(c, result.success, result.error ?? '');
+    } catch (e) {
+      log.warn('MCP OAuth callback tunnel failed', {
+        namespace: 'proxy',
+        runnerId: runner.value,
+        error: (e as Error).message,
+      });
+      return oauthCallbackPage(c, false, 'Runner did not respond', 502);
+    }
+  });
+  if (sent.isOk()) return sent.value;
+  if (sent.error.kind === 'oauth-state-invalid') {
+    return oauthCallbackPage(c, false, 'Invalid or expired state parameter', 400);
+  }
+  log.warn('No reachable runner for MCP OAuth callback', { namespace: 'proxy' });
+  return oauthCallbackPage(c, false, 'Your runner is not connected', 502);
+}
+
+const oauthCallbackResultSchema = z.object({
+  success: z.boolean(),
+  error: z.string().nullish(),
+});
+
+function parseOAuthCallbackResult(
+  body: string | null | undefined,
+): { success: boolean; error?: string | null } | null {
+  if (!body) return null;
+  const parsed = parseStoredJson(oauthCallbackResultSchema, body, 'runner OAuth callback result');
+  return parsed.ok ? parsed.value : null;
 }
 
 /**

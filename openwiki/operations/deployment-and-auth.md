@@ -104,7 +104,8 @@ unchanged. Two deliberate exceptions stay explicit: steer-share delegation
 (`sendDelegated`, allowed only from `middleware/proxy.ts`, signs the sharee with a
 `steer` claim while the runner is certified for the thread owner) and the
 unauthenticated MCP OAuth callback (`OAuthCallbackRunner` → `sendOAuthCallback`,
-shared secret only, no identity). The scheduler's `/dispatch` and `/cancel` sign
+shared secret only, no identity), routed only to the runner its server-signed
+`state` is bound to; the server renders the callback page itself. The scheduler's `/dispatch` and `/cancel` sign
 the thread owner read from the DB and refuse a mismatching `userId`. See the
 [development workflow](../workflows/development.md#runner-request-isolation-proof-checks)
 for the lint, type-test and fitness checks that keep this closed.

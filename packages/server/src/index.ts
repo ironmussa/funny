@@ -21,6 +21,11 @@ import { secureHeaders } from 'hono/secure-headers';
 
 import { resolveCorsOrigins } from './lib/cors-origins.js';
 import { log } from './lib/logger.js';
+import {
+  MCP_OAUTH_CALLBACK_CSP,
+  MCP_OAUTH_CALLBACK_SCRIPT,
+} from './lib/mcp-oauth-callback-page.js';
+import { sandboxAttachmentResponse } from './lib/runner-content-policy.js';
 import type { ServerEnv } from './lib/types.js';
 import { authMiddleware, setAuthInstance } from './middleware/auth.js';
 
@@ -125,6 +130,27 @@ app.use('*', cors({ origin: corsOrigins, credentials: true }));
 // Runner/scheduler/proxy traffic is JSON-only, so this is invisible to
 // them.
 app.use('*', csrf({ origin: corsOrigins }));
+// These two run their post-`next()` code AFTER `secureHeaders` below (they are
+// registered before it, so they wrap it); registered after it, their headers
+// would be overwritten by the global CSP/COOP.
+//
+// Security HI-10: CSP/COOP for the MCP OAuth callback page and its script.
+// The server renders both itself (`lib/mcp-oauth-callback-page.ts`; runner
+// HTML is never relayed — H3). No inline script, so `script-src 'self'`, and
+// COOP `same-origin-allow-popups` keeps `window.opener` for the app window
+// that launched the popup while isolating the OAuth provider's page.
+app.use('/api/mcp/oauth/callback*', async (c, next) => {
+  await next();
+  c.res.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
+  c.res.headers.set('Content-Security-Policy', MCP_OAUTH_CALLBACK_CSP);
+});
+// Security H3: a response forced to download (`Content-Disposition:
+// attachment`, e.g. runner content the proxy neutralized) is also sandboxed,
+// so even a browser that renders it gets an opaque origin and no scripts.
+app.use('/api/*', async (c, next) => {
+  await next();
+  sandboxAttachmentResponse(c.res.headers);
+});
 app.use(
   '*',
   secureHeaders({
@@ -183,26 +209,6 @@ app.use(
     xContentTypeOptions: true,
   }),
 );
-// Security HI-10: CSP/COOP override for the MCP OAuth callback page and its
-// same-origin script. The runtime now serves the page WITHOUT an inline
-// script — the HTML loads `/api/mcp/oauth/callback.js` instead — so we can
-// drop `script-src 'unsafe-inline'` and restore origin isolation via
-// `Cross-Origin-Opener-Policy: same-origin-allow-popups` (still preserves
-// `window.opener` for the parent that launched the popup, but isolates us
-// from the cross-origin OAuth provider's intermediate page).
-//
-// Match the runtime's override exactly so a response that lands here
-// (server is in front of the runner via tunnel/proxy) is not silently
-// loosened on its way back to the browser.
-app.use('/api/mcp/oauth/callback*', async (c, next) => {
-  await next();
-  c.res.headers.set('Cross-Origin-Opener-Policy', 'same-origin-allow-popups');
-  c.res.headers.set(
-    'Content-Security-Policy',
-    "default-src 'none'; script-src 'self'; style-src 'unsafe-inline'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'",
-  );
-});
-
 app.use('*', logger());
 
 // Health check (before auth)
@@ -211,6 +217,14 @@ app.get('/api/health', (c) => {
     status: 'ok',
     timestamp: new Date().toISOString(),
   });
+});
+
+// MCP OAuth callback script (public, static): the callback page is rendered by
+// the server and must never load a runner-supplied script (H3).
+app.get('/api/mcp/oauth/callback.js', (c) => {
+  c.header('Content-Type', 'application/javascript; charset=utf-8');
+  c.header('Cache-Control', 'public, max-age=300');
+  return c.body(MCP_OAUTH_CALLBACK_SCRIPT);
 });
 
 // Bootstrap endpoint (public — returns minimal info for client init)

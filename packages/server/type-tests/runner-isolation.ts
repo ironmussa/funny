@@ -4,6 +4,7 @@ import type { Named, Proof } from '@gdp-ts/core';
 import {
   authorizedRunnerRequests,
   authorizedRunnerTerminal,
+  mintOAuthCallbackState,
   runnerActor,
   withOAuthCallbackRunner,
   withRunnerFor,
@@ -52,11 +53,36 @@ withRunnerFor(actorInput, { kind: 'projectless' }, undefined, async (actor, runn
   );
 });
 
-withOAuthCallbackRunner(undefined, async (runner, proof) => {
+withOAuthCallbackRunner('signed-state', undefined, async (runner, proof) => {
   await requests.sendOAuthCallback(runner, proof, request);
   // @ts-expect-error An OAuth proof certifies no actor, so it cannot authorize `send`.
   await requests.send(actorInput, runner, proof, request);
 });
+
+// @ts-expect-error The callback runner is chosen by the signed state only; it is mandatory.
+withOAuthCallbackRunner(undefined, async (runner, proof) => {
+  await requests.sendOAuthCallback(runner, proof, request);
+});
+
+withRunnerFor(actorInput, { kind: 'projectless' }, undefined, async (actor, runner, proof) => {
+  // A callback state can only bind a runner certified for the actor.
+  mintOAuthCallbackState(actor, runner, proof);
+  // @ts-expect-error The proof is mandatory.
+  mintOAuthCallbackState(actor, runner);
+  // @ts-expect-error A raw runner id cannot be bound.
+  mintOAuthCallbackState(actor, runner.value, proof);
+  // @ts-expect-error A raw actor cannot be bound.
+  mintOAuthCallbackState(actorInput, runner, proof);
+});
+
+export function oauthProofCannotMintState<A, R>(
+  actor: Named<A, RunnerActor>,
+  runner: Named<R, RunnerId>,
+  oauth: OAuthCallbackRunner<R>,
+) {
+  // @ts-expect-error An OAuth callback proof cannot bind a new flow to a runner.
+  return mintOAuthCallbackState(actor, runner, oauth);
+}
 
 export function reversedNames<A, R>(
   actor: Named<A, RunnerActor>,

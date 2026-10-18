@@ -7,7 +7,6 @@ import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
 import {
   resolveRunner as resolveRunnerWithPresence,
-  resolveAnyRunner as resolveAnyRunnerWithPresence,
   cacheThreadRunner,
   uncacheThread,
   evictRunnerFromCache,
@@ -27,7 +26,6 @@ let presence: RunnerGrpcSessionRegistry;
 
 const resolveRunner = (path: string, query: Record<string, string>, userId: string) =>
   resolveRunnerWithPresence(path, query, userId, presence);
-const resolveAnyRunner = () => resolveAnyRunnerWithPresence(presence);
 
 async function bindTestDb() {
   testDb = createTestDb();
@@ -192,25 +190,5 @@ describe('resolveRunner — cache', () => {
 
     const t3 = await resolveRunner('/api/threads/t3/messages', {}, 'user-b');
     expect(t3).toBeNull();
-  });
-});
-
-describe('resolveAnyRunner', () => {
-  test('returns any gRPC-connected runner', async () => {
-    wireRunner('r-a', 'user-a');
-
-    const resolved = await resolveAnyRunner();
-    expect(resolved?.runnerId).toBe('r-a');
-  });
-
-  test('returns null when no runner is reachable', async () => {
-    seedRunner(testDb.db, {
-      id: 'r-offline',
-      userId: 'user-a',
-      httpUrl: null,
-      token: 'tok-off',
-    });
-
-    expect(await resolveAnyRunner()).toBeNull();
   });
 });

@@ -4,8 +4,11 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { HonoEnv } from '../../types/hono-env.js';
 
+const BOUND_STATE = 'v1.eyJ1IjoidXNlci0xIn0.c2lnbmF0dXJl';
+
 const {
   mockAddMcpServer,
+  mockHandleOAuthCallback,
   mockListMcpServers,
   mockRemoveMcpServer,
   mockRequireProjectPath,
@@ -14,6 +17,7 @@ const {
   mockToggleMcpServer,
 } = vi.hoisted(() => ({
   mockAddMcpServer: vi.fn(),
+  mockHandleOAuthCallback: vi.fn(),
   mockListMcpServers: vi.fn(),
   mockRemoveMcpServer: vi.fn(),
   mockRequireProjectPath: vi.fn(),
@@ -39,7 +43,7 @@ vi.mock('../../lib/logger.js', () => ({
 }));
 
 vi.mock('../../services/mcp-oauth.js', () => ({
-  handleOAuthCallback: vi.fn(),
+  handleOAuthCallback: mockHandleOAuthCallback,
   startOAuthFlow: mockStartOAuthFlow,
 }));
 
@@ -142,6 +146,7 @@ describe('MCP routes', () => {
         'Content-Type': 'application/json',
         'X-Forwarded-Host': 'app.example.test',
         'X-Forwarded-Proto': 'https',
+        'X-Funny-OAuth-State': BOUND_STATE,
       },
       body: JSON.stringify({
         serverName: 'linear',
@@ -160,7 +165,33 @@ describe('MCP routes', () => {
       'https://mcp.linear.test/mcp',
       '/repo',
       'https://app.example.test',
-      { claudeConfigDir: '/tmp/claude-work' },
+      { claudeConfigDir: '/tmp/claude-work', state: BOUND_STATE },
     );
+  });
+
+  test('POST /oauth/start refuses a flow the server did not bind to this runner', async () => {
+    const app = makeApp();
+    mockListMcpServers.mockReturnValue(
+      okAsync([{ name: 'linear', type: 'http', url: 'https://mcp.linear.test/mcp' }]),
+    );
+    const res = await app.request('/mcp/oauth/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ serverName: 'linear', projectPath: '/repo', provider: 'claude' }),
+    });
+    expect(res.status).toBe(400);
+    expect(mockStartOAuthFlow).not.toHaveBeenCalled();
+  });
+
+  test('GET /oauth/callback answers JSON only — never HTML the server would relay', async () => {
+    mockHandleOAuthCallback.mockResolvedValue({
+      serverName: 'linear',
+      success: false,
+      error: '<script>alert(1)</script>',
+    });
+    const res = await makeApp().request(`/mcp/oauth/callback?code=c1&state=${BOUND_STATE}`);
+    expect(res.headers.get('content-type')).toContain('application/json');
+    expect(await res.json()).toEqual({ success: false, error: '<script>alert(1)</script>' });
+    expect(mockHandleOAuthCallback).toHaveBeenCalledWith('c1', BOUND_STATE);
   });
 });

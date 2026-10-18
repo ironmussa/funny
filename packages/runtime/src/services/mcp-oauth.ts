@@ -99,6 +99,13 @@ function generateState(): string {
   return randomBytes(16).toString('hex');
 }
 
+/** The server-bound state if given (never reused), else a fresh random one. */
+function claimState(bound: string | undefined): string {
+  const state = bound ?? generateState();
+  if (pendingStates.has(state)) throw badRequest('OAuth state already in use');
+  return state;
+}
+
 // ── OAuth Discovery ───────────────────────────────────────────
 
 async function discoverResourceMetadata(serverUrl: string): Promise<string> {
@@ -175,12 +182,21 @@ async function registerClient(
 
 // ── Main OAuth flow ───────────────────────────────────────────
 
+interface OAuthFlowOptions {
+  claudeConfigDir?: string;
+  /**
+   * Server-minted `state` that binds the callback to this runner + user. The
+   * server routes the unauthenticated callback by it, so it must be used as-is.
+   */
+  state?: string;
+}
+
 export function startOAuthFlow(
   serverName: string,
   serverUrl: string,
   projectPath: string,
   callbackBaseUrl: string,
-  opts: { claudeConfigDir?: string } = {},
+  opts: OAuthFlowOptions = {},
 ): ResultAsync<{ authUrl: string; state: string }, DomainError> {
   return ResultAsync.fromPromise(
     startOAuthFlowImpl(serverName, serverUrl, projectPath, callbackBaseUrl, opts),
@@ -196,7 +212,7 @@ async function startOAuthFlowImpl(
   serverUrl: string,
   projectPath: string,
   callbackBaseUrl: string,
-  opts: { claudeConfigDir?: string },
+  opts: OAuthFlowOptions,
 ): Promise<{ authUrl: string; state: string }> {
   const redirectUri = `${callbackBaseUrl}/api/mcp/oauth/callback`;
 
@@ -276,7 +292,7 @@ async function startOAuthFlowImpl(
   // Step 5: Generate PKCE and state
   const codeVerifier = generateCodeVerifier();
   const codeChallenge = generateCodeChallenge(codeVerifier);
-  const state = generateState();
+  const state = claimState(opts.state);
 
   pendingStates.set(state, {
     serverName,

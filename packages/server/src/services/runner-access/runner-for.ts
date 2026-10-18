@@ -3,8 +3,9 @@
  *
  * `RunnerFor<A, R>` states that runner `R` is owned by actor `A` and is in
  * scope for the target the request is for. `OAuthCallbackRunner<R>` states
- * that `R` is a connected general runner and nothing else; it is accepted only
- * by the identity-free OAuth callback send.
+ * that `R` is the runner a server-signed MCP OAuth `state` is bound to, still
+ * owned by the user it was minted for, and connected; it certifies no identity
+ * and is accepted only by the identity-free OAuth callback send.
  *
  * The resolver still CHOOSES the runner (ordering, presence, the pinned
  * no-fallback rule). This module CERTIFIES the result independently:
@@ -29,8 +30,10 @@ import type { RunnerPresencePort } from '../runner-ports.js';
 import * as runnerResolver from '../runner-resolver.js';
 import type { RouteTarget, RunnerResolutionFailure } from '../runner-resolver.js';
 import * as runnerScope from '../runner-scope.js';
+import { verifyOAuthCallbackState } from './oauth-callback-state.js';
 import {
   resolvedRunnerId,
+  runnerActor,
   type RunnerActor,
   type RunnerId,
   type RunnerTarget,
@@ -42,7 +45,10 @@ const RunnerFor = defineProof('RunnerFor');
 export interface RunnerFor<A, R> extends Proof<'RunnerFor', [A, R]> {}
 
 const OAuthCallbackRunner = defineProof('OAuthCallbackRunner');
-/** Runner `R` is a connected general runner; no identity is certified. */
+/**
+ * Runner `R` is the runner a valid server-signed OAuth `state` is bound to,
+ * re-verified as owned by the bound user and connected. No identity is certified.
+ */
 export interface OAuthCallbackRunner<R> extends Proof<'OAuthCallbackRunner', [R]> {}
 
 export type Selected =
@@ -60,7 +66,6 @@ export interface RunnerSelection {
     presence: RunnerPresencePort | undefined,
   ): Promise<Selected>;
   pinnedRunnerIdsForProject(projectId: string, userId: string): Promise<string[] | null>;
-  anyGeneralRunner(presence: RunnerPresencePort | undefined): Promise<string | null>;
 }
 
 /** How a chosen runner is certified. Production defaults read `runners` and `runner-scope`. */
@@ -87,10 +92,14 @@ export type WithRunnerFor = <T>(
   ) => Promise<T>,
 ) => Promise<Result<T, RunnerUnavailable>>;
 
+/** Why an OAuth callback could not be routed. */
+export type OAuthCallbackRefused = { readonly kind: 'oauth-state-invalid' } | RunnerUnavailable;
+
 export type WithOAuthCallbackRunner = <T>(
+  state: string | undefined,
   presence: RunnerPresencePort | undefined,
   run: <R>(runner: Named<R, RunnerId>, proof: OAuthCallbackRunner<R>) => Promise<T>,
-) => Promise<Result<T, RunnerUnavailable>>;
+) => Promise<Result<T, OAuthCallbackRefused>>;
 
 export interface RunnerAccess {
   withRunnerFor: WithRunnerFor;
@@ -111,8 +120,6 @@ const productionSelection: RunnerSelection = {
   },
   pinnedRunnerIdsForProject: (projectId, userId) =>
     runnerScope.pinnedRunnerIdsForProject(projectId, userId),
-  anyGeneralRunner: async (presence) =>
-    (await runnerResolver.resolveAnyRunner(presence))?.runnerId ?? null,
 };
 
 const productionVerification: RunnerVerification = {
@@ -264,9 +271,27 @@ export function createRunnerAccess(deps: RunnerAccessDeps = {}): RunnerAccess {
     );
   };
 
-  const withOAuthCallbackRunner: WithOAuthCallbackRunner = async (presence, run) => {
-    const runnerId = await selection.anyGeneralRunner(presence);
-    if (!runnerId) return err({ kind: 'runner-unavailable', reason: 'general-runner-offline' });
+  // The callback is unauthenticated: the ONLY routing input is the
+  // server-signed state. Its bound runner is the sole candidate — there is no
+  // fallback to another runner — and it is re-certified for the bound user.
+  const withOAuthCallbackRunner: WithOAuthCallbackRunner = async (state, presence, run) => {
+    const binding = verifyOAuthCallbackState(state);
+    if (!binding) {
+      log.warn('MCP OAuth callback refused — invalid, forged or expired state', {
+        namespace: 'runner-access',
+      });
+      return err({ kind: 'oauth-state-invalid' });
+    }
+    const { userId, runnerId } = binding;
+    const target: RunnerTarget = { kind: 'owned-runner', runnerId };
+    const owner =
+      presence?.userIdForRunner?.(runnerId) ?? (await verification.runnerOwner(runnerId));
+    if (!owner || owner !== userId) {
+      return err(refused(runnerActor({ userId }), runnerId, target, 'ownership'));
+    }
+    if (presence && !presence.isAvailable(runnerId)) {
+      return err({ kind: 'runner-unavailable', reason: 'general-runner-offline' });
+    }
     return ok(await name(resolvedRunnerId(runnerId), (r) => run(r, OAuthCallbackRunner.prove(r))));
   };
 
@@ -279,5 +304,5 @@ export const runnerAccess: RunnerAccess = createRunnerAccess();
 export const withRunnerFor: WithRunnerFor = (actor, target, presence, run) =>
   runnerAccess.withRunnerFor(actor, target, presence, run);
 
-export const withOAuthCallbackRunner: WithOAuthCallbackRunner = (presence, run) =>
-  runnerAccess.withOAuthCallbackRunner(presence, run);
+export const withOAuthCallbackRunner: WithOAuthCallbackRunner = (state, presence, run) =>
+  runnerAccess.withOAuthCallbackRunner(state, presence, run);

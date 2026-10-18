@@ -1,3 +1,4 @@
+import DOMPurify from 'dompurify';
 import type { MermaidConfig } from 'mermaid';
 
 /**
@@ -35,36 +36,63 @@ export function removeMermaidRenderArtifacts(renderId: string): void {
  *   produce a 100-pixel-wide PNG with mismatched aspect ratio.
  */
 
+const MERMAID_SANITIZE_CONFIG = {
+  // `html` is needed for the XHTML labels mermaid nests in <foreignObject>;
+  // DOMPurify still enforces namespaces, so HTML is only accepted inside an
+  // HTML integration point.
+  USE_PROFILES: { svg: true, svgFilters: true, html: true },
+  // foreignObject carries node labels; `use` references mermaid's own <defs>
+  // symbols (fragment-only hrefs enforced by the hook below).
+  ADD_TAGS: ['foreignObject', 'use'],
+  HTML_INTEGRATION_POINTS: { foreignobject: true },
+  ALLOW_DATA_ATTR: false,
+  FORBID_TAGS: [
+    'button',
+    'embed',
+    'form',
+    'iframe',
+    'input',
+    'object',
+    'script',
+    'select',
+    'textarea',
+  ],
+  FORBID_ATTR: ['action', 'formaction'],
+};
+
+let mermaidPurifier: ReturnType<typeof DOMPurify> | null = null;
+
+/** Dedicated instance so the `<use>` hook never affects other sanitizers. */
+function getMermaidPurifier(): ReturnType<typeof DOMPurify> {
+  if (mermaidPurifier) return mermaidPurifier;
+  const purifier = DOMPurify(window);
+  purifier.addHook('uponSanitizeAttribute', (node, event) => {
+    // <use> may only reference an element inside this SVG.
+    if (
+      node.nodeName.toLowerCase() === 'use' &&
+      (event.attrName === 'href' || event.attrName === 'xlink:href') &&
+      !event.attrValue.trim().startsWith('#')
+    ) {
+      event.keepAttr = false;
+    }
+  });
+  mermaidPurifier = purifier;
+  return purifier;
+}
+
 /**
- * Security M1: parse mermaid's SVG output as XML (preserving SVG + XHTML
- * namespaces) and remove the elements/attributes that can carry JS. Mermaid
- * already escapes user input at `securityLevel: 'strict'`, so this is
- * defense-in-depth. We used to delegate to DOMPurify, but its SVG profile
- * stripped HTML content nested inside `<foreignObject>` (which mermaid uses
- * for node labels), leaving every node visually empty.
+ * Security M1: allow-list sanitization of mermaid's SVG output with DOMPurify
+ * (SVG + SVG-filter profiles, plus HTML only inside `<foreignObject>`, which
+ * mermaid uses for node labels). Mermaid already escapes user input at
+ * `securityLevel: 'strict'`, so this is defense-in-depth.
  */
 export function sanitizeMermaidSvg(svg: string): string {
   if (!svg) return svg;
-  const template = document.createElement('template');
-  template.innerHTML = svg;
-  const root = template.content;
-
-  root.querySelectorAll('script').forEach((n) => n.remove());
-  root.querySelectorAll('*').forEach((el) => {
-    for (const attr of Array.from(el.attributes)) {
-      const name = attr.name.toLowerCase();
-      const value = attr.value.trim().toLowerCase();
-      if (name.startsWith('on')) el.removeAttribute(attr.name);
-      else if (
-        (name === 'href' || name === 'xlink:href' || name === 'src') &&
-        value.startsWith('javascript:')
-      ) {
-        el.removeAttribute(attr.name);
-      }
-    }
+  const fragment = getMermaidPurifier().sanitize(svg, {
+    ...MERMAID_SANITIZE_CONFIG,
+    RETURN_DOM_FRAGMENT: true,
   });
-
-  const svgEl = root.querySelector('svg');
+  const svgEl = fragment.querySelector('svg');
   return svgEl ? svgEl.outerHTML : '';
 }
 

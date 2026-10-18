@@ -121,7 +121,7 @@ export function CommitHistoryToolbar({
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => window.open(prUrl, '_blank')}
+                onClick={() => window.open(prUrl, '_blank', 'noopener,noreferrer')}
                 className="text-muted-foreground ml-auto"
                 data-testid="history-view-pr"
               >

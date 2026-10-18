@@ -33,6 +33,57 @@ describe('satteri markdown sanitization', () => {
     expect(html).toContain('disabled=""');
   });
 
+  test('strips form controls and form-submission attributes (M11)', () => {
+    const html = sanitizeSatteriHtml(
+      '<form action="/api/threads" method="post"><input type="text" name="x" formaction="/api/x">' +
+        '<textarea>t</textarea><select><option>o</option></select>' +
+        '<button formaction="/api/projects">Go</button></form>',
+    );
+
+    expect(html).not.toContain('<form');
+    expect(html).not.toContain('<button');
+    expect(html).not.toContain('<textarea');
+    expect(html).not.toContain('<select');
+    expect(html).not.toContain('<option');
+    expect(html).not.toContain('action=');
+    expect(html).not.toContain('method=');
+    expect(html).not.toContain('type="text"');
+    // A surviving <input> is always a read-only checkbox.
+    expect(html).toContain('<input type="checkbox" name="x" disabled="">');
+  });
+
+  test('drops arbitrary classes so raw HTML cannot build overlay click traps (M11)', () => {
+    const html = sanitizeSatteriHtml(
+      '<a href="https://evil.example" class="fixed inset-0 z-50 opacity-0">trap</a>' +
+        '<div class="absolute top-0 task-list-item">x</div>' +
+        '<p style="position:fixed;inset:0">y</p>',
+    );
+
+    expect(html).not.toContain('fixed');
+    expect(html).not.toContain('inset-0');
+    expect(html).not.toContain('absolute');
+    expect(html).not.toContain('style=');
+    expect(html).toContain('<a href="https://evil.example">trap</a>');
+    expect(html).toContain('<div class="task-list-item">x</div>');
+  });
+
+  test('keeps classes the Sätteri compiler emits', () => {
+    const html = sanitizeSatteriHtml(
+      '<ul class="contains-task-list"><li class="task-list-item">a</li></ul>' +
+        '<pre><code class="language-ts">x</code></pre><pre><code class="language-c++">y</code></pre>' +
+        '<section class="footnotes"><h2 class="sr-only">Footnotes</h2>' +
+        '<a href="#user-content-fnref-1" class="data-footnote-backref">b</a></section>',
+    );
+
+    expect(html).toContain('class="contains-task-list"');
+    expect(html).toContain('class="task-list-item"');
+    expect(html).toContain('class="language-ts"');
+    expect(html).toContain('class="language-c++"');
+    expect(html).toContain('class="footnotes"');
+    expect(html).toContain('class="sr-only"');
+    expect(html).toContain('class="data-footnote-backref"');
+  });
+
   test('keeps relative repository paths and approved web URLs', () => {
     const html = sanitizeSatteriHtml(
       '<a href="packages/client/src/lib/editor-utils.ts">local</a><a href="https://example.com/path">web</a>',

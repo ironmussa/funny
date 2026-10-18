@@ -232,7 +232,7 @@ export function ChangesToolbar({
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    onClick={() => window.open(gitStatus.prUrl, '_blank')}
+                    onClick={() => window.open(gitStatus.prUrl, '_blank', 'noopener,noreferrer')}
                     className="text-muted-foreground"
                     data-testid="review-view-pr-toolbar"
                   >

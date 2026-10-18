@@ -1,16 +1,13 @@
 import type { GitHubPR } from '@funny/shared';
 import { screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PinnedPRCard } from '@/components/PinnedPRCard';
 
 import { mockT } from '../helpers/mock-i18n';
+import { MARKDOWN_PRELOAD_TIMEOUT_MS, preloadMarkdownPipeline } from '../helpers/preload-markdown';
 import { renderWithProviders } from '../helpers/render';
-
-// First render of a PR conversation loads the markdown pipeline, which can take
-// several seconds when the full suite runs in parallel.
-const MARKDOWN_RENDER_WAIT = { timeout: 10_000 };
 
 const apiMock = vi.hoisted(() => ({
   githubPRThreads: vi.fn(),
@@ -53,6 +50,8 @@ function makePR(overrides: Partial<GitHubPR> = {}): GitHubPR {
 }
 
 describe('PinnedPRCard', () => {
+  beforeAll(preloadMarkdownPipeline, MARKDOWN_PRELOAD_TIMEOUT_MS);
+
   beforeEach(() => {
     vi.clearAllMocks();
     apiMock.githubPRThreads.mockReturnValue(okAsync({ threads: [] }));
@@ -159,16 +158,14 @@ describe('PinnedPRCard', () => {
 
     const { container } = renderWithProviders(<PinnedPRCard pr={makePR()} projectId="project-1" />);
 
-    expect(
-      await screen.findByText('Run configuration', {}, MARKDOWN_RENDER_WAIT),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Run configuration')).toBeInTheDocument();
     expect(screen.getByText('Review profile:')).toBeInTheDocument();
     expect(container.querySelector('details')).toBeInTheDocument();
     expect(container.querySelector('br')).toBeInTheDocument();
     expect(container.querySelector('script')).not.toBeInTheDocument();
     expect(container).not.toHaveTextContent('<details>');
     expect(container).not.toHaveTextContent('<!-- This is an auto-generated comment');
-  }, 20_000);
+  });
 
   test('does not render a redundant merged status badge', () => {
     renderWithProviders(

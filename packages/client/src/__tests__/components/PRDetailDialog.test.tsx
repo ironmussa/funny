@@ -1,17 +1,14 @@
 import type { GitHubPR, PRDetail } from '@funny/shared';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PRDetailDialog } from '@/components/PRDetailDialog';
 import { usePRDetailStore } from '@/stores/pr-detail-store';
 
 import { mockT } from '../helpers/mock-i18n';
+import { MARKDOWN_PRELOAD_TIMEOUT_MS, preloadMarkdownPipeline } from '../helpers/preload-markdown';
 import { renderWithProviders } from '../helpers/render';
-
-// First render of a PR conversation loads the markdown pipeline, which can take
-// several seconds when the full suite runs in parallel.
-const MARKDOWN_RENDER_WAIT = { timeout: 10_000 };
 
 const apiMock = vi.hoisted(() => ({
   githubPRFiles: vi.fn(),
@@ -94,6 +91,8 @@ function makeDetail(overrides: Partial<PRDetail> = {}): PRDetail {
 }
 
 describe('PRDetailDialog', () => {
+  beforeAll(preloadMarkdownPipeline, MARKDOWN_PRELOAD_TIMEOUT_MS);
+
   beforeEach(() => {
     vi.clearAllMocks();
     usePRDetailStore.getState().clearAll();
@@ -167,8 +166,6 @@ describe('PRDetailDialog', () => {
     });
     expect(screen.getByTestId('pinned-pr-card-51')).toBeInTheDocument();
     expect(screen.getByTestId('pinned-pr-link-51')).not.toBeVisible();
-    expect(
-      await screen.findByText('Can we verify this path?', {}, MARKDOWN_RENDER_WAIT),
-    ).toBeInTheDocument();
-  }, 20_000);
+    expect(await screen.findByText('Can we verify this path?')).toBeInTheDocument();
+  });
 });

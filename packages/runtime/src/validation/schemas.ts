@@ -131,6 +131,46 @@ const symbolReferenceSchema = z.object({
   endLine: z.number().int().min(1).optional(),
 });
 
+/**
+ * Security ME-3: regex for git ref / hash arguments that are passed
+ * positionally to `git checkout` / `revert` / `reset` / `cherry-pick`. The
+ * route layer takes these from the request body, and previously had no
+ * schema — a value like `--force` or `-d branch` would be interpreted by
+ * git as a flag rather than a ref.
+ *
+ * The regex matches the characters git itself allows in ref names plus
+ * commit hashes (`^/~@:` for special refs like `HEAD^`, `origin/foo`,
+ * `branch@{1}`, `commit:path`). Trailing whitespace / control chars are
+ * rejected. Leading `-` is forbidden by the `.refine` so flag injection
+ * (the actual exploit class) is closed.
+ */
+export const gitRefSchema = z
+  .string()
+  .min(1, 'ref is required')
+  .max(255, 'ref is too long')
+  .regex(
+    /^[A-Za-z0-9._/@^~:{}=-]+$/,
+    'ref contains characters that are not valid in a git ref or commit hash',
+  )
+  .refine((s) => !s.startsWith('-'), 'ref must not start with "-"');
+
+/**
+ * Security M7: a branch name taken from a request body (`baseBranch`) and later
+ * passed positionally to `git branch --merged`, `git merge-base`,
+ * `git rev-list`, `git diff`, `git fetch` and `git checkout`. Rejects a leading
+ * `-` (flag injection such as `--output=/tmp/x`), whitespace and control
+ * characters. Looser than {@link gitRefSchema} on purpose so non-ASCII branch
+ * names keep working. An empty string still means "not set".
+ */
+const branchNameSchema = z
+  .string()
+  .min(1, 'branch is required')
+  .max(255, 'branch is too long')
+  .refine((s) => !s.startsWith('-'), 'branch must not start with "-"')
+  // eslint-disable-next-line no-control-regex -- rejecting control chars is the point
+  .refine((s) => !/[\s\x00-\x1f\x7f]/.test(s), 'branch contains invalid characters');
+const optionalBaseBranchSchema = branchNameSchema.or(z.literal('')).optional();
+
 // ── Request body schemas ─────────────────────────────────────────
 
 export const createProjectSchema = z.object({
@@ -186,7 +226,7 @@ export const createThreadSchema = z
     permissionMode: permissionModeSchema.default(DEFAULT_PERMISSION_MODE),
     effort: effortLevelSchema.optional(),
     source: threadSourceSchema.default('web'),
-    baseBranch: z.string().optional(),
+    baseBranch: optionalBaseBranchSchema,
     prompt: z.string().min(1, 'prompt is required').max(500_000),
     images: z.array(imageAttachmentSchema).max(10).optional(),
     allowedTools: z.array(z.string()).optional(),
@@ -229,7 +269,7 @@ export const createIdleThreadSchema = z.object({
   title: z.string().min(1, 'title is required'),
   mode: threadModeSchema,
   source: threadSourceSchema.default('web'),
-  baseBranch: z.string().optional(),
+  baseBranch: optionalBaseBranchSchema,
   prompt: z.string().optional(),
   images: z.array(imageAttachmentSchema).optional(),
   stage: z.enum(['backlog', 'planning']).default('backlog'),
@@ -248,7 +288,7 @@ export const sendMessageSchema = z
     disallowedTools: z.array(z.string()).optional(),
     fileReferences: z.array(fileReferenceSchema).max(20).optional(),
     symbolReferences: z.array(symbolReferenceSchema).max(20).optional(),
-    baseBranch: z.string().optional(),
+    baseBranch: optionalBaseBranchSchema,
     forceQueue: z.boolean().optional(),
   })
   .superRefine((data, ctx) => validateProviderModel(data, ctx));
@@ -273,31 +313,8 @@ export const rewindCodeSchema = z.object({
 export const forkAndRewindSchema = forkThreadSchema;
 
 export const convertToWorktreeSchema = z.object({
-  baseBranch: z.string().optional(),
+  baseBranch: optionalBaseBranchSchema,
 });
-
-/**
- * Security ME-3: regex for git ref / hash arguments that are passed
- * positionally to `git checkout` / `revert` / `reset` / `cherry-pick`. The
- * route layer takes these from the request body, and previously had no
- * schema — a value like `--force` or `-d branch` would be interpreted by
- * git as a flag rather than a ref.
- *
- * The regex matches the characters git itself allows in ref names plus
- * commit hashes (`^/~@:` for special refs like `HEAD^`, `origin/foo`,
- * `branch@{1}`, `commit:path`). Trailing whitespace / control chars are
- * rejected. Leading `-` is forbidden by the `.refine` so flag injection
- * (the actual exploit class) is closed.
- */
-export const gitRefSchema = z
-  .string()
-  .min(1, 'ref is required')
-  .max(255, 'ref is too long')
-  .regex(
-    /^[A-Za-z0-9._/@^~:{}=-]+$/,
-    'ref contains characters that are not valid in a git ref or commit hash',
-  )
-  .refine((s) => !s.startsWith('-'), 'ref must not start with "-"');
 
 export const checkoutHashSchema = z.object({ hash: gitRefSchema });
 export const revertCommitSchema = z.object({ hash: gitRefSchema });
@@ -375,7 +392,7 @@ export const reorderHooksSchema = z.object({
 export const createWorktreeSchema = z.object({
   projectId: z.string().min(1),
   branchName: z.string().min(1),
-  baseBranch: z.string().min(1, 'baseBranch is required'),
+  baseBranch: branchNameSchema,
 });
 
 export const deleteWorktreeSchema = z.object({

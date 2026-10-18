@@ -6,7 +6,9 @@
  */
 
 import { readFile, readdir, stat } from 'fs/promises';
-import { join, resolve } from 'path';
+import { join } from 'path';
+
+import { isContainedPath } from '@funny/core/git';
 
 const MAX_FILE_SIZE = 100 * 1024; // 100KB per file
 const MAX_TOTAL_CONTENT = 500 * 1024; // 500KB total
@@ -45,6 +47,50 @@ async function inlineFile(
   }
 }
 
+/** Inline up to MAX_FOLDER_FILES direct children of a referenced folder. */
+async function inlineFolder(
+  basePath: string,
+  folderPath: string,
+  relPath: string,
+  totalSize: { value: number },
+): Promise<string> {
+  const entries = await readdir(folderPath, { withFileTypes: true });
+  const files = entries.filter((e) => e.isFile()).map((e) => e.name);
+  const folderSections: string[] = [];
+  for (const fileName of files.slice(0, MAX_FOLDER_FILES)) {
+    if (totalSize.value >= MAX_TOTAL_CONTENT) break;
+    const childFullPath = join(folderPath, fileName);
+    // A child may itself be a symlink pointing outside the base.
+    if (!isContainedPath(basePath, childFullPath)) continue;
+    folderSections.push(await inlineFile(childFullPath, join(relPath, fileName), totalSize));
+  }
+  const truncNote =
+    files.length > MAX_FOLDER_FILES
+      ? ` note="Showing ${MAX_FOLDER_FILES} of ${files.length} files. Use the Glob/Read tools to access more."`
+      : '';
+  return `<folder path="${relPath}"${truncNote}>\n${folderSections.join('\n')}\n</folder>`;
+}
+
+/** Inline one file/folder reference, or null when it escapes `basePath`. */
+async function inlineReference(
+  basePath: string,
+  ref: FileRef,
+  totalSize: { value: number },
+): Promise<string | null> {
+  const fullPath = join(basePath, ref.path);
+  // Security (M9): sibling-prefix dirs (`/a/proj-secrets` vs `/a/proj`) and
+  // symlinks pointing outside the base must not be inlined into the prompt.
+  if (!isContainedPath(basePath, fullPath)) return null;
+  try {
+    const fileStat = await stat(fullPath);
+    return fileStat.isDirectory()
+      ? await inlineFolder(basePath, fullPath, ref.path, totalSize)
+      : await inlineFile(fullPath, ref.path, totalSize);
+  } catch {
+    return `<file path="${ref.path}" note="File not found or unreadable"></file>`;
+  }
+}
+
 export async function augmentPromptWithFiles(
   prompt: string,
   fileReferences: FileRef[] | undefined,
@@ -54,43 +100,9 @@ export async function augmentPromptWithFiles(
 
   const sections: string[] = [];
   const totalSize = { value: 0 };
-  const resolvedBase = resolve(basePath);
-
   for (const ref of fileReferences) {
-    const fullPath = join(basePath, ref.path);
-    const resolved = resolve(fullPath);
-    if (!resolved.startsWith(resolvedBase)) continue;
-
-    try {
-      const fileStat = await stat(fullPath);
-
-      if (fileStat.isDirectory()) {
-        // Folder reference: list and inline files from the directory
-        const entries = await readdir(fullPath, { withFileTypes: true });
-        const files = entries.filter((e) => e.isFile()).map((e) => e.name);
-        const truncated = files.length > MAX_FOLDER_FILES;
-        const filesToInline = files.slice(0, MAX_FOLDER_FILES);
-
-        const folderSections: string[] = [];
-        for (const fileName of filesToInline) {
-          if (totalSize.value >= MAX_TOTAL_CONTENT) break;
-          const childPath = join(ref.path, fileName);
-          const childFullPath = join(fullPath, fileName);
-          folderSections.push(await inlineFile(childFullPath, childPath, totalSize));
-        }
-
-        const truncNote = truncated
-          ? ` note="Showing ${MAX_FOLDER_FILES} of ${files.length} files. Use the Glob/Read tools to access more."`
-          : '';
-        sections.push(
-          `<folder path="${ref.path}"${truncNote}>\n${folderSections.join('\n')}\n</folder>`,
-        );
-      } else {
-        sections.push(await inlineFile(fullPath, ref.path, totalSize));
-      }
-    } catch {
-      sections.push(`<file path="${ref.path}" note="File not found or unreadable"></file>`);
-    }
+    const section = await inlineReference(basePath, ref, totalSize);
+    if (section !== null) sections.push(section);
   }
 
   if (sections.length === 0) return prompt;
@@ -112,12 +124,12 @@ export async function augmentPromptWithSymbols(
   if (!symbolReferences || symbolReferences.length === 0) return prompt;
 
   const sections: string[] = [];
-  const resolvedBase = resolve(basePath);
 
   for (const ref of symbolReferences) {
     const fullPath = join(basePath, ref.path);
-    const resolved = resolve(fullPath);
-    if (!resolved.startsWith(resolvedBase)) continue;
+    // Security (M9): sibling-prefix dirs (`/a/proj-secrets` vs `/a/proj`) and
+    // symlinks pointing outside the base must not be inlined into the prompt.
+    if (!isContainedPath(basePath, fullPath)) continue;
 
     try {
       const content = await readFile(fullPath, 'utf-8');

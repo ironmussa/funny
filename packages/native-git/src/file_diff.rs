@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Component, Path, PathBuf};
 
 use gix::bstr::ByteSlice;
 
@@ -10,6 +10,18 @@ const CONTEXT_LINES: u32 = 3;
 
 /// Maximum file size to diff (10 MB). Larger files return empty string.
 const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Security: `file_path` comes from an HTTP query string. `PathBuf::join`
+/// REPLACES the base when given an absolute path, and `..` walks out of the
+/// worktree, so either would let a caller read any file on the host. Only
+/// plain relative paths made of normal components are accepted.
+pub(crate) fn is_safe_relative_path(file_path: &str) -> bool {
+  !file_path.is_empty()
+    && !file_path.contains('\0')
+    && Path::new(file_path)
+      .components()
+      .all(|c| matches!(c, Component::Normal(_) | Component::CurDir))
+}
 
 /// Check first 8KB for null bytes (binary detection).
 fn is_binary(data: &[u8]) -> bool {
@@ -233,6 +245,11 @@ fn diff_file_with_context(
   staged: bool,
   context_lines: u32,
 ) -> napi::Result<String> {
+  if !is_safe_relative_path(file_path) {
+    return Err(napi::Error::from_reason(format!(
+      "Refusing unsafe file path (absolute or contains '..'): {file_path}"
+    )));
+  }
   with_repo(cwd, |repo| {
     let worktree_path = PathBuf::from(cwd);
 
@@ -420,4 +437,23 @@ pub(crate) fn commit_file_diff_inner(
     parent_blob.is_none(),
     commit_blob.is_none(),
   ))
+}
+
+#[cfg(test)]
+mod path_safety_tests {
+  use super::is_safe_relative_path;
+
+  #[test]
+  fn rejects_absolute_and_parent_paths() {
+    assert!(!is_safe_relative_path("/etc/passwd"));
+    assert!(!is_safe_relative_path("../../x"));
+    assert!(!is_safe_relative_path("src/../../x"));
+    assert!(!is_safe_relative_path(""));
+  }
+
+  #[test]
+  fn accepts_plain_relative_paths() {
+    assert!(is_safe_relative_path("src/main.rs"));
+    assert!(is_safe_relative_path("./README.md"));
+  }
 }

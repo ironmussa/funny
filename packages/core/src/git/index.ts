@@ -17,10 +17,14 @@ export {
   validatePathSync,
   pathExists,
   sanitizePath,
+  resolveRepoRelativePath,
+  isContainedPath,
   validateProjectPathLexical,
   validateProjectRootContainment,
   validateProjectRootPath,
 } from './path-validation.js';
+
+export { isSafeGitRefArg } from './ref-guard.js';
 
 export { getNativeGit } from './native.js';
 

@@ -435,6 +435,96 @@ describe('threadRoutes (mounted)', () => {
     expect(res.status).toBe(500);
   });
 
+  describe('POST /:id/message steer-share delegation (H6)', () => {
+    /** A non-owner sharee carrying a verified steer grant for thread t1. */
+    function makeSteerApp() {
+      const app = new Hono<HonoEnv>();
+      app.use('*', async (c, next) => {
+        c.set('userId', 'sharee-1');
+        c.set('organizationId', null);
+        c.set('shareLevel', 'steer');
+        c.set('onBehalfOfThread', 't1');
+        return next();
+      });
+      app.route('/api/threads', threadRoutes);
+      return app;
+    }
+
+    const settingsChangingBody = {
+      content: 'please continue',
+      provider: 'claude',
+      model: 'opus',
+      permissionMode: 'auto',
+      effort: 'max',
+      allowedTools: ['Bash'],
+      disallowedTools: [],
+      baseBranch: 'main',
+      forceQueue: true,
+      fileReferences: [{ path: 'src/a.ts' }],
+    };
+
+    test('strips settings-changing fields so they are never persisted', async () => {
+      const res = await makeSteerApp().request('/api/threads/t1/message', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(settingsChangingBody),
+      });
+      expect(res.status).toBe(200);
+      expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
+      const params = mocks.sendMessage.mock.calls[0][0];
+      expect(params).toMatchObject({
+        threadId: 't1',
+        userId: 'sharee-1',
+        content: 'please continue',
+        forceQueue: true,
+        fileReferences: [{ path: 'src/a.ts' }],
+      });
+      for (const key of [
+        'provider',
+        'model',
+        'permissionMode',
+        'effort',
+        'allowedTools',
+        'disallowedTools',
+        'baseBranch',
+      ]) {
+        expect(params[key]).toBeUndefined();
+      }
+    });
+
+    test('refuses shell escapes from a sharee', async () => {
+      const res = await makeSteerApp().request('/api/threads/t1/message', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ content: '!cat ~/.ssh/id_rsa' }),
+      });
+      expect(res.status).toBe(403);
+      expect(mocks.sendMessage).not.toHaveBeenCalled();
+    });
+
+    test('the owner keeps full control of thread settings', async () => {
+      const res = await makeApp().request('/api/threads/t1/message', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(settingsChangingBody),
+      });
+      expect(res.status).toBe(200);
+      expect(mocks.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ permissionMode: 'auto', allowedTools: ['Bash'] }),
+      );
+    });
+  });
+
+  test('POST /:id/message rejects a baseBranch that looks like a git option (M7)', async () => {
+    const res = await makeApp().request('/api/threads/t1/message', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: 'hi', baseBranch: '--output=x' }),
+    });
+    expect(res.status).toBe(400);
+    expect(mocks.sendMessage).not.toHaveBeenCalled();
+  });
+
   test('POST /:id/fork returns 400 on invalid body', async () => {
     const res = await makeApp().request('/api/threads/t1/fork', {
       method: 'POST',

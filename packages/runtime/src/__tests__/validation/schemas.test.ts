@@ -3,6 +3,9 @@ import { describe, test, expect } from 'vitest';
 import {
   createProjectSchema,
   createThreadSchema,
+  createIdleThreadSchema,
+  convertToWorktreeSchema,
+  createWorktreeSchema,
   updateProjectSchema,
   sendMessageSchema,
   threadModeSchema,
@@ -383,6 +386,33 @@ describe('sendMessageSchema', () => {
     });
     expect(result.success).toBe(true);
   });
+});
+
+// ── baseBranch flag injection (security M7) ─────────────────
+
+describe('baseBranch fields reject git option injection', () => {
+  const schemas = [
+    ['createThreadSchema', createThreadSchema, { projectId: 'p1', mode: 'local', prompt: 'x' }],
+    [
+      'createIdleThreadSchema',
+      createIdleThreadSchema,
+      { projectId: 'p1', title: 't', mode: 'local' },
+    ],
+    ['sendMessageSchema', sendMessageSchema, { content: 'x' }],
+    ['convertToWorktreeSchema', convertToWorktreeSchema, {}],
+    ['createWorktreeSchema', createWorktreeSchema, { projectId: 'p1', branchName: 'b' }],
+  ] as const;
+
+  for (const [name, schema, base] of schemas) {
+    test(`${name} rejects "--output=x"`, () => {
+      expect(schema.safeParse({ ...base, baseBranch: '--output=x' }).success).toBe(false);
+      expect(schema.safeParse({ ...base, baseBranch: 'main\n--x' }).success).toBe(false);
+    });
+
+    test(`${name} accepts a normal branch`, () => {
+      expect(schema.safeParse({ ...base, baseBranch: 'origin/feature-1' }).success).toBe(true);
+    });
+  }
 });
 
 // ── stageFilesSchema ─────────────────────────────────────────

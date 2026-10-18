@@ -11,7 +11,7 @@
     "typecheck": "bun check"
   },
   "dependencies": {
-    "@grpc/grpc-js": "1.14.0",
+    "@grpc/grpc-js": "1.14.6",
     "@grpc/proto-loader": "0.8.0"
   },
   "devDependencies": {

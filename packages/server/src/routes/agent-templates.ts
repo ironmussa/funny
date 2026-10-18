@@ -78,6 +78,7 @@ agentTemplateRoutes.get('/stats/usage', async (c) => {
 // GET /api/agent-templates/:id
 agentTemplateRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
+  const userId = c.get('userId') as string;
 
   // Check builtin templates first
   const builtin = BUILTIN_AGENT_TEMPLATES.find((t) => t.id === id);
@@ -85,7 +86,8 @@ agentTemplateRoutes.get('/:id', async (c) => {
 
   const rows = await db.select().from(agentTemplates).where(eq(agentTemplates.id, id));
 
-  if (!rows[0]) return c.json({ error: 'Not found' }, 404);
+  // Another user's private template is indistinguishable from a missing one.
+  if (!rows[0] || !canReadTemplate(rows[0], userId)) return c.json({ error: 'Not found' }, 404);
   return c.json(parseJsonColumns(rows[0]));
 });
 
@@ -216,7 +218,7 @@ agentTemplateRoutes.post('/:id/duplicate', async (c) => {
     };
   } else {
     const rows = await db.select().from(agentTemplates).where(eq(agentTemplates.id, sourceId));
-    if (!rows[0]) return c.json({ error: 'Not found' }, 404);
+    if (!rows[0] || !canReadTemplate(rows[0], userId)) return c.json({ error: 'Not found' }, 404);
     source = rows[0];
   }
 
@@ -227,6 +229,8 @@ agentTemplateRoutes.post('/:id/duplicate', async (c) => {
     ...source,
     id,
     userId,
+    // A copy starts private, even when duplicated from someone's shared template.
+    shared: false,
     name: `${source.name} (copy)`,
     createdAt: now,
     updatedAt: now,
@@ -237,6 +241,11 @@ agentTemplateRoutes.post('/:id/duplicate', async (c) => {
 });
 
 // ── Helpers ─────────────────────────────────────────────────
+
+/** A template is readable by its owner, or by anyone when it is marked shared. */
+function canReadTemplate(row: { userId: string; shared: boolean | null }, userId: string): boolean {
+  return row.userId === userId || row.shared === true;
+}
 
 const JSON_COLUMNS = [
   'disallowedTools',

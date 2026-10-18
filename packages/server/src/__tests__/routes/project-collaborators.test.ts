@@ -14,6 +14,7 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
  * Each test fails against the pre-fix code and passes with it.
  */
 import { user } from '@funny/shared/db/schema-sqlite';
+import { sql } from 'drizzle-orm';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
@@ -341,31 +342,35 @@ describe('project collaborators', () => {
   });
 
   describe('GET /api/users/search', () => {
-    test('finds users by username, name, or email', async () => {
+    const insertUsers = (rows: Array<{ id: string; name: string; username: string }>) => {
       const now = new Date().toISOString();
       (t.db as any)
         .insert(user)
-        .values([
-          {
-            id: 'u-alice',
-            name: 'Alice Wonderland',
-            email: 'alice@local.host',
-            username: 'alice',
+        .values(
+          rows.map((r) => ({
+            ...r,
+            email: `${r.username}@local.host`,
             emailVerified: 0,
             createdAt: now,
             updatedAt: now,
-          },
-          {
-            id: 'u-bob',
-            name: 'Bob Builder',
-            email: 'bob@local.host',
-            username: 'bob',
-            emailVerified: 0,
-            createdAt: now,
-            updatedAt: now,
-          },
-        ])
+          })),
+        )
+        .onConflictDoNothing()
         .run();
+    };
+
+    beforeEach(() => {
+      (t.db as any).run(sql`DELETE FROM "user"`);
+      insertUsers([
+        { id: 'u-alice', name: 'Alice Wonderland', username: 'alice' },
+        { id: 'u-bob', name: 'Bob Builder', username: 'bob' },
+        { id: 'u-under', name: 'Under Score', username: 'un_der' },
+      ]);
+    });
+
+    test('finds org co-members by username, name, or email', async () => {
+      seedOrgMember(t.db as any, { organizationId: 'org-s', userId: 'owner' });
+      seedOrgMember(t.db as any, { organizationId: 'org-s', userId: 'u-alice' });
 
       const byUsername = await t.requestAs('owner').get('/api/users/search?q=ali');
       const rows = (await byUsername.json()) as any[];
@@ -377,9 +382,41 @@ describe('project collaborators', () => {
       expect(rows[0]).not.toHaveProperty('banned');
     });
 
-    test('empty query returns an empty list', async () => {
-      const res = await t.requestAs('owner').get('/api/users/search?q=');
+    test('never returns users the caller shares no org or project with', async () => {
+      // Regression: any user could enumerate every account (and its email).
+      const res = await t.requestAs('owner').get('/api/users/search?q=local.host');
       expect(await res.json()).toEqual([]);
+    });
+
+    test('finds co-members of a shared project', async () => {
+      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'u-bob', role: 'member' });
+      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'u-alice', role: 'member' });
+
+      const asOwner = await t.requestAs('owner').get('/api/users/search?q=bob');
+      expect(((await asOwner.json()) as any[]).map((r) => r.id)).toEqual(['u-bob']);
+      const asMember = await t.requestAs('u-bob').get('/api/users/search?q=alice');
+      expect(((await asMember.json()) as any[]).map((r) => r.id)).toEqual(['u-alice']);
+    });
+
+    test('global admins can search every user', async () => {
+      const res = await t.requestAs('root', 'admin').get('/api/users/search?q=bob');
+      expect(((await res.json()) as any[]).map((r) => r.id)).toEqual(['u-bob']);
+    });
+
+    test('LIKE wildcards in the query are matched literally', async () => {
+      const percent = await t.requestAs('root', 'admin').get('/api/users/search?q=%25%25');
+      expect(await percent.json()).toEqual([]);
+      const anyChar = await t.requestAs('root', 'admin').get('/api/users/search?q=__');
+      expect(await anyChar.json()).toEqual([]);
+      const underscore = await t.requestAs('root', 'admin').get('/api/users/search?q=n_d');
+      expect(((await underscore.json()) as any[]).map((r) => r.id)).toEqual(['u-under']);
+    });
+
+    test('empty and 1-char queries return an empty list', async () => {
+      const empty = await t.requestAs('root', 'admin').get('/api/users/search?q=');
+      expect(await empty.json()).toEqual([]);
+      const one = await t.requestAs('root', 'admin').get('/api/users/search?q=a');
+      expect(await one.json()).toEqual([]);
     });
   });
 });

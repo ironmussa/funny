@@ -99,6 +99,44 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
     return map;
   }
 
+  /**
+   * Who-can-see filters for {@link listThreads}. Without an org: the caller's
+   * own threads. In org mode: threads in the org's projects that the caller
+   * owns OR that were explicitly shared with them — org membership grants
+   * NOTHING on a thread (see auth/authorizer.ts), so other members' threads
+   * are never listed by project scope alone. Returns `null` when the org has
+   * no projects (nothing can match).
+   */
+  async function ownershipFilters(
+    userId: string,
+    organizationId?: string | null,
+  ): Promise<ReturnType<typeof eq>[] | null> {
+    const ownedByCaller = eq(schema.threads.userId, userId);
+    if (!organizationId) return [ownedByCaller];
+
+    const orgProjectIds = (
+      await dbAll(
+        db
+          .select({ projectId: schema.teamProjects.projectId })
+          .from(schema.teamProjects)
+          .where(eq(schema.teamProjects.teamId, organizationId)),
+      )
+    ).map((r: any) => r.projectId);
+    if (orgProjectIds.length === 0) return null;
+
+    const sharedWithCaller = inArray(
+      schema.threads.id,
+      db
+        .select({ threadId: schema.threadShares.threadId })
+        .from(schema.threadShares)
+        .where(eq(schema.threadShares.sharedWithUserId, userId)),
+    );
+    return [
+      inArray(schema.threads.projectId, orgProjectIds),
+      or(ownedByCaller, sharedWithCaller) as ReturnType<typeof eq>,
+    ];
+  }
+
   /** List threads, optionally filtered by projectId, userId, and archive status.
    *  Supports server-side pagination via limit/offset.
    *  `isScratch`:
@@ -127,26 +165,9 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
       filters.push(eq(schema.threads.isScratch, 0));
     }
 
-    if (organizationId) {
-      // Org mode: only show threads for projects associated with this organization
-      const orgProjectIds = (
-        await dbAll(
-          db
-            .select({ projectId: schema.teamProjects.projectId })
-            .from(schema.teamProjects)
-            .where(eq(schema.teamProjects.teamId, organizationId)),
-        )
-      ).map((r: any) => r.projectId);
-
-      if (orgProjectIds.length > 0) {
-        filters.push(inArray(schema.threads.projectId, orgProjectIds));
-      } else {
-        // No projects in this org -- return empty
-        return { threads: [], total: 0 };
-      }
-    } else {
-      filters.push(eq(schema.threads.userId, userId));
-    }
+    const ownership = await ownershipFilters(userId, organizationId);
+    if (!ownership) return { threads: [], total: 0 };
+    filters.push(...ownership);
     if (projectId) {
       filters.push(eq(schema.threads.projectId, projectId));
     }

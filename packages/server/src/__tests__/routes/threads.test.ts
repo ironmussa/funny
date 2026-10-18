@@ -23,6 +23,7 @@ import {
   seedMessage,
   seedMessageQueue,
   seedThreadEvent,
+  seedTeamProject,
   seedToolCall,
 } from '../helpers/test-db.js';
 
@@ -84,6 +85,39 @@ describe('Thread Routes (Integration)', () => {
       const body = await res.json();
       expect(body.threads).toHaveLength(1);
       expect(body.threads[0].title).toBe('Mine');
+    });
+
+    test("org mode lists only the caller's own and explicitly shared threads", async () => {
+      // Regression: in org mode the list was scoped by org project only, so
+      // every member saw every other member's threads (+ last message snippet).
+      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'p1' });
+      seedThread(t.db as any, { id: 't-mine', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't-private', projectId: 'p1', userId: 'user-2' });
+      seedThread(t.db as any, { id: 't-shared', projectId: 'p1', userId: 'user-2' });
+      seedMessage(t.db as any, {
+        id: 'm-private',
+        threadId: 't-private',
+        role: 'assistant',
+        content: 'secret',
+      });
+      (t.db as any)
+        .insert(t.schema.threadShares)
+        .values({
+          threadId: 't-shared',
+          sharedWithUserId: 'user-1',
+          sharedByUserId: 'user-2',
+          level: 'view',
+          createdAt: new Date().toISOString(),
+        })
+        .run();
+
+      const res = await t.requestAs('user-1', 'user', { orgId: 'org-1' }).get('/api/threads');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      const ids = body.threads.map((th: { id: string }) => th.id).sort();
+      expect(ids).toEqual(['t-mine', 't-shared']);
+      expect(body.total).toBe(2);
     });
   });
 
@@ -452,6 +486,27 @@ describe('Thread Routes (Integration)', () => {
       const listRes = await t.requestAs('user-1').get('/api/threads/t1/comments');
       const body = await listRes.json();
       expect(body).toHaveLength(0);
+    });
+
+    test("cannot delete another thread's comment through a thread the caller owns", async () => {
+      // Regression: the delete was keyed on commentId only, so the owner of t1
+      // could delete any comment anywhere by pairing t1 with a foreign id.
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db as any, { id: 'p2', userId: 'user-2', path: '/b' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't2', projectId: 'p2', userId: 'user-2' });
+
+      const createRes = await t.requestAs('user-2').post('/api/threads/t2/comments', {
+        content: 'Victim comment',
+      });
+      const { id } = await createRes.json();
+
+      const delRes = await t.requestAs('user-1').delete(`/api/threads/t1/comments/${id}`);
+      expect(delRes.status).toBe(404);
+      expect(threadViewerCalls.some((c) => c.event.type === 'thread:comment_deleted')).toBe(false);
+
+      const listRes = await t.requestAs('user-2').get('/api/threads/t2/comments');
+      expect(await listRes.json()).toHaveLength(1);
     });
   });
 

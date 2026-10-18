@@ -8,7 +8,7 @@
  * DB-agnostic comment repository. Accepts db + schema via dependency injection.
  */
 
-import { eq, asc, inArray, count as drizzleCount } from 'drizzle-orm';
+import { and, eq, asc, inArray, count as drizzleCount } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import type { RepoDeps } from './deps.js';
@@ -51,9 +51,23 @@ export function createCommentRepository(deps: CommentRepositoryDeps) {
     return { id, ...data, createdAt };
   }
 
-  /** Delete a comment by ID */
-  async function deleteComment(commentId: string) {
-    await dbRun(db.delete(schema.threadComments).where(eq(schema.threadComments.id, commentId)));
+  /**
+   * Delete a comment, scoped to the thread it belongs to. A comment id from a
+   * DIFFERENT thread never matches, so an owner of thread A cannot delete
+   * comments on thread B by pairing A's id with B's comment id.
+   * Returns `true` when a comment was deleted, `false` when none matched.
+   */
+  async function deleteComment(threadId: string, commentId: string): Promise<boolean> {
+    const scope = and(
+      eq(schema.threadComments.id, commentId),
+      eq(schema.threadComments.threadId, threadId),
+    );
+    const existing = await dbAll(
+      db.select({ id: schema.threadComments.id }).from(schema.threadComments).where(scope),
+    );
+    if (existing.length === 0) return false;
+    await dbRun(db.delete(schema.threadComments).where(scope));
+    return true;
   }
 
   /** Get comment counts for a list of thread IDs */

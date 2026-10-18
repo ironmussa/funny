@@ -419,7 +419,8 @@ threadRoutes.post('/:id/comments', requireThreadView, async (c) => {
 threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) => {
   const id = c.req.param('id');
   const commentId = c.req.param('commentId');
-  await commentRepo.deleteComment(commentId);
+  const deleted = await commentRepo.deleteComment(id, commentId);
+  if (!deleted) return c.json({ error: 'Comment not found' }, 404);
   c.env?.browserEvents?.toThreadViewers(id, {
     type: THREAD_COMMENT_DELETED_EVENT,
     threadId: id,

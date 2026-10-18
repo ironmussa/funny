@@ -75,7 +75,7 @@ export function ProjectCollaborators() {
   // Debounced user search.
   useEffect(() => {
     const q = query.trim();
-    if (q.length < 1) {
+    if (q.length < 2) {
       setResults([]);
       return;
     }

@@ -104,17 +104,15 @@ function toProject(row: ProjectRow): Project {
 }
 
 export async function listProjects(userId: string): Promise<Project[]> {
-  // Empty userId means "list all projects" (used by runner-internal services)
-  const query = userId
-    ? db
-        .select()
-        .from(schema.projects)
-        .where(eq(schema.projects.userId, userId))
-        .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt))
-    : db
-        .select()
-        .from(schema.projects)
-        .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt));
+  // Always owner-scoped. An empty userId lists NOTHING — it used to mean "all
+  // projects", which let a runner-originated request without a userId read
+  // every tenant's projects (audit C4).
+  if (!userId) return [];
+  const query = db
+    .select()
+    .from(schema.projects)
+    .where(eq(schema.projects.userId, userId))
+    .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt));
   return (await dbAll(query)).map(toProject);
 }
 

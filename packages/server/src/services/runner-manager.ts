@@ -549,9 +549,18 @@ export async function getPendingTasks(runnerId: string): Promise<RunnerTask[]> {
   }));
 }
 
-export async function completeTask(req: RunnerTaskResultRequest): Promise<void> {
+/**
+ * Record a task result. Scoped to `runnerId` — the authenticated runner that
+ * reports it — so a runner can never complete (or overwrite the result of)
+ * another runner's task. Returns false when no task of that runner matched.
+ */
+export async function completeTask(
+  runnerId: string,
+  req: RunnerTaskResultRequest,
+): Promise<boolean> {
+  if (typeof req?.taskId !== 'string' || !req.taskId) return false;
   const now = new Date().toISOString();
-  await db
+  const updated = await db
     .update(runnerTasks)
     .set({
       status: req.success ? 'completed' : 'failed',
@@ -559,7 +568,9 @@ export async function completeTask(req: RunnerTaskResultRequest): Promise<void> 
       resultError: req.error ?? null,
       completedAt: now,
     })
-    .where(eq(runnerTasks.id, req.taskId));
+    .where(and(eq(runnerTasks.id, req.taskId), eq(runnerTasks.runnerId, runnerId)))
+    .returning({ id: runnerTasks.id });
+  return updated.length > 0;
 }
 
 /** Browser-reachable public media base URL for a runner (transport C), or null. */

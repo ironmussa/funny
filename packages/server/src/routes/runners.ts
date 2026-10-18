@@ -212,11 +212,11 @@ runnerRoutes.get('/tasks', async (c) => {
 // ── Task Result ─────────────────────────────────────────
 
 runnerRoutes.post('/tasks/result', async (c) => {
-  const runnerId = c.get('runnerId') as string | undefined;
-  if (!runnerId) return c.json({ error: 'Unauthorized: runner token required' }, 401);
-
-  const body = await c.req.json<RunnerTaskResultRequest>();
-  await rm.completeTask(body);
+  // Bound to the calling runner: a runner can only complete its OWN tasks.
+  const self = runnerSelfId(c);
+  if (!self) return c.json({ error: 'Unauthorized: runner token required' }, 401);
+  const updated = await rm.completeTask(self, await c.req.json<RunnerTaskResultRequest>());
+  if (!updated) return c.json({ error: 'Task not found' }, 404);
   return c.json({ ok: true });
 });
 
@@ -227,8 +227,15 @@ runnerRoutes.get('/', async (c) => {
   const isRunner = c.get('isRunner') as boolean | undefined;
   const userRole = c.get('userRole') as string | undefined;
 
-  // Admins and runner-authenticated requests see all runners
-  if (isRunner || userRole === 'admin') {
+  // Runner-authenticated callers see only THEMSELVES — a runner credential
+  // must never enumerate other tenants' runners (audit H2).
+  if (isRunner) {
+    const ownRunnerId = runnerSelfId(c);
+    const own = ownRunnerId ? await rm.getRunner(ownRunnerId) : null;
+    return c.json({ runners: own ? [own] : [] });
+  }
+
+  if (userRole === 'admin') {
     return c.json({ runners: await rm.listRunners() });
   }
 
@@ -249,13 +256,17 @@ runnerRoutes.get('/:runnerId', async (c) => {
   const runner = await rm.getRunner(runnerId);
   if (!runner) return c.json({ error: 'Runner not found' }, 404);
 
-  // Tenant isolation: only the owner, an admin, or a runner-authenticated
-  // caller (server-to-runner) may view a runner record. Otherwise return
-  // 404 rather than 403 so we don't disclose the runner's existence.
+  // Tenant isolation: only the owner, an admin, or the runner ITSELF may view
+  // a runner record. Otherwise return 404 rather than 403 so we don't
+  // disclose the runner's existence.
+  if (isRunner) {
+    if (!isRunnerSelf(c, runnerId)) return c.json({ error: 'Runner not found' }, 404);
+    return c.json(runner);
+  }
   const isAdmin = userRole === 'admin';
   const ownerId = await rm.getRunnerUserId(runnerId);
   const isOwner = !!userId && ownerId === userId;
-  if (!isRunner && !isAdmin && !isOwner) {
+  if (!isAdmin && !isOwner) {
     audit({
       action: 'authz.cross_tenant_refused',
       actorId: userId ?? null,
@@ -302,16 +313,41 @@ runnerRoutes.delete('/:runnerId', async (c) => {
 // ── Project Assignment ──────────────────────────────────
 
 /**
- * Return true when the caller is the runner's owner, an admin, or a
- * runner-authenticated (server-to-runner) request. Callers that fail this
- * check should 404 (not 403) so we don't leak a runner's existence to
- * other tenants — matches the `GET /:runnerId` behaviour.
+ * The runner identity of a runner-authenticated caller: the `runnerId` bound
+ * by its bearer token. A caller holding only the shared `X-Runner-Auth`
+ * secret has NO runner identity and therefore gets no cross-runner access.
  */
-async function authorizeRunnerAccess(runnerId: string, c: any): Promise<boolean> {
+function runnerSelfId(c: Context<ServerEnv>): string | null {
+  const id = c.get('runnerId') as string | undefined;
+  return typeof id === 'string' && id.length > 0 ? id : null;
+}
+
+/** True when a runner-authenticated caller is acting on its OWN runner record. */
+function isRunnerSelf(c: Context<ServerEnv>, runnerId: string): boolean {
+  const self = runnerSelfId(c);
+  const ok = self !== null && self === runnerId;
+  if (!ok) {
+    audit({
+      action: 'authz.cross_tenant_refused',
+      actorId: null,
+      detail: 'Runner access refused — runner credential acting on another runner',
+      meta: { runnerId, callerRunnerId: self, path: c.req.path, method: c.req.method },
+    });
+  }
+  return ok;
+}
+
+/**
+ * Return true when the caller is the runner's owner, an admin, or the runner
+ * itself (bearer-token identity). Callers that fail this check should 404
+ * (not 403) so we don't leak a runner's existence to other tenants — matches
+ * the `GET /:runnerId` behaviour.
+ */
+async function authorizeRunnerAccess(runnerId: string, c: Context<ServerEnv>): Promise<boolean> {
   const userId = c.get('userId') as string | undefined;
   const isRunner = c.get('isRunner') as boolean | undefined;
   const userRole = c.get('userRole') as string | undefined;
-  if (isRunner) return true;
+  if (isRunner) return isRunnerSelf(c, runnerId);
   if (userRole === 'admin') return true;
   if (!userId) {
     audit({

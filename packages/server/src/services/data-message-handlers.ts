@@ -9,7 +9,8 @@
  * before dispatching here — see `handleDataMessageWithAck` in data-handler.ts.
  */
 
-import { and, eq } from 'drizzle-orm';
+import type { JobPatch, WatcherPatch } from '@funny/shared/repositories';
+import { and, eq, or } from 'drizzle-orm';
 
 import { db, dbAll, dbGet } from '../db/index.js';
 import { repos } from '../db/repos.js';
@@ -25,6 +26,14 @@ interface DataMessageContext {
   runnerId: string;
   /** DB-recorded owner of the runner (already validated by the ownership guard). */
   runnerUserId: string | null;
+  /**
+   * The user every user-scoped handler acts as: the runner's owner, NEVER a
+   * payload-supplied userId. The ownership guard refuses every non-neutral
+   * request from a runner without an owner, so this is only '' for the
+   * user-neutral types (a missing data.userId used to widen list_projects to
+   * every tenant — audit C4).
+   */
+  ownerId: string;
   data: any;
 }
 
@@ -67,6 +76,108 @@ function notifyTerminalStatusPersisted(
   relayToUser(runnerUserId, event);
   relayToThreadStream(threadId, event);
 }
+
+async function isOrgMember(userId: string, orgId: string): Promise<boolean> {
+  if (!userId) return false;
+  const row = await dbGet(
+    db
+      .select({ userId: schema.member.userId })
+      .from(schema.member)
+      .where(and(eq(schema.member.organizationId, orgId), eq(schema.member.userId, userId))),
+  );
+  return !!row;
+}
+
+/**
+ * The org a runner-originated create_project may file under: null when none
+ * was requested, `false` when the runner's owner is not a member of it.
+ */
+async function resolveCreateProjectOrg(
+  ownerId: string,
+  rawOrgId: unknown,
+): Promise<string | null | false> {
+  if (typeof rawOrgId !== 'string' || !rawOrgId) return null;
+  return (await isOrgMember(ownerId, rawOrgId)) ? rawOrgId : false;
+}
+
+/**
+ * Resolve an agent template for a runner: builtins for anyone; custom rows
+ * only when owned by the runner's user or shared — never another tenant's
+ * private template (system prompt, MCP config).
+ */
+async function findAgentTemplateForRunner(ownerId: string, templateId: unknown): Promise<unknown> {
+  const { BUILTIN_AGENT_TEMPLATES } = await import('@funny/shared');
+  const builtin = BUILTIN_AGENT_TEMPLATES.find((t: { id: string }) => t.id === templateId);
+  if (builtin) return builtin;
+  if (!ownerId || typeof templateId !== 'string') return null;
+  const row = await dbGet(
+    db
+      .select()
+      .from(schema.agentTemplates)
+      .where(
+        and(
+          eq(schema.agentTemplates.id, templateId),
+          or(eq(schema.agentTemplates.userId, ownerId), eq(schema.agentTemplates.shared, true)),
+        ),
+      ),
+  );
+  return row ?? null;
+}
+
+// ── Watcher / job patch allow-lists ──────────────────────────────
+
+/** Keep `patch[key]` when it passes `ok`; drop it otherwise. */
+function copyIf<T>(
+  out: Record<string, unknown>,
+  patch: Record<string, unknown>,
+  key: string,
+  ok: (v: unknown) => v is T,
+): void {
+  if (Object.hasOwn(patch, key) && ok(patch[key])) out[key] = patch[key];
+}
+const isNum = (v: unknown): v is number => typeof v === 'number' && Number.isFinite(v);
+const isNumOrNull = (v: unknown): v is number | null => v === null || isNum(v);
+const isStr = (v: unknown): v is string => typeof v === 'string';
+const asRecord = (v: unknown): Record<string, unknown> =>
+  v && typeof v === 'object' ? (v as Record<string, unknown>) : {};
+
+/**
+ * Fields a runner may change on its own watcher — never owner, thread, key,
+ * or caps. Values are type-checked; anything else is dropped.
+ */
+function pickWatcherPatch(raw: unknown): WatcherPatch {
+  const patch = asRecord(raw);
+  const out: Record<string, unknown> = {};
+  copyIf(out, patch, 'nextWakeAt', isNum);
+  copyIf(out, patch, 'lastDelayMs', isNum);
+  copyIf(out, patch, 'wakeCount', isNum);
+  copyIf(out, patch, 'status', isStr);
+  copyIf(out, patch, 'updatedAt', isStr);
+  return out as WatcherPatch;
+}
+
+/**
+ * Fields a runner may change on its own job. `logPath`/`exitPath`/`command`/
+ * `cwd` are fixed at insert (the victim-file-read primitive), and `userId`/
+ * `threadId` are never re-assignable. `pid` stays patchable because the
+ * ownership guard already restricts updates to the runner user's own jobs.
+ */
+function pickJobPatch(raw: unknown): JobPatch {
+  const patch = asRecord(raw);
+  const out: Record<string, unknown> = {};
+  copyIf(out, patch, 'pid', isNumOrNull);
+  copyIf(out, patch, 'status', isStr);
+  copyIf(out, patch, 'exitCode', isNumOrNull);
+  copyIf(out, patch, 'updatedAt', isStr);
+  return out as JobPatch;
+}
+
+/**
+ * Watcher/job ops that carry no entity are scoped to the runner's owner.
+ * Without an owner (an empty id would mean "every user" to the list queries)
+ * they never run — they return an empty list.
+ */
+const OWNER_SCOPED_LIST_FALLBACK = [] as const;
 
 /** Dispatch table: one executor per `data:*` message type. */
 const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
@@ -236,33 +347,19 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
       command: command ?? null,
     };
   },
-  'data:get_agent_template': async ({ data }) => {
-    // Check builtin templates first
-    const { BUILTIN_AGENT_TEMPLATES } = await import('@funny/shared');
-    const builtin = BUILTIN_AGENT_TEMPLATES.find((t: { id: string }) => t.id === data.templateId);
-    if (builtin) {
-      return {
-        type: 'data:get_agent_template_response',
-        template: builtin,
-      };
-    }
-    const row = await dbGet(
-      db.select().from(schema.agentTemplates).where(eq(schema.agentTemplates.id, data.templateId)),
-    );
-    return {
-      type: 'data:get_agent_template_response',
-      template: row ?? null,
-    };
-  },
-  'data:list_projects': async ({ data }) => {
+  'data:get_agent_template': async ({ ownerId, data }) => ({
+    type: 'data:get_agent_template_response',
+    template: await findAgentTemplateForRunner(ownerId, data.templateId),
+  }),
+  'data:list_projects': async ({ ownerId }) => {
     // Collaborator model: the runner needs the user's owned projects AND
     // the projects they were added to directly — the latter carry the
     // member's own `localPath`, which path-scope uses to authorize file/git
     // access on the member's machine.
-    const owned = await projectRepo.listProjects(data.userId);
+    const owned = await projectRepo.listProjects(ownerId);
     const ownedIds = new Set(owned.map((p) => p.id));
-    const shared = (await projectRepo.listMemberProjects(data.userId)).filter(
-      (p) => p.userId !== data.userId && !ownedIds.has(p.id),
+    const shared = (await projectRepo.listMemberProjects(ownerId)).filter(
+      (p) => p.userId !== ownerId && !ownedIds.has(p.id),
     );
     return {
       type: 'data:list_projects_response',
@@ -300,8 +397,8 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     );
     return { type: 'data:list_project_threads_response', threads };
   },
-  'data:resolve_project_path': async ({ data }) => {
-    const result = await projectRepo.resolveProjectPath(data.projectId, data.userId);
+  'data:resolve_project_path': async ({ ownerId, data }) => {
+    const result = await projectRepo.resolveProjectPath(data.projectId, ownerId);
     if (result.isOk()) {
       return {
         type: 'data:resolve_project_path_response',
@@ -316,18 +413,20 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
       };
     }
   },
-  'data:create_project': async ({ runnerId, data }) => {
+  'data:create_project': async ({ runnerId, ownerId, data }) => {
     // Skip filesystem checks — the runner already validated the path
     // (clone succeeded, or the runner ran HI-3 containment against its own
     // $HOME before proxying creation here).
-    const orgId = (data.orgId as string | null | undefined) ?? null;
-    const cpResult = await projectRepo.createProject(
-      data.name,
-      data.path,
-      data.userId,
-      orgId,
-      true,
-    );
+    // A runner may only file a project under an org its owner belongs to.
+    const orgId = await resolveCreateProjectOrg(ownerId, data.orgId);
+    if (orgId === false) {
+      return {
+        type: 'data:create_project_response',
+        error: 'Not a member of the requested organization',
+        errorType: 'FORBIDDEN',
+      };
+    }
+    const cpResult = await projectRepo.createProject(data.name, data.path, ownerId, orgId, true);
     if (cpResult.isOk()) {
       if (orgId) {
         await projectRepo.addProjectToOrg(cpResult.value.id, orgId);
@@ -366,9 +465,11 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
       };
     }
   },
-  'data:create_thread': async ({ data }) => {
+  'data:create_thread': async ({ ownerId, data }) => {
     const tRepo = repos.threads();
-    await tRepo.createThread(data.payload);
+    // The thread is always owned by the runner's user (the ownership guard
+    // already refuses a mismatching payload.userId).
+    await tRepo.createThread({ ...data.payload, userId: ownerId });
     return { type: 'data:ack', success: true };
   },
   'data:delete_thread': async ({ data }) => {
@@ -429,17 +530,17 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     await saveThreadEvent(data.payload.threadId, data.payload.eventType, data.payload.data);
     return { type: 'data:ack', success: true };
   },
-  'data:get_profile': async ({ data }) => {
+  'data:get_profile': async ({ ownerId }) => {
     const { getProfile } = await import('./profile-service.js');
-    const profile = await getProfile(data.userId);
+    const profile = await getProfile(ownerId);
     return { type: 'data:get_profile_response', profile: profile ?? null };
   },
-  'data:get_provider_key': async ({ data }) => {
+  'data:get_provider_key': async ({ ownerId, data }) => {
     const { getProviderKey } = await import('./profile-service.js');
-    const key = await getProviderKey(data.userId, data.provider);
+    const key = await getProviderKey(ownerId, data.provider);
     return { type: 'data:get_provider_key_response', key: key ?? null };
   },
-  'data:get_github_token': async ({ runnerId, data }) => {
+  'data:get_github_token': async ({ runnerId, ownerId, data }) => {
     // Project override first (project-runner-binding), then the user's PAT.
     const { resolveProjectGithubToken } = await import('./runner-scope.js');
     const { getProviderKey } = await import('./profile-service.js');
@@ -447,25 +548,25 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
       (await resolveProjectGithubToken(
         runnerId,
         typeof data.projectId === 'string' ? data.projectId : null,
-      )) ?? (await getProviderKey(data.userId, 'github'));
+      )) ?? (await getProviderKey(ownerId, 'github'));
     return { type: 'data:get_github_token_response', token: token ?? null };
   },
-  'data:get_minimax_api_key': async ({ data }) => {
+  'data:get_minimax_api_key': async ({ ownerId }) => {
     const { getProviderKey } = await import('./profile-service.js');
-    const key = await getProviderKey(data.userId, 'minimax');
+    const key = await getProviderKey(ownerId, 'minimax');
     return { type: 'data:get_minimax_api_key_response', key: key ?? null };
   },
-  'data:update_profile': async ({ data }) => {
+  'data:update_profile': async ({ ownerId, data }) => {
     const { upsertProfile } = await import('./profile-service.js');
-    const updatedProfile = await upsertProfile(data.userId, data.payload);
+    const updatedProfile = await upsertProfile(ownerId, data.payload);
     return {
       type: 'data:update_profile_response',
       profile: updatedProfile,
     };
   },
-  'data:resolve_agent_execution_profile': async ({ data }) => {
+  'data:resolve_agent_execution_profile': async ({ ownerId, data }) => {
     const { resolveEffectiveProfile } = await import('./agent-execution-profile-repository.js');
-    const resolved = await resolveEffectiveProfile(data.projectId, data.userId);
+    const resolved = await resolveEffectiveProfile(data.projectId, ownerId);
     return {
       type: 'data:resolve_agent_execution_profile_response',
       ...resolved,
@@ -506,8 +607,11 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   },
 
   // ── Agent watchers (deferred-wake "snooze") ──────────────────
-  'data:watcher_insert': async ({ data }) => {
-    await repos.watchers().insert(data.payload.row);
+  // Every op acts as the runner's owner: inserts force row.userId, updates go
+  // through typed patch allow-lists, and lists are owner-scoped (never "all").
+  // By-id and by-thread ops were already owner-checked by data-ownership.ts.
+  'data:watcher_insert': async ({ ownerId, data }) => {
+    await repos.watchers().insert({ ...data.payload.row, userId: ownerId });
     return { type: 'data:watcher_insert_response', ok: true };
   },
   'data:watcher_get': async ({ data }) => {
@@ -523,21 +627,22 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
       watcher: watcher ?? null,
     };
   },
-  'data:watcher_list_pending': async ({ runnerUserId }) => {
-    // Scoped to the runner's user — never another tenant's watchers.
-    const watchers = await repos.watchers().listPending(runnerUserId ?? undefined);
-    return { type: 'data:watcher_list_pending_response', watchers };
-  },
-  'data:watcher_list_due': async ({ runnerUserId, data }) => {
-    const watchers = await repos.watchers().listDue(data.payload.now, runnerUserId ?? undefined);
-    return { type: 'data:watcher_list_due_response', watchers };
-  },
-  'data:watcher_list_by_user': async ({ runnerUserId, data }) => {
-    const watchers = await repos.watchers().listByUser(runnerUserId ?? data.payload.userId);
-    return { type: 'data:watcher_list_by_user_response', watchers };
-  },
+  'data:watcher_list_pending': async ({ ownerId }) => ({
+    type: 'data:watcher_list_pending_response',
+    watchers: ownerId ? await repos.watchers().listPending(ownerId) : OWNER_SCOPED_LIST_FALLBACK,
+  }),
+  'data:watcher_list_due': async ({ ownerId, data }) => ({
+    type: 'data:watcher_list_due_response',
+    watchers: ownerId
+      ? await repos.watchers().listDue(data.payload.now, ownerId)
+      : OWNER_SCOPED_LIST_FALLBACK,
+  }),
+  'data:watcher_list_by_user': async ({ ownerId }) => ({
+    type: 'data:watcher_list_by_user_response',
+    watchers: ownerId ? await repos.watchers().listByUser(ownerId) : OWNER_SCOPED_LIST_FALLBACK,
+  }),
   'data:watcher_update': async ({ data }) => {
-    await repos.watchers().update(data.payload.id, data.payload.patch);
+    await repos.watchers().update(data.payload.id, pickWatcherPatch(data.payload.patch));
     return { type: 'data:watcher_update_response', ok: true };
   },
   'data:watcher_delete_by_thread': async ({ data }) => {
@@ -546,24 +651,24 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   },
 
   // ── Agent jobs ───────────────────────────────────────────────
-  'data:job_insert': async ({ data }) => {
-    await repos.jobs().insert(data.payload.row);
+  'data:job_insert': async ({ ownerId, data }) => {
+    await repos.jobs().insert({ ...data.payload.row, userId: ownerId });
     return { type: 'data:job_insert_response', ok: true };
   },
   'data:job_get': async ({ data }) => {
     const job = await repos.jobs().getById(data.payload.id);
     return { type: 'data:job_get_response', job: job ?? null };
   },
-  'data:job_list_running': async ({ runnerUserId }) => {
-    const jobs = await repos.jobs().listRunning(runnerUserId ?? undefined);
-    return { type: 'data:job_list_running_response', jobs };
-  },
-  'data:job_list_by_user': async ({ runnerUserId, data }) => {
-    const jobs = await repos.jobs().listByUser(runnerUserId ?? data.payload.userId);
-    return { type: 'data:job_list_by_user_response', jobs };
-  },
+  'data:job_list_running': async ({ ownerId }) => ({
+    type: 'data:job_list_running_response',
+    jobs: ownerId ? await repos.jobs().listRunning(ownerId) : OWNER_SCOPED_LIST_FALLBACK,
+  }),
+  'data:job_list_by_user': async ({ ownerId }) => ({
+    type: 'data:job_list_by_user_response',
+    jobs: ownerId ? await repos.jobs().listByUser(ownerId) : OWNER_SCOPED_LIST_FALLBACK,
+  }),
   'data:job_update': async ({ data }) => {
-    await repos.jobs().update(data.payload.id, data.payload.patch);
+    await repos.jobs().update(data.payload.id, pickJobPatch(data.payload.patch));
     return { type: 'data:job_update_response', ok: true };
   },
   'data:job_delete_by_thread': async ({ data }) => {
@@ -631,5 +736,5 @@ export async function executeDataMessage(
     });
     return undefined;
   }
-  return handler({ runnerId, runnerUserId, data });
+  return handler({ runnerId, runnerUserId, ownerId: runnerUserId ?? '', data });
 }

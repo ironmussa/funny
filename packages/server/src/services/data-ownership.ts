@@ -81,12 +81,53 @@ function checkExplicitUserId({ userId, data, payload }: OwnershipContext): Denia
     : null;
 }
 
+/** Watcher/job inserts: the payload carries the full row to persist. */
+const ROW_INSERT_TYPES = new Set<string>(['data:watcher_insert', 'data:job_insert']);
+
+/** Data types whose payload MUST name the thread they act on. */
+const THREAD_REQUIRED_TYPES = new Set<string>([
+  'data:watcher_insert',
+  'data:watcher_get_live_by_thread_key',
+  'data:watcher_delete_by_thread',
+  'data:job_insert',
+  'data:job_delete_by_thread',
+]);
+
+/**
+ * Structural checks for watcher/job requests: thread-keyed ops must name a
+ * thread, and inserts must carry a row whose threadId is exactly the request's
+ * (owner-checked) thread. The row's `userId` is NOT trusted — the handler
+ * overwrites it with the runner's owner.
+ */
+function checkRowRefs({ data, payload }: OwnershipContext): Denial | null {
+  const type = data?.type;
+  if (!THREAD_REQUIRED_TYPES.has(type)) return null;
+  if (typeof payload?.threadId !== 'string' || !payload.threadId) {
+    return deny(`${type} requires payload.threadId`);
+  }
+  if (ROW_INSERT_TYPES.has(type) && payload.row?.threadId !== payload.threadId) {
+    return deny(`${type} row.threadId does not match payload.threadId`);
+  }
+  return null;
+}
+
+/**
+ * Check EVERY thread id the request references (top-level, payload, and an
+ * inserted row) — a forged request must not pass by pointing one field at its
+ * own thread and another at a victim's.
+ */
 async function checkThread({ userId, data, payload }: OwnershipContext): Promise<Denial | null> {
-  const threadId = nonEmptyString(data?.threadId) ?? nonEmptyString(payload?.threadId);
-  if (!threadId) return null;
-  const row = await findThread(threadId);
-  if (!row) return deny(`thread ${threadId} not found`);
-  return row.userId !== userId ? deny(`thread ${threadId} owned by ${row.userId}`) : null;
+  const threadIds = new Set(
+    [data?.threadId, payload?.threadId, payload?.row?.threadId]
+      .map(nonEmptyString)
+      .filter((v): v is string => v !== undefined),
+  );
+  for (const threadId of threadIds) {
+    const row = await findThread(threadId);
+    if (!row) return deny(`thread ${threadId} not found`);
+    if (row.userId !== userId) return deny(`thread ${threadId} owned by ${row.userId}`);
+  }
+  return null;
 }
 
 async function isProjectMember(projectId: string, userId: string): Promise<boolean> {
@@ -213,17 +254,18 @@ async function checkQueuedMessage({ userId, data }: OwnershipContext): Promise<D
 
 /**
  * Watcher / job ownership (row.user_id). Mutations / reads that reference a
- * watcher or job by id must belong to the runner's user. Inserts and
- * get_live_by_thread_key carry a payload.threadId and are covered by the
- * thread-ownership step; list ops carry no entity and are scoped to the
- * runner's user in the handler.
+ * watcher or job by id must belong to the runner's user, and must name an id.
+ * Inserts and thread-keyed ops carry a payload.threadId (and inserts a
+ * row.threadId) and are covered by the row-ref + thread-ownership steps; list
+ * ops carry no entity and are scoped to the runner's user in the handler.
  */
 function checkUserOwnedRow(
   kind: string,
   table: typeof schema.watchers | typeof schema.jobs,
 ): OwnershipStep {
   return async ({ userId, payload }) => {
-    if (typeof payload?.id !== 'string') return null;
+    // By-id ops MUST name the row they act on.
+    if (typeof payload?.id !== 'string' || !payload.id) return deny(`${kind} id required`);
     const id: string = payload.id;
     const row = (await dbGet(
       db.select({ userId: table.userId }).from(table).where(eq(table.id, id)),
@@ -300,6 +342,7 @@ function typeSpecific(checks: ReadonlyMap<string, OwnershipStep>): OwnershipStep
 /** Ordered pipeline; the first denial wins. */
 const OWNERSHIP_STEPS: readonly OwnershipStep[] = [
   checkExplicitUserId,
+  checkRowRefs,
   checkThread,
   typeSpecific(PRE_PROJECT_TYPE_CHECKS),
   checkProject,

@@ -39,6 +39,8 @@ describe('data-handler handleDataMessageWithAck', () => {
 
   beforeEach(() => {
     const tables = [
+      'watchers',
+      'jobs',
       'pending_permission_requests',
       'tool_calls',
       'messages',
@@ -1726,6 +1728,255 @@ describe('data-handler handleDataMessageWithAck', () => {
       });
 
       expect(res.results).toEqual([]);
+    });
+  });
+  describe('runner data channel is scoped to the runner owner (C2/C4)', () => {
+    const FORBIDDEN = { type: 'data:ack', success: false, error: 'Forbidden' };
+    const now = () => new Date().toISOString();
+    const watcherRow = (overrides: Record<string, unknown> = {}) => ({
+      id: 'w-1',
+      threadId: 't1',
+      key: 'k',
+      label: 'wake',
+      nextWakeAt: Date.now() + 60_000,
+      lastDelayMs: 60_000,
+      wakeCount: 0,
+      maxWakes: 20,
+      deadline: null,
+      status: 'pending',
+      createdAt: now(),
+      updatedAt: now(),
+      ...overrides,
+    });
+    const jobRow = (overrides: Record<string, unknown> = {}) => ({
+      id: 'j-1',
+      threadId: 't1',
+      command: 'sleep 1',
+      cwd: null,
+      label: null,
+      pid: 4242,
+      logPath: '/home/user-1/.funny/jobs/j-1/log',
+      exitPath: '/home/user-1/.funny/jobs/j-1/exit',
+      status: 'running',
+      exitCode: null,
+      startedAt: now(),
+      updatedAt: now(),
+      ...overrides,
+    });
+
+    beforeEach(() => {
+      // A thread owned by another tenant, inside a project this runner may
+      // reach, so ONLY the ownership check stands between the forgery and it.
+      seedThread(db as any, { id: 't-victim', projectId: 'p1', userId: 'user-2', title: 'V' });
+    });
+
+    const allWatchers = () => db.select().from(schema.watchers).all();
+    const allJobs = () => db.select().from(schema.jobs).all();
+
+    test('watcher_insert whose row points at another user thread is refused', async () => {
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:watcher_insert',
+        payload: { threadId: 't1', row: watcherRow({ threadId: 't-victim', userId: 'user-2' }) },
+      });
+      expect(res).toEqual(FORBIDDEN);
+      expect(allWatchers()).toHaveLength(0);
+    });
+
+    test('watcher_insert on another user thread is refused', async () => {
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:watcher_insert',
+        payload: { threadId: 't-victim', row: watcherRow({ threadId: 't-victim' }) },
+      });
+      expect(res).toEqual(FORBIDDEN);
+      expect(allWatchers()).toHaveLength(0);
+    });
+
+    test('watcher_insert claiming another owner is stored as the runner owner', async () => {
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:watcher_insert',
+        payload: { threadId: 't1', row: watcherRow({ userId: 'user-2' }) },
+      });
+      expect(res).toEqual({ type: 'data:watcher_insert_response', ok: true });
+      expect(allWatchers().map((w) => w.userId)).toEqual(['user-1']);
+    });
+
+    test('watcher_insert on an own thread is persisted with the runner owner', async () => {
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:watcher_insert',
+        payload: { threadId: 't1', row: watcherRow() },
+      });
+      expect(res).toEqual({ type: 'data:watcher_insert_response', ok: true });
+      const rows = allWatchers();
+      expect(rows).toHaveLength(1);
+      expect(rows[0]?.userId).toBe('user-1');
+    });
+
+    test('job_insert whose row points at another user thread is refused', async () => {
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:job_insert',
+        payload: {
+          threadId: 't1',
+          row: jobRow({ threadId: 't-victim', userId: 'user-2', logPath: '/home/v/.ssh/id' }),
+        },
+      });
+      expect(res).toEqual(FORBIDDEN);
+      expect(allJobs()).toHaveLength(0);
+    });
+
+    test('job_insert claiming another owner is stored as the runner owner', async () => {
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:job_insert',
+        payload: { threadId: 't1', row: jobRow({ userId: 'user-2' }) },
+      });
+      expect(res).toEqual({ type: 'data:job_insert_response', ok: true });
+      expect(allJobs().map((j) => j.userId)).toEqual(['user-1']);
+    });
+
+    test('job_update cannot change logPath, exitPath, userId or threadId', async () => {
+      await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:job_insert',
+        payload: { threadId: 't1', row: jobRow() },
+      });
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:job_update',
+        payload: {
+          id: 'j-1',
+          patch: {
+            logPath: '/home/user-2/.ssh/id_ed25519',
+            exitPath: '/etc/passwd',
+            userId: 'user-2',
+            threadId: 't-victim',
+            command: 'rm -rf ~',
+            status: 'exited',
+            exitCode: 0,
+          },
+        },
+      });
+      expect(res).toEqual({ type: 'data:job_update_response', ok: true });
+      const [row] = allJobs();
+      expect(row?.logPath).toBe('/home/user-1/.funny/jobs/j-1/log');
+      expect(row?.exitPath).toBe('/home/user-1/.funny/jobs/j-1/exit');
+      expect(row?.userId).toBe('user-1');
+      expect(row?.threadId).toBe('t1');
+      expect(row?.command).toBe('sleep 1');
+      expect(row?.status).toBe('exited');
+      expect(row?.exitCode).toBe(0);
+    });
+
+    test('watcher_update cannot reassign owner or thread', async () => {
+      await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:watcher_insert',
+        payload: { threadId: 't1', row: watcherRow() },
+      });
+      await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:watcher_update',
+        payload: {
+          id: 'w-1',
+          patch: { userId: 'user-2', threadId: 't-victim', label: 'x', status: 'fired' },
+        },
+      });
+      const [row] = allWatchers();
+      expect(row?.userId).toBe('user-1');
+      expect(row?.threadId).toBe('t1');
+      expect(row?.label).toBe('wake');
+      expect(row?.status).toBe('fired');
+    });
+
+    test('job_update / job_get on another user job are refused', async () => {
+      db.insert(schema.jobs)
+        .values({ ...jobRow({ id: 'j-victim', threadId: 't-victim' }), userId: 'user-2' } as any)
+        .run();
+      const upd = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:job_update',
+        payload: { id: 'j-victim', patch: { pid: 1 } },
+      });
+      expect(upd).toEqual(FORBIDDEN);
+      const get = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:job_get',
+        payload: { id: 'j-victim' },
+      });
+      expect(get).toEqual(FORBIDDEN);
+      expect(allJobs()[0]?.pid).toBe(4242);
+    });
+
+    test('*_delete_by_thread without a threadId is refused (no unscoped delete)', async () => {
+      for (const type of ['data:watcher_delete_by_thread', 'data:job_delete_by_thread']) {
+        const res = await handleDataMessageWithAck('runner-1', 'user-1', { type, payload: {} });
+        expect(res).toEqual(FORBIDDEN);
+      }
+    });
+
+    test('list_projects without a userId returns only the runner owner projects', async () => {
+      seedProject(db as any, { id: 'p-other', userId: 'user-2', name: 'Theirs', path: '/o' });
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:list_projects',
+      });
+      expect(res.type).toBe('data:list_projects_response');
+      expect(res.projects.map((p: { id: string }) => p.id)).toEqual(['p1']);
+    });
+
+    test('listProjects("") lists nothing (no "all projects" mode)', async () => {
+      seedProject(db as any, { id: 'p-other', userId: 'user-2', name: 'Theirs', path: '/o' });
+      const { listProjects } = await import('../../services/project-repository.js');
+      expect(await listProjects('')).toEqual([]);
+    });
+
+    test('get_agent_template hides another user private template, allows shared', async () => {
+      const ts = now();
+      db.insert(schema.agentTemplates)
+        .values([
+          {
+            id: 'tpl-private',
+            userId: 'user-2',
+            name: 'Private',
+            systemPromptMode: 'prepend',
+            createdAt: ts,
+            updatedAt: ts,
+          },
+          {
+            id: 'tpl-shared',
+            userId: 'user-2',
+            name: 'Shared',
+            systemPromptMode: 'prepend',
+            shared: true,
+            createdAt: ts,
+            updatedAt: ts,
+          },
+        ])
+        .run();
+      const priv = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:get_agent_template',
+        templateId: 'tpl-private',
+      });
+      expect(priv.template).toBeNull();
+      const shared = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:get_agent_template',
+        templateId: 'tpl-shared',
+      });
+      expect(shared.template?.id).toBe('tpl-shared');
+      const anonymous = await handleDataMessageWithAck('runner-1', null, {
+        type: 'data:get_agent_template',
+        templateId: 'tpl-shared',
+      });
+      expect(anonymous.template).toBeNull();
+    });
+
+    test('create_project refuses an org the runner owner is not a member of', async () => {
+      const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+        type: 'data:create_project',
+        name: 'Sneaky',
+        path: '/tmp/sneaky',
+        orgId: 'org-victim',
+      });
+      expect(res.type).toBe('data:create_project_response');
+      expect(res.project).toBeUndefined();
+      expect(res.errorType).toBe('FORBIDDEN');
+      const rows = db
+        .select()
+        .from(schema.projects)
+        .where(eq(schema.projects.name, 'Sneaky'))
+        .all();
+      expect(rows).toHaveLength(0);
     });
   });
 });

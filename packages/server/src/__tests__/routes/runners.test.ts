@@ -356,6 +356,79 @@ describe('Runner Routes (Integration)', () => {
     });
   });
 
+  describe('Runner-authenticated callers are scoped to their own runner (H2)', () => {
+    const seedTwoRunners = () => {
+      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1', name: 'R1' });
+      seedRunner(t.db as any, { id: 'r2', userId: 'user-2', token: 'tok-2', name: 'R2' });
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedRunnerProjectAssignment(t.db as any, {
+        runnerId: 'r1',
+        projectId: 'p1',
+        localPath: '/a',
+      });
+    };
+
+    test('GET /api/runners lists only the calling runner', async () => {
+      seedTwoRunners();
+      const res = await t.requestAsRunner('r2').get('/api/runners');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.runners.map((r: { runnerId: string }) => r.runnerId)).toEqual(['r2']);
+    });
+
+    test('a runner without a bearer identity (shared secret only) lists no runners', async () => {
+      seedTwoRunners();
+      const res = await t.requestAsRunner('').get('/api/runners');
+      expect(res.status).toBe(200);
+      expect((await res.json()).runners).toEqual([]);
+    });
+
+    test('a runner cannot read another runner record (404)', async () => {
+      seedTwoRunners();
+      expect((await t.requestAsRunner('r2').get('/api/runners/r1')).status).toBe(404);
+      expect((await t.requestAsRunner('r1').get('/api/runners/r1')).status).toBe(200);
+    });
+
+    test("a runner cannot list another runner's assignments (404)", async () => {
+      seedTwoRunners();
+      const res = await t.requestAsRunner('r2').get('/api/runners/r1/projects');
+      expect(res.status).toBe(404);
+      const shared = await t.requestAsRunner('').get('/api/runners/r1/projects');
+      expect(shared.status).toBe(404);
+    });
+
+    test("a runner cannot add or remove another runner's assignments (404)", async () => {
+      seedTwoRunners();
+      const add = await t.requestAsRunner('r2').post('/api/runners/r1/projects', {
+        projectId: 'p1',
+        localPath: '/evil',
+      });
+      expect(add.status).toBe(404);
+
+      const del = await t.app.request('/api/runners/r1/projects/p1', {
+        method: 'DELETE',
+        headers: { 'X-Test-Is-Runner': 'true', 'X-Test-Runner-Id': 'r2' },
+      });
+      expect(del.status).toBe(404);
+
+      const own = await t.requestAs('user-1').get('/api/runners/r1/projects');
+      const body = await own.json();
+      expect(body.assignments).toHaveLength(1);
+      expect(body.assignments[0].localPath).toBe('/a');
+    });
+
+    test("a runner cannot complete another runner's task (404)", async () => {
+      seedTwoRunners();
+      seedRunnerTask(t.db as any, { id: 'task-1', runnerId: 'r1', status: 'running' });
+      const res = await t.requestAsRunner('r2').post('/api/runners/tasks/result', {
+        taskId: 'task-1',
+        success: false,
+        error: 'forged',
+      });
+      expect(res.status).toBe(404);
+    });
+  });
+
   describe('GET /api/runners/:runnerId — tenant isolation', () => {
     test('returns 404 for non-owner non-admin', async () => {
       seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1', name: 'R1' });

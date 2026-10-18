@@ -140,9 +140,12 @@ describe('assertDataOwnership', () => {
       );
     });
 
-    test('top-level threadId wins over payload.threadId', async () => {
+    test('every referenced threadId is checked (top-level, payload, and row)', async () => {
       expect(
         await check({ type: 'data:update_thread', threadId: 't1', payload: { threadId: 't2' } }),
+      ).toEqual(deny('thread t2 owned by u2'));
+      expect(
+        await check({ type: 'data:update_thread', threadId: 't1', payload: { threadId: 't1' } }),
       ).toEqual(OK);
     });
 
@@ -375,9 +378,52 @@ describe('assertDataOwnership', () => {
       }
     }
 
-    test('other types ignore payload.id', async () => {
-      expect(await check({ type: 'data:watcher_insert', payload: { id: 'w2' } })).toEqual(OK);
-      expect(await check({ type: 'data:job_insert', payload: { id: 'j2' } })).toEqual(OK);
+    for (const type of [
+      'data:watcher_update',
+      'data:watcher_get',
+      'data:job_update',
+      'data:job_get',
+    ] as const) {
+      test(`${type}: missing id is refused`, async () => {
+        const kind = type.startsWith('data:watcher') ? 'watcher' : 'job';
+        expect(await check({ type, payload: {} })).toEqual(deny(`${kind} id required`));
+      });
+    }
+
+    test('inserts ignore payload.id but require a matching thread', async () => {
+      expect(
+        await check({
+          type: 'data:watcher_insert',
+          payload: { id: 'w2', threadId: 't1', row: { threadId: 't1' } },
+        }),
+      ).toEqual(OK);
+      expect(await check({ type: 'data:job_insert', payload: { id: 'j2' } })).toEqual(
+        deny('data:job_insert requires payload.threadId'),
+      );
+    });
+
+    test('insert row.threadId must equal payload.threadId', async () => {
+      expect(
+        await check({
+          type: 'data:job_insert',
+          payload: { threadId: 't1', row: { threadId: 't2' } },
+        }),
+      ).toEqual(deny('data:job_insert row.threadId does not match payload.threadId'));
+    });
+
+    test('thread-keyed deletes and lookups require a threadId', async () => {
+      for (const type of [
+        'data:watcher_get_live_by_thread_key',
+        'data:watcher_delete_by_thread',
+        'data:job_delete_by_thread',
+      ]) {
+        expect(await check({ type, payload: {} })).toEqual(
+          deny(`${type} requires payload.threadId`),
+        );
+      }
+      expect(
+        await check({ type: 'data:watcher_delete_by_thread', payload: { threadId: 't2' } }),
+      ).toEqual(deny('thread t2 owned by u2'));
     });
   });
 

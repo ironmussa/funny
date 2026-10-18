@@ -301,7 +301,13 @@ describe('runner-manager service', () => {
       expect(pending).toHaveLength(1);
       expect(pending[0]?.taskId).toBe(created.taskId);
 
-      await rm.completeTask({ taskId: created.taskId, success: true, data: { ok: true } });
+      expect(
+        await rm.completeTask('r-task', {
+          taskId: created.taskId,
+          success: true,
+          data: { ok: true },
+        }),
+      ).toBe(true);
 
       const schema = t.schema;
       const row = await t.db
@@ -310,6 +316,31 @@ describe('runner-manager service', () => {
         .where(eq(schema.runnerTasks.id, created.taskId))
         .then((rows) => rows[0]);
       expect(row?.status).toBe('completed');
+    });
+
+    test('completeTask refuses a task belonging to another runner', async () => {
+      seedRunner(t.db as any, { id: 'r-owner', userId: 'user-1', token: 'tok-owner' });
+      seedRunner(t.db as any, { id: 'r-other', userId: 'user-2', token: 'tok-other' });
+      const created = await rm.createRunnerTask('r-owner', 't1', 'start_agent', {
+        threadId: 't1',
+      } as any);
+
+      expect(
+        await rm.completeTask('r-other', {
+          taskId: created.taskId,
+          success: false,
+          error: 'forged',
+        }),
+      ).toBe(false);
+
+      const schema = t.schema;
+      const row = await t.db
+        .select({ status: schema.runnerTasks.status, error: schema.runnerTasks.resultError })
+        .from(schema.runnerTasks)
+        .where(eq(schema.runnerTasks.id, created.taskId))
+        .then((rows) => rows[0]);
+      expect(row?.status).toBe('pending');
+      expect(row?.error).toBeNull();
     });
   });
 

@@ -70,6 +70,9 @@ async function startServer(options: {
       ADMIN_PASSWORD,
       CORS_ORIGIN: 'http://localhost:5173',
       DATABASE_URL: '',
+      // No runners connect in this test; skip the gRPC listener so it does not
+      // collide with a dev server already bound to the default port.
+      RUNNER_GRPC_ENABLED: 'false',
     },
     stdout: 'ignore',
     stderr: 'ignore',

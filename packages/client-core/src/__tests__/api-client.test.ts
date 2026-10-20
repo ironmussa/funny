@@ -15,6 +15,9 @@ function createDependencies(
   const host = createInMemoryPlatform({ request });
   const circuit = { state: 'closed' as 'closed' | 'open' | 'half-open', failures: 0, successes: 0 };
   const unauthorized: string[] = [];
+  const failures: Parameters<
+    NonNullable<ApiClientDependencies['telemetry']['reportFailure']>
+  >[0][] = [];
   const dependencies: ApiClientDependencies = {
     transport: host.platform.transport,
     endpointPolicy: createEndpointPolicy(host.platform.transport.environment),
@@ -22,6 +25,7 @@ function createDependencies(
     telemetry: {
       startSpan: () => ({ traceparent: 'trace', end: () => undefined }),
       metric: () => undefined,
+      reportFailure: (failure) => failures.push(failure),
     },
     circuitBreaker: {
       snapshot: () => circuit,
@@ -31,7 +35,7 @@ function createDependencies(
     onUnauthorized: (path) => unauthorized.push(path),
     networkFriendlyMessage: () => 'Check your connection',
   };
-  return { client: createApiClient(dependencies), circuit, unauthorized };
+  return { client: createApiClient(dependencies), circuit, unauthorized, failures, dependencies };
 }
 
 describe('API client', () => {
@@ -39,6 +43,44 @@ describe('API client', () => {
     const fixture = createDependencies(async () => response(200, { ok: true }));
     expect(await fixture.client.request('/profile')).toEqual({ ok: true });
     expect(fixture.circuit.successes).toBe(1);
+    expect(fixture.failures).toEqual([]);
+  });
+
+  test('reports HTTP errors with context without arbitrary query values or request bodies', async () => {
+    const fixture = createDependencies(async () =>
+      response(400, { error: 'Could not determine remote URL for this project' }),
+    );
+    await expect(
+      fixture.client.request('/gh/prs?projectId=p1&token=secret', {
+        method: 'POST',
+        body: 'private request',
+      }),
+    ).rejects.toMatchObject({ type: 'BAD_REQUEST' });
+    expect(fixture.failures).toEqual([
+      {
+        kind: 'http',
+        method: 'POST',
+        path: '/gh/prs',
+        projectId: 'p1',
+        status: 400,
+        error: 'Could not determine remote URL for this project',
+        durationMs: 0,
+        traceparent: 'trace',
+      },
+    ]);
+  });
+
+  test('uses the HTTP status for non-JSON errors and tolerates a broken logging sink', async () => {
+    const fixture = createDependencies(async () => response(502, '<html>Bad gateway</html>'));
+    await fixture.client.request('/gh/prs').catch(() => undefined);
+    expect(fixture.failures[0]).toMatchObject({ status: 502, error: 'HTTP 502' });
+    fixture.dependencies.telemetry.reportFailure = () => {
+      throw new Error('logging unavailable');
+    };
+    await expect(fixture.client.request('/gh/prs')).rejects.toMatchObject({
+      type: 'INTERNAL',
+      message: 'HTTP 502',
+    });
   });
 
   test('handles server errors, exclusions, and unauthorized callbacks', async () => {
@@ -68,10 +110,18 @@ describe('API client', () => {
       friendlyMessage: 'Check your connection',
     });
     expect(fixture.circuit.failures).toBe(1);
+    expect(fixture.failures).toHaveLength(1);
+    expect(fixture.failures[0]).toMatchObject({
+      kind: 'network',
+      status: 0,
+      path: '/projects',
+      error: 'TypeError: Failed to fetch',
+    });
     fixture.circuit.state = 'open';
     await expect(fixture.client.request('/projects')).rejects.toMatchObject({
       message: 'Server unavailable (circuit open)',
     });
+    expect(fixture.failures).toHaveLength(1);
   });
 
   test('distinguishes cancellation from a network failure', async () => {
@@ -85,5 +135,6 @@ describe('API client', () => {
       .catch((value: ApiClientError) => value);
     expect(error).toMatchObject({ type: 'INTERNAL', message: 'Request aborted' });
     expect(fixture.circuit.failures).toBe(0);
+    expect(fixture.failures).toEqual([]);
   });
 });

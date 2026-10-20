@@ -10,6 +10,7 @@ delete (window as any).__TAURI_INTERNALS__;
 // Now import after mocks are set up
 const { api } = await import('@/lib/api');
 const { useCircuitBreakerStore } = await import('@/stores/circuit-breaker-store');
+const { createClientLogger } = await import('@/lib/client-logger');
 
 function mockJsonResponse(data: any, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -23,6 +24,31 @@ describe('API Client', () => {
     mockFetch.mockReset();
     // Reset circuit breaker so error tests don't affect subsequent tests
     useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+  });
+
+  test('sends HTTP failure details to the Abbacchio client logger', async () => {
+    const logError = vi.spyOn(createClientLogger('api'), 'error').mockImplementation(() => {});
+    try {
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ error: 'Could not determine remote URL for this project' }, 400),
+      );
+      const result = await api.listProjects();
+      expect(result.isErr()).toBe(true);
+      expect(logError).toHaveBeenCalledWith(
+        'API request failed',
+        expect.objectContaining({
+          kind: 'http',
+          method: 'GET',
+          path: '/projects',
+          status: 400,
+          error: 'Could not determine remote URL for this project',
+          durationMs: expect.any(Number),
+          traceparent: expect.any(String),
+        }),
+      );
+    } finally {
+      logError.mockRestore();
+    }
   });
 
   describe('Projects', () => {

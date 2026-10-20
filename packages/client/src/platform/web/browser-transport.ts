@@ -31,11 +31,16 @@ export function createBrowserTransportService(
   environment: TransportEnvironment,
   fetchImplementation: typeof fetch,
   diagnostics: DiagnosticService,
+  lifetimeSignal?: () => AbortSignal,
 ): TransportService {
   return {
     environment,
     async request(request) {
       const controller = new AbortController();
+      const lifetime = lifetimeSignal?.();
+      const abort = () => controller.abort();
+      lifetime?.addEventListener('abort', abort, { once: true });
+      if (lifetime?.aborted) controller.abort();
       const stopCancellation = request.cancellation?.subscribe(() => controller.abort());
       if (request.cancellation?.aborted) controller.abort();
       try {
@@ -65,12 +70,12 @@ export function createBrowserTransportService(
         // is cleaned up or a newer request supersedes an older one. Reporting
         // it as a platform failure floods the console during React StrictMode
         // startup and makes genuine transport failures harder to spot.
-        if (!controller.signal.aborted) {
-          diagnostics.report({ capability: 'transport', operation: 'request', error });
-        }
+        if (controller.signal.aborted) throw new DOMException('Request aborted', 'AbortError');
+        diagnostics.report({ capability: 'transport', operation: 'request', error });
         throw error;
       } finally {
         stopCancellation?.();
+        lifetime?.removeEventListener('abort', abort);
       }
     },
   };

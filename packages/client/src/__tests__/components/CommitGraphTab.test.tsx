@@ -418,6 +418,26 @@ describe('GraphRefChips', () => {
     );
   });
 
+  test('stacks branch chips vertically without shrinking their rows', () => {
+    renderWithProviders(
+      <GraphRefChips
+        refs={[
+          { kind: 'local', name: 'worktree/first', isCurrent: false },
+          { kind: 'local', name: 'worktree/second', isCurrent: false },
+        ]}
+        branchSummaryByName={new Map()}
+        actionInProgress={null}
+        color="#90b4ee"
+        searchQuery=""
+        onPushBranch={vi.fn()}
+        onPullCurrentBranch={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('graph-ref-chips')).toHaveClass('flex-col', 'items-start');
+    expect(screen.getByTestId('graph-branch-info-worktree/first')).toBeVisible();
+    expect(screen.getByTestId('graph-branch-info-worktree/second')).toBeVisible();
+  });
+
   test('shows local-only and synced status icons inside branch chips', () => {
     const refs: FoldedRef[] = [
       { kind: 'local', name: 'main', isCurrent: true, syncedRemote: 'origin/main' },

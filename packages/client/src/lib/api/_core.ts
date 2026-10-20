@@ -10,6 +10,7 @@ import { ResultAsync } from 'neverthrow';
 
 import i18n from '@/i18n/config';
 import { emitUnauthorized } from '@/lib/api/auth-events';
+import { createClientLogger } from '@/lib/client-logger';
 import { metric, startSpan } from '@/lib/telemetry';
 import { clientComposition } from '@/platform/client-composition';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
@@ -18,6 +19,7 @@ import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 export type PullStrategy = 'ff-only' | 'merge' | 'rebase';
 
 const endpointPolicy = createEndpointPolicy(clientComposition.platform.transport.environment);
+const log = createClientLogger('api');
 
 export function validateContainerUrl(raw: unknown): string | null {
   return validateRemoteOrigin(raw, endpointPolicy.remoteOriginAllowlist);
@@ -27,7 +29,13 @@ const apiClient = createApiClient({
   transport: clientComposition.platform.transport,
   endpointPolicy,
   clock: () => performance.now(),
-  telemetry: { startSpan, metric },
+  telemetry: {
+    startSpan,
+    metric,
+    reportFailure: (failure) => {
+      log.error('API request failed', { ...failure, online: navigator.onLine });
+    },
+  },
   circuitBreaker: {
     snapshot: () => useCircuitBreakerStore.getState(),
     recordFailure: () => useCircuitBreakerStore.getState().recordFailure(),

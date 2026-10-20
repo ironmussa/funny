@@ -441,7 +441,7 @@ function GraphRefChip({
 
   return (
     <div
-      className="inline-flex min-w-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90"
+      className="inline-flex h-[15px] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90"
       style={{ backgroundColor: color, color: textColor }}
       data-testid={`graph-ref-chip-${ref.kind}:${ref.name}`}
     >
@@ -516,7 +516,10 @@ export function GraphRefChips({
   const hasSearchQuery = searchQuery.trim().length > 0;
 
   return (
-    <div className="inline-flex min-w-0 shrink items-center gap-1" data-testid="graph-ref-chips">
+    <div
+      className="inline-flex min-w-0 shrink flex-col items-start gap-1"
+      data-testid="graph-ref-chips"
+    >
       {refs.map((ref) => {
         const branchName = branchNameForRef(ref);
         const summary = branchName ? branchSummaryByName.get(branchName) : undefined;

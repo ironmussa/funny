@@ -1,5 +1,5 @@
 import type { GitHubPR, GitStatusInfo, PRDetail, Thread } from '@funny/shared';
-import { screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -15,6 +15,7 @@ import { renderWithProviders } from '../helpers/render';
 
 const apiMock = vi.hoisted(() => ({
   githubStatus: vi.fn(),
+  projectGetRemoteUrl: vi.fn(),
   githubPRFilterOptions: vi.fn(),
   githubPRs: vi.fn(),
   githubPRsSearch: vi.fn(),
@@ -132,6 +133,9 @@ function makeDetail(overrides: Partial<PRDetail> = {}): PRDetail {
 describe('PullRequestsTab', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    apiMock.projectGetRemoteUrl.mockReturnValue(
+      okAsync({ remoteUrl: 'https://github.com/acme/repo' }),
+    );
     usePRDetailStore.getState().clearAll();
     apiMock.githubStatus.mockReturnValue(okAsync({ connected: true, login: 'argenisleon' }));
     apiMock.githubPRFilterOptions.mockReturnValue(okAsync({ labels: [], users: [] }));
@@ -182,6 +186,22 @@ describe('PullRequestsTab', () => {
       _loadingBranchKeys: new Set(),
       _loadingProjectStatus: new Set(),
     } as any);
+  });
+
+  test('skips GitHub queries without a remote and recovers after checking again', async () => {
+    apiMock.projectGetRemoteUrl.mockReturnValueOnce(okAsync({ remoteUrl: null }));
+    apiMock.githubPRs.mockReturnValue(
+      okAsync({ prs: [], hasMore: false, owner: 'acme', repo: 'repo' }),
+    );
+    const view = renderWithProviders(<PullRequestsTab visible />);
+    expect(await screen.findByTestId('github-remote-unavailable')).toBeInTheDocument();
+    expect(apiMock.githubPRs).not.toHaveBeenCalled();
+    expect(apiMock.githubPRFilterOptions).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
+    await waitFor(() => expect(apiMock.githubPRs).toHaveBeenCalled());
+    const signal = apiMock.githubPRs.mock.calls[0][2] as AbortSignal;
+    view.unmount();
+    expect(signal.aborted).toBe(true);
   });
 
   test('syncs the current-branch PR into git status so Activity can show its badge', async () => {
@@ -237,6 +257,7 @@ describe('PullRequestsTab', () => {
       expect(apiMock.githubPRs).toHaveBeenCalledWith(
         'project-1',
         expect.objectContaining({ state: 'open' }),
+        expect.any(AbortSignal),
       );
     });
     expect(screen.queryByTestId('prs-toggle-view-all')).not.toBeInTheDocument();

@@ -165,7 +165,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const titlePx = TITLE_PX;
   const metaPx = META_PX;
   // Variable row heights: the title sits on one line, so ref-less rows are a
-  // single tight line; rows with branch/tag chips get an extra line above. Computed
+  // single tight line; each branch/tag chip gets its own line above. Computed
   // from the font sizes — no magic numbers — so ref-less rows (the majority) stay
   // compact instead of padding to a fixed max.
   const baseRowH = Math.round(titlePx * 1.5) + 6;
@@ -173,8 +173,11 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   // breathing room so the chips don't crowd the commit title below them.
   const refsRowH = baseRowH + (metaPx + 5) + 6;
   const rowHeightFor = useCallback(
-    (e: GraphEntry) => (e.refs.length > 0 ? refsRowH : baseRowH),
-    [baseRowH, refsRowH],
+    (e: GraphEntry) => {
+      const count = foldGraphRefs(e.refs, e.headBranch).length;
+      return count > 0 ? refsRowH + (count - 1) * (metaPx + 5 + 4) : baseRowH;
+    },
+    [baseRowH, refsRowH, metaPx],
   );
   const selectedProjectId = useRightPaneProjectId();
   const effectiveThreadId = useRightPaneThreadId() || undefined;
@@ -923,11 +926,12 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   );
 }
 
-function nodeYForRow(entry: Pick<GraphEntry, 'refs'>, rowHeight: number): number {
+function nodeYForRow(entry: Pick<GraphEntry, 'refs' | 'headBranch'>, rowHeight: number): number {
   if (entry.refs.length === 0) return rowHeight / 2;
   const chipLineH = META_PX + 5;
   const titleLineH = Math.round(TITLE_PX * 1.5);
-  const refsContentH = chipLineH + 6 + titleLineH;
+  const count = foldGraphRefs(entry.refs, entry.headBranch).length;
+  const refsContentH = count * chipLineH + (count - 1) * 4 + 6 + titleLineH;
   return (rowHeight - refsContentH) / 2 + chipLineH / 2;
 }
 
@@ -1634,7 +1638,7 @@ function GraphCommitRow({
           {foldedRefs.length > 0 && (
             <div
               className="mb-1.5 flex min-w-0 shrink-0 items-center overflow-hidden"
-              style={{ height: chipLineH }}
+              style={{ height: foldedRefs.length * chipLineH + (foldedRefs.length - 1) * 4 }}
             >
               {/* Branches on a commit are siblings, not a hierarchy — render
                   them as separate pills (`chips`) rather than connected powerline

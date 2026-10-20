@@ -1,4 +1,4 @@
-import { ChevronRight, Wrench, ListTodo } from 'lucide-react';
+import { ChevronRight, Wrench, ListTodo, Bot } from 'lucide-react';
 import { useState, memo, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -55,6 +55,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
     name === 'Bash' && calls.some((call) => call.author === 'shell'),
   );
   const isTodo = isTodoToolName(name);
+  const Icon = isTodo ? ListTodo : name === 'Task' || name === 'Agent' ? Bot : Wrench;
   const label = getToolLabel(isTodo ? 'TodoWrite' : name, t);
   const displayTime = useMemo(
     () => (timestamp ? timeAgo(timestamp, t, now) : null),
@@ -65,6 +66,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
       <button
         type="button"
+        aria-expanded={expanded}
         onClick={() => setExpanded(!expanded)}
         className="hover:bg-accent/30 w-full overflow-hidden rounded-md px-3 py-1.5 text-left text-xs"
       >
@@ -72,11 +74,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
           <ChevronRight
             className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
           />
-          {isTodo ? (
-            <ListTodo className="icon-xs text-muted-foreground shrink-0" />
-          ) : (
-            <Wrench className="icon-xs text-muted-foreground shrink-0" />
-          )}
+          <Icon className="icon-xs text-muted-foreground shrink-0" />
           <span className="text-foreground shrink-0 font-mono font-medium">{label}</span>
           <span className="bg-muted-foreground/20 text-muted-foreground inline-flex items-center justify-center rounded-full px-1.5 text-xs leading-4 font-medium">
             ×{calls.length}

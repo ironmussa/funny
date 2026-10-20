@@ -22,6 +22,7 @@ export interface CreateWebPlatformOptions {
   allowedContainerOrigins?: string;
   showToast: BrowserEffectRuntime['toast'];
   reportDiagnostic?: (diagnostic: ClientDiagnostic) => void;
+  requestLifetimeSignal?: () => AbortSignal;
 }
 
 export function createWebPlatform(options: CreateWebPlatformOptions): ClientPlatform {
@@ -43,7 +44,12 @@ export function createWebPlatform(options: CreateWebPlatformOptions): ClientPlat
     lifecycle: createBrowserLifecycleService(
       browserLifecycleRuntime(options.window, options.document),
     ),
-    transport: createBrowserTransportService(environment, options.fetch, diagnostics),
+    transport: createBrowserTransportService(
+      environment,
+      options.fetch,
+      diagnostics,
+      options.requestLifetimeSignal,
+    ),
     effects: createBrowserEffectService(
       browserEffectRuntime(options.window, options.showToast),
       diagnostics,

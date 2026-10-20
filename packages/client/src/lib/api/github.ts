@@ -2,6 +2,24 @@ import type { GitHubRepo, Project } from '@funny/shared';
 
 import { request } from './_core';
 
+interface GitHubListParams {
+  state?: string;
+  sha?: string;
+  page?: number;
+  per_page?: number;
+  sort?: string;
+}
+
+/** Query string shared by the project-scoped, paginated GitHub list endpoints. */
+function githubListQuery(projectId: string, params?: GitHubListParams): URLSearchParams {
+  const p = new URLSearchParams({ projectId });
+  for (const key of ['state', 'sha', 'page', 'per_page', 'sort'] as const) {
+    const value = params?.[key];
+    if (value) p.set(key, String(value));
+  }
+  return p;
+}
+
 export const githubApi = {
   githubStatus: () =>
     request<{ connected: boolean; login?: string; source?: 'profile' | 'cli' }>('/github/status'),
@@ -41,10 +59,7 @@ export const githubApi = {
     projectId: string,
     params?: { state?: string; page?: number; per_page?: number },
   ) => {
-    const p = new URLSearchParams({ projectId });
-    if (params?.state) p.set('state', params.state);
-    if (params?.page) p.set('page', String(params.page));
-    if (params?.per_page) p.set('per_page', String(params.per_page));
+    const p = githubListQuery(projectId, params);
     return request<{
       issues: import('@funny/shared').GitHubIssue[];
       hasMore: boolean;
@@ -56,17 +71,15 @@ export const githubApi = {
   githubIssuesEnriched: (
     projectId: string,
     params?: { state?: string; page?: number; per_page?: number },
+    signal?: AbortSignal,
   ) => {
-    const p = new URLSearchParams({ projectId });
-    if (params?.state) p.set('state', params.state);
-    if (params?.page) p.set('page', String(params.page));
-    if (params?.per_page) p.set('per_page', String(params.per_page));
+    const p = githubListQuery(projectId, params);
     return request<{
       issues: import('@funny/shared').EnrichedGitHubIssue[];
       hasMore: boolean;
       owner: string;
       repo: string;
-    }>(`/github/issues-enriched?${p.toString()}`);
+    }>(`/github/issues-enriched?${p.toString()}`, { signal });
   },
 
   githubPRs: (
@@ -77,18 +90,15 @@ export const githubApi = {
       per_page?: number;
       sort?: import('@funny/shared').PRSortKey;
     },
+    signal?: AbortSignal,
   ) => {
-    const p = new URLSearchParams({ projectId });
-    if (params?.state) p.set('state', params.state);
-    if (params?.page) p.set('page', String(params.page));
-    if (params?.per_page) p.set('per_page', String(params.per_page));
-    if (params?.sort) p.set('sort', params.sort);
+    const p = githubListQuery(projectId, params);
     return request<{
       prs: import('@funny/shared').GitHubPR[];
       hasMore: boolean;
       owner: string;
       repo: string;
-    }>(`/github/prs?${p.toString()}`);
+    }>(`/github/prs?${p.toString()}`, { signal });
   },
 
   /** Filter PRs across the whole repo via the GitHub Search API (server-side). */
@@ -104,12 +114,9 @@ export const githubApi = {
       assignees?: string[];
       reviewers?: string[];
     },
+    signal?: AbortSignal,
   ) => {
-    const p = new URLSearchParams({ projectId });
-    if (params.state) p.set('state', params.state);
-    if (params.page) p.set('page', String(params.page));
-    if (params.per_page) p.set('per_page', String(params.per_page));
-    if (params.sort) p.set('sort', params.sort);
+    const p = githubListQuery(projectId, params);
     if (params.labels?.length) p.set('labels', params.labels.join(','));
     if (params.authors?.length) p.set('authors', params.authors.join(','));
     if (params.assignees?.length) p.set('assignees', params.assignees.join(','));
@@ -119,23 +126,21 @@ export const githubApi = {
       hasMore: boolean;
       owner: string;
       repo: string;
-    }>(`/github/prs-search?${p.toString()}`);
+    }>(`/github/prs-search?${p.toString()}`, { signal });
   },
 
   /** Labels + assignable users to populate the PR filter dropdowns. */
-  githubPRFilterOptions: (projectId: string) =>
+  githubPRFilterOptions: (projectId: string, signal?: AbortSignal) =>
     request<import('@funny/shared').PRFilterOptions>(
       `/github/pr-filter-options?projectId=${projectId}`,
+      { signal },
     ),
 
   githubCommitAuthors: (
     projectId: string,
     params?: { sha?: string; page?: number; per_page?: number },
   ) => {
-    const p = new URLSearchParams({ projectId });
-    if (params?.sha) p.set('sha', params.sha);
-    if (params?.page) p.set('page', String(params.page));
-    if (params?.per_page) p.set('per_page', String(params.per_page));
+    const p = githubListQuery(projectId, params);
     return request<{
       authors: Array<{ sha: string; login: string | null; avatar_url: string }>;
     }>(`/github/commit-authors?${p.toString()}`);

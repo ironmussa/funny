@@ -1,9 +1,10 @@
 import type { GitHubPR, PRFilterOptions } from '@funny/shared';
 import { ExternalLink, GitBranch, GitPullRequest, Loader2, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
 import { PRCompactIdentity } from '@/components/pull-requests/PRCompactIdentity';
 import {
@@ -18,6 +19,8 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { contrastText, pastelize } from '@/components/ui/project-chip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useGitHubProjectId } from '@/hooks/use-github-project-id';
+import { usePagedGitHubList, type FetchGitHubListPage } from '@/hooks/use-paged-github-list';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn, resolveThreadBranch } from '@/lib/utils';
@@ -342,16 +345,18 @@ function PullRequestsContent({
 }
 
 export function PullRequestsTab({ visible }: PullRequestsTabProps) {
-  const { t } = useTranslation();
-  const activeThreadId = useThreadId();
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  return (
+    <GitHubProjectGate visible={visible}>
+      <PullRequestsProjectContent visible={visible} />
+    </GitHubProjectGate>
+  );
+}
+
+/** Branch of the current thread (or project when no thread is active). */
+function useCurrentBranch(projectId: string | null): string | undefined {
   const activeThreadProjectId = useThreadProjectId();
   const activeThreadBranch = useThreadBranch();
   const activeThreadWorktreePath = useThreadWorktreePath();
-  const projectId = activeThreadProjectId ?? selectedProjectId;
-
-  // Branch of the current thread (or project when no thread is active) —
-  // used to pin the matching PR at the top of the list.
   const threadBranch =
     activeThreadProjectId !== null
       ? resolveThreadBranch({
@@ -362,54 +367,38 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
   const projectBranch = useProjectStore((s) =>
     projectId ? s.branchByProject[projectId] : undefined,
   );
-  const currentBranch = threadBranch || projectBranch;
+  return threadBranch || projectBranch;
+}
 
-  const startNewThread = useUIStore((s) => s.startNewThread);
-
-  const [prs, setPrs] = useState<GitHubPR[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
-  const [page, setPage] = useState(1);
-  const [state, setState] = useState<PRState>('open');
-  const [repoInfo, setRepoInfo] = useState<{
-    owner: string;
-    repo: string;
-  } | null>(null);
-  const loadedRef = useRef(false);
-  const [selectedPR, setSelectedPR] = useState<GitHubPR | null>(null);
-  const [currentUserLogin, setCurrentUserLogin] = useState<string | undefined>(undefined);
-
-  // Sort + label/author/assignee/reviewer filters. Any active filter switches
-  // the fetch to the server-side Search API (search mode); sort alone stays on
-  // the plain list endpoint.
-  const [filters, setFilters] = useState<PRFilterState>(EMPTY_PR_FILTERS);
-  const [filterOptions, setFilterOptions] = useState<PRFilterOptions | null>(null);
-  const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
-  const searchMode = hasActivePRFilters(filters);
-
-  const effectiveState: PRState = state;
-
+function useGitHubLogin(): string | undefined {
+  const [login, setLogin] = useState<string | undefined>(undefined);
   useEffect(() => {
     let cancelled = false;
     void api.githubStatus().then((res) => {
-      if (cancelled) return;
-      if (res.isOk() && res.value.connected) {
-        setCurrentUserLogin(res.value.login);
-      }
+      if (!cancelled && res.isOk() && res.value.connected) setLogin(res.value.login);
     });
     return () => {
       cancelled = true;
     };
   }, []);
+  return login;
+}
 
-  // Load filter options (labels + assignable users) once per project.
+/** Labels + assignable users for the filter dropdowns, loaded once per project. */
+function usePRFilterOptions(visible: boolean | undefined, projectId: string | null) {
+  const [filterOptions, setFilterOptions] = useState<PRFilterOptions | null>(null);
+  const [filterOptionsLoading, setFilterOptionsLoading] = useState(false);
+
+  useEffect(() => {
+    setFilterOptions(null);
+  }, [projectId]);
+
   useEffect(() => {
     if (!visible || !projectId) return;
-    let cancelled = false;
+    const controller = new AbortController();
     setFilterOptionsLoading(true);
-    void api.githubPRFilterOptions(projectId).then((res) => {
-      if (cancelled) return;
+    void api.githubPRFilterOptions(projectId, controller.signal).then((res) => {
+      if (controller.signal.aborted) return;
       if (res.isOk()) {
         setFilterOptions(res.value);
       } else {
@@ -420,87 +409,116 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
       }
       setFilterOptionsLoading(false);
     });
-    return () => {
-      cancelled = true;
-    };
+    return () => controller.abort();
   }, [visible, projectId]);
+
+  return { filterOptions, filterOptionsLoading };
+}
+
+function prBadgeState(pr: GitHubPR): 'OPEN' | 'MERGED' | 'CLOSED' {
+  if (pr.merged_at) return 'MERGED';
+  return pr.state === 'closed' ? 'CLOSED' : 'OPEN';
+}
+
+/** Mirror the current branch's PR onto the thread's git status (powerline badge). */
+function useSyncCurrentBranchPR(threadId: string | null | undefined, pr: GitHubPR | undefined) {
+  const prNumber = pr?.number;
+  const prUrl = pr?.html_url;
+  const prState = pr ? prBadgeState(pr) : undefined;
+  useEffect(() => {
+    if (!threadId || !prNumber || !prUrl || !prState) return;
+    useGitStatusStore.getState().applyPRMetadata(threadId, { prNumber, prUrl, prState });
+  }, [threadId, prNumber, prUrl, prState]);
+}
+
+function splitByBranch(prs: GitHubPR[], branch: string | undefined) {
+  if (!branch) return { currentBranchPRs: [] as GitHubPR[], otherPRs: prs };
+  const currentBranchPRs: GitHubPR[] = [];
+  const otherPRs: GitHubPR[] = [];
+  for (const pr of prs) {
+    if (pr.head.ref === branch) currentBranchPRs.push(pr);
+    else otherPRs.push(pr);
+  }
+  return { currentBranchPRs, otherPRs };
+}
+
+/** Any active filter switches to the Search API; sort alone stays on the list endpoint. */
+function prPageFetcher(
+  projectId: string,
+  state: PRState,
+  filters: PRFilterState,
+): FetchGitHubListPage<GitHubPR> {
+  const searchMode = hasActivePRFilters(filters);
+  return (page, signal) => {
+    const params = { state, page, per_page: 30, sort: filters.sort };
+    const request = searchMode
+      ? api.githubPRsSearch(projectId, { ...params, ...filters }, signal)
+      : api.githubPRs(projectId, params, signal);
+    return request
+      .map((data) => ({ ...data, items: data.prs }))
+      .mapErr((error) => {
+        log.error('failed to load pull requests', { projectId, state, error: error.message });
+        return error;
+      });
+  };
+}
+
+/**
+ * PR list query: state + sort/label/author/assignee/reviewer filters, paginated.
+ * Any active filter switches the fetch to the server-side Search API (search
+ * mode); sort alone stays on the plain list endpoint.
+ */
+function usePRList(visible: boolean | undefined, projectId: string | null) {
+  const { t } = useTranslation();
+  const [state, setState] = useState<PRState>('open');
+  const [filters, setFilters] = useState<PRFilterState>(EMPTY_PR_FILTERS);
+  const filterOptions = usePRFilterOptions(visible, projectId);
 
   // Reset filters when switching projects so stale selections don't leak across.
   useEffect(() => {
     setFilters(EMPTY_PR_FILTERS);
-    setFilterOptions(null);
   }, [projectId]);
 
-  const fetchPRs = useCallback(
-    async (pageNum: number, append: boolean) => {
-      if (!projectId) return;
-      setLoading(true);
-      setError(null);
-
-      try {
-        const result = searchMode
-          ? await api.githubPRsSearch(projectId, {
-              state: effectiveState,
-              page: pageNum,
-              per_page: 30,
-              sort: filters.sort,
-              labels: filters.labels,
-              authors: filters.authors,
-              assignees: filters.assignees,
-              reviewers: filters.reviewers,
-            })
-          : await api.githubPRs(projectId, {
-              state: effectiveState,
-              page: pageNum,
-              per_page: 30,
-              sort: filters.sort,
-            });
-
-        if (result.isOk()) {
-          const data = result.value;
-          setPrs((prev) => (append ? [...prev, ...data.prs] : data.prs));
-          setHasMore(data.hasMore);
-          setRepoInfo({ owner: data.owner, repo: data.repo });
-        } else {
-          log.error('failed to load pull requests', {
-            projectId,
-            state: effectiveState,
-            error: result.error.message,
-          });
-          setError(
-            result.error.message ||
-              t('review.pullRequests.fetchError', 'Failed to load pull requests'),
-          );
-        }
-      } finally {
-        setLoading(false);
-      }
-    },
-    [projectId, effectiveState, searchMode, filters, t],
+  const fetchPage = useMemo(
+    () => (projectId ? prPageFetcher(projectId, state, filters) : null),
+    [projectId, state, filters],
   );
+  const list = usePagedGitHubList({
+    visible,
+    fetchPage,
+    errorFallback: t('review.pullRequests.fetchError', 'Failed to load pull requests'),
+  });
 
-  // Reset and fetch on visibility / project / state / filter / sort change
-  useEffect(() => {
-    if (!visible || !projectId) return;
-    // Avoid double-fetching on mount in StrictMode
-    if (!loadedRef.current) {
-      loadedRef.current = true;
-    }
-    setPage(1);
-    setPrs([]);
-    fetchPRs(1, false);
-  }, [visible, projectId, effectiveState, fetchPRs]);
-
-  const loadMore = () => {
-    const next = page + 1;
-    setPage(next);
-    fetchPRs(next, true);
+  return {
+    ...list,
+    ...filterOptions,
+    state,
+    setState,
+    filters,
+    setFilters,
+    searchMode: hasActivePRFilters(filters),
   };
+}
 
-  const refresh = () => {
-    setPage(1);
-    fetchPRs(1, false);
-  };
+/** PRs whose head is the current branch are pinned on top and mirrored into git status. */
+function useCurrentBranchPRs(prs: GitHubPR[], projectId: string | null) {
+  const activeThreadId = useThreadId();
+  const currentBranch = useCurrentBranch(projectId);
+  const split = useMemo(() => splitByBranch(prs, currentBranch), [prs, currentBranch]);
+  useSyncCurrentBranchPR(activeThreadId, split.currentBranchPRs[0]);
+  return { ...split, currentBranch };
+}
+
+function PullRequestsProjectContent({ visible }: PullRequestsTabProps) {
+  const { t } = useTranslation();
+  const projectId = useGitHubProjectId();
+  const currentUserLogin = useGitHubLogin();
+  const startNewThread = useUIStore((s) => s.startNewThread);
+  const [selectedPR, setSelectedPR] = useState<GitHubPR | null>(null);
+
+  const list = usePRList(visible, projectId);
+  const { state, filters, searchMode, loading, refresh } = list;
+  const { currentBranchPRs, otherPRs, currentBranch } = useCurrentBranchPRs(list.items, projectId);
 
   const createThreadFromPRBranch = useCallback(
     (branch: string) => {
@@ -509,42 +527,6 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
     },
     [projectId, startNewThread],
   );
-
-  const { currentBranchPRs, otherPRs } = useMemo(() => {
-    if (!currentBranch) return { currentBranchPRs: [] as GitHubPR[], otherPRs: prs };
-    const match: GitHubPR[] = [];
-    const rest: GitHubPR[] = [];
-    for (const pr of prs) {
-      if (pr.head.ref === currentBranch) match.push(pr);
-      else rest.push(pr);
-    }
-    return { currentBranchPRs: match, otherPRs: rest };
-  }, [prs, currentBranch]);
-
-  const currentBranchPR = currentBranchPRs[0];
-  const currentBranchPRNumber = currentBranchPR?.number;
-  const currentBranchPRUrl = currentBranchPR?.html_url;
-  const currentBranchPRMergedAt = currentBranchPR?.merged_at;
-  const currentBranchPRState = currentBranchPR?.state;
-
-  useEffect(() => {
-    if (!activeThreadId || !currentBranchPRNumber || !currentBranchPRUrl) return;
-    useGitStatusStore.getState().applyPRMetadata(activeThreadId, {
-      prNumber: currentBranchPRNumber,
-      prUrl: currentBranchPRUrl,
-      prState: currentBranchPRMergedAt
-        ? 'MERGED'
-        : currentBranchPRState === 'closed'
-          ? 'CLOSED'
-          : 'OPEN',
-    });
-  }, [
-    activeThreadId,
-    currentBranchPRMergedAt,
-    currentBranchPRNumber,
-    currentBranchPRState,
-    currentBranchPRUrl,
-  ]);
 
   const renderPRRow = (pr: GitHubPR) => (
     <PullRequestRow
@@ -572,18 +554,18 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
         loading={loading}
         onRefresh={refresh}
         filters={filters}
-        onFiltersChange={setFilters}
-        filterOptions={filterOptions}
-        filterOptionsLoading={filterOptionsLoading}
+        onFiltersChange={list.setFilters}
+        filterOptions={list.filterOptions}
+        filterOptionsLoading={list.filterOptionsLoading}
         state={state}
-        onStateChange={setState}
-        repoInfo={repoInfo}
+        onStateChange={list.setState}
+        repoInfo={list.repoInfo}
       />
 
       <PullRequestsContent
         loading={loading}
-        prCount={prs.length}
-        error={error}
+        prCount={list.items.length}
+        error={list.error}
         searchMode={searchMode}
         state={state}
         onRefresh={refresh}
@@ -591,8 +573,8 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
         otherPRs={otherPRs}
         currentBranch={currentBranch}
         renderPRRow={renderPRRow}
-        hasMore={hasMore}
-        onLoadMore={loadMore}
+        hasMore={list.hasMore}
+        onLoadMore={list.loadMore}
       />
 
       {/* PR Detail Dialog */}

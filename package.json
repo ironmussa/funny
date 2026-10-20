@@ -128,7 +128,7 @@
     "@xterm/headless": "^6.0.0",
     "better-auth": "^1.6.19",
     "deepagents-acp": "^0.1.12",
-    "drizzle-orm": "^0.45.1",
+    "drizzle-orm": "^0.45.2",
     "hono": "^4.13.13",
     "nanoid": "^5.0.9",
     "neverthrow": "^8.2.0",

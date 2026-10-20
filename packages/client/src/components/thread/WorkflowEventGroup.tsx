@@ -14,22 +14,12 @@ import { SubItemsList } from '@/components/GitProgressModal';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import type { GitProgressStep } from '@/lib/git-progress-types';
+import { parseThreadEventData } from '@/lib/thread-event-data';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useCommitProgressStore } from '@/stores/commit-progress-store';
 
 import { WorkflowEventCard } from './WorkflowEventCard';
-
-function parseEventData(data: string | Record<string, unknown>): Record<string, any> {
-  if (typeof data === 'string') {
-    try {
-      return JSON.parse(data);
-    } catch {
-      return {};
-    }
-  }
-  return data as Record<string, any>;
-}
 
 /** Labels for workflow actions */
 const ACTION_LABELS: Record<string, string> = {
@@ -54,12 +44,12 @@ function getWorkflowStatus(events: ThreadEvent[]): {
   // Find the workflow:started event for the action label
   const startedEvent = events.find((e) => e.type === 'workflow:started');
   const completedEvent = events.find((e) => e.type === 'workflow:completed');
-  const startData = startedEvent ? parseEventData(startedEvent.data) : {};
+  const startData = startedEvent ? parseThreadEventData(startedEvent.data) : {};
   const action = startData.action || '';
   const actionLabel = ACTION_LABELS[action] || action;
 
   if (completedEvent) {
-    const metadata = parseEventData(completedEvent.data);
+    const metadata = parseThreadEventData(completedEvent.data);
     if (metadata.status === 'completed') {
       return { label: 'completed', action: actionLabel, icon: CheckCircle2, running: false };
     }
@@ -178,7 +168,7 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
 
   // Extract workflowId from the started event
   const startedEvent = events.find((e) => e.type === 'workflow:started');
-  const startData = startedEvent ? parseEventData(startedEvent.data) : {};
+  const startData = startedEvent ? parseThreadEventData(startedEvent.data) : {};
   const workflowId = startData.workflowId as string | undefined;
 
   const activeProgress = useActiveProgress(workflowId, status.running);

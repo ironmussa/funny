@@ -30,6 +30,16 @@ export interface ApiSpan {
 }
 
 export interface ApiTelemetry {
+  reportFailure?(failure: {
+    kind: 'http' | 'network';
+    method: string;
+    path: string;
+    projectId?: string;
+    status: number;
+    error: string;
+    durationMs: number;
+    traceparent: string;
+  }): void;
   startSpan(name: string, options: { attributes: Record<string, string | number> }): ApiSpan;
   metric(
     name: string,
@@ -89,6 +99,24 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
         attributes: { 'http.method': method, 'http.url': path },
       });
       const startedAt = dependencies.clock();
+      const reportFailure = (kind: 'http' | 'network', status: number, error: string) => {
+        // Keep request bodies, headers, and arbitrary query values out of logs.
+        const [pathname, query] = path.split('?');
+        try {
+          dependencies.telemetry.reportFailure?.({
+            kind,
+            method,
+            path: pathname,
+            projectId: new URLSearchParams(query).get('projectId') ?? undefined,
+            status,
+            error: error.slice(0, 2048),
+            durationMs: dependencies.clock() - startedAt,
+            traceparent: span.traceparent,
+          });
+        } catch {
+          // A diagnostic sink must never change the request's result.
+        }
+      };
 
       if (dependencies.circuitBreaker.snapshot().state === 'open') {
         span.end('ERROR');
@@ -118,6 +146,7 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
           throw { type: 'INTERNAL', message: 'Request aborted' } satisfies ApiClientError;
         }
         dependencies.circuitBreaker.recordFailure();
+        reportFailure('network', 0, String(error));
         dependencies.telemetry.metric('http.client.duration', dependencies.clock() - startedAt, {
           type: 'gauge',
           attributes: { method, path, status: '0' },
@@ -156,6 +185,7 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
             : rawError
               ? JSON.stringify(rawError)
               : `HTTP ${response.status}`;
+        reportFailure('http', response.status, message);
         if (body.stderr || body.exitCode != null) {
           throw {
             type: 'PROCESS_ERROR',

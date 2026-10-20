@@ -108,6 +108,7 @@ export function dispatchToolCard({
               key={`group-${item.name}-${item.calls.map((call) => call.id).join('-')}`}
               name={item.name}
               calls={item.calls}
+              renderCall={renderToolCall}
             />
           ) : (
             renderToolCall(item.tc)

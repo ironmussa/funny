@@ -1,5 +1,7 @@
+import type { ThreadEvent } from '@funny/shared';
 import { describe, test, expect } from 'vitest';
 
+import { GIT_TIMELINE_EVENT_TYPES } from '@/lib/git-timeline-events';
 import {
   buildGroupedRenderItems,
   buildRenderItemIdIndexMap,
@@ -234,6 +236,35 @@ describe('buildGroupedRenderItems', () => {
     expect(todoWrites[0].id).toBe('tc3');
   });
 
+  test('excludes events without cards instead of leaving empty timeline rows', () => {
+    const messages = [makeMessage('m1', 'Before'), makeMessage('m2', 'After')];
+    const events = ['watcher:fired', 'unknown:event', 'workflow:started', 'git:changed'].map(
+      (type, index) => makeThreadEvent(`e${index}`, type, '2024-01-01T00:01:00Z'),
+    );
+    expect(buildGroupedRenderItems(messages, events as ThreadEvent[])).toEqual(
+      buildGroupedRenderItems(messages),
+    );
+  });
+
+  test('preserves every supported standalone git card', () => {
+    const events = GIT_TIMELINE_EVENT_TYPES.map((type, index) =>
+      makeThreadEvent(`e${index}`, type, '2024-01-01T00:01:00Z'),
+    );
+    expect(buildGroupedRenderItems([], events as ThreadEvent[])).toEqual(
+      events.map((event) => ({ type: 'thread-event', event })),
+    );
+  });
+
+  test('preserves workflow groups even when their events have no standalone card', () => {
+    const events = ['workflow:started', 'workflow:completed'].map((type, index) => ({
+      ...makeThreadEvent(`e${index}`, type, '2024-01-01T00:01:00Z'),
+      data: JSON.stringify({ workflowId: 'workflow-1' }),
+    }));
+    expect(buildGroupedRenderItems([], events as ThreadEvent[])).toEqual([
+      { type: 'workflow-event-group', events },
+    ]);
+  });
+
   test('interleaves thread events chronologically when provided', () => {
     const messages = [
       makeMessage('m1', 'First message', [], '2024-01-01T00:01:00Z'),
@@ -305,6 +336,22 @@ describe('buildGroupedRenderItems', () => {
     }
     expect(exitPlanTc).toBeDefined();
     expect(exitPlanTc._planText).toBe('# My Plan\nStep 1\nStep 2');
+  });
+
+  test.each(['Bash', 'Think'])('keeps orphan %s calls visible across pagination', (name) => {
+    const child = { ...makeToolCall('child', name), parentToolCallId: 'parent' };
+    const recent = makeMessage('recent', '', [child]);
+    const initial = buildGroupedRenderItems([recent]);
+    expect(initial).toEqual([expect.objectContaining({ type: 'toolcall', tc: child })]);
+
+    const parent = { ...makeToolCall('parent', 'Agent') };
+    const hydrated = buildGroupedRenderItems([makeMessage('older', '', [parent]), recent]);
+    expect(hydrated).toEqual([
+      expect.objectContaining({
+        type: 'toolcall',
+        tc: expect.objectContaining({ id: 'parent', _childToolCalls: [child] }),
+      }),
+    ]);
   });
 
   test('skips child tool calls with parentToolCallId from top-level', () => {

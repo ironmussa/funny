@@ -22,21 +22,12 @@ import { memo, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { isGitTimelineEventType, type GitTimelineEventType } from '@/lib/git-timeline-events';
+import { parseThreadEventData } from '@/lib/thread-event-data';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
-function parseEventData(data: string | Record<string, unknown>): Record<string, any> {
-  if (typeof data === 'string') {
-    try {
-      return JSON.parse(data);
-    } catch {
-      return {};
-    }
-  }
-  return data as Record<string, any>;
-}
-
-const eventConfig: Record<string, { icon: typeof GitCommit; label: string }> = {
+const eventConfig: Record<GitTimelineEventType, { icon: typeof GitCommit; label: string }> = {
   'git:commit': { icon: GitCommit, label: 'Committed' },
   'git:push': { icon: Upload, label: 'Pushed' },
   'git:merge': { icon: GitMerge, label: 'Merged' },
@@ -54,9 +45,9 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
   const { t } = useTranslation();
   const now = useMinuteTick();
   const [expanded, setExpanded] = useState(false);
-  const metadata = useMemo(() => parseEventData(event.data), [event.data]);
+  const metadata = useMemo(() => parseThreadEventData(event.data), [event.data]);
+  if (!isGitTimelineEventType(event.type)) return null;
   const config = eventConfig[event.type];
-  if (!config) return null;
 
   const Icon = config.icon;
   const output = typeof metadata.output === 'string' ? metadata.output.trim() : '';

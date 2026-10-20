@@ -99,7 +99,7 @@ export const TaskCard = memo(function TaskCard({
         <ChevronRight
           className={cn('icon-xs shrink-0 text-muted-foreground', expanded && 'rotate-90')}
         />
-        {!hideLabel && <Bot className="icon-xs text-muted-foreground shrink-0" />}
+        <Bot className="icon-xs text-muted-foreground shrink-0" />
         {!hideLabel && (
           <span className="text-foreground shrink-0 font-mono font-medium">
             {t('tools.subagent')}

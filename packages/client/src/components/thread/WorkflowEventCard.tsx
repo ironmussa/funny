@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
+import { parseThreadEventData } from '@/lib/thread-event-data';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -53,17 +54,6 @@ const ansiConverter = createAnsiConverter({
   fg: '#d4d4d4',
   bg: 'transparent',
 });
-
-function parseEventData(data: string | Record<string, unknown>): Record<string, any> {
-  if (typeof data === 'string') {
-    try {
-      return JSON.parse(data);
-    } catch {
-      return {};
-    }
-  }
-  return data as Record<string, any>;
-}
 
 /** Config for workflow-specific event types */
 const workflowEventConfig: Record<string, { icon: typeof Shield; label: string }> = {
@@ -176,7 +166,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
   const { t } = useTranslation();
   const now = useMinuteTick();
   const navigateToThread = useNavigateToThread();
-  const metadata = parseEventData(event.data);
+  const metadata = parseThreadEventData(event.data);
 
   // Try workflow config first, then git config
   const wfConfig = workflowEventConfig[event.type];

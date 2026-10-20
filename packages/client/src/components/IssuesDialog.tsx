@@ -1,18 +1,9 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
-import {
-  CircleDot,
-  CircleCheck,
-  MessageSquare,
-  Loader2,
-  ExternalLink,
-  GitBranch,
-  Plus,
-} from 'lucide-react';
-import { useState, useEffect, useCallback } from 'react';
+import { CircleDot, CircleCheck, MessageSquare, Loader2, ExternalLink, Plus } from 'lucide-react';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { PRBadge } from '@/components/PRBadge';
-import { Badge } from '@/components/ui/badge';
+import { IssueBadges } from '@/components/IssueBadges';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -25,6 +16,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { usePagedGitHubList, type FetchGitHubListPage } from '@/hooks/use-paged-github-list';
 import { api } from '@/lib/api';
 import { buildIssueThreadPrompt } from '@/lib/build-issue-thread-prompt';
 
@@ -56,52 +48,27 @@ function timeAgo(dateStr: string, now: number): string {
 export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: IssuesDialogProps) {
   const { t } = useTranslation();
   const now = useMinuteTick();
-  const [issues, setIssues] = useState<EnrichedGitHubIssue[]>([]);
   const [state, setState] = useState<'open' | 'closed'>('open');
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [hasMore, setHasMore] = useState(false);
-  const [repoInfo, setRepoInfo] = useState<{ owner: string; repo: string } | null>(null);
 
-  const fetchIssues = useCallback(
-    async (pageNum: number, append: boolean) => {
-      setLoading(true);
-      setError(null);
-      try {
-        const result = await api.githubIssuesEnriched(projectId, {
-          state,
-          page: pageNum,
-          per_page: 30,
-        });
-        result.match(
-          (data) => {
-            setIssues((prev) => (append ? [...prev, ...data.issues] : data.issues));
-            setHasMore(data.hasMore);
-            setRepoInfo({ owner: data.owner, repo: data.repo });
-          },
-          (err) => setError(err.message),
-        );
-      } finally {
-        setLoading(false);
-      }
-    },
+  const fetchPage = useMemo<FetchGitHubListPage<EnrichedGitHubIssue>>(
+    () => (page, signal) =>
+      api
+        .githubIssuesEnriched(projectId, { state, page, per_page: 30 }, signal)
+        .map((data) => ({ ...data, items: data.issues })),
     [projectId, state],
   );
-
-  useEffect(() => {
-    if (open) {
-      setPage(1);
-      setIssues([]);
-      fetchIssues(1, false);
-    }
-  }, [open, state, fetchIssues]);
-
-  const loadMore = () => {
-    const next = page + 1;
-    setPage(next);
-    fetchIssues(next, true);
-  };
+  const {
+    items: issues,
+    loading,
+    error,
+    hasMore,
+    repoInfo,
+    loadMore,
+  } = usePagedGitHubList({
+    visible: open,
+    fetchPage,
+    errorFallback: t('issues.error', 'Failed to load issues'),
+  });
 
   const handleCreateThread = useCallback(
     (issue: EnrichedGitHubIssue) => {
@@ -202,46 +169,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                     ) : null}
                     <div className="mt-0.5 flex flex-wrap items-center gap-2">
                       <span className="text-muted-foreground text-xs">#{issue.number}</span>
-                      {issue.labels.map((label) => (
-                        <Badge
-                          key={label.name}
-                          variant="outline"
-                          className="h-4 px-1 text-[10px]"
-                          style={{
-                            borderColor: `#${label.color}`,
-                            color: `#${label.color}`,
-                          }}
-                        >
-                          {label.name}
-                        </Badge>
-                      ))}
-
-                      {/* Linked branch badge */}
-                      {issue.linkedBranch && (
-                        <Badge
-                          variant="outline"
-                          className="h-4 gap-0.5 border-emerald-500/30 px-1 text-[10px] text-emerald-500"
-                        >
-                          <GitBranch className="size-2.5" />
-                          <span className="max-w-[100px] truncate">{issue.linkedBranch}</span>
-                        </Badge>
-                      )}
-
-                      {/* Linked PR badge */}
-                      {issue.linkedPR && (
-                        <PRBadge
-                          prNumber={issue.linkedPR.number}
-                          prState={
-                            issue.linkedPR.state === 'merged'
-                              ? 'MERGED'
-                              : issue.linkedPR.state === 'closed'
-                                ? 'CLOSED'
-                                : 'OPEN'
-                          }
-                          prUrl={issue.linkedPR.url}
-                          size="xxs"
-                        />
-                      )}
+                      <IssueBadges issue={issue} badgeClassName="h-4 text-[10px]" />
 
                       <span className="text-muted-foreground text-xs">
                         {timeAgo(issue.created_at, now)}

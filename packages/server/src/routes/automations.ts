@@ -121,18 +121,46 @@ automationRoutes.get('/', async (c) => {
   return c.json(result);
 });
 
+async function findOwnedAutomation(id: string, userId: string) {
+  const rows = await db
+    .select()
+    .from(automations)
+    .where(and(eq(automations.id, id), eq(automations.userId, userId)));
+  return rows[0];
+}
+
+/**
+ * Moving an automation to another project re-runs the same gate as POST: the
+ * run acts on that project with the owner's identity.
+ */
+async function canMoveToProject(
+  userId: string,
+  currentProjectId: string | null,
+  nextProjectId: string | undefined,
+): Promise<boolean> {
+  if (nextProjectId === undefined || nextProjectId === currentProjectId) return true;
+  return authorizer.authorize(userId, 'project', nextProjectId, 'view');
+}
+
+function buildAutomationUpdates(
+  fields: Record<string, unknown>,
+  enabled: boolean | undefined,
+): Record<string, unknown> {
+  const updates: Record<string, unknown> = Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined),
+  );
+  if (enabled !== undefined) updates.enabled = enabled ? 1 : 0;
+  return updates;
+}
+
 // GET /api/automations/:id
 automationRoutes.get('/:id', async (c) => {
   const userId = c.get('userId') as string | undefined;
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
-  const rows = await db
-    .select()
-    .from(automations)
-    .where(and(eq(automations.id, c.req.param('id')), eq(automations.userId, userId)));
-
-  if (!rows[0]) return c.json({ error: 'Not found' }, 404);
-  return c.json(rows[0]);
+  const automation = await findOwnedAutomation(c.req.param('id'), userId);
+  if (!automation) return c.json({ error: 'Not found' }, 404);
+  return c.json(automation);
 });
 
 // POST /api/automations
@@ -179,30 +207,18 @@ automationRoutes.patch('/:id', async (c) => {
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
   const id = c.req.param('id');
-  const rows = await db
-    .select()
-    .from(automations)
-    .where(and(eq(automations.id, id), eq(automations.userId, userId)));
-  if (!rows[0]) return c.json({ error: 'Not found' }, 404);
+  const existing = await findOwnedAutomation(id, userId);
+  if (!existing) return c.json({ error: 'Not found' }, 404);
 
   const parsed = await parseJsonBody(c, updateAutomationSchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const { enabled, ...fields } = parsed.value;
 
-  // Moving the automation to another project re-runs the same gate as POST:
-  // the run acts on that project with the owner's identity.
-  if (
-    fields.projectId !== undefined &&
-    fields.projectId !== rows[0].projectId &&
-    !(await authorizer.authorize(userId, 'project', fields.projectId, 'view'))
-  ) {
+  if (!(await canMoveToProject(userId, existing.projectId, fields.projectId))) {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  const updates: Record<string, unknown> = Object.fromEntries(
-    Object.entries(fields).filter(([, value]) => value !== undefined),
-  );
-  if (enabled !== undefined) updates.enabled = enabled ? 1 : 0;
+  const updates = buildAutomationUpdates(fields, enabled);
 
   if (Object.keys(updates).length > 0) {
     updates.updatedAt = new Date().toISOString();
@@ -220,11 +236,7 @@ automationRoutes.delete('/:id', async (c) => {
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
   const id = c.req.param('id');
-  const rows = await db
-    .select()
-    .from(automations)
-    .where(and(eq(automations.id, id), eq(automations.userId, userId)));
-  if (!rows[0]) return c.json({ error: 'Not found' }, 404);
+  if (!(await findOwnedAutomation(id, userId))) return c.json({ error: 'Not found' }, 404);
 
   unscheduleAutomation(id);
   await db.delete(automations).where(eq(automations.id, id));
@@ -236,13 +248,10 @@ automationRoutes.post('/:id/trigger', async (c) => {
   const userId = c.get('userId') as string | undefined;
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
-  const rows = await db
-    .select()
-    .from(automations)
-    .where(and(eq(automations.id, c.req.param('id')), eq(automations.userId, userId)));
-  if (!rows[0]) return c.json({ error: 'Not found' }, 404);
+  const automation = await findOwnedAutomation(c.req.param('id'), userId);
+  if (!automation) return c.json({ error: 'Not found' }, 404);
 
-  const result = await runAutomation(rows[0]);
+  const result = await runAutomation(automation);
   if (result.isErr()) return c.json({ error: result.error.message }, result.error.status as any);
   return c.json({ ok: true, ...result.value });
 });

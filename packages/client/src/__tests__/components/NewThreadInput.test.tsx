@@ -65,7 +65,7 @@ vi.mock('@/lib/api', async () => {
       createIdleThread: mockCreateIdleThread,
       runWorkflow: mockRunWorkflow,
       listThreads: vi.fn().mockReturnValue(okAsyncResult({ threads: [], total: 0 })),
-      remoteUrl: vi.fn().mockReturnValue(okAsyncResult({ url: '' })),
+      projectGetRemoteUrl: vi.fn().mockReturnValue(okAsyncResult({ remoteUrl: '' })),
     },
   };
 });

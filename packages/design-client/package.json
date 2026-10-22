@@ -6,14 +6,13 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview"
   },
   "dependencies": {
     "@funny/shared": "workspace:*"
   },
   "devDependencies": {
-    "typescript": "^7.0.2",
     "vite": "^8.0.16"
   }
 }

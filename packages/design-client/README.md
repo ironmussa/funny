@@ -8,6 +8,19 @@ Genera prototipos visuales interactivos a partir de prompts en lenguaje natural 
 
 🚧 En diseño — ver [docs/open-design.md](./docs/open-design.md) para la especificación completa.
 
+El paquete incluye una página estática de presentación; la aplicación de generación y edición todavía no está implementada.
+
+## Build
+
+Desde la raíz del repositorio:
+
+```bash
+bun install
+bun run --cwd packages/design-client build
+```
+
+Vite genera `packages/design-client/dist/index.html`. Puedes servir el resultado con `bun run --cwd packages/design-client preview`. Como la entrada es HTML y no hay código TypeScript, este build no necesita un `tsconfig.json` ni un paso de typecheck.
+
 ## Decisiones técnicas clave
 
 - **Output:** HTML + Tailwind (no React, no JSON intermedio)

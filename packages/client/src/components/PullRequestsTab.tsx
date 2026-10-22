@@ -457,7 +457,9 @@ function prPageFetcher(
     return request
       .map((data) => ({ ...data, items: data.prs }))
       .mapErr((error) => {
-        log.error('failed to load pull requests', { projectId, state, error: error.message });
+        if (!signal.aborted) {
+          log.error('failed to load pull requests', { projectId, state, error: error.message });
+        }
         return error;
       });
   };

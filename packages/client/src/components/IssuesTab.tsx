@@ -70,7 +70,9 @@ function IssuesContent({ visible }: IssuesTabProps) {
         .githubIssuesEnriched(projectId, { state, page, per_page: 30 }, signal)
         .map((data) => ({ ...data, items: data.issues }))
         .mapErr((error) => {
-          log.error('failed to load issues', { projectId, state, error: error.message });
+          if (!signal.aborted) {
+            log.error('failed to load issues', { projectId, state, error: error.message });
+          }
           return error;
         });
   }, [projectId, state]);

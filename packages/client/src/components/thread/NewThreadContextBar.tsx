@@ -1,6 +1,6 @@
 import { SiGithub } from '@icons-pack/react-simple-icons';
 import { FolderOpen, GitBranch, Globe, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
@@ -55,24 +55,7 @@ export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
   );
 
   // ── Remote URL ──
-  const projectPath = useMemo(() => project?.path ?? '', [project?.path]);
-  const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelled = false;
-    if (projectPath) {
-      (async () => {
-        const result = await api.remoteUrl(projectPath);
-        if (cancelled) return;
-        if (result.isOk()) setRemoteUrl(result.value.url);
-        else setRemoteUrl(null);
-      })();
-    } else {
-      setRemoteUrl(null);
-    }
-    return () => {
-      cancelled = true;
-    };
-  }, [projectPath]);
+  const remoteUrl = useProjectRemoteUrl(projectId);
 
   return (
     <>
@@ -159,4 +142,20 @@ export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
       {branchSwitchDialog}
     </>
   );
+}
+
+function useProjectRemoteUrl(projectId?: string) {
+  const [remote, setRemote] = useState<{ projectId: string; url: string | null } | null>(null);
+  const remoteUrl = remote && remote.projectId === projectId ? remote.url : null;
+  useEffect(() => {
+    if (!projectId) return;
+    const controller = new AbortController();
+    void (async () => {
+      const result = await api.projectGetRemoteUrl(projectId, controller.signal);
+      if (controller.signal.aborted) return;
+      setRemote({ projectId, url: result.isOk() ? result.value.remoteUrl : null });
+    })();
+    return () => controller.abort();
+  }, [projectId]);
+  return remoteUrl;
 }

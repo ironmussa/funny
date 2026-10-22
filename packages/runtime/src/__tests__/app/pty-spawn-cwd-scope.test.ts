@@ -11,18 +11,24 @@
  */
 import { describe, expect, test, vi, beforeEach } from 'vitest';
 
-const { mockSpawnPty, mockGetLocalProjects, mockListProjects, mockGetThread, mockMkdir } =
+const { mockSpawnPty, mockGetLocalProjects, mockListProjects, mockGetThread, mockMkdir, mockStat } =
   vi.hoisted(() => ({
     mockSpawnPty: vi.fn(),
     mockGetLocalProjects: vi.fn(),
     mockListProjects: vi.fn(),
     mockGetThread: vi.fn(),
     mockMkdir: vi.fn(),
+    mockStat: vi.fn(),
   }));
 
 vi.mock('node:fs', async (importOriginal) => ({
   ...(await importOriginal<typeof import('node:fs')>()),
   mkdirSync: mockMkdir,
+  statSync: mockStat,
+}));
+
+vi.mock('../../lib/logger.js', () => ({
+  log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
 vi.mock('../../services/pty-manager.js', () => ({
@@ -74,6 +80,7 @@ describe('pty:spawn cwd scoping', () => {
     mockListProjects.mockReset();
     mockGetThread.mockReset();
     mockMkdir.mockReset();
+    mockStat.mockReset().mockReturnValue({ isDirectory: () => true });
   });
 
   test('resolves an owned scratch directory locally instead of trusting the client cwd', async () => {
@@ -135,6 +142,28 @@ describe('pty:spawn cwd scoping', () => {
     expect(mockSpawnPty).not.toHaveBeenCalled();
     expect(mockMkdir).not.toHaveBeenCalled();
   });
+
+  test.each(['cache', 'server'])(
+    'reports a removed folder after authorization through %s',
+    async (source) => {
+      mockGetLocalProjects.mockReturnValue(source === 'cache' ? [{ path: PROJECT_PATH }] : []);
+      mockListProjects.mockResolvedValue([{ path: PROJECT_PATH }]);
+      mockStat.mockImplementation(() => {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      });
+      const send = spawn();
+      await vi.waitFor(() =>
+        expect(send).toHaveBeenCalledWith({
+          type: 'pty:error',
+          data: {
+            ptyId: 'pty-1',
+            error: expect.stringContaining('may have been moved or deleted'),
+          },
+        }),
+      );
+      expect(mockSpawnPty).not.toHaveBeenCalled();
+    },
+  );
 
   test('cache MISS falls through to the server list and allows a known project', async () => {
     // Stale cache (warmed before the project existed) does not contain it...

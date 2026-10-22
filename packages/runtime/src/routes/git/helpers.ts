@@ -24,6 +24,7 @@ import {
 } from '../../services/git-runtime-service.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import { requireProject } from '../../utils/route-helpers.js';
+import { requireWorkingDirectory } from '../../utils/working-directory.js';
 
 // computeBranchKey is imported from utils/git-status-helpers.ts
 
@@ -179,7 +180,7 @@ export async function requireProjectCwd(
 ): Promise<import('neverthrow').Result<string, import('@funny/shared/errors').DomainError>> {
   const projectResult = await requireProject(projectId, userId, organizationId ?? undefined);
   if (projectResult.isErr()) return projectResult.map(() => '');
-  return ok(projectResult.value.path);
+  return requireWorkingDirectory(projectResult.value.path);
 }
 
 /**
@@ -188,6 +189,8 @@ export async function requireProjectCwd(
  * history commands, but changes and graph context become misleading/incomplete.
  */
 export async function requireGitWorkingTree(cwd: string): Promise<Result<void, DomainError>> {
+  const directory = requireWorkingDirectory(cwd);
+  if (directory.isErr()) return err(directory.error);
   const result = await gitRead(['rev-parse', '--is-inside-work-tree'], {
     cwd,
     reject: false,

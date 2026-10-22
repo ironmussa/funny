@@ -8,6 +8,7 @@ import * as ptyManager from '../services/pty-manager.js';
 import { getServices } from '../services/service-registry.js';
 import { scratchPathFor } from '../services/thread-context.js';
 import * as tm from '../services/thread-manager.js';
+import { requireWorkingDirectory } from '../utils/working-directory.js';
 
 /**
  * Routes incoming PTY-related WS messages (spawn / write / resize / kill /
@@ -165,6 +166,11 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
   };
 
   const doSpawn = () => {
+    const directory = requireWorkingDirectory(resolvedCwd);
+    if (directory.isErr()) {
+      sendError(directory.error.message);
+      return;
+    }
     ptyManager.spawnPty(
       data.id,
       data.cwd,

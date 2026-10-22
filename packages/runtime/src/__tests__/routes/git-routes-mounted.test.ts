@@ -1,3 +1,5 @@
+import { statSync } from 'node:fs';
+
 import { badRequest } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { errAsync, okAsync } from 'neverthrow';
@@ -53,7 +55,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('fs', async (importOriginal) => {
   const actual = await importOriginal<typeof import('fs')>();
-  return { ...actual, existsSync: vi.fn(() => true) };
+  return {
+    ...actual,
+    existsSync: vi.fn(() => true),
+    statSync: vi.fn(() => ({ isDirectory: () => true })),
+  };
 });
 
 vi.mock('../../services/thread-manager.js', () => ({
@@ -169,6 +175,7 @@ function makeApp() {
 
 describe('gitRoutes (mounted)', () => {
   beforeEach(() => {
+    vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as ReturnType<typeof statSync>);
     vi.clearAllMocks();
     mocks.stageFiles.mockReturnValue(okAsync(undefined));
     mocks.gitServiceStage.mockReturnValue(okAsync(undefined));
@@ -289,6 +296,25 @@ describe('gitRoutes (mounted)', () => {
       path: '/tmp/repo',
     });
   });
+
+  test.each(['remote-url', 'reflog-events', 'log'])(
+    'GET project/%s explains a missing folder without running Git',
+    async (endpoint) => {
+      vi.mocked(statSync).mockImplementation(() => {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+      });
+      const res = await makeApp().request(`/api/git/project/p1/${endpoint}`);
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toContain('/tmp/repo');
+      expect(body.error).toContain('moved or deleted');
+      expect(body.error).toContain('Restore it');
+      expect(mocks.gitRead).not.toHaveBeenCalled();
+      expect(mocks.getRemoteUrl).not.toHaveBeenCalled();
+      expect(mocks.getRebaseReflogEvents).not.toHaveBeenCalled();
+      expect(mocks.getLog).not.toHaveBeenCalled();
+    },
+  );
 
   test('scratch guard returns 400 for scratch threads (threadId query)', async () => {
     mocks.getThread.mockResolvedValue({

@@ -117,7 +117,7 @@
     "typecheck:refresh": "bun scripts/fitness/check-typecheck.ts --refresh",
     "doctor": "npx react-doctor@latest",
     "lint:proofs": "bun scripts/fitness/check-proof-lint.ts",
-    "typecheck:proofs": "tsc --noEmit -p packages/server/tsconfig.proofs.json --ignoreDeprecations 6.0"
+    "typecheck:proofs": "tsrs --noEmit -p packages/server/tsconfig.proofs.json"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.2.1",
@@ -148,7 +148,7 @@
     "oxfmt": "^0.66.0",
     "oxlint": "1.86.0",
     "secretlint": "^13.0.2",
-    "typescript": "^7.0.2",
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929",
     "vitepress": "^2.0.0-alpha.17"
   },
   "optionalDependencies": {

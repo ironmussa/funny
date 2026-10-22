@@ -23,7 +23,7 @@ test('accepts a clean project without emitting files', () => {
   expect(existsSync(join(cwd, 'index.js'))).toBe(false);
 });
 
-test('normalizes diagnostics independently of line numbers and agent output mode', () => {
+test('accepts tsrs diagnostic exit status and normalizes diagnostics independently of line numbers and agent output mode', () => {
   const previous = process.env.AGENT;
   process.env.AGENT = '1';
   try {
@@ -45,20 +45,20 @@ test('normalizes diagnostics independently of line numbers and agent output mode
 });
 
 test('rejects missing projects instead of reporting a clean check', () => {
-  expect(() => runTypecheck('missing.json', cwd)).toThrow('bun check');
+  expect(() => runTypecheck('missing.json', cwd)).toThrow('tsrs');
 });
 
 test('rejects invalid compiler options', () => {
   writeFileSync(join(cwd, 'tsconfig.json'), '{"compilerOptions":{"target":"invalid"}}');
-  expect(() => runTypecheck('tsconfig.json', cwd)).toThrow('bun check');
+  expect(() => runTypecheck('tsconfig.json', cwd)).toThrow('tsrs');
 });
 
 test('rejects empty projects', () => {
   writeFileSync(join(cwd, 'tsconfig.json'), '{"files":[]}');
-  expect(() => runTypecheck('tsconfig.json', cwd)).toThrow('bun check');
+  expect(() => runTypecheck('tsconfig.json', cwd)).toThrow('tsrs');
 });
 
 test('rejects syntax failures that stop type checking early', () => {
   writeFileSync(join(cwd, 'index.ts'), 'const value: = ;');
-  expect(() => runTypecheck('tsconfig.json', cwd)).toThrow('bun check');
+  expect(() => runTypecheck('tsconfig.json', cwd)).toThrow('tsrs');
 });

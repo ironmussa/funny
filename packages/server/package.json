@@ -2,7 +2,7 @@
   "name": "@funny/server",
   "version": "0.1.0",
   "private": false,
-  "description": "Funny server for team coordination \u2014 manages users, projects, memberships, and runner dispatch.",
+  "description": "Funny server for team coordination — manages users, projects, memberships, and runner dispatch.",
   "license": "MIT",
   "bin": {
     "funny-server": "./bin/funny-server.js"
@@ -56,8 +56,7 @@
     "@types/nodemailer": "^8.0.1",
     "@types/pg": "^8.18.0",
     "@types/web-push": "^3.6.4",
-    "socket.io-client": "4.8.4",
-    "typescript": "^7.0.2"
+    "socket.io-client": "4.8.4"
   },
   "engines": {
     "bun": ">=1.4.0"

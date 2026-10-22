@@ -17,13 +17,13 @@
   },
   "scripts": {
     "test": "bun test",
-    "typecheck": "bun check -p tsconfig.json"
+    "typecheck": "tsrs --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "zod": "^4.5.4"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",
-    "typescript": "^7.0.2"
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929"
   }
 }

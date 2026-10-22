@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
 // Fitness function: typecheck baseline diff.
 //
-// Runs Bun’s built-in TypeScript checker against each package and compares
+// Runs tsrs against each package and compares
 // the error set against a frozen baseline at .fitness/typecheck-baseline.txt.
 // Fails when there are NEW errors (i.e. errors present now that weren't in the
 // baseline).
@@ -22,9 +22,10 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 const ROOT = join(import.meta.dir, '..', '..');
+const TSRS_CLI = join(ROOT, 'node_modules', 'tsrs', 'bin', 'tsrs');
 const BASELINE_PATH = join(ROOT, '.fitness', 'typecheck-baseline.txt');
 
-// Each entry runs `bun check -p <project>`. Add new
+// Each entry runs `tsrs --noEmit -p <project>`. Add new
 // packages here as their own tsconfig.json gains errors worth gating on.
 const PROJECTS = [
   'packages/client-core/tsconfig.json',
@@ -56,36 +57,63 @@ interface NormalizedError {
 }
 
 /**
- * Run bun check for a single project and parse its error lines into normalized
+ * Run tsrs for a single project and parse its error lines into normalized
  * (file, code, message) tuples. Line numbers are intentionally dropped —
  * adding a blank line above an existing error shouldn't count as a "new"
  * error.
  */
 export function runTypecheck(project: string, cwd = ROOT): NormalizedError[] {
-  // Agent output uses tagged blocks; the baseline requires plain tsc diagnostics.
+  // Keep diagnostics stable when invoked from an agent session.
   const env = { ...process.env };
   delete env.AGENT;
   delete env.CLAUDECODE;
   delete env.REPL_ID;
-  const result = spawnSync(process.execPath, ['check', '-p', project, '--pretty', 'false'], {
-    cwd,
-    env,
-    encoding: 'utf-8',
-    maxBuffer: 16 * 1024 * 1024,
-  });
+  const result = spawnSync(
+    process.execPath,
+    [TSRS_CLI, '--noEmit', '-p', project, '--pretty', 'false'],
+    {
+      cwd,
+      env,
+      encoding: 'utf-8',
+      maxBuffer: 16 * 1024 * 1024,
+    },
+  );
 
   const output = (result.stdout || '') + (result.stderr || '');
-  if (result.error || (result.status !== 0 && result.status !== 1)) {
+  // tsrs uses exit 2 for diagnostics when --noEmit skips output.
+  if (result.error || (result.status !== 0 && result.status !== 1 && result.status !== 2)) {
     throw new Error(
-      `bun check failed for ${project}: ${result.error?.message ?? result.signal ?? result.status}\n${output}`,
+      `tsrs failed for ${project}: ${result.error?.message ?? result.signal ?? result.status}\n${output}`,
     );
   }
   // Configuration/global-type failures can stop checking before all files are visited.
   if (/^error TS\d+:|Stopped before/im.test(output)) {
-    throw new Error(`bun check could not complete ${project}:\n${output}`);
+    throw new Error(`tsrs could not complete ${project}:\n${output}`);
   }
+  const errors = parseDiagnostics(result.stdout || '', project, output);
+
+  if (result.status !== 0 && errors.length === 0) {
+    throw new Error(`tsrs failed without parseable diagnostics for ${project}:\n${output}`);
+  }
+  return errors;
+}
+
+function normalizeDiagnostic(
+  match: RegExpMatchArray,
+  project: string,
+  output: string,
+): NormalizedError {
+  const [, file, , , code, message] = match;
+  // Syntax errors can prevent semantic checking; never freeze an incomplete run.
+  if (file.endsWith('.json') || /^TS1\d{3}$/.test(code)) {
+    throw new Error(`tsrs could not complete ${project}:\n${output}`);
+  }
+  return { file, code, message };
+}
+
+function parseDiagnostics(stdout: string, project: string, output: string): NormalizedError[] {
   // Summaries and GitHub annotations must not become multiline error messages.
-  const lines = (result.stdout || '').split('\n');
+  const lines = stdout.split('\n');
 
   const errors: NormalizedError[] = [];
   let current: NormalizedError | null = null;
@@ -95,11 +123,7 @@ export function runTypecheck(project: string, cwd = ROOT): NormalizedError[] {
     const match = line.match(/^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/);
     if (match) {
       if (current) errors.push(current);
-      const [, file, , , code, message] = match;
-      if (file.endsWith('.json')) {
-        throw new Error(`bun check could not complete ${project}:\n${output}`);
-      }
-      current = { file, code, message };
+      current = normalizeDiagnostic(match, project, output);
       continue;
     }
 
@@ -117,9 +141,6 @@ export function runTypecheck(project: string, cwd = ROOT): NormalizedError[] {
   }
   if (current) errors.push(current);
 
-  if (result.status !== 0 && errors.length === 0) {
-    throw new Error(`bun check failed without parseable diagnostics for ${project}:\n${output}`);
-  }
   return errors;
 }
 
@@ -149,7 +170,7 @@ function writeBaseline(errors: NormalizedError[]): void {
 }
 
 function main(): void {
-  console.log('Running bun check against', PROJECTS.length, 'projects…');
+  console.log('Running tsrs against', PROJECTS.length, 'projects…');
   const allErrors: NormalizedError[] = [];
   for (const project of PROJECTS) {
     if (!existsSync(join(ROOT, project))) {

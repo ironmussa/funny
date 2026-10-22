@@ -1,0 +1,1318 @@
+{
+  "runs": [
+    {
+      "case": "full",
+      "workers": null,
+      "tool": "bun",
+      "round": 0,
+      "seconds": 1.6296028740034672,
+      "mib": 636.84765625,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": null,
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 2.4916943480056943,
+      "mib": 730.42578125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 1,
+      "tool": "bun",
+      "round": 0,
+      "seconds": 3.245375911006704,
+      "mib": 528.3828125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 1,
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 2.7496201649919385,
+      "mib": 423.76953125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 4,
+      "tool": "bun",
+      "round": 0,
+      "seconds": 1.5850914360053139,
+      "mib": 471.08203125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 2.4061438770004315,
+      "mib": 543.73046875,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 8,
+      "tool": "bun",
+      "round": 0,
+      "seconds": 1.451519529990037,
+      "mib": 522.3671875,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 8,
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 2.40814952000801,
+      "mib": 613.8515625,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 20,
+      "tool": "bun",
+      "round": 0,
+      "seconds": 1.6796610109886387,
+      "mib": 651.3359375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 20,
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 2.2175957879953785,
+      "mib": 777.66796875,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "production",
+      "workers": 4,
+      "tool": "bun",
+      "round": 0,
+      "seconds": 1.3077675829990767,
+      "mib": 404.1328125,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "production",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 1.9329989600082627,
+      "mib": 462.578125,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "ui",
+      "workers": 4,
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.5863641619944246,
+      "mib": 275.0625,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "ui",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 1.1252035189972958,
+      "mib": 182.80859375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "stores",
+      "workers": 4,
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.5067590539983939,
+      "mib": 262.1640625,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "stores",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 0.4386382419907022,
+      "mib": 181.49609375,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "lib",
+      "workers": 4,
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.5615291780122789,
+      "mib": 262.63671875,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "lib",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 0.5830917709972709,
+      "mib": 212.9296875,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "prompt",
+      "workers": 4,
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.5583043270016788,
+      "mib": 254.7265625,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "prompt",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 0.5665049319941318,
+      "mib": 189.45703125,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "full",
+      "workers": null,
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 2.4422798329906072,
+      "mib": 722.875,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": null,
+      "tool": "bun",
+      "round": 1,
+      "seconds": 1.8438878759916406,
+      "mib": 651.421875,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 1,
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 3.009443047994864,
+      "mib": 429.3828125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 1,
+      "tool": "bun",
+      "round": 1,
+      "seconds": 3.6167437480035005,
+      "mib": 527.20703125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 2.2804984300018987,
+      "mib": 539.17578125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 4,
+      "tool": "bun",
+      "round": 1,
+      "seconds": 1.6999893179890933,
+      "mib": 466.859375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 8,
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 2.3358682980033336,
+      "mib": 586.86328125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 8,
+      "tool": "bun",
+      "round": 1,
+      "seconds": 1.5123700309923152,
+      "mib": 532.2890625,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 20,
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 2.3180337009980576,
+      "mib": 758.7109375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 20,
+      "tool": "bun",
+      "round": 1,
+      "seconds": 1.8603210319997743,
+      "mib": 653.0234375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "production",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 2.152064390000305,
+      "mib": 452.7890625,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "production",
+      "workers": 4,
+      "tool": "bun",
+      "round": 1,
+      "seconds": 1.392493536011898,
+      "mib": 404.9296875,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "ui",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 1.3413268770091236,
+      "mib": 186.96484375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "ui",
+      "workers": 4,
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.6272770340001443,
+      "mib": 281.66015625,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "stores",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 0.4024431430007098,
+      "mib": 179.15625,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "stores",
+      "workers": 4,
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.5096000110061141,
+      "mib": 264.8828125,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "lib",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 0.6035252059955383,
+      "mib": 213.55859375,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "lib",
+      "workers": 4,
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.5436896299943328,
+      "mib": 270.97265625,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "prompt",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 0.5169632600009209,
+      "mib": 190.2421875,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "prompt",
+      "workers": 4,
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.5105136399943149,
+      "mib": 261.87890625,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "full",
+      "workers": null,
+      "tool": "bun",
+      "round": 2,
+      "seconds": 1.625644742991426,
+      "mib": 652.9765625,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": null,
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 2.183274404000258,
+      "mib": 735.32421875,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 1,
+      "tool": "bun",
+      "round": 2,
+      "seconds": 3.1155993059946923,
+      "mib": 528.05078125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 1,
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 2.709602207993157,
+      "mib": 429.703125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 4,
+      "tool": "bun",
+      "round": 2,
+      "seconds": 1.6782423350086901,
+      "mib": 462.08203125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 2.3472009870019974,
+      "mib": 544.703125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 8,
+      "tool": "bun",
+      "round": 2,
+      "seconds": 1.4495437430014135,
+      "mib": 533.73046875,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 8,
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 2.267015054996591,
+      "mib": 616.953125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 20,
+      "tool": "bun",
+      "round": 2,
+      "seconds": 1.6978429310111096,
+      "mib": 652.03125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 20,
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 2.2383109360089293,
+      "mib": 762.77734375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "production",
+      "workers": 4,
+      "tool": "bun",
+      "round": 2,
+      "seconds": 1.3542877420113655,
+      "mib": 408.61328125,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "production",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 2.194095105995075,
+      "mib": 454.20703125,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "ui",
+      "workers": 4,
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.604723586991895,
+      "mib": 282.0546875,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "ui",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 1.150699916004669,
+      "mib": 188.25,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "stores",
+      "workers": 4,
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.5389803510042839,
+      "mib": 265.7734375,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "stores",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 0.4224375549965771,
+      "mib": 180.765625,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "lib",
+      "workers": 4,
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.6440597510081716,
+      "mib": 264.765625,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "lib",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 0.5787752009928226,
+      "mib": 211.44140625,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "prompt",
+      "workers": 4,
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.6157666720100679,
+      "mib": 246.953125,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "prompt",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 0.5448582569952123,
+      "mib": 188.14453125,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "full",
+      "workers": null,
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 2.2274936489993706,
+      "mib": 723.41015625,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": null,
+      "tool": "bun",
+      "round": 3,
+      "seconds": 1.564512423996348,
+      "mib": 657.28515625,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 1,
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 2.881874072991195,
+      "mib": 424.90234375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 1,
+      "tool": "bun",
+      "round": 3,
+      "seconds": 3.1223863729974255,
+      "mib": 528.03515625,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 2.132611530003487,
+      "mib": 534.0234375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 4,
+      "tool": "bun",
+      "round": 3,
+      "seconds": 1.6544247069978155,
+      "mib": 462.375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 8,
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 2.251711578996037,
+      "mib": 607.92578125,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 8,
+      "tool": "bun",
+      "round": 3,
+      "seconds": 1.4090358539979206,
+      "mib": 540.609375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 20,
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 2.294002356007695,
+      "mib": 751.90234375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "full",
+      "workers": 20,
+      "tool": "bun",
+      "round": 3,
+      "seconds": 1.6849438950011972,
+      "mib": 653.4609375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "production",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 2.0811790199950337,
+      "mib": 461.03515625,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "production",
+      "workers": 4,
+      "tool": "bun",
+      "round": 3,
+      "seconds": 1.3491720320016611,
+      "mib": 413.03515625,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "ui",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 1.1363173550053034,
+      "mib": 187.9375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "ui",
+      "workers": 4,
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.6029486280021956,
+      "mib": 278.55859375,
+      "exit": 0,
+      "errors": []
+    },
+    {
+      "case": "stores",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 0.4127356709941523,
+      "mib": 175.4453125,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "stores",
+      "workers": 4,
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.5300484619947383,
+      "mib": 257.9921875,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "lib",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 0.6267973909998545,
+      "mib": 208.97265625,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "lib",
+      "workers": 4,
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.5897834489878733,
+      "mib": 268.72265625,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "prompt",
+      "workers": 4,
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 0.49314996199973393,
+      "mib": 186.02734375,
+      "exit": 2,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    },
+    {
+      "case": "prompt",
+      "workers": 4,
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.5112899569940055,
+      "mib": 268.6640625,
+      "exit": 1,
+      "errors": [
+        "packages/shared/src/provider-manifest.ts(193,45): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `bun add -d @types/node` and then add 'node' to the types field in your tsconfig."
+      ]
+    }
+  ],
+  "dependency_probes": [
+    {
+      "package": "react",
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.11650299899338279,
+      "mib": 57.0,
+      "exit": 0
+    },
+    {
+      "package": "react",
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 0.048581827999441884,
+      "mib": 48.57421875,
+      "exit": 0
+    },
+    {
+      "package": "lucide-react",
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.1481877870101016,
+      "mib": 67.5078125,
+      "exit": 0
+    },
+    {
+      "package": "lucide-react",
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 0.05562482800451107,
+      "mib": 48.4296875,
+      "exit": 0
+    },
+    {
+      "package": "@radix-ui/react-select",
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.10327744000824168,
+      "mib": 59.92578125,
+      "exit": 0
+    },
+    {
+      "package": "@radix-ui/react-select",
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 0.07518859799893107,
+      "mib": 48.22265625,
+      "exit": 0
+    },
+    {
+      "package": "monaco-editor",
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.08767519200046081,
+      "mib": 56.4921875,
+      "exit": 0
+    },
+    {
+      "package": "monaco-editor",
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 0.04680060599639546,
+      "mib": 48.16796875,
+      "exit": 0
+    },
+    {
+      "package": "@storybook/react-vite",
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.2124105949915247,
+      "mib": 120.17578125,
+      "exit": 0
+    },
+    {
+      "package": "@storybook/react-vite",
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 0.171353365003597,
+      "mib": 70.88671875,
+      "exit": 0
+    },
+    {
+      "package": "@tiptap/react",
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.1222281039954396,
+      "mib": 61.2265625,
+      "exit": 0
+    },
+    {
+      "package": "@tiptap/react",
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 0.06992387199716177,
+      "mib": 48.12890625,
+      "exit": 0
+    },
+    {
+      "package": "recharts",
+      "tool": "bun",
+      "round": 0,
+      "seconds": 0.19704583298880607,
+      "mib": 68.9296875,
+      "exit": 0
+    },
+    {
+      "package": "recharts",
+      "tool": "tsrs",
+      "round": 0,
+      "seconds": 0.11060433198872488,
+      "mib": 48.01171875,
+      "exit": 0
+    },
+    {
+      "package": "react",
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 0.050290841987589374,
+      "mib": 48.57421875,
+      "exit": 0
+    },
+    {
+      "package": "react",
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.1039964899973711,
+      "mib": 60.25,
+      "exit": 0
+    },
+    {
+      "package": "lucide-react",
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 0.05838649900397286,
+      "mib": 48.1328125,
+      "exit": 0
+    },
+    {
+      "package": "lucide-react",
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.15554394200444221,
+      "mib": 68.8125,
+      "exit": 0
+    },
+    {
+      "package": "@radix-ui/react-select",
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 0.08626969000033569,
+      "mib": 48.0078125,
+      "exit": 0
+    },
+    {
+      "package": "@radix-ui/react-select",
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.12244615799863823,
+      "mib": 58.609375,
+      "exit": 0
+    },
+    {
+      "package": "monaco-editor",
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 0.04706971000996418,
+      "mib": 48.265625,
+      "exit": 0
+    },
+    {
+      "package": "monaco-editor",
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.10631581499183085,
+      "mib": 57.0859375,
+      "exit": 0
+    },
+    {
+      "package": "@storybook/react-vite",
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 0.17652570200152695,
+      "mib": 72.24609375,
+      "exit": 0
+    },
+    {
+      "package": "@storybook/react-vite",
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.20758873999875505,
+      "mib": 116.9375,
+      "exit": 0
+    },
+    {
+      "package": "@tiptap/react",
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 0.06449841700668912,
+      "mib": 48.515625,
+      "exit": 0
+    },
+    {
+      "package": "@tiptap/react",
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.10455718499724753,
+      "mib": 64.23046875,
+      "exit": 0
+    },
+    {
+      "package": "recharts",
+      "tool": "tsrs",
+      "round": 1,
+      "seconds": 0.11871437101217452,
+      "mib": 48.5859375,
+      "exit": 0
+    },
+    {
+      "package": "recharts",
+      "tool": "bun",
+      "round": 1,
+      "seconds": 0.17610683498787694,
+      "mib": 69.484375,
+      "exit": 0
+    },
+    {
+      "package": "react",
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.09127246598654892,
+      "mib": 58.2734375,
+      "exit": 0
+    },
+    {
+      "package": "react",
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 0.05130897701019421,
+      "mib": 48.203125,
+      "exit": 0
+    },
+    {
+      "package": "lucide-react",
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.12718681599653792,
+      "mib": 69.32421875,
+      "exit": 0
+    },
+    {
+      "package": "lucide-react",
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 0.06970330899639521,
+      "mib": 48.42578125,
+      "exit": 0
+    },
+    {
+      "package": "@radix-ui/react-select",
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.14692825700331014,
+      "mib": 58.2265625,
+      "exit": 0
+    },
+    {
+      "package": "@radix-ui/react-select",
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 0.0869021190010244,
+      "mib": 48.1875,
+      "exit": 0
+    },
+    {
+      "package": "monaco-editor",
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.09555956699477974,
+      "mib": 56.65625,
+      "exit": 0
+    },
+    {
+      "package": "monaco-editor",
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 0.04438749499968253,
+      "mib": 48.078125,
+      "exit": 0
+    },
+    {
+      "package": "@storybook/react-vite",
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.2464303629967617,
+      "mib": 118.515625,
+      "exit": 0
+    },
+    {
+      "package": "@storybook/react-vite",
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 0.1936306709976634,
+      "mib": 75.5546875,
+      "exit": 0
+    },
+    {
+      "package": "@tiptap/react",
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.10051060700789094,
+      "mib": 62.70703125,
+      "exit": 0
+    },
+    {
+      "package": "@tiptap/react",
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 0.0730804979975801,
+      "mib": 48.19921875,
+      "exit": 0
+    },
+    {
+      "package": "recharts",
+      "tool": "bun",
+      "round": 2,
+      "seconds": 0.20158526800514665,
+      "mib": 72.01953125,
+      "exit": 0
+    },
+    {
+      "package": "recharts",
+      "tool": "tsrs",
+      "round": 2,
+      "seconds": 0.11892342899227515,
+      "mib": 48.1640625,
+      "exit": 0
+    },
+    {
+      "package": "react",
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 0.0489865639974596,
+      "mib": 48.03515625,
+      "exit": 0
+    },
+    {
+      "package": "react",
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.08886291299131699,
+      "mib": 60.8828125,
+      "exit": 0
+    },
+    {
+      "package": "lucide-react",
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 0.0701022919965908,
+      "mib": 47.953125,
+      "exit": 0
+    },
+    {
+      "package": "lucide-react",
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.18511060700984672,
+      "mib": 67.26171875,
+      "exit": 0
+    },
+    {
+      "package": "@radix-ui/react-select",
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 0.08138689899351448,
+      "mib": 48.19921875,
+      "exit": 0
+    },
+    {
+      "package": "@radix-ui/react-select",
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.15265980499680154,
+      "mib": 59.265625,
+      "exit": 0
+    },
+    {
+      "package": "monaco-editor",
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 0.059146105995750986,
+      "mib": 48.44921875,
+      "exit": 0
+    },
+    {
+      "package": "monaco-editor",
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.14226950299052987,
+      "mib": 52.73046875,
+      "exit": 0
+    },
+    {
+      "package": "@storybook/react-vite",
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 0.17950393000501208,
+      "mib": 77.0,
+      "exit": 0
+    },
+    {
+      "package": "@storybook/react-vite",
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.20623660599812865,
+      "mib": 120.40234375,
+      "exit": 0
+    },
+    {
+      "package": "@tiptap/react",
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 0.07059697298973333,
+      "mib": 48.18359375,
+      "exit": 0
+    },
+    {
+      "package": "@tiptap/react",
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.10509881400503218,
+      "mib": 62.625,
+      "exit": 0
+    },
+    {
+      "package": "recharts",
+      "tool": "tsrs",
+      "round": 3,
+      "seconds": 0.11966227200173307,
+      "mib": 48.58984375,
+      "exit": 0
+    },
+    {
+      "package": "recharts",
+      "tool": "bun",
+      "round": 3,
+      "seconds": 0.18374044400115963,
+      "mib": 68.875,
+      "exit": 0
+    }
+  ]
+}

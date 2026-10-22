@@ -24,13 +24,13 @@
   },
   "scripts": {
     "test": "bun test",
-    "typecheck": "bun check -p tsconfig.json"
+    "typecheck": "tsrs --noEmit -p tsconfig.json"
   },
   "dependencies": {
     "@funny/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",
-    "typescript": "^7.0.2"
+    "tsrs": "0.18.0-ts7.1.0-dev.20260929"
   }
 }

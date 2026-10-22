@@ -89,7 +89,6 @@
     "@vitest/coverage-v8": "^4.1.9",
     "drizzle-kit": "^0.31.9",
     "eslint": "^10.6.0",
-    "typescript": "^7.0.2",
     "typescript-eslint": "^8.63.0",
     "typescript-eslint-typescript": "npm:typescript@5.9.3",
     "vitest": "^4.1.9"

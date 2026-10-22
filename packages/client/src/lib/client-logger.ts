@@ -4,6 +4,7 @@ import {
   isConsoleIntercepted,
   type Logger,
 } from '@abbacchio/browser-transport';
+import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
 
 import { otlpEnabled, otlpEndpoint } from './otlp-config';
 
@@ -60,6 +61,7 @@ let shared: Logger | null = null;
 function getLogger(): Logger {
   if (!shared) {
     shared = createLogger({
+      ...getTelemetryIdentity('funny-client'),
       endpoint: otlpEndpoint ?? '',
       serviceName: 'funny-client',
       enabled: otlpEnabled,

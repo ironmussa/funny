@@ -7,8 +7,9 @@
 import { mkdirSync } from 'fs';
 import { resolve } from 'path';
 
-import 'winston-daily-rotate-file';
 import { AbbacchioWinstonTransport } from '@abbacchio/transport';
+import 'winston-daily-rotate-file';
+import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
 import winston from 'winston';
 
 import { DATA_DIR } from './data-dir.js';
@@ -22,6 +23,13 @@ mkdirSync(logDir, { recursive: true });
 
 const cfg = getTelemetryConfig();
 
+const telemetryTransport = new AbbacchioWinstonTransport({
+  endpoint: cfg.endpoint,
+  serviceName: cfg.serverServiceName,
+  enabled: cfg.enabled,
+  ...getTelemetryIdentity('funny-runtime'),
+});
+
 export const log = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
@@ -30,11 +38,7 @@ export const log = winston.createLogger({
   ),
   defaultMeta: { service: cfg.serverServiceName },
   transports: [
-    new AbbacchioWinstonTransport({
-      endpoint: cfg.endpoint,
-      serviceName: cfg.serverServiceName,
-      enabled: cfg.enabled,
-    }),
+    telemetryTransport,
     // Persist logs to ~/.funny/logs/server-YYYY-MM-DD.log (rotated daily, 7 days max)
     new winston.transports.DailyRotateFile({
       dirname: logDir,

@@ -8,8 +8,9 @@
 import { mkdirSync } from 'fs';
 import { resolve } from 'path';
 
-import 'winston-daily-rotate-file';
 import { AbbacchioWinstonTransport } from '@abbacchio/transport';
+import 'winston-daily-rotate-file';
+import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
 import winston from 'winston';
 
 import { DATA_DIR } from './data-dir.js';
@@ -24,6 +25,13 @@ mkdirSync(logDir, { recursive: true });
 const endpoint = process.env.OTLP_ENDPOINT || 'http://localhost:4000';
 const otlpEnabled = !!process.env.OTLP_ENDPOINT;
 
+const telemetryTransport = new AbbacchioWinstonTransport({
+  endpoint,
+  serviceName: SERVICE_NAME,
+  enabled: otlpEnabled,
+  ...getTelemetryIdentity('funny-server'),
+});
+
 export const log = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
   format: winston.format.combine(
@@ -32,11 +40,7 @@ export const log = winston.createLogger({
   ),
   defaultMeta: { service: SERVICE_NAME },
   transports: [
-    new AbbacchioWinstonTransport({
-      endpoint,
-      serviceName: SERVICE_NAME,
-      enabled: otlpEnabled,
-    }),
+    telemetryTransport,
     new winston.transports.DailyRotateFile({
       dirname: logDir,
       filename: 'server-%DATE%.log',

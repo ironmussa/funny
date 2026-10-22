@@ -1,4 +1,5 @@
 import { AbbacchioProvider } from '@abbacchio/browser-transport/react';
+import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
 
 import { clientComposition } from './platform/client-composition';
 import { prefetchInitialThread } from './platform/prefetch-initial-thread';
@@ -283,6 +284,7 @@ root.render(
       }}
     >
       <AbbacchioProvider
+        {...getTelemetryIdentity('funny-client')}
         endpoint={otlpEndpoint ?? ''}
         serviceName="funny-client"
         captureConsole

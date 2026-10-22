@@ -19,7 +19,7 @@ layout {
                 args "-lic" "cd packages/client && bun run storybook; exec bash -li"
             }
             pane command="bash" name="abbacchio" close_on_exit=false {
-                args "-lic" "cd ../abbacchio && bun run dev; exec bash -li"
+                args "-lic" "cd ../abbacchio && PORT=4000 bun run dev; exec bash -li"
             }
         }
     }

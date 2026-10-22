@@ -10,12 +10,14 @@
  */
 
 import { createClient, type AbbacchioClient, type SpanRecord } from '@abbacchio/transport';
+import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
 
 import { getTelemetryConfig } from './telemetry-config.js';
 
 const cfg = getTelemetryConfig();
 
 const telemetry: AbbacchioClient = createClient({
+  ...getTelemetryIdentity('funny-runtime'),
   endpoint: cfg.endpoint,
   serviceName: cfg.serverServiceName,
   enabled: cfg.enabled,

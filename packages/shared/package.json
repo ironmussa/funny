@@ -45,6 +45,7 @@
     "./db/adapters/pg": "./src/db/adapters/pg.ts",
     "./db/migrate": "./src/db/migrate.ts",
     "./repositories": "./src/repositories/index.ts",
+    "./lib/telemetry-identity": "./src/lib/telemetry-identity.ts",
     "./lib/crypto": "./src/lib/crypto.ts",
     "./lib/child-env": "./src/lib/child-env.ts",
     "./lib/canonical-json": "./src/lib/canonical-json.ts",

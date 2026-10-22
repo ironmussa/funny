@@ -50,6 +50,7 @@ export default defineConfig({
         __dirname,
         '../evflow/models/funny-runtime.model.ts',
       ),
+      '@funny/shared/lib/telemetry-identity': path.join(shared, 'lib/telemetry-identity.ts'),
       '@funny/shared/lib/crypto': path.join(shared, 'lib/crypto.ts'),
       '@funny/shared/lib/canonical-json': path.join(shared, 'lib/canonical-json.ts'),
       '@funny/shared/lib/file-search': path.join(shared, 'lib/file-search.ts'),

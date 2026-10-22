@@ -7,6 +7,7 @@
  */
 
 import { createClient, type AbbacchioClient } from '@abbacchio/browser-transport';
+import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
 
 import { otlpEnabled, otlpEndpoint } from './otlp-config';
 
@@ -16,6 +17,7 @@ function getClient(): AbbacchioClient | null {
   if (!otlpEnabled || !otlpEndpoint) return null;
   if (!client) {
     client = createClient({
+      ...getTelemetryIdentity('funny-client'),
       endpoint: otlpEndpoint,
       serviceName: 'funny-client',
       enabled: true,

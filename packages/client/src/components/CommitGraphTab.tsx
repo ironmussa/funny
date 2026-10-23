@@ -37,6 +37,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useElementWidth } from '@/hooks/use-element-width';
+import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
@@ -98,6 +99,12 @@ const log = createClientLogger('commit-graph');
 // Process-lifetime cache of resolved email → avatar URL (GitHub .png / Gravatar),
 // shared across remounts so we don't re-hash the same emails. Mirrors AuthorBadge.
 const emailAvatarCache = new Map<string, string>();
+
+/** Bypass the status cooldown after a branch action so badges update at once. */
+function forceRefreshGitStatus(threadId: string | undefined, projectModeId: string | null): void {
+  if (threadId) useGitStatusStore.getState().fetchForThread(threadId, true);
+  else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+}
 
 interface GraphEntry {
   hash: string;
@@ -309,6 +316,17 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     if (!hasMore || loadingRef.current) return;
     loadLog(loadedLogSkipRef.current, true);
   }, [hasMore, loadLog]);
+
+  // Keep the graph in sync with new commits / refs.
+  useGitHistoryAutoRefresh({
+    effectiveThreadId,
+    projectModeId,
+    contextKey: gitContextKey,
+    visible,
+    enabled: hasGitContext,
+    busy: logLoading,
+    refresh: loadLog,
+  });
 
   const loadFilteredHistory = useCallback(async () => {
     if (!hasMoreRef.current || loadingRef.current) return;
@@ -634,11 +652,6 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     [branchSummaries],
   );
 
-  const refreshGitStatus = useCallback(() => {
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
-  }, [effectiveThreadId, projectModeId]);
-
   const pushBranch = useCallback(
     async (branch: string) => {
       if (!hasGitContext || branchActionInProgress) return;
@@ -662,18 +675,10 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         );
       }
       setBranchActionInProgress(null);
-      refreshGitStatus();
+      forceRefreshGitStatus(effectiveThreadId, projectModeId);
       refreshLog();
     },
-    [
-      hasGitContext,
-      branchActionInProgress,
-      effectiveThreadId,
-      projectModeId,
-      refreshGitStatus,
-      refreshLog,
-      t,
-    ],
+    [hasGitContext, branchActionInProgress, effectiveThreadId, projectModeId, refreshLog, t],
   );
 
   const pullCurrentBranch = useCallback(
@@ -694,18 +699,10 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         );
       }
       setBranchActionInProgress(null);
-      refreshGitStatus();
+      forceRefreshGitStatus(effectiveThreadId, projectModeId);
       refreshLog();
     },
-    [
-      hasGitContext,
-      branchActionInProgress,
-      effectiveThreadId,
-      projectModeId,
-      refreshGitStatus,
-      refreshLog,
-      t,
-    ],
+    [hasGitContext, branchActionInProgress, effectiveThreadId, projectModeId, refreshLog, t],
   );
 
   if (!hasGitContext) {

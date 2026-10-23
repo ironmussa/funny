@@ -27,6 +27,7 @@ export function createCircuitBreakerStore<TTimer>(
   const cooldownMs = options.cooldownMs ?? 15_000;
   let cooldownTimer: TTimer | undefined;
   let disposed = false;
+  let verifying = false;
 
   const clearCooldown = (): void => {
     if (cooldownTimer !== undefined) options.clearTimer(cooldownTimer);
@@ -54,10 +55,25 @@ export function createCircuitBreakerStore<TTimer>(
           return;
         }
         const failureCount = current.failureCount + 1;
-        if (failureCount >= failureThreshold && current.state === 'closed') {
-          set({ state: 'open', failureCount });
-          startCooldown();
-        } else set({ failureCount });
+        set({ failureCount });
+        if (failureCount < failureThreshold || current.state !== 'closed' || verifying) return;
+        // Failed requests alone don't prove the server is down: one endpoint can
+        // fail while everything else works. Only open (and block every request)
+        // once the health probe confirms the server is unreachable.
+        verifying = true;
+        void options
+          .probe()
+          .catch(() => false)
+          .then((reachable) => {
+            verifying = false;
+            if (disposed || get().state !== 'closed') return;
+            if (reachable) {
+              set({ failureCount: 0 });
+              return;
+            }
+            set({ state: 'open' });
+            startCooldown();
+          });
       },
       recordSuccess() {
         clearCooldown();

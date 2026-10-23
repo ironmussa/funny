@@ -9,6 +9,15 @@ vi.stubEnv('VITE_SERVER_PORT', '3001');
 
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 
+/** Reach the threshold with the health probe failing, then let the probe settle. */
+async function openCircuit() {
+  mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+  useCircuitBreakerStore.getState().recordFailure();
+  useCircuitBreakerStore.getState().recordFailure();
+  useCircuitBreakerStore.getState().recordFailure();
+  await vi.advanceTimersByTimeAsync(0);
+}
+
 describe('useCircuitBreakerStore', () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -64,28 +73,47 @@ describe('useCircuitBreakerStore', () => {
       expect(useCircuitBreakerStore.getState().state).toBe('closed');
     });
 
-    test('transitions to open at threshold (3 failures)', () => {
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
+    test('transitions to open at threshold (3 failures)', async () => {
+      await openCircuit();
       expect(useCircuitBreakerStore.getState().state).toBe('open');
       expect(useCircuitBreakerStore.getState().failureCount).toBe(3);
     });
 
-    test('starts cooldown timer when transitioning to open', () => {
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
+    test('starts cooldown timer when transitioning to open', async () => {
+      await openCircuit();
       expect(useCircuitBreakerStore.getState()._cooldownTimer).not.toBeNull();
     });
   });
 
+  describe('health confirmation', () => {
+    test('stays closed when the health probe shows the server is reachable', async () => {
+      // Individual requests failing (one endpoint, one dropped connection) must
+      // not block the whole UI while the server itself answers.
+      mockFetch.mockResolvedValueOnce({ ok: true });
+      useCircuitBreakerStore.getState().recordFailure();
+      useCircuitBreakerStore.getState().recordFailure();
+      useCircuitBreakerStore.getState().recordFailure();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(useCircuitBreakerStore.getState().state).toBe('closed');
+      expect(useCircuitBreakerStore.getState().failureCount).toBe(0);
+    });
+
+    test('runs a single probe for failures arriving while one is in flight', async () => {
+      mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
+      for (let i = 0; i < 6; i++) useCircuitBreakerStore.getState().recordFailure();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+      expect(useCircuitBreakerStore.getState().state).toBe('open');
+    });
+  });
+
   describe('recordSuccess', () => {
-    test('resets state to closed', () => {
+    test('resets state to closed', async () => {
       // First get to open state
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
+      await openCircuit();
       expect(useCircuitBreakerStore.getState().state).toBe('open');
 
       useCircuitBreakerStore.getState().recordSuccess();
@@ -101,10 +129,8 @@ describe('useCircuitBreakerStore', () => {
       expect(useCircuitBreakerStore.getState().failureCount).toBe(0);
     });
 
-    test('clears cooldown timer', () => {
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
+    test('clears cooldown timer', async () => {
+      await openCircuit();
       expect(useCircuitBreakerStore.getState()._cooldownTimer).not.toBeNull();
 
       useCircuitBreakerStore.getState().recordSuccess();
@@ -235,9 +261,7 @@ describe('useCircuitBreakerStore', () => {
   describe('cooldown auto-probe', () => {
     test('auto-probes after cooldown period (15s)', async () => {
       // Trigger open state
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
+      await openCircuit();
       expect(useCircuitBreakerStore.getState().state).toBe('open');
 
       // Mock the fetch for the auto-probe
@@ -257,9 +281,7 @@ describe('useCircuitBreakerStore', () => {
       expect(useCircuitBreakerStore.getState().state).toBe('closed');
 
       // 3 failures -> open
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
+      await openCircuit();
       expect(useCircuitBreakerStore.getState().state).toBe('open');
 
       // Retry with success -> closed
@@ -271,9 +293,7 @@ describe('useCircuitBreakerStore', () => {
 
     test('closed -> open -> half-open (retryNow) -> open (failure) -> half-open -> closed', async () => {
       // 3 failures -> open
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
-      useCircuitBreakerStore.getState().recordFailure();
+      await openCircuit();
 
       // First retry fails -> back to open
       mockFetch.mockResolvedValueOnce({ ok: false });

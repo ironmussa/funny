@@ -5,6 +5,9 @@ import { createClientPreferencesStore, PREFERENCE_KEYS } from '../stores/prefere
 import { createThreadReadStore, THREAD_READ_STORAGE_KEY } from '../stores/thread-read';
 import { createInMemoryPlatform } from '../testing/in-memory-platform';
 
+/** Let the async health probe resolve. */
+const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
+
 describe('portable client stores', () => {
   test('round-trips thread read markers using the legacy key', () => {
     const host = createInMemoryPlatform({
@@ -86,7 +89,15 @@ describe('portable client stores', () => {
     });
     store.getState().recordFailure();
     store.getState().recordFailure();
+    await settle();
+    // The server answers its health probe, so request failures alone don't open it.
+    expect(store.getState()).toMatchObject({ state: 'closed', failureCount: 0 });
+    probeResult = false;
+    store.getState().recordFailure();
+    store.getState().recordFailure();
+    await settle();
     expect(store.getState()).toMatchObject({ state: 'open', failureCount: 2 });
+    probeResult = true;
     await store.getState().retryNow();
     expect(store.getState()).toMatchObject({ state: 'closed', failureCount: 0 });
     probeResult = false;

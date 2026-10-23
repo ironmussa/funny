@@ -92,6 +92,18 @@ function asApiError(error: unknown): ApiClientError {
 }
 
 export function createApiClient(dependencies: ApiClientDependencies): ApiClient {
+  // One connection drop fails every request in flight at that moment (a thread
+  // switch fires several in parallel). Count that burst as a single failure:
+  // a request only counts if it started after the last counted failure, so a
+  // real outage still opens the circuit after `failureThreshold` sequential
+  // failures, but one blip no longer does.
+  let lastCountedFailureAt = Number.NEGATIVE_INFINITY;
+  const recordFailure = (startedAt: number): void => {
+    if (startedAt <= lastCountedFailureAt) return;
+    lastCountedFailureAt = dependencies.clock();
+    dependencies.circuitBreaker.recordFailure();
+  };
+
   return {
     async request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
       const method = init.method ?? 'GET';
@@ -145,7 +157,7 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
         if (init.cancellation?.aborted || (error as { name?: string })?.name === 'AbortError') {
           throw { type: 'INTERNAL', message: 'Request aborted' } satisfies ApiClientError;
         }
-        dependencies.circuitBreaker.recordFailure();
+        recordFailure(startedAt);
         reportFailure('network', 0, String(error));
         dependencies.telemetry.metric('http.client.duration', dependencies.clock() - startedAt, {
           type: 'gauge',
@@ -174,7 +186,7 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
           response.status !== 504 &&
           !isGitDiffReadRequest(method, path)
         ) {
-          dependencies.circuitBreaker.recordFailure();
+          recordFailure(startedAt);
         }
         const responseText = await response.text().catch(() => '');
         const body = parseBody(responseText);

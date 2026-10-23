@@ -14,6 +14,7 @@ function createDependencies(
 ) {
   const host = createInMemoryPlatform({ request });
   const circuit = { state: 'closed' as 'closed' | 'open' | 'half-open', failures: 0, successes: 0 };
+  const time = { now: 100 };
   const unauthorized: string[] = [];
   const failures: Parameters<
     NonNullable<ApiClientDependencies['telemetry']['reportFailure']>
@@ -21,7 +22,7 @@ function createDependencies(
   const dependencies: ApiClientDependencies = {
     transport: host.platform.transport,
     endpointPolicy: createEndpointPolicy(host.platform.transport.environment),
-    clock: () => 100,
+    clock: () => time.now,
     telemetry: {
       startSpan: () => ({ traceparent: 'trace', end: () => undefined }),
       metric: () => undefined,
@@ -35,7 +36,14 @@ function createDependencies(
     onUnauthorized: (path) => unauthorized.push(path),
     networkFriendlyMessage: () => 'Check your connection',
   };
-  return { client: createApiClient(dependencies), circuit, unauthorized, failures, dependencies };
+  return {
+    client: createApiClient(dependencies),
+    circuit,
+    unauthorized,
+    failures,
+    dependencies,
+    time,
+  };
 }
 
 describe('API client', () => {
@@ -85,10 +93,11 @@ describe('API client', () => {
 
   test('handles server errors, exclusions, and unauthorized callbacks', async () => {
     const server = createDependencies(async () => response(500, { error: 'broken' }));
-    expect(server.client.request('/projects')).rejects.toMatchObject({
+    await expect(server.client.request('/projects')).rejects.toMatchObject({
       type: 'INTERNAL',
       message: 'broken',
     });
+    server.time.now += 1;
     await server.client.request('/projects').catch(() => undefined);
     expect(server.circuit.failures).toBe(2);
 
@@ -122,6 +131,32 @@ describe('API client', () => {
       message: 'Server unavailable (circuit open)',
     });
     expect(fixture.failures).toHaveLength(1);
+  });
+
+  test('counts a burst of in-flight requests failing together as one circuit failure', async () => {
+    let failInFlight: (() => void) | undefined;
+    const dropped = new Promise<void>((resolve) => (failInFlight = resolve));
+    const fixture = createDependencies(async () => {
+      await dropped;
+      throw new TypeError('Failed to fetch');
+    });
+    // A thread switch fires several requests; one connection drop fails them all.
+    const burst = ['/branches', '/workflows', '/skills/resources', '/git/status'].map((path) =>
+      fixture.client.request(path).catch(() => undefined),
+    );
+    fixture.time.now += 50;
+    failInFlight?.();
+    await Promise.all(burst);
+    expect(fixture.circuit.failures).toBe(1);
+    // Every failure is still reported to telemetry.
+    expect(fixture.failures).toHaveLength(4);
+
+    // Requests started after the counted failure still count, so a real outage opens the circuit.
+    fixture.time.now += 1;
+    await fixture.client.request('/projects').catch(() => undefined);
+    fixture.time.now += 1;
+    await fixture.client.request('/projects').catch(() => undefined);
+    expect(fixture.circuit.failures).toBe(3);
   });
 
   test('distinguishes cancellation from a network failure', async () => {

@@ -30,7 +30,7 @@
   },
   "scripts": {
     "test": "bun test",
-    "typecheck": "tsrs --noEmit -p tsconfig.json",
+    "typecheck": "bun check -p tsconfig.json",
     "verify:native-test-renderer": "bun scripts/verify-native-test-renderer.ts"
   },
   "dependencies": {
@@ -40,8 +40,7 @@
     "@gpuix/react": "0.5.1",
     "@types/bun": "^1.4.0",
     "@types/react": "^19.2.14",
-    "react": "^19.2.4",
-    "tsrs": "0.18.0-ts7.1.0-dev.20260929"
+    "react": "^19.2.4"
   },
   "peerDependencies": {
     "@gpuix/react": "^0.5.1",

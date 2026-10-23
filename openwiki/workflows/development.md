@@ -27,13 +27,13 @@ Production start: `bun start` (runs `bin/funny.js` against built `dist/` output)
 
 ## TypeScript
 
-Workspace typecheck and client build scripts use the pinned `tsrs` version installed by `bun install`. Type checks, including `typecheck:proofs`, use `--noEmit`; client builds use `tsrs -b` before Vite. TypeScript remains a development dependency of `evflow` for its `tsserverlibrary` editor plugin, and the runtime retains the TypeScript 5 alias required by its ESLint tooling. These APIs are not drop-in replacements for tsrs. The canonical repository check is:
+Workspace typecheck and client build scripts use Bun 1.4.4 or newer. Type checks, including `typecheck:proofs`, use `bun check`; client builds run it before Vite. TypeScript remains a development dependency of `evflow` for its `tsserverlibrary` editor plugin, and the runtime retains the TypeScript 5 alias required by its ESLint tooling. Bun 1.4.4 reports seven unused `@ts-expect-error` directives in the proof tests; these assertions remain enabled and fail until the checker supports the expected constraints. The canonical repository check is:
 
 ```bash
 bun run typecheck
 ```
 
-This runs `scripts/fitness/check-typecheck.ts`, which invokes `tsrs --noEmit` for each configured project, followed by the remote connector’s Rust check and the server proof typecheck. The TypeScript fitness check is a **baseline-diff** check: it compares current type errors against a committed baseline (`.fitness/typecheck-baseline.txt`) so pre-existing debt doesn't block CI while new violations do. Use `bun run typecheck:refresh` only when you've deliberately reduced (never increased) the baseline.
+This runs `scripts/fitness/check-typecheck.ts`, which invokes `bun check` for each configured project, followed by the remote connector’s Rust check and the server proof typecheck. The TypeScript fitness check is a **baseline-diff** check: it compares current type errors against a committed baseline (`.fitness/typecheck-baseline.txt`) so pre-existing debt doesn't block CI while new violations do. Use `bun run typecheck:refresh` only when you've deliberately reduced (never increased) the baseline.
 
 ## Lint, format, and architecture guardrails
 

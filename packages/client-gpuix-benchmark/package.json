@@ -10,7 +10,7 @@
     "build": "bun build src/cli.tsx --target=bun --outdir=dist --external react --external react/jsx-runtime --external @gpuix/native --external @gpuix/react --external '@gpuix/react/*'",
     "start": "bun src/cli.tsx",
     "test": "bun test",
-    "typecheck": "tsrs --noEmit -p tsconfig.json"
+    "typecheck": "bun check -p tsconfig.json"
   },
   "dependencies": {
     "@funny/client-benchmark": "workspace:*",
@@ -21,7 +21,6 @@
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",
-    "@types/react": "^19.2.14",
-    "tsrs": "0.18.0-ts7.1.0-dev.20260929"
+    "@types/react": "^19.2.14"
   }
 }

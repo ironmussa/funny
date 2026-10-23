@@ -22,3 +22,19 @@ export function getTelemetryIdentity(source: TelemetrySource) {
   }
   return identity;
 }
+
+/**
+ * Test runs (bun test / vitest set NODE_ENV=test) inherit the developer's .env,
+ * so without this guard their fixture errors land in the live Abbacchio channels
+ * and ~/.funny/logs, indistinguishable from the running app's.
+ */
+export function isTestProcess(env: Record<string, string | undefined> = process.env): boolean {
+  return env.NODE_ENV === 'test';
+}
+
+/** OTLP export is opt-in via OTLP_ENDPOINT and never active inside a test run. */
+export function isTelemetryExportEnabled(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return !!env.OTLP_ENDPOINT && !isTestProcess(env);
+}

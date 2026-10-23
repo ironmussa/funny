@@ -8,11 +8,14 @@
  */
 
 import { createClient, type AbbacchioClient, type SpanRecord } from '@abbacchio/transport';
-import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
+import {
+  getTelemetryIdentity,
+  isTelemetryExportEnabled,
+} from '@funny/shared/lib/telemetry-identity';
 
 const SERVICE_NAME = 'funny-server';
 const endpoint = process.env.OTLP_ENDPOINT || 'http://localhost:4000';
-const enabled = !!process.env.OTLP_ENDPOINT;
+const enabled = isTelemetryExportEnabled();
 
 export const telemetry: AbbacchioClient = createClient({
   ...getTelemetryIdentity('funny-server'),

@@ -8,6 +8,8 @@
  * independently parsing env vars.
  */
 
+import { isTelemetryExportEnabled } from '@funny/shared/lib/telemetry-identity';
+
 export interface TelemetryConfig {
   /** OTLP collector endpoint (e.g. http://localhost:4000) */
   endpoint: string;
@@ -24,7 +26,7 @@ export function getTelemetryConfig(): TelemetryConfig {
     const endpoint = process.env.OTLP_ENDPOINT || 'http://localhost:4000';
     _config = {
       endpoint,
-      enabled: !!process.env.OTLP_ENDPOINT,
+      enabled: isTelemetryExportEnabled(),
       serverServiceName: 'funny-runtime',
     };
   }

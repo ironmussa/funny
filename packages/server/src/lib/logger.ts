@@ -10,7 +10,11 @@ import { resolve } from 'path';
 
 import { AbbacchioWinstonTransport } from '@abbacchio/transport';
 import 'winston-daily-rotate-file';
-import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
+import {
+  getTelemetryIdentity,
+  isTelemetryExportEnabled,
+  isTestProcess,
+} from '@funny/shared/lib/telemetry-identity';
 import winston from 'winston';
 
 import { DATA_DIR } from './data-dir.js';
@@ -23,7 +27,7 @@ const logDir = resolve(DATA_DIR, 'logs');
 mkdirSync(logDir, { recursive: true });
 
 const endpoint = process.env.OTLP_ENDPOINT || 'http://localhost:4000';
-const otlpEnabled = !!process.env.OTLP_ENDPOINT;
+const otlpEnabled = isTelemetryExportEnabled();
 
 const telemetryTransport = new AbbacchioWinstonTransport({
   endpoint,
@@ -41,26 +45,30 @@ export const log = winston.createLogger({
   defaultMeta: { service: SERVICE_NAME },
   transports: [
     telemetryTransport,
-    new winston.transports.DailyRotateFile({
-      dirname: logDir,
-      filename: 'server-%DATE%.log',
-      datePattern: 'YYYY-MM-DD',
-      maxFiles: '7d',
-      format: winston.format.combine(
-        winston.format.timestamp(),
-        winston.format.printf(({ level, message, timestamp, namespace, ...meta }) => {
-          const ns = namespace ? `[${namespace}]` : '';
-          const extra =
-            Object.keys(meta).length > 1
-              ? ' ' +
-                JSON.stringify(
-                  Object.fromEntries(Object.entries(meta).filter(([k]) => k !== 'service')),
-                )
-              : '';
-          return `${timestamp} ${level} ${ns} ${message}${extra}`;
-        }),
-      ),
-    }),
+    ...(isTestProcess()
+      ? []
+      : [
+          new winston.transports.DailyRotateFile({
+            dirname: logDir,
+            filename: 'server-%DATE%.log',
+            datePattern: 'YYYY-MM-DD',
+            maxFiles: '7d',
+            format: winston.format.combine(
+              winston.format.timestamp(),
+              winston.format.printf(({ level, message, timestamp, namespace, ...meta }) => {
+                const ns = namespace ? `[${namespace}]` : '';
+                const extra =
+                  Object.keys(meta).length > 1
+                    ? ' ' +
+                      JSON.stringify(
+                        Object.fromEntries(Object.entries(meta).filter(([k]) => k !== 'service')),
+                      )
+                    : '';
+                return `${timestamp} ${level} ${ns} ${message}${extra}`;
+              }),
+            ),
+          }),
+        ]),
     ...(isDev
       ? [
           new winston.transports.Console({

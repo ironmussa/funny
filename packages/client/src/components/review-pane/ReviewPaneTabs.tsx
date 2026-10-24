@@ -76,6 +76,7 @@ export function ReviewSecondaryTabs({
   prNumber,
   prUrl,
   readOnly = false,
+  activePath,
 }: {
   reviewSubTab: ReviewSubTab;
   reviewPaneOpen: boolean;
@@ -84,6 +85,7 @@ export function ReviewSecondaryTabs({
   prNumber: number | undefined;
   prUrl: string | undefined;
   readOnly?: boolean;
+  activePath?: string;
 }) {
   return (
     <>
@@ -98,7 +100,12 @@ export function ReviewSecondaryTabs({
       </TabsContent>
 
       <TabsContent value="worktrees" className={TAB_CONTENT_CLASS}>
-        <WorktreeSettings key={projectId} projectId={projectId} readOnly={readOnly} />
+        <WorktreeSettings
+          key={projectId}
+          projectId={projectId}
+          readOnly={readOnly}
+          activePath={activePath}
+        />
       </TabsContent>
 
       {/* Pull Requests tab */}

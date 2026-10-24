@@ -12,6 +12,7 @@ import { renderWithProviders } from '../helpers/render';
 const context = vi.hoisted(() => ({
   remoteCheckProjectId: 'p2' as string | null,
   viewerReadOnly: false,
+  basePath: '/second/feature',
 }));
 vi.mock('@/components/review-pane/ReviewPaneStateContext', () => ({
   useReviewPaneContext: () => context,
@@ -24,6 +25,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   context.remoteCheckProjectId = 'p2';
   context.viewerReadOnly = false;
+  context.basePath = '/second/feature';
   useProjectStore.setState({
     selectedProjectId: 'p1',
     projects: [
@@ -94,6 +96,27 @@ describe('Worktrees sidebar', () => {
       'items-center',
       'justify-center',
     );
+  });
+
+  test('distinguishes the main checkout from the active linked worktree', async () => {
+    vi.mocked(api.listWorktrees).mockReturnValue(
+      okAsync([
+        { path: '/second', branch: 'main', commit: 'abcdef12', isMain: true },
+        { path: '/second/feature', branch: 'feature/test', commit: 'abcdef12', isMain: false },
+      ]),
+    );
+    const view = renderWithProviders(<WorktreesPanel />);
+    await screen.findByText('feature/test');
+    const mainBadge = screen.getByText('Main');
+    const activeBadge = screen.getByText('Active');
+    expect(mainBadge.parentElement).toHaveTextContent('main');
+    expect(activeBadge.parentElement).toHaveTextContent('feature/test');
+    context.basePath = '/second';
+    view.rerender(<WorktreesPanel />);
+    expect(screen.getByText('Main').parentElement).toContainElement(screen.getByText('Active'));
+    context.basePath = '';
+    view.rerender(<WorktreesPanel />);
+    expect(screen.queryByText('Active')).not.toBeInTheDocument();
   });
 
   test('removes worktrees from project settings', () => {

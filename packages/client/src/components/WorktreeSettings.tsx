@@ -17,11 +17,16 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
+import { contrastText, pastelize } from '@/components/ui/project-chip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 
 import { BranchPicker } from './SearchablePicker';
+
+const MAIN_CHIP_COLOR = pastelize('#7CB9E8');
+const ACTIVE_CHIP_COLOR = pastelize('#A8D5A2');
+const WORKTREE_CHIP_CLASS = 'shrink-0 rounded-full px-1.5 py-0 text-[9px] leading-4 font-medium';
 
 interface WorktreeInfo {
   path: string;
@@ -34,11 +39,13 @@ function WorktreeCard({
   worktree,
   onRemove,
   removing,
+  active,
   readOnly,
 }: {
   worktree: WorktreeInfo;
   onRemove: () => void;
   removing: boolean;
+  active: boolean;
   readOnly: boolean;
 }) {
   const { t } = useTranslation();
@@ -51,6 +58,27 @@ function WorktreeCard({
             <span className="text-foreground min-w-0 text-[11px] leading-5 font-medium break-words">
               {worktree.branch}
             </span>
+            {worktree.isMain && (
+              <span
+                className={WORKTREE_CHIP_CLASS}
+                style={{ backgroundColor: MAIN_CHIP_COLOR, color: contrastText(MAIN_CHIP_COLOR) }}
+                title={t('worktreeSettings.mainDescription')}
+              >
+                {t('worktreeSettings.main')}
+              </span>
+            )}
+            {active && (
+              <span
+                className={WORKTREE_CHIP_CLASS}
+                style={{
+                  backgroundColor: ACTIVE_CHIP_COLOR,
+                  color: contrastText(ACTIVE_CHIP_COLOR),
+                }}
+                title={t('worktreeSettings.activeDescription')}
+              >
+                {t('worktreeSettings.active')}
+              </span>
+            )}
           </div>
           <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[10px]">
             <FolderOpen className="icon-xs text-muted-foreground/70 shrink-0" />
@@ -164,9 +192,11 @@ function WorktreeCreateForm({
 
 export function WorktreeSettings({
   projectId,
+  activePath,
   readOnly = false,
 }: {
   projectId?: string;
+  activePath?: string;
   readOnly?: boolean;
 }) {
   const { t } = useTranslation();
@@ -340,6 +370,7 @@ export function WorktreeSettings({
                   <WorktreeCard
                     key={wt.path}
                     worktree={wt}
+                    active={!!activePath && wt.path === activePath}
                     readOnly={readOnly}
                     onRemove={() => setConfirmRemove(wt)}
                     removing={removingPath === wt.path}

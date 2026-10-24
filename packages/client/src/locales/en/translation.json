@@ -949,6 +949,10 @@
     "close": "Close"
   },
   "worktreeSettings": {
+    "main": "Main",
+    "active": "Active",
+    "mainDescription": "Original repository checkout. It cannot be deleted as a linked worktree.",
+    "activeDescription": "Working directory currently shown in the review panel.",
     "noProject": "No project selected. Add a project first to manage worktrees.",
     "worktreesFor": "Worktrees for:",
     "dismiss": "Dismiss",

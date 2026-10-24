@@ -11,6 +11,7 @@ import { CITab } from '../CITab';
 import { CommitGraphTab } from '../CommitGraphTab';
 import { IssuesTab } from '../IssuesTab';
 import { PullRequestsTab } from '../PullRequestsTab';
+import { WorktreeSettings } from '../WorktreeSettings';
 import { StashTab } from './StashTab';
 
 const TAB_TRIGGER_CLASS =
@@ -22,6 +23,7 @@ const TABS: Array<{ value: ReviewSubTab; labelKey: string; fallback: string }> =
   { value: 'changes', labelKey: 'review.changes', fallback: 'Changes' },
   { value: 'graph', labelKey: 'review.history', fallback: 'History' },
   { value: 'stash', labelKey: 'review.stash', fallback: 'Stash' },
+  { value: 'worktrees', labelKey: 'settings.worktrees', fallback: 'Worktrees' },
   { value: 'prs', labelKey: 'review.prs', fallback: 'PRs' },
   { value: 'ci', labelKey: 'review.ci.tab', fallback: 'CI' },
   { value: 'issues', labelKey: 'review.issues.tab', fallback: 'Issues' },
@@ -32,7 +34,7 @@ export function ReviewPaneTabsHeader({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   return (
     <div className="border-sidebar-border flex h-12 items-center justify-between border-b px-2">
-      <TabsList className="bg-sidebar-accent/50 h-7 p-0.5">
+      <TabsList className="bg-sidebar-accent/50 h-7 min-w-0 justify-start overflow-x-auto p-0.5">
         {TABS.map((tab) => (
           <TabsTrigger
             key={tab.value}
@@ -73,6 +75,7 @@ export function ReviewSecondaryTabs({
   projectId,
   prNumber,
   prUrl,
+  readOnly = false,
 }: {
   reviewSubTab: ReviewSubTab;
   reviewPaneOpen: boolean;
@@ -80,6 +83,7 @@ export function ReviewSecondaryTabs({
   projectId: string;
   prNumber: number | undefined;
   prUrl: string | undefined;
+  readOnly?: boolean;
 }) {
   return (
     <>
@@ -91,6 +95,10 @@ export function ReviewSecondaryTabs({
       {/* Stash tab */}
       <TabsContent value="stash" className={TAB_CONTENT_CLASS} forceMount>
         <StashTab {...stashTab} />
+      </TabsContent>
+
+      <TabsContent value="worktrees" className="min-h-0 flex-1 overflow-y-auto p-3">
+        <WorktreeSettings key={projectId} projectId={projectId} readOnly={readOnly} />
       </TabsContent>
 
       {/* Pull Requests tab */}

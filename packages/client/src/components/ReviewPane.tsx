@@ -304,6 +304,7 @@ export function ReviewPane() {
         />
 
         <ReviewSecondaryTabs
+          readOnly={viewerReadOnly}
           reviewSubTab={reviewSubTab}
           reviewPaneOpen={reviewPaneOpen}
           stashTab={{

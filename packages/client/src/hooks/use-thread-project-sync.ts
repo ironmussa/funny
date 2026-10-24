@@ -38,7 +38,7 @@ function syncPanelParam(search: string, ui: UIState) {
   }
 }
 
-const VALID_TABS: ReviewSubTab[] = ['changes', 'graph', 'stash', 'prs', 'issues'];
+const VALID_TABS: ReviewSubTab[] = ['changes', 'graph', 'stash', 'worktrees', 'prs', 'issues'];
 
 function syncTabParam(search: string, ui: UIState) {
   const tabParam = new URLSearchParams(search).get('tab') as ReviewSubTab | null;

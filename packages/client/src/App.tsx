@@ -82,6 +82,11 @@ const ChangesPanel = lazy(() =>
 const GraphPanel = lazy(() =>
   import('@/components/review-pane/panels/ChangesPanel').then((m) => ({ default: m.GraphPanel })),
 );
+const WorktreesPanel = lazy(() =>
+  import('@/components/review-pane/panels/WorktreesPanel').then((m) => ({
+    default: m.WorktreesPanel,
+  })),
+);
 const StashPanel = lazy(() =>
   import('@/components/review-pane/panels/ChangesPanel').then((m) => ({ default: m.StashPanel })),
 );
@@ -135,6 +140,15 @@ const ExternalClaudeSessionView = lazy(() =>
 const BrowserPanel = lazy(() =>
   import('@/components/browser-panel/BrowserPanel').then((m) => ({ default: m.BrowserPanel })),
 );
+
+function WorktreesTab({ ready }: { ready: boolean }) {
+  if (!ready) return RIGHT_PANE_LOADING_FALLBACK;
+  return (
+    <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
+      <WorktreesPanel />
+    </Suspense>
+  );
+}
 
 export function App() {
   useAppScrollLock();
@@ -312,6 +326,11 @@ export function App() {
           ) : (
             RIGHT_PANE_LOADING_FALLBACK
           ),
+        },
+        {
+          id: 'worktrees',
+          title: 'Worktrees',
+          content: <WorktreesTab ready={primaryViewReady} />,
         },
         {
           id: 'prs',

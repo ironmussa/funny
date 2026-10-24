@@ -23,10 +23,12 @@ function WorktreeCard({
   worktree,
   onRemove,
   removing,
+  readOnly,
 }: {
   worktree: WorktreeInfo;
   onRemove: () => void;
   removing: boolean;
+  readOnly: boolean;
 }) {
   return (
     <div className="border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
@@ -49,7 +51,7 @@ function WorktreeCard({
           )}
         </div>
       </div>
-      {!worktree.isMain && (
+      {!readOnly && !worktree.isMain && (
         <Button
           variant="ghost"
           size="icon-xs"
@@ -64,7 +66,89 @@ function WorktreeCard({
   );
 }
 
-export function WorktreeSettings() {
+function WorktreeCreateForm({
+  branches,
+  branchName,
+  baseBranch,
+  creating,
+  onBranchNameChange,
+  onBaseBranchChange,
+  onCreate,
+}: {
+  branches: string[];
+  branchName: string;
+  baseBranch: string;
+  creating: boolean;
+  onBranchNameChange: (value: string) => void;
+  onBaseBranchChange: (value: string) => void;
+  onCreate: () => void;
+}) {
+  const { t } = useTranslation();
+  return branches.length === 0 ? (
+    <div className="bg-status-pending/10 text-status-pending/80 mb-3 flex items-center gap-2 rounded-md px-3 py-2 text-xs">
+      <AlertCircle className="icon-sm shrink-0" />
+      <span>No branches found. Make sure the project has at least one commit.</span>
+    </div>
+  ) : (
+    <div className="border-border/50 bg-muted/30 mb-3 space-y-3 rounded-lg border p-3">
+      <div>
+        <label htmlFor="worktree-branch-name" className="text-muted-foreground mb-1 block text-xs">
+          {t('worktreeSettings.branchName')}
+        </label>
+        <Input
+          id="worktree-branch-name"
+          type="text"
+          value={branchName}
+          onChange={(e) => onBranchNameChange(e.target.value)}
+          placeholder="feature/my-new-branch"
+          className="h-8 px-2 font-mono text-xs"
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === 'Enter') onCreate();
+          }}
+        />
+      </div>
+
+      <fieldset>
+        <legend className="text-muted-foreground mb-1 block text-xs">
+          {t('worktreeSettings.baseBranch')}
+        </legend>
+        <BranchPicker
+          branches={branches}
+          selected={baseBranch}
+          onChange={onBaseBranchChange}
+          triggerClassName="flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-xs transition-colors hover:bg-accent/50 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/50"
+          side="bottom"
+          align="start"
+          showCopy={false}
+          placeholder="main (default)"
+        />
+      </fieldset>
+
+      <Button
+        size="sm"
+        onClick={onCreate}
+        disabled={!branchName.trim() || creating}
+        className="w-full"
+      >
+        {creating ? (
+          <Loader2 className="icon-xs mr-1 animate-spin" />
+        ) : (
+          <Plus className="icon-xs mr-1" />
+        )}
+        {creating ? t('worktreeSettings.creating') : t('worktreeSettings.createWorktree')}
+      </Button>
+    </div>
+  );
+}
+
+export function WorktreeSettings({
+  projectId,
+  readOnly = false,
+}: {
+  projectId?: string;
+  readOnly?: boolean;
+}) {
   const { t } = useTranslation();
   const projects = useAppStore((s) => s.projects);
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
@@ -79,9 +163,12 @@ export function WorktreeSettings() {
   const [baseBranch, setBaseBranch] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const project = selectedProjectId
-    ? projects.find((p) => p.id === selectedProjectId)
-    : projects[0];
+  const targetProjectId = projectId ?? selectedProjectId;
+  const project = targetProjectId
+    ? projects.find((p) => p.id === targetProjectId)
+    : projectId === undefined
+      ? projects[0]
+      : undefined;
 
   const loadWorktrees = useCallback(async () => {
     if (!project) return;
@@ -120,7 +207,7 @@ export function WorktreeSettings() {
 
   const handleCreate = async () => {
     const effectiveBase = baseBranch || branches[0];
-    if (!branchName.trim() || !project) return;
+    if (readOnly || !branchName.trim() || !project) return;
     if (!effectiveBase) {
       setError('No base branch available. Make sure the project has at least one commit.');
       return;
@@ -143,7 +230,7 @@ export function WorktreeSettings() {
   };
 
   const handleRemoveConfirmed = async () => {
-    if (!project || !confirmRemove) return;
+    if (readOnly || !project || !confirmRemove) return;
     const { path: worktreePath, branch } = confirmRemove;
     setConfirmRemove(null);
     setRemovingPath(worktreePath);
@@ -184,82 +271,35 @@ export function WorktreeSettings() {
           <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
             {t('worktreeSettings.worktrees')}
           </h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowCreate(!showCreate)}
-            className="px-2"
-          >
-            {showCreate ? (
-              <ChevronUp className="icon-xs mr-1" />
-            ) : (
-              <Plus className="icon-xs mr-1" />
-            )}
-            {showCreate ? t('worktreeSettings.cancel') : t('worktreeSettings.createWorktree')}
-          </Button>
+          {!readOnly && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowCreate(!showCreate)}
+              className="px-2"
+            >
+              {showCreate ? (
+                <ChevronUp className="icon-xs mr-1" />
+              ) : (
+                <Plus className="icon-xs mr-1" />
+              )}
+              {showCreate ? t('worktreeSettings.cancel') : t('worktreeSettings.createWorktree')}
+            </Button>
+          )}
         </div>
 
         {/* Create form */}
-        {showCreate &&
-          (branches.length === 0 ? (
-            <div className="bg-status-pending/10 text-status-pending/80 mb-3 flex items-center gap-2 rounded-md px-3 py-2 text-xs">
-              <AlertCircle className="icon-sm shrink-0" />
-              <span>No branches found. Make sure the project has at least one commit.</span>
-            </div>
-          ) : (
-            <div className="border-border/50 bg-muted/30 mb-3 space-y-3 rounded-lg border p-3">
-              <div>
-                <label
-                  htmlFor="worktree-branch-name"
-                  className="text-muted-foreground mb-1 block text-xs"
-                >
-                  {t('worktreeSettings.branchName')}
-                </label>
-                <Input
-                  id="worktree-branch-name"
-                  type="text"
-                  value={branchName}
-                  onChange={(e) => setBranchName(e.target.value)}
-                  placeholder="feature/my-new-branch"
-                  className="h-8 px-2 font-mono text-xs"
-                  onKeyDown={(e) => {
-                    if (e.nativeEvent.isComposing) return;
-                    if (e.key === 'Enter') handleCreate();
-                  }}
-                />
-              </div>
-
-              <fieldset>
-                <legend className="text-muted-foreground mb-1 block text-xs">
-                  {t('worktreeSettings.baseBranch')}
-                </legend>
-                <BranchPicker
-                  branches={branches}
-                  selected={baseBranch}
-                  onChange={setBaseBranch}
-                  triggerClassName="flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-xs transition-colors hover:bg-accent/50 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/50"
-                  side="bottom"
-                  align="start"
-                  showCopy={false}
-                  placeholder="main (default)"
-                />
-              </fieldset>
-
-              <Button
-                size="sm"
-                onClick={handleCreate}
-                disabled={!branchName.trim() || creating}
-                className="w-full"
-              >
-                {creating ? (
-                  <Loader2 className="icon-xs mr-1 animate-spin" />
-                ) : (
-                  <Plus className="icon-xs mr-1" />
-                )}
-                {creating ? t('worktreeSettings.creating') : t('worktreeSettings.createWorktree')}
-              </Button>
-            </div>
-          ))}
+        {!readOnly && showCreate && (
+          <WorktreeCreateForm
+            branches={branches}
+            branchName={branchName}
+            baseBranch={baseBranch}
+            creating={creating}
+            onBranchNameChange={setBranchName}
+            onBaseBranchChange={setBaseBranch}
+            onCreate={handleCreate}
+          />
+        )}
 
         {loading ? (
           <LoadingState
@@ -279,6 +319,7 @@ export function WorktreeSettings() {
               <WorktreeCard
                 key={wt.path}
                 worktree={wt}
+                readOnly={readOnly}
                 onRemove={() => setConfirmRemove(wt)}
                 removing={removingPath === wt.path}
               />

@@ -18,8 +18,16 @@ const REVIEW_SUB_TAB_KEY = 'review_sub_tab';
 const GRID_SELECTED_THREAD_KEY = 'funny:grid-selected-thread:v1';
 
 type RightPaneTab = 'review' | 'activity' | 'files' | 'comments';
-export type ReviewSubTab = 'changes' | 'graph' | 'stash' | 'prs' | 'ci' | 'issues';
-const VALID_REVIEW_SUB_TABS: ReviewSubTab[] = ['changes', 'graph', 'stash', 'prs', 'ci', 'issues'];
+export type ReviewSubTab = 'changes' | 'graph' | 'stash' | 'prs' | 'ci' | 'issues' | 'worktrees';
+const VALID_REVIEW_SUB_TABS: ReviewSubTab[] = [
+  'changes',
+  'graph',
+  'stash',
+  'worktrees',
+  'prs',
+  'ci',
+  'issues',
+];
 
 function persistRightPane(open: boolean, tab?: RightPaneTab) {
   try {

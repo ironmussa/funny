@@ -97,7 +97,7 @@ export function ReviewSecondaryTabs({
         <StashTab {...stashTab} />
       </TabsContent>
 
-      <TabsContent value="worktrees" className="min-h-0 flex-1 overflow-y-auto p-3">
+      <TabsContent value="worktrees" className={TAB_CONTENT_CLASS}>
         <WorktreeSettings key={projectId} projectId={projectId} readOnly={readOnly} />
       </TabsContent>
 

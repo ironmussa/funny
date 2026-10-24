@@ -1,5 +1,5 @@
 import { screen, waitFor } from '@testing-library/react';
-import { okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { WorktreesPanel } from '@/components/review-pane/panels/WorktreesPanel';
@@ -71,6 +71,29 @@ describe('Worktrees sidebar', () => {
     context.remoteCheckProjectId = null;
     renderWithProviders(<WorktreesPanel />);
     expect(api.listWorktrees).not.toHaveBeenCalled();
+  });
+
+  test('uses a full-height centered loading state', () => {
+    vi.mocked(api.listWorktrees).mockReturnValue(
+      ResultAsync.fromSafePromise(new Promise<never>(() => {})),
+    );
+    renderWithProviders(<WorktreesPanel />);
+    expect(screen.getByTestId('worktree-settings-loading')).toHaveClass(
+      'flex-1',
+      'flex-col',
+      'items-center',
+      'justify-center',
+    );
+  });
+
+  test('lets the empty message fill the available panel height', async () => {
+    vi.mocked(api.listWorktrees).mockReturnValue(okAsync([]));
+    renderWithProviders(<WorktreesPanel />);
+    expect(await screen.findByTestId('worktree-settings-empty')).toHaveClass(
+      'flex-1',
+      'items-center',
+      'justify-center',
+    );
   });
 
   test('removes worktrees from project settings', () => {

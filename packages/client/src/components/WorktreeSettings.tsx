@@ -1,12 +1,23 @@
-import { Trash2, Plus, Loader2, AlertCircle, GitFork, FolderOpen, ChevronUp } from 'lucide-react';
+import {
+  Trash2,
+  Plus,
+  Loader2,
+  AlertCircle,
+  GitFork,
+  FolderOpen,
+  ChevronUp,
+  GitCommitHorizontal,
+} from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 
@@ -30,23 +41,30 @@ function WorktreeCard({
   removing: boolean;
   readOnly: boolean;
 }) {
+  const { t } = useTranslation();
   return (
-    <div className="border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
-      <div className="flex min-w-0 items-center gap-3">
-        <GitFork className="icon-base text-status-info shrink-0" />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{worktree.branch}</span>
+    <div className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors">
+      <div className="flex min-w-0 flex-1 items-start gap-2">
+        <GitFork className="icon-sm text-status-info mt-0.5 shrink-0" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-foreground min-w-0 text-[11px] leading-5 font-medium break-words">
+              {worktree.branch}
+            </span>
           </div>
-          <div className="mt-0.5 flex items-center gap-2">
+          <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[10px]">
             <FolderOpen className="icon-xs text-muted-foreground/70 shrink-0" />
-            <span className="text-muted-foreground/70 truncate font-mono text-xs">
+            <span title={worktree.path} className="truncate font-mono">
               {worktree.path}
             </span>
           </div>
           {worktree.commit && (
-            <span className="text-muted-foreground/70 font-mono text-xs">
-              {worktree.commit.slice(0, 8)}
+            <span
+              className="text-muted-foreground flex items-center gap-1.5 text-[10px]"
+              title={worktree.commit}
+            >
+              <GitCommitHorizontal className="icon-xs shrink-0" />
+              <span className="font-mono">{worktree.commit.slice(0, 8)}</span>
             </span>
           )}
         </div>
@@ -55,6 +73,8 @@ function WorktreeCard({
         <Button
           variant="ghost"
           size="icon-xs"
+          aria-label={t('dialog.deleteWorktree')}
+          title={t('dialog.deleteWorktree')}
           onClick={onRemove}
           disabled={removing}
           className="text-muted-foreground hover:text-destructive shrink-0"
@@ -90,7 +110,7 @@ function WorktreeCreateForm({
       <span>No branches found. Make sure the project has at least one commit.</span>
     </div>
   ) : (
-    <div className="border-border/50 bg-muted/30 mb-3 space-y-3 rounded-lg border p-3">
+    <div className="border-sidebar-border bg-sidebar-accent/30 space-y-3 border-b p-3">
       <div>
         <label htmlFor="worktree-branch-name" className="text-muted-foreground mb-1 block text-xs">
           {t('worktreeSettings.branchName')}
@@ -245,15 +265,11 @@ export function WorktreeSettings({
   };
 
   if (!project) {
-    return (
-      <div className="text-muted-foreground py-6 text-center text-sm">
-        {t('worktreeSettings.noProject')}
-      </div>
-    );
+    return <EmptyState icon={GitFork} title={t('worktreeSettings.noProject')} />;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 w-full flex-col text-xs">
       {/* Error banner */}
       {error && (
         <div className="bg-destructive/10 text-destructive flex items-center gap-2 rounded-md px-3 py-2 text-xs">
@@ -266,17 +282,20 @@ export function WorktreeSettings({
       )}
 
       {/* Worktree list */}
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="border-sidebar-border flex shrink-0 items-center gap-1.5 border-b px-2 py-1.5">
+          <h3 className="text-muted-foreground flex min-w-0 flex-1 items-center gap-1.5 px-1 text-[11px]">
             {t('worktreeSettings.worktrees')}
+            <span className="bg-sidebar-accent rounded px-1.5 text-[10px] tabular-nums">
+              {worktrees.length}
+            </span>
           </h3>
           {!readOnly && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowCreate(!showCreate)}
-              className="px-2"
+              className="text-muted-foreground h-6 shrink-0 px-2 text-[11px]"
             >
               {showCreate ? (
                 <ChevronUp className="icon-xs mr-1" />
@@ -288,44 +307,48 @@ export function WorktreeSettings({
           )}
         </div>
 
-        {/* Create form */}
-        {!readOnly && showCreate && (
-          <WorktreeCreateForm
-            branches={branches}
-            branchName={branchName}
-            baseBranch={baseBranch}
-            creating={creating}
-            onBranchNameChange={setBranchName}
-            onBaseBranchChange={setBaseBranch}
-            onCreate={handleCreate}
-          />
-        )}
-
-        {loading ? (
-          <LoadingState
-            fill={false}
-            layout="inline"
-            className="py-6"
-            testId="worktree-settings-loading"
-            label={t('worktreeSettings.loadingWorktrees')}
-          />
-        ) : worktrees.length === 0 ? (
-          <div className="text-muted-foreground py-6 text-center text-sm">
-            {t('worktreeSettings.noWorktrees')}
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {worktrees.map((wt) => (
-              <WorktreeCard
-                key={wt.path}
-                worktree={wt}
-                readOnly={readOnly}
-                onRemove={() => setConfirmRemove(wt)}
-                removing={removingPath === wt.path}
+        <ScrollArea className="min-h-0 flex-1" viewportProps={{ className: '[&>div]:h-full' }}>
+          <div className="flex min-h-full flex-col">
+            {/* Create form */}
+            {!readOnly && showCreate && (
+              <WorktreeCreateForm
+                branches={branches}
+                branchName={branchName}
+                baseBranch={baseBranch}
+                creating={creating}
+                onBranchNameChange={setBranchName}
+                onBaseBranchChange={setBaseBranch}
+                onCreate={handleCreate}
               />
-            ))}
+            )}
+
+            {loading ? (
+              <LoadingState
+                testId="worktree-settings-loading"
+                label={t('worktreeSettings.loadingWorktrees')}
+              />
+            ) : worktrees.length === 0 ? (
+              <EmptyState
+                icon={GitFork}
+                title={t('worktreeSettings.noWorktrees')}
+                className="flex-1"
+                testId="worktree-settings-empty"
+              />
+            ) : (
+              <div className="divide-sidebar-border flex flex-col divide-y">
+                {worktrees.map((wt) => (
+                  <WorktreeCard
+                    key={wt.path}
+                    worktree={wt}
+                    readOnly={readOnly}
+                    onRemove={() => setConfirmRemove(wt)}
+                    removing={removingPath === wt.path}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </ScrollArea>
       </div>
 
       {/* Confirm remove dialog */}

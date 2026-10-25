@@ -95,4 +95,22 @@ describe('useGitHistoryAutoRefresh', () => {
     rerender({ visible: true });
     expect(refresh).toHaveBeenCalledTimes(1);
   });
+
+  test('an explicit invalidate merges with the status change into one reload', async () => {
+    setStatus({ ...clean, unpushedCommitCount: 1, state: 'unpushed' });
+    const { result, refresh } = renderAutoRefresh();
+    // After a push: the forced status refetch lands, then the caller invalidates.
+    setStatus(clean);
+    act(() => result.current());
+    await flushDebounce();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('invalidate alone reloads when the status does not move (non-current branch push)', async () => {
+    setStatus(clean);
+    const { result, refresh } = renderAutoRefresh();
+    act(() => result.current());
+    await flushDebounce();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
 });

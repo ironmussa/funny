@@ -25,6 +25,7 @@ import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 import { GraphGutter, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
 import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
 import { HistoryFilters } from '@/components/commit-graph/HistoryFilters';
+import { useBranchActions } from '@/components/commit-graph/use-branch-actions';
 import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDialog';
 import { DiffStats } from '@/components/DiffStats';
 import { PRBadge } from '@/components/PRBadge';
@@ -90,7 +91,6 @@ import { useThreadById } from '@/lib/thread-selectors';
 import { shortTimeAgo } from '@/lib/thread-utils';
 import { canLoadGitHistory } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -99,12 +99,6 @@ const log = createClientLogger('commit-graph');
 // Process-lifetime cache of resolved email → avatar URL (GitHub .png / Gravatar),
 // shared across remounts so we don't re-hash the same emails. Mirrors AuthorBadge.
 const emailAvatarCache = new Map<string, string>();
-
-/** Bypass the status cooldown after a branch action so badges update at once. */
-function forceRefreshGitStatus(threadId: string | undefined, projectModeId: string | null): void {
-  if (threadId) useGitStatusStore.getState().fetchForThread(threadId, true);
-  else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
-}
 
 interface GraphEntry {
   hash: string;
@@ -209,7 +203,6 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [unpushed, setUnpushed] = useState<Set<string>>(new Set());
   const [unpulled, setUnpulled] = useState<Set<string>>(new Set());
-  const [branchActionInProgress, setBranchActionInProgress] = useState<string | null>(null);
   const [rebaseEvents, setRebaseEvents] = useState<GitRebaseReflogEventDTO[]>([]);
   const [selectedRebaseEvent, setSelectedRebaseEvent] = useState<GitRebaseReflogEventDTO | null>(
     null,
@@ -318,7 +311,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   }, [hasMore, loadLog]);
 
   // Keep the graph in sync with new commits / refs.
-  useGitHistoryAutoRefresh({
+  const invalidateHistory = useGitHistoryAutoRefresh({
     effectiveThreadId,
     projectModeId,
     contextKey: gitContextKey,
@@ -652,58 +645,12 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     [branchSummaries],
   );
 
-  const pushBranch = useCallback(
-    async (branch: string) => {
-      if (!hasGitContext || branchActionInProgress) return;
-      setBranchActionInProgress(`push:${branch}`);
-      const result = effectiveThreadId
-        ? await api.pushBranch(effectiveThreadId, branch)
-        : await api.projectPushBranch(projectModeId!, branch);
-      if (result.isOk()) {
-        toast.success(
-          t('history.pushBranchSuccess', {
-            branch,
-            defaultValue: `Pushed ${branch} to origin`,
-          }),
-        );
-      } else {
-        toast.error(
-          t('review.pushFailed', {
-            message: result.error.message,
-            defaultValue: `Push failed: ${result.error.message}`,
-          }),
-        );
-      }
-      setBranchActionInProgress(null);
-      forceRefreshGitStatus(effectiveThreadId, projectModeId);
-      refreshLog();
-    },
-    [hasGitContext, branchActionInProgress, effectiveThreadId, projectModeId, refreshLog, t],
-  );
-
-  const pullCurrentBranch = useCallback(
-    async (branch: string) => {
-      if (!hasGitContext || branchActionInProgress) return;
-      setBranchActionInProgress(`pull:${branch}`);
-      const result = effectiveThreadId
-        ? await api.pull(effectiveThreadId, 'ff-only')
-        : await api.projectPull(projectModeId!, 'ff-only');
-      if (result.isOk()) {
-        toast.success(t('review.pullSuccess', 'Pulled successfully'));
-      } else {
-        toast.error(
-          t('review.pullFailed', {
-            message: result.error.message,
-            defaultValue: `Pull failed: ${result.error.message}`,
-          }),
-        );
-      }
-      setBranchActionInProgress(null);
-      forceRefreshGitStatus(effectiveThreadId, projectModeId);
-      refreshLog();
-    },
-    [hasGitContext, branchActionInProgress, effectiveThreadId, projectModeId, refreshLog, t],
-  );
+  const { branchActionInProgress, pushBranch, pullCurrentBranch } = useBranchActions({
+    hasGitContext,
+    effectiveThreadId,
+    projectModeId,
+    invalidateHistory,
+  });
 
   if (!hasGitContext) {
     return <EmptyState title={t('review.noProject', 'Select a project to view history')} />;

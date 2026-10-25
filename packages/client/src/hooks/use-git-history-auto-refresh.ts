@@ -1,5 +1,5 @@
 import { useMachine } from '@xstate/react';
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { fromPromise } from 'xstate';
 
 import { useStableCallback } from '@/hooks/use-stable-callback';
@@ -43,6 +43,10 @@ function withRefreshLoader(refresh: () => Promise<unknown>) {
  * commit / push / pull, window focus) — and feeds changes in the
  * history-relevant fingerprint into {@link historyRefreshMachine}, which
  * debounces them and reloads only when the tab is visible and idle.
+ *
+ * Returns `invalidate`, for callers that know history changed (e.g. after a
+ * push or pull). Going through the machine instead of reloading directly lets
+ * it merge with the reload the resulting status change triggers on its own.
  */
 export function useGitHistoryAutoRefresh({
   effectiveThreadId,
@@ -52,7 +56,7 @@ export function useGitHistoryAutoRefresh({
   enabled,
   busy,
   refresh,
-}: GitHistoryAutoRefreshOptions): void {
+}: GitHistoryAutoRefreshOptions): () => void {
   const contextKey = rawContextKey ?? '';
   const visible = !!rawVisible && enabled;
   const threadStatus = useGitStatusForThread(effectiveThreadId);
@@ -90,4 +94,6 @@ export function useGitHistoryAutoRefresh({
       baselineRef.current = baseline;
     }
   }, [contextKey, fingerprint, send]);
+
+  return useCallback(() => send({ type: 'INVALIDATED' }), [send]);
 }

@@ -1,14 +1,18 @@
+import type { Project } from '@funny/shared';
 import { SiGithub } from '@icons-pack/react-simple-icons';
 import { FolderOpen, GitBranch, Globe, Loader2 } from 'lucide-react';
+import type { ReactElement, ReactNode } from 'react';
 import { useCallback, useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
+import { colorFromName, darkenHex } from '@/components/ui/project-chip';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { api } from '@/lib/api';
+import { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useProjectStore } from '@/stores/project-store';
 
-import { formatRemoteUrl, remoteUrlToBrowseUrl } from '../PromptInputUI';
 import { BranchPicker } from '../SearchablePicker';
 
 interface NewThreadContextBarProps {
@@ -59,89 +63,124 @@ export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
 
   return (
     <>
-      {project && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="flex max-w-[140px] min-w-0 items-center gap-1 md:max-w-[200px]">
-              <FolderOpen className="size-4 shrink-0" />
-              <span className="flex min-w-0 items-center font-medium">
-                <span className="truncate">{project.name.slice(0, -8)}</span>
-                <span className="shrink-0">{project.name.slice(-8)}</span>
-              </span>
-            </span>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] break-all">
-            {project.name}
-          </TooltipContent>
-        </Tooltip>
-      )}
-      {project && remoteUrl && (
-        <>
-          <span className="text-muted-foreground/40 shrink-0">/</span>
-          {(() => {
-            const browseUrl = remoteUrlToBrowseUrl(remoteUrl);
-            const Icon = remoteUrl.includes('github.com') ? SiGithub : Globe;
-            const formatted = formatRemoteUrl(remoteUrl);
-            const content = (
-              <>
-                <Icon className="size-4 shrink-0" />
-                <span className="flex min-w-0 items-center font-medium">
-                  <span className="truncate">{formatted.slice(0, -8)}</span>
-                  <span className="shrink-0">{formatted.slice(-8)}</span>
-                </span>
-              </>
-            );
-            return browseUrl ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <a
-                    href={browseUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="hover:bg-muted hover:text-foreground flex max-w-[180px] min-w-0 items-center gap-1 rounded px-1 py-0.5 transition-colors md:max-w-[280px]"
-                    data-testid="new-thread-repo-link"
-                  >
-                    {content}
-                  </a>
-                </TooltipTrigger>
-                <TooltipContent className="max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all">
-                  {browseUrl}
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <span className="flex max-w-[180px] min-w-0 items-center gap-1 md:max-w-[280px]">
-                {content}
-              </span>
-            );
-          })()}
-        </>
-      )}
-      {(branches.length > 0 || loading) && (
-        <>
-          <span className="text-muted-foreground/40">/</span>
-          {loading ? (
-            <span className="flex items-center gap-1">
-              <GitBranch className="size-4 shrink-0" />
-              <Loader2 className="icon-base animate-spin" />
-            </span>
-          ) : (
-            <BranchPicker
-              mobilePresentation="drawer"
-              branches={branches}
-              remoteBranches={remoteBranches}
-              defaultBranch={defaultBranch}
-              selected={selectedBranch}
-              onChange={handleBranchChange}
-              showCreateNew
-              testId="new-thread-branch-picker"
-              triggerClassName="flex max-w-[300px] items-center gap-1.5 truncate rounded px-1.5 py-0.5 text-sm text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-hidden [&_svg]:h-4 [&_svg]:w-4"
-            />
-          )}
-        </>
-      )}
+      <NewThreadPowerline
+        project={project}
+        projectId={projectId}
+        remoteUrl={remoteUrl}
+        loading={loading}
+        branchCount={branches.length}
+        selectedBranch={selectedBranch}
+        renderBranchTrigger={(trigger) => (
+          <BranchPicker
+            trigger={trigger}
+            mobilePresentation="drawer"
+            branches={branches}
+            remoteBranches={remoteBranches}
+            defaultBranch={defaultBranch}
+            selected={selectedBranch}
+            onChange={handleBranchChange}
+            showCreateNew
+            testId="new-thread-branch-picker"
+          />
+        )}
+      />
       {branchSwitchDialog}
     </>
   );
+}
+
+function NewThreadPowerline({
+  project,
+  projectId,
+  remoteUrl,
+  loading,
+  branchCount,
+  selectedBranch,
+  renderBranchTrigger,
+}: {
+  project?: Pick<Project, 'name' | 'color' | 'path'>;
+  projectId?: string;
+  remoteUrl: string | null;
+  loading: boolean;
+  branchCount: number;
+  selectedBranch: string;
+  renderBranchTrigger: (trigger: ReactElement) => ReactNode;
+}) {
+  const { t } = useTranslation();
+  const baseColor = contextColor(project, projectId);
+  const segments: PowerlineSegmentData[] = [];
+  if (project) {
+    segments.push({
+      key: 'project',
+      icon: FolderOpen,
+      label: project.name,
+      color: baseColor,
+      tooltip: project.path,
+    });
+  }
+  if (project && remoteUrl) {
+    segments.push(repositorySegment(remoteUrl, baseColor));
+  }
+  if (branchCount > 0 || loading) {
+    segments.push(
+      loading
+        ? branchSegment(t('common.loading'), LoadingBranchIcon, baseColor)
+        : branchSegment(
+            selectedBranch || t('newThread.selectBranch'),
+            GitBranch,
+            baseColor,
+            renderBranchTrigger,
+          ),
+    );
+  }
+
+  return (
+    <PowerlineBar
+      segments={segments}
+      size="md"
+      className="max-w-full"
+      data-testid="new-thread-powerline"
+    />
+  );
+}
+
+function contextColor(project?: Pick<Project, 'name' | 'color'>, projectId?: string) {
+  return project?.color || colorFromName(project?.name || projectId || 'project');
+}
+
+/** The branch picker segment; without `renderTrigger` it is display-only (loading). */
+function branchSegment(
+  label: string,
+  icon: PowerlineSegmentData['icon'],
+  baseColor: string,
+  renderTrigger?: PowerlineSegmentData['renderTrigger'],
+): PowerlineSegmentData {
+  return {
+    key: 'branch',
+    icon,
+    label,
+    color: darkenHex(baseColor, 0.15),
+    testId: 'new-thread-branch-picker',
+    renderTrigger,
+  };
+}
+
+function repositorySegment(remoteUrl: string, baseColor: string): PowerlineSegmentData {
+  const browseUrl = remoteUrlToBrowseUrl(remoteUrl);
+  const label = formatRemoteUrl(remoteUrl);
+  return {
+    key: 'repository',
+    icon: remoteUrl.includes('github.com') ? SiGithub : Globe,
+    label,
+    color: darkenHex(baseColor, 0.08),
+    href: browseUrl ?? undefined,
+    tooltip: browseUrl || label,
+    testId: 'new-thread-repo-link',
+  };
+}
+
+function LoadingBranchIcon({ className }: { className?: string }) {
+  return <Loader2 className={`${className ?? ''} animate-spin`} />;
 }
 
 function useProjectRemoteUrl(projectId?: string) {

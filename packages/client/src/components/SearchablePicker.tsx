@@ -36,6 +36,56 @@ export function SearchablePicker({
   return <SearchablePickerContent key={mobile ? 'mobile' : 'desktop'} {...props} mobile={mobile} />;
 }
 
+/**
+ * The stock picker trigger. Rest props (incl. React 19's `ref`) are spread onto
+ * the button so it works as a Radix `asChild` trigger.
+ */
+function DefaultPickerTrigger({
+  testId,
+  className,
+  mobile,
+  icon,
+  displayValue,
+  title,
+  ...rest
+}: {
+  testId?: string;
+  className?: string;
+  mobile?: boolean;
+  icon?: React.ReactNode;
+  displayValue: React.ReactNode;
+  title?: string;
+} & Omit<React.ComponentProps<'button'>, 'title'>) {
+  return (
+    <button
+      {...rest}
+      type="button"
+      data-testid={testId}
+      className={cn(
+        className ??
+          'text-muted-foreground hover:bg-muted hover:text-foreground flex max-w-[300px] items-center gap-1 truncate rounded px-2 py-1 text-xs transition-colors focus-visible:outline-hidden',
+        mobile && 'min-h-[48px] min-w-0 max-w-full text-sm',
+      )}
+      tabIndex={mobile ? 0 : -1}
+    >
+      {icon ?? <GitBranch className="icon-xs shrink-0" />}
+      {title ? (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className="truncate font-mono">{displayValue}</span>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
+            {title}
+          </TooltipContent>
+        </Tooltip>
+      ) : (
+        <span className="truncate font-mono">{displayValue}</span>
+      )}
+      <ChevronDown className="icon-xs shrink-0 opacity-60" />
+    </button>
+  );
+}
+
 function SearchablePickerContent({
   items,
   label,
@@ -48,6 +98,7 @@ function SearchablePickerContent({
   onSelect,
   onCopy,
   triggerClassName,
+  trigger: customTrigger,
   triggerTitle,
   width = 'w-md',
   side = 'top',
@@ -67,6 +118,7 @@ function SearchablePickerContent({
   onSelect: (key: string) => void;
   onCopy?: (key: string) => void;
   triggerClassName?: string;
+  trigger?: React.ReactElement;
   triggerTitle?: string;
   width?: string;
   side?: 'top' | 'bottom';
@@ -196,32 +248,15 @@ function SearchablePickerContent({
     }
   };
 
-  const trigger = (
-    <button
-      type="button"
-      data-testid={testId}
-      className={cn(
-        triggerClassName ??
-          'text-muted-foreground hover:bg-muted hover:text-foreground flex max-w-[300px] items-center gap-1 truncate rounded px-2 py-1 text-xs transition-colors focus-visible:outline-hidden',
-        mobile && 'min-h-[48px] min-w-0 max-w-full text-sm',
-      )}
-      tabIndex={mobile ? 0 : -1}
-    >
-      {icon ?? <GitBranch className="icon-xs shrink-0" />}
-      {triggerTitle ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="truncate font-mono">{displayValue}</span>
-          </TooltipTrigger>
-          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
-            {triggerTitle}
-          </TooltipContent>
-        </Tooltip>
-      ) : (
-        <span className="truncate font-mono">{displayValue}</span>
-      )}
-      <ChevronDown className="icon-xs shrink-0 opacity-60" />
-    </button>
+  const trigger = customTrigger ?? (
+    <DefaultPickerTrigger
+      testId={testId}
+      className={triggerClassName}
+      mobile={mobile}
+      icon={icon}
+      displayValue={displayValue}
+      title={triggerTitle}
+    />
   );
   const content = (
     <>
@@ -384,6 +419,10 @@ function SearchablePickerContent({
 const CREATE_NEW_BRANCH_KEY = '__create_new_branch__';
 const EMPTY_REMOTE_BRANCHES: string[] = [];
 
+function suffixTestId(testId: string | undefined, suffix: string): string | undefined {
+  return testId ? `${testId}${suffix}` : undefined;
+}
+
 export function BranchPicker({
   branches,
   remoteBranches = EMPTY_REMOTE_BRANCHES,
@@ -391,6 +430,7 @@ export function BranchPicker({
   selected,
   onChange,
   triggerClassName,
+  trigger: customTrigger,
   width = 'w-120',
   side = 'top',
   align = 'start',
@@ -407,6 +447,7 @@ export function BranchPicker({
   selected: string;
   onChange: (branch: string) => void;
   triggerClassName?: string;
+  trigger?: React.ReactElement;
   width?: string;
   side?: 'top' | 'bottom';
   align?: 'start' | 'end';
@@ -512,7 +553,7 @@ export function BranchPicker({
 
   if (creatingNew) {
     return (
-      <div className="flex items-center gap-1" data-testid={testId ? `${testId}-new` : undefined}>
+      <div className="flex items-center gap-1" data-testid={suffixTestId(testId, '-new')}>
         <Plus className="icon-xs text-muted-foreground shrink-0" />
         <Input
           ref={newBranchInputRef}
@@ -538,7 +579,7 @@ export function BranchPicker({
             }
           }}
           placeholder={t('newThread.newBranchPlaceholder', 'new-branch-name')}
-          data-testid={testId ? `${testId}-new-input` : undefined}
+          data-testid={suffixTestId(testId, '-new-input')}
           className={cn(
             'text-foreground h-auto w-40 rounded-none border-0 bg-transparent p-0 font-mono text-xs shadow-none focus-visible:ring-0',
             mobile && 'min-h-[48px] text-[16px]',
@@ -549,7 +590,7 @@ export function BranchPicker({
           aria-label={t('newThread.confirmNewBranch', 'Create branch')}
           onClick={handleConfirmNewBranch}
           disabled={!newBranchName.trim()}
-          data-testid={testId ? `${testId}-new-confirm` : undefined}
+          data-testid={suffixTestId(testId, '-new-confirm')}
           className={cn(
             'text-muted-foreground hover:bg-muted hover:text-foreground rounded px-1.5 py-0.5 text-xs transition-colors disabled:opacity-40',
             mobile && 'flex size-[48px] items-center justify-center',
@@ -580,6 +621,7 @@ export function BranchPicker({
           : undefined
       }
       triggerClassName={triggerClassName}
+      trigger={customTrigger}
       width={width}
       side={side}
       align={align}

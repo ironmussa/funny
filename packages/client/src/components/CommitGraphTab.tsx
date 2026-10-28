@@ -25,6 +25,7 @@ import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 import { GraphGutter, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
 import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
 import { HistoryFilters } from '@/components/commit-graph/HistoryFilters';
+import { useBranchActions } from '@/components/commit-graph/use-branch-actions';
 import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDialog';
 import { DiffStats } from '@/components/DiffStats';
 import { PRBadge } from '@/components/PRBadge';
@@ -37,6 +38,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useElementWidth } from '@/hooks/use-element-width';
+import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
@@ -89,7 +91,6 @@ import { useThreadById } from '@/lib/thread-selectors';
 import { shortTimeAgo } from '@/lib/thread-utils';
 import { canLoadGitHistory } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -202,7 +203,6 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [unpushed, setUnpushed] = useState<Set<string>>(new Set());
   const [unpulled, setUnpulled] = useState<Set<string>>(new Set());
-  const [branchActionInProgress, setBranchActionInProgress] = useState<string | null>(null);
   const [rebaseEvents, setRebaseEvents] = useState<GitRebaseReflogEventDTO[]>([]);
   const [selectedRebaseEvent, setSelectedRebaseEvent] = useState<GitRebaseReflogEventDTO | null>(
     null,
@@ -309,6 +309,17 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     if (!hasMore || loadingRef.current) return;
     loadLog(loadedLogSkipRef.current, true);
   }, [hasMore, loadLog]);
+
+  // Keep the graph in sync with new commits / refs.
+  const invalidateHistory = useGitHistoryAutoRefresh({
+    effectiveThreadId,
+    projectModeId,
+    contextKey: gitContextKey,
+    visible,
+    enabled: hasGitContext,
+    busy: logLoading,
+    refresh: loadLog,
+  });
 
   const loadFilteredHistory = useCallback(async () => {
     if (!hasMoreRef.current || loadingRef.current) return;
@@ -634,79 +645,12 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     [branchSummaries],
   );
 
-  const refreshGitStatus = useCallback(() => {
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
-  }, [effectiveThreadId, projectModeId]);
-
-  const pushBranch = useCallback(
-    async (branch: string) => {
-      if (!hasGitContext || branchActionInProgress) return;
-      setBranchActionInProgress(`push:${branch}`);
-      const result = effectiveThreadId
-        ? await api.pushBranch(effectiveThreadId, branch)
-        : await api.projectPushBranch(projectModeId!, branch);
-      if (result.isOk()) {
-        toast.success(
-          t('history.pushBranchSuccess', {
-            branch,
-            defaultValue: `Pushed ${branch} to origin`,
-          }),
-        );
-      } else {
-        toast.error(
-          t('review.pushFailed', {
-            message: result.error.message,
-            defaultValue: `Push failed: ${result.error.message}`,
-          }),
-        );
-      }
-      setBranchActionInProgress(null);
-      refreshGitStatus();
-      refreshLog();
-    },
-    [
-      hasGitContext,
-      branchActionInProgress,
-      effectiveThreadId,
-      projectModeId,
-      refreshGitStatus,
-      refreshLog,
-      t,
-    ],
-  );
-
-  const pullCurrentBranch = useCallback(
-    async (branch: string) => {
-      if (!hasGitContext || branchActionInProgress) return;
-      setBranchActionInProgress(`pull:${branch}`);
-      const result = effectiveThreadId
-        ? await api.pull(effectiveThreadId, 'ff-only')
-        : await api.projectPull(projectModeId!, 'ff-only');
-      if (result.isOk()) {
-        toast.success(t('review.pullSuccess', 'Pulled successfully'));
-      } else {
-        toast.error(
-          t('review.pullFailed', {
-            message: result.error.message,
-            defaultValue: `Pull failed: ${result.error.message}`,
-          }),
-        );
-      }
-      setBranchActionInProgress(null);
-      refreshGitStatus();
-      refreshLog();
-    },
-    [
-      hasGitContext,
-      branchActionInProgress,
-      effectiveThreadId,
-      projectModeId,
-      refreshGitStatus,
-      refreshLog,
-      t,
-    ],
-  );
+  const { branchActionInProgress, pushBranch, pullCurrentBranch } = useBranchActions({
+    hasGitContext,
+    effectiveThreadId,
+    projectModeId,
+    invalidateHistory,
+  });
 
   if (!hasGitContext) {
     return <EmptyState title={t('review.noProject', 'Select a project to view history')} />;

@@ -9,6 +9,7 @@ import { CreatePRDialog, type PRDraft } from '@/components/commit-history/Create
 import { PublishRepoDialog } from '@/components/PublishRepoDialog';
 import { isDivergedBranchesError, PullStrategyDialog } from '@/components/pull-strategy-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { api, type PullStrategy } from '@/lib/api';
 import { mergeLogEntriesByHash, uniqueLogEntriesByHash } from '@/lib/git-log-merge';
@@ -191,6 +192,17 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
     loadLog(0, false);
   }, [loadLog]);
 
+  // Keep the list in sync with new commits / refs (replaces reload-on-every-reveal).
+  useGitHistoryAutoRefresh({
+    effectiveThreadId,
+    projectModeId,
+    contextKey: gitContextKey,
+    visible,
+    enabled: hasGitContext,
+    busy: logLoading,
+    refresh: loadLog,
+  });
+
   // Auto-load on mount / context change
   const prevContextRef = useRef<string | null | undefined>(undefined);
   useEffect(() => {
@@ -224,16 +236,6 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
     if (visible && hasGitContext && !loadedRef.current) {
       loadedRef.current = true;
       // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- first reveal intentionally triggers the initial history fetch once.
-      loadLog(0, false);
-    }
-  }, [visible, hasGitContext, loadLog]);
-
-  const prevVisibleRef = useRef(visible);
-  useEffect(() => {
-    const wasHidden = prevVisibleRef.current === false;
-    prevVisibleRef.current = visible;
-    if (visible && wasHidden && hasGitContext && loadedRef.current) {
-      // eslint-disable-next-line react-doctor/no-adjust-state-on-prop-change -- tab reveal intentionally refreshes the already-loaded history.
       loadLog(0, false);
     }
   }, [visible, hasGitContext, loadLog]);

@@ -304,6 +304,8 @@ export function ReviewPane() {
         />
 
         <ReviewSecondaryTabs
+          activePath={basePath}
+          readOnly={viewerReadOnly}
           reviewSubTab={reviewSubTab}
           reviewPaneOpen={reviewPaneOpen}
           stashTab={{

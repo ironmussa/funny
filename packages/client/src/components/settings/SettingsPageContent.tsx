@@ -15,7 +15,6 @@ import { ProjectRunnerSettings } from '@/components/settings/ProjectRunnerSettin
 import { SkillsSettings } from '@/components/SkillsSettings';
 import { StartupCommandsSettings } from '@/components/StartupCommandsSettings';
 import { LoadingState } from '@/components/ui/loading-state';
-import { WorktreeSettings } from '@/components/WorktreeSettings';
 
 // Lazy-loaded: pulls in Monaco editor (~3MB) only when the user opens this page
 const ProjectHooksSettings = lazy(() =>
@@ -46,8 +45,6 @@ export function SettingsPageContent({ page, label }: Props) {
       return <McpServerSettings />;
     case 'skills':
       return <SkillsSettings />;
-    case 'worktrees':
-      return <WorktreeSettings />;
     case 'startup-commands':
       return <StartupCommandsSettings />;
     case 'project-config':

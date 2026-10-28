@@ -947,6 +947,10 @@
     "close": "Cerrar"
   },
   "worktreeSettings": {
+    "main": "Principal",
+    "active": "Activo",
+    "mainDescription": "Carpeta original del repositorio. No se puede eliminar como un worktree secundario.",
+    "activeDescription": "Directorio de trabajo mostrado actualmente en el panel de revisión.",
     "noProject": "No hay proyecto seleccionado. Agrega un proyecto primero para gestionar worktrees.",
     "worktreesFor": "Worktrees para:",
     "dismiss": "Descartar",

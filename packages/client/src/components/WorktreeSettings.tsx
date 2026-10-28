@@ -1,16 +1,32 @@
-import { Trash2, Plus, Loader2, AlertCircle, GitFork, FolderOpen, ChevronUp } from 'lucide-react';
+import {
+  Trash2,
+  Plus,
+  Loader2,
+  AlertCircle,
+  GitFork,
+  FolderOpen,
+  ChevronUp,
+  GitCommitHorizontal,
+} from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
+import { contrastText, pastelize } from '@/components/ui/project-chip';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 
 import { BranchPicker } from './SearchablePicker';
+
+const MAIN_CHIP_COLOR = pastelize('#7CB9E8');
+const ACTIVE_CHIP_COLOR = pastelize('#A8D5A2');
+const WORKTREE_CHIP_CLASS = 'shrink-0 rounded-full px-1.5 py-0 text-[9px] leading-4 font-medium';
 
 interface WorktreeInfo {
   path: string;
@@ -23,36 +39,70 @@ function WorktreeCard({
   worktree,
   onRemove,
   removing,
+  active,
+  readOnly,
 }: {
   worktree: WorktreeInfo;
   onRemove: () => void;
   removing: boolean;
+  active: boolean;
+  readOnly: boolean;
 }) {
+  const { t } = useTranslation();
   return (
-    <div className="border-border/50 bg-card flex items-center justify-between gap-3 rounded-md border px-3 py-2.5">
-      <div className="flex min-w-0 items-center gap-3">
-        <GitFork className="icon-base text-status-info shrink-0" />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{worktree.branch}</span>
+    <div className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors">
+      <div className="flex min-w-0 flex-1 items-start gap-2">
+        <GitFork className="icon-sm text-status-info mt-0.5 shrink-0" />
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-foreground min-w-0 text-[11px] leading-5 font-medium break-words">
+              {worktree.branch}
+            </span>
+            {worktree.isMain && (
+              <span
+                className={WORKTREE_CHIP_CLASS}
+                style={{ backgroundColor: MAIN_CHIP_COLOR, color: contrastText(MAIN_CHIP_COLOR) }}
+                title={t('worktreeSettings.mainDescription')}
+              >
+                {t('worktreeSettings.main')}
+              </span>
+            )}
+            {active && (
+              <span
+                className={WORKTREE_CHIP_CLASS}
+                style={{
+                  backgroundColor: ACTIVE_CHIP_COLOR,
+                  color: contrastText(ACTIVE_CHIP_COLOR),
+                }}
+                title={t('worktreeSettings.activeDescription')}
+              >
+                {t('worktreeSettings.active')}
+              </span>
+            )}
           </div>
-          <div className="mt-0.5 flex items-center gap-2">
+          <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[10px]">
             <FolderOpen className="icon-xs text-muted-foreground/70 shrink-0" />
-            <span className="text-muted-foreground/70 truncate font-mono text-xs">
+            <span title={worktree.path} className="truncate font-mono">
               {worktree.path}
             </span>
           </div>
           {worktree.commit && (
-            <span className="text-muted-foreground/70 font-mono text-xs">
-              {worktree.commit.slice(0, 8)}
+            <span
+              className="text-muted-foreground flex items-center gap-1.5 text-[10px]"
+              title={worktree.commit}
+            >
+              <GitCommitHorizontal className="icon-xs shrink-0" />
+              <span className="font-mono">{worktree.commit.slice(0, 8)}</span>
             </span>
           )}
         </div>
       </div>
-      {!worktree.isMain && (
+      {!readOnly && !worktree.isMain && (
         <Button
           variant="ghost"
           size="icon-xs"
+          aria-label={t('dialog.deleteWorktree')}
+          title={t('dialog.deleteWorktree')}
           onClick={onRemove}
           disabled={removing}
           className="text-muted-foreground hover:text-destructive shrink-0"
@@ -64,7 +114,91 @@ function WorktreeCard({
   );
 }
 
-export function WorktreeSettings() {
+function WorktreeCreateForm({
+  branches,
+  branchName,
+  baseBranch,
+  creating,
+  onBranchNameChange,
+  onBaseBranchChange,
+  onCreate,
+}: {
+  branches: string[];
+  branchName: string;
+  baseBranch: string;
+  creating: boolean;
+  onBranchNameChange: (value: string) => void;
+  onBaseBranchChange: (value: string) => void;
+  onCreate: () => void;
+}) {
+  const { t } = useTranslation();
+  return branches.length === 0 ? (
+    <div className="bg-status-pending/10 text-status-pending/80 mb-3 flex items-center gap-2 rounded-md px-3 py-2 text-xs">
+      <AlertCircle className="icon-sm shrink-0" />
+      <span>No branches found. Make sure the project has at least one commit.</span>
+    </div>
+  ) : (
+    <div className="border-sidebar-border bg-sidebar-accent/30 space-y-3 border-b p-3">
+      <div>
+        <label htmlFor="worktree-branch-name" className="text-muted-foreground mb-1 block text-xs">
+          {t('worktreeSettings.branchName')}
+        </label>
+        <Input
+          id="worktree-branch-name"
+          type="text"
+          value={branchName}
+          onChange={(e) => onBranchNameChange(e.target.value)}
+          placeholder="feature/my-new-branch"
+          className="h-8 px-2 font-mono text-xs"
+          onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (e.key === 'Enter') onCreate();
+          }}
+        />
+      </div>
+
+      <fieldset>
+        <legend className="text-muted-foreground mb-1 block text-xs">
+          {t('worktreeSettings.baseBranch')}
+        </legend>
+        <BranchPicker
+          branches={branches}
+          selected={baseBranch}
+          onChange={onBaseBranchChange}
+          triggerClassName="flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-xs transition-colors hover:bg-accent/50 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/50"
+          side="bottom"
+          align="start"
+          showCopy={false}
+          placeholder="main (default)"
+        />
+      </fieldset>
+
+      <Button
+        size="sm"
+        onClick={onCreate}
+        disabled={!branchName.trim() || creating}
+        className="w-full"
+      >
+        {creating ? (
+          <Loader2 className="icon-xs mr-1 animate-spin" />
+        ) : (
+          <Plus className="icon-xs mr-1" />
+        )}
+        {creating ? t('worktreeSettings.creating') : t('worktreeSettings.createWorktree')}
+      </Button>
+    </div>
+  );
+}
+
+export function WorktreeSettings({
+  projectId,
+  activePath,
+  readOnly = false,
+}: {
+  projectId?: string;
+  activePath?: string;
+  readOnly?: boolean;
+}) {
   const { t } = useTranslation();
   const projects = useAppStore((s) => s.projects);
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
@@ -79,9 +213,12 @@ export function WorktreeSettings() {
   const [baseBranch, setBaseBranch] = useState('');
   const [creating, setCreating] = useState(false);
 
-  const project = selectedProjectId
-    ? projects.find((p) => p.id === selectedProjectId)
-    : projects[0];
+  const targetProjectId = projectId ?? selectedProjectId;
+  const project = targetProjectId
+    ? projects.find((p) => p.id === targetProjectId)
+    : projectId === undefined
+      ? projects[0]
+      : undefined;
 
   const loadWorktrees = useCallback(async () => {
     if (!project) return;
@@ -120,7 +257,7 @@ export function WorktreeSettings() {
 
   const handleCreate = async () => {
     const effectiveBase = baseBranch || branches[0];
-    if (!branchName.trim() || !project) return;
+    if (readOnly || !branchName.trim() || !project) return;
     if (!effectiveBase) {
       setError('No base branch available. Make sure the project has at least one commit.');
       return;
@@ -143,7 +280,7 @@ export function WorktreeSettings() {
   };
 
   const handleRemoveConfirmed = async () => {
-    if (!project || !confirmRemove) return;
+    if (readOnly || !project || !confirmRemove) return;
     const { path: worktreePath, branch } = confirmRemove;
     setConfirmRemove(null);
     setRemovingPath(worktreePath);
@@ -158,15 +295,11 @@ export function WorktreeSettings() {
   };
 
   if (!project) {
-    return (
-      <div className="text-muted-foreground py-6 text-center text-sm">
-        {t('worktreeSettings.noProject')}
-      </div>
-    );
+    return <EmptyState icon={GitFork} title={t('worktreeSettings.noProject')} />;
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 w-full flex-col text-xs">
       {/* Error banner */}
       {error && (
         <div className="bg-destructive/10 text-destructive flex items-center gap-2 rounded-md px-3 py-2 text-xs">
@@ -179,112 +312,74 @@ export function WorktreeSettings() {
       )}
 
       {/* Worktree list */}
-      <div>
-        <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-muted-foreground text-xs font-semibold tracking-wider uppercase">
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="border-sidebar-border flex shrink-0 items-center gap-1.5 border-b px-2 py-1.5">
+          <h3 className="text-muted-foreground flex min-w-0 flex-1 items-center gap-1.5 px-1 text-[11px]">
             {t('worktreeSettings.worktrees')}
+            <span className="bg-sidebar-accent rounded px-1.5 text-[10px] tabular-nums">
+              {worktrees.length}
+            </span>
           </h3>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setShowCreate(!showCreate)}
-            className="px-2"
-          >
-            {showCreate ? (
-              <ChevronUp className="icon-xs mr-1" />
-            ) : (
-              <Plus className="icon-xs mr-1" />
-            )}
-            {showCreate ? t('worktreeSettings.cancel') : t('worktreeSettings.createWorktree')}
-          </Button>
+          {!readOnly && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowCreate(!showCreate)}
+              className="text-muted-foreground h-6 shrink-0 px-2 text-[11px]"
+            >
+              {showCreate ? (
+                <ChevronUp className="icon-xs mr-1" />
+              ) : (
+                <Plus className="icon-xs mr-1" />
+              )}
+              {showCreate ? t('worktreeSettings.cancel') : t('worktreeSettings.createWorktree')}
+            </Button>
+          )}
         </div>
 
-        {/* Create form */}
-        {showCreate &&
-          (branches.length === 0 ? (
-            <div className="bg-status-pending/10 text-status-pending/80 mb-3 flex items-center gap-2 rounded-md px-3 py-2 text-xs">
-              <AlertCircle className="icon-sm shrink-0" />
-              <span>No branches found. Make sure the project has at least one commit.</span>
-            </div>
-          ) : (
-            <div className="border-border/50 bg-muted/30 mb-3 space-y-3 rounded-lg border p-3">
-              <div>
-                <label
-                  htmlFor="worktree-branch-name"
-                  className="text-muted-foreground mb-1 block text-xs"
-                >
-                  {t('worktreeSettings.branchName')}
-                </label>
-                <Input
-                  id="worktree-branch-name"
-                  type="text"
-                  value={branchName}
-                  onChange={(e) => setBranchName(e.target.value)}
-                  placeholder="feature/my-new-branch"
-                  className="h-8 px-2 font-mono text-xs"
-                  onKeyDown={(e) => {
-                    if (e.nativeEvent.isComposing) return;
-                    if (e.key === 'Enter') handleCreate();
-                  }}
-                />
-              </div>
-
-              <fieldset>
-                <legend className="text-muted-foreground mb-1 block text-xs">
-                  {t('worktreeSettings.baseBranch')}
-                </legend>
-                <BranchPicker
-                  branches={branches}
-                  selected={baseBranch}
-                  onChange={setBaseBranch}
-                  triggerClassName="flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-xs transition-colors hover:bg-accent/50 focus-visible:outline-hidden focus-visible:ring-1 focus-visible:ring-ring/50"
-                  side="bottom"
-                  align="start"
-                  showCopy={false}
-                  placeholder="main (default)"
-                />
-              </fieldset>
-
-              <Button
-                size="sm"
-                onClick={handleCreate}
-                disabled={!branchName.trim() || creating}
-                className="w-full"
-              >
-                {creating ? (
-                  <Loader2 className="icon-xs mr-1 animate-spin" />
-                ) : (
-                  <Plus className="icon-xs mr-1" />
-                )}
-                {creating ? t('worktreeSettings.creating') : t('worktreeSettings.createWorktree')}
-              </Button>
-            </div>
-          ))}
-
-        {loading ? (
-          <LoadingState
-            fill={false}
-            layout="inline"
-            className="py-6"
-            testId="worktree-settings-loading"
-            label={t('worktreeSettings.loadingWorktrees')}
-          />
-        ) : worktrees.length === 0 ? (
-          <div className="text-muted-foreground py-6 text-center text-sm">
-            {t('worktreeSettings.noWorktrees')}
-          </div>
-        ) : (
-          <div className="space-y-1.5">
-            {worktrees.map((wt) => (
-              <WorktreeCard
-                key={wt.path}
-                worktree={wt}
-                onRemove={() => setConfirmRemove(wt)}
-                removing={removingPath === wt.path}
+        <ScrollArea className="min-h-0 flex-1" viewportProps={{ className: '[&>div]:h-full' }}>
+          <div className="flex min-h-full flex-col">
+            {/* Create form */}
+            {!readOnly && showCreate && (
+              <WorktreeCreateForm
+                branches={branches}
+                branchName={branchName}
+                baseBranch={baseBranch}
+                creating={creating}
+                onBranchNameChange={setBranchName}
+                onBaseBranchChange={setBaseBranch}
+                onCreate={handleCreate}
               />
-            ))}
+            )}
+
+            {loading ? (
+              <LoadingState
+                testId="worktree-settings-loading"
+                label={t('worktreeSettings.loadingWorktrees')}
+              />
+            ) : worktrees.length === 0 ? (
+              <EmptyState
+                icon={GitFork}
+                title={t('worktreeSettings.noWorktrees')}
+                className="flex-1"
+                testId="worktree-settings-empty"
+              />
+            ) : (
+              <div className="divide-sidebar-border flex flex-col divide-y">
+                {worktrees.map((wt) => (
+                  <WorktreeCard
+                    key={wt.path}
+                    worktree={wt}
+                    active={!!activePath && wt.path === activePath}
+                    readOnly={readOnly}
+                    onRemove={() => setConfirmRemove(wt)}
+                    removing={removingPath === wt.path}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-        )}
+        </ScrollArea>
       </div>
 
       {/* Confirm remove dialog */}

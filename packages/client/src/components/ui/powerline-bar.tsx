@@ -1,4 +1,4 @@
-import { Copy } from 'lucide-react';
+import { ChevronDown, Copy } from 'lucide-react';
 import * as React from 'react';
 import { toast } from 'sonner';
 
@@ -44,6 +44,11 @@ export interface PowerlineSegmentData {
    * copy glyph and clicking copies this string to the clipboard.
    */
   copyValue?: string;
+  /** Optional external repository link. Takes precedence over click-to-copy. */
+  href?: string;
+  /** Compose a picker around the styled, keyboard-focusable segment button. */
+  renderTrigger?: (trigger: React.ReactElement) => React.ReactNode;
+  testId?: string;
 }
 
 export interface PowerlineBarProps {
@@ -146,6 +151,55 @@ function copyInteractionProps(value: string | undefined) {
   };
 }
 
+/** Links and pickers own the click, so only plain segments copy. */
+function isCopyable(segment: PowerlineSegmentData): boolean {
+  return !!segment.copyValue && !segment.href && !segment.renderTrigger;
+}
+
+function segmentTestId(segment: PowerlineSegmentData): string {
+  return segment.testId ?? `powerline-segment-${segment.key}`;
+}
+
+function SegmentWrapper({
+  segment,
+  children,
+}: {
+  segment: PowerlineSegmentData;
+  children: React.ReactElement<React.HTMLAttributes<HTMLElement>>;
+}) {
+  const interactiveClass = cn(
+    children.props.className,
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+  );
+  if (segment.renderTrigger) {
+    return segment.renderTrigger(
+      <button
+        {...children.props}
+        type="button"
+        className={interactiveClass}
+        title={segment.tooltip || segment.label}
+      />,
+    );
+  }
+  const content = segment.href ? (
+    <a
+      {...children.props}
+      className={interactiveClass}
+      href={segment.href}
+      target="_blank"
+      rel="noopener noreferrer"
+    />
+  ) : (
+    children
+  );
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{content}</TooltipTrigger>
+      <TooltipContent>{segment.tooltip || segment.label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
 export function PowerlineBar({
   segments,
   size = 'md',
@@ -166,15 +220,18 @@ export function PowerlineBar({
     query?.trim() ? <HighlightText text={label} query={query} /> : label;
 
   const renderSegmentLabel = (segment: PowerlineSegmentData) => (
-    <span
-      className={cn(
-        config.text,
-        'truncate font-medium whitespace-nowrap',
-        segment.emphasis && 'font-bold',
-      )}
-    >
-      {renderLabel(segment.label)}
-    </span>
+    <>
+      <span
+        className={cn(
+          config.text,
+          'truncate font-medium whitespace-nowrap',
+          segment.emphasis && 'font-bold',
+        )}
+      >
+        {renderLabel(segment.label)}
+      </span>
+      {segment.renderTrigger && <ChevronDown className={cn(config.icon, 'shrink-0 opacity-60')} />}
+    </>
   );
 
   return (
@@ -193,28 +250,26 @@ export function PowerlineBar({
           const isLast = i === segments.length - 1;
           const textColor = segment.textColor || contrastText(segment.color);
           const Icon = segment.icon;
-          const copyable = !!segment.copyValue;
-          const interaction = copyInteractionProps(segment.copyValue);
+          const copyable = isCopyable(segment);
+          const interaction = copyInteractionProps(copyable ? segment.copyValue : undefined);
+          const testId = segmentTestId(segment);
 
           if (variant === 'plain') {
             return (
               <React.Fragment key={segment.key}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div
-                      className={cn(
-                        'group/seg inline-flex items-center gap-1 min-w-0 text-muted-foreground',
-                        copyable && 'cursor-pointer hover:text-foreground',
-                      )}
-                      data-testid={`powerline-segment-${segment.key}`}
-                      {...interaction}
-                    >
-                      <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
-                      {renderSegmentLabel(segment)}
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent>{segment.tooltip || segment.label}</TooltipContent>
-                </Tooltip>
+                <SegmentWrapper segment={segment}>
+                  <div
+                    className={cn(
+                      'group/seg inline-flex items-center gap-1 min-w-0 text-muted-foreground',
+                      copyable && 'cursor-pointer hover:text-foreground',
+                    )}
+                    data-testid={testId}
+                    {...interaction}
+                  >
+                    <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
+                    {renderSegmentLabel(segment)}
+                  </div>
+                </SegmentWrapper>
                 {!isLast && (
                   <span
                     aria-hidden="true"
@@ -229,69 +284,60 @@ export function PowerlineBar({
 
           if (variant === 'chips') {
             return (
-              <Tooltip key={segment.key}>
-                <TooltipTrigger asChild>
-                  <div
-                    className={cn(
-                      'group/seg inline-flex items-center gap-0.5 min-w-0 rounded-full',
-                      config.height,
-                      config.padding,
-                      copyable && 'cursor-pointer',
-                    )}
-                    style={{ backgroundColor: segment.color, color: textColor }}
-                    data-testid={`powerline-segment-${segment.key}`}
-                    {...interaction}
-                  >
-                    <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
-                    {renderSegmentLabel(segment)}
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent>{segment.tooltip || segment.label}</TooltipContent>
-              </Tooltip>
+              <SegmentWrapper key={segment.key} segment={segment}>
+                <div
+                  className={cn(
+                    'group/seg inline-flex items-center gap-0.5 min-w-0 rounded-full',
+                    config.height,
+                    config.padding,
+                    copyable && 'cursor-pointer',
+                  )}
+                  style={{ backgroundColor: segment.color, color: textColor }}
+                  data-testid={testId}
+                  {...interaction}
+                >
+                  <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
+                  {renderSegmentLabel(segment)}
+                </div>
+              </SegmentWrapper>
             );
           }
 
           return (
-            <Tooltip key={segment.key}>
-              <TooltipTrigger asChild>
-                {/* Outer wrapper applies drop-shadow-sm that follows the clipped
-                    arrow shape of the inner div, creating a visible edge
-                    between segments even when they share the same color. */}
+            <SegmentWrapper key={segment.key} segment={segment}>
+              <div
+                className={cn(
+                  'group/seg relative inline-flex min-w-0 shrink',
+                  copyable && 'cursor-pointer',
+                )}
+                style={{
+                  zIndex: segments.length - i,
+                  marginLeft: !isFirst ? `-${config.arrow}px` : undefined,
+                  filter: !isLast ? arrowEdgeShadow(segment.color) : undefined,
+                }}
+                data-testid={testId}
+                {...interaction}
+              >
                 <div
                   className={cn(
-                    'group/seg relative inline-flex min-w-0 shrink',
-                    copyable && 'cursor-pointer',
+                    'inline-flex items-center gap-0.5 min-w-0 w-full',
+                    config.height,
+                    config.padding,
+                    isFirst && 'rounded-l-sm',
                   )}
                   style={{
-                    zIndex: segments.length - i,
-                    marginLeft: !isFirst ? `-${config.arrow}px` : undefined,
-                    filter: !isLast ? arrowEdgeShadow(segment.color) : undefined,
+                    backgroundColor: segment.color,
+                    color: textColor,
+                    paddingRight: `calc(${config.arrow}px + 0.25rem)`,
+                    paddingLeft: !isFirst ? `calc(${config.arrow}px + 0.375rem)` : undefined,
+                    clipPath: `polygon(0 0, calc(100% - ${config.arrow}px) 0, 100% 50%, calc(100% - ${config.arrow}px) 100%, 0 100%)`,
                   }}
-                  data-testid={`powerline-segment-${segment.key}`}
-                  {...interaction}
                 >
-                  <div
-                    className={cn(
-                      'inline-flex items-center gap-0.5 min-w-0 w-full',
-                      config.height,
-                      config.padding,
-                      isFirst && 'rounded-l-sm',
-                    )}
-                    style={{
-                      backgroundColor: segment.color,
-                      color: textColor,
-                      paddingRight: `calc(${config.arrow}px + 0.25rem)`,
-                      paddingLeft: !isFirst ? `calc(${config.arrow}px + 0.375rem)` : undefined,
-                      clipPath: `polygon(0 0, calc(100% - ${config.arrow}px) 0, 100% 50%, calc(100% - ${config.arrow}px) 100%, 0 100%)`,
-                    }}
-                  >
-                    <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
-                    {renderSegmentLabel(segment)}
-                  </div>
+                  <SegmentIcon Icon={Icon} copyable={copyable} className={config.icon} />
+                  {renderSegmentLabel(segment)}
                 </div>
-              </TooltipTrigger>
-              <TooltipContent>{segment.tooltip || segment.label}</TooltipContent>
-            </Tooltip>
+              </div>
+            </SegmentWrapper>
           );
         })}
       </div>

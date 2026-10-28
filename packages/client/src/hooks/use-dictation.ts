@@ -152,11 +152,9 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
       const { token } = tokenResult.value;
 
       // 3. Connect directly to AssemblyAI
-      // Using universal-streaming-multilingual: emits immutable words individually
-      // (~300ms latency per word) — ideal for dictation. Supports EN, ES, FR, DE, IT, PT.
-      // u3-rt-pro only emits during silence pauses which is unsuitable for dictation.
+      // Universal-3.6 Pro supports multilingual partial transcripts and native code-switching.
       const params = new URLSearchParams({
-        speech_model: 'universal-streaming-multilingual',
+        speech_model: 'universal-3-6-pro',
         sample_rate: '16000',
         encoding: 'pcm_s16le',
         token,

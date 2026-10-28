@@ -96,6 +96,14 @@ describe('useDictation', () => {
     await waitFor(() => expect(ConnectingWebSocket.instances).toHaveLength(1));
 
     const socket = ConnectingWebSocket.instances[0];
+    const url = new URL(socket.url);
+    expect(url.origin + url.pathname).toBe('wss://streaming.assemblyai.com/v3/ws');
+    expect(Object.fromEntries(url.searchParams)).toEqual({
+      speech_model: 'universal-3-6-pro',
+      sample_rate: '16000',
+      encoding: 'pcm_s16le',
+      token: 'temporary-token',
+    });
     unmount();
     await act(async () => {
       await startPromise;

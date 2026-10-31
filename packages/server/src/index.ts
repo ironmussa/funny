@@ -11,6 +11,7 @@ import { createHash } from 'crypto';
 import { existsSync } from 'fs';
 import { join, resolve } from 'path';
 
+import { scheduleRepeating } from '@funny/shared/async';
 import { VISUALIZER_IMPORT_MAP_JSON } from '@funny/shared/visualizer-importmap';
 import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
@@ -473,10 +474,30 @@ if (runnerTransport) {
   });
 }
 
-const server = Bun.serve({
-  // Spread Bun engine handler FIRST — provides the `websocket` property
-  // for native Bun WebSocket lifecycle (open/message/close).
-  ...socketEngine.handler(),
+// Runners outside the private network reach the gRPC listener through a
+// WebSocket carrier on this public origin (see services/grpc/websocket-carrier.ts).
+const {
+  createRunnerGrpcWebSocketCarrier,
+  carrierTargetFor,
+  routeRunnerCarrier,
+  withRunnerCarrier,
+} = await import('./services/grpc/websocket-carrier.js');
+const runnerCarrier = runnerTransport
+  ? createRunnerGrpcWebSocketCarrier({ target: carrierTargetFor(runnerTransport.endpoint) })
+  : null;
+const socketEngineHandler = socketEngine.handler();
+const appEnv = {
+  runnerRequests: runnerTransport?.requests,
+  runnerPresence: runnerTransport?.presence,
+  browserEvents,
+};
+
+// `any` WebSocket data: one server hosts Socket.IO sockets and runner carrier sockets.
+const server = Bun.serve<any>({
+  // Spread Bun engine handler FIRST — provides idle/body limits; the
+  // `websocket` lifecycle is shared with the runner carrier.
+  ...socketEngineHandler,
+  websocket: withRunnerCarrier(socketEngineHandler.websocket, runnerCarrier),
   port: PORT,
   hostname: HOST,
   reusePort: true,
@@ -488,12 +509,9 @@ const server = Bun.serve({
     if (url.pathname.startsWith('/socket.io/')) {
       return socketEngine.handleRequest(req, server);
     }
-    return app.fetch(req, {
-      IP: server.requestIP(req),
-      runnerRequests: runnerTransport?.requests,
-      runnerPresence: runnerTransport?.presence,
-      browserEvents,
-    });
+    const carried = routeRunnerCarrier(req, server, runnerCarrier);
+    if (carried !== null) return carried;
+    return app.fetch(req, { ...appEnv, IP: server.requestIP(req) });
   },
 });
 
@@ -508,12 +526,12 @@ log.info(`funny-server running on http://${HOST}:${PORT}`, {
 // Socket.IO handles heartbeats natively (pingInterval/pingTimeout),
 // so we only check periodically for DB↔connection state mismatches.
 const RUNNER_STATUS_INTERVAL_MS = 30_000;
-let runnerStatusTimer: ReturnType<typeof setInterval> | null = null;
+let runnerStatusMonitor: ReturnType<typeof scheduleRepeating> | null = null;
 let lastRunnerStateHash = '';
 const runnerStatusMonitorEnabled = process.env.FUNNY_RUNNER_STATUS_MONITOR === 'true';
 
 if (process.env.NODE_ENV !== 'production' && runnerStatusMonitorEnabled) {
-  runnerStatusTimer = setInterval(async () => {
+  runnerStatusMonitor = scheduleRepeating(async () => {
     try {
       const browserEvents = await import('./services/browser-events.js');
       const rm = await import('./services/runner-manager.js');
@@ -567,7 +585,8 @@ async function shutdown() {
   log.info('Shutting down…', { namespace: 'server' });
 
   // Stop runner status monitor
-  if (runnerStatusTimer) clearInterval(runnerStatusTimer);
+  runnerStatusMonitor?.stop();
+  await runnerStatusMonitor?.done;
 
   // Force exit after 5 seconds if graceful shutdown hangs
   const forceExit = setTimeout(() => {

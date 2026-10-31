@@ -5,8 +5,6 @@
  * @domain layer: infrastructure
  */
 
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import { resolveSDKCliPath } from '@funny/core/agents';
 import { getDiff, addToGitignore, commit, runHookCommand, gitRead } from '@funny/core/git';
 import { badRequest, internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
@@ -14,12 +12,10 @@ import { err } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { requestSpan } from '../../middleware/tracing.js';
+import { generateCommitMessage } from '../../services/commit-message-generator.js';
 import { commitChanges as gitServiceCommit, resolveIdentity } from '../../services/git-service.js';
 import { getPipelineForProject } from '../../services/pipeline-manager.js';
-import {
-  buildCommitMessagePrompt,
-  COMMIT_MESSAGE_SYSTEM_PROMPT,
-} from '../../services/pipeline-prompts.js';
+import { buildCommitMessagePrompt } from '../../services/pipeline-prompts.js';
 import { listHooks } from '../../services/project-hooks-service.js';
 import * as tm from '../../services/thread-manager.js';
 import type { HonoEnv } from '../../types/hono-env.js';
@@ -114,53 +110,7 @@ commitRoutes.post('/project/:projectId/generate-commit-message', async (c) => {
   const pipelineCfg = await getPipelineForProject(projectId);
   const prompt = buildCommitMessagePrompt(diffSummary, pipelineCfg?.commitMessagePrompt);
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000);
-
-  const output = await (async (): Promise<{ text: string } | { error: string }> => {
-    try {
-      let resultText = '';
-
-      const gen = query({
-        prompt,
-        options: {
-          cwd,
-          maxTurns: 1,
-          permissionMode: 'plan',
-          abortController: controller,
-          pathToClaudeCodeExecutable: resolveSDKCliPath(),
-          systemPrompt: COMMIT_MESSAGE_SYSTEM_PROMPT,
-          tools: [],
-        },
-      });
-
-      for await (const msg of gen) {
-        if (msg.type === 'assistant') {
-          const content = (msg as any).message?.content;
-          if (!content) continue;
-          const text = content
-            .filter((b: any) => b.type === 'text' && b.text)
-            .map((b: any) => b.text)
-            .join('\n');
-          if (text) resultText = text;
-        }
-        if (msg.type === 'result') {
-          const r = (msg as any).result || resultText;
-          return r ? { text: r } : { error: 'No output received' };
-        }
-      }
-
-      return resultText ? { text: resultText } : { error: 'No output received' };
-    } catch (e: any) {
-      log.error('SDK query error generating commit message', {
-        namespace: 'git',
-        error: e.message,
-      });
-      return { error: e.message || 'Unknown error' };
-    } finally {
-      clearTimeout(timeout);
-    }
-  })();
+  const output = await generateCommitMessage({ cwd, prompt, signal: c.req.raw.signal });
 
   if ('error' in output) {
     return resultToResponse(c, err(internal(output.error)));
@@ -325,53 +275,7 @@ commitRoutes.post('/:threadId/generate-commit-message', async (c) => {
     fileCount: relevantDiffs.length,
   });
 
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 60_000);
-
-  const output = await (async (): Promise<{ text: string } | { error: string }> => {
-    try {
-      let resultText = '';
-
-      const gen = query({
-        prompt,
-        options: {
-          cwd,
-          maxTurns: 1,
-          permissionMode: 'plan',
-          abortController: controller,
-          pathToClaudeCodeExecutable: resolveSDKCliPath(),
-          systemPrompt: COMMIT_MESSAGE_SYSTEM_PROMPT,
-          tools: [],
-        },
-      });
-
-      for await (const msg of gen) {
-        if (msg.type === 'assistant') {
-          const content = (msg as any).message?.content;
-          if (!content) continue;
-          const text = content
-            .filter((b: any) => b.type === 'text' && b.text)
-            .map((b: any) => b.text)
-            .join('\n');
-          if (text) resultText = text;
-        }
-        if (msg.type === 'result') {
-          const r = (msg as any).result || resultText;
-          return r ? { text: r } : { error: 'No output received' };
-        }
-      }
-
-      return resultText ? { text: resultText } : { error: 'No output received' };
-    } catch (e: any) {
-      log.error('SDK query error generating commit message', {
-        namespace: 'git',
-        error: e.message,
-      });
-      return { error: e.message || 'Unknown error' };
-    } finally {
-      clearTimeout(timeout);
-    }
-  })();
+  const output = await generateCommitMessage({ cwd, prompt, signal: c.req.raw.signal });
 
   if ('error' in output) {
     span.end('error', output.error);

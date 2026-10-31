@@ -3,12 +3,16 @@ import { readdir } from 'fs/promises';
 import { join } from 'path';
 
 import { getNativeGit, gitRead } from '@funny/core/git';
+import { createConcurrencyLimiter } from '@funny/shared/async';
 
 import { log } from '../lib/logger.js';
 import { startSpan } from '../lib/telemetry.js';
 
 // ─── Cache for resolveGitFiles ──────────────────────────────
 const GIT_FILES_CACHE_TTL = 5_000; // 5 seconds
+
+// Shared across walks; only hold a permit during IO, never while awaiting children.
+const limitDirectoryRead = createConcurrencyLimiter(16);
 
 /**
  * Heavy build/dependency directories we never want to surface in the file
@@ -154,7 +158,9 @@ export async function walkDirectoryTree(cwd: string): Promise<string[]> {
   async function walk(dir: string, prefix: string): Promise<void> {
     let entries: Dirent[];
     try {
-      entries = (await readdir(dir, { withFileTypes: true, encoding: 'utf8' })) as Dirent[];
+      entries = await limitDirectoryRead(() =>
+        readdir(dir, { withFileTypes: true, encoding: 'utf8' }),
+      );
     } catch (err) {
       log.warn('git-files: walkDirectoryTree readdir failed', {
         namespace: 'git-files',

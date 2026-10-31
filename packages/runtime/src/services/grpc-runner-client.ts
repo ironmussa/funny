@@ -6,6 +6,7 @@ import {
   type DescMessage,
   type DescMethodStreaming,
 } from '@bufbuild/protobuf';
+import { scheduleTask } from '@funny/shared/async';
 import { RUNNER_GRPC_MAX_MESSAGE_BYTES } from '@funny/shared/runner-protocol';
 import { RunnerCapability } from '@funny/shared/runner-v2/common';
 import { RunnerTransportService } from '@funny/shared/runner-v2/control';
@@ -14,6 +15,7 @@ import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
 import { metric, recordHistogram } from '../lib/telemetry.js';
+import { isWebSocketEndpoint, startGrpcWebSocketBridge } from './grpc-websocket-bridge.js';
 
 export type RunnerGrpcStreamName = 'operations' | 'events' | 'tunnel' | 'terminal';
 export type RunnerGrpcWireMessage = Record<string, any>;
@@ -105,7 +107,11 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
     runnerTransportDefinition,
     RunnerTransportService.name,
   );
-  const { address, secure } = normalizeEndpoint(endpoint);
+  // `ws(s)://` endpoints go through the WebSocket carrier via a loopback bridge.
+  const bridge = isWebSocketEndpoint(endpoint) ? startGrpcWebSocketBridge(endpoint.trim()) : null;
+  const { address, secure } = bridge
+    ? { address: bridge.address, secure: false }
+    : normalizeEndpoint(endpoint);
   const client = new service(
     address,
     secure ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
@@ -122,7 +128,10 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
       callMetadata.set('x-correlation-id', nanoid());
       return method.call(client, callMetadata);
     },
-    close: () => client.close(),
+    close: () => {
+      client.close();
+      bridge?.close();
+    },
   };
 }
 
@@ -151,7 +160,7 @@ export class RunnerGrpcClient {
   private readonly streams = new Map<RunnerGrpcStreamName, RunnerGrpcDuplexStream>();
   private epoch: string | null = null;
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private reconnectTask: ReturnType<typeof scheduleTask> | null = null;
   private generation = 0;
   private reconnectAttempt = 0;
   private connectStartedAt = 0;
@@ -189,8 +198,8 @@ export class RunnerGrpcClient {
     if (this.stopped) return;
     this.stopped = true;
     this.generation++;
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.reconnectTimer = null;
+    this.reconnectTask?.cancel();
+    this.reconnectTask = null;
     if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
     this.heartbeatTimer = null;
     if (this.control && this.epoch) this.control.write({ closing: { reason } });
@@ -356,11 +365,20 @@ export class RunnerGrpcClient {
       delayMs: delay,
       reconnectReason: error?.name ?? 'stream-closed',
     });
-    this.reconnectTimer = setTimeout(() => {
-      this.reconnectTimer = null;
-      this.connect();
-    }, delay);
-    this.reconnectTimer.unref?.();
+    this.reconnectTask = scheduleTask(
+      () => {
+        this.reconnectTask = null;
+        this.connect();
+      },
+      delay,
+      { unref: true },
+    );
+    void this.reconnectTask.done.catch((error: unknown) => {
+      log.error('Runner gRPC reconnect failed', {
+        namespace: 'runner-grpc',
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
   }
 
   private closeTransport(): void {

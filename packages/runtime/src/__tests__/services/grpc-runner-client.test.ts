@@ -235,6 +235,57 @@ describe('RunnerGrpcClient', () => {
     expect(factory).toHaveBeenCalledTimes(1);
   });
 
+  test('shutdown cancels a pending reconnect even after stale stream events', async () => {
+    const transport = new FakeTransport();
+    const factory = vi.fn(() => transport);
+    const client = createClient(factory, { reconnectMinimumMs: 100 });
+    client.start();
+    const control = transport.streams.get('control')!;
+    control.emit('error', new Error('offline'));
+    client.shutdown();
+    control.emit('close');
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(factory).toHaveBeenCalledTimes(1);
+    expect(transport.closed).toBe(true);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  test('caps exponential backoff and resets it after ServerHello', async () => {
+    const transports: FakeTransport[] = [];
+    const factory = vi.fn(() => {
+      const transport = new FakeTransport();
+      transports.push(transport);
+      return transport;
+    });
+    const client = createClient(factory, {
+      reconnectMinimumMs: 100,
+      reconnectMaximumMs: 250,
+    });
+    client.start();
+    try {
+      for (const delay of [100, 200, 250, 250]) {
+        const calls = factory.mock.calls.length;
+        const control = transports.at(-1)!.streams.get('control')!;
+        control.emit('error', new Error('offline'));
+        control.emit('close');
+        await vi.advanceTimersByTimeAsync(delay - 1);
+        expect(factory).toHaveBeenCalledTimes(calls);
+        await vi.advanceTimersByTimeAsync(1);
+        expect(factory).toHaveBeenCalledTimes(calls + 1);
+      }
+      const control = transports.at(-1)!.streams.get('control')!;
+      control.emit('data', { hello: { sessionEpoch: '42' } });
+      control.emit('error', new Error('offline again'));
+      const calls = factory.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(99);
+      expect(factory).toHaveBeenCalledTimes(calls);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(factory).toHaveBeenCalledTimes(calls + 1);
+    } finally {
+      client.shutdown();
+    }
+  });
+
   test('sends a closing frame and releases every stream during graceful shutdown', () => {
     const transport = new FakeTransport();
     const client = createClient(() => transport);

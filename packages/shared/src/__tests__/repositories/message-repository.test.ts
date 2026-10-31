@@ -534,7 +534,6 @@ describe('getThreadWithMessages', () => {
     const { db, schema } = deps;
     db.update(schema.threads)
       .set({ initTools: '["Read","Write"]', initCwd: '/tmp', model: 'opus' })
-      .where(deps.schema.threads.id.getSQL ? (undefined as any) : undefined)
       .run();
 
     // Re-query - simpler to just create a new thread with tools

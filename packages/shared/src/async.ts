@@ -165,10 +165,14 @@ export function consumeAsync<A>(
 }
 
 /** An owned delayed task; cancellation is normal completion, other errors remain observable. */
-export function scheduleTask(task: () => void | PromiseLike<void>, delayMs: number) {
+export function scheduleTask(
+  task: () => void | PromiseLike<void>,
+  delayMs: number,
+  options: { unref?: boolean } = {},
+) {
   const controller = new AbortController();
   const program = Effect.gen(function* () {
-    yield* Effect.sleep(delayMs);
+    yield* options.unref ? unrefSleep(Duration.millis(delayMs)) : Effect.sleep(delayMs);
     yield* Effect.tryPromise({ try: async () => task(), catch: (error) => error });
   });
   const done = run(program, { signal: controller.signal }).catch((error) => {

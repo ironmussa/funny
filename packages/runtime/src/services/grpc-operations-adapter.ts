@@ -1,3 +1,4 @@
+import { waitFor } from '@funny/shared/async';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 import { nanoid } from 'nanoid';
 
@@ -405,24 +406,41 @@ export class GrpcOperationsAdapter {
         payload: operation.value,
       });
     }
-    const promise = new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
+    return waitFor((resolve, reject) => {
+      const cleanup = () => {
         this.pending.delete(correlationId);
-        reject(new Error(`Data request timed out waiting for runner connection (${eventType})`));
-      }, CONNECTION_TIMEOUT_MS);
-      timer.unref?.();
-      this.pending.set(correlationId, {
+        clearTimeout(item.timer);
+      };
+      const item: PendingOperation = {
         eventType,
         kind: operation.kind,
         value: operation.value,
-        resolve,
-        reject,
-        timer,
+        resolve: (value) => {
+          cleanup();
+          resolve(value);
+        },
+        reject: (error) => {
+          cleanup();
+          reject(error);
+        },
+        // This deadline is reset after delivery; unref keeps it from owning process lifetime.
+        timer: setTimeout(() => {
+          item.reject(
+            new Error(`Data request timed out waiting for runner connection (${eventType})`),
+          );
+        }, CONNECTION_TIMEOUT_MS),
         idempotencyKey,
-      });
+      };
+      item.timer.unref?.();
+      this.pending.set(correlationId, item);
+      try {
+        this.send(correlationId, operation.kind, operation.value, idempotencyKey);
+      } catch (error) {
+        item.reject(error instanceof Error ? error : new Error(String(error)));
+      }
+      // Also release resources if the Effect wait is interrupted.
+      return cleanup;
     });
-    this.send(correlationId, operation.kind, operation.value, idempotencyKey);
-    return promise;
   }
 
   activated(): void {
@@ -449,8 +467,6 @@ export class GrpcOperationsAdapter {
     if (deliveryKey && (message.success || message.failure)) this.outbox.confirm(deliveryKey);
     if (message.failure) {
       if (!pending) return;
-      this.pending.delete(correlationId);
-      clearTimeout(pending.timer);
       if (message.failure.code === FailureCode.NOT_FOUND) {
         const missing = missingOperationResult(pending.kind);
         if (missing !== undefined) return pending.resolve(missing);
@@ -459,15 +475,12 @@ export class GrpcOperationsAdapter {
       return;
     }
     if (message.success && pending) {
-      this.pending.delete(correlationId);
-      clearTimeout(pending.timer);
       pending.resolve(mapRunnerOperationOutcome(pending.kind, message.success));
     }
   }
 
   shutdown(): void {
     for (const item of this.pending.values()) {
-      clearTimeout(item.timer);
       item.reject(new Error('gRPC runner transport shut down'));
     }
     this.pending.clear();
@@ -489,7 +502,6 @@ export class GrpcOperationsAdapter {
       if (pending) {
         clearTimeout(pending.timer);
         pending.timer = setTimeout(() => {
-          this.pending.delete(correlationId);
           pending.reject(new Error(`Data request timed out (${pending.eventType})`));
         }, OPERATION_TIMEOUT_MS);
         pending.timer.unref?.();

@@ -98,7 +98,7 @@ export default defineConfig(({ mode }) => {
             if (id.includes('/motion/')) return 'motion';
             if (id.includes('/highlight.js/')) return 'syntax';
             if (id.includes('@monaco-editor/react')) return 'monaco';
-            if (id.includes('/mermaid/')) return 'mermaid';
+            if (id.includes('/beautiful-mermaid/')) return 'mermaid';
             if (id.includes('@tiptap/react') || id.includes('@tiptap/core')) return 'tiptap';
             if (id.includes('lucide-react')) return 'icons';
           },

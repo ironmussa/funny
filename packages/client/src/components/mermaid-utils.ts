@@ -1,27 +1,5 @@
+import { renderMermaidSVG } from 'beautiful-mermaid';
 import DOMPurify from 'dompurify';
-import type { MermaidConfig } from 'mermaid';
-
-/**
- * Shared mermaid.initialize() options. `suppressErrorRendering` prevents
- * mermaid from appending the built-in "Syntax error in text" SVG nodes to
- * document.body on failure — those nodes are never removed and stack up,
- * stretching the page with extra scroll.
- */
-export function getMermaidInitOptions(theme: 'dark' | 'default'): MermaidConfig {
-  return {
-    startOnLoad: false,
-    theme,
-    securityLevel: 'strict',
-    suppressErrorRendering: true,
-  };
-}
-
-/** Remove temp nodes mermaid.render() may leave behind (id, d{id}, i{id}). */
-export function removeMermaidRenderArtifacts(renderId: string): void {
-  for (const id of [renderId, `d${renderId}`, `i${renderId}`]) {
-    document.getElementById(id)?.remove();
-  }
-}
 
 /**
  * Pure DOM helpers for the mermaid block. Extracted so they can be unit-tested
@@ -83,8 +61,7 @@ function getMermaidPurifier(): ReturnType<typeof DOMPurify> {
 /**
  * Security M1: allow-list sanitization of mermaid's SVG output with DOMPurify
  * (SVG + SVG-filter profiles, plus HTML only inside `<foreignObject>`, which
- * mermaid uses for node labels). Mermaid already escapes user input at
- * `securityLevel: 'strict'`, so this is defense-in-depth.
+ * can carry labels). All renderer output is treated as untrusted.
  */
 export function sanitizeMermaidSvg(svg: string): string {
   if (!svg) return svg;
@@ -152,4 +129,17 @@ export function getSvgExportDimensions(svgEl: Element): { w: number; h: number }
   const w = hasViewBox ? viewBox![2] : isAbsolute(widthAttr) ? parseFloat(widthAttr!) : 800;
   const h = hasViewBox ? viewBox![3] : isAbsolute(heightAttr) ? parseFloat(heightAttr!) : 600;
   return { w, h };
+}
+
+/** Render with app tokens on screen and self-contained colors for PNG export. */
+export function renderThreadDiagram(chart: string, target: 'screen' | 'export' = 'screen'): string {
+  const svg = renderMermaidSVG(chart, {
+    bg: target === 'screen' ? 'hsl(var(--card))' : '#ffffff',
+    fg: target === 'screen' ? 'hsl(var(--foreground))' : '#27272a',
+    font: 'Geist Sans',
+    transparent: target === 'screen',
+  });
+  // Funny already bundles its fonts. External font imports also cannot load
+  // reliably when the SVG is rasterized through an image for clipboard export.
+  return sanitizeMermaidSvg(svg.replace(/@import\s+url\([^)]*\);?/g, ''));
 }

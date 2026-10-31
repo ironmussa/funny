@@ -1,7 +1,5 @@
 import { Check, Code, Image, Maximize2, Minimize2, X, ZoomIn, ZoomOut } from 'lucide-react';
-import mermaid from 'mermaid';
-import { useTheme } from 'next-themes';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useMemo, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -17,49 +15,20 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
 
-import {
-  getMermaidInitOptions,
-  getSvgExportDimensions,
-  inlineForeignObjects,
-  removeMermaidRenderArtifacts,
-  sanitizeMermaidSvg,
-} from './mermaid-utils';
+import { getSvgExportDimensions, inlineForeignObjects, renderThreadDiagram } from './mermaid-utils';
 
 const log = createClientLogger('mermaid');
 
-// mermaid.render is inherently async — there is no event-handler alternative
-// short of restructuring callers around Suspense + use(). useState+useEffect
-// is the standard derived-async-value pattern here.
-// oxlint-disable react-doctor/no-event-handler
-function useMermaidSvg(chart: string) {
-  const [svg, setSvg] = useState<string>('');
-  const [error, setError] = useState<string>('');
-  const { resolvedTheme } = useTheme();
-
-  useEffect(() => {
-    let cancelled = false;
-    setSvg('');
-    setError('');
-    const renderId = `mermaid-${Math.random().toString(36).slice(2)}`;
-    const theme = resolvedTheme === 'monochrome' ? 'default' : 'dark';
-    mermaid.initialize(getMermaidInitOptions(theme));
-    mermaid
-      .render(renderId, chart)
-      .then(({ svg: renderedSvg }) => {
-        if (!cancelled) setSvg(sanitizeMermaidSvg(renderedSvg));
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-      removeMermaidRenderArtifacts(renderId);
-    };
-  }, [chart, resolvedTheme]);
-
-  return { svg, error };
+function useMermaidSvg(chart: string, enabled = true) {
+  return useMemo(() => {
+    if (!enabled) return { svg: '', error: '' };
+    try {
+      return { svg: renderThreadDiagram(chart), error: '' };
+    } catch (err) {
+      return { svg: '', error: err instanceof Error ? err.message : String(err) };
+    }
+  }, [chart, enabled]);
 }
-// oxlint-enable react-doctor/no-event-handler
 
 const MIN_SCALE = 0.1;
 const MAX_SCALE = 20;
@@ -178,6 +147,7 @@ function useMermaidPanZoom(): PanZoom {
       }
       containerElRef.current = el;
       if (!el) return;
+      fit();
       const handler = (e: WheelEvent) => {
         e.preventDefault();
         const rect = el.getBoundingClientRect();
@@ -191,7 +161,7 @@ function useMermaidPanZoom(): PanZoom {
       el.addEventListener('wheel', handler, { passive: false }); // oxlint-disable-line react-doctor/client-passive-event-listeners -- intentional non-passive: handler calls preventDefault to suppress page scroll during zoom
       wheelCleanupRef.current = () => el.removeEventListener('wheel', handler);
     },
-    [applyZoom],
+    [applyZoom, fit],
   );
 
   const onPointerDown = useCallback(
@@ -261,7 +231,7 @@ export function MermaidBlock({ chart }: { chart: string }) {
         className="border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-2 rounded border px-3 py-2 text-xs"
         data-testid="mermaid-error"
       >
-        <span className="font-medium">Invalid diagram</span>
+        <span className="font-medium">Invalid or unsupported diagram</span>
         <span className="text-muted-foreground">{error}</span>
       </div>
     );
@@ -292,7 +262,7 @@ export function MermaidBlock({ chart }: { chart: string }) {
               transformOrigin: 'center center',
             }}
             // SVG is sanitized by sanitizeMermaidSvg() (scripts removed,
-            // javascript: URLs scrubbed) and mermaid runs at securityLevel:'strict'.
+            // javascript: URLs scrubbed).
             // oxlint-disable-next-line react-doctor/no-danger
             dangerouslySetInnerHTML={{ __html: svg }}
           />
@@ -368,29 +338,9 @@ export function MermaidBlock({ chart }: { chart: string }) {
   );
 }
 
-/**
- * Re-render the mermaid chart with `htmlLabels: false` so labels are emitted
- * as native SVG `<text>` instead of HTML inside `<foreignObject>`. This both
- * (a) avoids canvas-taint on export (foreignObject taints any canvas it gets
- * drawn into) and (b) gives crisp, mermaid-styled labels in the PNG instead
- * of the rough "screenshot" look from my hand-rolled foreignObject→text
- * fallback. We prepend mermaid's per-chart init directive so this only
- * affects the export render, not the on-screen one.
- */
+/** Use fixed light colors so copied images remain readable outside Funny. */
 async function renderChartForExport(chart: string): Promise<string> {
-  // Force theme="default" (light) for the export — dark-theme diagrams render
-  // with light text that's invisible when pasted onto the typical light
-  // surfaces (Google Docs, Slack, Notion, slides). The init directive applies
-  // per-render so mermaid's global theme stays as the user set it on screen.
-  const annotated = `%%{init: {"theme": "default", "flowchart": {"htmlLabels": false}}}%%\n${chart}`;
-  const id = `mermaid-export-${Math.random().toString(36).slice(2)}`;
-  mermaid.initialize(getMermaidInitOptions('default'));
-  try {
-    const { svg } = await mermaid.render(id, annotated);
-    return sanitizeMermaidSvg(svg);
-  } finally {
-    removeMermaidRenderArtifacts(id);
-  }
+  return renderThreadDiagram(chart, 'export');
 }
 
 async function svgToPngBlob(svgHtml: string): Promise<Blob> {
@@ -465,7 +415,7 @@ export function MermaidExpandedDialog({
   open: boolean;
   onClose: () => void;
 }) {
-  const { svg } = useMermaidSvg(chart);
+  const { svg, error } = useMermaidSvg(chart, open);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const pz = useMermaidPanZoom();
   const [copiedCode, copyCode] = useCopyToClipboard();
@@ -514,6 +464,9 @@ export function MermaidExpandedDialog({
         )}
         onOpenAutoFocus={(e) => e.preventDefault()}
       >
+        <div role="alert" hidden={!error} className="text-destructive px-4 py-2 text-xs">
+          Invalid or unsupported diagram: {error}
+        </div>
         <DialogHeader className="border-border shrink-0 border-b px-4 py-3">
           <DialogTitle className="flex items-center gap-2 text-sm">Mermaid Diagram</DialogTitle>
           <DialogDescription className="sr-only">Expanded Mermaid diagram view</DialogDescription>
@@ -648,7 +601,7 @@ export function MermaidExpandedDialog({
               transformOrigin: 'center center',
             }}
             // SVG is sanitized by sanitizeMermaidSvg() and mermaid runs at
-            // securityLevel:'strict'.
+            // SVG output is sanitized before insertion.
             // oxlint-disable-next-line react-doctor/no-danger
             dangerouslySetInnerHTML={{ __html: svg }}
             data-testid="mermaid-expanded-diagram"

@@ -1,10 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
 import {
-  getMermaidInitOptions,
   getSvgExportDimensions,
   inlineForeignObjects,
-  removeMermaidRenderArtifacts,
+  renderThreadDiagram,
   sanitizeMermaidSvg,
 } from './mermaid-utils';
 
@@ -251,23 +250,44 @@ describe('getSvgExportDimensions', () => {
   });
 });
 
-describe('getMermaidInitOptions', () => {
-  it('suppresses built-in error SVG injection into document.body', () => {
-    expect(getMermaidInitOptions('dark').suppressErrorRendering).toBe(true);
+describe('renderThreadDiagram', () => {
+  it.each([
+    'flowchart TD\nA[Client] --> B[Server]',
+    'sequenceDiagram\nAlice->>Bob: Hello',
+    'stateDiagram-v2\n[*] --> Ready\nReady --> [*]',
+    'classDiagram\nAnimal <|-- Duck',
+    'erDiagram\nCUSTOMER ||--o{ ORDER : places',
+    'xychart-beta\nx-axis [jan, feb]\ny-axis 0 --> 10\nbar [3, 7]',
+  ])('renders supported diagrams with usable dimensions: %s', (chart) => {
+    const svg = parseSvg(renderThreadDiagram(chart));
+    const { w, h } = getSvgExportDimensions(svg);
+    expect(w).toBeGreaterThan(0);
+    expect(h).toBeGreaterThan(0);
+    expect(svg.querySelector('text')).not.toBeNull();
+    expect(svg.querySelector('foreignObject')).toBeNull();
   });
-});
 
-describe('removeMermaidRenderArtifacts', () => {
-  it('removes mermaid temp nodes by id prefix', () => {
-    const renderId = 'mermaid-test-abc';
-    for (const id of [renderId, `d${renderId}`, `i${renderId}`]) {
-      const el = document.createElement('div');
-      el.id = id;
-      document.body.appendChild(el);
-    }
-    removeMermaidRenderArtifacts(renderId);
-    expect(document.getElementById(renderId)).toBeNull();
-    expect(document.getElementById(`d${renderId}`)).toBeNull();
-    expect(document.getElementById(`i${renderId}`)).toBeNull();
+  it('inherits app colors without external font requests', () => {
+    const svg = renderThreadDiagram('graph LR\nA --> B');
+    expect(svg).toContain('hsl(var(--card))');
+    expect(svg).toContain('hsl(var(--foreground))');
+    expect(svg).not.toContain('@import');
+  });
+
+  it('exports native SVG labels with fixed light colors independent of the app theme', () => {
+    const svg = renderThreadDiagram('graph LR\nA[Client] --> B[Server]', 'export');
+    expect(svg).toContain('#ffffff');
+    expect(svg).toContain('#27272a');
+    expect(svg).not.toContain('var(--card)');
+    expect(svg).not.toContain('var(--foreground)');
+    expect(svg).not.toContain('@import');
+    expect(parseSvg(svg).textContent).toContain('Client');
+  });
+
+  it('rejects unsupported diagrams without leaving DOM artifacts', () => {
+    const before = document.body.innerHTML;
+    expect(() => renderThreadDiagram('pie\n"Dogs" : 10')).toThrow();
+    expect(document.body.innerHTML).toBe(before);
+    expect(() => renderThreadDiagram('')).toThrow();
   });
 });

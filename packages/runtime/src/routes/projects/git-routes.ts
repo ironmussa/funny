@@ -1,3 +1,5 @@
+import { stat } from 'node:fs/promises';
+
 import {
   getCurrentBranch,
   getDefaultBranch,
@@ -28,6 +30,23 @@ projectGitRoutes.get('/:id/branches', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const project = projectResult.value;
+  // Check on the owning runner before spawning git in a deleted working directory.
+  const directoryExists = await stat(project.path).then(
+    (entry) => entry.isDirectory(),
+    (error: NodeJS.ErrnoException) => {
+      if (error.code === 'ENOENT' || error.code === 'ENOTDIR') return false;
+      throw error;
+    },
+  );
+  if (!directoryExists) {
+    return c.json({
+      branches: [],
+      remoteBranches: [],
+      defaultBranch: null,
+      currentBranch: null,
+      directoryExists: false,
+    });
+  }
   // Fire-and-forget: fetch remote refs in the background so the response is
   // instant (uses locally cached branch data).
   const identity = userId ? await resolveIdentity(userId, project.id) : undefined;
@@ -67,7 +86,7 @@ projectGitRoutes.get('/:id/branches', async (c) => {
   const branches = detailed.filter((b) => b.isLocal).map((b) => b.name);
   const remoteBranches = detailed.filter((b) => b.isRemote).map((b) => b.name);
 
-  return c.json({ branches, remoteBranches, defaultBranch, currentBranch });
+  return c.json({ branches, remoteBranches, defaultBranch, currentBranch, directoryExists });
 });
 
 // GET /api/projects/:id/checkout-preflight?branch=<branch>

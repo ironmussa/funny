@@ -58,6 +58,7 @@ export const projectsApi = {
     request<{
       branches: string[];
       remoteBranches: string[];
+      directoryExists?: boolean;
       defaultBranch: string | null;
       currentBranch: string | null;
     }>(`/projects/${projectId}/branches`, { signal }),

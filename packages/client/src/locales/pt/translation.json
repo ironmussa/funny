@@ -1,4 +1,9 @@
 {
+  "projects": {
+    "missingDirectoryTitle": "O diretório do projeto não existe",
+    "missingDirectoryDescription": "O diretório do projeto “{{path}}” não existe. Deseja configurar uma nova localização?",
+    "configureDirectory": "Configurar projeto"
+  },
   "app": {
     "title": "funny",
     "subtitle": "Agentes Claude Code em Paralelo"

@@ -1,5 +1,6 @@
 import { lazy, Suspense } from 'react';
 
+import { MissingProjectDirectoryDialog } from '@/components/MissingProjectDirectoryDialog';
 import { PipelineApprovalDialog } from '@/components/PipelineApprovalDialog';
 import { Toaster } from '@/components/ui/sonner';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
@@ -62,6 +63,7 @@ export function OverlayDialogs() {
     <>
       <Toaster position="bottom-right" duration={TOAST_DURATION} />
       <WorkflowErrorModal />
+      <MissingProjectDirectoryDialog />
       <Suspense>
         <PipelineApprovalDialog />
       </Suspense>

@@ -11,9 +11,11 @@
  * written to logs. Every read is scoped to the owning user.
  */
 
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { infraConnections } from '../../db/schema.js';
@@ -39,6 +41,8 @@ export type InfraConnectionError =
   | { kind: 'storage'; message: string };
 
 type Row = typeof infraConnections.$inferSelect;
+
+const storedConfigSchema = z.record(z.string(), z.unknown());
 
 const storage = (error: unknown): InfraConnectionError => ({
   kind: 'storage',
@@ -89,13 +93,10 @@ export function createInfraConnectionService(registry: SandboxProviderRegistry) 
     if (credential === null) {
       return errAsync({ kind: 'storage', message: 'connection credential cannot be decrypted' });
     }
-    let config: unknown = {};
-    try {
-      config = JSON.parse(row.configJson);
-    } catch {
-      return errAsync({ kind: 'invalid-config', message: 'stored config is not valid JSON' });
-    }
-    const provider = instantiate(row.provider, credential, config);
+    // The provider's own schema validates the shape; here we only need an object.
+    const config = parseStoredJson(storedConfigSchema, row.configJson, 'infra connection config');
+    if (!config.ok) return errAsync({ kind: 'invalid-config', message: config.error });
+    const provider = instantiate(row.provider, credential, config.value);
     return provider.isOk() ? okAsync(provider.value) : errAsync(provider.error);
   };
 

@@ -747,6 +747,28 @@ export const runnerEnrollments = pgTable('runner_enrollments', {
 });
 
 /**
+ * The sandbox a thread runs in (change thread-sandboxes): which provider
+ * account and machine, its runner, and the normalized lifecycle state.
+ */
+export const threadSandboxes = pgTable('thread_sandboxes', {
+  threadId: text('thread_id').primaryKey(),
+  userId: text('user_id').notNull(),
+  connectionId: text('connection_id').notNull(),
+  provider: text('provider').notNull(),
+  /** Provider machine id; null until the provider accepted the create. */
+  sandboxId: text('sandbox_id'),
+  runnerId: text('runner_id'),
+  sizeId: text('size_id').notNull(),
+  /** provisioning | installing | connecting | running | stopping | stopped | failed | lost */
+  state: text('state').notNull(),
+  error: text('error'),
+  /** Bumped on every re-provision; part of the provider idempotency key. */
+  generation: integer('generation').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+/**
  * A user's credential for a sandbox provider such as Boat (change
  * thread-sandboxes). The credential is encrypted at rest and never returned.
  */

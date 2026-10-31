@@ -8,12 +8,10 @@
  * a provider-specific dependency.
  */
 
-import { retryAsync } from '@funny/shared/async';
 import { errAsync, okAsync, ResultAsync, type Result } from 'neverthrow';
 import { z } from 'zod';
 
 import {
-  isRetryableSandboxError,
   type CreateSandboxRequest,
   type ExecResult,
   type NormalizedSandboxState,
@@ -24,6 +22,7 @@ import {
   type SandboxStatus,
   type TemplateRef,
 } from '../../contract.js';
+import { pollUntil } from '../../poll.js';
 import type { SandboxProviderEntry } from '../../registry.js';
 import { scriptCommand } from '../../runner-install-script.js';
 
@@ -119,11 +118,6 @@ export interface BoatProviderOptions {
   snapshotTimeoutMs?: number;
 }
 
-const NOT_READY = Symbol('not-ready');
-
-const isSandboxError = (value: unknown): value is SandboxError =>
-  typeof value === 'object' && value !== null && 'kind' in value && 'message' in value;
-
 export function createBoatProvider(
   apiKey: string,
   config: BoatConfig = {},
@@ -157,35 +151,12 @@ export function createBoatProvider(
     );
   }
 
-  /** Poll `check` until it yields a value; retries Boat's transient errors. */
-  function poll<T>(
+  const poll = <T>(
     what: string,
     timeoutMs: number,
     check: () => ResultAsync<T | null, SandboxError>,
     signal?: AbortSignal,
-  ): ResultAsync<T, SandboxError> {
-    const attempt = async () => {
-      const result = await check();
-      if (result.isErr()) throw result.error;
-      if (result.value === null) throw NOT_READY;
-      return result.value;
-    };
-    return ResultAsync.fromPromise(
-      retryAsync(attempt, {
-        delayMs: () => pollMs,
-        while: (error) =>
-          error === NOT_READY || (isSandboxError(error) && isRetryableSandboxError(error)),
-        timeoutMs,
-        timeoutError: () => ({ kind: 'unavailable', message: `${what} timed out` }),
-        sleep: options.sleep,
-        signal,
-      }),
-      (error): SandboxError =>
-        isSandboxError(error)
-          ? error
-          : { kind: 'unavailable', message: `${what} failed: ${String(error)}` },
-    );
-  }
+  ) => pollUntil(check, { what, timeoutMs, intervalMs: pollMs, signal, sleep: options.sleep });
 
   const savedSnapshotStatus = (body: any): string | undefined =>
     body?.snapshot?.status ?? body?.savedSnapshot?.status;

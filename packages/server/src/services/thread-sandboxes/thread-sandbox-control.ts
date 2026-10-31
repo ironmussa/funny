@@ -4,7 +4,7 @@
  * connection, the store and runner presence.
  */
 
-import { errAsync, ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import type { SandboxError, SandboxHandle, SandboxProvider } from './contract.js';
 import type { InfraConnectionError, InfraConnectionService } from './infra-connections.js';
@@ -26,6 +26,8 @@ export interface ThreadSandboxControlDeps {
   connectTimeoutMs?: number;
   /** Provider-side safety cap; the idle stopper normally stops the sandbox first. */
   lifetimeMs?: number;
+  /** Revokes the sandbox runner's registration (and with it its credentials). */
+  removeRunner?: (runnerId: string) => Promise<void>;
 }
 
 export const sandboxError = (error: SandboxError): ProvisionError => ({
@@ -131,6 +133,53 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
             }).andThen(() => errAsync<string, ProvisionError>(error));
           }),
       );
+    },
+
+    /**
+     * Tear down the thread's sandbox for good (thread deleted): destroy the
+     * machine, revoke its runner and drop the row. A machine the provider no
+     * longer knows counts as destroyed. Any other failure keeps the row (state
+     * `failed`) so the leak stays visible; the provider lifetime cap bounds it.
+     */
+    destroy(threadId: string): ResultAsync<void, ProvisionError> {
+      return fromStore(deps.store.get(threadId)).andThen((row) => {
+        if (!row) return okAsync<void, ProvisionError>(undefined);
+        const sandboxId = row.sandboxId;
+        const destroyed: ResultAsync<void, ProvisionError> = !sandboxId
+          ? okAsync(undefined)
+          : deps.connections
+              .providerFor(row.userId, row.connectionId)
+              .mapErr((e: InfraConnectionError): ProvisionError => ({
+                kind: 'connection',
+                message: e.message,
+              }))
+              .andThen(({ provider }) =>
+                provider
+                  .destroy({ providerId: provider.id, sandboxId })
+                  .orElse((e) =>
+                    e.kind === 'not-found' || e.kind === 'expired'
+                      ? okAsync(undefined)
+                      : errAsync(e),
+                  )
+                  .mapErr(sandboxError),
+              );
+        return destroyed
+          .andThen(() =>
+            ResultAsync.fromPromise(
+              (async () => {
+                const runnerId = row.runnerId ?? (await deps.sandboxRunnerIdForThread(threadId));
+                if (runnerId) await deps.removeRunner?.(runnerId);
+              })(),
+              (e): ProvisionError => ({ kind: 'storage', message: String(e) }),
+            ),
+          )
+          .andThen(() => fromStore(deps.store.remove(threadId)))
+          .orElse((error) =>
+            setState(threadId, 'failed', { error: `destroy failed: ${error.message}` }).andThen(
+              () => errAsync<void, ProvisionError>(error),
+            ),
+          );
+      });
     },
   };
 }

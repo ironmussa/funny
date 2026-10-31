@@ -8,6 +8,7 @@ import { errAsync, ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
+import { removeRunner } from '../runner-manager.js';
 import { sandboxRunnerIdForThread } from '../runner-scope.js';
 import { createSandboxIdleSweeper, DEFAULT_SANDBOX_IDLE_MS } from './idle-sweeper.js';
 import { createInfraConnectionService } from './infra-connections.js';
@@ -78,7 +79,25 @@ export function createSandboxWaker(deps: {
 }
 
 let waker: SandboxWaker | null = null;
+let control: ThreadSandboxControl | null = null;
 let sweepTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Destroy a deleted thread's sandbox, if it has one. Never throws; failures
+ * are logged and leave the sandbox row in state `failed`.
+ */
+export async function destroyThreadSandbox(threadId: string): Promise<void> {
+  if (!control) return;
+  const result = await control.destroy(threadId);
+  if (result.isErr()) {
+    log.error('Failed to destroy the sandbox of a deleted thread', {
+      namespace: 'thread-sandboxes',
+      threadId,
+      kind: result.error.kind,
+      error: result.error.message,
+    });
+  }
+}
 
 /** The running waker, or null when the lifecycle was not started. */
 export function sandboxWaker(): SandboxWaker | null {
@@ -102,11 +121,12 @@ export function startSandboxLifecycle(deps: {
     });
     return;
   }
-  const control = createThreadSandboxControl({
+  control = createThreadSandboxControl({
     connections: createInfraConnectionService(registry.value),
     sandboxRunnerIdForThread,
     presence: deps.presence,
     store: sqlThreadSandboxStore,
+    removeRunner,
   });
   waker = createSandboxWaker({ control, store: sqlThreadSandboxStore });
   const sweeper = createSandboxIdleSweeper({ control, idleMs: idleWindowMs() });
@@ -125,4 +145,5 @@ export function stopSandboxLifecycle(): void {
   if (sweepTimer) clearInterval(sweepTimer);
   sweepTimer = null;
   waker = null;
+  control = null;
 }

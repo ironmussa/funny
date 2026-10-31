@@ -28,6 +28,7 @@ export interface ThreadSandboxStore {
     threadId: string,
     patch: Partial<Omit<ThreadSandboxRow, 'threadId'>>,
   ): ResultAsync<void, string>;
+  remove(threadId: string): ResultAsync<void, string>;
 }
 
 const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
@@ -54,6 +55,12 @@ export const sqlThreadSandboxStore: ThreadSandboxStore = {
         .update(threadSandboxes)
         .set({ ...patch, updatedAt: new Date().toISOString() })
         .where(eq(threadSandboxes.threadId, threadId)),
+      message,
+    ).map(() => undefined),
+
+  remove: (threadId) =>
+    ResultAsync.fromPromise(
+      db.delete(threadSandboxes).where(eq(threadSandboxes.threadId, threadId)),
       message,
     ).map(() => undefined),
 };

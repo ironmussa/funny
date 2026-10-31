@@ -42,6 +42,7 @@ import {
 import * as runnerResolver from '../services/runner-resolver.js';
 import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
+import { destroyThreadSandbox } from '../services/thread-sandboxes/sandbox-lifecycle.js';
 import { parseJsonBody, parseQuery } from '../validation/request.js';
 
 // Canonical thread-lifecycle enums — kept in sync with
@@ -1002,6 +1003,10 @@ threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
     ).catch(() => undefined);
     void thread;
   }
+
+  // A sandbox thread's machine goes with it (thread-sandboxes). Provider calls
+  // take seconds, so the answer does not wait for them.
+  void destroyThreadSandbox(threadId);
 
   return c.json({ ok: true });
 });

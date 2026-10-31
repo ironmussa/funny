@@ -31,6 +31,10 @@ function memoryStore(): ThreadSandboxStore & { rows: Map<string, ThreadSandboxRo
       if (row) rows.set(threadId, { ...row, ...patch });
       return okAsync(undefined);
     },
+    remove: (threadId) => {
+      rows.delete(threadId);
+      return okAsync(undefined);
+    },
   };
 }
 
@@ -40,6 +44,7 @@ interface Setup {
   store: ReturnType<typeof memoryStore>;
   service: ReturnType<typeof createThreadSandboxService>;
   issued: string[];
+  removedRunners: string[];
 }
 
 function setup(
@@ -49,6 +54,7 @@ function setup(
   const store = memoryStore();
   const issued: string[] = [];
   const checkouts: Setup['checkouts'] = [];
+  const removedRunners: string[] = [];
   // The runner "connects" once the start command ran in the sandbox.
   const started = () => provider.commands.some((c) => c.command.includes('systemctl restart'));
   const service = createThreadSandboxService({
@@ -78,8 +84,11 @@ function setup(
     pollMs: 1,
     readyTimeoutMs: 1_000,
     connectTimeoutMs: 200,
+    removeRunner: async (runnerId) => {
+      removedRunners.push(runnerId);
+    },
   });
-  return { provider, store, service, issued, checkouts };
+  return { provider, store, service, issued, checkouts, removedRunners };
 }
 
 const input = { userId: 'alice', threadId: 't-1', connectionId: 'conn-1' };
@@ -205,6 +214,44 @@ describe('thread sandbox provisioning', () => {
     expect((await service.stop('t-1')).isErr()).toBe(true);
     expectOk(await service.provision(input));
     expect((await service.resume('t-1')).isErr()).toBe(true);
+  });
+});
+
+describe("destroying a deleted thread's sandbox", () => {
+  test('destroys the machine, revokes the runner and drops the row', async () => {
+    const { provider, store, service, removedRunners } = setup({ templates: [build.version] });
+    expectOk(await service.provision(input));
+    expectOk(await service.destroy('t-1'));
+    expect(provider.sandboxes.size).toBe(0);
+    expect(removedRunners).toEqual(['r-box']);
+    expect(store.rows.has('t-1')).toBe(false);
+  });
+
+  test('works on a stopped sandbox and is a no-op without one', async () => {
+    const { provider, store, service } = setup({ templates: [build.version] });
+    expectOk(await service.destroy('t-1'));
+    expectOk(await service.provision(input));
+    expectOk(await service.stop('t-1'));
+    expectOk(await service.destroy('t-1'));
+    expect(provider.sandboxes.size).toBe(0);
+    expect(store.rows.has('t-1')).toBe(false);
+  });
+
+  test('a machine the provider already lost still counts as destroyed', async () => {
+    const { provider, store, service } = setup({ templates: [build.version] });
+    expectOk(await service.provision(input));
+    provider.failNext({ kind: 'not-found', message: 'gone' });
+    expectOk(await service.destroy('t-1'));
+    expect(store.rows.has('t-1')).toBe(false);
+  });
+
+  test('a provider failure keeps the row as failed so the leak stays visible', async () => {
+    const { provider, store, service, removedRunners } = setup({ templates: [build.version] });
+    expectOk(await service.provision(input));
+    provider.failNext({ kind: 'unavailable', message: 'provider down' });
+    expect((await service.destroy('t-1')).isErr()).toBe(true);
+    expect(store.rows.get('t-1')?.state).toBe('failed');
+    expect(removedRunners).toEqual([]);
   });
 });
 

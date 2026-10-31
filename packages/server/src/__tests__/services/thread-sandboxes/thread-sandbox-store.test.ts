@@ -76,4 +76,11 @@ describe('sqlThreadSandboxStore', () => {
       runnerId: null,
     });
   });
+
+  test('remove drops the row; removing a missing row is fine', async () => {
+    expectOk(await sqlThreadSandboxStore.put(row()));
+    expectOk(await sqlThreadSandboxStore.remove('t-1'));
+    expect(expectOk(await sqlThreadSandboxStore.get('t-1'))).toBeNull();
+    expectOk(await sqlThreadSandboxStore.remove('t-1'));
+  });
 });

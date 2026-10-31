@@ -274,6 +274,17 @@ describe('renderThreadDiagram', () => {
     expect(svg).not.toContain('@import');
   });
 
+  it('isolates renderer colors from Funny HSL tokens for edge labels and arrows', () => {
+    const svg = parseSvg(renderThreadDiagram('graph LR\nA -->|gRPC autenticado| B'));
+    const style = svg.getAttribute('style')!;
+    expect(style).toContain('--diagram-muted:hsl(var(--muted-foreground))');
+    expect(style).toContain('--diagram-border:hsl(var(--border))');
+    expect(style).toContain('--diagram-accent:hsl(var(--foreground))');
+    expect(style).not.toMatch(/(?:^|;)--(?:muted|border|accent):/);
+    expect(svg.querySelector('.edge-label text')?.getAttribute('fill')).toBe('var(--_text-sec)');
+    expect(svg.querySelector('style')?.textContent).toContain('var(--diagram-muted,');
+  });
+
   it('exports native SVG labels with fixed light colors independent of the app theme', () => {
     const svg = renderThreadDiagram('graph LR\nA[Client] --> B[Server]', 'export');
     expect(svg).toContain('#ffffff');

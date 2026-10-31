@@ -136,10 +136,25 @@ export function renderThreadDiagram(chart: string, target: 'screen' | 'export' =
   const svg = renderMermaidSVG(chart, {
     bg: target === 'screen' ? 'hsl(var(--card))' : '#ffffff',
     fg: target === 'screen' ? 'hsl(var(--foreground))' : '#27272a',
+    // Set every optional color explicitly: Funny's inherited --muted,
+    // --accent and --border tokens contain HSL channels, not CSS colors.
+    muted: target === 'screen' ? 'hsl(var(--muted-foreground))' : '#52525b',
+    line: target === 'screen' ? 'hsl(var(--muted-foreground))' : '#71717a',
+    accent: target === 'screen' ? 'hsl(var(--foreground))' : '#27272a',
+    surface: target === 'screen' ? 'hsl(var(--secondary))' : '#f4f4f5',
+    border: target === 'screen' ? 'hsl(var(--border))' : '#d4d4d8',
     font: 'Geist Sans',
     transparent: target === 'screen',
   });
   // Funny already bundles its fonts. External font imports also cannot load
   // reliably when the SVG is rasterized through an image for clipboard export.
-  return sanitizeMermaidSvg(svg.replace(/@import\s+url\([^)]*\);?/g, ''));
+  return sanitizeMermaidSvg(
+    svg
+      .replace(/@import\s+url\([^)]*\);?/g, '')
+      // Namespace renderer variables without changing the app tokens nested
+      // inside hsl(). This also avoids --border referencing itself.
+      .replace(/--(bg|fg|line|accent|muted|surface|border)(?=\s*:)/g, '--diagram-$1')
+      .replace(/var\(--(bg|fg|line|accent|muted|surface|border)(?=[,)])/g, 'var(--diagram-$1')
+      .replace(/hsl\(var\(--diagram-(accent|muted|border)\)\)/g, 'hsl(var(--$1))'),
+  );
 }

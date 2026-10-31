@@ -46,7 +46,8 @@ import {
   type RunnerRequestPort,
   type RunnerResponse,
 } from '../services/runner-ports.js';
-import { describeResolutionFailure } from '../services/runner-resolver.js';
+import { describeResolutionFailure, extractThreadId } from '../services/runner-resolver.js';
+import { sandboxWaker, type SandboxWaker } from '../services/thread-sandboxes/sandbox-lifecycle.js';
 
 /**
  * Transport dependencies the proxy uses to reach a runner. Injectable so tests
@@ -60,6 +61,8 @@ export interface ProxyTransport {
   runnerAccess?: RunnerAccess;
   requests?: RunnerRequestPort;
   presence?: RunnerPresencePort;
+  /** Wakes a stopped thread sandbox. Default: the server's sandbox lifecycle. */
+  sandboxWaker?: SandboxWaker | null;
 }
 
 const defaultTransport: ProxyTransport = {};
@@ -243,40 +246,54 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
     });
   }
 
-  const sent = await access.withRunnerFor(
-    delegation ? runnerActor({ userId: delegation.ownerId }) : requester,
-    { kind: 'request', path, query },
-    presence,
-    async (actor, runner, proof) => {
-      if (!sink.isAvailable(runner)) return notConnected();
-      // Bind the OAuth flow this runner is about to start to (user, runner):
-      // the provider echoes the state back to the unauthenticated callback,
-      // which is then routed to this runner only. Never for a delegated send.
-      const outgoing: UnsignedRunnerRequest =
-        isOAuthStart && !delegation
-          ? {
-              ...request,
-              headers: {
-                ...request.headers,
-                [OAUTH_STATE_HEADER]: mintOAuthCallbackState(actor, runner, proof),
-              },
-            }
-          : request;
-      return relay(
-        () =>
-          delegation
-            ? sink.sendDelegated(
-                actor,
-                runner,
-                proof,
-                { sharee: requester, threadId: delegation.threadId },
-                outgoing,
-              )
-            : sink.send(actor, runner, proof, outgoing),
-        runner.value,
-      );
-    },
-  );
+  const send = () =>
+    access.withRunnerFor(
+      delegation ? runnerActor({ userId: delegation.ownerId }) : requester,
+      { kind: 'request', path, query },
+      presence,
+      async (actor, runner, proof) => {
+        if (!sink.isAvailable(runner)) return notConnected();
+        // Bind the OAuth flow this runner is about to start to (user, runner):
+        // the provider echoes the state back to the unauthenticated callback,
+        // which is then routed to this runner only. Never for a delegated send.
+        const outgoing: UnsignedRunnerRequest =
+          isOAuthStart && !delegation
+            ? {
+                ...request,
+                headers: {
+                  ...request.headers,
+                  [OAUTH_STATE_HEADER]: mintOAuthCallbackState(actor, runner, proof),
+                },
+              }
+            : request;
+        return relay(
+          () =>
+            delegation
+              ? sink.sendDelegated(
+                  actor,
+                  runner,
+                  proof,
+                  { sharee: requester, threadId: delegation.threadId },
+                  outgoing,
+                )
+              : sink.send(actor, runner, proof, outgoing),
+          runner.value,
+        );
+      },
+    );
+  let sent = await send();
+  // A stopped sandbox is woken for its owner (bounded), then the request retried once.
+  const waker = deps.sandboxWaker === undefined ? sandboxWaker() : deps.sandboxWaker;
+  const sandboxThreadId = extractThreadId(path);
+  if (
+    sent.isErr() &&
+    sent.error.reason === 'thread-sandbox-unavailable' &&
+    waker &&
+    sandboxThreadId
+  ) {
+    const woken = await waker.wake(sandboxThreadId, delegation?.ownerId ?? userId!);
+    if (woken.isOk()) sent = await send();
+  }
   if (sent.isErr()) {
     log.warn('No reachable runner for proxy request', { namespace: 'proxy', userId, path });
     return c.json(describeResolutionFailure(sent.error.reason), 502);

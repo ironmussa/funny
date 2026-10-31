@@ -323,7 +323,7 @@ function extractProjectId(path: string, query: Record<string, string>): string |
   return null;
 }
 
-function extractThreadId(path: string): string | null {
+export function extractThreadId(path: string): string | null {
   const threadMatch = path.match(/\/api\/threads\/([^/?]+)/);
   if (threadMatch) return threadMatch[1];
 

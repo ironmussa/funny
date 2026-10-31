@@ -475,6 +475,10 @@ if (runnerTransport) {
   });
 }
 
+// Thread sandboxes: stop idle ones, wake stopped ones on demand.
+const sandboxLifecycle = await import('./services/thread-sandboxes/sandbox-lifecycle.js');
+if (runnerTransport) sandboxLifecycle.startSandboxLifecycle({ presence: runnerTransport.presence });
+
 // Runners outside the private network reach the gRPC listener through a
 // WebSocket carrier on this public origin (see services/grpc/websocket-carrier.ts).
 const {
@@ -596,6 +600,7 @@ async function shutdown() {
 
   // Stop firing automations before the runner transport goes away
   automationScheduler.stopAutomationScheduler();
+  sandboxLifecycle.stopSandboxLifecycle();
 
   // Close Socket.IO connections
   await closeSocketIO();

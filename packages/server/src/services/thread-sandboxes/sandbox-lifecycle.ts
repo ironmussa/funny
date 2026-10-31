@@ -1,0 +1,128 @@
+/**
+ * Process-wide sandbox lifecycle (change thread-sandboxes): the idle sweeper
+ * that stops unused sandboxes, and wake-on-demand that resumes a stopped one
+ * when its thread is used again. Started once by the server entry point.
+ */
+
+import { errAsync, ResultAsync } from 'neverthrow';
+
+import { log } from '../../lib/logger.js';
+import { metric } from '../../lib/telemetry.js';
+import { sandboxRunnerIdForThread } from '../runner-scope.js';
+import { createSandboxIdleSweeper, DEFAULT_SANDBOX_IDLE_MS } from './idle-sweeper.js';
+import { createInfraConnectionService } from './infra-connections.js';
+import { productionSandboxProviders } from './provider-catalog.js';
+import { createThreadSandboxControl, type ThreadSandboxControl } from './thread-sandbox-control.js';
+import type { ProvisionError } from './thread-sandbox-service.js';
+import { sqlThreadSandboxStore, type ThreadSandboxStore } from './thread-sandbox-store.js';
+
+const SWEEP_INTERVAL_MS = 60_000;
+/** Bound on how long a request waits for its sandbox to wake up. */
+const WAKE_TIMEOUT_MS = 90_000;
+
+export interface SandboxWaker {
+  /**
+   * Resume the thread's stopped sandbox on behalf of its owner. Concurrent
+   * calls for one thread share the same resume.
+   */
+  wake(threadId: string, ownerId: string): ResultAsync<string, ProvisionError>;
+}
+
+export function createSandboxWaker(deps: {
+  control: Pick<ThreadSandboxControl, 'resume'>;
+  store: Pick<ThreadSandboxStore, 'get'>;
+  timeoutMs?: number;
+}): SandboxWaker {
+  const inFlight = new Map<string, ResultAsync<string, ProvisionError>>();
+
+  const resume = (threadId: string, ownerId: string) =>
+    deps.store
+      .get(threadId)
+      .mapErr((message): ProvisionError => ({ kind: 'storage', message }))
+      .andThen((row) => {
+        // Only the owner's own sandbox, and only a stopped one (never lost/failed).
+        if (!row || row.userId !== ownerId || row.state !== 'stopped') {
+          return errAsync<string, ProvisionError>({
+            kind: 'sandbox',
+            message: 'no stopped sandbox to wake',
+            cause: 'not-found',
+          });
+        }
+        return deps.control.resume(
+          threadId,
+          AbortSignal.timeout(deps.timeoutMs ?? WAKE_TIMEOUT_MS),
+        );
+      })
+      .map((runnerId) => {
+        metric('thread_sandboxes.woken', 1);
+        return runnerId;
+      });
+
+  return {
+    wake(threadId, ownerId) {
+      const pending = inFlight.get(threadId);
+      if (pending) return pending;
+      const shared = new ResultAsync(
+        (async () => {
+          try {
+            return await resume(threadId, ownerId);
+          } finally {
+            inFlight.delete(threadId);
+          }
+        })(),
+      );
+      inFlight.set(threadId, shared);
+      return shared;
+    },
+  };
+}
+
+let waker: SandboxWaker | null = null;
+let sweepTimer: ReturnType<typeof setInterval> | null = null;
+
+/** The running waker, or null when the lifecycle was not started. */
+export function sandboxWaker(): SandboxWaker | null {
+  return waker;
+}
+
+function idleWindowMs(): number {
+  const raw = Number(process.env.FUNNY_SANDBOX_IDLE_MS);
+  return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_SANDBOX_IDLE_MS;
+}
+
+export function startSandboxLifecycle(deps: {
+  presence: { isAvailable(runnerId: string): boolean } | undefined;
+}): void {
+  if (sweepTimer) return;
+  const registry = productionSandboxProviders();
+  if (registry.isErr()) {
+    log.error('Sandbox lifecycle disabled: provider registry invalid', {
+      namespace: 'thread-sandboxes',
+      error: registry.error.kind,
+    });
+    return;
+  }
+  const control = createThreadSandboxControl({
+    connections: createInfraConnectionService(registry.value),
+    sandboxRunnerIdForThread,
+    presence: deps.presence,
+    store: sqlThreadSandboxStore,
+  });
+  waker = createSandboxWaker({ control, store: sqlThreadSandboxStore });
+  const sweeper = createSandboxIdleSweeper({ control, idleMs: idleWindowMs() });
+  let sweeping = false;
+  sweepTimer = setInterval(() => {
+    if (sweeping) return;
+    sweeping = true;
+    void sweeper.sweep().finally(() => {
+      sweeping = false;
+    });
+  }, SWEEP_INTERVAL_MS);
+  sweepTimer.unref?.();
+}
+
+export function stopSandboxLifecycle(): void {
+  if (sweepTimer) clearInterval(sweepTimer);
+  sweepTimer = null;
+  waker = null;
+}

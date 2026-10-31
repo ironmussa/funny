@@ -28,6 +28,18 @@ import type {
 export const RUNNER_GRPC_MAX_MESSAGE_BYTES = 32 * 1024 * 1024;
 
 /**
+ * WebSocket carrier for the native runner gRPC transport. Runners outside the
+ * server's private network (sandboxes, laptops) reach the gRPC listener through
+ * the public HTTPS origin: the same `runner.v2` HTTP/2 bytes ride inside binary
+ * WebSocket frames, because HTTP edges (e.g. Railway) only speak HTTP/1.1
+ * upstream. This is a carrier, not an alternative protocol.
+ */
+export const RUNNER_GRPC_WS_PATH = '/api/runner-grpc/ws';
+
+/** Bytes either end of the carrier may hold for a slow peer before closing it. */
+export const RUNNER_GRPC_WS_MAX_BUFFERED_BYTES = 16 * 1024 * 1024;
+
+/**
  * How a tunneled response body string is encoded on the wire.
  *
  * The central proxy represents the assembled body as a string. A `utf8` body is the

@@ -14,6 +14,7 @@ import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
 import { metric, recordHistogram } from '../lib/telemetry.js';
+import { isWebSocketEndpoint, startGrpcWebSocketBridge } from './grpc-websocket-bridge.js';
 
 export type RunnerGrpcStreamName = 'operations' | 'events' | 'tunnel' | 'terminal';
 export type RunnerGrpcWireMessage = Record<string, any>;
@@ -105,7 +106,11 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
     runnerTransportDefinition,
     RunnerTransportService.name,
   );
-  const { address, secure } = normalizeEndpoint(endpoint);
+  // `ws(s)://` endpoints go through the WebSocket carrier via a loopback bridge.
+  const bridge = isWebSocketEndpoint(endpoint) ? startGrpcWebSocketBridge(endpoint.trim()) : null;
+  const { address, secure } = bridge
+    ? { address: bridge.address, secure: false }
+    : normalizeEndpoint(endpoint);
   const client = new service(
     address,
     secure ? grpc.credentials.createSsl() : grpc.credentials.createInsecure(),
@@ -122,7 +127,10 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
       callMetadata.set('x-correlation-id', nanoid());
       return method.call(client, callMetadata);
     },
-    close: () => client.close(),
+    close: () => {
+      client.close();
+      bridge?.close();
+    },
   };
 }
 

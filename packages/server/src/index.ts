@@ -473,10 +473,30 @@ if (runnerTransport) {
   });
 }
 
-const server = Bun.serve({
-  // Spread Bun engine handler FIRST — provides the `websocket` property
-  // for native Bun WebSocket lifecycle (open/message/close).
-  ...socketEngine.handler(),
+// Runners outside the private network reach the gRPC listener through a
+// WebSocket carrier on this public origin (see services/grpc/websocket-carrier.ts).
+const {
+  createRunnerGrpcWebSocketCarrier,
+  carrierTargetFor,
+  routeRunnerCarrier,
+  withRunnerCarrier,
+} = await import('./services/grpc/websocket-carrier.js');
+const runnerCarrier = runnerTransport
+  ? createRunnerGrpcWebSocketCarrier({ target: carrierTargetFor(runnerTransport.endpoint) })
+  : null;
+const socketEngineHandler = socketEngine.handler();
+const appEnv = {
+  runnerRequests: runnerTransport?.requests,
+  runnerPresence: runnerTransport?.presence,
+  browserEvents,
+};
+
+// `any` WebSocket data: one server hosts Socket.IO sockets and runner carrier sockets.
+const server = Bun.serve<any>({
+  // Spread Bun engine handler FIRST — provides idle/body limits; the
+  // `websocket` lifecycle is shared with the runner carrier.
+  ...socketEngineHandler,
+  websocket: withRunnerCarrier(socketEngineHandler.websocket, runnerCarrier),
   port: PORT,
   hostname: HOST,
   reusePort: true,
@@ -488,12 +508,9 @@ const server = Bun.serve({
     if (url.pathname.startsWith('/socket.io/')) {
       return socketEngine.handleRequest(req, server);
     }
-    return app.fetch(req, {
-      IP: server.requestIP(req),
-      runnerRequests: runnerTransport?.requests,
-      runnerPresence: runnerTransport?.presence,
-      browserEvents,
-    });
+    const carried = routeRunnerCarrier(req, server, runnerCarrier);
+    if (carried !== null) return carried;
+    return app.fetch(req, { ...appEnv, IP: server.requestIP(req) });
   },
 });
 

@@ -37,7 +37,7 @@ describe('gpuix-ui components', () => {
 
     const bounds = button ? root.renderer.getElementBounds(button.id) : null;
     expect(bounds).not.toBeNull();
-    if (bounds) root.renderer.nativeSimulateClick(bounds[0]! + 2, bounds[1]! + 2);
+    if (bounds) root.renderer.nativeSimulateClick(bounds.x + 2, bounds.y + 2);
     expect(presses).toBe(1);
     root.unmount();
   });
@@ -78,7 +78,7 @@ describe('gpuix-ui components', () => {
     );
     const button = root.renderer.findByTestId('disabled');
     const bounds = button ? root.renderer.getElementBounds(button.id) : null;
-    if (bounds) root.renderer.nativeSimulateClick(bounds[0]! + 2, bounds[1]! + 2);
+    if (bounds) root.renderer.nativeSimulateClick(bounds.x + 2, bounds.y + 2);
     expect(presses).toBe(0);
     root.unmount();
   });

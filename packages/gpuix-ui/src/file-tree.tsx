@@ -17,7 +17,7 @@ import {
 } from './file-tree-window';
 import { Icon } from './icon';
 import { NavItem } from './nav-item';
-import { useGpuixUiTheme } from './theme';
+import { scrollbarStyle, useGpuixUiTheme } from './theme';
 import { maximumWindowStart, windowStartForVisibleRange } from './virtual-range';
 
 type DivProps = JSX.IntrinsicElements['div'];
@@ -144,6 +144,7 @@ function VirtualizedFileTreeRows({
   hostProps: VirtualListHostProps;
   style?: StyleDesc;
 }) {
+  const theme = useGpuixUiTheme();
   const viewportWindowSize = fileTreeWindowSizeForViewport(viewportHeight, rows.length);
   const [retainedWindow, setRetainedWindow] = useState<{
     windowStart: number;
@@ -200,7 +201,16 @@ function VirtualizedFileTreeRows({
       estimatedItemHeight={FILE_TREE_ESTIMATED_ROW_HEIGHT}
       overdraw={FILE_TREE_NATIVE_OVERDRAW}
       onVisibleRange={updateRetainedWindow}
-      style={{ flexGrow: 1, minHeight: 0, width: '100%', gap: 1, ...style }}
+      role="tree"
+      aria-label="Files"
+      style={{
+        flexGrow: 1,
+        minHeight: 0,
+        width: '100%',
+        gap: 1,
+        ...scrollbarStyle(theme.colors),
+        ...style,
+      }}
     >
       {retainedRows.map((row) => (
         <FileTreeRow
@@ -233,6 +243,10 @@ const FileTreeRow = memo(function FileTreeRow({
   return (
     <NavItem
       testId={`file-tree-${row.kind}-${row.path}`}
+      role="treeitem"
+      aria-label={row.name}
+      aria-level={row.depth + 1}
+      aria-expanded={row.kind === 'folder' ? !collapsed : undefined}
       selected={selected}
       onSelect={() => onSelect?.(row.path)}
       highlight={query ? { query, color: theme.colors.accent } : null}

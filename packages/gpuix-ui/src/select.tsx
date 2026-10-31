@@ -32,6 +32,7 @@ export function SelectTrigger({ style, ...props }: SelectTriggerProps): ReactEle
   const theme = useGpuixUiTheme();
   return (
     <GpuixSelectTrigger
+      role="combobox"
       {...props}
       style={(state) => ({
         display: 'flex',
@@ -58,6 +59,7 @@ export function SelectContent({ style, ...props }: SelectContentProps): ReactEle
   const theme = useGpuixUiTheme();
   return (
     <GpuixSelectContent
+      role="listbox"
       {...props}
       style={{
         minWidth: 180,
@@ -84,6 +86,7 @@ export function SelectItem({ style, ...props }: SelectItemProps): ReactElement {
   const theme = useGpuixUiTheme();
   return (
     <GpuixSelectItem
+      role="option"
       {...props}
       style={(state: SelectItemState) => ({
         paddingTop: 7,

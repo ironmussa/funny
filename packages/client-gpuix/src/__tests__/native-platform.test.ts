@@ -91,7 +91,7 @@ describe('native navigation and lifecycle', () => {
     expect(lifecycle.current()).toEqual({ focused: true, visible: true });
     expect(NATIVE_HOST_FOCUS_EVIDENCE).toEqual({
       supported: false,
-      runtime: 'GPUIX 0.5.1',
+      runtime: 'GPUIX 0.11.0',
       reason: 'independent host-focus signal unavailable',
     });
 

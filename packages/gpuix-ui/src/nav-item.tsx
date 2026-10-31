@@ -32,6 +32,8 @@ export function NavItem({
   const [focused, setFocused] = useState(false);
   return (
     <div
+      role="button"
+      aria-selected={selected}
       {...props}
       tabIndex={tabIndex}
       onClick={onSelect}

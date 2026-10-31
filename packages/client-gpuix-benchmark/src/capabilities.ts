@@ -12,7 +12,7 @@ export const GPUIX_BENCHMARK_CAPABILITIES: BenchmarkCapabilities = {
   renderer: 'gpuix@0.5.1',
   capabilities: {
     frameTiming: unsupportedCapability(
-      'GPUIX 0.5.1 exposes aggregate draw statistics but no raw presented-frame samples.',
+      'GPUIX 0.11.0 exposes aggregate draw statistics but no raw presented-frame samples.',
       [
         {
           source: pinnedSource,
@@ -29,7 +29,7 @@ export const GPUIX_BENCHMARK_CAPABILITIES: BenchmarkCapabilities = {
         },
       ],
     ),
-    gpuMemory: unsupportedCapability('GPUIX 0.5.1 does not expose per-process GPU memory.', [
+    gpuMemory: unsupportedCapability('GPUIX 0.11.0 does not expose per-process GPU memory.', [
       {
         source: pinnedSource,
         detail: 'No GPU-memory query is present in the public native types.',

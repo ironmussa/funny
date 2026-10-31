@@ -25,7 +25,7 @@ if (process.platform !== 'darwin' && process.platform !== 'win32') {
     JSON.stringify(
       unsupportedVisualCaptureEvidence(
         desktopParityFixture.id,
-        'GPUIX 0.5.1 captureScreenshot is supported only by Metal and DirectX hosts.',
+        'GPUIX 0.11.0 captureScreenshot is supported only by Metal and DirectX hosts.',
       ),
       null,
       2,

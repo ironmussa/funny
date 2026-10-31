@@ -129,16 +129,8 @@ export function DockLayoutRoot({
   const boundsFor = useCallback(
     (id: string): Bounds | null => {
       const instance = panelRefs.get(id);
-      const bounds = instance
-        ? (
-            renderer as
-              | (typeof renderer & {
-                  getElementBounds?(elementId: number): number[] | null;
-                })
-              | null
-          )?.getElementBounds?.(instance.id)
-        : null;
-      return bounds && bounds.length >= 4 ? (bounds.slice(0, 4) as Bounds) : null;
+      const bounds = instance ? renderer?.getElementBounds?.(instance.id) : null;
+      return bounds ? [bounds.x, bounds.y, bounds.width, bounds.height] : null;
     },
     [panelRefs, renderer],
   );

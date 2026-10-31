@@ -15,12 +15,12 @@ const GPUIX_PRODUCT_BENCHMARK_CAPABILITIES: BenchmarkCapabilities = {
   renderer: 'react-gpuix-gpui-product',
   capabilities: {
     frameTiming: unsupportedCapability(
-      'GPUIX 0.5 exposes aggregate draw statistics but no presented-frame samples',
+      'GPUIX 0.11 exposes aggregate draw statistics but no presented-frame samples',
     ),
     presentationAcknowledgement: unsupportedCapability(
-      'GPUIX 0.5 has no verified public presentation acknowledgement',
+      'GPUIX 0.11 has no verified public presentation acknowledgement',
     ),
-    gpuMemory: unsupportedCapability('GPUIX 0.5 exposes no portable GPU-memory counter'),
+    gpuMemory: unsupportedCapability('GPUIX 0.11 exposes no portable GPU-memory counter'),
     screenshot: supportedCapability('GPUIX native renderer captureScreenshot on supported hosts'),
     processSampling: supportedCapability('External process-tree sampler'),
   },

@@ -117,3 +117,14 @@ export function GpuixUiProvider({
 export function useGpuixUiTheme(): GpuixUiTheme {
   return use(ThemeContext);
 }
+
+/** Matches the web client's `--scrollbar-size`. */
+const SCROLLBAR_WIDTH = 6;
+
+/** Native scrollbar thumb for `overflow: "scroll"` containers and `<virtual-list>`. */
+export function scrollbarStyle(colors: GpuixUiColors): {
+  scrollbarColor: string;
+  scrollbarWidth: number;
+} {
+  return { scrollbarColor: colors.borderStrong, scrollbarWidth: SCROLLBAR_WIDTH };
+}

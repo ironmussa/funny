@@ -49,7 +49,7 @@ export function detectNativeHostSupport(input: NativeHostInput): NativeHostSuppo
   }
   if (input.platform === 'linux' && input.linuxLibc !== 'glibc') {
     return unsupported(
-      `GPUIX 0.5.1 requires glibc on Linux; detected ${input.linuxLibc ?? 'unknown libc'}`,
+      `GPUIX 0.11.0 requires glibc on Linux; detected ${input.linuxLibc ?? 'unknown libc'}`,
     );
   }
   const platform = input.platform as NativeHostPlatform;

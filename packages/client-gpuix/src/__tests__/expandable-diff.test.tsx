@@ -51,7 +51,10 @@ describe('expandable native diff', () => {
     ).toBeTrue();
     const bounds = root.renderer.getElementBounds(truncated!.id);
     expect(bounds).not.toBeNull();
-    root.renderer.nativeSimulateClick(bounds![0]! + bounds![2]! / 2, bounds![1]! + bounds![3]! - 8);
+    root.renderer.nativeSimulateClick(
+      bounds!.x + bounds!.width / 2,
+      bounds!.y + bounds!.height - 8,
+    );
 
     expect(root.renderer.findByTestId('diff')?.customProps?.maxLines).toBeUndefined();
     expect(

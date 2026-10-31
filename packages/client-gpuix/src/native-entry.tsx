@@ -1,4 +1,4 @@
-import { createRenderer, createRoot, startFrameLoop } from '@gpuix/react';
+import { collectGarbageWhenIdle, createRenderer, createRoot, startFrameLoop } from '@gpuix/react';
 
 import { GpuixClientApp } from './app';
 import type { NativeApplicationServices } from './application';
@@ -26,8 +26,11 @@ export function startNativeClient(
       />
     </NativeRendererErrorBoundary>,
   );
+  // Return the heap to baseline after bursts (initial mount, streaming, opening large threads).
+  const stopIdleGc = collectGarbageWhenIdle();
   const frameLoop = startFrameLoop(renderer, {
     onTerminated: () => {
+      stopIdleGc();
       composition.lifecycle.markWindowTerminated();
       application.dispose();
       root.unmount();
@@ -35,6 +38,7 @@ export function startNativeClient(
   });
   return {
     stop(): void {
+      stopIdleGc();
       composition.lifecycle.markWindowTerminated();
       application.dispose();
       frameLoop.stop();

@@ -131,6 +131,7 @@ export function Button({
   };
   return (
     <div
+      role="button"
       {...props}
       tabIndex={disabled ? -1 : (tabIndex ?? 0)}
       onClick={press}
@@ -163,6 +164,8 @@ export function IconButton({
 }: IconButtonProps): ReactElement {
   const button = (
     <Button
+      aria-label={label}
+      aria-selected={selected || undefined}
       {...props}
       variant={selected ? 'secondary' : (variant ?? 'ghost')}
       style={{

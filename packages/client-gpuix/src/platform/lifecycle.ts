@@ -2,7 +2,7 @@ import type { LifecycleService, LifecycleSnapshot, Unsubscribe } from '@funny/cl
 
 export const NATIVE_HOST_FOCUS_EVIDENCE = {
   supported: false,
-  runtime: 'GPUIX 0.5.1',
+  runtime: 'GPUIX 0.11.0',
   reason: 'independent host-focus signal unavailable',
 } as const;
 

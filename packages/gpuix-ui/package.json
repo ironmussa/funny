@@ -37,13 +37,13 @@
     "@funny/ui-contracts": "workspace:*"
   },
   "devDependencies": {
-    "@gpuix/react": "0.5.1",
+    "@gpuix/react": "0.11.0",
     "@types/bun": "^1.4.0",
     "@types/react": "^19.2.14",
     "react": "^19.2.4"
   },
   "peerDependencies": {
-    "@gpuix/react": "^0.5.1",
+    "@gpuix/react": "^0.11.0",
     "react": ">=19"
   }
 }

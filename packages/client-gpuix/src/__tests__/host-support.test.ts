@@ -22,7 +22,7 @@ describe('GPUIX product host support', () => {
       detectNativeHostSupport({ platform: 'linux', architecture: 'x64', linuxLibc: 'musl' }),
     ).toEqual({
       supported: false,
-      reason: 'GPUIX 0.5.1 requires glibc on Linux; detected musl',
+      reason: 'GPUIX 0.11.0 requires glibc on Linux; detected musl',
       fallbackCommand: 'bun run dev:client',
     });
   });

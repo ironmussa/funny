@@ -34,8 +34,8 @@ describe('DockLayout', () => {
     const bounds = separator ? root.renderer.getElementBounds(separator.id) : null;
     expect(bounds).not.toBeNull();
     if (bounds) {
-      const x = bounds[0]! + bounds[2]! / 2;
-      const y = bounds[1]! + 30;
+      const x = bounds.x + bounds.width / 2;
+      const y = bounds.y + 30;
       root.renderer.nativeSimulateMouseDown(x, y, 0);
       root.renderer.nativeSimulateMouseMove(x + 70, y, 0);
       root.renderer.nativeSimulateMouseUp(x + 70, y, 0);
@@ -72,9 +72,9 @@ describe('DockLayout', () => {
     expect(handleBounds).not.toBeNull();
     expect(targetBounds).not.toBeNull();
     if (handleBounds && targetBounds) {
-      const startX = handleBounds[0]! + 6;
-      const y = handleBounds[1]! + handleBounds[3]! / 2;
-      const endX = targetBounds[0]! + targetBounds[2]! - 6;
+      const startX = handleBounds.x + 6;
+      const y = handleBounds.y + handleBounds.height / 2;
+      const endX = targetBounds.x + targetBounds.width - 6;
       root.renderer.nativeSimulateMouseDown(startX, y, 0);
       root.renderer.nativeSimulateMouseMove(endX, y, 0);
       root.renderer.nativeSimulateMouseUp(endX, y, 0);
@@ -107,8 +107,8 @@ describe('DockLayout', () => {
     const handleBounds = handle ? root.renderer.getElementBounds(handle.id) : null;
     expect(handleBounds).not.toBeNull();
     if (handleBounds) {
-      const x = handleBounds[0]! + 6;
-      const y = handleBounds[1]! + handleBounds[3]! / 2;
+      const x = handleBounds.x + 6;
+      const y = handleBounds.y + handleBounds.height / 2;
       root.renderer.nativeSimulateMouseDown(x, y, 0);
       root.renderer.nativeSimulateMouseUp(x, y, 0);
     }
@@ -117,7 +117,7 @@ describe('DockLayout', () => {
     const action = root.renderer.findByTestId('after-drag-action');
     const actionBounds = action ? root.renderer.getElementBounds(action.id) : null;
     if (actionBounds) {
-      root.renderer.nativeSimulateClick(actionBounds[0]! + 4, actionBounds[1]! + 4);
+      root.renderer.nativeSimulateClick(actionBounds.x + 4, actionBounds.y + 4);
     }
     expect(presses).toBe(1);
     root.unmount();

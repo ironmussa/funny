@@ -41,54 +41,34 @@ function inputStyle(theme: ReturnType<typeof useGpuixUiTheme>, style?: StyleDesc
   };
 }
 
-export function Input({
+/** Shared native props for `<input>` and `<textarea>`: theme, a11y name and value callbacks. */
+function useEditorProps({
   onChange,
   onValueChange,
   style,
   tabIndex = 0,
   theme: nativeTheme,
   ...props
-}: InputProps): ReactElement {
+}: InputProps | TextareaProps) {
   const theme = useGpuixUiTheme();
-  return (
-    <input
-      {...props}
-      tabIndex={tabIndex}
-      style={inputStyle(theme, style)}
-      theme={{
-        caret: theme.colors.accent,
-        ...nativeTheme,
-      }}
-      onChange={(event) => {
-        onChange?.(event);
-        onValueChange?.(eventValue(event));
-      }}
-    />
-  );
+  return {
+    role: 'textbox',
+    'aria-label': props.placeholder,
+    ...props,
+    tabIndex,
+    style: inputStyle(theme, style),
+    theme: { caret: theme.colors.accent, ...nativeTheme },
+    onChange: (event: EventPayload) => {
+      onChange?.(event);
+      onValueChange?.(eventValue(event));
+    },
+  };
 }
 
-export function Textarea({
-  onChange,
-  onValueChange,
-  style,
-  tabIndex = 0,
-  theme: nativeTheme,
-  ...props
-}: TextareaProps): ReactElement {
-  const theme = useGpuixUiTheme();
-  return (
-    <textarea
-      {...props}
-      tabIndex={tabIndex}
-      style={inputStyle(theme, style)}
-      theme={{
-        caret: theme.colors.accent,
-        ...nativeTheme,
-      }}
-      onChange={(event) => {
-        onChange?.(event);
-        onValueChange?.(eventValue(event));
-      }}
-    />
-  );
+export function Input(props: InputProps): ReactElement {
+  return <input {...useEditorProps(props)} />;
+}
+
+export function Textarea(props: TextareaProps): ReactElement {
+  return <textarea {...useEditorProps(props)} />;
 }

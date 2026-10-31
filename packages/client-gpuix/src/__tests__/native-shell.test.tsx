@@ -80,14 +80,14 @@ describe('native read-only shell', () => {
     expect(root.renderer.findByText('Rendering: Rich')).toBeDefined();
     const toggleBounds = root.renderer.getElementBounds(toggle!.id)!;
     root.renderer.nativeSimulateClick(
-      toggleBounds[0]! + toggleBounds[2]! / 2,
-      toggleBounds[1]! + toggleBounds[3]! / 2,
+      toggleBounds.x + toggleBounds.width / 2,
+      toggleBounds.y + toggleBounds.height / 2,
     );
     expect(root.renderer.findByText('Rendering: Fast')).toBeDefined();
     const resetBounds = root.renderer.getElementBounds(reset!.id)!;
     root.renderer.nativeSimulateClick(
-      resetBounds[0]! + resetBounds[2]! / 2,
-      resetBounds[1]! + resetBounds[3]! / 2,
+      resetBounds.x + resetBounds.width / 2,
+      resetBounds.y + resetBounds.height / 2,
     );
     expect(resetFrameStats).toHaveBeenCalledTimes(1);
 
@@ -205,8 +205,8 @@ describe('native read-only shell', () => {
     expect(virtualLists[0]!.children.length).toBeGreaterThan(2);
     expect(virtualLists[1]!.children).toHaveLength(THREAD_RETAINED_WINDOW_SIZE);
     const sidebarBounds = root.renderer.getElementBounds(virtualLists[0]!.id);
-    expect(sidebarBounds?.[2]).toBeGreaterThan(0);
-    expect(sidebarBounds?.[3]).toBeGreaterThan(0);
+    expect(sidebarBounds?.width).toBeGreaterThan(0);
+    expect(sidebarBounds?.height).toBeGreaterThan(0);
     expect(root.renderer.findByType('markdown')).toHaveLength(0);
     expect(root.renderer.findByType('code')).toHaveLength(0);
     expect(root.renderer.getPaintedText()).toContain('Long thread');

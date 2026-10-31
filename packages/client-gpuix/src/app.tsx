@@ -33,7 +33,12 @@ import {
   StatusCard,
   ToolCallCard,
 } from '@funny/gpuix-ui/status-card';
-import { gpuixTheme, GpuixUiProvider, useGpuixUiTheme } from '@funny/gpuix-ui/theme';
+import {
+  gpuixTheme,
+  GpuixUiProvider,
+  scrollbarStyle,
+  useGpuixUiTheme,
+} from '@funny/gpuix-ui/theme';
 import { ThreadHeader } from '@funny/gpuix-ui/thread-header';
 import {
   clampWindowStart,
@@ -328,7 +333,7 @@ function LoginView({ application }: { application: NativeApplicationServices }) 
         onSubmit={(event) => void submit(eventValue(event))}
       />
       <text style={{ color: colors.warning, fontSize: 12 }}>
-        GPUIX 0.5 does not expose secure-text entry; use this experimental login only in a trusted
+        GPUIX does not expose secure-text entry; use this experimental login only in a trusted
         environment.
       </text>
       {error ? <text style={{ color: colors.danger }}>{error}</text> : null}
@@ -595,7 +600,15 @@ const Sidebar = memo(function Sidebar({ application }: { application: NativeAppl
             estimatedItemHeight={56}
             overdraw={240}
             onVisibleRange={updateRetainedWindow}
-            style={{ flexGrow: 1, minHeight: 0, width: '100%', gap: 14 }}
+            role="list"
+            aria-label="Projects and threads"
+            style={{
+              flexGrow: 1,
+              minHeight: 0,
+              width: '100%',
+              gap: 14,
+              ...scrollbarStyle(colors),
+            }}
           >
             {retainedRows}
           </virtual-list>
@@ -1108,11 +1121,14 @@ const ThreadTranscript = memo(function ThreadTranscript({
       onVisibleRange={updateRetainedWindow}
       overdraw={360}
       estimatedItemHeight={220}
+      role="log"
+      aria-label="Conversation"
       style={{
         flexGrow: 1,
         minHeight: 0,
         width: '100%',
         backgroundColor: colors.background,
+        ...scrollbarStyle(colors),
       }}
     >
       {retainedItems.map((item) => {

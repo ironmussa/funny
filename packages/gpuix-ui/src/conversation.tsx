@@ -69,6 +69,7 @@ export function UserMessageCard({
   };
   return (
     <div
+      role={onActivate ? 'button' : 'article'}
       {...props}
       tabIndex={onActivate ? (tabIndex ?? 0) : tabIndex}
       onClick={onActivate}

@@ -5,7 +5,9 @@ import { nativeJsonRequest } from './services/native-api';
 
 export const NATIVE_FILE_TREE_MAX_FILES = 10_000;
 
-export type NativeFileTreeTarget = { path: string } | { threadId: string };
+export interface NativeFileTreeTarget {
+  path: string;
+}
 
 export interface NativeFileTreeState {
   targetKey: string | null;
@@ -14,7 +16,9 @@ export interface NativeFileTreeState {
   loading: boolean;
   truncated: boolean;
   error: string | null;
-  version: number | null;
+  loaded: boolean;
+  /** The thread has no directory the server can list (scratch, or a worktree not created yet). */
+  unavailable: boolean;
 }
 
 const initialState: NativeFileTreeState = {
@@ -24,22 +28,38 @@ const initialState: NativeFileTreeState = {
   loading: false,
   truncated: false,
   error: null,
-  version: null,
+  loaded: false,
+  unavailable: false,
 };
 
 export function resolveNativeFileTreeTarget(
   thread: Thread,
   project?: Project,
-): NativeFileTreeTarget {
+): NativeFileTreeTarget | null {
   if (thread.worktreePath) return { path: thread.worktreePath };
-  if (thread.mode === 'worktree' || thread.isScratch || !project?.path) {
-    return { threadId: thread.id };
-  }
+  if (thread.mode === 'worktree' || thread.isScratch || !project?.path) return null;
   return { path: project.path };
 }
 
 function targetKey(target: NativeFileTreeTarget): string {
-  return 'path' in target ? `path:${target.path}` : `thread:${target.threadId}`;
+  return `path:${target.path}`;
+}
+
+type BrowseEntry = string | { path?: unknown; type?: unknown };
+
+/** `/browse/files` returns bare paths or `{ path, type }` entries; the tree derives folders itself. */
+function filePaths(entries: unknown[]): string[] | null {
+  const paths: string[] = [];
+  for (const entry of entries as BrowseEntry[]) {
+    if (typeof entry === 'string') {
+      paths.push(entry);
+    } else if (entry && typeof entry === 'object' && typeof entry.path === 'string') {
+      if (entry.type !== 'folder') paths.push(entry.path);
+    } else {
+      return null;
+    }
+  }
+  return paths;
 }
 
 export class NativeFileTreeService {
@@ -58,9 +78,15 @@ export class NativeFileTreeService {
 
   loadForThread(thread: Thread, project?: Project, force = false): Promise<void> {
     const target = resolveNativeFileTreeTarget(thread, project);
+    if (!target) {
+      this.requestSequence += 1;
+      this.currentTarget = null;
+      this.state.setState({ ...initialState, unavailable: true });
+      return Promise.resolve();
+    }
     const key = targetKey(target);
     const current = this.state.getState();
-    if (!force && current.targetKey === key && (current.loading || current.version !== null)) {
+    if (!force && current.targetKey === key && (current.loading || current.loaded)) {
       return Promise.resolve();
     }
     return this.load(target);
@@ -89,42 +115,25 @@ export class NativeFileTreeService {
       basePath: current.targetKey === key ? current.basePath : null,
     });
     try {
-      const query =
-        'path' in target
-          ? `path=${encodeURIComponent(target.path)}`
-          : `threadId=${encodeURIComponent(target.threadId)}`;
-      const response = await nativeJsonRequest<{
-        files?: unknown;
-        version?: unknown;
-        basePath?: unknown;
-      }>({
+      const params = new URLSearchParams({
+        path: target.path,
+        limit: String(NATIVE_FILE_TREE_MAX_FILES),
+      });
+      const response = await nativeJsonRequest<{ files?: unknown; truncated?: unknown }>({
         ...this.options,
-        path: `/browse/files/index?${query}`,
+        path: `/browse/files?${params.toString()}`,
       });
       if (sequence !== this.requestSequence) return;
-      if (
-        !Array.isArray(response.files) ||
-        response.files.some((path) => typeof path !== 'string')
-      ) {
-        throw new Error('File index response is invalid');
-      }
-      const truncated = response.files.length > NATIVE_FILE_TREE_MAX_FILES;
+      const files = Array.isArray(response.files) ? filePaths(response.files) : null;
+      if (!files) throw new Error('File index response is invalid');
       this.state.setState({
         targetKey: key,
-        basePath:
-          typeof response.basePath === 'string'
-            ? response.basePath
-            : 'path' in target
-              ? target.path
-              : null,
-        files: (response.files as string[]).slice(0, NATIVE_FILE_TREE_MAX_FILES),
+        basePath: target.path,
+        files: files.slice(0, NATIVE_FILE_TREE_MAX_FILES),
         loading: false,
-        truncated,
+        truncated: response.truncated === true || files.length > NATIVE_FILE_TREE_MAX_FILES,
         error: null,
-        version:
-          typeof response.version === 'number' && Number.isFinite(response.version)
-            ? response.version
-            : 0,
+        loaded: true,
       });
     } catch (error) {
       if (sequence !== this.requestSequence) return;

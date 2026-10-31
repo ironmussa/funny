@@ -11,7 +11,7 @@ import {
 const project = { id: 'p1', path: '/repo' } as never;
 
 describe('native file tree state', () => {
-  test('prefers worktrees, resolves scratch threads on the server, and uses project roots', () => {
+  test('prefers worktrees, uses project roots, and has no target without a directory', () => {
     expect(
       resolveNativeFileTreeTarget(
         { id: 't1', mode: 'worktree', worktreePath: '/worktrees/t1' } as never,
@@ -20,20 +20,30 @@ describe('native file tree state', () => {
     ).toEqual({ path: '/worktrees/t1' });
     expect(
       resolveNativeFileTreeTarget({ id: 'scratch', mode: 'local', isScratch: true } as never),
-    ).toEqual({ threadId: 'scratch' });
+    ).toBeNull();
+    expect(
+      resolveNativeFileTreeTarget({ id: 't3', mode: 'worktree' } as never, project),
+    ).toBeNull();
     expect(resolveNativeFileTreeTarget({ id: 't2', mode: 'local' } as never, project)).toEqual({
       path: '/repo',
     });
   });
 
-  test('loads and validates the portable file index', async () => {
+  test('lists files through the browse route the runtime serves', async () => {
     const host = createInMemoryPlatform({
       request: async () => ({
         status: 200,
         ok: true,
         headers: {},
         text: async () =>
-          JSON.stringify({ files: ['src/app.ts', 'README.md'], version: 4, basePath: '/repo' }),
+          JSON.stringify({
+            files: [
+              { path: 'src/app.ts', type: 'file' },
+              { path: 'src', type: 'folder' },
+              'README.md',
+            ],
+            truncated: false,
+          }),
       }),
     });
     const service = new NativeFileTreeService({
@@ -43,12 +53,32 @@ describe('native file tree state', () => {
 
     await service.loadForThread({ id: 't2', mode: 'local' } as never, project);
 
-    expect(host.controls.requests[0]?.url).toContain('/api/browse/files/index?path=%2Frepo');
+    expect(host.controls.requests[0]?.url).toContain(
+      `/api/browse/files?path=%2Frepo&limit=${NATIVE_FILE_TREE_MAX_FILES}`,
+    );
     expect(service.state.getState()).toMatchObject({
       basePath: '/repo',
       files: ['src/app.ts', 'README.md'],
       loading: false,
-      version: 4,
+      loaded: true,
+      truncated: false,
+    });
+  });
+
+  test('marks threads without a directory as unavailable without calling the server', async () => {
+    const host = createInMemoryPlatform();
+    const service = new NativeFileTreeService({
+      platform: host.platform,
+      clientOrigin: 'http://localhost:5173',
+    });
+
+    await service.loadForThread({ id: 'scratch', mode: 'local', isScratch: true } as never);
+
+    expect(host.controls.requests).toHaveLength(0);
+    expect(service.state.getState()).toMatchObject({
+      targetKey: null,
+      unavailable: true,
+      error: null,
     });
   });
 
@@ -66,7 +96,7 @@ describe('native file tree state', () => {
       clientOrigin: 'http://localhost:5173',
     });
 
-    await service.loadForThread({ id: 'scratch', mode: 'local', isScratch: true } as never);
+    await service.loadForThread({ id: 't2', mode: 'local' } as never, project);
 
     expect(service.state.getState()).toMatchObject({
       loading: false,
@@ -85,7 +115,7 @@ describe('native file tree state', () => {
         status: 200,
         ok: true,
         headers: {},
-        text: async () => JSON.stringify({ files, version: 1 }),
+        text: async () => JSON.stringify({ files, truncated: true }),
       }),
     });
     const service = new NativeFileTreeService({

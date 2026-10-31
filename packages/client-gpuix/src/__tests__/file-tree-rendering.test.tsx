@@ -42,7 +42,7 @@ describe('native file-tree rendering', () => {
         status: 200,
         ok: true,
         headers: new HeadersStub(),
-        text: async () => JSON.stringify({ files: [], version: 1 }),
+        text: async () => JSON.stringify({ files: [], truncated: false }),
       }),
     });
     const application = createNativeApplicationServices(composition);
@@ -64,7 +64,7 @@ describe('native file-tree rendering', () => {
       loading: false,
       truncated: false,
       error: null,
-      version: 1,
+      loaded: true,
     });
 
     let renders = 0;

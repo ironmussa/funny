@@ -62,6 +62,7 @@ import {
 
 import type { NativeApplicationServices } from './application';
 import { diagnosticSurfacePosition, nativeRenderingModeLabel } from './diagnostic-mode';
+import type { NativeFileTreeState } from './file-tree-state';
 import { nativeGitStatusForThread } from './git-status-state';
 import {
   createMessageContentPreview,
@@ -124,6 +125,21 @@ const SIDEBAR_RETAINED_WINDOW_SIZE = 48;
 const SIDEBAR_WINDOW_BUFFER = 12;
 export const THREAD_RETAINED_WINDOW_SIZE = 48;
 const THREAD_WINDOW_BUFFER = 12;
+
+function fileTreeIdleMessage(state: NativeFileTreeState): string {
+  return state.unavailable
+    ? 'This thread has no files to browse yet.'
+    : 'Select a thread to browse files.';
+}
+
+function FileTreeMessage({ children }: { children: string }) {
+  const colors = useNativeColors();
+  return (
+    <div style={{ flexGrow: 1, alignItems: 'center', justifyContent: 'center', padding: 12 }}>
+      <text style={{ color: colors.muted }}>{children}</text>
+    </div>
+  );
+}
 
 export const NativeFileTreeDock = memo(function NativeFileTreeDock({
   application,
@@ -244,27 +260,9 @@ export const NativeFileTreeDock = memo(function NativeFileTreeDock({
         <text style={{ color: colors.danger, fontSize: 10, padding: 6 }}>{state.error}</text>
       ) : null}
       {!state.targetKey ? (
-        <div
-          style={{
-            flexGrow: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 12,
-          }}
-        >
-          <text style={{ color: colors.muted }}>Select a thread to browse files.</text>
-        </div>
+        <FileTreeMessage>{fileTreeIdleMessage(state)}</FileTreeMessage>
       ) : state.loading && state.files.length === 0 ? (
-        <div
-          style={{
-            flexGrow: 1,
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: 12,
-          }}
-        >
-          <text style={{ color: colors.muted }}>Loading files…</text>
-        </div>
+        <FileTreeMessage>Loading files…</FileTreeMessage>
       ) : state.error && state.files.length === 0 ? (
         <StatusCard title="Unable to load files" detail={state.error} tone="danger">
           <NativeButton size="small" onPress={() => void application.fileTree.refresh()}>

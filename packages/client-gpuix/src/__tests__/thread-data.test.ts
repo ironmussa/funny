@@ -74,12 +74,8 @@ function setup(statusForThread = 200) {
             },
           ],
         };
-      else if (path.startsWith('/api/browse/files/index'))
-        body = {
-          files: ['src/app.ts', 'README.md'],
-          version: 1,
-          basePath: '/repo',
-        };
+      else if (path.startsWith('/api/browse/files?'))
+        body = { files: ['src/app.ts', 'README.md'], truncated: false };
       else if (path.startsWith('/api/threads/t1/messages'))
         body = { messages: [message('m0')], hasMore: false };
       else if (path.startsWith('/api/threads/t1')) {

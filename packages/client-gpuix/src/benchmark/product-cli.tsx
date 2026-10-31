@@ -109,7 +109,7 @@ application.fileTree.state.setState({
   loading: false,
   truncated: false,
   error: null,
-  version: 1,
+  loaded: true,
 });
 application.statusState.setState({ phase: 'ready', error: null });
 

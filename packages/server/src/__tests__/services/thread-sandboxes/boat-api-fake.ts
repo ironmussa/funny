@@ -17,6 +17,8 @@ export interface BoatApiFake {
   requests: Array<{ method: string; path: string; headers: Record<string, string>; body: any }>;
   sandboxes: Map<string, FakeSandbox>;
   savedSnapshots: Set<string>;
+  commands: Array<{ sandboxId: string; command: string }>;
+  failNextCommand(exitCode: number): void;
   expire(sandboxId: string): void;
   respondOnce(status: number, body: any, headers?: Record<string, string>): void;
 }
@@ -33,6 +35,9 @@ const error = (status: number, code: string, message = code) =>
 export function createBoatApiFake(validKey = 'boat_test_key'): BoatApiFake {
   const sandboxes = new Map<string, FakeSandbox>();
   const savedSnapshots = new Set<string>(['funny-runner-0.0.0-test']);
+  const savingPolls = new Map<string, number>();
+  const commands: Array<{ sandboxId: string; command: string }> = [];
+  let nextExitCode: number | undefined;
   const byIdempotencyKey = new Map<string, string>();
   const requests: BoatApiFake['requests'] = [];
   const queued: Array<() => Response> = [];
@@ -57,11 +62,41 @@ export function createBoatApiFake(validKey = 'boat_test_key'): BoatApiFake {
         blockedReason: null,
       });
     }
+    if (method === 'GET' && path === '/saved-snapshots') {
+      return json(200, {
+        ok: true,
+        savedSnapshots: [...savedSnapshots].map((name) => ({ name, status: 'ready' })),
+      });
+    }
+    if (method === 'POST' && path === '/saved-snapshots') {
+      if (!sandboxes.has(body?.sandboxId)) return error(404, 'not_found');
+      savingPolls.set(body.name, 1);
+      return json(202, {
+        ok: true,
+        type: 'snapshot.saved.saving',
+        status: 'saving',
+        snapshot: { name: body.name, status: 'saving' },
+      });
+    }
     const snapshot = path.match(/^\/saved-snapshots\/(.+)$/);
-    if (method === 'GET' && snapshot) {
+    if (snapshot) {
       const name = decodeURIComponent(snapshot[1]);
+      if (method === 'DELETE') {
+        if (!savedSnapshots.delete(name)) return error(404, 'snapshot_not_found');
+        return json(200, { ok: true });
+      }
+      const remaining = savingPolls.get(name);
+      if (remaining !== undefined) {
+        // One poll in `saving`, then the snapshot becomes ready.
+        if (remaining > 0) {
+          savingPolls.set(name, remaining - 1);
+          return json(200, { ok: true, snapshot: { name, status: 'saving' } });
+        }
+        savingPolls.delete(name);
+        savedSnapshots.add(name);
+      }
       return savedSnapshots.has(name)
-        ? json(200, { ok: true, savedSnapshot: { name } })
+        ? json(200, { ok: true, snapshot: { name, status: 'ready' } })
         : error(404, 'snapshot_not_found');
     }
     if (method === 'POST' && path === '/sandboxes') {
@@ -106,6 +141,16 @@ export function createBoatApiFake(validKey = 'boat_test_key'): BoatApiFake {
         return json(202, { ok: true, type: 'sandbox.deleting' });
       }
     }
+    const commandPath = path.match(/^\/sandboxes\/([^/]+)\/commands$/);
+    if (method === 'POST' && commandPath) {
+      const sandbox = sandboxes.get(commandPath[1]);
+      if (!sandbox) return error(404, 'not_found');
+      if (sandbox.state !== 'ready') return error(409, 'machine_not_running');
+      commands.push({ sandboxId: sandbox.id, command: body?.command ?? '' });
+      const exitCode = nextExitCode ?? 0;
+      nextExitCode = undefined;
+      return json(200, { ok: true, exitCode, stdout: 'ok', stderr: exitCode ? 'boom' : '' });
+    }
     return error(400, 'unsupported_in_fake');
   };
 
@@ -114,6 +159,10 @@ export function createBoatApiFake(validKey = 'boat_test_key'): BoatApiFake {
     requests,
     sandboxes,
     savedSnapshots,
+    commands,
+    failNextCommand: (exitCode) => {
+      nextExitCode = exitCode;
+    },
     expire: (sandboxId) => {
       const sandbox = sandboxes.get(sandboxId);
       if (sandbox) sandbox.dataExpiredAt = '2026-01-01T00:00:00Z';

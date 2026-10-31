@@ -13,7 +13,14 @@ const BASE = { apiBaseUrl: 'https://boat.test/api/v1' };
 // One fake API per provider so every contract test starts clean.
 const providerWith = (key: string) => {
   const api = createBoatApiFake();
-  return Object.assign(createBoatProvider(key, BASE, api.fetch), { api });
+  return Object.assign(
+    createBoatProvider(key, BASE, {
+      fetch: api.fetch,
+      sleep: async () => {},
+      pollMs: 1,
+    }),
+    { api },
+  );
 };
 
 runSandboxProviderContract('boat (emulated API)', {
@@ -80,6 +87,13 @@ describe('boat adapter specifics', () => {
       ],
       [503, { ok: false, code: 'busy' }, { 'retry-after': '3' }, 'unavailable'],
       [409, { ok: false, code: 'snapshot_data_expired' }, undefined, 'expired'],
+      [
+        403,
+        { ok: false, code: 'trial_saved_snapshots_not_allowed', message: 'trial' },
+        undefined,
+        'unsupported',
+      ],
+      [403, { ok: false, code: 'forbidden' }, undefined, 'auth'],
     ];
     for (const [status, body, headers, kind] of cases) {
       provider.api.respondOnce(status, body, headers);
@@ -123,5 +137,55 @@ describe('boat adapter specifics', () => {
     expectOk(await provider.stop(handle));
     provider.api.expire(handle.sandboxId);
     expect(expectOk(await provider.status(handle)).state).toBe('lost');
+  });
+
+  test('exec runs a command and reports its exit code', async () => {
+    const provider = providerWith('boat_test_key');
+    const handle = expectOk(
+      await provider.create({ threadId: 't1', sizeId: 'small', env: {}, idempotencyKey: 'k' }),
+    );
+    const result = expectOk(await provider.exec(handle, 'echo hi', { timeoutMs: 30_000 }));
+    expect(result).toEqual({ exitCode: 0, stdout: 'ok', stderr: '' });
+    const sent = provider.api.requests.find((r) => r.path.endsWith('/commands'));
+    expect(sent?.body).toEqual({ command: 'echo hi', timeoutSeconds: 30 });
+  });
+
+  test('buildTemplate installs, saves the snapshot and always deletes the throwaway sandbox', async () => {
+    const provider = providerWith('boat_test_key');
+    const ref = expectOk(
+      await provider.buildTemplate!({
+        serverVersion: 'abc123def456',
+        installScript: 'echo install',
+        scriptEnv: { FUNNY_COMMIT: 'f'.repeat(40) },
+      }),
+    );
+    expect(ref.ref).toBe('funny-runner-abc123def456');
+    expect(provider.api.commands[0].command).toContain('echo install');
+    expect(provider.api.commands[0].command).toContain(`FUNNY_COMMIT='${'f'.repeat(40)}'`);
+    expect(provider.api.sandboxes.size).toBe(0);
+    expect(expectOk(await provider.resolveTemplate('abc123def456')).ref).toBe(ref.ref);
+  });
+
+  test('a failed install surfaces the error and still deletes the throwaway sandbox', async () => {
+    const provider = providerWith('boat_test_key');
+    provider.api.failNextCommand(2);
+    const result = await provider.buildTemplate!({
+      serverVersion: 'v-broken',
+      installScript: 'exit 2',
+      scriptEnv: {},
+    });
+    expect(result.isErr() && result.error.kind).toBe('provider');
+    expect(provider.api.sandboxes.size).toBe(0);
+    expect(provider.api.savedSnapshots.has('funny-runner-v-broken')).toBe(false);
+  });
+
+  test('templates are listed and deleted by name', async () => {
+    const provider = providerWith('boat_test_key');
+    provider.api.savedSnapshots.add('unrelated-snapshot');
+    const listed = expectOk(await provider.listTemplates!()).map((t) => t.ref);
+    expect(listed).toEqual(['funny-runner-0.0.0-test']);
+    expectOk(await provider.deleteTemplate!(listed.map((ref) => ({ providerId: 'boat', ref }))[0]));
+    expectOk(await provider.deleteTemplate!({ providerId: 'boat', ref: 'funny-runner-gone' }));
+    expect(provider.api.savedSnapshots.has('unrelated-snapshot')).toBe(true);
   });
 });

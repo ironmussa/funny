@@ -354,7 +354,10 @@ export function App() {
             RIGHT_PANE_LOADING_FALLBACK
           ),
         },
-      ]
+      ].map((tab) => ({
+        ...tab,
+        content: <ErrorBoundary area={`review-${tab.id}`}>{tab.content}</ErrorBoundary>,
+      }))
     : undefined;
 
   const singleRightPanel =

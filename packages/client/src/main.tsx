@@ -28,6 +28,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 
 import { AppShellSkeleton } from './components/AppShellSkeleton';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { TooltipProvider } from './components/ui/tooltip';
 import { profileApi } from './lib/api/profile';
 import { resolveClientLogLevel } from './lib/client-logger';
@@ -298,15 +299,17 @@ root.render(
         }}
       >
         <TooltipProvider delayDuration={300} skipDelayDuration={0}>
-          <LazyMotion features={domAnimation} strict>
-            {isPreviewWindow ? (
-              <Suspense fallback={null}>
-                <PreviewBrowser />
-              </Suspense>
-            ) : (
-              <AuthGate />
-            )}
-          </LazyMotion>
+          <ErrorBoundary area="app">
+            <LazyMotion features={domAnimation} strict>
+              {isPreviewWindow ? (
+                <Suspense fallback={null}>
+                  <PreviewBrowser />
+                </Suspense>
+              ) : (
+                <AuthGate />
+              )}
+            </LazyMotion>
+          </ErrorBoundary>
         </TooltipProvider>
       </AbbacchioProvider>
     </ThemeProvider>

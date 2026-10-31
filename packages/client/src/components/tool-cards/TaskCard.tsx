@@ -44,6 +44,59 @@ function normalizeTaskOutput(output: string): string {
   return output;
 }
 
+function TaskResult({ rawOutput }: { rawOutput?: string }) {
+  const { t } = useTranslation();
+  const { output, toolsUsed } = useMemo(() => {
+    const normalized = rawOutput ? normalizeTaskOutput(rawOutput) : '';
+    // Claude's subagent results can begin with harness metadata, not Markdown.
+    // Only consume a complete leading header; preserve tags in the report itself.
+    const header = normalized.match(
+      /^\s*<tools-used-before-summary>([\s\S]*?)<\/tools-used-before-summary>/,
+    );
+    return {
+      output: header ? normalized.slice(header[0].length).trimStart() : normalized,
+      toolsUsed: header?.[1].trim(),
+    };
+  }, [rawOutput]);
+
+  return (
+    <>
+      {toolsUsed && (
+        <div className="px-3 py-2">
+          <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 font-mono text-xs">
+            {toolsUsed}
+          </span>
+        </div>
+      )}
+
+      {/* Final text output rendered as markdown */}
+      {output && (
+        <div className="px-3 py-2">
+          <div className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
+            {t('tools.output')}
+          </div>
+          <div
+            className={cn(
+              markdownProseClassName,
+              'border-border/40 bg-background/80 rounded border px-2.5 py-1.5',
+            )}
+          >
+            <Suspense
+              fallback={
+                <pre className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
+                  {output}
+                </pre>
+              }
+            >
+              <LazyMarkdown content={output} />
+            </Suspense>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 type RenderChildToolCall = (item: ToolItem, idx: number) => ReactNode;
 
 interface TaskCardProps {
@@ -73,11 +126,6 @@ export const TaskCard = memo(function TaskCard({
   const [expanded, setExpanded] = useState(isRunning);
   const description = (parsed.description as string) ?? '';
   const hasChildren = childToolCalls && childToolCalls.length > 0;
-
-  const output = useMemo(
-    () => (rawOutput ? normalizeTaskOutput(rawOutput) : undefined),
-    [rawOutput],
-  );
 
   const groupedChildren = useMemo(
     () => (hasChildren ? groupConsecutiveToolCalls(childToolCalls.map((tc: any) => ({ tc }))) : []),
@@ -118,7 +166,7 @@ export const TaskCard = memo(function TaskCard({
             {displayTime}
           </span>
         )}
-        {!output && <Loader2 className="icon-xs text-muted-foreground shrink-0 animate-spin" />}
+        {isRunning && <Loader2 className="icon-xs text-muted-foreground shrink-0 animate-spin" />}
       </button>
 
       {expanded && (
@@ -133,33 +181,10 @@ export const TaskCard = memo(function TaskCard({
             </div>
           )}
 
-          {/* Final text output rendered as markdown */}
-          {output && (
-            <div className="px-3 py-2">
-              <div className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
-                {t('tools.output')}
-              </div>
-              <div
-                className={cn(
-                  markdownProseClassName,
-                  'border-border/40 bg-background/80 rounded border px-2.5 py-1.5',
-                )}
-              >
-                <Suspense
-                  fallback={
-                    <pre className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
-                      {output}
-                    </pre>
-                  }
-                >
-                  <LazyMarkdown content={output} />
-                </Suspense>
-              </div>
-            </div>
-          )}
+          <TaskResult rawOutput={rawOutput} />
 
           {/* Waiting state when no children and no output yet */}
-          {!hasChildren && !output && (
+          {!hasChildren && isRunning && (
             <div className="text-muted-foreground/50 px-3 py-3 text-center text-xs italic">
               {t('tools.waitingForOutput')}
             </div>

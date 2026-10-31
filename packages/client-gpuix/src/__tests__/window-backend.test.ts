@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { configureNativeWindowBackend, resolveNativeLinuxWindowBackend } from '../native-backend';
+import { planNativeWindowBackend, resolveNativeLinuxWindowBackend } from '../native-backend';
 import { NATIVE_CLIENT_WINDOW_OPTIONS } from '../native-frame-options';
 
 describe('native GPUIX window backend', () => {
@@ -12,34 +12,60 @@ describe('native GPUIX window backend', () => {
     expect(resolveNativeLinuxWindowBackend('unsupported')).toBe('auto');
   });
 
-  test('disables Wayland only for Linux x11 mode', () => {
-    const environment = { WAYLAND_DISPLAY: 'wayland-0' };
+  const gnomeWayland = {
+    WAYLAND_DISPLAY: 'wayland-0',
+    DISPLAY: ':0',
+    XDG_CURRENT_DESKTOP: 'zorin:GNOME',
+  };
 
-    expect(
-      configureNativeWindowBackend({ platform: 'linux', preference: 'x11', environment }),
-    ).toBe('x11');
-    expect(environment.WAYLAND_DISPLAY).toBe('');
+  test('relaunches without WAYLAND_DISPLAY in x11 mode', () => {
+    const plan = planNativeWindowBackend({
+      platform: 'linux',
+      preference: 'x11',
+      environment: { WAYLAND_DISPLAY: 'wayland-0', DISPLAY: ':0', HOME: '/home/u' },
+    });
+
+    expect(plan.backend).toBe('x11');
+    expect(plan.relaunchEnvironment).toEqual({ DISPLAY: ':0', HOME: '/home/u' });
   });
 
-  test.each(['auto', 'wayland', undefined])(
-    'preserves the Linux display environment for %s mode',
-    (preference) => {
-      const environment = { WAYLAND_DISPLAY: 'wayland-0' };
+  test('defaults GNOME Wayland sessions to x11 so the window manager draws a titlebar', () => {
+    const plan = planNativeWindowBackend({
+      platform: 'linux',
+      preference: undefined,
+      environment: gnomeWayland,
+    });
 
-      configureNativeWindowBackend({ platform: 'linux', preference, environment });
+    expect(plan.backend).toBe('x11');
+    expect(plan.relaunchEnvironment).not.toHaveProperty('WAYLAND_DISPLAY');
+  });
 
-      expect(environment.WAYLAND_DISPLAY).toBe('wayland-0');
-    },
-  );
+  test('does not relaunch again once WAYLAND_DISPLAY is gone', () => {
+    const { WAYLAND_DISPLAY: _wayland, ...relaunched } = gnomeWayland;
+
+    expect(
+      planNativeWindowBackend({ platform: 'linux', preference: 'auto', environment: relaunched })
+        .relaunchEnvironment,
+    ).toBeNull();
+  });
+
+  test.each([
+    ['explicit wayland on GNOME', 'wayland', gnomeWayland],
+    ['auto without XWayland', 'auto', { ...gnomeWayland, DISPLAY: undefined }],
+    ['auto on a decorating compositor', 'auto', { ...gnomeWayland, XDG_CURRENT_DESKTOP: 'KDE' }],
+  ])('keeps Wayland for %s', (_name, preference, environment) => {
+    expect(
+      planNativeWindowBackend({ platform: 'linux', preference, environment }).relaunchEnvironment,
+    ).toBeNull();
+  });
 
   test.each(['darwin', 'win32'] as const)(
     'never applies Linux display overrides on %s',
     (platform) => {
-      const environment = { WAYLAND_DISPLAY: 'host-value' };
-
-      configureNativeWindowBackend({ platform, preference: 'x11', environment });
-
-      expect(environment.WAYLAND_DISPLAY).toBe('host-value');
+      expect(
+        planNativeWindowBackend({ platform, preference: 'x11', environment: gnomeWayland })
+          .relaunchEnvironment,
+      ).toBeNull();
     },
   );
 

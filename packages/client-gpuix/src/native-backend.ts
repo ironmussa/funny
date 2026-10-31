@@ -1,9 +1,17 @@
 export type NativeLinuxWindowBackend = 'auto' | 'x11' | 'wayland';
 
+type Environment = Record<string, string | undefined>;
+
 interface NativeWindowBackendInput {
   platform: NodeJS.Platform;
   preference: string | undefined;
-  environment: Record<string, string | undefined>;
+  environment: Environment;
+}
+
+interface NativeWindowBackendPlan {
+  backend: NativeLinuxWindowBackend;
+  /** Environment to relaunch with, when the current process cannot select the backend. */
+  relaunchEnvironment: Environment | null;
 }
 
 export function resolveNativeLinuxWindowBackend(
@@ -13,15 +21,35 @@ export function resolveNativeLinuxWindowBackend(
   return normalized === 'x11' || normalized === 'wayland' ? normalized : 'auto';
 }
 
-/** Selects X11 before the native GPUIX module is loaded. */
-export function configureNativeWindowBackend({
+/**
+ * GNOME's compositor draws no server-side decorations for Wayland clients and GPUIX draws no
+ * client-side titlebar, so the app would have no header to drag. Under XWayland mutter frames it.
+ */
+function lacksWaylandDecorations(environment: Environment): boolean {
+  const desktop = environment.XDG_CURRENT_DESKTOP?.toUpperCase() ?? '';
+  return desktop.split(':').includes('GNOME');
+}
+
+/**
+ * Selects the Linux display backend. GPUI reads `WAYLAND_DISPLAY` from the native process
+ * environment, which `process.env` writes do not reach, so X11 requires a relaunch without it.
+ */
+export function planNativeWindowBackend({
   platform,
   preference,
   environment,
-}: NativeWindowBackendInput): NativeLinuxWindowBackend {
-  const backend = resolveNativeLinuxWindowBackend(preference);
-  if (platform === 'linux' && backend === 'x11') {
-    environment.WAYLAND_DISPLAY = '';
-  }
-  return backend;
+}: NativeWindowBackendInput): NativeWindowBackendPlan {
+  const requested = resolveNativeLinuxWindowBackend(preference);
+  if (platform !== 'linux') return { backend: requested, relaunchEnvironment: null };
+
+  const onWayland = Boolean(environment.WAYLAND_DISPLAY);
+  const x11Available = Boolean(environment.DISPLAY);
+  const backend =
+    requested === 'auto' && onWayland && x11Available && lacksWaylandDecorations(environment)
+      ? 'x11'
+      : requested;
+
+  if (backend !== 'x11' || !onWayland) return { backend, relaunchEnvironment: null };
+  const { WAYLAND_DISPLAY: _wayland, ...relaunchEnvironment } = environment;
+  return { backend, relaunchEnvironment };
 }

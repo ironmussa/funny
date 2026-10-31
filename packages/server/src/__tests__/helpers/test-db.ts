@@ -272,6 +272,20 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS infra_connections (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      label TEXT NOT NULL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      credential_enc TEXT NOT NULL,
+      account_label TEXT,
+      created_at TEXT NOT NULL,
+      last_validated_at TEXT
+    )
+  `);
+
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS runner_provision_tokens (
       id TEXT PRIMARY KEY,
       token_hash TEXT NOT NULL UNIQUE,

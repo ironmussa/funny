@@ -18,6 +18,8 @@ type AuditAction =
   | 'token.revoke'
   | 'runner.register'
   | 'runner.register_sandbox'
+  | 'infra.connection_added'
+  | 'infra.connection_removed'
   | 'runner.remove'
   | 'runner.enroll_approved'
   | 'runner.enroll_rejected'

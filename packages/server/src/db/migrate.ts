@@ -1730,6 +1730,28 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // thread-sandboxes: encrypted credentials for sandbox providers.
+    name: '084_infra_connections',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS infra_connections (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          label TEXT NOT NULL,
+          config_json TEXT NOT NULL DEFAULT '{}',
+          credential_enc TEXT NOT NULL,
+          account_label TEXT,
+          created_at TEXT NOT NULL,
+          last_validated_at TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_infra_connections_user ON infra_connections (user_id)
+      `);
+    },
+  },
 ];
 
 /**

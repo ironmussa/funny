@@ -746,6 +746,24 @@ export const runnerEnrollments = sqliteTable('runner_enrollments', {
 });
 
 /**
+ * A user's credential for a sandbox provider such as Boat (change
+ * thread-sandboxes). The credential is encrypted at rest and never returned.
+ */
+export const infraConnections = sqliteTable('infra_connections', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  provider: text('provider').notNull(),
+  label: text('label').notNull(),
+  /** Non-secret provider config, validated by the provider's schema. */
+  configJson: text('config_json').notNull().default('{}'),
+  credentialEnc: text('credential_enc').notNull(),
+  /** Account label reported by the provider at validation time. */
+  accountLabel: text('account_label'),
+  createdAt: text('created_at').notNull(),
+  lastValidatedAt: text('last_validated_at'),
+});
+
+/**
  * Single-use, short-lived token that lets a freshly provisioned sandbox runner
  * register itself as the `sandbox` runner of one thread without device-link
  * approval (change thread-sandboxes). Only the SHA-256 hash is stored.

@@ -33,6 +33,7 @@ import {
   generalRunnerIdsForUser,
   onRunnerScopeChange,
   pinnedRunnerIdsForProject,
+  sandboxRunnerIdForThread,
 } from './runner-scope.js';
 import { getRunnerForThread } from './thread-registry.js';
 
@@ -41,7 +42,10 @@ export interface ResolvedRunner {
 }
 
 /** Why a request could not be routed (drives the 502 message). */
-export type RunnerResolutionFailure = 'project-runner-offline' | 'general-runner-offline';
+export type RunnerResolutionFailure =
+  | 'project-runner-offline'
+  | 'general-runner-offline'
+  | 'thread-sandbox-unavailable';
 
 type CachedThreadRunner = ResolvedRunner & { threadId: string; userId: string };
 
@@ -62,8 +66,14 @@ function isReachable(presence: RunnerPresencePort | undefined, runnerId: string)
   return !!presence?.isAvailable(runnerId);
 }
 
-/** Where a request points: a project, or projectless work. */
-export type RouteTarget = { kind: 'project'; projectId: string } | { kind: 'projectless' };
+/**
+ * Where a request points: a thread bound to its own sandbox runner, a project,
+ * or projectless work.
+ */
+export type RouteTarget =
+  | { kind: 'thread-sandbox'; threadId: string; runnerId: string }
+  | { kind: 'project'; projectId: string }
+  | { kind: 'projectless' };
 
 /**
  * The route target of a proxied request, as `resolveRunnerDetailed` sees it.
@@ -81,6 +91,11 @@ async function resolveTarget(
   projectId: string | null,
   threadId: string | null,
 ): Promise<RouteTarget> {
+  // A sandbox thread is served by its sandbox runner only (thread-sandboxes).
+  if (threadId) {
+    const runnerId = await sandboxRunnerIdForThread(threadId);
+    if (runnerId) return { kind: 'thread-sandbox', threadId, runnerId };
+  }
   if (projectId) return { kind: 'project', projectId };
   if (threadId) {
     const [row] = await db
@@ -92,10 +107,19 @@ async function resolveTarget(
   return { kind: 'projectless' };
 }
 
-async function isAllowed(runnerId: string, target: RouteTarget): Promise<boolean> {
-  return target.kind === 'project'
-    ? canRunnerAccessProject(runnerId, target.projectId)
-    : canRunnerServeProjectless(runnerId);
+/** Scope check for a route target — the same rule `runner-access` re-verifies. */
+export async function isRunnerInRouteScope(
+  runnerId: string,
+  target: RouteTarget,
+): Promise<boolean> {
+  switch (target.kind) {
+    case 'thread-sandbox':
+      return runnerId === target.runnerId;
+    case 'project':
+      return canRunnerAccessProject(runnerId, target.projectId);
+    case 'projectless':
+      return canRunnerServeProjectless(runnerId);
+  }
 }
 
 /**
@@ -144,6 +168,19 @@ export async function resolveRunnerDetailed(
     return { ok: true as const, runnerId };
   };
 
+  // Sandbox thread: its sandbox runner or nothing — the caller wakes it up.
+  if (target.kind === 'thread-sandbox') {
+    if (isReachable(presence, target.runnerId)) return remember(target.runnerId);
+    log.warn('Thread sandbox runner unavailable — not falling back', {
+      namespace: 'proxy',
+      userId,
+      threadId: target.threadId,
+      runnerId: target.runnerId,
+      path,
+    });
+    return { ok: false, reason: 'thread-sandbox-unavailable' };
+  }
+
   // Pinned project: its dedicated runner (+ grants) or nothing.
   if (target.kind === 'project') {
     const pinned = await pinnedRunnerIdsForProject(target.projectId, userId);
@@ -177,7 +214,7 @@ export async function resolveRunnerDetailed(
 
   for (const runnerId of new Set(candidates)) {
     if (!isReachable(presence, runnerId)) continue;
-    if (!(await isAllowed(runnerId, target))) continue;
+    if (!(await isRunnerInRouteScope(runnerId, target))) continue;
     return remember(runnerId);
   }
 
@@ -205,6 +242,7 @@ export async function explainUnresolved(
   userId: string,
 ): Promise<RunnerResolutionFailure> {
   const target = await resolveTarget(extractProjectId(path, query), extractThreadId(path));
+  if (target.kind === 'thread-sandbox') return 'thread-sandbox-unavailable';
   if (target.kind === 'project' && (await pinnedRunnerIdsForProject(target.projectId, userId))) {
     return 'project-runner-offline';
   }
@@ -216,15 +254,23 @@ export function describeResolutionFailure(reason: RunnerResolutionFailure): {
   error: string;
   code: RunnerResolutionFailure;
 } {
-  return reason === 'project-runner-offline'
-    ? {
+  switch (reason) {
+    case 'project-runner-offline':
+      return {
         error: "This project's runner is offline. Start or redeploy it from Project Settings.",
         code: reason,
-      }
-    : {
+      };
+    case 'thread-sandbox-unavailable':
+      return {
+        error: "This thread's sandbox is not running. Resume it to continue.",
+        code: reason,
+      };
+    case 'general-runner-offline':
+      return {
         error: 'No runner connected. Check that your runner is online.',
         code: reason,
       };
+  }
 }
 
 /**

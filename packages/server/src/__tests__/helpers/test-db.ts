@@ -264,6 +264,7 @@ export function createTestDb() {
       http_url TEXT,
       public_media_url TEXT,
       role TEXT NOT NULL DEFAULT 'general',
+      thread_id TEXT,
       active_thread_ids TEXT NOT NULL DEFAULT '[]',
       registered_at TEXT NOT NULL,
       last_heartbeat_at TEXT NOT NULL

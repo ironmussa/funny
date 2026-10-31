@@ -195,6 +195,7 @@ export function createRunnerAccess(deps: RunnerAccessDeps = {}): RunnerAccess {
         return verification.canServeProjectless(runnerId);
       case 'request': {
         const route = await verification.routeTarget(target.path, target.query);
+        if (route.kind === 'thread-sandbox') return runnerId === route.runnerId;
         return route.kind === 'project'
           ? verification.canAccessProject(runnerId, route.projectId)
           : verification.canServeProjectless(runnerId);

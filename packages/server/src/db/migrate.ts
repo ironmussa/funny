@@ -1700,6 +1700,13 @@ const migrations: Migration[] = [
       await ctx().dropColumn('user_profiles', 'assemblyai_api_key');
     },
   },
+  {
+    // thread-sandboxes: a runner with role 'sandbox' is bound to one thread.
+    name: '082_sandbox_runner_thread',
+    async up() {
+      await ctx().addColumn('runners', 'thread_id', 'TEXT');
+    },
+  },
 ];
 
 /**

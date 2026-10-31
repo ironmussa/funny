@@ -580,6 +580,8 @@ export const runners = sqliteTable('runners', {
   publicMediaUrl: text('public_media_url'),
   /** 'general' serves projectless + non-overridden work; 'dedicated' only its projects. */
   role: text('role').notNull().default('general'),
+  /** For role 'sandbox': the only thread this runner may serve (change thread-sandboxes). */
+  threadId: text('thread_id'),
   activeThreadIds: text('active_thread_ids').notNull().default('[]'),
   registeredAt: text('registered_at').notNull(),
   lastHeartbeatAt: text('last_heartbeat_at').notNull(),

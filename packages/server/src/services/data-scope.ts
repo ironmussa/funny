@@ -21,7 +21,11 @@ import { eq } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
 import * as schema from '../db/schema.js';
-import { canRunnerAccessProject, canRunnerServeProjectless } from './runner-scope.js';
+import {
+  canRunnerAccessProject,
+  canRunnerServeProjectless,
+  sandboxThreadOfRunner,
+} from './runner-scope.js';
 
 /**
  * - `refs`: the request references threads/projects/messages/…; each one must
@@ -142,6 +146,8 @@ export async function canRunnerActOnThread(
   if (!runnerUserId) return false;
   const info = await threadInfo(threadId);
   if (!info || info.userId !== runnerUserId) return false;
+  const boundThread = await sandboxThreadOfRunner(runnerId);
+  if (boundThread) return boundThread === threadId;
   return info.projectId === null
     ? canRunnerServeProjectless(runnerId)
     : canRunnerAccessProject(runnerId, info.projectId);
@@ -337,6 +343,9 @@ export async function assertRunnerDataScope(
   const rule = Object.hasOwn(DATA_SCOPE_RULES, type) ? DATA_SCOPE_RULES[type] : undefined;
   if (!rule) return { ok: false, reason: `no scope rule for ${String(type)}` };
 
+  const boundThread = await sandboxThreadOfRunner(runnerId);
+  if (boundThread) return sandboxDataScope(boundThread, type, rule, data);
+
   const isScratchCreate =
     type === 'data:create_thread' && !str(data?.payload?.projectId) && !str(data?.projectId);
   if (rule === 'projectless' || isScratchCreate) {
@@ -360,12 +369,45 @@ export async function assertRunnerDataScope(
   return { ok: true };
 }
 
+/**
+ * A `sandbox` runner (thread-sandboxes) acts only on its bound thread: no
+ * projectless work, no other thread, and no project other than its thread's.
+ */
+async function sandboxDataScope(
+  boundThread: string,
+  type: string,
+  rule: DataScopeRule,
+  data: any,
+): Promise<DataScopeDecision> {
+  if (rule === 'projectless') {
+    return { ok: false, reason: `${type} is projectless work (sandbox runner)` };
+  }
+  if (rule !== 'refs') return { ok: true };
+  if (type === 'data:create_thread') {
+    return { ok: false, reason: 'sandbox runners cannot create threads' };
+  }
+  const boundProject = await projectOfThread(boundThread);
+  for (const threadId of await referencedThreadIds(data)) {
+    if (threadId !== boundThread) {
+      return { ok: false, reason: `thread ${threadId} outside sandbox runner scope` };
+    }
+  }
+  for (const projectId of [str(data?.projectId), str(data?.payload?.projectId)]) {
+    if (projectId && projectId !== boundProject) {
+      return { ok: false, reason: `project ${projectId} outside sandbox runner scope` };
+    }
+  }
+  return { ok: true };
+}
+
 /** Drop items of other projects from collection responses (`list` rule). */
 export async function filterDataResponse(runnerId: string, type: string, response: any) {
   if (DATA_SCOPE_RULES[type] !== 'list' || !response) return response;
 
+  const boundThread = await sandboxThreadOfRunner(runnerId);
   const projectAllowed = new Map<string, boolean>();
   const allowProject = async (projectId: string | null | undefined) => {
+    if (boundThread) return false;
     if (projectId === undefined) return false;
     if (projectId === null) return canRunnerServeProjectless(runnerId);
     if (!projectAllowed.has(projectId)) {
@@ -374,7 +416,8 @@ export async function filterDataResponse(runnerId: string, type: string, respons
     return projectAllowed.get(projectId)!;
   };
   const allowThread = async (threadId: unknown) =>
-    typeof threadId === 'string' && allowProject(await projectOfThread(threadId));
+    typeof threadId === 'string' &&
+    (boundThread ? threadId === boundThread : allowProject(await projectOfThread(threadId)));
 
   const filterBy = async <T>(items: T[] | undefined, keep: (item: T) => Promise<boolean>) => {
     if (!Array.isArray(items)) return items;

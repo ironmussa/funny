@@ -130,9 +130,9 @@ describe('runner gRPC WebSocket carrier', () => {
   test('routes WebSocket events to the carrier or Socket.IO by upgrade data', () => {
     const calls: string[] = [];
     const engine = {
-      open: () => calls.push('engine-open'),
-      message: () => calls.push('engine-message'),
-      close: () => calls.push('engine-close'),
+      open: (_ws: any) => void calls.push('engine-open'),
+      message: (_ws: any, _message: any) => void calls.push('engine-message'),
+      close: (_ws: any, _code: number, _reason: string) => void calls.push('engine-close'),
     };
     const fakeCarrier = {
       websocket: {

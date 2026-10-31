@@ -13,6 +13,10 @@
  *   - A project uses its owner's general runner unless its settings select a
  *     dedicated runner. Extra runners may be granted access explicitly from the
  *     project's settings (`project_runner_grants`).
+ *   - A `sandbox` runner (change thread-sandboxes) is bound to exactly one thread
+ *     and serves nothing else: no project-level work, no projectless work, and
+ *     no other thread — not even through an explicit grant. Requests for that
+ *     thread go ONLY to it (`sandboxRunnerIdForThread`).
  *   - `runner_project_assignments` stays a LOCATION record (where the project
  *     lives on a runner's disk). Runners write it themselves, so it is never an
  *     authorization source.
@@ -36,12 +40,14 @@ import {
 import { decrypt, encrypt } from '../lib/crypto.js';
 import { log } from '../lib/logger.js';
 
-export type RunnerRole = 'general' | 'dedicated';
+export type RunnerRole = 'general' | 'dedicated' | 'sandbox';
 
 export interface RunnerScopeRecord {
   id: string;
   userId: string | null;
   role: RunnerRole;
+  /** Bound thread for a `sandbox` runner, otherwise null. */
+  threadId?: string | null;
 }
 
 export interface ProjectRunnerPolicy {
@@ -64,6 +70,7 @@ export function evaluateRunnerAccess(
   runner: RunnerScopeRecord,
   policy: ProjectRunnerPolicy,
 ): boolean {
+  if (runner.role === 'sandbox') return false;
   if (policy.dedicatedRunnerId === runner.id) return true;
   if (policy.grantedRunnerIds.includes(runner.id)) return true;
   if (runner.role === 'dedicated') return false;
@@ -99,6 +106,7 @@ function invalidateRunnerScope(change: { runnerId?: string; projectId?: string }
   if (!change.runnerId && !change.projectId) {
     runnerCache.clear();
     policyCache.clear();
+    sandboxByThreadCache.clear();
   }
   for (const listener of listeners) {
     try {
@@ -116,22 +124,35 @@ function invalidateRunnerScope(change: { runnerId?: string; projectId?: string }
 export function __resetRunnerScopeCache() {
   runnerCache.clear();
   policyCache.clear();
+  sandboxByThreadCache.clear();
 }
 
 // ── Reads ──────────────────────────────────────────────────
+
+function parseRunnerRole(role: string): RunnerRole {
+  return role === 'dedicated' || role === 'sandbox' ? role : 'general';
+}
+
+const sandboxByThreadCache = new Map<string, { value: string | null; at: number }>();
 
 async function getRunnerScopeRecord(runnerId: string): Promise<RunnerScopeRecord | null> {
   const cached = runnerCache.get(runnerId);
   if (fresh(cached)) return cached.value;
   const [row] = await db
-    .select({ id: runners.id, userId: runners.userId, role: runners.role })
+    .select({
+      id: runners.id,
+      userId: runners.userId,
+      role: runners.role,
+      threadId: runners.threadId,
+    })
     .from(runners)
     .where(eq(runners.id, runnerId));
   const value: RunnerScopeRecord | null = row
     ? {
         id: row.id,
         userId: row.userId,
-        role: row.role === 'dedicated' ? 'dedicated' : 'general',
+        role: parseRunnerRole(row.role),
+        threadId: row.role === 'sandbox' ? row.threadId : null,
       }
     : null;
   runnerCache.set(runnerId, { value, at: Date.now() });
@@ -174,6 +195,28 @@ export async function canRunnerAccessProject(runnerId: string, projectId: string
   ]);
   if (!runner || !policy) return false;
   return evaluateRunnerAccess(runner, policy);
+}
+
+/** The thread a `sandbox` runner is bound to, or null for any other runner. */
+export async function sandboxThreadOfRunner(runnerId: string): Promise<string | null> {
+  const runner = await getRunnerScopeRecord(runnerId);
+  return runner?.role === 'sandbox' ? (runner.threadId ?? null) : null;
+}
+
+/**
+ * The sandbox runner bound to `threadId`, or null when the thread has none.
+ * When set, it is the ONLY runner that may serve the thread.
+ */
+export async function sandboxRunnerIdForThread(threadId: string): Promise<string | null> {
+  const cached = sandboxByThreadCache.get(threadId);
+  if (fresh(cached)) return cached.value;
+  const [row] = await db
+    .select({ id: runners.id })
+    .from(runners)
+    .where(and(eq(runners.threadId, threadId), eq(runners.role, 'sandbox')));
+  const value = row?.id ?? null;
+  sandboxByThreadCache.set(threadId, { value, at: Date.now() });
+  return value;
 }
 
 /** Projectless work (scratch threads, folder browsing, adding local projects). */
@@ -255,6 +298,13 @@ async function getProjectGithubTokenCiphertext(projectId: string): Promise<strin
 
 export async function setRunnerRole(runnerId: string, role: RunnerRole): Promise<void> {
   await db.update(runners).set({ role }).where(eq(runners.id, runnerId));
+  invalidateRunnerScope({ runnerId });
+}
+
+/** Make `runnerId` the sandbox runner of `threadId` (it then serves nothing else). */
+export async function bindSandboxRunner(runnerId: string, threadId: string): Promise<void> {
+  await db.update(runners).set({ role: 'sandbox', threadId }).where(eq(runners.id, runnerId));
+  sandboxByThreadCache.delete(threadId);
   invalidateRunnerScope({ runnerId });
 }
 

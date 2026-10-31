@@ -35,16 +35,20 @@ function memoryStore(): ThreadSandboxStore & { rows: Map<string, ThreadSandboxRo
 }
 
 interface Setup {
+  checkouts: Array<{ threadId: string; path: string; repoUrl: string }>;
   provider: FakeSandboxProvider;
   store: ReturnType<typeof memoryStore>;
   service: ReturnType<typeof createThreadSandboxService>;
   issued: string[];
 }
 
-function setup(opts: { templates?: string[]; runnerConnects?: boolean } = {}): Setup {
+function setup(
+  opts: { templates?: string[]; runnerConnects?: boolean; checkoutFails?: boolean } = {},
+): Setup {
   const provider = createFakeSandboxProvider('fake-valid', { templates: opts.templates ?? [] });
   const store = memoryStore();
   const issued: string[] = [];
+  const checkouts: Setup['checkouts'] = [];
   // The runner "connects" once the start command ran in the sandbox.
   const started = () => provider.commands.some((c) => c.command.includes('systemctl restart'));
   const service = createThreadSandboxService({
@@ -65,13 +69,17 @@ function setup(opts: { templates?: string[]; runnerConnects?: boolean } = {}): S
     sandboxRunnerIdForThread: async () =>
       opts.runnerConnects === false ? null : started() ? 'r-box' : null,
     presence: { isAvailable: (id) => id === 'r-box' },
+    requestCheckout: ({ threadId, path, repoUrl }) => {
+      checkouts.push({ threadId, path, repoUrl });
+      return opts.checkoutFails ? errAsync('clone failed') : okAsync(undefined);
+    },
     store,
     sleep: async () => {},
     pollMs: 1,
     readyTimeoutMs: 1_000,
     connectTimeoutMs: 200,
   });
-  return { provider, store, service, issued };
+  return { provider, store, service, issued, checkouts };
 }
 
 const input = { userId: 'alice', threadId: 't-1', connectionId: 'conn-1' };
@@ -135,6 +143,92 @@ describe('thread sandbox provisioning', () => {
     expect(foreign.isErr() && foreign.error.kind).toBe('connection');
     const size = await service.provision({ ...input, sizeId: 'huge' });
     expect(size.isErr() && size.error.kind).toBe('invalid-size');
+    expect(provider.sandboxes.size).toBe(0);
+  });
+
+  test('materializes the project at its path on the sandbox runner once it is connected', async () => {
+    const { provider, service, checkouts } = setup({ templates: [build.version] });
+    const checkout = { path: '/data/projects/acme', repoUrl: 'https://github.com/acme/app.git' };
+    const row = expectOk(await service.provision({ ...input, checkout }));
+    expect(row.state).toBe('running');
+    expect(checkouts).toEqual([{ threadId: 't-1', ...checkout }]);
+    const prepare = provider.commands.find((c) => c.command.includes('mkdir -p'));
+    expect(prepare?.command).toContain("sudo mkdir -p '/data/projects'");
+  });
+
+  test('a failed checkout fails the thread and destroys the machine', async () => {
+    const { provider, store, service } = setup({ templates: [build.version], checkoutFails: true });
+    const result = await service.provision({
+      ...input,
+      checkout: { path: '/data/projects/acme', repoUrl: 'https://github.com/acme/app.git' },
+    });
+    expect(result.isErr() && result.error.kind).toBe('checkout');
+    expect(store.rows.get('t-1')?.state).toBe('failed');
+    expect(provider.sandboxes.size).toBe(0);
+  });
+
+  test('a project path needing shell quoting is refused', async () => {
+    const { checkouts, service } = setup({ templates: [build.version] });
+    const result = await service.provision({
+      ...input,
+      checkout: { path: "/data/it's here", repoUrl: 'https://github.com/acme/app.git' },
+    });
+    expect(result.isErr() && result.error.kind).toBe('checkout');
+    expect(checkouts).toHaveLength(0);
+  });
+
+  test('stop then resume a disk-preserving sandbox; the runner comes back', async () => {
+    const { provider, store, service } = setup({ templates: [build.version] });
+    expectOk(await service.provision(input));
+    expect(expectOk(await service.stop('t-1'))).toBe('stopped');
+    const [sandbox] = [...provider.sandboxes.values()];
+    expect(sandbox.state).toBe('stopped');
+    expect(store.rows.get('t-1')?.state).toBe('stopped');
+
+    expect(expectOk(await service.resume('t-1'))).toBe('r-box');
+    expect(sandbox.state).toBe('running');
+    expect(store.rows.get('t-1')?.state).toBe('running');
+  });
+
+  test('an expired disk on resume marks the thread lost', async () => {
+    const { provider, store, service } = setup({ templates: [build.version] });
+    expectOk(await service.provision(input));
+    expectOk(await service.stop('t-1'));
+    provider.expire([...provider.sandboxes.keys()][0]);
+    const result = await service.resume('t-1');
+    expect(result.isErr() && result.error.kind).toBe('sandbox');
+    expect(store.rows.get('t-1')?.state).toBe('lost');
+  });
+
+  test('only a running sandbox can be stopped and only a stopped one resumed', async () => {
+    const { service } = setup({ templates: [build.version] });
+    expect((await service.stop('t-1')).isErr()).toBe(true);
+    expectOk(await service.provision(input));
+    expect((await service.resume('t-1')).isErr()).toBe(true);
+  });
+});
+
+describe('ephemeral providers', () => {
+  test('stopping destroys the machine and marks the sandbox lost', async () => {
+    const provider = createFakeSandboxProvider('fake-valid', {
+      templates: [build.version],
+      stopPreservesDisk: false,
+    });
+    const store = memoryStore();
+    const service = createThreadSandboxService({
+      connections: { providerFor: (_u, id) => okAsync({ connectionId: id, provider }) },
+      templates: createRunnerTemplateManager(build),
+      build,
+      serverUrl: 'https://funny.example',
+      issueToken: () => okAsync({ token: 'rprov_x' }),
+      sandboxRunnerIdForThread: async () => 'r-box',
+      presence: { isAvailable: () => true },
+      store,
+      sleep: async () => {},
+      pollMs: 1,
+    });
+    expectOk(await service.provision(input));
+    expect(expectOk(await service.stop('t-1'))).toBe('lost');
     expect(provider.sandboxes.size).toBe(0);
   });
 });

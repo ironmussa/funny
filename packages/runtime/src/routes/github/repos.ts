@@ -12,6 +12,7 @@ import { log } from '../../lib/logger.js';
 import { getServices } from '../../services/service-registry.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
+import { redactGithubToken, withGithubToken } from '../../utils/github-clone-url.js';
 import { requirePickerPath } from '../../utils/path-scope.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { validate, cloneRepoSchema } from '../../validation/schemas.js';
@@ -148,13 +149,7 @@ repoRoutes.post('/clone', async (c) => {
   // Inject token into clone URL for private repo access
   const resolved = await resolveGithubToken(userId);
   const token = resolved?.token ?? null;
-  let authenticatedUrl = cloneUrl;
-  if (token && cloneUrl.startsWith('https://github.com/')) {
-    authenticatedUrl = cloneUrl.replace(
-      'https://github.com/',
-      `https://x-access-token:${token}@github.com/`,
-    );
-  }
+  const authenticatedUrl = withGithubToken(cloneUrl, token);
 
   // Clone ID for WebSocket progress events
   const cloneId = `clone:${Date.now()}`;
@@ -190,7 +185,7 @@ repoRoutes.post('/clone', async (c) => {
           const trimmed = line.trim();
           if (!trimmed) continue;
           // Sanitize — never leak the token
-          const safeLine = trimmed.replace(/x-access-token:[^@]+@/g, 'x-access-token:***@');
+          const safeLine = redactGithubToken(trimmed);
           // Parse percentage from git output like "Receiving objects:  45% (123/456)"
           const pctMatch = safeLine.match(/(\d+)%/);
           emitProgress({
@@ -206,10 +201,7 @@ repoRoutes.post('/clone', async (c) => {
     if (proc.exitCode !== 0) {
       // Read any remaining stdout for error context
       const stdoutText = await new Response(proc.stdout).text();
-      const errorMsg = (stderrBuffer + stdoutText).replace(
-        /x-access-token:[^@]+@/g,
-        'x-access-token:***@',
-      );
+      const errorMsg = redactGithubToken(stderrBuffer + stdoutText);
       emitProgress({ phase: 'Clone failed', percent: 0, error: errorMsg });
       return resultToResponse(
         c,
@@ -239,10 +231,7 @@ repoRoutes.post('/clone', async (c) => {
     emitProgress({ phase: 'Clone complete', percent: 100 });
   } catch (error: any) {
     // Sanitize error message — never leak the token
-    const safeMsg = (error.message || String(error)).replace(
-      /x-access-token:[^@]+@/g,
-      'x-access-token:***@',
-    );
+    const safeMsg = redactGithubToken(error.message || String(error));
     emitProgress({ phase: 'Clone failed', percent: 0, error: safeMsg });
     return resultToResponse(c, err(processError(`Clone failed: ${safeMsg}`, 1, safeMsg)));
   }

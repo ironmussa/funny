@@ -29,27 +29,28 @@ import {
   type SandboxProvider,
   type TemplateRef,
 } from './contract.js';
-import type { InfraConnectionError, InfraConnectionService } from './infra-connections.js';
+import type { InfraConnectionError } from './infra-connections.js';
 import { pollUntil } from './poll.js';
 import type { RunnerBuild } from './runner-build.js';
 import { runnerInstallCommand, startRunnerCommand } from './runner-install-script.js';
 import type { RunnerTemplateManager } from './template-manager.js';
-import type {
-  ThreadSandboxRow,
-  ThreadSandboxState,
-  ThreadSandboxStore,
-} from './thread-sandbox-store.js';
+import {
+  createThreadSandboxControl,
+  sandboxError,
+  type ThreadSandboxControlDeps,
+} from './thread-sandbox-control.js';
+import type { ThreadSandboxRow, ThreadSandboxState } from './thread-sandbox-store.js';
 
 export type ProvisionError =
   | { kind: 'already-provisioned'; message: string }
   | { kind: 'connection'; message: string }
   | { kind: 'invalid-size'; message: string }
   | { kind: 'token'; message: string }
+  | { kind: 'checkout'; message: string }
   | { kind: 'sandbox'; message: string; cause: SandboxError['kind'] }
   | { kind: 'storage'; message: string };
 
-export interface ThreadSandboxDeps {
-  connections: Pick<InfraConnectionService, 'providerFor'>;
+export interface ThreadSandboxDeps extends ThreadSandboxControlDeps {
   templates: RunnerTemplateManager;
   build: RunnerBuild;
   /** Public origin the sandbox runner connects to. */
@@ -58,15 +59,14 @@ export interface ThreadSandboxDeps {
     userId: string;
     threadId: string;
   }): ResultAsync<{ token: string }, ProvisionTokenError>;
-  sandboxRunnerIdForThread(threadId: string): Promise<string | null>;
-  presence: { isAvailable(runnerId: string): boolean } | undefined;
-  store: ThreadSandboxStore;
-  sleep?: (ms: number) => PromiseLike<void>;
-  pollMs?: number;
+  /** Clone the project on the thread's sandbox runner (via runner-access). */
+  requestCheckout?(input: {
+    userId: string;
+    threadId: string;
+    path: string;
+    repoUrl: string;
+  }): ResultAsync<void, string>;
   readyTimeoutMs?: number;
-  connectTimeoutMs?: number;
-  /** Provider-side safety cap; the idle stopper normally stops the sandbox first. */
-  lifetimeMs?: number;
 }
 
 export interface ProvisionInput {
@@ -74,23 +74,24 @@ export interface ProvisionInput {
   threadId: string;
   connectionId: string;
   sizeId?: string;
+  /** The project to materialize at its canonical path once the runner is up. */
+  checkout?: { path: string; repoUrl: string };
   signal?: AbortSignal;
 }
 
+/** Absolute path made only of characters that need no shell quoting beyond '…'. */
+const SAFE_PATH = /^\/[A-Za-z0-9._/@+-]+$/;
+
 const ACTIVE_STATES = new Set<ThreadSandboxState>([
+  'bootstrapping',
   'provisioning',
   'installing',
   'connecting',
   'running',
 ]);
 
-const sandboxError = (error: SandboxError): ProvisionError => ({
-  kind: 'sandbox',
-  message: error.message,
-  cause: error.kind,
-});
-
 export function createThreadSandboxService(deps: ThreadSandboxDeps) {
+  const control = createThreadSandboxControl(deps);
   const pollMs = deps.pollMs ?? 2_000;
   const fromStore = <T>(r: ResultAsync<T, string>) =>
     r.mapErr((message): ProvisionError => ({ kind: 'storage', message }));
@@ -174,7 +175,40 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
       .andThen(() => install)
       .andThen(() => exec(provider, handle, start.value, 'runner start'))
       .andThen(() => setState(input.threadId, 'connecting'))
-      .andThen(() => waitConnected);
+      .andThen(() => waitConnected)
+      .andThrough(() => checkoutProject(input, provider, handle));
+  }
+
+  /**
+   * Prepare the project's parent directory (no secrets, via the provider) and
+   * let the sandbox runner clone it with the owner's per-operation credential.
+   */
+  function checkoutProject(
+    input: ProvisionInput,
+    provider: SandboxProvider,
+    handle: SandboxHandle,
+  ): ResultAsync<void, ProvisionError> {
+    const checkout = input.checkout;
+    if (!checkout) return okAsync(undefined);
+    if (!deps.requestCheckout) {
+      return errAsync({ kind: 'checkout', message: 'repository checkout is not wired' });
+    }
+    if (!SAFE_PATH.test(checkout.path) || checkout.path.includes('..')) {
+      return errAsync({ kind: 'checkout', message: `unsupported project path ${checkout.path}` });
+    }
+    const parent = checkout.path.replace(/\/[^/]+\/?$/, '') || '/';
+    const prepare = `sudo mkdir -p '${parent}' && sudo chown "$(id -un)" '${parent}'`;
+    const requestCheckout = deps.requestCheckout;
+    return setState(input.threadId, 'bootstrapping')
+      .andThen(() => exec(provider, handle, prepare, 'project directory setup'))
+      .andThen(() =>
+        requestCheckout({
+          userId: input.userId,
+          threadId: input.threadId,
+          path: checkout.path,
+          repoUrl: checkout.repoUrl,
+        }).mapErr((message): ProvisionError => ({ kind: 'checkout', message })),
+      );
   }
 
   return {
@@ -286,6 +320,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
             .map((stored) => stored ?? row);
         });
     },
+    ...control,
   };
 }
 

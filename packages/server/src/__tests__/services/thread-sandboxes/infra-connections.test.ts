@@ -220,5 +220,12 @@ describe('infra routes', () => {
       const other = await app('mallory').request('/api/infra/threads/t-1/sandbox');
       expect(other.status).toBe(404);
     });
+
+    test('refuses when the repository URL cannot be determined', async () => {
+      const res = await post('alice', 't-1');
+      restore();
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe('repo-url-unknown');
+    });
   });
 });

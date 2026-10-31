@@ -13,6 +13,7 @@ export type ThreadSandboxState =
   | 'provisioning'
   | 'installing'
   | 'connecting'
+  | 'bootstrapping'
   | 'running'
   | 'stopping'
   | 'stopped'

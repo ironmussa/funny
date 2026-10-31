@@ -24,7 +24,11 @@ export function CopyButton({ content }: { content: string }) {
       aria-label="Copy message"
       data-testid="message-copy"
     >
-      {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
+      {copied ? (
+        <Check className="icon-sm copy-feedback-icon text-green-600" />
+      ) : (
+        <Copy className="icon-sm copy-feedback-icon" />
+      )}
     </button>
   );
 }

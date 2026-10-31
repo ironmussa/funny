@@ -1,14 +1,17 @@
-import { render } from '@testing-library/react';
+import { fireEvent, render } from '@testing-library/react';
 import { createRef, useRef, type RefObject } from 'react';
 import { afterEach, beforeEach, describe, test, expect, vi } from 'vitest';
 
 import { FrozenMessageList } from '@/components/thread/FrozenMessageList';
 import type { MemoizedMessageListHandle } from '@/components/thread/MemoizedMessageList.types';
+import { useTurnEndHover } from '@/components/thread/use-turn-end-hover';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { makeLongThread } from '@/test-fixtures/long-thread-fixture';
 
 import { mockT } from '../helpers/mock-i18n';
 
 vi.mock('react-i18next', () => ({
+  Trans: ({ i18nKey }: { i18nKey: string }) => mockT(i18nKey),
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
@@ -60,23 +63,26 @@ function Harness({
   leadingUserMessage?: any;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
+  useTurnEndHover(scrollRef);
   const fx = makeLongThread({ messageCount: 10, seed: 5, toolCallRatio: 1 });
   return (
-    <div ref={scrollRef} style={{ overflow: 'auto' }}>
-      <FrozenMessageList
-        ref={handleRef}
-        messages={messages ?? fx.messages}
-        lastUserMessage={lastUserMessage}
-        leadingUserMessage={leadingUserMessage}
-        threadId={fx.threadId}
-        threadStatus="idle"
-        knownIds={new Set()}
-        snapshotMap={new Map()}
-        onSend={() => {}}
-        onOpenLightbox={() => {}}
-        scrollRef={scrollRef}
-      />
-    </div>
+    <TooltipProvider>
+      <div ref={scrollRef} style={{ overflow: 'auto' }}>
+        <FrozenMessageList
+          ref={handleRef}
+          messages={messages ?? fx.messages}
+          lastUserMessage={lastUserMessage}
+          leadingUserMessage={leadingUserMessage}
+          threadId={fx.threadId}
+          threadStatus="idle"
+          knownIds={new Set()}
+          snapshotMap={new Map()}
+          onSend={() => {}}
+          onOpenLightbox={() => {}}
+          scrollRef={scrollRef}
+        />
+      </div>
+    </TooltipProvider>
   );
 }
 
@@ -97,6 +103,18 @@ describe('FrozenMessageList', () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  test('reveals completion over the section gap and switches off for the next turn', () => {
+    const { container } = render(<Harness handleRef={createRef()} />);
+    const sections = container.querySelectorAll('[data-frozen-section]');
+    const section = sections[0];
+    const bar = section.querySelector('[data-turn-end-for]')!;
+    expect(bar).toBeTruthy();
+    fireEvent.mouseOver(section);
+    expect(bar).toHaveAttribute('data-hovered');
+    fireEvent.mouseOver(sections[1]);
+    expect(bar).not.toHaveAttribute('data-hovered');
   });
 
   test('enables browser offscreen skipping from the initial in-flow render', () => {

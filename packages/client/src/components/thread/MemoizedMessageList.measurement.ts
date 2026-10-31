@@ -17,13 +17,13 @@ export const VIRTUAL_OVERSCAN = 4;
 // synchronously parse hundreds of markdown messages before the LCP can paint.
 export const INITIAL_FALLBACK_RENDER_COUNT = VIRTUAL_OVERSCAN * 2 + 1;
 
-const USER_MESSAGE_ROW_PADDING_PX = 24;
+const USER_MESSAGE_ROW_PADDING_PX = 12;
 const USER_MESSAGE_CARD_VERTICAL_CHROME_PX = 38;
 const USER_MESSAGE_COLLAPSED_TEXT_PX = 48;
 const USER_MESSAGE_EXPAND_BUTTON_PX = 20;
 const USER_MESSAGE_ATTACHMENT_ROW_PX = 48;
 const USER_MESSAGE_FILE_CHIP_ROW_PX = 28;
-const USER_MESSAGE_MIN_ESTIMATE_PX = 112;
+const USER_MESSAGE_MIN_ESTIMATE_PX = 100;
 
 export interface FontConfig {
   proseFont: string;
@@ -137,6 +137,7 @@ export function estimateVirtualRowHeight(
 ) {
   if (!row) return 60;
   if (row.type === 'session-summary') return 72;
+  if (row.type === 'turn-end') return 28;
   return estimateItemHeight(row.item, containerWidth, fonts);
 }
 

@@ -12,7 +12,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
 import type { InstalledExtension } from '@/lib/api/extensions';
@@ -155,12 +157,16 @@ export function ExtensionsSettings() {
 
       {/* Installed list */}
       {extensions.length === 0 ? (
-        <div className="settings-card flex flex-col items-center gap-2 px-4 py-8 text-center">
-          <Puzzle className="text-muted-foreground/50 size-6" />
-          <p className="text-muted-foreground text-sm">
-            {loading ? 'Loading…' : 'No extensions installed.'}
-          </p>
-        </div>
+        loading ? (
+          <LoadingState fill={false} className="settings-card py-8" label="Loading…" />
+        ) : (
+          <EmptyState
+            fill={false}
+            className="settings-card py-8"
+            icon={Puzzle}
+            title="No extensions installed."
+          />
+        )
       ) : (
         <div className="flex flex-col gap-2">
           {extensions.map((ext) => (

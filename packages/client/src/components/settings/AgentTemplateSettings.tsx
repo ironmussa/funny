@@ -1,8 +1,3 @@
-/**
- * Agent Template settings page — global (per-user), accessible from General Settings.
- * Templates are Deep Agent configurations selectable when creating threads.
- */
-
 import type {
   AgentTemplate,
   CreateAgentTemplateRequest,
@@ -11,6 +6,10 @@ import type {
   McpServerType,
   TemplateVariable,
 } from '@funny/shared';
+/**
+ * Agent Template settings page — global (per-user), accessible from General Settings.
+ * Templates are Deep Agent configurations selectable when creating threads.
+ */
 import { DEEPAGENT_TOOLS } from '@funny/shared';
 import {
   Bot,
@@ -31,6 +30,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -157,11 +157,13 @@ export function AgentTemplateSettings() {
       {ownTemplates.length === 0 &&
         sharedTemplates.length === 0 &&
         builtinTemplates.length === 0 && (
-          <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center">
-            <Bot className="mx-auto mb-2 size-8 opacity-50" />
-            <p>No agent templates yet.</p>
-            <p className="text-xs">Create one to define a reusable Deep Agent configuration.</p>
-          </div>
+          <EmptyState
+            fill={false}
+            className="rounded-md border border-dashed p-6"
+            icon={Bot}
+            title="No agent templates yet."
+            description="Create one to define a reusable Deep Agent configuration."
+          />
         )}
 
       <div className="space-y-2">

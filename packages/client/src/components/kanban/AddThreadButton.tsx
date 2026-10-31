@@ -3,8 +3,8 @@ import { Plus } from 'lucide-react';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ProjectPickerResults } from '@/components/kanban/ProjectPickerResults';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { colorFromName } from '@/components/ui/project-chip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -84,29 +84,14 @@ export function AddThreadButton({ projectId, projects, onSelect }: Props) {
           />
         </div>
         <ScrollArea className="max-h-56 py-1">
-          {filtered.length === 0 ? (
-            <div className="text-muted-foreground py-3 text-center text-sm">
-              {t('commandPalette.noResults')}
-            </div>
-          ) : (
-            filtered.map((p) => (
-              <button
-                key={p.id}
-                className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
-                onClick={() => {
-                  setOpen(false);
-                  setSearch('');
-                  onSelect(p.id);
-                }}
-              >
-                <span
-                  className="size-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: p.color || colorFromName(p.name) }}
-                />
-                <span className="truncate">{p.name}</span>
-              </button>
-            ))
-          )}
+          <ProjectPickerResults
+            projects={filtered}
+            onSelect={(id) => {
+              setOpen(false);
+              setSearch('');
+              onSelect(id);
+            }}
+          />
         </ScrollArea>
       </PopoverContent>
     </Popover>

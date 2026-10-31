@@ -12,6 +12,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -132,9 +133,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
               <p className="mt-1 text-xs">{error}</p>
             </div>
           ) : issues.length === 0 ? (
-            <div className="text-muted-foreground py-12 text-center text-sm">
-              {t('issues.noIssues')}
-            </div>
+            <EmptyState fill={false} className="py-12" title={t('issues.noIssues')} />
           ) : (
             <div className="space-y-1">
               {issues.map((issue) => (

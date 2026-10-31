@@ -14,6 +14,7 @@ export interface MessageStreamProps {
   ref?: Ref<MessageStreamHandle>;
   threadId: string;
   status: string;
+  completedAt?: string | null;
   messages: any[];
   /** Most-recent user message, returned even when it falls outside the loaded window. */
   lastUserMessage?: any;
@@ -56,7 +57,6 @@ export interface MessageStreamProps {
     total?: number;
     windowStart?: number;
   };
-  createdAt?: string;
   snapshotMap?: Map<string, number>;
   knownIds?: Set<string>;
   onOpenLightbox?: (images: { src: string; alt: string }[], index: number) => void;

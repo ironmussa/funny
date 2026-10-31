@@ -293,7 +293,7 @@ export type {
   InboxItem,
 } from './types/automations.js';
 
-export type { ThreadEventType, ThreadEvent } from './types/thread-events.js';
+export type { ThreadEventType, ThreadEvent, TurnOutcomeEventData } from './types/thread-events.js';
 
 export type { ChangedFilesSummaryEventData } from './session-changed-files.js';
 export {

@@ -22,7 +22,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
@@ -400,21 +402,15 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             </div>
           ) : loading ? (
             <div className="flex flex-1 items-center justify-center">
-              <p className="text-muted-foreground px-2 text-center text-xs">
-                {t('folderPicker.loading')}
-              </p>
+              <LoadingState fill={false} className="px-2" label={t('folderPicker.loading')} />
             </div>
           ) : dirs.length === 0 ? (
             <div className="flex flex-1 items-center justify-center">
-              <p className="text-muted-foreground px-2 text-center text-xs">
-                {t('folderPicker.noSubdirs')}
-              </p>
+              <EmptyState fill={false} className="px-2" title={t('folderPicker.noSubdirs')} />
             </div>
           ) : filteredDirs.length === 0 ? (
             <div className="flex flex-1 items-center justify-center">
-              <p className="text-muted-foreground px-2 text-center text-xs">
-                {t('folderPicker.noResults')}
-              </p>
+              <EmptyState fill={false} className="px-2" title={t('folderPicker.noResults')} />
             </div>
           ) : (
             <ScrollArea className="-mx-2 min-h-0 flex-1 px-2">

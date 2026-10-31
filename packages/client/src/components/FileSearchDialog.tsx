@@ -6,7 +6,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 import { HighlightText } from '@/components/ui/highlight-text';
-import { LoadingState } from '@/components/ui/loading-state';
+import { SearchEmptyRow as EmptyRow, SearchLoadingRow } from '@/components/ui/search-placeholder';
 import { useRankedFileSearch } from '@/hooks/use-ranked-file-search';
 import { api } from '@/lib/api';
 import type { RankedFileSearchMatch, RankedFileSearchTarget } from '@/lib/api/browse';
@@ -264,19 +264,6 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
   );
 }
 
-function EmptyRow({ text }: { text: string }) {
-  return <div className="text-muted-foreground px-3 py-6 text-center text-sm">{text}</div>;
-}
-
 function LoadingRow({ text }: { text: string }) {
-  return (
-    <LoadingState
-      fill={false}
-      layout="inline"
-      size="compact"
-      className="px-3 py-6"
-      testId="file-search-loading"
-      label={text}
-    />
-  );
+  return <SearchLoadingRow text={text} testId="file-search-loading" />;
 }

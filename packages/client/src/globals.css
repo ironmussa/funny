@@ -1739,3 +1739,22 @@ mark.md-search-match[data-active='true'] {
 /* Right-pane tabs (Changes/History/Stash/PRs/Issues) use a custom tab component
    (`RightTabHeader` in DockviewLayout.tsx) so they render without a close
    button. Terminal tabs keep dockview's default tab with native close. */
+
+/* Only the active copy control animates; history mounts stay still. */
+@keyframes copy-feedback-enter {
+  from {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  :where(button, [role='menuitem']):is(:focus, :hover) > .copy-feedback-icon {
+    transform-origin: center;
+    animation: copy-feedback-enter 140ms ease-out;
+  }
+}

@@ -100,6 +100,27 @@ describe('getGraphLog', () => {
     expect(merge!.headBranch).toBe('main');
   });
 
+  it('excludes T3 checkpoint refs before pagination without hiding shared history', async () => {
+    const repo = initMergeRepo();
+    const baseline = (await getGraphLog(repo, { all: true }))._unsafeUnwrap();
+    git(repo, ['checkout', '--detach']);
+    writeCommit(repo, 'checkpoint.txt', 'snapshot', 't3 checkpoint refs/t3/orchestration-v2');
+    const checkpointRef = 'refs/t3/orchestration-v2/checkpoints/thread/ordinal/0';
+    git(repo, ['update-ref', checkpointRef, 'HEAD']);
+    git(repo, ['checkout', 'main']);
+
+    const entries = (await getGraphLog(repo, { all: true }))._unsafeUnwrap();
+    expect(entries.map((entry) => entry.hash)).toEqual(baseline.map((entry) => entry.hash));
+    const page = (await getGraphLog(repo, { all: true, limit: 2, skip: 1 }))._unsafeUnwrap();
+    expect(page.map((entry) => entry.hash)).toEqual(
+      baseline.slice(1, 3).map((entry) => entry.hash),
+    );
+    // The checkpoint is preserved and remains visible if a real branch references it.
+    git(repo, ['branch', 'saved-snapshot', checkpointRef]);
+    const withBranch = (await getGraphLog(repo, { all: true }))._unsafeUnwrap();
+    expect(withBranch.some((entry) => entry.message.startsWith('t3 checkpoint'))).toBe(true);
+  });
+
   it('returns author and committer identities for rebased commits', async () => {
     const repo = resolve(TMP, 'rebased');
     mkdirSync(repo, { recursive: true });

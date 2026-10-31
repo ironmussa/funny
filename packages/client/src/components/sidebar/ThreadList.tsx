@@ -13,7 +13,9 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
+import { useVisibleGitStatus } from '@/hooks/use-git-status-scope';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
@@ -23,12 +25,6 @@ import { resolveThreadBranch } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
-import {
-  useGitStatusStore,
-  branchKey as computeBranchKey,
-  gitStatusForThreadFromState,
-  gitStatusSidebarFingerprint,
-} from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 
 import { ThreadItem } from './ThreadItem';
@@ -120,49 +116,9 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
     return { threads: visible, totalCount: result.length };
   }, [threadsByProject, scratchThreads, projects, _t]);
 
-  // Compute branch keys for visible threads to scope git status selectors.
-  const threadBranchKeys = useMemo(
-    () => new Map(threads.map((t) => [t.id, computeBranchKey(t)])),
-    [threads],
-  );
+  const gitStatusByThread = useSidebarGitStatuses(threads);
 
-  // Subscribe to a fingerprint string so Zustand skips re-renders when
-  // unrelated threads' git statuses change.
-  const gitStatusFingerprint = useGitStatusStore(
-    useCallback(
-      (s: {
-        statusByBranch: Record<string, GitStatusInfo>;
-        threadToBranchKey: Record<string, string>;
-      }) => {
-        let fp = '';
-        for (const [id, fallbackBk] of threadBranchKeys) {
-          const bk = s.threadToBranchKey[id] ?? fallbackBk;
-          const st = s.statusByBranch[bk];
-          if (st) fp += `${gitStatusSidebarFingerprint(id, st)},`;
-        }
-        return fp;
-      },
-      [threadBranchKeys],
-    ),
-  );
-
-  // Derive the actual status objects only when the fingerprint changes
-  const gitStatusByThread = useMemo(() => {
-    const state = useGitStatusStore.getState();
-    const result: Record<string, GitStatusInfo> = {};
-    for (const thread of threads) {
-      const status = gitStatusForThreadFromState(state, thread);
-      if (status) result[thread.id] = status;
-    }
-    return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
-  }, [threads, threadBranchKeys, gitStatusFingerprint]);
-
-  // Eagerly fetch git status for visible threads that don't have it yet.
-  // Uses ensureStatusForThreads to deduplicate by branchKey across all callers.
-  useEffect(() => {
-    useGitStatusStore.getState().ensureStatusForThreads(threads);
-  }, [threads]);
+  useVisibleGitStatus(threads);
 
   // Keep a ref to threads so handleSelect always reads the latest list.
   const threadsRef = useRef(threads);

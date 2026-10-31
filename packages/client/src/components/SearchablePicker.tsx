@@ -5,8 +5,10 @@ import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { EmptyState } from '@/components/ui/empty-state';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -282,16 +284,16 @@ function SearchablePickerContent({
         style={{ maxHeight: mobile ? '60dvh' : 'min(60vh, 440px)' }}
       >
         {loading && items.length === 0 && loadingText && (
-          <p className="text-muted-foreground py-3 text-center text-sm">{loadingText}</p>
+          <LoadingState fill={false} className="py-3" label={loadingText} />
         )}
         {!loading && items.length === 0 && emptyText && (
-          <p className="text-muted-foreground py-3 text-center text-sm">{emptyText}</p>
+          <EmptyState fill={false} className="py-3" title={emptyText} />
         )}
         {!loading &&
           items.length > 0 &&
           (filtered.length === 0 ||
             (mobile && search && filtered.every((item) => item.alwaysVisibleOnMobile))) && (
-            <p className="text-muted-foreground py-3 text-center text-sm">{noMatchText}</p>
+            <EmptyState fill={false} className="py-3" title={noMatchText} />
           )}
         {filtered.length > 0 && (
           <div

@@ -13,6 +13,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { remarkPlugins } from '@/lib/markdown-components';
 import { parsePlanSections, type PlanSection } from '@/lib/parse-plan-sections';
@@ -294,13 +295,7 @@ export function PlanReviewDialog({
         {/* ── Body: editor or outline + content ── */}
         {isEditing ? (
           <div className="min-h-0 flex-1 overflow-hidden" data-testid="plan-review-editor">
-            <Suspense
-              fallback={
-                <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-                  Loading editor…
-                </div>
-              }
-            >
+            <Suspense fallback={<LoadingState fill={false} label="Loading editor…" />}>
               <LazyEditor
                 height="100%"
                 language="markdown"

@@ -3,6 +3,7 @@ import { Server, Sparkles, SlashSquare, EyeOff } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { colorFromName } from '@/components/ui/project-chip';
 import {
@@ -190,9 +191,7 @@ export function AgentResourcesSettings() {
           })}
 
           {resources.length === 0 && (
-            <div className="text-muted-foreground py-6 text-center text-sm">
-              {t('agentResources.empty')}
-            </div>
+            <EmptyState fill={false} className="py-6" title={t('agentResources.empty')} />
           )}
 
           {/* Incompatible resources — shown for audit only; not suggested or injected. */}

@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { authClient } from '@/lib/auth-client';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -94,7 +95,7 @@ export function UserManagement() {
   };
 
   if (loading) {
-    return <p className="text-muted-foreground p-4 text-sm">{t('common.loading')}</p>;
+    return <LoadingState label={t('common.loading')} />;
   }
 
   return (

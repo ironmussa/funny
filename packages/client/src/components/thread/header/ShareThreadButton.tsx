@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/dialog';
 import { ShortcutHint } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { threadsApi, type ShareLevel, type ThreadShareGrant } from '@/lib/api/threads';
 import { createClientLogger } from '@/lib/client-logger';
@@ -87,7 +88,7 @@ export function ShareThreadButton({
   const [shares, setShares] = useState<ThreadShareGrant[]>([]);
   const [members, setMembers] = useState<ProjectMemberPick[]>([]);
   const [busy, setBusy] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [copied, copy] = useCopyToClipboard();
   // Permission level applied to the NEXT member added: viewer / commenter /
   // editor (view | comment | steer). See `ShareLevel`.
   const [level, setLevel] = useState<ShareLevel>('view');
@@ -155,9 +156,7 @@ export function ShareThreadButton({
     const url = `${window.location.origin}${buildPath(
       getThreadRoute({ id: threadId, projectId, isScratch: false }),
     )}`;
-    void navigator.clipboard?.writeText(url);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1500);
+    void copy(url);
   };
 
   if (!isOwner) return null;
@@ -317,7 +316,11 @@ export function ShareThreadButton({
             onClick={copyLink}
             data-testid="share-copy-link"
           >
-            {copied ? <Check className="h-4 w-4" /> : <Link2 className="h-4 w-4" />}
+            {copied ? (
+              <Check className="copy-feedback-icon h-4 w-4 text-green-600" />
+            ) : (
+              <Link2 className="copy-feedback-icon h-4 w-4" />
+            )}
             {copied ? 'Copied' : 'Copy link'}
           </Button>
           <DialogClose asChild>

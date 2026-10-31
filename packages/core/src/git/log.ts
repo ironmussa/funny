@@ -285,7 +285,7 @@ function parseRefs(decoration: string): {
  * than as a compact block stacked above its merge-base, which is what
  * `--topo-order` produces. `--date-order` still never shows a parent before all
  * of its children, the one invariant the lane layout (`computeGraphRows`)
- * needs. When `all` is set, walks every ref (`--all`) so divergent / unmerged
+ * needs. When `all` is set, walks refs except internal T3 checkpoints so divergent / unmerged
  * branches appear; otherwise walks HEAD only. Bypasses the native fast-path
  * (which doesn't return parents or refs) and goes straight to `git log`.
  */
@@ -314,7 +314,9 @@ export function getGraphLog(
     String(limit),
   ];
   if (skip > 0) args.push(`--skip=${skip}`);
-  if (all) args.push('--all');
+  // Exclude checkpoint refs before traversal so they neither create graph lanes
+  // nor consume pagination slots. Commits reachable from normal branches remain.
+  if (all) args.push('--exclude=refs/t3/*', '--all');
   return ResultAsync.fromPromise(
     (async () => {
       const result = await gitRead(args, { cwd, reject: false });

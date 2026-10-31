@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { colorFromName } from '@/components/ui/project-chip';
@@ -410,9 +411,7 @@ export function SkillsSettings() {
             label={t('skills.loadingSkills')}
           />
         ) : globalSkills.length === 0 ? (
-          <div className="text-muted-foreground py-6 text-center text-sm">
-            {t('skills.noGlobalSkills')}
-          </div>
+          <EmptyState fill={false} className="py-6" title={t('skills.noGlobalSkills')} />
         ) : (
           <div className="space-y-1.5">
             {globalSkills.map((skill) => (
@@ -447,9 +446,7 @@ export function SkillsSettings() {
             label={t('plugins.loadingPlugins')}
           />
         ) : plugins.length === 0 ? (
-          <div className="text-muted-foreground py-4 text-center text-sm">
-            {t('plugins.noPlugins')}
-          </div>
+          <EmptyState fill={false} className="py-4" title={t('plugins.noPlugins')} />
         ) : (
           <div className="space-y-1.5">
             {plugins.map((plugin) => (

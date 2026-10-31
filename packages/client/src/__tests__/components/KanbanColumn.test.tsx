@@ -49,4 +49,24 @@ describe('KanbanColumn pagination', () => {
     view.rerender(<KanbanColumn {...baseProps} search="new query" highlightThreadId="thread-35" />);
     expect(screen.getAllByTestId('kanban-test-card')).toHaveLength(36);
   });
+  test('passes search settings to a custom card renderer', () => {
+    const card = vi.fn(({ thread }: { thread: Thread; caseSensitive?: boolean }) => (
+      <div>{thread.id}</div>
+    ));
+    render(
+      <KanbanColumn
+        {...baseProps}
+        threads={[threads[0]]}
+        search="Exact"
+        caseSensitive
+        cardComponent={card}
+      />,
+    );
+    expect(card.mock.calls[0]?.[0]).toMatchObject({
+      thread: threads[0],
+      search: 'Exact',
+      caseSensitive: true,
+      stage: 'backlog',
+    });
+  });
 });

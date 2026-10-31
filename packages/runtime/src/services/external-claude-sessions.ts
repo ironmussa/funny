@@ -48,6 +48,7 @@ const claudeJsonlEntrySchema = z
     lastPrompt: z.string().optional(),
     summary: z.string().optional(),
     uuid: z.string().optional(),
+    isMeta: z.boolean().optional(),
     message: z
       .object({
         role: z.enum(['user', 'assistant', 'system']).optional(),
@@ -875,10 +876,9 @@ function isSafeSessionId(sessionId: string): boolean {
   return /^[A-Za-z0-9_-]+$/.test(sessionId);
 }
 
-function entryToTranscriptMessage(
+function summaryTranscriptMessage(
   entry: z.infer<typeof claudeJsonlEntrySchema>,
   index: number,
-  toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
 ): ExternalClaudeTranscriptMessage | null {
   if (entry.type === 'summary' && entry.summary) {
     return {
@@ -888,6 +888,16 @@ function entryToTranscriptMessage(
       timestamp: entry.timestamp ?? null,
     };
   }
+  return null;
+}
+
+function entryToTranscriptMessage(
+  entry: z.infer<typeof claudeJsonlEntrySchema>,
+  index: number,
+  toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
+): ExternalClaudeTranscriptMessage | null {
+  const summary = summaryTranscriptMessage(entry, index);
+  if (summary) return summary;
 
   const message = entry.message;
   const role = message?.role;
@@ -916,6 +926,7 @@ function entryToTranscriptMessage(
     id: entry.uuid ?? `${role}-${index}`,
     role,
     content,
+    ...(role === 'user' && entry.isMeta ? { author: CLAUDE_CODE_SYNTHETIC_AUTHOR } : {}),
     timestamp: entry.timestamp ?? null,
     ...(assistantToolCalls.length > 0 ? { toolCalls: assistantToolCalls } : {}),
   };

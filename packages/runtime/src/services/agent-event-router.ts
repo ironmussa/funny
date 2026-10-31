@@ -11,7 +11,7 @@
  */
 
 import type { AgentOrchestrator } from '@funny/core/agents';
-import type { WSEvent, ThreadStatus } from '@funny/shared';
+import type { WSEvent, ThreadStatus, TurnOutcomeEventData } from '@funny/shared';
 
 import { log } from '../lib/logger.js';
 import { metric, type startSpan } from '../lib/telemetry.js';
@@ -40,7 +40,48 @@ export class AgentEventRouter {
         event.status !== 'completed' ? event.status : undefined,
       );
     }
+    this.persistTurnOutcome(event).catch((err) => {
+      log.warn('Failed to persist turn outcome', {
+        namespace: 'agent',
+        threadId: event.threadId,
+        error: String(err),
+      });
+    });
   };
+
+  /**
+   * Record how the run for the latest user message ended (completed / failed /
+   * stopped) as a `turn_outcome` thread event, so every past turn — not just
+   * the thread's current status — can show its outcome after a reload.
+   * `agent:completed` fires once per run for every terminal path.
+   */
+  private async persistTurnOutcome(event: AgentCompletedEvent): Promise<void> {
+    const detail = await this.threadManager.getThreadWithMessages(event.threadId, 1);
+    const userMessageId = (detail as { lastUserMessage?: { id?: string } } | null)?.lastUserMessage
+      ?.id;
+    if (!userMessageId) return;
+
+    const createdAt = new Date().toISOString();
+    const data: TurnOutcomeEventData = {
+      userMessageId,
+      status: event.status,
+      completedAt: createdAt,
+    };
+    await getServices().threadEvents.saveThreadEvent(
+      event.threadId,
+      'turn_outcome',
+      data as unknown as Record<string, unknown>,
+    );
+    this.emitWSToUser(event.threadId, event.userId, 'thread:event', {
+      event: {
+        id: crypto.randomUUID(),
+        threadId: event.threadId,
+        type: 'turn_outcome',
+        data: JSON.stringify(data),
+        createdAt,
+      },
+    });
+  }
 
   constructor(
     private orchestrator: AgentOrchestrator,

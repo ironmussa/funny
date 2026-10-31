@@ -49,6 +49,7 @@ import {
   buildRowKeyIndexMap,
   buildUserRowVirtualIndices,
   buildVirtualRows,
+  getRowSectionId,
   getLeadingUserItem,
   getVirtualRowsSignature,
   shouldReserveLeadingStickySpace,
@@ -429,7 +430,7 @@ export const MemoizedMessageList = memo(
       : undefined;
     const candidateHiddenSectionUserItem = useMemo(() => {
       if (!firstVisibleRow || !firstVisibleVirtualItem) return null;
-      if (firstVisibleRow.type === 'session-summary') return firstVisibleRow.userItem;
+      if (firstVisibleRow.type !== 'item') return firstVisibleRow.userItem;
       if (firstVisibleRow.item.type === 'message' && firstVisibleRow.item.msg.role === 'user') {
         // The real user card is still the first visible row. Showing the sticky
         // copy here creates a duplicate until the virtualizer catches up.
@@ -742,6 +743,7 @@ export const MemoizedMessageList = memo(
               row.item.msg.role === 'user'
                 ? { 'data-section-msg-id': row.item.msg.id }
                 : {})}
+              data-turn-section={getRowSectionId(row)}
               key={virtualItem.key}
               className="absolute top-0 left-0 z-0 w-full"
               style={{
@@ -751,6 +753,17 @@ export const MemoizedMessageList = memo(
                 overflowAnchor: 'none',
               }}
             >
+              {/* Cover the virtualizer gap without changing the measured row height. */}
+              {getRowSectionId(row) &&
+              virtualRows[virtualItem.index + 1] &&
+              getRowSectionId(row) === getRowSectionId(virtualRows[virtualItem.index + 1]) ? (
+                <div
+                  aria-hidden="true"
+                  data-turn-hover-gap=""
+                  className="absolute top-full left-0 w-full"
+                  style={{ height: VIRTUAL_ROW_GAP_PX }}
+                />
+              ) : null}
               <VirtualRowContent
                 row={row}
                 threadId={threadId}

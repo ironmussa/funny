@@ -83,7 +83,11 @@ function CopyButton({ text }: { text: string }) {
       className="text-muted-foreground hover:bg-background/50 hover:text-foreground absolute top-2 right-2 rounded p-1 opacity-0 transition-opacity group-hover/codeblock:opacity-100"
       aria-label="Copy code"
     >
-      {copied ? <Check className="icon-base" /> : <Copy className="icon-base" />}
+      {copied ? (
+        <Check className="icon-base copy-feedback-icon text-green-600" />
+      ) : (
+        <Copy className="icon-base copy-feedback-icon" />
+      )}
     </button>
   );
 }

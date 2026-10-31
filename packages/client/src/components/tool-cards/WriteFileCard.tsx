@@ -1,17 +1,16 @@
-import { Check, ChevronRight, Copy, FileText } from 'lucide-react';
+import { ChevronRight, FileText } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PreviewModeToggle } from '@/components/PreviewModeToggle';
 import { MessageContent } from '@/components/thread/MessageContent';
-import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { ensureHighlight, extToHljsLang, highlightCode } from '@/hooks/use-highlight';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
+import { FileCopyButton } from './FileCopyButton';
 import { ToolContentArea } from './MobileContentPreview';
 import {
   toEditorUri,
@@ -43,7 +42,6 @@ export function WriteFileCard({
   const fileName = filePath ? getFileName(filePath) : 'unknown';
   const isMarkdown = filePath ? isMarkdownFile(filePath) : false;
   const [renderMarkdown, setRenderMarkdown] = useState(isMarkdown);
-  const [copied, copy] = useCopyToClipboard();
 
   useEffect(() => setRenderMarkdown(isMarkdown), [filePath, isMarkdown]);
 
@@ -142,21 +140,7 @@ export function WriteFileCard({
                   testId="write-file-toggle-markdown"
                 />
               )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={() => copy(content)}
-                    data-testid="write-file-copy"
-                    aria-label={t('tools.copy', 'Copy')}
-                    className="text-muted-foreground hover:text-foreground"
-                  >
-                    {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="left">{t('tools.copy', 'Copy')}</TooltipContent>
-              </Tooltip>
+              <FileCopyButton content={content} testId="write-file-copy" />
             </div>
           </div>
           <div>

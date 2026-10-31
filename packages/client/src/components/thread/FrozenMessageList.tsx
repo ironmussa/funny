@@ -21,7 +21,7 @@ import type {
   MemoizedMessageListProps,
   MessageListScrollAnchor,
 } from './MemoizedMessageList.types';
-import { buildVirtualRows } from './MemoizedMessageList.virtualRows';
+import { buildVirtualRows, getRowSectionId } from './MemoizedMessageList.virtualRows';
 
 /**
  * Frozen viewer — in-flow list renderer (experimental `threadViewer=frozen`).
@@ -230,6 +230,7 @@ export const FrozenMessageList = memo(function FrozenMessageList({
       <div
         key={row.key}
         data-virtual-row-key={row.key}
+        data-turn-section={getRowSectionId(row)}
         {...(isUserRow ? { 'data-section-msg-id': (row as any).item.msg.id } : {})}
         // Opaque bg so content scrolling under the stuck header cannot bleed
         // through the transparent padding around the card.
@@ -295,6 +296,7 @@ export const FrozenMessageList = memo(function FrozenMessageList({
           <div
             key={section.key}
             data-frozen-section=""
+            data-turn-section={getRowSectionId(section.rows[0])}
             style={{ display: 'flex', flexDirection: 'column', gap: `${VIRTUAL_ROW_GAP_PX}px` }}
           >
             {section.rows.map(renderRow)}

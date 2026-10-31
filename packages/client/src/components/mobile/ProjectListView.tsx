@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
@@ -49,10 +50,10 @@ export function ProjectListView({ projects, onSelect, onAddProject }: Props) {
       <MobileNotifications />
       <ScrollArea className="flex-1">
         {projects.length === 0 ? (
-          <div className="text-muted-foreground flex h-full flex-col items-center justify-center gap-3 p-4 text-sm">
-            {t('sidebar.noProjects')}
-            <Button onClick={onAddProject}>{t('sidebar.addProject')}</Button>
-          </div>
+          <EmptyState
+            title={t('sidebar.noProjects')}
+            action={<Button onClick={onAddProject}>{t('sidebar.addProject')}</Button>}
+          />
         ) : (
           <div className="space-y-1 p-2">
             {projects.map((project) => (

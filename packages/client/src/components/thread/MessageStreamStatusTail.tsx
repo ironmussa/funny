@@ -21,6 +21,12 @@ import {
 
 interface MessageStreamStatusTailProps {
   status: string;
+  completedAt?: string | null;
+  /** Timestamp of the latest user message — start of the run being summarized. */
+  turnStartedAt?: string | null;
+  /** Latest user message id — its turn's hover reveals the completion card. */
+  turnId?: string;
+  copyThreadId?: string;
   waitingReason?: WaitingReason;
   pendingPermission?: { toolName: string; toolInput?: string };
   pendingPermissionRequest?: PendingPermissionRequest;
@@ -46,29 +52,24 @@ interface MessageStreamStatusTailProps {
   onPermissionDecision?: (requestId: string, decision: PermissionDecision) => Promise<void> | void;
 }
 
-export function MessageStreamStatusTail({
-  status,
-  waitingReason,
-  pendingPermission,
-  pendingPermissionRequest,
-  permissionApprovalCapability,
-  permissionRecoveryReason,
-  isRunning,
-  isExternal,
-  compact,
-  resultInfo,
-  model,
-  permissionMode,
-  effort,
-  t,
-  onSend,
-  onPermissionApprove,
-  onPermissionAlwaysAllow,
-  onPermissionDeny,
-  onPermissionDecision,
-}: MessageStreamStatusTailProps) {
+export function MessageStreamStatusTail(props: MessageStreamStatusTailProps) {
+  const {
+    status,
+    isRunning,
+    isExternal,
+    compact,
+    resultInfo,
+    completedAt,
+    turnStartedAt,
+    turnId,
+    copyThreadId,
+    model,
+    permissionMode,
+    effort,
+    t,
+    onSend,
+  } = props;
   const sendContinue = () => onSend('Continue', { model, mode: permissionMode, effort });
-  const sendWithMode = (text: string) => onSend(text, { model, mode: permissionMode });
 
   return (
     <>
@@ -90,56 +91,172 @@ export function MessageStreamStatusTail({
         </StatusBlock>
       )}
 
-      {status === 'waiting' && waitingReason === 'question' && (
+      {status === 'waiting' && <WaitingStatus {...props} />}
+
+      {resultInfo && !isRunning && status !== 'stopped' && status !== 'interrupted' && (
+        <StatusBlock sectionId={turnId}>
+          <AgentResultCard
+            status={resultInfo.status}
+            revealForSection={turnId}
+            startedAt={turnStartedAt}
+            completedAt={completedAt}
+            copyThreadId={copyThreadId}
+            cost={resultInfo.cost}
+            duration={resultInfo.duration}
+            error={resultInfo.error}
+            onContinue={resultInfo.status === 'failed' ? sendContinue : undefined}
+          />
+        </StatusBlock>
+      )}
+
+      {status === 'interrupted' && (
+        <StatusBlock>
+          <AgentInterruptedCard
+            onContinue={sendContinue}
+            startedAt={turnStartedAt}
+            completedAt={completedAt}
+            copyThreadId={copyThreadId}
+          />
+        </StatusBlock>
+      )}
+
+      {status === 'stopped' && (
+        <StatusBlock>
+          <AgentStoppedCard
+            onContinue={sendContinue}
+            startedAt={turnStartedAt}
+            completedAt={completedAt}
+            copyThreadId={copyThreadId}
+          />
+        </StatusBlock>
+      )}
+    </>
+  );
+}
+
+type WaitingStatusProps = Pick<
+  MessageStreamStatusTailProps,
+  | 'waitingReason'
+  | 'pendingPermission'
+  | 'pendingPermissionRequest'
+  | 'permissionApprovalCapability'
+  | 'permissionRecoveryReason'
+  | 't'
+  | 'onSend'
+  | 'model'
+  | 'permissionMode'
+  | 'onPermissionDecision'
+  | 'onPermissionApprove'
+  | 'onPermissionAlwaysAllow'
+  | 'onPermissionDeny'
+>;
+
+function WaitingStatus(props: WaitingStatusProps) {
+  const { waitingReason, permissionRecoveryReason, t, onSend, model, permissionMode } = props;
+  const sendWithMode = (text: string) => onSend(text, { model, mode: permissionMode });
+  return (
+    <>
+      {waitingReason === 'question' && (
         <StatusBlock className="text-status-warning/80 flex items-center gap-2 text-xs">
           <Clock className="size-3.5 text-yellow-400" />
           {t('thread.waitingForResponse')}
         </StatusBlock>
       )}
 
-      {status === 'waiting' &&
-        waitingReason === 'permission' &&
-        pendingPermissionRequest &&
-        permissionApprovalCapability?.kind === 'structured' && (
-          <StatusBlock>
-            <PermissionApprovalCard
-              toolName={pendingPermissionRequest.toolName}
-              toolInput={pendingPermissionRequest.toolInput}
-              onApprove={() =>
-                onPermissionDecision?.(pendingPermissionRequest.requestId, 'allow_once')
-              }
-              onAlwaysAllow={
-                pendingPermissionRequest.canAlwaysAllow
-                  ? () => onPermissionDecision?.(pendingPermissionRequest.requestId, 'allow_always')
-                  : undefined
-              }
-              onDeny={
-                pendingPermissionRequest.canDeny
-                  ? () => onPermissionDecision?.(pendingPermissionRequest.requestId, 'deny')
-                  : undefined
-              }
-            />
-          </StatusBlock>
-        )}
-
-      {status === 'waiting' && permissionRecoveryReason === 'runner_lost' && (
+      {permissionRecoveryReason === 'runner_lost' && (
         <StatusBlock>
           <PermissionContinuationLostCard />
         </StatusBlock>
       )}
+      {waitingReason === 'permission' && <WaitingPermissions {...props} />}
 
-      {status === 'waiting' &&
-        waitingReason === 'permission' &&
-        permissionRecoveryReason !== 'runner_lost' &&
-        permissionApprovalCapability?.kind === 'unavailable' && (
-          <StatusBlock>
-            <CodexSdkApprovalUnavailableCard />
-          </StatusBlock>
-        )}
+      {waitingReason === 'provider_error' && permissionRecoveryReason !== 'runner_lost' && (
+        <StatusBlock>
+          <ProviderErrorCard onSend={sendWithMode} />
+        </StatusBlock>
+      )}
 
-      {status === 'waiting' &&
-        waitingReason === 'permission' &&
-        pendingPermission &&
+      {!waitingReason && (
+        <StatusBlock>
+          <WaitingActions onSend={sendWithMode} />
+        </StatusBlock>
+      )}
+    </>
+  );
+}
+
+function StatusBlock({
+  className,
+  sectionId,
+  children,
+}: {
+  className?: string;
+  /** Marks the block as part of a turn so hovering it keeps that turn's bar shown. */
+  sectionId?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className={className} data-turn-section={sectionId}>
+      {children}
+    </div>
+  );
+}
+
+function StructuredApproval({
+  request,
+  onDecision,
+}: {
+  request: PendingPermissionRequest;
+  onDecision: MessageStreamStatusTailProps['onPermissionDecision'];
+}) {
+  return (
+    <StatusBlock>
+      <PermissionApprovalCard
+        toolName={request.toolName}
+        toolInput={request.toolInput}
+        onApprove={() => onDecision?.(request.requestId, 'allow_once')}
+        onAlwaysAllow={
+          request.canAlwaysAllow ? () => onDecision?.(request.requestId, 'allow_always') : undefined
+        }
+        onDeny={request.canDeny ? () => onDecision?.(request.requestId, 'deny') : undefined}
+      />
+    </StatusBlock>
+  );
+}
+
+function WaitingPermissions({
+  pendingPermission,
+  pendingPermissionRequest,
+  permissionApprovalCapability,
+  permissionRecoveryReason,
+  onPermissionDecision,
+  onPermissionApprove,
+  onPermissionAlwaysAllow,
+  onPermissionDeny,
+}: Pick<
+  WaitingStatusProps,
+  | 'pendingPermission'
+  | 'pendingPermissionRequest'
+  | 'permissionApprovalCapability'
+  | 'permissionRecoveryReason'
+  | 'onPermissionDecision'
+  | 'onPermissionApprove'
+  | 'onPermissionAlwaysAllow'
+  | 'onPermissionDeny'
+>) {
+  return (
+    <>
+      {pendingPermissionRequest && permissionApprovalCapability?.kind === 'structured' && (
+        <StructuredApproval request={pendingPermissionRequest} onDecision={onPermissionDecision} />
+      )}
+
+      {approvalUnavailable(permissionRecoveryReason, permissionApprovalCapability) && (
+        <StatusBlock>
+          <CodexSdkApprovalUnavailableCard />
+        </StatusBlock>
+      )}
+
+      {pendingPermission &&
         permissionApprovalCapability?.kind !== 'unavailable' &&
         !pendingPermissionRequest && (
           <StatusBlock>
@@ -152,48 +269,13 @@ export function MessageStreamStatusTail({
             />
           </StatusBlock>
         )}
-
-      {status === 'waiting' &&
-        waitingReason === 'provider_error' &&
-        permissionRecoveryReason !== 'runner_lost' && (
-          <StatusBlock>
-            <ProviderErrorCard onSend={sendWithMode} />
-          </StatusBlock>
-        )}
-
-      {status === 'waiting' && !waitingReason && (
-        <StatusBlock>
-          <WaitingActions onSend={sendWithMode} />
-        </StatusBlock>
-      )}
-
-      {resultInfo && !isRunning && status !== 'stopped' && status !== 'interrupted' && (
-        <StatusBlock>
-          <AgentResultCard
-            status={resultInfo.status}
-            cost={resultInfo.cost}
-            duration={resultInfo.duration}
-            error={resultInfo.error}
-            onContinue={resultInfo.status === 'failed' ? sendContinue : undefined}
-          />
-        </StatusBlock>
-      )}
-
-      {status === 'interrupted' && (
-        <StatusBlock>
-          <AgentInterruptedCard onContinue={sendContinue} />
-        </StatusBlock>
-      )}
-
-      {status === 'stopped' && (
-        <StatusBlock>
-          <AgentStoppedCard onContinue={sendContinue} />
-        </StatusBlock>
-      )}
     </>
   );
 }
 
-function StatusBlock({ className, children }: { className?: string; children: ReactNode }) {
-  return <div className={className}>{children}</div>;
+function approvalUnavailable(
+  recovery: PermissionRecoveryReason | undefined,
+  capability: PermissionApprovalCapability | undefined,
+) {
+  return recovery !== 'runner_lost' && capability?.kind === 'unavailable';
 }

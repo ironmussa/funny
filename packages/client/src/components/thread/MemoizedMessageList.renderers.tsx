@@ -1,9 +1,13 @@
-import { useContext } from 'react';
+import type { ThreadEvent } from '@funny/shared';
+import { useContext, useMemo } from 'react';
 
 import { getItemKey, type RenderItem, type ToolItem } from '@/lib/render-items';
+import { turnOutcomesFromEvents } from '@/lib/turn-outcomes-from-events';
+import { useThreadStore } from '@/stores/thread-store';
 
 import { ToolCallCard } from '../ToolCallCard';
 import { ToolCallGroup } from '../ToolCallGroup';
+import { AgentResultCard } from './AgentStatusCards';
 import { AuthorAvatar } from './AuthorAvatar';
 import { ChangedFilesSummary } from './ChangedFilesSummary';
 import { CompactionEventCard } from './CompactionEventCard';
@@ -119,37 +123,7 @@ function NonUserItemRenderer({
   onToolRespond,
 }: NonUserItemRendererProps) {
   const key = getItemKey(item);
-  // In the frozen viewer, assistant markdown freezes to static HTML offscreen.
-  const frozenViewer = useContext(FrozenViewerContext) !== null;
-
-  if (item.type === 'message') {
-    const msg = item.msg;
-    // `contentVisibility:auto` was previously applied here for paint
-    // virtualization. It broke a specific pattern: the server inserts
-    // an empty assistant placeholder (content=''), Chrome remembers
-    // the small rendered size, then the WS event updates the message
-    // content (same msgId, content='...') and Chrome can skip repainting.
-    return (
-      <div data-item-key={key} className="group/msg relative w-full text-sm">
-        <div
-          data-testid={`assistant-message-${msg.id}`}
-          className="px-3 py-1.5 text-sm leading-relaxed wrap-break-word"
-        >
-          <div className="flex items-start gap-2">
-            {msg.author && <AuthorAvatar author={msg.author} />}
-            <div className="min-w-0 flex-1">
-              {frozenViewer ? (
-                <FrozenMessage content={msg.content.trim()} />
-              ) : (
-                <MessageContent content={msg.content.trim()} />
-              )}
-            </div>
-            <CopyButton content={msg.content} />
-          </div>
-        </div>
-      </div>
-    );
-  }
+  if (item.type === 'message') return <AssistantMessageItem item={item} />;
 
   if (item.type === 'toolcall' || item.type === 'toolcall-group') {
     return (
@@ -195,7 +169,11 @@ function NonUserItemRenderer({
   if (item.type === 'thread-event') {
     return (
       <div data-item-key={key}>
-        <GitEventCard event={item.event} />
+        {item.event.type === 'turn_outcome' ? (
+          <StoppedOutcomeRow event={item.event} />
+        ) : (
+          <GitEventCard event={item.event} />
+        )}
       </div>
     );
   }
@@ -241,13 +219,14 @@ export function UserMessageRenderer({
   const msg = item.msg;
   return (
     <div
-      className="relative pt-3 pb-3"
+      className="relative pb-3"
       {...(includeUserObserver ? { 'data-user-msg': msg.id } : {})}
       {...(includeItemKey ? { 'data-item-key': msg.id } : {})}
     >
       <UserMessageCard
         data-testid={`user-message-${msg.id}`}
         content={msg.content}
+        automatic={msg.author === 'Claude Code'}
         images={msg.images}
         model={msg.model}
         permissionMode={msg.permissionMode}
@@ -262,6 +241,80 @@ export function UserMessageRenderer({
         rewindDisabled={rewindDisabled}
         rewindDisabledReason={rewindDisabledReason}
       />
+    </div>
+  );
+}
+
+/**
+ * Inline record of a stop, placed where it happened in the timeline. Hidden
+ * only while it is the thread's latest outcome and the thread is still
+ * stopped — the status tail's stopped card (with Continue) shows it then.
+ */
+function StoppedOutcomeRow({ event }: { event: ThreadEvent }) {
+  const shownByTail = useThreadStore((s) => {
+    const thread = s.threadDataById[event.threadId];
+    if (thread?.status !== 'stopped') return false;
+    const latest = thread.threadEvents?.findLast((e) => e.type === 'turn_outcome');
+    return latest?.id === event.id;
+  });
+  if (shownByTail) return null;
+  let completedAt: string | undefined;
+  try {
+    completedAt = JSON.parse(event.data as string)?.completedAt;
+  } catch {
+    completedAt = undefined;
+  }
+  return (
+    <div className="flow-root">
+      <div className="-mt-3">
+        <AgentResultCard
+          status="stopped"
+          cost={0}
+          duration={0}
+          completedAt={completedAt ?? event.createdAt}
+        />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * End-of-turn bar. The persisted `turn_outcome` event says how the run ended;
+ * older turns without one are shown as completed. Completed bars reveal on
+ * hover; stopped/failed ones stay visible so the outcome is never lost.
+ */
+function TurnEndBar({
+  row,
+  threadId,
+}: {
+  row: Extract<VirtualRow, { type: 'turn-end' }>;
+  threadId: string;
+}) {
+  // Keyed by threadId (not ThreadProvider) so every host of the list works.
+  const threadEvents = useThreadStore((s) => s.threadDataById[threadId]?.threadEvents);
+  const outcome = useMemo(() => turnOutcomesFromEvents(threadEvents), [threadEvents]).get(
+    row.userItem.msg.id,
+  );
+  // A turn that ended stopped already shows its inline stop row.
+  if (outcome?.status === 'stopped') return null;
+
+  return (
+    // flow-root keeps the negative margin inside the row: the bar is pulled up
+    // into the uniform virtual-row gap so it hugs the answer it closes, and the
+    // measured row height shrinks by the same amount.
+    <div className="flow-root" data-testid={`turn-end-${row.userItem.msg.id}`}>
+      <div className="-mt-3">
+        <AgentResultCard
+          status={outcome?.status ?? 'completed'}
+          cost={0}
+          duration={0}
+          startedAt={row.startedAt}
+          completedAt={outcome?.completedAt ?? row.completedAt}
+          copyThreadId={threadId}
+          copyMessages={row.messages}
+          revealForSection={row.userItem.msg.id}
+        />
+      </div>
     </div>
   );
 }
@@ -306,8 +359,12 @@ export function VirtualRowContent({
     );
   }
 
+  if (row.type === 'turn-end') {
+    return <TurnEndBar row={row} threadId={threadId} />;
+  }
+
   const item = row.item;
-  if (item.type === 'message' && item.msg.role === 'user') {
+  if (isUserMessageItem(item)) {
     return (
       <UserMessageRenderer
         item={item as MessageItem}
@@ -332,4 +389,38 @@ export function VirtualRowContent({
       onToolRespond={onToolRespond}
     />
   );
+}
+
+function AssistantMessageItem({ item }: { item: MessageItem }) {
+  const frozenViewer = useContext(FrozenViewerContext) !== null;
+  const msg = item.msg;
+  // `contentVisibility:auto` was previously applied here for paint
+  // virtualization. It broke a specific pattern: the server inserts
+  // an empty assistant placeholder (content=''), Chrome remembers
+  // the small rendered size, then the WS event updates the message
+  // content (same msgId, content='...') and Chrome can skip repainting.
+  return (
+    <div data-item-key={getItemKey(item)} className="group/msg relative w-full text-sm">
+      <div
+        data-testid={`assistant-message-${msg.id}`}
+        className="px-3 py-1.5 text-sm leading-relaxed wrap-break-word"
+      >
+        <div className="flex items-start gap-2">
+          {msg.author && <AuthorAvatar author={msg.author} />}
+          <div className="min-w-0 flex-1">
+            {frozenViewer ? (
+              <FrozenMessage content={msg.content.trim()} />
+            ) : (
+              <MessageContent content={msg.content.trim()} />
+            )}
+          </div>
+          <CopyButton content={msg.content} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function isUserMessageItem(item: RenderItem): item is MessageItem {
+  return item.type === 'message' && item.msg.role === 'user';
 }

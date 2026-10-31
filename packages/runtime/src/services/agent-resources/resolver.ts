@@ -65,8 +65,22 @@ export function resolveAgentResources(
     }
   }
 
-  // Built-in / dynamic commands come ONLY from the live provider session. They
-  // belong to whichever provider reported them — compatible with this provider.
+  // This prompt command ships with the pinned Claude SDK. Make it available
+  // before the first turn, when there is no live session command catalog yet.
+  // The composer and send-boundary validation consume this same resource.
+  if (provider === 'claude' && !sessionCommands?.includes('security-review')) {
+    candidates.push({
+      kind: 'slash-command',
+      name: 'security-review',
+      description: 'Review pending changes for security vulnerabilities',
+      origin: 'builtin',
+      compatibleProviders: ['claude'],
+      usable: true,
+      commandTier: 'builtin',
+    });
+  }
+
+  // Dynamic commands belong to whichever live provider session reported them.
   if (sessionCommands?.length) {
     for (const name of sessionCommands) {
       candidates.push({

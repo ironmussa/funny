@@ -107,7 +107,6 @@ export function ExternalClaudeSessionView({ sessionId }: { sessionId: string }) 
             model="Claude Code"
             permissionMode=""
             onSend={handleSend}
-            createdAt={state.transcript.startedAt ?? undefined}
             className="min-h-0 flex-1"
             footer={
               <PromptInput

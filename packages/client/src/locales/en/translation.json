@@ -156,6 +156,8 @@
     "openDesign": "Open design"
   },
   "thread": {
+    "claudeContext": "Claude Code · Automatic context",
+    "claudeContextDescription": "Instructions supplied to Claude Code, not a message written by you.",
     "status": {
       "pending": "Pending",
       "running": "Running",
@@ -232,8 +234,13 @@
     "providerErrorWaiting": "The provider returned an error. The run is paused — retry or send a message to continue.",
     "planWaitingForResponse": "Accept or reject the plan",
     "rejectPlan": "Reject plan",
+    "copyLatestTurn": "Copy latest prompt and response",
+    "latestTurnCopied": "Latest response copied",
     "taskCompleted": "Task completed",
     "taskFailed": "Task failed",
+    "taskCompletedAt": "Task completed at <time/>",
+    "taskFailedAt": "Task failed at <time/>",
+    "taskStoppedAt": "Task stopped at <time/>",
     "taskInterrupted": "Task interrupted",
     "taskStopped": "Task stopped",
     "manuallyStopped": "You stopped this task. Send a message to continue.",
@@ -984,6 +991,7 @@
     "retry": "Retry",
     "back": "Back",
     "copy": "Copy",
+    "copyFailed": "Could not copy to clipboard",
     "copied": "Copied",
     "previousPage": "Previous page",
     "nextPage": "Next page",

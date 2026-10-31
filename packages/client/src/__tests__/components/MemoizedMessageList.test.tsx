@@ -6,10 +6,13 @@ import {
   MemoizedMessageList,
   type MemoizedMessageListHandle,
 } from '@/components/thread/MemoizedMessageList';
+import { useTurnEndHover } from '@/components/thread/use-turn-end-hover';
+import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { mockT } from '../helpers/mock-i18n';
 
 vi.mock('react-i18next', () => ({
+  Trans: ({ i18nKey }: { i18nKey: string }) => mockT(i18nKey),
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -174,6 +177,8 @@ function Harness({
   viewportHeight?: number;
   listRef?: RefObject<MemoizedMessageListHandle | null>;
 }) {
+  const hoverRef = useRef<HTMLDivElement>(null);
+  useTurnEndHover(hoverRef);
   const initialScrollElement = useMemo(() => {
     const initialScrollElement = document.createElement('div');
     if (viewportHeight !== undefined) {
@@ -186,33 +191,36 @@ function Harness({
   }, [viewportHeight]);
   const scrollRef = useRef<HTMLDivElement>(initialScrollElement);
   return (
-    <div
-      ref={(node) => {
-        if (!node) return;
-        if (viewportHeight !== undefined) {
-          Object.defineProperty(node, 'clientHeight', {
-            value: viewportHeight,
-            configurable: true,
-          });
-        }
-        scrollRef.current = node;
-      }}
-      data-testid="viewport"
-    >
-      <MemoizedMessageList
-        ref={listRef}
-        messages={messages}
-        leadingUserMessage={leadingUserMessage}
-        threadEvents={threadEvents}
-        compactionEvents={compactionEvents}
-        threadId="t1"
-        knownIds={new Set()}
-        snapshotMap={new Map()}
-        onSend={() => {}}
-        onOpenLightbox={() => {}}
-        scrollRef={scrollRef}
-      />
-    </div>
+    <TooltipProvider>
+      <div
+        ref={(node) => {
+          if (!node) return;
+          if (viewportHeight !== undefined) {
+            Object.defineProperty(node, 'clientHeight', {
+              value: viewportHeight,
+              configurable: true,
+            });
+          }
+          scrollRef.current = node;
+          hoverRef.current = node;
+        }}
+        data-testid="viewport"
+      >
+        <MemoizedMessageList
+          ref={listRef}
+          messages={messages}
+          leadingUserMessage={leadingUserMessage}
+          threadEvents={threadEvents}
+          compactionEvents={compactionEvents}
+          threadId="t1"
+          knownIds={new Set()}
+          snapshotMap={new Map()}
+          onSend={() => {}}
+          onOpenLightbox={() => {}}
+          scrollRef={scrollRef}
+        />
+      </div>
+    </TooltipProvider>
   );
 }
 
@@ -227,6 +235,20 @@ describe('MemoizedMessageList virtualization', () => {
     virtualizerMockState.resizeItemCalls = [];
     virtualizerMockState.scrollToIndexCalls = [];
     virtualizerMockState.scrollToOffsetCalls = [];
+  });
+
+  test('keeps completion visible over row gaps without extending into the next turn', () => {
+    const { container } = render(<Harness messages={makeMessages(4)} />);
+    const gap = container.querySelector('[data-turn-section="m0"] [data-turn-hover-gap]')!;
+    const bar = container.querySelector('[data-turn-end-for="m0"]')!;
+    expect(gap).toBeTruthy();
+    expect(bar).toBeTruthy();
+    fireEvent.mouseOver(gap);
+    expect(bar).toHaveAttribute('data-hovered');
+    const endRow = bar.closest('[data-virtual-row-key]')!;
+    expect(endRow.querySelector('[data-turn-hover-gap]')).toBeNull();
+    fireEvent.mouseOver(container.querySelector('[data-turn-section="m2"]')!);
+    expect(bar).not.toHaveAttribute('data-hovered');
   });
 
   test('keeps mounted item rows bounded for a long loaded thread', async () => {
@@ -263,7 +285,10 @@ describe('MemoizedMessageList virtualization', () => {
     await waitFor(() =>
       expect(viewport.querySelectorAll('[data-item-key]').length).toBeGreaterThan(0),
     );
-    expect(viewport.querySelectorAll('[data-item-key]')).toHaveLength(12);
+    // The 12 measured rows include four end-of-turn bars, not sticky copies.
+    expect(viewport.querySelectorAll('[data-virtual-row-key]')).toHaveLength(12);
+    expect(viewport.querySelectorAll('[data-item-key]')).toHaveLength(8);
+    expect(getByTestId('sticky-section-context').querySelector('[data-item-key]')).toBeNull();
   });
 
   test('shows sticky section context when the owner row remains mounted only by overscan', async () => {
@@ -390,10 +415,10 @@ describe('MemoizedMessageList virtualization', () => {
   test('pushes the sticky section context up as the next user row reaches it', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 4;
-    // Rows are 120px in the mock: next user row m2 starts at 240. With the
-    // sticky content measuring 100px, offset 180 leaves 60px of headroom, so
+    // Rows are 120px in the mock: next user row m2 starts at 360. With the
+    // sticky content measuring 100px, offset 300 leaves 60px of headroom, so
     // the sticky copy must be pushed up by 40px.
-    virtualizerMockState.scrollOffset = 180;
+    virtualizerMockState.scrollOffset = 300;
 
     const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     rectSpy.mockImplementation(function (this: Element) {
@@ -425,7 +450,7 @@ describe('MemoizedMessageList virtualization', () => {
   test('updates the sticky push per scroll event without waiting for a virtualizer re-render', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 4;
-    virtualizerMockState.scrollOffset = 180;
+    virtualizerMockState.scrollOffset = 300;
 
     const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     rectSpy.mockImplementation(function (this: Element) {
@@ -453,7 +478,7 @@ describe('MemoizedMessageList virtualization', () => {
       // Simulate scroll frames between virtualizer notifications: the
       // instance's scrollOffset advances but the virtualizer does not notify
       // React (its range has not changed), so no new offset reaches a render.
-      virtualizerMockState.scrollOffset = 200;
+      virtualizerMockState.scrollOffset = 320;
       fireEvent.scroll(getByTestId('viewport'));
 
       expect(getByTestId('sticky-section-content').style.transform).toBe('translateY(-60px)');
@@ -465,9 +490,9 @@ describe('MemoizedMessageList virtualization', () => {
   test('does not push the sticky section context while the next user row is far below', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 4;
-    // Next user row m2 (start 240) is 110px below the offset, beyond the
+    // Next user row m2 (start 360) is 110px below the offset, beyond the
     // 100px sticky content height, so no push applies.
-    virtualizerMockState.scrollOffset = 130;
+    virtualizerMockState.scrollOffset = 250;
 
     const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     rectSpy.mockImplementation(function (this: Element) {
@@ -895,7 +920,9 @@ describe('MemoizedMessageList virtualization', () => {
 
     await waitFor(() => expect(viewport.querySelector('[data-item-key="u1"]')).toBeTruthy());
 
-    expect(virtualizerMockState.lastOptions.estimateSize(0)).toBeGreaterThan(120);
+    // Includes only bottom row padding; the list gap separates turns above.
+    expect(virtualizerMockState.lastOptions.estimateSize(0)).toBe(118);
+    expect(viewport.querySelector('[data-user-msg="u1"]')).not.toHaveClass('pt-3');
   });
 
   test('does not use content-visibility placeholders for variable-height tool runs', async () => {

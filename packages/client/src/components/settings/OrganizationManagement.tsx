@@ -5,7 +5,9 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { activeOrganizationIdFromSession } from '@/lib/active-organization';
 import { authClient } from '@/lib/auth-client';
 import { useProjectStore } from '@/stores/project-store';
@@ -144,11 +146,7 @@ export function OrganizationManagement() {
   }, [deleteConfirm, loadOrgs]);
 
   if (loading) {
-    return (
-      <div className="text-muted-foreground flex items-center justify-center py-12 text-sm">
-        Loading organizations…
-      </div>
-    );
+    return <LoadingState fill={false} className="py-12" label="Loading organizations…" />;
   }
 
   return (
@@ -217,9 +215,11 @@ export function OrganizationManagement() {
       <h3 className="settings-section-header">Your Organizations ({orgs.length})</h3>
       <div className="settings-card">
         {orgs.length === 0 ? (
-          <div className="text-muted-foreground px-4 py-6 text-center text-sm">
-            No organizations yet. Create one above to get started.
-          </div>
+          <EmptyState
+            fill={false}
+            className="px-4 py-6"
+            title="No organizations yet. Create one above to get started."
+          />
         ) : (
           orgs.map((org) => {
             const role = memberships.get(org.id) || 'member';

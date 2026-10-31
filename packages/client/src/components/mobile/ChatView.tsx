@@ -171,6 +171,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
             compactionEvents={stableCompactionEvents}
             initInfo={activeThread.initInfo}
             resultInfo={activeThread.resultInfo}
+            completedAt={activeThread.completedAt}
             waitingReason={activeThread.waitingReason}
             pendingPermission={activeThread.pendingPermission}
             isExternal={isExternal}
@@ -180,7 +181,6 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
             onPermissionApproval={handlePermissionApproval}
             onToolRespond={handleToolRespond}
             pagination={{ hasMore, loadingMore, load: loadOlderMessages, total: totalMessages }}
-            createdAt={activeThread.createdAt}
             snapshotMap={snapshotMap}
             knownIds={knownIds}
             onOpenLightbox={openLightbox}

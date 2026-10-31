@@ -180,6 +180,50 @@ describe('ThreadView', () => {
     await waitFor(() => expect(onReady).toHaveBeenCalledTimes(1));
   });
 
+  test('keeps the submitted prompt in the conversation layout while a new thread loads', () => {
+    renderWithProviders(<ThreadView />, {
+      route: {
+        pathname: '/projects/p1/threads/t-new',
+        state: {
+          pendingPrompt: 'Fix the bug',
+          pendingMetadata: { model: 'gpt-5', permissionMode: 'auto', effort: 'medium' },
+        },
+      },
+      threadId: 't-new',
+    });
+    expect(screen.getByTestId('thread-preparation-view')).toBeInTheDocument();
+    expect(screen.getByText('Fix the bug')).toBeInTheDocument();
+    expect(screen.getByText('thread.model.gpt-5 · Medium')).toBeInTheDocument();
+    expect(screen.getByText('prompt.auto')).toBeInTheDocument();
+    expect(screen.queryByTestId('thread-loading-placeholder')).not.toBeInTheDocument();
+  });
+
+  test('shows known message metadata while the worktree is setting up', () => {
+    useAppStore.setState({
+      selectedThreadId: 't1',
+      activeThread: {
+        id: 't1',
+        projectId: 'p1',
+        status: 'setting_up',
+        initialPrompt: 'Prepare feature',
+        model: 'gpt-5',
+        permissionMode: 'auto',
+        createdAt: new Date().toISOString(),
+        messages: [],
+        lastUserMessage: {
+          content: 'Prepare feature',
+          model: 'gpt-6-astra',
+          permissionMode: 'plan',
+          effort: 'medium',
+        },
+      } as any,
+    });
+    renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
+    expect(screen.getByTestId('thread-preparation-view')).toBeInTheDocument();
+    expect(screen.getByText('thread.model.gpt-6-astra · Medium')).toBeInTheDocument();
+    expect(screen.getByText('prompt.plan')).toBeInTheDocument();
+  });
+
   test('shows empty state when no thread or project selected', () => {
     useAppStore.setState({ selectedProjectId: null });
     renderWithProviders(<ThreadView />);

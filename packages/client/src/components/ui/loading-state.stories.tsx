@@ -1,5 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { Inbox } from 'lucide-react';
 
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 
 const meta = {
@@ -8,7 +10,6 @@ const meta = {
   parameters: { layout: 'fullscreen' },
   tags: ['autodocs'],
   argTypes: {
-    size: { control: 'select', options: ['default', 'compact'] },
     layout: { control: 'select', options: ['stack', 'inline'] },
     fill: { control: 'boolean' },
   },
@@ -41,11 +42,10 @@ export const Preparing: Story = {
   ),
 };
 
-export const Compact: Story = {
+export const NarrowPanel: Story = {
   args: {
-    size: 'compact',
     label: 'Loading changes…',
-    testId: 'loading-compact',
+    testId: 'loading-narrow-panel',
   },
   render: (args) => (
     <div className="border-border bg-background h-48 w-72 border">
@@ -57,7 +57,6 @@ export const Compact: Story = {
 export const Inline: Story = {
   args: {
     layout: 'inline',
-    size: 'compact',
     fill: false,
     label: 'Loading older messages…',
     testId: 'loading-inline',
@@ -65,6 +64,19 @@ export const Inline: Story = {
   render: (args) => (
     <div className="border-border bg-background flex w-full max-w-2xl justify-center border py-6">
       <LoadingState {...args} />
+    </div>
+  ),
+};
+
+/** Both orientations share the same spinner, typography, and spacing. */
+export const LayoutComparison: Story = {
+  args: {
+    label: 'Loading…',
+  },
+  render: (args) => (
+    <div className="border-border bg-background grid h-64 grid-cols-2 divide-x border">
+      <LoadingState {...args} layout="stack" />
+      <LoadingState {...args} layout="inline" />
     </div>
   ),
 };
@@ -108,6 +120,16 @@ export const SpinnerOnly: Story = {
   render: (args) => (
     <div className="border-border bg-background flex h-32 w-full max-w-md items-center justify-center border">
       <LoadingState {...args} />
+    </div>
+  ),
+};
+
+/** Loading and empty placeholders must keep the same icon and text scale. */
+export const LoadingAndEmpty: Story = {
+  render: () => (
+    <div className="bg-background grid h-64 grid-cols-2">
+      <LoadingState label="Loading files…" />
+      <EmptyState icon={Inbox} title="No files yet" description="Add a file to get started." />
     </div>
   ),
 };

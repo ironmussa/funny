@@ -1,14 +1,8 @@
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element';
-import {
-  draggable,
-  dropTargetForElements,
-  monitorForElements,
-} from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
+import { draggable, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Thread, ThreadStage, Project, GitStatusInfo } from '@funny/shared';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import {
-  Plus,
-  Search,
   Trash2,
   Terminal,
   FolderOpenDot,
@@ -23,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { KanbanColumn } from '@/components/kanban/KanbanColumn';
 import { SlideUpPrompt } from '@/components/SlideUpPrompt';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
@@ -36,9 +31,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
-import { Input } from '@/components/ui/input';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { colorFromName } from '@/components/ui/project-chip';
+import { useGitStatusScope } from '@/hooks/use-git-status-scope';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { api } from '@/lib/api';
@@ -316,229 +309,6 @@ export const KanbanCard = memo(function KanbanCard({
   );
 });
 
-function AddThreadButton({
-  projectId,
-  projects,
-  onSelect,
-}: {
-  projectId?: string;
-  projects: Project[];
-  onSelect: (projectId: string) => void;
-}) {
-  const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Single project mode: click goes straight to new thread
-  if (projectId) {
-    return (
-      <button
-        data-testid="kanban-add-thread"
-        className="text-muted-foreground hover:bg-accent hover:text-foreground ml-auto rounded p-0.5 transition-colors"
-        onClick={() => onSelect(projectId)}
-        title={t('kanban.addThread')}
-      >
-        <Plus className="icon-base" />
-      </button>
-    );
-  }
-
-  const filtered = search
-    ? projects.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
-    : projects;
-
-  return (
-    <Popover
-      open={open}
-      onOpenChange={(v) => {
-        setOpen(v);
-        if (!v) setSearch('');
-      }}
-    >
-      <PopoverTrigger asChild>
-        <button
-          data-testid="kanban-add-thread"
-          className="text-muted-foreground hover:bg-accent hover:text-foreground ml-auto rounded p-0.5 transition-colors"
-          title={t('kanban.addThread')}
-        >
-          <Plus className="icon-base" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-64 p-0">
-        <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2.5">
-          <Search className="icon-base text-muted-foreground shrink-0" />
-          <Input
-            ref={inputRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={t('kanban.searchProject')}
-            className="placeholder:text-muted-foreground h-auto flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm shadow-none focus-visible:ring-0"
-            autoFocus
-          />
-        </div>
-        <div className="max-h-56 overflow-y-auto py-1">
-          {filtered.length === 0 ? (
-            <div className="text-muted-foreground py-3 text-center text-sm">
-              {t('commandPalette.noResults')}
-            </div>
-          ) : (
-            filtered.map((p) => (
-              <button
-                key={p.id}
-                className="hover:bg-accent flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors"
-                onClick={() => {
-                  setOpen(false);
-                  setSearch('');
-                  onSelect(p.id);
-                }}
-              >
-                <span
-                  className="size-2.5 shrink-0 rounded-full"
-                  style={{ backgroundColor: p.color || colorFromName(p.name) }}
-                />
-                <span className="truncate">{p.name}</span>
-              </button>
-            ))
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  );
-}
-
-const KanbanColumn = memo(function KanbanColumn({
-  stage,
-  threads,
-  projectInfoById,
-  onDelete,
-  onArchive,
-  projectId,
-  projects,
-  onAddThread,
-  search,
-  caseSensitive,
-  contentSnippets,
-  highlightThreadId,
-  statusByThread,
-}: {
-  stage: ThreadStage;
-  threads: Thread[];
-  projectInfoById?: Record<string, { name: string; color?: string; path?: string }>;
-  onDelete: (thread: Thread) => void;
-  onArchive: (thread: Thread) => void;
-  projectId?: string;
-  projects: Project[];
-  onAddThread: (projectId: string, stage: ThreadStage) => void;
-  search?: string;
-  caseSensitive?: boolean;
-  contentSnippets?: Map<string, string>;
-  highlightThreadId?: string;
-  statusByThread: Record<string, GitStatusInfo>;
-}) {
-  const { t } = useTranslation();
-  const ref = useRef<HTMLDivElement>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const [isDraggedOver, setIsDraggedOver] = useState(false);
-  const [visibleCount, setVisibleCount] = useState(20);
-
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-
-    return dropTargetForElements({
-      element: el,
-      getData: () => ({ type: 'kanban-column', stage }),
-      canDrop: ({ source }) => source.data.type === 'kanban-card',
-      onDragEnter: () => setIsDraggedOver(true),
-      onDragLeave: () => setIsDraggedOver(false),
-      onDrop: () => setIsDraggedOver(false),
-    });
-  }, [stage]);
-
-  useEffect(() => {
-    const el = scrollRef.current;
-    if (!el) return;
-    return autoScrollForElements({ element: el });
-  }, []);
-
-  // Reset visible count only when search/filter changes, not when a card is moved
-  useEffect(() => {
-    setVisibleCount(20);
-  }, [search, projectId]);
-
-  // If the highlighted thread is beyond the visible count, expand to include it
-  useEffect(() => {
-    if (!highlightThreadId) return;
-    const idx = threads.findIndex((t) => t.id === highlightThreadId);
-    if (idx >= visibleCount) {
-      setVisibleCount(idx + 1);
-    }
-  }, [highlightThreadId, threads, visibleCount]);
-
-  const visibleThreads = threads.slice(0, visibleCount);
-  const hasMore = threads.length > visibleCount;
-
-  return (
-    <div
-      ref={ref}
-      className={cn(
-        'flex flex-col w-92 min-w-92 shrink-0 rounded-lg bg-secondary/30 transition-colors',
-        isDraggedOver && 'ring-2 ring-ring bg-secondary/50',
-      )}
-    >
-      <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2.5">
-        <span className="text-sm font-medium">{t(stageConfig[stage].labelKey)}</span>
-        <span className="text-muted-foreground text-xs">({threads.length})</span>
-        {projects.length > 0 && stage !== 'review' && stage !== 'done' && stage !== 'archived' && (
-          <AddThreadButton
-            projectId={projectId}
-            projects={projects}
-            onSelect={(pid) => onAddThread(pid, stage)}
-          />
-        )}
-      </div>
-
-      <div ref={scrollRef} className="min-h-[200px] flex-1 space-y-2 overflow-y-auto p-2">
-        {threads.length === 0 ? (
-          <div className="text-muted-foreground py-8 text-center text-xs">
-            {t('kanban.emptyColumn')}
-          </div>
-        ) : (
-          <>
-            {visibleThreads.map((thread) => (
-              <KanbanCard
-                key={thread.id}
-                thread={thread}
-                projectInfo={projectInfoById?.[thread.projectId]}
-                onDelete={onDelete}
-                onArchive={stage !== 'archived' ? onArchive : undefined}
-                search={search}
-                caseSensitive={caseSensitive}
-                ghost={stage === 'archived'}
-                contentSnippet={contentSnippets?.get(thread.id)}
-                projectId={projectId}
-                highlighted={thread.id === highlightThreadId}
-                stage={stage}
-                gitStatus={statusByThread[thread.id]}
-              />
-            ))}
-            {hasMore && (
-              <button
-                data-testid={`kanban-load-more-${stage}`}
-                onClick={() => setVisibleCount((prev) => prev + 20)}
-                className="text-muted-foreground hover:bg-accent hover:text-foreground w-full rounded-md py-2 text-xs transition-colors"
-              >
-                {t('kanban.loadMore', { count: Math.min(20, threads.length - visibleCount) })}
-              </button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
-  );
-});
-
 export function KanbanView({
   threads,
   projectId,
@@ -578,17 +348,15 @@ export function KanbanView({
   } | null>(null);
   const _statusByBranch = useGitStatusStore((s) => s.statusByBranch);
   const _threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
+  // Every card shows git state — request the whole project, not the sidebar rows.
+  useGitStatusScope({
+    all: true,
+    projectIds: projectId ? [projectId] : [...new Set(threads.map((t) => t.projectId))],
+  });
   // Resolve branch-keyed statuses to a threadId-keyed map for child components.
   // Prefer server-provided threadToBranchKey mapping (stable across thread data
   // refreshes) and fall back to client-side computation for threads not yet mapped.
-  const statusByThread = useMemo(() => {
-    const result: Record<string, GitStatusInfo> = {};
-    for (const t of threads) {
-      const bk = _threadToBranchKey[t.id] || computeBranchKey(t);
-      if (_statusByBranch[bk]) result[t.id] = _statusByBranch[bk];
-    }
-    return result;
-  }, [threads, _statusByBranch, _threadToBranchKey]);
+  const statusByThread = useKanbanGitStatuses(threads, _statusByBranch, _threadToBranchKey);
 
   // Highlight the card the user came from, then fade it out
   const [highlightThreadId, setHighlightThreadId] = useState<string | undefined>(
@@ -675,35 +443,7 @@ export function KanbanView({
     return map;
   }, [projects]);
 
-  const threadsByStage = useMemo(() => {
-    const map: Record<ThreadStage, Thread[]> = {
-      backlog: [],
-      planning: [],
-      in_progress: [],
-      review: [],
-      done: [],
-      archived: [],
-    };
-
-    for (const thread of threads) {
-      const stage = thread.archived ? 'archived' : thread.stage || 'backlog';
-      if (map[stage]) {
-        map[stage].push(thread);
-      }
-    }
-
-    // Sort each column: pinned first, then by date (most recent first)
-    for (const stage of STAGES) {
-      map[stage].sort((a, b) => {
-        if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-        const dateA = a.completedAt || a.createdAt;
-        const dateB = b.completedAt || b.createdAt;
-        return new Date(dateB).getTime() - new Date(dateA).getTime();
-      });
-    }
-
-    return map;
-  }, [threads]);
+  const threadsByStage = useMemo(() => groupThreadsByStage(threads), [threads]);
 
   const handleDrop = useCallback(
     ({ source, location }: { source: any; location: any }) => {
@@ -742,15 +482,11 @@ export function KanbanView({
         }
       }
 
-      if (newStage === 'archived') {
-        // Dragging to archived column → archive the thread
-        archiveThread(threadId, targetProjectId);
-      } else if (sourceStage === 'archived') {
-        // Dragging from archived column → unarchive and set new stage
-        unarchiveThread(threadId, targetProjectId, newStage);
-      } else {
-        updateThreadStage(threadId, targetProjectId, newStage);
-      }
+      moveThreadToStage(threadId, targetProjectId, sourceStage, newStage, {
+        archiveThread,
+        unarchiveThread,
+        updateThreadStage,
+      });
 
       const thread = threads.find((th) => th.id === threadId);
       const title = thread?.title || threadId;
@@ -778,6 +514,7 @@ export function KanbanView({
       <div ref={boardRef} className="flex h-full gap-3 overflow-x-auto px-4 py-2">
         {STAGES.map((stage) => (
           <KanbanColumn
+            cardComponent={KanbanCard}
             key={stage}
             stage={stage}
             threads={threadsByStage[stage]}
@@ -816,27 +553,9 @@ export function KanbanView({
         onConfirm={handleDeleteConfirm}
       />
 
-      <ConfirmDialog
-        open={!!mergeWarning}
-        onOpenChange={(open) => {
-          if (!open) setMergeWarning(null);
-        }}
-        title={t(
-          `dialog.${mergeWarning?.gitState === 'unpushed' ? 'unpushedChanges' : mergeWarning?.gitState === 'dirty' ? 'dirtyChanges' : 'unmergedChanges'}`,
-        )}
-        description={t(
-          `dialog.${mergeWarning?.gitState === 'unpushed' ? 'unpushedChangesDesc' : mergeWarning?.gitState === 'dirty' ? 'dirtyChangesDesc' : 'unmergedChangesDesc'}`,
-          {
-            title:
-              mergeWarning?.title && mergeWarning.title.length > 80
-                ? mergeWarning.title.slice(0, 80) + '…'
-                : mergeWarning?.title,
-          },
-        )}
-        variant="default"
-        cancelLabel={t('common.cancel')}
-        confirmLabel={t('common.continue')}
-        onCancel={() => setMergeWarning(null)}
+      <MergeWarningDialog
+        mergeWarning={mergeWarning}
+        onClose={() => setMergeWarning(null)}
         onConfirm={handleMergeWarningConfirm}
       />
 
@@ -849,4 +568,103 @@ export function KanbanView({
       />
     </>
   );
+}
+
+function groupThreadsByStage(threads: Thread[]) {
+  const map: Record<ThreadStage, Thread[]> = {
+    backlog: [],
+    planning: [],
+    in_progress: [],
+    review: [],
+    done: [],
+    archived: [],
+  };
+
+  for (const thread of threads) {
+    const stage = thread.archived ? 'archived' : thread.stage || 'backlog';
+    if (map[stage]) {
+      map[stage].push(thread);
+    }
+  }
+
+  // Sort each column: pinned first, then by date (most recent first)
+  for (const stage of STAGES) {
+    map[stage].sort((a, b) => {
+      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+      const dateA = a.completedAt || a.createdAt;
+      const dateB = b.completedAt || b.createdAt;
+      return new Date(dateB).getTime() - new Date(dateA).getTime();
+    });
+  }
+
+  return map;
+}
+
+function useKanbanGitStatuses(
+  threads: Thread[],
+  _statusByBranch: Record<string, GitStatusInfo>,
+  _threadToBranchKey: Record<string, string>,
+) {
+  const statusByThread = useMemo(() => {
+    const result: Record<string, GitStatusInfo> = {};
+    for (const t of threads) {
+      const bk = _threadToBranchKey[t.id] || computeBranchKey(t);
+      if (_statusByBranch[bk]) result[t.id] = _statusByBranch[bk];
+    }
+    return result;
+  }, [threads, _statusByBranch, _threadToBranchKey]);
+  return statusByThread;
+}
+
+function moveThreadToStage(
+  threadId: string,
+  projectId: string,
+  source: ThreadStage,
+  target: ThreadStage,
+  actions: Pick<
+    ReturnType<typeof useThreadStore.getState>,
+    'archiveThread' | 'unarchiveThread' | 'updateThreadStage'
+  >,
+) {
+  if (target === 'archived') actions.archiveThread(threadId, projectId);
+  else if (source === 'archived') actions.unarchiveThread(threadId, projectId, target);
+  else actions.updateThreadStage(threadId, projectId, target);
+}
+
+function MergeWarningDialog({
+  mergeWarning,
+  onClose,
+  onConfirm,
+}: {
+  mergeWarning: { gitState: string; title: string } | null;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ConfirmDialog
+      open={!!mergeWarning}
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+      title={t(`dialog.${mergeWarningKey(mergeWarning?.gitState)}`)}
+      description={t(`dialog.${mergeWarningKey(mergeWarning?.gitState)}Desc`, {
+        title: shortenWarningTitle(mergeWarning?.title),
+      })}
+      variant="default"
+      cancelLabel={t('common.cancel')}
+      confirmLabel={t('common.continue')}
+      onCancel={() => onClose()}
+      onConfirm={onConfirm}
+    />
+  );
+}
+
+function mergeWarningKey(state: string | undefined) {
+  if (state === 'unpushed') return 'unpushedChanges';
+  if (state === 'dirty') return 'dirtyChanges';
+  return 'unmergedChanges';
+}
+function shortenWarningTitle(title: string | undefined) {
+  return title && title.length > 80 ? title.slice(0, 80) + '…' : title;
 }

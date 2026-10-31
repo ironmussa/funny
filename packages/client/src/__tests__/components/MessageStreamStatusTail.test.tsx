@@ -1,7 +1,11 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import type { ReactElement } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { MessageStreamStatusTail } from '@/components/thread/MessageStreamStatusTail';
+import { TooltipProvider } from '@/components/ui/tooltip';
+
+const render = (ui: ReactElement) => rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
 
 const baseProps = {
   status: 'idle',
@@ -18,6 +22,20 @@ const baseProps = {
 };
 
 describe('MessageStreamStatusTail', () => {
+  test('passes the completion time and copy action into the result card', () => {
+    const { container } = render(
+      <MessageStreamStatusTail
+        {...baseProps}
+        status="completed"
+        completedAt="2026-10-30T20:42:00.000Z"
+        copyThreadId="thread-1"
+        resultInfo={{ status: 'completed', cost: 0, duration: 0 }}
+      />,
+    );
+    expect(container.querySelector('time')).toHaveAttribute('datetime', '2026-10-30T20:42:00.000Z');
+    expect(screen.getByRole('button', { name: 'Copy latest prompt and response' })).toBeEnabled();
+  });
+
   test('renders running externally as a static status', () => {
     const { container } = render(
       <MessageStreamStatusTail {...baseProps} status="running" isRunning isExternal />,

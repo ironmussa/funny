@@ -584,3 +584,32 @@ describe('findNearestPrecedingUserMessageItem', () => {
     expect(findNearestPrecedingUserMessageItem(items, 0)).toBeNull();
   });
 });
+
+describe('turn outcome timeline rows', () => {
+  const outcome = (id: string, status: string, createdAt: string) =>
+    ({
+      id,
+      threadId: 't1',
+      type: 'turn_outcome',
+      data: JSON.stringify({ userMessageId: 'u1', status, completedAt: createdAt }),
+      createdAt,
+    }) as any;
+
+  test('places a stop where it happened so Continue never erases it', () => {
+    const messages = [
+      { id: 'u1', role: 'user', content: 'Summarize', timestamp: '2026-10-31T05:22:00.000Z' },
+      { id: 'a1', role: 'assistant', content: 'Partial', timestamp: '2026-10-31T05:22:10.000Z' },
+      { id: 'a2', role: 'assistant', content: 'Resumed', timestamp: '2026-10-31T05:23:30.000Z' },
+    ];
+    const items = buildGroupedRenderItems(messages, [
+      outcome('stop-1', 'stopped', '2026-10-31T05:22:22.000Z'),
+      outcome('done-1', 'completed', '2026-10-31T05:23:40.000Z'),
+    ]);
+
+    expect(
+      items.map((item) =>
+        item.type === 'message' ? item.msg.id : item.type === 'thread-event' ? item.event.id : '',
+      ),
+    ).toEqual(['u1', 'a1', 'stop-1', 'a2']);
+  });
+});

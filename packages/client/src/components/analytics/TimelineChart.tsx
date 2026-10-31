@@ -11,6 +11,8 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 
+import { EmptyState } from '@/components/ui/empty-state';
+
 interface DataPoint {
   date: string;
   count: number;
@@ -127,9 +129,7 @@ export function TimelineChart({
   }, [created, completed, movedToPlanning, movedToReview, movedToDone, movedToArchived]);
 
   if (chartData.length === 0) {
-    return (
-      <div className="text-muted-foreground py-8 text-center text-sm">{t('analytics.noData')}</div>
-    );
+    return <EmptyState fill={false} className="py-8" title={t('analytics.noData')} />;
   }
 
   // Format date labels based on groupBy granularity

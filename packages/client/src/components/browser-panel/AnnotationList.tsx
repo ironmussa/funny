@@ -1,6 +1,7 @@
 import { MapPin, Pencil, Square, Trash2 } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useBrowserPanelStore, type Annotation } from '@/stores/browser-panel-store';
 import {
@@ -49,13 +50,10 @@ export function AnnotationList() {
 
   if (annotations.length === 0) {
     return (
-      <div
-        className="text-muted-foreground flex h-full items-center justify-center px-3 py-2"
-        style={fontStyle}
-        data-testid="browser-panel-annotation-list-empty"
-      >
-        No annotations yet. Pick a tool and start marking up the page.
-      </div>
+      <EmptyState
+        testId="browser-panel-annotation-list-empty"
+        title="No annotations yet. Pick a tool and start marking up the page."
+      />
     );
   }
 

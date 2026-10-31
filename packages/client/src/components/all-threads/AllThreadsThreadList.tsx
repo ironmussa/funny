@@ -16,18 +16,20 @@ import { SidebarDialogs } from '@/components/sidebar/SidebarDialogs';
 import { ThreadItem } from '@/components/sidebar/ThreadItem';
 import { normalize } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
+import { ThreadListEmptyState } from '@/components/ui/thread-list-empty-state';
+import { ThreadListViewport } from '@/components/ui/thread-list-viewport';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSidebarActions } from '@/hooks/use-sidebar-actions';
+import { useVirtualListPagination } from '@/hooks/use-virtual-list-pagination';
 import { timeAgo } from '@/lib/thread-utils';
 import { isScratch } from '@/lib/thread-variant';
-import { cn, resolveThreadBranch } from '@/lib/utils';
+import { resolveThreadBranch } from '@/lib/utils';
 import { buildThreadPath } from '@/navigation/thread-paths';
 import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useUIStore } from '@/stores/ui-store';
 
 const ROW_ESTIMATE_PX = 64;
-const LOAD_MORE_THRESHOLD = 5;
 
 interface ProjectInfo {
   name: string;
@@ -175,138 +177,118 @@ export function AllThreadsThreadList({
     useGitStatusStore.getState().ensureStatusForThreads(visibleThreads);
   }, [visibleThreads]);
 
-  useEffect(() => {
-    if (!hasMore || loadingMore) return;
-    const last = virtualItems[virtualItems.length - 1];
-    if (!last) return;
-    if (last.index >= threads.length - 1 - LOAD_MORE_THRESHOLD) {
-      onEndReached();
-    }
-  }, [virtualItems, hasMore, loadingMore, onEndReached, threads.length]);
+  useVirtualListPagination(virtualItems, threads.length, hasMore, loadingMore, onEndReached);
 
   if (threads.length === 0) {
-    return (
-      <div
-        className={cn(
-          'flex h-32 items-center justify-center text-xs text-muted-foreground',
-          className,
-        )}
-      >
-        {search ? searchEmptyMessage : emptyMessage}
-      </div>
-    );
+    return <ThreadListEmptyState {...{ className, search, searchEmptyMessage, emptyMessage }} />;
   }
 
   return (
     <>
-      <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
+      <ThreadListViewport
+        testId="all-threads-thread-list-scroll"
+        scrollRef={scrollRef}
+        className={className}
+        padded
+      >
         <div
-          ref={scrollRef}
-          data-testid="all-threads-thread-list-scroll"
-          className="border-border/50 min-h-0 flex-1 overflow-y-auto rounded-lg border p-2"
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
         >
-          <div
-            style={{
-              height: `${virtualizer.getTotalSize()}px`,
-              width: '100%',
-              position: 'relative',
-            }}
-          >
-            {virtualItems.map((v) => {
-              const thread = threads[v.index];
-              if (!thread) return null;
-              const projectInfo = projectInfoById[thread.projectId];
-              const gitStatus: GitStatusInfo | undefined =
-                statusByBranch[statusBranchKeyForThread(thread, threadToBranchKey)];
-              const branch = resolveThreadBranch(thread);
-              const isWorktree =
-                thread.mode === 'worktree' && !!branch && thread.provider !== 'external';
-              const isRunning = thread.status === 'running';
-              const titleMatches = search
-                ? caseSensitive
-                  ? thread.title.includes(search)
-                  : normalize(thread.title).includes(normalize(search))
-                : false;
-              const contentSnippet =
-                search && !titleMatches ? contentSnippets.get(thread.id) : undefined;
+          {virtualItems.map((v) => {
+            const thread = threads[v.index];
+            if (!thread) return null;
+            const projectInfo = projectInfoById[thread.projectId];
+            const gitStatus: GitStatusInfo | undefined =
+              statusByBranch[statusBranchKeyForThread(thread, threadToBranchKey)];
+            const branch = resolveThreadBranch(thread);
+            const isWorktree =
+              thread.mode === 'worktree' && !!branch && thread.provider !== 'external';
+            const isRunning = thread.status === 'running';
+            const titleMatches = search
+              ? caseSensitive
+                ? thread.title.includes(search)
+                : normalize(thread.title).includes(normalize(search))
+              : false;
+            const contentSnippet =
+              search && !titleMatches ? contentSnippets.get(thread.id) : undefined;
 
-              return (
-                <div
-                  key={v.key}
-                  data-index={v.index}
-                  data-testid={`all-threads-thread-item-${thread.id}`}
-                  ref={virtualizer.measureElement}
-                  onMouseMove={() => setHighlightedThreadId(thread.id)}
-                  className="absolute top-0 left-0 w-full px-0.5 pb-1"
-                  style={{ transform: `translateY(${v.start}px)` }}
-                >
-                  <ThreadItem
-                    thread={thread}
-                    projectPath={projectInfo?.path ?? ''}
-                    isSelected={activeThreadId === thread.id || highlightedThreadId === thread.id}
-                    subtitle={
-                      isScratch(thread)
-                        ? undefined
-                        : (projectInfo?.name ??
-                          t('allThreads.unknownProject', {
-                            defaultValue: 'Unknown project',
-                          }))
-                    }
-                    projectColor={projectInfo?.color}
-                    timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t, now)}
-                    search={search || undefined}
-                    contentSnippet={contentSnippet}
-                    metadataBadge={
-                      thread.archived ? (
-                        <span className="bg-muted text-status-warning/80 inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[10px] leading-tight font-medium">
-                          <Archive className="icon-2xs" />
-                          {t('allThreads.archived')}
-                        </span>
-                      ) : undefined
-                    }
-                    gitStatus={gitStatus}
-                    href={buildThreadPath(thread)}
-                    onSelect={() => void handleThreadSelect(thread)}
-                    onRename={(newTitle) =>
-                      handleRenameThread(thread.projectId, thread.id, newTitle)
-                    }
-                    onPin={() => handlePinThread(thread.projectId, thread.id, !thread.pinned)}
-                    onArchive={
-                      isRunning || thread.archived
-                        ? undefined
-                        : () =>
-                            handleArchiveThreadFromList(
-                              thread.id,
-                              thread.projectId,
-                              thread.title,
-                              isWorktree,
-                            )
-                    }
-                    onDelete={() =>
-                      handleDeleteThreadFromList(
-                        thread.id,
-                        thread.projectId,
-                        thread.title,
-                        isWorktree,
-                      )
-                    }
-                  />
-                </div>
-              );
-            })}
-          </div>
-          {loadingMore && (
-            <LoadingState
-              fill={false}
-              layout="inline"
-              size="compact"
-              className="py-3"
-              testId="all-threads-thread-list-loading-more"
-              label={t('common.loading')}
-            />
-          )}
+            return (
+              <div
+                key={v.key}
+                data-index={v.index}
+                data-testid={`all-threads-thread-item-${thread.id}`}
+                ref={virtualizer.measureElement}
+                onMouseMove={() => setHighlightedThreadId(thread.id)}
+                className="absolute top-0 left-0 w-full px-0.5 pb-1"
+                style={{ transform: `translateY(${v.start}px)` }}
+              >
+                <ThreadItem
+                  thread={thread}
+                  projectPath={projectInfo?.path ?? ''}
+                  isSelected={activeThreadId === thread.id || highlightedThreadId === thread.id}
+                  subtitle={
+                    isScratch(thread)
+                      ? undefined
+                      : (projectInfo?.name ??
+                        t('allThreads.unknownProject', {
+                          defaultValue: 'Unknown project',
+                        }))
+                  }
+                  projectColor={projectInfo?.color}
+                  timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t, now)}
+                  search={search || undefined}
+                  contentSnippet={contentSnippet}
+                  metadataBadge={
+                    thread.archived ? (
+                      <span className="bg-muted text-status-warning/80 inline-flex shrink-0 items-center gap-0.5 rounded px-1 py-px text-[10px] leading-tight font-medium">
+                        <Archive className="icon-2xs" />
+                        {t('allThreads.archived')}
+                      </span>
+                    ) : undefined
+                  }
+                  gitStatus={gitStatus}
+                  href={buildThreadPath(thread)}
+                  onSelect={() => void handleThreadSelect(thread)}
+                  onRename={(newTitle) => handleRenameThread(thread.projectId, thread.id, newTitle)}
+                  onPin={() => handlePinThread(thread.projectId, thread.id, !thread.pinned)}
+                  onArchive={
+                    isRunning || thread.archived
+                      ? undefined
+                      : () =>
+                          handleArchiveThreadFromList(
+                            thread.id,
+                            thread.projectId,
+                            thread.title,
+                            isWorktree,
+                          )
+                  }
+                  onDelete={() =>
+                    handleDeleteThreadFromList(
+                      thread.id,
+                      thread.projectId,
+                      thread.title,
+                      isWorktree,
+                    )
+                  }
+                />
+              </div>
+            );
+          })}
         </div>
-      </div>
+        {loadingMore && (
+          <LoadingState
+            fill={false}
+            layout="inline"
+            className="py-3"
+            testId="all-threads-thread-list-loading-more"
+            label={t('common.loading')}
+          />
+        )}
+      </ThreadListViewport>
 
       <AllThreadsActionDialogs actions={actions} />
     </>

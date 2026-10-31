@@ -100,10 +100,6 @@ vi.mock('@/components/thread/AgentStatusCards', () => ({
   AgentStoppedCard: () => null,
 }));
 
-vi.mock('@/components/thread/InitInfoCard', () => ({
-  InitInfoCard: () => null,
-}));
-
 vi.mock('@/components/thread/WaitingCards', () => ({
   WaitingActions: () => null,
   PermissionApprovalCard: () => null,
@@ -213,6 +209,25 @@ describe('MessageStream sticky bottom', () => {
     expect(viewport.style.overscrollBehaviorY).toBe('contain');
   });
 
+  test('top-aligns the conversation and pushes only the prompt dock to the bottom', () => {
+    const { container } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('done')}
+        onSend={() => {}}
+      />,
+    );
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+    const children = Array.from((container.firstElementChild as HTMLDivElement).children);
+
+    expect(children[0]).not.toHaveClass('grow');
+    expect(children.at(-2)).toHaveClass('grow');
+    expect(children.at(-1)).toHaveClass('sticky');
+  });
+
   test('remeasures and restores a bottom-pinned virtual stream after its viewport resizes', () => {
     const observers: Array<{
       targets: Set<Element>;
@@ -267,6 +282,8 @@ describe('MessageStream sticky bottom', () => {
 
     act(() => {
       viewportObserver?.trigger();
+      // Measure frame, then the nested restore frame it schedules.
+      vi.runOnlyPendingTimers();
       vi.runOnlyPendingTimers();
     });
 
@@ -1365,5 +1382,18 @@ describe('MessageStream viewer selection', () => {
       />,
     );
     expect(getByTestId('frozen-message-list-mock')).toBeTruthy();
+  });
+
+  test('starts directly with the messages, without init or beginning-of-conversation chrome', () => {
+    render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('done')}
+        pagination={{ hasMore: false, loadingMore: false, load: async () => {} }}
+        onSend={() => {}}
+      />,
+    );
+    expect(screen.queryByText(/Beginning of conversation/)).not.toBeInTheDocument();
   });
 });

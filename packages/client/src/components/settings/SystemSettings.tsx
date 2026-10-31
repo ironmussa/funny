@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
@@ -73,7 +74,7 @@ export function SystemSettings() {
   if (loading && !nativeGit) {
     return (
       <div className="p-1">
-        <p className="text-muted-foreground text-sm">Loading…</p>
+        <LoadingState label="Loading…" />
       </div>
     );
   }

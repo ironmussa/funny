@@ -376,6 +376,40 @@ describe('external Claude sessions', () => {
     );
   });
 
+  test('identifies meta user entries as automatic Claude context', () => {
+    const homeDir = makeHome();
+    const sessionId = 'session-meta';
+    const projectDir = join(homeDir, '.claude/projects', '-work-funny');
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(
+      join(projectDir, `${sessionId}.jsonl`),
+      [
+        {
+          type: 'user',
+          sessionId,
+          cwd: '/work/funny',
+          isMeta: true,
+          message: { role: 'user', content: 'Internal instructions' },
+        },
+        {
+          type: 'user',
+          sessionId,
+          isMeta: false,
+          message: { role: 'user', content: 'My request' },
+        },
+      ]
+        .map((entry) => JSON.stringify(entry))
+        .join('\n'),
+    );
+    const transcript = readExternalClaudeTranscript(sessionId, { homeDir });
+    expect(transcript?.messages[0]).toMatchObject({
+      role: 'user',
+      content: 'Internal instructions',
+      author: 'Claude Code',
+    });
+    expect(transcript?.messages[1]?.author).toBeUndefined();
+  });
+
   test('reads a Claude JSONL transcript without importing it as a thread', () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';

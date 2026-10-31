@@ -1,6 +1,11 @@
 import type { FileDiffSummary } from '@funny/shared';
 
-import { buildRenderItemIdIndexMap, getItemKey, type RenderItem } from '@/lib/render-items';
+import {
+  buildRenderItemIdIndexMap,
+  getItemKey,
+  getItemTimestamp,
+  type RenderItem,
+} from '@/lib/render-items';
 import { buildToolCallDiffFallbacks } from '@/lib/tool-call-diff-fallbacks';
 
 export type MessageItem = Extract<RenderItem, { type: 'message' }>;
@@ -11,6 +16,8 @@ export type VirtualRow =
       key: string;
       item: RenderItem;
       itemIndex: number;
+      /** User message id of the turn this row belongs to (hover-reveal of its bar). */
+      sectionId?: string;
     }
   | {
       type: 'session-summary';
@@ -19,6 +26,16 @@ export type VirtualRow =
       files: FileDiffSummary[];
       fallbackDiffs: Map<string, string>;
       isLastSection: boolean;
+    }
+  | {
+      /** End-of-turn bar for a finished section, rendered above the next prompt. */
+      type: 'turn-end';
+      key: string;
+      userItem: MessageItem;
+      startedAt?: string;
+      completedAt?: string;
+      /** Prompt + text replies of the turn (tool cards are not copied). */
+      messages: any[];
     };
 
 export function getLeadingUserItem(
@@ -52,9 +69,35 @@ export function buildVirtualRows(
     });
   };
 
+  // The thread's final turn is summarized by the status tail instead.
+  const appendTurnEnd = () => {
+    if (!currentUser) return;
+    const completedAt = currentSessionItems
+      .map(getItemTimestamp)
+      .filter(Boolean)
+      .reduce<string | undefined>(
+        (latest, ts) => (!latest || ts > latest ? ts : latest),
+        undefined,
+      );
+    rows.push({
+      type: 'turn-end',
+      key: `turn-end-${currentUser.msg.id}`,
+      userItem: currentUser,
+      startedAt: currentUser.msg.timestamp,
+      completedAt,
+      messages: [
+        currentUser.msg,
+        ...currentSessionItems.flatMap((sectionItem) =>
+          sectionItem.type === 'message' ? [sectionItem.msg] : [],
+        ),
+      ],
+    });
+  };
+
   groupedItems.forEach((item, itemIndex) => {
     if (item.type === 'message' && item.msg.role === 'user') {
       appendSessionSummary();
+      appendTurnEnd();
       currentUser = item as MessageItem;
       currentSessionItems = [];
     } else if (currentUser) {
@@ -65,6 +108,7 @@ export function buildVirtualRows(
       key: getItemKey(item),
       item,
       itemIndex,
+      sectionId: (currentUser as MessageItem | null)?.msg.id,
     });
   });
   appendSessionSummary();
@@ -78,6 +122,10 @@ export function buildVirtualRows(
   }
 
   return rows;
+}
+
+export function getRowSectionId(row: VirtualRow): string | undefined {
+  return row.type === 'item' ? row.sectionId : row.userItem.msg.id;
 }
 
 export function getVirtualRowsSignature(virtualRows: VirtualRow[]) {

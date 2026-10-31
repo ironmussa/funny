@@ -167,6 +167,7 @@ export function ThreadConversation({
         compactionEvents={stableCompactionEvents}
         initInfo={activeThread.initInfo}
         resultInfo={activeThread.resultInfo}
+        completedAt={activeThread.completedAt}
         waitingReason={activeThread.waitingReason}
         pendingPermission={activeThread.pendingPermission}
         pendingPermissionRequest={activeThread.pendingPermissionRequest}
@@ -214,7 +215,6 @@ export function ThreadConversation({
               }
             : undefined
         }
-        createdAt={activeThread.createdAt}
         snapshotMap={snapshotMap}
         knownIds={knownIds}
         onOpenLightbox={openLightbox}

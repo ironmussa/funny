@@ -134,7 +134,6 @@ export function ArchivedThreadsSettings() {
           <LoadingState
             fill={false}
             layout="inline"
-            size="compact"
             className="h-32 shrink-0"
             testId="archived-loading"
             label={t('common.loading')}

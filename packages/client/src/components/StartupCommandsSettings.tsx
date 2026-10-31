@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import { CommandHighlight } from '@/components/CommandHighlight';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { sendTerminalRealtime } from '@/hooks/use-ws';
@@ -142,11 +143,7 @@ export function StartupCommandsSettings() {
   };
 
   if (!selectedProjectId) {
-    return (
-      <div className="text-muted-foreground py-6 text-center text-sm">
-        {t('startup.noCommands')}
-      </div>
-    );
+    return <EmptyState fill={false} className="py-6" title={t('startup.noCommands')} />;
   }
 
   return (
@@ -171,13 +168,17 @@ export function StartupCommandsSettings() {
 
       {/* Command list */}
       {commands.length === 0 && !adding && (
-        <div className="py-8 text-center">
-          <p className="text-muted-foreground mb-3 text-sm">{t('startup.noCommands')}</p>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
-            <Plus className="icon-sm" />
-            {t('startup.addFirst')}
-          </Button>
-        </div>
+        <EmptyState
+          fill={false}
+          className="py-8"
+          title={t('startup.noCommands')}
+          action={
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
+              <Plus className="icon-sm" />
+              {t('startup.addFirst')}
+            </Button>
+          }
+        />
       )}
 
       {commands.map((cmd) => {

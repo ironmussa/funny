@@ -15,6 +15,7 @@ export type ThreadEventType =
   | 'git:reset_soft'
   | 'compact_boundary'
   | 'changed_files_summary'
+  | 'turn_outcome'
   | 'workflow:started'
   | 'workflow:completed'
   | 'workflow:hooks'
@@ -39,4 +40,11 @@ export interface ThreadEvent {
   type: ThreadEventType;
   data: string;
   createdAt: string;
+}
+
+/** Persisted payload of a `turn_outcome` thread event: how one user turn's run ended. */
+export interface TurnOutcomeEventData {
+  userMessageId: string;
+  status: 'completed' | 'failed' | 'stopped';
+  completedAt: string;
 }

@@ -52,6 +52,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
@@ -726,7 +727,6 @@ function TerminalPhaseOverlay({
         <LoadingState
           fill={false}
           layout="inline"
-          size="compact"
           testId="terminal-awaiting-runner-spinner"
           label={t('terminal.awaitingRunner', 'Waiting for runner to come online…')}
         />
@@ -745,7 +745,6 @@ function TerminalPhaseOverlay({
         <LoadingState
           fill={false}
           layout="inline"
-          size="compact"
           testId="terminal-loading-spinner"
           label={t('terminal.loading')}
         />
@@ -1599,9 +1598,7 @@ export function TerminalPanel() {
             <TerminalSearchOverlay activeTabId={effectiveActiveTabId} onClose={closeSearch} />
           )}
           {visibleTabs.length === 0 ? (
-            <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
-              {t('terminal.noProcesses')}
-            </div>
+            <EmptyState title={t('terminal.noProcesses')} />
           ) : (
             visibleTabs.map((tab) =>
               tab.type === 'pty' ? (

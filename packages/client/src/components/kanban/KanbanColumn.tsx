@@ -1,13 +1,11 @@
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element';
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { GitStatusInfo, Project, Thread, ThreadStage } from '@funny/shared';
-import { memo, useEffect, useRef, useState } from 'react';
+import { type ComponentProps, type ComponentType, memo, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { stageConfig } from '@/lib/thread-utils';
-import { cn } from '@/lib/utils';
+import { KanbanColumnSurface } from '@/components/kanban/KanbanColumnHeader';
 
-import { AddThreadButton } from './AddThreadButton';
 import { KanbanCard } from './KanbanCard';
 
 interface Props {
@@ -20,6 +18,8 @@ interface Props {
   projects: Project[];
   onAddThread: (projectId: string, stage: ThreadStage) => void;
   search?: string;
+  caseSensitive?: boolean;
+  cardComponent?: ComponentType<ComponentProps<typeof KanbanCard> & { caseSensitive?: boolean }>;
   contentSnippets?: Map<string, string>;
   highlightThreadId?: string;
   statusByThread: Record<string, GitStatusInfo>;
@@ -35,6 +35,8 @@ export const KanbanColumn = memo(function KanbanColumn({
   projects,
   onAddThread,
   search,
+  caseSensitive,
+  cardComponent: Card = KanbanCard,
   contentSnippets,
   highlightThreadId,
   statusByThread,
@@ -77,65 +79,49 @@ export const KanbanColumn = memo(function KanbanColumn({
   const hasMore = threads.length > visibleCount;
 
   return (
-    <div
-      ref={ref}
-      className={cn(
-        'flex flex-col w-92 min-w-92 shrink-0 rounded-lg bg-secondary/30 transition-colors',
-        isDraggedOver && 'ring-2 ring-ring bg-secondary/50',
-      )}
+    <KanbanColumnSurface
+      columnRef={ref}
+      scrollRef={scrollRef}
+      isDraggedOver={isDraggedOver}
+      stage={stage}
+      count={threads.length}
+      projectId={projectId}
+      projects={projects}
+      onAddThread={onAddThread}
     >
-      <div className="border-border/50 flex items-center gap-2 border-b px-3 py-2.5">
-        <span className="text-sm font-medium">{t(stageConfig[stage].labelKey)}</span>
-        <span className="text-muted-foreground text-xs">({threads.length})</span>
-        {projects.length > 0 && stage !== 'review' && stage !== 'done' && stage !== 'archived' && (
-          <AddThreadButton
+      <>
+        {visibleThreads.map((thread) => (
+          <Card
+            key={thread.id}
+            thread={thread}
+            projectInfo={projectInfoById?.[thread.projectId]}
+            onDelete={onDelete}
+            onArchive={stage !== 'archived' ? onArchive : undefined}
+            search={search}
+            caseSensitive={caseSensitive}
+            ghost={stage === 'archived'}
+            contentSnippet={contentSnippets?.get(thread.id)}
             projectId={projectId}
-            projects={projects}
-            onSelect={(pid) => onAddThread(pid, stage)}
+            highlighted={thread.id === highlightThreadId}
+            stage={stage}
+            gitStatus={statusByThread[thread.id]}
           />
+        ))}
+        {hasMore && (
+          <button
+            data-testid={`kanban-load-more-${stage}`}
+            onClick={() =>
+              setPagination((prev) => ({
+                key: paginationKey,
+                visibleCount: (prev.key === paginationKey ? prev.visibleCount : 20) + 20,
+              }))
+            }
+            className="text-muted-foreground hover:bg-accent hover:text-foreground w-full rounded-md py-2 text-xs transition-colors"
+          >
+            {t('kanban.loadMore', { count: Math.min(20, threads.length - visibleCount) })}
+          </button>
         )}
-      </div>
-
-      <div ref={scrollRef} className="min-h-[200px] flex-1 space-y-2 overflow-y-auto p-2">
-        {threads.length === 0 ? (
-          <div className="text-muted-foreground py-8 text-center text-xs">
-            {t('kanban.emptyColumn')}
-          </div>
-        ) : (
-          <>
-            {visibleThreads.map((thread) => (
-              <KanbanCard
-                key={thread.id}
-                thread={thread}
-                projectInfo={projectInfoById?.[thread.projectId]}
-                onDelete={onDelete}
-                onArchive={stage !== 'archived' ? onArchive : undefined}
-                search={search}
-                ghost={stage === 'archived'}
-                contentSnippet={contentSnippets?.get(thread.id)}
-                projectId={projectId}
-                highlighted={thread.id === highlightThreadId}
-                stage={stage}
-                gitStatus={statusByThread[thread.id]}
-              />
-            ))}
-            {hasMore && (
-              <button
-                data-testid={`kanban-load-more-${stage}`}
-                onClick={() =>
-                  setPagination((prev) => ({
-                    key: paginationKey,
-                    visibleCount: (prev.key === paginationKey ? prev.visibleCount : 20) + 20,
-                  }))
-                }
-                className="text-muted-foreground hover:bg-accent hover:text-foreground w-full rounded-md py-2 text-xs transition-colors"
-              >
-                {t('kanban.loadMore', { count: Math.min(20, threads.length - visibleCount) })}
-              </button>
-            )}
-          </>
-        )}
-      </div>
-    </div>
+      </>
+    </KanbanColumnSurface>
   );
 });

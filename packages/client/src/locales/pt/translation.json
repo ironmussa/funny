@@ -155,6 +155,8 @@
     "openDesign": "Abrir design"
   },
   "thread": {
+    "claudeContext": "Claude Code · Contexto automático",
+    "claudeContextDescription": "Instruções fornecidas ao Claude Code; não é uma mensagem escrita por você.",
     "status": {
       "pending": "Pendente",
       "running": "Executando",
@@ -230,8 +232,13 @@
     "providerErrorWaiting": "O provedor retornou um erro. A execução está pausada — tente novamente ou envie uma mensagem para continuar.",
     "planWaitingForResponse": "Aceite ou rejeite o plano",
     "rejectPlan": "Rejeitar plano",
+    "copyLatestTurn": "Copiar a última mensagem e a resposta",
+    "latestTurnCopied": "Última resposta copiada",
     "taskCompleted": "Tarefa concluída",
     "taskFailed": "Tarefa falhou",
+    "taskCompletedAt": "Tarefa concluída às <time/>",
+    "taskFailedAt": "Tarefa falhou às <time/>",
+    "taskStoppedAt": "Tarefa parada às <time/>",
     "taskInterrupted": "Tarefa interrompida",
     "taskStopped": "Tarefa parada",
     "manuallyStopped": "Você parou esta tarefa. Envie uma mensagem para continuar.",
@@ -968,6 +975,7 @@
     "retry": "Tentar novamente",
     "back": "Voltar",
     "copy": "Copiar",
+    "copyFailed": "Não foi possível copiar para a área de transferência",
     "copied": "Copiado",
     "previousPage": "Página anterior",
     "nextPage": "Próxima página",

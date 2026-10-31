@@ -12,9 +12,10 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import '@/lib/monaco-setup';
 import { CommandHighlight } from '@/components/CommandHighlight';
+import '@/lib/monaco-setup';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -409,9 +410,7 @@ export function ProjectHooksSettings() {
   }, [hooks]);
 
   if (!selectedProjectId) {
-    return (
-      <div className="text-muted-foreground py-6 text-center text-sm">{t('hooks.noHooks')}</div>
-    );
+    return <EmptyState fill={false} className="py-6" title={t('hooks.noHooks')} />;
   }
 
   return (
@@ -435,13 +434,17 @@ export function ProjectHooksSettings() {
 
       {/* Empty state */}
       {hooks.length === 0 && !adding && (
-        <div className="py-8 text-center">
-          <p className="text-muted-foreground mb-3 text-sm">{t('hooks.noHooks')}</p>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
-            <Plus className="icon-sm" />
-            {t('hooks.addFirst')}
-          </Button>
-        </div>
+        <EmptyState
+          fill={false}
+          className="py-8"
+          title={t('hooks.noHooks')}
+          action={
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
+              <Plus className="icon-sm" />
+              {t('hooks.addFirst')}
+            </Button>
+          }
+        />
       )}
 
       {/* Hook list grouped by type */}

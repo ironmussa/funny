@@ -19,6 +19,8 @@ import { FileTree } from '@/components/FileTree';
 import { formatInput } from '@/components/tool-cards/utils';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState as SharedEmptyState } from '@/components/ui/empty-state';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useThreadChangedFiles } from '@/hooks/use-thread-changed-files';
@@ -236,9 +238,7 @@ function AgentCard({
 }
 
 function EmptyState({ message }: { message: string }) {
-  return (
-    <div className="text-muted-foreground/50 px-4 py-3 text-center text-xs italic">{message}</div>
-  );
+  return <SharedEmptyState fill={false} className="px-4 py-3" title={message} />;
 }
 
 // ─── Main Component ───────────────────────────────────────
@@ -352,12 +352,10 @@ export function ActivityPane() {
 
   if (!threadId) {
     return (
-      <div
-        data-testid="activity-pane"
-        className="text-muted-foreground flex h-full items-center justify-center text-sm"
-      >
-        {t('activity.noThread', 'Select a thread to see activity')}
-      </div>
+      <SharedEmptyState
+        testId="activity-pane"
+        title={t('activity.noThread', 'Select a thread to see activity')}
+      />
     );
   }
 
@@ -443,14 +441,14 @@ export function ActivityPane() {
                 fontSize="text-xs"
                 testIdPrefix="activity-file"
               />
-            ) : (
-              <EmptyState
-                message={
-                  filesLoading
-                    ? t('activity.loadingFiles', 'Loading...')
-                    : t('activity.noFiles', 'No modified files')
-                }
+            ) : filesLoading ? (
+              <LoadingState
+                fill={false}
+                className="px-4 py-3"
+                label={t('activity.loadingFiles', 'Loading...')}
               />
+            ) : (
+              <EmptyState message={t('activity.noFiles', 'No modified files')} />
             )}
           </ActivitySection>
         </div>

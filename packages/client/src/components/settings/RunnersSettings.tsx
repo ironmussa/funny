@@ -1,10 +1,3 @@
-/**
- * RunnersSettings — lets users connect and manage their own remote runners.
- *
- * Users copy a generated install command, run it on any machine, and the runner
- * connects to the server under their account. No admin involvement needed.
- */
-
 import type {
   EnrollmentInfo,
   RunnerInfo,
@@ -19,6 +12,12 @@ import {
   Server,
   Trash2,
 } from 'lucide-react';
+/**
+ * RunnersSettings — lets users connect and manage their own remote runners.
+ *
+ * Users copy a generated install command, run it on any machine, and the runner
+ * connects to the server under their account. No admin involvement needed.
+ */
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -28,7 +27,9 @@ import { ConnectRunnerCard } from '@/components/ConnectRunnerCard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import {
   Select,
   SelectContent,
@@ -474,15 +475,15 @@ export function RunnersSettings() {
         </div>
 
         {loadingRunners && runners.length === 0 ? (
-          <p className="text-muted-foreground text-xs">Loading…</p>
+          <LoadingState fill={false} label="Loading…" />
         ) : runners.length === 0 ? (
-          <div className="border-border/50 rounded-lg border border-dashed px-4 py-6 text-center">
-            <Server className="text-muted-foreground/50 mx-auto mb-2 size-8" />
-            <p className="text-muted-foreground text-sm">No runners connected yet.</p>
-            <p className="text-muted-foreground mt-1 text-xs">
-              Copy the install command above and run it on any machine.
-            </p>
-          </div>
+          <EmptyState
+            fill={false}
+            className="border-border/50 rounded-lg border border-dashed px-4 py-6"
+            icon={Server}
+            title="No runners connected yet."
+            description="Copy the install command above and run it on any machine."
+          />
         ) : (
           <div className="space-y-2">
             {runners.map((r) => (

@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
@@ -85,9 +87,11 @@ export function CommentsPane() {
     return (
       <div className="bg-sidebar flex h-full w-full flex-col" data-testid="comments-pane">
         {header}
-        <div className="text-muted-foreground flex flex-1 items-center justify-center text-sm">
-          {t('comments.noThread', 'No thread selected')}
-        </div>
+        <EmptyState
+          fill={false}
+          className="flex-1"
+          title={t('comments.noThread', 'No thread selected')}
+        />
       </div>
     );
   }
@@ -99,13 +103,15 @@ export function CommentsPane() {
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-3 p-3" data-testid="comments-list">
           {loading && count === 0 ? (
-            <p className="text-muted-foreground text-sm">{t('comments.loading', 'Loading…')}</p>
+            <LoadingState fill={false} label={t('comments.loading', 'Loading…')} />
           ) : count === 0 ? (
-            <div className="text-muted-foreground flex flex-col items-center gap-1 py-10 text-center text-sm">
-              <MessageSquare className="h-6 w-6 opacity-50" />
-              <p>{t('comments.empty', 'No comments yet')}</p>
-              <p className="text-xs">{t('comments.emptyHint', 'Leave the first note below.')}</p>
-            </div>
+            <EmptyState
+              fill={false}
+              className="py-10"
+              icon={MessageSquare}
+              title={t('comments.empty', 'No comments yet')}
+              description={t('comments.emptyHint', 'Leave the first note below.')}
+            />
           ) : (
             comments!.map((c) => {
               const name = c.user?.name ?? c.user?.username ?? c.userId;

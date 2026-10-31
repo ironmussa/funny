@@ -319,9 +319,7 @@ function UnknownPreview({ src, name }: { src: string; name?: string }) {
 }
 
 function PreviewSpinner() {
-  return (
-    <LoadingState fill={false} size="compact" className="p-6" testId="media-preview-loading" />
-  );
+  return <LoadingState fill={false} className="p-6" testId="media-preview-loading" />;
 }
 
 function PreviewError() {

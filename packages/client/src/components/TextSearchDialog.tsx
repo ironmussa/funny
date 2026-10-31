@@ -7,8 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
-import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
+import { SearchEmptyRow as EmptyRow, SearchLoadingRow } from '@/components/ui/search-placeholder';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { FileExtensionIcon } from '@/lib/file-icons';
@@ -443,19 +443,6 @@ function MatchLine({
   );
 }
 
-function EmptyRow({ text }: { text: string }) {
-  return <div className="text-muted-foreground px-3 py-6 text-center text-sm">{text}</div>;
-}
-
 function LoadingRow({ text }: { text: string }) {
-  return (
-    <LoadingState
-      fill={false}
-      layout="inline"
-      size="compact"
-      className="px-3 py-6"
-      testId="text-search-loading"
-      label={text}
-    />
-  );
+  return <SearchLoadingRow text={text} testId="text-search-loading" />;
 }

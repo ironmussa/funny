@@ -8,6 +8,7 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import {
   Select,
   SelectContent,
@@ -234,11 +235,7 @@ export function TeamMembers() {
   const ownerCount = members.filter((m) => m.role === 'owner').length;
 
   if (loading) {
-    return (
-      <div className="text-muted-foreground flex items-center justify-center py-12 text-sm">
-        Loading members…
-      </div>
-    );
+    return <LoadingState fill={false} className="py-12" label="Loading members…" />;
   }
 
   return (

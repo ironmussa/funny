@@ -6,7 +6,9 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import {
   Select,
   SelectContent,
@@ -187,11 +189,7 @@ export function AgentExecutionProfilesSettings() {
   );
 
   if (loading) {
-    return (
-      <div className="text-muted-foreground py-6 text-center text-sm">
-        {t('common.loading', 'Loading…')}
-      </div>
-    );
+    return <LoadingState fill={false} className="py-6" label={t('common.loading', 'Loading…')} />;
   }
 
   return (
@@ -212,10 +210,12 @@ export function AgentExecutionProfilesSettings() {
         />
 
         {profiles.length === 0 ? (
-          <div className="text-muted-foreground rounded-md border border-dashed p-6 text-center text-sm">
-            <Bot className="mx-auto mb-2 size-8 opacity-50" />
-            {t('agentProfiles.empty', 'No profiles yet.')}
-          </div>
+          <EmptyState
+            fill={false}
+            className="rounded-md border border-dashed p-6"
+            icon={Bot}
+            title={t('agentProfiles.empty', 'No profiles yet.')}
+          />
         ) : (
           <div className="space-y-2">
             {profiles.map((profile) => (
@@ -307,11 +307,7 @@ export function ProjectAgentExecutionProfileSettings() {
   );
 
   if (loading) {
-    return (
-      <div className="text-muted-foreground py-6 text-center text-sm">
-        {t('common.loading', 'Loading…')}
-      </div>
-    );
+    return <LoadingState fill={false} className="py-6" label={t('common.loading', 'Loading…')} />;
   }
 
   return (
@@ -550,7 +546,11 @@ function ClaudeAuthCommand({ configDir, className }: { configDir: string; classN
           aria-label={t('agentProfiles.copyAuthCommand', 'Copy subscription login command')}
           data-testid="agent-profile-copy-auth-command"
         >
-          {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
+          {copied ? (
+            <Check className="icon-sm copy-feedback-icon text-green-600" />
+          ) : (
+            <Copy className="icon-sm copy-feedback-icon" />
+          )}
         </Button>
       </div>
     </div>

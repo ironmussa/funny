@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { BrowserPreview } from '@/components/test-runner/BrowserPreview';
 import { TestFileBrowser } from '@/components/test-runner/TestFileBrowser';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjectStore } from '@/stores/project-store';
@@ -123,11 +124,7 @@ export function TestRunnerPane() {
   });
 
   if (!selectedProjectId) {
-    return (
-      <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-        Select a project to run tests
-      </div>
-    );
+    return <EmptyState title="Select a project to run tests" />;
   }
 
   return (

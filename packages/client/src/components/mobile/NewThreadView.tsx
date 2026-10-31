@@ -1,9 +1,11 @@
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
+import { Sparkles } from 'lucide-react';
 import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { PromptInput } from '@/components/PromptInput';
 import { NewThreadContextBar } from '@/components/thread/NewThreadContextBar';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -44,13 +46,11 @@ export function NewThreadView({ projectId, onBack, onCreated }: Props) {
         </button>
         <h1 className="text-base font-semibold">{t('thread.newThread', 'New Thread')}</h1>
       </header>
-      <div className="text-muted-foreground flex flex-1 items-center justify-center p-4">
-        <div className="text-center">
-          <p className="mb-4 text-4xl">✨</p>
-          <p className="text-foreground text-2xl font-semibold">{t('thread.whatShouldAgentDo')}</p>
-          <p className="mt-2 text-sm">{t('thread.describeTask')}</p>
-        </div>
-      </div>
+      <EmptyState
+        icon={Sparkles}
+        title={t('thread.whatShouldAgentDo')}
+        description={t('thread.describeTask')}
+      />
       <div className="px-3 pb-3">
         <PromptInput
           onSubmit={createThread}

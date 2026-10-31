@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -121,9 +122,11 @@ export function SchedulerView() {
         {loading && runs.length === 0 ? (
           <LoadingState testId="scheduler-loading" label="Loading…" />
         ) : runs.length === 0 ? (
-          <div className="text-muted-foreground px-4 py-12 text-center text-xs">
-            No runs in flight. The scheduler picks up queued threads on the next tick.
-          </div>
+          <EmptyState
+            fill={false}
+            className="px-4 py-12"
+            title="No runs in flight. The scheduler picks up queued threads on the next tick."
+          />
         ) : (
           <ul className="divide-border divide-y">
             {runs.map((run) => {

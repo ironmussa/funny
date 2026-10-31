@@ -501,7 +501,6 @@ export function MermaidExpandedDialog({
 
   const handleCopyCode = useCallback(() => {
     copyCode(chart);
-    toast.success('Diagram code copied to clipboard');
   }, [chart, copyCode]);
 
   return (
@@ -528,7 +527,11 @@ export function MermaidExpandedDialog({
                   className="text-muted-foreground"
                   data-testid="mermaid-copy-code"
                 >
-                  {copiedCode ? <Check className="icon-base" /> : <Code className="icon-base" />}
+                  {copiedCode ? (
+                    <Check className="icon-base copy-feedback-icon text-green-600" />
+                  ) : (
+                    <Code className="icon-base copy-feedback-icon" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{copiedCode ? 'Copied!' : 'Copy code'}</TooltipContent>
@@ -542,7 +545,11 @@ export function MermaidExpandedDialog({
                   className="text-muted-foreground"
                   data-testid="mermaid-copy-image"
                 >
-                  {copiedImage ? <Check className="icon-base" /> : <Image className="icon-base" />}
+                  {copiedImage ? (
+                    <Check className="icon-base copy-feedback-icon text-green-600" />
+                  ) : (
+                    <Image className="icon-base copy-feedback-icon" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{copiedImage ? 'Copied!' : 'Copy as image'}</TooltipContent>

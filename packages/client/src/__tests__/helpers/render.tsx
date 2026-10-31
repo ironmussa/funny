@@ -1,13 +1,13 @@
 import { render, type RenderOptions, type RenderResult } from '@testing-library/react';
 import type { ReactElement } from 'react';
-import { MemoryRouter } from 'react-router-dom';
+import { MemoryRouter, type InitialEntry } from 'react-router-dom';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
 interface ProviderOptions {
-  route?: string;
+  route?: InitialEntry;
   /** When provided, wraps with a ThreadProvider so context-aware hooks work in tests. */
   threadId?: string | null;
 }

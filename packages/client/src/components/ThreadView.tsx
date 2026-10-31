@@ -1,8 +1,10 @@
-import { Plus } from 'lucide-react';
+import { FolderOpen, Rocket, Plus } from 'lucide-react';
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
@@ -15,7 +17,10 @@ import { useUIStore } from '@/stores/ui-store';
 import { NewThreadInput } from './thread/NewThreadInput';
 import { ThreadChatView } from './thread/ThreadChatView';
 import { ThreadIdleStarter } from './thread/ThreadIdleStarter';
-import { WorktreeSetupProgress } from './WorktreeSetupProgress';
+import {
+  ThreadPreparationView,
+  type PreparationMessageMetadata,
+} from './thread/ThreadPreparationView';
 
 export interface ThreadViewProps {
   /** Called once the primary route has enough data to paint its real view. */
@@ -35,6 +40,13 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   const newThreadIsScratch = useUIStore((s) => s.newThreadIsScratch);
   const hasProjects = useProjectStore((s) => s.projects.length > 0);
   const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
+  // Prompt handed over by NewThreadInput so the conversation layout stays put
+  // while the freshly created thread loads.
+  const { pendingPrompt, pendingMetadata } =
+    (useLocation().state as {
+      pendingPrompt?: string;
+      pendingMetadata?: PreparationMessageMetadata;
+    } | null) ?? {};
 
   useEffect(() => {
     if (!activeThreadId || activeThread) onReady?.();
@@ -69,27 +81,24 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
     }
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <div className="text-muted-foreground flex flex-1 items-center justify-center px-6">
-          <div className="max-w-3xl text-center">
-            <p className="mb-4 text-4xl">{hasProjects ? '🚀' : '📁'}</p>
-            <p className="text-foreground mb-1 text-2xl font-semibold">
-              {hasProjects ? t('thread.selectOrCreate') : t('thread.addProjectFirst')}
-            </p>
-            <p className="text-sm">
-              {hasProjects ? t('thread.threadsRunParallel') : t('thread.addProjectDescription')}
-            </p>
+        <EmptyState
+          icon={hasProjects ? Rocket : FolderOpen}
+          title={hasProjects ? t('thread.selectOrCreate') : t('thread.addProjectFirst')}
+          description={
+            hasProjects ? t('thread.threadsRunParallel') : t('thread.addProjectDescription')
+          }
+          action={
             <Button
               variant="outline"
               size="sm"
               onClick={() => setAddProjectOpen(true)}
-              className="mt-6"
               data-testid="thread-empty-add-project"
             >
               <Plus className="icon-sm" />
               {t('sidebar.addProject')}
             </Button>
-          </div>
-        </div>
+          }
+        />
       </div>
     );
   }
@@ -97,24 +106,23 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   if (!activeThread) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <LoadingState
-          testId="thread-loading-placeholder"
-          label={t('common.preparing', 'Preparing…')}
-        />
+        {pendingPrompt ? (
+          <ThreadPreparationView
+            prompt={pendingPrompt}
+            metadata={pendingMetadata}
+            projectId={selectedProjectId ?? undefined}
+          />
+        ) : (
+          <LoadingState
+            testId="thread-loading-placeholder"
+            label={t('common.preparing', 'Preparing…')}
+          />
+        )}
       </div>
     );
   }
 
-  const threadBody =
-    activeThread.status === 'setting_up' ? (
-      <div className="flex flex-1 items-center justify-center px-4">
-        <WorktreeSetupProgress steps={activeThread.setupProgress ?? []} />
-      </div>
-    ) : activeThread.status === 'idle' && (activeThread.queuedCount ?? 0) === 0 ? (
-      <ThreadIdleStarter activeThread={activeThread} />
-    ) : (
-      <ThreadChatView activeThread={activeThread} />
-    );
+  const threadBody = <ThreadBody activeThread={activeThread} pendingMetadata={pendingMetadata} />;
 
   if (isThreadSwitching) {
     return (
@@ -131,4 +139,44 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   }
 
   return <div className={cn('flex h-full min-w-0 flex-1 flex-col')}>{threadBody}</div>;
+}
+
+function PreparingThread({
+  activeThread,
+  pendingMetadata,
+}: {
+  activeThread: NonNullable<ReturnType<typeof useThreadCore>>;
+  pendingMetadata?: PreparationMessageMetadata;
+}) {
+  const message: Partial<NonNullable<LoadedThread['lastUserMessage']>> =
+    activeThread.lastUserMessage ?? {};
+  const metadata = pendingMetadata ?? {};
+  return (
+    <ThreadPreparationView
+      prompt={message.content ?? activeThread.initialPrompt}
+      projectId={activeThread.projectId}
+      metadata={{
+        model: message.model ?? activeThread.model,
+        permissionMode: message.permissionMode ?? activeThread.permissionMode,
+        effort: message.effort ?? metadata.effort,
+        timestamp: message.timestamp ?? activeThread.createdAt,
+      }}
+      steps={activeThread.setupProgress ?? []}
+    />
+  );
+}
+
+type LoadedThread = NonNullable<ReturnType<typeof useThreadCore>>;
+function ThreadBody({
+  activeThread,
+  pendingMetadata,
+}: {
+  activeThread: LoadedThread;
+  pendingMetadata?: PreparationMessageMetadata;
+}) {
+  if (activeThread.status === 'setting_up')
+    return <PreparingThread activeThread={activeThread} pendingMetadata={pendingMetadata} />;
+  if (activeThread.status === 'idle' && (activeThread.queuedCount ?? 0) === 0)
+    return <ThreadIdleStarter activeThread={activeThread} />;
+  return <ThreadChatView activeThread={activeThread} />;
 }

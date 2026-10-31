@@ -14,19 +14,15 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useExternalClaudeSessionsLoaded } from '@/hooks/use-external-claude-sessions';
+import { useVisibleGitStatus } from '@/hooks/use-git-status-scope';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { isExternalClaudeShell } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import {
-  useGitStatusStore,
-  branchKey as computeBranchKey,
-  gitStatusForThreadFromState,
-  gitStatusSidebarFingerprint,
-} from '@/stores/git-status-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadItem } from './ThreadItem';
@@ -218,43 +214,7 @@ export const ProjectItem = memo(function ProjectItem({
   // Read the shared global sync flag — the polling itself happens once at the
   // sidebar root (useExternalClaudeSessionsSync), not per project.
   const externalClaudeSessionsLoaded = useExternalClaudeSessionsLoaded();
-  // Pre-compute branchKeys from thread data so we don't depend on threadToBranchKey
-  // (which requires a prior fetch per thread to be populated).
-  const threadBranchKeys = useMemo(
-    () => new Map(threads.map((t) => [t.id, computeBranchKey(t)])),
-    [threads],
-  );
-  // Select only the git statuses for threads visible in *this* project.
-  // The selector returns a fingerprint string so Zustand's Object.is check
-  // skips re-renders when unrelated threads' git statuses change.
-  const gitStatusFingerprint = useGitStatusStore(
-    useCallback(
-      (s: {
-        statusByBranch: Record<string, import('@funny/shared').GitStatusInfo>;
-        threadToBranchKey: Record<string, string>;
-      }) => {
-        let fp = '';
-        for (const [id, fallbackBk] of threadBranchKeys) {
-          const bk = s.threadToBranchKey[id] ?? fallbackBk;
-          const st = s.statusByBranch[bk];
-          if (st) fp += `${gitStatusSidebarFingerprint(id, st)},`;
-        }
-        return fp;
-      },
-      [threadBranchKeys],
-    ),
-  );
-  // Derive the actual status objects only when the fingerprint changes
-  const gitStatusForThreads = useMemo(() => {
-    const state = useGitStatusStore.getState();
-    const result: Record<string, import('@funny/shared').GitStatusInfo> = {};
-    for (const thread of threads) {
-      const status = gitStatusForThreadFromState(state, thread);
-      if (status) result[thread.id] = status;
-    }
-    return result;
-    // eslint-disable-next-line react-hooks/exhaustive-deps, react-doctor/exhaustive-deps
-  }, [threads, threadBranchKeys, gitStatusFingerprint]);
+  const gitStatusForThreads = useSidebarGitStatuses(threads);
 
   // Read selectedThreadId from the store directly, scoped to this project's
   // thread IDs. This avoids passing selectedThreadId as a prop from the parent,
@@ -295,16 +255,7 @@ export const ProjectItem = memo(function ProjectItem({
     void useThreadStore.getState().loadThreadsForProject(project.id);
   }, [isExpanded, isSelected, project.id, threadsLoaded]);
 
-  // Eagerly fetch git status for visible threads that don't have it yet.
-  // Uses ensureStatusForThreads to deduplicate by branchKey across all callers.
-  useEffect(() => {
-    // Collapsed, inactive projects have no thread rows on screen. Fetching
-    // their status here turns startup into one repository scan per project and
-    // can starve the initial thread render. Expansion/selection will rerun the
-    // effect and populate badges before the rows need them.
-    if (!isExpanded && !isSelected) return;
-    useGitStatusStore.getState().ensureStatusForThreads(visibleThreads);
-  }, [isExpanded, isSelected, visibleThreads]);
+  useVisibleGitStatus(visibleThreads, isExpanded || isSelected);
 
   const dragRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);

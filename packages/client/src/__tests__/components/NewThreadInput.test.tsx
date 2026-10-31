@@ -1,4 +1,4 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import type { ReactNode } from 'react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
@@ -16,6 +16,7 @@ const mockNavigate = vi.fn();
 const mockListMcpServers = vi.hoisted(() => vi.fn());
 const mockCreateIdleThread = vi.hoisted(() => vi.fn());
 const mockRunWorkflow = vi.hoisted(() => vi.fn());
+const mockListThreads = vi.hoisted(() => vi.fn());
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -64,7 +65,7 @@ vi.mock('@/lib/api', async () => {
       listMcpServers: mockListMcpServers,
       createIdleThread: mockCreateIdleThread,
       runWorkflow: mockRunWorkflow,
-      listThreads: vi.fn().mockReturnValue(okAsyncResult({ threads: [], total: 0 })),
+      listThreads: mockListThreads,
       projectGetRemoteUrl: vi.fn().mockReturnValue(okAsyncResult({ remoteUrl: '' })),
     },
   };
@@ -145,6 +146,7 @@ vi.mock('@/components/PromptInput', () => ({
 describe('NewThreadInput', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockListThreads.mockReturnValue(okAsync({ threads: [], total: 0 }));
     mockListMcpServers.mockReturnValue(okAsync({ servers: [] }));
     mockCreateIdleThread.mockReturnValue(
       okAsync({
@@ -256,9 +258,37 @@ describe('NewThreadInput', () => {
     fireEvent.click(screen.getByTestId('mock-prompt-submit'));
 
     await waitFor(() => expect(screen.getByTestId('new-thread-creating')).toBeInTheDocument());
-    // Compose form is gone — the loader replaced it even though the mocked hook
-    // reports `creating: false`.
-    expect(screen.queryByTestId('mock-prompt-input')).not.toBeInTheDocument();
+    expect(screen.getByTestId('thread-preparation-view')).toBeInTheDocument();
+    expect(screen.getByText('Build feature X')).toBeInTheDocument();
+    expect(screen.getByText('gpt-5')).toBeInTheDocument();
+    expect(screen.getByText('prompt.auto')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-prompt-submit')).toBeDisabled();
+  });
+
+  test('shows the conversation immediately and restores the prompt if creation fails', async () => {
+    let finish!: (ok: boolean) => void;
+    mockCreateThread.mockReturnValueOnce(
+      new Promise<boolean>((resolve) => {
+        finish = resolve;
+      }),
+    );
+    renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+
+    fireEvent.click(screen.getByTestId('mock-prompt-submit'));
+
+    expect(screen.getByTestId('thread-preparation-view')).toBeInTheDocument();
+    expect(screen.getByText('Build feature X')).toBeInTheDocument();
+    expect(screen.getByText('gpt-5')).toBeInTheDocument();
+    expect(screen.getByText('prompt.auto')).toBeInTheDocument();
+    expect(screen.getByTestId('mock-prompt-submit')).toBeDisabled();
+
+    await act(async () => {
+      finish(false);
+    });
+
+    expect(screen.queryByTestId('thread-preparation-view')).not.toBeInTheDocument();
+    expect(screen.getByTestId('initial-prompt')).toHaveTextContent('Build feature X');
+    expect(screen.getByTestId('mock-prompt-submit')).not.toBeDisabled();
   });
 
   test('does NOT pin the loader for idle (backlog) submits', async () => {
@@ -296,6 +326,34 @@ describe('NewThreadInput', () => {
       inputs: undefined,
     });
     expect(mockCreateThread).not.toHaveBeenCalled();
+  });
+
+  test('opens a created thread without waiting for the sidebar refresh', async () => {
+    let finishRefresh!: (result: unknown) => void;
+    mockListThreads.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishRefresh = resolve;
+      }),
+    );
+    renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+    fireEvent.click(screen.getByTestId('mock-workflow-submit'));
+
+    await waitFor(() =>
+      expect(mockNavigate).toHaveBeenCalledWith('/projects/p1/threads/thread-workflow', {
+        state: {
+          pendingPrompt: expect.any(String),
+          pendingMetadata: expect.objectContaining({
+            model: 'gpt-5',
+            permissionMode: 'auto',
+            timestamp: expect.any(String),
+          }),
+        },
+      }),
+    );
+    expect(mockListThreads).toHaveBeenCalled();
+    await act(async () => {
+      finishRefresh(await okAsync({ threads: [], total: 0 }));
+    });
   });
 
   test('shows worktree branch preview when worktree mode is enabled', () => {

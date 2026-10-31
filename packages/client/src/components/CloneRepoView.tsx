@@ -3,7 +3,6 @@ import { SiGithub } from '@icons-pack/react-simple-icons';
 import {
   Copy,
   ExternalLink,
-  Loader2,
   Lock,
   Globe,
   ArrowLeft,
@@ -18,6 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -475,7 +475,11 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
             {userCode}
           </code>
           <Button variant="outline" size="sm" onClick={() => copyCode(userCode)}>
-            {codeCopied ? <Check className="icon-base" /> : <Copy className="icon-base" />}
+            {codeCopied ? (
+              <Check className="icon-base copy-feedback-icon text-green-600" />
+            ) : (
+              <Copy className="icon-base copy-feedback-icon" />
+            )}
           </Button>
         </div>
 
@@ -601,9 +605,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
           )}
 
           {!loadingRepos && repos.length === 0 && (
-            <p className="text-muted-foreground py-8 text-center text-sm">
-              {t('github.repos.noRepos')}
-            </p>
+            <EmptyState fill={false} className="py-8" title={t('github.repos.noRepos')} />
           )}
 
           <div ref={sentinelRef} aria-hidden className="h-1 w-full" />
@@ -707,10 +709,10 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
 
     return (
       <div className="flex flex-col items-center gap-4 py-12">
-        <Loader2 className="text-primary size-8 animate-spin" />
-        <p className="text-sm font-medium">
-          {t('github.clone.cloning', { repo: selectedRepo?.full_name })}
-        </p>
+        <LoadingState
+          fill={false}
+          label={t('github.clone.cloning', { repo: selectedRepo?.full_name })}
+        />
 
         {/* Progress bar with phase label */}
         <div className="w-full max-w-xs">

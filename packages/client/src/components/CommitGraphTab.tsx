@@ -653,7 +653,9 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   });
 
   if (!hasGitContext) {
-    return <EmptyState title={t('review.noProject', 'Select a project to view history')} />;
+    return (
+      <EmptyState fill={false} title={t('review.noProject', 'Select a project to view history')} />
+    );
   }
 
   return (
@@ -744,7 +746,11 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
               title={t('graph.noFilterMatches', 'No commits match the filters')}
             />
           ) : (
-            <EmptyState icon={GitCommit} title={t('review.noCommits', 'No commits yet')} />
+            <EmptyState
+              fill={false}
+              icon={GitCommit}
+              title={t('review.noCommits', 'No commits yet')}
+            />
           )
         ) : (
           <div
@@ -781,7 +787,6 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                     <LoadingState
                       fill={false}
                       layout="inline"
-                      size="compact"
                       testId="graph-loading-more"
                       label={t('history.loadingMore', 'Loading more…')}
                     />

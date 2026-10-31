@@ -48,7 +48,6 @@ export function FrozenMessageStream(props: MessageStreamProps) {
     sessionChanges,
     onSessionReverted,
     pagination,
-    createdAt,
     snapshotMap = EMPTY_SNAPSHOT_MAP,
     knownIds = EMPTY_KNOWN_IDS,
     onOpenLightbox,
@@ -167,11 +166,8 @@ export function FrozenMessageStream(props: MessageStreamProps) {
       }
       compact={compact}
       className={className}
-      messages={messages}
       lastUserMessage={lastUserMessage}
       pagination={pagination}
-      createdAt={createdAt}
-      initInfo={initInfo}
       status={status}
       waitingReason={waitingReason}
       pendingPermission={pendingPermission}
@@ -181,6 +177,8 @@ export function FrozenMessageStream(props: MessageStreamProps) {
       isRunning={isRunning}
       isExternal={isExternal}
       resultInfo={resultInfo}
+      completedAt={props.completedAt}
+      copyThreadId={threadId}
       model={model}
       permissionMode={permissionMode}
       onSend={onSend}

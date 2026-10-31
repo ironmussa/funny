@@ -149,8 +149,52 @@ function claimProjectWrite(pid: string, seq: number): boolean {
   return true;
 }
 
+// ── Thread scope ─────────────────────────────────────────────
+// A project can hold thousands of threads while the sidebar shows a handful.
+// Views register which threads they render; the bulk fetch asks the runner for
+// just that union. A view that needs every thread (All threads, Kanban, archived
+// settings) registers 'all'. No registration for a project = whole project.
+export type GitStatusScope = Record<string, string[] | 'all'>;
+const _scopeByConsumer = new Map<string, GitStatusScope>();
+/** Scope key of the last bulk fetch per project ('' = whole project). */
+const _lastScopeKeyByProject = new Map<string, string>();
+
+/** Register (or replace) the threads a mounted view needs status for. */
+export function setGitStatusScope(consumerId: string, scope: GitStatusScope): void {
+  _scopeByConsumer.set(consumerId, scope);
+}
+
+export function clearGitStatusScope(consumerId: string): void {
+  _scopeByConsumer.delete(consumerId);
+}
+
+/** Sorted thread IDs to fetch for `projectId`, or null for the whole project. */
+function resolveThreadScope(projectId: string): string[] | null {
+  const ids = new Set<string>();
+  let registered = false;
+  for (const scope of _scopeByConsumer.values()) {
+    const entry = scope[projectId];
+    if (!entry) continue;
+    if (entry === 'all') return null;
+    registered = true;
+    for (const id of entry) ids.add(id);
+  }
+  return registered && ids.size > 0 ? [...ids].sort() : null;
+}
+
+/** True when `next` asks for threads the previous fetch (`prev`) did not cover. */
+function scopeWidened(prev: string | undefined, next: string): boolean {
+  if (prev === undefined) return true;
+  if (prev === '') return false; // previous fetch covered the whole project
+  if (next === '') return true;
+  const covered = new Set(prev.split(','));
+  return next.split(',').some((id) => !covered.has(id));
+}
+
 /** @internal Clear cooldown map — only for tests */
 export function _resetCooldowns() {
+  _scopeByConsumer.clear();
+  _lastScopeKeyByProject.clear();
   _lastFetchByProject.clear();
   _lastFetchByBranch.clear();
   _lastFetchByProjectStatus.clear();
@@ -263,6 +307,23 @@ function mergeStatuses(
   return { statusByBranch: merged };
 }
 
+function claimProjectFetch(
+  projectId: string,
+  threadIds: string[] | null,
+  force?: boolean,
+): boolean {
+  const now = Date.now();
+  const scopeKey = threadIds ? threadIds.join(',') : '';
+  const widened = scopeWidened(_lastScopeKeyByProject.get(projectId), scopeKey);
+  const lastFetch = _lastFetchByProject.get(projectId) ?? 0;
+  if (!force && !widened && now - lastFetch < FETCH_COOLDOWN_MS) {
+    return false;
+  }
+  _lastFetchByProject.set(projectId, now);
+  _lastScopeKeyByProject.set(projectId, scopeKey);
+  return true;
+}
+
 export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   statusByBranch: {},
   threadToBranchKey: {},
@@ -274,12 +335,10 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   fetchForProject: async (projectId, force) => {
     // Skip if fetched recently (prevents duplicate calls during cascading state
     // updates) — unless `force`, e.g. a manual refresh that must bypass the window.
-    const now = Date.now();
-    const lastFetch = _lastFetchByProject.get(projectId) ?? 0;
-    if (!force && now - lastFetch < FETCH_COOLDOWN_MS) {
-      return;
-    }
-    _lastFetchByProject.set(projectId, now);
+    // A widened scope (newly visible threads) bypasses the window: the last
+    // fetch did not cover them, so their badges would otherwise stay empty.
+    const threadIds = resolveThreadScope(projectId);
+    if (!claimProjectFetch(projectId, threadIds, force)) return;
 
     // Abort any stale in-flight request for this project
     _abortByProject.get(projectId)?.abort();
@@ -297,7 +356,9 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     // forced fetch is dropped per-key in `claimBranchWrite` below.
     const seq = nextStatusSeq();
     try {
-      const result = await api.getGitStatuses(projectId, ac.signal);
+      const result = threadIds
+        ? await api.getGitStatuses(projectId, ac.signal, threadIds)
+        : await api.getGitStatuses(projectId, ac.signal);
       if (result.isOk()) {
         const statuses = result.value.statuses;
         const updates: Record<string, GitStatusInfo> = {};

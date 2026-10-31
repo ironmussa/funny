@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { FileTree } from '@/components/FileTree';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -254,20 +255,20 @@ export function ProjectFilesPane() {
 
       <div className="min-h-0 flex-1 overflow-hidden">
         {!basePath ? (
-          <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
-            {t('projectFiles.noProject', 'Select a project first')}
-          </div>
+          <EmptyState title={t('projectFiles.noProject', 'Select a project first')} />
         ) : loading && files.length === 0 ? (
           <LoadingState
             testId="project-files-loading"
             label={t('projectFiles.loading', 'Loading files...')}
           />
         ) : filteredSummaries.length === 0 ? (
-          <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
-            {query
-              ? t('projectFiles.noMatches', 'No files match your filter')
-              : t('projectFiles.empty', 'No files in this project')}
-          </div>
+          <EmptyState
+            title={
+              query
+                ? t('projectFiles.noMatches', 'No files match your filter')
+                : t('projectFiles.empty', 'No files in this project')
+            }
+          />
         ) : (
           <FileTree
             files={filteredSummaries}

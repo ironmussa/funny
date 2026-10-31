@@ -6,7 +6,9 @@ import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { Separator } from '@/components/ui/separator';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
@@ -157,17 +159,11 @@ export function ProjectConfigSettings() {
   };
 
   if (!selectedProjectId) {
-    return (
-      <div className="text-muted-foreground py-6 text-center text-sm">
-        {t('projectConfig.noProject')}
-      </div>
-    );
+    return <EmptyState fill={false} className="py-6" title={t('projectConfig.noProject')} />;
   }
 
   if (loading) {
-    return (
-      <div className="text-muted-foreground py-6 text-center text-sm">{t('common.loading')}</div>
-    );
+    return <LoadingState fill={false} className="py-6" label={t('common.loading')} />;
   }
 
   return (

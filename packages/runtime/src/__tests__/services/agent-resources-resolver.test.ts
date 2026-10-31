@@ -85,6 +85,40 @@ describe('resolveAgentResources — skills', () => {
 });
 
 describe('resolveAgentResources — session commands', () => {
+  test.each([
+    { sessionCommands: undefined },
+    { sessionCommands: [] },
+    { sessionCommands: ['compact'] },
+    { sessionCommands: ['security-review'] },
+  ])(
+    'exposes security-review exactly once with session commands %j',
+    async ({ sessionCommands }) => {
+      const res = (
+        await resolveAgentResources({
+          provider: 'claude',
+          phase: 'composer',
+          sessionCommands,
+        })
+      )._unsafeUnwrap();
+      const commands = res.resources.filter((r) => r.name === 'security-review');
+      expect(commands).toHaveLength(1);
+      expect(commands[0]).toMatchObject({
+        kind: 'slash-command',
+        usable: true,
+        commandTier: 'builtin',
+        compatibleProviders: ['claude'],
+      });
+    },
+  );
+
+  test.each(['codex', 'gemini', 'llm-api'] as const)(
+    'does not advertise the Claude security command for %s',
+    async (provider) => {
+      const res = (await resolveAgentResources({ provider, phase: 'composer' }))._unsafeUnwrap();
+      expect(res.resources.some((r) => r.name === 'security-review')).toBe(false);
+    },
+  );
+
   test('built-in session commands are compatible with the reporting provider', async () => {
     const res = (
       await resolveAgentResources({

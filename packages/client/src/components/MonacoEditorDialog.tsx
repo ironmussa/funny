@@ -526,7 +526,11 @@ export function MonacoEditorDialog({
                 data-testid="editor-copy-content"
                 aria-label={t('editor.copy', 'Copy')}
               >
-                {copied ? <Check className="icon-base" /> : <Copy className="icon-base" />}
+                {copied ? (
+                  <Check className="icon-base copy-feedback-icon text-green-600" />
+                ) : (
+                  <Copy className="icon-base copy-feedback-icon" />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">{t('editor.copy', 'Copy')}</TooltipContent>

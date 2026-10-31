@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -175,9 +176,7 @@ export function AutomationSettings() {
 
   if (!selectedProjectId) {
     return (
-      <div className="text-muted-foreground py-6 text-center text-sm">
-        Select a project to manage automations.
-      </div>
+      <EmptyState fill={false} className="py-6" title="Select a project to manage automations." />
     );
   }
 
@@ -195,13 +194,17 @@ export function AutomationSettings() {
 
       {/* Automation list */}
       {automations.length === 0 ? (
-        <div className="py-8 text-center">
-          <p className="text-muted-foreground mb-3 text-sm">No automations yet.</p>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
-            <Plus className="icon-sm" />
-            Create your first automation
-          </Button>
-        </div>
+        <EmptyState
+          fill={false}
+          className="py-8"
+          title="No automations yet."
+          action={
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
+              <Plus className="icon-sm" />
+              Create your first automation
+            </Button>
+          }
+        />
       ) : (
         automations.map((a) => (
           <div key={a.id} className="space-y-1">

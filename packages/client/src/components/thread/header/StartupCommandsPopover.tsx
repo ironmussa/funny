@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
@@ -116,9 +117,7 @@ export function StartupCommandsPopover({ projectId, threadId, worktreeBranch }: 
           </div>
         )}
         {commands.length === 0 ? (
-          <p className="text-muted-foreground py-3 text-center text-xs">
-            {t('startup.noCommands')}
-          </p>
+          <EmptyState fill={false} className="py-3" title={t('startup.noCommands')} />
         ) : (
           <div className="space-y-1">
             {commands.map((cmd) => {

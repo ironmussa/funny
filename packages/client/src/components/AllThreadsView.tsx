@@ -8,7 +8,8 @@ import { AllThreadsContent } from '@/components/all-threads/AllThreadsContent';
 import { AllThreadsToolbar } from '@/components/all-threads/AllThreadsToolbar';
 import { normalize } from '@/components/ui/highlight-text';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
-import { api } from '@/lib/api';
+import { useGitStatusScope } from '@/hooks/use-git-status-scope';
+import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
 import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { buildThreadPath } from '@/navigation/thread-paths';
@@ -44,6 +45,8 @@ export function AllThreadsView() {
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
   const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
+  // Filters and sorts by git state across every loaded thread.
+  useGitStatusScope({ all: true, projectIds: Object.keys(threadsByProject) });
 
   // View mode derived from pathname: /kanban = board, /list (or anything else) = list
   // When ?status= param is present, force list view
@@ -115,12 +118,7 @@ export function AllThreadsView() {
 
     // Sync ?scratch=1 → typeFilter
     const paramScratch = searchParams.get('scratch') === '1';
-    setTypeFilter((prev) => {
-      const hasScratch = prev.has('scratch');
-      if (paramScratch && !hasScratch) return new Set(['scratch']);
-      if (!paramScratch && prev.size === 1 && hasScratch) return new Set();
-      return prev;
-    });
+    setTypeFilter((prev) => syncScratchFilter(prev, paramScratch));
 
     // Sync sort params from URL
     const paramSort = searchParams.get('sort');
@@ -232,55 +230,7 @@ export function AllThreadsView() {
     }
   }, [showArchived, viewMode, projectFilter, projects]);
 
-  // Content search: debounced server call to find threads matching by message content
-  // Stores threadId → snippet so we can display matching text on cards
-  const [contentMatches, setContentMatches] = useState<Map<string, string>>(new Map());
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // Cache: key = "query|projectId|cs" → Map<threadId, snippet>
-  const searchCacheRef = useRef<Map<string, Map<string, string>>>(new Map());
-
-  useEffect(() => {
-    // Clear previous timer
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
-    const q = search.trim();
-    if (!q) {
-      setContentMatches(new Map());
-      return;
-    }
-
-    const cacheKey = `${q}|${projectFilter || ''}|${caseSensitive ? '1' : '0'}`;
-    const cached = searchCacheRef.current.get(cacheKey);
-    if (cached) {
-      setContentMatches(cached);
-      return;
-    }
-
-    // Debounce 300ms to avoid hammering the server on every keystroke
-    searchTimerRef.current = setTimeout(() => {
-      const pid = projectFilter || undefined;
-      api.searchThreadContent(q, pid, caseSensitive).then((res) => {
-        if (res.isOk()) {
-          const map = new Map<string, string>();
-          const { threadIds, snippets } = res.value;
-          for (const id of threadIds) {
-            map.set(id, snippets[id] || '');
-          }
-          searchCacheRef.current.set(cacheKey, map);
-          // Evict old entries to prevent unbounded growth
-          if (searchCacheRef.current.size > 50) {
-            const firstKey = searchCacheRef.current.keys().next().value!;
-            searchCacheRef.current.delete(firstKey);
-          }
-          setContentMatches(map);
-        }
-      });
-    }, 300);
-
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
-  }, [search, projectFilter, caseSensitive]);
+  const contentMatches = useThreadContentSearch(search, projectFilter, caseSensitive);
 
   const projectInfoById = useMemo(() => {
     const map: Record<string, { name: string; path: string; color?: string }> = {};
@@ -599,4 +549,11 @@ export function AllThreadsView() {
       </div>
     </div>
   );
+}
+
+function syncScratchFilter(previous: Set<string>, scratch: boolean): Set<string> {
+  const hasScratch = previous.has('scratch');
+  if (scratch && !hasScratch) return new Set(['scratch']);
+  if (!scratch && previous.size === 1 && hasScratch) return new Set();
+  return previous;
 }

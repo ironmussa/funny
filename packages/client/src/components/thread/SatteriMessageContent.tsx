@@ -10,6 +10,8 @@ import {
   type MouseEvent,
   type ReactNode,
 } from 'react';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { toEditorUriWithLine, openFileInEditor } from '@/lib/editor-utils';
@@ -86,7 +88,8 @@ function setCopyButtonIcon(button: HTMLButtonElement, icon: 'copy' | 'check'): v
   svg.setAttribute('stroke-linejoin', 'round');
   svg.setAttribute('aria-hidden', 'true');
   svg.setAttribute('data-satteri-copy-icon', icon);
-  svg.classList.add('icon-base');
+  svg.classList.add('icon-base', 'copy-feedback-icon');
+  if (icon === 'check') svg.classList.add('text-green-600');
 
   const paths: Array<[tag: string, attributes: string[]]> =
     icon === 'copy'
@@ -254,6 +257,28 @@ function MarkdownIsland({ segment }: { segment: Exclude<RenderedSegment, { type:
 
 function SatteriMessageContentInner({ content }: { content: string }) {
   const rootRef = useRef<HTMLDivElement>(null);
+  const { t } = useTranslation();
+  const copyText = useCallback(
+    async (text: string) => {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast.success(t('common.copied', 'Copied'));
+        return true;
+      } catch {
+        toast.error(t('common.copyFailed', 'Could not copy to clipboard'));
+        return false;
+      }
+    },
+    [t],
+  );
+  const copyTimers = useRef(new Map<HTMLButtonElement, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const timers = copyTimers.current;
+    return () => {
+      timers.forEach(clearTimeout);
+      timers.clear();
+    };
+  }, []);
   const segments = useMemo(
     () =>
       splitSatteriMarkdownSegments(content, (language) => Boolean(getVisualizerForFence(language))),
@@ -291,23 +316,37 @@ function SatteriMessageContentInner({ content }: { content: string }) {
     return scheduleIdle(() => highlightCodeBlocks(root));
   }, [state]);
 
-  const onClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
-    const target = event.target as Element | null;
-    const copy = target?.closest<HTMLButtonElement>('[data-satteri-copy]');
-    if (copy) {
-      const code = copy.parentElement?.querySelector('pre > code')?.textContent ?? '';
-      void navigator.clipboard?.writeText(code);
-      copy.setAttribute('aria-label', 'Copied');
-      setCopyButtonIcon(copy, 'check');
-      return;
-    }
+  const onClick = useCallback(
+    (event: MouseEvent<HTMLDivElement>) => {
+      const target = event.target as Element | null;
+      const copy = target?.closest<HTMLButtonElement>('[data-satteri-copy]');
+      if (copy) {
+        const code = copy.parentElement?.querySelector('pre > code')?.textContent ?? '';
+        void copyText(code).then((success) => {
+          if (!success || !rootRef.current?.contains(copy)) return;
+          clearTimeout(copyTimers.current.get(copy));
+          copy.setAttribute('aria-label', 'Copied');
+          setCopyButtonIcon(copy, 'check');
+          copyTimers.current.set(
+            copy,
+            setTimeout(() => {
+              copy.setAttribute('aria-label', 'Copy code');
+              setCopyButtonIcon(copy, 'copy');
+              copyTimers.current.delete(copy);
+            }, 2000),
+          );
+        });
+        return;
+      }
 
-    const link = target?.closest<HTMLAnchorElement>('a[data-satteri-file-path]');
-    const resolvedPath = link?.dataset.satteriFilePath;
-    if (!link || !resolvedPath || toEditorUriWithLine(resolvedPath)) return;
-    event.preventDefault();
-    openFileInEditor(resolvedPath);
-  }, []);
+      const link = target?.closest<HTMLAnchorElement>('a[data-satteri-file-path]');
+      const resolvedPath = link?.dataset.satteriFilePath;
+      if (!link || !resolvedPath || toEditorUriWithLine(resolvedPath)) return;
+      event.preventDefault();
+      openFileInEditor(resolvedPath);
+    },
+    [copyText],
+  );
 
   if (state.status === 'loading') {
     return (

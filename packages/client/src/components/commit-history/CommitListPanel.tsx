@@ -141,7 +141,11 @@ export function CommitListPanel({
               label={t('review.loadingLog', 'Loading commits…')}
             />
           ) : logEntries.length === 0 ? (
-            <EmptyState icon={GitCommit} title={t('review.noCommits', 'No commits yet')} />
+            <EmptyState
+              fill={false}
+              icon={GitCommit}
+              title={t('review.noCommits', 'No commits yet')}
+            />
           ) : filteredEntries.length === 0 ? (
             <EmptyState
               icon={Search}
@@ -224,7 +228,6 @@ function SentinelRow({
         <LoadingState
           fill={false}
           layout="inline"
-          size="compact"
           testId="history-loading-more"
           label={t('history.loadingMore', 'Loading more…')}
         />

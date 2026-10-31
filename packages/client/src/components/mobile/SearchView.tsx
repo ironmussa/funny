@@ -1,11 +1,11 @@
 import { ArrowLeft } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { normalize } from '@/components/ui/highlight-text';
 import { SearchBar } from '@/components/ui/search-bar';
 import { VirtualThreadList } from '@/components/VirtualThreadList';
-import { api } from '@/lib/api';
+import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
 import { useThreadsForProject } from '@/lib/thread-selectors';
 import { useAppStore } from '@/stores/app-store';
 
@@ -40,49 +40,7 @@ export function SearchView({
   const threads = useThreadsForProject(projectId);
   const project = projects.find((p) => p.id === projectId);
 
-  // Content search: debounced server call matching threads by message content.
-  // threadId → snippet, so matching text can be shown on the row.
-  const [contentMatches, setContentMatches] = useState<Map<string, string>>(new Map());
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const searchCacheRef = useRef<Map<string, Map<string, string>>>(new Map());
-
-  useEffect(() => {
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-
-    const q = search.trim();
-    if (!q) {
-      setContentMatches(new Map());
-      return;
-    }
-
-    const cacheKey = `${q}|${projectId}|${caseSensitive ? '1' : '0'}`;
-    const cached = searchCacheRef.current.get(cacheKey);
-    if (cached) {
-      setContentMatches(cached);
-      return;
-    }
-
-    // Debounce 300ms to avoid hammering the server on every keystroke.
-    searchTimerRef.current = setTimeout(() => {
-      api.searchThreadContent(q, projectId, caseSensitive).then((res) => {
-        if (res.isOk()) {
-          const map = new Map<string, string>();
-          const { threadIds, snippets } = res.value;
-          for (const id of threadIds) map.set(id, snippets[id] || '');
-          searchCacheRef.current.set(cacheKey, map);
-          if (searchCacheRef.current.size > 50) {
-            const firstKey = searchCacheRef.current.keys().next().value!;
-            searchCacheRef.current.delete(firstKey);
-          }
-          setContentMatches(map);
-        }
-      });
-    }, 300);
-
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
-  }, [search, projectId, caseSensitive]);
+  const contentMatches = useThreadContentSearch(search, projectId, caseSensitive);
 
   const filtered = useMemo(() => {
     const result = threads.filter((th) => !th.archived);

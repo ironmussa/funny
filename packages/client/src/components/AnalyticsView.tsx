@@ -13,6 +13,7 @@ import {
 import { lazy, Suspense, useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -190,12 +191,12 @@ export function AnalyticsView() {
         <ScrollArea className="min-h-0 flex-1">
           <div className="mx-auto max-w-4xl space-y-6 px-6 py-6">
             {!overview ? (
-              <div
-                className="text-muted-foreground py-16 text-center text-sm"
-                data-testid="analytics-no-data"
-              >
-                {t('analytics.noData')}
-              </div>
+              <EmptyState
+                fill={false}
+                className="py-16"
+                testId="analytics-no-data"
+                title={t('analytics.noData')}
+              />
             ) : (
               <>
                 {/* Metric Cards */}

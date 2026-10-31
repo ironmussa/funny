@@ -3,13 +3,11 @@ import { ArrowDown } from 'lucide-react';
 import type { ReactNode, RefObject } from 'react';
 
 import { LoadingState } from '@/components/ui/loading-state';
-import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
-import { InitInfoCard } from './InitInfoCard';
 import type { MessageStreamProps } from './message-stream-types';
 import { MessageStreamStatusTail } from './MessageStreamStatusTail';
+import { useTurnEndHover } from './use-turn-end-hover';
 
 interface MessageStreamShellProps {
   t: TFunction;
@@ -29,11 +27,8 @@ interface MessageStreamShellProps {
   compact: boolean;
   className?: string;
   // Chrome data
-  messages: any[];
   lastUserMessage?: MessageStreamProps['lastUserMessage'];
   pagination: MessageStreamProps['pagination'];
-  createdAt?: string;
-  initInfo: MessageStreamProps['initInfo'];
   status: string;
   waitingReason: MessageStreamProps['waitingReason'];
   pendingPermission: MessageStreamProps['pendingPermission'];
@@ -42,6 +37,8 @@ interface MessageStreamShellProps {
   permissionRecoveryReason: MessageStreamProps['permissionRecoveryReason'];
   isRunning: boolean;
   isExternal: boolean;
+  completedAt?: string | null;
+  copyThreadId?: string;
   resultInfo: MessageStreamProps['resultInfo'];
   model: string;
   permissionMode: string;
@@ -55,7 +52,7 @@ interface MessageStreamShellProps {
 
 /**
  * Presentational shell shared by the virtual and frozen message streams: the
- * scroll viewport, bottom-aligned content stack (pagination chrome, init card,
+ * scroll viewport, top-aligned content stack (pagination chrome,
  * the list, status tail, prompt spacer) and the sticky bottom dock. The two
  * viewers differ only in their scroll behavior (which hook fills the refs), the
  * `overflowAnchor` mode, the `list` node, and the optional sentinels — so the
@@ -74,11 +71,8 @@ export function MessageStreamShell({
   bottomSentinel,
   compact,
   className,
-  messages,
   lastUserMessage,
   pagination,
-  createdAt,
-  initInfo,
   status,
   waitingReason,
   pendingPermission,
@@ -88,6 +82,8 @@ export function MessageStreamShell({
   isRunning,
   isExternal,
   resultInfo,
+  completedAt,
+  copyThreadId,
   model,
   permissionMode,
   onSend,
@@ -97,10 +93,7 @@ export function MessageStreamShell({
   onPermissionDecision,
   footer,
 }: MessageStreamShellProps) {
-  const now = useMinuteTick();
-  const hasMore = pagination?.hasMore ?? false;
-  const loadingMore = pagination?.loadingMore ?? false;
-
+  useTurnEndHover(contentStackRef);
   return (
     <div
       className={cn(
@@ -115,9 +108,6 @@ export function MessageStreamShell({
         overflowAnchor,
       }}
     >
-      {/* Spacer pushes content to bottom */}
-      <div className="grow" aria-hidden="true" />
-
       <div
         ref={contentStackRef}
         className={cn(
@@ -132,28 +122,9 @@ export function MessageStreamShell({
           <LoadingState
             fill={false}
             layout="inline"
-            size="compact"
             className="py-3"
             testId="message-stream-loading-more"
             label={t('thread.loadingOlder', 'Loading older messages…')}
-          />
-        )}
-
-        {/* Beginning of conversation marker */}
-        {pagination && !hasMore && !loadingMore && messages.length > 0 && (
-          <div className="py-2 text-center">
-            <span className="text-muted-foreground text-xs">
-              {t('thread.beginningOfConversation', 'Beginning of conversation')}
-              {createdAt && <> &middot; {timeAgo(createdAt, t, now)}</>}
-            </span>
-          </div>
-        )}
-
-        {/* Init info card */}
-        {initInfo && (
-          <InitInfoCard
-            initInfo={initInfo}
-            effort={messages?.find((m: any) => m.role === 'user')?.effort}
           />
         )}
 
@@ -173,6 +144,10 @@ export function MessageStreamShell({
           isExternal={isExternal}
           compact={compact}
           resultInfo={resultInfo}
+          completedAt={completedAt}
+          turnStartedAt={lastUserMessage?.timestamp}
+          turnId={lastUserMessage?.id}
+          copyThreadId={copyThreadId}
           model={model}
           permissionMode={permissionMode}
           effort={lastUserMessage?.effort}
@@ -189,6 +164,9 @@ export function MessageStreamShell({
           <div aria-hidden="true" style={{ height: promptPinSpacerHeight }} />
         )}
       </div>
+
+      {/* Spacer keeps the conversation top-aligned and the dock at the bottom */}
+      <div className="grow" aria-hidden="true" />
 
       {/* Sticky bottom dock: scroll-to-bottom button + footer (PromptInput) */}
       <div className="bg-background sticky bottom-0 z-30">

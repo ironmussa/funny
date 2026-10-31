@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef, memo } from 'react';
 import { toast } from 'sonner';
 
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -190,9 +191,11 @@ export function PipelineSettings() {
 
   if (!selectedProjectId) {
     return (
-      <div className="text-muted-foreground py-6 text-center text-sm">
-        Select a project to manage pipeline settings.
-      </div>
+      <EmptyState
+        fill={false}
+        className="py-6"
+        title="Select a project to manage pipeline settings."
+      />
     );
   }
 

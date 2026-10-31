@@ -202,8 +202,13 @@ export const gitApi = {
       method: 'POST',
       body: JSON.stringify({ patterns }),
     }),
-  getGitStatuses: (projectId: string, signal?: AbortSignal) =>
-    request<{ statuses: GitStatusInfo[] }>(`/git/status?projectId=${projectId}`, { signal }),
+  getGitStatuses: (projectId: string, signal?: AbortSignal, threadIds?: string[]) =>
+    request<{ statuses: GitStatusInfo[] }>(
+      `/git/status?projectId=${projectId}${
+        threadIds?.length ? `&threadIds=${threadIds.map(encodeURIComponent).join(',')}` : ''
+      }`,
+      { signal },
+    ),
   getGitStatus: (threadId: string, signal?: AbortSignal) =>
     request<GitStatusInfo>(`/git/${threadId}/status`, { signal }),
   getGitLog: (threadId: string, limit = 50, all = false, skip = 0, signal?: AbortSignal) =>

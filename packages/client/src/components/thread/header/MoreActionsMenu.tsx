@@ -123,7 +123,9 @@ function MenuItems({
                       >
                         <Icon className="icon-base mr-2" />
                         {t(stageConfig[stage].labelKey)}
-                        {stage === threadStage && <Check className="icon-base ml-auto pl-1" />}
+                        {stage === threadStage && (
+                          <Check className="icon-base ml-auto pl-1 text-green-600" />
+                        )}
                       </DropdownMenuItem>
                     );
                   })}
@@ -179,7 +181,11 @@ function MenuItems({
         disabled={!hasMessages}
         className="cursor-pointer"
       >
-        {copiedText ? <Check className="icon-base mr-2" /> : <Copy className="icon-base mr-2" />}
+        {copiedText ? (
+          <Check className="icon-base copy-feedback-icon mr-2 text-green-600" />
+        ) : (
+          <Copy className="icon-base copy-feedback-icon mr-2" />
+        )}
         {t('thread.copyText', 'Copy text only')}
       </DropdownMenuItem>
       <DropdownMenuItem
@@ -189,9 +195,9 @@ function MenuItems({
         className="cursor-pointer"
       >
         {copiedTools ? (
-          <Check className="icon-base mr-2" />
+          <Check className="icon-base copy-feedback-icon mr-2 text-green-600" />
         ) : (
-          <ClipboardList className="icon-base mr-2" />
+          <ClipboardList className="icon-base copy-feedback-icon mr-2" />
         )}
         {t('thread.copyWithTools', 'Copy with tool calls')}
       </DropdownMenuItem>

@@ -383,19 +383,23 @@ describe('sendMessage — slash-command guardrail', () => {
     },
   );
 
-  test('accepts a discovered Claude custom command without rewriting it', async () => {
-    vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
-    mocks.resolveAgentResources.mockResolvedValue(
-      ok({ resources: [{ name: 'team:review', kind: 'slash-command', usable: true }] }),
-    );
-    const result = await sendMessage({
-      threadId: 't-cmd',
-      userId: 'u-1',
-      content: '/team:review changes',
-    });
-    expect(result.isOk()).toBe(true);
-    expect(vi.mocked(startAgent).mock.calls[0][1]).toBe('/team:review changes');
-  });
+  test.each(['team:review', 'security-review'])(
+    'accepts the Claude catalog command %s without rewriting it',
+    async (name) => {
+      vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact']));
+      mocks.resolveAgentResources.mockResolvedValue(
+        ok({ resources: [{ name, kind: 'slash-command', usable: true }] }),
+      );
+      const content = `/${name} changes`;
+      const result = await sendMessage({
+        threadId: 't-cmd',
+        userId: 'u-1',
+        content,
+      });
+      expect(result.isOk()).toBe(true);
+      expect(vi.mocked(startAgent).mock.calls[0][1]).toBe(content);
+    },
+  );
 
   test('allows a known slash command through to the agent', async () => {
     vi.mocked(getSupportedSlashCommands).mockReturnValue(new Set(['compact', 'clear', 'context']));

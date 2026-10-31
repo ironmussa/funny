@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+import { EmptyState } from '@/components/ui/empty-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
@@ -103,11 +104,7 @@ export function ActionList({
   };
 
   if (visibleActions.length === 0) {
-    return (
-      <div className="text-muted-foreground flex h-full items-center justify-center px-2 text-center text-xs">
-        Actions will appear here during test execution…
-      </div>
-    );
+    return <EmptyState title="Actions will appear here during test execution…" />;
   }
 
   return (

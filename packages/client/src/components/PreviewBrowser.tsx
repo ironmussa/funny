@@ -2,6 +2,7 @@ import { X, RefreshCw, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -190,9 +191,7 @@ export function PreviewBrowser() {
             title={`Preview: ${activeTab.label}`}
           />
         ) : (
-          <div className="text-muted-foreground flex h-full items-center justify-center text-sm">
-            No previews open. Start a command with a port to see it here.
-          </div>
+          <EmptyState title="No previews open. Start a command with a port to see it here." />
         )}
       </div>
     </div>

@@ -11,7 +11,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import { Switch } from '@/components/ui/switch';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { systemApi, type AdvertisedProvider } from '@/lib/api/system';
@@ -223,12 +225,16 @@ export function ProvidersSettings() {
         </h4>
       </div>
       {providers.length === 0 ? (
-        <div className="settings-card flex flex-col items-center gap-2 px-4 py-8 text-center">
-          <Cpu className="text-muted-foreground/50 size-6" />
-          <p className="text-muted-foreground text-sm">
-            {loading ? 'Loading…' : 'No external providers installed.'}
-          </p>
-        </div>
+        loading ? (
+          <LoadingState fill={false} className="settings-card py-8" label="Loading…" />
+        ) : (
+          <EmptyState
+            fill={false}
+            className="settings-card py-8"
+            icon={Cpu}
+            title="No external providers installed."
+          />
+        )
       ) : (
         <div className="flex flex-col gap-2">
           {providers.map((p) => (

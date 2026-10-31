@@ -21,7 +21,6 @@ vi.mock('@/components/thread/FrozenMessageList', () => ({
   FrozenMessageList: () => <div data-testid="frozen-message-list-mock" />,
 }));
 
-vi.mock('@/components/thread/InitInfoCard', () => ({ InitInfoCard: () => null }));
 vi.mock('@/components/thread/MessageStreamStatusTail', () => ({
   MessageStreamStatusTail: () => null,
 }));

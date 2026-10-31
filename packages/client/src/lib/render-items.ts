@@ -341,8 +341,22 @@ function isTimelineThreadEvent(e: ThreadEvent): boolean {
     e.type !== 'compact_boundary' &&
     // Consumed by ThreadChatView to render the per-session changed-files
     // summary at the end of each session — not as a standalone event card.
-    e.type !== 'changed_files_summary'
+    e.type !== 'changed_files_summary' &&
+    // Run outcomes feed the per-turn end bar. Only stops get a timeline row, at
+    // the moment they happened, so "Continue" (which resumes the same turn)
+    // never erases the record that the user stopped it.
+    (e.type !== 'turn_outcome' || isStoppedOutcome(e))
   );
+}
+
+function isStoppedOutcome(e: ThreadEvent): boolean {
+  if (e.type !== 'turn_outcome') return false;
+  try {
+    const data = typeof e.data === 'string' ? JSON.parse(e.data) : (e.data as any);
+    return data?.status === 'stopped';
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -351,6 +365,10 @@ function isTimelineThreadEvent(e: ThreadEvent): boolean {
  * carry the workflowId when emitted from a workflow pipeline. Remaining events
  * become individual thread-event items.
  */
+function isStandaloneTimelineEvent(event: ThreadEvent): boolean {
+  return isGitTimelineEventType(event.type) || isStoppedOutcome(event);
+}
+
 function buildThreadEventItems(threadEvents: ThreadEvent[]): RenderItem[] {
   const filteredEvents = threadEvents.filter(isTimelineThreadEvent);
   const workflowGroups = new Map<string, ThreadEvent[]>();
@@ -377,7 +395,7 @@ function buildThreadEventItems(threadEvents: ThreadEvent[]): RenderItem[] {
   for (const e of filteredEvents) {
     // Unrecognized standalone events render no card. Exclude them before
     // virtualization so they cannot leave empty rows and extra gaps.
-    if (!consumedEventIds.has(e.id) && isGitTimelineEventType(e.type)) {
+    if (!consumedEventIds.has(e.id) && isStandaloneTimelineEvent(e)) {
       eventItems.push({ type: 'thread-event' as const, event: e });
     }
   }

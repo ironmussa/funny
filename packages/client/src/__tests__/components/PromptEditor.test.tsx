@@ -196,6 +196,33 @@ describe('PromptEditor', () => {
 });
 
 describe('buildSlashSuggestionItems', () => {
+  test.each([{ sdkCommands: [] }, { sdkCommands: ['security-review'] }])(
+    'prioritizes security-review before the result cap with SDK commands %j',
+    ({ sdkCommands }) => {
+      const skills = [
+        ...Array.from({ length: 60 }, (_, i) => ({ name: `skill-${i}`, kind: 'skill' as const })),
+        { name: 'security-review', kind: 'slash-command' as const },
+      ];
+      const items = buildSlashSuggestionItems({
+        skills,
+        sdkCommands,
+        query: '',
+        commandProvider: 'claude',
+      });
+      expect(items).toHaveLength(50);
+      expect(items[0]).toMatchObject({ id: 'security-review', type: 'slash' });
+      expect(items.filter((item) => item.id === 'security-review')).toHaveLength(1);
+      expect(
+        buildSlashSuggestionItems({
+          skills,
+          sdkCommands,
+          query: 'security',
+          commandProvider: 'claude',
+        }).map((item) => item.id),
+      ).toEqual(['security-review']);
+    },
+  );
+
   test('offers native Codex commands before a session starts', () => {
     const items = buildSlashSuggestionItems({
       skills: [],

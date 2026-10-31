@@ -42,6 +42,15 @@ export const WithCustomLabels: Story = {
   },
 };
 
+/** Text fetched on click (e.g. a thread turn) gets the same icon feedback. */
+export const AsyncValue: Story = {
+  args: {
+    value: () => new Promise<string>((resolve) => setTimeout(() => resolve('Fetched text'), 400)),
+    label: 'Copy latest prompt and response',
+    copiedLabel: 'Latest response copied',
+  },
+};
+
 export const InContext: Story = {
   args: { value: 'bunx funny' },
   render: (args) => (

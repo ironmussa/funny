@@ -12,6 +12,7 @@ import { useEffect, useRef, useState } from 'react';
 
 import { PRCompactIdentity } from '@/components/pull-requests/PRCompactIdentity';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { LoadingState } from '@/components/ui/loading-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
 
@@ -214,10 +215,7 @@ export function PRSummaryCard({
 
       {/* Loading skeleton when no detail yet */}
       {!detail && loadingDetail && (
-        <div className="text-muted-foreground mt-1 flex items-center gap-2">
-          <Loader2 className="icon-sm animate-spin" />
-          <span className="text-[11px]">Loading PR details…</span>
-        </div>
+        <LoadingState fill={false} layout="inline" className="mt-1" label="Loading PR details…" />
       )}
     </div>
   );

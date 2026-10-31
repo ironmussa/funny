@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -241,15 +242,19 @@ export function CreateDesignDialog({
           </TabsContent>
 
           <TabsContent value="template" className="mt-4 min-h-[360px]">
-            <p className="text-muted-foreground py-8 text-center text-sm">
-              {t('createDesign.template.empty', 'Templates coming soon.')}
-            </p>
+            <EmptyState
+              fill={false}
+              className="py-8"
+              title={t('createDesign.template.empty', 'Templates coming soon.')}
+            />
           </TabsContent>
 
           <TabsContent value="other" className="mt-4 min-h-[360px]">
-            <p className="text-muted-foreground py-8 text-center text-sm">
-              {t('createDesign.other.empty', 'More design types coming soon.')}
-            </p>
+            <EmptyState
+              fill={false}
+              className="py-8"
+              title={t('createDesign.other.empty', 'More design types coming soon.')}
+            />
           </TabsContent>
         </Tabs>
 

@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -199,9 +200,11 @@ function PRDetailInfoTab({
               {loadingCommitFiles ? (
                 <LoadingState testId="pr-detail-files-loading" label="Loading…" />
               ) : fileSummaries.length === 0 ? (
-                <div className="text-muted-foreground py-4 text-center text-xs">
-                  {fileSearch ? 'No matching files' : 'No files changed'}
-                </div>
+                <EmptyState
+                  fill={false}
+                  className="py-4"
+                  title={fileSearch ? 'No matching files' : 'No files changed'}
+                />
               ) : (
                 <FileTree
                   files={fileSummaries}

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const markdown = vi.hoisted(() => ({
@@ -12,6 +12,10 @@ import { SatteriMessageContent } from '@/components/thread/SatteriMessageContent
 describe('SatteriMessageContent', () => {
   beforeEach(() => {
     markdown.renderMarkdownToSafeHtml.mockReset();
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText: vi.fn().mockResolvedValue(undefined) },
+    });
   });
 
   test('preserves the source text instead of switching markdown engines after a compiler failure', async () => {
@@ -50,8 +54,13 @@ describe('SatteriMessageContent', () => {
 
     fireEvent.click(copyButton);
 
-    expect(copyButton).toHaveAccessibleName('Copied');
+    await waitFor(() => expect(copyButton).toHaveAccessibleName('Copied'));
+    expect(copyButton.querySelector('[data-satteri-copy-icon="check"]')).toHaveClass(
+      'text-green-600',
+    );
     expect(copyButton.querySelector('[data-satteri-copy-icon="check"]')).toBeInTheDocument();
+    await waitFor(() => expect(copyButton).toHaveAccessibleName('Copy code'), { timeout: 3000 });
+    expect(copyButton.querySelector('[data-satteri-copy-icon="copy"]')).toBeInTheDocument();
   });
 
   test('uses the final markdown text styling while the compiler is loading', () => {

@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -17,7 +17,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 vi.mock('sonner', () => ({
-  toast: { success: vi.fn() },
+  toast: { success: vi.fn(), error: vi.fn() },
 }));
 
 vi.mock('@/components/ui/dropdown-menu', () => {
@@ -58,6 +58,33 @@ describe('UserMessageCard', () => {
     expect(message).toBeInTheDocument();
     expect(message).toHaveClass('bg-foreground', 'rounded-lg', 'shadow-md');
     expect(screen.getByText('Fix the login bug')).toBeInTheDocument();
+  });
+
+  test('presents imported Claude commands without protocol tags', () => {
+    renderWithProviders(
+      <UserMessageCard content="<command-message>review</command-message><command-name>/review</command-name><command-args>src/main.ts</command-args>" />,
+    );
+    expect(screen.getByTestId('user-message-slash-command')).toHaveTextContent('review');
+    expect(screen.getByText(/src\/main.ts/)).toBeInTheDocument();
+    expect(screen.queryByText(/<command-name>/)).not.toBeInTheDocument();
+  });
+
+  test.each([
+    {
+      content: '<system-reminder>Follow repository instructions</system-reminder>',
+      automatic: false,
+    },
+    { content: 'Follow repository instructions', automatic: true },
+  ])('folds automatic context while keeping its contents available: $automatic', (props) => {
+    const onClick = vi.fn();
+    renderWithProviders(<UserMessageCard {...props} onClick={onClick} />);
+    const summary = screen.getByText('Claude Code · Automatic context');
+    const details = summary.closest('details');
+    expect(details).not.toHaveAttribute('open');
+    expect(details).toHaveTextContent('Follow repository instructions');
+    fireEvent.click(summary);
+    expect(details).toHaveAttribute('open');
+    expect(onClick).not.toHaveBeenCalled();
   });
 
   test('strips referenced-files XML and shows unmentioned attachments as chips', () => {
@@ -258,7 +285,7 @@ describe('UserMessageCard', () => {
     expect(onFork).toHaveBeenCalledTimes(1);
   });
 
-  test('copies the visible message content from the external copy button', () => {
+  test('copies the visible message content from the external copy button', async () => {
     const writeText = vi.fn();
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -281,10 +308,15 @@ describe('UserMessageCard', () => {
     expect(copyButton).not.toHaveAttribute('role', 'menuitem');
     expect(copyButton).toHaveClass('bg-white', 'text-black');
 
-    fireEvent.click(copyButton);
+    await act(async () => {
+      fireEvent.click(copyButton);
+    });
 
+    expect(copyButton.querySelector('.lucide-check')).toHaveClass('text-green-600');
     expect(writeText).toHaveBeenCalledWith('Copy this text');
     expect(vi.mocked(toast.success)).toHaveBeenCalledWith('Copied');
+    await waitFor(() => expect(copyButton).toHaveAccessibleName('Copy content'), { timeout: 3000 });
+    expect(copyButton.querySelector('.lucide-copy')).toBeInTheDocument();
   });
 
   test('disables rewind actions when rewindDisabled is true', () => {

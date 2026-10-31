@@ -23,6 +23,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -773,13 +774,13 @@ export function TestFileBrowser({
             label="Loading tests…"
           />
         ) : files.length === 0 ? (
-          <div className="text-muted-foreground px-4 py-8 text-center text-sm">
-            No test files found
-          </div>
+          <EmptyState fill={false} className="px-4 py-8" title="No test files found" />
         ) : filteredFiles.length === 0 ? (
-          <div className="text-muted-foreground px-4 py-8 text-center text-sm">
-            No tests matching "{search}"
-          </div>
+          <EmptyState
+            fill={false}
+            className="px-4 py-8"
+            title={<> No tests matching "{search}" </>}
+          />
         ) : (
           tree.map((node) => (
             <TreeItem

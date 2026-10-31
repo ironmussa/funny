@@ -15,17 +15,39 @@ interface WorktreeSetupProgressProps {
   steps: GitProgressStep[];
 }
 
+const STEP_STYLE = {
+  running: {
+    Icon: Loader2,
+    icon: 'text-primary size-6 animate-spin',
+    label: 'text-foreground',
+    dot: 'bg-primary',
+  },
+  completed: {
+    Icon: Check,
+    icon: 'size-6 text-emerald-500',
+    label: 'text-emerald-500',
+    dot: 'bg-emerald-500',
+  },
+  failed: {
+    Icon: X,
+    icon: 'text-destructive size-6',
+    label: 'text-destructive',
+    dot: 'bg-destructive',
+  },
+  pending: {
+    Icon: Circle,
+    icon: 'text-muted-foreground/40 size-6',
+    label: 'text-muted-foreground/60',
+    dot: 'bg-muted-foreground/20',
+  },
+};
+
 export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
   const prefersReducedMotion = useReducedMotion();
   const getStepElapsed = useStepTimers(steps, true);
   const totalElapsed = useTotalFromSteps(steps, getStepElapsed);
 
-  const focalStep = useMemo(() => {
-    const running = steps.find((s) => s.status === 'running');
-    if (running) return running;
-    const done = steps.filter((s) => s.status === 'completed' || s.status === 'failed');
-    return done.length > 0 ? done[done.length - 1] : (steps[0] ?? null);
-  }, [steps]);
+  const focalStep = useMemo(() => selectFocalStep(steps), [steps]);
 
   const completedCount = steps.filter((s) => s.status === 'completed').length;
 
@@ -35,6 +57,8 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
   }
 
   const stepElapsed = getStepElapsed(focalStep.id);
+  const style = STEP_STYLE[focalStep.status];
+  const Icon = style.Icon;
 
   return (
     <div
@@ -55,26 +79,11 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
           >
             {/* Icon */}
             <div className="shrink-0">
-              {focalStep.status === 'running' && (
-                <Loader2 className="text-primary size-8 animate-spin" />
-              )}
-              {focalStep.status === 'completed' && <Check className="size-8 text-emerald-500" />}
-              {focalStep.status === 'failed' && <X className="text-destructive size-8" />}
-              {focalStep.status === 'pending' && (
-                <Circle className="text-muted-foreground/40 size-8" />
-              )}
+              <Icon className={style.icon} />
             </div>
 
             {/* Label */}
-            <span
-              className={cn(
-                'text-center text-lg font-medium',
-                focalStep.status === 'completed' && 'text-emerald-500',
-                focalStep.status === 'running' && 'text-foreground',
-                focalStep.status === 'failed' && 'text-destructive',
-                focalStep.status === 'pending' && 'text-muted-foreground/60',
-              )}
-            >
+            <span className={cn('text-center text-sm font-normal', style.label)}>
               {focalStep.label}
             </span>
 
@@ -103,24 +112,38 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
               key={step.id}
               className={cn(
                 'size-2 rounded-full transition-colors duration-300',
-                step.status === 'completed' && 'bg-emerald-500',
-                step.status === 'running' && 'bg-primary',
-                step.status === 'failed' && 'bg-destructive',
-                step.status === 'pending' && 'bg-muted-foreground/20',
+                STEP_STYLE[step.status].dot,
               )}
             />
           ))}
         </div>
       )}
 
-      {/* Total elapsed */}
-      {steps.length > 0 && (
-        <span className="text-muted-foreground/40 text-xs tabular-nums">
-          {completedCount === steps.length && steps.length > 0
-            ? `Completed in ${formatElapsed(totalElapsed)}`
-            : formatElapsed(totalElapsed)}
-        </span>
-      )}
+      <SetupElapsed count={steps.length} completed={completedCount} elapsed={totalElapsed} />
     </div>
+  );
+}
+
+function selectFocalStep(steps: GitProgressStep[]) {
+  const running = steps.find((s) => s.status === 'running');
+  if (running) return running;
+  const done = steps.filter((s) => s.status === 'completed' || s.status === 'failed');
+  return done.length > 0 ? done[done.length - 1] : (steps[0] ?? null);
+}
+
+function SetupElapsed({
+  count,
+  completed,
+  elapsed,
+}: {
+  count: number;
+  completed: number;
+  elapsed: number;
+}) {
+  if (count === 0) return null;
+  return (
+    <span className="text-muted-foreground/40 text-xs tabular-nums">
+      {completed === count ? `Completed in ${formatElapsed(elapsed)}` : formatElapsed(elapsed)}
+    </span>
   );
 }

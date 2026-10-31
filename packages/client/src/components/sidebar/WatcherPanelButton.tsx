@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { NavItem } from '@/components/ui/nav-item';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -311,9 +312,7 @@ export function WatcherPanelButton() {
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="w-80 p-1" data-testid="watcher-panel">
         {totalCount === 0 ? (
-          <p className="text-muted-foreground px-2 py-4 text-center text-sm">
-            No background activity yet.
-          </p>
+          <EmptyState fill={false} className="px-2 py-4" title="No background activity yet." />
         ) : (
           <ScrollArea className={cn('max-h-96', totalCount > 6 && 'h-96')}>
             {activeCount > 0 && (

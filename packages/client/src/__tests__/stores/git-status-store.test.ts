@@ -16,7 +16,9 @@ import {
   useGitStatusStore,
   _resetCooldowns,
   branchKey,
+  clearGitStatusScope,
   invalidateCooldownsForKeys,
+  setGitStatusScope,
 } from '@/stores/git-status-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -673,6 +675,68 @@ describe('GitStatusStore', () => {
         .ensureStatusForThreads([{ id: 'scratch1', projectId: '', isScratch: true } as any]);
 
       expect(fetchSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  // ── 8b. Thread scope ──────────────────────────────────────
+  describe('thread scope', () => {
+    beforeEach(() => {
+      mockApi.getGitStatuses.mockReturnValue(okAsync({ statuses: [] }) as any);
+    });
+
+    test('requests only the union of registered visible threads', async () => {
+      setGitStatusScope('sidebar', { p1: ['t2', 't1'] });
+      setGitStatusScope('activity', { p1: ['t3'], p2: ['x1'] });
+
+      await useGitStatusStore.getState().fetchForProject('p1');
+
+      expect(mockApi.getGitStatuses).toHaveBeenCalledWith('p1', expect.any(AbortSignal), [
+        't1',
+        't2',
+        't3',
+      ]);
+    });
+
+    test("an 'all' registration requests the whole project", async () => {
+      setGitStatusScope('sidebar', { p1: ['t1'] });
+      setGitStatusScope('kanban', { p1: 'all' });
+
+      await useGitStatusStore.getState().fetchForProject('p1');
+
+      expect(mockApi.getGitStatuses).toHaveBeenCalledWith('p1', expect.any(AbortSignal));
+    });
+
+    test('unregistered projects and cleared scopes fall back to the whole project', async () => {
+      setGitStatusScope('sidebar', { p1: ['t1'] });
+      clearGitStatusScope('sidebar');
+
+      await useGitStatusStore.getState().fetchForProject('p1');
+
+      expect(mockApi.getGitStatuses).toHaveBeenCalledWith('p1', expect.any(AbortSignal));
+    });
+
+    test('a widened scope bypasses the cooldown; a narrowed one does not', async () => {
+      setGitStatusScope('sidebar', { p1: ['t1', 't2'] });
+      await useGitStatusStore.getState().fetchForProject('p1');
+
+      // Narrowed: already covered by the previous fetch.
+      setGitStatusScope('sidebar', { p1: ['t1'] });
+      await useGitStatusStore.getState().fetchForProject('p1');
+      expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(1);
+
+      // Widened: t3 was never fetched, so its badge would stay empty.
+      setGitStatusScope('sidebar', { p1: ['t1', 't3'] });
+      await useGitStatusStore.getState().fetchForProject('p1');
+      expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(2);
+      expect(mockApi.getGitStatuses).toHaveBeenLastCalledWith('p1', expect.any(AbortSignal), [
+        't1',
+        't3',
+      ]);
+
+      // Whole project after a scoped fetch is a widening too.
+      clearGitStatusScope('sidebar');
+      await useGitStatusStore.getState().fetchForProject('p1');
+      expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(3);
     });
   });
 

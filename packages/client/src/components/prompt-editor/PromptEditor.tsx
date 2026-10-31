@@ -62,6 +62,7 @@ const BUILTIN_SLASH_DESCRIPTIONS: Record<string, string> = {
   cost: 'Show token usage and cost for this session',
   init: 'Generate a CLAUDE.md for this project',
   review: 'Review a pull request',
+  'security-review': 'Review pending changes for security vulnerabilities',
   'pr-comments': 'Get comments from a GitHub pull request',
   'add-dir': 'Add a working directory to the session',
   'output-style': 'Change the agent output style',
@@ -249,8 +250,8 @@ export function buildSlashSuggestionItems({
       add(name, description, 'slash');
   }
   if (isClaude) {
-    for (const name of sdkCommands) {
-      if (BUILTIN_SLASH_DESCRIPTIONS[name]) add(name, BUILTIN_SLASH_DESCRIPTIONS[name], 'slash');
+    for (const [name, description] of Object.entries(BUILTIN_SLASH_DESCRIPTIONS)) {
+      if (sdkCommandNames.has(name) || skillByName.has(name)) add(name, description, 'slash');
     }
   }
   for (const s of skills) {
@@ -261,6 +262,14 @@ export function buildSlashSuggestionItems({
     add(name, skillByName.get(name) ?? builtinDesc(name) ?? BUILTIN_SLASH_FALLBACK, 'slash');
   }
 
+  return matchSlashSuggestions(ordered, query, limit);
+}
+
+function matchSlashSuggestions(
+  ordered: { name: string; description: string; type: 'slash' | 'skill' }[],
+  query: string,
+  limit: number,
+): SuggestionItem[] {
   const q = query.toLowerCase();
   const matched: SuggestionItem[] = [];
   for (let i = 0; i < ordered.length && matched.length < limit; i++) {

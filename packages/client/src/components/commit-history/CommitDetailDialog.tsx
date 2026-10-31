@@ -10,6 +10,7 @@ import { FileTree } from '@/components/FileTree';
 import { ExpandedDiffView } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -406,13 +407,17 @@ export function CommitDetailDialog({
                 )}
                 <ScrollArea className="min-h-0 flex-1">
                   {commitFiles.length === 0 ? (
-                    <div className="text-muted-foreground py-4 text-center text-xs">
-                      {t('history.noFiles', 'No files changed')}
-                    </div>
+                    <EmptyState
+                      fill={false}
+                      className="py-4"
+                      title={t('history.noFiles', 'No files changed')}
+                    />
                   ) : treeFiles.length === 0 ? (
-                    <div className="text-muted-foreground py-4 text-center text-xs">
-                      {t('history.noMatchingFiles', 'No matching files')}
-                    </div>
+                    <EmptyState
+                      fill={false}
+                      className="py-4"
+                      title={t('history.noMatchingFiles', 'No matching files')}
+                    />
                   ) : (
                     <FileTree
                       files={treeFiles}

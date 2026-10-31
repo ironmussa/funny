@@ -1,6 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
+import { EmptyState } from '@/components/ui/empty-state';
+
 interface Props {
   data: Record<string, number>;
 }
@@ -42,9 +44,7 @@ export function StageDistributionChart({ data }: Props) {
   );
 
   if (chartData.length === 0) {
-    return (
-      <div className="text-muted-foreground py-8 text-center text-sm">{t('analytics.noData')}</div>
-    );
+    return <EmptyState fill={false} className="py-8" title={t('analytics.noData')} />;
   }
 
   const total = chartData.reduce((sum, d) => sum + d.value, 0);

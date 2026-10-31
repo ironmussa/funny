@@ -45,16 +45,41 @@ import {
 
 export const statusRoutes = new Hono<HonoEnv>();
 
-// GET /api/git/status?projectId=xxx — bulk git status for all worktree threads
+/** Upper bound for `threadIds`; larger scopes fall back to the whole project. */
+const MAX_SCOPED_THREAD_IDS = 200;
+
+/**
+ * Parse the optional `threadIds` scope (comma-separated). Returns null for the
+ * whole project — also when the list is empty or too large to be worth scoping.
+ */
+function parseThreadScope(raw: string | undefined): Set<string> | null {
+  if (!raw) return null;
+  const ids = raw
+    .split(',')
+    .map((id) => id.trim())
+    .filter(Boolean);
+  if (ids.length === 0 || ids.length > MAX_SCOPED_THREAD_IDS) return null;
+  return new Set(ids);
+}
+
+function getCachedScope(projectId: string, scopeKey: string) {
+  const cached = _gitStatusCache.get(projectId);
+  if (!cached || (cached.scope ?? '') !== scopeKey) return undefined;
+  return Date.now() - cached.ts < GIT_STATUS_CACHE_TTL_MS ? cached : undefined;
+}
+
+// GET /api/git/status?projectId=xxx[&threadIds=a,b] — bulk git status for the
+// project's threads, optionally scoped to the threads the client has on screen
+// (a project can hold thousands of threads; the sidebar shows a handful).
 statusRoutes.get('/status', async (c) => {
   const projectId = c.req.query('projectId');
   if (!projectId) return c.json({ error: 'projectId required' }, 400);
+  const threadScope = parseThreadScope(c.req.query('threadIds'));
+  const scopeKey = threadScopeKey(threadScope);
 
-  // Return cached result if still fresh
-  const cached = _gitStatusCache.get(projectId);
-  if (cached && Date.now() - cached.ts < GIT_STATUS_CACHE_TTL_MS) {
-    return c.json(cached.data);
-  }
+  // Return cached result if still fresh (and computed for the same scope)
+  const cached = getCachedScope(projectId, scopeKey);
+  if (cached) return c.json(cached.data);
 
   const userId = c.get('userId') as string;
   const projectResult = await requireProject(
@@ -65,7 +90,12 @@ statusRoutes.get('/status', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
-  const { threads } = await tm.listThreads({ projectId, userId, isScratch: 'exclude' });
+  const { threads: projectThreads } = await tm.listThreads({
+    projectId,
+    userId,
+    isScratch: 'exclude',
+  });
+  const threads = filterThreadScope(projectThreads, threadScope);
   const worktreeThreads = threads.filter(
     (t) => t.mode === 'worktree' && t.worktreePath && t.branch,
   );
@@ -365,7 +395,7 @@ statusRoutes.get('/status', async (c) => {
   ];
 
   const response = { statuses };
-  _gitStatusCache.set(projectId, { data: response, ts: Date.now() });
+  _gitStatusCache.set(projectId, { data: response, ts: Date.now(), scope: scopeKey });
 
   for (const branch of branchesNeedingPRLookup) {
     const matchingStatuses = statuses.filter(
@@ -568,3 +598,10 @@ statusRoutes.get('/:threadId/status', async (c) => {
     ...(prInfo ? { prNumber: prInfo.prNumber, prUrl: prInfo.prUrl, prState: prInfo.prState } : {}),
   });
 });
+
+function threadScopeKey(scope: Set<string> | null): string {
+  return scope ? [...scope].sort().join(',') : '';
+}
+function filterThreadScope<T extends { id: string }>(threads: T[], scope: Set<string> | null): T[] {
+  return scope ? threads.filter((thread) => scope.has(thread.id)) : threads;
+}

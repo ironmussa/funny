@@ -1,25 +1,10 @@
 import { Loader2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import { STATE_ICON_CLASS, STATE_TEXT_CLASS } from '@/components/ui/state-styles';
 import { cn } from '@/lib/utils';
 
-type LoadingSize = 'default' | 'compact';
 type LoadingLayout = 'stack' | 'inline';
-
-const SIZE_STYLES: Record<LoadingSize, { spinner: string; label: string; gap: string }> = {
-  /** Pane-level loading — main column, review sidebar, tab panels. */
-  default: {
-    spinner: 'icon-xl animate-spin text-muted-foreground/70',
-    label: 'text-sm text-muted-foreground/60',
-    gap: 'gap-3',
-  },
-  /** Dense areas — overlays, dialog fragments, inline blocks. */
-  compact: {
-    spinner: 'icon-sm animate-spin text-muted-foreground',
-    label: 'text-xs text-muted-foreground',
-    gap: 'gap-2',
-  },
-};
 
 interface LoadingStateProps {
   /** Primary line shown next to or below the spinner. */
@@ -28,14 +13,10 @@ interface LoadingStateProps {
   className?: string;
   /** Hook for Playwright / unit tests. */
   testId?: string;
-  /** Visual scale. Default matches pane-level placeholders across columns. */
-  size?: LoadingSize;
   /** Stack (spinner above label) or inline (spinner beside label). */
   layout?: LoadingLayout;
   /** When false, sizes to content instead of filling the parent. */
   fill?: boolean;
-  /** Override spinner size / color — prefer {@link size} when possible. */
-  spinnerClassName?: string;
 }
 
 /**
@@ -48,12 +29,9 @@ export function LoadingState({
   label,
   className,
   testId,
-  size = 'default',
   layout = 'stack',
   fill = true,
-  spinnerClassName,
 }: LoadingStateProps) {
-  const styles = SIZE_STYLES[size];
   const isInline = layout === 'inline';
 
   return (
@@ -63,13 +41,13 @@ export function LoadingState({
         'flex items-center justify-center',
         isInline ? 'flex-row text-left' : 'flex-col text-center',
         fill && 'h-full w-full min-h-0 flex-1 p-4',
-        styles.gap,
+        'gap-2',
         className,
       )}
     >
-      <Loader2 className={cn(styles.spinner, spinnerClassName)} />
+      <Loader2 className={cn(STATE_ICON_CLASS, 'animate-spin text-muted-foreground/70')} />
       {label != null && label !== '' && (
-        <p className={cn(styles.label, isInline && 'whitespace-nowrap')}>{label}</p>
+        <p className={cn(STATE_TEXT_CLASS, 'text-muted-foreground')}>{label}</p>
       )}
     </div>
   );

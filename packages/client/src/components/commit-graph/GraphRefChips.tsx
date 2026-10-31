@@ -295,7 +295,11 @@ function CopyableRefValue({
               }}
               data-testid={`graph-branch-copy-${kind}-${value}`}
             >
-              {copied ? <Check className="icon-2xs" /> : <Copy className="icon-2xs" />}
+              {copied ? (
+                <Check className="icon-2xs copy-feedback-icon text-green-600" />
+              ) : (
+                <Copy className="icon-2xs copy-feedback-icon" />
+              )}
             </button>
           </TooltipTrigger>
           <TooltipContent side="right">

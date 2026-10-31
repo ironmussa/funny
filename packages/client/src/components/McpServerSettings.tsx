@@ -30,6 +30,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import {
@@ -800,7 +801,7 @@ export function McpServerSettings() {
             label={t('mcp.loadingServers')}
           />
         ) : servers.length === 0 ? (
-          <div className="text-muted-foreground py-6 text-center text-sm">{t('mcp.noServers')}</div>
+          <EmptyState fill={false} className="py-6" title={t('mcp.noServers')} />
         ) : (
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
             {servers.map((server) => (

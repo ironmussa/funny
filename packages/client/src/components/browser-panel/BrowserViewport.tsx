@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 
+import { EmptyState } from '@/components/ui/empty-state';
+import { LoadingState } from '@/components/ui/loading-state';
 import { browserSessionClient } from '@/lib/browser-session-client';
 import {
   BROWSER_SESSION_ASPECT_RATIO,
@@ -215,21 +217,19 @@ export function BrowserViewport() {
           </div>
         </div>
       ) : (
-        <div
-          className="text-muted-foreground text-center text-sm"
-          data-testid="browser-panel-empty"
-        >
-          {loadedUrl ? null : 'Paste a URL above to start.'}
-        </div>
+        <EmptyState
+          fill={false}
+          testId="browser-panel-empty"
+          title={loadedUrl ? null : 'Paste a URL above to start.'}
+        />
       )}
 
       {showCdpSpinner && (
-        <div
-          data-testid="browser-panel-spawning"
-          className="bg-background/80 text-muted-foreground absolute inset-0 flex items-center justify-center text-sm"
-        >
-          Spawning Chrome…
-        </div>
+        <LoadingState
+          testId="browser-panel-spawning"
+          className="bg-background/80 absolute inset-0"
+          label="Spawning Chrome…"
+        />
       )}
 
       {showCdpDisconnected && (

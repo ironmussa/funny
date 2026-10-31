@@ -1,12 +1,11 @@
 import { DEFAULT_PROVIDER, DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import { CircleDot, GitFork, NotebookPen } from 'lucide-react';
-import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
-import { LoadingState } from '@/components/ui/loading-state';
 import { useSaveBacklogOnLeave } from '@/hooks/use-save-backlog-on-leave';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { api } from '@/lib/api';
@@ -22,6 +21,7 @@ import { AvailableMcpServers } from '../AvailableMcpServers';
 import { PromptInput } from '../PromptInput';
 import { NewThreadContextBar } from './NewThreadContextBar';
 import { SaveBacklogDialog } from './SaveBacklogDialog';
+import { ThreadPreparationView, type PreparationMessageMetadata } from './ThreadPreparationView';
 
 /** Replicate server-side slugifyTitle for branch name preview. */
 function slugifyTitle(title: string, maxLength = 40): string {
@@ -56,11 +56,14 @@ export function NewThreadInput({
 }: NewThreadInputProps = {}) {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
-  const newThreadIsScratchStore = useUIStore((s) => s.newThreadIsScratch);
-  const newThreadIsScratch = isScratchOverride ?? newThreadIsScratchStore;
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const effectiveProjectId = projectIdOverride || newThreadProjectId || selectedProjectId;
+  const {
+    newThreadIsScratch,
+    effectiveProjectId,
+    project,
+    defaultThreadMode,
+    projectPath,
+    defaultProvider,
+  } = useComposeProject(projectIdOverride, isScratchOverride);
   const newThreadIdleOnly = useUIStore((s) => s.newThreadIdleOnly);
   const addScratchThread = useThreadStore((s) => s.addScratchThread);
   const activeDesignId = useUIStore((s) => s.activeDesignId);
@@ -81,16 +84,9 @@ export function NewThreadInput({
   const cancelNewThread = onCancel ?? cancelNewThreadGlobal;
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
-  const projects = useProjectStore((s) => s.projects);
-  const project = effectiveProjectId
-    ? projects.find((p) => p.id === effectiveProjectId)
-    : undefined;
-  const defaultThreadMode = project?.defaultMode ?? DEFAULT_THREAD_MODE;
   const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 
   // ── Project path (for AvailableMcpServers) ──
-  const projectPath = useMemo(() => project?.path ?? '', [project?.path]);
-  const defaultProvider = project?.defaultProvider ?? DEFAULT_PROVIDER;
   const [mcpProvider, setMcpProvider] = useState(defaultProvider);
 
   useEffect(() => {
@@ -133,7 +129,11 @@ export function NewThreadInput({
     });
 
   const [restoredPrompt, setRestoredPrompt] = useState<string | null>(null);
-  const lastPromptRef = useRef('');
+  const [submittedPrompt, setSubmittedPrompt] = useState('');
+  // Read by the async onSuccess callback, which may close over a stale render.
+  const submittedPromptRef = useRef('');
+  const [submittedMetadata, setSubmittedMetadata] = useState<PreparationMessageMetadata>();
+  const submittedMetadataRef = useRef<PreparationMessageMetadata>(undefined);
   // Pin the "Preparing…" loader from a successful submit until this component
   // unmounts via the navigation onSuccess triggers. The hook flips its local
   // `creating` flag back to false as soon as onSuccess resolves, but react-
@@ -144,6 +144,7 @@ export function NewThreadInput({
   // empty new-thread screen between "Preparing…" and the thread view.
   const [submitted, setSubmitted] = useState(false);
   const [workflowSubmitting, setWorkflowSubmitting] = useState(false);
+  const [requestPending, setRequestPending] = useState(false);
 
   const handleThreadCreated = useCallback(
     async (threadId: string, kind: 'scratch' | 'idle' | 'normal', thread: any) => {
@@ -156,20 +157,22 @@ export function NewThreadInput({
 
       if (kind === 'scratch') {
         addScratchThread(thread);
-        if (onCreated) {
-          onCreated(threadId);
-        } else {
-          useThreadStore.setState({ selectedThreadId: threadId });
-          cancelNewThread();
-          navigate(buildPath(getThreadRoute(thread)));
-        }
+        finishCreatedThread(
+          threadId,
+          onCreated,
+          cancelNewThread,
+          navigate,
+          buildPath(getThreadRoute(thread)),
+          {
+            pendingPrompt: submittedPromptRef.current,
+            pendingMetadata: submittedMetadataRef.current,
+          },
+        );
         return;
       }
 
       // Idle + normal both refresh the project's thread list.
-      if (effectiveProjectId) {
-        await loadThreadsForProject(effectiveProjectId);
-      }
+      await refreshCreatedProject(effectiveProjectId, kind, loadThreadsForProject);
 
       if (kind === 'idle') {
         toast.success(t('toast.threadCreated', { title: thread?.title ?? '' }));
@@ -182,17 +185,19 @@ export function NewThreadInput({
       }
 
       // kind === 'normal'
-      if (onCreated) {
-        onCreated(threadId);
-      } else {
-        useThreadStore.setState({ selectedThreadId: threadId });
-        cancelNewThread();
-        // Inside a design view, stay in the design view — the design's
-        // thread list picks up the new thread automatically.
-        if (!activeDesignId && effectiveProjectId) {
-          navigate(buildPath(`/projects/${effectiveProjectId}/threads/${threadId}`));
-        }
-      }
+      finishCreatedThread(
+        threadId,
+        onCreated,
+        cancelNewThread,
+        navigate,
+        !activeDesignId && effectiveProjectId
+          ? buildPath(`/projects/${effectiveProjectId}/threads/${threadId}`)
+          : undefined,
+        {
+          pendingPrompt: submittedPromptRef.current,
+          pendingMetadata: submittedMetadataRef.current,
+        },
+      );
     },
     [
       activeDesignId,
@@ -223,6 +228,14 @@ export function NewThreadInput({
       opts: Parameters<typeof createThreadFromHook>[1],
       images?: any[],
     ): Promise<boolean> => {
+      const metadata: PreparationMessageMetadata = {
+        model: opts.model as PreparationMessageMetadata['model'],
+        permissionMode: opts.mode as PreparationMessageMetadata['permissionMode'],
+        effort: opts.effort as PreparationMessageMetadata['effort'],
+        timestamp: new Date().toISOString(),
+      };
+      setSubmittedMetadata(metadata);
+      submittedMetadataRef.current = metadata;
       const workflowParse = parseWorkflowInvocation(prompt);
       if (!workflowParse.ok) {
         toast.error(workflowParse.error);
@@ -235,7 +248,8 @@ export function NewThreadInput({
         }
 
         setRestoredPrompt(null);
-        lastPromptRef.current = prompt;
+        setSubmittedPrompt(prompt);
+        submittedPromptRef.current = prompt;
         setWorkflowSubmitting(true);
 
         const workflowPrompt =
@@ -254,7 +268,7 @@ export function NewThreadInput({
 
           if (createResult.isErr()) {
             toast.error(createResult.error.message);
-            setRestoredPrompt(lastPromptRef.current);
+            setRestoredPrompt(prompt);
             return false;
           }
 
@@ -278,19 +292,27 @@ export function NewThreadInput({
 
       // Reset restored-prompt before the call so the field clears if it succeeds.
       setRestoredPrompt(null);
-      lastPromptRef.current = prompt;
-      const ok = await createThreadFromHook(prompt, opts, images);
+      setSubmittedPrompt(prompt);
+      submittedPromptRef.current = prompt;
+      setRequestPending(true);
+      const ok = await createThreadFromHook(prompt, opts, images).finally(() => {
+        setRequestPending(false);
+      });
       if (!ok) {
         // Restore the user's text so they don't lose it on a failed submit.
-        setRestoredPrompt(lastPromptRef.current);
+        setRestoredPrompt(prompt);
         return ok;
       }
       // Only pin the loader when onSuccess will navigate away (and thus unmount
       // this component). Idle threads and design-view creates stay on this
       // screen, so pinning there would strand the loader forever. Mirrors the
       // navigation conditions in onSuccess above.
-      const willNavigateAway =
-        !onCreated && !newThreadIdleOnly && (newThreadIsScratch || !activeDesignId);
+      const willNavigateAway = shouldNavigateAfterCreate(
+        !!onCreated,
+        newThreadIdleOnly,
+        newThreadIsScratch,
+        !!activeDesignId,
+      );
       if (willNavigateAway) setSubmitted(true);
       return ok;
     },
@@ -307,10 +329,14 @@ export function NewThreadInput({
     ],
   );
 
-  if (creating || submitted || workflowSubmitting) {
+  if (creating || requestPending || submitted || workflowSubmitting) {
     return (
-      <div className="text-muted-foreground flex flex-1 items-center justify-center px-4">
-        <LoadingState testId="new-thread-creating" label={t('common.preparing', 'Preparing…')} />
+      <div className="flex min-h-0 flex-1 flex-col" data-testid="new-thread-creating">
+        <ThreadPreparationView
+          prompt={submittedPrompt}
+          metadata={submittedMetadata}
+          projectId={effectiveProjectId || undefined}
+        />
       </div>
     );
   }
@@ -390,13 +416,7 @@ export function NewThreadInput({
           </div>
         )}
         <PromptInput
-          key={
-            issueContext
-              ? `${effectiveProjectId}-issue`
-              : initialPrefillRef.current
-                ? `${effectiveProjectId}-prefill-${initialPrefillRef.current.length}`
-                : effectiveProjectId
-          }
+          key={composePromptKey(effectiveProjectId, !!issueContext, initialPrefillRef.current)}
           onSubmit={handleCreate}
           loading={creating}
           isNewThread
@@ -426,4 +446,83 @@ export function NewThreadInput({
       />
     </div>
   );
+}
+
+async function refreshCreatedProject(
+  projectId: string | null | undefined,
+  kind: 'idle' | 'normal',
+  load: (projectId: string) => Promise<unknown>,
+) {
+  if (!projectId) return;
+  const refresh = load(projectId);
+  if (kind === 'idle') await refresh;
+  else
+    void refresh.catch(() => {
+      /* Sidebar refresh must not block opening the new thread. */
+    });
+}
+
+function composePromptKey(
+  projectId: string | null | undefined,
+  fromIssue: boolean,
+  prefill: string | null | undefined,
+) {
+  if (fromIssue) return `${projectId}-issue`;
+  return prefill ? `${projectId}-prefill-${prefill.length}` : projectId;
+}
+function shouldNavigateAfterCreate(
+  hasCallback: boolean,
+  idleOnly: boolean,
+  scratch: boolean,
+  hasDesign: boolean,
+) {
+  return !hasCallback && !idleOnly && (scratch || !hasDesign);
+}
+
+function finishCreatedThread(
+  threadId: string,
+  onCreated: ((id: string) => void) | undefined,
+  cancel: () => void,
+  navigate: ReturnType<typeof useNavigate>,
+  path: string | undefined,
+  state: { pendingPrompt: string; pendingMetadata?: PreparationMessageMetadata },
+) {
+  if (onCreated) {
+    onCreated(threadId);
+    return;
+  }
+  useThreadStore.setState({ selectedThreadId: threadId });
+  cancel();
+  if (path) navigate(path, { state });
+}
+
+function useComposeProject(
+  projectIdOverride: string | undefined,
+  isScratchOverride: boolean | undefined,
+) {
+  const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
+  const newThreadIsScratchStore = useUIStore((s) => s.newThreadIsScratch);
+  const newThreadIsScratch = isScratchOverride ?? newThreadIsScratchStore;
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const effectiveProjectId = projectIdOverride || newThreadProjectId || selectedProjectId;
+  const projects = useProjectStore((s) => s.projects);
+  const project = effectiveProjectId
+    ? projects.find((p) => p.id === effectiveProjectId)
+    : undefined;
+  return {
+    newThreadIsScratch,
+    effectiveProjectId,
+    project,
+    ...composeProjectDefaults(project),
+  };
+}
+
+function composeProjectDefaults(
+  project: ReturnType<typeof useProjectStore.getState>['projects'][number] | undefined,
+) {
+  return {
+    defaultThreadMode: project?.defaultMode ?? DEFAULT_THREAD_MODE,
+    projectPath: project?.path ?? '',
+    defaultProvider: project?.defaultProvider ?? DEFAULT_PROVIDER,
+  };
 }

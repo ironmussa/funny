@@ -13,6 +13,7 @@ import {
   CommandSeparator,
   CommandItem,
 } from '@/components/ui/command';
+import { EmptyState } from '@/components/ui/empty-state';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric } from '@/lib/telemetry';
 import { buildPath } from '@/lib/url';
@@ -213,9 +214,7 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
       />
       <CommandList ref={listRef}>
         {hasNoResults && (
-          <div className="text-muted-foreground py-6 text-center text-sm">
-            {t('commandPalette.noResults')}
-          </div>
+          <EmptyState fill={false} className="py-6" title={t('commandPalette.noResults')} />
         )}
         {displayProjects.length > 0 && (
           <CommandGroup heading={t('commandPalette.projects')}>
@@ -236,9 +235,7 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
           </CommandGroup>
         )}
         {!searchLower && displayProjects.length === 0 && (
-          <div className="text-muted-foreground px-2 py-6 text-center text-sm">
-            {t('commandPalette.noProjects')}
-          </div>
+          <EmptyState fill={false} className="px-2 py-6" title={t('commandPalette.noProjects')} />
         )}
         {displayProjects.length > 0 && displaySettings.length > 0 && <CommandSeparator />}
         {displaySettings.length > 0 && (

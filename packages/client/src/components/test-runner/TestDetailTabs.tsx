@@ -20,6 +20,7 @@ import type { ReactNode } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { CodeViewer } from '@/components/ui/code-viewer';
+import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -268,9 +269,7 @@ function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
   return (
     <ScrollArea className="h-full font-mono text-xs">
       {entries.length === 0 ? (
-        <div className="text-muted-foreground flex h-full items-center justify-center">
-          No errors captured
-        </div>
+        <EmptyState title="No errors captured" />
       ) : (
         <div>
           {keyedEntries.map(({ key, value: entry }) => (
@@ -396,11 +395,13 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
           className={cn('min-h-0 border-r', selectedEntry ? 'w-[280px] shrink-0' : 'flex-1')}
         >
           {filtered.length === 0 ? (
-            <div className="text-muted-foreground flex h-full items-center justify-center">
-              {entries.length === 0
-                ? 'Network requests will appear here...'
-                : 'No matching requests'}
-            </div>
+            <EmptyState
+              title={
+                entries.length === 0
+                  ? 'Network requests will appear here...'
+                  : 'No matching requests'
+              }
+            />
           ) : selectedEntry ? (
             /* Compact name-only list when detail is open */
             <div className="font-mono">
@@ -707,7 +708,7 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
   }, [entry.postData]);
 
   if (queryParams.length === 0 && !hasBody) {
-    return <div className="text-muted-foreground py-4 text-center">No payload data</div>;
+    return <EmptyState fill={false} className="py-4" title="No payload data" />;
   }
 
   return (
@@ -938,11 +939,7 @@ function SourceTab({
     );
   }
   if (!code) {
-    return (
-      <div className="text-muted-foreground flex h-full items-center justify-center text-xs">
-        No source available
-      </div>
-    );
+    return <EmptyState title="No source available" />;
   }
 
   return (
@@ -1129,9 +1126,7 @@ function AnnotationsTab({ outputLines }: { outputLines: OutputLine[] }) {
   return (
     <ScrollArea className="h-full text-xs">
       {annotations.length === 0 ? (
-        <div className="text-muted-foreground flex h-full items-center justify-center">
-          No annotations found
-        </div>
+        <EmptyState title="No annotations found" />
       ) : (
         <div>
           {annotations.map((anno) => (

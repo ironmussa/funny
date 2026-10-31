@@ -8,6 +8,7 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import {
   Select,
   SelectContent,
@@ -75,11 +76,7 @@ export function ProjectRunnerSettings() {
   );
 
   if (!projectId || !settings) {
-    return (
-      <div className="text-muted-foreground py-6 text-center text-sm">
-        {t('common.loading', 'Loading…')}
-      </div>
-    );
+    return <LoadingState fill={false} className="py-6" label={t('common.loading', 'Loading…')} />;
   }
 
   const runners = settings.runners ?? [];

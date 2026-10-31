@@ -8,13 +8,15 @@ import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
+import { ThreadListEmptyState } from '@/components/ui/thread-list-empty-state';
+import { ThreadListViewport } from '@/components/ui/thread-list-viewport';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useVirtualListPagination } from '@/hooks/use-virtual-list-pagination';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useThreadStore } from '@/stores/thread-store';
 
 const ROW_ESTIMATE_PX = 60;
-const LOAD_MORE_THRESHOLD = 5;
 
 interface VirtualThreadListProps {
   threads: Thread[];
@@ -100,134 +102,115 @@ export function VirtualThreadList({
 
   const virtualItems = virtualizer.getVirtualItems();
 
-  useEffect(() => {
-    if (!hasMore || loadingMore || !onEndReached) return;
-    const last = virtualItems[virtualItems.length - 1];
-    if (!last) return;
-    if (last.index >= threads.length - 1 - LOAD_MORE_THRESHOLD) {
-      onEndReached();
-    }
-  }, [virtualItems, hasMore, loadingMore, onEndReached, threads.length]);
+  useVirtualListPagination(virtualItems, threads.length, hasMore, loadingMore, onEndReached);
 
   if (threads.length === 0) {
-    return (
-      <div
-        className={cn(
-          'flex h-32 items-center justify-center text-xs text-muted-foreground',
-          className,
-        )}
-      >
-        {search ? searchEmptyMessage : emptyMessage}
-      </div>
-    );
+    return <ThreadListEmptyState {...{ className, search, searchEmptyMessage, emptyMessage }} />;
   }
 
   return (
-    <div className={cn('flex min-h-0 flex-1 flex-col', className)}>
+    <ThreadListViewport
+      testId="virtual-thread-list-scroll"
+      scrollRef={scrollRef}
+      className={className}
+    >
       <div
-        ref={scrollRef}
-        data-testid="virtual-thread-list-scroll"
-        className="border-border/50 min-h-0 flex-1 overflow-y-auto rounded-lg border"
+        style={{
+          height: `${virtualizer.getTotalSize()}px`,
+          width: '100%',
+          position: 'relative',
+        }}
       >
-        <div
-          style={{
-            height: `${virtualizer.getTotalSize()}px`,
-            width: '100%',
-            position: 'relative',
-          }}
-        >
-          {virtualItems.map((v) => {
-            const thread = threads[v.index];
-            if (!thread) return null;
-            if (renderItem) {
-              return (
-                <div
-                  key={v.key}
-                  data-index={v.index}
-                  data-testid={`virtual-thread-item-${thread.id}`}
-                  ref={virtualizer.measureElement}
-                  className="border-border/50 absolute top-0 left-0 w-full border-b px-1 py-1"
-                  style={{ transform: `translateY(${v.start}px)` }}
-                >
-                  {renderItem(thread)}
-                </div>
-              );
-            }
-            const Wrapper = onThreadClick ? 'button' : 'div';
+        {virtualItems.map((v) => {
+          const thread = threads[v.index];
+          if (!thread) return null;
+          if (renderItem) {
             return (
-              <Wrapper
+              <div
                 key={v.key}
                 data-index={v.index}
                 data-testid={`virtual-thread-item-${thread.id}`}
-                ref={virtualizer.measureElement as never}
-                {...(onThreadClick ? { onClick: () => onThreadClick(thread) } : {})}
-                onMouseMove={() => setHighlightIndex(v.index)}
-                className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/50 group/row outline-hidden',
-                  onThreadClick && 'text-left hover:bg-accent/50 transition-colors',
-                  v.index === highlightIndex && 'bg-accent/50',
-                )}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  transform: `translateY(${v.start}px)`,
-                }}
+                ref={virtualizer.measureElement}
+                className="border-border/50 absolute top-0 left-0 w-full border-b px-1 py-1"
+                style={{ transform: `translateY(${v.start}px)` }}
               >
-                <ThreadStatusPin
-                  thread={thread}
-                  onPin={(pinned) => pinThread(thread.id, thread.projectId, pinned)}
-                  hoverGroup="row"
-                  showStatusTooltip
-                />
-
-                <div className="min-w-0 flex-1">
-                  <ThreadTitle
-                    title={thread.title}
-                    search={search}
-                    className="block text-sm font-medium"
-                    badgeTestId={`virtual-thread-item-attachments-${thread.id}`}
-                    stopBadgePropagation
-                  />
-                  {contentSnippets?.get(thread.id) &&
-                    search &&
-                    !normalize(thread.title).includes(normalize(search)) && (
-                      <HighlightText
-                        text={contentSnippets.get(thread.id)!}
-                        query={search}
-                        className="text-muted-foreground block truncate text-[11px] italic"
-                      />
-                    )}
-                  <div className="mt-0.5 flex items-center gap-2">
-                    {renderExtraBadges?.(thread)}
-                    {!hideBranch && (resolveThreadBranch(thread) || thread.baseBranch) && (
-                      <BranchBadge
-                        branch={(resolveThreadBranch(thread) || thread.baseBranch)!}
-                        size="xs"
-                        className="max-w-[150px]"
-                      />
-                    )}
-                  </div>
-                </div>
-                <span className="text-muted-foreground hidden shrink-0 text-xs sm:inline">
-                  {timeAgo(thread.completedAt ?? thread.createdAt, t, now)}
-                </span>
-                {renderActions?.(thread)}
-              </Wrapper>
+                {renderItem(thread)}
+              </div>
             );
-          })}
-        </div>
-        {loadingMore && (
-          <LoadingState
-            fill={false}
-            layout="inline"
-            size="compact"
-            className="py-3"
-            testId="virtual-thread-list-loading-more"
-            label={t('common.loading')}
-          />
-        )}
+          }
+          const Wrapper = onThreadClick ? 'button' : 'div';
+          return (
+            <Wrapper
+              key={v.key}
+              data-index={v.index}
+              data-testid={`virtual-thread-item-${thread.id}`}
+              ref={virtualizer.measureElement as never}
+              {...(onThreadClick ? { onClick: () => onThreadClick(thread) } : {})}
+              onMouseMove={() => setHighlightIndex(v.index)}
+              className={cn(
+                'w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/50 group/row outline-hidden',
+                onThreadClick && 'text-left hover:bg-accent/50 transition-colors',
+                v.index === highlightIndex && 'bg-accent/50',
+              )}
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                transform: `translateY(${v.start}px)`,
+              }}
+            >
+              <ThreadStatusPin
+                thread={thread}
+                onPin={(pinned) => pinThread(thread.id, thread.projectId, pinned)}
+                hoverGroup="row"
+                showStatusTooltip
+              />
+
+              <div className="min-w-0 flex-1">
+                <ThreadTitle
+                  title={thread.title}
+                  search={search}
+                  className="block text-sm font-medium"
+                  badgeTestId={`virtual-thread-item-attachments-${thread.id}`}
+                  stopBadgePropagation
+                />
+                {contentSnippets?.get(thread.id) &&
+                  search &&
+                  !normalize(thread.title).includes(normalize(search)) && (
+                    <HighlightText
+                      text={contentSnippets.get(thread.id)!}
+                      query={search}
+                      className="text-muted-foreground block truncate text-[11px] italic"
+                    />
+                  )}
+                <div className="mt-0.5 flex items-center gap-2">
+                  {renderExtraBadges?.(thread)}
+                  {!hideBranch && (resolveThreadBranch(thread) || thread.baseBranch) && (
+                    <BranchBadge
+                      branch={(resolveThreadBranch(thread) || thread.baseBranch)!}
+                      size="xs"
+                      className="max-w-[150px]"
+                    />
+                  )}
+                </div>
+              </div>
+              <span className="text-muted-foreground hidden shrink-0 text-xs sm:inline">
+                {timeAgo(thread.completedAt ?? thread.createdAt, t, now)}
+              </span>
+              {renderActions?.(thread)}
+            </Wrapper>
+          );
+        })}
       </div>
-    </div>
+      {loadingMore && (
+        <LoadingState
+          fill={false}
+          layout="inline"
+          className="py-3"
+          testId="virtual-thread-list-loading-more"
+          label={t('common.loading')}
+        />
+      )}
+    </ThreadListViewport>
   );
 }

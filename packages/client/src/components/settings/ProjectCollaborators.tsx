@@ -1,3 +1,4 @@
+import { Search, Trash2, UserPlus } from 'lucide-react';
 /**
  * ProjectCollaborators — the project-scoped "who has access" page.
  *
@@ -6,13 +7,12 @@
  * active-org context needed — access is per-project. (Org membership remains an
  * optional, separate bulk-access path managed under global preferences.)
  */
-
-import { Search, Trash2, UserPlus } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import {
@@ -228,9 +228,7 @@ export function ProjectCollaborators() {
       {/* Member list */}
       <div className="settings-card divide-border/50 divide-y">
         {members.length === 0 ? (
-          <p className="text-muted-foreground px-4 py-6 text-center text-sm">
-            No collaborators yet.
-          </p>
+          <EmptyState fill={false} className="px-4 py-6" title="No collaborators yet." />
         ) : (
           members.map((m) => {
             const isOwner = m.userId === ownerId;

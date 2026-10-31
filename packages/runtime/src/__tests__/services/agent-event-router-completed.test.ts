@@ -31,7 +31,11 @@ function makeRouter(state: AgentStateTracker): AgentEventRouter {
   // provide minimal mocks that satisfy those.
   const orchestrator = { on: vi.fn() } as any;
   const messageHandler = {} as any;
-  const threadManager = { getThread: vi.fn(), updateThread: vi.fn() } as any;
+  const threadManager = {
+    getThread: vi.fn(),
+    updateThread: vi.fn(),
+    getThreadWithMessages: vi.fn(async () => null),
+  } as any;
   const wsBroker = { emit: vi.fn(), emitToUser: vi.fn() } as any;
   return new AgentEventRouter(orchestrator, state, messageHandler, threadManager, wsBroker);
 }
@@ -49,6 +53,7 @@ function makeRecoveryRouter(state: AgentStateTracker) {
     })),
     updateThread: vi.fn(async () => undefined),
     expirePendingPermissionRequest: vi.fn(async () => undefined),
+    getThreadWithMessages: vi.fn(async () => null),
   } as any;
   const wsBroker = { emit: vi.fn(), emitToUser: vi.fn() } as any;
   return {

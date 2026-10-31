@@ -14,6 +14,10 @@
 
   .scrollbar-visible {
     scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
+
+    @supports selector(::-webkit-scrollbar) {
+      scrollbar-color: auto;
+    }
   }
 
   .scrollbar-visible::-webkit-scrollbar-thumb {
@@ -393,6 +397,7 @@ mark.md-search-match[data-active='true'] {
 
 @layer base {
   :root {
+    --scrollbar-size: 6px;
     --font-sans: 'Geist Sans', 'Geist Sans Fallback', sans-serif;
     --font-mono: 'JetBrains Mono', ui-monospace, monospace;
     --font-mono-explorer: 'Geist Mono', ui-monospace, monospace;
@@ -1094,9 +1099,18 @@ mark.md-search-match[data-active='true'] {
     scrollbar-color: hsl(var(--muted-foreground) / 0.25) transparent;
   }
 
+  /* Both standard properties must be auto to use WebKit's pixel-sized scrollbars. */
+  @supports selector(::-webkit-scrollbar) {
+    *,
+    *:hover {
+      scrollbar-width: auto;
+      scrollbar-color: auto;
+    }
+  }
+
   *::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
   }
 
   *::-webkit-scrollbar-track {
@@ -1337,13 +1351,28 @@ mark.md-search-match[data-active='true'] {
   }
 
   .xterm .xterm-scrollable-element > .scrollbar.vertical {
-    width: 6px !important;
+    width: var(--scrollbar-size) !important;
     right: 0;
   }
 
   .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
-    width: 6px !important;
+    width: var(--scrollbar-size) !important;
     left: 0 !important;
+  }
+
+  .xterm .xterm-scrollable-element > .scrollbar.horizontal,
+  .xterm .xterm-scrollable-element > .scrollbar.horizontal > .slider {
+    height: var(--scrollbar-size) !important;
+  }
+
+  .monaco-scrollable-element > .scrollbar.vertical,
+  .monaco-scrollable-element > .scrollbar.vertical > .slider {
+    width: var(--scrollbar-size) !important;
+  }
+
+  .monaco-scrollable-element > .scrollbar.horizontal,
+  .monaco-scrollable-element > .scrollbar.horizontal > .slider {
+    height: var(--scrollbar-size) !important;
   }
 
   /* Remove the top shadow decoration from xterm scrollbar */

@@ -69,8 +69,8 @@ function ScrollBar({
       orientation={orientation}
       className={cn(
         'flex touch-none select-none transition-colors',
-        orientation === 'vertical' && 'h-full w-2 border-l border-l-transparent p-px',
-        orientation === 'horizontal' && 'h-2 flex-col border-t border-t-transparent p-px',
+        orientation === 'vertical' && 'h-full w-[var(--scrollbar-size)]',
+        orientation === 'horizontal' && 'h-[var(--scrollbar-size)] flex-col',
         className,
       )}
       {...props}

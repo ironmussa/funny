@@ -6,20 +6,55 @@
  *   POST   /api/infra/connections             — validate + store a credential
  *   POST   /api/infra/connections/:id/test    — re-validate a stored credential
  *   DELETE /api/infra/connections/:id
+ *   POST   /api/infra/threads/:threadId/sandbox — provision the thread's sandbox (202, async)
+ *   GET    /api/infra/threads/:threadId/sandbox — its lifecycle state
  */
 
+import { and, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
+import { db } from '../db/index.js';
+import { threads } from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
+import { issueThreadProvisionToken } from '../services/runner-provision-tokens.js';
+import { sandboxRunnerIdForThread } from '../services/runner-scope.js';
 import {
   createInfraConnectionService,
   type InfraConnectionError,
 } from '../services/thread-sandboxes/infra-connections.js';
 import { productionSandboxProviders } from '../services/thread-sandboxes/provider-catalog.js';
+import { resolvePublicServerUrl } from '../services/thread-sandboxes/public-server-url.js';
 import type { SandboxProviderRegistry } from '../services/thread-sandboxes/registry.js';
+import { resolveRunnerBuild } from '../services/thread-sandboxes/runner-build.js';
+import {
+  createRunnerTemplateManager,
+  type RunnerTemplateManager,
+} from '../services/thread-sandboxes/template-manager.js';
+import { createThreadSandboxService } from '../services/thread-sandboxes/thread-sandbox-service.js';
+import { sqlThreadSandboxStore } from '../services/thread-sandboxes/thread-sandbox-store.js';
+
+const provisionSchema = z
+  .object({
+    connectionId: z.string().min(1),
+    sizeId: z.string().min(1).max(32).optional(),
+  })
+  .strict();
+
+const ACTIVE_SANDBOX_STATES = new Set(['provisioning', 'installing', 'connecting', 'running']);
+
+/** One template manager per server build, shared by every request. */
+const templateManagers = new Map<string, RunnerTemplateManager>();
+
+async function ownsThread(userId: string, threadId: string) {
+  const [row] = await db
+    .select({ id: threads.id })
+    .from(threads)
+    .where(and(eq(threads.id, threadId), eq(threads.userId, userId)));
+  return !!row;
+}
 
 const addConnectionSchema = z
   .object({
@@ -91,6 +126,71 @@ export function createInfraRoutes(registry: SandboxProviderRegistry) {
       meta: { connectionId: id },
     });
     return c.json({ ok: true });
+  });
+
+  // ── Thread sandboxes ────────────────────────────────────
+
+  routes.get('/threads/:threadId/sandbox', async (c) => {
+    const row = await sqlThreadSandboxStore.get(c.req.param('threadId'));
+    if (row.isErr()) return respond(c, { kind: 'storage', message: row.error });
+    if (!row.value || row.value.userId !== c.get('userId')) {
+      return c.json({ error: 'No sandbox for this thread', code: 'not-found' }, 404);
+    }
+    return c.json(row.value);
+  });
+
+  routes.post('/threads/:threadId/sandbox', async (c) => {
+    const parsed = provisionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'Invalid request', code: 'invalid' }, 400);
+    const userId = c.get('userId');
+    const threadId = c.req.param('threadId');
+
+    const build = resolveRunnerBuild();
+    if (build.isErr()) return c.json({ error: build.error.message, code: build.error.kind }, 409);
+    const serverUrl = resolvePublicServerUrl();
+    if (serverUrl.isErr()) {
+      return c.json({ error: serverUrl.error.message, code: serverUrl.error.kind }, 409);
+    }
+    if (!(await ownsThread(userId, threadId))) {
+      return c.json({ error: 'Thread not found', code: 'not-found' }, 404);
+    }
+    const existing = await sqlThreadSandboxStore.get(threadId);
+    if (existing.isOk() && existing.value && ACTIVE_SANDBOX_STATES.has(existing.value.state)) {
+      return c.json(
+        {
+          error: `Thread already has a ${existing.value.state} sandbox`,
+          code: 'already-provisioned',
+        },
+        409,
+      );
+    }
+
+    let templates = templateManagers.get(build.value.version);
+    if (!templates) {
+      templates = createRunnerTemplateManager(build.value);
+      templateManagers.set(build.value.version, templates);
+    }
+    const service = createThreadSandboxService({
+      connections,
+      templates,
+      build: build.value,
+      serverUrl: serverUrl.value,
+      issueToken: issueThreadProvisionToken,
+      sandboxRunnerIdForThread,
+      presence: c.env?.runnerPresence,
+      store: sqlThreadSandboxStore,
+    });
+    // Provisioning takes minutes: answer now, report progress via GET.
+    void service.provision({ userId, threadId, ...parsed.data }).then((result) => {
+      if (result.isErr()) return;
+      audit({
+        action: 'infra.sandbox_provisioned',
+        actorId: userId,
+        detail: `Sandbox provisioned for thread ${threadId}`,
+        meta: { threadId, runnerId: result.value.runnerId, provider: result.value.provider },
+      });
+    });
+    return c.json({ threadId, state: 'provisioning' }, 202);
   });
 
   return routes;

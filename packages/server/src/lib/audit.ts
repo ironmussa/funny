@@ -20,6 +20,7 @@ type AuditAction =
   | 'runner.register_sandbox'
   | 'infra.connection_added'
   | 'infra.connection_removed'
+  | 'infra.sandbox_provisioned'
   | 'runner.remove'
   | 'runner.enroll_approved'
   | 'runner.enroll_rejected'

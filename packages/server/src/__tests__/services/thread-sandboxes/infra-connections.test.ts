@@ -7,7 +7,8 @@ import { createInfraRoutes } from '../../../routes/infra.js';
 import { createInfraConnectionService } from '../../../services/thread-sandboxes/infra-connections.js';
 import { fakeSandboxProviderEntry } from '../../../services/thread-sandboxes/providers/fake/fake-provider.js';
 import { createSandboxProviderRegistry } from '../../../services/thread-sandboxes/registry.js';
-import { createTestDb } from '../../helpers/test-db.js';
+import { sqlThreadSandboxStore } from '../../../services/thread-sandboxes/thread-sandbox-store.js';
+import { createTestDb, seedProject, seedThread } from '../../helpers/test-db.js';
 import { expectOk } from './provider-contract.js';
 
 let testDb: ReturnType<typeof createTestDb>;
@@ -138,5 +139,86 @@ describe('infra routes', () => {
       body: JSON.stringify({ provider: 'fake' }),
     });
     expect(malformed.status).toBe(400);
+  });
+
+  describe('thread sandbox routes', () => {
+    const post = (userId: string, threadId: string) =>
+      app(userId).request(`/api/infra/threads/${threadId}/sandbox`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ connectionId: 'conn-1' }),
+      });
+    const saved = { ...process.env };
+    beforeEach(() => {
+      seedProject(testDb.db, { id: 'px', userId: 'alice', path: '/tmp/px' });
+      seedThread(testDb.db, { id: 't-1', projectId: 'px', userId: 'alice' });
+      process.env.FUNNY_BUILD_COMMIT = 'd'.repeat(40);
+      process.env.FUNNY_PUBLIC_URL = 'https://funny.example';
+    });
+    const restore = () => {
+      for (const key of ['FUNNY_BUILD_COMMIT', 'FUNNY_PUBLIC_URL']) {
+        if (saved[key] === undefined) delete process.env[key];
+        else process.env[key] = saved[key];
+      }
+    };
+
+    test('refuses without a known build commit', async () => {
+      delete process.env.FUNNY_BUILD_COMMIT;
+      const res = await post('alice', 't-1');
+      restore();
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe('missing-build-commit');
+    });
+
+    test('refuses another user’s thread and an already active sandbox', async () => {
+      const foreign = await post('mallory', 't-1');
+      expect(foreign.status).toBe(404);
+
+      expectOk(
+        await sqlThreadSandboxStore.put({
+          threadId: 't-1',
+          userId: 'alice',
+          connectionId: 'conn-1',
+          provider: 'fake',
+          sandboxId: 'fake-1',
+          runnerId: 'r-box',
+          sizeId: 'default',
+          state: 'running',
+          error: null,
+          generation: 0,
+          createdAt: '2026-10-31T00:00:00Z',
+          updatedAt: '2026-10-31T00:00:00Z',
+        }),
+      );
+      const active = await post('alice', 't-1');
+      restore();
+      expect(active.status).toBe(409);
+      expect((await active.json()).code).toBe('already-provisioned');
+    });
+
+    test('the sandbox state is visible only to its owner', async () => {
+      expectOk(
+        await sqlThreadSandboxStore.put({
+          threadId: 't-1',
+          userId: 'alice',
+          connectionId: 'conn-1',
+          provider: 'fake',
+          sandboxId: null,
+          runnerId: null,
+          sizeId: 'default',
+          state: 'provisioning',
+          error: null,
+          generation: 0,
+          createdAt: '2026-10-31T00:00:00Z',
+          updatedAt: '2026-10-31T00:00:00Z',
+        }),
+      );
+      restore();
+      const own = await app('alice').request('/api/infra/threads/t-1/sandbox');
+      expect(own.status).toBe(200);
+      expect((await own.json()).state).toBe('provisioning');
+      const other = await app('mallory').request('/api/infra/threads/t-1/sandbox');
+      expect(other.status).toBe(404);
+    });
   });
 });

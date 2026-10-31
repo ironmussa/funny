@@ -746,6 +746,25 @@ export const runnerEnrollments = pgTable('runner_enrollments', {
   expiresAt: text('expires_at').notNull(),
 });
 
+/**
+ * Single-use, short-lived token that lets a freshly provisioned sandbox runner
+ * register itself as the `sandbox` runner of one thread without device-link
+ * approval (change thread-sandboxes). Only the SHA-256 hash is stored.
+ */
+export const runnerProvisionTokens = pgTable('runner_provision_tokens', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull().unique(),
+  userId: text('user_id').notNull(),
+  projectId: text('project_id'),
+  threadId: text('thread_id').notNull(),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  /** Set atomically when a runner registers with the token. */
+  usedAt: text('used_at'),
+  /** The runner created by the registration. */
+  runnerId: text('runner_id'),
+});
+
 export const runnerOperationIdempotency = pgTable(
   'runner_operation_idempotency',
   {

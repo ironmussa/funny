@@ -132,10 +132,9 @@ export class RunnerEnrollmentClient {
     authFailed: boolean;
   }> {
     try {
-      const inviteToken = this.dependencies.env.RUNNER_INVITE_TOKEN;
       const res = await this.centralFetch('/api/runners/register', {
         method: 'POST',
-        headers: inviteToken ? { 'X-Runner-Invite-Token': inviteToken } : {},
+        headers: this.registrationHeaders(),
         body: JSON.stringify(await this.advertisement()),
       });
       if (!res.ok) {
@@ -222,9 +221,21 @@ export class RunnerEnrollmentClient {
     return 'unexpected';
   }
 
+  /**
+   * Credential for `POST /api/runners/register`: a sandbox provisioning token
+   * (thread-sandboxes, single-use, minted by the server) or a user invite token.
+   */
+  private registrationHeaders(): Record<string, string> {
+    const { RUNNER_PROVISION_TOKEN, RUNNER_INVITE_TOKEN } = this.dependencies.env;
+    if (RUNNER_PROVISION_TOKEN) return { 'X-Runner-Provision-Token': RUNNER_PROVISION_TOKEN };
+    if (RUNNER_INVITE_TOKEN) return { 'X-Runner-Invite-Token': RUNNER_INVITE_TOKEN };
+    return {};
+  }
+
   private async maybeEnroll(): Promise<void> {
-    if (this.dependencies.env.RUNNER_INVITE_TOKEN || this.dependencies.env.RUNNER_AUTH_SECRET)
-      return;
+    const { RUNNER_PROVISION_TOKEN, RUNNER_INVITE_TOKEN, RUNNER_AUTH_SECRET } =
+      this.dependencies.env;
+    if (RUNNER_PROVISION_TOKEN || RUNNER_INVITE_TOKEN || RUNNER_AUTH_SECRET) return;
     if (this.dependencies.loadCredentials(this.serverUrl)) return;
     log.info('No runner credentials found — starting device-link enrollment', {
       namespace: 'runner',

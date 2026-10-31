@@ -88,6 +88,27 @@ describe('RunnerEnrollmentClient', () => {
     expect(deps.env).toEqual({ RUNNER_INVITE_TOKEN: 'invite' });
   });
 
+  test('a sandbox runner registers with its provisioning token, without device-link', async () => {
+    const sentHeaders: Array<Record<string, string>> = [];
+    const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      if (String(input).endsWith('/register')) {
+        sentHeaders.push(init?.headers as Record<string, string>);
+        return Response.json({ runnerId: 'runner-box', token: 'token-box', ownerUserId: 'alice' });
+      }
+      return Response.json({ ok: true });
+    });
+    const deps = dependencies(fetch);
+    deps.env = { RUNNER_PROVISION_TOKEN: 'rprov_abc', RUNNER_INVITE_TOKEN: 'invite' };
+    const client = new RunnerEnrollmentClient('http://server.test', advertisement, deps);
+
+    const session = await client.bootstrap();
+    expect(session.runnerId).toBe('runner-box');
+    expect(sentHeaders[0]).toMatchObject({ 'X-Runner-Provision-Token': 'rprov_abc' });
+    expect(sentHeaders[0]).not.toHaveProperty('X-Runner-Invite-Token');
+    expect(deps.enroll).not.toHaveBeenCalled();
+    expect(deps.saved).toContainEqual(expect.objectContaining({ runnerId: 'runner-box' }));
+  });
+
   test('migrates legacy stored root secret to a per-runner key and drops it from disk', async () => {
     const deps = dependencies(async () => Response.json({ ok: true }));
     deps.env = {};

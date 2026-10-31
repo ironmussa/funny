@@ -1707,6 +1707,29 @@ const migrations: Migration[] = [
       await ctx().addColumn('runners', 'thread_id', 'TEXT');
     },
   },
+  {
+    // thread-sandboxes: single-use tokens for zero-touch sandbox runner enrollment.
+    name: '083_runner_provision_tokens',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS runner_provision_tokens (
+          id TEXT PRIMARY KEY,
+          token_hash TEXT NOT NULL UNIQUE,
+          user_id TEXT NOT NULL,
+          project_id TEXT,
+          thread_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          used_at TEXT,
+          runner_id TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_runner_provision_tokens_expires
+        ON runner_provision_tokens (expires_at)
+      `);
+    },
+  },
 ];
 
 /**

@@ -272,6 +272,20 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS runner_provision_tokens (
+      id TEXT PRIMARY KEY,
+      token_hash TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL,
+      project_id TEXT,
+      thread_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      runner_id TEXT
+    )
+  `);
+
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS runner_project_assignments (
       runner_id TEXT NOT NULL REFERENCES runners(id) ON DELETE CASCADE,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

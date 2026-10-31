@@ -17,6 +17,7 @@ type AuditAction =
   | 'token.create'
   | 'token.revoke'
   | 'runner.register'
+  | 'runner.register_sandbox'
   | 'runner.remove'
   | 'runner.enroll_approved'
   | 'runner.enroll_rejected'

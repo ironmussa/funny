@@ -59,6 +59,28 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
   // MCP OAuth callback
   if (path === '/api/mcp/oauth/callback') return next();
 
+  // ── Sandbox runner registration via provisioning token ─────────
+  // A single-use, thread-bound token minted by the server when it provisions a
+  // sandbox (thread-sandboxes). The runner becomes that thread's sandbox runner.
+  const provisionToken = c.req.header('X-Runner-Provision-Token');
+  if (provisionToken && c.req.method === 'POST' && path === '/api/runners/register') {
+    const pt = await import('../services/runner-provision-tokens.js');
+    const grant = await pt.consumeProvisionToken(provisionToken);
+    if (grant.isErr()) {
+      audit({
+        action: 'auth.runner_rejected',
+        actorId: null,
+        detail: `Rejected X-Runner-Provision-Token on /api/runners/register (${grant.error.kind})`,
+        meta: { path, method: c.req.method, reason: grant.error.kind },
+      });
+      return c.json({ error: 'Invalid runner provisioning token' }, 401);
+    }
+    c.set('userId', grant.value.userId);
+    c.set('isRunner', false);
+    c.set('provisionGrant', grant.value);
+    return next();
+  }
+
   // ── Runner registration via user invite token ──────────────────
   // Allows a runner to self-register under a user's account without a session cookie.
   const inviteToken = c.req.header('X-Runner-Invite-Token');

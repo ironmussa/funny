@@ -20,6 +20,7 @@ import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import * as enroll from '../services/runner-enrollment-service.js';
 import * as rm from '../services/runner-manager.js';
+import { recordProvisionedRunner } from '../services/runner-provision-tokens.js';
 
 export const runnerRoutes = new Hono<ServerEnv>();
 
@@ -61,6 +62,18 @@ runnerRoutes.post('/register', async (c) => {
     if (!userId) {
       log.error('Runner registration rejected — no userId in context', { namespace: 'runner' });
       return c.json({ error: 'Runner must be associated with a user' }, 400);
+    }
+    const grant = c.get('provisionGrant');
+    if (grant) {
+      const result = await rm.registerSandboxRunner(body, userId, grant.threadId);
+      await recordProvisionedRunner(grant.tokenId, result.runnerId);
+      audit({
+        action: 'runner.register_sandbox',
+        actorId: userId,
+        detail: `Sandbox runner "${body.name}" registered for thread ${grant.threadId}`,
+        meta: { runnerId: result.runnerId, threadId: grant.threadId, hostname: body.hostname },
+      });
+      return c.json(result, 201);
     }
     const result = await rm.registerRunner(body, userId);
     audit({

@@ -62,7 +62,7 @@ import {
 } from '../../middleware/auth.js';
 import { inviteLinkPublicRoutes } from '../../routes/invite-links.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedInviteLink, seedRunner } from '../helpers/test-db.js';
+import { seedInviteLink, seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
 
 function protectedApp() {
   const app = new Hono<ServerEnv>();
@@ -76,9 +76,14 @@ function protectedApp() {
       userRole: c.get('userRole') ?? null,
     }),
   );
-  app.post('/api/runners/register', (c) =>
-    c.json({ userId: c.get('userId') ?? null, isRunner: c.get('isRunner') ?? false }),
-  );
+  app.post('/api/runners/register', (c) => {
+    const grant = c.get('provisionGrant');
+    return c.json({
+      userId: c.get('userId') ?? null,
+      isRunner: c.get('isRunner') ?? false,
+      ...(grant ? { threadId: grant.threadId } : {}),
+    });
+  });
   app.route('/api/invite-links', inviteLinkPublicRoutes);
   app.get('/api/scheduler/system/ping', (c) =>
     c.json({
@@ -188,6 +193,31 @@ describe('authMiddleware (integration)', () => {
     });
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ userId: 'invite-user', isRunner: false });
+  });
+
+  test('a provisioning token registers once as the sandbox of its thread', async () => {
+    seedProject(t.db as any, { id: 'prov-p', userId: 'prov-user', path: '/tmp/prov' });
+    seedThread(t.db as any, { id: 'prov-t', projectId: 'prov-p', userId: 'prov-user' });
+    const { issueThreadProvisionToken } = await import('../../services/runner-provision-tokens.js');
+    const issued = await issueThreadProvisionToken({ userId: 'prov-user', threadId: 'prov-t' });
+    if (issued.isErr()) throw new Error(issued.error.kind);
+
+    const register = () =>
+      app.request('/api/runners/register', {
+        method: 'POST',
+        headers: { 'X-Runner-Provision-Token': issued.value.token },
+      });
+    const first = await register();
+    expect(first.status).toBe(200);
+    expect(await first.json()).toEqual({
+      userId: 'prov-user',
+      isRunner: false,
+      threadId: 'prov-t',
+    });
+
+    const replay = await register();
+    expect(replay.status).toBe(401);
+    expect(await replay.json()).toEqual({ error: 'Invalid runner provisioning token' });
   });
 
   test('rejects runner registration with an invalid invite token', async () => {

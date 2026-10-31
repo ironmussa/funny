@@ -4,7 +4,12 @@
  * throttling, in-flight dedupe, and cache invalidation.
  */
 
-import { fetchRemote, invalidateStatusCache, type GitIdentityOptions } from '@funny/core/git';
+import {
+  fetchRemote,
+  gitRead,
+  invalidateStatusCache,
+  type GitIdentityOptions,
+} from '@funny/core/git';
 import type { DomainError } from '@funny/shared/errors';
 import { ok, type Result } from 'neverthrow';
 
@@ -12,7 +17,8 @@ import { log } from '../lib/logger.js';
 import { startSpan } from '../lib/telemetry.js';
 import * as tm from './thread-manager.js';
 
-export const gitStatusCache = new Map<string, { data: any; ts: number }>();
+/** Bulk status per project; `scope` is the sorted thread-ID filter ('' = whole project). */
+export const gitStatusCache = new Map<string, { data: any; ts: number; scope?: string }>();
 export const GIT_STATUS_CACHE_TTL_MS = 2_000;
 const FETCH_THROTTLE_MS = 30_000;
 
@@ -32,6 +38,22 @@ interface ExplicitFetchOptions {
   identity?: GitIdentityOptions;
 }
 
+/** Snapshot of remote-tracking refs (`<sha> <ref>` lines), or null when unreadable. */
+async function readRemoteRefs(cwd: string): Promise<string | null> {
+  try {
+    const result = await gitRead(
+      ['for-each-ref', '--format=%(objectname) %(refname)', 'refs/remotes'],
+      {
+        cwd,
+        reject: false,
+      },
+    );
+    return result.exitCode === 0 ? result.stdout : null;
+  } catch {
+    return null;
+  }
+}
+
 class GitRuntimeService {
   scheduleBackgroundFetch(opts: BackgroundFetchOptions): boolean {
     const { projectId, projectPath, identity, attrs, onFetched } = opts;
@@ -44,29 +66,37 @@ class GitRuntimeService {
     const span = startSpan('git.fetch_remote', {
       attributes: { projectId, background: true, ...(attrs ?? {}) },
     });
-    void fetchRemote(projectPath, identity).match(
-      () => {
-        span.end('ok');
-        this.invalidateProjectStatus(projectId, projectPath);
-        fetchInFlightByPath.delete(projectPath);
-        void Promise.resolve(onFetched?.()).catch((err) => {
-          log.warn('Background fetch onFetched callback failed', {
-            namespace: 'git-service',
-            projectId,
-            error: String(err),
-          });
-        });
-      },
-      (error) => {
-        span.end('error', error.message);
+    void (async () => {
+      const refsBefore = await readRemoteRefs(projectPath);
+      const result = await fetchRemote(projectPath, identity);
+      if (result.isErr()) {
+        span.end('error', result.error.message);
         fetchInFlightByPath.delete(projectPath);
         log.warn('Background git fetch failed', {
           namespace: 'git-service',
           projectId,
-          error: error.message,
+          error: result.error.message,
         });
-      },
-    );
+        return;
+      }
+      span.end('ok');
+      const refsAfter = await readRemoteRefs(projectPath);
+      fetchInFlightByPath.delete(projectPath);
+      // Most background fetches bring nothing new. Keep the caches warm and
+      // skip the client refetch wave unless a remote-tracking ref moved (an
+      // unreadable snapshot counts as "moved").
+      if (refsBefore !== null && refsBefore === refsAfter) return;
+      this.invalidateProjectStatus(projectId, projectPath);
+      try {
+        await onFetched?.();
+      } catch (err) {
+        log.warn('Background fetch onFetched callback failed', {
+          namespace: 'git-service',
+          projectId,
+          error: String(err),
+        });
+      }
+    })();
     return true;
   }
 

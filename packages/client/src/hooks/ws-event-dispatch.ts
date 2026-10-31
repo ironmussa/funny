@@ -584,7 +584,9 @@ function handleGitStatus(threadId: string, data: any): void {
   useGitStatusStore.getState().updateFromWS(data.statuses);
   const updatedKeys = (data.statuses as Array<{ branchKey: string }>).map((s) => s.branchKey);
   if (updatedKeys.length > 0) invalidateCooldownsForKeys(updatedKeys);
-  notifyReviewDirty(threadId);
+  // PR-lookup updates don't touch the working tree — refetching the diff
+  // summary for them only repeats an expensive request.
+  if (!data.prOnly) notifyReviewDirty(threadId);
 }
 
 function handleGitRefsUpdated(_threadId: string, data: any): void {

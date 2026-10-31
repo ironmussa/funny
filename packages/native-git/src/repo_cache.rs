@@ -11,6 +11,9 @@ const CACHE_CAPACITY: usize = 8;
 /// is called to pick up external changes (e.g. refs modified by CLI git).
 const CACHE_TTL: Duration = Duration::from_secs(10);
 
+/// Per-handle object cache. Bounded by `CACHE_CAPACITY` handles per thread.
+const OBJECT_CACHE_BYTES: usize = 8 * 1024 * 1024;
+
 struct CachedRepo {
     repo: gix::Repository,
     opened_at: Instant,
@@ -19,6 +22,13 @@ struct CachedRepo {
 thread_local! {
     static REPO_CACHE: RefCell<LruCache<String, CachedRepo>> =
         RefCell::new(LruCache::new(NonZeroUsize::new(CACHE_CAPACITY).unwrap()));
+}
+
+/// Without an object cache every `lookup_entry_by_path` re-reads (open + mmap +
+/// inflate) the same tree objects from disk — status on a ~3k-file repo opened
+/// ~11k loose objects and took >1s.
+fn enable_object_cache(repo: &mut gix::Repository) {
+    repo.object_cache_size(OBJECT_CACHE_BYTES);
 }
 
 /// Execute a closure with a cached `gix::Repository` handle.
@@ -47,11 +57,16 @@ pub(crate) fn with_repo<T>(
                     .repo
                     .reload()
                     .map_err(|e| napi::Error::from_reason(format!("Failed to reload repo: {e}")))?;
+                // `reload()` re-applies config and resets the object cache to
+                // its (disabled) default — re-enable it or every later call is
+                // uncached again.
+                enable_object_cache(&mut entry.repo);
                 entry.opened_at = Instant::now();
             }
         } else {
-            let repo = gix::open(cwd)
+            let mut repo = gix::open(cwd)
                 .map_err(|e| napi::Error::from_reason(format!("Failed to open repo: {e}")))?;
+            enable_object_cache(&mut repo);
             map.put(
                 cwd.to_string(),
                 CachedRepo {

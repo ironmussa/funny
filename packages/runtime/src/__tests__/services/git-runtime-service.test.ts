@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   fetchRemote: vi.fn(),
+  gitRead: vi.fn(),
   invalidateStatusCache: vi.fn(),
   getThread: vi.fn(),
 }));
@@ -12,6 +13,7 @@ vi.mock('@funny/core/git', async (importOriginal) => {
   return {
     ...actual,
     fetchRemote: mocks.fetchRemote,
+    gitRead: mocks.gitRead,
     invalidateStatusCache: mocks.invalidateStatusCache,
   };
 });
@@ -37,9 +39,53 @@ describe('git-runtime-service', () => {
     gitRuntimeService.clearFetchStateForTests();
     mocks.fetchRemote.mockReturnValue(okAsync(true));
     mocks.getThread.mockResolvedValue({ id: 't1', projectId: 'p1' });
+    mocks.gitRead.mockResolvedValue({ exitCode: 0, stdout: 'aaa refs/remotes/origin/main\n' });
   });
 
-  test('dedupes background fetches by repository path while one is in flight', () => {
+  async function runBackgroundFetch() {
+    const onFetched = vi.fn();
+    gitStatusCache.set('p1', { data: { statuses: [] }, ts: Date.now() });
+    const scheduled = gitRuntimeService.scheduleBackgroundFetch({
+      projectId: 'p1',
+      projectPath: '/repo',
+      onFetched,
+    });
+    expect(scheduled).toBe(true);
+    await vi.waitFor(() => expect(mocks.gitRead).toHaveBeenCalledTimes(2));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    return onFetched;
+  }
+
+  test('background fetch that moves no remote ref keeps caches and skips onFetched', async () => {
+    const onFetched = await runBackgroundFetch();
+
+    expect(onFetched).not.toHaveBeenCalled();
+    expect(gitStatusCache.has('p1')).toBe(true);
+    expect(mocks.invalidateStatusCache).not.toHaveBeenCalled();
+  });
+
+  test('background fetch that moves a remote ref invalidates caches and calls onFetched', async () => {
+    mocks.gitRead
+      .mockResolvedValueOnce({ exitCode: 0, stdout: 'aaa refs/remotes/origin/main\n' })
+      .mockResolvedValueOnce({ exitCode: 0, stdout: 'bbb refs/remotes/origin/main\n' });
+
+    const onFetched = await runBackgroundFetch();
+
+    expect(onFetched).toHaveBeenCalledTimes(1);
+    expect(gitStatusCache.has('p1')).toBe(false);
+    expect(mocks.invalidateStatusCache).toHaveBeenCalledWith('/repo');
+  });
+
+  test('background fetch treats an unreadable ref snapshot as changed', async () => {
+    mocks.gitRead.mockResolvedValue({ exitCode: 128, stdout: '' });
+
+    const onFetched = await runBackgroundFetch();
+
+    expect(onFetched).toHaveBeenCalledTimes(1);
+    expect(gitStatusCache.has('p1')).toBe(false);
+  });
+
+  test('dedupes background fetches by repository path while one is in flight', async () => {
     let resolveFetch!: (value: boolean) => void;
     const pendingFetch = new Promise<boolean>((resolve) => {
       resolveFetch = resolve;
@@ -57,7 +103,7 @@ describe('git-runtime-service', () => {
 
     expect(first).toBe(true);
     expect(second).toBe(false);
-    expect(mocks.fetchRemote).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => expect(mocks.fetchRemote).toHaveBeenCalledTimes(1));
 
     resolveFetch(true);
   });

@@ -256,6 +256,37 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     expect(useGitStatusStore.getState().threadToBranchKey.t1).toBe('p1:main');
   });
 
+  test('git:status with prOnly updates the store without marking review dirty', async () => {
+    captureHandlers()['git:status']({
+      threadId: 't1',
+      data: {
+        prOnly: true,
+        statuses: [
+          {
+            threadId: 't1',
+            branchKey: 'p1:feature',
+            state: 'clean' as const,
+            dirtyFileCount: 0,
+            unpushedCommitCount: 0,
+            unpulledCommitCount: 0,
+            hasRemoteBranch: true,
+            isMergedIntoBase: false,
+            linesAdded: 0,
+            linesDeleted: 0,
+            prNumber: 42,
+          },
+        ],
+      },
+    });
+
+    await vi.waitFor(() => {
+      expect(useGitStatusStore.getState().statusByBranch['p1:feature']).toMatchObject({
+        prNumber: 42,
+      });
+    });
+    expect(mockNotifyDirty).not.toHaveBeenCalled();
+  });
+
   test('git:refs-updated only refreshes active slices for the matching project', () => {
     const fetchForThread = vi.fn();
     const fetchProjectStatus = vi.fn();

@@ -150,9 +150,10 @@ export function ChangesPanel() {
 
 /** Dockview panel: Graph — branch-graph history view. */
 export function GraphPanel() {
+  const ctx = useReviewPaneContext();
   return (
     <div className="flex h-full w-full flex-col text-xs">
-      <CommitGraphTab visible />
+      <CommitGraphTab visible={ctx.reviewSubTab === 'graph' && ctx.reviewPaneOpen} />
     </div>
   );
 }
@@ -174,18 +175,20 @@ export function StashPanel() {
 
 /** Dockview panel: Pull Requests — self-contained. */
 export function PRsPanel() {
+  const ctx = useReviewPaneContext();
   return (
     <div className="flex h-full w-full flex-col text-xs">
-      <PullRequestsTab visible />
+      <PullRequestsTab visible={ctx.reviewSubTab === 'prs' && ctx.reviewPaneOpen} />
     </div>
   );
 }
 
 /** Dockview panel: Issues — self-contained. */
 export function IssuesPanel() {
+  const ctx = useReviewPaneContext();
   return (
     <div className="flex h-full w-full flex-col text-xs">
-      <IssuesTab visible />
+      <IssuesTab visible={ctx.reviewSubTab === 'issues' && ctx.reviewPaneOpen} />
     </div>
   );
 }

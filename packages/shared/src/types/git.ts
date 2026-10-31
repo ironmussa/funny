@@ -74,6 +74,11 @@ export interface GitStatusInfo {
 
 export interface WSGitStatusData {
   statuses: GitStatusInfo[];
+  /**
+   * True when only PR metadata changed (background PR lookup). The working
+   * tree is untouched, so clients must not refetch the diff.
+   */
+  prOnly?: boolean;
 }
 
 /**

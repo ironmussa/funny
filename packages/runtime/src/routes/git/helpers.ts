@@ -119,6 +119,7 @@ export function emitPRUpdateForThread(opts: {
     threadId,
     data: {
       statuses: [merged as unknown as import('@funny/shared').GitStatusInfo],
+      prOnly: true,
     },
   });
 }

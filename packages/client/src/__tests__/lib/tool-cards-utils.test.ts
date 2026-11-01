@@ -10,6 +10,7 @@ import {
   getFileExtension,
   getFileName,
   isTodoToolName,
+  isPathWithin,
 } from '@/components/tool-cards/format-utils';
 import { extToHljsLang } from '@/hooks/use-highlight';
 import { toEditorUri, toEditorUriWithLine } from '@/lib/editor-utils';
@@ -317,5 +318,30 @@ describe('getFileName', () => {
 
   test('returns the input if no separator', () => {
     expect(getFileName('file.ts')).toBe('file.ts');
+  });
+});
+
+describe('isPathWithin', () => {
+  test('accepts the base itself and its descendants', () => {
+    expect(isPathWithin('/repo', '/repo')).toBe(true);
+    expect(isPathWithin('/repo/src/a.ts', '/repo')).toBe(true);
+    expect(isPathWithin('/repo/src/a.ts', '/repo/')).toBe(true);
+  });
+
+  test('rejects paths outside the base', () => {
+    expect(isPathWithin('/tmp/script.sh', '/repo')).toBe(false);
+    expect(isPathWithin('/home/u/.claude/projects/x/memory/a.md', '/repo')).toBe(false);
+  });
+
+  test('rejects sibling-prefix paths', () => {
+    expect(isPathWithin('/repo-other/a.ts', '/repo')).toBe(false);
+  });
+
+  test('normalizes Windows separators', () => {
+    expect(isPathWithin('C:\\repo\\src\\a.ts', 'C:\\repo')).toBe(true);
+  });
+
+  test('rejects an empty base', () => {
+    expect(isPathWithin('/repo/a.ts', '')).toBe(false);
   });
 });

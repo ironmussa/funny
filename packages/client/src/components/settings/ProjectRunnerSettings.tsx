@@ -272,7 +272,14 @@ export function ProjectRunnerSettings() {
             </AlertDescription>
           </Alert>
         )}
-        <div className="border-border/50 flex flex-wrap items-center gap-2 rounded-lg border p-4">
+        <form
+          className="border-border/50 flex flex-wrap items-center gap-2 rounded-lg border p-4"
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!saving && tokenDraft.trim()) saveToken(tokenDraft.trim());
+          }}
+          data-testid="project-runner-github-token-form"
+        >
           <Input
             type="password"
             value={tokenDraft}
@@ -283,8 +290,8 @@ export function ProjectRunnerSettings() {
             data-testid="project-runner-github-token"
           />
           <Button
+            type="submit"
             size="sm"
-            onClick={() => saveToken(tokenDraft.trim())}
             disabled={saving || !tokenDraft.trim()}
             data-testid="project-runner-github-token-save"
           >
@@ -293,6 +300,7 @@ export function ProjectRunnerSettings() {
           </Button>
           {settings.hasGithubToken && (
             <Button
+              type="button"
               size="sm"
               variant="outline"
               onClick={() => saveToken(null)}
@@ -303,7 +311,7 @@ export function ProjectRunnerSettings() {
               {t('projectRunner.useProfileToken', 'Use my personal token')}
             </Button>
           )}
-        </div>
+        </form>
       </section>
     </div>
   );

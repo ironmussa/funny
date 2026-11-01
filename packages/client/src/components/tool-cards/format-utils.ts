@@ -196,3 +196,15 @@ export function getFileName(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
   return normalized.split('/').pop() || filePath;
 }
+
+/**
+ * True when `filePath` is `basePath` itself or a descendant of it. Used to
+ * skip `/files/read` calls the runtime would reject with 403 (paths outside
+ * the thread's project/worktree, e.g. `/tmp` scripts or Claude memory files).
+ */
+export function isPathWithin(filePath: string, basePath: string): boolean {
+  const file = filePath.replace(/\\/g, '/');
+  const base = basePath.replace(/\\/g, '/').replace(/\/+$/, '');
+  if (!base) return false;
+  return file === base || file.startsWith(base + '/');
+}

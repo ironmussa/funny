@@ -281,6 +281,7 @@ export function createTestDb() {
       runner_id TEXT,
       size_id TEXT NOT NULL,
       repo_url TEXT,
+      llm_token_hash TEXT,
       state TEXT NOT NULL,
       error TEXT,
       generation INTEGER NOT NULL DEFAULT 0,

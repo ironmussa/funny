@@ -53,6 +53,7 @@ describe('sqlThreadSandboxStore', () => {
     runnerId: null,
     sizeId: 'default',
     repoUrl: null,
+    llmTokenHash: null,
     state: 'provisioning',
     error: null,
     generation: 0,
@@ -83,5 +84,25 @@ describe('sqlThreadSandboxStore', () => {
     expectOk(await sqlThreadSandboxStore.remove('t-1'));
     expect(expectOk(await sqlThreadSandboxStore.get('t-1'))).toBeNull();
     expectOk(await sqlThreadSandboxStore.remove('t-1'));
+  });
+
+  test('an LLM proxy token resolves only while its sandbox can run agents', async () => {
+    const { mintLlmProxyToken, resolveLlmProxyToken } =
+      await import('../../../services/llm-proxy/llm-proxy-tokens.js');
+    const llm = mintLlmProxyToken();
+    expectOk(await sqlThreadSandboxStore.put(row({ state: 'running', llmTokenHash: llm.hash })));
+    expect(expectOk(await resolveLlmProxyToken(llm.token))).toEqual({
+      userId: 'alice',
+      threadId: 't-1',
+    });
+    expect(expectOk(await resolveLlmProxyToken('llmp_unknown'))).toBeNull();
+    expect(expectOk(await resolveLlmProxyToken('not-a-proxy-token'))).toBeNull();
+
+    expectOk(await sqlThreadSandboxStore.update('t-1', { state: 'stopped' }));
+    expect(expectOk(await resolveLlmProxyToken(llm.token))).toBeNull();
+
+    expectOk(await sqlThreadSandboxStore.update('t-1', { state: 'running' }));
+    expectOk(await sqlThreadSandboxStore.remove('t-1'));
+    expect(expectOk(await resolveLlmProxyToken(llm.token))).toBeNull();
   });
 });

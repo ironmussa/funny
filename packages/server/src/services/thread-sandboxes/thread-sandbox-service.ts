@@ -21,6 +21,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
+import { mintLlmProxyToken } from '../llm-proxy/llm-proxy-tokens.js';
 import type { ProvisionTokenError } from '../runner-provision-tokens.js';
 import {
   resolveSandboxSize,
@@ -123,6 +124,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
     handle: SandboxHandle,
     template: TemplateRef | null,
     token: string,
+    llmToken: string,
   ): ResultAsync<string, ProvisionError> {
     const waitRunning = pollUntil(
       () =>
@@ -154,6 +156,8 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
     const start = startRunnerCommand({
       TEAM_SERVER_URL: deps.serverUrl,
       RUNNER_PROVISION_TOKEN: token,
+      // Model calls go through the server's LLM proxy with this token (llm-proxy).
+      FUNNY_LLM_PROXY_TOKEN: llmToken,
     });
     if (start.isErr()) return errAsync({ kind: 'connection', message: start.error });
 
@@ -241,6 +245,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
             });
           }
           const now = new Date().toISOString();
+          const llm = mintLlmProxyToken();
           const row: ThreadSandboxRow = {
             threadId: input.threadId,
             userId: input.userId,
@@ -250,15 +255,16 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
             runnerId: null,
             sizeId: size.id,
             repoUrl: input.checkout?.repoUrl ?? null,
+            llmTokenHash: llm.hash,
             state: 'provisioning',
             error: null,
             generation,
             createdAt: now,
             updatedAt: now,
           };
-          return fromStore(deps.store.put(row)).map(() => ({ row, provider }));
+          return fromStore(deps.store.put(row)).map(() => ({ row, provider, llmToken: llm.token }));
         })
-        .andThen(({ row, provider }) => {
+        .andThen(({ row, provider, llmToken }) => {
           const template = deps.templates
             .current(provider)
             .orElse(() => okAsync<TemplateRef | null, never>(null))
@@ -286,11 +292,12 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
                 .andThen((handle) =>
                   setState(input.threadId, 'provisioning', { sandboxId: handle.sandboxId }).andThen(
                     () =>
-                      bringUpRunner(input, provider, handle, ref, provisionToken).orElse((error) =>
-                        // The machine exists: never leave it running (and billing) after a failure.
-                        ResultAsync.fromSafePromise(
-                          Promise.resolve(provider.destroy(handle)),
-                        ).andThen(() => errAsync<string, ProvisionError>(error)),
+                      bringUpRunner(input, provider, handle, ref, provisionToken, llmToken).orElse(
+                        (error) =>
+                          // The machine exists: never leave it running (and billing) after a failure.
+                          ResultAsync.fromSafePromise(
+                            Promise.resolve(provider.destroy(handle)),
+                          ).andThen(() => errAsync<string, ProvisionError>(error)),
                       ),
                   ),
                 ),

@@ -1782,6 +1782,16 @@ const migrations: Migration[] = [
       await ctx().addColumn('thread_sandboxes', 'repo_url', 'TEXT');
     },
   },
+  {
+    // thread-sandboxes: per-sandbox token for the server's LLM credential proxy.
+    name: '087_thread_sandboxes_llm_token',
+    async up() {
+      await ctx().addColumn('thread_sandboxes', 'llm_token_hash', 'TEXT');
+      await ctx().exec(
+        sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_thread_sandboxes_llm_token ON thread_sandboxes(llm_token_hash)`,
+      );
+    },
+  },
 ];
 
 /**

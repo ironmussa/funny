@@ -761,6 +761,8 @@ export const threadSandboxes = pgTable('thread_sandboxes', {
   sizeId: text('size_id').notNull(),
   /** Repository cloned into the sandbox; reused for the project's next sandbox. */
   repoUrl: text('repo_url'),
+  /** SHA-256 of the sandbox's LLM proxy token; the row going away revokes it. */
+  llmTokenHash: text('llm_token_hash'),
   /** provisioning | installing | connecting | bootstrapping | running | stopping | stopped | failed | lost */
   state: text('state').notNull(),
   error: text('error'),

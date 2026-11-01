@@ -107,6 +107,7 @@ describe('createSandboxWaker', () => {
     runnerId: 'r1',
     sizeId: 'small',
     repoUrl: null,
+    llmTokenHash: null,
     state: 'stopped',
     error: null,
     generation: 0,

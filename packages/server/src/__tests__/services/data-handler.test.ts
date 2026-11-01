@@ -1014,6 +1014,22 @@ describe('data-handler handleDataMessageWithAck', () => {
     expect(res.key).toBe('mm-key');
   });
 
+  test('get_provider_key never hands a server-only key (LLM proxy credential) to a runner', async () => {
+    const { upsertProfile } = await import('../../services/profile-service.js');
+    await upsertProfile('user-1', {
+      providerKey: { id: 'claude-subscription', value: 'sk-ant-oat01-secret' },
+    });
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:get_provider_key',
+      userId: 'user-1',
+      provider: 'claude-subscription',
+    });
+
+    expect(res.type).toBe('data:get_provider_key_response');
+    expect(res.key).toBeNull();
+  });
+
   test('list_projects returns only projects owned by userId', async () => {
     seedProject(db as any, {
       id: 'p2',

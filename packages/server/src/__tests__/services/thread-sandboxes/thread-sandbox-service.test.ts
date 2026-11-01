@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { okAsync, errAsync } from 'neverthrow';
 
+import { hashLlmProxyToken } from '../../../services/llm-proxy/llm-proxy-tokens.js';
 import {
   createFakeSandboxProvider,
   type FakeSandboxProvider,
@@ -106,6 +107,10 @@ describe('thread sandbox provisioning', () => {
     expect(commands.some((c) => c.includes('funny-install-runner.sh'))).toBe(false);
     expect(commands.at(-1)).toContain(`RUNNER_PROVISION_TOKEN=${issued[0]}`);
     expect(commands.at(-1)).toContain('TEAM_SERVER_URL=https://funny.example');
+    // The sandbox gets an LLM proxy token; only its hash is stored.
+    const llmToken = commands.at(-1)?.match(/FUNNY_LLM_PROXY_TOKEN=(llmp_[A-Za-z0-9_-]+)/)?.[1];
+    expect(llmToken).toBeDefined();
+    expect(store.rows.get('t-1')?.llmTokenHash).toBe(hashLlmProxyToken(llmToken!));
     expect(store.rows.get('t-1')?.sandboxId).toBe(
       sandbox ? [...provider.sandboxes.keys()][0] : null,
     );

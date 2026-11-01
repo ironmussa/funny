@@ -270,6 +270,12 @@ app.use('/api/runners/*', rateLimit({ windowMs: 60_000, max: 1200 }));
 const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('./routes/invite-links.js');
 app.route('/api/invite-links', inviteLinkPublicRoutes);
 
+// LLM credential proxy for sandbox agents (thread-sandboxes): authenticated by
+// the sandbox's proxy token, not a session, so it is mounted before auth.
+const { llmProxyRoutes } = await import('./routes/llm-proxy.js');
+app.use('/api/llm-proxy/*', rateLimit({ windowMs: 60_000, max: 600 }));
+app.route('/api/llm-proxy', llmProxyRoutes());
+
 // Better Auth routes — use app.all to handle all HTTP methods (GET, POST, DELETE, etc.)
 app.all('/api/auth/*', (c) => authInstance.handler(c.req.raw));
 

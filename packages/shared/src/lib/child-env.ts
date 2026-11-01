@@ -18,6 +18,8 @@ export const SENSITIVE_ENV_VARS: readonly string[] = [
   'RUNNER_AUTH_SECRET',
   'RUNNER_INVITE_TOKEN',
   'RUNNER_PROVISION_TOKEN',
+  // thread-sandboxes: injected explicitly into Claude agents only (agent-env.ts).
+  'FUNNY_LLM_PROXY_TOKEN',
   'RUNNER_TOKEN',
   'FUNNY_RUNNER_TOKEN',
   'FUNNY_RUNNER_FORWARDING_KEY',

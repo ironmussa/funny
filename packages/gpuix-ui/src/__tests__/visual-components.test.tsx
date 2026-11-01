@@ -127,7 +127,7 @@ describe('visual component contracts', () => {
     expect(root.renderer.getPaintedText()).toContain('ACTIVITY');
     expect(root.renderer.getPaintedText()).toContain('@ada');
     expect(root.renderer.getPaintedText()).toContain('+14');
-    expect(root.renderer.findByTestId('changes-summary')).not.toBeNull();
+    expect(root.renderer.findByTestId('changes-summary')).toBeDefined();
 
     const row = root.renderer.findByTestId('thread-row');
     if (row) root.renderer.nativeSimulateKeyDown(row.id, 'enter');

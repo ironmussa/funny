@@ -41,6 +41,10 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # remote-connector's Rust lint links libdbus-sys (keyring), which needs dbus-1 via pkg-config.
+      - name: Install system libraries (remote-connector)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
+
       - name: Lint (oxlint)
         run: bun run lint
 
@@ -69,6 +73,10 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      # The renderer benchmark loads the GPUIX native addon, which links libxkbcommon-x11.
+      - name: Install system libraries (GPUIX native)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-x11-0
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
@@ -158,6 +166,10 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      - name: Install system libraries (GPUIX native, Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-x11-0 xvfb
 
       - name: Run client-core contracts
         run: bun run --cwd packages/client-core test

@@ -36,8 +36,8 @@ describe('native file tree window', () => {
     root.renderer.dispatchNativeEvents();
     root.renderer.flush();
 
-    expect(root.renderer.findByTestId('file-tree-file-src/file-900.ts')).not.toBeNull();
-    expect(root.renderer.findByTestId('file-tree-file-src/file-0.ts')).toBeNull();
+    expect(root.renderer.findByTestId('file-tree-file-src/file-900.ts')).toBeDefined();
+    expect(root.renderer.findByTestId('file-tree-file-src/file-0.ts')).toBeUndefined();
     expect(root.renderer.findByType('virtual-list')[0]?.children.length).toBeLessThan(96);
     root.unmount();
   });
@@ -57,8 +57,8 @@ describe('native file tree window', () => {
     root.render(<FileTree files={files} query="file-1.ts" viewportHeight={500} />);
     root.render(<FileTree files={files} viewportHeight={500} />);
 
-    expect(root.renderer.findByTestId('file-tree-folder-src')).not.toBeNull();
-    expect(root.renderer.findByTestId('file-tree-file-src/file-0.ts')).not.toBeNull();
+    expect(root.renderer.findByTestId('file-tree-folder-src')).toBeDefined();
+    expect(root.renderer.findByTestId('file-tree-file-src/file-0.ts')).toBeDefined();
     root.unmount();
   });
 });

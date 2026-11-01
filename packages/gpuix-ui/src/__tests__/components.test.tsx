@@ -5,7 +5,7 @@ import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing';
 import { Button } from '../button';
 import { eventValue, Input, Textarea } from '../input';
 import { NavItem } from '../nav-item';
-import { GpuixUiProvider } from '../theme';
+import { darkTheme, GpuixUiProvider } from '../theme';
 
 describe('gpuix-ui components', () => {
   const nativeTest = hasNativeTestRenderer ? test : test.skip;
@@ -28,12 +28,14 @@ describe('gpuix-ui components', () => {
     );
 
     const button = root.renderer.findByTestId('save');
-    expect(button?.style.backgroundColor).toBe('#315da8');
-    expect(root.renderer.findByTestId('name')?.style.borderRadius).toBe(7);
+    expect(button?.style.backgroundColor).toBe(darkTheme.colors.accent);
+    expect(root.renderer.findByTestId('name')?.style.borderRadius).toBe(darkTheme.radii.medium);
     expect(root.renderer.findByTestId('name')?.customProps?.theme).toEqual({
-      caret: '#315da8',
+      caret: darkTheme.colors.accent,
     });
-    expect(root.renderer.findByTestId('thread')?.style.backgroundColor).toBe('#315da8');
+    expect(root.renderer.findByTestId('thread')?.style.backgroundColor).toBe(
+      darkTheme.colors.accent,
+    );
 
     const bounds = button ? root.renderer.getElementBounds(button.id) : null;
     expect(bounds).not.toBeNull();

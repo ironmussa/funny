@@ -31,7 +31,10 @@ describe('gpuix-ui accessibility', () => {
           <NavItem testId="thread" selected onSelect={() => {}}>
             <text>Thread</text>
           </NavItem>
-          <FileTree testId="tree" files={['src/app.ts']} />
+          {/* A virtual list only paints rows when its column gives it a definite height. */}
+          <div style={{ display: 'flex', flexDirection: 'column', height: 80 }}>
+            <FileTree testId="tree" files={['src/app.ts']} />
+          </div>
         </div>
       </GpuixUiProvider>,
     );

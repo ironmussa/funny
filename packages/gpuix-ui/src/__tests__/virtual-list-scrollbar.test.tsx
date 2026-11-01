@@ -47,9 +47,10 @@ describe('ScrollableVirtualList', () => {
     expect(middle).toBeGreaterThan(30);
     expect(middle).toBeLessThan(70);
 
-    root.renderer.nativeSimulateMouseMove(x, bounds.y + 2, 0);
+    // The track maps proportionally (100 rows over ~200px), so only its top edge is row 0.
+    root.renderer.nativeSimulateMouseMove(x, bounds.y, 0);
     expect(root.renderer.getListScrollTop(listId)?.[0]).toBe(0);
-    root.renderer.nativeSimulateMouseUp(x, bounds.y + 2, 0);
+    root.renderer.nativeSimulateMouseUp(x, bounds.y, 0);
     expect(root.renderer.findByTestId('list-scrollbar-capture')).toBeUndefined();
     root.unmount();
   });

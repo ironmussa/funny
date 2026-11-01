@@ -32,6 +32,15 @@ export function runsInSandbox(thread: { runtime?: string } | null | undefined): 
   return thread?.runtime === 'sandbox';
 }
 
+/**
+ * Whether a busy (running / setting up) thread may be deleted. Deleting a
+ * sandbox thread destroys its machine, which also ends its agent; a local
+ * thread must be stopped first so no agent process is left behind.
+ */
+export function canDeleteWhileBusy(thread: { runtime?: string } | null | undefined): boolean {
+  return runsInSandbox(thread);
+}
+
 // ── Capability predicates ────────────────────────────────────────
 
 /**

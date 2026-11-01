@@ -19,7 +19,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { api } from '@/lib/api';
 import { setDashedDragPreview } from '@/lib/drag-preview';
-import { isExternalClaudeShell } from '@/lib/thread-variant';
+import { canDeleteWhileBusy, isExternalClaudeShell } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -121,7 +121,7 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
         onRename={handleRename}
         onArchive={isBusy ? undefined : handleArchive}
         onPin={handlePin}
-        onDelete={isBusy ? undefined : handleDelete}
+        onDelete={isBusy && !canDeleteWhileBusy(thread) ? undefined : handleDelete}
         gitStatus={gitStatus}
       />
     </div>

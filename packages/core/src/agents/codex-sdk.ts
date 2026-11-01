@@ -55,6 +55,18 @@ const CODEX_TOOLS = [
   'web_fetch',
 ];
 
+function assertSuccessfulStreamEvent(event: ThreadEvent): void {
+  // Throwing closes the iterator and routes SDK failures through the transport-error path.
+  if (event.type === 'error') throw new Error(event.message);
+  if (event.type === 'turn.failed') throw new Error(event.error.message);
+}
+
+function assertCompletedTurn(completed: boolean, aborted: boolean): void {
+  if (!completed && !aborted) {
+    throw new Error('Codex connection ended before the turn completed. Please try again.');
+  }
+}
+
 export class CodexSDKProcess extends BaseAgentProcess {
   private codex: Codex | null = null;
   private thread: Thread | null = null;
@@ -176,21 +188,20 @@ export class CodexSDKProcess extends BaseAgentProcess {
           prompt = `Inspect this repository and create or update AGENTS.md with concise, accurate guidance for coding agents. ${command.args}`;
         const input = await this.buildInput(prompt, images, cleanupDirs);
         const { events } = await this.thread.runStreamed(input, { signal: turnAbort.signal });
+        let turnCompleted = false;
 
         await consumeAsync(
           events,
           async (event) => {
             if (this.isAborted) return false;
+            assertSuccessfulStreamEvent(event);
+            if (event.type === 'turn.completed') turnCompleted = true;
             const maybeText = await this.handleEvent(event);
             if (maybeText) resultText = maybeText;
-            if (event.type === 'turn.failed') {
-              subtype = 'error_during_execution';
-              errors.push(event.error.message);
-              this.emitErrorToolCall(event.error.message);
-            }
           },
           { signal: turnAbort.signal },
         );
+        assertCompletedTurn(turnCompleted, this.isAborted);
       }
     } catch (err) {
       if (turnAbort.signal.aborted || this.isAborted) {

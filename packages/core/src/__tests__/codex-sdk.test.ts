@@ -173,6 +173,95 @@ process.stdin.on('end', () => {
     }
   });
 
+  test.each([
+    {
+      name: 'stream error',
+      ending: {
+        type: 'error',
+        message: 'Your network connection was interrupted. Please try again.',
+      },
+      error: 'Your network connection was interrupted. Please try again.',
+    },
+    {
+      name: 'failed turn',
+      ending: { type: 'turn.failed', error: { message: 'Connection lost' } },
+      error: 'Connection lost',
+    },
+    {
+      name: 'stream ending without a terminal event',
+      ending: null,
+      error: 'Codex connection ended before the turn completed. Please try again.',
+    },
+    {
+      name: 'completed turn',
+      ending: {
+        type: 'turn.completed',
+        usage: { input_tokens: 10, cached_input_tokens: 0, output_tokens: 5 },
+      },
+      error: undefined,
+    },
+  ])('reports $name through the runtime result contract', async ({ ending, error }) => {
+    const fixtureDir = await mkdtemp(join(tmpdir(), 'funny-codex-sdk-network-'));
+    const fixtureBinary = join(fixtureDir, 'codex-fixture.mjs');
+    const agent = new CodexSDKProcess({
+      ...options,
+      env: { CODEX_BINARY_PATH: fixtureBinary },
+    });
+    const messages: CLIMessage[] = [];
+    agent.on('message', (message) => messages.push(message));
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+
+    try {
+      const events = [
+        { type: 'thread.started', thread_id: 'sdk-network-thread' },
+        { type: 'turn.started' },
+        {
+          type: 'item.completed',
+          item: { id: 'answer', type: 'agent_message', text: 'Partial answer' },
+        },
+        ...(ending ? [ending] : []),
+      ];
+      await writeFile(
+        fixtureBinary,
+        `#!/usr/bin/env node
+process.stdin.resume();
+process.stdin.on('end', () => {
+  for (const event of ${JSON.stringify(events)}) console.log(JSON.stringify(event));
+});
+`,
+      );
+      await chmod(fixtureBinary, 0o755);
+      await new Promise<void>((resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error('Codex network fixture timed out')), 5_000);
+        agent.on('message', (message) => {
+          if (message.type === 'result') resolve();
+        });
+        agent.start();
+      });
+
+      const results = messages.filter((message) => message.type === 'result');
+      expect(results).toHaveLength(1);
+      expect(results[0]).toMatchObject({
+        subtype: error ? 'error_during_execution' : 'success',
+        is_error: !!error,
+        result: 'Partial answer',
+        ...(error ? { errors: [error] } : {}),
+      });
+      const errorCards = messages.filter(
+        (message) =>
+          message.type === 'assistant' &&
+          message.message.content.some(
+            (block) => block.type === 'tool_use' && block.name === 'ProviderError',
+          ),
+      );
+      expect(errorCards).toHaveLength(error ? 1 : 0);
+    } finally {
+      clearTimeout(timeout);
+      await agent.kill();
+      await rm(fixtureDir, { recursive: true, force: true });
+    }
+  });
+
   test('allows linked-worktree Git metadata in workspace-write mode', async () => {
     const root = await mkdtemp(join(tmpdir(), 'funny-codex-worktree-'));
     const repository = join(root, 'repository');

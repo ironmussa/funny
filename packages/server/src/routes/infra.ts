@@ -19,22 +19,13 @@ import { projects, threads } from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
-import { issueThreadProvisionToken } from '../services/runner-provision-tokens.js';
-import { sandboxRunnerIdForThread } from '../services/runner-scope.js';
 import {
   createInfraConnectionService,
   type InfraConnectionError,
 } from '../services/thread-sandboxes/infra-connections.js';
 import { productionSandboxProviders } from '../services/thread-sandboxes/provider-catalog.js';
-import { resolvePublicServerUrl } from '../services/thread-sandboxes/public-server-url.js';
 import type { SandboxProviderRegistry } from '../services/thread-sandboxes/registry.js';
-import { resolveRunnerBuild } from '../services/thread-sandboxes/runner-build.js';
-import { createSandboxRunnerCalls } from '../services/thread-sandboxes/sandbox-runner-calls.js';
-import {
-  createRunnerTemplateManager,
-  type RunnerTemplateManager,
-} from '../services/thread-sandboxes/template-manager.js';
-import { createThreadSandboxService } from '../services/thread-sandboxes/thread-sandbox-service.js';
+import { prepareSandboxLaunch } from '../services/thread-sandboxes/sandbox-launch.js';
 import { sqlThreadSandboxStore } from '../services/thread-sandboxes/thread-sandbox-store.js';
 
 const provisionSchema = z
@@ -45,17 +36,6 @@ const provisionSchema = z
     repoUrl: z.string().min(1).max(2048).optional(),
   })
   .strict();
-
-const ACTIVE_SANDBOX_STATES = new Set([
-  'provisioning',
-  'installing',
-  'connecting',
-  'bootstrapping',
-  'running',
-]);
-
-/** One template manager per server build, shared by every request. */
-const templateManagers = new Map<string, RunnerTemplateManager>();
 
 /** The caller's thread with its project path, or null when it is not theirs. */
 async function ownedThreadProject(userId: string, threadId: string) {
@@ -156,68 +136,28 @@ export function createInfraRoutes(registry: SandboxProviderRegistry) {
     const userId = c.get('userId');
     const threadId = c.req.param('threadId');
 
-    const build = resolveRunnerBuild();
-    if (build.isErr()) return c.json({ error: build.error.message, code: build.error.kind }, 409);
-    const serverUrl = resolvePublicServerUrl();
-    if (serverUrl.isErr()) {
-      return c.json({ error: serverUrl.error.message, code: serverUrl.error.kind }, 409);
-    }
     const thread = await ownedThreadProject(userId, threadId);
     if (!thread) return c.json({ error: 'Thread not found', code: 'not-found' }, 404);
     if (!thread.projectId || !thread.projectPath) {
       return c.json({ error: 'Scratch threads cannot run in a sandbox', code: 'scratch' }, 400);
     }
-    const existing = await sqlThreadSandboxStore.get(threadId);
-    if (existing.isOk() && existing.value && ACTIVE_SANDBOX_STATES.has(existing.value.state)) {
-      return c.json(
-        {
-          error: `Thread already has a ${existing.value.state} sandbox`,
-          code: 'already-provisioned',
-        },
-        409,
-      );
+    const prepared = await prepareSandboxLaunch(
+      {
+        userId,
+        threadId,
+        projectId: thread.projectId,
+        projectPath: thread.projectPath,
+        connectionId: parsed.data.connectionId,
+        sizeId: parsed.data.sizeId,
+        repoUrl: parsed.data.repoUrl,
+      },
+      { connections, requests: c.env?.runnerRequests, presence: c.env?.runnerPresence },
+    );
+    if (prepared.isErr()) {
+      return c.json({ error: prepared.error.message, code: prepared.error.code }, 409);
     }
-
-    const calls = createSandboxRunnerCalls({
-      requests: c.env?.runnerRequests,
-      presence: c.env?.runnerPresence,
-    });
-    let repoUrl = parsed.data.repoUrl ?? null;
-    if (!repoUrl) {
-      const remote = await calls.projectRemoteUrl({ userId, projectId: thread.projectId });
-      repoUrl = remote.isOk() ? remote.value : null;
-    }
-    if (!repoUrl) {
-      return c.json(
-        {
-          error:
-            "Could not determine the project's repository URL; pass repoUrl or connect the project's runner.",
-          code: 'repo-url-unknown',
-        },
-        409,
-      );
-    }
-
-    let templates = templateManagers.get(build.value.version);
-    if (!templates) {
-      templates = createRunnerTemplateManager(build.value);
-      templateManagers.set(build.value.version, templates);
-    }
-    const service = createThreadSandboxService({
-      connections,
-      templates,
-      build: build.value,
-      serverUrl: serverUrl.value,
-      issueToken: issueThreadProvisionToken,
-      sandboxRunnerIdForThread,
-      requestCheckout: calls.checkout,
-      presence: c.env?.runnerPresence,
-      store: sqlThreadSandboxStore,
-    });
     // Provisioning takes minutes: answer now, report progress via GET.
-    const { connectionId, sizeId } = parsed.data;
-    const checkout = { path: thread.projectPath, repoUrl };
-    void service.provision({ userId, threadId, connectionId, sizeId, checkout }).then((result) => {
+    void prepared.value.provision().then((result) => {
       if (result.isErr()) return;
       audit({
         action: 'infra.sandbox_provisioned',

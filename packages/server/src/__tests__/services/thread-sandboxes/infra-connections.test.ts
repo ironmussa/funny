@@ -183,6 +183,7 @@ describe('infra routes', () => {
           sandboxId: 'fake-1',
           runnerId: 'r-box',
           sizeId: 'default',
+          repoUrl: null,
           state: 'running',
           error: null,
           generation: 0,
@@ -206,6 +207,7 @@ describe('infra routes', () => {
           sandboxId: null,
           runnerId: null,
           sizeId: 'default',
+          repoUrl: null,
           state: 'provisioning',
           error: null,
           generation: 0,
@@ -226,6 +228,30 @@ describe('infra routes', () => {
       restore();
       expect(res.status).toBe(409);
       expect((await res.json()).code).toBe('repo-url-unknown');
+    });
+
+    test('reuses the repository of an earlier sandbox of the project when its runner is offline', async () => {
+      seedThread(testDb.db, { id: 't-0', projectId: 'px', userId: 'alice' });
+      expectOk(
+        await sqlThreadSandboxStore.put({
+          threadId: 't-0',
+          userId: 'alice',
+          connectionId: 'conn-1',
+          provider: 'fake',
+          sandboxId: 'fake-0',
+          runnerId: 'r-old',
+          sizeId: 'default',
+          repoUrl: 'https://github.com/acme/px.git',
+          state: 'stopped',
+          error: null,
+          generation: 0,
+          createdAt: '2026-10-31T00:00:00Z',
+          updatedAt: '2026-10-31T00:00:00Z',
+        }),
+      );
+      const res = await post('alice', 't-1');
+      restore();
+      expect(res.status).toBe(202);
     });
   });
 });

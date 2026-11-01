@@ -52,6 +52,7 @@ describe('sqlThreadSandboxStore', () => {
     sandboxId: null,
     runnerId: null,
     sizeId: 'default',
+    repoUrl: null,
     state: 'provisioning',
     error: null,
     generation: 0,

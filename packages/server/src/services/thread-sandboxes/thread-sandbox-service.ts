@@ -249,6 +249,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
             sandboxId: null,
             runnerId: null,
             sizeId: size.id,
+            repoUrl: input.checkout?.repoUrl ?? null,
             state: 'provisioning',
             error: null,
             generation,

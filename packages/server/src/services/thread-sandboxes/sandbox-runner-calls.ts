@@ -3,8 +3,9 @@
  * Every call goes through runner-access: the runner is certified for the actor
  * and target, and the forwarded identity is signed by the sink.
  *
- * - checkout: to the THREAD's sandbox runner (the `request` target resolves to
- *   the thread-sandbox route target, so no other runner can be certified).
+ * - checkout / sendMessage: to the THREAD's sandbox runner (the `request`
+ *   target resolves to the thread-sandbox route target, so no other runner can
+ *   be certified).
  * - projectRemoteUrl: to the PROJECT's runner, to learn the repository URL.
  */
 
@@ -70,6 +71,29 @@ export function createSandboxRunnerCalls(ports: {
         res.status >= 200 && res.status < 300
           ? okAsync<void, string>(undefined)
           : errAsync<void, string>(`checkout failed (${res.status}): ${res.body.slice(0, 500)}`),
+      );
+    },
+
+    /** Send a message to the thread on its sandbox runner (starts the agent). */
+    sendMessage(input: {
+      userId: string;
+      threadId: string;
+      body: Record<string, unknown>;
+    }): ResultAsync<void, string> {
+      const path = `/api/threads/${encodeURIComponent(input.threadId)}/message`;
+      return send(
+        input.userId,
+        { kind: 'request', path, query: {} },
+        {
+          method: 'POST',
+          path,
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(input.body),
+        },
+      ).andThen((res) =>
+        res.status >= 200 && res.status < 300
+          ? okAsync<void, string>(undefined)
+          : errAsync<void, string>(`message failed (${res.status}): ${res.body.slice(0, 500)}`),
       );
     },
 

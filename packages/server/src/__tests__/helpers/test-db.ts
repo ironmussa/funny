@@ -280,6 +280,7 @@ export function createTestDb() {
       sandbox_id TEXT,
       runner_id TEXT,
       size_id TEXT NOT NULL,
+      repo_url TEXT,
       state TEXT NOT NULL,
       error TEXT,
       generation INTEGER NOT NULL DEFAULT 0,

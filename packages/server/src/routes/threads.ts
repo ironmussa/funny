@@ -43,6 +43,7 @@ import * as runnerResolver from '../services/runner-resolver.js';
 import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
 import { destroyThreadSandbox } from '../services/thread-sandboxes/sandbox-lifecycle.js';
+import { sandboxThreadLauncherFor } from '../services/thread-sandboxes/sandbox-thread-wiring.js';
 import { parseJsonBody, parseQuery } from '../validation/request.js';
 
 // Canonical thread-lifecycle enums — kept in sync with
@@ -695,6 +696,7 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
 async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent) {
   const parsed = await parseJsonBody(c, threadCreateBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  if (parsed.value.runtime === 'sandbox') return handleCreateSandboxThread(c, parsed.value);
 
   const createThread = composeCreateThread(c.env);
   const result = await createThread({
@@ -730,6 +732,16 @@ async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent)
       return c.json({ error: 'Thread creation failed' }, 502);
     }
   }
+}
+
+/** `runtime: 'sandbox'`: the server creates the thread and starts it in its own sandbox. */
+async function handleCreateSandboxThread(c: Context<ServerEnv>, payload: Record<string, unknown>) {
+  const userId = c.get('userId') as string;
+  const result = await sandboxThreadLauncherFor(c.env ?? {}).create(userId, payload);
+  if (result.isErr()) {
+    return c.json({ error: result.error.message, code: result.error.code }, result.error.status);
+  }
+  return c.json(result.value.thread as any, 201);
 }
 
 // POST /api/threads — Create a new thread

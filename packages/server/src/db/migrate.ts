@@ -1774,6 +1774,14 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // thread-sandboxes: remember the cloned repository so the next sandbox of the
+    // project can be created while the project's own runner is offline.
+    name: '086_thread_sandboxes_repo_url',
+    async up() {
+      await ctx().addColumn('thread_sandboxes', 'repo_url', 'TEXT');
+    },
+  },
 ];
 
 /**

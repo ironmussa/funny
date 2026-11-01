@@ -758,7 +758,9 @@ export const threadSandboxes = sqliteTable('thread_sandboxes', {
   sandboxId: text('sandbox_id'),
   runnerId: text('runner_id'),
   sizeId: text('size_id').notNull(),
-  /** provisioning | installing | connecting | running | stopping | stopped | failed | lost */
+  /** Repository cloned into the sandbox; reused for the project's next sandbox. */
+  repoUrl: text('repo_url'),
+  /** provisioning | installing | connecting | bootstrapping | running | stopping | stopped | failed | lost */
   state: text('state').notNull(),
   error: text('error'),
   /** Bumped on every re-provision; part of the provider idempotency key. */

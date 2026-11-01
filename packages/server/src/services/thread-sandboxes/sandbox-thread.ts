@@ -1,0 +1,192 @@
+/**
+ * Create a thread that runs in its own sandbox (change thread-sandboxes).
+ *
+ * The server owns the whole flow so it works with the user's own runners
+ * offline (e.g. from a phone): it writes the thread row itself (status
+ * `setting_up`, mode `local` — the sandbox already isolates it), provisions the
+ * sandbox in the background, and once the sandbox runner has the checkout it
+ * sends the first message there, which starts the agent. A failure marks the
+ * thread `failed` and the prompt stays on the thread as its initial prompt.
+ */
+
+import { err, ok, type Result, type ResultAsync } from 'neverthrow';
+import { z } from 'zod';
+
+import { log } from '../../lib/logger.js';
+import { metric } from '../../lib/telemetry.js';
+import type {
+  PreparedSandboxLaunch,
+  SandboxLaunchRefusal,
+  SandboxLaunchRequest,
+} from './sandbox-launch.js';
+
+const createSandboxThreadSchema = z
+  .object({
+    projectId: z.string().min(1),
+    title: z.string().trim().max(200).optional(),
+    prompt: z.string().min(1).max(500_000),
+    provider: z.string().min(1).max(64).optional(),
+    model: z.string().min(1).max(128).optional(),
+    permissionMode: z.string().min(1).max(64).optional(),
+    effort: z.string().min(1).max(32).optional(),
+    sandbox: z
+      .object({
+        connectionId: z.string().min(1),
+        sizeId: z.string().min(1).max(32).optional(),
+        repoUrl: z.string().min(1).max(2048).optional(),
+      })
+      .strict(),
+  })
+  // The compose payload carries more fields; only the ones above are used here,
+  // plus the message extras forwarded below.
+  .passthrough();
+
+/** Message fields forwarded verbatim; the runner validates them. */
+const FORWARDED_MESSAGE_FIELDS = [
+  'images',
+  'fileReferences',
+  'symbolReferences',
+  'allowedTools',
+  'disallowedTools',
+] as const;
+
+export interface SandboxThreadFailure {
+  status: 400 | 404 | 409;
+  code: string;
+  message: string;
+}
+
+export interface NewSandboxThreadRow {
+  id: string;
+  projectId: string;
+  userId: string;
+  title: string;
+  mode: 'local';
+  runtime: 'sandbox';
+  status: 'setting_up';
+  stage: 'in_progress';
+  provider?: string;
+  model?: string;
+  permissionMode?: string;
+  initialPrompt: string;
+  source: 'web';
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SandboxThreadDeps {
+  findOwnedProject(userId: string, projectId: string): Promise<{ path: string } | null>;
+  prepare(req: SandboxLaunchRequest): Promise<Result<PreparedSandboxLaunch, SandboxLaunchRefusal>>;
+  insertThread(row: NewSandboxThreadRow): Promise<void>;
+  loadThread(threadId: string): Promise<unknown>;
+  markFailed(threadId: string, reason: string): Promise<void>;
+  sendMessage(input: {
+    userId: string;
+    threadId: string;
+    body: Record<string, unknown>;
+  }): ResultAsync<void, string>;
+  newId(): string;
+  now?: () => string;
+}
+
+export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
+  const now = deps.now ?? (() => new Date().toISOString());
+
+  async function runInBackground(
+    userId: string,
+    threadId: string,
+    launch: PreparedSandboxLaunch,
+    body: Record<string, unknown>,
+  ): Promise<void> {
+    const provisioned = await launch.provision();
+    const started = provisioned.isErr()
+      ? err(`sandbox provisioning failed: ${provisioned.error.message}`)
+      : await deps.sendMessage({ userId, threadId, body });
+    if (started.isOk()) {
+      metric('thread_sandboxes.threads_started', 1);
+      return;
+    }
+    log.warn('Sandbox thread could not start', {
+      namespace: 'thread-sandboxes',
+      threadId,
+      error: started.error,
+    });
+    metric('thread_sandboxes.threads_failed', 1);
+    await deps.markFailed(threadId, started.error);
+  }
+
+  return {
+    /**
+     * Validate, create the thread and start its sandbox. `started` settles when
+     * the agent was started (or the thread was marked failed); callers do not
+     * need to await it.
+     */
+    async create(
+      userId: string,
+      payload: unknown,
+    ): Promise<Result<{ thread: unknown; started: Promise<void> }, SandboxThreadFailure>> {
+      const parsed = createSandboxThreadSchema.safeParse(payload);
+      if (!parsed.success) {
+        return err({
+          status: 400,
+          code: 'invalid',
+          message: parsed.error.issues[0]?.message ?? 'Invalid sandbox thread',
+        });
+      }
+      const input = parsed.data;
+      const project = await deps.findOwnedProject(userId, input.projectId);
+      if (!project) return err({ status: 404, code: 'not-found', message: 'Project not found' });
+
+      const threadId = deps.newId();
+      const launch = await deps.prepare({
+        userId,
+        threadId,
+        projectId: input.projectId,
+        projectPath: project.path,
+        connectionId: input.sandbox.connectionId,
+        sizeId: input.sandbox.sizeId,
+        repoUrl: input.sandbox.repoUrl,
+      });
+      if (launch.isErr()) return err({ status: 409, ...launch.error });
+
+      const createdAt = now();
+      await deps.insertThread({
+        id: threadId,
+        projectId: input.projectId,
+        userId,
+        title: input.title || input.prompt.slice(0, 80),
+        mode: 'local',
+        runtime: 'sandbox',
+        status: 'setting_up',
+        stage: 'in_progress',
+        provider: input.provider,
+        model: input.model,
+        permissionMode: input.permissionMode,
+        initialPrompt: input.prompt,
+        source: 'web',
+        createdAt,
+        updatedAt: createdAt,
+      });
+
+      const body: Record<string, unknown> = { content: input.prompt };
+      for (const key of ['provider', 'model', 'permissionMode', 'effort'] as const) {
+        if (input[key]) body[key] = input[key];
+      }
+      const extras = payload as Record<string, unknown>;
+      for (const key of FORWARDED_MESSAGE_FIELDS) {
+        if (extras[key] !== undefined) body[key] = extras[key];
+      }
+
+      const started = runInBackground(userId, threadId, launch.value, body).catch((error) => {
+        log.error('Sandbox thread launch crashed', {
+          namespace: 'thread-sandboxes',
+          threadId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+      return ok({ thread: await deps.loadThread(threadId), started });
+    },
+  };
+}
+
+export type SandboxThreadLauncher = ReturnType<typeof createSandboxThreadLauncher>;

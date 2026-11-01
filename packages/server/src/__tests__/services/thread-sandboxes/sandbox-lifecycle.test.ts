@@ -106,6 +106,7 @@ describe('createSandboxWaker', () => {
     sandboxId: 'sb1',
     runnerId: 'r1',
     sizeId: 'small',
+    repoUrl: null,
     state: 'stopped',
     error: null,
     generation: 0,

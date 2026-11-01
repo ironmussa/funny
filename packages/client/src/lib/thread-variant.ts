@@ -28,7 +28,7 @@ export function isScratch(thread: ThreadLike): boolean {
  * runner, checkout and model credential live there, not on the project's
  * runner, so project-runner readiness checks do not apply to it.
  */
-export function runsInSandbox(thread: Pick<Thread, 'runtime'> | null | undefined): boolean {
+export function runsInSandbox(thread: { runtime?: string } | null | undefined): boolean {
   return thread?.runtime === 'sandbox';
 }
 

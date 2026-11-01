@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSandboxSetupSteps } from '@/hooks/use-sandbox-setup-steps';
+import { runsInSandbox } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -176,7 +177,13 @@ function ThreadBody({
   activeThread: LoadedThread;
   pendingMetadata?: PreparationMessageMetadata;
 }) {
-  if (activeThread.status === 'setting_up')
+  // A sandbox that failed before the agent started keeps showing its setup
+  // steps, so the failed step and its error stay visible.
+  const sandboxSetupFailed =
+    runsInSandbox(activeThread) &&
+    activeThread.status === 'failed' &&
+    !activeThread.lastUserMessage;
+  if (activeThread.status === 'setting_up' || sandboxSetupFailed)
     return <PreparingThread activeThread={activeThread} pendingMetadata={pendingMetadata} />;
   if (activeThread.status === 'idle' && (activeThread.queuedCount ?? 0) === 0)
     return <ThreadIdleStarter activeThread={activeThread} />;

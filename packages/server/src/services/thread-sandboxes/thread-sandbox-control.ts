@@ -30,6 +30,13 @@ export interface ThreadSandboxControlDeps {
   removeRunner?: (runnerId: string) => Promise<void>;
 }
 
+/**
+ * Provider-side lifetime of a sandbox per create/resume. Two hours fits the
+ * strictest plan we know (Boat's trial refuses longer auto-stops); idle
+ * sandboxes are stopped long before, and each resume grants a fresh window.
+ */
+export const DEFAULT_SANDBOX_LIFETIME_MS = 2 * 60 * 60_000;
+
 export const sandboxError = (error: SandboxError): ProvisionError => ({
   kind: 'sandbox',
   message: error.message,
@@ -101,7 +108,7 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
         setState(row.threadId, 'connecting')
           .andThen(() =>
             provider
-              .resume(handle, { lifetimeMs: deps.lifetimeMs ?? 4 * 60 * 60_000 })
+              .resume(handle, { lifetimeMs: deps.lifetimeMs ?? DEFAULT_SANDBOX_LIFETIME_MS })
               .mapErr(sandboxError),
           )
           .andThen(() =>

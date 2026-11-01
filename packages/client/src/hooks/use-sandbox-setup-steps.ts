@@ -1,9 +1,11 @@
+import type { Thread } from '@funny/shared';
 import { useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
 import type { ThreadSandboxInfo, ThreadSandboxState } from '@/lib/api/infra';
 import { createClientLogger } from '@/lib/client-logger';
 import type { GitProgressStep } from '@/lib/git-progress-types';
+import { runsInSandbox } from '@/lib/thread-variant';
 
 const log = createClientLogger('sandbox-setup');
 
@@ -47,10 +49,12 @@ export function sandboxSetupSteps(info: Pick<ThreadSandboxInfo, 'state' | 'error
  */
 export function useSandboxSetupSteps(thread: {
   id: string;
-  runtime?: string;
+  runtime?: Thread['runtime'];
   status: string;
 }): GitProgressStep[] | null {
-  const active = thread.runtime === 'sandbox' && thread.status === 'setting_up';
+  const preparing = thread.status === 'setting_up';
+  // A failed setup is read once, to show where it failed and why.
+  const active = runsInSandbox(thread) && (preparing || thread.status === 'failed');
   const [info, setInfo] = useState<ThreadSandboxInfo | null>(null);
 
   useEffect(() => {
@@ -66,12 +70,12 @@ export function useSandboxSetupSteps(thread: {
       }
     };
     void poll();
-    const timer = setInterval(poll, POLL_MS);
+    const timer = preparing ? setInterval(poll, POLL_MS) : undefined;
     return () => {
       cancelled = true;
       clearInterval(timer);
     };
-  }, [active, thread.id]);
+  }, [active, preparing, thread.id]);
 
   return active ? sandboxSetupSteps(info) : null;
 }

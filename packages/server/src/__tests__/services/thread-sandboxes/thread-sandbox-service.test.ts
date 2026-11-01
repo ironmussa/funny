@@ -103,6 +103,8 @@ describe('thread sandbox provisioning', () => {
     const [sandbox] = [...provider.sandboxes.values()];
     expect(sandbox.request.template?.ref).toBe(`funny-runner-${build.version}`);
     expect(sandbox.request.idempotencyKey).toBe('t-1:0');
+    // Within the strictest provider plan (Boat's trial refuses auto-stops over 2 h).
+    expect(sandbox.request.lifetimeMs).toBe(2 * 60 * 60_000);
     const commands = provider.commands.map((c) => c.command);
     expect(commands.some((c) => c.includes('funny-install-runner.sh'))).toBe(false);
     expect(commands.at(-1)).toContain(`RUNNER_PROVISION_TOKEN=${issued[0]}`);

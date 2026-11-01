@@ -37,6 +37,7 @@ import { runnerInstallCommand, startRunnerCommand } from './runner-install-scrip
 import type { RunnerTemplateManager } from './template-manager.js';
 import {
   createThreadSandboxControl,
+  DEFAULT_SANDBOX_LIFETIME_MS,
   sandboxError,
   type ThreadSandboxControlDeps,
 } from './thread-sandbox-control.js';
@@ -285,7 +286,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
                   sizeId: row.sizeId,
                   ...(ref ? { template: ref } : {}),
                   env: {},
-                  lifetimeMs: deps.lifetimeMs ?? 4 * 60 * 60_000,
+                  lifetimeMs: deps.lifetimeMs ?? DEFAULT_SANDBOX_LIFETIME_MS,
                   idempotencyKey: `${input.threadId}:${row.generation}`,
                 })
                 .mapErr(sandboxError)

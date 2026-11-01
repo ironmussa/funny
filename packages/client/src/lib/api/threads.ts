@@ -125,6 +125,8 @@ export const threadsApi = {
     designId?: string;
     agentTemplateId?: string;
     templateVariables?: Record<string, string>;
+    /** With `runtime: 'sandbox'`: the provider connection to run the thread on. */
+    sandbox?: { connectionId: string; sizeId?: string };
   }) => request<Thread>('/threads', { method: 'POST', body: JSON.stringify(data) }),
   createIdleThread: (data: {
     projectId: string;

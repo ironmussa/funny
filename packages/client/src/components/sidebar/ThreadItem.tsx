@@ -461,6 +461,15 @@ export const ThreadItem = memo(function ThreadItem({
               Remote
             </span>
           )}
+          {/* Sandbox runtime badge (thread-sandboxes) */}
+          {thread.runtime === 'sandbox' && (
+            <span
+              data-testid={`thread-item-sandbox-badge-${thread.id}`}
+              className="bg-primary/15 text-primary shrink-0 rounded px-1 py-0.5 text-[10px] leading-none font-medium"
+            >
+              Sandbox
+            </span>
+          )}
           {/* Agent template badge */}
           {agentTemplate && (
             <Tooltip>

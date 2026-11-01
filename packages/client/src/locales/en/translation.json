@@ -622,6 +622,7 @@
     "resetPromptModels": "Show all models",
     "organizations": "Organizations",
     "runners": "Runners",
+    "sandboxes": "Sandboxes",
     "agentTemplates": "Agent Templates",
     "toolPermissions": "Tool Permissions",
     "toolPermissionsDesc": "Choose how each tool behaves: Allow (auto-approved), Ask (requires approval), or Deny (blocked).",

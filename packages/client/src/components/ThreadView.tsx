@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useSandboxSetupSteps } from '@/hooks/use-sandbox-setup-steps';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -151,6 +152,7 @@ function PreparingThread({
   const message: Partial<NonNullable<LoadedThread['lastUserMessage']>> =
     activeThread.lastUserMessage ?? {};
   const metadata = pendingMetadata ?? {};
+  const sandboxSteps = useSandboxSetupSteps(activeThread);
   return (
     <ThreadPreparationView
       prompt={message.content ?? activeThread.initialPrompt}
@@ -161,7 +163,7 @@ function PreparingThread({
         effort: message.effort ?? metadata.effort,
         timestamp: message.timestamp ?? activeThread.createdAt,
       }}
-      steps={activeThread.setupProgress ?? []}
+      steps={sandboxSteps ?? activeThread.setupProgress ?? []}
     />
   );
 }

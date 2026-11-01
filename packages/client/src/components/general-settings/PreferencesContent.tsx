@@ -15,6 +15,7 @@ import { ExtensionsSettings } from '@/components/settings/ExtensionsSettings';
 import { OrganizationManagement } from '@/components/settings/OrganizationManagement';
 import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { RunnersSettings } from '@/components/settings/RunnersSettings';
+import { SandboxesSettings } from '@/components/settings/SandboxesSettings';
 import { SettingRow } from '@/components/settings/SettingRow';
 import { SystemSettings } from '@/components/settings/SystemSettings';
 import { TeamMembers } from '@/components/settings/TeamMembers';
@@ -733,6 +734,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
         {activePreferencesPage === 'organizations' && <OrganizationManagement />}
         {activePreferencesPage === 'team-members' && <TeamMembers />}
         {activePreferencesPage === 'runners' && <RunnersSettings />}
+        {activePreferencesPage === 'sandboxes' && <SandboxesSettings />}
         {activePreferencesPage === 'agent-profiles' && <AgentExecutionProfilesSettings />}
         {activePreferencesPage === 'agent-templates' && <AgentTemplateSettings />}
         {activePreferencesPage === 'extensions' && <ExtensionsSettings />}

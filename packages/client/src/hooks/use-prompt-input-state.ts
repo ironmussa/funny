@@ -34,6 +34,7 @@ import {
   normalizeEffort,
   parseUnifiedModel,
 } from '@/lib/providers';
+import { buildRuntimeModes } from '@/lib/thread-payload';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
@@ -41,6 +42,7 @@ import { useDraftStore } from '@/stores/draft-store';
 import { useGitStatusForThread } from '@/stores/git-status-store';
 import { useProfileStore } from '@/stores/profile-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useSandboxConnectionsStore } from '@/stores/sandbox-connections-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadId, useThreadSelector } from '@/stores/thread-context';
 import * as mutations from '@/stores/thread-mutations';
@@ -218,8 +220,18 @@ export function usePromptInputState({
     },
     [onWorktreeModeChange],
   );
-  const [runtime, setRuntime] = useState<'local' | 'remote'>('local');
+  const [runtime, setRuntime] = useState<string>('local');
   const hasLauncher = !!effectiveProject?.launcherUrl;
+  const isScratch = useUIStore((s) => s.newThreadIsScratch);
+  const sandboxConnections = useSandboxConnectionsStore((s) => s.connections);
+  const fetchSandboxConnections = useSandboxConnectionsStore((s) => s.fetch);
+  useEffect(() => {
+    if (isNewThread) void fetchSandboxConnections();
+  }, [isNewThread, fetchSandboxConnections]);
+  const runtimeModes = useMemo(
+    () => buildRuntimeModes({ hasLauncher, sandboxConnections, isScratch: !!isScratch }),
+    [hasLauncher, sandboxConnections, isScratch],
+  );
   const [effort, setEffort] = useState<string>(defaultEffort);
 
   const baseUnifiedModelGroups = useUnifiedPromptModelGroups();
@@ -1014,6 +1026,7 @@ export function usePromptInputState({
     setCreateWorktree,
     runtime,
     setRuntime,
+    runtimeModes,
     hasLauncher,
     effort,
     setEffort,

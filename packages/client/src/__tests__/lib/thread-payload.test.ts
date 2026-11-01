@@ -1,7 +1,12 @@
 import type { ToolPermission } from '@funny/shared';
 import { describe, test, expect } from 'vitest';
 
-import { buildThreadPayload, type BuildInput } from '@/lib/thread-payload';
+import {
+  buildRuntimeModes,
+  buildThreadPayload,
+  parseRuntimeChoice,
+  type BuildInput,
+} from '@/lib/thread-payload';
 import { ALL_STANDARD_TOOLS } from '@/stores/settings-store';
 
 const defaultPermissions: Record<string, ToolPermission> = Object.fromEntries(
@@ -159,5 +164,47 @@ describe('buildThreadPayload', () => {
 
     expect(result.kind).toBe('normal');
     expect(result.payload).toMatchObject({ mode: 'worktree' });
+  });
+});
+
+describe('sandbox runtime (thread-sandboxes)', () => {
+  test('a sandbox choice sends the connection and forces local mode', () => {
+    const built = buildThreadPayload(
+      baseInput({
+        opts: {
+          model: 'sonnet',
+          mode: 'autoEdit',
+          threadMode: 'worktree',
+          ...parseRuntimeChoice('sandbox:conn-1'),
+        },
+      }),
+    );
+    expect(built.kind).toBe('normal');
+    expect(built.payload).toMatchObject({
+      runtime: 'sandbox',
+      mode: 'local',
+      sandbox: { connectionId: 'conn-1' },
+    });
+  });
+
+  test('local and remote choices carry no sandbox', () => {
+    expect(parseRuntimeChoice('local')).toEqual({ runtime: 'local' });
+    expect(parseRuntimeChoice('remote')).toEqual({ runtime: 'remote' });
+    expect(buildThreadPayload(baseInput()).payload).not.toHaveProperty('sandbox');
+  });
+
+  test('runtime modes: one sandbox entry per connection, none for scratch', () => {
+    const sandboxConnections = [
+      { id: 'c1', label: 'Boat' },
+      { id: 'c2', label: 'Work' },
+    ];
+    expect(
+      buildRuntimeModes({ hasLauncher: true, sandboxConnections, isScratch: false }).map(
+        (m) => m.value,
+      ),
+    ).toEqual(['local', 'remote', 'sandbox:c1', 'sandbox:c2']);
+    expect(buildRuntimeModes({ hasLauncher: false, sandboxConnections, isScratch: true })).toEqual([
+      { value: 'local', label: 'Local' },
+    ]);
   });
 });

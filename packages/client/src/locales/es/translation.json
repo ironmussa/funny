@@ -620,6 +620,7 @@
     "resetPromptModels": "Mostrar todos los modelos",
     "organizations": "Organizaciones",
     "runners": "Runners",
+    "sandboxes": "Sandboxes",
     "agentTemplates": "Plantillas de agente",
     "toolPermissions": "Permisos de Herramientas",
     "toolPermissionsDesc": "Elige cómo se comporta cada herramienta: Permitir (auto-aprobada), Preguntar (requiere aprobación) o Denegar (bloqueada).",

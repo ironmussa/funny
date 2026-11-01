@@ -4,7 +4,7 @@
  */
 import type { ImageAttachment, TemplateVariable } from '@funny/shared';
 
-import type { FileRef, SymbolRef } from '@/lib/thread-payload';
+import { parseRuntimeChoice, type FileRef, type SymbolRef } from '@/lib/thread-payload';
 
 /**
  * Attached files: small files are inlined (`mode: 'inline'`, content is
@@ -24,6 +24,8 @@ export interface PromptSubmitOptions {
   effort?: string;
   threadMode?: string;
   runtime?: string;
+  /** Provider connection used when `runtime === 'sandbox'`. */
+  sandboxConnectionId?: string;
   baseBranch?: string;
   cwd?: string;
   sendToBacklog?: boolean;
@@ -158,7 +160,7 @@ export function buildThreadOptions(
   if (!input.isNewThread) return { baseBranch: input.followUpSelectedBranch || undefined };
   return {
     threadMode: input.threadMode,
-    runtime: input.runtime,
+    ...parseRuntimeChoice(input.runtime),
     baseBranch: input.selectedBranch || undefined,
     sendToBacklog: input.sendToBacklog,
     agentTemplateId: input.isDeepAgent ? input.selectedTemplateId : undefined,

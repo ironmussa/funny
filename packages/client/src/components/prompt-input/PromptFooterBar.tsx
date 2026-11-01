@@ -4,15 +4,16 @@ import { ModeSelect } from '@/components/PromptSelectors';
 import { ContextUsageRing } from '@/components/thread/ContextUsageRing';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 
-const RUNTIME_MODES = [
-  { value: 'local', label: 'Local' },
-  { value: 'remote', label: 'Remote' },
-];
+export interface RuntimeMode {
+  value: string;
+  label: string;
+}
 
 export interface PromptFooterBarProps {
   isNewThread: boolean;
-  hasLauncher: boolean;
-  runtime: 'local' | 'remote';
+  /** Runtime choices for a new thread; the selector shows when there is more than one. */
+  runtimeModes: RuntimeMode[];
+  runtime: string;
   onRuntimeChange: (v: string) => void;
   powerlineThread?: Thread;
   powerlineProjectName?: string;
@@ -31,7 +32,7 @@ export interface PromptFooterBarProps {
 type FooterLeadingProps = Pick<
   PromptFooterBarProps,
   | 'isNewThread'
-  | 'hasLauncher'
+  | 'runtimeModes'
   | 'runtime'
   | 'onRuntimeChange'
   | 'powerlineThread'
@@ -46,11 +47,11 @@ function FooterLeading(props: FooterLeadingProps) {
   if (props.isNewThread) {
     return (
       <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
-        {props.hasLauncher && (
+        {props.runtimeModes.length > 1 && (
           <ModeSelect
             value={props.runtime}
             onChange={props.onRuntimeChange}
-            modes={RUNTIME_MODES}
+            modes={props.runtimeModes}
           />
         )}
       </div>
@@ -87,7 +88,7 @@ function FooterLeading(props: FooterLeadingProps) {
 export function PromptFooterBar(props: PromptFooterBarProps) {
   const { contextPct, isNewThread } = props;
   const hasContext = typeof contextPct === 'number';
-  const hasLeading = isNewThread ? props.hasLauncher : !!props.powerlineThread;
+  const hasLeading = isNewThread ? props.runtimeModes.length > 1 : !!props.powerlineThread;
   if (!hasContext && !hasLeading) return null;
 
   return (

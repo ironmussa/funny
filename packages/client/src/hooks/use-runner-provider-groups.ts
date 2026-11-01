@@ -58,9 +58,37 @@ export function applyRunnerProviderGroups(
   return shown.map((g) => (availSet.has(g.provider) ? g : markDisabled(g, 'not-installed')));
 }
 
+/**
+ * Providers a sandbox agent can use: the server's LLM proxy holds a credential
+ * only for these (thread-sandboxes). Keep in sync with the proxy adapters.
+ */
+const SANDBOX_PROVIDERS = new Set(['claude']);
+
+/**
+ * Picker groups for a thread that runs in a sandbox. The user's own runners do
+ * not matter there: supported providers are enabled even with every runner
+ * offline, and the rest are greyed out as not available in sandboxes yet.
+ */
+export function applySandboxModelGroups<
+  G extends Pick<ModelGroup, 'provider' | 'models' | 'disabled' | 'disabledReason'>,
+>(groups: G[]): G[] {
+  return groups.map((g) => {
+    const supported = SANDBOX_PROVIDERS.has(g.provider);
+    return {
+      ...g,
+      disabled: !supported,
+      disabledReason: supported ? undefined : 'sandbox-unsupported',
+      models: g.models.map((m) => ({ ...m, disabled: !supported })),
+    };
+  });
+}
+
 /** Tag a group (and its models) as disabled with a reason, so the picker greys
  *  it out without removing it (model-picker-availability §4). */
-function markDisabled(g: ModelGroup, reason: 'not-installed' | 'no-runner'): ModelGroup {
+function markDisabled(
+  g: ModelGroup,
+  reason: NonNullable<ModelGroup['disabledReason']>,
+): ModelGroup {
   return {
     ...g,
     disabled: true,

@@ -3,6 +3,7 @@ import { describe, test, expect } from 'vitest';
 import type { ModelGroup } from '@/hooks/use-acp-prompt-models';
 import {
   applyRunnerProviderGroups,
+  applySandboxModelGroups,
   type RunnerProviderState,
 } from '@/hooks/use-runner-provider-groups';
 import type { AdvertisedProvider } from '@/lib/api/system';
@@ -80,5 +81,20 @@ describe('applyRunnerProviderGroups (model-picker-availability §4)', () => {
     expect(out.has('myagent')).toBe(true);
     expect(out.get('myagent')?.disabled).toBe(true); // advertised but not available
     expect(out.get('myagent')?.disabledReason).toBe('not-installed');
+  });
+});
+
+describe('applySandboxModelGroups (thread-sandboxes)', () => {
+  test('Claude stays usable in a sandbox even with every runner offline; others are greyed', () => {
+    const offline = applyRunnerProviderGroups(BASE, state({ hasRunner: false }));
+    const out = byProvider(applySandboxModelGroups(offline));
+    expect(out.get('claude')?.disabled).toBe(false);
+    expect(out.get('claude')?.disabledReason).toBeUndefined();
+    expect(out.get('claude')?.models.every((m) => !m.disabled)).toBe(true);
+    for (const provider of ['codex', 'gemini']) {
+      expect(out.get(provider)?.disabled).toBe(true);
+      expect(out.get(provider)?.disabledReason).toBe('sandbox-unsupported');
+      expect(out.get(provider)?.models.every((m) => m.disabled)).toBe(true);
+    }
   });
 });

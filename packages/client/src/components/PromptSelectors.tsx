@@ -69,7 +69,7 @@ export type ModelSelectGroup = {
   providerLabel: string;
   models: { value: string; label: string; disabled?: boolean }[];
   disabled?: boolean;
-  disabledReason?: 'not-installed' | 'no-runner';
+  disabledReason?: 'not-installed' | 'no-runner' | 'sandbox-unsupported';
 };
 
 /**
@@ -145,14 +145,18 @@ const DesktopModelSelect = memo(function DesktopModelSelect({
                 {group.disabledReason === 'not-installed' && (
                   <span className="ml-1 font-normal italic">— not installed on runner</span>
                 )}
+                {group.disabledReason === 'sandbox-unsupported' && (
+                  <span className="ml-1 font-normal italic">— not available in sandboxes yet</span>
+                )}
               </DropdownMenuLabel>
-              {group.disabledReason !== 'no-runner' && (
-                <DropdownMenuItem size="xs" onSelect={() => setSetupProvider(group)}>
-                  {group.disabledReason === 'not-installed'
-                    ? 'Install / configure provider…'
-                    : 'Configure provider…'}
-                </DropdownMenuItem>
-              )}
+              {group.disabledReason !== 'no-runner' &&
+                group.disabledReason !== 'sandbox-unsupported' && (
+                  <DropdownMenuItem size="xs" onSelect={() => setSetupProvider(group)}>
+                    {group.disabledReason === 'not-installed'
+                      ? 'Install / configure provider…'
+                      : 'Configure provider…'}
+                  </DropdownMenuItem>
+                )}
               {group.models.map((m) => {
                 const isSelected = m.value === value;
                 const { model: mModel } = parseUnifiedModel(m.value);

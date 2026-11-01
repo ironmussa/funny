@@ -13,7 +13,7 @@ export interface ModelGroup {
   models: { value: string; label: string; disabled?: boolean }[];
   /** Availability tagging (model-picker-availability) — set by useRunnerProviderGroups. */
   disabled?: boolean;
-  disabledReason?: 'not-installed' | 'no-runner';
+  disabledReason?: 'not-installed' | 'no-runner' | 'sandbox-unsupported';
   [key: string]: unknown;
 }
 

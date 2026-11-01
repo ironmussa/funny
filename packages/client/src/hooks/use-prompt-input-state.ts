@@ -24,6 +24,7 @@ import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useDictation } from '@/hooks/use-dictation';
 import { usePushToTalk } from '@/hooks/use-push-to-talk';
+import { applySandboxModelGroups } from '@/hooks/use-runner-provider-groups';
 import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { useUnifiedPromptModelGroups } from '@/hooks/use-unified-prompt-model-groups';
 import { api } from '@/lib/api';
@@ -34,7 +35,8 @@ import {
   normalizeEffort,
   parseUnifiedModel,
 } from '@/lib/providers';
-import { buildRuntimeModes } from '@/lib/thread-payload';
+import { buildRuntimeModes, isSandboxRuntimeChoice } from '@/lib/thread-payload';
+import { runsInSandbox } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
@@ -236,10 +238,19 @@ export function usePromptInputState({
 
   const baseUnifiedModelGroups = useUnifiedPromptModelGroups();
   const hiddenPromptModels = useSettingsStore((s) => s.hiddenPromptModels);
-  const unifiedModelGroups = useMemo(
-    () => filterVisibleModelGroups(baseUnifiedModelGroups, hiddenPromptModels, unifiedModel),
-    [baseUnifiedModelGroups, hiddenPromptModels, unifiedModel],
-  );
+  // A sandbox thread (new, or a follow-up on one) doesn't depend on the user's runners.
+  const activeThreadRuntime = useThreadSelector((t) => t?.runtime);
+  const targetsSandbox = isNewThread
+    ? isSandboxRuntimeChoice(runtime)
+    : runsInSandbox({ runtime: activeThreadRuntime });
+  const unifiedModelGroups = useMemo(() => {
+    const visible = filterVisibleModelGroups(
+      baseUnifiedModelGroups,
+      hiddenPromptModels,
+      unifiedModel,
+    );
+    return targetsSandbox ? applySandboxModelGroups(visible) : visible;
+  }, [baseUnifiedModelGroups, hiddenPromptModels, unifiedModel, targetsSandbox]);
 
   const { provider: currentProvider, model: currentModel } = useMemo(
     () => parseUnifiedModel(unifiedModel),
@@ -271,6 +282,15 @@ export function usePromptInputState({
     },
     [currentProvider, notifyProviderChange],
   );
+  // Choosing a sandbox moves a selection it can't run to its first usable model.
+  useEffect(() => {
+    if (!targetsSandbox) return;
+    const usable = unifiedModelGroups.find((g) => !g.disabled)?.models[0];
+    const selectedUsable = unifiedModelGroups.some(
+      (g) => !g.disabled && g.models.some((m) => m.value === unifiedModel),
+    );
+    if (usable && !selectedUsable) setUnifiedModel(usable.value);
+  }, [targetsSandbox, unifiedModelGroups, unifiedModel, setUnifiedModel]);
   const effortOptions = useMemo(
     () => getEffortLevels(currentModel, currentProvider),
     [currentProvider, currentModel],

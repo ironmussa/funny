@@ -20,12 +20,21 @@ import type {
   SandboxLaunchRequest,
 } from './sandbox-launch.js';
 
+/** Agent providers a sandbox can run (the LLM proxy's adapters). */
+const SANDBOX_AGENT_PROVIDERS = new Set(['claude']);
+
 const createSandboxThreadSchema = z
   .object({
     projectId: z.string().min(1),
     title: z.string().trim().max(200).optional(),
     prompt: z.string().min(1).max(500_000),
-    provider: z.string().min(1).max(64).optional(),
+    // Only providers the LLM proxy holds a credential for can run in a sandbox.
+    provider: z
+      .string()
+      .refine((p) => SANDBOX_AGENT_PROVIDERS.has(p), {
+        message: 'This provider is not available in sandboxes yet; use Claude.',
+      })
+      .optional(),
     model: z.string().min(1).max(128).optional(),
     permissionMode: z.string().min(1).max(64).optional(),
     effort: z.string().min(1).max(32).optional(),

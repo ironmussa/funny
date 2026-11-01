@@ -135,6 +135,14 @@ describe('sandbox thread creation', () => {
     expect(inserted).toEqual([]);
   });
 
+  test('rejects a provider the sandbox has no credential for', async () => {
+    const { launcher, prepared } = setup();
+    const result = await launcher.create('alice', { ...payload, provider: 'codex' });
+    expect(result._unsafeUnwrapErr()).toMatchObject({ status: 400, code: 'invalid' });
+    expect(result._unsafeUnwrapErr().message).toContain('Claude');
+    expect(prepared).toEqual([]);
+  });
+
   test('rejects a payload without a connection or a prompt', async () => {
     const { launcher } = setup();
     expect((await launcher.create('alice', { ...payload, sandbox: undefined })).isErr()).toBe(true);

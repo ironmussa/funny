@@ -13,6 +13,7 @@ import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { issueThreadProvisionToken } from '../runner-provision-tokens.js';
 import { sandboxRunnerIdForThread } from '../runner-scope.js';
 import type { InfraConnectionService } from './infra-connections.js';
+import { withProvisionTracking } from './provision-registry.js';
 import { resolvePublicServerUrl } from './public-server-url.js';
 import { resolveRunnerBuild } from './runner-build.js';
 import { createSandboxRunnerCalls } from './sandbox-runner-calls.js';
@@ -129,13 +130,17 @@ export async function prepareSandboxLaunch(
   const checkout = { path: req.projectPath, repoUrl };
   return ok({
     repoUrl,
-    provision: async () =>
-      service.provision({
-        userId: req.userId,
-        threadId: req.threadId,
-        connectionId: req.connectionId,
-        sizeId: req.sizeId,
-        checkout,
-      }),
+    // Tracked so deleting the thread cancels the preparation (provision-registry).
+    provision: () =>
+      withProvisionTracking(req.threadId, async (signal) =>
+        service.provision({
+          userId: req.userId,
+          threadId: req.threadId,
+          connectionId: req.connectionId,
+          sizeId: req.sizeId,
+          checkout,
+          signal,
+        }),
+      ),
   });
 }

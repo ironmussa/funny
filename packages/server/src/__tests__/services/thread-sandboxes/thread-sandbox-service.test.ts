@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
-import { okAsync, errAsync } from 'neverthrow';
+import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 
 import { hashLlmProxyToken } from '../../../services/llm-proxy/llm-proxy-tokens.js';
 import {
@@ -259,6 +259,63 @@ describe("destroying a deleted thread's sandbox", () => {
     expect((await service.destroy('t-1')).isErr()).toBe(true);
     expect(store.rows.get('t-1')?.state).toBe('failed');
     expect(removedRunners).toEqual([]);
+  });
+});
+
+describe('step ordering and cancellation', () => {
+  /**
+   * A fake whose runner install takes `installMs` of real time and whose
+   * runner connects as soon as the start command ran; `onInstall` runs when the
+   * install begins.
+   */
+  function slowInstallSetup(opts: { installMs: number; onInstall?: () => void }) {
+    const fake = createFakeSandboxProvider('fake-valid', { templates: [] });
+    const provider: FakeSandboxProvider = {
+      ...fake,
+      exec: (handle, command) => {
+        if (!command.includes('funny-install-runner')) return fake.exec(handle, command);
+        opts.onInstall?.();
+        return ResultAsync.fromSafePromise(
+          new Promise((resolve) => setTimeout(resolve, opts.installMs)),
+        ).andThen(() => fake.exec(handle, command));
+      },
+    };
+    const store = memoryStore();
+    const started = () => fake.commands.some((c) => c.command.includes('systemctl restart'));
+    const service = createThreadSandboxService({
+      connections: { providerFor: (_u, id) => okAsync({ connectionId: id, provider }) },
+      templates: createRunnerTemplateManager(build),
+      build,
+      serverUrl: 'https://funny.example',
+      issueToken: () => okAsync({ token: 'rprov_x' }),
+      sandboxRunnerIdForThread: async () => (started() ? 'r-box' : null),
+      presence: { isAvailable: (id) => id === 'r-box' },
+      store,
+      sleep: async () => {},
+      pollMs: 1,
+      connectTimeoutMs: 150,
+    });
+    return { fake, store, service };
+  }
+
+  test('the connect timeout counts from the runner start, not from machine creation', async () => {
+    // Install (300 ms) is longer than the connect timeout (150 ms): the runner
+    // connects right after it starts, so the sandbox must come up.
+    const { service, store } = slowInstallSetup({ installMs: 300 });
+    expect(expectOk(await service.provision(input)).state).toBe('running');
+    expect(store.rows.get('t-1')?.state).toBe('running');
+  });
+
+  test('deleting the thread mid-setup stops it and destroys the machine it created', async () => {
+    const controller = new AbortController();
+    const { service, fake } = slowInstallSetup({
+      installMs: 50,
+      onInstall: () => controller.abort(),
+    });
+    const result = await service.provision({ ...input, signal: controller.signal });
+    expect(result.isErr() && result.error.kind).toBe('cancelled');
+    expect(fake.sandboxes.size).toBe(0);
+    expect(fake.commands.some((c) => c.command.includes('systemctl restart'))).toBe(false);
   });
 });
 

@@ -43,7 +43,14 @@ import {
 } from './thread-sandbox-control.js';
 import type { ThreadSandboxRow, ThreadSandboxState } from './thread-sandbox-store.js';
 
+/** The thread was deleted while its sandbox was being prepared. */
+const notCancelled = (input: { signal?: AbortSignal }): ResultAsync<void, ProvisionError> =>
+  input.signal?.aborted
+    ? errAsync({ kind: 'cancelled', message: 'sandbox preparation cancelled' })
+    : okAsync(undefined);
+
 export type ProvisionError =
+  | { kind: 'cancelled'; message: string }
   | { kind: 'already-provisioned'; message: string }
   | { kind: 'connection'; message: string }
   | { kind: 'invalid-size'; message: string }
@@ -148,11 +155,15 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
       },
     ).mapErr(sandboxError);
 
-    const install = template
-      ? okAsync<void, ProvisionError>(undefined)
-      : setState(input.threadId, 'installing').andThen(() =>
-          exec(provider, handle, runnerInstallCommand(deps.build), 'runner install'),
-        );
+    // Steps are thunks: a ResultAsync starts as soon as it is created, so building
+    // them up front would run the install before the machine is up and start the
+    // connect timeout at machine creation instead of at runner start.
+    const install = () =>
+      template
+        ? okAsync<void, ProvisionError>(undefined)
+        : setState(input.threadId, 'installing').andThen(() =>
+            exec(provider, handle, runnerInstallCommand(deps.build), 'runner install'),
+          );
 
     const start = startRunnerCommand({
       TEAM_SERVER_URL: deps.serverUrl,
@@ -162,26 +173,31 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
     });
     if (start.isErr()) return errAsync({ kind: 'connection', message: start.error });
 
-    const waitConnected = pollUntil(
-      () =>
-        ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(input.threadId)).map(
-          (runnerId) => (runnerId && deps.presence?.isAvailable(runnerId) ? runnerId : null),
-        ),
-      {
-        what: 'sandbox runner connection',
-        timeoutMs: deps.connectTimeoutMs ?? 3 * 60_000,
-        intervalMs: pollMs,
-        signal: input.signal,
-        sleep: deps.sleep,
-      },
-    ).mapErr(sandboxError);
+    const waitConnected = () =>
+      pollUntil(
+        () =>
+          ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(input.threadId)).map(
+            (runnerId) => (runnerId && deps.presence?.isAvailable(runnerId) ? runnerId : null),
+          ),
+        {
+          what: 'sandbox runner connection',
+          timeoutMs: deps.connectTimeoutMs ?? 3 * 60_000,
+          intervalMs: pollMs,
+          signal: input.signal,
+          sleep: deps.sleep,
+        },
+      ).mapErr(sandboxError);
 
     return waitRunning
-      .andThen(() => install)
+      .andThen(() => notCancelled(input))
+      .andThen(install)
+      .andThen(() => notCancelled(input))
       .andThen(() => exec(provider, handle, start.value, 'runner start'))
       .andThen(() => setState(input.threadId, 'connecting'))
-      .andThen(() => waitConnected)
-      .andThrough(() => checkoutProject(input, provider, handle));
+      .andThen(waitConnected)
+      .andThen((runnerId) => notCancelled(input).map(() => runnerId))
+      .andThrough(() => checkoutProject(input, provider, handle))
+      .andThrough(() => notCancelled(input));
   }
 
   /**

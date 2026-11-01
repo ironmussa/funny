@@ -13,6 +13,7 @@ import { sandboxRunnerIdForThread } from '../runner-scope.js';
 import { createSandboxIdleSweeper, DEFAULT_SANDBOX_IDLE_MS } from './idle-sweeper.js';
 import { createInfraConnectionService } from './infra-connections.js';
 import { productionSandboxProviders } from './provider-catalog.js';
+import { cancelProvision } from './provision-registry.js';
 import { postSandboxError, sandboxErrorEventData } from './sandbox-events.js';
 import { createThreadSandboxControl, type ThreadSandboxControl } from './thread-sandbox-control.js';
 import type { ProvisionError } from './thread-sandbox-service.js';
@@ -92,6 +93,9 @@ let sweepTimer: ReturnType<typeof setInterval> | null = null;
  * are logged and leave the sandbox row in state `failed`.
  */
 export async function destroyThreadSandbox(threadId: string): Promise<void> {
+  // A preparation still running stops at its next step and destroys the machine
+  // it created; the destroy below covers a machine that already exists.
+  cancelProvision(threadId);
   if (!control) return;
   const result = await control.destroy(threadId);
   if (result.isErr()) {

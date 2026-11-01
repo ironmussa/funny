@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { planNativeWindowBackend, resolveNativeLinuxWindowBackend } from '../native-backend';
+import {
+  forwardTerminationSignals,
+  planNativeWindowBackend,
+  resolveNativeLinuxWindowBackend,
+} from '../native-backend';
 import { NATIVE_CLIENT_WINDOW_OPTIONS } from '../native-frame-options';
 
 describe('native GPUIX window backend', () => {
@@ -68,6 +72,19 @@ describe('native GPUIX window backend', () => {
       ).toBeNull();
     },
   );
+
+  test('forwards termination signals so the relaunched client does not outlive its launcher', () => {
+    const listeners = new Map<string, () => void>();
+    const killed: string[] = [];
+    forwardTerminationSignals(
+      { on: (signal, listener) => listeners.set(signal, listener) },
+      { kill: (signal) => killed.push(signal) },
+    );
+
+    for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) listeners.get(signal)?.();
+
+    expect(killed).toEqual(['SIGTERM', 'SIGINT', 'SIGHUP']);
+  });
 
   test('keeps native system chrome enabled with portable window constraints', () => {
     expect(NATIVE_CLIENT_WINDOW_OPTIONS).toMatchObject({

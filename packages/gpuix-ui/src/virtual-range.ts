@@ -51,3 +51,30 @@ export function shiftedWindowStartForItems<T extends { key: string }>(
   }
   return currentStart;
 }
+
+export interface ScrollbarPointerOptions {
+  pointerY: number;
+  trackTop: number;
+  trackHeight: number;
+  itemCount: number;
+  estimatedItemHeight: number;
+}
+
+/**
+ * Maps a pointer on a list's scrollbar track to the item (and pixel offset into it) to anchor at
+ * the viewport top. GPUIX sizes the thumb from row heights, with unmeasured rows counted as the
+ * average, so a proportional item position tracks the painted thumb.
+ */
+export function scrollTargetForPointer({
+  pointerY,
+  trackTop,
+  trackHeight,
+  itemCount,
+  estimatedItemHeight,
+}: ScrollbarPointerOptions): { index: number; offsetInItem: number } | null {
+  if (itemCount <= 0 || trackHeight <= 0) return null;
+  const fraction = Math.min(1, Math.max(0, (pointerY - trackTop) / trackHeight));
+  const position = fraction * itemCount;
+  const index = Math.min(itemCount - 1, Math.floor(position));
+  return { index, offsetInItem: Math.round((position - index) * estimatedItemHeight) };
+}

@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   clampWindowStart,
+  scrollTargetForPointer,
   shiftedWindowStartForItems,
   windowStartForVisibleRange,
 } from '../virtual-range';
@@ -56,5 +57,33 @@ describe('virtual window', () => {
     expect(shiftedWindowStartForItems(1, previous, prepended)).toBe(3);
     expect(shiftedWindowStartForItems(3, prepended, finalPage)).toBe(4);
     expect(shiftedWindowStartForItems(1, previous, previous.slice(1))).toBe(0);
+  });
+
+  test('maps a scrollbar pointer to the proportional item and offset', () => {
+    const track = { trackTop: 100, trackHeight: 400, itemCount: 200, estimatedItemHeight: 20 };
+
+    expect(scrollTargetForPointer({ ...track, pointerY: 100 })).toEqual({
+      index: 0,
+      offsetInItem: 0,
+    });
+    expect(scrollTargetForPointer({ ...track, pointerY: 301 })).toEqual({
+      index: 100,
+      offsetInItem: 10,
+    });
+    // Past either end of the track clamps to the first item / into the last one.
+    expect(scrollTargetForPointer({ ...track, pointerY: -50 })).toEqual({
+      index: 0,
+      offsetInItem: 0,
+    });
+    expect(scrollTargetForPointer({ ...track, pointerY: 900 })).toEqual({
+      index: 199,
+      offsetInItem: 20,
+    });
+  });
+
+  test('has no scrollbar target for an empty list or a collapsed track', () => {
+    const base = { pointerY: 10, trackTop: 0, estimatedItemHeight: 20 };
+    expect(scrollTargetForPointer({ ...base, trackHeight: 300, itemCount: 0 })).toBeNull();
+    expect(scrollTargetForPointer({ ...base, trackHeight: 0, itemCount: 10 })).toBeNull();
   });
 });

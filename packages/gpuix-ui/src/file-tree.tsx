@@ -18,6 +18,7 @@ import {
 import { Icon } from './icon';
 import { NavItem } from './nav-item';
 import { scrollbarStyle, useGpuixUiTheme } from './theme';
+import { ScrollableVirtualList } from './virtual-list-scrollbar';
 import { maximumWindowStart, windowStartForVisibleRange } from './virtual-range';
 
 type DivProps = JSX.IntrinsicElements['div'];
@@ -194,8 +195,9 @@ function VirtualizedFileTreeRows({
   );
 
   return (
-    <virtual-list
+    <ScrollableVirtualList
       {...hostProps}
+      scrollbarTestId="file-tree-scrollbar"
       itemCount={rows.length}
       windowStart={effectiveWindowStart}
       estimatedItemHeight={FILE_TREE_ESTIMATED_ROW_HEIGHT}
@@ -222,7 +224,7 @@ function VirtualizedFileTreeRows({
           onSelect={row.kind === 'folder' ? onSelectFolder : onSelectFile}
         />
       ))}
-    </virtual-list>
+    </ScrollableVirtualList>
   );
 }
 

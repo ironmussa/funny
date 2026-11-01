@@ -11,6 +11,7 @@ import { DockLayout } from '@funny/gpuix-ui/dock-layout';
 import { FileTree } from '@funny/gpuix-ui/file-tree';
 import { Icon } from '@funny/gpuix-ui/icon';
 import { eventValue, Input, Textarea } from '@funny/gpuix-ui/input';
+import { PointerCaptureScope } from '@funny/gpuix-ui/pointer-capture';
 import {
   GitChangesIndicator,
   GitChangesSummary,
@@ -40,6 +41,7 @@ import {
   useGpuixUiTheme,
 } from '@funny/gpuix-ui/theme';
 import { ThreadHeader } from '@funny/gpuix-ui/thread-header';
+import { ScrollableVirtualList } from '@funny/gpuix-ui/virtual-list-scrollbar';
 import {
   clampWindowStart,
   maximumWindowStart,
@@ -592,7 +594,8 @@ const Sidebar = memo(function Sidebar({ application }: { application: NativeAppl
     <SidebarShell testId="native-sidebar" style={{ width: '100%', minWidth: 0 }}>
       <SidebarBody>
         {rows.length > 0 ? (
-          <virtual-list
+          <ScrollableVirtualList
+            scrollbarTestId="native-sidebar-scrollbar"
             itemCount={rows.length}
             windowStart={effectiveWindowStart}
             estimatedItemHeight={56}
@@ -609,7 +612,7 @@ const Sidebar = memo(function Sidebar({ application }: { application: NativeAppl
             }}
           >
             {retainedRows}
-          </virtual-list>
+          </ScrollableVirtualList>
         ) : (
           <text style={{ color: colors.muted, padding: 8 }}>
             No accessible projects or threads.
@@ -1110,8 +1113,9 @@ const ThreadTranscript = memo(function ThreadTranscript({
   );
 
   return (
-    <virtual-list
-      ref={(instance) => onHistoryList?.(instance?.id ?? null)}
+    <ScrollableVirtualList
+      onListId={onHistoryList}
+      scrollbarTestId="conversation-scrollbar"
       alignment="bottom"
       followTail
       itemCount={items.length}
@@ -1161,7 +1165,7 @@ const ThreadTranscript = memo(function ThreadTranscript({
           <ToolCallBlock key={item.key} richContent={richContent} toolCall={toolCall} />
         ) : null;
       })}
-    </virtual-list>
+    </ScrollableVirtualList>
   );
 });
 
@@ -1571,51 +1575,57 @@ export function GpuixClientApp({
           color: colors.text,
         }}
       >
-        {unsupportedReason ? (
-          <div style={{ padding: 24, gap: 10 }}>
-            <text style={{ color: colors.danger, fontSize: 20 }}>
-              GPUIX is unsupported on this host
-            </text>
-            <text>{unsupportedReason}</text>
-            <text style={{ color: colors.muted }}>
-              Run `bun run dev:client` to use the web renderer.
-            </text>
-          </div>
-        ) : null}
-        {!unsupportedReason &&
-        (auth.phase === 'bootstrapping' || status.phase === 'bootstrapping') ? (
-          <div style={{ padding: 24 }}>
-            <text>Restoring session…</text>
-          </div>
-        ) : null}
-        {!unsupportedReason && status.phase === 'error' ? (
-          <div style={{ padding: 24, gap: 10 }}>
-            <text style={{ color: colors.danger }}>Recoverable startup error: {status.error}</text>
-            <NativeButton
-              onPress={() => {
-                void application.retry();
-              }}
-            >
-              <text>Retry startup</text>
-            </NativeButton>
-          </div>
-        ) : null}
-        {!unsupportedReason &&
-        status.phase !== 'error' &&
-        (auth.phase === 'anonymous' || auth.phase === 'rejected') ? (
-          <div>
-            {auth.rejection ? <text style={{ color: colors.danger }}>{auth.rejection}</text> : null}
-            <LoginView application={application} />
-          </div>
-        ) : null}
-        {!unsupportedReason && status.phase === 'ready' && auth.phase === 'authenticated' ? (
-          <AuthenticatedShell
-            application={application}
-            diagnostics={diagnostics}
-            onHistoryList={onHistoryList}
-            onResetFrameStats={onResetFrameStats}
-          />
-        ) : null}
+        <PointerCaptureScope>
+          {unsupportedReason ? (
+            <div style={{ padding: 24, gap: 10 }}>
+              <text style={{ color: colors.danger, fontSize: 20 }}>
+                GPUIX is unsupported on this host
+              </text>
+              <text>{unsupportedReason}</text>
+              <text style={{ color: colors.muted }}>
+                Run `bun run dev:client` to use the web renderer.
+              </text>
+            </div>
+          ) : null}
+          {!unsupportedReason &&
+          (auth.phase === 'bootstrapping' || status.phase === 'bootstrapping') ? (
+            <div style={{ padding: 24 }}>
+              <text>Restoring session…</text>
+            </div>
+          ) : null}
+          {!unsupportedReason && status.phase === 'error' ? (
+            <div style={{ padding: 24, gap: 10 }}>
+              <text style={{ color: colors.danger }}>
+                Recoverable startup error: {status.error}
+              </text>
+              <NativeButton
+                onPress={() => {
+                  void application.retry();
+                }}
+              >
+                <text>Retry startup</text>
+              </NativeButton>
+            </div>
+          ) : null}
+          {!unsupportedReason &&
+          status.phase !== 'error' &&
+          (auth.phase === 'anonymous' || auth.phase === 'rejected') ? (
+            <div>
+              {auth.rejection ? (
+                <text style={{ color: colors.danger }}>{auth.rejection}</text>
+              ) : null}
+              <LoginView application={application} />
+            </div>
+          ) : null}
+          {!unsupportedReason && status.phase === 'ready' && auth.phase === 'authenticated' ? (
+            <AuthenticatedShell
+              application={application}
+              diagnostics={diagnostics}
+              onHistoryList={onHistoryList}
+              onResetFrameStats={onResetFrameStats}
+            />
+          ) : null}
+        </PointerCaptureScope>
       </div>
     </GpuixUiProvider>
   );

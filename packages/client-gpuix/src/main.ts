@@ -1,7 +1,7 @@
 import { createNativeApplicationServices } from './application';
 import { resolveNativeDiagnosticMode } from './diagnostic-mode';
 import { currentNativeHostInput, detectNativeHostSupport } from './host-support';
-import { planNativeWindowBackend } from './native-backend';
+import { forwardTerminationSignals, planNativeWindowBackend } from './native-backend';
 import { createNativeClientComposition } from './platform/composition';
 
 const support = detectNativeHostSupport(currentNativeHostInput());
@@ -22,6 +22,7 @@ if (!support.supported) {
       env: backendPlan.relaunchEnvironment,
       stdio: ['inherit', 'inherit', 'inherit'],
     });
+    forwardTerminationSignals(process, child);
     process.exit(await child.exited);
   }
   const composition = createNativeClientComposition({

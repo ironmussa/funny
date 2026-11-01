@@ -18,6 +18,7 @@
     "./icon": "./src/icon.tsx",
     "./layout": "./src/layout.tsx",
     "./nav-item": "./src/nav-item.tsx",
+    "./pointer-capture": "./src/pointer-capture.tsx",
     "./powerline": "./src/powerline.tsx",
     "./select": "./src/select.tsx",
     "./separator": "./src/separator.tsx",
@@ -26,6 +27,7 @@
     "./thread-header": "./src/thread-header.tsx",
     "./theme": "./src/theme.tsx",
     "./tooltip": "./src/tooltip.tsx",
+    "./virtual-list-scrollbar": "./src/virtual-list-scrollbar.tsx",
     "./virtual-range": "./src/virtual-range.ts"
   },
   "scripts": {

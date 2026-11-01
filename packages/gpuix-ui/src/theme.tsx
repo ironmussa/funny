@@ -121,6 +121,16 @@ export function useGpuixUiTheme(): GpuixUiTheme {
 /** Matches the web client's `--scrollbar-size`. */
 const SCROLLBAR_WIDTH = 6;
 
+/** Fills its parent column and anchors a `VirtualListScrollbar` over the list it wraps. */
+export const SCROLLABLE_LIST_CONTAINER = {
+  display: 'flex',
+  flexDirection: 'column',
+  flexGrow: 1,
+  minHeight: 0,
+  width: '100%',
+  position: 'relative',
+} as const;
+
 /** Native scrollbar thumb for `overflow: "scroll"` containers and `<virtual-list>`. */
 export function scrollbarStyle(colors: GpuixUiColors): {
   scrollbarColor: string;

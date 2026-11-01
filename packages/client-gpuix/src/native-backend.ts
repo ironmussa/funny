@@ -53,3 +53,16 @@ export function planNativeWindowBackend({
   const { WAYLAND_DISPLAY: _wayland, ...relaunchEnvironment } = environment;
   return { backend, relaunchEnvironment };
 }
+
+const FORWARDED_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'] as const;
+
+/**
+ * Passes termination signals from the launcher to the relaunched client. Without this, stopping
+ * the launcher (`kill`, a closed terminal) orphans the child, which keeps running.
+ */
+export function forwardTerminationSignals(
+  launcher: { on(signal: NodeJS.Signals, listener: () => void): unknown },
+  child: { kill(signal: NodeJS.Signals): unknown },
+): void {
+  for (const signal of FORWARDED_SIGNALS) launcher.on(signal, () => child.kill(signal));
+}

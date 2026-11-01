@@ -613,3 +613,26 @@ describe('turn outcome timeline rows', () => {
     ).toEqual(['u1', 'a1', 'stop-1', 'a2']);
   });
 });
+
+describe('sandbox error cards (thread-sandboxes)', () => {
+  test('a sandbox:error event becomes a timeline row where it happened', () => {
+    const messages = [
+      { id: 'u1', role: 'user', content: 'Go on', timestamp: '2026-11-01T20:00:00.000Z' },
+      { id: 'a1', role: 'assistant', content: 'Done', timestamp: '2026-11-01T20:00:10.000Z' },
+    ];
+    const items = buildGroupedRenderItems(messages as any, [
+      {
+        id: 'sbx-err',
+        threadId: 't1',
+        type: 'sandbox:error',
+        data: JSON.stringify({ phase: 'wake', message: 'disk expired' }),
+        createdAt: '2026-11-01T20:30:00.000Z',
+      } as any,
+    ]);
+    expect(
+      items.map((item) =>
+        item.type === 'message' ? item.msg.id : item.type === 'thread-event' ? item.event.id : '',
+      ),
+    ).toEqual(['u1', 'a1', 'sbx-err']);
+  });
+});

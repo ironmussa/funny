@@ -8,6 +8,7 @@ import {
   type NewSandboxThreadRow,
 } from '../../../services/thread-sandboxes/sandbox-thread.js';
 import type { ProvisionError } from '../../../services/thread-sandboxes/thread-sandbox-service.js';
+import type { SandboxErrorEventData } from '../../../services/thread-sandboxes/sandbox-events.js';
 import type { ThreadSandboxRow } from '../../../services/thread-sandboxes/thread-sandbox-store.js';
 
 const provisioned = { threadId: 't-new', runnerId: 'r-box' } as ThreadSandboxRow;
@@ -23,7 +24,7 @@ function setup(
   const inserted: NewSandboxThreadRow[] = [];
   const prepared: SandboxLaunchRequest[] = [];
   const messages: Array<{ userId: string; threadId: string; body: Record<string, unknown> }> = [];
-  const failed: Array<[string, string]> = [];
+  const failed: Array<[string, SandboxErrorEventData]> = [];
   const events: string[] = [];
   const launcher = createSandboxThreadLauncher({
     findOwnedProject: async (userId, projectId) =>
@@ -163,12 +164,24 @@ describe('sandbox thread creation', () => {
     await (await launcher.create('alice', payload))._unsafeUnwrap().started;
     expect(messages).toEqual([]);
     expect(events).toEqual([]);
-    expect(failed).toEqual([['t-new', 'sandbox provisioning failed: clone failed']]);
+    expect(failed).toEqual([
+      [
+        't-new',
+        {
+          phase: 'setup',
+          kind: 'checkout',
+          message: 'clone failed',
+          hint: expect.stringContaining('could not be cloned'),
+        },
+      ],
+    ]);
   });
 
   test('a rejected first message marks the thread failed', async () => {
     const { launcher, failed } = setup({ messageFails: true });
     await (await launcher.create('alice', payload))._unsafeUnwrap().started;
-    expect(failed).toEqual([['t-new', 'message failed (500)']]);
+    expect(failed).toEqual([
+      ['t-new', { phase: 'start', message: 'The agent could not be started: message failed (500)' }],
+    ]);
   });
 });

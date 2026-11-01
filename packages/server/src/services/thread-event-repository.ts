@@ -43,8 +43,10 @@ export async function saveThreadEvent(
   threadId: string,
   type: string,
   data: Record<string, unknown>,
+  /** Same id as the live broadcast, so a reload does not show the event twice. */
+  id?: string,
 ): Promise<void> {
-  return createThreadEvent({ threadId, type, data });
+  return createThreadEvent({ threadId, type, data, id });
 }
 
 export async function getThreadEvents(threadId: string): Promise<ThreadEvent[]> {

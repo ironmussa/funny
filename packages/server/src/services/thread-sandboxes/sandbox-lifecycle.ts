@@ -13,6 +13,7 @@ import { sandboxRunnerIdForThread } from '../runner-scope.js';
 import { createSandboxIdleSweeper, DEFAULT_SANDBOX_IDLE_MS } from './idle-sweeper.js';
 import { createInfraConnectionService } from './infra-connections.js';
 import { productionSandboxProviders } from './provider-catalog.js';
+import { postSandboxError, sandboxErrorEventData } from './sandbox-events.js';
 import { createThreadSandboxControl, type ThreadSandboxControl } from './thread-sandbox-control.js';
 import type { ProvisionError } from './thread-sandbox-service.js';
 import { sqlThreadSandboxStore, type ThreadSandboxStore } from './thread-sandbox-store.js';
@@ -33,6 +34,8 @@ export function createSandboxWaker(deps: {
   control: Pick<ThreadSandboxControl, 'resume'>;
   store: Pick<ThreadSandboxStore, 'get'>;
   timeoutMs?: number;
+  /** Called once per failed resume (not per waiting request) to tell the user. */
+  onWakeFailed?: (threadId: string, ownerId: string, error: ProvisionError) => void;
 }): SandboxWaker {
   const inFlight = new Map<string, ResultAsync<string, ProvisionError>>();
 
@@ -49,10 +52,12 @@ export function createSandboxWaker(deps: {
             cause: 'not-found',
           });
         }
-        return deps.control.resume(
-          threadId,
-          AbortSignal.timeout(deps.timeoutMs ?? WAKE_TIMEOUT_MS),
-        );
+        return deps.control
+          .resume(threadId, AbortSignal.timeout(deps.timeoutMs ?? WAKE_TIMEOUT_MS))
+          .mapErr((error) => {
+            deps.onWakeFailed?.(threadId, ownerId, error);
+            return error;
+          });
       })
       .map((runnerId) => {
         metric('thread_sandboxes.woken', 1);
@@ -111,6 +116,7 @@ function idleWindowMs(): number {
 
 export function startSandboxLifecycle(deps: {
   presence: { isAvailable(runnerId: string): boolean } | undefined;
+  browserEvents?: { toUser(userId: string, event: Record<string, unknown>): void };
 }): void {
   if (sweepTimer) return;
   const registry = productionSandboxProviders();
@@ -128,7 +134,15 @@ export function startSandboxLifecycle(deps: {
     store: sqlThreadSandboxStore,
     removeRunner,
   });
-  waker = createSandboxWaker({ control, store: sqlThreadSandboxStore });
+  waker = createSandboxWaker({
+    control,
+    store: sqlThreadSandboxStore,
+    onWakeFailed: (threadId, ownerId, error) =>
+      void postSandboxError(
+        { threadId, userId: ownerId, data: sandboxErrorEventData('wake', error) },
+        deps.browserEvents,
+      ),
+  });
   const sweeper = createSandboxIdleSweeper({ control, idleMs: idleWindowMs() });
   let sweeping = false;
   sweepTimer = setInterval(() => {

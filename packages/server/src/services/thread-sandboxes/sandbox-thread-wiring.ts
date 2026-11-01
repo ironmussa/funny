@@ -12,6 +12,7 @@ import { projects } from '../../db/schema.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { createInfraConnectionService } from './infra-connections.js';
 import { productionSandboxProviders } from './provider-catalog.js';
+import { postSandboxError } from './sandbox-events.js';
 import { prepareSandboxLaunch } from './sandbox-launch.js';
 import { createSandboxRunnerCalls } from './sandbox-runner-calls.js';
 import { createSandboxThreadLauncher } from './sandbox-thread.js';
@@ -54,18 +55,21 @@ export function sandboxThreadLauncherFor(env: {
         data: { status: 'pending' },
       });
     },
-    markFailed: async (threadId, reason) => {
+    markFailed: async (threadId, failure) => {
       const thread = await threadRepo.getThread(threadId);
       if (!thread) return;
+      const reason = failure.hint ? `${failure.message}\n\n${failure.hint}` : failure.message;
       await threadRepo.updateThread(threadId, { status: 'failed' });
-      // Keep the reason where the thread view reads it (the sandbox itself may
-      // be up: the failure can be the first message, not the machine).
+      // Keep the reason where the setup view reads it (the sandbox itself may
+      // be up: the failure can be the first message, not the machine)…
       await sqlThreadSandboxStore.update(threadId, { error: reason });
       env.browserEvents?.toUser(thread.userId, {
         type: 'thread:updated',
         threadId,
         data: { status: 'failed', error: reason },
       });
+      // …and as a card in the conversation's history.
+      await postSandboxError({ threadId, userId: thread.userId, data: failure }, env.browserEvents);
     },
     sendMessage: calls.sendMessage,
     newId: () => nanoid(),

@@ -151,6 +151,37 @@ describe('createSandboxWaker', () => {
     expect(resumes).toEqual(['t1', 't1']);
   });
 
+  test('a failed resume is reported once, however many requests waited on it', async () => {
+    const reported: string[] = [];
+    const waker = createSandboxWaker({
+      store: { get: () => okAsync(row()) },
+      control: {
+        resume: () =>
+          errAsync({
+            kind: 'sandbox' as const,
+            cause: 'expired' as const,
+            message: 'disk expired',
+          }),
+      },
+      onWakeFailed: (threadId, ownerId, error) =>
+        reported.push(`${threadId}:${ownerId}:${error.message}`),
+    });
+    const results = await Promise.all([waker.wake('t1', 'owner'), waker.wake('t1', 'owner')]);
+    expect(results.every((r) => r.isErr())).toBe(true);
+    expect(reported).toEqual(['t1:owner:disk expired']);
+  });
+
+  test('nothing to wake is not reported to the user', async () => {
+    const reported: string[] = [];
+    const waker = createSandboxWaker({
+      store: { get: () => okAsync(row({ state: 'running' })) },
+      control: { resume: () => okAsync('r1') },
+      onWakeFailed: (threadId) => reported.push(threadId),
+    });
+    expect((await waker.wake('t1', 'owner')).isErr()).toBe(true);
+    expect(reported).toEqual([]);
+  });
+
   test('never wakes another user’s sandbox', async () => {
     const { waker, resumes } = setup(row());
     expect((await waker.wake('t1', 'intruder')).isErr()).toBe(true);

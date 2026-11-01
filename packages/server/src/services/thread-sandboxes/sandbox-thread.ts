@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
+import { sandboxErrorEventData, type SandboxErrorEventData } from './sandbox-events.js';
 import type {
   PreparedSandboxLaunch,
   SandboxLaunchRefusal,
@@ -91,7 +92,8 @@ export interface SandboxThreadDeps {
   loadThread(threadId: string): Promise<unknown>;
   /** The sandbox is ready: `setting_up` → `pending`, so the agent can start. */
   markReady(threadId: string): Promise<void>;
-  markFailed(threadId: string, reason: string): Promise<void>;
+  /** Mark the thread failed and post the failure as a card in it. */
+  markFailed(threadId: string, failure: SandboxErrorEventData): Promise<void>;
   sendMessage(input: {
     userId: string;
     threadId: string;
@@ -117,8 +119,10 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
       await deps.markReady(threadId);
     }
     const started = provisioned.isErr()
-      ? err(`sandbox provisioning failed: ${provisioned.error.message}`)
-      : await deps.sendMessage({ userId, threadId, body });
+      ? err(sandboxErrorEventData('setup', provisioned.error))
+      : (await deps.sendMessage({ userId, threadId, body })).mapErr((message) =>
+          sandboxErrorEventData('start', `The agent could not be started: ${message}`),
+        );
     if (started.isOk()) {
       metric('thread_sandboxes.threads_started', 1);
       return;
@@ -126,9 +130,13 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     log.warn('Sandbox thread could not start', {
       namespace: 'thread-sandboxes',
       threadId,
-      error: started.error,
+      phase: started.error.phase,
+      kind: started.error.kind,
+      error: started.error.message,
     });
-    metric('thread_sandboxes.threads_failed', 1);
+    metric('thread_sandboxes.threads_failed', 1, {
+      attributes: { phase: started.error.phase, kind: started.error.kind ?? 'unknown' },
+    });
     await deps.markFailed(threadId, started.error);
   }
 

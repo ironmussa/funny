@@ -124,7 +124,7 @@ export function estimateItemHeight(
   if (item.type === 'toolcall') return 44;
   if (item.type === 'toolcall-group') return 44;
   if (item.type === 'toolcall-run') return 44 * item.items.length;
-  if (item.type === 'thread-event') return 32;
+  if (item.type === 'thread-event') return item.event.type === 'sandbox:error' ? 80 : 32;
   if (item.type === 'compaction-event') return 32;
   if (item.type === 'workflow-event-group') return 32;
   return 60;

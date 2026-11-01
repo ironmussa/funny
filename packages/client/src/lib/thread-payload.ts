@@ -71,6 +71,11 @@ export function buildRuntimeModes(input: {
   return modes;
 }
 
+/** True when the composer's runtime choice starts the thread in a sandbox. */
+export function isSandboxRuntimeChoice(choice: string | undefined): boolean {
+  return !!choice?.startsWith(SANDBOX_RUNTIME_PREFIX);
+}
+
 /** Splits a runtime choice into the thread runtime and its sandbox connection. */
 export function parseRuntimeChoice(choice: string | undefined): {
   runtime?: string;

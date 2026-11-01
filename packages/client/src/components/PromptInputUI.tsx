@@ -287,6 +287,7 @@ export const PromptInputUI = memo(function PromptInputUI(rawProps: PromptInputUI
 
   const handleSubmit = usePromptSubmit({
     ...props,
+    activeThread: props.powerlineThread,
     t,
     editorRef,
     provider,

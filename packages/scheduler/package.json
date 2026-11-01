@@ -24,7 +24,7 @@
     "@funny/shared": "workspace:*",
     "@funny/workflows": "workspace:*",
     "nanoid": "^5.1.6",
-    "zod": "^4.5.4"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0"

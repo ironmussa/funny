@@ -1700,6 +1700,20 @@ const migrations: Migration[] = [
       await ctx().dropColumn('user_profiles', 'assemblyai_api_key');
     },
   },
+  {
+    name: '082_better_auth_plugin_fields',
+    async up() {
+      await ctx().addColumn('session', 'impersonated_by', 'TEXT');
+      await ctx().addColumn('session', 'active_organization_id', 'TEXT');
+      // Existing invitations predate this field; record the migration time.
+      await ctx().addColumn(
+        'invitation',
+        'created_at',
+        'TEXT NOT NULL',
+        `'${new Date().toISOString()}'`,
+      );
+    },
+  },
 ];
 
 /**

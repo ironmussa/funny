@@ -791,6 +791,8 @@ export const user = sqliteTable('user', {
   banExpires: dateText('ban_expires'),
 });
 
+// Better Auth requires matching fields in both dialect-specific schemas.
+// fallow-ignore-next-line code-duplication
 export const session = sqliteTable('session', {
   id: text('id').primaryKey(),
   expiresAt: dateText('expires_at').notNull(),
@@ -799,6 +801,8 @@ export const session = sqliteTable('session', {
   updatedAt: dateText('updated_at').notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
+  impersonatedBy: text('impersonated_by'),
+  activeOrganizationId: text('active_organization_id'),
   userId: text('user_id')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
@@ -874,6 +878,8 @@ export const agentTemplates = sqliteTable('agent_templates', {
   updatedAt: text('updated_at').notNull(),
 });
 
+// Better Auth requires matching fields in both dialect-specific schemas.
+// fallow-ignore-next-line code-duplication
 export const invitation = sqliteTable('invitation', {
   id: text('id').primaryKey(),
   organizationId: text('organization_id')
@@ -882,6 +888,7 @@ export const invitation = sqliteTable('invitation', {
   email: text('email').notNull(),
   role: text('role'),
   status: text('status').notNull(),
+  createdAt: dateText('created_at').notNull(),
   expiresAt: dateText('expires_at').notNull(),
   inviterId: text('inviter_id')
     .notNull()

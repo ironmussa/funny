@@ -69,7 +69,7 @@ export function ChangesFolderRow({
           folder: row.path,
           defaultValue: `${isCollapsed ? 'Expand' : 'Collapse'} ${row.path}`,
         })}
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
+        className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
         data-testid={`review-folder-${row.path}`}
       >
         <ChevronRight

@@ -11,6 +11,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { LoadingState } from '@/components/ui/loading-state';
 import {
   Select,
   SelectContent,
@@ -157,10 +158,13 @@ export function MergeBranchDialog({
             {t('review.targetBranch', 'Target branch')}
           </label>
           {mergeDialog?.loading ? (
-            <div className="text-muted-foreground flex items-center gap-2 py-2 text-xs">
-              <Loader2 className="icon-sm animate-spin" />
-              {t('common.loading', 'Loading...')}
-            </div>
+            <LoadingState
+              fill={false}
+              layout="inline"
+              className="justify-start py-2"
+              testId="merge-branches-loading"
+              label={t('common.loading', 'Loading...')}
+            />
           ) : (
             <Select
               value={mergeDialog?.targetBranch}

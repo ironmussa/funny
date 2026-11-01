@@ -215,15 +215,27 @@ export function createSafeMarkdownRenderer({
 }
 
 let compilerPromise: Promise<MarkdownCompiler> | null = null;
+let loadedCompiler: ((content: string) => string) | null = null;
 
 function loadSatteriCompiler(): Promise<MarkdownCompiler> {
   compilerPromise ??= import('satteri').then(({ markdownToHtml }) => {
-    return (content) => markdownToHtml(content, { features: { gfm: true } }).html;
+    loadedCompiler = (content) => markdownToHtml(content, { features: { gfm: true } }).html;
+    return loadedCompiler;
   });
   return compilerPromise;
 }
 
 const productionCache = new ByteLruCache();
+
+/** Avoid a plain-text frame when the compiler or sanitized result is already available. */
+export function renderReadyMarkdownToSafeHtml(content: string): string | undefined {
+  const cached = productionCache.get(content);
+  if (cached !== undefined) return cached;
+  if (!loadedCompiler) return undefined;
+  const html = sanitizeSatteriHtml(loadedCompiler(content));
+  productionCache.set(content, html);
+  return html;
+}
 
 /**
  * Compile GFM markdown through browser-only Sätteri WASM and sanitize before

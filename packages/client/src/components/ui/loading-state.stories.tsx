@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Inbox } from 'lucide-react';
+import { expect } from 'storybook/test';
 
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -75,10 +76,38 @@ export const LayoutComparison: Story = {
   },
   render: (args) => (
     <div className="border-border bg-background grid h-64 grid-cols-2 divide-x border">
-      <LoadingState {...args} layout="stack" />
-      <LoadingState {...args} layout="inline" />
+      <LoadingState {...args} layout="stack" testId="comparison-stack" />
+      <LoadingState {...args} layout="inline" testId="comparison-inline" />
     </div>
   ),
+};
+
+/** Parent typography must not change the placeholder text scale. */
+export const InheritedTypography: Story = {
+  render: () => (
+    <div className="bg-background grid h-64 grid-cols-3">
+      <div className="text-xs font-bold">
+        <LoadingState label="Loading…" />
+      </div>
+      <div className="text-lg font-semibold">
+        <LoadingState layout="inline" label="Loading…" />
+      </div>
+      <div className="text-base font-medium">
+        <EmptyState icon={Inbox} title="No files" />
+      </div>
+    </div>
+  ),
+  play: async ({ canvasElement }) => {
+    const labels = [...canvasElement.querySelectorAll('p')];
+    const reference = getComputedStyle(labels[0]);
+    for (const label of labels.slice(1)) {
+      const style = getComputedStyle(label);
+      await expect(style.fontSize).toBe(reference.fontSize);
+      await expect(style.fontWeight).toBe(reference.fontWeight);
+      await expect(style.lineHeight).toBe(reference.lineHeight);
+      await expect(style.color).toBe(reference.color);
+    }
+  },
 };
 
 export const Overlay: Story = {

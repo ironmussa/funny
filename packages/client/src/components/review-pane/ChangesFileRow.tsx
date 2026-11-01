@@ -185,7 +185,7 @@ export function ChangesFileRow({
           defaultValue: `Open diff for ${f.path}`,
         })}
         aria-current={isSelected ? 'true' : undefined}
-        className="flex min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left"
+        className="flex h-full min-w-0 flex-1 cursor-pointer items-center gap-1.5 text-left select-none"
       >
         <FileRowSummary file={f} fileSearch={ctx.fileSearch} />
       </button>

@@ -230,6 +230,26 @@ describe('ChangesFilesPanel markup', () => {
 });
 
 describe('ChangesFilesPanel row behavior', () => {
+  it('opens a file from its name and gives the diff button the full row height', () => {
+    const { props } = renderPanel({ fileSearch: '' });
+    const button = screen.getByRole('button', { name: `Open diff for ${files.renamed.path}` });
+    expect(button).toHaveClass('h-full', 'flex-1', 'cursor-pointer', 'select-none');
+    fireEvent.click(button.querySelector('.truncate')!);
+    expect(props.setSelectedFile).toHaveBeenCalledWith(files.renamed.path);
+    expect(props.setExpandedFile).toHaveBeenCalledWith(files.renamed.path);
+    expect(props.loadDiffForFile).toHaveBeenCalledWith(files.renamed.path);
+    expect(props.toggleFile).not.toHaveBeenCalled();
+  });
+
+  it('gives the folder toggle the full row height without opening a file', () => {
+    const { props } = renderPanel();
+    const button = screen.getByTestId('review-folder-src/a');
+    expect(button).toHaveClass('h-full', 'flex-1', 'cursor-pointer');
+    fireEvent.click(button);
+    expect(props.toggleFolder).toHaveBeenCalledWith('src/a');
+    expect(props.loadDiffForFile).not.toHaveBeenCalled();
+  });
+
   it('checks an unchecked file and re-selects all lines', () => {
     const { props } = renderPanel({ expandedFile: files.deleted.path });
     fireEvent.click(screen.getByTestId(`review-file-checkbox-${files.deleted.path}`));

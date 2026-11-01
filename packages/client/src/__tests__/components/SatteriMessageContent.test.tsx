@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const markdown = vi.hoisted(() => ({
   renderMarkdownToSafeHtml: vi.fn(),
+  renderReadyMarkdownToSafeHtml: vi.fn(),
 }));
 
 vi.mock('@/lib/satteri-markdown', () => markdown);
@@ -12,10 +13,27 @@ import { SatteriMessageContent } from '@/components/thread/SatteriMessageContent
 describe('SatteriMessageContent', () => {
   beforeEach(() => {
     markdown.renderMarkdownToSafeHtml.mockReset();
+    markdown.renderReadyMarkdownToSafeHtml.mockReset();
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: { writeText: vi.fn().mockResolvedValue(undefined) },
     });
+  });
+
+  test('renders available markdown on the first commit without reverting to plain text', () => {
+    markdown.renderReadyMarkdownToSafeHtml.mockReturnValue('<h2>Ready</h2>');
+
+    const { container, rerender } = render(<SatteriMessageContent content="## Ready" />);
+
+    expect(screen.getByRole('heading', { name: 'Ready' })).toBeInTheDocument();
+    expect(container.querySelector('[data-satteri-pending]')).toBeNull();
+    expect(markdown.renderMarkdownToSafeHtml).not.toHaveBeenCalled();
+
+    markdown.renderReadyMarkdownToSafeHtml.mockReturnValue('<h2>Updated</h2>');
+    rerender(<SatteriMessageContent content="## Updated" />);
+    expect(screen.getByRole('heading', { name: 'Updated' })).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Ready' })).toBeNull();
+    expect(container.querySelector('[data-satteri-pending]')).toBeNull();
   });
 
   test('preserves the source text instead of switching markdown engines after a compiler failure', async () => {

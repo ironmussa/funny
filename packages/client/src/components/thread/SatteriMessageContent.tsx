@@ -17,7 +17,7 @@ import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { toEditorUriWithLine, openFileInEditor } from '@/lib/editor-utils';
 import { MarkdownImage, markdownProseClassName } from '@/lib/markdown-components';
 import { getMarkdownFileLinkPath, resolveMarkdownFilePath } from '@/lib/markdown-file-links';
-import { renderMarkdownToSafeHtml } from '@/lib/satteri-markdown';
+import { renderMarkdownToSafeHtml, renderReadyMarkdownToSafeHtml } from '@/lib/satteri-markdown';
 import {
   splitSatteriMarkdownSegments,
   type SatteriMarkdownSegment,
@@ -36,6 +36,25 @@ type RenderState =
   | { status: 'loading' }
   | { status: 'ready'; segments: RenderedSegment[] }
   | { status: 'failed' };
+
+function getInitialRenderState(segments: SatteriMarkdownSegment[]): RenderState {
+  const rendered: RenderedSegment[] = [];
+  try {
+    for (const segment of segments) {
+      if (segment.type !== 'html') {
+        rendered.push(segment);
+        continue;
+      }
+      const html = renderReadyMarkdownToSafeHtml(segment.markdown);
+      if (html === undefined) return { status: 'loading' };
+      rendered.push({ type: 'html', html });
+    }
+    return { status: 'ready', segments: rendered };
+  } catch {
+    // The async path reports compilation failures and preserves the source.
+    return { status: 'loading' };
+  }
+}
 
 function getActiveFileBasePath(): string | null {
   const { activeThread, projects, selectedProjectId } = useAppStore.getState();
@@ -284,11 +303,12 @@ function SatteriMessageContentInner({ content }: { content: string }) {
       splitSatteriMarkdownSegments(content, (language) => Boolean(getVisualizerForFence(language))),
     [content],
   );
-  const [state, setState] = useState<RenderState>({ status: 'loading' });
+  // The content-keyed boundary remounts this state for each message version.
+  const [state, setState] = useState<RenderState>(() => getInitialRenderState(segments));
 
   useEffect(() => {
+    if (state.status !== 'loading') return;
     let cancelled = false;
-    setState({ status: 'loading' });
     void Promise.all(
       segments.map(async (segment): Promise<RenderedSegment> => {
         if (segment.type !== 'html') return segment;
@@ -307,7 +327,7 @@ function SatteriMessageContentInner({ content }: { content: string }) {
     return () => {
       cancelled = true;
     };
-  }, [content, segments]);
+  }, [content, segments, state.status]);
 
   useLayoutEffect(() => {
     const root = rootRef.current;

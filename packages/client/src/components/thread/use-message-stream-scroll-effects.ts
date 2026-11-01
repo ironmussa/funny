@@ -150,7 +150,16 @@ export function useViewportResizeRecovery({
 
     let measureRafId: number | null = null;
     let restoreRafId: number | null = null;
+    let width = viewport.clientWidth;
+    let height = viewport.clientHeight;
     const observer = new ResizeObserver(() => {
+      // ResizeObserver also fires on observation. Invalidating measured rows
+      // then would replace their real heights with estimates just after mount.
+      const nextWidth = viewport.clientWidth;
+      const nextHeight = viewport.clientHeight;
+      if (width === nextWidth && height === nextHeight) return;
+      width = nextWidth;
+      height = nextHeight;
       const wasBottomPinned = !userHasScrolledUpRef.current;
       const anchor = wasBottomPinned
         ? null

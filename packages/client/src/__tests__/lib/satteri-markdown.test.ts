@@ -4,6 +4,7 @@ import {
   ByteLruCache,
   createSafeMarkdownRenderer,
   renderMarkdownToSafeHtml,
+  renderReadyMarkdownToSafeHtml,
   sanitizeSatteriHtml,
 } from '@/lib/satteri-markdown';
 
@@ -130,6 +131,15 @@ describe('createSafeMarkdownRenderer', () => {
 });
 
 describe('renderMarkdownToSafeHtml', () => {
+  test('renders cached and new content synchronously once the compiler is loaded', async () => {
+    const source = '## Synchronous cached heading';
+    const html = await renderMarkdownToSafeHtml(source);
+    expect(renderReadyMarkdownToSafeHtml(source)).toBe(html);
+    const fresh = renderReadyMarkdownToSafeHtml('## Fresh heading\n<script>alert(1)</script>');
+    expect(fresh).toContain('Fresh heading</h2>');
+    expect(fresh).not.toContain('<script');
+    expect(renderReadyMarkdownToSafeHtml('')).toBe('');
+  });
   test('keeps GFM tables, task lists, and fenced-code language classes', async () => {
     const html = await renderMarkdownToSafeHtml(
       [

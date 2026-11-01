@@ -29,6 +29,7 @@ import { BrowserRouter } from 'react-router-dom';
 
 import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { LoadingState } from './components/ui/loading-state';
 import { TooltipProvider } from './components/ui/tooltip';
 import { profileApi } from './lib/api/profile';
 import { resolveClientLogLevel } from './lib/client-logger';
@@ -230,7 +231,7 @@ function AuthGate() {
       <Suspense
         fallback={
           <div className="bg-background flex min-h-screen items-center justify-center">
-            <div className="text-muted-foreground text-sm">Loading…</div>
+            <LoadingState fill={false} label="Loading…" />
           </div>
         }
       >

@@ -266,6 +266,15 @@ describe('MessageStream sticky bottom', () => {
       />,
     );
     const viewport = container.firstElementChild as HTMLDivElement;
+    const viewportObserver = observers.find((observer) => observer.targets.has(viewport));
+    expect(viewportObserver).toBeDefined();
+    act(() => {
+      viewportObserver?.trigger();
+      vi.runOnlyPendingTimers();
+      vi.runOnlyPendingTimers();
+    });
+    expect(memoizedMessageListLifecycle.remeasureCalls).toBe(0);
+
     setScrollMetrics(viewport, {
       scrollHeight: () => 1000,
       clientHeight: () => 300,
@@ -277,9 +286,6 @@ describe('MessageStream sticky bottom', () => {
     });
     memoizedMessageListLifecycle.remeasureCalls = 0;
 
-    const viewportObserver = observers.find((observer) => observer.targets.has(viewport));
-    expect(viewportObserver).toBeDefined();
-
     act(() => {
       viewportObserver?.trigger();
       // Measure frame, then the nested restore frame it schedules.
@@ -289,6 +295,13 @@ describe('MessageStream sticky bottom', () => {
 
     expect(memoizedMessageListLifecycle.remeasureCalls).toBe(1);
     expect(viewport.scrollTop).toBe(1000);
+
+    act(() => {
+      viewportObserver?.trigger();
+      vi.runOnlyPendingTimers();
+      vi.runOnlyPendingTimers();
+    });
+    expect(memoizedMessageListLifecycle.remeasureCalls).toBe(1);
   });
 
   test('continues with the canonical lastUserMessage effort', () => {

@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 
 import type { MessageStreamProps } from './message-stream-types';
 import { MessageStreamStatusTail } from './MessageStreamStatusTail';
+import { ProviderAuthRecovery } from './ProviderAuthRecovery';
 import { useTurnEndHover } from './use-turn-end-hover';
 
 interface MessageStreamShellProps {
@@ -94,6 +95,7 @@ export function MessageStreamShell({
   footer,
 }: MessageStreamShellProps) {
   useTurnEndHover(contentStackRef);
+  const showAuthRecovery = copyThreadId && !isRunning && !isExternal;
   return (
     <div
       className={cn(
@@ -118,20 +120,14 @@ export function MessageStreamShell({
         {topSentinel}
 
         {/* Loading indicator (pagination) */}
-        {pagination?.loadingMore && (
-          <LoadingState
-            fill={false}
-            layout="inline"
-            className="py-3"
-            testId="message-stream-loading-more"
-            label={t('thread.loadingOlder', 'Loading older messages…')}
-          />
-        )}
+        <PaginationLoading pagination={pagination} t={t} />
 
         {/* Message list wrapper keeps the virtualizer scroll-margin observer stable. */}
         <div>{list}</div>
 
         {bottomSentinel}
+
+        {showAuthRecovery && <ProviderAuthRecovery threadId={copyThreadId} />}
 
         <MessageStreamStatusTail
           status={status}
@@ -160,9 +156,7 @@ export function MessageStreamShell({
         />
 
         {/* Prompt pin spacer (full mode only) */}
-        {!compact && promptPinSpacerHeight > 0 && (
-          <div aria-hidden="true" style={{ height: promptPinSpacerHeight }} />
-        )}
+        <PromptPinSpacer compact={compact} height={promptPinSpacerHeight} />
       </div>
 
       {/* Spacer keeps the conversation top-aligned and the dock at the bottom */}
@@ -187,4 +181,22 @@ export function MessageStreamShell({
       </div>
     </div>
   );
+}
+
+function PaginationLoading({ pagination, t }: Pick<MessageStreamShellProps, 'pagination' | 't'>) {
+  if (!pagination?.loadingMore) return null;
+  return (
+    <LoadingState
+      fill={false}
+      layout="inline"
+      className="py-3"
+      testId="message-stream-loading-more"
+      label={t('thread.loadingOlder', 'Loading older messages…')}
+    />
+  );
+}
+
+function PromptPinSpacer({ compact, height }: { compact: boolean; height: number }) {
+  if (compact || height <= 0) return null;
+  return <div aria-hidden="true" style={{ height }} />;
 }

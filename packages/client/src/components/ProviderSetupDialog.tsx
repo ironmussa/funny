@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -23,17 +24,28 @@ const descriptions: Record<ProviderSetupStatus['state'], string> = {
     'This provider requires manual setup. Follow its installation instructions on the runner or configure its extension in Settings → Providers.',
 };
 
+function authDescription(auth: ProviderSetupStatus['auth']): string {
+  if (auth === 'connected') return 'Connected. You can return to your message.';
+  if (auth === 'configured') return 'Credentials are configured. You can return to your message.';
+  if (auth === 'required')
+    return 'Sign in to continue. Funny will open the login process in its terminal.';
+  return 'Open the terminal to sign in. This provider does not support automatic session verification.';
+}
+
 export function ProviderSetupDialog({
   provider,
   label,
   projectId,
   onClose,
+  reauthenticate = false,
 }: {
   provider: string;
   label: string;
   projectId?: string | null;
   onClose: () => void;
+  reauthenticate?: boolean;
 }) {
+  const { t } = useTranslation();
   const [status, setStatus] = useState<ProviderSetupStatus | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -98,62 +110,92 @@ export function ProviderSetupDialog({
         )}
         {status?.state === 'installed' && (
           <p className="text-sm">
-            {status.auth === 'connected'
-              ? 'Connected. You can return to your message.'
-              : status.auth === 'configured'
-                ? 'Credentials are configured. You can return to your message.'
-                : status.auth === 'required'
-                  ? 'Sign in to continue. Funny will open the login process in its terminal.'
-                  : 'Open the terminal to sign in. This provider does not support automatic session verification.'}
+            {reauthenticate ? t('thread.providerAuthExpired') : authDescription(status.auth)}
           </p>
         )}
-        {provider === 'pi' && status?.auth === 'required' && (
+        {provider === 'pi' && (reauthenticate || status?.auth === 'required') && (
           <p className="text-sm">
-            {status.loginCommand
+            {status?.loginCommand
               ? 'Connect Pi, then type /login in the terminal and choose your provider. After signing in, return to your message.'
               : 'Install Pi to sign in, then connect and type /login in the terminal to choose your provider.'}
           </p>
         )}
-        <div className="flex justify-end gap-2">
-          <Button
-            variant="outline"
-            disabled={pending}
-            onClick={() => setRevision((value) => value + 1)}
-          >
-            Check again
-          </Button>
-          {status?.loginCommand &&
-            projectId &&
-            status.auth !== 'connected' &&
-            status.auth !== 'configured' && (
-              <Button
-                onClick={() => {
-                  openProviderLoginTerminal({
-                    projectId,
-                    command: status.loginCommand!,
-                    shell: status.loginShell ?? 'default',
-                    label: `Connect ${label}`,
-                  });
-                  onClose();
-                }}
-              >
-                Connect {label}
-              </Button>
-            )}
-          {status?.installable && status.state !== 'installed' && (
-            <Button
-              disabled={pending || status.state === 'installing'}
-              onClick={() => void install()}
-            >
-              {pending || status.state === 'installing'
-                ? 'Installing…'
-                : status.state === 'failed'
-                  ? 'Retry installation'
-                  : 'Install on runner'}
-            </Button>
-          )}
-        </div>
+        <SetupActions
+          status={status}
+          pending={pending}
+          projectId={projectId}
+          label={label}
+          reauthenticate={reauthenticate}
+          onCheck={() => setRevision((value) => value + 1)}
+          onInstall={install}
+          onClose={onClose}
+        />
       </DialogContent>
     </Dialog>
+  );
+}
+
+function SetupActions({
+  status,
+  pending,
+  projectId,
+  label,
+  reauthenticate,
+  onCheck,
+  onInstall,
+  onClose,
+}: {
+  status: ProviderSetupStatus | null;
+  pending: boolean;
+  projectId?: string | null;
+  label: string;
+  reauthenticate: boolean;
+  onCheck: () => void;
+  onInstall: () => Promise<void>;
+  onClose: () => void;
+}) {
+  return (
+    <div className="flex justify-end gap-2">
+      <Button variant="outline" disabled={pending} onClick={onCheck}>
+        Check again
+      </Button>
+      {status?.loginCommand &&
+        projectId &&
+        (reauthenticate || (status.auth !== 'connected' && status.auth !== 'configured')) && (
+          <Button
+            onClick={() => {
+              openProviderLoginTerminal({
+                projectId,
+                command: status.loginCommand!,
+                shell: status.loginShell ?? 'default',
+                label: `Connect ${label}`,
+              });
+              onClose();
+            }}
+          >
+            Connect {label}
+          </Button>
+        )}
+      <InstallAction status={status} pending={pending} onInstall={onInstall} />
+    </div>
+  );
+}
+
+function InstallAction({
+  status,
+  pending,
+  onInstall,
+}: {
+  status: ProviderSetupStatus | null;
+  pending: boolean;
+  onInstall: () => Promise<void>;
+}) {
+  if (!status?.installable || status.state === 'installed') return null;
+  const installing = pending || status.state === 'installing';
+  const label = status.state === 'failed' ? 'Retry installation' : 'Install on runner';
+  return (
+    <Button disabled={installing} onClick={() => void onInstall()}>
+      {installing ? 'Installing…' : label}
+    </Button>
   );
 }

@@ -140,3 +140,26 @@ it('guides Pi installation and opens its login terminal after installation', asy
     label: 'Connect Pi',
   });
 });
+
+it.each(['connected', 'configured'])(
+  'allows reauthentication despite stale %s status',
+  async (auth) => {
+    mocks.status.mockResolvedValue(
+      ok({ ...missing, state: 'installed', auth, loginCommand: 'login' }),
+    );
+    render(
+      <ProviderSetupDialog
+        provider="gemini"
+        label="Gemini"
+        projectId="p1"
+        reauthenticate
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Gemini' }));
+    expect(mocks.terminal).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'p1', command: 'login' }),
+    );
+    expect(screen.queryByText('Connected. You can return to your message.')).toBeNull();
+  },
+);

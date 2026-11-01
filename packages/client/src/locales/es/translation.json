@@ -230,6 +230,8 @@
     "addProjectDescription": "Abre un proyecto desde la barra lateral para ejecutar agentes en paralelo",
     "agentWorking": "El agente está trabajando...",
     "waitingForResponse": "Esperando tu respuesta...",
+    "providerAuthExpired": "Tu sesión con el proveedor expiró o falló la autenticación. Vuelve a conectar y reintenta tu mensaje.",
+    "reconnectProvider": "Reconectar",
     "providerErrorWaiting": "El proveedor devolvió un error. La ejecución está en pausa — reintenta o envía un mensaje para continuar.",
     "planWaitingForResponse": "Acepta o rechaza el plan",
     "rejectPlan": "Rechazar plan",

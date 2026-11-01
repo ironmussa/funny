@@ -231,6 +231,8 @@
     "addProjectDescription": "Open a project from the sidebar to start running agents in parallel",
     "agentWorking": "Agent is working...",
     "waitingForResponse": "Waiting for your response...",
+    "providerAuthExpired": "Your provider session expired or authentication failed. Reconnect, then retry your message.",
+    "reconnectProvider": "Reconnect",
     "providerErrorWaiting": "The provider returned an error. The run is paused — retry or send a message to continue.",
     "planWaitingForResponse": "Accept or reject the plan",
     "rejectPlan": "Reject plan",

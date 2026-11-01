@@ -535,7 +535,17 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     const profile = await getProfile(ownerId);
     return { type: 'data:get_profile_response', profile: profile ?? null };
   },
-  'data:get_provider_key': async ({ ownerId, data }) => {
+  'data:get_provider_key': async ({ runnerId, ownerId, data }) => {
+    // Server-only keys (the LLM proxy's credential) never go to a runner.
+    const { PROVIDER_KEY_REGISTRY } = await import('@funny/shared/models');
+    if (PROVIDER_KEY_REGISTRY.some((k) => k.id === data.provider && k.serverOnly)) {
+      log.warn('Runner asked for a server-only provider key', {
+        namespace: 'data-scope',
+        runnerId,
+        provider: data.provider,
+      });
+      return { type: 'data:get_provider_key_response', key: null };
+    }
     const { getProviderKey } = await import('./profile-service.js');
     const key = await getProviderKey(ownerId, data.provider);
     return { type: 'data:get_provider_key_response', key: key ?? null };

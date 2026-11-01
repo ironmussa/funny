@@ -44,235 +44,301 @@ export function resetAuthInstanceForTests(): void {
   _auth = null;
 }
 
-export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
-  const path = new URL(c.req.url).pathname;
+/** Sentinel returned by an auth step that authenticated the request (or let it through). */
+const PROCEED = Symbol('auth-proceed');
 
+/**
+ * One authentication step. Returns `null` when the step does not apply (try
+ * the next one), `PROCEED` to continue the middleware chain, or a Response to
+ * short-circuit the request.
+ */
+type AuthStepResult = Response | typeof PROCEED | null;
+type AuthStep = (c: Context<ServerEnv>, path: string) => AuthStepResult | Promise<AuthStepResult>;
+
+const REGISTER_PATH = '/api/runners/register';
+
+function isRegisterRequest(c: Context<ServerEnv>, path: string): boolean {
+  return c.req.method === 'POST' && path === REGISTER_PATH;
+}
+
+/** Constant-time comparison of a presented header value against a configured secret. */
+function secretMatches(presented: string | undefined, expected: string): boolean {
+  return (
+    !!presented &&
+    presented.length === expected.length &&
+    timingSafeEqual(Buffer.from(presented), Buffer.from(expected))
+  );
+}
+
+function publicPathStep(_c: Context<ServerEnv>, path: string): AuthStepResult {
   // Public endpoints
-  if (PUBLIC_PATHS.has(path)) return next();
+  if (PUBLIC_PATHS.has(path)) return PROCEED;
 
   // Public invite-link paths
-  if (PUBLIC_PREFIXES.some((p) => path.startsWith(p))) return next();
+  if (PUBLIC_PREFIXES.some((p) => path.startsWith(p))) return PROCEED;
 
   // Auth routes are handled by their own handlers
-  if (path.startsWith('/api/auth/')) return next();
+  if (path.startsWith('/api/auth/')) return PROCEED;
 
   // MCP OAuth callback
-  if (path === '/api/mcp/oauth/callback') return next();
+  if (path === '/api/mcp/oauth/callback') return PROCEED;
 
-  // ── Runner registration via user invite token ──────────────────
-  // Allows a runner to self-register under a user's account without a session cookie.
+  return null;
+}
+
+// ── Sandbox runner registration via provisioning token ─────────
+// A single-use, thread-bound token minted by the server when it provisions a
+// sandbox (thread-sandboxes). The runner becomes that thread's sandbox runner.
+async function provisionTokenStep(c: Context<ServerEnv>, path: string): Promise<AuthStepResult> {
+  const provisionToken = c.req.header('X-Runner-Provision-Token');
+  if (!provisionToken || !isRegisterRequest(c, path)) return null;
+  const pt = await import('../services/runner-provision-tokens.js');
+  const grant = await pt.consumeProvisionToken(provisionToken);
+  if (grant.isErr()) {
+    audit({
+      action: 'auth.runner_rejected',
+      actorId: null,
+      detail: `Rejected X-Runner-Provision-Token on /api/runners/register (${grant.error.kind})`,
+      meta: { path, method: c.req.method, reason: grant.error.kind },
+    });
+    return c.json({ error: 'Invalid runner provisioning token' }, 401);
+  }
+  c.set('userId', grant.value.userId);
+  c.set('isRunner', false);
+  c.set('provisionGrant', grant.value);
+  return PROCEED;
+}
+
+// ── Runner registration via user invite token ──────────────────
+// Allows a runner to self-register under a user's account without a session cookie.
+async function inviteTokenStep(c: Context<ServerEnv>, path: string): Promise<AuthStepResult> {
   const inviteToken = c.req.header('X-Runner-Invite-Token');
-  if (inviteToken && c.req.method === 'POST' && path === '/api/runners/register') {
-    const ps = await import('../services/profile-service.js');
-    const userId = await ps.validateRunnerInviteToken(inviteToken);
-    if (!userId) {
-      audit({
-        action: 'auth.runner_rejected',
-        actorId: null,
-        detail: 'Invalid X-Runner-Invite-Token on /api/runners/register',
-        meta: { path, method: c.req.method },
-      });
-      return c.json({ error: 'Invalid runner invite token' }, 401);
-    }
-    c.set('userId', userId);
-    c.set('isRunner', false);
-    return next();
+  if (!inviteToken || !isRegisterRequest(c, path)) return null;
+  const ps = await import('../services/profile-service.js');
+  const userId = await ps.validateRunnerInviteToken(inviteToken);
+  if (!userId) {
+    audit({
+      action: 'auth.runner_rejected',
+      actorId: null,
+      detail: 'Invalid X-Runner-Invite-Token on /api/runners/register',
+      meta: { path, method: c.req.method },
+    });
+    return c.json({ error: 'Invalid runner invite token' }, 401);
   }
+  c.set('userId', userId);
+  c.set('isRunner', false);
+  return PROCEED;
+}
 
-  // ── Runner auth via bearer token ───────────────────────────────
+// ── Runner auth via bearer token ───────────────────────────────
+async function runnerBearerStep(c: Context<ServerEnv>, path: string): Promise<AuthStepResult> {
   const authHeader = c.req.header('Authorization');
-  if (authHeader?.startsWith('Bearer runner_')) {
-    const rm = await import('../services/runner-manager.js');
-    const token = authHeader.slice(7);
-    const runnerId = await rm.authenticateRunner(token);
-    if (!runnerId) {
-      audit({
-        action: 'auth.runner_rejected',
-        actorId: null,
-        detail: 'Invalid runner bearer token',
-        meta: { path, method: c.req.method },
-      });
-      return c.json({ error: 'Invalid runner token' }, 401);
-    }
-
-    c.set('runnerId', runnerId);
-    c.set('isRunner', true);
-    return next();
+  if (!authHeader?.startsWith('Bearer runner_')) return null;
+  const rm = await import('../services/runner-manager.js');
+  const token = authHeader.slice(7);
+  const runnerId = await rm.authenticateRunner(token);
+  if (!runnerId) {
+    audit({
+      action: 'auth.runner_rejected',
+      actorId: null,
+      detail: 'Invalid runner bearer token',
+      meta: { path, method: c.req.method },
+    });
+    return c.json({ error: 'Invalid runner token' }, 401);
   }
 
-  // ── Scheduler auth via shared secret + impersonated user ────
-  // Co-located scheduler binary calling server-native pipeline endpoints.
-  // Trust boundary: same-host process. The secret + X-Forwarded-User pair
-  // grants the scheduler the ability to act as `userId` for the duration
-  // of the request — per-tenant guards downstream still apply.
-  //
-  // System mode: when the path is under `/api/scheduler/system/*`, the
-  // X-Forwarded-User header is OPTIONAL — those endpoints are explicitly
-  // cross-tenant (the brain reads/writes runs and dependencies for ALL users).
+  c.set('runnerId', runnerId);
+  c.set('isRunner', true);
+  return PROCEED;
+}
+
+// ── Scheduler auth via shared secret + impersonated user ────
+// Co-located scheduler binary calling server-native pipeline endpoints.
+// Trust boundary: same-host process. The secret + X-Forwarded-User pair
+// grants the scheduler the ability to act as `userId` for the duration
+// of the request — per-tenant guards downstream still apply.
+//
+// System mode: when the path is under `/api/scheduler/system/*`, the
+// X-Forwarded-User header is OPTIONAL — those endpoints are explicitly
+// cross-tenant (the brain reads/writes runs and dependencies for ALL users).
+function schedulerStep(c: Context<ServerEnv>, path: string): AuthStepResult {
   const ORCH_AUTH_SECRET = process.env.SCHEDULER_AUTH_SECRET;
-  if (ORCH_AUTH_SECRET) {
-    const orchSecret = c.req.header('X-Scheduler-Auth');
-    if (
-      orchSecret &&
-      orchSecret.length === ORCH_AUTH_SECRET.length &&
-      timingSafeEqual(Buffer.from(orchSecret), Buffer.from(ORCH_AUTH_SECRET))
-    ) {
-      const isSystemPath = path.startsWith('/api/scheduler/system/');
-      const forwardedUser = c.req.header('X-Forwarded-User');
-      if (!forwardedUser && !isSystemPath) {
-        audit({
-          action: 'auth.scheduler_rejected',
-          actorId: null,
-          detail: 'X-Scheduler-Auth without X-Forwarded-User',
-          meta: { path, method: c.req.method },
-        });
-        return c.json({ error: 'X-Forwarded-User required with scheduler auth' }, 401);
-      }
-      if (forwardedUser) c.set('userId', forwardedUser);
-      c.set('isScheduler', true);
-      c.set('isSchedulerSystem', isSystemPath && !forwardedUser);
-      c.set('isRunner', false);
-      return next();
-    }
-  }
+  if (!ORCH_AUTH_SECRET) return null;
+  if (!secretMatches(c.req.header('X-Scheduler-Auth'), ORCH_AUTH_SECRET)) return null;
 
-  // ── Runner auth via the ROOT shared secret ─────────────────────
-  // Only the deployment root `RUNNER_AUTH_SECRET` matches here — held by the
-  // server and operator-provisioned runners. A device-link / invite-token
-  // runner only knows its derived per-runner key (security H1), which never
-  // equals the root secret, so it cannot obtain `isRunner` this way; it
-  // authenticates with its bearer token (branch above) instead.
+  const isSystemPath = path.startsWith('/api/scheduler/system/');
+  const forwardedUser = c.req.header('X-Forwarded-User');
+  if (!forwardedUser && !isSystemPath) {
+    audit({
+      action: 'auth.scheduler_rejected',
+      actorId: null,
+      detail: 'X-Scheduler-Auth without X-Forwarded-User',
+      meta: { path, method: c.req.method },
+    });
+    return c.json({ error: 'X-Forwarded-User required with scheduler auth' }, 401);
+  }
+  if (forwardedUser) c.set('userId', forwardedUser);
+  c.set('isScheduler', true);
+  c.set('isSchedulerSystem', isSystemPath && !forwardedUser);
+  c.set('isRunner', false);
+  return PROCEED;
+}
+
+// ── Runner auth via the ROOT shared secret ─────────────────────
+// Only the deployment root `RUNNER_AUTH_SECRET` matches here — held by the
+// server and operator-provisioned runners. A device-link / invite-token
+// runner only knows its derived per-runner key (security H1), which never
+// equals the root secret, so it cannot obtain `isRunner` this way; it
+// authenticates with its bearer token (branch above) instead.
+async function runnerSecretStep(c: Context<ServerEnv>, path: string): Promise<AuthStepResult> {
   const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET;
-  if (RUNNER_AUTH_SECRET) {
-    const runnerSecret = c.req.header('X-Runner-Auth');
-    if (
-      runnerSecret &&
-      runnerSecret.length === RUNNER_AUTH_SECRET.length &&
-      timingSafeEqual(Buffer.from(runnerSecret), Buffer.from(RUNNER_AUTH_SECRET))
-    ) {
-      c.set('isRunner', true);
+  if (!RUNNER_AUTH_SECRET) return null;
+  if (!secretMatches(c.req.header('X-Runner-Auth'), RUNNER_AUTH_SECRET)) return null;
 
-      // Runner registration via shared secret is restricted to loopback, to
-      // prevent remote attackers who obtain RUNNER_AUTH_SECRET from registering
-      // a runner bound to the admin account. Remote runners MUST present a
-      // `X-Runner-Invite-Token` (handled earlier in this middleware).
-      if (c.req.method === 'POST' && path === '/api/runners/register') {
-        const addr = (c.env as any)?.IP?.address ?? '';
-        const isLoopback =
-          addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1' || addr === '';
-        if (!isLoopback) {
-          log.warn('Runner registration via shared secret rejected (non-loopback)', {
-            namespace: 'auth',
-            addr,
-          });
-          audit({
-            action: 'auth.runner_rejected',
-            actorId: null,
-            detail: 'Shared-secret runner registration from non-loopback address',
-            meta: { path, method: c.req.method, addr },
-          });
-          return c.json(
-            {
-              error:
-                'Runner registration requires X-Runner-Invite-Token. Generate one from Settings > Profile.',
-            },
-            401,
-          );
-        }
+  c.set('isRunner', true);
 
-        // Security HI-13: loopback shared-secret registration previously
-        // silently bound the runner to the first admin user. Any local
-        // process able to read `RUNNER_AUTH_SECRET` (it sits in the
-        // operator's `.env`) could register itself as admin's runner —
-        // turning a low-privilege local user / sidecar / malicious npm
-        // postinstall into an admin-proxying runner without any consent
-        // signal.
-        //
-        // The new policy: operators who want the dev convenience must opt
-        // in explicitly with `FUNNY_LOOPBACK_RUNNER_USERNAME=<name>`, which
-        // selects which user the loopback runner binds to. Without that
-        // env var the request is refused with guidance to use the
-        // invite-token flow (Settings > Profile generates one).
-        const optInUsername = process.env.FUNNY_LOOPBACK_RUNNER_USERNAME;
-        if (!optInUsername) {
-          log.warn('Loopback runner registration refused: no explicit opt-in', {
-            namespace: 'auth',
-          });
-          audit({
-            action: 'auth.runner_rejected',
-            actorId: null,
-            detail:
-              'Loopback shared-secret runner registration requires FUNNY_LOOPBACK_RUNNER_USERNAME opt-in',
-            meta: { path, method: c.req.method },
-          });
-          return c.json(
-            {
-              error:
-                'Runner registration requires X-Runner-Invite-Token. ' +
-                'Generate one from Settings > Profile, or set FUNNY_LOOPBACK_RUNNER_USERNAME ' +
-                'to allow loopback registration under that account.',
-            },
-            401,
-          );
-        }
-        try {
-          // Security L-3: use the Drizzle query builder (with dialect-aware
-          // schema) instead of raw SQL. The previous pg branch built a raw
-          // `sql\`...\`` template; even though the value was parameterised,
-          // the pattern is brittle (any caller who reuses it with a
-          // non-literal column name or a future refactor that drops the
-          // `${value}` binding turns it into an injection sink). One path
-          // for both dialects also keeps the sqlite + pg behaviour aligned.
-          const { db, dbDialect } = await import('../db/index.js');
-          const { getSchema } = await import('@funny/shared/db/schema');
-          const { eq } = await import('drizzle-orm');
-          const s = getSchema(dbDialect) as { user: any };
-          const rows = (await (db as any)
-            .select({ id: s.user.id })
-            .from(s.user)
-            .where(eq(s.user.username, optInUsername))
-            .limit(1)) as Array<{ id: string }>;
-          const resolvedUserId = rows[0]?.id;
-
-          if (resolvedUserId) {
-            c.set('userId', resolvedUserId);
-            audit({
-              action: 'runner.register',
-              actorId: resolvedUserId,
-              detail: 'Loopback runner registration via FUNNY_LOOPBACK_RUNNER_USERNAME opt-in',
-              meta: { username: optInUsername },
-            });
-          } else {
-            log.error('FUNNY_LOOPBACK_RUNNER_USERNAME points at a non-existent user', {
-              namespace: 'auth',
-              username: optInUsername,
-            });
-            return c.json(
-              { error: `FUNNY_LOOPBACK_RUNNER_USERNAME "${optInUsername}" not found` },
-              500,
-            );
-          }
-        } catch (err) {
-          log.error('Failed to resolve loopback runner userId', {
-            namespace: 'auth',
-            error: (err as Error).message,
-          });
-          return c.json({ error: 'Failed to resolve userId for runner' }, 500);
-        }
-      }
-
-      return next();
-    }
+  // Runner registration via shared secret is restricted to loopback, to
+  // prevent remote attackers who obtain RUNNER_AUTH_SECRET from registering
+  // a runner bound to the admin account. Remote runners MUST present a
+  // `X-Runner-Invite-Token` (handled earlier in this middleware).
+  if (isRegisterRequest(c, path)) {
+    const rejected = await authorizeLoopbackRegistration(c, path);
+    if (rejected) return rejected;
   }
 
-  // ── Better Auth session ────────────────────────────────────────
+  return PROCEED;
+}
+
+function isLoopbackAddress(addr: string): boolean {
+  return addr === '127.0.0.1' || addr === '::1' || addr === '::ffff:127.0.0.1' || addr === '';
+}
+
+/** Returns a rejection Response, or `null` when the loopback registration may proceed. */
+async function authorizeLoopbackRegistration(
+  c: Context<ServerEnv>,
+  path: string,
+): Promise<Response | null> {
+  const addr = (c.env as any)?.IP?.address ?? '';
+  if (!isLoopbackAddress(addr)) {
+    log.warn('Runner registration via shared secret rejected (non-loopback)', {
+      namespace: 'auth',
+      addr,
+    });
+    audit({
+      action: 'auth.runner_rejected',
+      actorId: null,
+      detail: 'Shared-secret runner registration from non-loopback address',
+      meta: { path, method: c.req.method, addr },
+    });
+    return c.json(
+      {
+        error:
+          'Runner registration requires X-Runner-Invite-Token. Generate one from Settings > Profile.',
+      },
+      401,
+    );
+  }
+
+  // Security HI-13: loopback shared-secret registration previously
+  // silently bound the runner to the first admin user. Any local
+  // process able to read `RUNNER_AUTH_SECRET` (it sits in the
+  // operator's `.env`) could register itself as admin's runner —
+  // turning a low-privilege local user / sidecar / malicious npm
+  // postinstall into an admin-proxying runner without any consent
+  // signal.
+  //
+  // The new policy: operators who want the dev convenience must opt
+  // in explicitly with `FUNNY_LOOPBACK_RUNNER_USERNAME=<name>`, which
+  // selects which user the loopback runner binds to. Without that
+  // env var the request is refused with guidance to use the
+  // invite-token flow (Settings > Profile generates one).
+  const optInUsername = process.env.FUNNY_LOOPBACK_RUNNER_USERNAME;
+  if (!optInUsername) {
+    log.warn('Loopback runner registration refused: no explicit opt-in', {
+      namespace: 'auth',
+    });
+    audit({
+      action: 'auth.runner_rejected',
+      actorId: null,
+      detail:
+        'Loopback shared-secret runner registration requires FUNNY_LOOPBACK_RUNNER_USERNAME opt-in',
+      meta: { path, method: c.req.method },
+    });
+    return c.json(
+      {
+        error:
+          'Runner registration requires X-Runner-Invite-Token. ' +
+          'Generate one from Settings > Profile, or set FUNNY_LOOPBACK_RUNNER_USERNAME ' +
+          'to allow loopback registration under that account.',
+      },
+      401,
+    );
+  }
+  return bindLoopbackRunnerUser(c, optInUsername);
+}
+
+/** Resolves the opt-in username to a user id and binds it; returns an error Response on failure. */
+async function bindLoopbackRunnerUser(
+  c: Context<ServerEnv>,
+  optInUsername: string,
+): Promise<Response | null> {
+  try {
+    // Security L-3: use the Drizzle query builder (with dialect-aware
+    // schema) instead of raw SQL. The previous pg branch built a raw
+    // `sql\`...\`` template; even though the value was parameterised,
+    // the pattern is brittle (any caller who reuses it with a
+    // non-literal column name or a future refactor that drops the
+    // `${value}` binding turns it into an injection sink). One path
+    // for both dialects also keeps the sqlite + pg behaviour aligned.
+    const { db, dbDialect } = await import('../db/index.js');
+    const { getSchema } = await import('@funny/shared/db/schema');
+    const { eq } = await import('drizzle-orm');
+    const s = getSchema(dbDialect) as { user: any };
+    const rows = (await (db as any)
+      .select({ id: s.user.id })
+      .from(s.user)
+      .where(eq(s.user.username, optInUsername))
+      .limit(1)) as Array<{ id: string }>;
+    const resolvedUserId = rows[0]?.id;
+
+    if (!resolvedUserId) {
+      log.error('FUNNY_LOOPBACK_RUNNER_USERNAME points at a non-existent user', {
+        namespace: 'auth',
+        username: optInUsername,
+      });
+      return c.json({ error: `FUNNY_LOOPBACK_RUNNER_USERNAME "${optInUsername}" not found` }, 500);
+    }
+    c.set('userId', resolvedUserId);
+    audit({
+      action: 'runner.register',
+      actorId: resolvedUserId,
+      detail: 'Loopback runner registration via FUNNY_LOOPBACK_RUNNER_USERNAME opt-in',
+      meta: { username: optInUsername },
+    });
+    return null;
+  } catch (err) {
+    log.error('Failed to resolve loopback runner userId', {
+      namespace: 'auth',
+      error: (err as Error).message,
+    });
+    return c.json({ error: 'Failed to resolve userId for runner' }, 500);
+  }
+}
+
+async function getAuth(): Promise<any> {
   if (!_auth) {
     // Fallback: import from server's auth module (team mode)
     const { auth } = await import('../lib/auth.js');
     _auth = auth;
   }
+  return _auth;
+}
 
-  const session = await _auth.api.getSession({ headers: c.req.raw.headers });
+// ── Better Auth session ────────────────────────────────────────
+async function sessionStep(c: Context<ServerEnv>, path: string): Promise<AuthStepResult> {
+  const auth = await getAuth();
+
+  const session = await auth.api.getSession({ headers: c.req.raw.headers });
   if (!session) {
     log.warn('Session validation failed', {
       namespace: 'auth',
@@ -289,48 +355,82 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
   }
 
   c.set('userId', session.user.id);
-  // Narrow the role to a validated enum. An unknown value (or an attacker
-  // crafting an unexpected string into the session) is coerced to the
-  // least-privileged role instead of being stored verbatim.
-  const rawRole: unknown =
-    session.user && typeof session.user === 'object'
-      ? (session.user as Record<string, unknown>).role
-      : undefined;
-  const role = normalizeUserRole(rawRole);
-  if (rawRole !== undefined && typeof rawRole === 'string' && rawRole !== role) {
-    log.warn('Unknown session role — coerced to user', {
-      namespace: 'auth',
-      rawRole,
-      userId: session.user.id,
-    });
-    audit({
-      action: 'auth.role_coerced',
-      actorId: session.user.id,
-      detail: 'Unknown session role coerced to least-privileged user',
-      meta: { rawRole },
-    });
-  }
-  c.set('userRole', role);
+  c.set('userRole', resolveSessionRole(session.user));
   c.set('isRunner', false);
 
   const activeOrgId = (session.session as any).activeOrganizationId ?? null;
   c.set('organizationId', activeOrgId);
 
   // Resolve org name for forwarding to runtime
-  let orgName: string | null = null;
-  if (activeOrgId) {
-    try {
-      const org = await _auth.api.getFullOrganization({
-        headers: c.req.raw.headers,
-        query: { organizationId: activeOrgId },
-      });
-      orgName = org?.name ?? null;
-    } catch {
-      // Org name unavailable
-    }
-  }
-  c.set('organizationName', orgName);
+  c.set('organizationName', await resolveOrgName(c, auth, activeOrgId));
 
+  return PROCEED;
+}
+
+/**
+ * Narrow the role to a validated enum. An unknown value (or an attacker
+ * crafting an unexpected string into the session) is coerced to the
+ * least-privileged role instead of being stored verbatim.
+ */
+function resolveSessionRole(user: any) {
+  const rawRole: unknown =
+    user && typeof user === 'object' ? (user as Record<string, unknown>).role : undefined;
+  const role = normalizeUserRole(rawRole);
+  if (rawRole !== undefined && typeof rawRole === 'string' && rawRole !== role) {
+    log.warn('Unknown session role — coerced to user', {
+      namespace: 'auth',
+      rawRole,
+      userId: user.id,
+    });
+    audit({
+      action: 'auth.role_coerced',
+      actorId: user.id,
+      detail: 'Unknown session role coerced to least-privileged user',
+      meta: { rawRole },
+    });
+  }
+  return role;
+}
+
+async function resolveOrgName(
+  c: Context<ServerEnv>,
+  auth: any,
+  activeOrgId: string | null,
+): Promise<string | null> {
+  if (!activeOrgId) return null;
+  try {
+    const org = await auth.api.getFullOrganization({
+      headers: c.req.raw.headers,
+      query: { organizationId: activeOrgId },
+    });
+    return org?.name ?? null;
+  } catch {
+    // Org name unavailable
+    return null;
+  }
+}
+
+/**
+ * Ordered authentication steps. The FIRST step that applies decides the
+ * request; the session step always applies, so it must stay last.
+ */
+const AUTH_STEPS: readonly AuthStep[] = [
+  publicPathStep,
+  provisionTokenStep,
+  inviteTokenStep,
+  runnerBearerStep,
+  schedulerStep,
+  runnerSecretStep,
+  sessionStep,
+];
+
+export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
+  const path = new URL(c.req.url).pathname;
+  for (const step of AUTH_STEPS) {
+    const outcome = await step(c, path);
+    if (outcome === null) continue;
+    return outcome === PROCEED ? next() : outcome;
+  }
   return next();
 }
 

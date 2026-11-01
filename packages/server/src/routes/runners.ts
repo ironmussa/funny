@@ -20,6 +20,10 @@ import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import * as enroll from '../services/runner-enrollment-service.js';
 import * as rm from '../services/runner-manager.js';
+import {
+  recordProvisionedRunner,
+  type ProvisionGrant,
+} from '../services/runner-provision-tokens.js';
 
 export const runnerRoutes = new Hono<ServerEnv>();
 
@@ -43,11 +47,64 @@ function callerIp(c: Context<ServerEnv>): string {
 
 // ── Registration ────────────────────────────────────────
 
+function hasRequiredRegisterFields(body: RunnerRegisterRequest): boolean {
+  return !!body.name && !!body.hostname && !!body.os;
+}
+
+/** Register a sandbox runner bound to the thread its provisioning grant names. */
+async function registerSandboxRunnerFromGrant(
+  c: Context<ServerEnv>,
+  body: RunnerRegisterRequest,
+  userId: string,
+  grant: ProvisionGrant,
+) {
+  const result = await rm.registerSandboxRunner(body, userId, grant.threadId);
+  await recordProvisionedRunner(grant.tokenId, result.runnerId);
+  audit({
+    action: 'runner.register_sandbox',
+    actorId: userId,
+    detail: `Sandbox runner "${body.name}" registered for thread ${grant.threadId}`,
+    meta: { runnerId: result.runnerId, threadId: grant.threadId, hostname: body.hostname },
+  });
+  return c.json(result, 201);
+}
+
+async function registerUserRunner(
+  c: Context<ServerEnv>,
+  body: RunnerRegisterRequest,
+  userId: string,
+) {
+  const result = await rm.registerRunner(body, userId);
+  audit({
+    action: 'runner.register',
+    actorId: userId,
+    detail: `Runner "${body.name}" registered`,
+    meta: { runnerId: result.runnerId, hostname: body.hostname, os: body.os },
+  });
+  return c.json(result, 201);
+}
+
+function errorMessage(err: any): string {
+  return err?.message || String(err);
+}
+
+function errorCause(err: any): string {
+  return String(err?.cause?.message || err?.cause || '');
+}
+
+function errorCode(err: any): string {
+  return String(err?.code || err?.cause?.code || '');
+}
+
+function errorStack(err: any): string {
+  return err?.stack?.split('\n').slice(0, 5).join(' | ') || '';
+}
+
 runnerRoutes.post('/register', async (c) => {
   try {
     const body = await c.req.json<RunnerRegisterRequest>();
 
-    if (!body.name || !body.hostname || !body.os) {
+    if (!hasRequiredRegisterFields(body)) {
       return c.json({ error: 'Missing required fields: name, hostname, os' }, 400);
     }
 
@@ -62,24 +119,19 @@ runnerRoutes.post('/register', async (c) => {
       log.error('Runner registration rejected — no userId in context', { namespace: 'runner' });
       return c.json({ error: 'Runner must be associated with a user' }, 400);
     }
-    const result = await rm.registerRunner(body, userId);
-    audit({
-      action: 'runner.register',
-      actorId: userId,
-      detail: `Runner "${body.name}" registered`,
-      meta: { runnerId: result.runnerId, hostname: body.hostname, os: body.os },
-    });
-    return c.json(result, 201);
+    const grant = c.get('provisionGrant');
+    if (grant) return await registerSandboxRunnerFromGrant(c, body, userId, grant);
+    return await registerUserRunner(c, body, userId);
   } catch (err: any) {
     // Full diagnostics go to the structured logger only — never to the client.
     // Returning err.message risks leaking DB paths, internal codes, or stack
     // fragments embedded in driver errors.
     log.error('Runner registration failed', {
       namespace: 'runner',
-      error: err?.message || String(err),
-      cause: String(err?.cause?.message || err?.cause || ''),
-      code: String(err?.code || err?.cause?.code || ''),
-      stack: err?.stack?.split('\n').slice(0, 5).join(' | ') || '',
+      error: errorMessage(err),
+      cause: errorCause(err),
+      code: errorCode(err),
+      stack: errorStack(err),
     });
     return c.json({ error: 'Registration failed' }, 500);
   }

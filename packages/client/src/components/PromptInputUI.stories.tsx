@@ -270,7 +270,10 @@ export const WithBacklog: Story = {
 export const WithLauncher: Story = {
   args: {
     isNewThread: true,
-    hasLauncher: true,
+    runtimeModes: [
+      { value: 'local', label: 'Local' },
+      { value: 'remote', label: 'Remote' },
+    ],
     runtime: 'local',
     onRuntimeChange: fn(),
     selectedBranch: 'main',

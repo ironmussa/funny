@@ -23,6 +23,24 @@ export function isScratch(thread: ThreadLike): boolean {
   return !!thread?.isScratch;
 }
 
+/**
+ * True when the thread's agent runs in its own sandbox (thread-sandboxes): its
+ * runner, checkout and model credential live there, not on the project's
+ * runner, so project-runner readiness checks do not apply to it.
+ */
+export function runsInSandbox(thread: { runtime?: string } | null | undefined): boolean {
+  return thread?.runtime === 'sandbox';
+}
+
+/**
+ * Whether a busy (running / setting up) thread may be deleted. Deleting a
+ * sandbox thread destroys its machine, which also ends its agent; a local
+ * thread must be stopped first so no agent process is left behind.
+ */
+export function canDeleteWhileBusy(thread: { runtime?: string } | null | undefined): boolean {
+  return runsInSandbox(thread);
+}
+
 // ── Capability predicates ────────────────────────────────────────
 
 /**

@@ -14,6 +14,7 @@ import type {
   SandboxHandle,
   SandboxProvider,
   SandboxStatus,
+  TemplateBuildRequest,
   TemplateRef,
 } from '../../contract.js';
 import type { SandboxProviderEntry } from '../../registry.js';
@@ -55,6 +56,8 @@ function fakeCapabilities(opts: FakeProviderOptions = {}): SandboxCapabilities {
 export interface FakeSandboxProvider extends SandboxProvider {
   /** Test controls. */
   readonly sandboxes: ReadonlyMap<string, FakeSandbox>;
+  readonly commands: ReadonlyArray<{ sandboxId: string; command: string }>;
+  readonly templateBuilds: ReadonlyArray<TemplateBuildRequest>;
   failNext(error: SandboxError): void;
   expire(sandboxId: string): void;
 }
@@ -67,6 +70,8 @@ export function createFakeSandboxProvider(
   const validCredential = opts.validCredential ?? 'fake-valid';
   const templates = new Set(opts.templates ?? ['0.0.0-test']);
   const sandboxes = new Map<string, FakeSandbox>();
+  const commands: Array<{ sandboxId: string; command: string }> = [];
+  const templateBuilds: TemplateBuildRequest[] = [];
   const byIdempotencyKey = new Map<string, string>();
   let pendingFailure: SandboxError | null = null;
   let counter = 0;
@@ -92,6 +97,8 @@ export function createFakeSandboxProvider(
   return {
     id: FAKE_PROVIDER_ID,
     sandboxes,
+    commands,
+    templateBuilds,
     failNext: (error) => {
       pendingFailure = error;
     },
@@ -173,6 +180,43 @@ export function createFakeSandboxProvider(
       guard(() => {
         sandboxes.delete(handle.sandboxId);
         return okAsync(undefined);
+      }),
+
+    exec: (handle, command) =>
+      guard(() =>
+        find(handle).andThen((s) => {
+          if (s.state !== 'running') {
+            return errAsync({ kind: 'unavailable' as const, message: 'sandbox is not running' });
+          }
+          commands.push({ sandboxId: handle.sandboxId, command });
+          return okAsync({ exitCode: 0, stdout: '', stderr: '' });
+        }),
+      ),
+
+    listTemplates: () =>
+      guard(() =>
+        okAsync(
+          [...templates].map((version) => ({
+            providerId: FAKE_PROVIDER_ID,
+            ref: `funny-runner-${version}`,
+          })),
+        ),
+      ),
+
+    deleteTemplate: (template) =>
+      guard(() => {
+        templates.delete(template.ref.replace(/^funny-runner-/, ''));
+        return okAsync(undefined);
+      }),
+
+    buildTemplate: (req) =>
+      guard(() => {
+        templateBuilds.push(req);
+        templates.add(req.serverVersion);
+        return okAsync({
+          providerId: FAKE_PROVIDER_ID,
+          ref: `funny-runner-${req.serverVersion}`,
+        });
       }),
   };
 }

@@ -20,6 +20,8 @@ export interface FakeRunnerAccessOptions {
   allowProjectless?: (runnerId: string) => boolean;
   /** Observes every selection (user id + target), for routing assertions. */
   onSelect?: (userId: string, target: RunnerTarget) => void;
+  /** Why a request resolves to no runner. Default: `general-runner-offline`. */
+  unavailableReason?: 'general-runner-offline' | 'thread-sandbox-unavailable';
 }
 
 export function fakeRunnerAccess(opts: FakeRunnerAccessOptions = {}): RunnerAccess {
@@ -38,7 +40,7 @@ export function fakeRunnerAccess(opts: FakeRunnerAccessOptions = {}): RunnerAcce
         const runnerId = await pick(userId, { kind: 'request', path, query });
         return runnerId
           ? { ok: true, runnerId }
-          : { ok: false, reason: 'general-runner-offline' as const };
+          : { ok: false, reason: opts.unavailableReason ?? 'general-runner-offline' };
       },
       pinnedRunnerIdsForProject: async () => null,
     },

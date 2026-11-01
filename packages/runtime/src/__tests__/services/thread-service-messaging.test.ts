@@ -11,6 +11,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   resolveAgentResources: vi.fn(),
+  invalidateThreadCache: vi.fn(),
   tm: {
     getThread: vi.fn(),
     updateThread: vi.fn(async () => undefined),
@@ -73,6 +74,9 @@ vi.mock('../../utils/file-mentions.js', () => ({
 }));
 
 vi.mock('../../services/thread-manager.js', () => mocks.tm);
+vi.mock('../../services/remote-thread-data-client.js', () => ({
+  invalidateThreadCache: mocks.invalidateThreadCache,
+}));
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
@@ -320,6 +324,18 @@ describe('respondPermissionRequest', () => {
 
 beforeEach(() => {
   mocks.resolveAgentResources.mockImplementation(() => Promise.resolve(ok({ resources: [] })));
+});
+
+describe('sendMessage — fresh thread state', () => {
+  test('drops the cached thread before reading it, so a server-side status change is seen', async () => {
+    mocks.tm.getThread.mockResolvedValueOnce(null);
+    const result = await sendMessage({ threadId: 't-sbx', userId: 'u-1', content: 'hi' });
+    expect(result.isErr()).toBe(true);
+    expect(mocks.invalidateThreadCache).toHaveBeenCalledWith('t-sbx');
+    expect(mocks.invalidateThreadCache.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.tm.getThread.mock.invocationCallOrder.at(-1)!,
+    );
+  });
 });
 
 describe('sendMessage — slash-command guardrail', () => {

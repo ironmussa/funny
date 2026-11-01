@@ -9,6 +9,7 @@ import type { CommentAuthor, ThreadComment } from '@funny/shared';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
+import type { Result } from 'neverthrow';
 import { z } from 'zod';
 
 import { db, dbAll } from '../db/index.js';
@@ -42,6 +43,8 @@ import {
 import * as runnerResolver from '../services/runner-resolver.js';
 import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
+import { destroyThreadSandbox } from '../services/thread-sandboxes/sandbox-lifecycle.js';
+import { sandboxThreadLauncherFor } from '../services/thread-sandboxes/sandbox-thread-wiring.js';
 import { parseJsonBody, parseQuery } from '../validation/request.js';
 
 // Canonical thread-lifecycle enums — kept in sync with
@@ -694,6 +697,7 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
 async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent) {
   const parsed = await parseJsonBody(c, threadCreateBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  if (parsed.value.runtime === 'sandbox') return handleCreateSandboxThread(c, parsed.value);
 
   const createThread = composeCreateThread(c.env);
   const result = await createThread({
@@ -707,8 +711,18 @@ async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent)
     payload: parsed.value,
   });
   if (result.isOk()) return c.json(result.value.thread as any, 201);
+  return creationFailureResponse(c, intent, result.error);
+}
 
-  const failure = result.error;
+type CreateThreadResult = Awaited<ReturnType<ReturnType<typeof composeCreateThread>>>;
+type CreateThreadFailure = CreateThreadResult extends Result<unknown, infer E> ? E : never;
+
+/** Map a creation-use-case failure onto the existing HTTP contract. */
+function creationFailureResponse(
+  c: Context<ServerEnv>,
+  intent: CreationIntent,
+  failure: CreateThreadFailure,
+) {
   switch (failure.kind) {
     case 'rejected':
       return failure.code === 'project-required'
@@ -729,6 +743,16 @@ async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent)
       return c.json({ error: 'Thread creation failed' }, 502);
     }
   }
+}
+
+/** `runtime: 'sandbox'`: the server creates the thread and starts it in its own sandbox. */
+async function handleCreateSandboxThread(c: Context<ServerEnv>, payload: Record<string, unknown>) {
+  const userId = c.get('userId') as string;
+  const result = await sandboxThreadLauncherFor(c.env ?? {}).create(userId, payload);
+  if (result.isErr()) {
+    return c.json({ error: result.error.message, code: result.error.code }, result.error.status);
+  }
+  return c.json(result.value.thread as any, 201);
 }
 
 // POST /api/threads — Create a new thread
@@ -1002,6 +1026,10 @@ threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
     ).catch(() => undefined);
     void thread;
   }
+
+  // A sandbox thread's machine goes with it (thread-sandboxes). Provider calls
+  // take seconds, so the answer does not wait for them.
+  void destroyThreadSandbox(threadId);
 
   return c.json({ ok: true });
 });

@@ -405,6 +405,43 @@ describe('PromptInputUI submit', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
+  test('a new sandbox thread skips the project-runner provider check', async () => {
+    vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+      okAsync({ provider: 'claude', state: 'installed', auth: 'required' }) as any,
+    );
+    const onCheckoutPreflight = vi.fn(async () => false);
+    const { onSubmit, editor } = renderUI({
+      projectId: 'p1',
+      isNewThread: true,
+      runtime: 'sandbox:conn-1',
+      selectedBranch: 'main',
+      onCheckoutPreflight,
+    });
+    type(editor, 'task');
+    submit(editor);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][1]).toMatchObject({
+      runtime: 'sandbox',
+      sandboxConnectionId: 'conn-1',
+    });
+    expect(systemApi.providerSetupStatus).not.toHaveBeenCalled();
+    expect(onCheckoutPreflight).not.toHaveBeenCalled();
+  });
+
+  test('a follow-up on a sandbox thread skips the project-runner provider check', async () => {
+    vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+      okAsync({ provider: 'claude', state: 'installed', auth: 'required' }) as any,
+    );
+    const { onSubmit, editor } = renderUI({
+      projectId: 'p1',
+      powerlineThread: { id: 't1', runtime: 'sandbox' } as any,
+    });
+    type(editor, 'next step');
+    submit(editor);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(systemApi.providerSetupStatus).not.toHaveBeenCalled();
+  });
+
   test('skips the provider check while running or sending to backlog', async () => {
     const { onSubmit, editor } = renderUI({ projectId: 'p1', running: true });
     type(editor, 'task');

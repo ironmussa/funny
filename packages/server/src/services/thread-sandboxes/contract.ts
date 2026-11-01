@@ -79,7 +79,8 @@ export function isRetryableSandboxError(e: SandboxError): boolean {
 export interface CreateSandboxRequest {
   threadId: string;
   sizeId: string;
-  template: TemplateRef;
+  /** Runner template; omitted = the provider's base image (runner installed on the fly). */
+  template?: TemplateRef;
   /** Enrollment bootstrap only (server URL, provisioning token, …). Never git or agent secrets. */
   env: Record<string, string>;
   lifetimeMs?: number;
@@ -108,6 +109,35 @@ export interface SandboxProvider {
   extendLifetime(handle: SandboxHandle, lifetimeMs: number): ResultAsync<void, SandboxError>;
   /** Idempotent: destroying a missing sandbox succeeds. */
   destroy(handle: SandboxHandle): ResultAsync<void, SandboxError>;
+  /** Run a shell command in a running sandbox (writing its env file, starting the runner). */
+  exec(
+    handle: SandboxHandle,
+    command: string,
+    opts?: { timeoutMs?: number },
+  ): ResultAsync<ExecResult, SandboxError>;
+  /**
+   * Build the runner template for `serverVersion` by running `installScript`
+   * (with `scriptEnv`) on a throwaway machine and saving it. Optional: providers
+   * without it need their template built out of band.
+   */
+  buildTemplate?(req: TemplateBuildRequest): ResultAsync<TemplateRef, SandboxError>;
+  /** funny runner templates this provider holds (for cleanup of old versions). */
+  listTemplates?(): ResultAsync<TemplateRef[], SandboxError>;
+  /** Idempotent: deleting a missing template succeeds. */
+  deleteTemplate?(template: TemplateRef): ResultAsync<void, SandboxError>;
+}
+
+export interface ExecResult {
+  exitCode: number;
+  stdout: string;
+  stderr: string;
+}
+
+export interface TemplateBuildRequest {
+  serverVersion: string;
+  installScript: string;
+  scriptEnv: Record<string, string>;
+  signal?: AbortSignal;
 }
 
 /** Picks the size to use: the requested one if declared, else the provider's default. */

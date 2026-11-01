@@ -2,6 +2,7 @@ import { SiGithub } from '@icons-pack/react-simple-icons';
 import {
   ArrowLeft,
   Bot,
+  Boxes,
   Building2,
   Cpu,
   Mail,
@@ -43,6 +44,7 @@ export type GeneralPage =
   | 'organizations'
   | 'team-members'
   | 'runners'
+  | 'sandboxes'
   | 'system'
   | 'extensions'
   | 'providers'
@@ -67,6 +69,7 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   { id: 'organizations', label: 'settings.organizations', icon: Building2 },
   { id: 'team-members', label: 'Team Members', icon: UsersRound },
   { id: 'runners', label: 'settings.runners', icon: Server },
+  { id: 'sandboxes', label: 'settings.sandboxes', icon: Boxes },
   { id: 'agent-templates', label: 'settings.agentTemplates', icon: Bot },
   { id: 'extensions', label: 'Extensions', icon: Puzzle },
   { id: 'system', label: 'settings.system', icon: Cpu },

@@ -69,8 +69,162 @@ export type ModelSelectGroup = {
   providerLabel: string;
   models: { value: string; label: string; disabled?: boolean }[];
   disabled?: boolean;
-  disabledReason?: 'not-installed' | 'no-runner';
+  disabledReason?: 'not-installed' | 'no-runner' | 'sandbox-unsupported';
 };
+
+/** Leading slot keeps labels aligned whether or not a row shows a checkmark. */
+function SelectLead({ active }: { active: boolean }) {
+  return (
+    <span className="flex w-3 shrink-0 items-center justify-center">
+      {active && <Check className="icon-2xs" />}
+    </span>
+  );
+}
+
+const DISABLED_REASON_SUFFIX: Record<NonNullable<ModelSelectGroup['disabledReason']>, string> = {
+  'no-runner': '— connect a runner',
+  'not-installed': '— not installed on runner',
+  'sandbox-unsupported': '— not available in sandboxes yet',
+};
+
+/** Groups whose provider can be installed/configured from the picker. */
+function canConfigureProvider(group: ModelSelectGroup): boolean {
+  return group.disabledReason !== 'no-runner' && group.disabledReason !== 'sandbox-unsupported';
+}
+
+type ModelOptionProps = {
+  model: ModelSelectGroup['models'][number];
+  provider: string;
+  value: string;
+  effort?: string;
+  onChange: (v: string) => void;
+  onEffortChange?: (v: string) => void;
+};
+
+function ModelEffortSubmenu({
+  model: m,
+  efforts,
+  isSelected,
+  effort,
+  onChange,
+  onEffortChange,
+}: {
+  model: ModelSelectGroup['models'][number];
+  efforts: ReturnType<typeof getEffortLevels>;
+  isSelected: boolean;
+  effort?: string;
+  onChange: (v: string) => void;
+  onEffortChange: (v: string) => void;
+}) {
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger size="xs" data-testid={`prompt-model-option-${m.value}`}>
+        <SelectLead active={isSelected} />
+        <span className="truncate">{m.label}</span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuPortal>
+        <DropdownMenuSubContent
+          size="xs"
+          collisionPadding={8}
+          className="max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overscroll-contain"
+        >
+          {efforts.map((e) => (
+            <DropdownMenuItem
+              key={e.value}
+              size="xs"
+              data-testid={`prompt-effort-option-${m.value}-${e.value}`}
+              onSelect={() => {
+                onChange(m.value);
+                onEffortChange(e.value);
+              }}
+            >
+              <SelectLead active={isSelected && effort === e.value} />
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span>{e.label}</span>
+                </TooltipTrigger>
+                <TooltipContent>{e.description}</TooltipContent>
+              </Tooltip>
+            </DropdownMenuItem>
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuPortal>
+    </DropdownMenuSub>
+  );
+}
+
+function ModelOption({
+  model: m,
+  provider,
+  value,
+  effort,
+  onChange,
+  onEffortChange,
+}: ModelOptionProps) {
+  const isSelected = m.value === value;
+  const { model: mModel } = parseUnifiedModel(m.value);
+  const efforts = m.disabled ? [] : getEffortLevels(mModel, provider);
+
+  if (efforts.length > 0 && onEffortChange) {
+    return (
+      <ModelEffortSubmenu
+        model={m}
+        efforts={efforts}
+        isSelected={isSelected}
+        effort={effort}
+        onChange={onChange}
+        onEffortChange={onEffortChange}
+      />
+    );
+  }
+
+  return (
+    <DropdownMenuItem
+      size="xs"
+      disabled={m.disabled}
+      data-testid={`prompt-model-option-${m.value}`}
+      onSelect={() => onChange(m.value)}
+    >
+      <SelectLead active={isSelected} />
+      <span className="truncate">{m.label}</span>
+    </DropdownMenuItem>
+  );
+}
+
+function ModelGroupSection({
+  group,
+  showSeparator,
+  onSetup,
+  ...optionProps
+}: Omit<ModelOptionProps, 'model' | 'provider'> & {
+  group: ModelSelectGroup;
+  showSeparator: boolean;
+  onSetup: (group: ModelSelectGroup) => void;
+}) {
+  const suffix = group.disabledReason ? DISABLED_REASON_SUFFIX[group.disabledReason] : null;
+  return (
+    <DropdownMenuGroup>
+      {showSeparator && <DropdownMenuSeparator />}
+      <DropdownMenuLabel
+        className={group.disabled ? 'text-muted-foreground/60' : undefined}
+        data-testid={group.disabled ? `model-group-disabled-${group.provider}` : undefined}
+      >
+        {group.providerLabel}
+        {suffix && <span className="ml-1 font-normal italic">{suffix}</span>}
+      </DropdownMenuLabel>
+      {canConfigureProvider(group) && (
+        <DropdownMenuItem size="xs" onSelect={() => onSetup(group)}>
+          {group.disabledReason === 'not-installed'
+            ? 'Install / configure provider…'
+            : 'Configure provider…'}
+        </DropdownMenuItem>
+      )}
+      {group.models.map((m) => (
+        <ModelOption key={m.value} model={m} provider={group.provider} {...optionProps} />
+      ))}
+    </DropdownMenuGroup>
+  );
+}
 
 /**
  * Combined model + thinking-effort picker. Selecting a model that supports
@@ -101,13 +255,6 @@ const DesktopModelSelect = memo(function DesktopModelSelect({
     (e) => e.value === effort,
   )?.label;
 
-  // Leading slot keeps labels aligned whether or not a row shows a checkmark.
-  const lead = (active: boolean) => (
-    <span className="flex w-3 shrink-0 items-center justify-center">
-      {active && <Check className="icon-2xs" />}
-    </span>
-  );
-
   return (
     <>
       <DropdownMenu>
@@ -132,87 +279,16 @@ const DesktopModelSelect = memo(function DesktopModelSelect({
           className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto overscroll-contain"
         >
           {groups.map((group, idx) => (
-            <DropdownMenuGroup key={group.provider}>
-              {idx > 0 && <DropdownMenuSeparator />}
-              <DropdownMenuLabel
-                className={group.disabled ? 'text-muted-foreground/60' : undefined}
-                data-testid={group.disabled ? `model-group-disabled-${group.provider}` : undefined}
-              >
-                {group.providerLabel}
-                {group.disabledReason === 'no-runner' && (
-                  <span className="ml-1 font-normal italic">— connect a runner</span>
-                )}
-                {group.disabledReason === 'not-installed' && (
-                  <span className="ml-1 font-normal italic">— not installed on runner</span>
-                )}
-              </DropdownMenuLabel>
-              {group.disabledReason !== 'no-runner' && (
-                <DropdownMenuItem size="xs" onSelect={() => setSetupProvider(group)}>
-                  {group.disabledReason === 'not-installed'
-                    ? 'Install / configure provider…'
-                    : 'Configure provider…'}
-                </DropdownMenuItem>
-              )}
-              {group.models.map((m) => {
-                const isSelected = m.value === value;
-                const { model: mModel } = parseUnifiedModel(m.value);
-                const efforts = m.disabled ? [] : getEffortLevels(mModel, group.provider);
-
-                if (efforts.length > 0 && onEffortChange) {
-                  return (
-                    <DropdownMenuSub key={m.value}>
-                      <DropdownMenuSubTrigger
-                        size="xs"
-                        data-testid={`prompt-model-option-${m.value}`}
-                      >
-                        {lead(isSelected)}
-                        <span className="truncate">{m.label}</span>
-                      </DropdownMenuSubTrigger>
-                      <DropdownMenuPortal>
-                        <DropdownMenuSubContent
-                          size="xs"
-                          collisionPadding={8}
-                          className="max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overscroll-contain"
-                        >
-                          {efforts.map((e) => (
-                            <DropdownMenuItem
-                              key={e.value}
-                              size="xs"
-                              data-testid={`prompt-effort-option-${m.value}-${e.value}`}
-                              onSelect={() => {
-                                onChange(m.value);
-                                onEffortChange(e.value);
-                              }}
-                            >
-                              {lead(isSelected && effort === e.value)}
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span>{e.label}</span>
-                                </TooltipTrigger>
-                                <TooltipContent>{e.description}</TooltipContent>
-                              </Tooltip>
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuPortal>
-                    </DropdownMenuSub>
-                  );
-                }
-
-                return (
-                  <DropdownMenuItem
-                    key={m.value}
-                    size="xs"
-                    disabled={m.disabled}
-                    data-testid={`prompt-model-option-${m.value}`}
-                    onSelect={() => onChange(m.value)}
-                  >
-                    {lead(isSelected)}
-                    <span className="truncate">{m.label}</span>
-                  </DropdownMenuItem>
-                );
-              })}
-            </DropdownMenuGroup>
+            <ModelGroupSection
+              key={group.provider}
+              group={group}
+              showSeparator={idx > 0}
+              value={value}
+              effort={effort}
+              onChange={onChange}
+              onEffortChange={onEffortChange}
+              onSetup={setSetupProvider}
+            />
           ))}
         </DropdownMenuContent>
       </DropdownMenu>

@@ -32,7 +32,9 @@ export type ThreadEventType =
   | 'pipeline:precommit_fixer_started'
   | 'pipeline:precommit_fixing'
   | 'pipeline:precommit_fixed'
-  | 'pipeline:precommit_failed';
+  | 'pipeline:precommit_failed'
+  // A sandbox / provider failure the user can act on (thread-sandboxes).
+  | 'sandbox:error';
 
 export interface ThreadEvent {
   id: string;

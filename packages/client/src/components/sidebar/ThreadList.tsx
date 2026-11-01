@@ -1,23 +1,13 @@
-import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
-import {
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-  useRef,
-  useLayoutEffect,
-  memo,
-  type MutableRefObject,
-} from 'react';
+import { useMemo, useCallback, useRef, useLayoutEffect, memo, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useVisibleGitStatus } from '@/hooks/use-git-status-scope';
+import { useGridThreadDrag } from '@/hooks/use-grid-thread-drag';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
-import { setDashedDragPreview } from '@/lib/drag-preview';
 import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
@@ -237,25 +227,7 @@ const ThreadListItem = memo(function ThreadListItem({
   }, [thread]);
 
   // Drag support: allow dragging threads into grid cells
-  const dragRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  useEffect(() => {
-    const el = dragRef.current;
-    if (!el) return;
-    return draggable({
-      element: el,
-      getInitialData: () => ({
-        type: 'grid-thread',
-        threadId: thread.id,
-        projectId: thread.projectId,
-      }),
-      onGenerateDragPreview: ({ nativeSetDragImage }) =>
-        setDashedDragPreview({ nativeSetDragImage, source: el }),
-      onDragStart: () => setIsDragging(true),
-      onDrop: () => setIsDragging(false),
-    });
-  }, [thread.id, thread.projectId]);
+  const { dragRef, isDragging } = useGridThreadDrag(thread.id, thread.projectId);
 
   const handleSelect = useCallback(
     () => onSelect(thread.id, thread.projectId),

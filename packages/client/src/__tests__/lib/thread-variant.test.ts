@@ -2,6 +2,8 @@ import type { Thread } from '@funny/shared';
 import { describe, test, expect } from 'vitest';
 
 import {
+  canDeleteWhileBusy,
+  runsInSandbox,
   canConvertToWorktree,
   canDoGitOps,
   canFetchGitStatus,
@@ -214,5 +216,18 @@ describe('getSidebarBucket', () => {
   test('defaults to project for null/undefined', () => {
     expect(getSidebarBucket(null)).toBe('project');
     expect(getSidebarBucket(undefined)).toBe('project');
+  });
+});
+
+describe('sandbox threads (thread-sandboxes)', () => {
+  test('runsInSandbox only for the sandbox runtime', () => {
+    expect(runsInSandbox({ runtime: 'sandbox' })).toBe(true);
+    expect(runsInSandbox({ runtime: 'local' })).toBe(false);
+    expect(runsInSandbox(undefined)).toBe(false);
+  });
+
+  test('a busy sandbox thread can be deleted (its machine goes with it); a local one cannot', () => {
+    expect(canDeleteWhileBusy({ runtime: 'sandbox' })).toBe(true);
+    expect(canDeleteWhileBusy({ runtime: 'local' })).toBe(false);
   });
 });

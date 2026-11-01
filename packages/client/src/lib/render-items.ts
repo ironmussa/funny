@@ -366,7 +366,12 @@ function isStoppedOutcome(e: ThreadEvent): boolean {
  * become individual thread-event items.
  */
 function isStandaloneTimelineEvent(event: ThreadEvent): boolean {
-  return isGitTimelineEventType(event.type) || isStoppedOutcome(event);
+  return (
+    isGitTimelineEventType(event.type) ||
+    isStoppedOutcome(event) ||
+    // Sandbox / provider failures (thread-sandboxes) render as error cards.
+    event.type === 'sandbox:error'
+  );
 }
 
 function buildThreadEventItems(threadEvents: ThreadEvent[]): RenderItem[] {

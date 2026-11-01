@@ -11,7 +11,7 @@
 
 // ─── Threads ────────────────────────────────────────────
 export type ThreadMode = 'local' | 'worktree';
-export type ThreadRuntime = 'local' | 'remote';
+export type ThreadRuntime = 'local' | 'remote' | 'sandbox';
 export type ThreadStatus =
   | 'setting_up'
   | 'idle'

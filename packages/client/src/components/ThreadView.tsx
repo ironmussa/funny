@@ -8,6 +8,8 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useSandboxSetupSteps } from '@/hooks/use-sandbox-setup-steps';
+import { runsInSandbox } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -148,22 +150,36 @@ function PreparingThread({
   activeThread: NonNullable<ReturnType<typeof useThreadCore>>;
   pendingMetadata?: PreparationMessageMetadata;
 }) {
-  const message: Partial<NonNullable<LoadedThread['lastUserMessage']>> =
-    activeThread.lastUserMessage ?? {};
-  const metadata = pendingMetadata ?? {};
+  const message = preparationMessage(activeThread);
+  const sandboxSteps = useSandboxSetupSteps(activeThread);
   return (
     <ThreadPreparationView
       prompt={message.content ?? activeThread.initialPrompt}
       projectId={activeThread.projectId}
-      metadata={{
-        model: message.model ?? activeThread.model,
-        permissionMode: message.permissionMode ?? activeThread.permissionMode,
-        effort: message.effort ?? metadata.effort,
-        timestamp: message.timestamp ?? activeThread.createdAt,
-      }}
-      steps={activeThread.setupProgress ?? []}
+      metadata={preparationMetadata(activeThread, message, pendingMetadata)}
+      steps={sandboxSteps ?? activeThread.setupProgress ?? []}
     />
   );
+}
+
+type PreparationMessage = Partial<NonNullable<LoadedThread['lastUserMessage']>>;
+
+function preparationMessage(activeThread: LoadedThread): PreparationMessage {
+  return activeThread.lastUserMessage ?? {};
+}
+
+/** The persisted user message wins; thread defaults / pending metadata fill the gaps. */
+function preparationMetadata(
+  activeThread: LoadedThread,
+  message: PreparationMessage,
+  pendingMetadata?: PreparationMessageMetadata,
+): PreparationMessageMetadata {
+  return {
+    model: message.model ?? activeThread.model,
+    permissionMode: message.permissionMode ?? activeThread.permissionMode,
+    effort: message.effort ?? pendingMetadata?.effort,
+    timestamp: message.timestamp ?? activeThread.createdAt,
+  };
 }
 
 type LoadedThread = NonNullable<ReturnType<typeof useThreadCore>>;
@@ -174,7 +190,11 @@ function ThreadBody({
   activeThread: LoadedThread;
   pendingMetadata?: PreparationMessageMetadata;
 }) {
-  if (activeThread.status === 'setting_up')
+  // A sandbox that failed before its agent ever started (no session) keeps
+  // showing its setup steps, so the failed step and its error stay visible.
+  const sandboxSetupFailed =
+    runsInSandbox(activeThread) && activeThread.status === 'failed' && !activeThread.sessionId;
+  if (activeThread.status === 'setting_up' || sandboxSetupFailed)
     return <PreparingThread activeThread={activeThread} pendingMetadata={pendingMetadata} />;
   if (activeThread.status === 'idle' && (activeThread.queuedCount ?? 0) === 0)
     return <ThreadIdleStarter activeThread={activeThread} />;

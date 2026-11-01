@@ -30,4 +30,9 @@ export interface ProviderKeyConfig {
   envVar?: string;
   /** Which agent providers require this key at runtime. */
   requiredByProviders?: AgentProvider[];
+  /**
+   * Used only by the server itself (e.g. the LLM proxy) and never handed to a
+   * runner, so a sandboxed agent cannot read it.
+   */
+  serverOnly?: boolean;
 }

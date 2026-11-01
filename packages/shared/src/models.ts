@@ -454,6 +454,16 @@ export const PROVIDER_KEY_REGISTRY: ProviderKeyConfig[] = [
     requiredByProviders: ['cursor'],
   },
   {
+    // thread-sandboxes: stays on the server. Sandbox agents reach Anthropic through
+    // the server's LLM proxy, which adds it per request — never sent to a runner.
+    id: 'claude-subscription',
+    label: 'Claude subscription token (sandboxes)',
+    serverOnly: true,
+    helpUrl: 'https://code.claude.com/docs/en/authentication',
+    description:
+      'Run `claude setup-token` and paste the token. Agents in sandboxes use your subscription through the server; the token never reaches the sandbox.',
+  },
+  {
     id: 'assemblyai',
     label: 'AssemblyAI API Key',
     helpUrl: 'https://www.assemblyai.com/dashboard/signup',

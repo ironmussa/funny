@@ -1,766 +1,231 @@
-import type { UserProfile } from '@funny/shared';
 import { PROVIDER_KEY_REGISTRY } from '@funny/shared/models';
-import { Check, Mail, Send } from 'lucide-react';
-import { useTheme } from 'next-themes';
-import { useCallback, useEffect, useState } from 'react';
+import { Mail, Send } from 'lucide-react';
+import { useEffect, type ComponentType, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
-import { useShallow } from 'zustand/react/shallow';
 
 import { ADMIN_ONLY_PREFERENCES, type GeneralPage } from '@/components/PreferencesPanel';
-import { PromptModelVisibilitySettings } from '@/components/PromptModelVisibilitySettings';
 import { AgentExecutionProfilesSettings } from '@/components/settings/AgentExecutionProfilesSettings';
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
 import { ExtensionsSettings } from '@/components/settings/ExtensionsSettings';
 import { OrganizationManagement } from '@/components/settings/OrganizationManagement';
 import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { RunnersSettings } from '@/components/settings/RunnersSettings';
-import { SettingRow } from '@/components/settings/SettingRow';
+import { SandboxesSettings } from '@/components/settings/SandboxesSettings';
 import { SystemSettings } from '@/components/settings/SystemSettings';
 import { TeamMembers } from '@/components/settings/TeamMembers';
 import { UserManagement } from '@/components/settings/UserManagement';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import {
-  playNotificationSound,
-  showAgentNotification,
-  useNotifications,
-} from '@/hooks/use-notifications';
-import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { disableWebPush } from '@/lib/web-push';
 import { useAuthStore } from '@/stores/auth-store';
+import { useSettingsStore } from '@/stores/settings-store';
+
 import {
-  editorLabels,
-  type Editor,
-  type FontSize,
-  type TerminalShell,
-  type ThreadViewer,
-  useSettingsStore,
-} from '@/stores/settings-store';
-
-interface ThemeOption {
-  value: string;
-  label: string;
-  colors: { bg: string; sidebar: string; accent: string; fg: string };
-}
-
-const THEME_OPTIONS: ThemeOption[] = [
-  {
-    value: 'one-dark',
-    label: 'settings.themes.oneDark',
-    colors: { bg: '#252931', sidebar: '#1e2127', accent: '#528bff', fg: '#b8beca' },
-  },
-  {
-    value: 'dracula',
-    label: 'settings.themes.dracula',
-    colors: { bg: '#282A36', sidebar: '#21222C', accent: '#BD93F9', fg: '#F8F8F2' },
-  },
-  {
-    value: 'github-dark',
-    label: 'settings.themes.githubDark',
-    colors: { bg: '#0d1117', sidebar: '#010409', accent: '#2f81f7', fg: '#e6edf3' },
-  },
-  {
-    value: 'night-owl',
-    label: 'settings.themes.nightOwl',
-    colors: { bg: '#011627', sidebar: '#01111d', accent: '#7e57c2', fg: '#d6deeb' },
-  },
-  {
-    value: 'catppuccin',
-    label: 'settings.themes.catppuccin',
-    colors: { bg: '#1e1e2e', sidebar: '#181825', accent: '#89b4fa', fg: '#cdd6f4' },
-  },
-  {
-    value: 'sunrise',
-    label: 'settings.themes.sunrise',
-    colors: { bg: '#FAFAFA', sidebar: '#F5F5F5', accent: '#171717', fg: '#171717' },
-  },
-  {
-    value: 'monochrome',
-    label: 'settings.themes.monochrome',
-    colors: { bg: '#ffffff', sidebar: '#f7f7f7', accent: '#000000', fg: '#000000' },
-  },
-  {
-    value: 'monochrome-dark',
-    label: 'settings.themes.monochromeDark',
-    colors: { bg: '#121212', sidebar: '#0d0d0d', accent: '#ededed', fg: '#ededed' },
-  },
-];
-
-const displayNamesCache = new Map<string, Intl.DisplayNames>();
-
-function getDisplayNames(code: string): Intl.DisplayNames {
-  let dn = displayNamesCache.get(code);
-  if (!dn) {
-    dn = new Intl.DisplayNames([code], { type: 'language' });
-    displayNamesCache.set(code, dn);
-  }
-  return dn;
-}
-
-function getLanguageName(code: string): string {
-  try {
-    const name = getDisplayNames(code).of(code);
-    return name ? name.charAt(0).toUpperCase() + name.slice(1) : code;
-  } catch {
-    return code;
-  }
-}
-
-function ThemeCard({
-  option,
-  selected,
-  onClick,
-  t,
-}: {
-  option: ThemeOption;
-  selected: boolean;
-  onClick: () => void;
-  t: (key: string) => string;
-}) {
-  const { bg, sidebar, accent, fg } = option.colors;
-  return (
-    <button
-      onClick={onClick}
-      data-testid={`preferences-theme-${option.value}`}
-      className={cn(
-        'relative flex flex-col overflow-hidden rounded-lg border-2 transition-colors',
-        selected ? 'border-primary' : 'border-border/50 hover:border-border',
-      )}
-    >
-      <div className="flex h-16" style={{ backgroundColor: bg }}>
-        <div
-          className="w-5 border-r"
-          style={{ backgroundColor: sidebar, borderColor: `${fg}15` }}
-        />
-        <div className="flex flex-1 flex-col gap-1 p-2">
-          <div className="h-1.5 w-10 rounded-full" style={{ backgroundColor: fg, opacity: 0.7 }} />
-          <div className="h-1.5 w-14 rounded-full" style={{ backgroundColor: fg, opacity: 0.3 }} />
-          <div className="h-1.5 w-8 rounded-full" style={{ backgroundColor: accent }} />
-        </div>
-      </div>
-      <div className="flex items-center justify-between px-2.5 py-1.5">
-        <span className="text-xs font-medium">{t(option.label)}</span>
-        {selected && <Check className="icon-xs text-primary" />}
-      </div>
-    </button>
-  );
-}
+  AppearancePreferencesSection,
+  ModelsPreferencesSection,
+} from './AppearancePreferencesSection';
+import { GeneralPreferencesSection } from './GeneralPreferencesSection';
+import {
+  type ProviderKeysState,
+  type SmtpSource,
+  useProviderKeys,
+  useSmtpSettings,
+} from './preferences-hooks';
 
 interface Props {
   activePreferencesPage: GeneralPage;
 }
 
+/** Pages that own all of their state. */
+const STANDALONE_PAGES: Partial<Record<GeneralPage, ComponentType>> = {
+  general: GeneralPreferencesSection,
+  models: ModelsPreferencesSection,
+  appearance: AppearancePreferencesSection,
+  users: UserManagement,
+  organizations: OrganizationManagement,
+  'team-members': TeamMembers,
+  runners: RunnersSettings,
+  sandboxes: SandboxesSettings,
+  'agent-profiles': AgentExecutionProfilesSettings,
+  'agent-templates': AgentTemplateSettings,
+  extensions: ExtensionsSettings,
+  providers: ProvidersSettings,
+  system: SystemSettings,
+};
+
+interface SharedPageState {
+  keys: ProviderKeysState;
+  smtp: ReturnType<typeof useSmtpSettings>;
+}
+
+/** Pages whose state is owned by PreferencesContent so it survives page switches. */
+const STATEFUL_PAGES: Partial<Record<GeneralPage, (state: SharedPageState) => ReactNode>> = {
+  github: ({ keys }) => <GitHubTokenSection keys={keys} />,
+  'ai-keys': ({ keys }) => <AiProviderKeysSection keys={keys} />,
+  speech: ({ keys }) => <SpeechKeySection keys={keys} />,
+  email: ({ smtp }) => <SmtpPanel {...smtp} />,
+};
+
+function PreferencesPage({ page, state }: { page: GeneralPage; state: SharedPageState }) {
+  const Standalone = STANDALONE_PAGES[page];
+  if (Standalone) return <Standalone />;
+  return STATEFUL_PAGES[page]?.(state) ?? null;
+}
+
+function AdminOnlyNotice() {
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <div className="max-w-4xl px-8 py-8">
+        <p className="text-muted-foreground text-sm" data-testid="preferences-admin-only">
+          This setting is only available to administrators.
+        </p>
+      </div>
+    </ScrollArea>
+  );
+}
+
 /**
- * The right-side scrollable content area of the preferences view. Owns every
- * page's local state (provider keys, SMTP settings) and the auto-save
- * handlers. Extracted so GeneralSettingsView is a thin layout shell.
+ * The right-side scrollable content area of the preferences view. Owns the
+ * pages' shared local state (provider keys, SMTP settings); each page section
+ * owns its own auto-save handlers. Extracted so GeneralSettingsView is a thin
+ * layout shell.
  */
 export function PreferencesContent({ activePreferencesPage }: Props) {
-  const {
-    defaultEditor,
-    useInternalEditor,
-    terminalShell,
-    availableShells,
-    fontSize,
-    notificationsEnabled,
-    notificationSoundEnabled,
-    threadViewer,
-    setDefaultEditor,
-    setUseInternalEditor,
-    setTerminalShell,
-    setFontSize,
-    setNotificationsEnabled,
-    setNotificationSoundEnabled,
-    setThreadViewer,
-    fetchAvailableShells,
-  } = useSettingsStore(
-    useShallow((s) => ({
-      defaultEditor: s.defaultEditor,
-      useInternalEditor: s.useInternalEditor,
-      terminalShell: s.terminalShell,
-      availableShells: s.availableShells,
-      fontSize: s.fontSize,
-      notificationsEnabled: s.notificationsEnabled,
-      notificationSoundEnabled: s.notificationSoundEnabled,
-      threadViewer: s.threadViewer,
-      setDefaultEditor: s.setDefaultEditor,
-      setUseInternalEditor: s.setUseInternalEditor,
-      setTerminalShell: s.setTerminalShell,
-      setFontSize: s.setFontSize,
-      setNotificationsEnabled: s.setNotificationsEnabled,
-      setNotificationSoundEnabled: s.setNotificationSoundEnabled,
-      setThreadViewer: s.setThreadViewer,
-      fetchAvailableShells: s.fetchAvailableShells,
-    })),
-  );
-  const {
-    permission: notificationPermission,
-    requestPermission,
-    supported: notificationsSupported,
-  } = useNotifications();
-  const { theme, setTheme } = useTheme();
-  const { t, i18n } = useTranslation();
   const isAdmin = useAuthStore((s) => s.user?.role === 'admin');
-
-  const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
-  const [keyPresence, setKeyPresence] = useState<Record<string, boolean>>({});
-  const [keySaving, setKeySaving] = useState<Record<string, boolean>>({});
-
-  const [smtpHost, setSmtpHost] = useState('');
-  const [smtpPort, setSmtpPort] = useState('587');
-  const [smtpUser, setSmtpUser] = useState('');
-  const [smtpPass, setSmtpPass] = useState('');
-  const [smtpFrom, setSmtpFrom] = useState('');
-  const [smtpHasPassword, setSmtpHasPassword] = useState(false);
-  const [smtpSource, setSmtpSource] = useState<'database' | 'environment' | 'none'>('none');
-  const [smtpSaving, setSmtpSaving] = useState(false);
-  const [smtpTesting, setSmtpTesting] = useState(false);
+  const fetchAvailableShells = useSettingsStore((s) => s.fetchAvailableShells);
+  // Hook order matters: their mount effects load the profile, then SMTP, then shells.
+  const keys = useProviderKeys();
+  const smtp = useSmtpSettings();
 
   useEffect(() => {
-    api.getProfile().then((result) => {
-      if (result.isOk() && result.value) {
-        const profile = result.value as UserProfile;
-        setKeyPresence(profile.providerKeys ?? {});
-      }
-    });
-    setKeyInputs({});
-    api.getSmtpSettings().then((result) => {
-      if (result.isOk()) {
-        setSmtpHost(result.value.host);
-        setSmtpPort(result.value.port);
-        setSmtpUser(result.value.user);
-        setSmtpFrom(result.value.from);
-        setSmtpHasPassword(result.value.hasPassword);
-        setSmtpSource(result.value.source);
-      }
-    });
     fetchAvailableShells();
   }, [fetchAvailableShells]);
-
-  const handleEditorChange = useCallback(
-    (v: string) => {
-      setDefaultEditor(v as Editor);
-      toast.success(t('settings.saved'), { id: 'settings-saved' });
-    },
-    [setDefaultEditor, t],
-  );
-
-  const handleInternalEditorChange = useCallback(
-    (checked: boolean) => {
-      setUseInternalEditor(checked);
-      toast.success(t('settings.saved'), { id: 'settings-saved' });
-    },
-    [setUseInternalEditor, t],
-  );
-
-  const handleShellChange = useCallback(
-    (v: string) => {
-      setTerminalShell(v as TerminalShell);
-      toast.success(t('settings.saved'), { id: 'settings-saved' });
-    },
-    [setTerminalShell, t],
-  );
-
-  const handleThemeChange = useCallback(
-    (value: string) => {
-      setTheme(value);
-      api.updateProfile({ theme: value });
-      toast.success(t('settings.saved'), { id: 'settings-saved' });
-    },
-    [setTheme, t],
-  );
-
-  const handleFontSizeChange = useCallback(
-    (v: string) => {
-      setFontSize(v as FontSize);
-      toast.success(t('settings.saved'), { id: 'settings-saved' });
-    },
-    [setFontSize, t],
-  );
-
-  const handleNotificationsToggle = useCallback(
-    async (checked: boolean) => {
-      if (checked) {
-        const result = notificationPermission === 'granted' ? 'granted' : await requestPermission();
-        if (result !== 'granted') {
-          toast.error(t('settings.notificationsDenied'));
-          setNotificationsEnabled(false);
-          return;
-        }
-      }
-      if (!checked) {
-        try {
-          await disableWebPush();
-        } catch (error) {
-          toast.error(t('settings.notificationsTestFailed', { reason: String(error) }));
-          return;
-        }
-      }
-      setNotificationsEnabled(checked);
-      toast.success(t('settings.saved'), { id: 'settings-saved' });
-    },
-    [notificationPermission, requestPermission, setNotificationsEnabled, t],
-  );
-
-  const handleTestNotification = useCallback(async () => {
-    if (!notificationsSupported) {
-      toast.error(t('settings.notificationsUnsupported'));
-      return;
-    }
-    let perm = notificationPermission;
-    if (perm !== 'granted') {
-      perm = await requestPermission();
-    }
-    if (perm !== 'granted') {
-      toast.error(t('settings.notificationsDenied'));
-      return;
-    }
-    const result = await showAgentNotification(
-      t('settings.notificationsTestTitle'),
-      t('settings.notificationsTestBody'),
-      { force: true },
-    );
-    if (result.ok) {
-      toast.success(t('settings.notificationsTestSent'));
-    } else {
-      toast.error(t('settings.notificationsTestFailed', { reason: result.reason }));
-    }
-  }, [notificationPermission, notificationsSupported, requestPermission, t]);
-
-  const handleNotificationSoundToggle = useCallback(
-    (checked: boolean) => {
-      setNotificationSoundEnabled(checked);
-      if (checked) playNotificationSound();
-      toast.success(t('settings.saved'), { id: 'settings-saved' });
-    },
-    [setNotificationSoundEnabled, t],
-  );
-
-  const handleTestNotificationSound = useCallback(() => {
-    playNotificationSound();
-  }, []);
-
-  const handleLanguageChange = useCallback(
-    (code: string) => {
-      i18n.changeLanguage(code);
-      toast.success(t('settings.saved'), { id: 'settings-saved' });
-    },
-    [i18n, t],
-  );
-
-  const handleSaveProviderKey = useCallback(
-    async (id: string) => {
-      const value = keyInputs[id];
-      if (!value) return;
-      setKeySaving((prev) => ({ ...prev, [id]: true }));
-      const result = await api.updateProfile({ providerKey: { id, value } });
-      if (result.isOk()) {
-        setKeyPresence(result.value.providerKeys ?? {});
-        setKeyInputs((prev) => ({ ...prev, [id]: '' }));
-        toast.success(t('profile.tokenSaved'));
-      } else {
-        toast.error(t('profile.saveFailed'));
-      }
-      setKeySaving((prev) => ({ ...prev, [id]: false }));
-    },
-    [keyInputs, t],
-  );
-
-  const handleClearProviderKey = useCallback(
-    async (id: string) => {
-      setKeySaving((prev) => ({ ...prev, [id]: true }));
-      const result = await api.updateProfile({ providerKey: { id, value: null } });
-      if (result.isOk()) {
-        setKeyPresence(result.value.providerKeys ?? {});
-        setKeyInputs((prev) => ({ ...prev, [id]: '' }));
-        toast.success(t('profile.tokenCleared'));
-      }
-      setKeySaving((prev) => ({ ...prev, [id]: false }));
-    },
-    [t],
-  );
-
-  const handleSaveSmtp = useCallback(async () => {
-    setSmtpSaving(true);
-    try {
-      const result = await api.updateSmtpSettings({
-        host: smtpHost,
-        port: smtpPort,
-        user: smtpUser,
-        pass: smtpPass || undefined,
-        from: smtpFrom,
-      });
-      if (result.isOk()) {
-        toast.success('SMTP settings saved');
-        if (smtpPass) setSmtpHasPassword(true);
-        setSmtpSource('database');
-        setSmtpPass('');
-      } else {
-        toast.error('Failed to save SMTP settings');
-      }
-    } finally {
-      setSmtpSaving(false);
-    }
-  }, [smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom]);
-
-  const handleTestSmtp = useCallback(async () => {
-    setSmtpTesting(true);
-    try {
-      const result = await api.testSmtpSettings();
-      if (result.isOk()) {
-        toast.success(`Test email sent to ${result.value.sentTo}`);
-      } else {
-        toast.error('Failed to send test email. Check your SMTP settings.');
-      }
-    } finally {
-      setSmtpTesting(false);
-    }
-  }, []);
 
   // Defense in depth: the nav hides admin-only pages for non-admins, but a
   // direct URL (e.g. /preferences/system) must not render one either.
   if (!isAdmin && ADMIN_ONLY_PREFERENCES.has(activePreferencesPage)) {
-    return (
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="max-w-4xl px-8 py-8">
-          <p className="text-muted-foreground text-sm" data-testid="preferences-admin-only">
-            This setting is only available to administrators.
-          </p>
-        </div>
-      </ScrollArea>
-    );
+    return <AdminOnlyNotice />;
   }
 
   return (
     <ScrollArea className="min-h-0 flex-1">
       <div className="max-w-4xl px-8 py-8">
-        {activePreferencesPage === 'general' && (
-          <>
-            <div className="settings-card">
-              <SettingRow
-                title={t('settings.defaultEditor')}
-                description={t('settings.defaultEditorDesc')}
-              >
-                <Select value={defaultEditor} onValueChange={handleEditorChange}>
-                  <SelectTrigger className="w-[140px]" data-testid="preferences-editor-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.entries(editorLabels) as [Editor, string][]).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-              <SettingRow
-                title={t('settings.useInternalEditor')}
-                description={t('settings.useInternalEditorDesc')}
-              >
-                <Checkbox
-                  checked={useInternalEditor}
-                  onCheckedChange={(checked) => handleInternalEditorChange(!!checked)}
-                  data-testid="preferences-internal-editor"
-                />
-              </SettingRow>
-              <SettingRow title={t('settings.language')} description={t('settings.languageDesc')}>
-                <Select value={i18n.language} onValueChange={handleLanguageChange}>
-                  <SelectTrigger className="w-[140px]" data-testid="preferences-language-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(i18n.options.resources ?? {}).map((code) => (
-                      <SelectItem key={code} value={code}>
-                        {getLanguageName(code)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-              <SettingRow
-                title={t('settings.terminalShell')}
-                description={t('settings.terminalShellDesc')}
-              >
-                <Select value={terminalShell} onValueChange={handleShellChange}>
-                  <SelectTrigger className="w-[160px]" data-testid="preferences-shell-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">{t('settings.shellDefault')}</SelectItem>
-                    {availableShells.map((shell) => (
-                      <SelectItem key={shell.id} value={shell.id}>
-                        {shell.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-              <SettingRow
-                title={t('settings.notifications')}
-                description={
-                  notificationsSupported
-                    ? notificationPermission === 'denied'
-                      ? t('settings.notificationsBlocked')
-                      : t('settings.notificationsDesc')
-                    : t('settings.notificationsUnsupported')
-                }
-              >
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleTestNotification}
-                    disabled={!notificationsSupported || notificationPermission === 'denied'}
-                    data-testid="preferences-notifications-test"
-                  >
-                    {t('settings.notificationsTest')}
-                  </Button>
-                  <Checkbox
-                    checked={notificationsEnabled && notificationPermission === 'granted'}
-                    disabled={!notificationsSupported || notificationPermission === 'denied'}
-                    onCheckedChange={(checked) => handleNotificationsToggle(!!checked)}
-                    data-testid="preferences-notifications-toggle"
-                  />
-                </div>
-              </SettingRow>
-              <SettingRow
-                title={t('settings.notificationsSound')}
-                description={t('settings.notificationsSoundDesc')}
-              >
-                <div className="flex items-center gap-2">
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleTestNotificationSound}
-                    data-testid="preferences-notifications-sound-test"
-                  >
-                    {t('settings.notificationsTest')}
-                  </Button>
-                  <Checkbox
-                    checked={notificationSoundEnabled}
-                    onCheckedChange={(checked) => handleNotificationSoundToggle(!!checked)}
-                    data-testid="preferences-notifications-sound-toggle"
-                  />
-                </div>
-              </SettingRow>
-            </div>
-          </>
-        )}
-
-        {activePreferencesPage === 'models' && (
-          <>
-            <p className="text-muted-foreground px-1 pb-3 text-sm">
-              {t('settings.promptModelVisibilityDesc')}
-            </p>
-            <div className="settings-card overflow-visible!">
-              <PromptModelVisibilitySettings showHeader={false} />
-            </div>
-          </>
-        )}
-
-        {activePreferencesPage === 'appearance' && (
-          <>
-            <p className="text-muted-foreground px-1 pb-3 text-sm">{t('settings.themeDesc')}</p>
-            <div className="grid grid-cols-3 gap-2">
-              {THEME_OPTIONS.map((opt) => (
-                <ThemeCard
-                  key={opt.value}
-                  option={opt}
-                  selected={(theme ?? 'one-dark') === opt.value}
-                  onClick={() => handleThemeChange(opt.value)}
-                  t={t}
-                />
-              ))}
-            </div>
-            <h3 className="settings-section-header mt-6">{t('settings.fontSize')}</h3>
-            <div className="settings-card">
-              <SettingRow title={t('settings.fontSize')} description={t('settings.fontSizeDesc')}>
-                <Select value={fontSize} onValueChange={handleFontSizeChange}>
-                  <SelectTrigger className="w-[140px]" data-testid="preferences-font-size-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="small">{t('settings.fontSizeSmall')}</SelectItem>
-                    <SelectItem value="default">{t('settings.fontSizeDefault')}</SelectItem>
-                    <SelectItem value="large">{t('settings.fontSizeLarge')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-            </div>
-            <h3 className="settings-section-header mt-6">
-              {t('settings.experimental', 'Experimental')}
-            </h3>
-            <div className="settings-card">
-              <SettingRow
-                title={t('settings.threadViewer', 'Thread viewer')}
-                description={t(
-                  'settings.threadViewerDesc',
-                  'Frozen renders messages in normal document flow (native scroll, find-in-page across the whole thread). Virtual is the current renderer.',
-                )}
-              >
-                <Select
-                  value={threadViewer}
-                  onValueChange={(v) => setThreadViewer(v as ThreadViewer)}
-                >
-                  <SelectTrigger
-                    className="w-[140px]"
-                    data-testid="preferences-thread-viewer-select"
-                  >
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="virtual">
-                      {t('settings.threadViewerVirtual', 'Virtual (default)')}
-                    </SelectItem>
-                    <SelectItem value="frozen">
-                      {t('settings.threadViewerFrozen', 'Frozen (experimental)')}
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-            </div>
-          </>
-        )}
-
-        {activePreferencesPage === 'github' && (
-          <ProviderKeyPanel
-            id="github"
-            label="GitHub token"
-            title={t('profile.githubTokenLabel')}
-            description={t('profile.githubTokenDesc')}
-            keyInputs={keyInputs}
-            keyPresence={keyPresence}
-            keySaving={keySaving}
-            setKeyInputs={setKeyInputs}
-            handleSave={handleSaveProviderKey}
-            handleClear={handleClearProviderKey}
-            saveTestId="preferences-save-token"
-            inputTestId="preferences-github-token"
-            clearTestId="preferences-clear-token"
-            t={t}
-          />
-        )}
-
-        {activePreferencesPage === 'ai-keys' && (
-          <>
-            <p className="text-muted-foreground px-1 pb-3 text-sm">
-              Configure API keys for AI providers. Keys are encrypted at rest.
-            </p>
-            <div className="settings-card divide-border space-y-0 divide-y">
-              {PROVIDER_KEY_REGISTRY.filter((k) => k.id !== 'github' && k.id !== 'assemblyai').map(
-                (keyConfig) => (
-                  <div key={keyConfig.id} className="px-4 py-3.5">
-                    <p className="settings-row-title">{keyConfig.label}</p>
-                    <p className="settings-row-desc mb-2">
-                      Get your key at{' '}
-                      <a
-                        href={keyConfig.helpUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="text-primary hover:underline"
-                      >
-                        {new URL(keyConfig.helpUrl).hostname}
-                      </a>
-                      . {keyConfig.description}
-                    </p>
-                    <ProviderKeyRow
-                      id={keyConfig.id}
-                      label={keyConfig.label}
-                      keyInputs={keyInputs}
-                      keyPresence={keyPresence}
-                      keySaving={keySaving}
-                      setKeyInputs={setKeyInputs}
-                      handleSave={handleSaveProviderKey}
-                      handleClear={handleClearProviderKey}
-                      t={t}
-                    />
-                  </div>
-                ),
-              )}
-            </div>
-          </>
-        )}
-
-        {activePreferencesPage === 'speech' && (
-          <>
-            <p className="text-muted-foreground px-1 pb-3 text-sm">
-              Configure an AssemblyAI API key to enable voice dictation in the prompt input.
-            </p>
-            <div className="settings-card">
-              <div className="px-4 py-3.5">
-                <p className="settings-row-title">AssemblyAI API Key</p>
-                <p className="settings-row-desc mb-2">
-                  Get your key at{' '}
-                  <a
-                    href="https://www.assemblyai.com/dashboard/signup"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    assemblyai.com
-                  </a>
-                  . The key is encrypted at rest.
-                </p>
-                <ProviderKeyRow
-                  id="assemblyai"
-                  label="AssemblyAI API Key"
-                  keyInputs={keyInputs}
-                  keyPresence={keyPresence}
-                  keySaving={keySaving}
-                  setKeyInputs={setKeyInputs}
-                  handleSave={handleSaveProviderKey}
-                  handleClear={handleClearProviderKey}
-                  t={t}
-                />
-              </div>
-            </div>
-          </>
-        )}
-
-        {activePreferencesPage === 'users' && <UserManagement />}
-        {activePreferencesPage === 'organizations' && <OrganizationManagement />}
-        {activePreferencesPage === 'team-members' && <TeamMembers />}
-        {activePreferencesPage === 'runners' && <RunnersSettings />}
-        {activePreferencesPage === 'agent-profiles' && <AgentExecutionProfilesSettings />}
-        {activePreferencesPage === 'agent-templates' && <AgentTemplateSettings />}
-        {activePreferencesPage === 'extensions' && <ExtensionsSettings />}
-        {activePreferencesPage === 'providers' && <ProvidersSettings />}
-        {activePreferencesPage === 'system' && <SystemSettings />}
-
-        {activePreferencesPage === 'email' && (
-          <SmtpPanel
-            smtpHost={smtpHost}
-            smtpPort={smtpPort}
-            smtpUser={smtpUser}
-            smtpPass={smtpPass}
-            smtpFrom={smtpFrom}
-            smtpHasPassword={smtpHasPassword}
-            smtpSource={smtpSource}
-            smtpSaving={smtpSaving}
-            smtpTesting={smtpTesting}
-            setSmtpHost={setSmtpHost}
-            setSmtpPort={setSmtpPort}
-            setSmtpUser={setSmtpUser}
-            setSmtpPass={setSmtpPass}
-            setSmtpFrom={setSmtpFrom}
-            handleSaveSmtp={handleSaveSmtp}
-            handleTestSmtp={handleTestSmtp}
-          />
-        )}
+        <PreferencesPage page={activePreferencesPage} state={{ keys, smtp }} />
       </div>
     </ScrollArea>
+  );
+}
+
+// ── Provider key pages ───────────────────────────────────────────────
+
+function GitHubTokenSection({ keys }: { keys: ProviderKeysState }) {
+  const { t } = useTranslation();
+  return (
+    <ProviderKeyPanel
+      id="github"
+      label="GitHub token"
+      title={t('profile.githubTokenLabel')}
+      description={t('profile.githubTokenDesc')}
+      keyInputs={keys.keyInputs}
+      keyPresence={keys.keyPresence}
+      keySaving={keys.keySaving}
+      setKeyInputs={keys.setKeyInputs}
+      handleSave={keys.handleSave}
+      handleClear={keys.handleClear}
+      saveTestId="preferences-save-token"
+      inputTestId="preferences-github-token"
+      clearTestId="preferences-clear-token"
+      t={t}
+    />
+  );
+}
+
+function ProviderKeyRowFor({
+  keys,
+  id,
+  label,
+}: {
+  keys: ProviderKeysState;
+  id: string;
+  label: string;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ProviderKeyRow
+      id={id}
+      label={label}
+      keyInputs={keys.keyInputs}
+      keyPresence={keys.keyPresence}
+      keySaving={keys.keySaving}
+      setKeyInputs={keys.setKeyInputs}
+      handleSave={keys.handleSave}
+      handleClear={keys.handleClear}
+      t={t}
+    />
+  );
+}
+
+/** GitHub and AssemblyAI have their own pages. */
+const AI_PROVIDER_KEYS = PROVIDER_KEY_REGISTRY.filter(
+  (k) => k.id !== 'github' && k.id !== 'assemblyai',
+);
+
+function AiProviderKeysSection({ keys }: { keys: ProviderKeysState }) {
+  return (
+    <>
+      <p className="text-muted-foreground px-1 pb-3 text-sm">
+        Configure API keys for AI providers. Keys are encrypted at rest.
+      </p>
+      <div className="settings-card divide-border space-y-0 divide-y">
+        {AI_PROVIDER_KEYS.map((keyConfig) => (
+          <div key={keyConfig.id} className="px-4 py-3.5">
+            <p className="settings-row-title">{keyConfig.label}</p>
+            <p className="settings-row-desc mb-2">
+              Get your key at{' '}
+              <a
+                href={keyConfig.helpUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary hover:underline"
+              >
+                {new URL(keyConfig.helpUrl).hostname}
+              </a>
+              . {keyConfig.description}
+            </p>
+            <ProviderKeyRowFor keys={keys} id={keyConfig.id} label={keyConfig.label} />
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function SpeechKeySection({ keys }: { keys: ProviderKeysState }) {
+  return (
+    <>
+      <p className="text-muted-foreground px-1 pb-3 text-sm">
+        Configure an AssemblyAI API key to enable voice dictation in the prompt input.
+      </p>
+      <div className="settings-card">
+        <div className="px-4 py-3.5">
+          <p className="settings-row-title">AssemblyAI API Key</p>
+          <p className="settings-row-desc mb-2">
+            Get your key at{' '}
+            <a
+              href="https://www.assemblyai.com/dashboard/signup"
+              target="_blank"
+              rel="noreferrer"
+              className="text-primary hover:underline"
+            >
+              assemblyai.com
+            </a>
+            . The key is encrypted at rest.
+          </p>
+          <ProviderKeyRowFor keys={keys} id="assemblyai" label="AssemblyAI API Key" />
+        </div>
+      </div>
+    </>
   );
 }
 
@@ -893,7 +358,7 @@ interface SmtpPanelProps {
   smtpPass: string;
   smtpFrom: string;
   smtpHasPassword: boolean;
-  smtpSource: 'database' | 'environment' | 'none';
+  smtpSource: SmtpSource;
   smtpSaving: boolean;
   smtpTesting: boolean;
   setSmtpHost: (v: string) => void;
@@ -905,40 +370,110 @@ interface SmtpPanelProps {
   handleTestSmtp: () => void;
 }
 
-function SmtpPanel({
-  smtpHost,
-  smtpPort,
-  smtpUser,
-  smtpPass,
-  smtpFrom,
-  smtpHasPassword,
-  smtpSource,
+function SmtpStatusBadge({ source }: { source: SmtpSource }) {
+  if (source === 'none') return null;
+  const fromDatabase = source === 'database';
+  return (
+    <span
+      className={cn(
+        'rounded-full px-2 py-0.5 text-[10px] font-medium',
+        fromDatabase ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+      )}
+      data-testid="preferences-smtp-status"
+    >
+      {fromDatabase ? 'Configured' : 'Env vars'}
+    </span>
+  );
+}
+
+function SmtpField({
+  id,
+  label,
+  value,
+  onChange,
+  placeholder,
+  testId,
+  type,
+}: {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder: string;
+  testId: string;
+  type?: string;
+}) {
+  return (
+    <div>
+      <label htmlFor={id} className="text-muted-foreground mb-1 block text-xs">
+        {label}
+      </label>
+      <Input
+        id={id}
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="text-sm"
+        data-testid={testId}
+      />
+    </div>
+  );
+}
+
+function SmtpActions({
+  canSave,
+  canTest,
   smtpSaving,
   smtpTesting,
-  setSmtpHost,
-  setSmtpPort,
-  setSmtpUser,
-  setSmtpPass,
-  setSmtpFrom,
   handleSaveSmtp,
   handleTestSmtp,
-}: SmtpPanelProps) {
+}: {
+  canSave: boolean;
+  canTest: boolean;
+  smtpSaving: boolean;
+  smtpTesting: boolean;
+  handleSaveSmtp: () => void;
+  handleTestSmtp: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2 pt-1">
+      <Button
+        size="sm"
+        onClick={handleSaveSmtp}
+        disabled={!canSave}
+        data-testid="preferences-smtp-save"
+      >
+        <Mail className="icon-sm mr-1.5" />
+        {smtpSaving ? 'Saving...' : 'Save SMTP'}
+      </Button>
+      <Button
+        size="sm"
+        variant="outline"
+        onClick={handleTestSmtp}
+        disabled={!canTest}
+        data-testid="preferences-smtp-test"
+      >
+        <Send className="icon-sm mr-1.5" />
+        {smtpTesting ? 'Sending...' : 'Send Test Email'}
+      </Button>
+    </div>
+  );
+}
+
+function SmtpPanel(props: SmtpPanelProps) {
+  const { smtpHost, smtpPort, smtpUser, smtpPass, smtpFrom, smtpHasPassword, smtpSource } = props;
+  const { smtpSaving, smtpTesting, setSmtpHost, setSmtpPort, setSmtpUser, setSmtpPass } = props;
+  const canSave = !!smtpHost && !!smtpUser && !smtpSaving;
+  const canTest = smtpSource !== 'none' && !smtpTesting;
+  const passwordPlaceholder = smtpHasPassword
+    ? 'Password saved (enter new to replace)'
+    : 'App password or SMTP password';
+
   return (
     <>
       <div className="flex items-center gap-2">
-        {smtpSource !== 'none' && (
-          <span
-            className={cn(
-              'rounded-full px-2 py-0.5 text-[10px] font-medium',
-              smtpSource === 'database'
-                ? 'bg-primary/10 text-primary'
-                : 'bg-muted text-muted-foreground',
-            )}
-            data-testid="preferences-smtp-status"
-          >
-            {smtpSource === 'database' ? 'Configured' : 'Env vars'}
-          </span>
-        )}
+        <SmtpStatusBadge source={smtpSource} />
       </div>
       <p className="text-muted-foreground px-1 pb-3 text-sm">
         Used for sending team invitation emails. Set via env vars (SMTP_HOST, SMTP_USER, SMTP_PASS)
@@ -947,113 +482,56 @@ function SmtpPanel({
       <div className="settings-card">
         <div className="space-y-3 px-4 py-3.5">
           <div className="grid grid-cols-[1fr_80px] gap-2">
-            <div>
-              <label
-                htmlFor="preferences-smtp-host"
-                className="text-muted-foreground mb-1 block text-xs"
-              >
-                Host
-              </label>
-              <Input
-                id="preferences-smtp-host"
-                value={smtpHost}
-                onChange={(e) => setSmtpHost(e.target.value)}
-                placeholder="smtp.gmail.com"
-                className="text-sm"
-                data-testid="preferences-smtp-host"
-              />
-            </div>
-            <div>
-              <label
-                htmlFor="preferences-smtp-port"
-                className="text-muted-foreground mb-1 block text-xs"
-              >
-                Port
-              </label>
-              <Input
-                id="preferences-smtp-port"
-                value={smtpPort}
-                onChange={(e) => setSmtpPort(e.target.value)}
-                placeholder="587"
-                className="text-sm"
-                data-testid="preferences-smtp-port"
-              />
-            </div>
-          </div>
-          <div>
-            <label
-              htmlFor="preferences-smtp-user"
-              className="text-muted-foreground mb-1 block text-xs"
-            >
-              Username
-            </label>
-            <Input
-              id="preferences-smtp-user"
-              value={smtpUser}
-              onChange={(e) => setSmtpUser(e.target.value)}
-              placeholder="you@example.com"
-              className="text-sm"
-              data-testid="preferences-smtp-user"
+            <SmtpField
+              id="preferences-smtp-host"
+              label="Host"
+              value={smtpHost}
+              onChange={setSmtpHost}
+              placeholder="smtp.gmail.com"
+              testId="preferences-smtp-host"
+            />
+            <SmtpField
+              id="preferences-smtp-port"
+              label="Port"
+              value={smtpPort}
+              onChange={setSmtpPort}
+              placeholder="587"
+              testId="preferences-smtp-port"
             />
           </div>
-          <div>
-            <label
-              htmlFor="preferences-smtp-password"
-              className="text-muted-foreground mb-1 block text-xs"
-            >
-              Password
-            </label>
-            <Input
-              id="preferences-smtp-password"
-              type="password"
-              value={smtpPass}
-              onChange={(e) => setSmtpPass(e.target.value)}
-              placeholder={
-                smtpHasPassword
-                  ? 'Password saved (enter new to replace)'
-                  : 'App password or SMTP password'
-              }
-              className="text-sm"
-              data-testid="preferences-smtp-pass"
-            />
-          </div>
-          <div>
-            <label
-              htmlFor="preferences-smtp-from"
-              className="text-muted-foreground mb-1 block text-xs"
-            >
-              From address
-            </label>
-            <Input
-              id="preferences-smtp-from"
-              value={smtpFrom}
-              onChange={(e) => setSmtpFrom(e.target.value)}
-              placeholder="noreply@example.com"
-              className="text-sm"
-              data-testid="preferences-smtp-from"
-            />
-          </div>
-          <div className="flex items-center gap-2 pt-1">
-            <Button
-              size="sm"
-              onClick={handleSaveSmtp}
-              disabled={!smtpHost || !smtpUser || smtpSaving}
-              data-testid="preferences-smtp-save"
-            >
-              <Mail className="icon-sm mr-1.5" />
-              {smtpSaving ? 'Saving...' : 'Save SMTP'}
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleTestSmtp}
-              disabled={smtpSource === 'none' || smtpTesting}
-              data-testid="preferences-smtp-test"
-            >
-              <Send className="icon-sm mr-1.5" />
-              {smtpTesting ? 'Sending...' : 'Send Test Email'}
-            </Button>
-          </div>
+          <SmtpField
+            id="preferences-smtp-user"
+            label="Username"
+            value={smtpUser}
+            onChange={setSmtpUser}
+            placeholder="you@example.com"
+            testId="preferences-smtp-user"
+          />
+          <SmtpField
+            id="preferences-smtp-password"
+            type="password"
+            label="Password"
+            value={smtpPass}
+            onChange={setSmtpPass}
+            placeholder={passwordPlaceholder}
+            testId="preferences-smtp-pass"
+          />
+          <SmtpField
+            id="preferences-smtp-from"
+            label="From address"
+            value={smtpFrom}
+            onChange={props.setSmtpFrom}
+            placeholder="noreply@example.com"
+            testId="preferences-smtp-from"
+          />
+          <SmtpActions
+            canSave={canSave}
+            canTest={canTest}
+            smtpSaving={smtpSaving}
+            smtpTesting={smtpTesting}
+            handleSaveSmtp={props.handleSaveSmtp}
+            handleTestSmtp={props.handleTestSmtp}
+          />
         </div>
       </div>
     </>

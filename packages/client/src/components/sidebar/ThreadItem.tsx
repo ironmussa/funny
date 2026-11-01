@@ -6,27 +6,15 @@ import {
   FolderOpenDot,
   Terminal,
   Square,
-  Bot,
   Pencil,
   GitFork,
   GitBranch,
-  Loader2,
-  NotebookPen,
 } from 'lucide-react';
 import { useState, memo, useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
-import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -34,26 +22,25 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { HighlightText } from '@/components/ui/highlight-text';
 import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
-import { Input } from '@/components/ui/input';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { openThreadTerminal } from '@/lib/open-terminal-tab';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { timeAgo } from '@/lib/thread-utils';
-import {
-  canConvertToWorktree,
-  canShowPowerline,
-  getThreadRoute,
-  isScratch,
-} from '@/lib/thread-variant';
+import { canConvertToWorktree, getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useThreadStore } from '@/stores/thread-store';
+
+import {
+  CreateBranchDialog,
+  RenameThreadDialog,
+  useCreateBranchDialog,
+  useRenameThreadDialog,
+} from './ThreadItemDialogs';
+import { ThreadItemMetaRow, ThreadItemTitleRow } from './ThreadItemRows';
 
 export interface ThreadItemProps {
   thread: Thread;
@@ -79,24 +66,28 @@ export interface ThreadItemProps {
 // Custom comparator: only re-render when visually-relevant props change.
 // Uses shared `threadsVisuallyEqual` for the thread object comparison,
 // preventing re-renders from high-churn fields (cost, sessionId, etc.).
+const THREAD_ITEM_COMPARED_PROPS = [
+  'isSelected',
+  'onSelect',
+  'onRename',
+  'onArchive',
+  'onPin',
+  'onDelete',
+  'subtitle',
+  'projectColor',
+  'timeValue',
+  'search',
+  'contentSnippet',
+  'titleBadge',
+  'metadataBadge',
+  'hideActions',
+  'projectPath',
+  'gitStatus',
+  'href',
+] as const satisfies readonly (keyof ThreadItemProps)[];
+
 function threadItemAreEqual(prev: ThreadItemProps, next: ThreadItemProps): boolean {
-  if (prev.isSelected !== next.isSelected) return false;
-  if (prev.onSelect !== next.onSelect) return false;
-  if (prev.onRename !== next.onRename) return false;
-  if (prev.onArchive !== next.onArchive) return false;
-  if (prev.onPin !== next.onPin) return false;
-  if (prev.onDelete !== next.onDelete) return false;
-  if (prev.subtitle !== next.subtitle) return false;
-  if (prev.projectColor !== next.projectColor) return false;
-  if (prev.timeValue !== next.timeValue) return false;
-  if (prev.search !== next.search) return false;
-  if (prev.contentSnippet !== next.contentSnippet) return false;
-  if (prev.titleBadge !== next.titleBadge) return false;
-  if (prev.metadataBadge !== next.metadataBadge) return false;
-  if (prev.hideActions !== next.hideActions) return false;
-  if (prev.projectPath !== next.projectPath) return false;
-  if (prev.gitStatus !== next.gitStatus) return false;
-  if (prev.href !== next.href) return false;
+  if (THREAD_ITEM_COMPARED_PROPS.some((key) => prev[key] !== next[key])) return false;
   return threadsVisuallyEqual(prev.thread, next.thread);
 }
 
@@ -262,6 +253,136 @@ function ThreadItemActions({
   );
 }
 
+const NEW_WINDOW_FEATURES = 'noopener,noreferrer,popup=yes,width=1280,height=900';
+
+function openThreadInNewWindow(e: React.MouseEvent, href: string) {
+  e.preventDefault();
+  e.stopPropagation();
+  window.open(href, '_blank', NEW_WINDOW_FEATURES);
+}
+
+/** Pointer / keyboard handlers for the row's selection button. */
+function useThreadRowHandlers(
+  threadId: string,
+  isSelected: boolean,
+  threadHref: string,
+  onSelect: () => void,
+) {
+  const prefetch = () => {
+    if (!isSelected) useThreadStore.getState().prefetchThread(threadId);
+  };
+  return {
+    onPointerEnter: prefetch,
+    onFocus: prefetch,
+    onClick: (e: React.MouseEvent) => {
+      if (e.ctrlKey || e.metaKey) {
+        openThreadInNewWindow(e, threadHref);
+        return;
+      }
+      onSelect();
+    },
+    onKeyDown: (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onSelect();
+      }
+    },
+    // Middle-click also opens in a new window for consistency
+    onAuxClick: (e: React.MouseEvent) => {
+      if (e.button === 1) openThreadInNewWindow(e, threadHref);
+    },
+  };
+}
+
+/**
+ * Keep the last known git status so the widget doesn't flicker away during
+ * transient undefined gaps (e.g. thread selection race conditions).
+ */
+function useStickyGitStatus(gitStatus?: GitStatusInfo) {
+  const lastGitStatusRef = useRef(gitStatus);
+  const effectiveGitStatus = gitStatus ?? lastGitStatusRef.current;
+  useLayoutEffect(() => {
+    if (gitStatus) lastGitStatusRef.current = gitStatus;
+  }, [gitStatus]);
+  return effectiveGitStatus;
+}
+
+interface ThreadItemTrailingProps {
+  thread: Thread;
+  displayTime: string;
+  hideActions: boolean;
+  onRename?: () => void;
+  onCreateBranch: () => void;
+  onArchive?: () => void;
+  onDelete?: () => void;
+}
+
+function ThreadItemTrailing({
+  hideActions,
+  displayTime,
+  thread,
+  ...actions
+}: ThreadItemTrailingProps) {
+  // Thread status (used for busy checks + dropdown gating)
+  const isRunning = thread.status === 'running';
+  const isBusy = isRunning || thread.status === 'setting_up';
+  return (
+    <div className="flex shrink-0 items-center gap-1.5 py-1 pr-1.5 pl-2">
+      {hideActions ? (
+        <span className="text-muted-foreground h-4 min-w-10 text-right text-xs leading-4">
+          {displayTime}
+        </span>
+      ) : (
+        <ThreadItemActions
+          thread={thread}
+          displayTime={displayTime}
+          isBusy={isBusy}
+          isRunning={isRunning}
+          {...actions}
+        />
+      )}
+    </div>
+  );
+}
+
+/** All of a row's hooks + derived values, kept out of the render body. */
+function useThreadItemState({
+  thread,
+  isSelected,
+  onSelect,
+  timeValue,
+  gitStatus,
+  href,
+  onRename,
+  onPin,
+}: Pick<
+  ThreadItemProps,
+  'thread' | 'isSelected' | 'onSelect' | 'timeValue' | 'gitStatus' | 'href' | 'onRename' | 'onPin'
+>) {
+  const { t } = useTranslation();
+  const now = useMinuteTick();
+  const renameDialog = useRenameThreadDialog(thread.title, onRename);
+  const createBranchDialog = useCreateBranchDialog(thread.id, thread.projectId);
+  const effectiveGitStatus = useStickyGitStatus(gitStatus);
+
+  const displayTime = timeValue ?? timeAgo(thread.createdAt, t, now);
+  const threadHref = href ?? buildPath(getThreadRoute(thread));
+  const rowHandlers = useThreadRowHandlers(thread.id, isSelected, threadHref, onSelect);
+
+  return {
+    displayTime,
+    effectiveGitStatus,
+    rowHandlers,
+    rowClassName: isSelected
+      ? 'bg-accent text-foreground'
+      : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
+    handlePin: onPin ? () => onPin() : undefined,
+    handleRename: onRename ? renameDialog.openDialog : undefined,
+    renameDialog,
+    createBranchDialog,
+  };
+}
+
 export const ThreadItem = memo(function ThreadItem({
   thread,
   projectPath,
@@ -282,367 +403,66 @@ export const ThreadItem = memo(function ThreadItem({
   gitStatus,
   href,
 }: ThreadItemProps) {
-  const { t } = useTranslation();
-  const now = useMinuteTick();
-
-  // Rename dialog state
-  const [isRenameOpen, setIsRenameOpen] = useState(false);
-  const [renameValue, setRenameValue] = useState('');
-
-  // Agent template lookup for badge display
-  const agentTemplate = useAgentTemplateStore((s) =>
-    thread.agentTemplateId ? s.templates.find((t) => t.id === thread.agentTemplateId) : undefined,
-  );
-
-  // Create Branch dialog state
-  const [isCreateBranchOpen, setIsCreateBranchOpen] = useState(false);
-  const [branchName, setBranchName] = useState('');
-  const [createBranchLoading, setCreateBranchLoading] = useState(false);
-
-  const openRenameDialog = useCallback(() => {
-    setRenameValue(thread.title);
-    setIsRenameOpen(true);
-  }, [thread.title]);
-
-  const commitRename = useCallback(() => {
-    const trimmed = renameValue.trim();
-    if (trimmed && trimmed !== thread.title && onRename) {
-      onRename(trimmed);
-    }
-    setIsRenameOpen(false);
-  }, [renameValue, thread.title, onRename]);
-
-  const commitCreateBranch = useCallback(async () => {
-    const name = branchName
-      .trim()
-      .replace(/\s+/g, '-')
-      .replace(/[^a-zA-Z0-9\-_/.]/g, '');
-    if (!name || !thread.projectId) return;
-    setCreateBranchLoading(true);
-    try {
-      const result = await api.checkout(thread.projectId, name, 'carry', true, thread.id);
-      if (result.isErr()) {
-        toastError(result.error);
-      } else {
-        setIsCreateBranchOpen(false);
-        setBranchName('');
-      }
-    } finally {
-      setCreateBranchLoading(false);
-    }
-  }, [branchName, thread.projectId, thread.id]);
-
-  const openCreateBranchDialog = useCallback(() => setIsCreateBranchOpen(true), []);
-
-  // Thread status (used for busy checks + dropdown gating)
-  const isRunning = thread.status === 'running';
-  const isSettingUp = thread.status === 'setting_up';
-  const isBusy = isRunning || isSettingUp;
-  const displayTime = timeValue ?? timeAgo(thread.createdAt, t, now);
-  const threadHref = href ?? buildPath(getThreadRoute(thread));
-
-  // Keep the last known git status so the widget doesn't flicker away
-  // during transient undefined gaps (e.g. thread selection race conditions).
-  const lastGitStatusRef = useRef(gitStatus);
-  const effectiveGitStatus = gitStatus ?? lastGitStatusRef.current;
-  useLayoutEffect(() => {
-    if (gitStatus) lastGitStatusRef.current = gitStatus;
-  }, [gitStatus]);
-
-  // Whether to show the second row (has project subtitle or git diff stats)
-  const hasDiffStats =
-    !!effectiveGitStatus &&
-    effectiveGitStatus.state !== 'clean' &&
-    (effectiveGitStatus.linesAdded > 0 ||
-      effectiveGitStatus.linesDeleted > 0 ||
-      effectiveGitStatus.dirtyFileCount > 0);
-  const hasPR = !!effectiveGitStatus?.prNumber;
-  const snippetText = contentSnippet ?? thread.lastAssistantMessage;
-  const hasSnippet = !!snippetText;
-  // A newly-created thread is returned as `pending` before the runner emits
-  // its first `running` status. Treat it as launching so it does not briefly
-  // look like an idle backlog item ("Ready to Launch").
-  const showLaunching = (isBusy || thread.status === 'pending') && !hasSnippet;
-  const isBacklog = !hasSnippet && !isBusy && (!thread.stage || thread.stage === 'backlog');
-  // Scratch threads have no project / branch / worktree — never show the
-  // powerline even if older DB rows still carry a stale `branch` value.
-  // Instead they get a scratch-pad icon as the row's identifier.
-  const scratch = isScratch(thread);
-  const hasPowerline =
-    canShowPowerline(thread) && (!!subtitle || !!thread.baseBranch || !!thread.branch);
-  const hasMetadataRow = hasDiffStats || hasPR || hasPowerline || scratch || !!metadataBadge;
-  const hasSnippetRow = hasSnippet || showLaunching || isBacklog;
+  const {
+    displayTime,
+    effectiveGitStatus,
+    rowHandlers,
+    rowClassName,
+    handlePin,
+    handleRename,
+    renameDialog,
+    createBranchDialog,
+  } = useThreadItemState({
+    thread,
+    isSelected,
+    onSelect,
+    timeValue,
+    gitStatus,
+    href,
+    onRename,
+    onPin,
+  });
 
   return (
-    <div
-      className={cn(
-        'group/thread w-full flex items-stretch rounded-md min-w-0',
-        isSelected
-          ? 'bg-accent text-foreground'
-          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
-      )}
-    >
+    <div className={cn('group/thread w-full flex items-stretch rounded-md min-w-0', rowClassName)}>
       {/* Keep the pin beside the selection button so interactive elements are never nested. */}
       <div className="shrink-0 py-2 pl-2">
-        <ThreadStatusPin
-          thread={thread}
-          onPin={onPin ? () => onPin() : undefined}
-          hoverGroup="thread"
-          showStatusTooltip
-        />
+        <ThreadStatusPin thread={thread} onPin={handlePin} hoverGroup="thread" showStatusTooltip />
       </div>
 
       <button
         type="button"
         data-testid={`thread-item-${thread.id}`}
-        onPointerEnter={() => {
-          if (!isSelected) useThreadStore.getState().prefetchThread(thread.id);
-        }}
-        onFocus={() => {
-          if (!isSelected) useThreadStore.getState().prefetchThread(thread.id);
-        }}
-        onClick={(e) => {
-          if (e.ctrlKey || e.metaKey) {
-            e.preventDefault();
-            e.stopPropagation();
-            window.open(
-              threadHref,
-              '_blank',
-              'noopener,noreferrer,popup=yes,width=1280,height=900',
-            );
-            return;
-          }
-          onSelect();
-        }}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            onSelect();
-          }
-        }}
-        onAuxClick={(e) => {
-          // Middle-click also opens in a new window for consistency
-          if (e.button === 1) {
-            e.preventDefault();
-            e.stopPropagation();
-            window.open(
-              threadHref,
-              '_blank',
-              'noopener,noreferrer,popup=yes,width=1280,height=900',
-            );
-          }
-        }}
+        {...rowHandlers}
         className="focus-visible:ring-ring flex min-w-0 flex-1 cursor-pointer flex-col gap-1 overflow-hidden bg-transparent py-1.5 pl-1.5 text-left focus:outline-hidden focus-visible:ring-1"
       >
         {/* Row 1: Title */}
-        <div className="flex min-w-0 items-center gap-1.5">
-          <ThreadTitle
-            title={thread.title}
-            search={search}
-            density="compact"
-            className="text-sm leading-tight"
-            badgeTestId={`thread-item-attachments-${thread.id}`}
-          />
-          {titleBadge}
-          {/* External creator icon */}
-          {thread.createdBy && thread.createdBy !== 'user' && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Bot className="icon-xs text-muted-foreground shrink-0" />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {t('thread.createdBy', { creator: thread.createdBy })}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {/* Remote runtime badge */}
-          {thread.runtime === 'remote' && (
-            <span className="shrink-0 rounded bg-violet-500/15 px-1 py-0.5 text-[10px] leading-none font-medium text-violet-500">
-              Remote
-            </span>
-          )}
-          {/* Agent template badge */}
-          {agentTemplate && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span
-                  className="flex shrink-0 items-center gap-0.5 rounded px-1 py-0.5 text-[10px] leading-none font-medium"
-                  style={{
-                    backgroundColor: agentTemplate.color
-                      ? `${agentTemplate.color}22`
-                      : 'hsl(var(--muted))',
-                    color: agentTemplate.color ?? 'hsl(var(--muted-foreground))',
-                  }}
-                  data-testid={`thread-template-badge-${thread.id}`}
-                >
-                  {agentTemplate.color && (
-                    <span
-                      className="inline-block size-1.5 rounded-full"
-                      style={{ backgroundColor: agentTemplate.color }}
-                    />
-                  )}
-                  {agentTemplate.name}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {agentTemplate.description || agentTemplate.name}
-              </TooltipContent>
-            </Tooltip>
-          )}
-        </div>
+        <ThreadItemTitleRow thread={thread} search={search} titleBadge={titleBadge} />
 
-        {/* Row 2: Powerline (project → branch) + Git status + Snippet + Time */}
-        {(hasMetadataRow || hasSnippetRow) && (
-          <div className="flex min-h-[22px] min-w-0 flex-col items-stretch gap-1.5 sm:flex-row sm:items-center">
-            {(hasPowerline || hasPR) && (
-              <ThreadPowerline
-                thread={thread}
-                projectName={subtitle}
-                projectColor={projectColor}
-                projectTooltip={projectPath}
-                gitStatus={effectiveGitStatus}
-                diffStatsSize="xs"
-                prBadgeSize="compact"
-                prBadgeTestId={`thread-pr-badge-${thread.id}`}
-                data-testid={`thread-powerline-${thread.id}`}
-              />
-            )}
-            {scratch && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <span
-                    data-testid={`thread-scratch-badge-${thread.id}`}
-                    className="bg-muted/60 text-muted-foreground flex shrink-0 items-center rounded p-1 leading-none"
-                  >
-                    <NotebookPen className="icon-xs" />
-                  </span>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {t('thread.scratchTooltip', {
-                    defaultValue: 'Scratch thread — no project, no git',
-                  })}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {metadataBadge}
-            {hasSnippet && contentSnippet && search ? (
-              <HighlightText
-                text={snippetText!}
-                query={search}
-                className="text-muted-foreground/50 min-w-0 flex-1 truncate text-xs"
-              />
-            ) : hasSnippet ? (
-              <span className="text-muted-foreground/50 min-w-0 flex-1 truncate text-xs">
-                {snippetText}
-              </span>
-            ) : showLaunching ? (
-              <span className="text-muted-foreground/50 min-w-0 flex-1 truncate text-xs italic">
-                {t('thread.launching', 'Launching...')}
-              </span>
-            ) : isBacklog ? (
-              <span className="text-muted-foreground/50 min-w-0 flex-1 truncate text-xs italic">
-                {t('thread.readyToLaunch', 'Ready to Launch')}
-              </span>
-            ) : null}
-          </div>
-        )}
+        {/* Row 2: Powerline (project → branch) + Git status + Snippet */}
+        <ThreadItemMetaRow
+          thread={thread}
+          subtitle={subtitle}
+          projectColor={projectColor}
+          projectPath={projectPath}
+          gitStatus={effectiveGitStatus}
+          metadataBadge={metadataBadge}
+          contentSnippet={contentSnippet}
+          search={search}
+        />
       </button>
-      <div className="flex shrink-0 items-center gap-1.5 py-1 pr-1.5 pl-2">
-        {hideActions ? (
-          <span className="text-muted-foreground h-4 min-w-10 text-right text-xs leading-4">
-            {displayTime}
-          </span>
-        ) : (
-          <ThreadItemActions
-            thread={thread}
-            displayTime={displayTime}
-            isBusy={isBusy}
-            isRunning={isRunning}
-            onRename={onRename ? openRenameDialog : undefined}
-            onCreateBranch={openCreateBranchDialog}
-            onArchive={onArchive}
-            onDelete={onDelete}
-          />
-        )}
-      </div>
+      <ThreadItemTrailing
+        thread={thread}
+        displayTime={displayTime}
+        hideActions={hideActions}
+        onRename={handleRename}
+        onCreateBranch={createBranchDialog.openDialog}
+        onArchive={onArchive}
+        onDelete={onDelete}
+      />
 
-      {/* Rename dialog */}
-      <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
-        <DialogContent className="sm:max-w-md" data-testid={`thread-rename-dialog-${thread.id}`}>
-          <DialogHeader>
-            <DialogTitle>{t('sidebar.rename')}</DialogTitle>
-          </DialogHeader>
-          <Input
-            data-testid={`thread-rename-input-${thread.id}`}
-            value={renameValue}
-            onChange={(e) => setRenameValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.nativeEvent.isComposing) commitRename();
-            }}
-            autoFocus
-          />
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setIsRenameOpen(false)}
-              data-testid="thread-rename-cancel"
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={commitRename}
-              disabled={!renameValue.trim() || renameValue.trim() === thread.title}
-              data-testid="thread-rename-confirm"
-            >
-              {t('common.save')}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Create Branch dialog */}
-      <Dialog open={isCreateBranchOpen} onOpenChange={setIsCreateBranchOpen}>
-        <DialogContent
-          className="sm:max-w-md"
-          data-testid={`thread-create-branch-dialog-${thread.id}`}
-        >
-          <DialogHeader>
-            <DialogTitle>{t('dialog.createBranchTitle')}</DialogTitle>
-          </DialogHeader>
-          <Input
-            data-testid={`thread-create-branch-input-${thread.id}`}
-            placeholder={t('dialog.createBranchPlaceholder')}
-            value={branchName}
-            onChange={(e) => setBranchName(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.nativeEvent.isComposing && branchName.trim()) {
-                commitCreateBranch();
-              }
-            }}
-            autoFocus
-          />
-          <DialogFooter>
-            <Button
-              variant="ghost"
-              onClick={() => setIsCreateBranchOpen(false)}
-              data-testid={`thread-create-branch-cancel-${thread.id}`}
-            >
-              {t('common.cancel')}
-            </Button>
-            <Button
-              onClick={commitCreateBranch}
-              disabled={!branchName.trim() || createBranchLoading}
-              data-testid={`thread-create-branch-confirm-${thread.id}`}
-            >
-              {createBranchLoading ? (
-                <Loader2 className="icon-sm animate-spin" />
-              ) : (
-                t('common.create', 'Create')
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <RenameThreadDialog thread={thread} dialog={renameDialog} />
+      <CreateBranchDialog thread={thread} dialog={createBranchDialog} />
     </div>
   );
 }, threadItemAreEqual);

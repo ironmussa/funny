@@ -12,6 +12,7 @@ import mcpRoutes from '../routes/mcp.js';
 import { pipelineRuntimeRoutes } from '../routes/pipelines.js';
 import pluginRoutes from '../routes/plugins.js';
 import { projectRoutes } from '../routes/projects.js';
+import { sandboxCheckoutRoutes } from '../routes/sandbox-checkout.js';
 import { schedulerRuntimeRoutes } from '../routes/scheduler.js';
 import skillsRoutes from '../routes/skills.js';
 import { testRoutes } from '../routes/tests.js';
@@ -33,6 +34,7 @@ export function registerRoutes(app: Hono<HonoEnv>): void {
   app.use('/api/worktrees/*', mutationRateLimit());
 
   app.route('/api/projects', projectRoutes);
+  app.route('/api/threads', sandboxCheckoutRoutes);
   app.route('/api/threads', threadRoutes);
   app.route('/api/git', gitRoutes);
   app.route('/api/browse', browseRoutes);

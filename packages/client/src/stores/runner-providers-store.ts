@@ -3,9 +3,9 @@ import { create } from 'zustand';
 import { systemApi, type AdvertisedProvider } from '@/lib/api/system';
 import { createClientLogger } from '@/lib/client-logger';
 
-const log = createClientLogger('runner-providers-store');
+import { shouldSkipFetch } from './stale-fetch';
 
-const STALE_MS = 60_000;
+const log = createClientLogger('runner-providers-store');
 
 interface RunnerProvidersState {
   /** External providers advertised by the user's runner (provider-manifest-loader §3). */
@@ -41,9 +41,7 @@ export const useRunnerProvidersStore = create<RunnerProvidersState>((set, get) =
   loading: false,
 
   fetch: async (force = false) => {
-    const s = get();
-    if (s.loading) return;
-    if (!force && s.loadedAt && Date.now() - s.loadedAt < STALE_MS) return;
+    if (shouldSkipFetch(get(), force)) return;
 
     set({ loading: true });
     const res = await systemApi.getProviders();

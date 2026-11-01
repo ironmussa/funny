@@ -11,19 +11,16 @@ import {
 import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { useState, useRef, useEffect, useMemo, useCallback, useReducer, memo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
 import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
 import { reduceQuestionTab } from '@/components/tool-cards/question-tab-state';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useDictation } from '@/hooks/use-dictation';
-import { usePushToTalk } from '@/hooks/use-push-to-talk';
+import { useEditorDictation } from '@/hooks/use-editor-dictation';
 import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
-import { useProfileStore } from '@/stores/profile-store';
 
 import {
   getQuestions,
@@ -154,46 +151,8 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   const { provider: threadProvider, model: threadModel } = useCurrentThreadProviderModel();
 
   // ── Dictation (real-time voice-to-text via AssemblyAI) ──
-  const hasAssemblyaiKey = useProfileStore((s) => s.profile?.hasAssemblyaiKey ?? false);
-  const partialTextRef = useRef('');
-
-  const handlePartialTranscript = useCallback((text: string) => {
-    partialTextRef.current = text;
-    if (text) otherEditorRef.current?.setDictationPreview(text);
-  }, []);
-
-  const handleFinalTranscript = useCallback((text: string) => {
-    if (text) otherEditorRef.current?.commitDictation(text);
-    partialTextRef.current = '';
-  }, []);
-
-  const handleDictationError = useCallback(
-    (message: string) => {
-      toast.error(message || t('prompt.micPermissionDenied', 'Microphone access denied'));
-    },
-    [t],
-  );
-
-  const {
-    isRecording,
-    isConnecting: isTranscribing,
-    start: startRecording,
-    toggle: toggleRecording,
-    stop: stopRecording,
-  } = useDictation({
-    onPartial: handlePartialTranscript,
-    onFinal: handleFinalTranscript,
-    onError: handleDictationError,
-  });
-
-  usePushToTalk({
-    enabled: hasAssemblyaiKey,
-    containerRef: otherEditorContainerRef,
-    isRecording,
-    isTranscribing,
-    startRecording,
-    stopRecording,
-  });
+  const { hasAssemblyaiKey, isRecording, isTranscribing, toggleRecording, stopRecording } =
+    useEditorDictation(otherEditorRef, otherEditorContainerRef);
 
   // ── Skills for slash commands (single cache; lazy — these cards mount in
   // bulk and most are never typed into, so only fetch on the first `/`). ──

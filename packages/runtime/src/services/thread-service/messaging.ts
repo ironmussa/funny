@@ -40,6 +40,7 @@ import {
 } from '../agent-runner-control.js';
 import { cleanupExternalThread } from '../ingest-mapper.js';
 import { listPermissionRules } from '../permission-rules-client.js';
+import { invalidateThreadCache } from '../remote-thread-data-client.js';
 import { getServices } from '../service-registry.js';
 import { resolveThreadCwd } from '../thread-context.js';
 import * as tm from '../thread-manager.js';
@@ -118,6 +119,10 @@ type SendThread = NonNullable<Awaited<ReturnType<typeof tm.getThread>>>;
 type SendProject = Awaited<ReturnType<ReturnType<typeof getServices>['projects']['getProject']>>;
 
 async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageResult> {
+  // Read the thread fresh: the server may have just changed it (a sandbox thread
+  // leaves `setting_up` right before its first message), and a stale copy would
+  // make startAgent write the old status back.
+  invalidateThreadCache(params.threadId);
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 

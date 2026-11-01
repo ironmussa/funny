@@ -1,0 +1,61 @@
+import { request } from './_core';
+
+/** A sandbox size a provider offers. */
+export interface SandboxSize {
+  id: string;
+  vcpu: number;
+  memoryGb: number;
+  default?: boolean;
+}
+
+export interface SandboxProviderInfo {
+  id: string;
+  displayName: string;
+  capabilities: { sizes: SandboxSize[] };
+}
+
+/** A user's stored provider connection (the credential is never returned). */
+export interface InfraConnection {
+  id: string;
+  provider: string;
+  label: string;
+  accountLabel: string | null;
+  createdAt: string;
+  lastValidatedAt: string | null;
+}
+
+export type ThreadSandboxState =
+  | 'provisioning'
+  | 'installing'
+  | 'connecting'
+  | 'bootstrapping'
+  | 'running'
+  | 'stopping'
+  | 'stopped'
+  | 'failed'
+  | 'lost';
+
+export interface ThreadSandboxInfo {
+  threadId: string;
+  provider: string;
+  state: ThreadSandboxState;
+  error: string | null;
+  updatedAt: string;
+}
+
+/** Sandbox provider connections and thread sandboxes (change thread-sandboxes). */
+export const infraApi = {
+  listSandboxProviders: () => request<{ providers: SandboxProviderInfo[] }>('/infra/providers'),
+  listInfraConnections: () => request<{ connections: InfraConnection[] }>('/infra/connections'),
+  addInfraConnection: (data: { provider: string; label: string; credential: string }) =>
+    request<InfraConnection>('/infra/connections', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  testInfraConnection: (id: string) =>
+    request<unknown>(`/infra/connections/${id}/test`, { method: 'POST' }),
+  deleteInfraConnection: (id: string) =>
+    request<{ ok: boolean }>(`/infra/connections/${id}`, { method: 'DELETE' }),
+  getThreadSandbox: (threadId: string) =>
+    request<ThreadSandboxInfo>(`/infra/threads/${threadId}/sandbox`),
+};

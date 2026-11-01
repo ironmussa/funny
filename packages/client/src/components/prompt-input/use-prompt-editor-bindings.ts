@@ -89,7 +89,7 @@ interface UseSelectorHandlersParams {
   editorRef: React.RefObject<PromptEditorHandle | null>;
   onUnifiedModelChange: (v: string) => void;
   onEffortChange?: (v: string) => void;
-  onRuntimeChange?: (v: 'local' | 'remote') => void;
+  onRuntimeChange?: (v: string) => void;
   mode: string;
   modes: { value: string }[];
   onModeChange: (v: string) => void;
@@ -108,10 +108,7 @@ export function useSelectorHandlers({
   const isMobile = useIsMobile();
   const handleUnifiedModelChange = useRefocusAfter(onUnifiedModelChange, editorRef, isMobile);
   const handleEffortChange = useRefocusAfter(onEffortChange, editorRef, isMobile);
-  const handleRuntimeChange = useCallback(
-    (v: string) => onRuntimeChange?.(v as 'local' | 'remote'),
-    [onRuntimeChange],
-  );
+  const handleRuntimeChange = useCallback((v: string) => onRuntimeChange?.(v), [onRuntimeChange]);
   const handleCycleMode = useCallback(
     () => onModeChange(nextMode(modes, mode)),
     [modes, mode, onModeChange],

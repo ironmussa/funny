@@ -38,7 +38,10 @@ export interface CreateThreadCommand {
 }
 
 /** Why no runner of the actor could serve the target (mirrors the resolver's reasons). */
-export type RunnerUnavailableReason = 'project-runner-offline' | 'general-runner-offline';
+export type RunnerUnavailableReason =
+  | 'project-runner-offline'
+  | 'general-runner-offline'
+  | 'thread-sandbox-unavailable';
 
 export type RunnerResolution =
   | { readonly ok: true; readonly runnerId: RunnerId }

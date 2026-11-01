@@ -15,11 +15,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useExternalClaudeSessionsLoaded } from '@/hooks/use-external-claude-sessions';
 import { useVisibleGitStatus } from '@/hooks/use-git-status-scope';
+import { useGridThreadDrag } from '@/hooks/use-grid-thread-drag';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { api } from '@/lib/api';
-import { setDashedDragPreview } from '@/lib/drag-preview';
-import { isExternalClaudeShell } from '@/lib/thread-variant';
+import { canDeleteWhileBusy, isExternalClaudeShell } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -27,6 +27,20 @@ import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';
+
+/**
+ * External Claude shells must be dismissed on the runner before the row is
+ * deleted. Returns false (after toasting) when the dismissal failed.
+ */
+async function dismissExternalShellBeforeDelete(thread: Thread): Promise<boolean> {
+  if (!isExternalClaudeShell(thread) || !thread.sessionId) return true;
+  const result = await api.dismissExternalClaudeSession(thread.sessionId);
+  if (result.isErr()) {
+    toastError(result.error);
+    return false;
+  }
+  return true;
+}
 
 // ── Stable wrapper so ThreadItem callbacks don't break memo ──────────
 interface ProjectThreadItemProps {
@@ -44,41 +58,25 @@ interface ProjectThreadItemProps {
   onDeleteThread: (projectId: string, threadId: string, title: string) => void;
 }
 
-const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThreadItem({
+/** Stable per-row callbacks so ThreadItem's memo comparator holds. */
+function useProjectThreadHandlers({
   thread,
   projectId,
-  projectPath,
-  projectName: _projectName,
-  projectColor,
-  isSelected,
-  gitStatus,
   onSelectThread,
   onRenameThread,
   onArchiveThread,
   onPinThread,
   onDeleteThread,
-}) {
-  // Drag support: allow dragging threads into grid cells
-  const dragRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  useEffect(() => {
-    const el = dragRef.current;
-    if (!el) return;
-    return draggable({
-      element: el,
-      getInitialData: () => ({
-        type: 'grid-thread',
-        threadId: thread.id,
-        projectId,
-      }),
-      onGenerateDragPreview: ({ nativeSetDragImage }) =>
-        setDashedDragPreview({ nativeSetDragImage, source: el }),
-      onDragStart: () => setIsDragging(true),
-      onDrop: () => setIsDragging(false),
-    });
-  }, [thread.id, projectId]);
-
+}: Pick<
+  ProjectThreadItemProps,
+  | 'thread'
+  | 'projectId'
+  | 'onSelectThread'
+  | 'onRenameThread'
+  | 'onArchiveThread'
+  | 'onPinThread'
+  | 'onDeleteThread'
+>) {
   // External Claude shells are hydrated by the thread-data machine on load
   // (see thread-data-machine.ts) — selection just navigates.
   const handleSelect = useCallback(() => {
@@ -97,15 +95,40 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
     [onPinThread, projectId, thread.id, thread.pinned],
   );
   const handleDelete = useCallback(async () => {
-    if (isExternalClaudeShell(thread) && thread.sessionId) {
-      const result = await api.dismissExternalClaudeSession(thread.sessionId);
-      if (result.isErr()) {
-        toastError(result.error);
-        return;
-      }
-    }
+    if (!(await dismissExternalShellBeforeDelete(thread))) return;
     onDeleteThread(projectId, thread.id, thread.title);
   }, [onDeleteThread, projectId, thread]);
+
+  return { handleSelect, handleRename, handleArchive, handlePin, handleDelete };
+}
+
+const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThreadItem({
+  thread,
+  projectId,
+  projectPath,
+  projectName: _projectName,
+  projectColor,
+  isSelected,
+  gitStatus,
+  onSelectThread,
+  onRenameThread,
+  onArchiveThread,
+  onPinThread,
+  onDeleteThread,
+}) {
+  // Drag support: allow dragging threads into grid cells
+  const { dragRef, isDragging } = useGridThreadDrag(thread.id, projectId);
+
+  const { handleSelect, handleRename, handleArchive, handlePin, handleDelete } =
+    useProjectThreadHandlers({
+      thread,
+      projectId,
+      onSelectThread,
+      onRenameThread,
+      onArchiveThread,
+      onPinThread,
+      onDeleteThread,
+    });
 
   const isBusy = thread.status === 'running' || thread.status === 'setting_up';
 
@@ -121,7 +144,7 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
         onRename={handleRename}
         onArchive={isBusy ? undefined : handleArchive}
         onPin={handlePin}
-        onDelete={isBusy ? undefined : handleDelete}
+        onDelete={isBusy && !canDeleteWhileBusy(thread) ? undefined : handleDelete}
         gitStatus={gitStatus}
       />
     </div>
@@ -152,39 +175,41 @@ interface ProjectItemProps {
   onShowIssues: (projectId: string) => void;
 }
 
+const PROJECT_ITEM_COMPARED_PROPS = [
+  'threads',
+  'threadsLoaded',
+  'isExpanded',
+  'isSelected',
+  'onToggle',
+  'onSelectProject',
+  'onNewThread',
+  'onRenameProject',
+  'onDeleteProject',
+  'onCloseProject',
+  'onReopenProject',
+  'onSelectThread',
+  'onRenameThread',
+  'onArchiveThread',
+  'onPinThread',
+  'onDeleteThread',
+  'onShowAllThreads',
+  'onShowIssues',
+] as const satisfies readonly (keyof ProjectItemProps)[];
+
+/** Project fields the row renders (ignore sortOrder, createdAt changes). */
+const PROJECT_COMPARED_FIELDS = [
+  'id',
+  'name',
+  'path',
+  'color',
+  'isTeamProject',
+  'organizationName',
+  'needsSetup',
+] as const satisfies readonly (keyof Project)[];
+
 function projectItemAreEqual(prev: ProjectItemProps, next: ProjectItemProps): boolean {
-  if (prev.threads !== next.threads) return false;
-  if (prev.threadsLoaded !== next.threadsLoaded) return false;
-  if (prev.isExpanded !== next.isExpanded) return false;
-  if (prev.isSelected !== next.isSelected) return false;
-  if (prev.onToggle !== next.onToggle) return false;
-  if (prev.onSelectProject !== next.onSelectProject) return false;
-  if (prev.onNewThread !== next.onNewThread) return false;
-  if (prev.onRenameProject !== next.onRenameProject) return false;
-  if (prev.onDeleteProject !== next.onDeleteProject) return false;
-  if (prev.onCloseProject !== next.onCloseProject) return false;
-  if (prev.onReopenProject !== next.onReopenProject) return false;
-  if (prev.onSelectThread !== next.onSelectThread) return false;
-  if (prev.onRenameThread !== next.onRenameThread) return false;
-  if (prev.onArchiveThread !== next.onArchiveThread) return false;
-  if (prev.onPinThread !== next.onPinThread) return false;
-  if (prev.onDeleteThread !== next.onDeleteThread) return false;
-  if (prev.onShowAllThreads !== next.onShowAllThreads) return false;
-  if (prev.onShowIssues !== next.onShowIssues) return false;
-  // Compare project by relevant fields only (ignore sortOrder, createdAt changes)
-  const pp = prev.project;
-  const np = next.project;
-  if (
-    pp.id !== np.id ||
-    pp.name !== np.name ||
-    pp.path !== np.path ||
-    pp.color !== np.color ||
-    pp.isTeamProject !== np.isTeamProject ||
-    pp.organizationName !== np.organizationName ||
-    pp.needsSetup !== np.needsSetup
-  )
-    return false;
-  return true;
+  if (PROJECT_ITEM_COMPARED_PROPS.some((key) => prev[key] !== next[key])) return false;
+  return PROJECT_COMPARED_FIELDS.every((key) => prev.project[key] === next.project[key]);
 }
 
 export const ProjectItem = memo(function ProjectItem({

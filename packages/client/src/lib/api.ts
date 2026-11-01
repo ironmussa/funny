@@ -8,6 +8,7 @@ import { designsApi } from './api/designs';
 import { extensionsApi } from './api/extensions';
 import { gitApi } from './api/git';
 import { githubApi } from './api/github';
+import { infraApi } from './api/infra';
 import { mcpApi } from './api/mcp';
 import { pipelinesApi } from './api/pipelines';
 import { profileApi } from './api/profile';
@@ -41,6 +42,7 @@ export const api = {
   ...schedulerApi, // Scheduler queue
   ...agentExecutionProfilesApi, // Agent execution profiles
   ...projectRunnersApi, // Project ↔ runner binding (project-runner-binding)
+  ...infraApi, // Sandbox provider connections + thread sandboxes (thread-sandboxes)
   ...agentTemplatesApi, // Agent Templates (per-user, Deep Agent only)
   ...browseApi, // Browse (filesystem)
   ...githubApi, // GitHub (status, OAuth, repos, issues, PRs, comments)

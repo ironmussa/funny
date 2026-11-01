@@ -1,4 +1,5 @@
 import type { WSEvent } from '@funny/shared';
+import { RUNNER_GRPC_WS_PATH } from '@funny/shared/runner-protocol';
 
 import type { GrpcTeamTransport } from './grpc-team-transport.js';
 
@@ -15,14 +16,29 @@ export type RunnerTransportFactory = (
   options: RunnerConnectionOptions,
 ) => SupervisedRunnerTransport;
 
+/**
+ * The runner gRPC endpoint: `RUNNER_GRPC_ENDPOINT` when set (private network,
+ * e.g. `server.railway.internal:50051`), otherwise the WebSocket carrier on the
+ * `TEAM_SERVER_URL` origin — so a runner outside the private network needs no
+ * extra configuration.
+ */
 export function requireRunnerGrpcEndpoint(
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): string {
   const endpoint = env.RUNNER_GRPC_ENDPOINT?.trim();
-  if (!endpoint) {
-    throw new Error('RUNNER_GRPC_ENDPOINT is required when TEAM_SERVER_URL enables runner mode');
+  if (endpoint) return endpoint;
+  const serverUrl = env.TEAM_SERVER_URL?.trim();
+  if (serverUrl) {
+    const url = new URL(serverUrl);
+    url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+    url.pathname = RUNNER_GRPC_WS_PATH;
+    url.search = '';
+    url.hash = '';
+    return url.toString();
   }
-  return endpoint;
+  throw new Error(
+    'RUNNER_GRPC_ENDPOINT is required when TEAM_SERVER_URL is not set to derive the WebSocket carrier',
+  );
 }
 
 /** Owns activation, reconnect callbacks delegated to gRPC, and deterministic shutdown. */

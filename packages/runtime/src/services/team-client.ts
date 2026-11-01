@@ -348,7 +348,8 @@ async function connectGrpc(endpoint: string): Promise<void> {
  * Called from app.ts init() when TEAM_SERVER_URL is set.
  */
 export async function initTeamMode(serverUrl: string): Promise<void> {
-  const grpcEndpoint = requireRunnerGrpcEndpoint();
+  // Explicit private endpoint, else the WebSocket carrier on the server origin.
+  const grpcEndpoint = requireRunnerGrpcEndpoint({ ...process.env, TEAM_SERVER_URL: serverUrl });
   state.serverUrl = serverUrl.replace(/\/$/, '');
 
   log.info(`Connecting to server at ${state.serverUrl}`, {

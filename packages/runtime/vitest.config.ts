@@ -27,6 +27,7 @@ export default defineConfig({
       '@funny/shared/db/migrate': path.join(shared, 'db/migrate.ts'),
       '@funny/shared/repositories': path.join(shared, 'repositories/index.ts'),
       '@funny/shared/runner-protocol': path.join(shared, 'runner-protocol.ts'),
+      '@funny/shared/lib/byte-write-queue': path.join(shared, 'lib/byte-write-queue.ts'),
       '@funny/shared/runner-v2/common': path.join(
         shared,
         'generated/runner-v2/runner/v2/common_pb.ts',

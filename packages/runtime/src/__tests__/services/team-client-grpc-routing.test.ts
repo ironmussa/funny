@@ -8,7 +8,9 @@ const h = vi.hoisted(() => ({
   request: vi.fn(async (eventType: string) =>
     eventType === 'data:get_builtin_providers' ? null : { success: true },
   ),
-  grpcOptions: undefined as { onDisconnected?: (error?: Error) => void } | undefined,
+  grpcOptions: undefined as
+    | { endpoint?: string; onDisconnected?: (error?: Error) => void }
+    | undefined,
   brokerHandler: undefined as ((event: WSEvent) => void) | undefined,
 }));
 
@@ -16,7 +18,7 @@ const originalFetch = globalThis.fetch;
 
 vi.mock('../../services/grpc-team-transport.js', () => ({
   GrpcTeamTransport: class {
-    constructor(options: { onDisconnected?: (error?: Error) => void }) {
+    constructor(options: { endpoint?: string; onDisconnected?: (error?: Error) => void }) {
       h.grpcOptions = options;
     }
 
@@ -113,13 +115,18 @@ describe('team-client gRPC routing', () => {
     expect(h.start).toHaveBeenCalledOnce();
   });
 
-  test('fails before registration when the gRPC endpoint is absent', async () => {
+  test('uses the WebSocket carrier on the server origin when no gRPC endpoint is set', async () => {
     delete process.env.RUNNER_GRPC_ENDPOINT;
 
-    await expect(initTeamMode('http://central.test')).rejects.toThrow(
-      'RUNNER_GRPC_ENDPOINT is required',
-    );
-    expect(globalThis.fetch).not.toHaveBeenCalled();
-    expect(h.start).not.toHaveBeenCalled();
+    await initTeamMode('https://central.test');
+
+    expect(h.grpcOptions?.endpoint).toBe('wss://central.test/api/runner-grpc/ws');
+    expect(h.start).toHaveBeenCalledOnce();
+  });
+
+  test('prefers the explicit private gRPC endpoint', async () => {
+    await initTeamMode('https://central.test');
+
+    expect(h.grpcOptions?.endpoint).toBe('grpc.example.test:50051');
   });
 });

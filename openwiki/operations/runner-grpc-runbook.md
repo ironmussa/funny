@@ -1,6 +1,6 @@
 # Runner gRPC runbook
 
-The server-to-runner path uses the native `runner.v2` gRPC protocol exclusively. There is no WebSocket, signed-HTTP, or direct-fetch fallback for runner traffic. Browsers continue to use HTTP and Socket.IO with the central server; they do not connect to `grpc-js` directly.
+The server-to-runner path uses the native `runner.v2` gRPC protocol exclusively. There is no signed-HTTP or direct-fetch fallback for runner traffic. Runners outside the server's private network carry the same gRPC bytes inside a WebSocket on the public HTTPS origin (`/api/runner-grpc/ws`); that is a carrier for `runner.v2`, not a second protocol. Browsers continue to use HTTP and Socket.IO with the central server; they do not connect to `grpc-js` directly.
 
 ## Composition and ownership
 
@@ -34,13 +34,16 @@ The runtime needs these values in team mode:
 
 ```sh
 TEAM_SERVER_URL=https://funny.example.com
-RUNNER_GRPC_ENDPOINT=grpc.funny.example.com:443
+# Optional. Set it only when the runner shares the server's private network
+# (e.g. funny-server.railway.internal:50051). When unset, the runner derives
+# wss://funny.example.com/api/runner-grpc/ws from TEAM_SERVER_URL.
+# RUNNER_GRPC_ENDPOINT=funny-server.railway.internal:50051
 # Optional — operator-trusted runners only. Device-link / invite-token runners
 # receive their own per-runner key instead of the server's root secret.
 # RUNNER_AUTH_SECRET=<server root secret>
 ```
 
-The central server enables and binds its dedicated HTTP/2 listener with `RUNNER_GRPC_ENABLED`, `RUNNER_GRPC_HOST`, and `RUNNER_GRPC_PORT`. Limits and liveness controls use the remaining `RUNNER_GRPC_*` values documented in `.env.example`. Public TLS/ALPN normally terminates at ingress; the server listener is private. A runtime with `TEAM_SERVER_URL` but no `RUNNER_GRPC_ENDPOINT` fails startup instead of falling back.
+The central server enables and binds its dedicated HTTP/2 listener with `RUNNER_GRPC_ENABLED`, `RUNNER_GRPC_HOST`, and `RUNNER_GRPC_PORT`. Limits and liveness controls use the remaining `RUNNER_GRPC_*` values documented in `.env.example`. The listener itself stays private. Public runners reach it through the WebSocket carrier (`services/grpc/websocket-carrier.ts`), served by the same `Bun.serve` as the UI, so TLS comes from the existing HTTPS origin and needs no extra domain, port or certificate. Many HTTP edges (Railway included) forward HTTP/1.1 upstream and cannot proxy native gRPC; WebSockets pass through them and Railway keeps them open indefinitely. On the runner, `services/grpc-websocket-bridge.ts` exposes an ephemeral `127.0.0.1` port that grpc-js dials, piping each connection into one WebSocket. Both ends bound buffered bytes (`RUNNER_GRPC_WS_MAX_BUFFERED_BYTES`, 16 MiB) and close a slow peer instead of growing memory; the server caps concurrent carrier connections (512). Authentication is unchanged: the runner bearer token is checked by the gRPC endpoint on every stream.
 
 ## Test layers
 

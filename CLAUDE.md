@@ -367,5 +367,6 @@ domain rules, integrations/standalone services, operations/auth, and the develop
 Consult it when searching for context about how this codebase works.
 
 <!-- fallow:agent-install v1 claude-import:start -->
+
 @AGENTS.md
 <!-- fallow:agent-install v1 claude-import:end -->

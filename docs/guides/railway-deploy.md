@@ -18,20 +18,20 @@ Then verify (see [Verify a deploy](#verify-a-deploy)).
 
 ## The project
 
-| Field | Value |
-|---|---|
-| Project | `funny` |
-| Project ID | `373f9d06-a436-4292-b20c-9f0b2096a588` |
-| Workspace | `Argenis Leon's Projects` |
+| Field       | Value                                                 |
+| ----------- | ----------------------------------------------------- |
+| Project     | `funny`                                               |
+| Project ID  | `373f9d06-a436-4292-b20c-9f0b2096a588`                |
+| Workspace   | `Argenis Leon's Projects`                             |
 | Environment | `production` (`f9b2196c-7ce6-4045-976e-fdf8763b911f`) |
 
 Services in the environment:
 
-| Service | Role | Public URL |
-|---|---|---|
-| `funny-server` | Auth, DB owner, serves the client UI, proxies to runners. Uses `packages/shared` model registry to validate/offer models. | https://funny-server-production.up.railway.app |
+| Service        | Role                                                                                                                                               | Public URL                                     |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
+| `funny-server` | Auth, DB owner, serves the client UI, proxies to runners. Uses `packages/shared` model registry to validate/offer models.                          | https://funny-server-production.up.railway.app |
 | `funny-runner` | Executes agent work — **spawns the Claude Code CLI** bundled with `@anthropic-ai/claude-agent-sdk`. Connects out to the server over a gRPC tunnel. | https://funny-runner-production.up.railway.app |
-| `Postgres` | Database | — |
+| `Postgres`     | Database                                                                                                                                           | —                                              |
 
 ## Credentials — the token gotcha
 

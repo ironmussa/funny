@@ -13,5 +13,13 @@
     "newlinesBetween": true
   },
   "sortTailwindcss": {},
-  "ignorePatterns": ["dist/", "node_modules/", ".funny-worktrees/", "src-tauri/"]
+  "ignorePatterns": [
+    "dist/",
+    "node_modules/",
+    ".funny-worktrees/",
+    "src-tauri/",
+    "packages/client/vendor/",
+    "protocol/**/fixtures/",
+    "fallow-viz.html"
+  ]
 }

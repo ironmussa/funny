@@ -51,13 +51,13 @@ key that retrieves the run from Abbacchio later.
 While a run is active, Funny marks its own phase boundaries, so a long session
 can be read back as phases without anyone typing in the console:
 
-| Mark | Emitted from |
-| ---------------------- | ----------------------------------------------------- |
-| `thread-open` | `stores/thread-store.ts`, on thread selection |
-| `browser-session-open` | `lib/browser-session-frames.ts`, on a session's first frame |
-| `browser-session-close`| `lib/browser-session-frames.ts`, on retained-frame cleanup |
-| `terminal-open` | `components/TerminalPanel.tsx`, once xterm is attached |
-| `terminal-close` | `components/TerminalPanel.tsx`, before `terminal.dispose()` |
+| Mark                    | Emitted from                                                |
+| ----------------------- | ----------------------------------------------------------- |
+| `thread-open`           | `stores/thread-store.ts`, on thread selection               |
+| `browser-session-open`  | `lib/browser-session-frames.ts`, on a session's first frame |
+| `browser-session-close` | `lib/browser-session-frames.ts`, on retained-frame cleanup  |
+| `terminal-open`         | `components/TerminalPanel.tsx`, once xterm is attached      |
+| `terminal-close`        | `components/TerminalPanel.tsx`, before `terminal.dispose()` |
 
 They go through `markMemoryPhase()` in [lib/memory-phase.ts](../../packages/client/src/lib/memory-phase.ts),
 which is a no-op unless a run is active — so there is no cost when nobody is
@@ -98,11 +98,11 @@ and must be exported with `download()`.
 
 Published series, one point per sample:
 
-| Series | Source |
-| ------------------------------------------------- | -------------------------------------------------- |
-| `client.memory.heap.{used,total,limit}_bytes`      | Chrome heap readings, omitted when unavailable     |
-| `client.memory.dom.*`                              | Element, canvas, image, xterm, Monaco, row, item counts |
-| `client.memory.browser_panel.totals.*`             | Browser Panel frame and decode counters            |
+| Series                                        | Source                                                  |
+| --------------------------------------------- | ------------------------------------------------------- |
+| `client.memory.heap.{used,total,limit}_bytes` | Chrome heap readings, omitted when unavailable          |
+| `client.memory.dom.*`                         | Element, canvas, image, xterm, Monaco, row, item counts |
+| `client.memory.browser_panel.totals.*`        | Browser Panel frame and decode counters                 |
 
 Each point carries `sessionId`, `kind`, `sequence`, and `label` attributes.
 Per-session Browser Panel entries (`values.browserPanel.trackedSessions`) are

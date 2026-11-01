@@ -119,49 +119,49 @@ cd packages/server && bun run dev
 
 ## Environment variables reference
 
-| Variable                                   | Default                 | Description                                        |
-| ------------------------------------------ | ----------------------- | -------------------------------------------------- |
-| `DATABASE_URL`                             | —                       | PostgreSQL connection string (required)            |
-| `RUNNER_AUTH_SECRET`                       | —                       | Shared secret for runner authentication (required) |
-| `PORT`                                     | `3002`                  | HTTP server port                                   |
-| `HOST`                                     | `0.0.0.0`               | Bind address                                       |
-| `CORS_ORIGIN`                              | `http://localhost:5173` | Comma-separated allowed origins                    |
-| `FUNNY_CENTRAL_DATA_DIR`                   | `~/.funny-central`      | Directory for auth secrets and encryption keys     |
-| `RUNNER_GRPC_ENABLED`                      | `true`                  | Set `false` only when this server offers no runners |
-| `RUNNER_GRPC_HOST`                         | `127.0.0.1`             | Private gRPC HTTP/2 bind address                   |
-| `RUNNER_GRPC_PORT`                         | `50051`                 | Dedicated gRPC listener port                       |
-| `RUNNER_GRPC_MAX_MESSAGE_BYTES`            | `33554432`              | Maximum inbound and outbound gRPC message size     |
-| `RUNNER_GRPC_MAX_STREAMS_PER_RUNNER`       | `10`                    | Concurrent stream quota per authenticated runner   |
-| `RUNNER_GRPC_AUTH_TIMEOUT_MS`              | `10000`                 | Runner credential lookup timeout                   |
-| `RUNNER_GRPC_MAX_FRAME_BYTES`              | `65536`                 | Negotiated frame-size ceiling                      |
-| `RUNNER_GRPC_MAX_PENDING_OPERATIONS`       | `32`                    | Negotiated pending-operation ceiling               |
-| `RUNNER_GRPC_IDEMPOTENCY_RETENTION_MS`     | `604800000`             | Completed mutation outcome retention (7 days)      |
-| `RUNNER_GRPC_MAX_ACTIVE_TUNNELS`           | `4`                     | Negotiated active-tunnel ceiling                   |
-| `RUNNER_GRPC_MAX_ACTIVE_TERMINALS`         | `8`                     | Negotiated active-terminal ceiling                 |
-| `RUNNER_GRPC_MAX_BUFFERED_BYTES_PER_CLASS` | `1048576`               | Negotiated buffer ceiling per traffic class        |
-| `RUNNER_GRPC_HEARTBEAT_INTERVAL_MS`        | `15000`                 | Negotiated runner heartbeat interval               |
-| `RUNNER_GRPC_HEARTBEAT_TIMEOUT_MS`         | `45000`                 | Negotiated runner heartbeat expiry                 |
-The gRPC listener is the only runner data plane. Its public route must terminate
-TLS and preserve HTTP/2 at the deployment
-ingress; the dedicated Bun listener accepts only the private ingress hop and
-authenticates runner bearer credentials from gRPC metadata.
+| Variable                                                                         | Default                 | Description                                         |
+| -------------------------------------------------------------------------------- | ----------------------- | --------------------------------------------------- |
+| `DATABASE_URL`                                                                   | —                       | PostgreSQL connection string (required)             |
+| `RUNNER_AUTH_SECRET`                                                             | —                       | Shared secret for runner authentication (required)  |
+| `PORT`                                                                           | `3002`                  | HTTP server port                                    |
+| `HOST`                                                                           | `0.0.0.0`               | Bind address                                        |
+| `CORS_ORIGIN`                                                                    | `http://localhost:5173` | Comma-separated allowed origins                     |
+| `FUNNY_CENTRAL_DATA_DIR`                                                         | `~/.funny-central`      | Directory for auth secrets and encryption keys      |
+| `RUNNER_GRPC_ENABLED`                                                            | `true`                  | Set `false` only when this server offers no runners |
+| `RUNNER_GRPC_HOST`                                                               | `127.0.0.1`             | Private gRPC HTTP/2 bind address                    |
+| `RUNNER_GRPC_PORT`                                                               | `50051`                 | Dedicated gRPC listener port                        |
+| `RUNNER_GRPC_MAX_MESSAGE_BYTES`                                                  | `33554432`              | Maximum inbound and outbound gRPC message size      |
+| `RUNNER_GRPC_MAX_STREAMS_PER_RUNNER`                                             | `10`                    | Concurrent stream quota per authenticated runner    |
+| `RUNNER_GRPC_AUTH_TIMEOUT_MS`                                                    | `10000`                 | Runner credential lookup timeout                    |
+| `RUNNER_GRPC_MAX_FRAME_BYTES`                                                    | `65536`                 | Negotiated frame-size ceiling                       |
+| `RUNNER_GRPC_MAX_PENDING_OPERATIONS`                                             | `32`                    | Negotiated pending-operation ceiling                |
+| `RUNNER_GRPC_IDEMPOTENCY_RETENTION_MS`                                           | `604800000`             | Completed mutation outcome retention (7 days)       |
+| `RUNNER_GRPC_MAX_ACTIVE_TUNNELS`                                                 | `4`                     | Negotiated active-tunnel ceiling                    |
+| `RUNNER_GRPC_MAX_ACTIVE_TERMINALS`                                               | `8`                     | Negotiated active-terminal ceiling                  |
+| `RUNNER_GRPC_MAX_BUFFERED_BYTES_PER_CLASS`                                       | `1048576`               | Negotiated buffer ceiling per traffic class         |
+| `RUNNER_GRPC_HEARTBEAT_INTERVAL_MS`                                              | `15000`                 | Negotiated runner heartbeat interval                |
+| `RUNNER_GRPC_HEARTBEAT_TIMEOUT_MS`                                               | `45000`                 | Negotiated runner heartbeat expiry                  |
+| The gRPC listener is the only runner data plane. Its public route must terminate |
+| TLS and preserve HTTP/2 at the deployment                                        |
+| ingress; the dedicated Bun listener accepts only the private ingress hop and     |
+| authenticates runner bearer credentials from gRPC metadata.                      |
 
 See [RUNNER_GRPC_RUNBOOK.md](RUNNER_GRPC_RUNBOOK.md) for deployment order,
 monitoring, retention, cleanup, and binary rollback procedures.
 
 ## API endpoints
 
-| Method | Path              | Description                                    |
-| ------ | ----------------- | ---------------------------------------------- |
-| `GET`  | `/api/health`     | Health check                                   |
-| `GET`  | `/api/auth/mode`  | Returns `{ mode: "multi" }`                    |
-| `*`    | `/api/auth/*`     | Better Auth endpoints (login, signup, session) |
-| `*`    | `/api/projects/*` | Project CRUD + membership                      |
-| `*`    | `/api/runners/*`  | Runner registration + management               |
-| `*`    | `/api/profile/*`  | User profile (git identity, GitHub token)      |
-| `*`    | `/api/threads/*`  | Thread routing + status                        |
-| `*`    | `/api/*`          | Catch-all proxy to assigned runner             |
-| `WS`   | `/ws`             | Browser WebSocket                              |
+| Method | Path               | Description                                    |
+| ------ | ------------------ | ---------------------------------------------- |
+| `GET`  | `/api/health`      | Health check                                   |
+| `GET`  | `/api/auth/mode`   | Returns `{ mode: "multi" }`                    |
+| `*`    | `/api/auth/*`      | Better Auth endpoints (login, signup, session) |
+| `*`    | `/api/projects/*`  | Project CRUD + membership                      |
+| `*`    | `/api/runners/*`   | Runner registration + management               |
+| `*`    | `/api/profile/*`   | User profile (git identity, GitHub token)      |
+| `*`    | `/api/threads/*`   | Thread routing + status                        |
+| `*`    | `/api/*`           | Catch-all proxy to assigned runner             |
+| `WS`   | `/ws`              | Browser WebSocket                              |
 | `gRPC` | dedicated listener | Authenticated native runner transport          |
 
 ### Browser Web Push

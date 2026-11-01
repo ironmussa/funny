@@ -1,1 +1,7 @@
-{"name":"funny","short_name":"funny","start_url":"/","display":"standalone","icons":[{"src":"/notification-icon.png","sizes":"any","type":"image/png"}]}
+{
+  "name": "funny",
+  "short_name": "funny",
+  "start_url": "/",
+  "display": "standalone",
+  "icons": [{ "src": "/notification-icon.png", "sizes": "any", "type": "image/png" }]
+}

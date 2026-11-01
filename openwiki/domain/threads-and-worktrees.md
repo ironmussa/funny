@@ -64,12 +64,12 @@ UI label:       "Viewer"      "Commenter"         "Editor"
 
 Threads are private; projects are shared workspaces. The unified authorizer (`packages/shared/src/auth/authorizer.ts`) gives a user a role on a project when they are:
 
-| Who | Role | Can |
-|---|---|---|
-| The creator | `owner` | everything, including delete |
-| A collaborator (`project_members`, role `admin`) | `admin` | view + `manage` (members, startup commands, project settings) |
-| A collaborator (role `member`) | `contributor` | view |
-| A member of an org the project is shared with (`team_projects`) | `viewer` | view |
+| Who                                                             | Role          | Can                                                           |
+| --------------------------------------------------------------- | ------------- | ------------------------------------------------------------- |
+| The creator                                                     | `owner`       | everything, including delete                                  |
+| A collaborator (`project_members`, role `admin`)                | `admin`       | view + `manage` (members, startup commands, project settings) |
+| A collaborator (role `member`)                                  | `contributor` | view                                                          |
+| A member of an org the project is shared with (`team_projects`) | `viewer`      | view                                                          |
 
 Org sharing never reaches the project's threads — those still need an explicit thread grant. Server routes declare the capability they need with `requireProjectAccess(capability)` (`packages/server/src/middleware/project-access.ts`, wired in `lib/server-authorizer.ts`); runtime routes use `requireProject` / `requireAccessibleProject` (`packages/runtime/src/utils/route-helpers.ts`, `routes/github/helpers.ts`). A caller with no role gets the same `404 Project not found` as for a missing id, so foreign projects stay invisible; a caller who can see the project but lacks the capability gets `403`. Runner settings (`project-runner-settings.ts`) stay owner-only, since they pin the owner's own runners.
 

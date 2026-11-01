@@ -37,4 +37,27 @@ describe('ThreadPreparationView', () => {
     expect(screen.getByRole('status')).toHaveTextContent('Disk full');
     expect(screen.getByText('Fix the bug')).toBeInTheDocument();
   });
+
+  test('a failed early step is shown with its error, not the last pending step', () => {
+    renderWithProviders(
+      <ThreadPreparationView
+        prompt="dame un resumen"
+        steps={[
+          {
+            id: 'machine',
+            label: 'Creating sandbox',
+            status: 'failed',
+            error: 'Trial accounts can run 2 concurrent sandboxes.',
+          },
+          { id: 'runner', label: 'Installing runner', status: 'pending' },
+          { id: 'agent', label: 'Starting agent', status: 'pending' },
+        ]}
+      />,
+    );
+    const status = screen.getByRole('status');
+    expect(status).toHaveTextContent('Creating sandbox');
+    expect(status).toHaveTextContent('Trial accounts can run 2 concurrent sandboxes.');
+    expect(status).not.toHaveTextContent('Starting agent');
+    expect(screen.getByTestId('thread-preparation-failed')).toBeInTheDocument();
+  });
 });

@@ -5,7 +5,8 @@
  * offline (e.g. from a phone): it writes the thread row itself (status
  * `setting_up`, mode `local` — the sandbox already isolates it), provisions the
  * sandbox in the background, and once the sandbox runner has the checkout it
- * sends the first message there, which starts the agent. A failure marks the
+ * marks the thread `pending` (as a ready worktree does) and sends the first
+ * message there, which starts the agent. A failure marks the
  * thread `failed` and the prompt stays on the thread as its initial prompt.
  */
 
@@ -88,6 +89,8 @@ export interface SandboxThreadDeps {
   prepare(req: SandboxLaunchRequest): Promise<Result<PreparedSandboxLaunch, SandboxLaunchRefusal>>;
   insertThread(row: NewSandboxThreadRow): Promise<void>;
   loadThread(threadId: string): Promise<unknown>;
+  /** The sandbox is ready: `setting_up` → `pending`, so the agent can start. */
+  markReady(threadId: string): Promise<void>;
   markFailed(threadId: string, reason: string): Promise<void>;
   sendMessage(input: {
     userId: string;
@@ -108,6 +111,11 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     body: Record<string, unknown>,
   ): Promise<void> {
     const provisioned = await launch.provision();
+    if (provisioned.isOk()) {
+      // Like a ready worktree: the agent may only start from `pending`, so the
+      // thread leaves `setting_up` before its first message is sent.
+      await deps.markReady(threadId);
+    }
     const started = provisioned.isErr()
       ? err(`sandbox provisioning failed: ${provisioned.error.message}`)
       : await deps.sendMessage({ userId, threadId, body });

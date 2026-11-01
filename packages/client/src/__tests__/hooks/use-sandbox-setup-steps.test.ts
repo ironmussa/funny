@@ -30,6 +30,12 @@ describe('sandboxSetupSteps', () => {
     ]);
   });
 
+  test('a thread that failed on a running sandbox fails the last step with its error', () => {
+    const steps = sandboxSetupSteps({ state: 'running', error: 'message failed (500)' }, true);
+    expect(statuses(steps)).toEqual(['completed', 'completed', 'completed', 'completed', 'failed']);
+    expect(steps[4].error).toBe('message failed (500)');
+  });
+
   test('a failed sandbox shows the error', () => {
     const steps = sandboxSetupSteps({ state: 'failed', error: 'clone failed' });
     expect(steps[0]).toMatchObject({ status: 'failed', error: 'clone failed' });

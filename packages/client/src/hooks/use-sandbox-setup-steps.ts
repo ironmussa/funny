@@ -20,10 +20,17 @@ const PHASES: Array<{ id: string; label: string; states: ThreadSandboxState[] }>
   { id: 'agent', label: 'Starting agent', states: ['running'] },
 ];
 
-/** Maps a sandbox's lifecycle state to the setup steps shown while a thread prepares. */
-export function sandboxSetupSteps(info: Pick<ThreadSandboxInfo, 'state' | 'error'> | null) {
+/**
+ * Maps a sandbox's lifecycle state to the setup steps shown while a thread
+ * prepares. `threadFailed`: the thread failed even though the machine is up
+ * (e.g. the first message was refused) — the current step shows the error.
+ */
+export function sandboxSetupSteps(
+  info: Pick<ThreadSandboxInfo, 'state' | 'error'> | null,
+  threadFailed = false,
+) {
   if (!info) return [];
-  const failed = info.state === 'failed' || info.state === 'lost';
+  const failed = info.state === 'failed' || info.state === 'lost' || threadFailed;
   let current = PHASES.findIndex((p) => p.states.includes(info.state));
   // A failed sandbox does not say where it failed; mark the first unfinished phase.
   if (current === -1) current = failed ? 0 : PHASES.length - 1;
@@ -77,5 +84,5 @@ export function useSandboxSetupSteps(thread: {
     };
   }, [active, preparing, thread.id]);
 
-  return active ? sandboxSetupSteps(info) : null;
+  return active ? sandboxSetupSteps(info, thread.status === 'failed') : null;
 }

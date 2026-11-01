@@ -24,6 +24,7 @@ function setup(
   const prepared: SandboxLaunchRequest[] = [];
   const messages: Array<{ userId: string; threadId: string; body: Record<string, unknown> }> = [];
   const failed: Array<[string, string]> = [];
+  const events: string[] = [];
   const launcher = createSandboxThreadLauncher({
     findOwnedProject: async (userId, projectId) =>
       opts.project !== undefined
@@ -43,17 +44,21 @@ function setup(
       inserted.push(row);
     },
     loadThread: async (id) => ({ id, status: 'setting_up' }),
+    markReady: async (id) => {
+      events.push(`ready:${id}`);
+    },
     markFailed: async (id, reason) => {
       failed.push([id, reason]);
     },
     sendMessage: (input) => {
+      events.push(`message:${input.threadId}`);
       messages.push(input);
       return opts.messageFails ? errAsync('message failed (500)') : okAsync(undefined);
     },
     newId: () => 't-new',
     now: () => '2026-11-01T00:00:00.000Z',
   });
-  return { launcher, inserted, prepared, messages, failed };
+  return { launcher, inserted, prepared, messages, failed, events };
 }
 
 const payload = {
@@ -69,7 +74,7 @@ const payload = {
 
 describe('sandbox thread creation', () => {
   test('creates a local setting_up thread, provisions, then sends the prompt to the sandbox', async () => {
-    const { launcher, inserted, prepared, messages, failed } = setup();
+    const { launcher, inserted, prepared, messages, failed, events } = setup();
     const result = await launcher.create('alice', payload);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().thread).toEqual({ id: 't-new', status: 'setting_up' });
@@ -112,6 +117,8 @@ describe('sandbox thread creation', () => {
       },
     ]);
     expect(failed).toEqual([]);
+    // The agent can only start from `pending`: the thread leaves setting_up first.
+    expect(events).toEqual(['ready:t-new', 'message:t-new']);
   });
 
   test('a refused launch creates nothing', async () => {
@@ -150,11 +157,12 @@ describe('sandbox thread creation', () => {
   });
 
   test('a provisioning failure marks the thread failed and sends nothing', async () => {
-    const { launcher, messages, failed } = setup({
+    const { launcher, messages, failed, events } = setup({
       provisionError: { kind: 'checkout', message: 'clone failed' },
     });
     await (await launcher.create('alice', payload))._unsafeUnwrap().started;
     expect(messages).toEqual([]);
+    expect(events).toEqual([]);
     expect(failed).toEqual([['t-new', 'sandbox provisioning failed: clone failed']]);
   });
 

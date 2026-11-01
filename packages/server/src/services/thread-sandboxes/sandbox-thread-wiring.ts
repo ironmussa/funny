@@ -15,6 +15,7 @@ import { productionSandboxProviders } from './provider-catalog.js';
 import { prepareSandboxLaunch } from './sandbox-launch.js';
 import { createSandboxRunnerCalls } from './sandbox-runner-calls.js';
 import { createSandboxThreadLauncher } from './sandbox-thread.js';
+import { sqlThreadSandboxStore } from './thread-sandbox-store.js';
 
 interface BrowserEventsPort {
   toUser(userId: string, event: Record<string, unknown>): void;
@@ -43,10 +44,23 @@ export function sandboxThreadLauncherFor(env: {
     prepare: (req) => prepareSandboxLaunch(req, { connections, ...ports }),
     insertThread: (row) => threadRepo.createThread(row),
     loadThread: (threadId) => threadRepo.getThread(threadId),
+    markReady: async (threadId) => {
+      const thread = await threadRepo.getThread(threadId);
+      if (!thread) return;
+      await threadRepo.updateThread(threadId, { status: 'pending' });
+      env.browserEvents?.toUser(thread.userId, {
+        type: 'thread:updated',
+        threadId,
+        data: { status: 'pending' },
+      });
+    },
     markFailed: async (threadId, reason) => {
       const thread = await threadRepo.getThread(threadId);
       if (!thread) return;
       await threadRepo.updateThread(threadId, { status: 'failed' });
+      // Keep the reason where the thread view reads it (the sandbox itself may
+      // be up: the failure can be the first message, not the machine).
+      await sqlThreadSandboxStore.update(threadId, { error: reason });
       env.browserEvents?.toUser(thread.userId, {
         type: 'thread:updated',
         threadId,

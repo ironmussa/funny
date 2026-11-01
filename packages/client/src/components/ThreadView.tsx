@@ -177,12 +177,10 @@ function ThreadBody({
   activeThread: LoadedThread;
   pendingMetadata?: PreparationMessageMetadata;
 }) {
-  // A sandbox that failed before the agent started keeps showing its setup
-  // steps, so the failed step and its error stay visible.
+  // A sandbox that failed before its agent ever started (no session) keeps
+  // showing its setup steps, so the failed step and its error stay visible.
   const sandboxSetupFailed =
-    runsInSandbox(activeThread) &&
-    activeThread.status === 'failed' &&
-    !activeThread.lastUserMessage;
+    runsInSandbox(activeThread) && activeThread.status === 'failed' && !activeThread.sessionId;
   if (activeThread.status === 'setting_up' || sandboxSetupFailed)
     return <PreparingThread activeThread={activeThread} pendingMetadata={pendingMetadata} />;
   if (activeThread.status === 'idle' && (activeThread.queuedCount ?? 0) === 0)

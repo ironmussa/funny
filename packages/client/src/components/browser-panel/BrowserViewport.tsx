@@ -3,11 +3,6 @@ import { useEffect, useRef } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { browserSessionClient } from '@/lib/browser-session-client';
-import {
-  BROWSER_SESSION_ASPECT_RATIO,
-  BROWSER_SESSION_VIEWPORT_HEIGHT,
-  BROWSER_SESSION_VIEWPORT_WIDTH,
-} from '@/lib/browser-session-frames';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
 import { BrowserSessionCanvas } from './BrowserSessionCanvas';
@@ -30,6 +25,7 @@ export function BrowserViewport() {
   const setLoadError = useBrowserPanelStore((s) => s.setLoadError);
   const overlaysVisible = useBrowserPanelStore((s) => s.overlaysVisible);
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
+  const viewport = useBrowserPanelStore((s) => s.viewport);
   const sessionStatus = useBrowserPanelStore((s) => s.sessionStatus);
   const sessionError = useBrowserPanelStore((s) => s.sessionError);
   const openBrowserSession = useBrowserPanelStore((s) => s.openBrowserSession);
@@ -54,7 +50,8 @@ export function BrowserViewport() {
     setLoadError(null);
   }, [loadedUrl, setLoadError]);
 
-  // Translate canvas-relative CSS coords → CDP viewport coords (1920×1080).
+  // Translate canvas-relative CSS coords → CDP viewport coords (the session's
+  // page viewport — 1920×1080 unless the agent resized it).
   // We measure against the CANVAS (not the overlay) because the canvas is the
   // visible content the user is aiming at — using the overlay's rect can drift
   // by a few pixels if its size doesn't exactly match the canvas (subpixel
@@ -64,8 +61,8 @@ export function BrowserViewport() {
     if (!el) return { x: 0, y: 0 };
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
-    const scaleX = BROWSER_SESSION_VIEWPORT_WIDTH / rect.width;
-    const scaleY = BROWSER_SESSION_VIEWPORT_HEIGHT / rect.height;
+    const scaleX = viewport.width / rect.width;
+    const scaleY = viewport.height / rect.height;
     return {
       x: Math.round((e.clientX - rect.left) * scaleX),
       y: Math.round((e.clientY - rect.top) * scaleY),
@@ -178,7 +175,7 @@ export function BrowserViewport() {
         <div
           className="relative max-h-full max-w-full"
           style={{
-            aspectRatio: BROWSER_SESSION_ASPECT_RATIO,
+            aspectRatio: `${viewport.width} / ${viewport.height}`,
             width: '100%',
             maxWidth: `calc((100% - 1rem) * 1)`,
           }}

@@ -1,10 +1,6 @@
 import { useEffect, useRef, useState, type RefObject } from 'react';
 
 import { browserSessionClient } from '@/lib/browser-session-client';
-import {
-  BROWSER_SESSION_VIEWPORT_HEIGHT as VIEWPORT_H,
-  BROWSER_SESSION_VIEWPORT_WIDTH as VIEWPORT_W,
-} from '@/lib/browser-session-viewport';
 import { createClientLogger } from '@/lib/client-logger';
 import { useBrowserPanelStore, type AnnotationDomInfo } from '@/stores/browser-panel-store';
 
@@ -72,6 +68,7 @@ function ActiveInspectOverlay({
   sessionId,
   toggleInspectActive,
 }: ActiveInspectOverlayProps) {
+  const { width: VIEWPORT_W, height: VIEWPORT_H } = useBrowserPanelStore((s) => s.viewport);
   const [hover, setHover] = useState<HoverState | null>(null);
   const lastSent = useRef(0);
 
@@ -126,7 +123,7 @@ function ActiveInspectOverlay({
 
     el.addEventListener('mousemove', onMove);
     return () => el.removeEventListener('mousemove', onMove);
-  }, [sessionId, overlayRef, canvasRef]);
+  }, [sessionId, overlayRef, canvasRef, VIEWPORT_W, VIEWPORT_H]);
 
   if (!hover) return null;
 

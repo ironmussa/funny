@@ -790,7 +790,17 @@
       "scheduledCheck": "Revisión programada",
       "newThread": "Nuevo hilo",
       "searchThreads": "Buscar hilos",
-      "runJavaScript": "Ejecutar JavaScript"
+      "runJavaScript": "Ejecutar JavaScript",
+      "browserOpen": "Abrir página",
+      "browserNavigate": "Navegar",
+      "browserSnapshot": "Leer página",
+      "browserAct": "Interactuar",
+      "browserEvaluate": "Ejecutar JavaScript en la página",
+      "browserWaitFor": "Esperar a la página",
+      "browserStatus": "Estado",
+      "browserResize": "Cambiar tamaño",
+      "browserClose": "Cerrar navegador",
+      "showInBrowserPanel": "Ver en el panel del navegador"
     }
   },
   "plan": {

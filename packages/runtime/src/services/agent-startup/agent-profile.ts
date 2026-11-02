@@ -46,3 +46,25 @@ export async function withWatchMcpServer(
     funny: buildWatchMcpServer(threadId, userId),
   };
 }
+
+/**
+ * Inject the in-process `funny_browser` server (agent browser tools over the
+ * thread's browser session). Claude SDK only — other providers cannot host an
+ * in-process MCP server. Kill switch: `FUNNY_BROWSER_TOOLS=0`.
+ */
+export async function withBrowserMcpServer(
+  threadId: string,
+  userId: string | undefined,
+  provider: AgentProvider,
+  mcpServers: Record<string, any> | undefined,
+): Promise<Record<string, any> | undefined> {
+  if (!userId || provider !== 'claude' || process.env.FUNNY_BROWSER_TOOLS === '0') {
+    return mcpServers;
+  }
+  const { buildBrowserMcpServer, BROWSER_MCP_SERVER_NAME } =
+    await import('../browser-automation/browser-mcp-server.js');
+  return {
+    ...(mcpServers ?? {}),
+    [BROWSER_MCP_SERVER_NAME]: buildBrowserMcpServer(threadId, userId),
+  };
+}

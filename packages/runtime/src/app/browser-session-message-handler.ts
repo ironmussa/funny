@@ -27,7 +27,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
     case 'browser-session:open': {
       const d = data as WSBrowserSessionOpenData;
       log.info('handling open', { namespace: NS, sessionId: d.sessionId, url: d.url });
-      browserSessionManager.open(userId, d.sessionId, d.url).catch((err) => {
+      browserSessionManager.open(userId, d.sessionId, d.url, { origin: 'panel' }).catch((err) => {
         log.error('open failed', { namespace: NS, sessionId: d.sessionId, error: String(err) });
       });
       return true;
@@ -35,7 +35,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
 
     case 'browser-session:navigate': {
       const d = data as WSBrowserSessionNavigateData;
-      browserSessionManager.navigate(d.sessionId, d.url).catch((err) => {
+      browserSessionManager.navigate(userId, d.sessionId, d.url).catch((err) => {
         log.warn('navigate failed', {
           namespace: NS,
           sessionId: d.sessionId,
@@ -49,7 +49,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
       const d = data as WSBrowserSessionNavData;
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
-          browserSessionManager.nav(d.sessionId, d.action),
+          browserSessionManager.nav(userId, d.sessionId, d.action),
         )
         .catch((err) => {
           log.warn('nav failed', {
@@ -64,7 +64,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
 
     case 'browser-session:input': {
       const d = data as WSBrowserSessionInputData;
-      browserSessionManager.dispatchInput(d.sessionId, d).catch(() => {
+      browserSessionManager.dispatchInput(userId, d.sessionId, d).catch(() => {
         /* swallow — input is best-effort, frame stream provides visual feedback */
       });
       return true;
@@ -74,7 +74,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
       const d = data as WSBrowserSessionInspectAtData;
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
-          browserSessionManager.inspectAt(d.sessionId, d.x, d.y),
+          browserSessionManager.inspectAt(userId, d.sessionId, d.x, d.y),
         )
         .catch((err) => {
           log.warn('inspect-at failed', {
@@ -90,7 +90,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
       const d = data as WSBrowserSessionInspectRectData;
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
-          browserSessionManager.inspectRect(d.sessionId, d.x, d.y, d.w, d.h),
+          browserSessionManager.inspectRect(userId, d.sessionId, d.x, d.y, d.w, d.h),
         )
         .catch(() => {});
       return true;
@@ -100,7 +100,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
       const d = data as WSBrowserSessionScreenshotData;
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
-          browserSessionManager.screenshot(d.sessionId),
+          browserSessionManager.screenshot(userId, d.sessionId),
         )
         .catch(() => {});
       return true;
@@ -110,7 +110,7 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
       const d = data as WSBrowserSessionExecuteData;
       browserSessionManager
         .handleRequest(userId, d.sessionId, d.requestId, () =>
-          browserSessionManager.execute(d.sessionId, d.expression),
+          browserSessionManager.execute(userId, d.sessionId, d.expression),
         )
         .catch(() => {});
       return true;
@@ -118,13 +118,15 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
 
     case 'browser-session:heartbeat': {
       const d = data as WSBrowserSessionHeartbeatData;
-      browserSessionManager.heartbeat(d.sessionId);
+      browserSessionManager.heartbeat(userId, d.sessionId);
       return true;
     }
 
     case 'browser-session:close': {
       const d = data as WSBrowserSessionCloseData;
-      browserSessionManager.close(d.sessionId, 'user').catch(() => {});
+      browserSessionManager.closeFromClient(userId, d.sessionId, d.reason).catch((err) => {
+        log.warn('close failed', { namespace: NS, sessionId: d.sessionId, error: String(err) });
+      });
       return true;
     }
 

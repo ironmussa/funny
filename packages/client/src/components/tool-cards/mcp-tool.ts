@@ -32,6 +32,7 @@ const SERVER_NAMES: Record<string, string> = {
   supabase: 'Supabase',
   github: 'GitHub',
   funny: 'funny',
+  funny_browser: 'Browser',
   cua_repl: 'REPL',
   'coplay-mcp': 'Coplay',
 };
@@ -46,6 +47,77 @@ const KNOWN_ACTIONS: Record<string, string> = {
   'funny/funny_spawn_thread': 'newThread',
   'funny/funny_search_threads': 'searchThreads',
   'cua_repl/js': 'runJavaScript',
+  'funny_browser/browser_open': 'browserOpen',
+  'funny_browser/browser_navigate': 'browserNavigate',
+  'funny_browser/browser_snapshot': 'browserSnapshot',
+  'funny_browser/browser_act': 'browserAct',
+  'funny_browser/browser_evaluate': 'browserEvaluate',
+  'funny_browser/browser_wait_for': 'browserWaitFor',
+  'funny_browser/browser_status': 'browserStatus',
+  'funny_browser/browser_resize': 'browserResize',
+  'funny_browser/browser_close': 'browserClose',
+};
+
+/** funny's own browser tools (`mcp__funny_browser__*`) — the card offers "Show in panel". */
+export function isBrowserTool(mcp: McpToolName): boolean {
+  return mcp.server === 'funny_browser';
+}
+
+function str(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim() : null;
+}
+
+type Summarizer = (parsed: Record<string, unknown>) => string | null;
+
+function num(value: unknown): number | null {
+  return typeof value === 'number' ? value : null;
+}
+
+function actTarget(parsed: Record<string, unknown>): string | null {
+  const x = num(parsed.x);
+  const y = num(parsed.y);
+  return str(parsed.ref) ?? (x !== null && y !== null ? `(${x}, ${y})` : null);
+}
+
+function actDetail(parsed: Record<string, unknown>): string | null {
+  const text = str(parsed.text);
+  if (text) return `"${firstLine(text, 60)}"`;
+  return str(parsed.key) ?? (Array.isArray(parsed.values) ? parsed.values.join(', ') : null);
+}
+
+/** `click e7`, `fill e3 · "me@x.com"`, `press · Enter`, `double click (10, 20)`. */
+const summarizeAct: Summarizer = (parsed) => {
+  const action = str(parsed.action)?.replace(/_/g, ' ') ?? 'act';
+  const head = [action, actTarget(parsed)].filter(Boolean).join(' ');
+  const detail = actDetail(parsed);
+  return detail ? `${head} · ${detail}` : head;
+};
+
+const summarizeWait: Summarizer = (parsed) => {
+  const gone = str(parsed.textGone);
+  const ms = num(parsed.timeMs);
+  return (
+    str(parsed.text) ??
+    (gone ? `gone: ${gone}` : null) ??
+    str(parsed.url) ??
+    str(parsed.ref) ??
+    (ms !== null ? `${ms}ms` : null)
+  );
+};
+
+/** One-line summaries of funny's browser tool calls, by tool. */
+const BROWSER_SUMMARIES: Record<string, Summarizer> = {
+  browser_open: (p) => str(p.url),
+  browser_navigate: (p) => str(p.url) ?? str(p.action),
+  browser_act: summarizeAct,
+  browser_evaluate: (p) => (str(p.expression) ? firstLine(str(p.expression) as string, 120) : null),
+  browser_wait_for: summarizeWait,
+  browser_resize: (p) => {
+    const w = num(p.width);
+    const h = num(p.height);
+    return w !== null && h !== null ? `${w}×${h}` : null;
+  },
+  browser_snapshot: (p) => (p.screenshot === true ? 'with screenshot' : null),
 };
 
 /** "Get issue" from `get_issue`, `getIssue` or `codegraph_search` (server prefix dropped). */
@@ -107,7 +179,13 @@ const SUMMARY_KEYS = [
 /** A one-line description of the call for the card header, with the input it came from. */
 export function getMcpSummary(
   parsed: Record<string, unknown>,
+  mcp?: McpToolName,
 ): { key: string; text: string } | null {
+  if (mcp && isBrowserTool(mcp)) {
+    const text = BROWSER_SUMMARIES[mcp.tool]?.(parsed) ?? null;
+    // `key: ''` — the summary is composed from several inputs; keep them all listed.
+    return text ? { key: '', text } : null;
+  }
   for (const key of SUMMARY_KEYS) {
     const value = parsed[key];
     const text = typeof value === 'string' ? firstLine(value, 120) : null;

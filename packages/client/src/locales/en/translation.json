@@ -792,7 +792,17 @@
       "scheduledCheck": "Scheduled check",
       "newThread": "New thread",
       "searchThreads": "Search threads",
-      "runJavaScript": "Run JavaScript"
+      "runJavaScript": "Run JavaScript",
+      "browserOpen": "Open page",
+      "browserNavigate": "Navigate",
+      "browserSnapshot": "Read page",
+      "browserAct": "Interact",
+      "browserEvaluate": "Run JavaScript in page",
+      "browserWaitFor": "Wait for page",
+      "browserStatus": "Status",
+      "browserResize": "Resize viewport",
+      "browserClose": "Close browser",
+      "showInBrowserPanel": "Show in browser panel"
     }
   },
   "plan": {

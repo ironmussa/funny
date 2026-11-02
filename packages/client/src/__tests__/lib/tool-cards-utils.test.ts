@@ -13,6 +13,7 @@ import {
   isPathWithin,
   unwrapShellCommand,
 } from '@/components/tool-cards/format-utils';
+import { getMcpSummary, isBrowserTool } from '@/components/tool-cards/mcp-tool';
 import { extToHljsLang } from '@/hooks/use-highlight';
 import { toEditorUri, toEditorUriWithLine } from '@/lib/editor-utils';
 
@@ -76,6 +77,47 @@ describe('friendly labels for agent and MCP tools', () => {
   });
 });
 
+describe('browser tool cards', () => {
+  const browser = (tool: string) => ({ server: 'funny_browser', tool });
+
+  test('browser tools get translated titles', () => {
+    expect(getToolLabel('mcp__funny_browser__browser_act', t)).toBe(
+      'Browser · tools.mcp.browserAct',
+    );
+    expect(getToolLabel('mcp__funny_browser__browser_open', t)).toBe(
+      'Browser · tools.mcp.browserOpen',
+    );
+    expect(isBrowserTool(browser('browser_act'))).toBe(true);
+    expect(isBrowserTool({ server: 'playwright', tool: 'browser_click' })).toBe(false);
+  });
+
+  test('summaries describe the action, its target and its input', () => {
+    expect(getMcpSummary({ action: 'click', ref: 'e7' }, browser('browser_act'))?.text).toBe(
+      'click e7',
+    );
+    expect(
+      getMcpSummary({ action: 'fill', ref: 'e3', text: 'me@example.com' }, browser('browser_act'))
+        ?.text,
+    ).toBe('fill e3 · "me@example.com"');
+    expect(getMcpSummary({ action: 'press', key: 'Enter' }, browser('browser_act'))?.text).toBe(
+      'press · Enter',
+    );
+    expect(
+      getMcpSummary({ action: 'double_click', x: 10, y: 20 }, browser('browser_act'))?.text,
+    ).toBe('double click (10, 20)');
+    expect(
+      getMcpSummary({ url: 'https://dash.cloudflare.com' }, browser('browser_open'))?.text,
+    ).toBe('https://dash.cloudflare.com');
+    expect(getMcpSummary({ action: 'back' }, browser('browser_navigate'))?.text).toBe('back');
+    expect(getMcpSummary({ width: 800, height: 600 }, browser('browser_resize'))?.text).toBe(
+      '800×600',
+    );
+  });
+
+  test('browser summaries keep every input listed in the card', () => {
+    expect(getMcpSummary({ action: 'click', ref: 'e7' }, browser('browser_act'))?.key).toBe('');
+  });
+});
 
 describe('formatInput', () => {
   test('parses JSON string into object', () => {

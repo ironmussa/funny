@@ -1,4 +1,5 @@
 import type { JsonObject } from '@bufbuild/protobuf';
+import type { BrowserSessionCloseRequestReason } from '@funny/shared';
 /**
  * Client-side helpers for talking to the runner's BrowserSessionManager.
  *
@@ -172,7 +173,7 @@ export const browserSessionClient = {
     sendFireAndForget('browser-session:heartbeat', sessionId);
   },
 
-  close(sessionId: string, reason: 'user' | 'unmount' | 'navigation' = 'user'): void {
+  close(sessionId: string, reason: BrowserSessionCloseRequestReason = 'user'): void {
     log.info('close', { sessionId, reason });
     sendFireAndForget('browser-session:close', sessionId, { reason });
   },

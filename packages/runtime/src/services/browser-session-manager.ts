@@ -1,49 +1,68 @@
 /**
- * Browser annotator panel — runner-side session manager.
+ * Runner-side browser session manager — shared by the Browser Panel and the
+ * agent's browser tools.
  *
- * Each panel session owns one Chromium subprocess (spawned via Playwright's
- * bundled binary) + one `ChromeSession` from `@funny/core/chrome`. We do not
- * use the Playwright test runner here — we want a long-running browser, not
- * test execution. `ChromeSession` already handles CDP screencast / input /
- * console / network / error capture, so this manager is mostly lifecycle.
+ * Each user gets one headless Chromium (`BrowserHost`) on a persistent
+ * profile; each session is one tab in it. The panel streams and drives a tab
+ * through a `ChromeSession` (CDP screencast + input) attached to the tab's
+ * target id, while the agent drives the same tab through Playwright. A session
+ * is either:
+ *
+ *   - panel-owned — opened from the panel with a random id; closes with the
+ *     panel or after the heartbeat times out;
+ *   - thread-bound — id `thread:<threadId>`, opened by the agent or by the
+ *     panel on a thread; survives panel close and agent turns, and closes on
+ *     explicit close, idle timeout, thread deletion or runner shutdown.
  *
  * Runtime log level override:
  *   __funnyLog.setNamespaceLevel('browser-session', 'debug')
  */
 
-import { spawn, type ChildProcess } from 'child_process';
-import { randomBytes } from 'crypto';
-import { existsSync } from 'fs';
-import { mkdtemp, readdir, rm } from 'fs/promises';
-import { homedir, tmpdir } from 'os';
+import { readdir, rm } from 'fs/promises';
+import { tmpdir } from 'os';
 import { join } from 'path';
 
+import type { ChromeSession } from '@funny/core/chrome';
 import type {
   BrowserSessionClosedReason,
   WSBrowserSessionInputData,
   WSBrowserSessionResultData,
 } from '@funny/shared';
+import { threadBrowserSessionId, threadIdFromBrowserSessionId } from '@funny/shared';
 import {
   cssSelector,
   detectFrameworkComponent,
   extractElementInfo,
   pickStyles,
 } from '@funny/shared/dom/extract';
-import { buildChildEnv } from '@funny/shared/lib/child-env';
+import type { Page } from 'playwright';
 
 import { log } from '../lib/logger.js';
 import { metric, startSpan } from '../lib/telemetry.js';
+import {
+  BrowserHost,
+  profileDirFor,
+  resolveChromiumBinary,
+  type BrowserProfileKind,
+  type BrowserTab,
+} from './browser-automation/browser-host.js';
+import { RefGenerations } from './browser-automation/snapshot-refs.js';
+import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 import { wsBroker } from './ws-broker.js';
 
 const NS = 'browser-session';
 const BASE_PORT = 9300; // test-runner uses 9223; keep us out of that range
-const MAX_SESSIONS = 4; // per runner
+const MAX_SESSIONS = 8; // tabs per runner
 const HEARTBEAT_INTERVAL_MS = 30_000;
 const HEARTBEAT_TIMEOUT_MS = 90_000;
-const SPAWN_TIMEOUT_MS = 30_000;
+/** Thread-bound sessions with no agent call and no panel for this long close. */
+const THREAD_IDLE_TIMEOUT_MS = 15 * 60_000;
+/** Keep Chromium warm briefly after its last tab closes. */
+const HOST_GRACE_MS = 30_000;
 // Keep in sync with packages/client/src/lib/browser-session-viewport.ts
 const VIEWPORT_WIDTH = 1920;
 const VIEWPORT_HEIGHT = 1080;
+const MAX_CONSOLE_ERRORS = 20;
 
 /**
  * Per-session inspect helpers — injected into Runtime.evaluate calls.
@@ -69,28 +88,179 @@ const INSPECT_HELPERS = `
 })();
 `.trim();
 
-interface BrowserSession {
+export type BrowserController = 'agent' | 'user';
+
+export interface BrowserDialogRecord {
+  type: string;
+  message: string;
+  handled: 'dismissed' | 'accepted';
+}
+
+export interface BrowserSession {
   sessionId: string;
   userId: string;
-  port: number;
+  /** Set for thread-bound sessions. */
+  threadId: string | null;
+  owner: 'panel' | 'thread';
+  profile: BrowserProfileKind;
   url: string;
-  chromeProcess: ChildProcess;
-  userDataDir: string;
-  /** Lazy-loaded via dynamic import to avoid top-level dep on core. */
-  chromeSession: any;
+  host: BrowserHost;
+  tab: BrowserTab;
+  /** Background tabs left behind when the session followed a popup. */
+  backgroundTabs: BrowserTab[];
+  /** Panel-side CDP client; `null` only while (re)attaching or after close. */
+  chromeSession: ChromeSession | null;
+  viewport: { width: number; height: number };
   lastHeartbeat: number;
+  panelAttached: boolean;
+  lastAgentActivity: number;
+  controller: BrowserController;
+  refs: RefGenerations;
+  /** Dialogs auto-handled since the agent last looked (reported once). */
+  pendingDialogReports: BrowserDialogRecord[];
+  consoleErrors: string[];
+  /** Serialises panel input and agent actions on this tab. */
+  queue: Promise<unknown>;
 }
+
+interface OpenSessionOptions {
+  threadId?: string | null;
+  profile?: BrowserProfileKind;
+  origin: 'panel' | 'agent';
+}
+
+interface HostEntry {
+  host: BrowserHost | null;
+  launching: Promise<BrowserHost> | null;
+  graceTimer: ReturnType<typeof setTimeout> | null;
+}
+
+function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function newSessionRecord(init: {
+  sessionId: string;
+  userId: string;
+  threadId: string | null;
+  profile: BrowserProfileKind;
+  url: string;
+  host: BrowserHost;
+  tab: BrowserTab;
+  origin: OpenSessionOptions['origin'];
+}): BrowserSession {
+  const now = Date.now();
+  return {
+    sessionId: init.sessionId,
+    userId: init.userId,
+    threadId: init.threadId,
+    owner: init.threadId ? 'thread' : 'panel',
+    profile: init.profile,
+    url: init.url || 'about:blank',
+    host: init.host,
+    tab: init.tab,
+    backgroundTabs: [],
+    chromeSession: null,
+    viewport: { width: VIEWPORT_WIDTH, height: VIEWPORT_HEIGHT },
+    lastHeartbeat: now,
+    panelAttached: init.origin === 'panel',
+    lastAgentActivity: init.origin === 'agent' ? now : 0,
+    controller: 'agent',
+    refs: new RefGenerations(),
+    pendingDialogReports: [],
+    consoleErrors: [],
+    queue: Promise.resolve(),
+  };
+}
+
+/** The session's panel CDP client; a missing one means the session is gone. */
+function chromeOf(s: BrowserSession): ChromeSession {
+  if (!s.chromeSession) throw new Error('no-session');
+  return s.chromeSession;
+}
+
+type MouseButton = 'left' | 'middle' | 'right';
+type PanelInputHandler = (cs: ChromeSession, input: WSBrowserSessionInputData) => Promise<void>;
+
+function mouse(type: 'mouseMoved' | 'mousePressed' | 'mouseReleased'): PanelInputHandler {
+  return (cs, input) =>
+    cs.dispatchMouseEvent({
+      type,
+      x: input.x ?? 0,
+      y: input.y ?? 0,
+      ...(type === 'mouseMoved'
+        ? {}
+        : { button: (input.button ?? 'left') as MouseButton, clickCount: input.clickCount ?? 1 }),
+    });
+}
+
+function key(type: 'keyDown' | 'keyUp'): PanelInputHandler {
+  return (cs, input) =>
+    cs.dispatchKeyEvent({
+      type,
+      key: input.key ?? '',
+      code: input.code ?? '',
+      // Only keyDown carries the typed character.
+      text: type === 'keyDown' ? input.text : undefined,
+      modifiers: input.modifiers ?? 0,
+    });
+}
+
+/** Panel input event → CDP dispatch on the session's tab. */
+const PANEL_INPUT: Record<WSBrowserSessionInputData['kind'], PanelInputHandler> = {
+  mouseMove: mouse('mouseMoved'),
+  mouseDown: mouse('mousePressed'),
+  mouseUp: mouse('mouseReleased'),
+  wheel: (cs, input) =>
+    cs.dispatchScroll(input.x ?? 0, input.y ?? 0, input.deltaX ?? 0, input.deltaY ?? 0),
+  keyDown: key('keyDown'),
+  keyUp: key('keyUp'),
+};
 
 class BrowserSessionManager {
   private sessions = new Map<string, BrowserSession>();
+  private hosts = new Map<string, HostEntry>();
   private reaperTimer: ReturnType<typeof setInterval> | null = null;
+
+  private emit(
+    s: { userId: string; threadId: string | null },
+    type: string,
+    data: Record<string, unknown>,
+  ): void {
+    // The envelope keeps `threadId: ''` (browser-session events are user-scoped);
+    // the thread binding travels inside `data` for the panel to route on.
+    wsBroker.emitToUser(s.userId, {
+      type,
+      threadId: '',
+      data: s.threadId ? { ...data, threadId: s.threadId } : data,
+    } as any);
+  }
+
+  /**
+   * `ready` plus a separate `viewport` event: the `browser.v1` ready payload
+   * only carries the URL, so the viewport must also travel on its own.
+   */
+  private emitReady(s: BrowserSession): void {
+    this.emit(s, 'browser-session:ready', {
+      sessionId: s.sessionId,
+      url: s.url,
+      viewport: s.viewport,
+    });
+    this.emit(s, 'browser-session:viewport', { sessionId: s.sessionId, ...s.viewport });
+  }
 
   private startReaper() {
     if (this.reaperTimer) return;
-    this.reaperTimer = setInterval(() => {
-      const now = Date.now();
-      for (const s of this.sessions.values()) {
-        if (now - s.lastHeartbeat > HEARTBEAT_TIMEOUT_MS) {
+    this.reaperTimer = setInterval(() => this.reap(Date.now()), HEARTBEAT_INTERVAL_MS);
+    this.reaperTimer.unref?.();
+  }
+
+  /** Heartbeat + idle sweep. Exposed for tests via `reap(now)`. */
+  reap(now: number): void {
+    for (const s of this.sessions.values()) {
+      const heartbeatLost = now - s.lastHeartbeat > HEARTBEAT_TIMEOUT_MS;
+      if (s.owner === 'panel') {
+        if (heartbeatLost) {
           log.warn('Reaping idle browser session', {
             namespace: NS,
             sessionId: s.sessionId,
@@ -98,9 +268,21 @@ class BrowserSessionManager {
           });
           this.closeAndLog(s.sessionId, 'heartbeat');
         }
+        continue;
       }
-    }, HEARTBEAT_INTERVAL_MS);
-    this.reaperTimer.unref?.();
+      if (s.panelAttached && heartbeatLost) {
+        log.info('Panel heartbeat lost; detaching thread session', {
+          namespace: NS,
+          sessionId: s.sessionId,
+        });
+        s.panelAttached = false;
+      }
+      const lastUse = Math.max(s.lastAgentActivity, s.lastHeartbeat);
+      if (!s.panelAttached && now - lastUse > THREAD_IDLE_TIMEOUT_MS) {
+        log.info('Closing idle thread browser session', { namespace: NS, sessionId: s.sessionId });
+        this.closeAndLog(s.sessionId, 'idle');
+      }
+    }
   }
 
   private stopReaperIfIdle() {
@@ -110,207 +292,286 @@ class BrowserSessionManager {
     }
   }
 
-  /** Find an available port starting from BASE_PORT and avoiding currently-used ones. */
+  // ── Hosts ────────────────────────────────────────────────────────────────
+
   private async allocatePort(): Promise<number> {
     const { findAvailablePort } = await import('@funny/core/ports');
-    const used = new Set(Array.from(this.sessions.values()).map((s) => s.port));
+    const used = new Set<number>();
+    for (const entry of this.hosts.values()) if (entry.host) used.add(entry.host.port);
     return findAvailablePort(BASE_PORT, used);
   }
 
-  /**
-   * Resolve the Chromium binary path with a fallback when Playwright's reported
-   * path doesn't exist on disk. Common case: `chromium.executablePath()` returns
-   * a path inside VSCode's flatpak cache when funny is launched from VSCode's
-   * integrated terminal — that path is invisible to the runner outside the
-   * sandbox.
-   *
-   * Fallback strategy: scan `$PLAYWRIGHT_BROWSERS_PATH || ~/.cache/ms-playwright/`
-   * for `chromium-N` subdirs (then a `chrome-linux64/chrome` inside) and return
-   * the newest one that actually exists.
-   */
-  private async resolveChromiumBinary(): Promise<string> {
-    const { chromium } = await import('playwright');
-    const reported = chromium.executablePath();
-    if (reported && existsSync(reported)) return reported;
-
-    log.warn('Playwright executablePath does not exist on disk, falling back', {
-      namespace: NS,
-      reported,
-    });
-
-    const root = process.env.PLAYWRIGHT_BROWSERS_PATH || join(homedir(), '.cache', 'ms-playwright');
-    try {
-      const entries = await readdir(root);
-      const chromiumDirs = entries
-        .filter((e) => e.startsWith('chromium-'))
-        .map((e) => ({
-          dir: e,
-          version: Number.parseInt(e.replace('chromium-', ''), 10) || 0,
-        }))
-        .sort((a, b) => b.version - a.version);
-
-      for (const { dir } of chromiumDirs) {
-        for (const subpath of [
-          'chrome-linux64/chrome',
-          'chrome-linux/chrome',
-          'chrome-mac/Chromium.app/Contents/MacOS/Chromium',
-        ]) {
-          const candidate = join(root, dir, subpath);
-          if (existsSync(candidate)) return candidate;
-        }
-      }
-    } catch (err) {
-      log.error('Could not scan for Chromium binaries', {
-        namespace: NS,
-        root,
-        error: String(err),
-      });
+  /** The user's Chromium host, launching it if needed (concurrent callers share one launch). */
+  private async hostFor(userId: string): Promise<BrowserHost> {
+    let entry = this.hosts.get(userId);
+    if (!entry) {
+      entry = { host: null, launching: null, graceTimer: null };
+      this.hosts.set(userId, entry);
     }
+    if (entry.graceTimer) {
+      clearTimeout(entry.graceTimer);
+      entry.graceTimer = null;
+    }
+    if (entry.host?.alive) return entry.host;
+    if (entry.launching) return entry.launching;
 
-    throw new Error(
-      `No Chromium binary found. Run \`bunx playwright install chromium\` or set PLAYWRIGHT_BROWSERS_PATH to a directory containing chromium-N/chrome-linux64/chrome. Searched: ${root}`,
-    );
+    const launching = (async () => {
+      const binary = await resolveChromiumBinary();
+      const port = await this.allocatePort();
+      const result = await BrowserHost.launch({
+        binary,
+        port,
+        profileDir: profileDirFor(userId),
+        windowWidth: VIEWPORT_WIDTH,
+        windowHeight: VIEWPORT_HEIGHT,
+        onExit: (detail) => this.onHostExit(userId, detail),
+      });
+      if (result.isErr()) throw result.error;
+      return result.value;
+    })();
+    entry.launching = launching;
+    try {
+      const host = await launching;
+      entry.host = host;
+      return host;
+    } finally {
+      entry.launching = null;
+    }
   }
 
-  async open(userId: string, sessionId: string, url: string): Promise<void> {
-    log.info('open() called', {
-      namespace: NS,
+  private onHostExit(userId: string, detail: string): void {
+    const entry = this.hosts.get(userId);
+    if (entry) entry.host = null;
+    for (const s of this.sessions.values()) {
+      if (s.userId === userId) {
+        log.warn('Chromium host died; closing session', {
+          namespace: NS,
+          sessionId: s.sessionId,
+          detail,
+        });
+        this.closeAndLog(s.sessionId, 'error');
+      }
+    }
+  }
+
+  private scheduleHostShutdownIfUnused(userId: string): void {
+    const entry = this.hosts.get(userId);
+    if (!entry?.host) return;
+    const inUse = Array.from(this.sessions.values()).some((s) => s.userId === userId);
+    if (inUse || entry.graceTimer) return;
+    entry.graceTimer = setTimeout(() => {
+      entry.graceTimer = null;
+      const stillUnused = !Array.from(this.sessions.values()).some((s) => s.userId === userId);
+      if (stillUnused && entry.host) {
+        const host = entry.host;
+        entry.host = null;
+        void host.shutdown();
+      }
+    }, HOST_GRACE_MS);
+    entry.graceTimer.unref?.();
+  }
+
+  // ── Lookup / ownership ───────────────────────────────────────────────────
+
+  /** A session the given user owns, or `null` (foreign or missing ids look the same). */
+  getOwned(userId: string, sessionId: string): BrowserSession | null {
+    const s = this.sessions.get(sessionId);
+    if (!s) return null;
+    if (s.userId !== userId) {
+      log.warn('Refusing browser session owned by another user', {
+        namespace: NS,
+        sessionId,
+        userId,
+      });
+      return null;
+    }
+    return s;
+  }
+
+  private requireOwned(userId: string, sessionId: string): BrowserSession {
+    const s = this.getOwned(userId, sessionId);
+    if (!s) throw new Error('no-session');
+    return s;
+  }
+
+  findByThread(userId: string, threadId: string): BrowserSession | null {
+    return this.getOwned(userId, threadBrowserSessionId(threadId));
+  }
+
+  /** Threads currently holding a session (for the `too-many-sessions` message). */
+  listThreadsWithSessions(userId: string): string[] {
+    return Array.from(this.sessions.values())
+      .filter((s) => s.userId === userId && s.threadId)
+      .map((s) => s.threadId as string);
+  }
+
+  // ── Open ─────────────────────────────────────────────────────────────────
+
+  /**
+   * Open (or reuse) a session. From the panel, an empty `url` is an attach
+   * attempt: it re-attaches to an existing session and never creates one.
+   */
+  async open(
+    userId: string,
+    sessionId: string,
+    url: string,
+    opts: OpenSessionOptions = { origin: 'panel' },
+  ): Promise<BrowserSession | null> {
+    log.info('open() called', { namespace: NS, sessionId, userId, url, origin: opts.origin });
+    const threadId = opts.threadId ?? threadIdFromBrowserSessionId(sessionId);
+
+    const existing = this.sessions.get(sessionId);
+    if (existing) return this.reuseSession(existing, userId, url, opts.origin);
+
+    if (!url && opts.origin === 'panel') {
+      this.emit({ userId, threadId }, 'browser-session:closed', { sessionId, reason: 'not_found' });
+      return null;
+    }
+    this.ensureCapacity(userId, sessionId, threadId);
+
+    const profile = opts.profile ?? 'persistent';
+    const { host, tab } = await this.openTab(userId, sessionId, threadId, profile);
+    const session = newSessionRecord({
       sessionId,
       userId,
+      threadId,
+      profile,
       url,
-      env: {
-        PLAYWRIGHT_BROWSERS_PATH: process.env.PLAYWRIGHT_BROWSERS_PATH || '(unset)',
-        HOME: process.env.HOME || '(unset)',
-      },
+      host,
+      tab,
+      origin: opts.origin,
     });
+    // Register before connecting so a concurrent open for the same id reuses it.
+    this.sessions.set(sessionId, session);
+    this.startReaper();
+    await this.startSession(session, url);
 
-    if (this.sessions.has(sessionId)) {
-      log.warn('Reusing session via navigate', { namespace: NS, sessionId });
-      return this.navigate(sessionId, url);
+    metric('browser_session.opened', 1, { type: 'sum', attributes: { origin: opts.origin } });
+    log.info('Browser session ready', { namespace: NS, sessionId, threadId, profile });
+    this.emitReady(session);
+    if (opts.origin === 'agent' && threadId) {
+      this.emit(session, 'browser-session:agent-opened', { sessionId, url: session.url });
     }
-    if (this.sessions.size >= MAX_SESSIONS) {
-      log.warn('Too many sessions, refusing open', {
+    return session;
+  }
+
+  /** Open on an id that already has a session: navigate and (re)attach. */
+  private async reuseSession(
+    existing: BrowserSession,
+    userId: string,
+    url: string,
+    origin: OpenSessionOptions['origin'],
+  ): Promise<BrowserSession> {
+    if (existing.userId !== userId) {
+      log.warn('Refusing open for a session owned by another user', {
         namespace: NS,
-        sessionId,
-        active: this.sessions.size,
+        sessionId: existing.sessionId,
       });
-      wsBroker.emitToUser(userId, {
-        type: 'browser-session:closed',
-        threadId: '',
-        data: { sessionId, reason: 'too_many_sessions' },
-      });
-      throw new Error('too-many-sessions');
+      throw new Error('no-session');
     }
-
-    const port = await this.allocatePort();
-    const userDataDir = await mkdtemp(
-      join(tmpdir(), `funny-browser-${randomBytes(4).toString('hex')}-`),
-    );
-
-    log.info('Spawning Chromium', { namespace: NS, sessionId, port, url });
-
-    const { ChromeSession, waitForChrome } = await import('@funny/core/chrome');
-
-    let binary: string;
-    try {
-      binary = await this.resolveChromiumBinary();
-      log.info('Chromium binary resolved', { namespace: NS, sessionId, binary });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      await rm(userDataDir, { recursive: true, force: true }).catch(() => {});
-      log.error('Cannot find Chromium binary', { namespace: NS, sessionId, error: msg });
-      wsBroker.emitToUser(userId, {
-        type: 'browser-session:closed',
-        threadId: '',
-        data: { sessionId, reason: 'error', message: msg },
+    if (url) await this.navigate(userId, existing.sessionId, url);
+    if (origin === 'panel') {
+      existing.panelAttached = true;
+      existing.lastHeartbeat = Date.now();
+      this.emitReady(existing);
+      return existing;
+    }
+    existing.lastAgentActivity = Date.now();
+    if (url && existing.threadId) {
+      this.emit(existing, 'browser-session:agent-opened', {
+        sessionId: existing.sessionId,
+        url: existing.url,
       });
+    }
+    return existing;
+  }
+
+  private ensureCapacity(userId: string, sessionId: string, threadId: string | null): void {
+    if (this.sessions.size < MAX_SESSIONS) return;
+    log.warn('Too many sessions, refusing open', {
+      namespace: NS,
+      sessionId,
+      active: this.sessions.size,
+    });
+    this.emit({ userId, threadId }, 'browser-session:closed', {
+      sessionId,
+      reason: 'too_many_sessions',
+    });
+    throw new Error('too-many-sessions');
+  }
+
+  /** Launch (or reuse) the user's Chromium and open a tab in it. */
+  private async openTab(
+    userId: string,
+    sessionId: string,
+    threadId: string | null,
+    profile: BrowserProfileKind,
+  ): Promise<{ host: BrowserHost; tab: BrowserTab }> {
+    try {
+      const host = await this.hostFor(userId);
+      const tabResult = await host.newTab(profile);
+      if (tabResult.isErr()) throw tabResult.error;
+      return { host, tab: tabResult.value };
+    } catch (err) {
+      const msg = errorMessage(err);
+      log.error('Could not open browser tab', { namespace: NS, sessionId, error: msg });
+      this.emit({ userId, threadId }, 'browser-session:closed', {
+        sessionId,
+        reason: 'error',
+        message: msg,
+      });
+      this.scheduleHostShutdownIfUnused(userId);
       throw err;
     }
-    const chromeArgs = [
-      `--remote-debugging-port=${port}`,
-      '--headless=new',
-      '--no-sandbox',
-      '--disable-gpu',
-      '--disable-dev-shm-usage',
-      '--hide-scrollbars',
-      `--window-size=${VIEWPORT_WIDTH},${VIEWPORT_HEIGHT}`,
-      `--user-data-dir=${userDataDir}`,
-      'about:blank',
-    ];
+  }
 
-    log.info('Spawning Chromium', { namespace: NS, sessionId, binary, args: chromeArgs });
-
-    const proc = spawn(binary, chromeArgs, {
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: buildChildEnv(),
-      detached: false,
-    });
-
-    // Buffer recent stderr so we can include it in the error payload if the
-    // process dies during boot. Chromium dumps useful info there (missing
-    // .so libs, sandbox failures, etc.).
-    const stderrTail: string[] = [];
-    proc.stderr?.on('data', (chunk) => {
-      const text = chunk.toString();
-      stderrTail.push(text);
-      if (stderrTail.length > 20) stderrTail.shift();
-      // Surface lines that look like real errors at warn level.
-      if (
-        text.includes('ERROR') ||
-        text.includes('FATAL') ||
-        text.includes('error while loading shared libraries')
-      ) {
-        log.warn('Chromium stderr', { namespace: NS, sessionId, text: text.slice(0, 400) });
-      }
-    });
-
-    // `error` event fires when the binary itself can't be invoked (ENOENT,
-    // EACCES). `exit` fires when it ran but died. Both are fatal during boot.
-    let bootFailed = false;
-    let bootFailureMessage = '';
-    proc.on('error', (err) => {
-      bootFailed = true;
-      bootFailureMessage = `spawn failed: ${err.message}`;
-      log.error('Chromium spawn error', { namespace: NS, sessionId, binary, error: err.message });
-    });
-    proc.on('exit', (code, signal) => {
-      log.info('Chromium exited', { namespace: NS, sessionId, code, signal });
-      if (this.sessions.has(sessionId)) {
-        this.closeAndLog(sessionId, 'error');
-      } else if (code !== 0 && code !== null) {
-        // Died during boot.
-        bootFailed = true;
-        bootFailureMessage = `Chromium exited with code ${code}${signal ? ` (${signal})` : ''}: ${stderrTail.join('').slice(-400)}`;
-      }
-    });
-
-    // Wait for CDP to be ready
+  /** Attach the panel client, watch the page and load the first URL; closes on failure. */
+  private async startSession(session: BrowserSession, url: string): Promise<void> {
     try {
-      await waitForChrome('localhost', port, SPAWN_TIMEOUT_MS);
+      await this.attachChromeSession(session, session.tab.targetId);
+      this.watchPage(session, session.tab.page);
+      if (url) await chromeOf(session).navigate(url);
+      await chromeOf(session)
+        .execute(INSPECT_HELPERS)
+        .catch((err: unknown) => {
+          log.warn('Failed to install inspect helpers', {
+            namespace: NS,
+            sessionId: session.sessionId,
+            error: String(err),
+          });
+        });
     } catch (err) {
-      proc.kill('SIGKILL');
-      await rm(userDataDir, { recursive: true, force: true }).catch(() => {});
-      const detail = bootFailed
-        ? bootFailureMessage
-        : `Chromium did not expose CDP on port ${port} within ${SPAWN_TIMEOUT_MS}ms. stderr tail: ${stderrTail.join('').slice(-400)}`;
-      log.error('Chromium did not expose CDP in time', {
+      log.error('Browser session failed to start', {
         namespace: NS,
-        sessionId,
-        port,
+        sessionId: session.sessionId,
         error: String(err),
-        detail,
       });
-      wsBroker.emitToUser(userId, {
-        type: 'browser-session:closed',
-        threadId: '',
-        data: { sessionId, reason: 'error', message: detail },
-      });
+      await this.close(session.sessionId, 'error');
       throw err;
     }
+  }
 
+  /** Thread-bound open for the agent tools. */
+  openForThread(
+    userId: string,
+    threadId: string,
+    url: string,
+    profile: BrowserProfileKind = 'persistent',
+  ): Promise<BrowserSession | null> {
+    return this.open(userId, threadBrowserSessionId(threadId), url, {
+      threadId,
+      profile,
+      origin: 'agent',
+    });
+  }
+
+  /** Connect the panel-side CDP client (screencast, input) to a tab. */
+  private async attachChromeSession(s: BrowserSession, targetId: string): Promise<void> {
+    const { ChromeSession } = await import('@funny/core/chrome');
     const chromeSession = new ChromeSession({
-      host: 'localhost',
-      port,
+      host: '127.0.0.1',
+      port: s.host.port,
+      targetId,
       format: 'jpeg',
       quality: 60,
       maxWidth: VIEWPORT_WIDTH,
@@ -320,109 +581,142 @@ class BrowserSessionManager {
 
     // Wire events BEFORE connect so we don't miss the early frames.
     chromeSession.on('frame', (frame: { data: string; timestamp: number }) => {
-      wsBroker.emitToUser(userId, {
-        type: 'browser-session:frame',
-        threadId: '',
-        data: { sessionId, data: frame.data, timestamp: frame.timestamp },
+      if (s.chromeSession !== chromeSession) return;
+      this.emit(s, 'browser-session:frame', {
+        sessionId: s.sessionId,
+        data: frame.data,
+        timestamp: frame.timestamp,
       });
     });
-
-    chromeSession.on(
-      'console',
-      (entry: {
-        level: string;
-        text: string;
-        url?: string;
-        line?: number;
-        column?: number;
-        timestamp: number;
-      }) => {
-        wsBroker.emitToUser(userId, {
-          type: 'browser-session:console',
-          threadId: '',
-          data: { sessionId, ...entry },
-        });
-      },
-    );
-
-    chromeSession.on(
-      'error',
-      (err: {
-        message: string;
-        source?: string;
-        line?: number;
-        column?: number;
-        stack?: string;
-        timestamp: number;
-      }) => {
-        wsBroker.emitToUser(userId, {
-          type: 'browser-session:error',
-          threadId: '',
-          data: { sessionId, ...err },
-        });
-      },
-    );
-
+    chromeSession.on('console', (entry: Record<string, unknown>) => {
+      if (s.chromeSession !== chromeSession) return;
+      this.emit(s, 'browser-session:console', { sessionId: s.sessionId, ...entry });
+    });
+    chromeSession.on('error', (err: { message: string } & Record<string, unknown>) => {
+      if (s.chromeSession !== chromeSession) return;
+      this.emit(s, 'browser-session:error', { sessionId: s.sessionId, ...err });
+    });
     chromeSession.on('disconnect', () => {
-      log.warn('Chrome disconnected', { namespace: NS, sessionId });
-      if (this.sessions.has(sessionId)) {
-        this.closeAndLog(sessionId, 'error');
-      }
+      // A deliberate re-attach (popup switch) replaces `s.chromeSession` first.
+      if (s.chromeSession !== chromeSession) return;
+      // A popup that closed itself (OAuth windows do) drops its target: go
+      // back to the opener. Give Playwright a moment to observe the close.
+      setTimeout(() => {
+        if (s.chromeSession !== chromeSession || this.sessions.get(s.sessionId) !== s) return;
+        if (s.tab.page.isClosed() && s.backgroundTabs.length > 0) {
+          void this.restorePreviousTab(s);
+          return;
+        }
+        log.warn('Chrome disconnected', { namespace: NS, sessionId: s.sessionId });
+        this.closeAndLog(s.sessionId, 'error');
+      }, 250);
     });
 
+    const previous = s.chromeSession;
+    s.chromeSession = chromeSession;
     await chromeSession.connect();
-    // Lock the page viewport to exactly VIEWPORT_WIDTH×VIEWPORT_HEIGHT so the
-    // screencast frame size matches the canvas/overlay coordinate space the
-    // client uses to translate clicks. Without this, Chromium derives the
-    // viewport from the OS window and frames can come back slightly smaller,
-    // making clicks drift toward the corner the further from origin they are.
-    await chromeSession.setViewport(VIEWPORT_WIDTH, VIEWPORT_HEIGHT).catch((err: unknown) => {
+    // Lock the page viewport so the screencast frame size matches the
+    // coordinate space the client uses to translate clicks.
+    await chromeSession.setViewport(s.viewport.width, s.viewport.height).catch((err: unknown) => {
       log.warn('Failed to set viewport', {
         namespace: NS,
-        sessionId,
+        sessionId: s.sessionId,
         error: String(err),
       });
     });
-    await chromeSession.navigate(url);
+    if (previous) await previous.disconnect().catch(() => {});
+  }
 
-    // Install inspect helpers (idempotent — checks __funnyInspectInstalled).
-    await chromeSession.execute(INSPECT_HELPERS).catch((err: unknown) => {
-      log.warn('Failed to install inspect helpers', {
-        namespace: NS,
-        sessionId,
-        error: String(err),
-      });
+  /** Playwright-side listeners: navigation invalidates refs, dialogs, popups, errors. */
+  private watchPage(s: BrowserSession, page: Page): void {
+    page.on('framenavigated', (frame) => {
+      if (s.tab.page !== page || frame !== page.mainFrame()) return;
+      s.url = frame.url();
+      s.refs.invalidate('navigation');
     });
-
-    const session: BrowserSession = {
-      sessionId,
-      userId,
-      port,
-      url,
-      chromeProcess: proc,
-      userDataDir,
-      chromeSession,
-      lastHeartbeat: Date.now(),
-    };
-    this.sessions.set(sessionId, session);
-    this.startReaper();
-
-    metric('browser_session.opened', 1, { type: 'sum' });
-    log.info('Browser session ready', { namespace: NS, sessionId, port });
-
-    wsBroker.emitToUser(userId, {
-      type: 'browser-session:ready',
-      threadId: '',
-      data: { sessionId, url },
+    page.on('dialog', (dialog) => {
+      if (s.tab.page !== page) return;
+      // Phase 1: no agent-facing dialog tool yet — dismiss and report.
+      s.pendingDialogReports.push({
+        type: dialog.type(),
+        message: dialog.message(),
+        handled: 'dismissed',
+      });
+      void dialog.dismiss().catch(() => {});
+    });
+    page.on('console', (msg) => {
+      if (s.tab.page !== page || msg.type() !== 'error') return;
+      s.consoleErrors.push(msg.text().slice(0, 500));
+      if (s.consoleErrors.length > MAX_CONSOLE_ERRORS) s.consoleErrors.shift();
+    });
+    page.on('pageerror', (error) => {
+      if (s.tab.page !== page) return;
+      s.consoleErrors.push(error.message.slice(0, 500));
+      if (s.consoleErrors.length > MAX_CONSOLE_ERRORS) s.consoleErrors.shift();
+    });
+    page.on('close', () => {
+      if (s.tab.page === page && s.backgroundTabs.length > 0) void this.restorePreviousTab(s);
+    });
+    page.on('popup', (popup) => {
+      if (s.tab.page !== page) return;
+      void this.followPopup(s, popup).catch((err) => {
+        log.warn('Could not follow popup', {
+          namespace: NS,
+          sessionId: s.sessionId,
+          error: String(err),
+        });
+      });
     });
   }
 
-  async navigate(sessionId: string, url: string): Promise<void> {
-    const s = this.sessions.get(sessionId);
-    if (!s) throw new Error('no-session');
-    await s.chromeSession.navigate(url);
+  /** Keep one active tab per session: switch the session (and panel) to a popup. */
+  private async followPopup(s: BrowserSession, popup: Page): Promise<void> {
+    const cdp = await popup.context().newCDPSession(popup);
+    const info = (await cdp.send('Target.getTargetInfo')) as { targetInfo: { targetId: string } };
+    await cdp.detach().catch(() => {});
+    s.backgroundTabs.push(s.tab);
+    s.tab = { page: popup, targetId: info.targetInfo.targetId, ephemeralContext: null };
+    s.refs.invalidate('navigation');
+    s.url = popup.url();
+    this.watchPage(s, popup);
+    await this.attachChromeSession(s, info.targetInfo.targetId);
+    log.info('Session followed popup', { namespace: NS, sessionId: s.sessionId, url: s.url });
+  }
+
+  /** The active tab closed: switch back to the most recent open background tab. */
+  private async restorePreviousTab(s: BrowserSession): Promise<void> {
+    if (!s.tab.page.isClosed()) return;
+    let previous = s.backgroundTabs.pop();
+    while (previous && previous.page.isClosed()) previous = s.backgroundTabs.pop();
+    if (!previous) {
+      this.closeAndLog(s.sessionId, 'error');
+      return;
+    }
+    s.tab = previous;
+    s.url = previous.page.url();
+    s.refs.invalidate('navigation');
+    try {
+      await this.attachChromeSession(s, previous.targetId);
+      log.info('Session returned to previous tab', { namespace: NS, sessionId: s.sessionId });
+    } catch (err) {
+      log.warn('Could not return to previous tab', {
+        namespace: NS,
+        sessionId: s.sessionId,
+        error: String(err),
+      });
+      this.closeAndLog(s.sessionId, 'error');
+    }
+  }
+
+  // ── Panel operations (all ownership-checked) ─────────────────────────────
+
+  async navigate(userId: string, sessionId: string, url: string): Promise<void> {
+    const s = this.requireOwned(userId, sessionId);
+    await chromeOf(s).navigate(url);
     // Re-install helpers in case of full reload.
-    await s.chromeSession.execute(INSPECT_HELPERS).catch(() => {});
+    await chromeOf(s)
+      .execute(INSPECT_HELPERS)
+      .catch(() => {});
     s.url = url;
     s.lastHeartbeat = Date.now();
   }
@@ -433,129 +727,76 @@ class BrowserSessionManager {
    * `window.history` don't break the buttons. Returns the same value the
    * `ChromeSession` helper returns (boolean for back/forward, void for reload).
    */
-  async nav(sessionId: string, action: 'back' | 'forward' | 'reload'): Promise<unknown> {
-    const s = this.sessions.get(sessionId);
-    if (!s) throw new Error('no-session');
+  async nav(
+    userId: string,
+    sessionId: string,
+    action: 'back' | 'forward' | 'reload',
+  ): Promise<unknown> {
+    const s = this.requireOwned(userId, sessionId);
     s.lastHeartbeat = Date.now();
-    if (action === 'back') return s.chromeSession.goHistory(-1);
-    if (action === 'forward') return s.chromeSession.goHistory(1);
+    if (action === 'back') return chromeOf(s).goHistory(-1);
+    if (action === 'forward') return chromeOf(s).goHistory(1);
     if (action === 'reload') {
-      await s.chromeSession.reload();
+      await chromeOf(s).reload();
       return true;
     }
     throw new Error(`unknown nav action: ${String(action)}`);
   }
 
-  heartbeat(sessionId: string): void {
-    const s = this.sessions.get(sessionId);
-    if (s) s.lastHeartbeat = Date.now();
+  heartbeat(userId: string, sessionId: string): void {
+    const s = this.getOwned(userId, sessionId);
+    if (!s) return;
+    s.lastHeartbeat = Date.now();
+    s.panelAttached = true;
   }
 
-  async dispatchInput(sessionId: string, input: WSBrowserSessionInputData): Promise<void> {
-    const s = this.sessions.get(sessionId);
+  /** Run `fn` after every earlier action on this tab has finished. */
+  runExclusive<T>(s: BrowserSession, fn: () => Promise<T>): Promise<T> {
+    const run = s.queue.then(fn, fn);
+    s.queue = run.catch(() => {});
+    return run;
+  }
+
+  async dispatchInput(
+    userId: string,
+    sessionId: string,
+    input: WSBrowserSessionInputData,
+  ): Promise<void> {
+    const s = this.getOwned(userId, sessionId);
     if (!s) {
       log.warn('dispatchInput: no session', { namespace: NS, sessionId, kind: input.kind });
       return;
     }
     s.lastHeartbeat = Date.now();
-    const cs = s.chromeSession;
-
-    switch (input.kind) {
-      case 'mouseMove':
-        await cs.dispatchMouseEvent({ type: 'mouseMoved', x: input.x ?? 0, y: input.y ?? 0 });
-        return;
-      case 'mouseDown':
-        log.info('dispatching mouseDown', {
-          namespace: NS,
-          sessionId,
-          x: input.x,
-          y: input.y,
-          button: input.button,
-        });
-        await cs.dispatchMouseEvent({
-          type: 'mousePressed',
-          x: input.x ?? 0,
-          y: input.y ?? 0,
-          button: input.button ?? 'left',
-          clickCount: input.clickCount ?? 1,
-        });
-        return;
-      case 'mouseUp':
-        log.info('dispatching mouseUp', {
-          namespace: NS,
-          sessionId,
-          x: input.x,
-          y: input.y,
-          button: input.button,
-        });
-        await cs.dispatchMouseEvent({
-          type: 'mouseReleased',
-          x: input.x ?? 0,
-          y: input.y ?? 0,
-          button: input.button ?? 'left',
-          clickCount: input.clickCount ?? 1,
-        });
-        return;
-      case 'wheel':
-        await cs.dispatchScroll(input.x ?? 0, input.y ?? 0, input.deltaX ?? 0, input.deltaY ?? 0);
-        return;
-      case 'keyDown':
-        log.info('dispatching keyDown', {
-          namespace: NS,
-          sessionId,
-          key: input.key,
-          hasText: !!input.text,
-          modifiers: input.modifiers,
-        });
-        await cs.dispatchKeyEvent({
-          type: 'keyDown',
-          key: input.key ?? '',
-          code: input.code ?? '',
-          text: input.text,
-          modifiers: input.modifiers ?? 0,
-        });
-        return;
-      case 'keyUp':
-        log.info('dispatching keyUp', {
-          namespace: NS,
-          sessionId,
-          key: input.key,
-          modifiers: input.modifiers,
-        });
-        await cs.dispatchKeyEvent({
-          type: 'keyUp',
-          key: input.key ?? '',
-          code: input.code ?? '',
-          modifiers: input.modifiers ?? 0,
-        });
-        return;
-    }
+    const cs = chromeOf(s);
+    await this.runExclusive(s, () => PANEL_INPUT[input.kind](cs, input));
   }
 
   /** Run JS in the page; returns whatever value the expression evaluates to. */
-  async execute(sessionId: string, expression: string): Promise<unknown> {
-    const s = this.sessions.get(sessionId);
-    if (!s) throw new Error('no-session');
+  async execute(userId: string, sessionId: string, expression: string): Promise<unknown> {
+    const s = this.requireOwned(userId, sessionId);
     s.lastHeartbeat = Date.now();
-    return s.chromeSession.execute(expression);
+    return chromeOf(s).execute(expression);
   }
 
-  async inspectAt(sessionId: string, x: number, y: number): Promise<unknown> {
+  async inspectAt(userId: string, sessionId: string, x: number, y: number): Promise<unknown> {
     const span = startSpan('browser_session.inspect', { attributes: { kind: 'point' } });
     try {
       const result = await this.execute(
+        userId,
         sessionId,
         `(() => { const el = document.elementFromPoint(${x}, ${y}); return window.__funnyElementInfo ? window.__funnyElementInfo(el) : null; })()`,
       );
       span.end('ok');
       return result;
     } catch (err) {
-      span.end('error', err instanceof Error ? err.message : String(err));
+      span.end('error', errorMessage(err));
       throw err;
     }
   }
 
   async inspectRect(
+    userId: string,
     sessionId: string,
     x: number,
     y: number,
@@ -567,6 +808,7 @@ class BrowserSessionManager {
       // Sample a sparse grid inside the rect (5×5 = 25 points), dedupe by
       // element identity, return up to 10 by area-of-intersection desc.
       const result = await this.execute(
+        userId,
         sessionId,
         `
         (() => {
@@ -596,16 +838,22 @@ class BrowserSessionManager {
       span.end('ok');
       return result;
     } catch (err) {
-      span.end('error', err instanceof Error ? err.message : String(err));
+      span.end('error', errorMessage(err));
       throw err;
     }
   }
 
-  async screenshot(sessionId: string): Promise<string> {
-    const s = this.sessions.get(sessionId);
-    if (!s) throw new Error('no-session');
+  async screenshot(userId: string, sessionId: string): Promise<string> {
+    const s = this.requireOwned(userId, sessionId);
     s.lastHeartbeat = Date.now();
-    return s.chromeSession.screenshot();
+    return chromeOf(s).screenshot();
+  }
+
+  /** Resize the page viewport (panel coordinates follow via `browser-session:viewport`). */
+  async setViewport(s: BrowserSession, width: number, height: number): Promise<void> {
+    await chromeOf(s).setViewport(width, height);
+    s.viewport = { width, height };
+    this.emit(s, 'browser-session:viewport', { sessionId: s.sessionId, width, height });
   }
 
   /**
@@ -623,18 +871,34 @@ class BrowserSessionManager {
       const value = await fn();
       result = { sessionId, requestId, ok: true, value };
     } catch (err) {
-      result = {
-        sessionId,
-        requestId,
-        ok: false,
-        error: err instanceof Error ? err.message : String(err),
-      };
+      result = { sessionId, requestId, ok: false, error: errorMessage(err) };
     }
     wsBroker.emitToUser(userId, {
       type: 'browser-session:result',
       threadId: '',
       data: result,
     });
+  }
+
+  // ── Close ────────────────────────────────────────────────────────────────
+
+  /**
+   * Client-initiated close. `detach` keeps thread-bound sessions running;
+   * `clear-profile` wipes the user's persistent profile.
+   */
+  async closeFromClient(userId: string, sessionId: string, reason?: string): Promise<void> {
+    if (reason === 'clear-profile') {
+      await this.clearProfile(userId);
+      return;
+    }
+    const s = this.getOwned(userId, sessionId);
+    if (!s) return;
+    if (s.owner === 'thread' && (reason === 'detach' || reason === 'unmount')) {
+      s.panelAttached = false;
+      log.info('Panel detached from thread session', { namespace: NS, sessionId });
+      return;
+    }
+    await this.close(sessionId, 'user');
   }
 
   /** Fire-and-forget close: the session is already gone from the map, so a
@@ -645,7 +909,7 @@ class BrowserSessionManager {
         namespace: NS,
         sessionId,
         reason,
-        error: err instanceof Error ? err.message : String(err),
+        error: errorMessage(err),
       });
     });
   }
@@ -657,37 +921,62 @@ class BrowserSessionManager {
 
     log.info('Closing browser session', { namespace: NS, sessionId, reason });
 
-    try {
-      await s.chromeSession.disconnect();
-    } catch {
-      // ignore
-    }
-
-    if (!s.chromeProcess.killed) {
-      s.chromeProcess.kill('SIGTERM');
-      // Force-kill after 2s if SIGTERM didn't take.
-      setTimeout(() => {
-        if (!s.chromeProcess.killed) s.chromeProcess.kill('SIGKILL');
-      }, 2000).unref?.();
-    }
-
-    await rm(s.userDataDir, { recursive: true, force: true }).catch(() => {});
+    const chromeSession = s.chromeSession;
+    s.chromeSession = null;
+    await chromeSession?.disconnect().catch(() => {});
+    for (const tab of [s.tab, ...s.backgroundTabs]) await s.host.closeTab(tab);
 
     metric('browser_session.closed', 1, { type: 'sum', attributes: { reason } });
+    this.emit(s, 'browser-session:closed', { sessionId, reason });
 
-    wsBroker.emitToUser(s.userId, {
-      type: 'browser-session:closed',
-      threadId: '',
-      data: { sessionId, reason },
-    });
-
+    this.scheduleHostShutdownIfUnused(s.userId);
     this.stopReaperIfIdle();
   }
 
-  /** Force-close all sessions — used on runner shutdown. */
+  async closeForThread(userId: string, threadId: string): Promise<void> {
+    const s = this.findByThread(userId, threadId);
+    if (s) await this.close(s.sessionId, 'thread_deleted');
+  }
+
+  /** Close every session of the user, stop Chromium and delete the profile. */
+  async clearProfile(userId: string): Promise<void> {
+    const ids = Array.from(this.sessions.values())
+      .filter((s) => s.userId === userId)
+      .map((s) => s.sessionId);
+    await Promise.all(ids.map((id) => this.close(id, 'user')));
+    const entry = this.hosts.get(userId);
+    if (entry?.launching) await entry.launching.catch(() => {});
+    if (entry?.graceTimer) clearTimeout(entry.graceTimer);
+    if (entry?.host) await entry.host.shutdown();
+    this.hosts.delete(userId);
+    await rm(profileDirFor(userId), { recursive: true, force: true });
+    metric('browser_session.profile_cleared', 1, { type: 'sum' });
+    log.info('Browser profile cleared', { namespace: NS, userId });
+  }
+
+  /** Force-close all sessions and hosts — used on runner shutdown. */
   async closeAll(): Promise<void> {
     const ids = Array.from(this.sessions.keys());
     await Promise.all(ids.map((id) => this.close(id, 'runner_shutdown')));
+    const hosts = Array.from(this.hosts.values());
+    this.hosts.clear();
+    await Promise.all(
+      hosts.map(async (entry) => {
+        if (entry.graceTimer) clearTimeout(entry.graceTimer);
+        await entry.host?.shutdown();
+      }),
+    );
+  }
+
+  /** Remove temp profiles left by the pre-host process-per-session model. */
+  async cleanupLegacyTempProfiles(): Promise<void> {
+    const root = tmpdir();
+    const entries = await readdir(root).catch(() => [] as string[]);
+    await Promise.all(
+      entries
+        .filter((e) => e.startsWith('funny-browser-'))
+        .map((e) => rm(join(root, e), { recursive: true, force: true }).catch(() => {})),
+    );
   }
 
   /** Inspection: how many active sessions, who owns them. */
@@ -698,7 +987,9 @@ class BrowserSessionManager {
       sessions: Array.from(this.sessions.values()).map((s) => ({
         sessionId: s.sessionId,
         userId: s.userId,
-        port: s.port,
+        threadId: s.threadId,
+        owner: s.owner,
+        port: s.host.port,
         url: s.url,
         idleMs: Date.now() - s.lastHeartbeat,
       })),
@@ -707,3 +998,12 @@ class BrowserSessionManager {
 }
 
 export const browserSessionManager = new BrowserSessionManager();
+
+// Old process-per-session temp profiles are never reused — sweep them once.
+void browserSessionManager.cleanupLegacyTempProfiles();
+
+shutdownManager.register(
+  'browser-sessions',
+  () => browserSessionManager.closeAll(),
+  ShutdownPhase.SERVICES,
+);

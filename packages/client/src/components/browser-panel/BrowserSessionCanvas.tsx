@@ -5,11 +5,7 @@ import {
   recordBrowserSessionDecodeFailed,
   recordBrowserSessionDecodeStarted,
 } from '@/lib/browser-session-diagnostics';
-import {
-  BROWSER_SESSION_VIEWPORT_HEIGHT,
-  BROWSER_SESSION_VIEWPORT_WIDTH,
-  subscribeToFrames,
-} from '@/lib/browser-session-frames';
+import { subscribeToFrames } from '@/lib/browser-session-frames';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
 /**
@@ -28,6 +24,7 @@ interface BrowserSessionCanvasProps {
 export function BrowserSessionCanvas({ canvasRef }: BrowserSessionCanvasProps) {
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
   const sessionStatus = useBrowserPanelStore((s) => s.sessionStatus);
+  const viewport = useBrowserPanelStore((s) => s.viewport);
   const imgRef = useRef<HTMLImageElement | null>(null);
 
   // Lazily create an Image() instance we reuse for every frame to avoid GC
@@ -43,8 +40,8 @@ export function BrowserSessionCanvas({ canvasRef }: BrowserSessionCanvasProps) {
     if (!sessionId) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
-    canvas.width = BROWSER_SESSION_VIEWPORT_WIDTH;
-    canvas.height = BROWSER_SESSION_VIEWPORT_HEIGHT;
+    canvas.width = viewport.width;
+    canvas.height = viewport.height;
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
@@ -70,7 +67,7 @@ export function BrowserSessionCanvas({ canvasRef }: BrowserSessionCanvasProps) {
     return () => {
       unsub();
     };
-  }, [sessionId, canvasRef]);
+  }, [sessionId, canvasRef, viewport.width, viewport.height]);
 
   // The canvas fills its wrapper exactly (no own aspect-ratio / max-* sizing) so
   // its display rect matches the overlay's rect pixel-for-pixel — clicks scale

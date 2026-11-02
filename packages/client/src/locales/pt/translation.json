@@ -780,7 +780,17 @@
       "scheduledCheck": "Verificação agendada",
       "newThread": "Nova conversa",
       "searchThreads": "Buscar conversas",
-      "runJavaScript": "Executar JavaScript"
+      "runJavaScript": "Executar JavaScript",
+      "browserOpen": "Abrir página",
+      "browserNavigate": "Navegar",
+      "browserSnapshot": "Ler página",
+      "browserAct": "Interagir",
+      "browserEvaluate": "Executar JavaScript na página",
+      "browserWaitFor": "Aguardar a página",
+      "browserStatus": "Status",
+      "browserResize": "Redimensionar",
+      "browserClose": "Fechar navegador",
+      "showInBrowserPanel": "Ver no painel do navegador"
     }
   },
   "plan": {

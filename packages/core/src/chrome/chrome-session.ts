@@ -17,11 +17,17 @@ export interface ChromeSessionOptions {
   maxWidth?: number;
   maxHeight?: number;
   everyNthFrame?: number;
+  /**
+   * CDP target id of the page to attach to. When omitted, the first page
+   * target is used. Several sessions (and Playwright) can attach to the same
+   * browser at once, so callers that manage multiple tabs pass this.
+   */
+  targetId?: string;
 }
 
 export class ChromeSession extends EventEmitter {
   private client: CDP.Client | null = null;
-  private options: Required<ChromeSessionOptions>;
+  private options: Required<Omit<ChromeSessionOptions, 'targetId'>> & { targetId?: string };
   private frameCount = 0;
   private connected = false;
 
@@ -35,6 +41,7 @@ export class ChromeSession extends EventEmitter {
       maxWidth: options.maxWidth ?? 1280,
       maxHeight: options.maxHeight ?? 720,
       everyNthFrame: options.everyNthFrame ?? 1,
+      targetId: options.targetId,
     };
   }
 
@@ -42,12 +49,16 @@ export class ChromeSession extends EventEmitter {
     const { host, port } = this.options;
     this.emit('log', `Connecting to Chrome at ${host}:${port}...`);
 
-    // Connect to the first page-level target rather than the browser-level
-    // WebSocket. Chrome only allows one browser-level CDP connection at a time,
-    // and Playwright's connectOverCDP also needs that slot — so we take the
-    // page target slot instead, which is independent and doesn't conflict.
+    // Attach to a page-level target (the requested one, else the first page)
+    // so screencast and input are scoped to that tab. Chrome accepts several
+    // CDP clients per target and per browser, so this coexists with
+    // Playwright's `connectOverCDP` on the same browser and page.
     const targets: CDP.Target[] = await CDP.List({ host, port });
-    const pageTarget = targets.find((t) => t.type === 'page');
+    const { targetId } = this.options;
+    const pageTarget = targetId
+      ? targets.find((t) => t.id === targetId)
+      : targets.find((t) => t.type === 'page');
+    if (targetId && !pageTarget) throw new Error(`Target ${targetId} not found`);
 
     if (pageTarget?.webSocketDebuggerUrl) {
       this.emit('log', `Using page target: ${pageTarget.id}`);

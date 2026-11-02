@@ -95,7 +95,7 @@
   },
   "optionalDependencies": {
     "node-pty": "^1.1.0",
-    "playwright": "^1.50.0"
+    "playwright": "^1.61.0"
   },
   "engines": {
     "bun": ">=1.4.0"

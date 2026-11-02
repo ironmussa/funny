@@ -1,6 +1,10 @@
 import { describe, test, expect } from 'vitest';
 
-import { FUNNY_DEAD_CLAUDE_TOOLS, mergeDisallowedTools } from '../agents/sdk-claude.js';
+import {
+  FUNNY_DEAD_CLAUDE_TOOLS,
+  mcpAutoAllowWildcards,
+  mergeDisallowedTools,
+} from '../agents/sdk-claude.js';
 
 // Regression: ScheduleWakeup is a no-op inside funny's SDK/headless runtime —
 // its firing relies on the interactive CLI's outer loop, which doesn't exist
@@ -26,5 +30,17 @@ describe('mergeDisallowedTools', () => {
     const merged = mergeDisallowedTools(['ScheduleWakeup', 'Bash']);
     expect(merged.filter((t) => t === 'ScheduleWakeup')).toHaveLength(1);
     expect(merged).toContain('Bash');
+  });
+});
+
+// Browser tools act on real, often logged-in pages: they must follow the
+// thread's permission mode rather than the blanket MCP auto-allow.
+describe('mcpAutoAllowWildcards', () => {
+  test('auto-allows ordinary MCP servers', () => {
+    expect(mcpAutoAllowWildcards(['funny', 'linear'])).toEqual(['mcp__funny__*', 'mcp__linear__*']);
+  });
+
+  test('never auto-allows the funny_browser server', () => {
+    expect(mcpAutoAllowWildcards(['funny', 'funny_browser'])).toEqual(['mcp__funny__*']);
   });
 });

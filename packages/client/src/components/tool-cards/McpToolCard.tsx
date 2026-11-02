@@ -1,4 +1,5 @@
-import { CircleAlert, ChevronRight, Plug } from 'lucide-react';
+import { threadBrowserSessionId } from '@funny/shared';
+import { CircleAlert, ChevronRight, Globe, Plug } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -8,12 +9,15 @@ import { CopyButton } from '@/components/ui/copy-button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { cn } from '@/lib/utils';
+import { useBrowserPanelStore } from '@/stores/browser-panel-store';
+import { getUrlThreadId } from '@/stores/thread-store';
 
 import { ToolValue } from './GenericToolCard';
 import {
   formatDurationMs,
   getMcpCodeInput,
   getMcpSummary,
+  isBrowserTool,
   mcpResultPreview,
   mcpToolTitle,
   parseMcpResult,
@@ -41,7 +45,7 @@ export function McpToolCard({ mcp, parsed, output, hideLabel, displayTime }: Pro
   const [expanded, setExpanded] = useState(false);
   const [raw, setRaw] = useState(false);
 
-  const summary = useMemo(() => getMcpSummary(parsed), [parsed]);
+  const summary = useMemo(() => getMcpSummary(parsed, mcp), [parsed, mcp]);
   const codeInput = useMemo(() => getMcpCodeInput(parsed, mcp.tool), [parsed, mcp.tool]);
   const result = useMemo(() => parseMcpResult(output), [output]);
   const otherInputs = useMemo(
@@ -145,6 +149,7 @@ export function McpToolCard({ mcp, parsed, output, hideLabel, displayTime }: Pro
           viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
         >
           <div className="space-y-2 px-3 pt-1.5 pb-2">
+            {isBrowserTool(mcp) && <ShowInBrowserPanelButton />}
             {codeInput && (
               <Section label={codeInput.key}>
                 <CodeBlock code={codeInput.code} language={codeInput.language} />
@@ -204,6 +209,28 @@ export function McpToolCard({ mcp, parsed, output, hideLabel, displayTime }: Pro
         </ToolContentArea>
       )}
     </div>
+  );
+}
+
+/** Open the browser panel on the active thread's (agent-shared) session. */
+function ShowInBrowserPanelButton() {
+  const { t } = useTranslation();
+  const handleAgentOpened = useBrowserPanelStore((s) => s.handleAgentOpened);
+  const threadId = getUrlThreadId();
+  if (!threadId) return null;
+  return (
+    <Button
+      variant="outline"
+      size="xs"
+      onClick={() => {
+        useBrowserPanelStore.setState({ open: true });
+        handleAgentOpened(threadBrowserSessionId(threadId), threadId, threadId);
+      }}
+      data-testid="mcp-tool-card-show-in-browser-panel"
+    >
+      <Globe className="icon-xs" />
+      {t('tools.mcp.showInBrowserPanel')}
+    </Button>
   );
 }
 

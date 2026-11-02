@@ -51,7 +51,7 @@ browserSessionRoutes.post('/', async (c) => {
 
   // Fire-and-forget: the spawn takes ~2s, return immediately and let the
   // client wait for the `browser-session:ready` WS event.
-  browserSessionManager.open(userId, sessionId, url).catch((err) => {
+  browserSessionManager.open(userId, sessionId, url, { origin: 'panel' }).catch((err) => {
     log.error('browser-session open failed', {
       namespace: NS,
       sessionId,
@@ -65,11 +65,11 @@ browserSessionRoutes.post('/', async (c) => {
 
 /**
  * DELETE /api/browser-session/:sessionId
- * Closes the session: disconnects CDP, kills Chromium, frees the port.
+ * Closes the session: disconnects CDP and closes its tab.
  */
 browserSessionRoutes.delete('/:sessionId', async (c) => {
   const sessionId = c.req.param('sessionId');
-  await browserSessionManager.close(sessionId, 'user');
+  await browserSessionManager.closeFromClient(c.get('userId'), sessionId, 'user');
   return c.json({ status: 'closed' });
 });
 

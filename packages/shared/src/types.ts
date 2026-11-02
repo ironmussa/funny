@@ -140,7 +140,11 @@ export type {
   WSBrowserSessionConsoleData,
   WSBrowserSessionErrorData,
   WSBrowserSessionClosedData,
+  WSBrowserSessionAgentOpenedData,
+  WSBrowserSessionViewportData,
+  BrowserSessionCloseRequestReason,
 } from './types/browser-session.js';
+export { threadBrowserSessionId, threadIdFromBrowserSessionId } from './types/browser-session.js';
 
 export type {
   FunnyPortGroup,
@@ -974,7 +978,13 @@ export type WSEvent =
   | { type: 'browser-session:result'; threadId: ''; data: WSBrowserSessionResultData }
   | { type: 'browser-session:console'; threadId: ''; data: WSBrowserSessionConsoleData }
   | { type: 'browser-session:error'; threadId: ''; data: WSBrowserSessionErrorData }
-  | { type: 'browser-session:closed'; threadId: ''; data: WSBrowserSessionClosedData };
+  | { type: 'browser-session:closed'; threadId: ''; data: WSBrowserSessionClosedData }
+  | {
+      type: 'browser-session:agent-opened';
+      threadId: '';
+      data: WSBrowserSessionAgentOpenedData;
+    }
+  | { type: 'browser-session:viewport'; threadId: ''; data: WSBrowserSessionViewportData };
 
 export interface WSOrgMemberData {
   organizationId: string;
@@ -1100,6 +1110,8 @@ import type {
   WSBrowserSessionConsoleData,
   WSBrowserSessionErrorData,
   WSBrowserSessionClosedData,
+  WSBrowserSessionAgentOpenedData,
+  WSBrowserSessionViewportData,
 } from './types/browser-session.js';
 import type {
   WSGitStatusData,

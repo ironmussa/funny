@@ -91,10 +91,40 @@ export interface WSBrowserSessionHeartbeatData {
   sessionId: string;
 }
 
+/**
+ * Client close reasons. `'detach'` only disconnects the panel from a
+ * thread-bound session (the session keeps running for the agent);
+ * `'clear-profile'` closes every session of the user and deletes the
+ * persistent browser profile.
+ */
+export type BrowserSessionCloseRequestReason =
+  | 'user'
+  | 'unmount'
+  | 'navigation'
+  | 'detach'
+  | 'clear-profile';
+
 export interface WSBrowserSessionCloseData {
   sessionId: string;
   /** Optional client-supplied reason; defaults to `'user'` on the runner side. */
-  reason?: 'user' | 'unmount' | 'navigation';
+  reason?: BrowserSessionCloseRequestReason;
+}
+
+/**
+ * Thread-bound sessions use a deterministic id so the panel can attach to the
+ * session an agent opened (and re-attach after a reload) without a lookup.
+ */
+const THREAD_SESSION_PREFIX = 'thread:';
+
+export function threadBrowserSessionId(threadId: string): string {
+  return `${THREAD_SESSION_PREFIX}${threadId}`;
+}
+
+/** Thread id of a thread-bound session id, or `null` for panel-owned ids. */
+export function threadIdFromBrowserSessionId(sessionId: string): string | null {
+  return sessionId.startsWith(THREAD_SESSION_PREFIX)
+    ? sessionId.slice(THREAD_SESSION_PREFIX.length) || null
+    : null;
 }
 
 // ─── Runner → client messages ──────────────────────────────────────────────
@@ -103,6 +133,25 @@ export interface WSBrowserSessionReadyData {
   sessionId: string;
   /** Echoed back so the client can confirm the URL the runner is on. */
   url: string;
+  /** Set for thread-bound sessions. */
+  threadId?: string;
+  /** Page viewport in CSS pixels; the panel maps input coordinates to it. */
+  viewport?: { width: number; height: number };
+}
+
+/** An agent opened (or navigated) its thread's session — the panel may attach. */
+export interface WSBrowserSessionAgentOpenedData {
+  sessionId: string;
+  threadId: string;
+  url: string;
+}
+
+/** The session's page viewport changed (e.g. the agent resized it). */
+export interface WSBrowserSessionViewportData {
+  sessionId: string;
+  threadId?: string;
+  width: number;
+  height: number;
 }
 
 export interface WSBrowserSessionFrameData {
@@ -147,11 +196,18 @@ export type BrowserSessionClosedReason =
   | 'heartbeat'
   | 'error'
   | 'runner_shutdown'
-  | 'too_many_sessions';
+  | 'too_many_sessions'
+  /** Thread-bound session left unused (no agent calls, no panel) too long. */
+  | 'idle'
+  /** The session's thread was deleted or archived. */
+  | 'thread_deleted'
+  /** Attach attempt (`open` with an empty URL) for a session that does not exist. */
+  | 'not_found';
 
 export interface WSBrowserSessionClosedData {
   sessionId: string;
   reason: BrowserSessionClosedReason;
+  threadId?: string;
   /** Free-text detail for `'error'` reasons. */
   message?: string;
 }

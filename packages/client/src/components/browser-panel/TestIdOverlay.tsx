@@ -1,10 +1,6 @@
 import { useEffect, useState } from 'react';
 
 import { browserSessionClient } from '@/lib/browser-session-client';
-import {
-  BROWSER_SESSION_VIEWPORT_HEIGHT as VIEWPORT_H,
-  BROWSER_SESSION_VIEWPORT_WIDTH as VIEWPORT_W,
-} from '@/lib/browser-session-viewport';
 import { createClientLogger } from '@/lib/client-logger';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
@@ -44,6 +40,7 @@ const COLLECT_TESTIDS_EXPR = `
  * Refreshes every 2 seconds so labels keep up with SPA route changes.
  */
 export function TestIdOverlay() {
+  const { width: VIEWPORT_W, height: VIEWPORT_H } = useBrowserPanelStore((s) => s.viewport);
   const showTestIds = useBrowserPanelStore((s) => s.showTestIds);
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
   const [labels, setLabels] = useState<TestIdLabel[]>([]);

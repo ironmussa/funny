@@ -4,10 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 import { browserSessionClient } from '@/lib/browser-session-client';
-import {
-  BROWSER_SESSION_VIEWPORT_HEIGHT as VIEWPORT_H,
-  BROWSER_SESSION_VIEWPORT_WIDTH as VIEWPORT_W,
-} from '@/lib/browser-session-viewport';
 import { createClientLogger } from '@/lib/client-logger';
 import { useBrowserPanelStore, type AnnotationDomInfo } from '@/stores/browser-panel-store';
 import {
@@ -42,6 +38,7 @@ export function RegionTool({ overlayRef, isActive }: RegionToolProps) {
   const updateAnnotationNote = useBrowserPanelStore((s) => s.updateAnnotationNote);
   const updateRegionDom = useBrowserPanelStore((s) => s.updateRegionDom);
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
+  const { width: VIEWPORT_W, height: VIEWPORT_H } = useBrowserPanelStore((s) => s.viewport);
 
   const [drag, setDrag] = useState<DragState | null>(null);
   const [openRegionId, setOpenRegionId] = useState<string | null>(null);

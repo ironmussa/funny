@@ -1,14 +1,15 @@
 import type { AgentProvider } from '@funny/shared';
 
 import type { RuntimeThreadRecord } from '../server-interfaces.js';
-import { withWatchMcpServer } from './agent-profile.js';
+import { withBrowserMcpServer, withWatchMcpServer } from './agent-profile.js';
 import { loadProjectMcpServers } from './load-mcp-servers.js';
 import { resolveAgentTemplate, type AgentTemplateResolution } from './resolve-agent-template.js';
 
 /**
  * Resolve the MCP servers, tool restrictions and template wiring for a spawn:
  * project MCP servers (when none were explicitly provided), the Deep Agent
- * template, then the always-present funny_watch server.
+ * template, then the always-present funny_watch server and (Claude only) the
+ * funny_browser server.
  */
 export async function resolveAgentTooling(input: {
   threadId: string;
@@ -35,8 +36,9 @@ export async function resolveAgentTooling(input: {
     disallowedTools: input.disallowedTools,
     mcpServers,
   });
+  const withWatch = await withWatchMcpServer(threadId, thread?.userId, template.mcpServers);
   return {
     ...template,
-    mcpServers: await withWatchMcpServer(threadId, thread?.userId, template.mcpServers),
+    mcpServers: await withBrowserMcpServer(threadId, thread?.userId, provider, withWatch),
   };
 }

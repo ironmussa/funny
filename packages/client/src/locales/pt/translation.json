@@ -749,6 +749,9 @@
     "acceptPlan": "Aceitar Plano",
     "input": "Entrada",
     "output": "Saída",
+    "mcpError": "Erro",
+    "raw": "Bruto",
+    "formatted": "Formatado",
     "waitingForOutput": "Aguardando saída...",
     "diffUnavailableNoTracking": "A diferença não pode ser exibida porque este arquivo não é rastreado pelo Git.",
     "openInEditor": "Abrir no {{editor}}: {{path}}",
@@ -759,7 +762,26 @@
     "other": "Outra",
     "otherPlaceholder": "Escreva sua resposta...",
     "next": "Próximo",
-    "continue": "Continuar"
+    "continue": "Continuar",
+    "loadTools": "Carregar ferramentas",
+    "skill": "Skill",
+    "newTask": "Nova tarefa",
+    "updateTask": "Atualizar tarefa",
+    "taskOutput": "Saída da tarefa",
+    "stopTask": "Parar tarefa",
+    "scheduleWakeup": "Despertar agendado",
+    "monitor": "Monitor",
+    "sendMessage": "Enviar mensagem",
+    "applyPatch": "Aplicar patch",
+    "updatePlan": "Atualizar plano",
+    "planMode": "Modo plano",
+    "mcp": {
+      "backgroundJob": "Tarefa em segundo plano",
+      "scheduledCheck": "Verificação agendada",
+      "newThread": "Nova conversa",
+      "searchThreads": "Buscar conversas",
+      "runJavaScript": "Executar JavaScript"
+    }
   },
   "plan": {
     "reviewPlan": "Revisar plano",

@@ -1,3 +1,5 @@
+import { mcpToolTitle, parseMcpToolName } from './mcp-tool';
+
 export interface TodoItem {
   content: string;
   status: 'pending' | 'in_progress' | 'completed';
@@ -110,7 +112,9 @@ export function getSummary(
     case 'Edit':
       return (parsed.file_path as string) ?? null;
     case 'Bash':
-      return (parsed.command as string) ?? null;
+      return typeof parsed.command === 'string'
+        ? unwrapShellCommand(parsed.command)
+        : ((parsed.command as string) ?? null);
     case 'Glob':
       return (parsed.pattern as string) ?? null;
     case 'Grep':
@@ -147,6 +151,38 @@ export function getSummary(
     }
     case 'ProviderError':
       return (parsed.error as string) ?? null;
+    case 'ToolSearch':
+      return typeof parsed.query === 'string'
+        ? parsed.query.replace(/^select:/, '').replace(/,/g, ', ')
+        : null;
+    case 'Skill':
+      return (parsed.skill as string) ?? null;
+    case 'TaskCreate':
+      return (parsed.subject as string) ?? null;
+    case 'TaskUpdate':
+      return parsed.taskId
+        ? `#${String(parsed.taskId)}${parsed.status ? ` → ${String(parsed.status)}` : ''}`
+        : null;
+    case 'TaskOutput':
+    case 'TaskStop':
+      return parsed.task_id ? String(parsed.task_id) : null;
+    case 'ScheduleWakeup':
+      return (parsed.reason as string) ?? null;
+    case 'Monitor':
+      return (parsed.description as string) ?? (parsed.command as string) ?? null;
+    case 'SendMessage':
+      return (parsed.summary as string) ?? (parsed.to as string) ?? null;
+    case 'apply_patch':
+    case 'ApplyPatch':
+      return patchSummary(parsed);
+    case 'update_plan':
+      return typeof parsed.explanation === 'string'
+        ? (parsed.explanation.split('\n').find((l) => l.trim()) ?? null)
+        : null;
+    case 'Tool':
+      return parsed.server && parsed.tool
+        ? `${String(parsed.server)} · ${String(parsed.tool)}`
+        : ((parsed.description as string) ?? null);
     case 'Background':
       return (
         (parsed.label as string) ??
@@ -160,7 +196,39 @@ export function getSummary(
   }
 }
 
+const SHELL_WRAPPER = /^(?:\/usr)?(?:\/bin\/)?(?:bash|sh|zsh)\s+-l?c\s+(['"])([\s\S]*)\1\s*$/;
+
+/**
+ * The command inside a shell wrapper (`/bin/bash -lc '…'`, as Codex sends
+ * them), unescaped; anything else is returned as is.
+ */
+export function unwrapShellCommand(command: string): string {
+  const match = command.trim().match(SHELL_WRAPPER);
+  if (!match) return command;
+  const [, quote, body] = match;
+  return quote === "'" ? body.replace(/'\\''/g, "'") : body.replace(/\\(["\\$`])/g, '$1');
+}
+
+/** The file(s) a patch touches: the first path, plus how many more. */
+function patchSummary(parsed: Record<string, unknown>): string | null {
+  const paths: string[] = [];
+  if (typeof parsed.input === 'string') {
+    for (const m of parsed.input.matchAll(/^\*\*\* (?:Update|Add|Delete) File: (.+)$/gm)) {
+      paths.push(m[1].trim());
+    }
+  }
+  if (Array.isArray(parsed.changes)) {
+    for (const change of parsed.changes) {
+      if (change && typeof change.path === 'string') paths.push(change.path);
+    }
+  }
+  if (paths.length === 0) return null;
+  return paths.length > 1 ? `${paths[0]} +${paths.length - 1}` : paths[0];
+}
+
 export function getToolLabel(name: string, t: (key: string) => string): string {
+  const mcp = parseMcpToolName(name);
+  if (mcp) return mcpToolTitle(mcp, t);
   const labels: Record<string, string> = {
     Read: t('tools.readFile'),
     Write: t('tools.writeFile'),
@@ -181,6 +249,19 @@ export function getToolLabel(name: string, t: (key: string) => string): string {
     ProviderError: t('tools.providerError'),
     Background: t('tools.background'),
     Tool: t('tools.tool'),
+    ToolSearch: t('tools.loadTools'),
+    Skill: t('tools.skill'),
+    TaskCreate: t('tools.newTask'),
+    TaskUpdate: t('tools.updateTask'),
+    TaskOutput: t('tools.taskOutput'),
+    TaskStop: t('tools.stopTask'),
+    ScheduleWakeup: t('tools.scheduleWakeup'),
+    Monitor: t('tools.monitor'),
+    SendMessage: t('tools.sendMessage'),
+    apply_patch: t('tools.applyPatch'),
+    ApplyPatch: t('tools.applyPatch'),
+    update_plan: t('tools.updatePlan'),
+    EnterPlanMode: t('tools.planMode'),
   };
   return labels[name] ?? name;
 }

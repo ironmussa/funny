@@ -11,11 +11,71 @@ import {
   getFileName,
   isTodoToolName,
   isPathWithin,
+  unwrapShellCommand,
 } from '@/components/tool-cards/format-utils';
 import { extToHljsLang } from '@/hooks/use-highlight';
 import { toEditorUri, toEditorUriWithLine } from '@/lib/editor-utils';
 
 const t = (key: string) => key;
+
+describe('friendly labels for agent and MCP tools', () => {
+  test('MCP tool names become "Server · Action" titles, also for groups', () => {
+    expect(getToolLabel('mcp__linear__save_issue', t)).toBe('Linear · Save issue');
+    expect(getToolLabel('mcp__funny__funny_spawn', t)).toBe('funny · tools.mcp.backgroundJob');
+    expect(getToolLabel('mcp__chrome-devtools__take_snapshot', t)).toBe(
+      'Chrome DevTools · Take snapshot',
+    );
+  });
+
+  test('the chrome-devtools calls from the thread get readable titles', () => {
+    expect(getToolLabel('mcp__chrome-devtools__list_pages', t)).toBe(
+      'Chrome DevTools · List pages',
+    );
+    expect(getToolLabel('mcp__chrome-devtools__navigate_page', t)).toBe(
+      'Chrome DevTools · Navigate page',
+    );
+  });
+
+  test('a command wrapped in /bin/bash -lc shows the command itself', () => {
+    expect(getSummary('Bash', { command: "/bin/bash -lc 'cat migration-state.json'" }, t)).toBe(
+      'cat migration-state.json',
+    );
+    expect(
+      getSummary('Bash', { command: `/bin/bash -lc "python3 - <<'PY'\\nprint(\\"hi\\")"` }, t),
+    ).toBe(`python3 - <<'PY'\\nprint("hi")`);
+    expect(unwrapShellCommand(`bash -lc 'echo '\\''quoted'\\'''`)).toBe("echo 'quoted'");
+    // Not a wrapper: unchanged.
+    expect(unwrapShellCommand('bun run lint && bash -lc x')).toBe('bun run lint && bash -lc x');
+  });
+
+  test('agent tools get a label and a one-line summary', () => {
+    expect(getToolLabel('ToolSearch', t)).toBe('tools.loadTools');
+    expect(getSummary('ToolSearch', { query: 'select:TaskCreate,TaskUpdate' }, t)).toBe(
+      'TaskCreate, TaskUpdate',
+    );
+    expect(getSummary('Skill', { skill: 'query-logs' }, t)).toBe('query-logs');
+    expect(getSummary('TaskCreate', { subject: 'Ship it' }, t)).toBe('Ship it');
+    expect(getSummary('TaskUpdate', { taskId: '14', status: 'completed' }, t)).toBe(
+      '#14 → completed',
+    );
+    expect(getSummary('ScheduleWakeup', { reason: 'Watch CI' }, t)).toBe('Watch CI');
+    expect(getSummary('SendMessage', { to: 'a1', summary: 'Resume fixes' }, t)).toBe(
+      'Resume fixes',
+    );
+    expect(
+      getSummary(
+        'apply_patch',
+        { input: '*** Begin Patch\n*** Update File: a.ts\n*** Add File: b.ts\n' },
+        t,
+      ),
+    ).toBe('a.ts +1');
+    expect(getSummary('ApplyPatch', { changes: [{ path: 'c.ts' }] }, t)).toBe('c.ts');
+    expect(getSummary('Tool', { server: 'supabase', tool: 'get_advisors' }, t)).toBe(
+      'supabase · get_advisors',
+    );
+  });
+});
+
 
 describe('formatInput', () => {
   test('parses JSON string into object', () => {

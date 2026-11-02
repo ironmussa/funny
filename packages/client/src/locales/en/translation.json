@@ -761,6 +761,9 @@
     "acceptPlan": "Accept Plan",
     "input": "Input",
     "output": "Output",
+    "mcpError": "Error",
+    "raw": "Raw",
+    "formatted": "Formatted",
     "waitingForOutput": "Waiting for output...",
     "diffUnavailableNoTracking": "The diff cannot be shown because this file is not tracked by Git.",
     "openInEditor": "Open in {{editor}}: {{path}}",
@@ -771,7 +774,26 @@
     "other": "Other",
     "otherPlaceholder": "Write your answer...",
     "next": "Next",
-    "continue": "Continue"
+    "continue": "Continue",
+    "loadTools": "Load tools",
+    "skill": "Skill",
+    "newTask": "New task",
+    "updateTask": "Update task",
+    "taskOutput": "Task output",
+    "stopTask": "Stop task",
+    "scheduleWakeup": "Scheduled wakeup",
+    "monitor": "Monitor",
+    "sendMessage": "Send message",
+    "applyPatch": "Apply patch",
+    "updatePlan": "Update plan",
+    "planMode": "Plan mode",
+    "mcp": {
+      "backgroundJob": "Background job",
+      "scheduledCheck": "Scheduled check",
+      "newThread": "New thread",
+      "searchThreads": "Search threads",
+      "runJavaScript": "Run JavaScript"
+    }
   },
   "plan": {
     "reviewPlan": "Review plan",

@@ -6,6 +6,8 @@ import { AskQuestionCard } from './AskQuestionCard';
 import { BashCard } from './BashCard';
 import { EditFileCard } from './EditFileCard';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
+import { parseMcpToolName } from './mcp-tool';
+import { McpToolCard } from './McpToolCard';
 import { PlanCard } from './PlanCard';
 import { ReadFileCard } from './ReadFileCard';
 import { TaskCard } from './TaskCard';
@@ -47,6 +49,17 @@ export function dispatchToolCard({
   renderToolCall,
 }: Args): ReactNode | null {
   const isPlan = typeof parsed.plan === 'string' && parsed.plan.length > 0;
+  const mcp = parseMcpToolName(name);
+  if (mcp)
+    return (
+      <McpToolCard
+        mcp={mcp}
+        parsed={parsed}
+        output={output}
+        hideLabel={hideLabel}
+        displayTime={displayTime}
+      />
+    );
 
   if (name === 'ExitPlanMode')
     return (

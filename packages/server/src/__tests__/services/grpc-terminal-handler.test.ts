@@ -192,4 +192,72 @@ describe('runner gRPC terminal stream', () => {
     ).toThrow('runner terminal limit exceeded');
     sessions.closeAll();
   });
+
+  test('recovers lost output with a replay-only resume instead of failing the terminal', () => {
+    const { call, dispatcher, epoch, relayed, sessions } = setup();
+    dispatcher.dispatch('runner-1', 'user-1', {
+      type: 'pty:spawn',
+      data: { id: 'pty-1', cwd: '/repo' },
+    });
+    const output = (sequence: string, text: string) =>
+      call.emit('data', {
+        session: { sessionEpoch: String(epoch) },
+        terminalId: 'pty-1',
+        output: { sequence, data: new TextEncoder().encode(text) },
+      });
+
+    output('1', 'a');
+    // Sequences 2 and 3 were lost while the runner stream was down.
+    output('4', 'd');
+    output('5', 'e');
+
+    const resumes = call.writes.filter((frame) => frame.resume);
+    expect(resumes).toEqual([
+      expect.objectContaining({
+        resume: { terminalId: 'pty-1', lastSeenOutputSequence: '1', replayOnly: true },
+      }),
+    ]);
+    expect(relayed.some((event) => event.type === 'pty:error')).toBe(false);
+
+    // The runner replays from its history; live output then continues in order.
+    for (const [sequence, text] of [
+      ['2', 'b'],
+      ['3', 'c'],
+      ['4', 'd'],
+      ['5', 'e'],
+    ]) {
+      output(sequence, text);
+    }
+    expect(relayed.map((event) => (event.data as { data: string }).data).join('')).toBe('abcde');
+    sessions.closeAll();
+  });
+
+  test('requests a replay for open terminals when the runner stream is replaced', () => {
+    const { call, dispatcher, epoch, sessions } = setup();
+    dispatcher.dispatch('runner-1', 'user-1', {
+      type: 'pty:spawn',
+      data: { id: 'pty-1', cwd: '/repo' },
+    });
+    call.emit('data', {
+      session: { sessionEpoch: String(epoch) },
+      terminalId: 'pty-1',
+      output: { sequence: '1', data: Uint8Array.from([97]) },
+    });
+
+    const replacement = new FakeCall();
+    createTerminalHandler(
+      { ...resolveRunnerGrpcConfig({ RUNNER_GRPC_ENABLED: 'true' }), heartbeatTimeoutMs: 60_000 },
+      sessions,
+      { dispatcher },
+    )(replacement as unknown as RunnerGrpcCall, context);
+    replacement.emit('data', { session: { sessionEpoch: String(epoch) }, ready: {} });
+
+    expect(replacement.writes).toEqual([
+      expect.objectContaining({
+        terminalId: 'pty-1',
+        resume: { terminalId: 'pty-1', lastSeenOutputSequence: '1', replayOnly: true },
+      }),
+    ]);
+    sessions.closeAll();
+  });
 });

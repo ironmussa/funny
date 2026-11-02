@@ -3,6 +3,7 @@ import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
 import { GrpcTerminalReplayStore } from './grpc-terminal-replay-store.js';
+import { binary, unsigned } from './grpc-wire-values.js';
 
 export interface GrpcTerminalCommand {
   terminalId: string;
@@ -13,25 +14,6 @@ export interface GrpcTerminalCommand {
 
 export interface RunnerTerminalSender {
   send(name: 'terminal', message: RunnerGrpcWireMessage): boolean;
-}
-
-function binary(value: unknown): Uint8Array | null {
-  if (value instanceof Uint8Array) return value;
-  if (typeof value !== 'string') return null;
-  try {
-    return Buffer.from(value, 'base64');
-  } catch {
-    return null;
-  }
-}
-
-function unsigned(value: unknown): bigint | null {
-  try {
-    const parsed = BigInt(value as string | number | bigint);
-    return parsed >= 0n ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 /** Maps terminal commands, output sequence/replay, and terminal outcomes. */
@@ -55,80 +37,96 @@ export class RunnerTerminalAdapter {
   receive(message: RunnerGrpcWireMessage): void {
     const terminalId = String(message.terminalId ?? '');
     if (!terminalId || !this.handle) return;
-    let command: GrpcTerminalCommand | undefined;
-    if (message.open) {
-      const userId = String(message.open.userId ?? '');
-      if (!userId) return;
-      this.users.set(terminalId, userId);
-      command = {
-        terminalId,
-        userId,
-        type: 'pty:spawn',
-        data: {
-          id: terminalId,
-          cwd: message.open.cwd,
-          cols: message.open.columns,
-          rows: message.open.rows,
-          shell: message.open.shell,
-          projectId: message.open.projectId,
-          label: message.open.label,
-          scratchThreadId: message.open.scratchThreadId,
-        },
-      };
-    } else {
-      const userId = this.users.get(terminalId);
-      if (!userId) return;
-      if (message.input) {
-        const ordinal = unsigned(message.input.ordinal);
-        const data = binary(message.input.data);
-        if (!ordinal || !data || !this.store.acceptInput(terminalId, ordinal)) return;
-        command = {
-          terminalId,
-          userId,
-          type: 'pty:write',
-          data: { id: terminalId, data: new TextDecoder().decode(data) },
-        };
-      } else if (message.resize) {
-        command = {
-          terminalId,
-          userId,
-          type: 'pty:resize',
-          data: {
-            id: terminalId,
-            cols: message.resize.columns,
-            rows: message.resize.rows,
-          },
-        };
-      } else if (message.signal) {
-        command = {
-          terminalId,
-          userId,
-          type: 'pty:signal',
-          data: {
-            id: terminalId,
-            signal: message.signal.signal,
-          },
-        };
-      } else if (message.close) {
-        command = { terminalId, userId, type: 'pty:kill', data: { id: terminalId } };
-      } else if (message.resume) {
-        const after = unsigned(message.resume.lastSeenOutputSequence) ?? 0n;
-        const replay = this.store.replay(terminalId, after);
-        if (replay.kind === 'gap') {
-          this.sender.send('terminal', {
-            terminalId,
-            gap: {
-              requestedSequence: String(after + 1n),
-              earliestAvailableSequence: String(replay.earliestAvailableSequence),
-            },
-          });
-          return;
-        }
-        for (const output of replay.outputs) this.sendOutput(terminalId, output);
-        command = { terminalId, userId, type: 'pty:restore', data: { id: terminalId } };
-      }
-    }
+    const command = message.open
+      ? this.openCommand(terminalId, message.open)
+      : this.sessionCommand(terminalId, message);
     if (command) this.handle(command, (event) => this.publish(event));
+  }
+
+  private openCommand(
+    terminalId: string,
+    open: RunnerGrpcWireMessage,
+  ): GrpcTerminalCommand | undefined {
+    const userId = String(open.userId ?? '');
+    if (!userId) return undefined;
+    this.users.set(terminalId, userId);
+    return {
+      terminalId,
+      userId,
+      type: 'pty:spawn',
+      data: {
+        id: terminalId,
+        cwd: open.cwd,
+        cols: open.columns,
+        rows: open.rows,
+        shell: open.shell,
+        projectId: open.projectId,
+        label: open.label,
+        scratchThreadId: open.scratchThreadId,
+      },
+    };
+  }
+
+  /** Commands for an already-open terminal, owned by the user that opened it. */
+  private sessionCommand(
+    terminalId: string,
+    message: RunnerGrpcWireMessage,
+  ): GrpcTerminalCommand | undefined {
+    const userId = this.users.get(terminalId);
+    if (!userId) return undefined;
+    if (message.input) return this.inputCommand(terminalId, userId, message.input);
+    if (message.resize) {
+      const { columns: cols, rows } = message.resize;
+      return { terminalId, userId, type: 'pty:resize', data: { id: terminalId, cols, rows } };
+    }
+    if (message.signal) {
+      const { signal } = message.signal;
+      return { terminalId, userId, type: 'pty:signal', data: { id: terminalId, signal } };
+    }
+    if (message.close) return { terminalId, userId, type: 'pty:kill', data: { id: terminalId } };
+    if (message.resume) return this.resumeCommand(terminalId, userId, message.resume);
+    return undefined;
+  }
+
+  private inputCommand(
+    terminalId: string,
+    userId: string,
+    input: RunnerGrpcWireMessage,
+  ): GrpcTerminalCommand | undefined {
+    const ordinal = unsigned(input.ordinal);
+    const data = binary(input.data);
+    if (!ordinal || !data || !this.store.acceptInput(terminalId, ordinal)) return undefined;
+    return {
+      terminalId,
+      userId,
+      type: 'pty:write',
+      data: { id: terminalId, data: new TextDecoder().decode(data) },
+    };
+  }
+
+  /** Replays buffered output; a full resume also restores the screen snapshot. */
+  private resumeCommand(
+    terminalId: string,
+    userId: string,
+    resume: RunnerGrpcWireMessage,
+  ): GrpcTerminalCommand | undefined {
+    const after = unsigned(resume.lastSeenOutputSequence) ?? 0n;
+    const replay = this.store.replay(terminalId, after);
+    if (replay.kind === 'gap') {
+      this.sender.send('terminal', {
+        terminalId,
+        gap: {
+          requestedSequence: String(after + 1n),
+          earliestAvailableSequence: String(replay.earliestAvailableSequence),
+        },
+      });
+      return undefined;
+    }
+    for (const output of replay.outputs) this.sendOutput(terminalId, output);
+    // Server-initiated recovery of lost frames: the browser already shows
+    // everything before them, so a screen snapshot would duplicate content.
+    if (resume.replayOnly === true) return undefined;
+    return { terminalId, userId, type: 'pty:restore', data: { id: terminalId } };
   }
 
   publish(event: WSEvent): void {

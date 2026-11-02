@@ -956,6 +956,11 @@ pub struct TerminalResume {
     pub terminal_id: ::prost::alloc::string::String,
     #[prost(uint64, tag="2")]
     pub last_seen_output_sequence: u64,
+    /// Set by the server when it detects lost output (sequence gap or stream
+    /// replacement): replay buffered output only, without re-sending a screen
+    /// snapshot that would duplicate content already shown in the browser.
+    #[prost(bool, tag="3")]
+    pub replay_only: bool,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct TerminalInput {

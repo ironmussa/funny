@@ -25,6 +25,8 @@ interface TerminalState {
   lastInputOrdinal: bigint;
   lastOutputSequence: bigint;
   outputDecoder: TextDecoder;
+  /** A replay-only resume is in flight; out-of-order output is dropped until it lands. */
+  resumePending: boolean;
 }
 
 interface ActiveTerminalStream {
@@ -72,6 +74,13 @@ export class RunnerGrpcTerminalDispatcher implements RunnerTerminalPort {
   register(runnerId: string, epoch: bigint, call: RunnerGrpcCall): () => void {
     const stream = { epoch, call };
     this.streams.set(runnerId, stream);
+    // Output the runner produced while its previous stream was down never
+    // reached us. Ask for it now so the terminal doesn't silently lose its tail.
+    const prefix = `${runnerId}\0`;
+    for (const [key, state] of this.terminals) {
+      if (!key.startsWith(prefix)) continue;
+      this.requestReplay(stream, key.slice(prefix.length), state);
+    }
     return () => {
       if (this.streams.get(runnerId) === stream) this.streams.delete(runnerId);
     };
@@ -100,6 +109,7 @@ export class RunnerGrpcTerminalDispatcher implements RunnerTerminalPort {
         lastInputOrdinal: 0n,
         lastOutputSequence: 0n,
         outputDecoder: new TextDecoder(),
+        resumePending: false,
       };
       state.userId = userId;
       state.cwd = String(event.data.cwd ?? '');
@@ -185,31 +195,15 @@ export class RunnerGrpcTerminalDispatcher implements RunnerTerminalPort {
   }
 
   receive(runnerId: string, epoch: bigint, call: RunnerGrpcCall, frame: WireFrame): void {
-    const stream = this.streams.get(runnerId);
-    if (!stream || stream.epoch !== epoch || stream.call !== call) return;
+    const stream = this.currentStream(runnerId, epoch, call);
+    if (!stream) return;
     const terminalId = typeof frame.terminalId === 'string' ? frame.terminalId : '';
     const state = this.terminals.get(this.key(runnerId, terminalId));
     if (!state) return;
 
-    if (frame.output) {
-      const sequence = unsigned(frame.output.sequence);
-      const data = frame.output.data as Uint8Array | undefined;
-      if (
-        sequence === null ||
-        !(data instanceof Uint8Array) ||
-        data.byteLength > this.config.maxFrameBytes
-      ) {
-        return this.relayError(state, terminalId, 'Invalid terminal output frame');
-      }
-      if (sequence <= state.lastOutputSequence) return;
-      if (sequence !== state.lastOutputSequence + 1n) {
-        return this.relayError(state, terminalId, 'Terminal output gap requires reconnect');
-      }
-      state.lastOutputSequence = sequence;
-      this.relayOutput(state, terminalId, state.outputDecoder.decode(data, { stream: true }));
-      return;
-    }
+    if (frame.output) return this.receiveOutput(stream, terminalId, state, frame.output);
     if (frame.gap) {
+      state.resumePending = false;
       this.relayError(
         state,
         terminalId,
@@ -221,15 +215,60 @@ export class RunnerGrpcTerminalDispatcher implements RunnerTerminalPort {
       this.relayError(state, terminalId, frame.failure.message || 'Terminal operation failed');
       return;
     }
-    if (frame.close) {
-      this.relayOutput(state, terminalId, state.outputDecoder.decode());
-      this.relayToUser(state.userId, {
-        type: 'pty:exit',
-        threadId: '',
-        data: { ptyId: terminalId, exitCode: frame.close.exitCode ?? null },
-      });
-      this.terminals.delete(this.key(runnerId, terminalId));
+    if (frame.close) this.receiveClose(runnerId, terminalId, state, frame.close);
+  }
+
+  /** The runner's live stream, only if `call` is still the one for `epoch`. */
+  private currentStream(
+    runnerId: string,
+    epoch: bigint,
+    call: RunnerGrpcCall,
+  ): ActiveTerminalStream | undefined {
+    const stream = this.streams.get(runnerId);
+    return stream && stream.epoch === epoch && stream.call === call ? stream : undefined;
+  }
+
+  private receiveOutput(
+    stream: ActiveTerminalStream,
+    terminalId: string,
+    state: TerminalState,
+    output: WireFrame,
+  ): void {
+    const sequence = unsigned(output.sequence);
+    const data = output.data as Uint8Array | undefined;
+    if (
+      sequence === null ||
+      !(data instanceof Uint8Array) ||
+      data.byteLength > this.config.maxFrameBytes
+    ) {
+      return this.relayError(state, terminalId, 'Invalid terminal output frame');
     }
+    if (sequence <= state.lastOutputSequence) return;
+    if (sequence !== state.lastOutputSequence + 1n) {
+      // Frames were lost (typically while the runner reconnected). The runner
+      // keeps a bounded replay history, so recover from it instead of failing
+      // the terminal. Later out-of-order frames are covered by the same replay.
+      if (!state.resumePending) this.requestReplay(stream, terminalId, state);
+      return;
+    }
+    state.lastOutputSequence = sequence;
+    state.resumePending = false;
+    this.relayOutput(state, terminalId, state.outputDecoder.decode(data, { stream: true }));
+  }
+
+  private receiveClose(
+    runnerId: string,
+    terminalId: string,
+    state: TerminalState,
+    close: WireFrame,
+  ): void {
+    this.relayOutput(state, terminalId, state.outputDecoder.decode());
+    this.relayToUser(state.userId, {
+      type: 'pty:exit',
+      threadId: '',
+      data: { ptyId: terminalId, exitCode: close.exitCode ?? null },
+    });
+    this.terminals.delete(this.key(runnerId, terminalId));
   }
 
   private scheduleResizeFlush(): void {
@@ -248,6 +287,21 @@ export class RunnerGrpcTerminalDispatcher implements RunnerTerminalPort {
           resize: { columns: resize.columns, rows: resize.rows },
         });
       }
+    });
+  }
+
+  private requestReplay(
+    stream: ActiveTerminalStream,
+    terminalId: string,
+    state: TerminalState,
+  ): void {
+    state.resumePending = true;
+    this.write(stream, terminalId, {
+      resume: {
+        terminalId,
+        lastSeenOutputSequence: state.lastOutputSequence.toString(),
+        replayOnly: true,
+      },
     });
   }
 

@@ -5,23 +5,34 @@
  * @domain layer: application
  * @domain depends: BrowserSessionManager
  *
- * In-process MCP server `funny_browser`: browser tools bound to one spawn's
- * thread and user. Tool names as seen by the model:
+ * The `funny_browser` tools, bound to one spawn's thread and user, and the
+ * instructions the agent sees. Tool names as seen by the model:
  * `mcp__funny_browser__browser_<name>`.
  *
- * Kept separate from the `funny` server on purpose: `funny_browser` is listed
- * in `PERMISSION_GATED_MCP_SERVERS` (sdk-claude), so its calls follow the
- * thread's permission mode instead of being auto-allowed. Tools are deferred
- * (no `alwaysLoad`) so their schemas only enter the prompt when needed.
+ * Served to every agent alike over loopback HTTP (`agent-mcp-http.ts`), so
+ * the browser does not depend on which agent a thread uses. Kept separate
+ * from the `funny` server on purpose: `funny_browser` is listed in
+ * `PERMISSION_GATED_MCP_SERVERS` (sdk-claude), so Claude's calls follow the
+ * thread's permission mode instead of being auto-allowed.
  */
 
-import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
 import type { ResultAsync } from 'neverthrow';
 
+import type {
+  AgentMcpServerSpec,
+  AgentToolDefinition,
+  AgentToolResult,
+} from '../agent-mcp-http.js';
 import {
   actArgs,
   browserAct,
+  appearanceArgs,
   browserClose,
+  browserDialog,
+  browserRecordingStart,
+  browserRecordingStop,
+  browserSetAppearance,
+  dialogArgs,
   browserEvaluate,
   browserNavigate,
   browserOpen,
@@ -56,11 +67,7 @@ export const BROWSER_INSTRUCTIONS =
 
 type ToolOutcome = ResultAsync<BrowserToolContent[], BrowserToolError>;
 
-interface CallToolResult {
-  [key: string]: unknown;
-  content: BrowserToolContent[];
-  isError?: boolean;
-}
+type CallToolResult = AgentToolResult;
 
 function signalOf(extra: unknown): AbortSignal | undefined {
   const signal = (extra as { signal?: unknown } | undefined)?.signal;
@@ -94,71 +101,99 @@ async function respond(outcome: ToolOutcome, extra: unknown): Promise<CallToolRe
   return Promise.race([settled, aborted]);
 }
 
-/** Build the `funny_browser` server for one spawn. */
-export function buildBrowserMcpServer(threadId: string, userId: string) {
-  const ctx: BrowserToolContext = { threadId, userId };
-  return createSdkMcpServer({
-    name: BROWSER_MCP_SERVER_NAME,
-    version: '1.0.0',
-    instructions: BROWSER_INSTRUCTIONS,
-    tools: [
-      tool(
-        'browser_open',
+/** The tools of `funny_browser`, bound to one spawn's thread, user and paths. */
+function browserToolDefinitions(ctx: BrowserToolContext): AgentToolDefinition[] {
+  return [
+    {
+      name: 'browser_open',
+      description:
         "Open this thread's browser (or reuse it) and optionally load a URL. The user sees it live in the browser panel.",
-        openArgs,
-        (args, extra) => respond(browserOpen(ctx, args), extra),
-        { searchHint: 'open a web page / start the browser' },
-      ),
-      tool(
-        'browser_navigate',
-        'Load a URL in the current tab, or go back / forward / reload.',
-        navigateArgs,
-        (args, extra) => respond(browserNavigate(ctx, args), extra),
-        { searchHint: 'go to url, back, forward, reload' },
-      ),
-      tool(
-        'browser_snapshot',
+      schema: openArgs,
+      run: (args, extra) => respond(browserOpen(ctx, args), extra),
+    },
+    {
+      name: 'browser_navigate',
+      description: 'Load a URL in the current tab, or go back / forward / reload.',
+      schema: navigateArgs,
+      run: (args, extra) => respond(browserNavigate(ctx, args), extra),
+    },
+    {
+      name: 'browser_snapshot',
+      description:
         'Accessibility snapshot of the current page with [ref=eN] ids for browser_act. Optionally includes a screenshot.',
-        snapshotArgs,
-        (args, extra) => respond(browserSnapshot(ctx, args), extra),
-        { searchHint: 'read the page, find elements, screenshot' },
-      ),
-      tool(
-        'browser_act',
+      schema: snapshotArgs,
+      run: (args, extra) => respond(browserSnapshot(ctx, args), extra),
+    },
+    {
+      name: 'browser_act',
+      description:
         'Perform one action on the page: click, double_click, hover, type, fill, select, press, scroll or drag — targeting a ref from the latest snapshot or viewport coordinates.',
-        actArgs,
-        (args, extra) => respond(browserAct(ctx, args), extra),
-        { searchHint: 'click, type, fill a form, press a key, scroll, drag' },
-      ),
-      tool(
-        'browser_evaluate',
-        'Evaluate a JavaScript expression in the page and return its JSON result.',
-        evaluateArgs,
-        (args, extra) => respond(browserEvaluate(ctx, args), extra),
-        { searchHint: 'run javascript in the page' },
-      ),
-      tool(
-        'browser_wait_for',
+      schema: actArgs,
+      run: (args, extra) => respond(browserAct(ctx, args), extra),
+    },
+    {
+      name: 'browser_evaluate',
+      description: 'Evaluate a JavaScript expression in the page and return its JSON result.',
+      schema: evaluateArgs,
+      run: (args, extra) => respond(browserEvaluate(ctx, args), extra),
+    },
+    {
+      name: 'browser_wait_for',
+      description:
         'Wait for text to appear or disappear, a URL, a ref to become visible, or a fixed delay.',
-        waitForArgs,
-        (args, extra) => respond(browserWaitFor(ctx, args), extra),
-        { searchHint: 'wait for page / login to finish' },
-      ),
-      tool(
-        'browser_status',
+      schema: waitForArgs,
+      run: (args, extra) => respond(browserWaitFor(ctx, args), extra),
+    },
+    {
+      name: 'browser_status',
+      description:
         "State of this thread's browser: URL, title, profile, viewport, controller, recent page errors.",
-        {},
-        (_args, extra) => respond(browserStatus(ctx), extra),
-      ),
-      tool(
-        'browser_resize',
-        'Set the page viewport size in CSS pixels.',
-        resizeArgs,
-        (args, extra) => respond(browserResize(ctx, args), extra),
-      ),
-      tool('browser_close', "Close this thread's browser session.", {}, (_args, extra) =>
-        respond(browserClose(ctx), extra),
-      ),
-    ],
-  });
+      schema: {},
+      run: (_args, extra) => respond(browserStatus(ctx), extra),
+    },
+    {
+      name: 'browser_resize',
+      description: 'Set the page viewport size in CSS pixels.',
+      schema: resizeArgs,
+      run: (args, extra) => respond(browserResize(ctx, args), extra),
+    },
+    {
+      name: 'browser_dialog',
+      description:
+        'Accept or dismiss the open JavaScript dialog (alert, confirm, prompt, beforeunload).',
+      schema: dialogArgs,
+      run: (args, extra) => respond(browserDialog(ctx, args), extra),
+    },
+    {
+      name: 'browser_set_appearance',
+      description: 'Emulate the light or dark colour scheme for the page.',
+      schema: appearanceArgs,
+      run: (args, extra) => respond(browserSetAppearance(ctx, args), extra),
+    },
+    {
+      name: 'browser_recording_start',
+      description: 'Start recording the browser viewport to a video.',
+      schema: {},
+      run: (_args, extra) => respond(browserRecordingStart(ctx), extra),
+    },
+    {
+      name: 'browser_recording_stop',
+      description: 'Stop the recording and save it as an MP4 in the assets directory.',
+      schema: {},
+      run: (_args, extra) => respond(browserRecordingStop(ctx), extra),
+    },
+    {
+      name: 'browser_close',
+      description: "Close this thread's browser session.",
+      schema: {},
+      run: (_args, extra) => respond(browserClose(ctx), extra),
+    },
+  ];
 }
+
+/** The `funny_browser` server as served to every agent (`agent-mcp-http.ts`). */
+export const BROWSER_MCP_SERVER: AgentMcpServerSpec = {
+  name: BROWSER_MCP_SERVER_NAME,
+  instructions: BROWSER_INSTRUCTIONS,
+  tools: browserToolDefinitions,
+};

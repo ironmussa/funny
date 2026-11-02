@@ -8,8 +8,8 @@ import { resolveAgentTemplate, type AgentTemplateResolution } from './resolve-ag
 /**
  * Resolve the MCP servers, tool restrictions and template wiring for a spawn:
  * project MCP servers (when none were explicitly provided), the Deep Agent
- * template, then the always-present funny_watch server and (Claude only) the
- * funny_browser server.
+ * template, then funny's own servers (`funny`, `funny_browser`), which every
+ * agent reaches the same way.
  */
 export async function resolveAgentTooling(input: {
   threadId: string;
@@ -20,6 +20,8 @@ export async function resolveAgentTooling(input: {
   mcpServers?: Record<string, any>;
   disallowedTools?: string[];
   claudeConfigDir?: string;
+  /** Thread working directory (browser `upload` sandbox). */
+  cwd?: string;
 }): Promise<AgentTemplateResolution> {
   const { threadId, thread, projectPath, provider } = input;
   let mcpServers = input.mcpServers;
@@ -39,6 +41,6 @@ export async function resolveAgentTooling(input: {
   const withWatch = await withWatchMcpServer(threadId, thread?.userId, template.mcpServers);
   return {
     ...template,
-    mcpServers: await withBrowserMcpServer(threadId, thread?.userId, provider, withWatch),
+    mcpServers: await withBrowserMcpServer(threadId, thread?.userId, withWatch, input.cwd),
   };
 }

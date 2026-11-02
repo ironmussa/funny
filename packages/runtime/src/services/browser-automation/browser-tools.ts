@@ -10,6 +10,13 @@
  * MCP layer prefixes to the message so the agent can react to it.
  */
 
+import {
+  isAbsolute as isAbsolutePath,
+  join as joinPath,
+  relative as relativePath,
+  resolve as resolvePath,
+} from 'path';
+
 import { ResultAsync } from 'neverthrow';
 import type { Locator, Page } from 'playwright';
 import { z } from 'zod';
@@ -17,6 +24,7 @@ import { z } from 'zod';
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 import { browserSessionManager, type BrowserSession } from '../browser-session-manager.js';
+import type { ViewportRecorder } from './recorder.js';
 import type { RefCheck } from './snapshot-refs.js';
 
 const NS = 'browser-tools';
@@ -34,7 +42,11 @@ export type BrowserToolErrorCode =
   | 'too-many-sessions'
   | 'browser-unavailable'
   | 'invalid-arguments'
-  | 'action-failed';
+  | 'action-failed'
+  | 'user-has-control'
+  | 'dialog-pending'
+  | 'path-not-allowed'
+  | 'recording-unavailable';
 
 export interface BrowserToolError {
   code: BrowserToolErrorCode;
@@ -48,6 +60,10 @@ export type BrowserToolContent =
 export interface BrowserToolContext {
   userId: string;
   threadId: string;
+  /** Thread working directory; `upload` only accepts files inside it. */
+  cwd?: string;
+  /** Per-user previewable assets dir; recordings are saved here. */
+  assetsDir?: string;
 }
 
 type ToolResult = ResultAsync<BrowserToolContent[], BrowserToolError>;
@@ -139,21 +155,61 @@ function locatorFor(s: BrowserSession, ref: string): Locator {
   return s.tab.page.locator(`aria-ref=${ref}`);
 }
 
-/** Dialogs auto-dismissed since the last report, as a one-time note. */
-function takeDialogNotes(s: BrowserSession): string[] {
-  const notes = s.pendingDialogReports.map(
-    (d) => `A ${d.type} dialog ("${d.message.slice(0, 200)}") appeared and was ${d.handled}.`,
-  );
-  s.pendingDialogReports = [];
-  return notes;
+function dialogNote(s: BrowserSession): string | null {
+  const d = s.pendingDialog;
+  if (!d) return null;
+  return `A ${d.type} dialog is open: "${d.message.slice(0, 300)}". The page is frozen until you answer it with browser_dialog.`;
+}
+
+/** Page-changing tools wait while the user has taken the browser over. */
+function requireAgentControl(s: BrowserSession): void {
+  if (s.controller === 'user') {
+    throw new ToolFailure(
+      'user-has-control',
+      'The user has taken control of the browser. Wait (browser_wait_for or browser_status) until they hand it back.',
+    );
+  }
+}
+
+/** Page tools cannot run while a JavaScript dialog freezes the page. */
+function requireNoDialog(s: BrowserSession): void {
+  const note = dialogNote(s);
+  if (note) throw new ToolFailure('dialog-pending', note);
 }
 
 async function pageSummary(s: BrowserSession, extra: string[] = []): Promise<BrowserToolContent> {
   const page = s.tab.page;
-  const title = await page.title().catch(() => '');
+  const note = dialogNote(s);
+  // `title()` runs in the page, which a dialog freezes.
+  const title = note ? '' : await page.title().catch(() => '');
   return text(
-    [`URL: ${page.url()}`, `Title: ${title}`, ...extra, ...takeDialogNotes(s)].join('\n'),
+    [`URL: ${page.url()}`, `Title: ${title}`, ...extra, ...(note ? [note] : [])].join('\n'),
   );
+}
+
+/** Resolves when a dialog opens on the session (used to unblock in-flight actions). */
+/**
+ * Run `work` but return early if a JavaScript dialog opens meanwhile: the page
+ * freezes until the dialog is answered, so the work cannot finish by itself.
+ * The work keeps running and completes once the dialog is answered.
+ */
+async function untilDialog<T>(s: BrowserSession, work: Promise<T>): Promise<T | 'dialog'> {
+  const dialog = nextDialog(s);
+  work.catch(() => {});
+  try {
+    return await Promise.race([work, dialog.promise]);
+  } finally {
+    dialog.cancel();
+  }
+}
+
+function nextDialog(s: BrowserSession): { promise: Promise<'dialog'>; cancel: () => void } {
+  let listener: () => void = () => {};
+  const promise = new Promise<'dialog'>((resolve) => {
+    listener = () => resolve('dialog');
+    s.signals.once('dialog', listener);
+  });
+  return { promise, cancel: () => s.signals.off('dialog', listener) };
 }
 
 /** Run an action and report whether the main frame navigated while it ran. */
@@ -239,6 +295,7 @@ export const actArgs = {
     'press',
     'scroll',
     'drag',
+    'upload',
   ]),
   ref: z.string().optional().describe('Element ref from the latest browser_snapshot, e.g. "e12".'),
   x: z.number().optional().describe('Viewport x coordinate (CSS px), used when no ref is given.'),
@@ -248,6 +305,12 @@ export const actArgs = {
   values: z.array(z.string()).optional().describe('Option values or labels for select.'),
   deltaX: z.number().optional().describe('Horizontal scroll amount in px.'),
   deltaY: z.number().optional().describe('Vertical scroll amount in px (positive scrolls down).'),
+  paths: z
+    .array(z.string())
+    .optional()
+    .describe(
+      'Files for upload, relative to the thread working directory (files outside it are refused).',
+    ),
   to: z
     .union([z.object({ ref: z.string() }), pointArgs])
     .optional()
@@ -317,6 +380,8 @@ export function browserNavigate(
 ): ToolResult {
   return run('browser_navigate', ctx, async () => {
     const s = requireSession(ctx);
+    requireAgentControl(s);
+    requireNoDialog(s);
     if (!args.url && !args.action) {
       throw new ToolFailure('invalid-arguments', 'Pass either url or action.');
     }
@@ -345,6 +410,7 @@ export function browserSnapshot(
 ): ToolResult {
   return run('browser_snapshot', ctx, async () => {
     const s = requireSession(ctx);
+    requireNoDialog(s);
     return browserSessionManager.runExclusive(s, async () => {
       const page = s.tab.page;
       const raw = await page.ariaSnapshot({ mode: 'ai', timeout: ACTION_TIMEOUT_MS });
@@ -386,6 +452,8 @@ interface ActionContext {
   target: Locator | null;
   label: string;
   args: ActArgs;
+  /** Thread working directory (upload sandbox). */
+  cwd?: string;
 }
 
 const timeout = ACTION_TIMEOUT_MS;
@@ -489,6 +557,33 @@ async function dragAction(ctx: ActionContext): Promise<string> {
   return `Dragged ${ctx.label}.`;
 }
 
+/** Resolve upload paths inside the thread directory; anything else is refused. */
+function resolveUploadPaths(cwd: string | undefined, paths: string[]): string[] {
+  if (!cwd) {
+    throw new ToolFailure(
+      'path-not-allowed',
+      'This thread has no working directory to upload from.',
+    );
+  }
+  const root = resolvePath(cwd);
+  return paths.map((p) => {
+    const abs = resolvePath(root, p);
+    const rel = relativePath(root, abs);
+    if (rel.startsWith('..') || isAbsolutePath(rel)) {
+      throw new ToolFailure('path-not-allowed', `${p} is outside the thread directory (${root}).`);
+    }
+    return abs;
+  });
+}
+
+async function uploadAction(ctx: ActionContext): Promise<string> {
+  const target = requireTarget(ctx);
+  if (!ctx.args.paths?.length) throw new ToolFailure('invalid-arguments', 'upload needs paths.');
+  const files = resolveUploadPaths(ctx.cwd, ctx.args.paths);
+  await target.setInputFiles(files, { timeout });
+  return `Attached ${files.length} file(s) to ${ctx.label}.`;
+}
+
 const ACTIONS: Record<ActArgs['action'], (ctx: ActionContext) => Promise<string>> = {
   click: (ctx) => clickAction(ctx, 1),
   double_click: (ctx) => clickAction(ctx, 2),
@@ -499,15 +594,21 @@ const ACTIONS: Record<ActArgs['action'], (ctx: ActionContext) => Promise<string>
   press: pressAction,
   scroll: scrollAction,
   drag: dragAction,
+  upload: uploadAction,
 };
 
-function performAction(s: BrowserSession, args: ActArgs): Promise<string> {
+function performAction(
+  s: BrowserSession,
+  args: ActArgs,
+  toolCtx: BrowserToolContext,
+): Promise<string> {
   const ctx: ActionContext = {
     s,
     page: s.tab.page,
     target: args.ref ? locatorFor(s, args.ref) : null,
     label: args.ref ? `ref ${args.ref}` : `(${args.x}, ${args.y})`,
     args,
+    cwd: toolCtx.cwd,
   };
   return ACTIONS[args.action](ctx);
 }
@@ -515,12 +616,19 @@ function performAction(s: BrowserSession, args: ActArgs): Promise<string> {
 export function browserAct(ctx: BrowserToolContext, args: Args<typeof actArgs>): ToolResult {
   return run('browser_act', ctx, async () => {
     const s = requireSession(ctx);
+    requireAgentControl(s);
+    requireNoDialog(s);
     let description = '';
-    const navigated = await browserSessionManager.runExclusive(s, () =>
-      trackNavigation(s.tab.page, async () => {
-        description = await performAction(s, args);
-      }),
+    const outcome = await untilDialog(
+      s,
+      browserSessionManager.runExclusive(s, () =>
+        trackNavigation(s.tab.page, async () => {
+          description = await performAction(s, args, ctx);
+        }),
+      ),
     );
+    if (outcome === 'dialog') return [await pageSummary(s, [`${args.action} triggered a dialog.`])];
+    const navigated = outcome;
     return [
       await pageSummary(
         s,
@@ -539,12 +647,15 @@ export function browserEvaluate(
 ): ToolResult {
   return run('browser_evaluate', ctx, async () => {
     const s = requireSession(ctx);
+    requireAgentControl(s);
+    requireNoDialog(s);
     let value: unknown;
     try {
       // A string is evaluated as an expression through CDP (not page `eval`,
       // which a strict CSP would block); a returned promise is awaited.
-      value = await browserSessionManager.runExclusive(s, () =>
-        s.tab.page.evaluate(args.expression),
+      value = await untilDialog(
+        s,
+        browserSessionManager.runExclusive(s, () => s.tab.page.evaluate(args.expression)),
       );
     } catch (err) {
       throw new ToolFailure(
@@ -557,7 +668,8 @@ export function browserEvaluate(
     if (serialized.length > MAX_EVALUATE_CHARS) {
       serialized = `${serialized.slice(0, MAX_EVALUATE_CHARS)}\n[truncated]`;
     }
-    return [text(serialized), ...takeDialogNotes(s).map(text)];
+    const note = dialogNote(s);
+    return [text(value === 'dialog' && note ? note : serialized)];
   });
 }
 
@@ -603,6 +715,7 @@ export function browserStatus(ctx: BrowserToolContext): ToolResult {
           `Viewport: ${s.viewport.width}x${s.viewport.height}`,
           `Controller: ${s.controller}`,
           `Panel attached: ${s.panelAttached ? 'yes' : 'no'}`,
+          s.recorder ? `Recording: yes (${s.recorder.frameCount} frames)` : '',
           errors.length ? `Recent page errors:\n${errors.map((e) => `- ${e}`).join('\n')}` : '',
         ].filter(Boolean),
       ),
@@ -613,6 +726,7 @@ export function browserStatus(ctx: BrowserToolContext): ToolResult {
 export function browserResize(ctx: BrowserToolContext, args: Args<typeof resizeArgs>): ToolResult {
   return run('browser_resize', ctx, async () => {
     const s = requireSession(ctx);
+    requireAgentControl(s);
     await browserSessionManager.runExclusive(s, () =>
       browserSessionManager.setViewport(s, args.width, args.height),
     );
@@ -626,5 +740,86 @@ export function browserClose(ctx: BrowserToolContext): ToolResult {
     if (!s) return [text('No browser session was open.')];
     await browserSessionManager.close(s.sessionId, 'user');
     return [text('Browser session closed.')];
+  });
+}
+
+// ── Dialogs, appearance, recording ────────────────────────────────────────
+
+export const dialogArgs = {
+  accept: z.boolean().describe('true accepts (OK), false dismisses (Cancel).'),
+  promptText: z.string().optional().describe('Answer for a prompt() dialog.'),
+};
+
+export const appearanceArgs = {
+  colorScheme: z.enum(['light', 'dark']).describe('Preferred colour scheme to emulate.'),
+};
+
+export function browserDialog(ctx: BrowserToolContext, args: Args<typeof dialogArgs>): ToolResult {
+  return run('browser_dialog', ctx, async () => {
+    const s = requireSession(ctx);
+    requireAgentControl(s);
+    const pending = s.pendingDialog;
+    // Not queued: the action that opened the dialog still holds the queue.
+    if (!pending || !(await browserSessionManager.answerDialog(s, args.accept, args.promptText))) {
+      throw new ToolFailure('invalid-arguments', 'No dialog is open.');
+    }
+    return [
+      await pageSummary(s, [
+        `${args.accept ? 'Accepted' : 'Dismissed'} the ${pending.type} dialog "${pending.message.slice(0, 200)}".`,
+      ]),
+    ];
+  });
+}
+
+export function browserSetAppearance(
+  ctx: BrowserToolContext,
+  args: Args<typeof appearanceArgs>,
+): ToolResult {
+  return run('browser_set_appearance', ctx, async () => {
+    const s = requireSession(ctx);
+    requireAgentControl(s);
+    requireNoDialog(s);
+    await browserSessionManager.runExclusive(s, () =>
+      s.tab.page.emulateMedia({ colorScheme: args.colorScheme }),
+    );
+    return [await pageSummary(s, [`Colour scheme: ${args.colorScheme}`])];
+  });
+}
+
+export function browserRecordingStart(ctx: BrowserToolContext): ToolResult {
+  return run('browser_recording_start', ctx, async () => {
+    const s = requireSession(ctx);
+    if (s.recorder) return [text('A recording is already running. Call browser_recording_stop.')];
+    const { hasFfmpeg, ViewportRecorder } = await import('./recorder.js');
+    if (!ctx.assetsDir || !(await hasFfmpeg())) {
+      throw new ToolFailure(
+        'recording-unavailable',
+        'Recording needs ffmpeg (with libx264) on the runner and an assets directory.',
+      );
+    }
+    s.recorder = await ViewportRecorder.start();
+    // Static pages do not repaint: seed the recording with the current view.
+    const first = await browserSessionManager.captureFrame(s);
+    if (first) s.recorder.addFrame(first.data, first.timestamp);
+    return [text('Recording the browser viewport. Call browser_recording_stop to save it.')];
+  });
+}
+
+export function browserRecordingStop(ctx: BrowserToolContext): ToolResult {
+  return run('browser_recording_stop', ctx, async () => {
+    const s = requireSession(ctx);
+    const recorder: ViewportRecorder | null = s.recorder;
+    if (!recorder) throw new ToolFailure('invalid-arguments', 'No recording is running.');
+    const last = await browserSessionManager.captureFrame(s);
+    if (last) recorder.addFrame(last.data, last.timestamp);
+    s.recorder = null;
+    const out = joinPath(
+      ctx.assetsDir ?? '',
+      `browser-recording-${ctx.threadId.slice(0, 8)}-${Date.now()}.mp4`,
+    );
+    const result = await recorder.stop(out);
+    if (result.isErr()) throw new ToolFailure('action-failed', result.error.message);
+    const { path, frames, seconds } = result.value;
+    return [text(`Recording saved: ${path}\n${seconds}s, ${frames} frames.`)];
   });
 }

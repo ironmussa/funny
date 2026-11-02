@@ -9,7 +9,6 @@ import { api } from '@/lib/api';
 import * as variant from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
-import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useProjectStore } from '@/stores/project-store';
 import { type Editor } from '@/stores/settings-store';
 import {
@@ -61,8 +60,6 @@ export function useMoreActionsMenu() {
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
   const setActivityPaneOpen = useUIStore((s) => s.setActivityPaneOpen);
   const activityActive = reviewPaneOpen && rightPaneTab === 'activity';
-  const browserPanelOpen = useBrowserPanelStore((s) => s.open);
-  const toggleBrowserPanel = useBrowserPanelStore((s) => s.togglePanel);
 
   const [copiedText, copyText] = useCopyToClipboard();
   const [copiedTools, copyTools] = useCopyToClipboard();
@@ -76,7 +73,6 @@ export function useMoreActionsMenu() {
   const canConvertToWorktree =
     useThreadSelector((tt) => variant.canConvertToWorktree(tt)) && !isBusy;
   const sourceBranch = threadBranch || projectBranch;
-  const canShowBrowserPanel = !!menuSelectedProjectId && !isScratchThread;
   const showStage = !!threadId && !!threadStage && threadStage !== 'archived' && !isScratchThread;
 
   const tooltipMenu = useTooltipMenu();
@@ -173,10 +169,6 @@ export function useMoreActionsMenu() {
     setTimelineVisible(!timelineVisible);
   }, [timelineVisible, setTimelineVisible]);
 
-  const toggleBrowser = useCallback(() => {
-    toggleBrowserPanel();
-  }, [toggleBrowserPanel]);
-
   const handleViewOnBoard = useCallback(() => {
     if (!threadId || !threadProjectId) return;
     setReviewPaneOpen(false);
@@ -200,13 +192,11 @@ export function useMoreActionsMenu() {
     isWorktree,
     isScratchThread,
     canConvertToWorktree,
-    canShowBrowserPanel,
     showStage,
     threadPinned,
     sourceBranch,
     activityActive,
     timelineVisible,
-    browserPanelOpen,
     copiedText,
     copiedTools,
     deleteOpen,
@@ -226,6 +216,5 @@ export function useMoreActionsMenu() {
     togglePin,
     toggleActivity,
     toggleTimeline,
-    toggleBrowser,
   };
 }

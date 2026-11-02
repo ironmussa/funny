@@ -28,7 +28,13 @@ export type BrowserSessionInputKind =
   | 'mouseUp'
   | 'wheel'
   | 'keyDown'
-  | 'keyUp';
+  | 'keyUp'
+  /** Shared control: the user takes the session over from the agent. */
+  | 'takeControl'
+  /** Shared control: the user hands the session back to the agent. */
+  | 'releaseControl'
+  /** Answer the pending JavaScript dialog (`accept`, optional `promptText`). */
+  | 'dialog';
 
 export interface WSBrowserSessionInputData {
   sessionId: string;
@@ -39,11 +45,25 @@ export interface WSBrowserSessionInputData {
   clickCount?: number;
   deltaX?: number;
   deltaY?: number;
+  /** Mouse buttons held during a move (`MouseEvent.buttons` bitmask) — drags and selections. */
+  buttons?: number;
   /** For key events. */
   key?: string;
   code?: string;
   text?: string;
+  /** CDP modifiers bitmask (1=Alt, 2=Ctrl, 4=Meta, 8=Shift); mouse events carry it too. */
   modifiers?: number;
+  /**
+   * `KeyboardEvent.keyCode` — Chrome needs it as `windowsVirtualKeyCode` to
+   * act on non-text keys (arrows, Shift, Backspace, Tab…).
+   */
+  keyCode?: number;
+  /** `KeyboardEvent.location` (left/right Shift, numpad). */
+  location?: number;
+  /** For `dialog`: accept (true) or dismiss (false). */
+  accept?: boolean;
+  /** For `dialog` on a `prompt()`: the text to answer with. */
+  promptText?: string;
 }
 
 export interface WSBrowserSessionInspectAtData {
@@ -144,6 +164,22 @@ export interface WSBrowserSessionAgentOpenedData {
   sessionId: string;
   threadId: string;
   url: string;
+}
+
+/** Who drives the session right now; the agent's page-changing tools wait while it is `user`. */
+export type BrowserSessionController = 'agent' | 'user';
+
+export interface WSBrowserSessionControllerData {
+  sessionId: string;
+  threadId?: string;
+  controller: BrowserSessionController;
+}
+
+/** A JavaScript dialog is waiting for an answer (`dialog: null` once answered). */
+export interface WSBrowserSessionDialogData {
+  sessionId: string;
+  threadId?: string;
+  dialog: { type: string; message: string; defaultValue?: string } | null;
 }
 
 /** The session's page viewport changed (e.g. the agent resized it). */

@@ -29,9 +29,10 @@ export async function resolveActiveAgentProfile(
 }
 
 /**
- * Inject the always-present funny_watch tool (deferred-wake "snooze") on
- * EVERY spawn. In-process MCP so the handler runs here with the spawn's
- * threadId/userId. Server name `funny` → tool `mcp__funny__funny_watch`,
+ * Inject the always-present `funny` server (watchers, background jobs,
+ * sub-threads, thread search) on EVERY spawn, whatever the
+ * agent: loopback HTTP with the thread's token, so the handlers run in the
+ * runner with the spawn's threadId/userId. Tool `mcp__funny__funny_watch`,
  * auto-allowed by the `mcp__funny__*` wildcard in sdk-claude.
  */
 export async function withWatchMcpServer(
@@ -40,31 +41,36 @@ export async function withWatchMcpServer(
   mcpServers: Record<string, any> | undefined,
 ): Promise<Record<string, any> | undefined> {
   if (!userId) return mcpServers;
-  const { buildWatchMcpServer } = await import('../agent-watch-tool.js');
+  const { FUNNY_MCP_SERVER } = await import('../agent-watch-tool.js');
+  const { grantAgentMcpHttp } = await import('../agent-mcp-http.js');
   return {
     ...(mcpServers ?? {}),
-    funny: buildWatchMcpServer(threadId, userId),
+    [FUNNY_MCP_SERVER.name]: grantAgentMcpHttp(FUNNY_MCP_SERVER, { threadId, userId }),
   };
 }
 
 /**
- * Inject the in-process `funny_browser` server (agent browser tools over the
- * thread's browser session). Claude SDK only — other providers cannot host an
- * in-process MCP server. Kill switch: `FUNNY_BROWSER_TOOLS=0`.
+ * Inject the `funny_browser` server (agent browser tools over the thread's
+ * browser session). Every agent gets the same loopback HTTP server, whatever
+ * its provider. Kill switch: `FUNNY_BROWSER_TOOLS=0`.
  */
 export async function withBrowserMcpServer(
   threadId: string,
   userId: string | undefined,
-  provider: AgentProvider,
   mcpServers: Record<string, any> | undefined,
+  cwd?: string,
 ): Promise<Record<string, any> | undefined> {
-  if (!userId || provider !== 'claude' || process.env.FUNNY_BROWSER_TOOLS === '0') {
-    return mcpServers;
-  }
-  const { buildBrowserMcpServer, BROWSER_MCP_SERVER_NAME } =
-    await import('../browser-automation/browser-mcp-server.js');
+  if (!userId || process.env.FUNNY_BROWSER_TOOLS === '0') return mcpServers;
+  const { BROWSER_MCP_SERVER } = await import('../browser-automation/browser-mcp-server.js');
+  const { grantAgentMcpHttp } = await import('../agent-mcp-http.js');
+  const { tmpAssetsPathFor } = await import('../thread-context.js');
   return {
     ...(mcpServers ?? {}),
-    [BROWSER_MCP_SERVER_NAME]: buildBrowserMcpServer(threadId, userId),
+    [BROWSER_MCP_SERVER.name]: grantAgentMcpHttp(BROWSER_MCP_SERVER, {
+      threadId,
+      userId,
+      cwd,
+      assetsDir: tmpAssetsPathFor(userId),
+    }),
   };
 }

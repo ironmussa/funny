@@ -86,6 +86,9 @@ pub enum RunnerCapability {
     Events = 2,
     HttpTunnel = 3,
     Terminal = 4,
+    /// Unscoped transient events for the runner owner's browser sessions
+    /// (EventsRequest.user_event). Sent only when the server enables it.
+    UserEvents = 5,
 }
 impl RunnerCapability {
     /// String value of the enum field names used in the ProtoBuf definition.
@@ -99,6 +102,7 @@ impl RunnerCapability {
             Self::Events => "RUNNER_CAPABILITY_EVENTS",
             Self::HttpTunnel => "RUNNER_CAPABILITY_HTTP_TUNNEL",
             Self::Terminal => "RUNNER_CAPABILITY_TERMINAL",
+            Self::UserEvents => "RUNNER_CAPABILITY_USER_EVENTS",
         }
     }
     /// Creates an enum from field names used in the ProtoBuf definition.
@@ -109,6 +113,7 @@ impl RunnerCapability {
             "RUNNER_CAPABILITY_EVENTS" => Some(Self::Events),
             "RUNNER_CAPABILITY_HTTP_TUNNEL" => Some(Self::HttpTunnel),
             "RUNNER_CAPABILITY_TERMINAL" => Some(Self::Terminal),
+            "RUNNER_CAPABILITY_USER_EVENTS" => Some(Self::UserEvents),
             _ => None,
         }
     }
@@ -192,6 +197,18 @@ pub struct AgentEvent {
     #[prost(message, optional, tag="4")]
     pub occurred_at: ::core::option::Option<::prost_types::Timestamp>,
 }
+/// A transient event addressed to the runner owner rather than to a thread
+/// (for example a browser-session screencast frame). It carries no scope or
+/// sequence, is never persisted or replayed, and gets no receipt. The server
+/// relays it only to the browser sessions of the user authenticated by the
+/// transport credentials, and only for event types it allows.
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct UserEvent {
+    #[prost(string, tag="1")]
+    pub event_type: ::prost::alloc::string::String,
+    #[prost(message, optional, tag="2")]
+    pub data: ::core::option::Option<::prost_types::Struct>,
+}
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct EventGap {
     #[prost(uint64, tag="1")]
@@ -209,7 +226,7 @@ pub struct EventsRequest {
     pub scope: ::core::option::Option<EventScope>,
     #[prost(uint64, tag="3")]
     pub sequence: u64,
-    #[prost(oneof="events_request::Payload", tags="10, 11")]
+    #[prost(oneof="events_request::Payload", tags="10, 11, 12")]
     pub payload: ::core::option::Option<events_request::Payload>,
 }
 /// Nested message and enum types in `EventsRequest`.
@@ -220,6 +237,8 @@ pub mod events_request {
         Event(super::AgentEvent),
         #[prost(message, tag="11")]
         Gap(super::EventGap),
+        #[prost(message, tag="12")]
+        UserEvent(super::UserEvent),
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]

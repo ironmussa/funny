@@ -2,6 +2,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import {
+  browserRecordingPath,
   getMcpCodeInput,
   getMcpSummary,
   mcpResultPreview,
@@ -57,6 +58,35 @@ describe('mcp-tool helpers', () => {
       'Convex · Run oneoff query',
     );
     expect(mcpToolTitle({ server: 'my-server', tool: 'do_it' }, t)).toBe('My Server · Do it');
+  });
+
+  test('browser dialog, appearance and recording tools have titles and summaries', () => {
+    const t = (key: string) => key;
+    const browser = (tool: string) => ({ server: 'funny_browser', tool });
+    expect(mcpToolTitle(browser('browser_recording_stop'), t)).toMatch(
+      / · tools\.mcp\.browserRecordingStop$/,
+    );
+    expect(getMcpSummary({ accept: false }, browser('browser_dialog'))?.text).toBe('dismiss');
+    expect(
+      getMcpSummary({ accept: true, promptText: 'Ada' }, browser('browser_dialog'))?.text,
+    ).toBe('accept · "Ada"');
+    expect(getMcpSummary({ colorScheme: 'dark' }, browser('browser_set_appearance'))?.text).toBe(
+      'dark',
+    );
+    expect(
+      getMcpSummary({ action: 'upload', ref: 'e4', paths: ['a.png'] }, browser('browser_act'))
+        ?.text,
+    ).toBe('upload e4 · a.png');
+  });
+
+  test('the recording path is read only from browser_recording_stop results', () => {
+    const text = 'Recording saved: /home/u/.funny/assets/rec.mp4\n3s, 40 frames.';
+    expect(
+      browserRecordingPath({ server: 'funny_browser', tool: 'browser_recording_stop' }, text),
+    ).toBe('/home/u/.funny/assets/rec.mp4');
+    expect(browserRecordingPath({ server: 'funny_browser', tool: 'browser_status' }, text)).toBe(
+      null,
+    );
   });
 
   test('summary prefers the title; code input takes its language from the tool', () => {
@@ -144,5 +174,25 @@ describe('McpToolCard', () => {
       />,
     );
     expect(screen.getByTestId('mcp-tool-card-error')).toBeInTheDocument();
+  });
+
+  test('a saved browser recording is previewed as a video', () => {
+    const output = JSON.stringify({
+      content: [{ type: 'text', text: 'Recording saved: /tmp/assets/rec.mp4\n2s, 12 frames.' }],
+    });
+    renderWithProviders(
+      <McpToolCard
+        mcp={{ server: 'funny_browser', tool: 'browser_recording_stop' }}
+        parsed={{}}
+        output={output}
+        displayTime={null}
+      />,
+    );
+    fireEvent.click(screen.getByTestId('mcp-tool-card-toggle'));
+    const preview = screen.getByTestId('media-preview');
+    expect(preview).toHaveAttribute('data-media-kind', 'video');
+    expect(preview.querySelector('video')?.getAttribute('src')).toBe(
+      '/api/files/raw?path=%2Ftmp%2Fassets%2Frec.mp4',
+    );
   });
 });

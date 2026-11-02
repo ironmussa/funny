@@ -34,6 +34,7 @@ import { createDebugLogger } from '../debug.js';
 import { getFullContextFileDiff, gitRead } from '../git/index.js';
 import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
 import { CodexAppServer, codexReviewTarget } from './codex-app-server.js';
+import { codexMcpSettings } from './codex-mcp.js';
 import type { CLIMessage } from './types.js';
 
 const dlog = createDebugLogger('codex-sdk');
@@ -112,7 +113,11 @@ export class CodexSDKProcess extends BaseAgentProcess {
   }
 
   protected async runProcess(): Promise<void> {
-    const env = buildChildEnv(this.options.env) as Record<string, string>;
+    const requestedPermissionMode =
+      this.options.originalPermissionMode ?? this.options.permissionMode;
+    // Funny's HTTP MCP servers (e.g. `funny_browser`); tokens ride in the env.
+    const mcp = codexMcpSettings(this.options.mcpServers, requestedPermissionMode);
+    const env = { ...buildChildEnv(this.options.env), ...mcp.env } as Record<string, string>;
 
     this.codex = new Codex({
       codexPathOverride: env.CODEX_BINARY_PATH || env.CODEX_BIN,
@@ -120,11 +125,10 @@ export class CodexSDKProcess extends BaseAgentProcess {
       env,
       config: {
         show_raw_agent_reasoning: true,
+        ...mcp.config,
       },
     });
 
-    const requestedPermissionMode =
-      this.options.originalPermissionMode ?? this.options.permissionMode;
     const sandboxOptions = resolveCodexSandboxOptions(requestedPermissionMode);
     const additionalDirectories =
       sandboxOptions.sandboxMode === 'workspace-write'

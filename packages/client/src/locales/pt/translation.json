@@ -790,6 +790,10 @@
       "browserStatus": "Status",
       "browserResize": "Redimensionar",
       "browserClose": "Fechar navegador",
+      "browserDialog": "Responder diálogo",
+      "browserSetAppearance": "Alterar aparência",
+      "browserRecordingStart": "Iniciar gravação",
+      "browserRecordingStop": "Parar gravação",
       "showInBrowserPanel": "Ver no painel do navegador"
     }
   },
@@ -959,6 +963,7 @@
     "importError": "Erro ao importar hooks"
   },
   "preview": {
+    "browser": "Navegador",
     "open": "Abrir Preview",
     "close": "Fechar Preview",
     "refresh": "Atualizar Preview",

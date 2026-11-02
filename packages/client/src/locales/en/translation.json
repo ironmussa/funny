@@ -802,6 +802,10 @@
       "browserStatus": "Status",
       "browserResize": "Resize viewport",
       "browserClose": "Close browser",
+      "browserDialog": "Answer dialog",
+      "browserSetAppearance": "Set appearance",
+      "browserRecordingStart": "Start recording",
+      "browserRecordingStop": "Stop recording",
       "showInBrowserPanel": "Show in browser panel"
     }
   },
@@ -971,6 +975,7 @@
     "importError": "Failed to import hooks"
   },
   "preview": {
+    "browser": "Browser",
     "open": "Open Preview",
     "close": "Close Preview",
     "refresh": "Refresh Preview",

@@ -30,6 +30,8 @@ export class ChromeSession extends EventEmitter {
   private options: Required<Omit<ChromeSessionOptions, 'targetId'>> & { targetId?: string };
   private frameCount = 0;
   private connected = false;
+  /** Browser UI around the page (tab strip, toolbar), measured before any emulation. */
+  private windowInsets: { width: number; height: number } | null = null;
 
   constructor(options: ChromeSessionOptions = {}) {
     super();
@@ -154,13 +156,55 @@ export class ChromeSession extends EventEmitter {
    */
   async setViewport(width: number, height: number, deviceScaleFactor = 1): Promise<void> {
     if (!this.client) throw new Error('Not connected');
+    await this.measureWindowInsets();
     await this.client.Emulation.setDeviceMetricsOverride({
       width,
       height,
       deviceScaleFactor,
       mobile: false,
     });
+    await this.fitWindow(width, height);
     this.emit('log', `Viewport set to ${width}x${height}@${deviceScaleFactor}x`);
+  }
+
+  /**
+   * The screencast captures the window's content area, not the emulated
+   * viewport: a 1920×1080 window shows a 1920×937 page under headless
+   * Chrome's UI, so frames came out shorter than the viewport and the panel
+   * stretched them (clicks landed below the pointer). Measure the UI around
+   * the page once, while the page is not emulated yet.
+   */
+  private async measureWindowInsets(): Promise<void> {
+    if (this.windowInsets || !this.client) return;
+    try {
+      const { bounds } = await this.client.Browser.getWindowForTarget({});
+      const inner = (await this.execute('[innerWidth, innerHeight]')) as [number, number];
+      if (!bounds.width || !bounds.height || !Array.isArray(inner)) return;
+      this.windowInsets = {
+        width: Math.max(0, bounds.width - inner[0]),
+        height: Math.max(0, bounds.height - inner[1]),
+      };
+    } catch {
+      // Best effort: without the Browser domain the window stays as launched.
+    }
+  }
+
+  /** Size the window so its content area is exactly the viewport. Best effort. */
+  private async fitWindow(width: number, height: number): Promise<void> {
+    if (!this.windowInsets || !this.client) return;
+    try {
+      const { windowId } = await this.client.Browser.getWindowForTarget({});
+      await this.client.Browser.setWindowBounds({
+        windowId,
+        bounds: {
+          width: width + this.windowInsets.width,
+          height: height + this.windowInsets.height,
+          windowState: 'normal',
+        },
+      });
+    } catch {
+      // Best effort, as above.
+    }
   }
 
   async execute(expression: string): Promise<unknown> {
@@ -172,10 +216,12 @@ export class ChromeSession extends EventEmitter {
     return result.result.value;
   }
 
-  async screenshot(): Promise<string> {
+  /** Viewport screenshot as base64 (PNG by default; JPEG for frame-sized captures). */
+  async screenshot(format: 'png' | 'jpeg' = 'png', quality?: number): Promise<string> {
     if (!this.client) throw new Error('Not connected');
     const { data } = await this.client.Page.captureScreenshot({
-      format: 'png',
+      format,
+      ...(format === 'jpeg' && quality ? { quality } : {}),
     });
     return data;
   }
@@ -191,6 +237,7 @@ export class ChromeSession extends EventEmitter {
     deltaX?: number;
     deltaY?: number;
     modifiers?: number;
+    buttons?: number;
   }): Promise<void> {
     if (!this.client) return;
     await this.client.Input.dispatchMouseEvent({
@@ -204,13 +251,15 @@ export class ChromeSession extends EventEmitter {
   }
 
   async dispatchKeyEvent(params: {
-    type: 'keyDown' | 'keyUp' | 'char';
+    type: 'keyDown' | 'rawKeyDown' | 'keyUp' | 'char';
     key: string;
     code: string;
     text?: string;
+    unmodifiedText?: string;
     modifiers?: number;
     windowsVirtualKeyCode?: number;
     nativeVirtualKeyCode?: number;
+    location?: number;
   }): Promise<void> {
     if (!this.client) return;
     await this.client.Input.dispatchKeyEvent({

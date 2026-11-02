@@ -15,6 +15,7 @@ import {
   useSettingsStore,
 } from '@/stores/settings-store';
 
+import { BrowserControlBar } from './BrowserControlBar';
 import { BrowserSessionMenu, BrowserSessionThreadLabel } from './BrowserSessionMenu';
 
 // Only http(s) are recognised as user-supplied schemes. Anything else —
@@ -210,6 +211,7 @@ export function BrowserUrlBar() {
         <BrowserSessionMenu />
       </form>
       <BrowserSessionThreadLabel style={fontStyle} />
+      <BrowserControlBar style={fontStyle} />
       {(loadError || error || sessionError) && (
         <div
           role="alert"

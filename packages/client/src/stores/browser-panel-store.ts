@@ -17,7 +17,11 @@
  * Or via URL/localStorage key: `funny:log-ns:browser-panel` = 'debug' | 'info' | 'warn' | 'error'.
  */
 
-import { threadBrowserSessionId } from '@funny/shared';
+import {
+  threadBrowserSessionId,
+  type BrowserSessionController,
+  type WSBrowserSessionDialogData,
+} from '@funny/shared';
 import type { AnnotationDomInfo } from '@funny/shared/dom/extract';
 import { create } from 'zustand';
 
@@ -68,6 +72,8 @@ type AnnotationInput = Annotation extends infer T
   : never;
 
 export type Tool = 'browse' | 'pin' | 'region' | 'draw';
+
+type BrowserSessionDialog = NonNullable<WSBrowserSessionDialogData['dialog']>;
 
 type SessionStatus =
   | 'idle' // No session
@@ -124,6 +130,10 @@ interface BrowserPanelState {
   sessionThreadId: string | null;
   /** Page viewport of the session — input and overlays scale to it. */
   viewport: { width: number; height: number };
+  /** Who drives a thread-bound session: the agent, or the user after "Take over". */
+  controller: BrowserSessionController;
+  /** JavaScript dialog waiting for an answer (the page is frozen meanwhile). */
+  dialog: BrowserSessionDialog | null;
   sessionStatus: SessionStatus;
   /**
    * Set to a human-readable error message when the runner rejects open or
@@ -178,6 +188,12 @@ interface BrowserPanelState {
   handleSessionNotFound: (sessionId: string) => void;
   /** Close every session and delete the persistent browser profile on the runner. */
   clearBrowserProfile: () => Promise<void>;
+  setSessionController: (sessionId: string, controller: BrowserSessionController) => void;
+  setSessionDialog: (sessionId: string, dialog: BrowserSessionDialog | null) => void;
+  /** Take the session over from the agent (or hand it back with `false`). */
+  setUserControl: (userControls: boolean) => Promise<void>;
+  /** Answer the pending dialog from the panel. */
+  answerDialog: (accept: boolean, promptText?: string) => Promise<void>;
   setSessionStatus: (status: SessionStatus, error?: string | null) => void;
   toggleShowTestIds: () => void;
   toggleAnimationsPaused: () => void;
@@ -283,6 +299,8 @@ const FRESH = {
   sessionId: null as string | null,
   sessionThreadId: null as string | null,
   viewport: { width: BROWSER_SESSION_VIEWPORT_WIDTH, height: BROWSER_SESSION_VIEWPORT_HEIGHT },
+  controller: 'agent' as BrowserSessionController,
+  dialog: null as BrowserSessionDialog | null,
   sessionStatus: 'idle' as SessionStatus,
   sessionError: null as string | null,
   showTestIds: false,
@@ -498,7 +516,15 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
   attachThreadSession: async (threadId) => {
     const sessionId = threadBrowserSessionId(threadId);
-    set({ sessionId, sessionThreadId: threadId, sessionStatus: 'spawning', sessionError: null });
+    // Controller and dialog start from defaults; `ready` restates the real ones.
+    set({
+      sessionId,
+      sessionThreadId: threadId,
+      sessionStatus: 'spawning',
+      sessionError: null,
+      controller: 'agent',
+      dialog: null,
+    });
     const { browserSessionClient } = await loadClient();
     // Empty URL = attach only: the runner re-sends `ready` or replies `not_found`.
     browserSessionClient.open(sessionId, '');
@@ -534,6 +560,37 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
   handleSessionNotFound: (sessionId) => {
     if (get().sessionId !== sessionId) return;
     set({ ...DETACHED });
+  },
+
+  setSessionController: (sessionId, controller) => {
+    if (get().sessionId !== sessionId) return;
+    set({ controller });
+  },
+
+  setSessionDialog: (sessionId, dialog) => {
+    if (get().sessionId !== sessionId) return;
+    set({ dialog });
+  },
+
+  setUserControl: async (userControls) => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    const { browserSessionClient } = await loadClient();
+    browserSessionClient.input(sessionId, {
+      kind: userControls ? 'takeControl' : 'releaseControl',
+    });
+    metric('browser_panel.control_changed', 1, {
+      type: 'sum',
+      attributes: { controller: userControls ? 'user' : 'agent' },
+    });
+  },
+
+  answerDialog: async (accept, promptText) => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    const { browserSessionClient } = await loadClient();
+    browserSessionClient.input(sessionId, { kind: 'dialog', accept, promptText });
+    set({ dialog: null });
   },
 
   clearBrowserProfile: async () => {

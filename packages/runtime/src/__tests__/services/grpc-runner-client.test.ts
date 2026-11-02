@@ -108,7 +108,7 @@ describe('RunnerGrpcClient', () => {
           instanceId: 'runner-1',
           activeProviderIds: ['codex'],
         },
-        capabilities: [1, 2, 3, 4],
+        capabilities: [1, 2, 3, 4, 5],
         eventCursors: [{ executionId: 'execution-1', lastAcceptedSequence: '7' }],
         terminalCursors: [{ terminalId: 'terminal-1', lastSeenOutputSequence: '4' }],
       },

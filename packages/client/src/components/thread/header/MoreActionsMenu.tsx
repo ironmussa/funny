@@ -1,7 +1,6 @@
 import type { ThreadStage } from '@funny/shared';
 import {
   Activity,
-  AppWindow,
   Check,
   ClipboardList,
   Columns3,
@@ -72,12 +71,10 @@ function MenuItems({
     hasMessages,
     isScratchThread,
     canConvertToWorktree,
-    canShowBrowserPanel,
     showStage,
     threadPinned,
     activityActive,
     timelineVisible,
-    browserPanelOpen,
     copiedText,
     copiedTools,
     setDeleteOpen,
@@ -89,7 +86,6 @@ function MenuItems({
     handleViewOnBoard,
     togglePin,
     toggleActivity,
-    toggleBrowser,
     toggleTimeline,
   } = menu;
   const effectiveOpenInEditor = onOpenInEditor ?? handleOpenInEditor;
@@ -162,16 +158,6 @@ function MenuItems({
         >
           <Milestone className={`icon-base mr-2 ${timelineVisible ? 'text-primary' : ''}`} />
           {t('thread.toggleTimeline', 'Toggle Timeline')}
-        </DropdownMenuItem>
-      )}
-      {canShowBrowserPanel && (
-        <DropdownMenuItem
-          data-testid="header-menu-browser-panel"
-          onClick={toggleBrowser}
-          className="cursor-pointer"
-        >
-          <AppWindow className={`icon-base mr-2 ${browserPanelOpen ? 'text-primary' : ''}`} />
-          {t('projectHeader.browserPanel', 'Browser annotator')}
         </DropdownMenuItem>
       )}
       <DropdownMenuSeparator />

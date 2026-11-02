@@ -5,8 +5,10 @@
  * Skipped when no Playwright Chromium is installed.
  */
 
-import { existsSync, rmSync } from 'fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { createServer, type Server } from 'http';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 import type { Result } from 'neverthrow';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
@@ -29,12 +31,18 @@ import {
   browserEvaluate,
   browserNavigate,
   browserOpen,
+  browserResize,
   browserSnapshot,
   browserStatus,
   browserWaitFor,
+  browserDialog,
+  browserRecordingStart,
+  browserRecordingStop,
+  browserSetAppearance,
   type BrowserToolContent,
 } from '../../services/browser-automation/browser-tools.js';
 import { browserSessionManager } from '../../services/browser-session-manager.js';
+import { wsBroker } from '../../services/ws-broker.js';
 
 /** Value of an Ok result; fails the test with the error otherwise. */
 function unwrap<T, E>(result: Result<T, E>): T {
@@ -56,7 +64,25 @@ const PAGES: Record<string, string> = {
     <button onclick="setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<p>Later</p>'), 300)">Delay</button>`,
   '/done': `<title>Done</title><h1>Welcome</h1>`,
   '/popup': `<title>Popup</title><h1>Popup page</h1>`,
+  '/upload': `<title>Upload</title><label>File <input type="file" id="f"></label>`,
+  // Animated so the screencast keeps sending frames.
+  '/keys': `<title>Keys</title><input id="k" value="hello world">
+    <style>@keyframes pulse { to { opacity: 0.9 } } body { animation: pulse 0.1s infinite alternate }</style>`,
 };
+
+/** Width and height of a base64 JPEG (from its SOF marker). */
+function jpegSize(base64: string): { width: number; height: number } | null {
+  const bytes = Buffer.from(base64, 'base64');
+  for (let i = 2; i + 9 < bytes.length;) {
+    if (bytes[i] !== 0xff) return null;
+    const marker = bytes[i + 1];
+    if (marker >= 0xc0 && marker <= 0xc3) {
+      return { height: bytes.readUInt16BE(i + 5), width: bytes.readUInt16BE(i + 7) };
+    }
+    i += 2 + bytes.readUInt16BE(i + 2);
+  }
+  return null;
+}
 
 function allText(content: BrowserToolContent[]): string {
   return content.map((c) => (c.type === 'text' ? c.text : '[image]')).join('\n');
@@ -124,13 +150,24 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     expect(thrown.isErr() && thrown.error.message).toContain('notDefinedAnywhere');
   });
 
-  test('dialogs are dismissed and reported; waits resolve', async () => {
+  test('dialogs are held until answered; waits resolve', async () => {
     unwrap(await browserNavigate(ctx, { url: `${base}/login` }));
     const snap = allText(unwrap(await browserSnapshot(ctx, {})));
     const danger = refOf(snap, /button "Danger" \[ref=(e\d+)\]/);
     const result = allText(unwrap(await browserAct(ctx, { action: 'click', ref: danger })));
-    expect(result).toContain('confirm dialog ("Delete?") appeared and was dismissed');
-    expect(result).toContain('Title: no');
+    expect(result).toContain('A confirm dialog is open: "Delete?"');
+
+    // Page tools refuse while the dialog freezes the page.
+    const blocked = await browserSnapshot(ctx, {});
+    expect(blocked.isErr() && blocked.error.code).toBe('dialog-pending');
+
+    const answered = allText(unwrap(await browserDialog(ctx, { accept: true })));
+    expect(answered).toContain('Accepted the confirm dialog');
+    await vi.waitFor(async () =>
+      expect(allText(unwrap(await browserEvaluate(ctx, { expression: 'document.title' })))).toBe(
+        '"yes"',
+      ),
+    );
 
     const delay = refOf(snap, /button "Delay" \[ref=(e\d+)\]/);
     unwrap(await browserAct(ctx, { action: 'click', ref: delay }));
@@ -180,6 +217,212 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     });
     expect(allText(unwrap(value))).toBe('"together"');
   }, 60_000);
+
+  test('the user can take control; agent page tools wait until handed back', async () => {
+    unwrap(await browserNavigate(ctx, { url: `${base}/login` }));
+    const snap = allText(unwrap(await browserSnapshot(ctx, {})));
+    const email = refOf(snap, /textbox "Email" \[ref=(e\d+)\]/);
+    const sessionId = `thread:${ctx.threadId}`;
+    await browserSessionManager.dispatchInput(ctx.userId, sessionId, {
+      sessionId,
+      kind: 'takeControl',
+    });
+
+    const blocked = await browserAct(ctx, { action: 'fill', ref: email, text: 'x' });
+    expect(blocked.isErr() && blocked.error.code).toBe('user-has-control');
+    // Read-only tools keep working.
+    expect(allText(unwrap(await browserStatus(ctx)))).toContain('Controller: user');
+
+    await browserSessionManager.dispatchInput(ctx.userId, sessionId, {
+      sessionId,
+      kind: 'releaseControl',
+    });
+    // Refs taken before the change of control are stale.
+    const stale = await browserAct(ctx, { action: 'fill', ref: email, text: 'x' });
+    expect(stale.isErr() && stale.error.code).toBe('stale-ref');
+  }, 60_000);
+
+  test('the panel can answer a dialog', async () => {
+    const snap = allText(unwrap(await browserSnapshot(ctx, {})));
+    const danger = refOf(snap, /button "Danger" \[ref=(e\d+)\]/);
+    unwrap(await browserAct(ctx, { action: 'click', ref: danger }));
+    const sessionId = `thread:${ctx.threadId}`;
+    await browserSessionManager.dispatchInput(ctx.userId, sessionId, {
+      sessionId,
+      kind: 'dialog',
+      accept: false,
+    });
+    await vi.waitFor(async () =>
+      expect(allText(unwrap(await browserEvaluate(ctx, { expression: 'document.title' })))).toBe(
+        '"no"',
+      ),
+    );
+  }, 60_000);
+
+  test('a re-attaching panel is told the controller and the pending dialog', async () => {
+    const snap = allText(unwrap(await browserSnapshot(ctx, {})));
+    const danger = refOf(snap, /button "Danger"[^\n]*\[ref=(e\d+)\]/);
+    unwrap(await browserAct(ctx, { action: 'click', ref: danger }));
+    const sessionId = `thread:${ctx.threadId}`;
+    await browserSessionManager.dispatchInput(ctx.userId, sessionId, {
+      sessionId,
+      kind: 'takeControl',
+    });
+    const emitToUser = vi.mocked(wsBroker.emitToUser);
+    emitToUser.mockClear();
+
+    await browserSessionManager.open(ctx.userId, sessionId, '');
+    const sent = emitToUser.mock.calls.map(([, event]) => event as { type: string; data: unknown });
+    expect(sent).toContainEqual(
+      expect.objectContaining({
+        type: 'browser-session:controller',
+        data: expect.objectContaining({ controller: 'user' }),
+      }),
+    );
+    expect(sent).toContainEqual(
+      expect.objectContaining({
+        type: 'browser-session:dialog',
+        data: expect.objectContaining({ dialog: expect.objectContaining({ type: 'confirm' }) }),
+      }),
+    );
+
+    await browserSessionManager.dispatchInput(ctx.userId, sessionId, {
+      sessionId,
+      kind: 'dialog',
+      accept: false,
+    });
+    await browserSessionManager.dispatchInput(ctx.userId, sessionId, {
+      sessionId,
+      kind: 'releaseControl',
+    });
+  }, 60_000);
+
+  test('screencast frames have the viewport size, also after a resize', async () => {
+    unwrap(await browserNavigate(ctx, { url: `${base}/keys` }));
+    const sessionId = `thread:${ctx.threadId}`;
+    const emitToUser = vi.mocked(wsBroker.emitToUser);
+    const lastFrameSize = async () => {
+      emitToUser.mockClear();
+      await new Promise((r) => setTimeout(r, 800));
+      const frames = emitToUser.mock.calls
+        .map(([, event]) => event as { type: string; data: { sessionId: string; data: string } })
+        .filter((e) => e.type === 'browser-session:frame' && e.data.sessionId === sessionId);
+      return frames.length ? jpegSize(frames.at(-1)!.data.data) : null;
+    };
+
+    // Headless Chrome's UI used to eat ~143px: frames came out 1920×937 and
+    // the panel stretched them, so clicks landed below the pointer.
+    expect(await lastFrameSize()).toEqual({ width: 1920, height: 1080 });
+    unwrap(await browserResize(ctx, { width: 1280, height: 720 }));
+    expect(await lastFrameSize()).toEqual({ width: 1280, height: 720 });
+    unwrap(await browserResize(ctx, { width: 1920, height: 1080 }));
+  }, 60_000);
+
+  test('panel keystrokes: arrows, Shift+arrows and Backspace edit the field', async () => {
+    unwrap(await browserNavigate(ctx, { url: `${base}/keys` }));
+    unwrap(
+      await browserEvaluate(ctx, {
+        expression:
+          "(() => { const k = document.getElementById('k'); k.focus(); k.setSelectionRange(11, 11); })()",
+      }),
+    );
+    const sessionId = `thread:${ctx.threadId}`;
+    const press = async (key: string, code: string, keyCode: number, modifiers = 0) => {
+      for (const kind of ['keyDown', 'keyUp'] as const) {
+        await browserSessionManager.dispatchInput(ctx.userId, sessionId, {
+          sessionId,
+          kind,
+          key,
+          code,
+          keyCode,
+          modifiers,
+        });
+      }
+    };
+    await press('ArrowLeft', 'ArrowLeft', 37);
+    await press('ArrowLeft', 'ArrowLeft', 37, 8); // Shift
+    await press('ArrowLeft', 'ArrowLeft', 37, 8);
+    expect(
+      allText(
+        unwrap(
+          await browserEvaluate(ctx, {
+            expression:
+              "[document.getElementById('k').selectionStart, document.getElementById('k').selectionEnd]",
+          }),
+        ),
+      ),
+    ).toMatch(/8,\s*10/);
+    await press('Backspace', 'Backspace', 8);
+    expect(
+      allText(
+        unwrap(await browserEvaluate(ctx, { expression: "document.getElementById('k').value" })),
+      ),
+    ).toBe('"hello wod"');
+    // Ctrl+A selects the whole field.
+    await press('a', 'KeyA', 65, 2);
+    expect(
+      allText(
+        unwrap(
+          await browserEvaluate(ctx, {
+            expression:
+              "[document.getElementById('k').selectionStart, document.getElementById('k').selectionEnd]",
+          }),
+        ),
+      ),
+    ).toMatch(/0,\s*9/);
+  }, 60_000);
+
+  test('upload only accepts files inside the thread directory', async () => {
+    const cwd = mkdtempSync(join(tmpdir(), 'funny-upload-'));
+    writeFileSync(join(cwd, 'report.txt'), 'hello');
+    const uctx = { ...ctx, cwd };
+    unwrap(await browserNavigate(uctx, { url: `${base}/upload` }));
+    const snap = allText(unwrap(await browserSnapshot(uctx, {})));
+    const input = refOf(
+      snap,
+      /button "File" \[ref=(e\d+)\]|textbox "File" \[ref=(e\d+)\]|"File" \[ref=(e\d+)\]/,
+    );
+
+    const outside = await browserAct(uctx, {
+      action: 'upload',
+      ref: input,
+      paths: ['/etc/hostname'],
+    });
+    expect(outside.isErr() && outside.error.code).toBe('path-not-allowed');
+
+    unwrap(await browserAct(uctx, { action: 'upload', ref: input, paths: ['report.txt'] }));
+    const name = await browserEvaluate(uctx, {
+      expression: "document.getElementById('f').files[0]?.name",
+    });
+    expect(allText(unwrap(name))).toBe('"report.txt"');
+    rmSync(cwd, { recursive: true, force: true });
+  }, 60_000);
+
+  test('appearance emulation switches the colour scheme', async () => {
+    unwrap(await browserSetAppearance(ctx, { colorScheme: 'dark' }));
+    const dark = await browserEvaluate(ctx, {
+      expression: "matchMedia('(prefers-color-scheme: dark)').matches",
+    });
+    expect(allText(unwrap(dark))).toBe('true');
+  }, 30_000);
+
+  test('recording saves an MP4 into the assets directory', async () => {
+    const assetsDir = mkdtempSync(join(tmpdir(), 'funny-assets-'));
+    const rctx = { ...ctx, assetsDir };
+    const started = await browserRecordingStart(rctx);
+    if (started.isErr()) {
+      // No ffmpeg with libx264 on this machine: the error is the contract.
+      expect(started.error.code).toBe('recording-unavailable');
+      return;
+    }
+    unwrap(await browserNavigate(rctx, { url: `${base}/done` }));
+    unwrap(await browserNavigate(rctx, { url: `${base}/login` }));
+    await new Promise((r) => setTimeout(r, 500));
+    const stopped = allText(unwrap(await browserRecordingStop(rctx)));
+    const path = /Recording saved: (\S+\.mp4)/.exec(stopped)?.[1];
+    expect(path && existsSync(path)).toBe(true);
+    rmSync(assetsDir, { recursive: true, force: true });
+  }, 120_000);
 
   test('close ends the session', async () => {
     expect(allText(unwrap(await browserClose(ctx)))).toContain('closed');

@@ -31,6 +31,16 @@ const execFileAsync = promisify(execFile);
 
 export type BrowserProfileKind = 'persistent' | 'ephemeral';
 
+async function targetIdOf(context: BrowserContext, page: Page): Promise<string> {
+  const cdp = await context.newCDPSession(page);
+  try {
+    const info = (await cdp.send('Target.getTargetInfo')) as { targetInfo: { targetId: string } };
+    return info.targetInfo.targetId;
+  } finally {
+    await cdp.detach().catch(() => {});
+  }
+}
+
 export interface BrowserTab {
   page: Page;
   /** CDP target id — what `ChromeSession({ targetId })` attaches to. */
@@ -249,16 +259,41 @@ export class BrowserHost {
             : null;
         const context = ephemeralContext ?? this.browser.contexts()[0];
         if (!context) throw new Error('browser-unavailable: no default browser context');
-        const page = await context.newPage();
-        const cdp = await context.newCDPSession(page);
-        const info = (await cdp.send('Target.getTargetInfo')) as {
-          targetInfo: { targetId: string };
-        };
-        await cdp.detach().catch(() => {});
-        return { page, targetId: info.targetInfo.targetId, ephemeralContext };
+        // An ephemeral context opens its own window; default-context pages
+        // would share one, so each gets a window of its own.
+        const page = ephemeralContext
+          ? await context.newPage()
+          : await this.newWindowPage(context).catch(() => context.newPage());
+        return { page, targetId: await targetIdOf(context, page), ephemeralContext };
       })(),
       toError,
     );
+  }
+
+  /**
+   * A default-context page in a new window. Each session sizes its window to
+   * its viewport (the screencast captures the window's content area), which
+   * must not resize the other sessions' pages.
+   */
+  private async newWindowPage(context: BrowserContext): Promise<Page> {
+    const cdp = await this.browser.newBrowserCDPSession();
+    try {
+      let created!: (targetId: string) => void;
+      const createdId = new Promise<string>((resolve) => (created = resolve));
+      const opened = context.waitForEvent('page', {
+        predicate: async (page) => (await targetIdOf(context, page)) === (await createdId),
+        timeout: 10_000,
+      });
+      opened.catch(() => {});
+      const { targetId } = (await cdp.send('Target.createTarget', {
+        url: 'about:blank',
+        newWindow: true,
+      })) as { targetId: string };
+      created(targetId);
+      return await opened;
+    } finally {
+      await cdp.detach().catch(() => {});
+    }
   }
 
   /** Close a tab (and its ephemeral context). Never throws. */

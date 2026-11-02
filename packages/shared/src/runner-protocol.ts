@@ -40,6 +40,14 @@ export const RUNNER_GRPC_WS_PATH = '/api/runner-grpc/ws';
 export const RUNNER_GRPC_WS_MAX_BUFFERED_BYTES = 16 * 1024 * 1024;
 
 /**
+ * Event types a runner may send as an unscoped `UserEvent` (relayed only to
+ * the runner owner's browser sessions, never persisted). Both ends enforce it.
+ */
+export function isRunnerUserEventType(type: string): boolean {
+  return type.startsWith('browser-session:');
+}
+
+/**
  * How a tunneled response body string is encoded on the wire.
  *
  * The central proxy represents the assembled body as a string. A `utf8` body is the

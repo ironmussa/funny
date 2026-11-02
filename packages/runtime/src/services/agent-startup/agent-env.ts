@@ -81,6 +81,12 @@ function prepareAssetsDirEnv(threadId: string, userId: string, assetsDir?: strin
  * subprocesses. Returns undefined when nothing applies (no user, or no
  * configured values) so the orchestrator keeps the inherited environment.
  */
+/** `$BROWSER` → open URLs in the thread's browser session (see open-url-bridge). */
+async function loadBrowserOpenEnv(userId: string, threadId: string): Promise<EnvVars> {
+  const { browserOpenEnv } = await import('../browser-automation/open-url-bridge.js');
+  return browserOpenEnv(userId, threadId);
+}
+
 export async function buildAgentEnv(input: {
   threadId: string;
   userId?: string;
@@ -95,6 +101,7 @@ export async function buildAgentEnv(input: {
     ...llmProxyEnv(provider),
     ...(await loadGitIdentityEnv(userId)),
     ...prepareAssetsDirEnv(threadId, userId, assetsDir),
+    ...(await loadBrowserOpenEnv(userId, threadId)),
   };
   return Object.keys(env).length > 0 ? env : undefined;
 }

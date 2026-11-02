@@ -46,4 +46,31 @@ describe('RunnerEventPublisher', () => {
       1n,
     );
   });
+
+  test('unscoped browser-session events go out as user events once the server enables them', () => {
+    const send = vi.fn(() => true);
+    const append = vi.fn();
+    const publisher = new RunnerEventPublisher({ send }, { append, close: vi.fn() } as any);
+    const frame = {
+      type: 'browser-session:frame',
+      threadId: '',
+      data: { sessionId: 'thread:t1', data: 'abc' },
+    } as any;
+
+    publisher.publish(frame);
+    expect(send).not.toHaveBeenCalled();
+
+    publisher.setUserEventsEnabled(true);
+    publisher.publish(frame);
+    publisher.publish({ type: 'thread:updated', threadId: '', data: {} } as any);
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith('events', {
+      userEvent: {
+        eventType: 'browser-session:frame',
+        data: { sessionId: 'thread:t1', data: 'abc' },
+      },
+    });
+    // Never stored for replay.
+    expect(append).not.toHaveBeenCalled();
+  });
 });

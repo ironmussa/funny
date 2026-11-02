@@ -750,6 +750,8 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
   'browser-session:closed': browserSessionEventHandler,
   'browser-session:agent-opened': browserSessionEventHandler,
   'browser-session:viewport': browserSessionEventHandler,
+  'browser-session:controller': browserSessionEventHandler,
+  'browser-session:dialog': browserSessionEventHandler,
   'clone:progress': noop,
   'worktree:setup': (threadId, data) => {
     useThreadStore.getState().handleWSWorktreeSetup(threadId, data);
@@ -1006,6 +1008,8 @@ const ALL_EVENT_TYPES = [
   'browser-session:closed',
   'browser-session:agent-opened',
   'browser-session:viewport',
+  'browser-session:controller',
+  'browser-session:dialog',
 ] as const;
 
 // Tracks Socket.IO listeners we attached, so HMR (or any future dispose path)

@@ -142,6 +142,9 @@ export type {
   WSBrowserSessionClosedData,
   WSBrowserSessionAgentOpenedData,
   WSBrowserSessionViewportData,
+  WSBrowserSessionControllerData,
+  WSBrowserSessionDialogData,
+  BrowserSessionController,
   BrowserSessionCloseRequestReason,
 } from './types/browser-session.js';
 export { threadBrowserSessionId, threadIdFromBrowserSessionId } from './types/browser-session.js';
@@ -984,7 +987,9 @@ export type WSEvent =
       threadId: '';
       data: WSBrowserSessionAgentOpenedData;
     }
-  | { type: 'browser-session:viewport'; threadId: ''; data: WSBrowserSessionViewportData };
+  | { type: 'browser-session:viewport'; threadId: ''; data: WSBrowserSessionViewportData }
+  | { type: 'browser-session:controller'; threadId: ''; data: WSBrowserSessionControllerData }
+  | { type: 'browser-session:dialog'; threadId: ''; data: WSBrowserSessionDialogData };
 
 export interface WSOrgMemberData {
   organizationId: string;
@@ -1112,6 +1117,8 @@ import type {
   WSBrowserSessionClosedData,
   WSBrowserSessionAgentOpenedData,
   WSBrowserSessionViewportData,
+  WSBrowserSessionControllerData,
+  WSBrowserSessionDialogData,
 } from './types/browser-session.js';
 import type {
   WSGitStatusData,

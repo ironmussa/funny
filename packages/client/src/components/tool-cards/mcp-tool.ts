@@ -56,6 +56,10 @@ const KNOWN_ACTIONS: Record<string, string> = {
   'funny_browser/browser_status': 'browserStatus',
   'funny_browser/browser_resize': 'browserResize',
   'funny_browser/browser_close': 'browserClose',
+  'funny_browser/browser_dialog': 'browserDialog',
+  'funny_browser/browser_set_appearance': 'browserSetAppearance',
+  'funny_browser/browser_recording_start': 'browserRecordingStart',
+  'funny_browser/browser_recording_stop': 'browserRecordingStop',
 };
 
 /** funny's own browser tools (`mcp__funny_browser__*`) — the card offers "Show in panel". */
@@ -82,6 +86,7 @@ function actTarget(parsed: Record<string, unknown>): string | null {
 function actDetail(parsed: Record<string, unknown>): string | null {
   const text = str(parsed.text);
   if (text) return `"${firstLine(text, 60)}"`;
+  if (Array.isArray(parsed.paths)) return parsed.paths.join(', ');
   return str(parsed.key) ?? (Array.isArray(parsed.values) ? parsed.values.join(', ') : null);
 }
 
@@ -118,7 +123,19 @@ const BROWSER_SUMMARIES: Record<string, Summarizer> = {
     return w !== null && h !== null ? `${w}×${h}` : null;
   },
   browser_snapshot: (p) => (p.screenshot === true ? 'with screenshot' : null),
+  browser_dialog: (p) => {
+    if (typeof p.accept !== 'boolean') return null;
+    const text = str(p.promptText);
+    return p.accept ? (text ? `accept · "${firstLine(text, 60)}"` : 'accept') : 'dismiss';
+  },
+  browser_set_appearance: (p) => str(p.colorScheme),
 };
+
+/** The MP4 a `browser_recording_stop` call saved ("Recording saved: <path>"), if any. */
+export function browserRecordingPath(mcp: McpToolName, resultText: string): string | null {
+  if (mcp.server !== 'funny_browser' || mcp.tool !== 'browser_recording_stop') return null;
+  return /^Recording saved: (.+\.mp4)$/m.exec(resultText)?.[1].trim() ?? null;
+}
 
 /** "Get issue" from `get_issue`, `getIssue` or `codegraph_search` (server prefix dropped). */
 function humanizeAction(server: string, tool: string): string {

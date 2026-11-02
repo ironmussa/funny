@@ -1,4 +1,5 @@
 import type { WSEvent } from '@funny/shared';
+import { RunnerCapability } from '@funny/shared/runner-v2/common';
 
 import { GrpcEventReplayStore } from './grpc-event-replay-store.js';
 import { GrpcOperationOutbox } from './grpc-operation-outbox.js';
@@ -80,6 +81,9 @@ export class GrpcTeamTransport {
           this.terminal.setMaxFrameBytes(negotiatedFrameBytes);
         }
         this.operations.activated();
+        this.events.setUserEventsEnabled(
+          (hello.enabledCapabilities ?? []).includes(RunnerCapability.USER_EVENTS),
+        );
         this.events.activated();
         onActivated?.(hello);
       },

@@ -18,6 +18,9 @@ enum RunnerCapability {
   RUNNER_CAPABILITY_EVENTS = 2;
   RUNNER_CAPABILITY_HTTP_TUNNEL = 3;
   RUNNER_CAPABILITY_TERMINAL = 4;
+  // Unscoped transient events for the runner owner's browser sessions
+  // (EventsRequest.user_event). Sent only when the server enables it.
+  RUNNER_CAPABILITY_USER_EVENTS = 5;
 }
 
 // Runner metadata used for observability. Authorization identity is derived

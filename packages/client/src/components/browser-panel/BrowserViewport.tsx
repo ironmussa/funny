@@ -13,7 +13,7 @@ import { PinTool } from './tools/PinTool';
 import { RegionTool } from './tools/RegionTool';
 
 // CDP modifiers bitmask: 1=Alt, 2=Ctrl, 4=Meta, 8=Shift
-const buildModifiers = (event: React.KeyboardEvent<HTMLDivElement>): number =>
+const buildModifiers = (event: React.KeyboardEvent | React.MouseEvent): number =>
   (event.altKey ? 1 : 0) |
   (event.ctrlKey ? 2 : 0) |
   (event.metaKey ? 4 : 0) |
@@ -93,6 +93,7 @@ export function BrowserViewport() {
       y,
       button: e.button === 2 ? 'right' : e.button === 1 ? 'middle' : 'left',
       clickCount: e.detail || 1,
+      modifiers: buildModifiers(e),
     });
   };
   const onBrowseMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -105,12 +106,19 @@ export function BrowserViewport() {
       y,
       button: e.button === 2 ? 'right' : e.button === 1 ? 'middle' : 'left',
       clickCount: e.detail || 1,
+      modifiers: buildModifiers(e),
     });
   };
   const onBrowseMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
     const { x, y } = toViewportCoords(e);
-    browserSessionClient.input(sessionId!, { kind: 'mouseMove', x, y });
+    browserSessionClient.input(sessionId!, {
+      kind: 'mouseMove',
+      x,
+      y,
+      buttons: e.buttons,
+      modifiers: buildModifiers(e),
+    });
   };
   const onBrowseWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
@@ -134,6 +142,9 @@ export function BrowserViewport() {
   const onBrowseKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
     e.preventDefault(); // don't let the browser handle (e.g. Tab navigation in funny)
+    // Keys typed into the remote page are the page's: funny's own shortcuts
+    // (`?`, Ctrl+P, Alt+←…) listen on `window` and must not see them.
+    e.stopPropagation();
     const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey;
     browserSessionClient.input(sessionId!, {
       kind: 'keyDown',
@@ -141,17 +152,22 @@ export function BrowserViewport() {
       code: e.code,
       text: printable ? e.key : undefined,
       modifiers: buildModifiers(e),
+      keyCode: e.keyCode,
+      location: e.location,
     });
   };
 
   const onBrowseKeyUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
     e.preventDefault();
+    e.stopPropagation();
     browserSessionClient.input(sessionId!, {
       kind: 'keyUp',
       key: e.key,
       code: e.code,
       modifiers: buildModifiers(e),
+      keyCode: e.keyCode,
+      location: e.location,
     });
   };
 
@@ -189,6 +205,8 @@ export function BrowserViewport() {
             data-testid="browser-panel-overlay"
             role="application"
             aria-label="Remote browser viewport"
+            // Capture-phase shortcuts (Ctrl+F) skip targets inside this.
+            data-keyboard-passthrough
             tabIndex={0}
             className="absolute inset-0 select-none focus:outline-hidden"
             style={{

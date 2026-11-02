@@ -1,4 +1,12 @@
-import { FlaskConical, FolderTree, GitCompare, Globe, MessageSquare, Terminal } from 'lucide-react';
+import {
+  AppWindow,
+  FlaskConical,
+  FolderTree,
+  GitCompare,
+  Globe,
+  MessageSquare,
+  Terminal,
+} from 'lucide-react';
 import { memo, startTransition, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
@@ -13,6 +21,7 @@ import { api } from '@/lib/api';
 import * as variant from '@/lib/thread-variant';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
+import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useProjectStore } from '@/stores/project-store';
 import type { Editor } from '@/stores/settings-store';
 import type { TerminalTab } from '@/stores/terminal-store';
@@ -162,6 +171,30 @@ function TerminalToggleButton({
       label={<ShortcutHint label={t('terminal.toggle', 'Toggle Terminal')} keys={['Ctrl', '`']} />}
     >
       <Terminal className="icon-base" />
+    </HeaderActionButton>
+  );
+}
+
+/** Opens/closes the browser panel (the thread's shared browser session). */
+function BrowserToggleButton({
+  threadId,
+  projectId,
+}: {
+  threadId?: string | null;
+  projectId?: string | null;
+}) {
+  const { t } = useTranslation();
+  const open = useBrowserPanelStore((s) => s.open);
+  const togglePanel = useBrowserPanelStore((s) => s.togglePanel);
+  if (!threadId && !projectId) return null;
+  return (
+    <HeaderActionButton
+      active={open}
+      testId="header-toggle-browser"
+      onClick={togglePanel}
+      label={t('preview.browser')}
+    >
+      <AppWindow className="icon-base" />
     </HeaderActionButton>
   );
 }
@@ -372,6 +405,7 @@ export const ThreadHeaderActionsBase = memo(function ThreadHeaderActionsBase({
           <FolderTree className="icon-base" />
         </HeaderActionButton>
       )}
+      <BrowserToggleButton threadId={activeThreadId} projectId={projectId} />
       {activeThreadId && canShowComments && (
         <CommentsToggleButton
           active={commentsPanelActive}

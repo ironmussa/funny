@@ -236,6 +236,7 @@ export class AgentLifecycleManager {
       mcpServers,
       disallowedTools,
       claudeConfigDir: activeAgentProfile.env.CLAUDE_CONFIG_DIR,
+      cwd,
     });
 
     // Per-user browser-previewable assets dir. Computed here so we can tell the

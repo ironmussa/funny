@@ -3,17 +3,20 @@ import { CircleAlert, ChevronRight, Globe, Plug } from 'lucide-react';
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MediaPreview } from '@/components/MediaPreview';
 import { MessageContent } from '@/components/thread/MessageContent';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
+import { toRawFileSrc } from '@/lib/raw-file-src';
 import { cn } from '@/lib/utils';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { getUrlThreadId } from '@/stores/thread-store';
 
 import { ToolValue } from './GenericToolCard';
 import {
+  browserRecordingPath,
   formatDurationMs,
   getMcpCodeInput,
   getMcpSummary,
@@ -150,6 +153,7 @@ export function McpToolCard({ mcp, parsed, output, hideLabel, displayTime }: Pro
         >
           <div className="space-y-2 px-3 pt-1.5 pb-2">
             {isBrowserTool(mcp) && <ShowInBrowserPanelButton />}
+            <BrowserRecordingPreview mcp={mcp} resultText={resultText} isError={isError} />
             {codeInput && (
               <Section label={codeInput.key}>
                 <CodeBlock code={codeInput.code} language={codeInput.language} />
@@ -209,6 +213,28 @@ export function McpToolCard({ mcp, parsed, output, hideLabel, displayTime }: Pro
         </ToolContentArea>
       )}
     </div>
+  );
+}
+
+/** Inline player for the MP4 a `browser_recording_stop` call saved. */
+function BrowserRecordingPreview({
+  mcp,
+  resultText,
+  isError,
+}: {
+  mcp: McpToolName;
+  resultText: string;
+  isError: boolean;
+}) {
+  const recording = isError ? null : browserRecordingPath(mcp, resultText);
+  if (!recording) return null;
+  return (
+    <MediaPreview
+      src={toRawFileSrc(recording)}
+      name={recording.split('/').pop()}
+      kind="video"
+      className="max-h-80"
+    />
   );
 }
 

@@ -18,6 +18,7 @@
  *   __funnyLog.setNamespaceLevel('browser-session', 'debug')
  */
 
+import { EventEmitter } from 'events';
 import { readdir, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -35,7 +36,7 @@ import {
   extractElementInfo,
   pickStyles,
 } from '@funny/shared/dom/extract';
-import type { Page } from 'playwright';
+import type { Dialog, Page } from 'playwright';
 
 import { log } from '../lib/logger.js';
 import { metric, startSpan } from '../lib/telemetry.js';
@@ -46,6 +47,7 @@ import {
   type BrowserProfileKind,
   type BrowserTab,
 } from './browser-automation/browser-host.js';
+import type { ViewportRecorder } from './browser-automation/recorder.js';
 import { RefGenerations } from './browser-automation/snapshot-refs.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 import { wsBroker } from './ws-broker.js';
@@ -90,10 +92,12 @@ const INSPECT_HELPERS = `
 
 export type BrowserController = 'agent' | 'user';
 
-export interface BrowserDialogRecord {
+/** A JavaScript dialog waiting for an answer from the agent or the user. */
+export interface PendingDialog {
   type: string;
   message: string;
-  handled: 'dismissed' | 'accepted';
+  defaultValue: string;
+  dialog: Dialog;
 }
 
 export interface BrowserSession {
@@ -116,8 +120,12 @@ export interface BrowserSession {
   lastAgentActivity: number;
   controller: BrowserController;
   refs: RefGenerations;
-  /** Dialogs auto-handled since the agent last looked (reported once). */
-  pendingDialogReports: BrowserDialogRecord[];
+  /** The open JavaScript dialog; the page is frozen until it is answered. */
+  pendingDialog: PendingDialog | null;
+  /** Active viewport recording, if any. */
+  recorder: ViewportRecorder | null;
+  /** Session-local signals (`dialog`) that in-flight agent actions wait on. */
+  signals: EventEmitter;
   consoleErrors: string[];
   /** Serialises panel input and agent actions on this tab. */
   queue: Promise<unknown>;
@@ -167,7 +175,9 @@ function newSessionRecord(init: {
     lastAgentActivity: init.origin === 'agent' ? now : 0,
     controller: 'agent',
     refs: new RefGenerations(),
-    pendingDialogReports: [],
+    pendingDialog: null,
+    recorder: null,
+    signals: new EventEmitter(),
     consoleErrors: [],
     queue: Promise.resolve(),
   };
@@ -182,32 +192,73 @@ function chromeOf(s: BrowserSession): ChromeSession {
 type MouseButton = 'left' | 'middle' | 'right';
 type PanelInputHandler = (cs: ChromeSession, input: WSBrowserSessionInputData) => Promise<void>;
 
+/** The button a move reports while `buttons` are held (a drag or a text selection). */
+function heldButton(buttons: number | undefined): MouseButton | undefined {
+  if (!buttons) return undefined;
+  if (buttons & 1) return 'left';
+  if (buttons & 2) return 'right';
+  if (buttons & 4) return 'middle';
+  return undefined;
+}
+
 function mouse(type: 'mouseMoved' | 'mousePressed' | 'mouseReleased'): PanelInputHandler {
-  return (cs, input) =>
-    cs.dispatchMouseEvent({
+  return (cs, input) => {
+    const held = heldButton(input.buttons);
+    return cs.dispatchMouseEvent({
       type,
       x: input.x ?? 0,
       y: input.y ?? 0,
+      modifiers: input.modifiers ?? 0,
+      ...(input.buttons !== undefined ? { buttons: input.buttons } : {}),
       ...(type === 'mouseMoved'
-        ? {}
+        ? held
+          ? { button: held }
+          : {}
         : { button: (input.button ?? 'left') as MouseButton, clickCount: input.clickCount ?? 1 }),
     });
+  };
+}
+
+/** Text a key produces when the panel did not send one (Enter submits forms). */
+const KEY_TEXT: Record<string, string> = { Enter: '\r' };
+
+/**
+ * Panel keystroke → CDP. Chrome acts on non-text keys (arrows, Shift,
+ * Backspace, Tab…) only with a `windowsVirtualKeyCode`, and a key that types
+ * nothing is a `rawKeyDown` (as Puppeteer and Playwright send it).
+ */
+function panelKeyEvent(
+  type: 'keyDown' | 'keyUp',
+  input: WSBrowserSessionInputData,
+): Parameters<ChromeSession['dispatchKeyEvent']>[0] {
+  const key = input.key ?? '';
+  const text = type === 'keyDown' ? (input.text ?? KEY_TEXT[key]) : undefined;
+  const cdpType = type === 'keyUp' ? 'keyUp' : text ? 'keyDown' : 'rawKeyDown';
+  // Undefined fields are left out of the CDP message.
+  return {
+    type: cdpType,
+    key,
+    code: input.code ?? '',
+    text,
+    unmodifiedText: text,
+    modifiers: input.modifiers ?? 0,
+    windowsVirtualKeyCode: input.keyCode,
+    nativeVirtualKeyCode: input.keyCode,
+    location: input.location,
+  };
 }
 
 function key(type: 'keyDown' | 'keyUp'): PanelInputHandler {
-  return (cs, input) =>
-    cs.dispatchKeyEvent({
-      type,
-      key: input.key ?? '',
-      code: input.code ?? '',
-      // Only keyDown carries the typed character.
-      text: type === 'keyDown' ? input.text : undefined,
-      modifiers: input.modifiers ?? 0,
-    });
+  return (cs, input) => cs.dispatchKeyEvent(panelKeyEvent(type, input));
 }
 
 /** Panel input event → CDP dispatch on the session's tab. */
-const PANEL_INPUT: Record<WSBrowserSessionInputData['kind'], PanelInputHandler> = {
+type PointerOrKeyKind = Exclude<
+  WSBrowserSessionInputData['kind'],
+  'takeControl' | 'releaseControl' | 'dialog'
+>;
+
+const PANEL_INPUT: Record<PointerOrKeyKind, PanelInputHandler> = {
   mouseMove: mouse('mouseMoved'),
   mouseDown: mouse('mousePressed'),
   mouseUp: mouse('mouseReleased'),
@@ -247,6 +298,37 @@ class BrowserSessionManager {
       viewport: s.viewport,
     });
     this.emit(s, 'browser-session:viewport', { sessionId: s.sessionId, ...s.viewport });
+    // A re-attaching panel starts from defaults: restate who controls the page
+    // and any dialog still waiting for an answer.
+    this.emit(s, 'browser-session:controller', {
+      sessionId: s.sessionId,
+      controller: s.controller,
+    });
+    if (s.pendingDialog) this.emitDialog(s);
+    // The screencast only sends frames on repaint: give a (re)attaching panel
+    // the current picture of a static page right away.
+    void this.captureFrame(s)
+      .then((frame) => {
+        if (frame) this.emit(s, 'browser-session:frame', { sessionId: s.sessionId, ...frame });
+      })
+      .catch(() => {});
+  }
+
+  private emitDialog(s: BrowserSession): void {
+    const pending = s.pendingDialog;
+    this.emit(s, 'browser-session:dialog', {
+      sessionId: s.sessionId,
+      dialog: pending
+        ? { type: pending.type, message: pending.message, defaultValue: pending.defaultValue }
+        : null,
+    });
+  }
+
+  /** A JPEG of the current viewport, shaped like a screencast frame. */
+  async captureFrame(s: BrowserSession): Promise<{ data: string; timestamp: number } | null> {
+    if (!s.chromeSession || s.pendingDialog) return null;
+    const data = await s.chromeSession.screenshot('jpeg', 60);
+    return { data, timestamp: Date.now() / 1000 };
   }
 
   private startReaper() {
@@ -582,6 +664,7 @@ class BrowserSessionManager {
     // Wire events BEFORE connect so we don't miss the early frames.
     chromeSession.on('frame', (frame: { data: string; timestamp: number }) => {
       if (s.chromeSession !== chromeSession) return;
+      s.recorder?.addFrame(frame.data, frame.timestamp);
       this.emit(s, 'browser-session:frame', {
         sessionId: s.sessionId,
         data: frame.data,
@@ -636,13 +719,16 @@ class BrowserSessionManager {
     });
     page.on('dialog', (dialog) => {
       if (s.tab.page !== page) return;
-      // Phase 1: no agent-facing dialog tool yet — dismiss and report.
-      s.pendingDialogReports.push({
+      // Hold the dialog until the agent (browser_dialog) or the user (panel)
+      // answers it; the page is frozen meanwhile.
+      s.pendingDialog = {
         type: dialog.type(),
         message: dialog.message(),
-        handled: 'dismissed',
-      });
-      void dialog.dismiss().catch(() => {});
+        defaultValue: dialog.defaultValue(),
+        dialog,
+      };
+      this.emitDialog(s);
+      s.signals.emit('dialog');
     });
     page.on('console', (msg) => {
       if (s.tab.page !== page || msg.type() !== 'error') return;
@@ -768,8 +854,47 @@ class BrowserSessionManager {
       return;
     }
     s.lastHeartbeat = Date.now();
+    // Control and dialog answers bypass the queue: an action blocked behind a
+    // dialog would otherwise wait for its own answer.
+    if (input.kind === 'takeControl' || input.kind === 'releaseControl') {
+      this.setController(s, input.kind === 'takeControl' ? 'user' : 'agent');
+      return;
+    }
+    if (input.kind === 'dialog') {
+      await this.answerDialog(s, input.accept === true, input.promptText);
+      return;
+    }
     const cs = chromeOf(s);
-    await this.runExclusive(s, () => PANEL_INPUT[input.kind](cs, input));
+    const handler = PANEL_INPUT[input.kind];
+    await this.runExclusive(s, () => handler(cs, input));
+  }
+
+  /** Hand the session to the user or back to the agent; agent refs expire. */
+  setController(s: BrowserSession, controller: BrowserController): void {
+    if (s.controller === controller) return;
+    s.controller = controller;
+    s.refs.invalidate('control');
+    log.info('Browser session controller changed', {
+      namespace: NS,
+      sessionId: s.sessionId,
+      controller,
+    });
+    metric('browser_session.controller_changed', 1, {
+      type: 'sum',
+      attributes: { controller },
+    });
+    this.emit(s, 'browser-session:controller', { sessionId: s.sessionId, controller });
+  }
+
+  /** Accept or dismiss the pending dialog. Returns false when none is open. */
+  async answerDialog(s: BrowserSession, accept: boolean, promptText?: string): Promise<boolean> {
+    const pending = s.pendingDialog;
+    if (!pending) return false;
+    s.pendingDialog = null;
+    if (accept) await pending.dialog.accept(promptText).catch(() => {});
+    else await pending.dialog.dismiss().catch(() => {});
+    this.emitDialog(s);
+    return true;
   }
 
   /** Run JS in the page; returns whatever value the expression evaluates to. */
@@ -923,6 +1048,10 @@ class BrowserSessionManager {
 
     const chromeSession = s.chromeSession;
     s.chromeSession = null;
+    await s.recorder?.discard();
+    s.recorder = null;
+    await s.pendingDialog?.dialog.dismiss().catch(() => {});
+    s.pendingDialog = null;
     await chromeSession?.disconnect().catch(() => {});
     for (const tab of [s.tab, ...s.backgroundTabs]) await s.host.closeTab(tab);
 

@@ -10,11 +10,17 @@ const mocks = vi.hoisted(() => ({
   open: vi.fn(),
   close: vi.fn(),
   navigate: vi.fn(),
+  input: vi.fn(),
   urlThreadId: null as string | null,
 }));
 
 vi.mock('@/lib/browser-session-client', () => ({
-  browserSessionClient: { open: mocks.open, close: mocks.close, navigate: mocks.navigate },
+  browserSessionClient: {
+    open: mocks.open,
+    close: mocks.close,
+    navigate: mocks.navigate,
+    input: mocks.input,
+  },
 }));
 vi.mock('@/lib/browser-session-frames', () => ({ clearLatestFrame: vi.fn() }));
 vi.mock('@/stores/thread-store', () => ({ getUrlThreadId: () => mocks.urlThreadId }));
@@ -28,6 +34,7 @@ describe('browser panel thread sessions', () => {
     store().reset();
     mocks.open.mockClear();
     mocks.close.mockClear();
+    mocks.input.mockClear();
     mocks.urlThreadId = null;
   });
 
@@ -105,5 +112,47 @@ describe('browser panel thread sessions', () => {
     expect(mocks.close).toHaveBeenCalledWith('thread:t1', 'user');
     await store().clearBrowserProfile();
     expect(mocks.close).toHaveBeenLastCalledWith('browser-profile', 'clear-profile');
+  });
+
+  test('controller and dialog updates only apply to the current session', async () => {
+    await store().attachThreadSession('t1');
+    expect(store().controller).toBe('agent');
+    store().setSessionController('thread:other', 'user');
+    store().setSessionDialog('thread:other', { type: 'alert', message: 'x' });
+    expect(store().controller).toBe('agent');
+    expect(store().dialog).toBeNull();
+    store().setSessionController('thread:t1', 'user');
+    store().setSessionDialog('thread:t1', { type: 'confirm', message: 'Sure?' });
+    expect(store().controller).toBe('user');
+    expect(store().dialog).toEqual({ type: 'confirm', message: 'Sure?' });
+  });
+
+  test('taking over and handing back send control inputs', async () => {
+    await store().attachThreadSession('t1');
+    await store().setUserControl(true);
+    expect(mocks.input).toHaveBeenLastCalledWith('thread:t1', { kind: 'takeControl' });
+    await store().setUserControl(false);
+    expect(mocks.input).toHaveBeenLastCalledWith('thread:t1', { kind: 'releaseControl' });
+  });
+
+  test('answering a dialog sends the answer and clears it', async () => {
+    await store().attachThreadSession('t1');
+    store().setSessionDialog('thread:t1', { type: 'prompt', message: 'Name?' });
+    await store().answerDialog(true, 'Ada');
+    expect(mocks.input).toHaveBeenCalledWith('thread:t1', {
+      kind: 'dialog',
+      accept: true,
+      promptText: 'Ada',
+    });
+    expect(store().dialog).toBeNull();
+  });
+
+  test('switching sessions resets controller and dialog', async () => {
+    await store().attachThreadSession('t1');
+    store().setSessionController('thread:t1', 'user');
+    store().setSessionDialog('thread:t1', { type: 'alert', message: 'Hi' });
+    await store().attachThreadSession('t2');
+    expect(store().controller).toBe('agent');
+    expect(store().dialog).toBeNull();
   });
 });

@@ -41,10 +41,12 @@ export function ThreadChatView({ activeThread }: Props) {
     const handler = (e: KeyboardEvent) => {
       if (!e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return;
       if (e.key !== 'f' && e.key !== 'F') return;
-      // Don't hijack Ctrl+F when focus is inside a terminal — the
-      // terminal owns this shortcut and shows its own search overlay.
+      // Don't hijack Ctrl+F when focus is inside a terminal (it shows its
+      // own search overlay) or the remote browser (the page owns its keys).
       const target = e.target;
-      if (target instanceof Element && target.closest('.xterm')) return;
+      if (target instanceof Element && target.closest('.xterm, [data-keyboard-passthrough]')) {
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       setSearchOpen(true);

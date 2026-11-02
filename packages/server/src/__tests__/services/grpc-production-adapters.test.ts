@@ -147,6 +147,63 @@ describe('production TypeScript runner gRPC adapters', () => {
     ]);
   });
 
+  test('relays unscoped browser-session events to the runner owner only', async () => {
+    const delivered: Array<{ userId: string; type: unknown; data: unknown }> = [];
+    const published: Array<{ scope: unknown; logicalType: string }> = [];
+    const sink = {
+      publish: (publication: any) =>
+        published.push({ scope: publication.scope, logicalType: publication.logicalType }),
+      toUser: (userId: string, event: any) =>
+        delivered.push({ userId, type: event.type, data: event.data }),
+      toAll: () => {},
+      toThreadStream: () => {},
+      toThreadPresence: () => {},
+      toThreadViewers: () => {},
+      evictFromThread: () => {},
+    };
+    fixture = await createProductionGrpcFixture({
+      browserEvents: sink as any,
+      authorizeThread: async (threadId) => threadId === 'own-thread',
+    });
+
+    // Not a user-event type: dropped by the runner (and by the server).
+    fixture.transport.publish({ type: 'thread:updated', threadId: '', data: {} } as any);
+    // A thread this runner may not act on: dropped by the server.
+    fixture.transport.publish({
+      type: 'browser-session:agent-opened',
+      threadId: '',
+      data: { sessionId: 'thread:foreign', threadId: 'foreign-thread', url: 'https://x.test' },
+    } as any);
+    fixture.transport.publish({
+      type: 'browser-session:agent-opened',
+      threadId: '',
+      data: { sessionId: 'thread:own', threadId: 'own-thread', url: 'https://example.com' },
+    } as any);
+    fixture.transport.publish({
+      type: 'browser-session:ready',
+      threadId: '',
+      data: { sessionId: 'panel-1', url: 'https://example.com' },
+    } as any);
+
+    await waitFor(
+      () => delivered.length === 1 && published.length === 1,
+      'browser-session events were not relayed',
+    );
+    await Bun.sleep(100);
+    expect(delivered).toEqual([
+      {
+        userId: 'user-1',
+        type: 'browser-session:agent-opened',
+        data: { sessionId: 'thread:own', threadId: 'own-thread', url: 'https://example.com' },
+      },
+    ]);
+    expect(published).toEqual([
+      { scope: { kind: 'user', userId: 'user-1' }, logicalType: 'browser-session:ready' },
+    ]);
+    // Unscoped events are never persisted as thread events.
+    expect(fixture.events).toEqual([]);
+  });
+
   test('isolates proxy, terminal, event, and browser-session routing for two users and runners', async () => {
     process.env.RUNNER_AUTH_SECRET = 'vertical-secret';
     const { io, capture } = createMockIo();

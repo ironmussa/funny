@@ -110,7 +110,7 @@ export const ThreadColumn = memo(function ThreadColumn({
       if (!e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return;
       if (e.key !== 'f' && e.key !== 'F') return;
       const target = e.target as Element | null;
-      if (target && target.closest('.xterm')) return;
+      if (target && target.closest('.xterm, [data-keyboard-passthrough]')) return;
       const root = columnRef.current;
       if (!root) return;
       const focusInside = document.activeElement ? root.contains(document.activeElement) : false;

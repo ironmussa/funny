@@ -50,6 +50,25 @@ export function dispatchBrowserSessionEvent(type: string, data: unknown): boolea
       return true;
     }
 
+    case 'browser-session:controller': {
+      const d = data as { sessionId: string; controller: 'agent' | 'user' };
+      import('@/stores/browser-panel-store').then(({ useBrowserPanelStore }) => {
+        useBrowserPanelStore.getState().setSessionController(d.sessionId, d.controller);
+      });
+      return true;
+    }
+
+    case 'browser-session:dialog': {
+      const d = data as {
+        sessionId: string;
+        dialog: { type: string; message: string; defaultValue?: string } | null;
+      };
+      import('@/stores/browser-panel-store').then(({ useBrowserPanelStore }) => {
+        useBrowserPanelStore.getState().setSessionDialog(d.sessionId, d.dialog);
+      });
+      return true;
+    }
+
     case 'browser-session:viewport': {
       const d = data as { sessionId: string; width: number; height: number };
       import('@/stores/browser-panel-store').then(({ useBrowserPanelStore }) => {

@@ -4,6 +4,7 @@
  * infra API (sandbox for an existing thread) and sandbox thread creation.
  */
 
+import { ACTIVE_SANDBOX_STATES, type SandboxState } from '@funny/shared/sandbox-machine';
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -20,14 +21,6 @@ import { createSandboxRunnerCalls } from './sandbox-runner-calls.js';
 import { createRunnerTemplateManager, type RunnerTemplateManager } from './template-manager.js';
 import { createThreadSandboxService, type ProvisionError } from './thread-sandbox-service.js';
 import { sqlThreadSandboxStore, type ThreadSandboxRow } from './thread-sandbox-store.js';
-
-const ACTIVE_SANDBOX_STATES = new Set([
-  'provisioning',
-  'installing',
-  'connecting',
-  'bootstrapping',
-  'running',
-]);
 
 /** One template manager per server build, shared by every launch. */
 const templateManagers = new Map<string, RunnerTemplateManager>();
@@ -89,7 +82,11 @@ export async function prepareSandboxLaunch(
     return err({ code: serverUrl.error.kind, message: serverUrl.error.message });
   }
   const existing = await sqlThreadSandboxStore.get(req.threadId);
-  if (existing.isOk() && existing.value && ACTIVE_SANDBOX_STATES.has(existing.value.state)) {
+  if (
+    existing.isOk() &&
+    existing.value &&
+    ACTIVE_SANDBOX_STATES.has(existing.value.state as SandboxState)
+  ) {
     return err({
       code: 'already-provisioned',
       message: `Thread already has a ${existing.value.state} sandbox`,

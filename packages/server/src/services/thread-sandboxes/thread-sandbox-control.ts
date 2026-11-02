@@ -1,17 +1,26 @@
 /**
- * Stop and resume of a thread's sandbox (change thread-sandboxes). Separate from
- * provisioning so the idle stopper and wake-on-demand need only a provider
- * connection, the store and runner presence.
+ * Stop, resume and destroy of a thread's sandbox (change thread-sandboxes).
+ * Separate from provisioning so the idle stopper and wake-on-demand need only
+ * a provider connection, the store and runner presence.
+ *
+ * Each operation is an Effect program: state moves are events of the shared
+ * sandbox machine applied atomically by the store, and `onExit` handles typed
+ * failures and interruptions alike (a wake cut by its timeout cannot leave the
+ * row stuck in `connecting`). The public API stays `ResultAsync`.
  */
 
+import type { SandboxEventType } from '@funny/shared/sandbox-machine';
+import { Cause, Effect, Exit, Option } from 'effect';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import type { SandboxError, SandboxHandle, SandboxProvider } from './contract.js';
+import { fromResult, runToResult } from './effect-bridge.js';
 import type { InfraConnectionService } from './infra-connections.js';
 import { pollUntil } from './poll.js';
-import { providerForConnection, sandboxStoreOps } from './sandbox-store-ops.js';
+import { providerForConnection } from './sandbox-store-ops.js';
 import type { ProvisionError } from './thread-sandbox-service.js';
 import type {
+  ThreadSandboxPatch,
   ThreadSandboxRow,
   ThreadSandboxState,
   ThreadSandboxStore,
@@ -44,134 +53,207 @@ export const sandboxError = (error: SandboxError): ProvisionError => ({
   cause: error.kind,
 });
 
-export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
-  const { pollMs, fromStore, setState } = sandboxStoreOps(deps);
+const storageError = (message: string): ProvisionError => ({ kind: 'storage', message });
 
-  /** Load the thread's sandbox in one of `states` and its provider client. */
-  function withProvider<T>(
-    threadId: string,
-    states: ThreadSandboxState[],
-    run: (
-      row: ThreadSandboxRow,
-      provider: SandboxProvider,
-      handle: SandboxHandle,
-    ) => ResultAsync<T, ProvisionError>,
-  ): ResultAsync<T, ProvisionError> {
-    return fromStore(deps.store.get(threadId)).andThen((row) => {
+/** The typed failure of an exit, or a description of its interruption / defect. */
+export function exitFailure(exit: Exit.Exit<unknown, ProvisionError>): ProvisionError {
+  if (Exit.isSuccess(exit)) return { kind: 'storage', message: 'not a failure' };
+  const failure = Cause.findErrorOption(exit.cause);
+  if (Option.isSome(failure)) return failure.value;
+  if (Cause.hasInterrupts(exit.cause)) {
+    return { kind: 'cancelled', message: 'the operation was interrupted' };
+  }
+  return { kind: 'storage', message: String(Cause.squash(exit.cause)) };
+}
+
+/** Sandbox store and provider access shared by every lifecycle program. */
+export function sandboxOps(deps: Pick<ThreadSandboxControlDeps, 'store' | 'connections'>) {
+  const get = (threadId: string) => fromResult(() => deps.store.get(threadId).mapErr(storageError));
+
+  const update = (threadId: string, patch: ThreadSandboxPatch) =>
+    fromResult(() => deps.store.update(threadId, patch).mapErr(storageError));
+
+  /** Apply a machine event; refuse (fail) when the row's state does not accept it. */
+  const transition = (threadId: string, event: SandboxEventType, patch?: ThreadSandboxPatch) =>
+    Effect.flatMap(
+      fromResult(() => deps.store.transition(threadId, event, patch).mapErr(storageError)),
+      (outcome) =>
+        outcome.applied
+          ? Effect.succeed(outcome.state)
+          : Effect.fail<ProvisionError>({
+              kind: 'conflict',
+              message: `sandbox is ${outcome.current ?? 'gone'}, cannot ${event}`,
+            }),
+    );
+
+  /** Best-effort event on the way out of a failed operation: never fails. */
+  const settle = (threadId: string, event: SandboxEventType, patch?: ThreadSandboxPatch) =>
+    Effect.ignore(transition(threadId, event, patch));
+
+  const providerFor = (row: ThreadSandboxRow) =>
+    Effect.map(
+      fromResult(() => providerForConnection(deps.connections, row.userId, row.connectionId)),
+      ({ provider }) => provider,
+    );
+
+  /** The thread's sandbox in one of `states`, with its provider and machine handle. */
+  const loadMachine = (threadId: string, states: readonly ThreadSandboxState[]) =>
+    Effect.gen(function* () {
+      const row = yield* get(threadId);
       if (!row || !row.sandboxId || !states.includes(row.state as ThreadSandboxState)) {
-        return errAsync<T, ProvisionError>({
+        return yield* Effect.fail<ProvisionError>({
           kind: 'sandbox',
           message: `thread has no ${states.join('/')} sandbox`,
           cause: 'not-found',
         });
       }
-      const sandboxId = row.sandboxId;
-      return providerForConnection(deps.connections, row.userId, row.connectionId).andThen(
-        ({ provider }) => run(row, provider, { providerId: provider.id, sandboxId }),
+      const provider = yield* providerFor(row);
+      const handle: SandboxHandle = { providerId: provider.id, sandboxId: row.sandboxId };
+      return { row, provider, handle };
+    });
+
+  return { get, update, transition, settle, providerFor, loadMachine };
+}
+
+/** A provider call as an Effect failing with a `ProvisionError`. */
+export const providerCall = <A>(call: () => ResultAsync<A, SandboxError>) =>
+  fromResult(() => call().mapErr(sandboxError));
+
+export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
+  const pollMs = deps.pollMs ?? 2_000;
+  const ops = sandboxOps(deps);
+
+  /** Wait until the thread's sandbox runner is connected; yields its id. */
+  const waitForRunner = (threadId: string, what: string) =>
+    fromResult((signal) =>
+      pollUntil(
+        () =>
+          ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(threadId)).map((runnerId) =>
+            runnerId && deps.presence?.isAvailable(runnerId) ? runnerId : null,
+          ),
+        {
+          what,
+          timeoutMs: deps.connectTimeoutMs ?? 3 * 60_000,
+          intervalMs: pollMs,
+          signal,
+          sleep: deps.sleep,
+        },
+      ).mapErr(sandboxError),
+    );
+
+  /**
+   * Stop an idle sandbox. Disk-preserving providers stop it (resume brings it
+   * back); ephemeral ones destroy it and the next wake re-provisions. A stop the
+   * provider refuses leaves the machine — and the row — running.
+   */
+  const stop = (threadId: string) =>
+    Effect.gen(function* () {
+      const { provider, handle } = yield* ops.loadMachine(threadId, ['running']);
+      const preserves = provider.capabilities().stopPreservesDisk;
+      yield* ops.transition(threadId, 'STOP');
+      yield* Effect.onExit(
+        providerCall(() => (preserves ? provider.stop(handle) : provider.destroy(handle))),
+        (exit) =>
+          Exit.isSuccess(exit)
+            ? Effect.void
+            : ops.settle(threadId, 'STOP_FAILED', { error: exitFailure(exit).message }),
+      );
+      return yield* ops.transition(threadId, preserves ? 'STOPPED' : 'LOST');
+    });
+
+  /**
+   * Wake a stopped sandbox and wait until its runner reconnects (the runner
+   * service restarts on boot with the credentials kept on disk). An expired or
+   * vanished machine is `lost` (the thread must be re-provisioned); any other
+   * failure — including the wake being cut short — is `failed`.
+   */
+  const resume = (threadId: string) =>
+    Effect.gen(function* () {
+      const { provider, handle } = yield* ops.loadMachine(threadId, ['stopped']);
+      yield* ops.transition(threadId, 'RESUME');
+      return yield* Effect.onExit(
+        Effect.gen(function* () {
+          yield* providerCall(() =>
+            provider.resume(handle, { lifetimeMs: deps.lifetimeMs ?? DEFAULT_SANDBOX_LIFETIME_MS }),
+          );
+          const runnerId = yield* waitForRunner(threadId, 'sandbox runner reconnection');
+          yield* ops.transition(threadId, 'READY', { runnerId, error: null });
+          return runnerId;
+        }),
+        (exit) => {
+          if (Exit.isSuccess(exit)) return Effect.void;
+          const error = exitFailure(exit);
+          const lost =
+            error.kind === 'sandbox' && (error.cause === 'expired' || error.cause === 'not-found');
+          return ops.settle(threadId, lost ? 'LOST' : 'FAIL', { error: error.message });
+        },
       );
     });
-  }
+
+  /**
+   * Tear down the thread's sandbox for good (thread deleted): destroy the
+   * machine, revoke its runner and drop the row. A machine the provider no
+   * longer knows counts as destroyed. Any other failure keeps the row (state
+   * `failed`) so the leak stays visible; the provider lifetime cap bounds it.
+   */
+  const destroy = (threadId: string) =>
+    Effect.gen(function* () {
+      const row = yield* ops.get(threadId);
+      if (!row) return;
+      yield* Effect.onExit(
+        Effect.gen(function* () {
+          if (row.sandboxId) {
+            const provider = yield* ops.providerFor(row);
+            const sandboxId = row.sandboxId;
+            yield* providerCall(() =>
+              provider
+                .destroy({ providerId: provider.id, sandboxId })
+                // A machine the provider no longer knows is already gone.
+                .orElse((e) =>
+                  e.kind === 'not-found' || e.kind === 'expired'
+                    ? okAsync<void, SandboxError>(undefined)
+                    : errAsync<void, SandboxError>(e),
+                ),
+            );
+          }
+          const runnerId =
+            row.runnerId ?? (yield* Effect.promise(() => deps.sandboxRunnerIdForThread(threadId)));
+          if (runnerId && deps.removeRunner) {
+            const remove = deps.removeRunner;
+            yield* Effect.tryPromise({
+              try: () => remove(runnerId),
+              catch: (e): ProvisionError => ({ kind: 'storage', message: String(e) }),
+            });
+          }
+          yield* fromResult(() => deps.store.remove(threadId).mapErr(storageError));
+        }),
+        (exit) =>
+          Exit.isSuccess(exit)
+            ? Effect.void
+            : Effect.flatMap(
+                ops.update(threadId, { error: `destroy failed: ${exitFailure(exit).message}` }),
+                () => ops.settle(threadId, 'FAIL'),
+              ).pipe(Effect.ignore),
+      );
+    });
+
+  const interrupted = (what: string) => (): ProvisionError => ({
+    kind: 'sandbox',
+    message: `sandbox ${what} was interrupted`,
+    cause: 'unavailable',
+  });
 
   return {
-    /**
-     * Stop an idle sandbox. Disk-preserving providers stop it (resume brings it
-     * back); ephemeral ones destroy it and the next wake re-provisions.
-     */
     stop(threadId: string): ResultAsync<ThreadSandboxState, ProvisionError> {
-      return withProvider(threadId, ['running'], (row, provider, handle) => {
-        const preserves = provider.capabilities().stopPreservesDisk;
-        const action = preserves ? provider.stop(handle) : provider.destroy(handle);
-        const next: ThreadSandboxState = preserves ? 'stopped' : 'lost';
-        return setState(row.threadId, 'stopping')
-          .andThen(() => action.mapErr(sandboxError))
-          .andThen(() => setState(row.threadId, next))
-          .map(() => next);
-      });
+      return runToResult(stop(threadId), { onInterrupt: interrupted('stop') });
     },
 
-    /**
-     * Wake a stopped sandbox and wait until its runner reconnects (the runner
-     * service restarts on boot with the credentials kept on disk).
-     */
     resume(threadId: string, signal?: AbortSignal): ResultAsync<string, ProvisionError> {
-      return withProvider(threadId, ['stopped'], (row, provider, handle) =>
-        setState(row.threadId, 'connecting')
-          .andThen(() =>
-            provider
-              .resume(handle, { lifetimeMs: deps.lifetimeMs ?? DEFAULT_SANDBOX_LIFETIME_MS })
-              .mapErr(sandboxError),
-          )
-          .andThen(() =>
-            pollUntil(
-              () =>
-                ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(threadId)).map(
-                  (runnerId) =>
-                    runnerId && deps.presence?.isAvailable(runnerId) ? runnerId : null,
-                ),
-              {
-                what: 'sandbox runner reconnection',
-                timeoutMs: deps.connectTimeoutMs ?? 3 * 60_000,
-                intervalMs: pollMs,
-                signal,
-                sleep: deps.sleep,
-              },
-            ).mapErr(sandboxError),
-          )
-          .andThen((runnerId) =>
-            setState(row.threadId, 'running', { runnerId, error: null }).map(() => runnerId),
-          )
-          .orElse((error) => {
-            // Expired disk or vanished machine: the thread must be re-provisioned.
-            const lost =
-              error.kind === 'sandbox' &&
-              (error.cause === 'expired' || error.cause === 'not-found');
-            return setState(row.threadId, lost ? 'lost' : 'failed', {
-              error: error.message,
-            }).andThen(() => errAsync<string, ProvisionError>(error));
-          }),
-      );
+      return runToResult(resume(threadId), { signal, onInterrupt: interrupted('resume') });
     },
 
-    /**
-     * Tear down the thread's sandbox for good (thread deleted): destroy the
-     * machine, revoke its runner and drop the row. A machine the provider no
-     * longer knows counts as destroyed. Any other failure keeps the row (state
-     * `failed`) so the leak stays visible; the provider lifetime cap bounds it.
-     */
     destroy(threadId: string): ResultAsync<void, ProvisionError> {
-      return fromStore(deps.store.get(threadId)).andThen((row) => {
-        if (!row) return okAsync<void, ProvisionError>(undefined);
-        const sandboxId = row.sandboxId;
-        const destroyed: ResultAsync<void, ProvisionError> = !sandboxId
-          ? okAsync(undefined)
-          : providerForConnection(deps.connections, row.userId, row.connectionId).andThen(
-              ({ provider }) =>
-                provider
-                  .destroy({ providerId: provider.id, sandboxId })
-                  .orElse((e) =>
-                    e.kind === 'not-found' || e.kind === 'expired'
-                      ? okAsync(undefined)
-                      : errAsync(e),
-                  )
-                  .mapErr(sandboxError),
-            );
-        return destroyed
-          .andThen(() =>
-            ResultAsync.fromPromise(
-              (async () => {
-                const runnerId = row.runnerId ?? (await deps.sandboxRunnerIdForThread(threadId));
-                if (runnerId) await deps.removeRunner?.(runnerId);
-              })(),
-              (e): ProvisionError => ({ kind: 'storage', message: String(e) }),
-            ),
-          )
-          .andThen(() => fromStore(deps.store.remove(threadId)))
-          .orElse((error) =>
-            setState(threadId, 'failed', { error: `destroy failed: ${error.message}` }).andThen(
-              () => errAsync<void, ProvisionError>(error),
-            ),
-          );
-      });
+      return runToResult(destroy(threadId), { onInterrupt: interrupted('destroy') });
     },
   };
 }

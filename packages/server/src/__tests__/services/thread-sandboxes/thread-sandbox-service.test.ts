@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { nextSandboxState, type SandboxState } from '@funny/shared/sandbox-machine';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 
 import { hashLlmProxyToken } from '../../../services/llm-proxy/llm-proxy-tokens.js';
@@ -31,6 +32,16 @@ function memoryStore(): ThreadSandboxStore & { rows: Map<string, ThreadSandboxRo
       const row = rows.get(threadId);
       if (row) rows.set(threadId, { ...row, ...patch });
       return okAsync(undefined);
+    },
+    // Same rule as the SQL store: only states that accept the event move.
+    transition: (threadId, event, patch = {}) => {
+      const row = rows.get(threadId);
+      const next = row ? nextSandboxState(row.state as SandboxState, event) : null;
+      if (!row || !next) {
+        return okAsync({ applied: false, current: (row?.state as SandboxState) ?? null });
+      }
+      rows.set(threadId, { ...row, ...patch, state: next });
+      return okAsync({ applied: true, state: next });
     },
     remove: (threadId) => {
       rows.delete(threadId);
@@ -221,6 +232,45 @@ describe('thread sandbox provisioning', () => {
     expect((await service.stop('t-1')).isErr()).toBe(true);
     expectOk(await service.provision(input));
     expect((await service.resume('t-1')).isErr()).toBe(true);
+  });
+});
+
+describe('stop and resume edge cases (state machine + Effect)', () => {
+  /** A provisioned, running sandbox whose runner connection can be switched off. */
+  async function runningSandbox() {
+    const provider = createFakeSandboxProvider('fake-valid', { templates: [build.version] });
+    const store = memoryStore();
+    const runner = { online: true };
+    const service = createThreadSandboxService({
+      connections: { providerFor: (_u, id) => okAsync({ connectionId: id, provider }) },
+      templates: createRunnerTemplateManager(build),
+      build,
+      serverUrl: 'https://funny.example',
+      issueToken: () => okAsync({ token: 'rprov_x' }),
+      sandboxRunnerIdForThread: async () => 'r-box',
+      presence: { isAvailable: () => runner.online },
+      store,
+      sleep: async () => {},
+      pollMs: 1,
+    });
+    expectOk(await service.provision(input));
+    return { provider, store, service, runner };
+  }
+
+  test('a wake cut short by its timeout fails the sandbox instead of leaving it connecting', async () => {
+    const { store, service, runner } = await runningSandbox();
+    expect(expectOk(await service.stop('t-1'))).toBe('stopped');
+    runner.online = false; // the runner never comes back
+    const result = await service.resume('t-1', AbortSignal.timeout(50));
+    expect(result.isErr()).toBe(true);
+    expect(store.rows.get('t-1')?.state).toBe('failed');
+  });
+
+  test('a stop the provider refuses leaves the sandbox running', async () => {
+    const { provider, store, service } = await runningSandbox();
+    provider.failNext({ kind: 'unavailable', message: 'provider down' });
+    expect((await service.stop('t-1')).isErr()).toBe(true);
+    expect(store.rows.get('t-1')).toMatchObject({ state: 'running', error: 'provider down' });
   });
 });
 

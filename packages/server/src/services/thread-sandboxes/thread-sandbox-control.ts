@@ -13,7 +13,12 @@ import type { SandboxEventType } from '@funny/shared/sandbox-machine';
 import { Cause, Effect, Exit, Option } from 'effect';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
-import type { SandboxError, SandboxHandle, SandboxProvider } from './contract.js';
+import {
+  isRetryableSandboxError,
+  type SandboxError,
+  type SandboxHandle,
+  type SandboxProvider,
+} from './contract.js';
 import { fromResult, runToResult } from './effect-bridge.js';
 import type { InfraConnectionService } from './infra-connections.js';
 import { pollUntil } from './poll.js';
@@ -38,6 +43,8 @@ export interface ThreadSandboxControlDeps {
   lifetimeMs?: number;
   /** Revokes the sandbox runner's registration (and with it its credentials). */
   removeRunner?: (runnerId: string) => Promise<void>;
+  /** Retry of transient provider errors (defaults: DEFAULT_TRANSIENT_RETRY, `sleep`). */
+  retry?: Partial<TransientRetryPolicy>;
 }
 
 /**
@@ -46,6 +53,9 @@ export interface ThreadSandboxControlDeps {
  * sandboxes are stopped long before, and each resume grants a fresh window.
  */
 export const DEFAULT_SANDBOX_LIFETIME_MS = 2 * 60 * 60_000;
+
+/** Dead sandboxes: nothing will use their machine again. */
+const RELEASABLE_STATES: ReadonlySet<ThreadSandboxState> = new Set(['failed', 'lost']);
 
 export const sandboxError = (error: SandboxError): ProvisionError => ({
   kind: 'sandbox',
@@ -67,7 +77,17 @@ export function exitFailure(exit: Exit.Exit<unknown, ProvisionError>): Provision
 }
 
 /** Sandbox store and provider access shared by every lifecycle program. */
-export function sandboxOps(deps: Pick<ThreadSandboxControlDeps, 'store' | 'connections'>) {
+export function sandboxOps(
+  deps: Pick<ThreadSandboxControlDeps, 'store' | 'connections' | 'sleep' | 'retry'>,
+) {
+  const retryPolicy: TransientRetryPolicy = {
+    ...DEFAULT_TRANSIENT_RETRY,
+    sleep: deps.sleep,
+    ...deps.retry,
+  };
+  /** A repeatable provider call, retried on transient errors (see `idempotentProviderCall`). */
+  const call = <A>(c: () => ResultAsync<A, SandboxError>) => idempotentProviderCall(c, retryPolicy);
+
   const get = (threadId: string) => fromResult(() => deps.store.get(threadId).mapErr(storageError));
 
   const update = (threadId: string, patch: ThreadSandboxPatch) =>
@@ -112,12 +132,65 @@ export function sandboxOps(deps: Pick<ThreadSandboxControlDeps, 'store' | 'conne
       return { row, provider, handle };
     });
 
-  return { get, update, transition, settle, providerFor, loadMachine };
+  return { get, update, transition, settle, providerFor, loadMachine, call };
 }
 
 /** A provider call as an Effect failing with a `ProvisionError`. */
 export const providerCall = <A>(call: () => ResultAsync<A, SandboxError>) =>
   fromResult(() => call().mapErr(sandboxError));
+
+export interface TransientRetryPolicy {
+  /** Retries after the first attempt. */
+  retries: number;
+  /** First backoff when the provider gives no `retryAfterMs`; doubles per retry. */
+  baseDelayMs: number;
+  /** Cap on any single wait, including a provider's `retryAfterMs`. */
+  maxDelayMs: number;
+  /** Injected wait for deterministic tests; defaults to Effect's interruptible sleep. */
+  sleep?: (ms: number) => PromiseLike<void>;
+}
+
+export const DEFAULT_TRANSIENT_RETRY: TransientRetryPolicy = {
+  retries: 3,
+  baseDelayMs: 1_000,
+  maxDelayMs: 30_000,
+};
+
+/** The wait before retry `retry` (1-based) of a transient error. */
+export function transientRetryDelayMs(
+  error: SandboxError,
+  retry: number,
+  policy: Pick<TransientRetryPolicy, 'baseDelayMs' | 'maxDelayMs'>,
+): number {
+  const hinted = 'retryAfterMs' in error ? error.retryAfterMs : undefined;
+  const ms = hinted ?? policy.baseDelayMs * 2 ** (retry - 1);
+  return Math.min(Math.max(0, ms), policy.maxDelayMs);
+}
+
+/**
+ * A provider call that is safe to repeat (status, stop, resume, destroy, and
+ * create thanks to its idempotency key), retried on transient errors
+ * (rate-limited / unavailable) honoring the provider's `retryAfterMs`. Never
+ * use it for `exec`: a command may have run before the error surfaced.
+ */
+export function idempotentProviderCall<A>(
+  call: () => ResultAsync<A, SandboxError>,
+  policy: TransientRetryPolicy = DEFAULT_TRANSIENT_RETRY,
+): Effect.Effect<A, ProvisionError> {
+  const attempt = (retry: number): Effect.Effect<A, SandboxError> =>
+    Effect.catch(
+      fromResult(() => call()),
+      (error) => {
+        if (!isRetryableSandboxError(error) || retry > policy.retries) return Effect.fail(error);
+        const ms = transientRetryDelayMs(error, retry, policy);
+        const wait = policy.sleep;
+        return Effect.flatMap(wait ? Effect.promise(() => wait(ms)) : Effect.sleep(ms), () =>
+          attempt(retry + 1),
+        );
+      },
+    );
+  return Effect.mapError(attempt(1), sandboxError);
+}
 
 export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
   const pollMs = deps.pollMs ?? 2_000;
@@ -152,7 +225,7 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
       const preserves = provider.capabilities().stopPreservesDisk;
       yield* ops.transition(threadId, 'STOP');
       yield* Effect.onExit(
-        providerCall(() => (preserves ? provider.stop(handle) : provider.destroy(handle))),
+        ops.call(() => (preserves ? provider.stop(handle) : provider.destroy(handle))),
         (exit) =>
           Exit.isSuccess(exit)
             ? Effect.void
@@ -173,7 +246,7 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
       yield* ops.transition(threadId, 'RESUME');
       return yield* Effect.onExit(
         Effect.gen(function* () {
-          yield* providerCall(() =>
+          yield* ops.call(() =>
             provider.resume(handle, { lifetimeMs: deps.lifetimeMs ?? DEFAULT_SANDBOX_LIFETIME_MS }),
           );
           const runnerId = yield* waitForRunner(threadId, 'sandbox runner reconnection');
@@ -190,11 +263,39 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
       );
     });
 
+  /** Destroy a machine; one the provider no longer knows counts as destroyed. */
+  const destroyMachine = (row: ThreadSandboxRow, sandboxId: string) =>
+    Effect.gen(function* () {
+      const provider = yield* ops.providerFor(row);
+      yield* ops.call(() =>
+        provider
+          .destroy({ providerId: provider.id, sandboxId })
+          .orElse((e) =>
+            e.kind === 'not-found' || e.kind === 'expired'
+              ? okAsync<void, SandboxError>(undefined)
+              : errAsync<void, SandboxError>(e),
+          ),
+      );
+    });
+
+  /** Revoke the sandbox runner's registration (and with it its credentials). */
+  const revokeRunner = (row: ThreadSandboxRow) =>
+    Effect.gen(function* () {
+      const runnerId =
+        row.runnerId ?? (yield* Effect.promise(() => deps.sandboxRunnerIdForThread(row.threadId)));
+      if (!runnerId || !deps.removeRunner) return;
+      const revoke = deps.removeRunner;
+      yield* Effect.tryPromise({
+        try: () => revoke(runnerId),
+        catch: (e): ProvisionError => ({ kind: 'storage', message: String(e) }),
+      });
+    });
+
   /**
    * Tear down the thread's sandbox for good (thread deleted): destroy the
-   * machine, revoke its runner and drop the row. A machine the provider no
-   * longer knows counts as destroyed. Any other failure keeps the row (state
-   * `failed`) so the leak stays visible; the provider lifetime cap bounds it.
+   * machine, revoke its runner and drop the row. Any failure keeps the row
+   * (state `failed`) so the reconciler retries it; the provider lifetime cap
+   * bounds the leak meanwhile.
    */
   const destroy = (threadId: string) =>
     Effect.gen(function* () {
@@ -202,29 +303,8 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
       if (!row) return;
       yield* Effect.onExit(
         Effect.gen(function* () {
-          if (row.sandboxId) {
-            const provider = yield* ops.providerFor(row);
-            const sandboxId = row.sandboxId;
-            yield* providerCall(() =>
-              provider
-                .destroy({ providerId: provider.id, sandboxId })
-                // A machine the provider no longer knows is already gone.
-                .orElse((e) =>
-                  e.kind === 'not-found' || e.kind === 'expired'
-                    ? okAsync<void, SandboxError>(undefined)
-                    : errAsync<void, SandboxError>(e),
-                ),
-            );
-          }
-          const runnerId =
-            row.runnerId ?? (yield* Effect.promise(() => deps.sandboxRunnerIdForThread(threadId)));
-          if (runnerId && deps.removeRunner) {
-            const remove = deps.removeRunner;
-            yield* Effect.tryPromise({
-              try: () => remove(runnerId),
-              catch: (e): ProvisionError => ({ kind: 'storage', message: String(e) }),
-            });
-          }
+          if (row.sandboxId) yield* destroyMachine(row, row.sandboxId);
+          yield* revokeRunner(row);
           yield* fromResult(() => deps.store.remove(threadId).mapErr(storageError));
         }),
         (exit) =>
@@ -235,6 +315,65 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
                 () => ops.settle(threadId, 'FAIL'),
               ).pipe(Effect.ignore),
       );
+    });
+
+  /**
+   * Free the machine a dead sandbox (`failed` / `lost`) still holds: nothing
+   * can use it again (a new sandbox is a new generation) but it keeps costing
+   * until its lifetime cap. The row stays, so the thread still shows the
+   * failure. A failure leaves `sandboxId` set for the next attempt.
+   */
+  const release = (threadId: string) =>
+    Effect.gen(function* () {
+      const row = yield* ops.get(threadId);
+      if (!row?.sandboxId || !RELEASABLE_STATES.has(row.state as ThreadSandboxState)) return false;
+      yield* destroyMachine(row, row.sandboxId);
+      yield* revokeRunner(row);
+      yield* ops.update(threadId, { sandboxId: null, runnerId: null });
+      return true;
+    });
+
+  /**
+   * Fail a sandbox whose operation is gone (the server restarted mid-setup,
+   * mid-stop or mid-wake) and free its machine. The FAIL event is atomic: a
+   * sandbox that has meanwhile reached a final state is left as it is.
+   */
+  const abandon = (threadId: string, reason: string) =>
+    Effect.gen(function* () {
+      yield* ops.settle(threadId, 'FAIL', { error: reason });
+      return yield* release(threadId);
+    });
+
+  /**
+   * Finish a stop or a wake whose operation died with the server, keeping the
+   * disk: a wake whose runner is back is `running`; otherwise the machine is
+   * put (back) to sleep, as the provider reports it. A provider failure leaves
+   * the row for the next pass.
+   */
+  const recover = (threadId: string) =>
+    Effect.gen(function* () {
+      const { row, provider, handle } = yield* ops.loadMachine(threadId, [
+        'connecting',
+        'stopping',
+      ]);
+      if (row.state === 'connecting') {
+        const runnerId = yield* Effect.promise(() => deps.sandboxRunnerIdForThread(threadId));
+        if (runnerId && deps.presence?.isAvailable(runnerId)) {
+          return yield* ops.transition(threadId, 'READY', { runnerId, error: null });
+        }
+        yield* ops.transition(threadId, 'STOP');
+      }
+      const status = yield* ops.call(() => provider.status(handle));
+      if (status.state === 'lost') return yield* ops.transition(threadId, 'LOST');
+      if (status.state === 'failed') {
+        return yield* ops.transition(threadId, 'FAIL', {
+          error: `sandbox ${status.detail ?? status.providerState}`,
+        });
+      }
+      if (status.state === 'stopped') return yield* ops.transition(threadId, 'STOPPED');
+      const preserves = provider.capabilities().stopPreservesDisk;
+      yield* ops.call(() => (preserves ? provider.stop(handle) : provider.destroy(handle)));
+      return yield* ops.transition(threadId, preserves ? 'STOPPED' : 'LOST');
     });
 
   const interrupted = (what: string) => (): ProvisionError => ({
@@ -254,6 +393,21 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
 
     destroy(threadId: string): ResultAsync<void, ProvisionError> {
       return runToResult(destroy(threadId), { onInterrupt: interrupted('destroy') });
+    },
+
+    /** Free the machine of a failed / lost sandbox. Yields whether there was one. */
+    release(threadId: string): ResultAsync<boolean, ProvisionError> {
+      return runToResult(release(threadId), { onInterrupt: interrupted('release') });
+    },
+
+    /** Settle an orphaned stop or wake, keeping the disk. Yields the state it ends in. */
+    recover(threadId: string): ResultAsync<ThreadSandboxState, ProvisionError> {
+      return runToResult(recover(threadId), { onInterrupt: interrupted('recovery') });
+    },
+
+    /** Fail an orphaned in-flight sandbox and free its machine. */
+    abandon(threadId: string, reason: string): ResultAsync<boolean, ProvisionError> {
+      return runToResult(abandon(threadId, reason), { onInterrupt: interrupted('cleanup') });
     },
   };
 }

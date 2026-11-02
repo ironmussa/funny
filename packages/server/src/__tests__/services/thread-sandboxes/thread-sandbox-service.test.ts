@@ -268,7 +268,7 @@ describe('stop and resume edge cases (state machine + Effect)', () => {
 
   test('a stop the provider refuses leaves the sandbox running', async () => {
     const { provider, store, service } = await runningSandbox();
-    provider.failNext({ kind: 'unavailable', message: 'provider down' });
+    provider.failNext({ kind: 'provider', message: 'provider down' });
     expect((await service.stop('t-1')).isErr()).toBe(true);
     expect(store.rows.get('t-1')).toMatchObject({ state: 'running', error: 'provider down' });
   });
@@ -305,7 +305,7 @@ describe("destroying a deleted thread's sandbox", () => {
   test('a provider failure keeps the row as failed so the leak stays visible', async () => {
     const { provider, store, service, removedRunners } = setup({ templates: [build.version] });
     expectOk(await service.provision(input));
-    provider.failNext({ kind: 'unavailable', message: 'provider down' });
+    provider.failNext({ kind: 'provider', message: 'provider down' });
     expect((await service.destroy('t-1')).isErr()).toBe(true);
     expect(store.rows.get('t-1')?.state).toBe('failed');
     expect(removedRunners).toEqual([]);
@@ -391,5 +391,158 @@ describe('ephemeral providers', () => {
     expectOk(await service.provision(input));
     expect(expectOk(await service.stop('t-1'))).toBe('lost');
     expect(provider.sandboxes.size).toBe(0);
+  });
+});
+
+describe('resilience: transient retries, release, abandon, recover', () => {
+  type Flaky = 'create' | 'stop' | 'destroy' | 'exec';
+
+  /** A fake whose calls can be made to fail transiently, with the backoff recorded. */
+  function resilientSetup() {
+    const fake = createFakeSandboxProvider('fake-valid', { templates: [build.version] });
+    const failing: Partial<Record<Flaky, number>> = {};
+    const calls: Record<Flaky, number> = { create: 0, stop: 0, destroy: 0, exec: 0 };
+    const flaky = <F extends (...args: never[]) => ResultAsync<unknown, unknown>>(
+      name: Flaky,
+      call: F,
+    ): F =>
+      ((...args: never[]) => {
+        calls[name] += 1;
+        if ((failing[name] ?? 0) > 0) {
+          failing[name]! -= 1;
+          return errAsync({ kind: 'unavailable', message: `${name} down`, retryAfterMs: 7 });
+        }
+        return call(...args);
+      }) as F;
+    const provider: FakeSandboxProvider = {
+      ...fake,
+      create: flaky('create', fake.create),
+      stop: flaky('stop', fake.stop),
+      destroy: flaky('destroy', fake.destroy),
+      exec: flaky('exec', fake.exec),
+    };
+    const store = memoryStore();
+    const waits: number[] = [];
+    const runner = { online: true };
+    const service = createThreadSandboxService({
+      connections: { providerFor: (_u, id) => okAsync({ connectionId: id, provider }) },
+      templates: createRunnerTemplateManager(build),
+      build,
+      serverUrl: 'https://funny.example',
+      issueToken: () => okAsync({ token: 'rprov_x' }),
+      sandboxRunnerIdForThread: async () => 'r-box',
+      presence: { isAvailable: () => runner.online },
+      store,
+      sleep: async (ms) => {
+        waits.push(ms);
+      },
+      pollMs: 1,
+      connectTimeoutMs: 200,
+    });
+    return { fake, service, store, failing, calls, waits, runner };
+  }
+
+  test('a transient provider error is retried, honoring its retryAfterMs', async () => {
+    const { service, store, failing, calls, waits } = resilientSetup();
+    expectOk(await service.provision(input));
+    failing.stop = 2;
+    expect(expectOk(await service.stop('t-1'))).toBe('stopped');
+    expect(calls.stop).toBe(3);
+    expect(waits.filter((ms) => ms === 7)).toHaveLength(2);
+    expect(store.rows.get('t-1')?.state).toBe('stopped');
+  });
+
+  test('retries are capped: a provider that stays down fails the operation', async () => {
+    const { service, store, failing, calls } = resilientSetup();
+    expectOk(await service.provision(input));
+    failing.stop = 99;
+    expect((await service.stop('t-1')).isErr()).toBe(true);
+    expect(calls.stop).toBe(4); // first attempt + 3 retries
+    expect(store.rows.get('t-1')?.state).toBe('running');
+  });
+
+  test('create is retried (its idempotency key yields one machine); exec never is', async () => {
+    const first = resilientSetup();
+    first.failing.create = 1;
+    expectOk(await first.service.provision(input));
+    expect(first.calls.create).toBe(2);
+    expect(first.fake.sandboxes.size).toBe(1);
+
+    const second = resilientSetup();
+    second.failing.exec = 1;
+    expect((await second.service.provision(input)).isErr()).toBe(true);
+    expect(second.calls.exec).toBe(1);
+    // The failed setup destroyed its machine and forgot it.
+    expect(second.fake.sandboxes.size).toBe(0);
+    expect(second.store.rows.get('t-1')).toMatchObject({ state: 'failed', sandboxId: null });
+  });
+
+  test('release frees the machine a failed setup could not destroy', async () => {
+    const { fake, service, store, failing } = resilientSetup();
+    failing.exec = 1;
+    failing.destroy = 99; // the setup's own cleanup fails too
+    expect((await service.provision(input)).isErr()).toBe(true);
+    const sandboxId = store.rows.get('t-1')?.sandboxId;
+    expect(sandboxId).toBeTruthy();
+    expect(fake.sandboxes.has(sandboxId!)).toBe(true);
+
+    failing.destroy = 0;
+    expect(expectOk(await service.release('t-1'))).toBe(true);
+    expect(fake.sandboxes.size).toBe(0);
+    expect(store.rows.get('t-1')).toMatchObject({ state: 'failed', sandboxId: null });
+    expect(expectOk(await service.release('t-1'))).toBe(false);
+  });
+
+  test('a live sandbox is never released', async () => {
+    const { fake, service } = resilientSetup();
+    expectOk(await service.provision(input));
+    expect(expectOk(await service.release('t-1'))).toBe(false);
+    expect(fake.sandboxes.size).toBe(1);
+  });
+
+  test('re-provisioning a failed thread releases the machine the old row still held', async () => {
+    const { fake, service, store, failing } = resilientSetup();
+    failing.exec = 1;
+    failing.destroy = 99;
+    expect((await service.provision(input)).isErr()).toBe(true);
+    const oldId = store.rows.get('t-1')!.sandboxId!;
+    failing.destroy = 0;
+    expectOk(await service.provision(input));
+    expect(fake.sandboxes.has(oldId)).toBe(false);
+    expect(fake.sandboxes.size).toBe(1);
+  });
+
+  test('abandon fails an orphaned setup and destroys its machine', async () => {
+    const { fake, service, store } = resilientSetup();
+    expectOk(await service.provision(input));
+    // As a crashed server would leave it: mid-install, machine up.
+    store.rows.set('t-1', { ...store.rows.get('t-1')!, state: 'installing', runnerId: null });
+    expect(expectOk(await service.abandon('t-1', 'server restarted'))).toBe(true);
+    expect(fake.sandboxes.size).toBe(0);
+    expect(store.rows.get('t-1')).toMatchObject({
+      state: 'failed',
+      error: 'server restarted',
+      sandboxId: null,
+    });
+  });
+
+  test('recover puts an orphaned wake back to sleep, keeping its disk', async () => {
+    const { fake, service, store, runner } = resilientSetup();
+    expectOk(await service.provision(input));
+    store.rows.set('t-1', { ...store.rows.get('t-1')!, state: 'connecting' });
+    runner.online = false;
+    expect(expectOk(await service.recover('t-1'))).toBe('stopped');
+    const [machine] = [...fake.sandboxes.values()];
+    expect(machine.state).toBe('stopped');
+  });
+
+  test('recover completes a wake whose runner is back, and an interrupted stop', async () => {
+    const { service, store } = resilientSetup();
+    expectOk(await service.provision(input));
+    store.rows.set('t-1', { ...store.rows.get('t-1')!, state: 'connecting' });
+    expect(expectOk(await service.recover('t-1'))).toBe('running');
+
+    store.rows.set('t-1', { ...store.rows.get('t-1')!, state: 'stopping' });
+    expect(expectOk(await service.recover('t-1'))).toBe('stopped');
   });
 });

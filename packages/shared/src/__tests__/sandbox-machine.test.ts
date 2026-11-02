@@ -22,6 +22,8 @@ describe('sandbox machine', () => {
     expect(nextSandboxState('stopped', 'RESUME')).toBe('connecting');
     // A refused stop leaves the machine running.
     expect(nextSandboxState('stopping', 'STOP_FAILED')).toBe('running');
+    // A wake abandoned by a server restart goes back to sleep.
+    expect(nextSandboxState('connecting', 'STOP')).toBe('stopping');
   });
 
   test('illegal transitions are refused', () => {

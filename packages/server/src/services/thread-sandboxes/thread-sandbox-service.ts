@@ -105,6 +105,10 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
   const ops = sandboxOps(deps);
   const pollMs = deps.pollMs ?? 2_000;
 
+  /** Best effort: if it fails, the provider lifetime cap still bounds the old machine. */
+  const releaseMachine = (row: ThreadSandboxRow) =>
+    Effect.ignore(fromResult(() => control.release(row.threadId)));
+
   const exec = (provider: SandboxProvider, handle: SandboxHandle, command: string, what: string) =>
     Effect.flatMap(
       providerCall(() => provider.exec(handle, command, { timeoutMs: 600_000 })),
@@ -216,7 +220,8 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
     template: TemplateRef | null,
   ) =>
     Effect.acquireRelease(
-      providerCall(() =>
+      // Safe to retry: the idempotency key returns the machine an earlier attempt made.
+      ops.call(() =>
         provider.create({
           threadId: input.threadId,
           sizeId: row.sizeId,
@@ -229,7 +234,13 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
       (handle, exit) =>
         Exit.isSuccess(exit)
           ? Effect.void
-          : Effect.ignore(providerCall(() => provider.destroy(handle))),
+          : Effect.ignore(
+              Effect.andThen(
+                ops.call(() => provider.destroy(handle)),
+                // Gone: the reconciler has nothing left to release.
+                ops.update(input.threadId, { sandboxId: null }),
+              ),
+            ),
     );
 
   /** Bring the sandbox up: machine, runner, connection, checkout. Yields the runner id. */
@@ -282,6 +293,11 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
           kind: 'already-provisioned',
           message: `thread already has a ${existing.state} sandbox`,
         });
+      }
+      // The new row replaces the old one: release a machine it still holds first
+      // (a failed setup whose cleanup did not finish), or nothing would track it.
+      if (existing?.sandboxId && existing.state !== 'lost') {
+        yield* releaseMachine(existing);
       }
       const generation = (existing?.generation ?? -1) + 1;
       const { provider } = yield* fromResult(() =>

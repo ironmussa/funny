@@ -14,6 +14,7 @@ import { setup, transition } from 'xstate';
  *
  *   running ──STOP──▶ stopping ──STOPPED──▶ stopped ──RESUME──▶ connecting
  *                        └──STOP_FAILED──▶ running (the machine is still up)
+ *   connecting ──STOP──▶ stopping (a wake abandoned by a server restart)
  *
  * FAIL (→ failed) and LOST (→ lost: the machine is gone or its disk expired)
  * are accepted from every non-final state. A failed or lost sandbox is only
@@ -75,7 +76,10 @@ export const sandboxMachine = setup({
   states: {
     provisioning: { on: { INSTALL: 'installing', CONNECT: 'connecting', ...broken } },
     installing: { on: { CONNECT: 'connecting', ...broken } },
-    connecting: { on: { BOOTSTRAP: 'bootstrapping', READY: 'running', ...broken } },
+    connecting: {
+      // STOP: a wake abandoned before its runner reconnected goes back to sleep.
+      on: { BOOTSTRAP: 'bootstrapping', READY: 'running', STOP: 'stopping', ...broken },
+    },
     bootstrapping: { on: { READY: 'running', ...broken } },
     running: { on: { STOP: 'stopping', ...broken } },
     stopping: { on: { STOPPED: 'stopped', STOP_FAILED: 'running', ...broken } },

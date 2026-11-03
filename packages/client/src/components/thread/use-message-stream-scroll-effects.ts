@@ -12,6 +12,7 @@ import type { MemoizedMessageListHandle } from './MemoizedMessageList';
 import {
   getLastUserMessageId,
   getLastVisibleUserMessageId,
+  LOAD_MORE_THRESHOLD_PX,
   THREAD_SWITCH_SETTLE_MS,
   type MessageStreamScrollMessage,
 } from './message-stream-scroll-utils';
@@ -362,7 +363,64 @@ export function useThreadLayoutScrollEffect({
   ]);
 }
 
-export function usePaginationScrollEffects({
+function needsMoreContent(viewport: HTMLDivElement) {
+  return (
+    viewport.clientHeight > 0 &&
+    viewport.scrollHeight - viewport.clientHeight < LOAD_MORE_THRESHOLD_PX
+  );
+}
+
+/** Pagination is driven by scroll events, so a loaded window whose content is
+ *  shorter than the viewport (e.g. 50 tool-call rows collapsed into a few
+ *  grouped cards) never scrolls and never loads the rest — the thread looks
+ *  truncated after a refresh. Keep pulling pages until the viewport overflows
+ *  or there is nothing left; newer pages first, since that is the live tail. */
+function useFillUnderflowedViewport({
+  firstMessageId,
+  lastMessageId,
+  messageListRef,
+  pagination,
+  scrollViewportRef,
+  threadId,
+}: {
+  firstMessageId: string | null;
+  lastMessageId: string | null;
+  messageListRef: RefObject<MemoizedMessageListHandle | null>;
+  pagination: MessageStreamProps['pagination'];
+  scrollViewportRef: RefObject<HTMLDivElement | null>;
+  threadId: string;
+}) {
+  const hasMore = pagination?.hasMore ?? false;
+  const hasMoreAfter = pagination?.hasMoreAfter ?? false;
+  const loadingMore = pagination?.loadingMore ?? false;
+  // One attempt per loaded window: a failed page leaves the ids unchanged, and
+  // retrying on every loadingMore flip would hammer the API in a loop.
+  const attemptedWindowRef = useRef<string | null>(null);
+
+  const fill = useEffectEvent(() => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport || !pagination || pagination.loadingMore) return;
+    if (!needsMoreContent(viewport)) return;
+    const windowKey = `${threadId}:${firstMessageId}:${lastMessageId}`;
+    if (attemptedWindowRef.current === windowKey) return;
+    attemptedWindowRef.current = windowKey;
+    if (pagination.hasMoreAfter && pagination.loadAfter) {
+      pagination.loadAfter();
+    } else if (pagination.hasMore) {
+      messageListRef.current?.captureScrollAnchor();
+      pagination.load();
+    }
+  });
+
+  useEffect(() => {
+    if (loadingMore || (!hasMore && !hasMoreAfter)) return;
+    // Measure after the list has laid out the newly rendered rows.
+    const raf = requestAnimationFrame(() => fill());
+    return () => cancelAnimationFrame(raf);
+  }, [threadId, firstMessageId, lastMessageId, hasMore, hasMoreAfter, loadingMore]);
+}
+
+function usePaginationScrollEffects({
   firstMessageId,
   hasMoreAfter,
   hasPagination,
@@ -468,4 +526,13 @@ export function usePaginationScrollEffects({
     updateScrollDownButton,
     updateStickyMetrics,
   ]);
+}
+
+export function useMessagePaginationEffects(
+  options: Parameters<typeof usePaginationScrollEffects>[0] & {
+    pagination: MessageStreamProps['pagination'];
+  },
+) {
+  usePaginationScrollEffects(options);
+  useFillUnderflowedViewport(options);
 }

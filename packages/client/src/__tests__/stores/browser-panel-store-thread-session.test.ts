@@ -155,4 +155,56 @@ describe('browser panel thread sessions', () => {
     expect(store().controller).toBe('agent');
     expect(store().dialog).toBeNull();
   });
+  test('annotation mode requires control and does not start on takeover', async () => {
+    await store().attachThreadSession('t1');
+    store().setSessionStatus('ready');
+    store().setAnnotationMode(true);
+    expect(store().annotationMode).toBe(false);
+    store().setSessionController('thread:t1', 'user');
+    expect(store().annotationMode).toBe(false);
+    store().setAnnotationMode(true);
+    expect(store().annotationMode).toBe(true);
+  });
+
+  test('handing back leaves annotation mode and preserves drafts', async () => {
+    await store().attachThreadSession('t1');
+    store().setSessionStatus('ready');
+    store().setSessionController('thread:t1', 'user');
+    store().setAnnotationMode(true);
+    store().addAnnotation({ kind: 'draw', dataUrl: 'draft', color: '#ff0000', note: 'Keep this' });
+    store().setTool('draw');
+    store().toggleInspectActive();
+    const drafts = store().annotations;
+    await store().setUserControl(false);
+    expect(store().annotationMode).toBe(false);
+    expect(store().tool).toBe('browse');
+    expect(store().inspectActive).toBe(false);
+    expect(store().annotations).toEqual(drafts);
+    store().setSessionController('thread:t1', 'agent');
+    store().setSessionController('thread:t1', 'user');
+    expect(store().annotationMode).toBe(false);
+  });
+
+  test('remote control changes exit annotation mode, unrelated updates do not', async () => {
+    await store().attachThreadSession('t1');
+    store().setSessionStatus('ready');
+    store().setSessionController('thread:t1', 'user');
+    store().setAnnotationMode(true);
+    store().setSessionController('thread:other', 'agent');
+    expect(store().annotationMode).toBe(true);
+    store().setSessionController('thread:t1', 'agent');
+    expect(store().annotationMode).toBe(false);
+  });
+
+  test('standalone sessions can annotate once ready and finish without deleting notes', async () => {
+    await store().openBrowserSession('https://example.com');
+    store().setAnnotationMode(true);
+    expect(store().annotationMode).toBe(false);
+    store().setSessionStatus('ready');
+    store().setAnnotationMode(true);
+    expect(store().annotationMode).toBe(true);
+    store().addAnnotation({ kind: 'draw', dataUrl: 'draft', color: '#ff0000', note: 'Keep' });
+    store().setAnnotationMode(false);
+    expect(store().annotations).toHaveLength(1);
+  });
 });

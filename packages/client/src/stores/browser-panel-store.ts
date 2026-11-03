@@ -153,6 +153,8 @@ interface BrowserPanelState {
   closePanel: () => void;
   setUrl: (url: string) => void;
   setLoadError: (msg: string | null) => void;
+  annotationMode: boolean;
+  setAnnotationMode: (active: boolean) => void;
   setTool: (tool: Tool) => void;
   setDrawColor: (color: string) => void;
   addAnnotation: (a: AnnotationInput) => string;
@@ -291,6 +293,7 @@ const FRESH = {
   url: '',
   loadedUrl: null,
   loadError: null as string | null,
+  annotationMode: false,
   tool: 'browse' as Tool,
   drawColor: DRAW_COLORS[0] as string,
   annotations: [] as Annotation[],
@@ -312,6 +315,10 @@ const initialDefaults = readDefaults();
 
 /** Session fields reset when the panel lets go of a session. */
 const DETACHED = {
+  annotationMode: false,
+  tool: 'browse' as Tool,
+  inspectActive: false,
+  showTestIds: false,
   sessionId: null as string | null,
   sessionThreadId: null as string | null,
   sessionStatus: 'idle' as SessionStatus,
@@ -364,6 +371,25 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
   setUrl: (url) => set({ url }),
 
   setLoadError: (msg) => set({ loadError: msg }),
+
+  setAnnotationMode: (active) => {
+    const state = get();
+    if (
+      active &&
+      (!state.sessionId ||
+        state.sessionStatus !== 'ready' ||
+        (state.sessionThreadId && state.controller !== 'user'))
+    )
+      return;
+    if (!active && state.animationsPaused) state.toggleAnimationsPaused();
+    set({
+      annotationMode: active,
+      tool: 'browse',
+      inspectActive: false,
+      showTestIds: false,
+      ...(active ? { overlaysVisible: true } : {}),
+    });
+  },
 
   setTool: (tool) => set({ tool }),
 
@@ -522,6 +548,10 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
       sessionThreadId: threadId,
       sessionStatus: 'spawning',
       sessionError: null,
+      annotationMode: false,
+      tool: 'browse',
+      inspectActive: false,
+      showTestIds: false,
       controller: 'agent',
       dialog: null,
     });
@@ -564,6 +594,7 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
   setSessionController: (sessionId, controller) => {
     if (get().sessionId !== sessionId) return;
+    if (controller !== 'user') get().setAnnotationMode(false);
     set({ controller });
   },
 
@@ -576,6 +607,7 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
     const { sessionId } = get();
     if (!sessionId) return;
     const { browserSessionClient } = await loadClient();
+    if (!userControls) get().setAnnotationMode(false);
     browserSessionClient.input(sessionId, {
       kind: userControls ? 'takeControl' : 'releaseControl',
     });

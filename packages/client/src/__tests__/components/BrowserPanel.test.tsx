@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, cleanup } from '@testing-library/react';
+import { act, render, screen, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@/hooks/use-active-thread-id', () => ({ useActiveThreadId: () => 't1' }));
@@ -33,31 +33,32 @@ describe('browser annotation mode', () => {
   });
   afterEach(cleanup);
 
-  test('tools require explicit annotation mode and disappear when the agent takes control', () => {
+  test('shows tools immediately on takeover and hides them when handing back', () => {
     render(<BrowserPanel />);
-    expect(screen.queryByTestId('browser-panel-annotation-mode')).toBeNull();
     expect(screen.queryByText('Annotation tools')).toBeNull();
     expect(screen.queryByText('Annotation list')).toBeNull();
     expect(screen.queryByText('Send annotations')).toBeNull();
 
     act(() => useBrowserPanelStore.getState().setSessionController('thread:t1', 'user'));
-    expect(screen.getByRole('button', { name: 'Annotate page' })).toBeTruthy();
-    expect(screen.queryByText('Annotation tools')).toBeNull();
-
-    fireEvent.click(screen.getByRole('button', { name: 'Annotate page' }));
+    expect(screen.queryByTestId('browser-panel-annotation-mode')).toBeNull();
     expect(screen.getByText('Annotation tools')).toBeTruthy();
     expect(screen.getByText('Annotation list')).toBeTruthy();
     expect(screen.getByText('Send annotations')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Finish annotating' }));
-    expect(screen.queryByText('Annotation tools')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Annotate page' }));
     act(() => useBrowserPanelStore.getState().setSessionController('thread:t1', 'agent'));
     expect(screen.queryByText('Annotation tools')).toBeNull();
+    expect(screen.queryByText('Annotation list')).toBeNull();
     expect(screen.queryByText('Send annotations')).toBeNull();
 
     act(() => useBrowserPanelStore.getState().setSessionController('thread:t1', 'user'));
-    expect(screen.getByRole('button', { name: 'Annotate page' })).toBeTruthy();
+    expect(screen.getByText('Annotation tools')).toBeTruthy();
+  });
+
+  test('waits for the session to be ready before showing tools', () => {
+    useBrowserPanelStore.setState({ controller: 'user', sessionStatus: 'spawning' });
+    render(<BrowserPanel />);
     expect(screen.queryByText('Annotation tools')).toBeNull();
+    act(() => useBrowserPanelStore.getState().setSessionStatus('ready'));
+    expect(screen.getByText('Annotation tools')).toBeTruthy();
   });
 });

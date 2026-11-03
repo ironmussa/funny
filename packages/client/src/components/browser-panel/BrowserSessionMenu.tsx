@@ -1,4 +1,4 @@
-import { Bot, MoreHorizontal, Trash2, XCircle } from 'lucide-react';
+import { MoreHorizontal, Trash2, XCircle } from 'lucide-react';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,6 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useThreadById } from '@/lib/thread-selectors';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
 /**
@@ -96,24 +95,5 @@ export function BrowserSessionMenu() {
         </DialogContent>
       </Dialog>
     </>
-  );
-}
-
-/** "Shared with the agent" label shown while the panel shows a thread's session. */
-export function BrowserSessionThreadLabel({ style }: { style?: React.CSSProperties }) {
-  const sessionThreadId = useBrowserPanelStore((s) => s.sessionThreadId);
-  const thread = useThreadById(sessionThreadId);
-  if (!sessionThreadId) return null;
-  return (
-    <div
-      data-testid="browser-panel-thread-label"
-      className="text-muted-foreground flex min-w-0 items-center gap-1"
-      style={style}
-    >
-      <Bot className="icon-sm shrink-0" />
-      <span className="truncate">
-        Shared with the agent of {thread?.title ? `“${thread.title}”` : 'this thread'}
-      </span>
-    </div>
   );
 }

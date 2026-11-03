@@ -1,6 +1,5 @@
 import { useEffect } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
@@ -28,9 +27,6 @@ export function BrowserPanel() {
       s.sessionStatus === 'ready' &&
       (!s.sessionThreadId || s.controller === 'user'),
   );
-  const annotationMode = useBrowserPanelStore((s) => s.annotationMode);
-  const setAnnotationMode = useBrowserPanelStore((s) => s.setAnnotationMode);
-  const annotating = canAnnotate && annotationMode;
   const open = useBrowserPanelStore((s) => s.open);
   const syncActiveThread = useBrowserPanelStore((s) => s.syncActiveThread);
   const activeThreadId = useActiveThreadId();
@@ -54,18 +50,7 @@ export function BrowserPanel() {
 
       {canAnnotate && (
         <section className="border-border shrink-0 border-b" data-section="toolbar">
-          <div className="px-3 py-1.5">
-            <Button
-              variant="outline"
-              size="sm"
-              data-testid="browser-panel-annotation-mode"
-              aria-pressed={annotating}
-              onClick={() => setAnnotationMode(!annotating)}
-            >
-              {annotating ? 'Finish annotating' : 'Annotate page'}
-            </Button>
-          </div>
-          {annotating && <ToolToolbar />}
+          <ToolToolbar />
         </section>
       )}
 
@@ -73,7 +58,7 @@ export function BrowserPanel() {
         <BrowserViewport />
       </section>
 
-      {annotating && (
+      {canAnnotate && (
         <>
           <section className="border-border max-h-48 shrink-0 border-t" data-section="annotations">
             <AnnotationList />

@@ -32,7 +32,8 @@ const store = () => useBrowserPanelStore.getState();
 describe('browser panel thread sessions', () => {
   beforeEach(() => {
     store().reset();
-    mocks.open.mockClear();
+    mocks.open.mockReset();
+    mocks.navigate.mockClear();
     mocks.close.mockClear();
     mocks.input.mockClear();
     mocks.urlThreadId = null;
@@ -44,6 +45,48 @@ describe('browser panel thread sessions', () => {
     expect(store().sessionId).toBe('thread:t1');
     expect(store().sessionThreadId).toBe('t1');
     expect(mocks.open).toHaveBeenCalledWith('thread:t1', 'https://example.com');
+  });
+
+  test.each(['spawning', 'disconnected', 'too-many-sessions'] as const)(
+    'Go reopens the same session while %s instead of only navigating',
+    async (sessionStatus) => {
+      useBrowserPanelStore.setState({
+        sessionId: 'thread:t1',
+        sessionThreadId: 't1',
+        sessionStatus,
+      });
+      await store().openBrowserSession('https://example.com/retry');
+      expect(mocks.open).toHaveBeenCalledWith('thread:t1', 'https://example.com/retry');
+      expect(mocks.navigate).not.toHaveBeenCalled();
+      expect(store().sessionStatus).toBe('spawning');
+      store().setSessionStatus('ready');
+      await store().openBrowserSession('https://example.com/next');
+      expect(mocks.navigate).toHaveBeenCalledWith('thread:t1', 'https://example.com/next');
+      expect(store().sessionStatus).toBe('ready');
+    },
+  );
+
+  test('a failed open leaves spawning and Go can retry', async () => {
+    mocks.urlThreadId = 't1';
+    mocks.open.mockImplementationOnce(() => {
+      throw new Error('Connection unavailable');
+    });
+    await store().openBrowserSession('https://example.com');
+    expect(store().sessionStatus).toBe('disconnected');
+    expect(store().sessionError).toBe('Connection unavailable');
+    await store().openBrowserSession('https://example.com');
+    expect(store().sessionStatus).toBe('spawning');
+    expect(store().sessionError).toBeNull();
+    expect(mocks.open).toHaveBeenCalledTimes(2);
+  });
+
+  test('a failed attach leaves spawning', async () => {
+    mocks.open.mockImplementationOnce(() => {
+      throw new Error('Connection unavailable');
+    });
+    await store().attachThreadSession('t1');
+    expect(store().sessionStatus).toBe('disconnected');
+    expect(store().sessionError).toBe('Connection unavailable');
   });
 
   test('opening a URL outside a thread uses a panel-owned id', async () => {
@@ -155,56 +198,30 @@ describe('browser panel thread sessions', () => {
     expect(store().controller).toBe('agent');
     expect(store().dialog).toBeNull();
   });
-  test('annotation mode requires control and does not start on takeover', async () => {
-    await store().attachThreadSession('t1');
-    store().setSessionStatus('ready');
-    store().setAnnotationMode(true);
-    expect(store().annotationMode).toBe(false);
-    store().setSessionController('thread:t1', 'user');
-    expect(store().annotationMode).toBe(false);
-    store().setAnnotationMode(true);
-    expect(store().annotationMode).toBe(true);
-  });
-
-  test('handing back leaves annotation mode and preserves drafts', async () => {
+  test('handing back resets tools and preserves drafts', async () => {
     await store().attachThreadSession('t1');
     store().setSessionStatus('ready');
     store().setSessionController('thread:t1', 'user');
-    store().setAnnotationMode(true);
     store().addAnnotation({ kind: 'draw', dataUrl: 'draft', color: '#ff0000', note: 'Keep this' });
     store().setTool('draw');
     store().toggleInspectActive();
     const drafts = store().annotations;
     await store().setUserControl(false);
-    expect(store().annotationMode).toBe(false);
     expect(store().tool).toBe('browse');
     expect(store().inspectActive).toBe(false);
     expect(store().annotations).toEqual(drafts);
     store().setSessionController('thread:t1', 'agent');
     store().setSessionController('thread:t1', 'user');
-    expect(store().annotationMode).toBe(false);
   });
 
-  test('remote control changes exit annotation mode, unrelated updates do not', async () => {
+  test('remote control changes reset tools, unrelated updates do not', async () => {
     await store().attachThreadSession('t1');
     store().setSessionStatus('ready');
     store().setSessionController('thread:t1', 'user');
-    store().setAnnotationMode(true);
+    store().setTool('draw');
     store().setSessionController('thread:other', 'agent');
-    expect(store().annotationMode).toBe(true);
+    expect(store().tool).toBe('draw');
     store().setSessionController('thread:t1', 'agent');
-    expect(store().annotationMode).toBe(false);
-  });
-
-  test('standalone sessions can annotate once ready and finish without deleting notes', async () => {
-    await store().openBrowserSession('https://example.com');
-    store().setAnnotationMode(true);
-    expect(store().annotationMode).toBe(false);
-    store().setSessionStatus('ready');
-    store().setAnnotationMode(true);
-    expect(store().annotationMode).toBe(true);
-    store().addAnnotation({ kind: 'draw', dataUrl: 'draft', color: '#ff0000', note: 'Keep' });
-    store().setAnnotationMode(false);
-    expect(store().annotations).toHaveLength(1);
+    expect(store().tool).toBe('browse');
   });
 });

@@ -153,8 +153,7 @@ interface BrowserPanelState {
   closePanel: () => void;
   setUrl: (url: string) => void;
   setLoadError: (msg: string | null) => void;
-  annotationMode: boolean;
-  setAnnotationMode: (active: boolean) => void;
+  resetAnnotationTools: () => void;
   setTool: (tool: Tool) => void;
   setDrawColor: (color: string) => void;
   addAnnotation: (a: AnnotationInput) => string;
@@ -293,7 +292,6 @@ const FRESH = {
   url: '',
   loadedUrl: null,
   loadError: null as string | null,
-  annotationMode: false,
   tool: 'browse' as Tool,
   drawColor: DRAW_COLORS[0] as string,
   annotations: [] as Annotation[],
@@ -315,7 +313,6 @@ const initialDefaults = readDefaults();
 
 /** Session fields reset when the panel lets go of a session. */
 const DETACHED = {
-  annotationMode: false,
   tool: 'browse' as Tool,
   inspectActive: false,
   showTestIds: false,
@@ -341,6 +338,21 @@ async function releaseSession(sessionId: string, reason: 'user' | 'detach'): Pro
   ]);
   browserSessionClient.close(sessionId, reason);
   clearLatestFrame(sessionId);
+}
+
+/** On a thread the session is the thread's (shared with its agent); otherwise a fresh id. */
+function newPanelSessionId(threadId: string | null): string {
+  if (threadId) return threadBrowserSessionId(threadId);
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `bp-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function urlProtocol(url: string): string {
+  return url.split(':', 1)[0] || 'unknown';
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
@@ -372,22 +384,13 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
   setLoadError: (msg) => set({ loadError: msg }),
 
-  setAnnotationMode: (active) => {
+  resetAnnotationTools: () => {
     const state = get();
-    if (
-      active &&
-      (!state.sessionId ||
-        state.sessionStatus !== 'ready' ||
-        (state.sessionThreadId && state.controller !== 'user'))
-    )
-      return;
-    if (!active && state.animationsPaused) state.toggleAnimationsPaused();
+    if (state.animationsPaused) state.toggleAnimationsPaused();
     set({
-      annotationMode: active,
       tool: 'browse',
       inspectActive: false,
       showTestIds: false,
-      ...(active ? { overlaysVisible: true } : {}),
     });
   },
 
@@ -492,7 +495,7 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
     // If we already have a session, just navigate it (the runner handles the
     // open→navigate fall-through too, but going through the dedicated client
     // method gives us cleaner WS traffic).
-    if (state.sessionId && state.sessionStatus !== 'disconnected') {
+    if (state.sessionId && state.sessionStatus === 'ready') {
       const { browserSessionClient } = await loadClient();
       browserSessionClient.navigate(state.sessionId, url);
       set({ loadedUrl: url, loadError: null });
@@ -501,12 +504,8 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
     // On a thread, the session is the thread's — shared with its agent.
     const { getUrlThreadId } = await import('@/stores/thread-store');
-    const threadId = getUrlThreadId();
-    const sessionId = threadId
-      ? threadBrowserSessionId(threadId)
-      : typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `bp-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    const threadId = state.sessionThreadId ?? getUrlThreadId();
+    const sessionId = state.sessionId ?? newPanelSessionId(threadId);
 
     set({
       sessionId,
@@ -519,11 +518,16 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
     metric('browser_panel.url_loaded', 1, {
       type: 'sum',
-      attributes: { protocol: url.split(':', 1)[0] || 'unknown' },
+      attributes: { protocol: urlProtocol(url) },
     });
 
-    const { browserSessionClient } = await loadClient();
-    browserSessionClient.open(sessionId, url);
+    try {
+      const { browserSessionClient } = await loadClient();
+      browserSessionClient.open(sessionId, url);
+    } catch (error) {
+      if (get().sessionId !== sessionId) return;
+      get().setSessionStatus('disconnected', errorMessage(error));
+    }
   },
 
   closeBrowserSession: async () => {
@@ -548,16 +552,23 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
       sessionThreadId: threadId,
       sessionStatus: 'spawning',
       sessionError: null,
-      annotationMode: false,
       tool: 'browse',
       inspectActive: false,
       showTestIds: false,
       controller: 'agent',
       dialog: null,
     });
-    const { browserSessionClient } = await loadClient();
-    // Empty URL = attach only: the runner re-sends `ready` or replies `not_found`.
-    browserSessionClient.open(sessionId, '');
+    try {
+      const { browserSessionClient } = await loadClient();
+      // Empty URL = attach only: the runner re-sends `ready` or replies `not_found`.
+      browserSessionClient.open(sessionId, '');
+    } catch (error) {
+      if (get().sessionId === sessionId)
+        get().setSessionStatus(
+          'disconnected',
+          error instanceof Error ? error.message : String(error),
+        );
+    }
   },
 
   syncActiveThread: (threadId) => {
@@ -594,7 +605,7 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
   setSessionController: (sessionId, controller) => {
     if (get().sessionId !== sessionId) return;
-    if (controller !== 'user') get().setAnnotationMode(false);
+    if (controller !== 'user') get().resetAnnotationTools();
     set({ controller });
   },
 
@@ -607,7 +618,7 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
     const { sessionId } = get();
     if (!sessionId) return;
     const { browserSessionClient } = await loadClient();
-    if (!userControls) get().setAnnotationMode(false);
+    if (!userControls) get().resetAnnotationTools();
     browserSessionClient.input(sessionId, {
       kind: userControls ? 'takeControl' : 'releaseControl',
     });

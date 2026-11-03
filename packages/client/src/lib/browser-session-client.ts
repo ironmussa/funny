@@ -98,28 +98,32 @@ function sendRequest(
   );
 }
 
+type RealtimeFrame = Parameters<typeof sendBrowserSessionRealtime>[1];
+
+const FIRE_AND_FORGET_FRAMES: Record<string, (extra: Record<string, unknown>) => RealtimeFrame> = {
+  'browser-session:open': (extra) => ({ case: 'open', targetUrl: String(extra.url ?? '') }),
+  'browser-session:navigate': (extra) => ({
+    case: 'navigate',
+    targetUrl: String(extra.url ?? ''),
+  }),
+  'browser-session:input': (extra) => ({ case: 'input', action: extra as JsonObject }),
+  'browser-session:heartbeat': () => ({ case: 'heartbeat' }),
+  'browser-session:close': (extra) => ({ case: 'close', reason: String(extra.reason ?? 'user') }),
+};
+
 function sendFireAndForget(
   type: string,
   sessionId: string,
   extra: Record<string, unknown> = {},
 ): void {
-  if (type === 'browser-session:open') {
-    sendBrowserSessionRealtime(sessionId, { case: 'open', targetUrl: String(extra.url ?? '') });
-  } else if (type === 'browser-session:navigate') {
-    sendBrowserSessionRealtime(sessionId, {
-      case: 'navigate',
-      targetUrl: String(extra.url ?? ''),
-    });
-  } else if (type === 'browser-session:input') {
-    sendBrowserSessionRealtime(sessionId, { case: 'input', action: extra as JsonObject });
-  } else if (type === 'browser-session:heartbeat') {
-    sendBrowserSessionRealtime(sessionId, { case: 'heartbeat' });
-  } else if (type === 'browser-session:close') {
-    sendBrowserSessionRealtime(sessionId, {
-      case: 'close',
-      reason: String(extra.reason ?? 'user'),
-    });
-  }
+  const frame = Object.hasOwn(FIRE_AND_FORGET_FRAMES, type)
+    ? FIRE_AND_FORGET_FRAMES[type](extra)
+    : null;
+  if (!frame) return;
+  const sent = sendBrowserSessionRealtime(sessionId, frame);
+  // Only `open` reports a lost connection: the others are best-effort.
+  if (!sent && type === 'browser-session:open')
+    throw new Error('Browser connection unavailable. Reconnect and try Go again.');
 }
 
 // ── Public API ───────────────────────────────────────────────────────────

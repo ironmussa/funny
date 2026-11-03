@@ -38,7 +38,6 @@ describe('browser viewport control and annotations', () => {
 
     act(() => {
       useBrowserPanelStore.getState().setSessionController('thread:t1', 'user');
-      useBrowserPanelStore.getState().setAnnotationMode(true);
       useBrowserPanelStore.setState({ overlaysVisible: false });
     });
     expect(viewport.style.visibility).not.toBe('hidden');
@@ -55,18 +54,16 @@ describe('browser viewport control and annotations', () => {
     );
   });
 
-  test('keeps the drawing canvas mounted when finishing annotations and handing back', () => {
-    useBrowserPanelStore.setState({ controller: 'user', annotationMode: true });
+  test('keeps the drawing canvas mounted when handing back and taking control again', () => {
+    useBrowserPanelStore.setState({ controller: 'user' });
     render(<BrowserViewport />);
     const canvas = screen.getByTestId('draft-canvas');
     expect(canvas.parentElement?.style.visibility).toBe('visible');
-    act(() => useBrowserPanelStore.getState().setAnnotationMode(false));
-    expect(screen.getByTestId('draft-canvas')).toBe(canvas);
-    expect(canvas.parentElement?.style.visibility).toBe('hidden');
-    act(() => useBrowserPanelStore.getState().setAnnotationMode(true));
-    expect(screen.getByTestId('draft-canvas')).toBe(canvas);
     act(() => useBrowserPanelStore.getState().setSessionController('thread:t1', 'agent'));
     expect(screen.getByTestId('draft-canvas')).toBe(canvas);
     expect(canvas.parentElement?.style.visibility).toBe('hidden');
+    act(() => useBrowserPanelStore.getState().setSessionController('thread:t1', 'user'));
+    expect(screen.getByTestId('draft-canvas')).toBe(canvas);
+    expect(canvas.parentElement?.style.visibility).toBe('visible');
   });
 });

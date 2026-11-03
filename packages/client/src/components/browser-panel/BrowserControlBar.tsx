@@ -1,9 +1,10 @@
 import { Bot, Hand, MessageSquareWarning } from 'lucide-react';
 import { useState } from 'react';
 
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { FIELD_SIZE } from '@/components/ui/control-size';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
 /**
@@ -21,18 +22,26 @@ export function BrowserControlBar({ style }: { style?: React.CSSProperties }) {
   return (
     <div className="flex flex-col gap-1" style={style}>
       {sessionThreadId && (
-        <div className="flex items-center gap-2" data-testid="browser-panel-control-bar">
-          <Badge
-            variant={controller === 'user' ? 'default' : 'secondary'}
+        <div
+          role="group"
+          aria-label="Browser control"
+          className="border-border inline-flex w-fit items-center rounded-md border"
+          data-testid="browser-panel-control-bar"
+        >
+          <span
+            className={cn(
+              'bg-muted/50 inline-flex items-center gap-1.5 rounded-l-md font-medium whitespace-nowrap',
+              FIELD_SIZE.xs,
+            )}
             data-testid="browser-panel-controller"
           >
             {controller === 'user' ? <Hand className="icon-xs" /> : <Bot className="icon-xs" />}
             {controller === 'user' ? 'You control' : 'Agent controls'}
-          </Badge>
+          </span>
           <Button
-            variant="outline"
+            variant="ghost"
             size="xs"
-            className="ml-auto"
+            className="border-border rounded-l-none border-l"
             onClick={() => void setUserControl(controller !== 'user')}
             data-testid={
               controller === 'user' ? 'browser-panel-hand-back' : 'browser-panel-take-over'

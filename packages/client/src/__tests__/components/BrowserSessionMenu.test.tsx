@@ -27,14 +27,7 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
     </button>
   ),
 }));
-vi.mock('@/lib/thread-selectors', () => ({
-  useThreadById: (id: string | null) => (id ? { id, title: 'Deploy to Cloudflare' } : undefined),
-}));
-
-import {
-  BrowserSessionMenu,
-  BrowserSessionThreadLabel,
-} from '@/components/browser-panel/BrowserSessionMenu';
+import { BrowserSessionMenu } from '@/components/browser-panel/BrowserSessionMenu';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
 describe('BrowserSessionMenu', () => {
@@ -70,15 +63,5 @@ describe('BrowserSessionMenu', () => {
     expect(clearBrowserProfile).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('browser-panel-clear-profile-confirm'));
     expect(clearBrowserProfile).toHaveBeenCalled();
-  });
-
-  test('the thread label names the thread sharing the session', () => {
-    const { rerender } = render(<BrowserSessionThreadLabel />);
-    expect(screen.queryByTestId('browser-panel-thread-label')).toBeNull();
-    useBrowserPanelStore.setState({ sessionId: 'thread:t1', sessionThreadId: 't1' });
-    rerender(<BrowserSessionThreadLabel />);
-    expect(screen.getByTestId('browser-panel-thread-label')).toHaveTextContent(
-      'Deploy to Cloudflare',
-    );
   });
 });

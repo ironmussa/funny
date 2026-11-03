@@ -57,8 +57,6 @@ export function BrowserViewport() {
 
 function ActiveBrowserViewport() {
   const userControls = useBrowserPanelStore((s) => !s.sessionThreadId || s.controller === 'user');
-  const annotationMode = useBrowserPanelStore((s) => s.annotationMode);
-  const annotating = userControls && annotationMode;
   const tool = useBrowserPanelStore((s) => s.tool);
   const overlaysVisible = useBrowserPanelStore((s) => s.overlaysVisible);
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
@@ -68,14 +66,8 @@ function ActiveBrowserViewport() {
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
-  const showAnnotations = annotating && overlaysVisible;
-  const canForwardInput = acceptsBrowserInput(
-    userControls,
-    annotating,
-    tool,
-    inspectActive,
-    sessionId,
-  );
+  const showAnnotations = userControls && overlaysVisible;
+  const canForwardInput = acceptsBrowserInput(userControls, tool, inspectActive, sessionId);
   const inputHandlers = useBrowserInputHandlers(canvasRef, viewport, sessionId, canForwardInput);
 
   return (
@@ -324,12 +316,11 @@ function useBrowserInputHandlers(
 
 function acceptsBrowserInput(
   userControls: boolean,
-  annotating: boolean,
   tool: string,
   inspectActive: boolean,
   sessionId: string | null,
 ) {
-  return userControls && (!annotating || (tool === 'browse' && !inspectActive)) && !!sessionId;
+  return userControls && tool === 'browse' && !inspectActive && !!sessionId;
 }
 
 function BrowserSessionStatus() {

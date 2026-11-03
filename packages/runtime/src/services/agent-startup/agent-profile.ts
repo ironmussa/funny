@@ -1,5 +1,6 @@
 import type { AgentProvider } from '@funny/shared';
 
+import { claudeProfileEnv } from '../../utils/claude-profile-paths.js';
 import type { RuntimeThreadRecord } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
 
@@ -23,9 +24,17 @@ export async function resolveActiveAgentProfile(
     thread.projectId,
     thread.userId,
   );
-  return resolved.profile && resolved.profile.provider === provider
-    ? (resolved as ActiveAgentProfile)
-    : NO_PROFILE();
+  if (!resolved.profile || resolved.profile.provider !== provider) return NO_PROFILE();
+
+  // Resolve home-relative paths on the runner that launches the agent, not
+  // on the server that stores the profile.
+  return {
+    ...resolved,
+    env: {
+      ...resolved.env,
+      ...claudeProfileEnv(resolved.env.CLAUDE_CONFIG_DIR),
+    },
+  };
 }
 
 /**
@@ -39,13 +48,20 @@ export async function withWatchMcpServer(
   threadId: string,
   userId: string | undefined,
   mcpServers: Record<string, any> | undefined,
+  provider?: AgentProvider,
 ): Promise<Record<string, any> | undefined> {
   if (!userId) return mcpServers;
   const { FUNNY_MCP_SERVER } = await import('../agent-watch-tool.js');
   const { grantAgentMcpHttp } = await import('../agent-mcp-http.js');
   return {
     ...(mcpServers ?? {}),
-    [FUNNY_MCP_SERVER.name]: grantAgentMcpHttp(FUNNY_MCP_SERVER, { threadId, userId }),
+    [FUNNY_MCP_SERVER.name]: grantAgentMcpHttp(FUNNY_MCP_SERVER, {
+      threadId,
+      userId,
+      // Claude tracks native tasks through completion after the main turn.
+      // Keep the fallback for adapters without verified lifecycle support.
+      nativeBackgroundJobs: provider === 'claude',
+    }),
   };
 }
 

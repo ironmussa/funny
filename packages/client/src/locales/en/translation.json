@@ -15,6 +15,7 @@
     "tooltipWorktreeWithPath": "Worktree branch: {{branch}} — {{path}}"
   },
   "sidebar": {
+    "openExistingProject": "Open existing project",
     "projects": "Projects",
     "addProject": "Add project",
     "newThread": "New thread",

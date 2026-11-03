@@ -12,6 +12,8 @@
 import { isAbsolute, resolve } from 'path';
 
 import { validateProjectPathLexical } from '@funny/core/git/path-validation';
+import type { Project } from '@funny/shared';
+import { includesSearchText } from '@funny/shared/lib/text-search';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -78,6 +80,9 @@ const projectCommandBodySchema = z.object({
 /** GET /api/projects — list projects for the current user */
 projectRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string;
+  const search = c.req.query('q')?.trim();
+  const matchesSearch = (project: Project) =>
+    !search || includesSearchText(project.name, search) || includesSearchText(project.path, search);
   const isPersonal = c.req.query('personal') === 'true';
   const queryOrgId = c.req.query('orgId');
   const sessionOrgId = c.get('organizationId');
@@ -112,7 +117,7 @@ projectRoutes.get('/', async (c) => {
         needsSetup: !lp,
       };
     });
-    return c.json(result);
+    return c.json(result.filter(matchesSearch));
   }
 
   const projects = await projectRepo.listProjects(userId);
@@ -138,7 +143,7 @@ projectRoutes.get('/', async (c) => {
       role: (memberRole === 'admin' ? 'admin' : 'member') as 'admin' | 'member',
     }));
 
-  return c.json([...personalProjects, ...sharedProjects]);
+  return c.json([...personalProjects, ...sharedProjects].filter(matchesSearch));
 });
 
 /** GET /api/projects/resolve — find project by URL pattern */

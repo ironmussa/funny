@@ -43,6 +43,42 @@ describe.serial('Project Routes (Integration)', () => {
   // ── GET /api/projects ──────────────────────────────────
 
   describe('GET /api/projects', () => {
+    test('searches current database names and paths without exposing other users or spaces', async () => {
+      seedProject(t.db as any, { id: 'match-name', userId: 'user-1', name: 'Bróncos', path: '/a' });
+      seedProject(t.db as any, {
+        id: 'match-path',
+        userId: 'user-1',
+        name: 'Repo',
+        path: '/broncos',
+      });
+      seedProject(t.db as any, { id: 'other', userId: 'user-1', name: 'Other', path: '/b' });
+      seedProject(t.db as any, { id: 'private', userId: 'user-2', name: 'Broncos', path: '/c' });
+      seedProject(t.db as any, { id: 'org', userId: 'user-1', name: 'Broncos', path: '/d' });
+      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'org' });
+
+      const res = await t.requestAs('user-1').get('/api/projects?personal=true&q=BRON');
+      expect(res.status).toBe(200);
+      expect((await res.json()).map((p: { id: string }) => p.id).sort()).toEqual([
+        'match-name',
+        'match-path',
+      ]);
+      const empty = await t.requestAs('user-1').get('/api/projects?personal=true&q=missing');
+      expect(await empty.json()).toEqual([]);
+    });
+
+    test('search respects organization membership', async () => {
+      seedProject(t.db as any, { id: 'org-match', userId: 'user-1', name: 'Broncos', path: '/a' });
+      seedProject(t.db as any, { id: 'org-other', userId: 'user-1', name: 'Other', path: '/b' });
+      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'org-match' });
+      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'org-other' });
+      seedOrgMember(t.db as any, { organizationId: 'org-1', userId: 'user-1', role: 'member' });
+      const res = await t.requestAs('user-1').get('/api/projects?orgId=org-1&q=bron');
+      expect(res.status).toBe(200);
+      expect((await res.json()).map((p: { id: string }) => p.id)).toEqual(['org-match']);
+      const denied = await t.requestAs('user-2').get('/api/projects?orgId=org-1&q=bron');
+      expect(denied.status).toBe(403);
+    });
+
     test('returns empty array for a user with no projects', async () => {
       const res = await t.requestAs('user-1').get('/api/projects');
       expect(res.status).toBe(200);

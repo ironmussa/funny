@@ -14,9 +14,11 @@ import {
   CommandItem,
 } from '@/components/ui/command';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useProjectSearch } from '@/hooks/use-project-search';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric } from '@/lib/telemetry';
 import { buildPath } from '@/lib/url';
+import { useAuthStore } from '@/stores/auth-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -48,7 +50,7 @@ function useFilteredCommandItems(
   t: (key: string) => string,
   hasActiveProject: boolean,
 ) {
-  const searchLower = normalizeSearchText(search);
+  const searchLower = normalizeSearchText(search.trim());
   const displayProjects = useMemo(() => {
     if (!searchLower) return projects.slice(0, 50);
     const scored: Array<{ p: ProjectEntry; rank: number; pos: number }> = [];
@@ -111,12 +113,13 @@ function usePaletteOpenTiming(open: boolean, projectCount: number) {
 function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const projects = useProjectStore((s) => s.projects);
+  const activeOrgId = useAuthStore((s) => s.activeOrgId);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const startNewThread = useUIStore((s) => s.startNewThread);
   const navigatedRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState('');
+  const { projects, loading, error } = useProjectSearch(open, search, activeOrgId);
   const { displayProjects, displaySettings, hasNoResults, searchLower } = useFilteredCommandItems(
     projects,
     search,
@@ -134,6 +137,7 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
   usePaletteOpenTiming(open, projects.length);
 
   const handleProjectSelect = (projectId: string) => {
+    rememberSelectedProject(projects, projectId);
     navigatedRef.current = true;
 
     // Close the command palette immediately so the UI feels responsive
@@ -213,9 +217,7 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
         onValueChange={setSearch}
       />
       <CommandList ref={listRef}>
-        {hasNoResults && (
-          <EmptyState fill={false} className="py-6" title={t('commandPalette.noResults')} />
-        )}
+        <PaletteSearchStatus loading={loading} error={error} hasNoResults={hasNoResults} />
         {displayProjects.length > 0 && (
           <CommandGroup heading={t('commandPalette.projects')}>
             {displayProjects.map((project) => (
@@ -234,7 +236,7 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
             ))}
           </CommandGroup>
         )}
-        {!searchLower && displayProjects.length === 0 && (
+        {!loading && !error && !searchLower && displayProjects.length === 0 && (
           <EmptyState fill={false} className="px-2 py-6" title={t('commandPalette.noProjects')} />
         )}
         {displayProjects.length > 0 && displaySettings.length > 0 && <CommandSeparator />}
@@ -259,4 +261,32 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
       </CommandList>
     </CommandDialog>
   );
+}
+
+function rememberSelectedProject(projects: ProjectEntry[], projectId: string) {
+  const project = projects.find((p) => p.id === projectId);
+  if (project) {
+    useProjectStore.setState((state) => ({
+      projects: state.projects.some((p) => p.id === project.id)
+        ? state.projects.map((p) => (p.id === project.id ? project : p))
+        : [...state.projects, project],
+    }));
+  }
+}
+
+function PaletteSearchStatus({
+  loading,
+  error,
+  hasNoResults,
+}: {
+  loading: boolean;
+  error: string | null;
+  hasNoResults: boolean;
+}) {
+  const { t } = useTranslation();
+  if (loading) return <EmptyState fill={false} className="py-6" title={t('common.loading')} />;
+  if (error) return <EmptyState fill={false} className="py-6" title={error} />;
+  if (hasNoResults)
+    return <EmptyState fill={false} className="py-6" title={t('commandPalette.noResults')} />;
+  return null;
 }

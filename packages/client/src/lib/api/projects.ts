@@ -11,15 +11,16 @@ import { request } from './_core';
 
 export const projectsApi = {
   // Projects
-  listProjects: (orgId?: string | null) => {
+  listProjects: (orgId?: string | null, search?: string, signal?: AbortSignal) => {
     const params = new URLSearchParams();
     if (orgId) {
       params.append('orgId', orgId);
     } else if (orgId === null) {
       params.append('personal', 'true');
     }
+    if (search !== undefined) params.set('q', search);
     const qs = params.toString();
-    return request<Project[]>(`/projects${qs ? `?${qs}` : ''}`);
+    return request<Project[]>(`/projects${qs ? `?${qs}` : ''}`, { signal });
   },
   createProject: (name: string, path: string) =>
     request<Project>('/projects', { method: 'POST', body: JSON.stringify({ name, path }) }),

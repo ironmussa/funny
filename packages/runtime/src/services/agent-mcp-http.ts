@@ -34,6 +34,8 @@ export interface AgentToolContext {
   userId: string;
   cwd?: string;
   assetsDir?: string;
+  /** The adapter supports native background execution and completion delivery. */
+  nativeBackgroundJobs?: boolean;
 }
 
 export interface AgentToolResult {

@@ -38,7 +38,12 @@ export async function resolveAgentTooling(input: {
     disallowedTools: input.disallowedTools,
     mcpServers,
   });
-  const withWatch = await withWatchMcpServer(threadId, thread?.userId, template.mcpServers);
+  const withWatch = await withWatchMcpServer(
+    threadId,
+    thread?.userId,
+    template.mcpServers,
+    provider,
+  );
   return {
     ...template,
     mcpServers: await withBrowserMcpServer(threadId, thread?.userId, withWatch, input.cwd),

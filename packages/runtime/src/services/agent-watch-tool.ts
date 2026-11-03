@@ -32,14 +32,15 @@ import { getThread } from './thread-manager.js';
 import { createAndStartThread } from './thread-service/create.js';
 
 const WATCH_INSTRUCTIONS =
-  'For long-running work you have two tools. To LAUNCH a long process (build, ' +
-  'test run, deploy, training, etc.), use funny_spawn — it runs the command ' +
-  'detached so it survives your turn ending and is NOT killed when the harness ' +
-  'reaps background jobs (a plain "cmd &" WILL be killed within minutes); funny ' +
-  'then wakes you when it finishes, with the exit code and log tail. To just ' +
-  'wait and re-check something yourself later, use funny_watch to schedule a ' +
-  'wake. Either way, do NOT just say "I\'ll check back in N minutes" and end ' +
-  'your turn — nothing will bring you back unless you call one of these tools. ' +
+  'For long-running commands, prefer your native background execution and ' +
+  'completion notifications when available. Follow the existing native task; ' +
+  'never launch the same command again through funny_spawn or schedule ' +
+  'funny_watch just to wait for its completion. If native background execution ' +
+  'is unavailable and funny_spawn is listed, use it as a fallback to launch ' +
+  'a detached process and receive its result. Use funny_watch only to schedule ' +
+  'a future check of external state (for example, whether a PR was approved) ' +
+  'when no native scheduled wake is available. A promise to check later does ' +
+  'not schedule a wake; call the scheduling tool before ending your turn. ' +
   'To delegate a subtask into its OWN independent thread (it runs in parallel ' +
   'with its own agent and conversation), use funny_spawn_thread — the new ' +
   'thread starts in the same project on the SAME current branch by default and ' +
@@ -131,13 +132,14 @@ export async function spawnThreadForAgent(
  */
 export function watchToolDefinitions(ctx: AgentToolContext): AgentToolDefinition[] {
   const { threadId, userId } = ctx;
-  return [
+  const tools: AgentToolDefinition[] = [
     {
       name: 'funny_watch',
       description:
         'Schedule a deferred wake ("snooze") on THIS thread. funny wakes you ' +
-        'after the delay so you can re-check long-running work without your ' +
-        'turn having to stay open. Reuse the same `key` to reschedule/extend ' +
+        'after the delay to check external state when no native scheduled wake ' +
+        'is available. Do not use this to wait for native background task ' +
+        'completion notifications. Reuse the same `key` to reschedule/extend ' +
         'an existing watcher instead of creating a duplicate.',
       schema: {
         key: z
@@ -193,8 +195,9 @@ export function watchToolDefinitions(ctx: AgentToolContext): AgentToolDefinition
         'to init), so it survives your turn ending, the harness reaping ' +
         'background jobs, and a runner restart — unlike a plain `cmd &`. funny ' +
         'captures stdout/stderr to a logfile and wakes you when the job ' +
-        'finishes, with the exit code and the log tail. Use this instead of ' +
-        'backgrounding the command yourself.',
+        'finishes, with the exit code and the log tail. Use only when native ' +
+        'background execution is unavailable. Never relaunch a command ' +
+        'already running as a native task.',
       schema: {
         command: z.string().describe('The shell command to run (executed via bash -c).'),
         cwd: z
@@ -358,6 +361,7 @@ export function watchToolDefinitions(ctx: AgentToolContext): AgentToolDefinition
       },
     },
   ];
+  return ctx.nativeBackgroundJobs ? tools.filter((tool) => tool.name !== 'funny_spawn') : tools;
 }
 
 /**

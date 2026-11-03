@@ -41,6 +41,45 @@ async function listTools(entry: { url: string; headers: Record<string, string> }
 }
 
 describe('funny MCP servers over HTTP', () => {
+  test('Claude uses native jobs while retaining scheduled wakes and other tools', async () => {
+    const watch = (await withWatchMcpServer('native-jobs', 'u1', undefined, 'claude')) as any;
+    const all = (await withBrowserMcpServer('native-jobs', 'u1', watch)) as any;
+    expect((await listTools(all.funny)).sort()).toEqual([
+      'funny_search_threads',
+      'funny_spawn_thread',
+      'funny_watch',
+    ]);
+    const client = new Client({ name: 'test', version: '1.0.0' });
+    await client.connect(
+      new StreamableHTTPClientTransport(new URL(all.funny.url), {
+        requestInit: { headers: all.funny.headers },
+      }),
+    );
+    try {
+      const result = await client.callTool({
+        name: 'funny_spawn',
+        arguments: { command: 'echo test' },
+      });
+      expect(result.isError).toBe(true);
+    } finally {
+      await client.close();
+    }
+  });
+
+  test('changing provider on a thread refreshes background job availability', async () => {
+    for (const provider of ['claude', 'codex', 'claude'] as const) {
+      const servers = (await withWatchMcpServer(
+        'provider-switch',
+        'u1',
+        undefined,
+        provider,
+      )) as any;
+      const names = await listTools(servers.funny);
+      expect(names.includes('funny_spawn')).toBe(provider !== 'claude');
+      expect(names).toContain('funny_watch');
+    }
+  });
+
   test('the funny server is an always-loaded HTTP entry with its tools', async () => {
     const servers = (await withWatchMcpServer('t1', 'u1', undefined)) as any;
     expect(servers.funny).toMatchObject({

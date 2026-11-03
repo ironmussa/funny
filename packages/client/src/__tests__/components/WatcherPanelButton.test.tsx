@@ -123,4 +123,46 @@ describe('WatcherPanelButton', () => {
     expectBefore(activeWatcherRow, historicalJobRow);
     expectBefore(activeWatcherRow, historicalWatcherRow);
   });
+  test('limits the preview to ten and searches the complete list', async () => {
+    const jobs = Array.from({ length: 12 }, (_, i) =>
+      makeJob(`job-${i}`, {
+        status: i === 11 ? 'running' : 'exited',
+      }),
+    );
+    useJobStore.setState({ jobsById: Object.fromEntries(jobs.map((job) => [job.id, job])) });
+    renderWithProviders(<WatcherPanelButton />);
+    fireEvent.click(screen.getByTestId('sidebar-watchers'));
+    const panel = await screen.findByTestId('watcher-panel');
+    expect(within(panel).getAllByTestId(/^job-row-/)).toHaveLength(10);
+    expect(within(panel).getByTestId('job-row-job-11')).toBeInTheDocument();
+    expect(within(panel).getByRole('button', { name: 'Stop process' })).toBeInTheDocument();
+    fireEvent.click(within(panel).getByRole('button', { name: 'View more (2)' }));
+    const view = await screen.findByTestId('watchers-view');
+    expect(within(view).getAllByTestId(/^job-row-/)).toHaveLength(12);
+    fireEvent.change(within(view).getByPlaceholderText('Search watchers and commands…'), {
+      target: { value: 'job-10' },
+    });
+    expect(within(view).getAllByTestId(/^job-row-/)).toHaveLength(1);
+    fireEvent.click(within(view).getByRole('button', { name: 'Active (1)' }));
+    expect(within(view).getByText('No matching background activity.')).toBeInTheDocument();
+  });
+
+  test('requires confirmation before stopping a process', async () => {
+    const cancelJob = vi.fn();
+    const original = useJobStore.getState().cancelJob;
+    useJobStore.setState({
+      jobsById: { running: makeJob('running', { status: 'running' }) },
+      cancelJob,
+    });
+    try {
+      renderWithProviders(<WatcherPanelButton />);
+      fireEvent.click(screen.getByTestId('sidebar-watchers'));
+      fireEvent.click(await screen.findByRole('button', { name: 'Stop process' }));
+      expect(cancelJob).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole('button', { name: /^Stop$/ }));
+      expect(cancelJob).toHaveBeenCalledWith('running');
+    } finally {
+      useJobStore.setState({ cancelJob: original });
+    }
+  });
 });

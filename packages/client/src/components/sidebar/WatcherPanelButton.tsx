@@ -1,15 +1,18 @@
 import type { Job, JobStatus, Watcher, WatcherStatus } from '@funny/shared';
-import { AlarmClock, X } from 'lucide-react';
+import { AlarmClock, CircleStop } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { normalize } from '@/components/ui/highlight-text';
 import { NavItem } from '@/components/ui/nav-item';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { openJobLogTerminal } from '@/lib/open-terminal-tab';
@@ -104,9 +107,10 @@ function WatcherRow({ watcher, now }: { watcher: Watcher; now: number }) {
               className="text-muted-foreground size-6 shrink-0"
               data-testid={`watcher-cancel-${watcher.id}`}
               onClick={() => void cancelWatcher(watcher.id)}
-              aria-label="Cancel watcher"
+              aria-label="Stop watcher"
+              title="Stop watcher"
             >
-              <X className="icon-sm" />
+              <CircleStop className="icon-sm" />
             </Button>
           ) : null}
         </div>
@@ -209,9 +213,10 @@ function JobRow({
                   e.stopPropagation();
                   setConfirmKill(true);
                 }}
-                aria-label="Kill job"
+                aria-label="Stop process"
+                title="Stop process"
               >
-                <X className="icon-sm" />
+                <CircleStop className="icon-sm" />
               </Button>
             ) : null}
           </div>
@@ -229,9 +234,9 @@ function JobRow({
       <ConfirmDialog
         open={confirmKill}
         onOpenChange={setConfirmKill}
-        title="Kill process?"
+        title="Stop process?"
         description={`This stops the running process: ${job.label || job.command}`}
-        confirmLabel="Kill"
+        confirmLabel="Stop"
         cancelLabel="Cancel"
         variant="destructive"
         onCancel={() => setConfirmKill(false)}
@@ -244,6 +249,168 @@ function JobRow({
   );
 }
 
+type ActivityEntry =
+  | { kind: 'job'; id: string; job: Job; active: boolean; date: string; text: string }
+  | { kind: 'watcher'; id: string; watcher: Watcher; active: boolean; date: string; text: string };
+
+type ActivityFilter = 'all' | 'active' | 'history';
+
+const PAGE_SIZE = 50;
+
+/** Jobs and watchers in one list: active first, then newest first. */
+function buildActivityEntries(
+  jobsById: Record<string, Job>,
+  watchersById: Record<string, Watcher>,
+): ActivityEntry[] {
+  const items: ActivityEntry[] = [
+    ...Object.values(jobsById).map((job) => ({
+      kind: 'job' as const,
+      id: job.id,
+      job,
+      active: job.status === 'running',
+      date: job.startedAt,
+      text: `${job.label} ${job.command} ${job.status}`,
+    })),
+    ...Object.values(watchersById).map((watcher) => ({
+      kind: 'watcher' as const,
+      id: watcher.id,
+      watcher,
+      active: ACTIVE_STATUSES.includes(watcher.status),
+      date: watcher.createdAt,
+      text: `${watcher.label} ${statusLabel(watcher)}`,
+    })),
+  ];
+  return items.sort((a, b) => Number(b.active) - Number(a.active) || b.date.localeCompare(a.date));
+}
+
+function matchesActivity(entry: ActivityEntry, filter: ActivityFilter, query: string): boolean {
+  if (filter !== 'all' && entry.active !== (filter === 'active')) return false;
+  return normalize(entry.text).includes(normalize(query.trim()));
+}
+
+function ActivityEntryList({
+  items,
+  scopeId,
+  now,
+  onOpened,
+}: {
+  items: ActivityEntry[];
+  scopeId: string | null;
+  now: number;
+  onOpened: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      {items.map((entry, index) => (
+        <div key={`${entry.kind}-${entry.id}`}>
+          {(index === 0 || entry.active !== items[index - 1].active) && (
+            <div className="text-muted-foreground px-2 py-2 text-xs font-medium">
+              {entry.active ? 'Active' : 'History'}
+            </div>
+          )}
+          {entry.kind === 'job' ? (
+            <JobRow job={entry.job} scopeId={scopeId} now={now} onOpened={onOpened} />
+          ) : (
+            <WatcherRow watcher={entry.watcher} now={now} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Full-history view with search, status filter and incremental paging. */
+function WatchersDialog({
+  open,
+  onOpenChange,
+  entries,
+  activeCount,
+  scopeId,
+  now,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  entries: ActivityEntry[];
+  activeCount: number;
+  scopeId: string | null;
+  now: number;
+}) {
+  const [search, setSearch] = useState('');
+  const [filter, setFilter] = useState<ActivityFilter>('all');
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const totalCount = entries.length;
+  const filtered = entries.filter((entry) => matchesActivity(entry, filter, search));
+  const filterLabels: Record<ActivityFilter, string> = {
+    all: `All (${totalCount})`,
+    active: `Active (${activeCount})`,
+    history: `History (${totalCount - activeCount})`,
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent
+        className="flex h-[85dvh] max-w-4xl flex-col gap-0 overflow-hidden p-0"
+        data-testid="watchers-view"
+      >
+        <DialogHeader className="border-border border-b px-5 py-4">
+          <DialogTitle>Watchers</DialogTitle>
+        </DialogHeader>
+        <div className="border-border space-y-3 border-b px-5 py-3">
+          <SearchBar
+            query={search}
+            onQueryChange={(value) => {
+              setSearch(value);
+              setVisibleCount(PAGE_SIZE);
+            }}
+            totalMatches={filtered.length}
+            placeholder="Search watchers and commands…"
+            testIdPrefix="watchers-search"
+          />
+          <div className="flex gap-2" role="group" aria-label="Activity status">
+            {(['all', 'active', 'history'] as const).map((value) => (
+              <Button
+                key={value}
+                size="sm"
+                variant={filter === value ? 'secondary' : 'ghost'}
+                aria-pressed={filter === value}
+                data-testid={`watchers-filter-${value}`}
+                onClick={() => {
+                  setFilter(value);
+                  setVisibleCount(PAGE_SIZE);
+                }}
+              >
+                {filterLabels[value]}
+              </Button>
+            ))}
+          </div>
+        </div>
+        <ScrollArea className="min-h-0 flex-1 px-3 py-2">
+          {filtered.length === 0 ? (
+            <EmptyState fill={false} className="py-12" title="No matching background activity." />
+          ) : (
+            <ActivityEntryList
+              items={filtered.slice(0, visibleCount)}
+              scopeId={scopeId}
+              now={now}
+              onOpened={() => onOpenChange(false)}
+            />
+          )}
+          {filtered.length > visibleCount && (
+            <Button
+              variant="ghost"
+              className="my-3 w-full"
+              data-testid="watchers-load-more"
+              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
+            >
+              Load more ({filtered.length - visibleCount})
+            </Button>
+          )}
+        </ScrollArea>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /**
  * Global, cross-thread background-activity panel. Lists the user's running
  * jobs (funny_spawn) and deferred-wake watchers (funny_watch snooze) with live
@@ -251,6 +418,7 @@ function JobRow({
  */
 export function WatcherPanelButton() {
   const [open, setOpen] = useState(false);
+  const [showAll, setShowAll] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const { scopeId } = useTerminalScope();
   const watchersById = useWatcherStore((s) => s.watchersById);
@@ -258,27 +426,12 @@ export function WatcherPanelButton() {
   const jobsById = useJobStore((s) => s.jobsById);
   const loadJobs = useJobStore((s) => s.loadJobs);
 
-  const watchers = useMemo(() => {
-    return Object.values(watchersById).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-  }, [watchersById]);
-
-  const jobs = useMemo(() => {
-    return Object.values(jobsById).sort((a, b) => b.startedAt.localeCompare(a.startedAt));
-  }, [jobsById]);
-
-  const activeWatchers = useMemo(
-    () => watchers.filter((w) => ACTIVE_STATUSES.includes(w.status)),
-    [watchers],
+  const entries = useMemo(
+    () => buildActivityEntries(jobsById, watchersById),
+    [jobsById, watchersById],
   );
-  const historicalWatchers = useMemo(
-    () => watchers.filter((w) => !ACTIVE_STATUSES.includes(w.status)),
-    [watchers],
-  );
-  const runningJobs = useMemo(() => jobs.filter((j) => j.status === 'running'), [jobs]);
-  const historicalJobs = useMemo(() => jobs.filter((j) => j.status !== 'running'), [jobs]);
-
-  const activeCount = activeWatchers.length + runningJobs.length;
-  const totalCount = watchers.length + jobs.length;
+  const activeCount = entries.filter((entry) => entry.active).length;
+  const totalCount = entries.length;
 
   // Load once on mount so the per-thread clocks (ThreadWatcherIndicator) are
   // correct without the user opening the panel. WS job:*/watcher:* events keep
@@ -291,71 +444,68 @@ export function WatcherPanelButton() {
 
   // Fetch on open; tick the countdown every second while open.
   useEffect(() => {
-    if (!open) return;
+    if (!open && !showAll) return;
     void loadWatchers();
     void loadJobs();
     setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [open, loadWatchers, loadJobs]);
+  }, [open, showAll, loadWatchers, loadJobs]);
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <NavItem
-          icon={AlarmClock}
-          label="Watchers"
-          count={activeCount}
-          isActive={open}
-          data-testid="sidebar-watchers"
-        />
-      </PopoverTrigger>
-      <PopoverContent side="top" align="start" className="w-80 p-1" data-testid="watcher-panel">
-        {totalCount === 0 ? (
-          <EmptyState fill={false} className="px-2 py-4" title="No background activity yet." />
-        ) : (
-          <ScrollArea className={cn('max-h-96', totalCount > 6 && 'h-96')}>
-            {activeCount > 0 && (
-              <>
-                <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">Active</div>
-                <div className="flex flex-col gap-0.5">
-                  {runningJobs.map((j) => (
-                    <JobRow
-                      key={j.id}
-                      job={j}
-                      scopeId={scopeId}
-                      now={now}
-                      onOpened={() => setOpen(false)}
-                    />
-                  ))}
-                  {activeWatchers.map((w) => (
-                    <WatcherRow key={w.id} watcher={w} now={now} />
-                  ))}
-                </div>
-              </>
-            )}
-            {historicalJobs.length + historicalWatchers.length > 0 && (
-              <>
-                <div className="text-muted-foreground px-2 py-1.5 text-xs font-medium">History</div>
-                <div className="flex flex-col gap-0.5">
-                  {historicalJobs.map((j) => (
-                    <JobRow
-                      key={j.id}
-                      job={j}
-                      scopeId={scopeId}
-                      now={now}
-                      onOpened={() => setOpen(false)}
-                    />
-                  ))}
-                  {historicalWatchers.map((w) => (
-                    <WatcherRow key={w.id} watcher={w} now={now} />
-                  ))}
-                </div>
-              </>
-            )}
-          </ScrollArea>
-        )}
-      </PopoverContent>
-    </Popover>
+    <>
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <NavItem
+            icon={AlarmClock}
+            label="Watchers"
+            count={activeCount}
+            isActive={open || showAll}
+            data-testid="sidebar-watchers"
+          />
+        </PopoverTrigger>
+        <PopoverContent side="top" align="start" className="w-80 p-1" data-testid="watcher-panel">
+          <div className="border-border border-b px-2 py-2">
+            <p className="text-sm font-medium">Watchers</p>
+            <p className="text-muted-foreground text-xs">
+              {activeCount} active · {totalCount - activeCount} in history
+            </p>
+          </div>
+          {totalCount === 0 ? (
+            <EmptyState fill={false} className="px-2 py-4" title="No background activity yet." />
+          ) : (
+            <>
+              <ScrollArea className={cn('max-h-96', totalCount > 6 && 'h-96')}>
+                <ActivityEntryList
+                  items={entries.slice(0, 10)}
+                  scopeId={scopeId}
+                  now={now}
+                  onOpened={() => setOpen(false)}
+                />
+              </ScrollArea>
+              <Button
+                variant="ghost"
+                className="mt-1 w-full border-t"
+                data-testid="watcher-panel-view-all"
+                onClick={() => {
+                  setOpen(false);
+                  setShowAll(true);
+                }}
+              >
+                {totalCount > 10 ? `View more (${totalCount - 10})` : 'View all'}
+              </Button>
+            </>
+          )}
+        </PopoverContent>
+      </Popover>
+      <WatchersDialog
+        open={showAll}
+        onOpenChange={setShowAll}
+        entries={entries}
+        activeCount={activeCount}
+        scopeId={scopeId}
+        now={now}
+      />
+    </>
   );
 }

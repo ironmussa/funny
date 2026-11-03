@@ -65,7 +65,12 @@ test('model menu scrolls within available height and effort selection escapes it
     'overflow-y-auto',
     'overscroll-contain',
   );
-  const model = screen.getByTestId('prompt-model-option-codex:gpt-5.5');
+  // Models live under their provider's submenu.
+  const provider = screen.getByTestId('prompt-provider-option-codex');
+  provider.focus();
+  fireEvent.keyDown(provider, { key: 'ArrowRight' });
+  const model = await screen.findByTestId('prompt-model-option-codex:gpt-5.5');
+  expect(menu).not.toContainElement(model);
   model.focus();
   fireEvent.keyDown(model, { key: 'ArrowRight' });
   const effort = await screen.findByTestId('prompt-effort-option-codex:gpt-5.5-high');

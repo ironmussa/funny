@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Folder } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useThreadId, useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -141,6 +142,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
       )}
       <Breadcrumb className="min-w-0">
         <BreadcrumbList>
+          <ThreadProjectBreadcrumb />
           {activeThreadId && (
             <BreadcrumbItem className="max-w-[240px] min-w-0 sm:max-w-[360px] md:max-w-[520px]">
               {isEditingTitle ? (
@@ -228,5 +230,28 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
         </BreadcrumbList>
       </Breadcrumb>
     </div>
+  );
+}
+
+function ThreadProjectBreadcrumb() {
+  const activeThreadId = useThreadId();
+  const activeThreadProjectId = useThreadProjectId();
+  const projectName = useProjectStore(
+    (s) => s.projects.find((project) => project.id === activeThreadProjectId)?.name,
+  );
+  return (
+    <>
+      {activeThreadId && projectName && (
+        <>
+          <BreadcrumbItem className="max-w-[120px] sm:max-w-[180px]">
+            <Folder aria-hidden="true" className="icon-sm text-muted-foreground shrink-0" />
+            <span className="truncate" title={projectName}>
+              {projectName}
+            </span>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator className="shrink-0">/</BreadcrumbSeparator>
+        </>
+      )}
+    </>
   );
 }

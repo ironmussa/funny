@@ -1406,7 +1406,8 @@
       "CONFLICT": "{{message}}",
       "PROCESS_ERROR": "{{message}}",
       "INTERNAL": "Falha ao criar o projeto. O servidor pode estar com problemas."
-    }
+    },
+    "threadUpdateFailed": "Não foi possível atualizar a thread. Sua alteração foi desfeita."
   },
   "agentResources": {
     "subtitle": "Skills, comandos e servidores MCP por provedor.",

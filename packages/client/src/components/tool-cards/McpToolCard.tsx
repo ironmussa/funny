@@ -174,40 +174,14 @@ export function McpToolCard({ mcp, parsed, output, hideLabel, displayTime }: Pro
               </Section>
             )}
             {output && (
-              <Section
-                label={isError ? t('tools.mcpError') : t('tools.output')}
-                tone={isError ? 'error' : undefined}
-                actions={
-                  <>
-                    {result && (
-                      <Button
-                        variant="ghost"
-                        size="xs"
-                        onClick={() => setRaw(!raw)}
-                        data-testid="mcp-tool-card-raw-toggle"
-                      >
-                        {raw ? t('tools.formatted') : t('tools.raw')}
-                      </Button>
-                    )}
-                    <CopyButton
-                      value={raw || !result ? output : resultText}
-                      label={t('tools.copy')}
-                      data-testid="mcp-tool-card-copy"
-                    />
-                  </>
-                }
-              >
-                {result && !raw ? (
-                  <div className="space-y-2">
-                    {result.parts.map((part, i) => (
-                      <ResultPart key={i} part={part} isError={isError} />
-                    ))}
-                    {result.structured != null && <ToolValue value={result.structured} />}
-                  </div>
-                ) : (
-                  <ToolValue value={raw ? prettyJson(output) : output} />
-                )}
-              </Section>
+              <McpOutputSection
+                output={output}
+                result={result}
+                resultText={resultText}
+                isError={isError}
+                raw={raw}
+                onToggleRaw={() => setRaw(!raw)}
+              />
             )}
           </div>
         </ToolContentArea>
@@ -370,4 +344,71 @@ function prettyJson(text: string): unknown {
   } catch {
     return text;
   }
+}
+
+function McpOutputSection({
+  output,
+  result,
+  resultText,
+  isError,
+  raw,
+  onToggleRaw,
+}: {
+  output: string;
+  result: ReturnType<typeof parseMcpResult>;
+  resultText: string;
+  isError: boolean;
+  raw: boolean;
+  onToggleRaw: () => void;
+}) {
+  const { t } = useTranslation();
+  const formattedResult = raw ? null : result;
+  return (
+    <Section
+      label={isError ? t('tools.mcpError') : t('tools.output')}
+      tone={isError ? 'error' : undefined}
+      actions={
+        <>
+          {result && (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={onToggleRaw}
+              data-testid="mcp-tool-card-raw-toggle"
+            >
+              {raw ? t('tools.formatted') : t('tools.raw')}
+            </Button>
+          )}
+          <CopyButton
+            value={formattedResult ? resultText : output}
+            label={t('tools.copy')}
+            data-testid="mcp-tool-card-copy"
+          />
+        </>
+      }
+    >
+      {formattedResult ? (
+        <FormattedMcpResult result={formattedResult} isError={isError} />
+      ) : (
+        <ToolValue value={raw ? prettyJson(output) : output} />
+      )}
+    </Section>
+  );
+}
+
+function FormattedMcpResult({
+  result,
+  isError,
+}: {
+  result: NonNullable<ReturnType<typeof parseMcpResult>>;
+  isError: boolean;
+}) {
+  return (
+    <div className="space-y-2">
+      {result.parts.map((part, i) => (
+        <ResultPart key={i} part={part} isError={isError} />
+      ))}
+      {result.structured != null && <ToolValue value={result.structured} />}
+    </div>
+  );
 }

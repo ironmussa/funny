@@ -20,20 +20,9 @@ const buildModifiers = (event: React.KeyboardEvent | React.MouseEvent): number =
   (event.shiftKey ? 8 : 0);
 
 export function BrowserViewport() {
-  const userControls = useBrowserPanelStore((s) => !s.sessionThreadId || s.controller === 'user');
-  const annotationMode = useBrowserPanelStore((s) => s.annotationMode);
-  const annotating = userControls && annotationMode;
-  const loadedUrl = useBrowserPanelStore((s) => s.loadedUrl);
-  const tool = useBrowserPanelStore((s) => s.tool);
-  const setLoadError = useBrowserPanelStore((s) => s.setLoadError);
-  const overlaysVisible = useBrowserPanelStore((s) => s.overlaysVisible);
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
-  const viewport = useBrowserPanelStore((s) => s.viewport);
-  const inspectActive = useBrowserPanelStore((s) => s.inspectActive);
-
-  const overlayRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
+  const loadedUrl = useBrowserPanelStore((s) => s.loadedUrl);
+  const setLoadError = useBrowserPanelStore((s) => s.setLoadError);
   // Heartbeat: keep the runner session alive while the viewport is mounted.
   // The runner reaps sessions idle for >90s (see HEARTBEAT_TIMEOUT_MS in
   // browser-session-manager.ts).
@@ -50,6 +39,35 @@ export function BrowserViewport() {
     setLoadError(null);
   }, [loadedUrl, setLoadError]);
 
+  return (
+    <div className="bg-background relative flex h-full w-full items-center justify-center p-2">
+      {sessionId ? (
+        <ActiveBrowserViewport />
+      ) : (
+        <EmptyState
+          fill={false}
+          testId="browser-panel-empty"
+          title={loadedUrl ? null : 'Paste a URL above to start.'}
+        />
+      )}
+      <BrowserSessionStatus />
+    </div>
+  );
+}
+
+function ActiveBrowserViewport() {
+  const userControls = useBrowserPanelStore((s) => !s.sessionThreadId || s.controller === 'user');
+  const annotationMode = useBrowserPanelStore((s) => s.annotationMode);
+  const annotating = userControls && annotationMode;
+  const tool = useBrowserPanelStore((s) => s.tool);
+  const overlaysVisible = useBrowserPanelStore((s) => s.overlaysVisible);
+  const sessionId = useBrowserPanelStore((s) => s.sessionId);
+  const viewport = useBrowserPanelStore((s) => s.viewport);
+  const inspectActive = useBrowserPanelStore((s) => s.inspectActive);
+
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
   const showAnnotations = annotating && overlaysVisible;
   const canForwardInput = acceptsBrowserInput(
     userControls,
@@ -60,64 +78,49 @@ export function BrowserViewport() {
   );
   const inputHandlers = useBrowserInputHandlers(canvasRef, viewport, sessionId, canForwardInput);
 
-  // Layout: a 16:9 aspect-ratio wrapper centered in the panel, letterboxed by
-  // `bg-background`. Canvas + overlay both fill that wrapper exactly, so
-  // click coords map cleanly 1:1 to the visible content.
   return (
-    <div className="bg-background relative flex h-full w-full items-center justify-center p-2">
-      {sessionId ? (
-        <div
-          className="relative max-h-full max-w-full"
-          style={{
-            aspectRatio: `${viewport.width} / ${viewport.height}`,
-            width: '100%',
-            maxWidth: `calc((100% - 1rem) * 1)`,
-          }}
-        >
-          <div className="absolute inset-0">
-            <BrowserSessionCanvas canvasRef={canvasRef} />
-          </div>
+    <div
+      className="relative max-h-full max-w-full"
+      style={{
+        aspectRatio: `${viewport.width} / ${viewport.height}`,
+        width: '100%',
+        maxWidth: `calc((100% - 1rem) * 1)`,
+      }}
+    >
+      <div className="absolute inset-0">
+        <BrowserSessionCanvas canvasRef={canvasRef} />
+      </div>
 
-          <div
-            ref={overlayRef}
-            data-testid="browser-panel-overlay"
-            role="application"
-            aria-label="Remote browser viewport"
-            // Capture-phase shortcuts (Ctrl+F) skip targets inside this.
-            data-keyboard-passthrough
-            tabIndex={userControls ? 0 : -1}
-            className="absolute inset-0 select-none focus:outline-hidden"
-            style={{
-              pointerEvents: userControls ? 'auto' : 'none',
-              WebkitUserSelect: 'none',
-              userSelect: 'none',
-            }}
-            onMouseDown={inputHandlers.onBrowseMouseDownWithFocus}
-            onMouseUp={inputHandlers.onBrowseMouseUp}
-            onMouseMove={inputHandlers.onBrowseMouseMove}
-            onWheel={inputHandlers.onBrowseWheel}
-            onKeyDown={inputHandlers.onBrowseKeyDown}
-            onKeyUp={inputHandlers.onBrowseKeyUp}
-            onContextMenu={inputHandlers.onBrowseContextMenu}
-            onDragStart={(e) => e.preventDefault()}
-          >
-            <BrowserAnnotations
-              overlayRef={overlayRef}
-              canvasRef={canvasRef}
-              showAnnotations={showAnnotations}
-              tool={tool}
-            />
-          </div>
-        </div>
-      ) : (
-        <EmptyState
-          fill={false}
-          testId="browser-panel-empty"
-          title={loadedUrl ? null : 'Paste a URL above to start.'}
+      <div
+        ref={overlayRef}
+        data-testid="browser-panel-overlay"
+        role="application"
+        aria-label="Remote browser viewport"
+        // Capture-phase shortcuts (Ctrl+F) skip targets inside this.
+        data-keyboard-passthrough
+        tabIndex={userControls ? 0 : -1}
+        className="absolute inset-0 select-none focus:outline-hidden"
+        style={{
+          pointerEvents: userControls ? 'auto' : 'none',
+          WebkitUserSelect: 'none',
+          userSelect: 'none',
+        }}
+        onMouseDown={inputHandlers.onBrowseMouseDownWithFocus}
+        onMouseUp={inputHandlers.onBrowseMouseUp}
+        onMouseMove={inputHandlers.onBrowseMouseMove}
+        onWheel={inputHandlers.onBrowseWheel}
+        onKeyDown={inputHandlers.onBrowseKeyDown}
+        onKeyUp={inputHandlers.onBrowseKeyUp}
+        onContextMenu={inputHandlers.onBrowseContextMenu}
+        onDragStart={(e) => e.preventDefault()}
+      >
+        <BrowserAnnotations
+          overlayRef={overlayRef}
+          canvasRef={canvasRef}
+          showAnnotations={showAnnotations}
+          tool={tool}
         />
-      )}
-
-      <BrowserSessionStatus />
+      </div>
     </div>
   );
 }

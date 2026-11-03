@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -15,7 +15,10 @@ function Diagram({ source = chart }: { source?: string }) {
   );
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 describe('MermaidBlock', () => {
   it('fits the synchronous first render and preserves zoom/reset controls', () => {
@@ -43,6 +46,37 @@ describe('MermaidBlock', () => {
     rerender(<Diagram />);
     expect(screen.queryByTestId('mermaid-error')).not.toBeInTheDocument();
     expect(screen.getByTestId('mermaid-diagram').querySelector('svg')).not.toBeNull();
+  });
+
+  it('downloads the diagram as a standalone SVG file', async () => {
+    let downloaded: Blob | undefined;
+    const createObjectURL = vi.fn((blob: Blob) => {
+      downloaded = blob;
+      return 'blob:mermaid';
+    });
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal(
+      'URL',
+      class extends URL {
+        static createObjectURL = createObjectURL;
+        static revokeObjectURL = revokeObjectURL;
+      },
+    );
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    render(
+      <TooltipProvider>
+        <MermaidExpandedDialog chart={chart} open onClose={() => {}} />
+      </TooltipProvider>,
+    );
+    fireEvent.click(screen.getByTestId('mermaid-download-svg'));
+    await waitFor(() => expect(click).toHaveBeenCalled());
+    const anchor = click.mock.instances[0] as unknown as HTMLAnchorElement;
+    expect(anchor.download).toBe('mermaid-diagram.svg');
+    expect(downloaded?.type).toBe('image/svg+xml;charset=utf-8');
+    const text = await downloaded!.text();
+    expect(text).toContain('xmlns="http://www.w3.org/2000/svg"');
+    expect(text).toContain('Client');
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:mermaid');
   });
 
   it('shows rendering errors in a standalone expanded dialog', () => {

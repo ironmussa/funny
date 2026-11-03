@@ -8,9 +8,11 @@ import { AllThreadsContent } from '@/components/all-threads/AllThreadsContent';
 import { AllThreadsToolbar } from '@/components/all-threads/AllThreadsToolbar';
 import { normalize } from '@/components/ui/highlight-text';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useLoadedThreads, useProjectListTotals } from '@/data/threads/hooks';
+import { readThreadRow } from '@/data/threads/read';
 import { useGitStatusScope } from '@/hooks/use-git-status-scope';
 import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
-import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
+import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { buildThreadPath } from '@/navigation/thread-paths';
 import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
@@ -39,8 +41,7 @@ export function AllThreadsView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const allThreadsProjectId = useUIStore((s) => s.allThreadsProjectId);
   const threadsByProject = useThreadsByProject();
-  const scratchThreads = useScratchThreads();
-  const threadTotalByProject = useThreadStore((s) => s.threadTotalByProject);
+  const threadTotalByProject = useProjectListTotals();
   const loadMoreThreads = useThreadStore((s) => s.loadMoreThreads);
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
@@ -243,13 +244,9 @@ export function AllThreadsView() {
     return map;
   }, [projects]);
 
-  const storeThreads = useMemo(() => {
-    const all = [...Object.values(threadsByProject).flat(), ...scratchThreads];
-    if (projectFilter) {
-      return all.filter((t) => t.projectId === projectFilter);
-    }
-    return all;
-  }, [threadsByProject, projectFilter, scratchThreads]);
+  // Rows come from a live query over the threads collection: one project's
+  // list, or every loaded project plus scratch.
+  const storeThreads = useLoadedThreads(projectFilter);
 
   // Check if any relevant project has more threads on the server than loaded
   const scratchOnlyFilter = typeFilter.size === 1 && typeFilter.has('scratch');
@@ -396,7 +393,7 @@ export function AllThreadsView() {
   const handleBack = useCallback(() => {
     const returnThreadId = searchParams.get('returnThread');
     if (returnThreadId) {
-      const returnThread = useThreadStore.getState().threadsById[returnThreadId];
+      const returnThread = readThreadRow(returnThreadId);
       if (returnThread) {
         navigate(buildThreadPath(returnThread));
         return;

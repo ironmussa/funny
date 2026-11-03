@@ -2,6 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ReviewPane } from '@/components/ReviewPane';
+import { withThreadIndex } from '@/data/threads/testing';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -98,22 +99,24 @@ beforeEach(() => {
   useProjectStore.setState({
     selectedProjectId: 'p1',
   });
-  useThreadStore.setState({
-    selectedThreadId: 't1',
-    activeThread: {
-      id: 't1',
-      projectId: 'p1',
-      title: 'Test Thread',
-      status: 'completed',
-      cost: 0,
-      branch: 'feature/test',
-      mode: 'worktree',
-      baseBranch: 'main',
-      messages: [],
-    } as any,
-    threadsById: { t1: { id: 't1', projectId: 'p1', status: 'completed' } as any },
-    threadIdsByProject: { p1: ['t1'] },
-  });
+  useThreadStore.setState(
+    withThreadIndex({
+      selectedThreadId: 't1',
+      activeThread: {
+        id: 't1',
+        projectId: 'p1',
+        title: 'Test Thread',
+        status: 'completed',
+        cost: 0,
+        branch: 'feature/test',
+        mode: 'worktree',
+        baseBranch: 'main',
+        messages: [],
+      } as any,
+      threadsById: { t1: { id: 't1', projectId: 'p1', status: 'completed' } as any },
+      threadIdsByProject: { p1: ['t1'] },
+    }),
+  );
   useUIStore.setState({
     reviewPaneOpen: true,
   });

@@ -2,8 +2,9 @@ import type { Project, Thread, GitStatusInfo } from '@funny/shared';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router-dom';
 
-import '@/i18n/config';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import '@/i18n/config';
+import { seedProjectThreads, seedThreadIndex, withThreadIndex } from '@/data/threads/testing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -11,6 +12,25 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { AppSidebar } from './Sidebar';
+
+/** Signed-in admin, closed settings and the given thread selection (rows seeded separately). */
+function seedSessionAndSelection(selectedThreadId: string | null) {
+  useThreadStore.setState({
+    selectedThreadId,
+    activeThread: null,
+    setupProgressByThread: {},
+    contextUsageByThread: {},
+  });
+  useAuthStore.setState({
+    user: { id: 'user-1', username: 'admin', displayName: 'Admin User', role: 'admin' },
+    isAuthenticated: true,
+    isLoading: false,
+    activeOrgId: null,
+    activeOrgName: null,
+    activeOrgSlug: null,
+  });
+  useUIStore.setState({ settingsOpen: false });
+}
 
 // ── Mock factories ───────────────────────────────────────────────
 
@@ -151,31 +171,8 @@ function seedDefault() {
     branchByProject: { 'proj-1': 'master', 'proj-2': 'main' },
   });
 
-  const threadsById: Record<string, Thread> = {};
-  const threadIdsByProject: Record<string, string[]> = {};
-  for (const pid in threadsByProject) {
-    threadIdsByProject[pid] = threadsByProject[pid].map((t) => t.id);
-    for (const t of threadsByProject[pid]) threadsById[t.id] = t;
-  }
-  useThreadStore.setState({
-    threadsById,
-    threadIdsByProject,
-    selectedThreadId: 't2',
-    activeThread: null,
-    setupProgressByThread: {},
-    contextUsageByThread: {},
-  });
-
-  useAuthStore.setState({
-    user: { id: 'user-1', username: 'admin', displayName: 'Admin User', role: 'admin' },
-    isAuthenticated: true,
-    isLoading: false,
-    activeOrgId: null,
-    activeOrgName: null,
-    activeOrgSlug: null,
-  });
-
-  useUIStore.setState({ settingsOpen: false });
+  seedProjectThreads(threadsByProject);
+  seedSessionAndSelection('t2');
 
   // Seed git status
   useGitStatusStore.setState({
@@ -231,23 +228,8 @@ function seedEmpty() {
     initialized: true,
     branchByProject: {},
   });
-  useThreadStore.setState({
-    threadsById: {},
-    threadIdsByProject: {},
-    selectedThreadId: null,
-    activeThread: null,
-    setupProgressByThread: {},
-    contextUsageByThread: {},
-  });
-  useAuthStore.setState({
-    user: { id: 'user-1', username: 'admin', displayName: 'Admin User', role: 'admin' },
-    isAuthenticated: true,
-    isLoading: false,
-    activeOrgId: null,
-    activeOrgName: null,
-    activeOrgSlug: null,
-  });
-  useUIStore.setState({ settingsOpen: false });
+  seedThreadIndex({ threadsById: {}, threadIdsByProject: {} });
+  seedSessionAndSelection(null);
   useGitStatusStore.setState({
     statusByBranch: {},
     threadToBranchKey: {},
@@ -335,14 +317,16 @@ export const SingleProjectNoActive: Story = {
         completedAt: new Date(Date.now() - 178 * 60_000).toISOString(),
       }),
     ];
-    useThreadStore.setState({
-      threadsById: Object.fromEntries(projThreads.map((t) => [t.id, t])),
-      threadIdsByProject: { 'proj-1': projThreads.map((t) => t.id) },
-      selectedThreadId: 't1',
-      activeThread: null,
-      setupProgressByThread: {},
-      contextUsageByThread: {},
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: Object.fromEntries(projThreads.map((t) => [t.id, t])),
+        threadIdsByProject: { 'proj-1': projThreads.map((t) => t.id) },
+        selectedThreadId: 't1',
+        activeThread: null,
+        setupProgressByThread: {},
+        contextUsageByThread: {},
+      }),
+    );
     useAuthStore.setState({
       user: { id: 'user-1', username: 'jane', displayName: 'Jane Smith', role: 'user' },
       isAuthenticated: true,

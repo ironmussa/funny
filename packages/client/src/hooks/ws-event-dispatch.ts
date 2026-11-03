@@ -7,6 +7,8 @@ import {
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
 
+import { readThreadRow } from '@/data/threads/read';
+import { getThreadsData } from '@/data/threads/store';
 import { showAgentNotification } from '@/hooks/use-notifications';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { validateContainerUrl } from '@/lib/api';
@@ -19,6 +21,7 @@ import { invalidateCooldownsForKeys, useGitStatusStore } from '@/stores/git-stat
 import { useProjectStore } from '@/stores/project-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import * as threadMutations from '@/stores/thread-mutations';
+import { patchThreadRow } from '@/stores/thread-row-writes';
 import { useThreadStore } from '@/stores/thread-store';
 import {
   getNavigate,
@@ -34,7 +37,7 @@ const wsLog = createClientLogger('ws');
 /** Bump a thread's comment-count badge live (floored at 0). */
 function adjustCommentCount(threadId: string, delta: number): void {
   useThreadStore.setState((state) =>
-    threadMutations.patchThread(state, threadId, (t) => ({
+    patchThreadRow(state, threadId, (t) => ({
       ...t,
       commentCount: Math.max(0, (t.commentCount ?? 0) + delta),
     })),
@@ -110,15 +113,19 @@ function flushBatch() {
 
   startTransition(() => {
     const store = useThreadStore.getState();
-    for (const entry of statuses) {
-      store.handleWSStatus(entry.threadId, entry.data);
-    }
-    for (const entry of msgs) {
-      store.handleWSMessage(entry.threadId, entry.data);
-    }
-    for (const entry of toolOutputs) {
-      store.handleWSToolOutput(entry.threadId, entry.data);
-    }
+    // One synced commit for every thread-row change in this frame, so the
+    // sidebar projection and live queries (Kanban, lists) recompute once.
+    getThreadsData().batchWrites(() => {
+      for (const entry of statuses) {
+        store.handleWSStatus(entry.threadId, entry.data);
+      }
+      for (const entry of msgs) {
+        store.handleWSMessage(entry.threadId, entry.data);
+      }
+      for (const entry of toolOutputs) {
+        store.handleWSToolOutput(entry.threadId, entry.data);
+      }
+    });
   });
 
   const elapsed = performance.now() - t0;
@@ -528,7 +535,7 @@ function hasLocationChange(data: any): boolean {
 
 function patchPermissionMode(threadId: string, permissionMode: any): void {
   useThreadStore.setState((state) => ({
-    ...threadMutations.patchThread(state, threadId, (thread) => ({
+    ...patchThreadRow(state, threadId, (thread) => ({
       ...thread,
       permissionMode,
     })),
@@ -539,7 +546,7 @@ function patchPermissionMode(threadId: string, permissionMode: any): void {
     // A very early event can arrive before either cache is hydrated.
     // Keep the active mirror coherent in that narrow window as well.
     ...(state.activeThread?.id === threadId &&
-    !state.threadsById[threadId] &&
+    !readThreadRow(threadId) &&
     !state.threadDataById[threadId]
       ? { activeThread: { ...state.activeThread, permissionMode } }
       : {}),
@@ -578,6 +585,18 @@ function handleShareRevoked(threadId: string): void {
   // The owner revoked our access — drop the thread + its presence.
   withPresenceStore((store) => store.clearThread(threadId));
   useThreadStore.getState().handleShareRevoked(threadId);
+}
+
+function handleThreadDeleted(threadId: string, data: any): void {
+  // Deleted here, in another tab, or by another client (spec: thread deleted
+  // elsewhere): drop it from every list and leave its detail view if open.
+  const wasOpen = clientComposition.platform.navigation.current().pathname.includes(threadId);
+  withPresenceStore((store) => store.clearThread(threadId));
+  useThreadStore.getState().handleThreadDeleted(threadId);
+  if (!wasOpen) return;
+  const navigate = getNavigate();
+  const projectId = data?.projectId as string | undefined;
+  navigate?.(buildPath(projectId ? `/projects/${projectId}` : '/'));
 }
 
 function handleGitStatus(threadId: string, data: any): void {
@@ -713,6 +732,7 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
     withPresenceStore((store) => store.removeViewer(threadId, data.clientId));
   },
   'thread:share-revoked': handleShareRevoked,
+  'thread:deleted': handleThreadDeleted,
   'thread:share-granted': () => {
     // A thread was just shared WITH us — pull it into "Shared with me".
     void useThreadStore.getState().loadSharedThreads();
@@ -781,7 +801,7 @@ function findThread(threadId: string): {
       isScratch: store.activeThread.isScratch,
     };
   }
-  const t = store.threadsById[threadId];
+  const t = readThreadRow(threadId);
   if (t) {
     return {
       title: t.title,
@@ -974,6 +994,7 @@ const ALL_EVENT_TYPES = [
   'presence:leave',
   'thread:share-revoked',
   'thread:share-granted',
+  'thread:deleted',
   'git:status',
   'git:refs-updated',
   'git:workflow_progress',

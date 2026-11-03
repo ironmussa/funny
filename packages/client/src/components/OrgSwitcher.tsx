@@ -68,15 +68,9 @@ export function OrgSwitcher() {
   }, [isAuthenticated, setActiveOrg]);
 
   const clearAndReload = useCallback(async () => {
-    useThreadStore.setState({
-      threadsById: {},
-      threadIdsByProject: {},
-      scratchThreadIds: [],
-      threadTotalByProject: {},
-      scratchThreadTotal: 0,
-      selectedThreadId: null,
-      activeThread: null,
-    });
+    // Thread rows are dropped by the org switch itself: `setActiveOrg` swaps the
+    // data layer (lib/data-layer-session.ts). Only the selection is reset here.
+    useThreadStore.setState({ selectedThreadId: null, activeThread: null });
     await loadProjects();
   }, [loadProjects]);
 

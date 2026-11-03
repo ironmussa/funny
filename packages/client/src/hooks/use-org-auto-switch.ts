@@ -8,15 +8,9 @@ import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 function resetThreadStore() {
-  useThreadStore.setState({
-    threadsById: {},
-    threadIdsByProject: {},
-    scratchThreadIds: [],
-    threadTotalByProject: {},
-    scratchThreadTotal: 0,
-    selectedThreadId: null,
-    activeThread: null,
-  });
+  // Thread rows are dropped by the org switch itself: `setActiveOrg` swaps the
+  // data layer (lib/data-layer-session.ts). Only the selection is reset here.
+  useThreadStore.setState({ selectedThreadId: null, activeThread: null });
 }
 
 async function switchToOrg(orgSlug: string, navigate: NavigateFunction) {

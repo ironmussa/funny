@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 
+import { useThreadById } from '@/data/threads/hooks';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { createClientLogger } from '@/lib/client-logger';
 import { isScratch } from '@/lib/thread-variant';
@@ -58,15 +59,19 @@ export function branchForDocumentTitle(thread: ThreadLike | null | undefined): s
  * switch. `branchByProject` is only used when no thread is focused (a project
  * is selected but no thread is open).
  */
+/** The URL-focused thread's row, falling back to the loaded right-pane payload. */
+function useFocusThread() {
+  const activeThreadId = useActiveThreadId();
+  const listedThread = useThreadById(activeThreadId);
+  const loadedThread = useThreadStore((s) => s.activeThread);
+  return listedThread ?? loadedThread;
+}
+
 export function useDocumentTitle(): void {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   // Focused thread follows the URL, not the async selectedThreadId — the latter
   // lagged a switch and flashed the previous title for a beat.
-  const activeThreadId = useActiveThreadId();
-  const focusThread = useThreadStore((s) => {
-    if (activeThreadId && s.threadsById[activeThreadId]) return s.threadsById[activeThreadId];
-    return s.activeThread;
-  });
+  const focusThread = useFocusThread();
 
   const scratch = isScratch(focusThread);
   const hasThread = !!focusThread && !scratch;

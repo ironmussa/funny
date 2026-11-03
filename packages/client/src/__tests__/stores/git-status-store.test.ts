@@ -11,6 +11,7 @@ vi.mock('@/lib/api/git', () => ({
   },
 }));
 
+import { withThreadIndex } from '@/data/threads/testing';
 import { gitApi } from '@/lib/api/git';
 import {
   useGitStatusStore,
@@ -50,10 +51,12 @@ describe('GitStatusStore', () => {
       _loadingBranchKeys: new Set(),
       _loadingProjectStatus: new Set(),
     });
-    useThreadStore.setState({
-      threadsById: {},
-      threadIdsByProject: {},
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: {},
+        threadIdsByProject: {},
+      } as any),
+    );
     _resetCooldowns();
     vi.clearAllMocks();
   });
@@ -258,11 +261,13 @@ describe('GitStatusStore', () => {
     });
 
     test('skips fetch for scratch threads', async () => {
-      useThreadStore.setState({
-        threadsById: {
-          scratch1: { id: 'scratch1', isScratch: true, projectId: '' } as any,
-        },
-      } as any);
+      useThreadStore.setState(
+        withThreadIndex({
+          threadsById: {
+            scratch1: { id: 'scratch1', isScratch: true, projectId: '' } as any,
+          },
+        } as any),
+      );
 
       await useGitStatusStore.getState().fetchForThread('scratch1');
 

@@ -3,6 +3,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ThreadList } from '@/components/sidebar/ThreadList';
+import { withThreadIndex } from '@/data/threads/testing';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -91,12 +92,14 @@ describe('ThreadList', () => {
       projects: [{ id: 'p1', name: 'My Project', path: '/repo' } as any],
       expandedProjects: new Set(['p1']),
     });
-    useThreadStore.setState({
-      ...seedThreads({ p1: [] }),
-      scratchThreadIds: [],
-      selectedThreadId: null,
-      activeThread: null,
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        ...seedThreads({ p1: [] }),
+        scratchThreadIds: [],
+        selectedThreadId: null,
+        activeThread: null,
+      } as any),
+    );
     useGitStatusStore.setState({
       statusByBranch: {},
       threadToBranchKey: {},
@@ -107,12 +110,14 @@ describe('ThreadList', () => {
   });
 
   test('shows empty state when no visible threads exist', () => {
-    useThreadStore.setState({
-      ...seedThreads({
-        p1: [makeThread('idle-1', { status: 'idle' })],
-      }),
-      scratchThreadIds: [],
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        ...seedThreads({
+          p1: [makeThread('idle-1', { status: 'idle' })],
+        }),
+        scratchThreadIds: [],
+      } as any),
+    );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
 
@@ -120,16 +125,18 @@ describe('ThreadList', () => {
   });
 
   test('renders running and completed threads but hides idle ones', () => {
-    useThreadStore.setState({
-      ...seedThreads({
-        p1: [
-          makeThread('idle-1', { status: 'idle' }),
-          makeThread('done-1', { status: 'completed', title: 'Done thread' }),
-          makeThread('run-1', { status: 'running', title: 'Running thread' }),
-        ],
-      }),
-      scratchThreadIds: [],
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        ...seedThreads({
+          p1: [
+            makeThread('idle-1', { status: 'idle' }),
+            makeThread('done-1', { status: 'completed', title: 'Done thread' }),
+            makeThread('run-1', { status: 'running', title: 'Running thread' }),
+          ],
+        }),
+        scratchThreadIds: [],
+      } as any),
+    );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
 
@@ -147,12 +154,14 @@ describe('ThreadList', () => {
       }),
     );
 
-    useThreadStore.setState({
-      ...seedThreads({
-        p1: [...completed, makeThread('run-1', { status: 'running', title: 'Running' })],
-      }),
-      scratchThreadIds: [],
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        ...seedThreads({
+          p1: [...completed, makeThread('run-1', { status: 'running', title: 'Running' })],
+        }),
+        scratchThreadIds: [],
+      } as any),
+    );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
 
@@ -169,11 +178,13 @@ describe('ThreadList', () => {
       title: 'Scratch idea',
     });
 
-    useThreadStore.setState({
-      threadsById: { 'scratch-1': scratch },
-      threadIdsByProject: {},
-      scratchThreadIds: ['scratch-1'],
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { 'scratch-1': scratch },
+        threadIdsByProject: {},
+        scratchThreadIds: ['scratch-1'],
+      } as any),
+    );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
 
@@ -187,11 +198,13 @@ describe('ThreadList', () => {
       title: 'Only once',
     });
 
-    useThreadStore.setState({
-      threadsById: { 'dupe-1': thread },
-      threadIdsByProject: { p1: ['dupe-1'] },
-      scratchThreadIds: ['dupe-1'],
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { 'dupe-1': thread },
+        threadIdsByProject: { p1: ['dupe-1'] },
+        scratchThreadIds: ['dupe-1'],
+      } as any),
+    );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
 
@@ -205,11 +218,13 @@ describe('ThreadList', () => {
       branch: 'main',
       mode: 'local',
     });
-    useThreadStore.setState({
-      ...seedThreads({ p1: [thread] }),
-      scratchThreadIds: [],
-      selectedThreadId: null,
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        ...seedThreads({ p1: [thread] }),
+        scratchThreadIds: [],
+        selectedThreadId: null,
+      } as any),
+    );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
 
@@ -224,15 +239,17 @@ describe('ThreadList', () => {
   test('highlights the row matching the URL, not selectedThreadId', () => {
     const a = makeThread('t-a', { status: 'running', title: 'A' });
     const b = makeThread('t-b', { status: 'running', title: 'B' });
-    useThreadStore.setState({
-      ...seedThreads({ p1: [a, b] }),
-      scratchThreadIds: [],
-      // Store pointer deliberately points at A; the URL points at B. The
-      // highlight must follow the URL (route-driven), proving it no longer
-      // reads selectedThreadId.
-      selectedThreadId: 't-a',
-      activeThread: null,
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        ...seedThreads({ p1: [a, b] }),
+        scratchThreadIds: [],
+        // Store pointer deliberately points at A; the URL points at B. The
+        // highlight must follow the URL (route-driven), proving it no longer
+        // reads selectedThreadId.
+        selectedThreadId: 't-a',
+        activeThread: null,
+      } as any),
+    );
 
     renderWithProviders(<ThreadList {...noopHandlers} />, {
       route: '/projects/p1/threads/t-b',
@@ -254,10 +271,12 @@ describe('ThreadList', () => {
       title: 'PR branch thread',
     });
     const branchKey = 'p1:feature/pr';
-    useThreadStore.setState({
-      ...seedThreads({ p1: [thread] }),
-      scratchThreadIds: [],
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        ...seedThreads({ p1: [thread] }),
+        scratchThreadIds: [],
+      } as any),
+    );
     useGitStatusStore.setState({
       statusByBranch: { [branchKey]: makeStatus({ branchKey }) },
       threadToBranchKey: { [thread.id]: branchKey },
@@ -294,10 +313,12 @@ describe('ThreadList', () => {
       title: 'Merged PR thread',
     });
     const branchKey = 'tid:t-pr';
-    useThreadStore.setState({
-      ...seedThreads({ p1: [thread] }),
-      scratchThreadIds: [],
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        ...seedThreads({ p1: [thread] }),
+        scratchThreadIds: [],
+      } as any),
+    );
     useGitStatusStore.setState({
       statusByBranch: {
         [branchKey]: makeStatus({

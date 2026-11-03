@@ -88,11 +88,6 @@ const PROJECT_KEYS = new Set([
   'renameProject',
 ]);
 const THREAD_KEYS = new Set([
-  'threadsById',
-  'threadIdsByProject',
-  'scratchThreadIds',
-  'threadTotalByProject',
-  'scratchThreadTotal',
   'selectedThreadId',
   'activeThread',
   'loadThreadsForProject',

@@ -2,6 +2,8 @@ import type { DomainError } from '@funny/shared/errors';
 import { okAsync, errAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
+import { readThreadIndex } from '@/data/threads/read';
+import { withThreadIndex } from '@/data/threads/testing';
 import { useAppStore } from '@/stores/app-store';
 
 import { readProjectThreads, seedThreads } from '../helpers/seed-thread-state';
@@ -35,18 +37,20 @@ const mockApi = { ...mockProjectsApi, ...mockThreadsApi };
 describe('AppStore', () => {
   beforeEach(() => {
     // Reset store to initial state
-    useAppStore.setState({
-      projects: [],
-      threadsById: {},
-      threadIdsByProject: {},
-      scratchThreadIds: [],
-      activeThread: null,
-      selectedProjectId: null,
-      selectedThreadId: null,
-      expandedProjects: new Set(),
-      reviewPaneOpen: false,
-      newThreadProjectId: null,
-    });
+    useAppStore.setState(
+      withThreadIndex({
+        projects: [],
+        threadsById: {},
+        threadIdsByProject: {},
+        scratchThreadIds: [],
+        activeThread: null,
+        selectedProjectId: null,
+        selectedThreadId: null,
+        expandedProjects: new Set<string>(),
+        reviewPaneOpen: false,
+        newThreadProjectId: null,
+      }),
+    );
     vi.clearAllMocks();
   });
 
@@ -416,15 +420,17 @@ describe('AppStore', () => {
     });
 
     test('handleWSStatus does not crash when threadsByProject is empty', () => {
-      useAppStore.setState({
-        threadsById: {},
-        threadIdsByProject: {},
-        activeThread: null,
-      });
+      useAppStore.setState(
+        withThreadIndex({
+          threadsById: {},
+          threadIdsByProject: {},
+          activeThread: null,
+        }),
+      );
 
       // Should not throw
       useAppStore.getState().handleWSStatus('t1', { status: 'completed' });
-      expect(useAppStore.getState().threadIdsByProject).toEqual({});
+      expect(readThreadIndex().threadIdsByProject).toEqual({});
     });
 
     test('handleWSMessage without messageId generates a UUID', () => {
@@ -578,7 +584,7 @@ describe('AppStore', () => {
     test('toggleProject does not reload threads on re-expand', () => {
       useAppStore.setState({
         ...seedThreads({ p1: [] }),
-        expandedProjects: new Set(),
+        expandedProjects: new Set<string>(),
       });
 
       useAppStore.getState().toggleProject('p1');

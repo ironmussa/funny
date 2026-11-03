@@ -4,8 +4,9 @@ import { okAsync } from 'neverthrow';
 import { useEffect } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
-import '@/i18n/config';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import '@/i18n/config';
+import { seedProjectThreads, withThreadIndex } from '@/data/threads/testing';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -74,17 +75,12 @@ function seedStores({
 
   useProjectStore.setState({ projects });
 
-  const threadsById: Record<string, Thread> = {};
-  const threadIdsByProject: Record<string, string[]> = {};
-  for (const pid in threadsByProject) {
-    threadIdsByProject[pid] = threadsByProject[pid].map((t) => t.id);
-    for (const t of threadsByProject[pid]) threadsById[t.id] = t;
-  }
-  useThreadStore.setState({
-    threadsById,
-    threadIdsByProject,
-    loadThreadsForProject: (() => Promise.resolve()) as any,
-  });
+  seedProjectThreads(threadsByProject);
+  useThreadStore.setState(
+    withThreadIndex({
+      loadThreadsForProject: (() => Promise.resolve()) as any,
+    }),
+  );
 
   useSettingsStore.setState({ toolPermissions: {} });
 }

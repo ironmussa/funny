@@ -19,6 +19,7 @@ import { OperationRequestSchema } from '@funny/shared/browser-v1/operations';
 import { useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
+import { listedProjectIds, readThreadIndex, type ThreadIndexSnapshot } from '@/data/threads/read';
 import { parseRoute } from '@/hooks/route-parser';
 import { createClientLogger } from '@/lib/client-logger';
 import { setBrowserSessionTransport } from '@/lib/realtime/browser-session-realtime';
@@ -283,7 +284,7 @@ function connect() {
     // Re-sync git status — do NOT reset cooldowns; the increased cooldown (5s)
     // naturally throttles the thundering herd. WS git:status events will
     // invalidate specific keys when the server pushes fresh data.
-    const loadedProjectIds = Object.keys(useThreadStore.getState().threadIdsByProject);
+    const loadedProjectIds = listedProjectIds();
     for (const pid of loadedProjectIds) {
       useGitStatusStore.getState().fetchForProject(pid);
     }
@@ -424,16 +425,16 @@ type SidebarResyncTargets = {
 };
 
 export function getLoadedSidebarResyncTargets(
-  state: Pick<
-    ThreadState,
+  index: Pick<
+    ThreadIndexSnapshot,
     'threadIdsByProject' | 'threadsById' | 'scratchThreadIds' | 'sharedThreadIds'
-  >,
+  > = readThreadIndex(),
 ): SidebarResyncTargets {
-  return getSidebarResyncTargets(state);
+  return getSidebarResyncTargets(index);
 }
 
 function refreshLoadedSidebarRowsForActiveThreads(store: ThreadState) {
-  const targets = getLoadedSidebarResyncTargets(store);
+  const targets = getLoadedSidebarResyncTargets();
   for (const projectId of targets.projectIds) {
     void store.loadThreadsForProject(projectId);
   }

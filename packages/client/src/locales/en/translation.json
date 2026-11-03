@@ -1488,7 +1488,8 @@
       "CONFLICT": "{{message}}",
       "PROCESS_ERROR": "{{message}}",
       "INTERNAL": "Failed to create the project. The server may be experiencing issues."
-    }
+    },
+    "threadUpdateFailed": "Couldn't update the thread. Your change was undone."
   },
   "agentResources": {
     "subtitle": "Skills, slash commands, and MCP servers scoped to each provider.",

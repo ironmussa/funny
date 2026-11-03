@@ -365,3 +365,88 @@ describe('mobile prompt selectors', () => {
     expect(screen.getByRole('dialog', { name: 'New thread' })).toBeInTheDocument();
   });
 });
+
+describe('desktop cascading model selector', () => {
+  const groups = [
+    ...modelGroups,
+    { provider: 'pi', providerLabel: 'Pi', models: [{ value: 'pi:default', label: 'Pi default' }] },
+    {
+      provider: 'cursor',
+      providerLabel: 'Cursor',
+      disabled: true,
+      disabledReason: 'not-installed' as const,
+      models: [{ value: 'cursor:default', label: 'Cursor default', disabled: true }],
+    },
+    {
+      provider: 'offline',
+      providerLabel: 'Offline',
+      disabled: true,
+      disabledReason: 'no-runner' as const,
+      models: [],
+    },
+  ];
+
+  test('opens provider then model without committing until a model is selected', async () => {
+    resize(1024);
+    const onChange = vi.fn();
+    render(<ModelSelect value="codex:gpt-5.5" groups={groups} onChange={onChange} />);
+    const open = (id: string) => fireEvent.keyDown(screen.getByTestId(id), { key: 'ArrowDown' });
+    open('prompt-model-select');
+    expect(await screen.findByTestId('prompt-provider-option-pi')).toBeInTheDocument();
+    expect(screen.queryByTestId('prompt-model-option-codex:gpt-5.5')).not.toBeInTheDocument();
+    expect(screen.getByTestId('prompt-provider-option-offline')).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
+    fireEvent.keyDown(screen.getByTestId('prompt-provider-option-pi'), { key: 'ArrowRight' });
+    expect(onChange).not.toHaveBeenCalled();
+    expect(await screen.findByTestId('prompt-model-option-pi:default')).toBeInTheDocument();
+    expect(screen.queryByTestId('prompt-model-option-codex:gpt-5.5')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('prompt-model-option-pi:default'));
+    expect(onChange).toHaveBeenLastCalledWith('pi:default');
+  });
+
+  test('opens thinking after the model and commits both values only at the final step', async () => {
+    resize(1024);
+    const onChange = vi.fn();
+    const onEffortChange = vi.fn();
+    render(
+      <TooltipProvider>
+        <ModelSelect
+          value="pi:default"
+          groups={groups}
+          onChange={onChange}
+          onEffortChange={onEffortChange}
+        />
+      </TooltipProvider>,
+    );
+    fireEvent.keyDown(screen.getByTestId('prompt-model-select'), { key: 'ArrowDown' });
+    fireEvent.keyDown(await screen.findByTestId('prompt-provider-option-codex'), {
+      key: 'ArrowRight',
+    });
+    expect(screen.queryByTestId('prompt-effort-option-codex:gpt-5.5-high')).not.toBeInTheDocument();
+    fireEvent.keyDown(await screen.findByTestId('prompt-model-option-codex:gpt-5.5'), {
+      key: 'ArrowRight',
+    });
+    const high = await screen.findByTestId('prompt-effort-option-codex:gpt-5.5-high');
+    expect(onChange).not.toHaveBeenCalled();
+    expect(onEffortChange).not.toHaveBeenCalled();
+    fireEvent.click(high);
+    expect(onChange).toHaveBeenCalledExactlyOnceWith('codex:gpt-5.5');
+    expect(onEffortChange).toHaveBeenCalledExactlyOnceWith('high');
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+  });
+
+  test('opens setup for an uninstalled provider without changing the model', async () => {
+    resize(1024);
+    const onChange = vi.fn();
+    render(<ModelSelect value="codex:gpt-5.5" groups={groups} onChange={onChange} />);
+    fireEvent.keyDown(screen.getByTestId('prompt-model-select'), { key: 'ArrowDown' });
+    fireEvent.keyDown(await screen.findByTestId('prompt-provider-option-cursor'), {
+      key: 'ArrowRight',
+    });
+    fireEvent.click(await screen.findByRole('menuitem', { name: 'Install / configure provider…' }));
+    expect(await screen.findByRole('dialog', { name: 'Setup Cursor' })).toBeInTheDocument();
+    expect(onChange).not.toHaveBeenCalled();
+  });
+});

@@ -1,14 +1,13 @@
 import type { AgentTemplate } from '@funny/shared';
 import { Bot, Check, ChevronDown } from 'lucide-react';
 import { memo, useState, type ComponentProps } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { ProviderSetupDialog } from '@/components/ProviderSetupDialog';
 import {
   DropdownMenu,
   DropdownMenuContent,
-  DropdownMenuGroup,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuPortal,
   DropdownMenuSeparator,
   DropdownMenuSub,
@@ -193,41 +192,56 @@ function ModelOption({
 
 function ModelGroupSection({
   group,
-  showSeparator,
   onSetup,
   ...optionProps
 }: Omit<ModelOptionProps, 'model' | 'provider'> & {
   group: ModelSelectGroup;
-  showSeparator: boolean;
   onSetup: (group: ModelSelectGroup) => void;
 }) {
   const suffix = group.disabledReason ? DISABLED_REASON_SUFFIX[group.disabledReason] : null;
   return (
-    <DropdownMenuGroup>
-      {showSeparator && <DropdownMenuSeparator />}
-      <DropdownMenuLabel
-        className={group.disabled ? 'text-muted-foreground/60' : undefined}
-        data-testid={group.disabled ? `model-group-disabled-${group.provider}` : undefined}
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger
+        size="xs"
+        data-testid={`prompt-provider-option-${group.provider}`}
+        disabled={group.disabled && !canConfigureProvider(group)}
       >
-        {group.providerLabel}
-        {suffix && <span className="ml-1 font-normal italic">{suffix}</span>}
-      </DropdownMenuLabel>
-      {canConfigureProvider(group) && (
-        <DropdownMenuItem size="xs" onSelect={() => onSetup(group)}>
-          {group.disabledReason === 'not-installed'
-            ? 'Install / configure provider…'
-            : 'Configure provider…'}
-        </DropdownMenuItem>
-      )}
-      {group.models.map((m) => (
-        <ModelOption key={m.value} model={m} provider={group.provider} {...optionProps} />
-      ))}
-    </DropdownMenuGroup>
+        <SelectLead active={group.models.some((model) => model.value === optionProps.value)} />
+        <span>{group.providerLabel}</span>
+        {suffix && <span className="text-muted-foreground ml-1 font-normal italic">{suffix}</span>}
+      </DropdownMenuSubTrigger>
+      <DropdownMenuPortal>
+        <DropdownMenuSubContent
+          size="xs"
+          collisionPadding={8}
+          className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto overscroll-contain"
+        >
+          {canConfigureProvider(group) && (
+            <>
+              <DropdownMenuItem size="xs" onSelect={() => onSetup(group)}>
+                {group.disabledReason === 'not-installed'
+                  ? 'Install / configure provider…'
+                  : 'Configure provider…'}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          {group.models.map((m) => (
+            <ModelOption
+              key={m.value}
+              model={group.disabled ? { ...m, disabled: true } : m}
+              provider={group.provider}
+              {...optionProps}
+            />
+          ))}
+        </DropdownMenuSubContent>
+      </DropdownMenuPortal>
+    </DropdownMenuSub>
   );
 }
 
 /**
- * Combined model + thinking-effort picker. Selecting a model that supports
+ * Cascading provider → model → thinking-effort picker. Selecting a model that supports
  * reasoning effort opens a submenu of thinking modes; picking a mode sets the
  * model AND the effort in one action, and both are reflected in the trigger
  * copy (e.g. "Opus 4.8 · High"). Models without effort support are plain items.
@@ -247,8 +261,11 @@ const DesktopModelSelect = memo(function DesktopModelSelect({
   groups: ModelSelectGroup[];
   projectId?: string;
 }) {
+  const { t } = useTranslation();
   const [setupProvider, setSetupProvider] = useState<ModelSelectGroup | null>(null);
-  const selectedGroup = groups.find((g) => g.models.some((m) => m.value === value));
+  const selectedGroup =
+    groups.find((g) => g.models.some((m) => m.value === value)) ??
+    groups.find((g) => g.provider === parseUnifiedModel(value).provider);
   const selected = selectedGroup?.models.find((m) => m.value === value);
   const { provider: selProvider, model: selModel } = parseUnifiedModel(value);
   const selEffortLabel = getEffortLevels(selModel, selProvider).find(
@@ -260,7 +277,7 @@ const DesktopModelSelect = memo(function DesktopModelSelect({
       <DropdownMenu>
         <DropdownMenuTrigger
           data-testid="prompt-model-select"
-          tabIndex={-1}
+          aria-label={t('prompt.mobileSelectors.model', 'Model')}
           className="text-foreground hover:bg-accent/50 focus-visible:ring-ring/50 flex h-7 w-auto cursor-pointer items-center gap-1 rounded-md px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-hidden"
         >
           <span className="text-muted-foreground shrink-0">
@@ -278,11 +295,10 @@ const DesktopModelSelect = memo(function DesktopModelSelect({
           size="xs"
           className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto overscroll-contain"
         >
-          {groups.map((group, idx) => (
+          {groups.map((group) => (
             <ModelGroupSection
               key={group.provider}
               group={group}
-              showSeparator={idx > 0}
               value={value}
               effort={effort}
               onChange={onChange}

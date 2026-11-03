@@ -15,6 +15,68 @@ function assistant(id: string, text: string): CLIMessage {
 }
 
 describe('AgentMessageHandler — streamed assistant updates', () => {
+  test.each([
+    ['completed', false, true],
+    ['failed', false, true],
+    ['completed', true, false],
+    ['stopped', false, false],
+    ['interrupted', false, false],
+    ['waiting', false, false],
+  ])(
+    'output after %s (known message: %s) resumes only new work',
+    async (status, known, resumes) => {
+      const threadId = `continuation-${status}-${known}`;
+      const state = new AgentStateTracker();
+      state.threadUserIds.set(threadId, 'user-1');
+      state.resultReceived.add(threadId);
+      state.completedEmitted.add(threadId);
+      if (known) state.cliToDbMsgId.set(threadId, new Map([['item', 'db-1']]));
+      const emitted: any[] = [];
+      const thread = { userId: 'user-1', projectId: 'proj-1', status, stage: 'review' };
+      const threadManager = {
+        getThread: vi.fn(async () => thread),
+        updateThread: vi.fn(async (_id: string, patch: object) => Object.assign(thread, patch)),
+        insertMessage: vi.fn(async () => 'db-1'),
+        updateMessage: vi.fn(async () => undefined),
+      };
+      const handler = new AgentMessageHandler(
+        state,
+        threadManager as any,
+        {
+          emit: vi.fn(),
+          emitToUser: vi.fn((_user: string, event: any) => emitted.push(event)),
+        } as any,
+        () => undefined,
+      );
+
+      await handler.handle(threadId, assistant('item', 'Continuing work'));
+
+      expect(thread.status).toBe(resumes ? 'running' : status);
+      expect(state.resultReceived.has(threadId)).toBe(!resumes);
+      expect(state.completedEmitted.has(threadId)).toBe(!resumes);
+      expect(emitted.filter((event) => event.type === 'agent:status')).toHaveLength(
+        resumes ? 1 : 0,
+      );
+      if (resumes) {
+        expect(threadManager.updateThread).toHaveBeenCalledWith(threadId, {
+          status: 'running',
+          completedAt: null,
+        });
+        await handler.handle(threadId, {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          duration_ms: 10,
+          num_turns: 1,
+          total_cost_usd: 0.01,
+          session_id: 'session',
+        } as CLIMessage);
+        expect(thread.status).toBe('completed');
+        expect(emitted.filter((event) => event.type === 'agent:result')).toHaveLength(1);
+      }
+    },
+  );
+
   test('updates the original message when an earlier provider item arrives after a later one', async () => {
     const state = new AgentStateTracker();
     state.threadUserIds.set(THREAD_ID, 'user-1');

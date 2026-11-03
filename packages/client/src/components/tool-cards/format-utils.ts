@@ -101,99 +101,113 @@ export function getQuestions(parsed: Record<string, unknown>): Question[] | null
   return questions as Question[];
 }
 
+type SummaryFn = (parsed: Record<string, unknown>, t: (key: string) => string) => string | null;
+
+/** Summary that is just one input field (or null). */
+const field =
+  (key: string): SummaryFn =>
+  (parsed) =>
+    (parsed[key] as string) ?? null;
+
+function todoSummary(parsed: Record<string, unknown>, t: (key: string) => string): string | null {
+  const todos = getTodos(parsed);
+  if (!todos) return null;
+  const done = todos.filter((tc) => tc.status === 'completed').length;
+  return `${done}/${todos.length} ${t('tools.done')}`;
+}
+
+function questionSummary(
+  parsed: Record<string, unknown>,
+  t: (key: string) => string,
+): string | null {
+  const questions = getQuestions(parsed);
+  if (!questions) return null;
+  return `${questions.length} ${questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}`;
+}
+
+function thinkSummary(parsed: Record<string, unknown>): string | null {
+  const thought = (parsed.content as string) ?? (parsed.description as string) ?? '';
+  const firstLine = thought
+    .split('\n')
+    .find((l) => l.trim())
+    ?.trim();
+  if (!firstLine) return null;
+  return firstLine.length > 80 ? firstLine.slice(0, 80) + '…' : firstLine;
+}
+
+function taskUpdateSummary(parsed: Record<string, unknown>): string | null {
+  if (!parsed.taskId) return null;
+  const status = parsed.status ? ` → ${String(parsed.status)}` : '';
+  return `#${String(parsed.taskId)}${status}`;
+}
+
+function backgroundSummary(parsed: Record<string, unknown>): string | null {
+  return (
+    (parsed.label as string) ??
+    (parsed.command as string) ??
+    (parsed.jobId ? `job ${String(parsed.jobId)}` : null)
+  );
+}
+
+const filePathSummary = field('file_path');
+
+const SUMMARIES: Record<string, SummaryFn> = {
+  Read: filePathSummary,
+  Write: filePathSummary,
+  Edit: filePathSummary,
+  Bash: (parsed) =>
+    typeof parsed.command === 'string'
+      ? unwrapShellCommand(parsed.command)
+      : ((parsed.command as string) ?? null),
+  Glob: field('pattern'),
+  Grep: field('pattern'),
+  Task: field('description'),
+  Agent: field('description'),
+  WebSearch: field('query'),
+  WebFetch: field('url'),
+  NotebookEdit: field('notebook_path'),
+  TodoWrite: todoSummary,
+  updateTodos: todoSummary,
+  todo_write: todoSummary,
+  AskUserQuestion: questionSummary,
+  Think: thinkSummary,
+  ProviderError: field('error'),
+  ToolSearch: (parsed) =>
+    typeof parsed.query === 'string'
+      ? parsed.query.replace(/^select:/, '').replace(/,/g, ', ')
+      : null,
+  Skill: field('skill'),
+  TaskCreate: field('subject'),
+  TaskUpdate: taskUpdateSummary,
+  TaskOutput: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
+  TaskStop: (parsed) => (parsed.task_id ? String(parsed.task_id) : null),
+  ScheduleWakeup: field('reason'),
+  Monitor: (parsed) => (parsed.description as string) ?? (parsed.command as string) ?? null,
+  SendMessage: (parsed) => (parsed.summary as string) ?? (parsed.to as string) ?? null,
+  apply_patch: (parsed) => patchSummary(parsed),
+  ApplyPatch: (parsed) => patchSummary(parsed),
+  update_plan: (parsed) =>
+    typeof parsed.explanation === 'string'
+      ? (parsed.explanation.split('\n').find((l) => l.trim()) ?? null)
+      : null,
+  Tool: (parsed) =>
+    parsed.server && parsed.tool
+      ? `${String(parsed.server)} · ${String(parsed.tool)}`
+      : ((parsed.description as string) ?? null),
+  Background: backgroundSummary,
+};
+
+// For Gemini ACP tool calls, the description field contains the
+// human-readable title from the ACP protocol (e.g. file path or search query)
+const defaultSummary = field('description');
+
 export function getSummary(
   name: string,
   parsed: Record<string, unknown>,
   t: (key: string) => string,
 ): string | null {
-  switch (name) {
-    case 'Read':
-    case 'Write':
-    case 'Edit':
-      return (parsed.file_path as string) ?? null;
-    case 'Bash':
-      return typeof parsed.command === 'string'
-        ? unwrapShellCommand(parsed.command)
-        : ((parsed.command as string) ?? null);
-    case 'Glob':
-      return (parsed.pattern as string) ?? null;
-    case 'Grep':
-      return (parsed.pattern as string) ?? null;
-    case 'Task':
-    case 'Agent':
-      return (parsed.description as string) ?? null;
-    case 'WebSearch':
-      return (parsed.query as string) ?? null;
-    case 'WebFetch':
-      return (parsed.url as string) ?? null;
-    case 'NotebookEdit':
-      return (parsed.notebook_path as string) ?? null;
-    case 'TodoWrite':
-    case 'updateTodos':
-    case 'todo_write': {
-      const todos = getTodos(parsed);
-      if (!todos) return null;
-      const done = todos.filter((tc) => tc.status === 'completed').length;
-      return `${done}/${todos.length} ${t('tools.done')}`;
-    }
-    case 'AskUserQuestion': {
-      const questions = getQuestions(parsed);
-      if (!questions) return null;
-      return `${questions.length} ${questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}`;
-    }
-    case 'Think': {
-      const thought = (parsed.content as string) ?? (parsed.description as string) ?? '';
-      const firstLine = thought
-        .split('\n')
-        .find((l) => l.trim())
-        ?.trim();
-      return firstLine ? (firstLine.length > 80 ? firstLine.slice(0, 80) + '…' : firstLine) : null;
-    }
-    case 'ProviderError':
-      return (parsed.error as string) ?? null;
-    case 'ToolSearch':
-      return typeof parsed.query === 'string'
-        ? parsed.query.replace(/^select:/, '').replace(/,/g, ', ')
-        : null;
-    case 'Skill':
-      return (parsed.skill as string) ?? null;
-    case 'TaskCreate':
-      return (parsed.subject as string) ?? null;
-    case 'TaskUpdate':
-      return parsed.taskId
-        ? `#${String(parsed.taskId)}${parsed.status ? ` → ${String(parsed.status)}` : ''}`
-        : null;
-    case 'TaskOutput':
-    case 'TaskStop':
-      return parsed.task_id ? String(parsed.task_id) : null;
-    case 'ScheduleWakeup':
-      return (parsed.reason as string) ?? null;
-    case 'Monitor':
-      return (parsed.description as string) ?? (parsed.command as string) ?? null;
-    case 'SendMessage':
-      return (parsed.summary as string) ?? (parsed.to as string) ?? null;
-    case 'apply_patch':
-    case 'ApplyPatch':
-      return patchSummary(parsed);
-    case 'update_plan':
-      return typeof parsed.explanation === 'string'
-        ? (parsed.explanation.split('\n').find((l) => l.trim()) ?? null)
-        : null;
-    case 'Tool':
-      return parsed.server && parsed.tool
-        ? `${String(parsed.server)} · ${String(parsed.tool)}`
-        : ((parsed.description as string) ?? null);
-    case 'Background':
-      return (
-        (parsed.label as string) ??
-        (parsed.command as string) ??
-        (parsed.jobId ? `job ${String(parsed.jobId)}` : null)
-      );
-    default:
-      // For Gemini ACP tool calls, the description field contains the
-      // human-readable title from the ACP protocol (e.g. file path or search query)
-      return (parsed.description as string) ?? null;
-  }
+  const summarize = Object.hasOwn(SUMMARIES, name) ? SUMMARIES[name] : defaultSummary;
+  return summarize(parsed, t);
 }
 
 const SHELL_WRAPPER = /^(?:\/usr)?(?:\/bin\/)?(?:bash|sh|zsh)\s+-l?c\s+(['"])([\s\S]*)\1\s*$/;

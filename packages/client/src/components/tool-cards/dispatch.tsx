@@ -28,6 +28,72 @@ interface Args {
   renderToolCall: (tc: ToolCallItem) => ReactNode;
 }
 
+type CardRenderer = (args: Args) => ReactNode;
+
+const renderTask: CardRenderer = ({
+  parsed,
+  output,
+  hideLabel,
+  childToolCalls,
+  displayTime,
+  renderToolCall,
+}) => (
+  <TaskCard
+    parsed={parsed}
+    output={output}
+    hideLabel={hideLabel}
+    childToolCalls={childToolCalls}
+    displayTime={displayTime}
+    renderChild={(item) =>
+      item.type === 'toolcall-group' ? (
+        <ToolCallGroup
+          key={`group-${item.name}-${item.calls.map((call) => call.id).join('-')}`}
+          name={item.name}
+          calls={item.calls}
+          renderCall={renderToolCall}
+        />
+      ) : (
+        renderToolCall(item.tc)
+      )
+    }
+  />
+);
+
+const CARD_RENDERERS: Record<string, CardRenderer> = {
+  Bash: ({ parsed, output, author, hideLabel, displayTime }) => (
+    <BashCard
+      parsed={parsed}
+      output={output}
+      author={author}
+      hideLabel={hideLabel}
+      displayTime={displayTime}
+    />
+  ),
+  Read: ({ parsed, output, hideLabel, displayTime }) => (
+    <ReadFileCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
+  ),
+  Write: ({ parsed, hideLabel, displayTime }) => (
+    <WriteFileCard parsed={parsed} hideLabel={hideLabel} displayTime={displayTime} />
+  ),
+  Edit: ({ parsed, hideLabel, displayTime }) => (
+    <EditFileCard parsed={parsed} hideLabel={hideLabel} displayTime={displayTime} />
+  ),
+  AskUserQuestion: ({ parsed, output, onRespond, hideLabel, displayTime }) => (
+    <AskQuestionCard
+      parsed={parsed}
+      onRespond={output ? undefined : onRespond}
+      output={output}
+      hideLabel={hideLabel}
+      displayTime={displayTime}
+    />
+  ),
+  Task: renderTask,
+  Agent: renderTask,
+  Think: ({ parsed, output, hideLabel, displayTime }) => (
+    <ThinkCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
+  ),
+};
+
 /**
  * Routes a tool call to its specialized renderer. Returns `null` when the
  * tool name doesn't match any specialized card, so the caller falls back to
@@ -36,19 +102,8 @@ interface Args {
  * Extracted from ToolCallCard so the parent doesn't import every specialized
  * card directly (drops ~9 fan-out edges).
  */
-export function dispatchToolCard({
-  name,
-  parsed,
-  output,
-  author,
-  onRespond,
-  hideLabel,
-  planText,
-  childToolCalls,
-  displayTime,
-  renderToolCall,
-}: Args): ReactNode | null {
-  const isPlan = typeof parsed.plan === 'string' && parsed.plan.length > 0;
+export function dispatchToolCard(args: Args): ReactNode | null {
+  const { name, parsed, output, onRespond, hideLabel, planText, displayTime } = args;
   const mcp = parseMcpToolName(name);
   if (mcp)
     return (
@@ -70,68 +125,10 @@ export function dispatchToolCard({
         displayTime={displayTime}
       />
     );
-  if (isPlan)
+  if (typeof parsed.plan === 'string' && parsed.plan.length > 0)
     return (
       <PlanCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
     );
-  if (name === 'Bash')
-    return (
-      <BashCard
-        parsed={parsed}
-        output={output}
-        author={author}
-        hideLabel={hideLabel}
-        displayTime={displayTime}
-      />
-    );
-  if (name === 'Read')
-    return (
-      <ReadFileCard
-        parsed={parsed}
-        output={output}
-        hideLabel={hideLabel}
-        displayTime={displayTime}
-      />
-    );
-  if (name === 'Write')
-    return <WriteFileCard parsed={parsed} hideLabel={hideLabel} displayTime={displayTime} />;
-  if (name === 'Edit')
-    return <EditFileCard parsed={parsed} hideLabel={hideLabel} displayTime={displayTime} />;
-  if (name === 'AskUserQuestion')
-    return (
-      <AskQuestionCard
-        parsed={parsed}
-        onRespond={output ? undefined : onRespond}
-        output={output}
-        hideLabel={hideLabel}
-        displayTime={displayTime}
-      />
-    );
-  if (name === 'Task' || name === 'Agent')
-    return (
-      <TaskCard
-        parsed={parsed}
-        output={output}
-        hideLabel={hideLabel}
-        childToolCalls={childToolCalls}
-        displayTime={displayTime}
-        renderChild={(item) =>
-          item.type === 'toolcall-group' ? (
-            <ToolCallGroup
-              key={`group-${item.name}-${item.calls.map((call) => call.id).join('-')}`}
-              name={item.name}
-              calls={item.calls}
-              renderCall={renderToolCall}
-            />
-          ) : (
-            renderToolCall(item.tc)
-          )
-        }
-      />
-    );
-  if (name === 'Think')
-    return (
-      <ThinkCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
-    );
-  return null;
+  const render = Object.hasOwn(CARD_RENDERERS, name) ? CARD_RENDERERS[name] : null;
+  return render ? render(args) : null;
 }

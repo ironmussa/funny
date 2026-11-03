@@ -12,6 +12,7 @@ import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { createClientLogger } from '@/lib/client-logger';
 import { setDashedDragPreview } from '@/lib/drag-preview';
+import { isThreadSearchShortcut } from '@/lib/thread-search-shortcut';
 import { getDisplayThreadStatus, statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
@@ -107,10 +108,7 @@ export const ThreadColumn = memo(function ThreadColumn({
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
-      if (!e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return;
-      if (e.key !== 'f' && e.key !== 'F') return;
-      const target = e.target as Element | null;
-      if (target && target.closest('.xterm, [data-keyboard-passthrough]')) return;
+      if (!isThreadSearchShortcut(e)) return;
       const root = columnRef.current;
       if (!root) return;
       const focusInside = document.activeElement ? root.contains(document.activeElement) : false;

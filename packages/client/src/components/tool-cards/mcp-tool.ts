@@ -281,28 +281,37 @@ function textPart(text: string): McpResultPart {
   return { kind: 'text', text, markdown: MARKDOWN_HINT.test(text) };
 }
 
+type ContentBlock = Record<string, any>;
+
+function imagePart(b: ContentBlock): McpResultPart | null {
+  const mimeType = typeof b.mimeType === 'string' ? b.mimeType : 'image/png';
+  // Only inline raster/vector data the browser renders as an image.
+  if (typeof b.data !== 'string' || !/^image\/[a-z0-9.+-]+$/i.test(mimeType)) return null;
+  return { kind: 'image', src: `data:${mimeType};base64,${b.data}`, mimeType };
+}
+
+function resourcePart(b: ContentBlock): McpResultPart | null {
+  const r = b.resource ?? {};
+  if (typeof r.uri !== 'string') return null;
+  return { kind: 'resource', uri: r.uri, text: typeof r.text === 'string' ? r.text : null };
+}
+
+const CONTENT_PARSERS: Record<string, (b: ContentBlock) => McpResultPart | null> = {
+  text: (b) => (typeof b.text === 'string' ? textPart(b.text) : null),
+  image: imagePart,
+  resource: resourcePart,
+  resource_link: (b) =>
+    typeof b.uri === 'string' ? { kind: 'resource', uri: b.uri, text: null } : null,
+};
+
 function contentPart(block: unknown): McpResultPart | null {
   if (!block || typeof block !== 'object') return null;
-  const b = block as Record<string, any>;
-  switch (b.type) {
-    case 'text':
-      return typeof b.text === 'string' ? textPart(b.text) : null;
-    case 'image': {
-      const mimeType = typeof b.mimeType === 'string' ? b.mimeType : 'image/png';
-      // Only inline raster/vector data the browser renders as an image.
-      if (typeof b.data !== 'string' || !/^image\/[a-z0-9.+-]+$/i.test(mimeType)) return null;
-      return { kind: 'image', src: `data:${mimeType};base64,${b.data}`, mimeType };
-    }
-    case 'resource': {
-      const r = b.resource ?? {};
-      if (typeof r.uri !== 'string') return null;
-      return { kind: 'resource', uri: r.uri, text: typeof r.text === 'string' ? r.text : null };
-    }
-    case 'resource_link':
-      return typeof b.uri === 'string' ? { kind: 'resource', uri: b.uri, text: null } : null;
-    default:
-      return null;
-  }
+  const b = block as ContentBlock;
+  const parse =
+    typeof b.type === 'string' && Object.hasOwn(CONTENT_PARSERS, b.type)
+      ? CONTENT_PARSERS[b.type]
+      : null;
+  return parse ? parse(b) : null;
 }
 
 function durationFromMeta(meta: unknown): number | null {

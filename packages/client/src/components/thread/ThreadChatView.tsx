@@ -6,6 +6,7 @@ import { PromptTimeline } from '@/components/thread/PromptTimeline';
 import { ThreadConversation } from '@/components/thread/ThreadConversation';
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
+import { isThreadSearchShortcut } from '@/lib/thread-search-shortcut';
 import { useThreadMessages, type ThreadCore } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -39,14 +40,7 @@ export function ThreadChatView({ activeThread }: Props) {
   useEffect(() => {
     if (!activeThread.id) return;
     const handler = (e: KeyboardEvent) => {
-      if (!e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return;
-      if (e.key !== 'f' && e.key !== 'F') return;
-      // Don't hijack Ctrl+F when focus is inside a terminal (it shows its
-      // own search overlay) or the remote browser (the page owns its keys).
-      const target = e.target;
-      if (target instanceof Element && target.closest('.xterm, [data-keyboard-passthrough]')) {
-        return;
-      }
+      if (!isThreadSearchShortcut(e)) return;
       e.preventDefault();
       e.stopPropagation();
       setSearchOpen(true);

@@ -1,5 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+import { withThreadIndex } from '@/data/threads/testing';
 import '@/i18n/config';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -128,14 +129,16 @@ function seedStores(
     branchByProject: { [PROJECT_ID]: 'master' },
   });
 
-  useThreadStore.setState({
-    threadsById: {},
-    threadIdsByProject: {},
-    selectedThreadId: null,
-    activeThread: null,
-    setupProgressByThread: {},
-    contextUsageByThread: {},
-  });
+  useThreadStore.setState(
+    withThreadIndex({
+      threadsById: {},
+      threadIdsByProject: {},
+      selectedThreadId: null,
+      activeThread: null,
+      setupProgressByThread: {},
+      contextUsageByThread: {},
+    }),
+  );
 
   useSettingsStore.setState({
     defaultEditor: 'cursor',

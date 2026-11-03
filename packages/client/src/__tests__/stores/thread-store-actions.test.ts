@@ -1,4 +1,5 @@
-import { okAsync, errAsync } from 'neverthrow';
+import type { Thread } from '@funny/shared';
+import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const {
@@ -124,9 +125,13 @@ vi.mock('@/stores/thread-store-internals', () => ({
   setUrlThreadId: vi.fn(),
 }));
 
+import { readThreadIndex } from '@/data/threads/read';
+import { getThreadsData } from '@/data/threads/store';
+import { withThreadIndex } from '@/data/threads/testing';
 import { prefetchThreadData } from '@/stores/thread-machine-bridge';
 import { useThreadStore } from '@/stores/thread-store';
 
+import { deferred } from '../helpers/data-layer-harness';
 import { seedThreads } from '../helpers/seed-thread-state';
 
 const baseThread = {
@@ -145,19 +150,21 @@ const baseThread = {
 describe('thread store actions', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useThreadStore.setState({
-      threadsById: {},
-      threadIdsByProject: {},
-      scratchThreadIds: [],
-      threadTotalByProject: {},
-      scratchThreadTotal: 0,
-      selectedThreadId: null,
-      threadDataById: {},
-      activeThread: null,
-      setupProgressByThread: {},
-      contextUsageByThread: {},
-      queuedCountByThread: {},
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: {},
+        threadIdsByProject: {},
+        scratchThreadIds: [],
+        threadTotalByProject: {},
+        scratchThreadTotal: 0,
+        selectedThreadId: null,
+        threadDataById: {},
+        activeThread: null,
+        setupProgressByThread: {},
+        contextUsageByThread: {},
+        queuedCountByThread: {},
+      }),
+    );
   });
 
   describe('sendMessage', () => {
@@ -586,8 +593,8 @@ describe('thread store actions', () => {
       await useThreadStore.getState().refreshActiveThread();
 
       expect(useThreadStore.getState().activeThread?.status).toBe('completed');
-      expect(useThreadStore.getState().threadsById.t1.status).toBe('completed');
-      expect(useThreadStore.getState().threadsById.t1.completedAt).toBe('2026-01-01T00:02:00.000Z');
+      expect(readThreadIndex().threadsById.t1.status).toBe('completed');
+      expect(readThreadIndex().threadsById.t1.completedAt).toBe('2026-01-01T00:02:00.000Z');
     });
   });
 
@@ -598,7 +605,7 @@ describe('thread store actions', () => {
       await useThreadStore.getState().loadThreadsForProject('');
 
       expect(mockListThreads).not.toHaveBeenCalled();
-      expect(useThreadStore.getState().threadIdsByProject['']).toBeUndefined();
+      expect(readThreadIndex().threadIdsByProject['']).toBeUndefined();
     });
 
     test('replaces project bucket on successful fetch', async () => {
@@ -607,24 +614,26 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().loadThreadsForProject('p1');
 
-      expect(useThreadStore.getState().threadIdsByProject.p1).toEqual(['t-new']);
-      expect(useThreadStore.getState().threadsById['t-new'].title).toBe('New');
+      expect(readThreadIndex().threadIdsByProject.p1).toEqual(['t-new']);
+      expect(readThreadIndex().threadsById['t-new'].title).toBe('New');
     });
   });
 
   describe('loadMoreThreads', () => {
     test('appends paginated threads without duplicating ids', async () => {
-      useThreadStore.setState({
-        ...seedThreads({ p1: [{ ...baseThread, id: 't1' } as any] }),
-        threadTotalByProject: { p1: 2 },
-      } as any);
+      useThreadStore.setState(
+        withThreadIndex({
+          ...seedThreads({ p1: [{ ...baseThread, id: 't1' } as any] }),
+          threadTotalByProject: { p1: 2 },
+        } as any),
+      );
       mockListThreads.mockReturnValue(
         okAsync({ threads: [{ ...baseThread, id: 't2', title: 'Page 2' }], total: 2 }),
       );
 
       await useThreadStore.getState().loadMoreThreads('p1');
 
-      expect(useThreadStore.getState().threadIdsByProject.p1).toEqual(['t1', 't2']);
+      expect(readThreadIndex().threadIdsByProject.p1).toEqual(['t1', 't2']);
     });
   });
 
@@ -636,17 +645,19 @@ describe('thread store actions', () => {
 
     test('removes thread from store and clears selection', async () => {
       const payload = { ...baseThread, messages: [] };
-      useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
-        threadTotalByProject: { p1: 1 },
-        selectedThreadId: 't1',
-        activeThread: payload as any,
-        threadDataById: { t1: payload as any },
-      } as any);
+      useThreadStore.setState(
+        withThreadIndex({
+          ...seedThreads({ p1: [baseThread as any] }),
+          threadTotalByProject: { p1: 1 },
+          selectedThreadId: 't1',
+          activeThread: payload as any,
+          threadDataById: { t1: payload as any },
+        } as any),
+      );
 
       await useThreadStore.getState().deleteThread('t1', 'p1');
 
-      expect(useThreadStore.getState().threadsById.t1).toBeUndefined();
+      expect(readThreadIndex().threadsById.t1).toBeUndefined();
       expect(useThreadStore.getState().selectedThreadId).toBeNull();
       expect(useThreadStore.getState().activeThread).toBeNull();
       expect(useThreadStore.getState().threadDataById.t1).toBeUndefined();
@@ -654,10 +665,12 @@ describe('thread store actions', () => {
     });
 
     test('stops running threads before delete', async () => {
-      useThreadStore.setState({
-        ...seedThreads({ p1: [{ ...baseThread, status: 'running' } as any] }),
-        threadTotalByProject: { p1: 1 },
-      } as any);
+      useThreadStore.setState(
+        withThreadIndex({
+          ...seedThreads({ p1: [{ ...baseThread, status: 'running' } as any] }),
+          threadTotalByProject: { p1: 1 },
+        } as any),
+      );
 
       await useThreadStore.getState().deleteThread('t1', 'p1');
 
@@ -679,19 +692,21 @@ describe('thread store actions', () => {
         projectId: '',
         isScratch: true,
       };
-      useThreadStore.setState({
-        threadsById: { s1: scratch as any },
-        scratchThreadIds: ['s1'],
-        scratchThreadTotal: 1,
-        threadIdsByProject: {},
-        threadTotalByProject: {},
-      } as any);
+      useThreadStore.setState(
+        withThreadIndex({
+          threadsById: { s1: scratch as any },
+          scratchThreadIds: ['s1'],
+          scratchThreadTotal: 1,
+          threadIdsByProject: {},
+          threadTotalByProject: {},
+        } as any),
+      );
 
       await useThreadStore.getState().deleteScratchThread('s1');
 
-      expect(useThreadStore.getState().threadsById.s1).toBeUndefined();
-      expect(useThreadStore.getState().scratchThreadIds).toEqual([]);
-      expect(useThreadStore.getState().scratchThreadTotal).toBe(0);
+      expect(readThreadIndex().threadsById.s1).toBeUndefined();
+      expect(readThreadIndex().scratchThreadIds).toEqual([]);
+      expect(readThreadIndex().scratchThreadTotal).toBe(0);
       expect(mockDeleteThread).toHaveBeenCalledWith('s1');
     });
   });
@@ -720,10 +735,12 @@ describe('thread store actions', () => {
     });
 
     test('hydrates thread payload on successful select', async () => {
-      useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
-        threadTotalByProject: { p1: 1 },
-      } as any);
+      useThreadStore.setState(
+        withThreadIndex({
+          ...seedThreads({ p1: [baseThread as any] }),
+          threadTotalByProject: { p1: 1 },
+        } as any),
+      );
 
       await useThreadStore.getState().selectThread('t1');
 
@@ -759,8 +776,8 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().loadScratchThreads();
 
-      expect(useThreadStore.getState().scratchThreadIds).toEqual(['s1']);
-      expect(useThreadStore.getState().threadsById.s1.title).toBe('Scratch idea');
+      expect(readThreadIndex().scratchThreadIds).toEqual(['s1']);
+      expect(readThreadIndex().threadsById.s1.title).toBe('Scratch idea');
     });
   });
 
@@ -771,20 +788,20 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().loadSharedThreads();
 
-      expect(useThreadStore.getState().sharedThreadIds).toEqual(['sh1']);
-      expect(useThreadStore.getState().threadsById.sh1.title).toBe('Shared prueba');
+      expect(readThreadIndex().sharedThreadIds).toEqual(['sh1']);
+      expect(readThreadIndex().threadsById.sh1.title).toBe('Shared prueba');
     });
 
     test('handleShareRevoked drops the thread from the shared bucket', async () => {
       const shared = { ...baseThread, id: 'sh1', title: 'Shared prueba' };
       mockListSharedWithMe.mockReturnValue(okAsync({ threads: [shared] }));
       await useThreadStore.getState().loadSharedThreads();
-      expect(useThreadStore.getState().sharedThreadIds).toEqual(['sh1']);
+      expect(readThreadIndex().sharedThreadIds).toEqual(['sh1']);
 
       useThreadStore.getState().handleShareRevoked('sh1');
 
-      expect(useThreadStore.getState().sharedThreadIds).toEqual([]);
-      expect(useThreadStore.getState().threadsById.sh1).toBeUndefined();
+      expect(readThreadIndex().sharedThreadIds).toEqual([]);
+      expect(readThreadIndex().threadsById.sh1).toBeUndefined();
     });
   });
 
@@ -803,18 +820,20 @@ describe('thread store actions', () => {
         isScratch: true,
         title: 'New scratch',
       };
-      useThreadStore.setState({
-        threadsById: { s0: existing as any },
-        scratchThreadIds: ['s0'],
-        scratchThreadTotal: 1,
-        threadIdsByProject: {},
-        threadTotalByProject: {},
-      } as any);
+      useThreadStore.setState(
+        withThreadIndex({
+          threadsById: { s0: existing as any },
+          scratchThreadIds: ['s0'],
+          scratchThreadTotal: 1,
+          threadIdsByProject: {},
+          threadTotalByProject: {},
+        } as any),
+      );
 
       useThreadStore.getState().addScratchThread(incoming as any);
 
-      expect(useThreadStore.getState().scratchThreadIds).toEqual(['s1', 's0']);
-      expect(useThreadStore.getState().threadsById.s1.title).toBe('New scratch');
+      expect(readThreadIndex().scratchThreadIds).toEqual(['s1', 's0']);
+      expect(readThreadIndex().threadsById.s1.title).toBe('New scratch');
     });
   });
 
@@ -827,7 +846,7 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().archiveThread('t1', 'p1');
 
-      expect(useThreadStore.getState().threadsById.t1.archived).toBe(true);
+      expect(readThreadIndex().threadsById.t1.archived).toBe(true);
       expect(mockArchiveThread).toHaveBeenCalledWith('t1', true);
     });
 
@@ -839,7 +858,7 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().archiveThread('t1', 'p1');
 
-      expect(useThreadStore.getState().threadsById.t1.archived).not.toBe(true);
+      expect(readThreadIndex().threadsById.t1.archived).not.toBe(true);
     });
   });
 
@@ -852,7 +871,7 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().renameThread('t1', 'p1', 'Renamed');
 
-      expect(useThreadStore.getState().threadsById.t1.title).toBe('Renamed');
+      expect(readThreadIndex().threadsById.t1.title).toBe('Renamed');
     });
 
     test('rolls back title when api fails', async () => {
@@ -863,7 +882,7 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().renameThread('t1', 'p1', 'Renamed');
 
-      expect(useThreadStore.getState().threadsById.t1.title).toBe('thread');
+      expect(readThreadIndex().threadsById.t1.title).toBe('thread');
     });
   });
 
@@ -876,7 +895,7 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().pinThread('t1', 'p1', true);
 
-      expect(useThreadStore.getState().threadsById.t1.pinned).toBe(true);
+      expect(readThreadIndex().threadsById.t1.pinned).toBe(true);
     });
 
     test('rolls back pin when api fails', async () => {
@@ -887,7 +906,7 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().pinThread('t1', 'p1', true);
 
-      expect(useThreadStore.getState().threadsById.t1.pinned).toBe(false);
+      expect(readThreadIndex().threadsById.t1.pinned).toBe(false);
     });
   });
 
@@ -901,8 +920,8 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().unarchiveThread('t1', 'p1', 'planning');
 
-      expect(useThreadStore.getState().threadsById.t1.archived).toBe(false);
-      expect(useThreadStore.getState().threadsById.t1.stage).toBe('planning');
+      expect(readThreadIndex().threadsById.t1.archived).toBe(false);
+      expect(readThreadIndex().threadsById.t1.stage).toBe('planning');
     });
 
     test('rolls back when archive api fails', async () => {
@@ -913,7 +932,7 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().unarchiveThread('t1', 'p1', 'planning');
 
-      expect(useThreadStore.getState().threadsById.t1.archived).toBe(true);
+      expect(readThreadIndex().threadsById.t1.archived).toBe(true);
     });
   });
 
@@ -926,7 +945,7 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().updateThreadStage('t1', 'p1', 'in_progress');
 
-      expect(useThreadStore.getState().threadsById.t1.stage).toBe('in_progress');
+      expect(readThreadIndex().threadsById.t1.stage).toBe('in_progress');
     });
 
     test('rolls back stage when api fails', async () => {
@@ -937,7 +956,7 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().updateThreadStage('t1', 'p1', 'in_progress');
 
-      expect(useThreadStore.getState().threadsById.t1.stage).toBe('backlog');
+      expect(readThreadIndex().threadsById.t1.stage).toBe('backlog');
     });
   });
 
@@ -952,7 +971,7 @@ describe('thread store actions', () => {
 
       expect(result).toBe(true);
       expect(mockUpdateThreadPermissionMode).toHaveBeenCalledWith('t1', 'plan');
-      expect(useThreadStore.getState().threadsById.t1.permissionMode).toBe('plan');
+      expect(readThreadIndex().threadsById.t1.permissionMode).toBe('plan');
     });
 
     test('restores the previous mode if the persistence request fails', async () => {
@@ -964,7 +983,7 @@ describe('thread store actions', () => {
       const result = await useThreadStore.getState().updateThreadPermissionMode('t1', 'plan');
 
       expect(result).toBe(false);
-      expect(useThreadStore.getState().threadsById.t1.permissionMode).toBe('ask');
+      expect(readThreadIndex().threadsById.t1.permissionMode).toBe('ask');
     });
   });
 
@@ -978,7 +997,7 @@ describe('thread store actions', () => {
 
       await useThreadStore.getState().loadMoreThreads('p1');
 
-      expect(useThreadStore.getState().threadIdsByProject.p1).toEqual(['t1', 't2']);
+      expect(readThreadIndex().threadIdsByProject.p1).toEqual(['t1', 't2']);
       expect(mockListThreads).toHaveBeenCalledWith('p1', false, 50, 1);
     });
   });
@@ -998,7 +1017,7 @@ describe('thread store actions', () => {
 
       expect(mockStopThread).toHaveBeenCalledWith('t1');
       expect(mockCleanupThreadActor).toHaveBeenCalledWith('t1');
-      expect(useThreadStore.getState().threadsById.t1).toBeUndefined();
+      expect(readThreadIndex().threadsById.t1).toBeUndefined();
       expect(useThreadStore.getState().selectedThreadId).toBeNull();
       expect(mockDeleteThread).toHaveBeenCalledWith('t1');
     });
@@ -1013,19 +1032,21 @@ describe('thread store actions', () => {
         isScratch: true,
         status: 'idle' as const,
       };
-      useThreadStore.setState({
-        threadsById: { s1: scratch as any },
-        scratchThreadIds: ['s1'],
-        scratchThreadTotal: 1,
-        threadIdsByProject: {},
-        threadTotalByProject: {},
-        threadDataById: { s1: scratch as any },
-      } as any);
+      useThreadStore.setState(
+        withThreadIndex({
+          threadsById: { s1: scratch as any },
+          scratchThreadIds: ['s1'],
+          scratchThreadTotal: 1,
+          threadIdsByProject: {},
+          threadTotalByProject: {},
+          threadDataById: { s1: scratch as any },
+        } as any),
+      );
 
       await useThreadStore.getState().deleteScratchThread('s1');
 
-      expect(useThreadStore.getState().scratchThreadIds).toEqual([]);
-      expect(useThreadStore.getState().threadsById.s1).toBeUndefined();
+      expect(readThreadIndex().scratchThreadIds).toEqual([]);
+      expect(readThreadIndex().threadsById.s1).toBeUndefined();
     });
   });
 
@@ -1048,7 +1069,7 @@ describe('thread store actions', () => {
       // bubble with its persisted copy — see loadNewerMessages tests.
       expect(payload.messages[0].id.startsWith('optimistic-')).toBe(true);
       expect(payload.status).toBe('running');
-      expect(useThreadStore.getState().threadsById.t1.status).toBe('running');
+      expect(readThreadIndex().threadsById.t1.status).toBe('running');
     });
 
     test('replaces existing draft user message on idle thread', () => {
@@ -1116,7 +1137,7 @@ describe('thread store actions', () => {
 
       useThreadStore.getState().clearProjectThreads('p1');
 
-      expect(useThreadStore.getState().threadIdsByProject.p1).toBeUndefined();
+      expect(readThreadIndex().threadIdsByProject.p1).toBeUndefined();
       expect(useThreadStore.getState().threadDataById.t1).toBeUndefined();
       expect(useThreadStore.getState().selectedThreadId).toBeNull();
     });
@@ -1537,10 +1558,12 @@ describe('thread store actions', () => {
   describe('refreshAllLoadedThreads', () => {
     test('refreshes every loaded project bucket', async () => {
       const t2 = { ...baseThread, id: 't2', projectId: 'p2', title: 'other' };
-      useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any], p2: [t2 as any] }),
-        threadTotalByProject: { p1: 1, p2: 1 },
-      } as any);
+      useThreadStore.setState(
+        withThreadIndex({
+          ...seedThreads({ p1: [baseThread as any], p2: [t2 as any] }),
+          threadTotalByProject: { p1: 1, p2: 1 },
+        } as any),
+      );
       mockListThreads.mockImplementation((pid: string) => {
         if (pid === 'p1') return okAsync({ threads: [baseThread], total: 1 });
         return okAsync({ threads: [t2], total: 1 });
@@ -1550,7 +1573,7 @@ describe('thread store actions', () => {
 
       expect(mockListThreads).toHaveBeenCalledWith('p1', false, 50);
       expect(mockListThreads).toHaveBeenCalledWith('p2', false, 50);
-      expect(useThreadStore.getState().threadsById.t2.title).toBe('other');
+      expect(readThreadIndex().threadsById.t2.title).toBe('other');
     });
   });
 
@@ -1630,5 +1653,104 @@ describe('thread store actions', () => {
       expect(useThreadStore.getState().setupProgressByThread.t1).toBeUndefined();
       expect(useThreadStore.getState().threadDataById.t1.branch).toBe('feat/worktree');
     });
+  });
+});
+
+// ── Data-layer integration (openspec adopt-tanstack-db-client) ────────
+//
+// Thread rows live in the threads collection; threadsById / buckets and the
+// right-pane row fields are projected from it. These cover the spec
+// scenarios end-to-end through the real store.
+describe('thread store actions on the threads collection', () => {
+  const t1 = { ...baseThread, stage: 'backlog' } as unknown as Thread;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    useThreadStore.setState(
+      withThreadIndex({
+        ...seedThreads({ p1: [t1] }),
+        scratchThreadIds: [],
+        threadTotalByProject: { p1: 1 },
+        selectedThreadId: 't1',
+        threadDataById: { t1: { ...baseThread } as any },
+        activeThread: { ...baseThread } as any,
+      }),
+    );
+  });
+
+  const sidebarTitle = () => readThreadIndex().threadsById.t1?.title;
+  const boardTitle = () => getThreadsData().readThread('t1')?.title;
+  const headerTitle = () => useThreadStore.getState().activeThread?.title;
+
+  test('spec: rename is reflected in sidebar, board and header at once', async () => {
+    const gate = deferred<unknown>();
+    mockRenameThread.mockReturnValue(ResultAsync.fromSafePromise(gate.promise));
+
+    const rename = useThreadStore.getState().renameThread('t1', 'p1', 'Renamed');
+    expect([sidebarTitle(), boardTitle(), headerTitle()]).toEqual([
+      'Renamed',
+      'Renamed',
+      'Renamed',
+    ]);
+
+    gate.resolve(undefined);
+    await rename;
+    expect([sidebarTitle(), boardTitle(), headerTitle()]).toEqual([
+      'Renamed',
+      'Renamed',
+      'Renamed',
+    ]);
+  });
+
+  test('a failed rename rolls back everywhere', async () => {
+    mockRenameThread.mockReturnValue(errAsync({ type: 'INTERNAL', message: 'boom' }));
+    await useThreadStore.getState().renameThread('t1', 'p1', 'Renamed');
+    expect([sidebarTitle(), boardTitle(), headerTitle()]).toEqual(['thread', 'thread', 'thread']);
+  });
+
+  test('pin applies optimistically and rolls back on failure', async () => {
+    mockPinThread.mockReturnValue(errAsync({ type: 'INTERNAL', message: 'boom' }));
+    const pin = useThreadStore.getState().pinThread('t1', 'p1', true);
+    expect(readThreadIndex().threadsById.t1.pinned).toBe(true);
+    await pin;
+    expect(readThreadIndex().threadsById.t1.pinned).toBeFalsy();
+  });
+
+  test('delete removes the row at once and restores it when the server refuses', async () => {
+    const gate = deferred<void>();
+    mockDeleteThread.mockReturnValue(
+      new ResultAsync(
+        gate.promise.then(() => errAsync({ type: 'INTERNAL', message: 'no' } as const)),
+      ),
+    );
+
+    const pending = useThreadStore.getState().deleteThread('t1', 'p1');
+    expect(readThreadIndex().threadsById.t1).toBeUndefined();
+
+    gate.resolve();
+    await pending;
+    expect(readThreadIndex().threadsById.t1?.id).toBe('t1');
+    expect(readThreadIndex().threadIdsByProject.p1).toEqual(['t1']);
+    expect(useThreadStore.getState().selectedThreadId).toBe('t1');
+  });
+
+  test('a confirmed delete drops the row, its list entry and the selection', async () => {
+    mockDeleteThread.mockReturnValue(okAsync(undefined));
+    await useThreadStore.getState().deleteThread('t1', 'p1');
+    const state = useThreadStore.getState();
+    expect(readThreadIndex().threadsById.t1).toBeUndefined();
+    expect(readThreadIndex().threadIdsByProject.p1).toEqual([]);
+    expect(state.selectedThreadId).toBeNull();
+    expect(state.threadDataById.t1).toBeUndefined();
+  });
+
+  test('spec: thread deleted elsewhere leaves every list and clears the open view', () => {
+    useThreadStore.getState().handleThreadDeleted('t1');
+    const state = useThreadStore.getState();
+    expect(readThreadIndex().threadsById.t1).toBeUndefined();
+    expect(readThreadIndex().threadIdsByProject.p1).toEqual([]);
+    expect(state.selectedThreadId).toBeNull();
+    expect(state.activeThread).toBeNull();
+    expect(mockDeleteThread).not.toHaveBeenCalled();
   });
 });

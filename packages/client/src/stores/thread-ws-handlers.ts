@@ -26,6 +26,7 @@ import type {
 } from '@funny/shared';
 import { toast } from 'sonner';
 
+import { listedProjectIds, readThreadIndex, readThreadRow } from '@/data/threads/read';
 import i18n from '@/i18n/config';
 import { createClientLogger } from '@/lib/client-logger';
 import { emitContextUsage } from '@/lib/context-usage-events';
@@ -38,6 +39,7 @@ import {
 } from './thread-machine-bridge';
 import * as mutations from './thread-mutations';
 import { useThreadReadStore } from './thread-read-store';
+import { patchThreadRow } from './thread-row-writes';
 import type { ThreadState } from './thread-state';
 import {
   bufferWSEvent,
@@ -70,10 +72,9 @@ function findTailUserMessageWithContent(
 
 // ── Sidebar update helper ─────────────────────────────────────
 //
-// Threads live in a single `threadsById` index; project- vs scratch- buckets
-// are just ordered ID arrays around it. So patching a sidebar-visible field
-// (status, lastAssistantMessage, cost, stage, etc.) is a one-liner via
-// `mutations.patchThread` — regardless of which bucket the thread is in.
+// Thread rows live once, in the data layer's threads collection. Patching a
+// sidebar-visible field (status, lastAssistantMessage, cost, stage, etc.) is
+// a synced write via `patchThreadRow`, regardless of which list it is in.
 //
 // This wrapper returns `{ found, patch }` so callers can decide whether to
 // fall back to a project refresh for unknown threads. `patch` is `{}` when
@@ -83,13 +84,10 @@ function patchSidebarThread(
   threadId: string,
   updater: (thread: Thread) => Thread,
 ): { found: boolean; patch: Partial<ThreadState> } {
-  const state = get();
-  if (!state.threadsById || !state.threadsById[threadId]) {
-    return { found: false, patch: {} };
-  }
+  if (!readThreadRow(threadId)) return { found: false, patch: {} };
   return {
     found: true,
-    patch: mutations.patchThread(state, threadId, updater),
+    patch: patchThreadRow(get(), threadId, updater),
   };
 }
 
@@ -141,14 +139,14 @@ function scheduleProjectRefresh(get: Get, specificPid?: string): void {
   if (_refreshAllTimer) return; // already scheduled
   _refreshAllTimer = setTimeout(() => {
     _refreshAllTimer = null;
-    const { threadIdsByProject, loadThreadsForProject } = get();
+    const { loadThreadsForProject } = get();
     if (_pendingRefreshPids.size > 0) {
       for (const pid of _pendingRefreshPids) {
         loadThreadsForProject(pid);
       }
     } else {
       // No specific project — refresh all loaded projects
-      for (const pid of Object.keys(threadIdsByProject)) {
+      for (const pid of listedProjectIds()) {
         loadThreadsForProject(pid);
       }
     }
@@ -807,7 +805,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
   });
   // Scratch threads sit outside any project, so the post-result fallback
   // (`loadThreadsForProject` / `scheduleProjectRefresh`) should be skipped.
-  const sidebarHitScratch = state.scratchThreadIds.includes(threadId);
+  const sidebarHitScratch = readThreadIndex().scratchThreadIds.includes(threadId);
 
   const payloadPatch = mutations.applyThreadDataPatch(state, threadId, (t) => {
     const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, data.cost ?? t.cost);
@@ -1196,7 +1194,7 @@ function notifyThreadResult(
   // all resolve uniformly. Falls back to the loaded payload below for cases
   // where the thread was never loaded into the sidebar.
   const state = get();
-  const t = state.threadsById[threadId];
+  const t = readThreadRow(threadId);
   if (t) {
     threadTitle = t.title ?? threadTitle;
     // Scratch threads keep projectId = null, so downstream notification

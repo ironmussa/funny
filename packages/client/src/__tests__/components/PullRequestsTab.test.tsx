@@ -4,6 +4,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PullRequestsTab } from '@/components/PullRequestsTab';
+import { withThreadIndex } from '@/data/threads/testing';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { usePRDetailStore } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -175,13 +176,15 @@ describe('PullRequestsTab', () => {
       branchByProject: { 'project-1': 'qa' },
       initialized: true,
     } as any);
-    useThreadStore.setState({
-      threadDataById: { [thread.id]: thread },
-      threadsById: { [thread.id]: thread },
-      threadIdsByProject: { 'project-1': [thread.id] },
-      selectedThreadId: thread.id,
-      activeThread: thread,
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadDataById: { [thread.id]: thread },
+        threadsById: { [thread.id]: thread },
+        threadIdsByProject: { 'project-1': [thread.id] },
+        selectedThreadId: thread.id,
+        activeThread: thread,
+      } as any),
+    );
     useGitStatusStore.setState({
       statusByBranch: { 'project-1:feature/pr-branch': makeStatus() },
       threadToBranchKey: { [thread.id]: 'project-1:feature/pr-branch' },

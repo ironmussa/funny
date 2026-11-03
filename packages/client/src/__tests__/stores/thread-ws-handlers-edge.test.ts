@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { attachThreadIndex } from '@/data/threads/testing';
+
 const { mockInvalidate, mockBuffer, mockEmitContextUsage, mockMarkRead, mockToastError } =
   vi.hoisted(() => ({
     mockInvalidate: vi.fn(),
@@ -67,7 +69,16 @@ function makeState(overrides: Record<string, unknown> = {}) {
     cost: 0,
     messages: [],
   };
-  return {
+  const {
+    threadsById,
+    threadIdsByProject,
+    scratchThreadIds,
+    sharedThreadIds,
+    threadTotalByProject,
+    scratchThreadTotal,
+    sharedThreadTotal,
+    ...rest
+  } = {
     threadsById: { [THREAD_ID]: activeThread },
     threadIdsByProject: { p1: [THREAD_ID] },
     scratchThreadIds: [],
@@ -82,6 +93,17 @@ function makeState(overrides: Record<string, unknown> = {}) {
     loadThreadsForProject: vi.fn(),
     ...overrides,
   } as any;
+  // Thread rows and lists live in the data layer: seed them there and expose
+  // them on the plain state as live getters, so assertions read handler writes.
+  return attachThreadIndex(rest, {
+    threadsById,
+    threadIdsByProject,
+    scratchThreadIds,
+    sharedThreadIds,
+    threadTotalByProject,
+    scratchThreadTotal,
+    sharedThreadTotal,
+  }) as any;
 }
 
 function makeGetSet(state: any) {

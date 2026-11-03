@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
+import { readThreadIndex } from '@/data/threads/read';
+import { withThreadIndex } from '@/data/threads/testing';
 import { clearWSDispatchState, dispatchRealtimeEvent } from '@/hooks/ws-event-dispatch';
 import { useAutomationStore } from '@/stores/automation-store';
 import { useCommentStore } from '@/stores/comment-store';
@@ -10,6 +12,7 @@ import { usePipelineStore } from '@/stores/pipeline-store';
 import { usePresenceStore } from '@/stores/presence-store';
 import { useSchedulerStore } from '@/stores/scheduler-store';
 import { useThreadStore } from '@/stores/thread-store';
+import { setAppNavigate } from '@/stores/thread-store-internals';
 import { useWatcherStore } from '@/stores/watcher-store';
 import { useWorkflowRunStore } from '@/stores/workflow-run-store';
 
@@ -136,16 +139,37 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     });
   });
 
+  test('thread:deleted drops the thread and leaves its open view', async () => {
+    const thread = spyActions(useThreadStore, ['handleThreadDeleted']);
+    const presence = spyActions(usePresenceStore, ['clearThread']);
+    const navigate = vi.fn();
+    setAppNavigate(navigate);
+    window.history.pushState({}, '', '/projects/p1/threads/t-open');
+
+    dispatchRealtimeEvent('thread:deleted', 't-other', { projectId: 'p1' });
+    expect(thread.handleThreadDeleted).toHaveBeenCalledWith('t-other');
+    expect(navigate).not.toHaveBeenCalled();
+
+    dispatchRealtimeEvent('thread:deleted', 't-open', { projectId: 'p1' });
+    expect(thread.handleThreadDeleted).toHaveBeenCalledWith('t-open');
+    expect(navigate).toHaveBeenCalledWith(expect.stringContaining('/projects/p1'));
+    await vi.waitFor(() => {
+      expect(presence.clearThread).toHaveBeenCalledWith('t-open');
+    });
+  });
+
   test('comment events update the comment store and the thread badge', async () => {
     const s = spyActions(useCommentStore, ['applyAdded', 'applyDeleted']);
-    useThreadStore.setState({
-      threadsById: { t1: { id: 't1', projectId: 'p1', commentCount: 1 } as any },
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { t1: { id: 't1', projectId: 'p1', commentCount: 1 } as any },
+      }),
+    );
 
     dispatchRealtimeEvent('thread:comment', 't1', { comment: { id: 'c1' } });
-    expect(useThreadStore.getState().threadsById.t1?.commentCount).toBe(2);
+    expect(readThreadIndex().threadsById.t1?.commentCount).toBe(2);
     dispatchRealtimeEvent('thread:comment_deleted', 't1', { commentId: 'c1' });
-    expect(useThreadStore.getState().threadsById.t1?.commentCount).toBe(1);
+    expect(readThreadIndex().threadsById.t1?.commentCount).toBe(1);
     await vi.waitFor(() => {
       expect(s.applyAdded).toHaveBeenCalledWith('t1', { id: 'c1' });
       expect(s.applyDeleted).toHaveBeenCalledWith('t1', 'c1');

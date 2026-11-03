@@ -31,6 +31,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
+import { groupThreadsByStage } from '@/data/threads/views';
 import { useGitStatusScope } from '@/hooks/use-git-status-scope';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
@@ -568,36 +569,6 @@ export function KanbanView({
       />
     </>
   );
-}
-
-function groupThreadsByStage(threads: Thread[]) {
-  const map: Record<ThreadStage, Thread[]> = {
-    backlog: [],
-    planning: [],
-    in_progress: [],
-    review: [],
-    done: [],
-    archived: [],
-  };
-
-  for (const thread of threads) {
-    const stage = thread.archived ? 'archived' : thread.stage || 'backlog';
-    if (map[stage]) {
-      map[stage].push(thread);
-    }
-  }
-
-  // Sort each column: pinned first, then by date (most recent first)
-  for (const stage of STAGES) {
-    map[stage].sort((a, b) => {
-      if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
-      const dateA = a.completedAt || a.createdAt;
-      const dateB = b.completedAt || b.createdAt;
-      return new Date(dateB).getTime() - new Date(dateA).getTime();
-    });
-  }
-
-  return map;
 }
 
 function useKanbanGitStatuses(

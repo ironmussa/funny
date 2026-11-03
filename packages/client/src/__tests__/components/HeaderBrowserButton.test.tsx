@@ -13,6 +13,7 @@ vi.mock('react-i18next', () => ({
 }));
 
 import { ThreadHeaderActionsBase } from '@/components/thread/header/ThreadHeaderActions';
+import { withThreadIndex } from '@/data/threads/testing';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -20,12 +21,14 @@ import { renderWithProviders } from '../helpers/render';
 
 function seedThread(thread: Partial<Thread>) {
   const full = { id: 't1', projectId: 'p1', status: 'idle', title: 'T', ...thread } as Thread;
-  useThreadStore.setState({
-    threadsById: { [full.id]: full },
-    threadIdsByProject: full.isScratch ? {} : { p1: [full.id] },
-    scratchThreadIds: full.isScratch ? [full.id] : [],
-    activeThread: full as any,
-  });
+  useThreadStore.setState(
+    withThreadIndex({
+      threadsById: { [full.id]: full },
+      threadIdsByProject: full.isScratch ? {} : { p1: [full.id] },
+      scratchThreadIds: full.isScratch ? [full.id] : [],
+      activeThread: full as any,
+    }),
+  );
 }
 
 describe('header Browser button', () => {

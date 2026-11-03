@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, test } from 'vitest';
 
+import { withThreadIndex } from '@/data/threads/testing';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -36,15 +37,17 @@ describe('use-right-pane-target', () => {
       selectedProjectId: null,
       projects: [],
     } as any);
-    useThreadStore.setState({
-      threadsById: {},
-      threadIdsByProject: {},
-      scratchThreadIds: [],
-      sharedThreadIds: [],
-      selectedThreadId: null,
-      threadDataById: {},
-      activeThread: null,
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: {},
+        threadIdsByProject: {},
+        scratchThreadIds: [],
+        sharedThreadIds: [],
+        selectedThreadId: null,
+        threadDataById: {},
+        activeThread: null,
+      } as any),
+    );
   });
 
   test('uses the grid-selected thread and project while heavy thread data is still unloaded', () => {
@@ -53,17 +56,19 @@ describe('use-right-pane-target', () => {
       gridSelectedThreadId: 't1',
     } as any);
     useProjectStore.setState({ selectedProjectId: 'stale-project' } as any);
-    useThreadStore.setState({
-      threadsById: {
-        t1: makeThread('t1', 'p1') as any,
-        t2: makeThread('t2', 'p2') as any,
-      },
-      threadIdsByProject: {
-        p1: ['t1'],
-        p2: ['t2'],
-      },
-      threadDataById: {},
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: {
+          t1: makeThread('t1', 'p1') as any,
+          t2: makeThread('t2', 'p2') as any,
+        },
+        threadIdsByProject: {
+          p1: ['t1'],
+          p2: ['t2'],
+        },
+        threadDataById: {},
+      } as any),
+    );
 
     const { result } = renderHook(() => ({
       threadId: useRightPaneThreadId(),

@@ -8,6 +8,9 @@
 
 import type { StoreApi } from 'zustand';
 
+import { isProjectListed, readThreadIndex, readThreadRow } from '@/data/threads/read';
+import { deriveOrderedThreads } from '@/data/threads/views';
+
 // ── Lazy references (set once per store creation) ────────────
 
 type LazyRef<T> = { current: StoreApi<T> | null };
@@ -49,22 +52,11 @@ export function fetchGitStatusForProject(projectId: string): void {
  * `useThreadsByProject` from `lib/thread-selectors` instead.
  */
 export function getThreadsByProject(): Record<string, any[]> {
-  const store = _threadStoreRef.current;
-  if (!store) return {};
-  const state = store.getState();
-  if (!state.threadIdsByProject) return {};
+  const { threadsById, threadIdsByProject } = readThreadIndex();
   const result: Record<string, any[]> = {};
-  for (const pid in state.threadIdsByProject) {
+  for (const pid in threadIdsByProject) {
     if (!pid) continue;
-    const ids = state.threadIdsByProject[pid];
-    if (!ids) continue;
-    const seen = new Set<string>();
-    result[pid] = ids.flatMap((id: string) => {
-      if (seen.has(id)) return [];
-      seen.add(id);
-      const thread = state.threadsById[id];
-      return thread ? [thread] : [];
-    });
+    result[pid] = deriveOrderedThreads(threadsById, threadIdsByProject[pid]);
   }
   return result;
 }
@@ -76,73 +68,23 @@ export function getThreadsByProject(): Record<string, any[]> {
  * `useThreadById` from `lib/thread-selectors` instead).
  */
 export function findThreadById(threadId: string): any | null {
-  const store = _threadStoreRef.current;
-  if (!store) return null;
-  const state = store.getState();
-  const fromIndex = state.threadsById[threadId];
-  if (fromIndex) return fromIndex;
-  // activeThread is loaded with messages so it may exist even when not in
-  // threadsById (race during selectThread). Return it so predicates still work.
-  if (state.activeThread?.id === threadId) return state.activeThread;
+  const fromRows = readThreadRow(threadId);
+  if (fromRows) return fromRows;
+  // activeThread is loaded with messages so it may exist before its row is
+  // listed (race during selectThread). Return it so predicates still work.
+  const active = _threadStoreRef.current?.getState().activeThread;
+  if (active?.id === threadId) return active;
   return null;
 }
 
 // ── Project → Thread operations ──────────────────────────────
 
-/**
- * Batch-update multiple projects' thread lists in a single `setState` so the
- * sidebar renders once instead of N times. Threads land in `threadsById` and
- * their ordered IDs in `threadIdsByProject` — same shape every other write
- * uses, so the rest of the store stays consistent.
- */
-export function batchUpdateThreads(
-  updates: Array<{ projectId: string; threads: any[] | null; total: number }>,
-): void {
-  const store = _threadStoreRef.current;
-  if (!store) return;
-  const state = store.getState();
-  let changed = false;
-  const nextById = { ...state.threadsById };
-  const nextIdsByProject = { ...state.threadIdsByProject };
-  const nextTotals = { ...state.threadTotalByProject };
-  for (const { projectId, threads, total } of updates) {
-    if (!projectId || !threads) continue;
-    const seen = new Set<string>();
-    const newIds: string[] = [];
-    for (const t of threads) {
-      if (seen.has(t.id)) continue;
-      seen.add(t.id);
-      newIds.push(t.id);
-    }
-    const prevIds = state.threadIdsByProject[projectId];
-    // Skip if the ID array is identical (same order, same length) — the
-    // server returned the same list, no need to thrash references.
-    const idsUnchanged =
-      prevIds &&
-      prevIds.length === newIds.length &&
-      prevIds.every((id: string, i: number) => id === newIds[i]);
-    if (idsUnchanged && state.threadTotalByProject[projectId] === total) continue;
-    for (const t of threads) nextById[t.id] = t;
-    nextIdsByProject[projectId] = newIds;
-    nextTotals[projectId] = total;
-    changed = true;
-  }
-  if (changed) {
-    store.setState({
-      threadsById: nextById,
-      threadIdsByProject: nextIdsByProject,
-      threadTotalByProject: nextTotals,
-    });
-  }
-}
-
 /** Load threads for a project if not already loaded */
 export function ensureThreadsLoaded(projectId: string): void {
   const store = _threadStoreRef.current;
   if (!store) return;
-  const state = store.getState();
-  if (!state.threadIdsByProject[projectId]) {
-    state.loadThreadsForProject(projectId);
+  if (!isProjectListed(projectId)) {
+    store.getState().loadThreadsForProject(projectId);
   }
 }
 

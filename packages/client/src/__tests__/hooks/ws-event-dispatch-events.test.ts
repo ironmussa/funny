@@ -113,6 +113,8 @@ vi.mock('@/stores/thread-store-internals', async (importOriginal) => {
   };
 });
 
+import { readThreadIndex } from '@/data/threads/read';
+import { withThreadIndex } from '@/data/threads/testing';
 import {
   clearWSDispatchState,
   registerSocketIOHandlers,
@@ -153,17 +155,19 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     const refreshAll = vi.fn();
     const refreshActive = vi.fn();
 
-    useThreadStore.setState({
-      threadsById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
-      threadDataById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
-      selectedThreadId: 't1',
-      activeThread: { id: 't1', permissionMode: 'ask' } as any,
-      handleWSStatus: ((tid: string, data: unknown) => {
-        statusCalls.push({ tid, data });
-      }) as any,
-      refreshAllLoadedThreads: refreshAll as any,
-      refreshActiveThread: refreshActive as any,
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
+        threadDataById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
+        selectedThreadId: 't1',
+        activeThread: { id: 't1', permissionMode: 'ask' } as any,
+        handleWSStatus: ((tid: string, data: unknown) => {
+          statusCalls.push({ tid, data });
+        }) as any,
+        refreshAllLoadedThreads: refreshAll as any,
+        refreshActiveThread: refreshActive as any,
+      }),
+    );
 
     const handlers = captureHandlers();
     handlers['thread:updated']({
@@ -174,7 +178,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     expect(statusCalls).toEqual([{ tid: 't1', data: { status: 'completed' } }]);
     expect(refreshAll).toHaveBeenCalled();
     expect(refreshActive).toHaveBeenCalled();
-    expect(useThreadStore.getState().threadsById.t1.permissionMode).toBe('plan');
+    expect(readThreadIndex().threadsById.t1.permissionMode).toBe('plan');
     expect(useThreadStore.getState().threadDataById.t1.permissionMode).toBe('plan');
     expect(useThreadStore.getState().activeThread?.permissionMode).toBe('plan');
   });
@@ -580,17 +584,19 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       value: Object.assign(function NotificationMock() {}, { permission: 'granted' }),
     });
 
-    useThreadStore.setState({
-      activeThread: {
-        id: 't1',
-        projectId: 'p1',
-        title: 'Fix bug',
-        branch: 'feat/x',
-      } as any,
-      threadsById: {
-        t1: { id: 't1', projectId: 'p1', title: 'Fix bug', branch: 'feat/x' } as any,
-      },
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        activeThread: {
+          id: 't1',
+          projectId: 'p1',
+          title: 'Fix bug',
+          branch: 'feat/x',
+        } as any,
+        threadsById: {
+          t1: { id: 't1', projectId: 'p1', title: 'Fix bug', branch: 'feat/x' } as any,
+        },
+      }),
+    );
 
     captureHandlers()['agent:result']({
       threadId: 't1',

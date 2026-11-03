@@ -27,13 +27,6 @@ async function freshBridge() {
 
 describe('store-bridge', () => {
   describe('before registration', () => {
-    test('batchUpdateThreads is a no-op and does not throw', async () => {
-      const bridge = await freshBridge();
-      expect(() =>
-        bridge.batchUpdateThreads([{ projectId: 'p1', threads: [{ id: 't1' }], total: 1 }]),
-      ).not.toThrow();
-    });
-
     test('ensureThreadsLoaded is a no-op and does not throw', async () => {
       const bridge = await freshBridge();
       expect(() => bridge.ensureThreadsLoaded('p1')).not.toThrow();
@@ -61,86 +54,6 @@ describe('store-bridge', () => {
   });
 
   describe('after registration', () => {
-    test('batchUpdateThreads delegates to thread store', async () => {
-      const bridge = await freshBridge();
-
-      const threadStore = createMockStore({
-        threadsById: {} as Record<string, any>,
-        threadIdsByProject: {} as Record<string, string[]>,
-        threadTotalByProject: {} as Record<string, number>,
-      });
-
-      bridge.registerThreadStore(threadStore as any);
-
-      const threads = [{ id: 't1', name: 'Thread 1' }];
-      bridge.batchUpdateThreads([{ projectId: 'p1', threads, total: 1 }]);
-
-      const state = threadStore.getState();
-      expect(state.threadIdsByProject['p1']).toEqual(['t1']);
-      expect(state.threadsById['t1']).toBe(threads[0]);
-      expect(state.threadTotalByProject['p1']).toBe(1);
-    });
-
-    test('batchUpdateThreads de-dupes duplicate ids in a project update', async () => {
-      const bridge = await freshBridge();
-
-      const threadStore = createMockStore({
-        threadsById: {} as Record<string, any>,
-        threadIdsByProject: {} as Record<string, string[]>,
-        threadTotalByProject: {} as Record<string, number>,
-      });
-
-      bridge.registerThreadStore(threadStore as any);
-
-      bridge.batchUpdateThreads([
-        {
-          projectId: 'p1',
-          threads: [{ id: 't1', title: 'old' }, { id: 't1', title: 'new' }, { id: 't2' }],
-          total: 3,
-        },
-      ]);
-
-      const state = threadStore.getState();
-      expect(state.threadIdsByProject['p1']).toEqual(['t1', 't2']);
-      expect(state.threadsById['t1'].title).toBe('new');
-    });
-
-    test('batchUpdateThreads only updates changed entries', async () => {
-      const bridge = await freshBridge();
-
-      const existingThread = { id: 't1' };
-      const threadStore = createMockStore({
-        threadsById: { t1: existingThread } as Record<string, any>,
-        threadIdsByProject: { p1: ['t1'] } as Record<string, string[]>,
-        threadTotalByProject: { p1: 1 } as Record<string, number>,
-      });
-
-      const setStateSpy = vi.spyOn(threadStore, 'setState');
-      bridge.registerThreadStore(threadStore as any);
-
-      // Same id list + same total — should NOT trigger setState.
-      bridge.batchUpdateThreads([{ projectId: 'p1', threads: [existingThread], total: 1 }]);
-
-      expect(setStateSpy).not.toHaveBeenCalled();
-    });
-
-    test('batchUpdateThreads skips entries with null threads', async () => {
-      const bridge = await freshBridge();
-
-      const threadStore = createMockStore({
-        threadsById: {} as Record<string, any>,
-        threadIdsByProject: {} as Record<string, string[]>,
-        threadTotalByProject: {} as Record<string, number>,
-      });
-
-      const setStateSpy = vi.spyOn(threadStore, 'setState');
-      bridge.registerThreadStore(threadStore as any);
-
-      bridge.batchUpdateThreads([{ projectId: 'p1', threads: null, total: 0 }]);
-
-      expect(setStateSpy).not.toHaveBeenCalled();
-    });
-
     test('ensureThreadsLoaded calls loadThreadsForProject when not loaded', async () => {
       const bridge = await freshBridge();
 
@@ -158,12 +71,12 @@ describe('store-bridge', () => {
 
     test('ensureThreadsLoaded skips if threads already loaded', async () => {
       const bridge = await freshBridge();
+      const { getThreadsData } = await import('@/data/threads/store');
+      const { setSourceMembers } = await import('@/data/threads/list-meta');
+      setSourceMembers(getThreadsData().meta, 'project:p1', ['t1'], 1);
 
       const loadThreadsForProject = vi.fn();
-      const threadStore = createMockStore({
-        threadIdsByProject: { p1: ['t1'] } as Record<string, string[]>,
-        loadThreadsForProject,
-      });
+      const threadStore = createMockStore({ loadThreadsForProject });
 
       bridge.registerThreadStore(threadStore as any);
       bridge.ensureThreadsLoaded('p1');
@@ -171,30 +84,31 @@ describe('store-bridge', () => {
       expect(loadThreadsForProject).not.toHaveBeenCalled();
     });
 
-    test('getThreadsByProject derives from threadsById + threadIdsByProject', async () => {
+    test('getThreadsByProject derives from the thread rows and project lists', async () => {
       const bridge = await freshBridge();
+      const { getThreadsData } = await import('@/data/threads/store');
+      const { setSourceMembers } = await import('@/data/threads/list-meta');
 
-      const t1 = { id: 't1', projectId: 'p1', title: 'one' };
-      const t2 = { id: 't2', projectId: 'p2', title: 'two' };
-      const threadStore = createMockStore({
-        threadsById: { t1, t2 } as Record<string, any>,
-        threadIdsByProject: { p1: ['t1', 't1'], p2: ['t2'], '': ['t1'] } as Record<
-          string,
-          string[]
-        >,
-      });
+      const t1 = { id: 't1', projectId: 'p1', title: 'one' } as any;
+      const t2 = { id: 't2', projectId: 'p2', title: 'two' } as any;
+      const data = getThreadsData();
+      data.upsertFromServer([t1, t2], data.beginRequest());
+      setSourceMembers(data.meta, 'project:p1', ['t1', 't1'], 1);
+      setSourceMembers(data.meta, 'project:p2', ['t2'], 1);
+      setSourceMembers(data.meta, 'project:', ['t1'], 1);
 
-      bridge.registerThreadStore(threadStore as any);
+      bridge.registerThreadStore(createMockStore({}) as any);
 
       // Regression: before unified-store, `getThreadsByProject` returned
       // `state.threadsByProject` directly — once that field was removed it
       // returned `undefined` and crashed every consumer (git-status-store,
-      // ThreadList, ProjectItem, etc.). It must now derive.
+      // ThreadList, ProjectItem, etc.). It must derive, de-duplicate IDs and
+      // skip the empty project id.
       const result = bridge.getThreadsByProject();
       expect(result).toEqual({ p1: [t1], p2: [t2] });
     });
 
-    test('getThreadsByProject is safe when threadIdsByProject is missing', async () => {
+    test('getThreadsByProject is empty before any project list loads', async () => {
       const bridge = await freshBridge();
 
       // Defensive: tests / stories may seed a partial store. Returning

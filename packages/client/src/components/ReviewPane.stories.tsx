@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 
+import { withThreadIndex } from '@/data/threads/testing';
 import '@/i18n/config';
 import { useCommitProgressStore } from '@/stores/commit-progress-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
@@ -396,23 +397,27 @@ function seedStores(
   };
 
   if (hasThread) {
-    useThreadStore.setState({
-      threadsById: { [thread.id]: thread },
-      threadIdsByProject: { 'proj-1': [thread.id] },
-      selectedThreadId: 'thread-1',
-      activeThread: { ...thread, messages: [] },
-      setupProgressByThread: {},
-      contextUsageByThread: {},
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { [thread.id]: thread },
+        threadIdsByProject: { 'proj-1': [thread.id] },
+        selectedThreadId: 'thread-1',
+        activeThread: { ...thread, messages: [] },
+        setupProgressByThread: {},
+        contextUsageByThread: {},
+      }),
+    );
   } else {
-    useThreadStore.setState({
-      threadsById: {},
-      threadIdsByProject: {},
-      selectedThreadId: null,
-      activeThread: null,
-      setupProgressByThread: {},
-      contextUsageByThread: {},
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: {},
+        threadIdsByProject: {},
+        selectedThreadId: null,
+        activeThread: null,
+        setupProgressByThread: {},
+        contextUsageByThread: {},
+      }),
+    );
   }
 
   useGitStatusStore.setState({

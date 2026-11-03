@@ -74,6 +74,7 @@ vi.mock('@/stores/thread-ws-handlers', () => ({
 // internals reales para que `getSelectingThreadId` / `nextSelectGeneration`
 // se comporten exactamente como en producción.
 
+import { withThreadIndex } from '@/data/threads/testing';
 import { useThreadStore } from '@/stores/thread-store';
 import {
   setSelectingThreadId,
@@ -119,14 +120,16 @@ describe('selectThread — stuck selectingThreadId (reproduces "invariant re-sel
     // evita una unhandled rejection ortogonal al bug bajo prueba.
     mockListThreads.mockReturnValue(okAsync({ threads: [], total: 0 }));
     // Reset el estado del store a un punto conocido: hilo A activo, B no cargado.
-    useThreadStore.setState({
-      selectedThreadId: threadA.id,
-      activeThread: { ...threadA } as any,
-      threadDataById: { [threadA.id]: { ...threadA } as any },
-      threadsById: {},
-      threadIdsByProject: {},
-      scratchThreadIds: [],
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: threadA.id,
+        activeThread: { ...threadA } as any,
+        threadDataById: { [threadA.id]: { ...threadA } as any },
+        threadsById: {},
+        threadIdsByProject: {},
+        scratchThreadIds: [],
+      }),
+    );
     // Asegurar que los internals están limpios entre tests.
     setSelectingThreadId(null);
   });

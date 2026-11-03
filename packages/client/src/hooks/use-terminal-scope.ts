@@ -1,5 +1,7 @@
 import type { Thread } from '@funny/shared';
 
+import { useThreadById } from '@/data/threads/hooks';
+import { readThreadRow } from '@/data/threads/read';
 import { useProjectStore } from '@/stores/project-store';
 import { SCRATCH_TERMINAL_SCOPE_ID } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -77,11 +79,11 @@ export function useTerminalScope(): TerminalScope {
   const activeThread = useThreadStore((s) => s.activeThread);
   const liveColumnsOpen = useUIStore((s) => s.liveColumnsOpen);
   const gridSelectedThreadId = useUIStore((s) => s.gridSelectedThreadId);
-  const gridThread = useThreadStore((s) =>
-    gridSelectedThreadId
-      ? (s.threadDataById[gridSelectedThreadId] ?? s.threadsById[gridSelectedThreadId] ?? null)
-      : null,
+  const gridPayload = useThreadStore((s) =>
+    gridSelectedThreadId ? (s.threadDataById[gridSelectedThreadId] ?? null) : null,
   );
+  const gridRow = useThreadById(gridSelectedThreadId);
+  const gridThread = gridPayload ?? gridRow ?? null;
 
   return resolveTerminalScope({
     liveColumnsOpen,
@@ -98,7 +100,7 @@ export function getTerminalScope(): TerminalScope {
   const { liveColumnsOpen, gridSelectedThreadId } = useUIStore.getState();
   const gridThread = gridSelectedThreadId
     ? (threadState.threadDataById[gridSelectedThreadId] ??
-      threadState.threadsById[gridSelectedThreadId] ??
+      readThreadRow(gridSelectedThreadId) ??
       null)
     : null;
 

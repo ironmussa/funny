@@ -14,6 +14,7 @@ import { ProjectPickerDialog } from '@/components/live-columns/ProjectPickerDial
 import { ThreadColumn } from '@/components/live-columns/ThreadColumn';
 import { ThreadHeaderActions } from '@/components/thread/ProjectHeader';
 import { Button } from '@/components/ui/button';
+import { isProjectListed } from '@/data/threads/read';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createClientLogger } from '@/lib/client-logger';
 import { firstPlacedThreadId, resolveGridSelection } from '@/lib/grid-selection';
@@ -49,9 +50,8 @@ export function LiveColumnsView() {
   // WS events keep the store in sync after the initial load).
   const projectIdsKey = useMemo(() => projects.map((p) => p.id).join(','), [projects]);
   useEffect(() => {
-    const state = useThreadStore.getState();
     for (const project of projects) {
-      if (!state.threadIdsByProject[project.id]) {
+      if (!isProjectListed(project.id)) {
         loadThreadsForProject(project.id);
       }
     }

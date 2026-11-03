@@ -4,6 +4,7 @@ import { GpuixClientApp } from './app';
 import type { NativeApplicationServices } from './application';
 import { configureNativeFrameDiagnostics, resetNativeFrameDiagnostics } from './frame-diagnostics';
 import { NATIVE_CLIENT_WINDOW_OPTIONS } from './native-frame-options';
+import { unmountAfterNativeShutdown } from './native-shutdown';
 import type { NativeClientComposition } from './platform/composition';
 import { NativeRendererErrorBoundary } from './renderer-error-boundary';
 
@@ -11,6 +12,8 @@ export function startNativeClient(
   composition: NativeClientComposition,
   application: NativeApplicationServices,
   diagnostics = false,
+  /** Called once the user has closed the native host and cleanup has run. */
+  onClosed?: () => void,
 ): { stop(): void } {
   const renderer = createRenderer();
   renderer.init(NATIVE_CLIENT_WINDOW_OPTIONS);
@@ -33,7 +36,8 @@ export function startNativeClient(
       stopIdleGc();
       composition.lifecycle.markWindowTerminated();
       application.dispose();
-      root.unmount();
+      unmountAfterNativeShutdown(root);
+      onClosed?.();
     },
   });
   return {

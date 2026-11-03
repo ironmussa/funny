@@ -33,6 +33,7 @@ import { LoadingState } from './components/ui/loading-state';
 import { TooltipProvider } from './components/ui/tooltip';
 import { profileApi } from './lib/api/profile';
 import { resolveClientLogLevel } from './lib/client-logger';
+import { bindDataLayerToSession } from './lib/data-layer-session';
 import { otlpEnabled, otlpEndpoint } from './lib/otlp-config';
 import { useAuthStore } from './stores/auth-store';
 import { useProfileStore } from './stores/profile-store';
@@ -50,6 +51,7 @@ import './i18n/config';
 // The platform is constructed and validated before React starts rendering.
 // Factories migrated into client-core receive capabilities from this value.
 void clientComposition;
+bindDataLayerToSession();
 const initialPathname = clientComposition.platform.navigation.current().pathname;
 const hasInitialThread = prefetchInitialThread(initialPathname);
 

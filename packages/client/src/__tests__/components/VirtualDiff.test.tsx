@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test } from 'vitest';
 
 import { VirtualDiff } from '@/components/VirtualDiff';
@@ -33,7 +33,7 @@ describe('VirtualDiff', () => {
     expect(screen.queryByTestId('diff-fade-right')).not.toBeInTheDocument();
   });
 
-  test('does not render vertical edge fades while scrolling', () => {
+  test('does not render vertical edge fades while scrolling', async () => {
     render(<VirtualDiff unifiedDiff={SIMPLE_DIFF} viewMode="split" />);
 
     const scrollArea = screen.getByTestId('diff-scroll-area');
@@ -56,6 +56,12 @@ describe('VirtualDiff', () => {
 
     scrollArea.scrollTop = 120;
     fireEvent.scroll(scrollArea);
+    expect(screen.queryByTestId('diff-fade-top')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('diff-fade-bottom')).not.toBeInTheDocument();
+
+    // Let the virtualizer's scroll-end reset (150ms) fire while mounted; left
+    // pending, it runs after the jsdom teardown and fails the run.
+    await act(() => new Promise((resolve) => setTimeout(resolve, 200)));
     expect(screen.queryByTestId('diff-fade-top')).not.toBeInTheDocument();
     expect(screen.queryByTestId('diff-fade-bottom')).not.toBeInTheDocument();
   });

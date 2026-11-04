@@ -1415,6 +1415,7 @@
     "automationCreateFailed": "Não foi possível criar a automação.",
     "automationTriggerFailed": "Não foi possível iniciar a execução da automação.",
     "commentDeleteFailed": "Não foi possível excluir o comentário.",
+    "approvalRespondFailed": "Não foi possível enviar sua resposta. A aprovação continua pendente.",
     "projectUpdateFailed": "Não foi possível atualizar o projeto. Sua alteração foi desfeita."
   },
   "agentResources": {

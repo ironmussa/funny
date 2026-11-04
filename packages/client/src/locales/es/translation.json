@@ -1449,6 +1449,7 @@
     "automationCreateFailed": "No se pudo crear la automatización.",
     "automationTriggerFailed": "No se pudo iniciar la ejecución de la automatización.",
     "commentDeleteFailed": "No se pudo eliminar el comentario.",
+    "approvalRespondFailed": "No se pudo enviar tu respuesta. La aprobación sigue pendiente.",
     "projectUpdateFailed": "No se pudo actualizar el proyecto. Se deshizo tu cambio."
   },
   "agentResources": {

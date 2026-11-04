@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -10,7 +10,8 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
-import { usePipelineApprovalStore, type PendingApproval } from '@/stores/pipeline-approval-store';
+import { usePendingApprovals } from '@/data/approvals/hooks';
+import { respondToApproval, type PendingApproval } from '@/data/approvals/store';
 
 /**
  * Renders a modal whenever there is at least one pending pipeline approval
@@ -23,51 +24,38 @@ import { usePipelineApprovalStore, type PendingApproval } from '@/stores/pipelin
  * the title so the user can see how many gates are waiting.
  */
 export function PipelineApprovalDialog() {
-  const pending = usePipelineApprovalStore((s) => s.pending);
-  const respond = usePipelineApprovalStore((s) => s.respond);
-
-  const queue = useMemo(() => {
-    return Object.values(pending).sort((a, b) => a.requestedAt.localeCompare(b.requestedAt));
-  }, [pending]);
+  const queue = usePendingApprovals();
 
   const current: PendingApproval | undefined = queue[0];
 
   if (!current) return null;
 
-  return (
-    <ApprovalForm
-      key={current.approvalId}
-      approval={current}
-      respond={respond}
-      queueDepth={queue.length}
-    />
-  );
+  return <ApprovalForm key={current.approvalId} approval={current} queueDepth={queue.length} />;
 }
 
 interface ApprovalFormProps {
   approval: PendingApproval;
-  respond: (
-    approvalId: string,
-    decision: 'approve' | 'reject',
-    text?: string,
-  ) => Promise<{ ok: true } | { ok: false; error: string }>;
   queueDepth: number;
 }
 
-function ApprovalForm({ approval, respond, queueDepth }: ApprovalFormProps) {
+function ApprovalForm({ approval, queueDepth }: ApprovalFormProps) {
   const [comment, setComment] = useState('');
   const [reason, setReason] = useState('');
 
-  const submitting = approval.submitting === true;
+  // Answering hides the approval at once; a refused answer brings it back with the error.
   const submitError = approval.submitError;
 
   const handleApprove = () => {
-    void respond(approval.approvalId, 'approve', approval.captureResponse ? comment : undefined);
+    void respondToApproval(
+      approval.approvalId,
+      'approve',
+      approval.captureResponse ? comment : undefined,
+    );
   };
 
   const handleReject = () => {
     if (!reason.trim()) return;
-    void respond(approval.approvalId, 'reject', reason);
+    void respondToApproval(approval.approvalId, 'reject', reason);
   };
 
   return (
@@ -111,7 +99,6 @@ function ApprovalForm({ approval, respond, queueDepth }: ApprovalFormProps) {
                 placeholder="Add a comment for downstream steps..."
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
-                disabled={submitting}
                 rows={3}
               />
             </div>
@@ -130,7 +117,6 @@ function ApprovalForm({ approval, respond, queueDepth }: ApprovalFormProps) {
               placeholder="Why is this being rejected?"
               value={reason}
               onChange={(e) => setReason(e.target.value)}
-              disabled={submitting}
               rows={2}
             />
           </div>
@@ -146,17 +132,13 @@ function ApprovalForm({ approval, respond, queueDepth }: ApprovalFormProps) {
           <Button
             variant="destructive"
             onClick={handleReject}
-            disabled={submitting || !reason.trim()}
+            disabled={!reason.trim()}
             data-testid="pipeline-approval-reject"
           >
             Reject
           </Button>
-          <Button
-            onClick={handleApprove}
-            disabled={submitting}
-            data-testid="pipeline-approval-approve"
-          >
-            {submitting ? 'Sending…' : 'Approve'}
+          <Button onClick={handleApprove} data-testid="pipeline-approval-approve">
+            Approve
           </Button>
         </DialogFooter>
       </DialogContent>

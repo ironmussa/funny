@@ -1456,6 +1456,7 @@
     "automationCreateFailed": "Couldn't create the automation.",
     "automationTriggerFailed": "Couldn't start the automation run.",
     "commentDeleteFailed": "Couldn't delete the comment.",
+    "approvalRespondFailed": "Couldn't send your answer. The approval is still waiting.",
     "projectUpdateFailed": "Couldn't update the project. Your change was undone."
   },
   "agentResources": {

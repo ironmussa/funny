@@ -48,7 +48,9 @@ class ApiHelper {
   ) {}
 
   private headers() {
-    return { Authorization: `Bearer ${this.token}` };
+    // The server refuses cross-origin writes without an Origin header (403), which
+    // made every afterEach cleanup fail silently and leave projects behind.
+    return { Authorization: `Bearer ${this.token}`, Origin: this.baseURL };
   }
 
   async createProject(name: string, repoPath: string): Promise<Project> {

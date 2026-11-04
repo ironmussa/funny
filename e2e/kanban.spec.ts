@@ -8,10 +8,13 @@ test.describe('11. Kanban View', () => {
     const project = await seedProject(api, page, tempRepo, `Kanban-${Date.now()}`);
     projectId = project.id;
 
-    // Create threads in different stages
+    // Create threads in different stages. Idle threads can only start in
+    // backlog or planning, so the later stages are reached with a stage update.
     const stages = ['backlog', 'planning', 'in_progress', 'review', 'done'];
     for (const stage of stages) {
-      const thread = await api.createIdleThread(projectId, `${stage} thread`, { stage });
+      const initial = stage === 'planning' ? 'planning' : 'backlog';
+      const thread = await api.createIdleThread(projectId, `${stage} thread`, { stage: initial });
+      if (stage !== initial) await api.updateThreadStage(thread.id, stage);
       threadIds.push(thread.id);
     }
   });

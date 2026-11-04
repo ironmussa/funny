@@ -9,6 +9,7 @@ import {
 } from 'react';
 
 import type { ConfirmDialogState } from '@/components/review-pane/ReviewDialogs';
+import type { ProjectGitStatus } from '@/data/git-status/keys';
 import { useCommitDraft } from '@/hooks/use-commit-draft';
 import { useCommitWorkflow } from '@/hooks/use-commit-workflow';
 import { useDiffData } from '@/hooks/use-diff-data';
@@ -18,7 +19,6 @@ import { usePublishState } from '@/hooks/use-publish-state';
 import { useReviewActions } from '@/hooks/use-review-actions';
 import { useStashState } from '@/hooks/use-stash-state';
 import { metric } from '@/lib/telemetry';
-import type { ProjectGitStatus } from '@/stores/git-status-store';
 import type { ReviewSubTab } from '@/stores/ui-store';
 
 interface UseReviewStateArgs {

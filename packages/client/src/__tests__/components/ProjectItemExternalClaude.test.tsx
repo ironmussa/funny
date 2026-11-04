@@ -8,7 +8,6 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ProjectItem } from '@/components/sidebar/ProjectItem';
 import { resetExternalClaudeSessionsForTests } from '@/hooks/use-external-claude-sessions';
 import { api } from '@/lib/api';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { mockT } from '../helpers/mock-i18n';
@@ -28,6 +27,16 @@ vi.mock('react-i18next', () => ({
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
+
+const gitActionOverrides = vi.hoisted(() => ({}) as Record<string, (...args: any[]) => unknown>);
+vi.mock('@/data/git-status/actions', async (importOriginal) => {
+  const real = await importOriginal<Record<string, (...args: any[]) => unknown>>();
+  const wrapped: Record<string, (...args: any[]) => unknown> = {};
+  for (const [name, fn] of Object.entries(real)) {
+    wrapped[name] = (...args) => (gitActionOverrides[name] ?? fn)(...args);
+  }
+  return wrapped;
+});
 
 vi.mock('@/hooks/use-minute-tick', () => ({
   useMinuteTick: () => {},
@@ -106,6 +115,7 @@ function LocationProbe() {
 
 describe('ProjectItem external Claude sessions', () => {
   beforeEach(() => {
+    for (const name of Object.keys(gitActionOverrides)) delete gitActionOverrides[name];
     resetExternalClaudeSessionsForTests();
     vi.clearAllMocks();
     vi.mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
@@ -178,7 +188,7 @@ describe('ProjectItem external Claude sessions', () => {
 
   test('defers git status for collapsed inactive projects until they become visible', async () => {
     const ensureStatusForThreads = vi.fn();
-    useGitStatusStore.setState({ ensureStatusForThreads } as any);
+    gitActionOverrides.ensureStatusForThreads = ensureStatusForThreads;
     const props = {
       project,
       threads: [thread],

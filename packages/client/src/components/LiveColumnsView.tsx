@@ -14,13 +14,13 @@ import { ProjectPickerDialog } from '@/components/live-columns/ProjectPickerDial
 import { ThreadColumn } from '@/components/live-columns/ThreadColumn';
 import { ThreadHeaderActions } from '@/components/thread/ProjectHeader';
 import { Button } from '@/components/ui/button';
+import { fetchForThread } from '@/data/git-status/actions';
 import { useProjects } from '@/data/projects/hooks';
 import { isProjectListed } from '@/data/threads/read';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createClientLogger } from '@/lib/client-logger';
 import { firstPlacedThreadId, resolveGridSelection } from '@/lib/grid-selection';
 import { GRID_CELLS_KEY, getGridCells, type GridCellAssignments } from '@/lib/grid-storage';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -77,7 +77,6 @@ export function LiveColumnsView() {
   // --- Selected thread (drives the consolidated header actions + right pane) ---
   const gridSelectedThreadId = useUIStore((s) => s.gridSelectedThreadId);
   const setGridSelectedThreadId = useUIStore((s) => s.setGridSelectedThreadId);
-  const fetchForThread = useGitStatusStore((s) => s.fetchForThread);
   const initedSelectionRef = useRef(false);
   const prevHadThreadsRef = useRef(false);
 

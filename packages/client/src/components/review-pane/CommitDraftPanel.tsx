@@ -16,10 +16,10 @@ import { InlineProgressSteps } from '@/components/InlineProgressSteps';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { ProjectGitStatus } from '@/data/git-status/keys';
 import type { CommitAction } from '@/hooks/use-commit-workflow';
 import { cn } from '@/lib/utils';
 import { type CommitProgressEntry, useCommitProgressStore } from '@/stores/commit-progress-store';
-import type { ProjectGitStatus } from '@/stores/git-status-store';
 import { editorLabels, useSettingsStore } from '@/stores/settings-store';
 
 interface CommitDraftPanelProps {

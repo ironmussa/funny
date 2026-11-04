@@ -9,10 +9,10 @@ import {
 } from '@funny/shared/models';
 import { useMemo } from 'react';
 
+import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { normalizeEffort } from '@/lib/providers';
 import { resolveThreadBranch } from '@/lib/utils';
-import { useGitStatusForThread } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadSelector } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';

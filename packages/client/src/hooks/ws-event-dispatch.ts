@@ -12,6 +12,14 @@ import { handleRunCompleted, handleRunStarted, handleRunUpdated } from '@/data/a
 import { applyJobEvent, applyWatcherEvent } from '@/data/background/loaders';
 import { applyCommentAdded, applyCommentDeleted } from '@/data/comments/store';
 import {
+  fetchForThread,
+  fetchProjectStatus,
+  fetchForProject,
+  applyGitStatusEvent,
+  markGitStatusStale,
+} from '@/data/git-status/actions';
+import { readGitStatusMaps } from '@/data/git-status/read';
+import {
   applyRunClaimed,
   applyRunDispatched,
   applyRunReleased,
@@ -27,7 +35,6 @@ import { metric, startSpan } from '@/lib/telemetry';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { clientComposition } from '@/platform/client-composition';
-import { invalidateCooldownsForKeys, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import * as threadMutations from '@/stores/thread-mutations';
@@ -560,9 +567,8 @@ function handleThreadDeleted(threadId: string, data: any): void {
 }
 
 function handleGitStatus(threadId: string, data: any): void {
-  useGitStatusStore.getState().updateFromWS(data.statuses);
-  const updatedKeys = (data.statuses as Array<{ branchKey: string }>).map((s) => s.branchKey);
-  if (updatedKeys.length > 0) invalidateCooldownsForKeys(updatedKeys);
+  // Fresh server state; also makes the matching request caches stale.
+  applyGitStatusEvent(data.statuses);
   // PR-lookup updates don't touch the working tree — refetching the diff
   // summary for them only repeats an expensive request.
   if (!data.prOnly) notifyReviewDirty(threadId);
@@ -579,18 +585,17 @@ function handleGitRefsUpdated(_threadId: string, data: any): void {
   // thread/project-mode slices are only relevant when that same project is
   // active; refreshing them for unrelated repositories created a second
   // startup wave and repeatedly recomputed the same active-thread status.
-  const gitStore = useGitStatusStore.getState();
-  // Clear cooldowns so the bulk sidebar refetch isn't swallowed by its window.
-  invalidateCooldownsForKeys([data.projectId]);
+  // Mark the project's status stale so the bulk sidebar refetch isn't served from cache.
+  markGitStatusStale([data.projectId]);
   const activeThreadId = getUrlThreadId() ?? useThreadStore.getState().selectedThreadId;
   const activeThreadProjectId = activeThreadId ? getProjectIdForThread(activeThreadId) : undefined;
   if (activeThreadId && activeThreadProjectId === data.projectId) {
-    void gitStore.fetchForThread(activeThreadId, true); // thread-mode pane
+    void fetchForThread(activeThreadId, true); // thread-mode pane
   }
   if (useProjectStore.getState().selectedProjectId === data.projectId) {
-    void gitStore.fetchProjectStatus(data.projectId, true); // project-mode pane slice
+    void fetchProjectStatus(data.projectId, true); // project-mode pane slice
   }
-  void gitStore.fetchForProject(data.projectId); // sidebar bulk badges
+  void fetchForProject(data.projectId); // sidebar bulk badges
 }
 
 const testEventHandler: WebEventHandler = (_threadId, data, type) => {
@@ -865,7 +870,7 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
     import('@/stores/pr-detail-store').then(({ usePRDetailStore }) => {
       const activeThread = readActiveThreadView(useThreadStore.getState());
       if (activeThread) {
-        const gitStatus = useGitStatusStore.getState();
+        const gitStatus = readGitStatusMaps();
         const bk =
           gitStatus.threadToBranchKey[activeThread.id] ??
           `${activeThread.projectId}:${activeThread.branch ?? ''}`;

@@ -9,10 +9,11 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { VirtualThreadList } from '@/components/VirtualThreadList';
+import { useGitStatusMaps } from '@/data/git-status/hooks';
+import { statusBranchKeyForThread } from '@/data/git-status/keys';
 import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
-import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 
 const PAGE_SIZE = 100;
 
@@ -21,8 +22,7 @@ export function ArchivedThreadsSettings() {
   const projects = useProjects();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
-  const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
-  const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
+  const { statusByBranch, threadToBranchKey } = useGitStatusMaps();
   const [threads, setThreads] = useState<Thread[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);

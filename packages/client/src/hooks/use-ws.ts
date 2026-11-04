@@ -19,6 +19,7 @@ import { OperationRequestSchema } from '@funny/shared/browser-v1/operations';
 import { useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
+import { fetchForProject } from '@/data/git-status/actions';
 import { readProjects } from '@/data/projects/read';
 import { resyncDataLayer } from '@/data/resync';
 import { listedProjectIds, readThreadIndex, type ThreadIndexSnapshot } from '@/data/threads/read';
@@ -30,7 +31,6 @@ import { metric } from '@/lib/telemetry';
 import { clientComposition } from '@/platform/client-composition';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import type { ThreadState } from '@/stores/thread-state';
@@ -289,7 +289,7 @@ function connect() {
     // invalidate specific keys when the server pushes fresh data.
     const loadedProjectIds = listedProjectIds();
     for (const pid of loadedProjectIds) {
-      useGitStatusStore.getState().fetchForProject(pid);
+      fetchForProject(pid);
     }
 
     useTerminalStore.getState().resetSessionsChecked();

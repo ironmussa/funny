@@ -3,9 +3,9 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ThreadList } from '@/components/sidebar/ThreadList';
+import { seedGitStatus } from '@/data/git-status/testing';
 import { withProjects } from '@/data/projects/testing';
 import { withThreadIndex } from '@/data/threads/testing';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -103,7 +103,7 @@ describe('ThreadList', () => {
         activeThread: null,
       } as any),
     );
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: {},
       threadToBranchKey: {},
       loadingProjects: new Set(),
@@ -280,7 +280,7 @@ describe('ThreadList', () => {
         scratchThreadIds: [],
       } as any),
     );
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: { [branchKey]: makeStatus({ branchKey }) },
       threadToBranchKey: { [thread.id]: branchKey },
     } as any);
@@ -290,7 +290,7 @@ describe('ThreadList', () => {
     expect(screen.queryByTestId(`thread-pr-badge-${thread.id}`)).not.toBeInTheDocument();
 
     act(() => {
-      useGitStatusStore.setState({
+      seedGitStatus({
         statusByBranch: {
           [branchKey]: makeStatus({
             branchKey,
@@ -322,7 +322,7 @@ describe('ThreadList', () => {
         scratchThreadIds: [],
       } as any),
     );
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: {
         [branchKey]: makeStatus({
           branchKey,

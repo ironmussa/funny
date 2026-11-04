@@ -8,8 +8,7 @@
 
 import type { StoreApi } from 'zustand';
 
-import { isProjectListed, readThreadIndex, readThreadRow } from '@/data/threads/read';
-import { deriveOrderedThreads } from '@/data/threads/views';
+import { isProjectListed, readThreadRow } from '@/data/threads/read';
 
 // ── Lazy references (set once per store creation) ────────────
 
@@ -17,7 +16,6 @@ type LazyRef<T> = { current: StoreApi<T> | null };
 
 const _projectStoreRef: LazyRef<any> = { current: null };
 const _threadStoreRef: LazyRef<any> = { current: null };
-const _gitStatusStoreRef: LazyRef<any> = { current: null };
 
 /** Called by project-store during creation to register itself */
 export function registerProjectStore(store: StoreApi<any>): void {
@@ -29,37 +27,17 @@ export function registerThreadStore(store: StoreApi<any>): void {
   _threadStoreRef.current = store;
 }
 
-/** Called by git-status-store during creation to register itself */
-export function registerGitStatusStore(store: StoreApi<any>): void {
-  _gitStatusStoreRef.current = store;
-}
-
 // ── Project → Git Status operations ──────────────────────────
 
 /** Refetch git status for a project (fire-and-forget). */
 export function fetchGitStatusForProject(projectId: string): void {
-  const store = _gitStatusStoreRef.current;
-  if (!store) return;
-  store.getState().fetchForProject(projectId);
+  // Loaded lazily, as before: the bridge stays out of the git request graph.
+  void import('@/data/git-status/actions').then(({ fetchForProject }) =>
+    fetchForProject(projectId),
+  );
 }
 
 // ── Git Status → Thread operations ───────────────────────────
-
-/**
- * Snapshot of `{ projectId → Thread[] }` derived from the unified index.
- * Used by non-React code (git-status-store branchKey lookup, etc.) that
- * needs to iterate threads by project. Components should use
- * `useThreadsByProject` from `lib/thread-selectors` instead.
- */
-export function getThreadsByProject(): Record<string, any[]> {
-  const { threadsById, threadIdsByProject } = readThreadIndex();
-  const result: Record<string, any[]> = {};
-  for (const pid in threadIdsByProject) {
-    if (!pid) continue;
-    result[pid] = deriveOrderedThreads(threadsById, threadIdsByProject[pid]);
-  }
-  return result;
-}
 
 /**
  * Look up a Thread by id from the unified index. Returns null if not loaded.

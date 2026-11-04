@@ -5,10 +5,11 @@ import { useTranslation } from 'react-i18next';
 
 import { ThreadItem } from '@/components/sidebar/ThreadItem';
 import { VirtualThreadList } from '@/components/VirtualThreadList';
+import { ensureStatusForThreads } from '@/data/git-status/actions';
+import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { useThreadsForProject } from '@/lib/thread-selectors';
 import { useAppStore } from '@/stores/app-store';
-import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 interface Props {
@@ -110,13 +111,11 @@ function MobileThreadItem({
   project?: Project;
   onSelectThread: (threadId: string) => void;
 }) {
-  const gitStatus = useGitStatusStore(
-    (s) => s.statusByBranch[statusBranchKeyForThread(thread, s.threadToBranchKey)],
-  );
+  const gitStatus = useGitStatusForThread(thread.id);
   const pinThread = useThreadStore((s) => s.pinThread);
 
   useEffect(() => {
-    useGitStatusStore.getState().ensureStatusForThreads([thread]);
+    ensureStatusForThreads([thread]);
   }, [thread]);
 
   return (

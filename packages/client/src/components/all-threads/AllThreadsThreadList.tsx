@@ -18,6 +18,9 @@ import { normalize } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ThreadListEmptyState } from '@/components/ui/thread-list-empty-state';
 import { ThreadListViewport } from '@/components/ui/thread-list-viewport';
+import { ensureStatusForThreads } from '@/data/git-status/actions';
+import { useGitStatusMaps } from '@/data/git-status/hooks';
+import { statusBranchKeyForThread } from '@/data/git-status/keys';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSidebarActions } from '@/hooks/use-sidebar-actions';
@@ -26,7 +29,6 @@ import { timeAgo } from '@/lib/thread-utils';
 import { isScratch } from '@/lib/thread-variant';
 import { resolveThreadBranch } from '@/lib/utils';
 import { buildThreadPath } from '@/navigation/thread-paths';
-import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useUIStore } from '@/stores/ui-store';
 
 const ROW_ESTIMATE_PX = 64;
@@ -71,8 +73,7 @@ export function AllThreadsThreadList({
   const { t } = useTranslation();
   const now = useMinuteTick();
   const activeThreadId = useActiveThreadId();
-  const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
-  const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
+  const { statusByBranch, threadToBranchKey } = useGitStatusMaps();
   const scrollRef = useRef<HTMLDivElement>(null);
   const [highlightState, setHighlightState] = useState<{
     threadId: string | null;
@@ -174,7 +175,7 @@ export function AllThreadsThreadList({
   );
 
   useEffect(() => {
-    useGitStatusStore.getState().ensureStatusForThreads(visibleThreads);
+    ensureStatusForThreads(visibleThreads);
   }, [visibleThreads]);
 
   useVirtualListPagination(virtualItems, threads.length, hasMore, loadingMore, onEndReached);

@@ -19,14 +19,14 @@ const { useGitStatusForThreadMock, fetchForThread, fetchProjectStatus, storeStat
   },
 );
 
-vi.mock('@/stores/git-status-store', () => ({
-  useGitStatusStore: Object.assign(
-    (selector: (s: typeof storeState) => unknown) => selector(storeState),
-    {
-      getState: () => storeState,
-    },
-  ),
+vi.mock('@/data/git-status/hooks', () => ({
   useGitStatusForThread: useGitStatusForThreadMock,
+  useProjectGitStatus: (projectId: string | null | undefined) =>
+    projectId ? storeState.statusByProject[projectId] : undefined,
+}));
+vi.mock('@/data/git-status/actions', () => ({
+  fetchForThread: storeState.fetchForThread,
+  fetchProjectStatus: storeState.fetchProjectStatus,
 }));
 
 beforeEach(() => {

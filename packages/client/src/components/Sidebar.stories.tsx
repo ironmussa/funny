@@ -4,10 +4,10 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { SidebarProvider } from '@/components/ui/sidebar';
 import '@/i18n/config';
+import { seedGitStatus } from '@/data/git-status/testing';
 import { withProjects } from '@/data/projects/testing';
 import { seedProjectThreads, seedThreadIndex, withThreadIndex } from '@/data/threads/testing';
 import { useAuthStore } from '@/stores/auth-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -178,7 +178,7 @@ function seedDefault() {
   seedSessionAndSelection('t2');
 
   // Seed git status
-  useGitStatusStore.setState({
+  seedGitStatus({
     statusByBranch: {
       'proj-1:feat/inline-diff': makeGitStatus({
         threadId: 't2',
@@ -217,9 +217,6 @@ function seedDefault() {
       t5: 'proj-2:feat/node22',
     },
     statusByProject: {},
-    loadingProjects: new Set(),
-    _loadingBranchKeys: new Set(),
-    _loadingProjectStatus: new Set(),
   });
 }
 
@@ -235,13 +232,10 @@ function seedEmpty() {
   );
   seedThreadIndex({ threadsById: {}, threadIdsByProject: {} });
   seedSessionAndSelection(null);
-  useGitStatusStore.setState({
+  seedGitStatus({
     statusByBranch: {},
     threadToBranchKey: {},
     statusByProject: {},
-    loadingProjects: new Set(),
-    _loadingBranchKeys: new Set(),
-    _loadingProjectStatus: new Set(),
   });
 }
 
@@ -343,7 +337,7 @@ export const SingleProjectNoActive: Story = {
       activeOrgSlug: null,
     });
     useUIStore.setState({ settingsOpen: false });
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: {
         'proj-1:feat/inline-diff': makeGitStatus({
           threadId: 't1',
@@ -352,9 +346,6 @@ export const SingleProjectNoActive: Story = {
       },
       threadToBranchKey: { t1: 'proj-1:feat/inline-diff' },
       statusByProject: {},
-      loadingProjects: new Set(),
-      _loadingBranchKeys: new Set(),
-      _loadingProjectStatus: new Set(),
     });
     return (
       <SidebarWrapper>

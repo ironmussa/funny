@@ -4,13 +4,13 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { isDivergedBranchesError } from '@/components/pull-strategy-dialog';
+import { refreshGitStatus } from '@/data/git-status/actions';
 import { type PullStrategy } from '@/lib/api/_core';
 import { browseApi } from '@/lib/api/browse';
 import { gitApi } from '@/lib/api/git';
 import { threadsApi } from '@/lib/api/threads';
 import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
 import { getThreadById } from '@/stores/thread-context';
 
@@ -513,8 +513,7 @@ export function useReviewActions({
         toast.success(t('review.pullSuccess', 'Pulled successfully'));
       }
       // Force-refresh git status so unpulled badge clears immediately after pull.
-      if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-      else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+      void refreshGitStatus(effectiveThreadId, projectModeId);
       await refresh();
     },
     [effectiveThreadId, projectModeId, refresh, t],
@@ -564,8 +563,7 @@ export function useReviewActions({
     setFetchInProgress(false);
     // Force-refresh git status to bypass client-side cooldown so unpulled/unpushed
     // counts update immediately after a manual fetch.
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+    void refreshGitStatus(effectiveThreadId, projectModeId);
     await refresh();
   }, [hasGitContext, fetchInProgress, effectiveThreadId, projectModeId, refresh, t]);
 

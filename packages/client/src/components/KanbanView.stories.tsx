@@ -4,10 +4,10 @@ import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { seedGitStatus } from '@/data/git-status/testing';
 import { seedProjects } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { KanbanView } from './KanbanView';
@@ -77,7 +77,7 @@ function seedStores(projects: Project[] = [makeProject()]) {
     selectedThreadId: null,
   });
 
-  useGitStatusStore.setState({ statusByBranch: {} });
+  seedGitStatus({ statusByBranch: {} });
 }
 
 function makeThreadsForStages(stages: Partial<Record<ThreadStage, number>>): Thread[] {
@@ -281,7 +281,7 @@ export const WithGitStatus: Story = {
         },
       };
       seedStores();
-      useGitStatusStore.setState({ statusByBranch });
+      seedGitStatus({ statusByBranch });
       return <Story />;
     },
   ],

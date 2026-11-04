@@ -19,12 +19,12 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { contrastText, pastelize } from '@/components/ui/project-chip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { applyPRMetadata } from '@/data/git-status/actions';
 import { useGitHubProjectId } from '@/hooks/use-github-project-id';
 import { usePagedGitHubList, type FetchGitHubListPage } from '@/hooks/use-paged-github-list';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn, resolveThreadBranch } from '@/lib/utils';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
 import {
@@ -427,7 +427,7 @@ function useSyncCurrentBranchPR(threadId: string | null | undefined, pr: GitHubP
   const prState = pr ? prBadgeState(pr) : undefined;
   useEffect(() => {
     if (!threadId || !prNumber || !prUrl || !prState) return;
-    useGitStatusStore.getState().applyPRMetadata(threadId, { prNumber, prUrl, prState });
+    applyPRMetadata(threadId, { prNumber, prUrl, prState });
   }, [threadId, prNumber, prUrl, prState]);
 }
 

@@ -14,11 +14,13 @@ import { ProjectPickerDialog } from '@/components/live-columns/ProjectPickerDial
 import { ThreadColumn } from '@/components/live-columns/ThreadColumn';
 import { ThreadHeaderActions } from '@/components/thread/ProjectHeader';
 import { Button } from '@/components/ui/button';
+import { fetchForThread } from '@/data/git-status/actions';
+import { useProjects } from '@/data/projects/hooks';
+import { isProjectListed } from '@/data/threads/read';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createClientLogger } from '@/lib/client-logger';
 import { firstPlacedThreadId, resolveGridSelection } from '@/lib/grid-selection';
 import { GRID_CELLS_KEY, getGridCells, type GridCellAssignments } from '@/lib/grid-storage';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -34,7 +36,7 @@ type OpenLightboxFn = (images: { src: string; alt: string }[], index: number) =>
 export function LiveColumnsView() {
   const { t } = useTranslation();
   useMinuteTick();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const [gridCols, setGridCols] = useState(() => {
     const saved = localStorage.getItem(GRID_COLS_KEY);
@@ -49,9 +51,8 @@ export function LiveColumnsView() {
   // WS events keep the store in sync after the initial load).
   const projectIdsKey = useMemo(() => projects.map((p) => p.id).join(','), [projects]);
   useEffect(() => {
-    const state = useThreadStore.getState();
     for (const project of projects) {
-      if (!state.threadIdsByProject[project.id]) {
+      if (!isProjectListed(project.id)) {
         loadThreadsForProject(project.id);
       }
     }
@@ -76,7 +77,6 @@ export function LiveColumnsView() {
   // --- Selected thread (drives the consolidated header actions + right pane) ---
   const gridSelectedThreadId = useUIStore((s) => s.gridSelectedThreadId);
   const setGridSelectedThreadId = useUIStore((s) => s.setGridSelectedThreadId);
-  const fetchForThread = useGitStatusStore((s) => s.fetchForThread);
   const initedSelectionRef = useRef(false);
   const prevHadThreadsRef = useRef(false);
 

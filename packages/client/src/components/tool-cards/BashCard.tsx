@@ -6,13 +6,14 @@ import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
 
+import { unwrapShellCommand } from './format-utils';
 import { ToolContentArea } from './MobileContentPreview';
 
 // eslint-disable-next-line no-control-regex -- ESC is the literal ANSI CSI marker we're detecting
 const ANSI_ESC_RE = /\x1b\[/;
 
 function commandToText(command: unknown): string | null {
-  if (typeof command === 'string') return command;
+  if (typeof command === 'string') return unwrapShellCommand(command);
   if (command == null) return null;
   if (typeof command === 'number' || typeof command === 'boolean' || typeof command === 'bigint') {
     return String(command);

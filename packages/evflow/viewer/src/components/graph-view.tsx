@@ -267,7 +267,7 @@ export function GraphView() {
         proOptions={{ hideAttribution: true }}
       >
         <Background color="#27272a" gap={20} />
-        <Controls className="!rounded-lg !border-zinc-700 !bg-zinc-800 [&>button:hover]:!bg-zinc-700 [&>button]:!border-zinc-700 [&>button]:!bg-zinc-800 [&>button]:!text-zinc-300" />
+        <Controls className="!rounded-lg !border-zinc-700 !bg-zinc-800 [&>button]:!border-zinc-700 [&>button]:!bg-zinc-800 [&>button]:!text-zinc-300 [&>button:hover]:!bg-zinc-700" />
         <MiniMap
           nodeColor={miniMapNodeColor}
           maskColor="rgba(0, 0, 0, 0.6)"

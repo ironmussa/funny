@@ -9,8 +9,9 @@ import { toast } from 'sonner';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PromptInputUI, type PromptInputUIProps } from '@/components/PromptInputUI';
+import { seedTemplates } from '@/data/templates/testing';
 import { systemApi } from '@/lib/api/system';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
+import { threadsApi } from '@/lib/api/threads';
 
 import { renderWithProviders } from '../helpers/render';
 
@@ -154,7 +155,7 @@ beforeEach(() => {
       login: null,
     }) as any,
   );
-  useAgentTemplateStore.setState({ templates: [], initialized: true });
+  seedTemplates([]);
 });
 
 describe('PromptInputUI submit', () => {
@@ -277,6 +278,32 @@ describe('PromptInputUI submit', () => {
     expect(screen.queryByTestId('prompt-attached-file-0')).toBeNull();
   });
 
+  test('a binary file attached before the thread exists is staged and sent as stagedUploads', async () => {
+    const stageUpload = vi
+      .spyOn(threadsApi, 'stageUpload')
+      .mockReturnValue(okAsync({ stagedId: 'staged-1', name: 'spec.pdf', size: 4 }) as never);
+    const uploadFile = vi.spyOn(threadsApi, 'uploadFile');
+    const { onSubmit, editor } = renderUI({ isNewThread: true, projectId: 'p-1' });
+
+    const input = screen.getByTestId('prompt-file-input') as HTMLInputElement;
+    const pdf = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'spec.pdf', {
+      type: 'application/pdf',
+    });
+    fireEvent.change(input, { target: { files: [pdf] } });
+    await waitFor(() => expect(stageUpload).toHaveBeenCalledTimes(1));
+    expect(stageUpload.mock.calls[0][0]).toMatchObject({ filename: 'spec.pdf' });
+    expect(stageUpload.mock.calls[0][1]).toBe('p-1');
+    expect(uploadFile).not.toHaveBeenCalled();
+    await screen.findByTestId('prompt-attached-file-0');
+
+    type(editor, 'read the spec');
+    submit(editor);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    // Never inlined as text: the prompt carries no referenced-files block.
+    expect(onSubmit.mock.calls[0][0]).toBe('read the spec');
+    expect(onSubmit.mock.calls[0][1].stagedUploads).toEqual(['staged-1']);
+  });
+
   test('restores images and text files when onSubmit returns false', async () => {
     const { onSubmit, editor } = renderUI({
       onSubmit: vi.fn().mockResolvedValue(false),
@@ -293,20 +320,17 @@ describe('PromptInputUI submit', () => {
   });
 
   test('deep agent new thread sends template id and resolved variables', async () => {
-    useAgentTemplateStore.setState({
-      initialized: true,
-      templates: [
-        {
-          id: 'tpl1',
-          name: 'Tpl',
-          variables: [
-            { name: 'a', defaultValue: 'da' },
-            { name: 'b', defaultValue: 'db' },
-            { name: 'c' },
-          ],
-        } as any,
-      ],
-    });
+    seedTemplates([
+      {
+        id: 'tpl1',
+        name: 'Tpl',
+        variables: [
+          { name: 'a', defaultValue: 'da' },
+          { name: 'b', defaultValue: 'db' },
+          { name: 'c' },
+        ],
+      } as any,
+    ]);
     const { onSubmit, editor } = renderUI({
       isNewThread: true,
       unifiedModel: 'deepagent:m1',
@@ -403,6 +427,43 @@ describe('PromptInputUI submit', () => {
     submit(editor);
     await screen.findByTestId('provider-setup-dialog');
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test('a new sandbox thread skips the project-runner provider check', async () => {
+    vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+      okAsync({ provider: 'claude', state: 'installed', auth: 'required' }) as any,
+    );
+    const onCheckoutPreflight = vi.fn(async () => false);
+    const { onSubmit, editor } = renderUI({
+      projectId: 'p1',
+      isNewThread: true,
+      runtime: 'sandbox:conn-1',
+      selectedBranch: 'main',
+      onCheckoutPreflight,
+    });
+    type(editor, 'task');
+    submit(editor);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(onSubmit.mock.calls[0][1]).toMatchObject({
+      runtime: 'sandbox',
+      sandboxConnectionId: 'conn-1',
+    });
+    expect(systemApi.providerSetupStatus).not.toHaveBeenCalled();
+    expect(onCheckoutPreflight).not.toHaveBeenCalled();
+  });
+
+  test('a follow-up on a sandbox thread skips the project-runner provider check', async () => {
+    vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+      okAsync({ provider: 'claude', state: 'installed', auth: 'required' }) as any,
+    );
+    const { onSubmit, editor } = renderUI({
+      projectId: 'p1',
+      powerlineThread: { id: 't1', runtime: 'sandbox' } as any,
+    });
+    type(editor, 'next step');
+    submit(editor);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    expect(systemApi.providerSetupStatus).not.toHaveBeenCalled();
   });
 
   test('skips the provider check while running or sending to backlog', async () => {

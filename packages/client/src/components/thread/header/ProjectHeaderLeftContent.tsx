@@ -1,4 +1,4 @@
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Folder } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -12,9 +12,11 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjectById } from '@/data/projects/hooks';
+import { useAgentTemplate } from '@/data/templates/hooks';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useThreadId, useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -31,9 +33,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
   const activeThreadTitle = useThreadSelector((t) => t?.title);
   const activeThreadParentId = useThreadSelector((t) => t?.parentThreadId);
   const activeThreadTemplateId = useThreadSelector((t) => t?.agentTemplateId);
-  const activeTemplate = useAgentTemplateStore((s) =>
-    activeThreadTemplateId ? s.templates.find((t) => t.id === activeThreadTemplateId) : undefined,
-  );
+  const activeTemplate = useAgentTemplate(activeThreadTemplateId);
   const renameThread = useThreadStore((s) => s.renameThread);
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const kanbanContext = useUIStore((s) => s.kanbanContext);
@@ -141,6 +141,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
       )}
       <Breadcrumb className="min-w-0">
         <BreadcrumbList>
+          <ThreadProjectBreadcrumb />
           {activeThreadId && (
             <BreadcrumbItem className="max-w-[240px] min-w-0 sm:max-w-[360px] md:max-w-[520px]">
               {isEditingTitle ? (
@@ -228,5 +229,26 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
         </BreadcrumbList>
       </Breadcrumb>
     </div>
+  );
+}
+
+function ThreadProjectBreadcrumb() {
+  const activeThreadId = useThreadId();
+  const activeThreadProjectId = useThreadProjectId();
+  const projectName = useProjectById(activeThreadProjectId)?.name;
+  return (
+    <>
+      {activeThreadId && projectName && (
+        <>
+          <BreadcrumbItem className="max-w-[120px] sm:max-w-[180px]">
+            <Folder aria-hidden="true" className="icon-sm text-muted-foreground shrink-0" />
+            <span className="truncate" title={projectName}>
+              {projectName}
+            </span>
+          </BreadcrumbItem>
+          <BreadcrumbSeparator className="shrink-0">/</BreadcrumbSeparator>
+        </>
+      )}
+    </>
   );
 }

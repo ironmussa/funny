@@ -1,11 +1,11 @@
 import { useEffect, useId } from 'react';
 
+import { fetchForProject, ensureStatusForThreads } from '@/data/git-status/actions';
 import {
-  clearGitStatusScope,
   setGitStatusScope,
-  useGitStatusStore,
+  clearGitStatusScope,
   type GitStatusScope,
-} from '@/stores/git-status-store';
+} from '@/data/git-status/store';
 
 /**
  * Declare which threads this mounted view needs git status for, so the bulk
@@ -32,9 +32,8 @@ export function useGitStatusScope(
   useEffect(() => {
     const scope: GitStatusScope = Object.fromEntries(JSON.parse(scopeKey));
     setGitStatusScope(consumerId, scope);
-    const store = useGitStatusStore.getState();
     for (const [projectId, entry] of Object.entries(scope)) {
-      if (entry === 'all') void store.fetchForProject(projectId);
+      if (entry === 'all') void fetchForProject(projectId);
     }
   }, [consumerId, scopeKey]);
 
@@ -62,11 +61,11 @@ function scopeKeyFor(input: ScopeInput): string {
 
 /** Register before fetching, and stop requesting rows when the view is hidden. */
 export function useVisibleGitStatus(
-  threads: Parameters<ReturnType<typeof useGitStatusStore.getState>['ensureStatusForThreads']>[0],
+  threads: Parameters<typeof ensureStatusForThreads>[0],
   visible = true,
 ) {
   useGitStatusScope({ threads: visible ? threads : [] });
   useEffect(() => {
-    if (visible) useGitStatusStore.getState().ensureStatusForThreads(threads);
+    if (visible) ensureStatusForThreads(threads);
   }, [threads, visible]);
 }

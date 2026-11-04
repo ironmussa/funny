@@ -35,8 +35,22 @@ sequenceDiagram
 4. **Agent process is spawned.** `packages/runtime/src/services/agent-runner.ts` imports `AgentOrchestrator` and `defaultProcessFactory` directly from `@funny/core/agents` (`packages/core/src/agents/orchestrator.ts` — described in its own docstring as a "portable agent lifecycle manager" that owns process creation and start/stop/resume).
 5. **Provider selection.** `AgentOrchestrator` asks `process-factory.ts` for a concrete process implementation based on the thread's configured provider: `sdk-claude.ts` for Claude, `codex-sdk.ts` for Codex, `gemini-acp.ts` / `cursor-acp.ts` / `opencode-acp.ts` / `generic-acp.ts` for Agent-Client-Protocol CLIs, `deepagent-process.ts`, or `llm/llm-api-process.ts` for generic LLM-API providers. `generic-acp.ts` resolves its spawn command from `packages/shared/src/provider-manifest*.ts` (the pluggable provider-config system).
 6. **Events flow back.** The spawned process streams assistant text, tool calls, and token counts through `agent-event-router.ts`. `RunnerEventPublisher` sends them over the event stream; the server accepts/persists each event once and publishes it through `BrowserEventSink`. The Socket.IO adapter targets the owner's user room and shared-thread stream rooms without coupling the event handler to Socket.IO. Every event carries a `threadId` so the client can route it to the right view.
-7. **Terminal sessions** are a separate path: `pty-manager.ts` dispatches to one of several backends (`pty-backend-headless.ts`, `pty-backend-bun.ts`, `pty-backend-node-pty.ts`, `pty-backend-tmux.ts`, `pty-backend-daemon.ts`, `pty-backend-null.ts`) depending on platform/availability.
-8. **Scheduled/triggered automation runs** start on the server (`packages/server/src/services/automation-scheduler.ts`), which creates the thread on the owner's runner through the same `POST /api/threads` path as a user, with `source: 'automation'` and write tools disallowed. See [pipelines-and-automation.md](./pipelines-and-automation.md).
+7. **Funny's own MCP servers (agent-neutral).** Before spawning, `agent-startup/agent-tooling.ts` adds two of Funny's own servers:
+   - `funny`: watchers, background jobs, sub-threads, thread search. It is always loaded and auto-allowed.
+   - `funny_browser`: browser tools over the thread's shared browser session. It is gated by the thread's permission mode.
+
+   Every agent gets the same tools, whatever its provider:
+   - They are defined independently of any SDK (`AgentToolDefinition`) and served over loopback streamable HTTP by `services/agent-mcp-http.ts`, with one bearer token per thread.
+   - Agents with an MCP client consume the entry directly: Claude, ACP providers, and Codex (translated by `core/src/agents/codex-mcp.ts`).
+   - Agents whose loop Funny drives itself (LLM API, pi) get the tools through `core/src/agents/mcp-tool-bridge.ts`, which connects to the same servers and adapts each tool to the provider's format.
+   - The fitness check `check-agent-neutral-tools.ts` (in `bun run lint`) forbids in-process Claude SDK servers (`createSdkMcpServer`), which reach Claude only.
+
+   The `funny` server's instructions also tell every agent that the chat renders fenced `mermaid` blocks. Skills stay native to each agent (Claude `.claude/skills`, Codex `.codex/skills` / `.agents/skills`): a skill is written for one agent's tools, so Funny does not cross-load them.
+
+   See [integrations/agent-browser.md](../integrations/agent-browser.md).
+
+8. **Terminal sessions** are a separate path: `pty-manager.ts` dispatches to one of several backends (`pty-backend-headless.ts`, `pty-backend-bun.ts`, `pty-backend-node-pty.ts`, `pty-backend-tmux.ts`, `pty-backend-daemon.ts`, `pty-backend-null.ts`) depending on platform/availability.
+9. **Scheduled/triggered automation runs** start on the server (`packages/server/src/services/automation-scheduler.ts`), which creates the thread on the owner's runner through the same `POST /api/threads` path as a user, with `source: 'automation'` and write tools disallowed. See [pipelines-and-automation.md](./pipelines-and-automation.md).
 
 ## Thread modes and git operations
 

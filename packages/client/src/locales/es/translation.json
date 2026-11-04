@@ -15,6 +15,7 @@
     "tooltipWorktreeWithPath": "Rama de worktree: {{branch}} — {{path}}"
   },
   "sidebar": {
+    "openExistingProject": "Abrir proyecto existente",
     "projects": "Proyectos",
     "addProject": "Agregar proyecto",
     "newThread": "Nuevo hilo",
@@ -230,6 +231,8 @@
     "addProjectDescription": "Abre un proyecto desde la barra lateral para ejecutar agentes en paralelo",
     "agentWorking": "El agente está trabajando...",
     "waitingForResponse": "Esperando tu respuesta...",
+    "providerAuthExpired": "Tu sesión con el proveedor expiró o falló la autenticación. Vuelve a conectar y reintenta tu mensaje.",
+    "reconnectProvider": "Reconectar",
     "providerErrorWaiting": "El proveedor devolvió un error. La ejecución está en pausa — reintenta o envía un mensaje para continuar.",
     "planWaitingForResponse": "Acepta o rechaza el plan",
     "rejectPlan": "Rechazar plan",
@@ -620,6 +623,7 @@
     "resetPromptModels": "Mostrar todos los modelos",
     "organizations": "Organizaciones",
     "runners": "Runners",
+    "sandboxes": "Sandboxes",
     "agentTemplates": "Plantillas de agente",
     "toolPermissions": "Permisos de Herramientas",
     "toolPermissionsDesc": "Elige cómo se comporta cada herramienta: Permitir (auto-aprobada), Preguntar (requiere aprobación) o Denegar (bloqueada).",
@@ -756,6 +760,9 @@
     "acceptPlan": "Aceptar Plan",
     "input": "Entrada",
     "output": "Salida",
+    "mcpError": "Error",
+    "raw": "Crudo",
+    "formatted": "Formateado",
     "waitingForOutput": "Esperando salida...",
     "diffUnavailableNoTracking": "No se puede mostrar el diff porque este archivo no está rastreado por Git.",
     "openInEditor": "Abrir en {{editor}}: {{path}}",
@@ -766,7 +773,40 @@
     "other": "Otra",
     "otherPlaceholder": "Escribe tu respuesta...",
     "next": "Siguiente",
-    "continue": "Continuar"
+    "continue": "Continuar",
+    "loadTools": "Cargar herramientas",
+    "skill": "Skill",
+    "newTask": "Nueva tarea",
+    "updateTask": "Actualizar tarea",
+    "taskOutput": "Salida de tarea",
+    "stopTask": "Detener tarea",
+    "scheduleWakeup": "Despertar programado",
+    "monitor": "Monitor",
+    "sendMessage": "Enviar mensaje",
+    "applyPatch": "Aplicar parche",
+    "updatePlan": "Actualizar plan",
+    "planMode": "Modo plan",
+    "mcp": {
+      "backgroundJob": "Tarea en segundo plano",
+      "scheduledCheck": "Revisión programada",
+      "newThread": "Nuevo hilo",
+      "searchThreads": "Buscar hilos",
+      "runJavaScript": "Ejecutar JavaScript",
+      "browserOpen": "Abrir página",
+      "browserNavigate": "Navegar",
+      "browserSnapshot": "Leer página",
+      "browserAct": "Interactuar",
+      "browserEvaluate": "Ejecutar JavaScript en la página",
+      "browserWaitFor": "Esperar a la página",
+      "browserStatus": "Estado",
+      "browserResize": "Cambiar tamaño",
+      "browserClose": "Cerrar navegador",
+      "browserDialog": "Responder diálogo",
+      "browserSetAppearance": "Cambiar apariencia",
+      "browserRecordingStart": "Iniciar grabación",
+      "browserRecordingStop": "Detener grabación",
+      "showInBrowserPanel": "Ver en el panel del navegador"
+    }
   },
   "plan": {
     "reviewPlan": "Revisar plan",
@@ -934,6 +974,7 @@
     "importError": "Error al importar hooks"
   },
   "preview": {
+    "browser": "Navegador",
     "open": "Abrir Preview",
     "close": "Cerrar Preview",
     "refresh": "Refrescar Preview",
@@ -1440,7 +1481,17 @@
       "CONFLICT": "{{message}}",
       "PROCESS_ERROR": "{{message}}",
       "INTERNAL": "Error al crear el proyecto. El servidor puede estar experimentando problemas."
-    }
+    },
+    "threadUpdateFailed": "No se pudo actualizar el hilo. Se deshizo tu cambio.",
+    "templateUpdateFailed": "No se pudo actualizar la plantilla de agente. Se deshizo tu cambio.",
+    "templateCreateFailed": "No se pudo crear la plantilla de agente.",
+    "backgroundCancelFailed": "No se pudo cancelar. Sigue en ejecución.",
+    "automationUpdateFailed": "No se pudo actualizar la automatización. Se deshizo tu cambio.",
+    "automationCreateFailed": "No se pudo crear la automatización.",
+    "automationTriggerFailed": "No se pudo iniciar la ejecución de la automatización.",
+    "commentDeleteFailed": "No se pudo eliminar el comentario.",
+    "approvalRespondFailed": "No se pudo enviar tu respuesta. La aprobación sigue pendiente.",
+    "projectUpdateFailed": "No se pudo actualizar el proyecto. Se deshizo tu cambio."
   },
   "agentResources": {
     "subtitle": "Skills, comandos y servidores MCP según el proveedor.",

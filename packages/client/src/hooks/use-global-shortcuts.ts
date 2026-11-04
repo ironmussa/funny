@@ -1,7 +1,10 @@
+import type { Thread } from '@funny/shared';
 import { useEffect } from 'react';
 import { type NavigateFunction, useNavigate } from 'react-router-dom';
 
 import { terminalRegistry } from '@/components/terminal/xterm-utils';
+import { readProject } from '@/data/projects/read';
+import { listedProjectThreadIds, readThreadIndex, readThreadRow } from '@/data/threads/read';
 import { getTerminalScope } from '@/hooks/use-terminal-scope';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildPath } from '@/lib/url';
@@ -115,16 +118,17 @@ function walkThreadHistory(e: KeyboardEvent, ctx: ShortcutContext): void {
 }
 
 type ThreadState = ReturnType<typeof useThreadStore.getState>;
-type SidebarThread = NonNullable<ThreadState['threadsById'][string]>;
+type SidebarThread = Thread;
 
 /**
  * Match the sidebar's visible order + slice (see ProjectItem.tsx): pinned
  * first, then most-recent createdAt first, archived hidden, capped at the top
  * 5 visible rows so cycling stays within what the user actually sees.
  */
-function visibleSidebarThreads(state: ThreadState, ids: string[]): SidebarThread[] {
+function visibleSidebarThreads(ids: string[]): SidebarThread[] {
+  const { threadsById } = readThreadIndex();
   return ids
-    .map((id) => state.threadsById[id])
+    .map((id) => threadsById[id])
     .filter((th): th is SidebarThread => !!th && !th.archived)
     .sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
@@ -158,9 +162,9 @@ function cycleProjectThreads(e: KeyboardEvent, ctx: ShortcutContext): void {
   const projectId = activeProjectId();
   if (!projectId) return;
   const state = useThreadStore.getState();
-  const ids = state.threadIdsByProject[projectId] ?? [];
+  const ids = listedProjectThreadIds(projectId);
   if (ids.length < 2) return;
-  const threads = visibleSidebarThreads(state, ids);
+  const threads = visibleSidebarThreads(ids);
   if (threads.length < 2) return;
   const delta = e.key === ']' ? 1 : -1;
   const next = cycledThread(state, threads, delta);
@@ -236,7 +240,7 @@ function activeOrSelectedThread(): { id: string; projectId: string } | null {
   const threadState = useThreadStore.getState();
   if (threadState.activeThread) return threadState.activeThread;
   if (!threadState.selectedThreadId) return null;
-  return threadState.threadsById[threadState.selectedThreadId] ?? null;
+  return readThreadRow(threadState.selectedThreadId) ?? null;
 }
 
 function threadListPath(): string {
@@ -260,8 +264,7 @@ function firstTerminalCwd(scopeId: string, worktreePath: string | null | undefin
   // Runner derives the actual cwd from `scratchThreadId`; this placeholder is
   // for display only.
   if (scopeId === SCRATCH_TERMINAL_SCOPE_ID) return '~';
-  const { projects } = useProjectStore.getState();
-  const project = projects.find((p: any) => p.id === scopeId);
+  const project = readProject(scopeId);
   return worktreePath ?? project?.path ?? 'C:\\';
 }
 

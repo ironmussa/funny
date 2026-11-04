@@ -12,6 +12,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { useProjectById } from '@/data/projects/hooks';
 import { projectsApi } from '@/lib/api/projects';
 import { buildPath } from '@/lib/url';
 import { useProjectStore } from '@/stores/project-store';
@@ -20,9 +21,7 @@ export function MissingProjectDirectoryDialog() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { pathname, search } = useLocation();
-  const project = useProjectStore((s) =>
-    s.projects.find((candidate) => candidate.id === s.selectedProjectId),
-  );
+  const project = useProjectById(useProjectStore((s) => s.selectedProjectId));
   const revealNonce = useProjectStore((s) => s.revealNonce);
   const [missing, setMissing] = useState<{ id: string; path: string } | null>(null);
   const projectId = project?.id;

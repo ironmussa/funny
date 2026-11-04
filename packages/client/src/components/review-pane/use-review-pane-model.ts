@@ -3,14 +3,16 @@ import { useCallback, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { resolveBasePath } from '@/components/review-pane/resolve-base-path';
+import { fetchForThread, fetchProjectStatus, fetchForProject } from '@/data/git-status/actions';
+import { useGitStatusForThread, useProjectGitStatus } from '@/data/git-status/hooks';
+import { useProjects } from '@/data/projects/hooks';
+import { usePRDetail } from '@/data/pull-requests/hooks';
 import { useReviewState } from '@/hooks/use-review-state';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useThreadById } from '@/lib/thread-selectors';
 import { canLoadGitHistory } from '@/lib/thread-variant';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
-import { usePRDetail } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
 import {
   useThreadProjectId,
@@ -71,7 +73,7 @@ function useReviewBasePath(
   selectedProjectId: string | null,
 ): string {
   const worktreePath = useThreadWorktreePath();
-  const projectsForPath = useProjectStore((s) => s.projects);
+  const projectsForPath = useProjects();
   return useMemo(
     () =>
       resolveBasePath({
@@ -152,9 +154,7 @@ function useReviewBranches(targetProjectId: string | null | undefined) {
 
 function useReviewGitStatus(effectiveThreadId: string | undefined, projectModeId: string | null) {
   const threadGitStatus = useGitStatusForThread(effectiveThreadId);
-  const projectGitStatus = useGitStatusStore((s) =>
-    projectModeId ? s.statusByProject[projectModeId] : undefined,
-  );
+  const projectGitStatus = useProjectGitStatus(projectModeId);
   return threadGitStatus ?? projectGitStatus;
 }
 
@@ -237,13 +237,12 @@ function useRefreshAll({
   refresh: () => Promise<void> | void;
 }) {
   return useCallback(async () => {
-    const gitStore = useGitStatusStore.getState();
     if (effectiveThreadId) {
-      void gitStore.fetchForThread(effectiveThreadId, true);
-      if (threadProjectId) void gitStore.fetchForProject(threadProjectId, true);
+      void fetchForThread(effectiveThreadId, true);
+      if (threadProjectId) void fetchForProject(threadProjectId, true);
     } else if (projectModeId) {
-      void gitStore.fetchProjectStatus(projectModeId, true);
-      void gitStore.fetchForProject(projectModeId, true);
+      void fetchProjectStatus(projectModeId, true);
+      void fetchForProject(projectModeId, true);
     }
     await refresh();
   }, [effectiveThreadId, projectModeId, threadProjectId, refresh]);

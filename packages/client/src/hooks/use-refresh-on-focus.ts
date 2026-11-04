@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 
+import { fetchForThread, fetchProjectStatus } from '@/data/git-status/actions';
 import { createClientLogger } from '@/lib/client-logger';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useReviewPaneStore } from '@/stores/review-pane-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -26,11 +26,11 @@ export function useRefreshOnFocus() {
       const { activeThread } = useThreadStore.getState();
 
       if (selectedProjectId) {
-        useGitStatusStore.getState().fetchProjectStatus(selectedProjectId, true);
+        fetchProjectStatus(selectedProjectId, true);
       }
 
       if (activeThread?.id) {
-        useGitStatusStore.getState().fetchForThread(activeThread.id, true);
+        fetchForThread(activeThread.id, true);
         // Triggers useAutoRefreshDiff in ReviewPane to re-fetch the diff.
         useReviewPaneStore.getState().notifyDirty(activeThread.id);
       }

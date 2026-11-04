@@ -54,4 +54,37 @@ describe('RunnerTerminalAdapter', () => {
       gap: { requestedSequence: '3', earliestAvailableSequence: '7' },
     });
   });
+
+  test('replay-only resume replays lost output without a screen snapshot', () => {
+    const send = vi.fn((_name: 'terminal', _message: Record<string, any>) => true);
+    const handle = vi.fn();
+    const store = {
+      acceptInput: () => true,
+      append: vi.fn(),
+      replay: () => ({
+        kind: 'replay',
+        outputs: [{ sequence: 3n, data: Uint8Array.from([111, 107]) }],
+      }),
+      close: vi.fn(),
+    };
+    const adapter = new RunnerTerminalAdapter({ send }, store as any, handle);
+    adapter.receive({ terminalId: 'pty-1', open: { userId: 'user-1' } });
+    handle.mockClear();
+
+    adapter.receive({
+      terminalId: 'pty-1',
+      resume: { lastSeenOutputSequence: '2', replayOnly: true },
+    });
+    expect(send).toHaveBeenCalledWith('terminal', {
+      terminalId: 'pty-1',
+      output: { sequence: '3', data: Buffer.from('ok').toString('base64') },
+    });
+    expect(handle).not.toHaveBeenCalled();
+
+    adapter.receive({ terminalId: 'pty-1', resume: { lastSeenOutputSequence: '2' } });
+    expect(handle).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'pty:restore' }),
+      expect.any(Function),
+    );
+  });
 });

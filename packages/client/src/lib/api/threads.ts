@@ -120,11 +120,15 @@ export const threadsApi = {
       line: number;
       endLine?: number;
     }[];
+    /** Ids from `stageUpload`, adopted into the new thread. */
+    stagedUploads?: string[];
     worktreePath?: string;
     parentThreadId?: string;
     designId?: string;
     agentTemplateId?: string;
     templateVariables?: Record<string, string>;
+    /** With `runtime: 'sandbox'`: the provider connection to run the thread on. */
+    sandbox?: { connectionId: string; sizeId?: string };
   }) => request<Thread>('/threads', { method: 'POST', body: JSON.stringify(data) }),
   createIdleThread: (data: {
     projectId: string;
@@ -134,6 +138,9 @@ export const threadsApi = {
     prompt?: string;
     stage?: string;
     images?: ImageAttachment[];
+    /** Stored as path-only references, read when the thread starts. */
+    fileReferences?: { path: string }[];
+    stagedUploads?: string[];
     designId?: string;
   }) => request<Thread>('/threads/idle', { method: 'POST', body: JSON.stringify(data) }),
   /**
@@ -147,6 +154,8 @@ export const threadsApi = {
     permissionMode?: string;
     title?: string;
     images?: ImageAttachment[];
+    fileReferences?: { path: string }[];
+    stagedUploads?: string[];
   }) =>
     request<Thread>('/threads', {
       method: 'POST',
@@ -160,6 +169,8 @@ export const threadsApi = {
         provider: data.provider,
         permissionMode: data.permissionMode,
         images: data.images,
+        fileReferences: data.fileReferences,
+        stagedUploads: data.stagedUploads,
       }),
     }),
   /** List the current user's scratch threads. */
@@ -188,6 +199,8 @@ export const threadsApi = {
         line: number;
         endLine?: number;
       }[];
+      /** Ids from `stageUpload` — set when the composer had no thread id. */
+      stagedUploads?: string[];
       baseBranch?: string;
       forceQueue?: boolean;
     },
@@ -195,20 +208,8 @@ export const threadsApi = {
   ) =>
     request<{ ok: boolean; handledLocally?: 'shell_escape' }>(`/threads/${threadId}/message`, {
       method: 'POST',
-      body: JSON.stringify({
-        content,
-        provider: opts?.provider,
-        model: opts?.model,
-        permissionMode: opts?.permissionMode,
-        effort: opts?.effort,
-        images,
-        allowedTools: opts?.allowedTools,
-        disallowedTools: opts?.disallowedTools,
-        fileReferences: opts?.fileReferences,
-        symbolReferences: opts?.symbolReferences,
-        baseBranch: opts?.baseBranch,
-        forceQueue: opts?.forceQueue,
-      }),
+      // Undefined options are dropped by JSON.stringify.
+      body: JSON.stringify({ content, images, ...opts }),
     }),
   stopThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/stop`, { method: 'POST' }),
@@ -366,6 +367,19 @@ export const threadsApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  /**
+   * Park an attachment for a thread that does not exist yet. `projectId`
+   * routes it to the project's runner (omit for scratch threads); pass the
+   * returned `stagedId` as `stagedUploads` when creating the thread.
+   */
+  stageUpload: (
+    body: { provider: string; filename: string; contentBase64: string },
+    projectId?: string,
+  ) =>
+    request<{ stagedId: string; name: string; size: number }>(
+      `/uploads/staging${projectId ? `?projectId=${encodeURIComponent(projectId)}` : ''}`,
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
   listArchivedThreads: (params?: {
     page?: number;
     limit?: number;

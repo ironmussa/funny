@@ -39,6 +39,7 @@ import {
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -78,7 +79,7 @@ interface AssignFormProps {
 }
 
 function AssignProjectForm({ runnerId, onAssigned }: AssignFormProps) {
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
   const [projectId, setProjectId] = useState('');
   const [localPath, setLocalPath] = useState('');
   const [saving, setSaving] = useState(false);
@@ -197,7 +198,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
     if (open) loadAssignments();
   }, [open, loadAssignments]);
 
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
 
   return (
     <Collapsible

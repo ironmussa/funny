@@ -38,6 +38,7 @@ import {
   runnerAccess,
   runnerActor,
   type RunnerAccess,
+  type RunnerActor,
   type UnsignedRunnerRequest,
 } from '../services/runner-access/index.js';
 import {
@@ -46,7 +47,8 @@ import {
   type RunnerRequestPort,
   type RunnerResponse,
 } from '../services/runner-ports.js';
-import { describeResolutionFailure } from '../services/runner-resolver.js';
+import { describeResolutionFailure, extractThreadId } from '../services/runner-resolver.js';
+import { sandboxWaker, type SandboxWaker } from '../services/thread-sandboxes/sandbox-lifecycle.js';
 
 /**
  * Transport dependencies the proxy uses to reach a runner. Injectable so tests
@@ -60,6 +62,8 @@ export interface ProxyTransport {
   runnerAccess?: RunnerAccess;
   requests?: RunnerRequestPort;
   presence?: RunnerPresencePort;
+  /** Wakes a stopped thread sandbox. Default: the server's sandbox lifecycle. */
+  sandboxWaker?: SandboxWaker | null;
 }
 
 const defaultTransport: ProxyTransport = {};
@@ -75,34 +79,33 @@ export function createProxyToRunner(deps: ProxyTransport = defaultTransport) {
 /** Default production handler, wired to the real transport. */
 export const proxyToRunner = createProxyToRunner();
 
+type ProxySink = ReturnType<typeof authorizedRunnerRequests>;
+
+/** Steer-share delegation target: the thread OWNER whose runner serves the sharee. */
+interface Delegation {
+  ownerId: string;
+  threadId: string;
+}
+
+/** Everything one certified send needs; built once per proxied request. */
+interface ProxySendContext {
+  c: Context<ServerEnv>;
+  path: string;
+  query: Record<string, string>;
+  access: RunnerAccess;
+  presence: RunnerPresencePort | undefined;
+  sink: ProxySink;
+  request: UnsignedRunnerRequest;
+  requester: RunnerActor;
+  delegation: Delegation | null;
+  isOAuthStart: boolean;
+}
+
 /**
- * Hono handler that proxies the request to the appropriate runner.
+ * Non-identity headers forwarded to the runner. Identity headers are set by
+ * the authorized sink and anything the client sent for them is dropped.
  */
-async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): Promise<Response> {
-  const userId = c.get('userId') as string | undefined;
-
-  const url = new URL(c.req.url);
-  const path = url.pathname;
-
-  // MCP OAuth callback: the external provider redirects the browser here without
-  // any session cookie. It is routed ONLY to the runner its server-signed
-  // `state` is bound to (minted below when this server proxied `/oauth/start`),
-  // through the identity-free `OAuthCallbackRunner` proof. The page is rendered
-  // here — runner HTML is never relayed on this origin.
-  const isOAuthCallback = path === '/api/mcp/oauth/callback';
-  const isOAuthStart = c.req.method === 'POST' && path === '/api/mcp/oauth/start';
-
-  if (!userId && !isOAuthCallback) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-
-  const access = deps.runnerAccess ?? runnerAccess;
-  const presence = deps.presence ?? c.env?.runnerPresence;
-  const sink = authorizedRunnerRequests(deps.requests ?? c.env?.runnerRequests);
-  const query = Object.fromEntries(url.searchParams.entries());
-
-  // Non-identity headers forwarded to the runner. Identity headers are set by
-  // the authorized sink and anything the client sent for them is dropped.
+function buildForwardedHeaders(c: Context<ServerEnv>, url: URL): Record<string, string> {
   const forwardedHeaders: Record<string, string> = {
     'content-type': c.req.header('content-type') || 'application/json',
   };
@@ -129,101 +132,94 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
   if (rangeHeader) {
     forwardedHeaders['range'] = rangeHeader;
   }
+  return forwardedHeaders;
+}
 
-  // Read body for non-GET/HEAD requests
-  let bodyBytes: Uint8Array | null = null;
-  if (c.req.method !== 'GET' && c.req.method !== 'HEAD') {
-    try {
-      bodyBytes = new Uint8Array(await c.req.arrayBuffer());
-    } catch {
-      bodyBytes = null;
-    }
+/** Read body for non-GET/HEAD requests. */
+async function readRequestBody(c: Context<ServerEnv>): Promise<Uint8Array | null> {
+  if (c.req.method === 'GET' || c.req.method === 'HEAD') return null;
+  try {
+    return new Uint8Array(await c.req.arrayBuffer());
+  } catch {
+    return null;
   }
-  const request: UnsignedRunnerRequest = {
-    method: c.req.method,
-    path: `${path}${url.search}`,
-    headers: forwardedHeaders,
-    body: bodyBytes,
-    signal: c.req.raw.signal,
-  };
+}
 
-  /** One physical tunnel send, mapped to the proxy's HTTP outcomes. */
-  const relay = async (
-    send: () => Promise<RunnerResponse>,
-    runnerId: string,
-  ): Promise<Response> => {
-    try {
-      const tunnelResp = await send();
+function isTunnelTimeout(tunnelErr: unknown): boolean {
+  return (
+    tunnelErr instanceof RunnerRequestTimeoutError ||
+    (typeof tunnelErr === 'object' &&
+      tunnelErr !== null &&
+      (tunnelErr as Error).name === 'TunnelTimeoutError')
+  );
+}
 
-      // A binary response (image, video, PDF…) arrives base64-encoded so its
-      // bytes survive the JSON ack — decode it back to raw bytes here. A text
-      // response (the common JSON API payload) is passed through verbatim.
-      const tunnelBody =
-        tunnelResp.bodyEncoding === 'base64' && tunnelResp.body != null
-          ? Buffer.from(tunnelResp.body, 'base64')
-          : tunnelResp.body;
+/** Map a tunnel response onto an HTTP Response for the browser. */
+function toBrowserResponse(tunnelResp: RunnerResponse): Response {
+  // A binary response (image, video, PDF…) arrives base64-encoded so its
+  // bytes survive the JSON ack — decode it back to raw bytes here. A text
+  // response (the common JSON API payload) is passed through verbatim.
+  const tunnelBody =
+    tunnelResp.bodyEncoding === 'base64' && tunnelResp.body != null
+      ? Buffer.from(tunnelResp.body, 'base64')
+      : tunnelResp.body;
 
-      // Security M5: filter runner response headers on the tunnel path too —
-      // Leaving it unfiltered would let a malicious runner
-      // set `Set-Cookie` / `Access-Control-*` / security-policy headers on the
-      // central server's origin for the requesting user's browser.
-      return new Response(tunnelBody, {
-        status: tunnelResp.status,
-        headers: neutralizeRunnerContent(
-          filterSafeRunnerResponseHeaders(new Headers(tunnelResp.headers)),
-        ),
-      });
-    } catch (tunnelErr) {
-      if (
-        tunnelErr instanceof RunnerRequestTimeoutError ||
-        (typeof tunnelErr === 'object' &&
-          tunnelErr !== null &&
-          (tunnelErr as Error).name === 'TunnelTimeoutError')
-      ) {
-        log.warn('gRPC tunnel request timed out', {
-          namespace: 'proxy',
-          runnerId,
-          path,
-          method: c.req.method,
-          timeoutMs: (tunnelErr as any).timeoutMs || 30_000,
-        });
-        return c.json(
-          { error: 'Runner did not respond in time. The request may still be processing.' },
-          504,
-        );
-      }
-      log.warn('gRPC tunnel request failed', {
+  // Security M5: filter runner response headers on the tunnel path too —
+  // Leaving it unfiltered would let a malicious runner
+  // set `Set-Cookie` / `Access-Control-*` / security-policy headers on the
+  // central server's origin for the requesting user's browser.
+  return new Response(tunnelBody, {
+    status: tunnelResp.status,
+    headers: neutralizeRunnerContent(
+      filterSafeRunnerResponseHeaders(new Headers(tunnelResp.headers)),
+    ),
+  });
+}
+
+/** One physical tunnel send, mapped to the proxy's HTTP outcomes. */
+async function relay(
+  c: Context<ServerEnv>,
+  path: string,
+  send: () => Promise<RunnerResponse>,
+  runnerId: string,
+): Promise<Response> {
+  try {
+    return toBrowserResponse(await send());
+  } catch (tunnelErr) {
+    if (isTunnelTimeout(tunnelErr)) {
+      log.warn('gRPC tunnel request timed out', {
         namespace: 'proxy',
         runnerId,
-        error: (tunnelErr as Error).message,
+        path,
+        method: c.req.method,
+        timeoutMs: (tunnelErr as any).timeoutMs || 30_000,
       });
-      return c.json({ error: 'Runner tunnel unavailable.' }, 502);
+      return c.json(
+        { error: 'Runner did not respond in time. The request may still be processing.' },
+        504,
+      );
     }
-  };
+    log.warn('gRPC tunnel request failed', {
+      namespace: 'proxy',
+      runnerId,
+      error: (tunnelErr as Error).message,
+    });
+    return c.json({ error: 'Runner tunnel unavailable.' }, 502);
+  }
+}
 
-  const notConnected = () =>
-    c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
-
-  if (isOAuthCallback) return handleOAuthCallback(c, url, access, presence, sink, request);
-
-  const requester = runnerActor({
-    userId: userId!,
-    role: c.get('userRole') as string | undefined,
-    orgId: c.get('organizationId') as string | undefined,
-    orgName: c.get('organizationName') as string | undefined,
-  });
-
-  // ── Steer-share delegation (thread-sharing-steer) ──────────────────────
-  // The runner-isolation invariant routes a request ONLY to the requester's
-  // own runner. The single intentional exception: when an ALLOW-LISTED route
-  // (`POST /:id/message`, read-only git GETs) has already authorized a `steer`
-  // sharee, the upstream middleware (`requireThreadSteer`) loaded the thread
-  // into context. The thread lives on its OWNER's runner, so we certify a
-  // runner for the OWNER (`RunnerFor<Owner, R>`) — never a blind fallback —
-  // and send through `sendDelegated`, which signs the SHAREE with a `steer`
-  // claim for the thread (the runtime has no DB to look up the grant). Routes
-  // NOT guarded by a thread-access middleware never set `thread`, so they can
-  // never trigger this path. See CLAUDE.md "Runner Isolation (CRITICAL)".
+// ── Steer-share delegation (thread-sharing-steer) ──────────────────────
+// The runner-isolation invariant routes a request ONLY to the requester's
+// own runner. The single intentional exception: when an ALLOW-LISTED route
+// (`POST /:id/message`, read-only git GETs) has already authorized a `steer`
+// sharee, the upstream middleware (`requireThreadSteer`) loaded the thread
+// into context. The thread lives on its OWNER's runner, so we certify a
+// runner for the OWNER (`RunnerFor<Owner, R>`) — never a blind fallback —
+// and send through `sendDelegated`, which signs the SHAREE with a `steer`
+// claim for the thread (the runtime has no DB to look up the grant). Routes
+// NOT guarded by a thread-access middleware never set `thread`, so they can
+// never trigger this path. See CLAUDE.md "Runner Isolation (CRITICAL)".
+function resolveDelegation(c: Context<ServerEnv>, userId: string, path: string): Delegation | null {
   const thread = c.get('thread') as ServerEnv['Variables']['thread'] | undefined;
   const delegation =
     thread && thread.userId && thread.userId !== userId
@@ -232,7 +228,7 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
   if (delegation) {
     audit({
       action: 'share.steer_delegation',
-      actorId: userId!,
+      actorId: userId,
       detail: `sharee routed to owner runner for ${c.req.method} ${path}`,
       meta: {
         threadId: delegation.threadId,
@@ -242,18 +238,29 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
       },
     });
   }
+  return delegation;
+}
 
-  const sent = await access.withRunnerFor(
+/**
+ * Certify a runner (for the requester, or for the thread OWNER on a steer
+ * delegation) and send through the authorized sink. The proof never leaves
+ * the `withRunnerFor` callback.
+ */
+function sendViaCertifiedRunner(ctx: ProxySendContext) {
+  const { c, path, query, access, presence, sink, request, requester, delegation } = ctx;
+  return access.withRunnerFor(
     delegation ? runnerActor({ userId: delegation.ownerId }) : requester,
     { kind: 'request', path, query },
     presence,
     async (actor, runner, proof) => {
-      if (!sink.isAvailable(runner)) return notConnected();
+      if (!sink.isAvailable(runner)) {
+        return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
+      }
       // Bind the OAuth flow this runner is about to start to (user, runner):
       // the provider echoes the state back to the unauthenticated callback,
       // which is then routed to this runner only. Never for a delegated send.
       const outgoing: UnsignedRunnerRequest =
-        isOAuthStart && !delegation
+        ctx.isOAuthStart && !delegation
           ? {
               ...request,
               headers: {
@@ -263,6 +270,8 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
             }
           : request;
       return relay(
+        c,
+        path,
         () =>
           delegation
             ? sink.sendDelegated(
@@ -277,6 +286,84 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
       );
     },
   );
+}
+
+type ProxySendResult = Awaited<ReturnType<typeof sendViaCertifiedRunner>>;
+
+/** A stopped sandbox is woken for its owner (bounded), then the request retried once. */
+async function retryAfterSandboxWake(
+  ctx: ProxySendContext,
+  deps: ProxyTransport,
+  userId: string,
+  sent: ProxySendResult,
+): Promise<ProxySendResult> {
+  const waker = deps.sandboxWaker === undefined ? sandboxWaker() : deps.sandboxWaker;
+  const sandboxThreadId = extractThreadId(ctx.path);
+  if (
+    sent.isErr() &&
+    sent.error.reason === 'thread-sandbox-unavailable' &&
+    waker &&
+    sandboxThreadId
+  ) {
+    const woken = await waker.wake(sandboxThreadId, ctx.delegation?.ownerId ?? userId);
+    if (woken.isOk()) return sendViaCertifiedRunner(ctx);
+  }
+  return sent;
+}
+
+/**
+ * Hono handler that proxies the request to the appropriate runner.
+ */
+async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): Promise<Response> {
+  const userId = c.get('userId') as string | undefined;
+
+  const url = new URL(c.req.url);
+  const path = url.pathname;
+
+  // MCP OAuth callback: the external provider redirects the browser here without
+  // any session cookie. It is routed ONLY to the runner its server-signed
+  // `state` is bound to (minted below when this server proxied `/oauth/start`),
+  // through the identity-free `OAuthCallbackRunner` proof. The page is rendered
+  // here — runner HTML is never relayed on this origin.
+  const isOAuthCallback = path === '/api/mcp/oauth/callback';
+
+  if (!userId && !isOAuthCallback) {
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
+
+  const { access, presence, sink } = resolveTransport(c, deps);
+  const query = Object.fromEntries(url.searchParams.entries());
+  const request: UnsignedRunnerRequest = {
+    method: c.req.method,
+    path: `${path}${url.search}`,
+    headers: buildForwardedHeaders(c, url),
+    body: await readRequestBody(c),
+    signal: c.req.raw.signal,
+  };
+
+  if (isOAuthCallback) return handleOAuthCallback(c, url, access, presence, sink, request);
+
+  const requester = runnerActor({
+    userId: userId!,
+    role: c.get('userRole') as string | undefined,
+    orgId: c.get('organizationId') as string | undefined,
+    orgName: c.get('organizationName') as string | undefined,
+  });
+
+  const ctx: ProxySendContext = {
+    c,
+    path,
+    query,
+    access,
+    presence,
+    sink,
+    request,
+    requester,
+    delegation: resolveDelegation(c, userId!, path),
+    isOAuthStart: c.req.method === 'POST' && path === '/api/mcp/oauth/start',
+  };
+
+  const sent = await retryAfterSandboxWake(ctx, deps, userId!, await sendViaCertifiedRunner(ctx));
   if (sent.isErr()) {
     log.warn('No reachable runner for proxy request', { namespace: 'proxy', userId, path });
     return c.json(describeResolutionFailure(sent.error.reason), 502);
@@ -284,7 +371,15 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
   return sent.value;
 }
 
-type OAuthCallbackSink = ReturnType<typeof authorizedRunnerRequests>;
+function resolveTransport(c: Context<ServerEnv>, deps: ProxyTransport) {
+  return {
+    access: deps.runnerAccess ?? runnerAccess,
+    presence: deps.presence ?? c.env?.runnerPresence,
+    sink: authorizedRunnerRequests(deps.requests ?? c.env?.runnerRequests),
+  };
+}
+
+type OAuthCallbackSink = ProxySink;
 
 function oauthCallbackPage(
   c: Context<ServerEnv>,

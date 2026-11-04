@@ -1700,6 +1700,112 @@ const migrations: Migration[] = [
       await ctx().dropColumn('user_profiles', 'assemblyai_api_key');
     },
   },
+  {
+    name: '082_better_auth_plugin_fields',
+    async up() {
+      await ctx().addColumn('session', 'impersonated_by', 'TEXT');
+      await ctx().addColumn('session', 'active_organization_id', 'TEXT');
+      // Existing invitations predate this field; record the migration time.
+      await ctx().addColumn(
+        'invitation',
+        'created_at',
+        'TEXT NOT NULL',
+        `'${new Date().toISOString()}'`,
+      );
+    },
+  },
+  {
+    // thread-sandboxes: a runner with role 'sandbox' is bound to one thread.
+    name: '083_sandbox_runner_thread',
+    async up() {
+      await ctx().addColumn('runners', 'thread_id', 'TEXT');
+    },
+  },
+  {
+    // thread-sandboxes: single-use tokens for zero-touch sandbox runner enrollment.
+    name: '084_runner_provision_tokens',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS runner_provision_tokens (
+          id TEXT PRIMARY KEY,
+          token_hash TEXT NOT NULL UNIQUE,
+          user_id TEXT NOT NULL,
+          project_id TEXT,
+          thread_id TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          used_at TEXT,
+          runner_id TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_runner_provision_tokens_expires
+        ON runner_provision_tokens (expires_at)
+      `);
+    },
+  },
+  {
+    // thread-sandboxes: encrypted credentials for sandbox providers.
+    name: '085_infra_connections',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS infra_connections (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          label TEXT NOT NULL,
+          config_json TEXT NOT NULL DEFAULT '{}',
+          credential_enc TEXT NOT NULL,
+          account_label TEXT,
+          created_at TEXT NOT NULL,
+          last_validated_at TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_infra_connections_user ON infra_connections (user_id)
+      `);
+    },
+  },
+  {
+    // thread-sandboxes: the sandbox each sandbox thread runs in.
+    name: '086_thread_sandboxes',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS thread_sandboxes (
+          thread_id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          connection_id TEXT NOT NULL,
+          provider TEXT NOT NULL,
+          sandbox_id TEXT,
+          runner_id TEXT,
+          size_id TEXT NOT NULL,
+          state TEXT NOT NULL,
+          error TEXT,
+          generation INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
+  {
+    // thread-sandboxes: remember the cloned repository so the next sandbox of the
+    // project can be created while the project's own runner is offline.
+    name: '087_thread_sandboxes_repo_url',
+    async up() {
+      await ctx().addColumn('thread_sandboxes', 'repo_url', 'TEXT');
+    },
+  },
+  {
+    // thread-sandboxes: per-sandbox token for the server's LLM credential proxy.
+    name: '088_thread_sandboxes_llm_token',
+    async up() {
+      await ctx().addColumn('thread_sandboxes', 'llm_token_hash', 'TEXT');
+      await ctx().exec(
+        sql`CREATE UNIQUE INDEX IF NOT EXISTS idx_thread_sandboxes_llm_token ON thread_sandboxes(llm_token_hash)`,
+      );
+    },
+  },
 ];
 
 /**

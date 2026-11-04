@@ -5,11 +5,13 @@ import { GIT_TIMELINE_EVENT_TYPES } from '@/lib/git-timeline-events';
 import {
   buildGroupedRenderItems,
   buildRenderItemIdIndexMap,
+  clipEventsToMessageWindow,
   findNearestPrecedingUserMessageItem,
   getItemKey,
   getItemTimestamp,
 } from '@/lib/render-items';
-import type { RenderItem } from '@/lib/render-items';
+import type { MessageWindowBounds, RenderItem } from '@/lib/render-items';
+import type { CompactionEvent } from '@/stores/thread-store';
 
 // --- Helpers ---
 
@@ -611,5 +613,91 @@ describe('turn outcome timeline rows', () => {
         item.type === 'message' ? item.msg.id : item.type === 'thread-event' ? item.event.id : '',
       ),
     ).toEqual(['u1', 'a1', 'stop-1', 'a2']);
+  });
+});
+
+describe('sandbox error cards (thread-sandboxes)', () => {
+  test('a sandbox:error event becomes a timeline row where it happened', () => {
+    const messages = [
+      { id: 'u1', role: 'user', content: 'Go on', timestamp: '2026-11-01T20:00:00.000Z' },
+      { id: 'a1', role: 'assistant', content: 'Done', timestamp: '2026-11-01T20:00:10.000Z' },
+    ];
+    const items = buildGroupedRenderItems(messages as any, [
+      {
+        id: 'sbx-err',
+        threadId: 't1',
+        type: 'sandbox:error',
+        data: JSON.stringify({ phase: 'wake', message: 'disk expired' }),
+        createdAt: '2026-11-01T20:30:00.000Z',
+      } as any,
+    ]);
+    expect(
+      items.map((item) =>
+        item.type === 'message' ? item.msg.id : item.type === 'thread-event' ? item.event.id : '',
+      ),
+    ).toEqual(['u1', 'a1', 'sbx-err']);
+  });
+});
+
+describe('events outside the loaded message window', () => {
+  const compaction = (timestamp: string) => ({
+    trigger: 'auto' as const,
+    preTokens: 1000,
+    timestamp,
+  });
+  const messages = [
+    makeMessage('m1', 'a', [], '2024-01-01T10:00:00Z'),
+    makeMessage('m2', 'b', [], '2024-01-01T11:00:00Z'),
+  ];
+  const compactions = [
+    compaction('2024-01-01T08:00:00Z'), // before the loaded page
+    compaction('2024-01-01T10:30:00Z'), // inside
+    compaction('2024-01-01T12:00:00Z'), // after the loaded page
+  ];
+  const clipped = (
+    events: ThreadEvent[],
+    comps: CompactionEvent[],
+    bounds: MessageWindowBounds,
+  ): [ThreadEvent[] | undefined, CompactionEvent[] | undefined] => {
+    const c = clipEventsToMessageWindow(messages, events, comps, bounds);
+    return [c.threadEvents, c.compactionEvents];
+  };
+  const compactionTimestamps = (items: RenderItem[]) =>
+    items.flatMap((i) => (i.type === 'compaction-event' ? [i.event.timestamp] : []));
+
+  test('shows every event when the full history is loaded', () => {
+    expect(compactionTimestamps(buildGroupedRenderItems(messages, [], compactions))).toHaveLength(
+      3,
+    );
+  });
+
+  test('hides events older than the first loaded message while older pages remain', () => {
+    const items = buildGroupedRenderItems(
+      messages,
+      ...clipped([], compactions, { hasOlder: true }),
+    );
+    expect(compactionTimestamps(items)).toEqual(['2024-01-01T10:30:00Z', '2024-01-01T12:00:00Z']);
+  });
+
+  test('hides events newer than the last loaded message while newer pages remain', () => {
+    const items = buildGroupedRenderItems(
+      messages,
+      ...clipped([], compactions, { hasOlder: true, hasNewer: true }),
+    );
+    expect(compactionTimestamps(items)).toEqual(['2024-01-01T10:30:00Z']);
+  });
+
+  test('hides every event until a message of the page has loaded', () => {
+    const c = clipEventsToMessageWindow([], [], compactions, { hasOlder: true });
+    expect(c.compactionEvents).toEqual([]);
+  });
+
+  test('applies the same window to thread events', () => {
+    const events = [makeThreadEvent('e1', 'git:commit', '2024-01-01T08:00:00Z')];
+    const items = buildGroupedRenderItems(
+      messages,
+      ...clipped(events as ThreadEvent[], [], { hasOlder: true }),
+    );
+    expect(items.some((i) => i.type === 'thread-event')).toBe(false);
   });
 });

@@ -1,7 +1,7 @@
 import type { RunTriageStatus } from '@funny/shared';
 import { includesSearchText } from '@funny/shared/lib/text-search';
 import { Check, ChevronsUpDown, Inbox, Settings } from 'lucide-react';
-import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
@@ -18,22 +18,21 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import { triageRun } from '@/data/automations/actions';
+import { useAutomationInbox } from '@/data/automations/hooks';
+import { loadInbox } from '@/data/automations/loaders';
+import { useProjects } from '@/data/projects/hooks';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
-import { useAutomationStore } from '@/stores/automation-store';
-import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 export function AutomationInboxView() {
   const navigate = useNavigate();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
 
-  const inbox = useAutomationStore((s) => s.inbox);
-  const inboxCount = useAutomationStore((s) => s.inboxCount);
-  const loadInbox = useAutomationStore((s) => s.loadInbox);
-  const triageRun = useAutomationStore((s) => s.triageRun);
+  const { inbox, pendingCount: inboxCount } = useAutomationInbox();
 
   const setAutomationInboxOpen = useUIStore((s) => s.setAutomationInboxOpen);
   const selectThread = useThreadStore((s) => s.selectThread);
@@ -46,15 +45,9 @@ export function AutomationInboxView() {
   const [searchQuery, setSearchQuery] = useState('');
   const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
 
-  // Keep a stable ref to avoid restarting the effect on re-renders
-  const loadInboxRef = useRef(loadInbox);
-  useLayoutEffect(() => {
-    loadInboxRef.current = loadInbox;
-  }, [loadInbox]);
-
   // Always load all inbox items so tab counts stay accurate; filter client-side
   useEffect(() => {
-    loadInboxRef.current();
+    void loadInbox();
   }, []);
 
   const filteredInbox = useMemo(() => {
@@ -337,7 +330,7 @@ export function AutomationInboxView() {
                             className="h-7 text-xs"
                             onClick={(e) => {
                               e.stopPropagation();
-                              triageRun(run.id, 'dismissed');
+                              void triageRun(run.id, 'dismissed');
                             }}
                           >
                             Dismiss
@@ -348,7 +341,7 @@ export function AutomationInboxView() {
                             className="h-7 text-xs"
                             onClick={(e) => {
                               e.stopPropagation();
-                              triageRun(run.id, 'reviewed');
+                              void triageRun(run.id, 'reviewed');
                             }}
                           >
                             Mark Reviewed

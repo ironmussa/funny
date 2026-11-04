@@ -18,6 +18,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useProjects } from '@/data/projects/hooks';
 import { parseRoute } from '@/hooks/route-parser';
 import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
@@ -40,7 +41,7 @@ interface Props {
  */
 export function ProjectSettingsView({ projectId, onBack }: Props) {
   const { t } = useTranslation();
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
   const project = projects.find((p) => p.id === projectId);
   const authUser = useAuthStore((s) => s.user);
   const location = useLocation();

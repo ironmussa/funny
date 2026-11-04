@@ -1,3 +1,4 @@
+import { formatCompactElapsed } from '@funny/client-core';
 import type { ThreadItemStatus } from '@funny/gpuix-ui/sidebar';
 import type { Thread } from '@funny/shared';
 
@@ -54,17 +55,7 @@ export function visibleProjectThreads(
 export function formatSidebarRelativeTime(value: string | undefined, now = Date.now()): string {
   const then = timestamp(value);
   if (then === 0) return '';
-  const seconds = Math.max(0, Math.floor((now - then) / 1000));
-  if (seconds < 60) return 'now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo`;
-  return `${Math.floor(months / 12)}y`;
+  return formatCompactElapsed(then, now);
 }
 
 export function sidebarThreadSummary(thread: Thread): string {

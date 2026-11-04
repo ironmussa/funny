@@ -17,9 +17,18 @@
  * Or via URL/localStorage key: `funny:log-ns:browser-panel` = 'debug' | 'info' | 'warn' | 'error'.
  */
 
+import {
+  threadBrowserSessionId,
+  type BrowserSessionController,
+  type WSBrowserSessionDialogData,
+} from '@funny/shared';
 import type { AnnotationDomInfo } from '@funny/shared/dom/extract';
 import { create } from 'zustand';
 
+import {
+  BROWSER_SESSION_VIEWPORT_HEIGHT,
+  BROWSER_SESSION_VIEWPORT_WIDTH,
+} from '@/lib/browser-session-viewport';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric } from '@/lib/telemetry';
 /**
@@ -63,6 +72,8 @@ type AnnotationInput = Annotation extends infer T
   : never;
 
 export type Tool = 'browse' | 'pin' | 'region' | 'draw';
+
+type BrowserSessionDialog = NonNullable<WSBrowserSessionDialogData['dialog']>;
 
 type SessionStatus =
   | 'idle' // No session
@@ -112,6 +123,17 @@ interface BrowserPanelState {
    * iframe model. Null when the panel is closed or no URL has been loaded.
    */
   sessionId: string | null;
+  /**
+   * Thread the session is bound to (`thread:<id>` session ids). Thread-bound
+   * sessions are shared with the agent: closing the panel only detaches.
+   */
+  sessionThreadId: string | null;
+  /** Page viewport of the session — input and overlays scale to it. */
+  viewport: { width: number; height: number };
+  /** Who drives a thread-bound session: the agent, or the user after "Take over". */
+  controller: BrowserSessionController;
+  /** JavaScript dialog waiting for an answer (the page is frozen meanwhile). */
+  dialog: BrowserSessionDialog | null;
   sessionStatus: SessionStatus;
   /**
    * Set to a human-readable error message when the runner rejects open or
@@ -131,6 +153,7 @@ interface BrowserPanelState {
   closePanel: () => void;
   setUrl: (url: string) => void;
   setLoadError: (msg: string | null) => void;
+  resetAnnotationTools: () => void;
   setTool: (tool: Tool) => void;
   setDrawColor: (color: string) => void;
   addAnnotation: (a: AnnotationInput) => string;
@@ -153,6 +176,25 @@ interface BrowserPanelState {
   openBrowserSession: (url: string) => Promise<void>;
   /** Close the runner-managed session and free its resources. */
   closeBrowserSession: () => Promise<void>;
+  /** Close a thread-bound session for good (not just detach). */
+  endBrowserSession: () => Promise<void>;
+  /** Re-attach to (or detect) the browser session of a thread. */
+  attachThreadSession: (threadId: string) => Promise<void>;
+  /** Follow the active thread: detach from another thread's session, attach to this one's. */
+  syncActiveThread: (threadId: string | null) => void;
+  /** An agent opened its thread's session — surface it if that thread is active. */
+  handleAgentOpened: (sessionId: string, threadId: string, activeThreadId: string | null) => void;
+  setSessionViewport: (sessionId: string, width: number, height: number) => void;
+  /** The runner has no session for an attach attempt. */
+  handleSessionNotFound: (sessionId: string) => void;
+  /** Close every session and delete the persistent browser profile on the runner. */
+  clearBrowserProfile: () => Promise<void>;
+  setSessionController: (sessionId: string, controller: BrowserSessionController) => void;
+  setSessionDialog: (sessionId: string, dialog: BrowserSessionDialog | null) => void;
+  /** Take the session over from the agent (or hand it back with `false`). */
+  setUserControl: (userControls: boolean) => Promise<void>;
+  /** Answer the pending dialog from the panel. */
+  answerDialog: (accept: boolean, promptText?: string) => Promise<void>;
   setSessionStatus: (status: SessionStatus, error?: string | null) => void;
   toggleShowTestIds: () => void;
   toggleAnimationsPaused: () => void;
@@ -256,6 +298,10 @@ const FRESH = {
   drawCanvasRef: null as HTMLCanvasElement | null,
   overlaysVisible: true,
   sessionId: null as string | null,
+  sessionThreadId: null as string | null,
+  viewport: { width: BROWSER_SESSION_VIEWPORT_WIDTH, height: BROWSER_SESSION_VIEWPORT_HEIGHT },
+  controller: 'agent' as BrowserSessionController,
+  dialog: null as BrowserSessionDialog | null,
   sessionStatus: 'idle' as SessionStatus,
   sessionError: null as string | null,
   showTestIds: false,
@@ -264,6 +310,50 @@ const FRESH = {
 };
 
 const initialDefaults = readDefaults();
+
+/** Session fields reset when the panel lets go of a session. */
+const DETACHED = {
+  tool: 'browse' as Tool,
+  inspectActive: false,
+  showTestIds: false,
+  sessionId: null as string | null,
+  sessionThreadId: null as string | null,
+  sessionStatus: 'idle' as SessionStatus,
+  sessionError: null as string | null,
+  viewport: { width: BROWSER_SESSION_VIEWPORT_WIDTH, height: BROWSER_SESSION_VIEWPORT_HEIGHT },
+};
+
+// Lazy-loaded so the panel's transport code stays out of the initial bundle;
+// cached so every action shares one module instance.
+let clientModule: Promise<typeof import('@/lib/browser-session-client')> | null = null;
+let framesModule: Promise<typeof import('@/lib/browser-session-frames')> | null = null;
+const loadClient = () => (clientModule ??= import('@/lib/browser-session-client'));
+const loadFrames = () => (framesModule ??= import('@/lib/browser-session-frames'));
+
+/** Tell the runner to close or detach a session and drop its cached frame. */
+async function releaseSession(sessionId: string, reason: 'user' | 'detach'): Promise<void> {
+  const [{ browserSessionClient }, { clearLatestFrame }] = await Promise.all([
+    loadClient(),
+    loadFrames(),
+  ]);
+  browserSessionClient.close(sessionId, reason);
+  clearLatestFrame(sessionId);
+}
+
+/** On a thread the session is the thread's (shared with its agent); otherwise a fresh id. */
+function newPanelSessionId(threadId: string | null): string {
+  if (threadId) return threadBrowserSessionId(threadId);
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
+  return `bp-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function urlProtocol(url: string): string {
+  return url.split(':', 1)[0] || 'unknown';
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
 
 export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
   ...FRESH,
@@ -278,8 +368,8 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
       metric('browser_panel.opened', 1, { type: 'sum' });
       set({ open: true });
     } else {
-      // Closing the panel must tear down the runner session — frames keep
-      // streaming otherwise and we leak a Chromium subprocess.
+      // Closing the panel tears down a panel-owned session (frames keep
+      // streaming otherwise) and detaches from a thread-bound one.
       void get().closeBrowserSession();
       set({ ...FRESH, open: false });
     }
@@ -293,6 +383,16 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
   setUrl: (url) => set({ url }),
 
   setLoadError: (msg) => set({ loadError: msg }),
+
+  resetAnnotationTools: () => {
+    const state = get();
+    if (state.animationsPaused) state.toggleAnimationsPaused();
+    set({
+      tool: 'browse',
+      inspectActive: false,
+      showTestIds: false,
+    });
+  },
 
   setTool: (tool) => set({ tool }),
 
@@ -395,20 +495,21 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
     // If we already have a session, just navigate it (the runner handles the
     // open→navigate fall-through too, but going through the dedicated client
     // method gives us cleaner WS traffic).
-    if (state.sessionId && state.sessionStatus !== 'disconnected') {
-      const { browserSessionClient } = await import('@/lib/browser-session-client');
+    if (state.sessionId && state.sessionStatus === 'ready') {
+      const { browserSessionClient } = await loadClient();
       browserSessionClient.navigate(state.sessionId, url);
       set({ loadedUrl: url, loadError: null });
       return;
     }
 
-    const sessionId =
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `bp-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+    // On a thread, the session is the thread's — shared with its agent.
+    const { getUrlThreadId } = await import('@/stores/thread-store');
+    const threadId = state.sessionThreadId ?? getUrlThreadId();
+    const sessionId = state.sessionId ?? newPanelSessionId(threadId);
 
     set({
       sessionId,
+      sessionThreadId: threadId,
       sessionStatus: 'spawning',
       sessionError: null,
       loadedUrl: url,
@@ -417,23 +518,134 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
     metric('browser_panel.url_loaded', 1, {
       type: 'sum',
-      attributes: { protocol: url.split(':', 1)[0] || 'unknown' },
+      attributes: { protocol: urlProtocol(url) },
     });
 
-    const { browserSessionClient } = await import('@/lib/browser-session-client');
-    browserSessionClient.open(sessionId, url);
+    try {
+      const { browserSessionClient } = await loadClient();
+      browserSessionClient.open(sessionId, url);
+    } catch (error) {
+      if (get().sessionId !== sessionId) return;
+      get().setSessionStatus('disconnected', errorMessage(error));
+    }
   },
 
   closeBrowserSession: async () => {
+    const { sessionId, sessionThreadId } = get();
+    if (!sessionId) return;
+    await releaseSession(sessionId, sessionThreadId ? 'detach' : 'user');
+    set({ ...DETACHED });
+  },
+
+  endBrowserSession: async () => {
     const { sessionId } = get();
     if (!sessionId) return;
-    const [{ browserSessionClient }, { clearLatestFrame }] = await Promise.all([
-      import('@/lib/browser-session-client'),
-      import('@/lib/browser-session-frames'),
-    ]);
-    browserSessionClient.close(sessionId, 'user');
-    clearLatestFrame(sessionId);
-    set({ sessionId: null, sessionStatus: 'idle', sessionError: null });
+    await releaseSession(sessionId, 'user');
+    set({ ...DETACHED, url: '', loadedUrl: null });
+  },
+
+  attachThreadSession: async (threadId) => {
+    const sessionId = threadBrowserSessionId(threadId);
+    // Controller and dialog start from defaults; `ready` restates the real ones.
+    set({
+      sessionId,
+      sessionThreadId: threadId,
+      sessionStatus: 'spawning',
+      sessionError: null,
+      tool: 'browse',
+      inspectActive: false,
+      showTestIds: false,
+      controller: 'agent',
+      dialog: null,
+    });
+    try {
+      const { browserSessionClient } = await loadClient();
+      // Empty URL = attach only: the runner re-sends `ready` or replies `not_found`.
+      browserSessionClient.open(sessionId, '');
+    } catch (error) {
+      if (get().sessionId === sessionId)
+        get().setSessionStatus(
+          'disconnected',
+          error instanceof Error ? error.message : String(error),
+        );
+    }
+  },
+
+  syncActiveThread: (threadId) => {
+    const state = get();
+    if (!state.open) return;
+    if (state.sessionThreadId && state.sessionThreadId !== threadId && state.sessionId) {
+      void releaseSession(state.sessionId, 'detach');
+      set({ ...DETACHED, url: '', loadedUrl: null });
+    }
+    if (threadId && !get().sessionId) void get().attachThreadSession(threadId);
+  },
+
+  handleAgentOpened: (sessionId, threadId, activeThreadId) => {
+    if (threadId !== activeThreadId) return;
+    const state = get();
+    if (state.sessionId === sessionId) return;
+    if (state.sessionId) {
+      void releaseSession(state.sessionId, state.sessionThreadId ? 'detach' : 'user');
+    }
+    log.info('agent opened browser on active thread — attaching', { threadId });
+    set({ ...DETACHED, open: true });
+    void get().attachThreadSession(threadId);
+  },
+
+  setSessionViewport: (sessionId, width, height) => {
+    if (get().sessionId !== sessionId) return;
+    set({ viewport: { width, height } });
+  },
+
+  handleSessionNotFound: (sessionId) => {
+    if (get().sessionId !== sessionId) return;
+    set({ ...DETACHED });
+  },
+
+  setSessionController: (sessionId, controller) => {
+    if (get().sessionId !== sessionId) return;
+    if (controller !== 'user') get().resetAnnotationTools();
+    set({ controller });
+  },
+
+  setSessionDialog: (sessionId, dialog) => {
+    if (get().sessionId !== sessionId) return;
+    set({ dialog });
+  },
+
+  setUserControl: async (userControls) => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    const { browserSessionClient } = await loadClient();
+    if (!userControls) get().resetAnnotationTools();
+    browserSessionClient.input(sessionId, {
+      kind: userControls ? 'takeControl' : 'releaseControl',
+    });
+    metric('browser_panel.control_changed', 1, {
+      type: 'sum',
+      attributes: { controller: userControls ? 'user' : 'agent' },
+    });
+  },
+
+  answerDialog: async (accept, promptText) => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    const { browserSessionClient } = await loadClient();
+    browserSessionClient.input(sessionId, { kind: 'dialog', accept, promptText });
+    set({ dialog: null });
+  },
+
+  clearBrowserProfile: async () => {
+    const { sessionId } = get();
+    const { browserSessionClient } = await loadClient();
+    browserSessionClient.close(sessionId ?? 'browser-profile', 'clear-profile');
+    if (sessionId) {
+      const { clearLatestFrame } = await loadFrames();
+      clearLatestFrame(sessionId);
+    }
+    metric('browser_panel.profile_cleared', 1, { type: 'sum' });
+    set({ ...DETACHED, url: '', loadedUrl: null });
   },
 
   setSessionStatus: (status, error = null) =>
@@ -450,7 +662,7 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
     const { sessionId } = get();
     if (!sessionId) return;
-    void import('@/lib/browser-session-client').then(({ browserSessionClient }) => {
+    void loadClient().then(({ browserSessionClient }) => {
       browserSessionClient
         .execute(
           sessionId,

@@ -16,6 +16,7 @@ import { FrozenMessage } from './FrozenMessage';
 import { GitEventCard } from './GitEventCard';
 import type { MessageItem, VirtualRow } from './MemoizedMessageList.virtualRows';
 import { MessageContent, CopyButton } from './MessageContent';
+import { SandboxErrorCard } from './SandboxErrorCard';
 import { UserMessageCard } from './UserMessageCard';
 import { WorkflowEventGroup } from './WorkflowEventGroup';
 
@@ -111,6 +112,14 @@ function ToolItemRenderer({
   return null;
 }
 
+type ThreadEventRenderItem = Extract<RenderItem, { type: 'thread-event' }>;
+
+function ThreadEventItem({ event }: { event: ThreadEventRenderItem['event'] }) {
+  if (event.type === 'turn_outcome') return <StoppedOutcomeRow event={event} />;
+  if (event.type === 'sandbox:error') return <SandboxErrorCard event={event} />;
+  return <GitEventCard event={event} />;
+}
+
 type NonUserItemRendererProps = ToolRendererCommonProps & {
   item: RenderItem;
 };
@@ -169,11 +178,7 @@ function NonUserItemRenderer({
   if (item.type === 'thread-event') {
     return (
       <div data-item-key={key}>
-        {item.event.type === 'turn_outcome' ? (
-          <StoppedOutcomeRow event={item.event} />
-        ) : (
-          <GitEventCard event={item.event} />
-        )}
+        <ThreadEventItem event={item.event} />
       </div>
     );
   }

@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjects } from '@/data/projects/hooks';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { sendTerminalRealtime } from '@/hooks/use-ws';
@@ -141,7 +142,7 @@ function NewTerminalButton() {
   const fetchAvailableShells = useSettingsStore((s) => s.fetchAvailableShells);
   const addTab = useTerminalStore((s) => s.addTab);
   const togglePanel = useTerminalStore((s) => s.togglePanel);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const { scopeId: selectedProjectId, scratchThreadId } = useTerminalScope();
   const activeThreadWorktreePath = useThreadWorktreePath();
   const visibleTabs = useTerminalStore(

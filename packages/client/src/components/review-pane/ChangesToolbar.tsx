@@ -18,8 +18,8 @@ import { PushButton } from '@/components/push-button';
 import { Button } from '@/components/ui/button';
 import { CountBadge } from '@/components/ui/count-badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import type { ProjectGitStatus } from '@/data/git-status/keys';
 import { cn } from '@/lib/utils';
-import type { ProjectGitStatus } from '@/stores/git-status-store';
 
 interface ChangesToolbarProps {
   // Refresh

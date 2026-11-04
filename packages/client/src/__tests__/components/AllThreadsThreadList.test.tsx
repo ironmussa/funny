@@ -4,7 +4,7 @@ import type { KeyboardEvent, MutableRefObject } from 'react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AllThreadsThreadList } from '@/components/all-threads/AllThreadsThreadList';
-import { useGitStatusStore } from '@/stores/git-status-store';
+import { seedGitStatus } from '@/data/git-status/testing';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -120,7 +120,7 @@ function expectThreadHighlighted(threadId: string, highlighted: boolean) {
 
 describe('AllThreadsThreadList', () => {
   beforeEach(() => {
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: {},
       threadToBranchKey: {},
       _loadingBranchKeys: new Set(),
@@ -144,7 +144,7 @@ describe('AllThreadsThreadList', () => {
       prState: 'OPEN',
       prUrl: 'https://example.test/pull/42',
     };
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: { 'project-1:main': gitStatus },
       threadToBranchKey: { [thread.id]: 'project-1:main' },
     } as any);

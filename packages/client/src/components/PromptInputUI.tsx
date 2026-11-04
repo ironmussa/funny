@@ -19,7 +19,7 @@ import {
   PromptInputFrame,
   ProviderSetupPrompt,
 } from './prompt-input/PromptChrome';
-import { PromptFooterBar } from './prompt-input/PromptFooterBar';
+import { PromptFooterBar, type RuntimeMode } from './prompt-input/PromptFooterBar';
 import { PromptToolbar } from './prompt-input/PromptToolbar';
 import { QueueIndicator } from './prompt-input/QueueIndicator';
 import { TemplateVariableInputs } from './prompt-input/TemplateVariableInputs';
@@ -80,9 +80,11 @@ export interface PromptInputUIProps {
   projectId?: string;
   createWorktree?: boolean;
   onCreateWorktreeChange?: (v: boolean) => void;
-  runtime?: 'local' | 'remote';
-  onRuntimeChange?: (v: 'local' | 'remote') => void;
-  hasLauncher?: boolean;
+  /** Runtime of the new thread: `local`, `remote` or `sandbox:<connectionId>`. */
+  runtime?: string;
+  onRuntimeChange?: (v: string) => void;
+  /** Runtime choices; the selector shows when there is more than one. */
+  runtimeModes?: RuntimeMode[];
 
   // ── Branch ──
   selectedBranch?: string;
@@ -178,8 +180,8 @@ const PROP_DEFAULTS = {
   isNewThread: false,
   isScratch: false,
   createWorktree: false,
-  runtime: 'local' as 'local' | 'remote',
-  hasLauncher: false,
+  runtime: 'local',
+  runtimeModes: [] as RuntimeMode[],
   selectedBranch: '',
   followUpSelectedBranch: '',
   showBacklog: false,
@@ -279,12 +281,14 @@ export const PromptInputUI = memo(function PromptInputUI(rawProps: PromptInputUI
     initialImages: props.initialImages,
     provider,
     threadId: props.threadId,
+    projectId: props.projectId,
     t,
   });
   const { images, attachedTextFiles } = attachments;
 
   const handleSubmit = usePromptSubmit({
     ...props,
+    activeThread: props.powerlineThread,
     t,
     editorRef,
     provider,
@@ -325,7 +329,7 @@ export const PromptInputUI = memo(function PromptInputUI(rawProps: PromptInputUI
     editorRef,
     loading,
     addFiles: attachments.addFiles,
-    addImageFile: attachments.addImageFile,
+    addFile: attachments.addFile,
     onEditorPaste: props.onEditorPaste,
   });
 

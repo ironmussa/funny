@@ -95,7 +95,7 @@ const threadSourceSchema = z.enum(['web', 'chrome_extension', 'api', 'automation
 
 // ── Image attachment ─────────────────────────────────────────────
 
-const imageAttachmentSchema = z.object({
+export const imageAttachmentSchema = z.object({
   type: z.literal('image'),
   source: z.object({
     type: z.literal('base64'),
@@ -116,6 +116,9 @@ const fileReferenceSchema = z.object({
 // safely covers the largest `uploadMaxBytes` across providers (25 MB
 // for Claude). Per-provider tier enforcement happens in upload.ts.
 const MAX_BASE64_LENGTH = 40 * 1024 * 1024;
+
+/** Shape of a staged-upload id (`randomUUID()`), see services/thread-service/staged-uploads.ts. */
+export const STAGED_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
 
 export const uploadFileSchema = z.object({
   provider: agentProviderSchema,
@@ -208,6 +211,16 @@ export const updateProjectSchema = z
 
 const effortLevelSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 
+/** Tool policy + attachments accepted by every request that runs the agent. */
+const agentRunInputShape = {
+  allowedTools: z.array(z.string()).optional(),
+  disallowedTools: z.array(z.string()).optional(),
+  fileReferences: z.array(fileReferenceSchema).max(20).optional(),
+  symbolReferences: z.array(symbolReferenceSchema).max(20).optional(),
+  /** Ids returned by POST /api/uploads/staging, adopted into the thread. */
+  stagedUploads: z.array(z.string().regex(STAGED_ID_RE)).max(20).optional(),
+};
+
 export const createThreadSchema = z
   .object({
     /**
@@ -229,10 +242,7 @@ export const createThreadSchema = z
     baseBranch: optionalBaseBranchSchema,
     prompt: z.string().min(1, 'prompt is required').max(500_000),
     images: z.array(imageAttachmentSchema).max(10).optional(),
-    allowedTools: z.array(z.string()).optional(),
-    disallowedTools: z.array(z.string()).optional(),
-    fileReferences: z.array(fileReferenceSchema).max(20).optional(),
-    symbolReferences: z.array(symbolReferenceSchema).max(20).optional(),
+    ...agentRunInputShape,
     worktreePath: z.string().optional(),
     parentThreadId: z.string().optional(),
     designId: z.string().optional(),
@@ -272,6 +282,8 @@ export const createIdleThreadSchema = z.object({
   baseBranch: optionalBaseBranchSchema,
   prompt: z.string().optional(),
   images: z.array(imageAttachmentSchema).optional(),
+  fileReferences: z.array(fileReferenceSchema).max(20).optional(),
+  stagedUploads: z.array(z.string().regex(STAGED_ID_RE)).max(20).optional(),
   stage: z.enum(['backlog', 'planning']).default('backlog'),
   designId: z.string().optional(),
 });
@@ -284,10 +296,7 @@ export const sendMessageSchema = z
     permissionMode: permissionModeSchema.optional(),
     effort: effortLevelSchema.optional(),
     images: z.array(imageAttachmentSchema).optional(),
-    allowedTools: z.array(z.string()).optional(),
-    disallowedTools: z.array(z.string()).optional(),
-    fileReferences: z.array(fileReferenceSchema).max(20).optional(),
-    symbolReferences: z.array(symbolReferenceSchema).max(20).optional(),
+    ...agentRunInputShape,
     baseBranch: optionalBaseBranchSchema,
     forceQueue: z.boolean().optional(),
   })

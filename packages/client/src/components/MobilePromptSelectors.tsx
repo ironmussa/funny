@@ -227,22 +227,31 @@ export function MobileModelSelect({
                     <span className="block font-normal">
                       {group.disabledReason === 'no-runner'
                         ? t('prompt.mobileSelectors.connectRunner', 'Connect a runner')
-                        : t('prompt.mobileSelectors.notInstalled', 'Not installed on runner')}
+                        : group.disabledReason === 'sandbox-unsupported'
+                          ? t(
+                              'prompt.mobileSelectors.sandboxUnsupported',
+                              'Not available in sandboxes yet',
+                            )
+                          : t('prompt.mobileSelectors.notInstalled', 'Not installed on runner')}
                     </span>
                   )}
                 </h3>
-                {group.disabledReason !== 'no-runner' && (
-                  <PromptSelectionOption
-                    onClick={() => {
-                      changeOpen(false);
-                      setSetupProvider(group);
-                    }}
-                  >
-                    {group.disabledReason === 'not-installed'
-                      ? t('prompt.mobileSelectors.installProvider', 'Install / configure provider…')
-                      : t('prompt.mobileSelectors.configureProvider', 'Configure provider…')}
-                  </PromptSelectionOption>
-                )}
+                {group.disabledReason !== 'no-runner' &&
+                  group.disabledReason !== 'sandbox-unsupported' && (
+                    <PromptSelectionOption
+                      onClick={() => {
+                        changeOpen(false);
+                        setSetupProvider(group);
+                      }}
+                    >
+                      {group.disabledReason === 'not-installed'
+                        ? t(
+                            'prompt.mobileSelectors.installProvider',
+                            'Install / configure provider…',
+                          )
+                        : t('prompt.mobileSelectors.configureProvider', 'Configure provider…')}
+                    </PromptSelectionOption>
+                  )}
                 {group.models.map((model) => (
                   <PromptSelectionOption
                     key={model.value}

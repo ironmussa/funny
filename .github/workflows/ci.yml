@@ -41,8 +41,18 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # remote-connector's Rust lint links libdbus-sys (keyring), which needs dbus-1 via pkg-config.
+      - name: Install system libraries (remote-connector)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
+
       - name: Lint (oxlint)
         run: bun run lint
+
+      # The evflow viewer is not a workspace: it has its own lockfile and Tailwind.
+      # oxfmt sorts its Tailwind classes against that install, so without it the
+      # check expects a different class order than local runs produce.
+      - name: Install evflow viewer dependencies (Tailwind class sorting)
+        run: bun install --frozen-lockfile --cwd packages/evflow/viewer
 
       - name: Format check (oxfmt)
         run: bun run format:check
@@ -70,6 +80,10 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # The renderer benchmark loads the GPUIX native addon, which links libxkbcommon-x11.
+      - name: Install system libraries (GPUIX native)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-x11-0
+
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
 
@@ -83,6 +97,9 @@ jobs:
 
       - name: Test typecheck baseline runner
         run: bun test scripts/fitness/check-typecheck.test.ts
+
+      - name: Test the suite runner's git isolation
+        run: bun test scripts/__tests__/test-env.test.ts
 
       - name: Run tests (shared)
         run: bun run --cwd packages/shared test
@@ -158,6 +175,14 @@ jobs:
 
       - name: Install dependencies
         run: bun install
+
+      # GPUI renders through Vulkan. The runner has no GPU, so the release smoke
+      # needs Mesa's software Vulkan driver (lavapipe) to create a surface.
+      - name: Install system libraries (GPUIX native, Linux)
+        if: runner.os == 'Linux'
+        run: >-
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libxkbcommon-x11-0 xvfb libvulkan1 mesa-vulkan-drivers
 
       - name: Run client-core contracts
         run: bun run --cwd packages/client-core test

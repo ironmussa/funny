@@ -2,8 +2,8 @@ import { DYNAMIC_MODEL_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useAcpModels } from '@/data/runner/hooks';
 import { createClientLogger } from '@/lib/client-logger';
-import { useAcpModelsStore } from '@/stores/acp-models-store';
 
 const log = createClientLogger('PromptInputAcpModels');
 
@@ -13,7 +13,7 @@ export interface ModelGroup {
   models: { value: string; label: string; disabled?: boolean }[];
   /** Availability tagging (model-picker-availability) — set by useRunnerProviderGroups. */
   disabled?: boolean;
-  disabledReason?: 'not-installed' | 'no-runner';
+  disabledReason?: 'not-installed' | 'no-runner' | 'sandbox-unsupported';
   [key: string]: unknown;
 }
 
@@ -29,13 +29,8 @@ const DYNAMIC_PROVIDERS = new Set<string>(DYNAMIC_MODEL_PROVIDER_IDS);
  */
 export function useAcpPromptModels(baseUnifiedModelGroups: ModelGroup[]): ModelGroup[] {
   const { t } = useTranslation();
-  const byProvider = useAcpModelsStore((s) => s.byProvider);
-  const fetchModels = useAcpModelsStore((s) => s.fetch);
-
-  // Discover each dynamic provider once (the store de-dupes via its cache window).
-  useEffect(() => {
-    for (const provider of DYNAMIC_MODEL_PROVIDER_IDS) void fetchModels(provider);
-  }, [fetchModels]);
+  // Discovers each dynamic provider on mount (shared and cached per provider).
+  const byProvider = useAcpModels();
 
   // Warn once per (provider, reason, message) on discovery failure.
   const lastWarnedRef = useRef<Record<string, string>>({});

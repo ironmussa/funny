@@ -166,7 +166,7 @@ function toChatCompletionTools(tools: Record<string, ToolDef>) {
     function: {
       name,
       description: def.description,
-      parameters: zodToJsonSchema(def.parameters as any),
+      parameters: def.jsonSchema ?? zodToJsonSchema(def.parameters as any),
     },
   }));
 }
@@ -209,6 +209,10 @@ export interface AgentExecutorOptions {
   signal?: AbortSignal;
   /** Callback fired after each step (LLM call + tool execution). May return a Promise. */
   onStepFinish?: (step: StepInfo) => Promise<void> | void;
+  /** Tools beyond the built-in ones (funny's MCP servers), by name. */
+  extraTools?: Record<string, ToolDef>;
+  /** Appended to the system prompt (the extra tools' instructions). */
+  extraInstructions?: string;
 }
 
 // ── Executor ──────────────────────────────────────────────────
@@ -227,12 +231,19 @@ export class AgentExecutor {
   ): Promise<AgentResult> {
     const startTime = Date.now();
 
-    const { tools, browserHandle } = createTools(context.worktreePath, role, context);
+    const built = createTools(context.worktreePath, role, context);
+    const tools = { ...built.tools, ...options.extraTools };
+    const browserHandle = built.browserHandle;
 
     const projectKnowledge = await loadProjectKnowledge(role, context.worktreePath);
     const runTools = toChatCompletionTools(tools);
 
-    const systemPrompt = this.buildSystemPrompt(role, context, projectKnowledge);
+    const systemPrompt = [
+      this.buildSystemPrompt(role, context, projectKnowledge),
+      options.extraInstructions,
+    ]
+      .filter(Boolean)
+      .join('\n\n');
 
     const messages: ChatMessage[] = [
       { role: 'system', content: systemPrompt },

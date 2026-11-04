@@ -7,6 +7,26 @@ import {
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
 
+import { applyApprovalRequested, applyApprovalResolved } from '@/data/approvals/store';
+import { handleRunCompleted, handleRunStarted, handleRunUpdated } from '@/data/automations/events';
+import { applyJobEvent, applyWatcherEvent } from '@/data/background/loaders';
+import { applyCommentAdded, applyCommentDeleted } from '@/data/comments/store';
+import {
+  fetchForThread,
+  fetchProjectStatus,
+  fetchForProject,
+  applyGitStatusEvent,
+  markGitStatusStale,
+} from '@/data/git-status/actions';
+import { readGitStatusMaps } from '@/data/git-status/read';
+import {
+  applyRunClaimed,
+  applyRunDispatched,
+  applyRunReleased,
+  applyRunRetryQueued,
+} from '@/data/scheduler/store';
+import { readThreadRow } from '@/data/threads/read';
+import { getThreadsData } from '@/data/threads/store';
 import { showAgentNotification } from '@/hooks/use-notifications';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { validateContainerUrl } from '@/lib/api';
@@ -15,16 +35,17 @@ import { metric, startSpan } from '@/lib/telemetry';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { clientComposition } from '@/platform/client-composition';
-import { invalidateCooldownsForKeys, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import * as threadMutations from '@/stores/thread-mutations';
+import { patchThreadRow } from '@/stores/thread-row-writes';
 import { useThreadStore } from '@/stores/thread-store';
 import {
   getNavigate,
   getProjectIdForThread,
   getUrlThreadId,
 } from '@/stores/thread-store-internals';
+import { readActiveThreadView } from '@/stores/thread-view';
 
 import { dispatchBrowserSessionEvent } from './dispatch-browser-session-events';
 import { dispatchTestEvent } from './dispatch-test-events';
@@ -33,12 +54,10 @@ const wsLog = createClientLogger('ws');
 
 /** Bump a thread's comment-count badge live (floored at 0). */
 function adjustCommentCount(threadId: string, delta: number): void {
-  useThreadStore.setState((state) =>
-    threadMutations.patchThread(state, threadId, (t) => ({
-      ...t,
-      commentCount: Math.max(0, (t.commentCount ?? 0) + delta),
-    })),
-  );
+  patchThreadRow(threadId, (t) => ({
+    ...t,
+    commentCount: Math.max(0, (t.commentCount ?? 0) + delta),
+  }));
 }
 
 // ── Remote container WS connections ─────────────────────────────
@@ -110,15 +129,19 @@ function flushBatch() {
 
   startTransition(() => {
     const store = useThreadStore.getState();
-    for (const entry of statuses) {
-      store.handleWSStatus(entry.threadId, entry.data);
-    }
-    for (const entry of msgs) {
-      store.handleWSMessage(entry.threadId, entry.data);
-    }
-    for (const entry of toolOutputs) {
-      store.handleWSToolOutput(entry.threadId, entry.data);
-    }
+    // One synced commit for every thread-row change in this frame, so the
+    // sidebar projection and live queries (Kanban, lists) recompute once.
+    getThreadsData().batchWrites(() => {
+      for (const entry of statuses) {
+        store.handleWSStatus(entry.threadId, entry.data);
+      }
+      for (const entry of msgs) {
+        store.handleWSMessage(entry.threadId, entry.data);
+      }
+      for (const entry of toolOutputs) {
+        store.handleWSToolOutput(entry.threadId, entry.data);
+      }
+    });
   });
 
   const elapsed = performance.now() - t0;
@@ -416,24 +439,11 @@ function handleNativeGitBuild(_threadId: string, data: any, type: string): void 
 }
 
 function upsertWatcher(_threadId: string, data: any): void {
-  import('@/stores/watcher-store').then(({ useWatcherStore }) => {
-    if (data?.watcher) useWatcherStore.getState().upsert(data.watcher);
-  });
+  if (data?.watcher) applyWatcherEvent(data.watcher);
 }
 
 function upsertJob(_threadId: string, data: any): void {
-  import('@/stores/job-store').then(({ useJobStore }) => {
-    if (data?.job) useJobStore.getState().upsert(data.job);
-  });
-}
-
-type AutomationStoreState = ReturnType<
-  (typeof import('@/stores/automation-store'))['useAutomationStore']['getState']
->;
-function withAutomationStore(apply: (store: AutomationStoreState) => void): void {
-  import('@/stores/automation-store').then(({ useAutomationStore }) => {
-    apply(useAutomationStore.getState());
-  });
+  if (data?.job) applyJobEvent(data.job);
 }
 
 type PipelineStoreState = ReturnType<
@@ -445,39 +455,12 @@ function withPipelineStore(apply: (store: PipelineStoreState) => void): void {
   });
 }
 
-type PipelineApprovalStoreState = ReturnType<
-  (typeof import('@/stores/pipeline-approval-store'))['usePipelineApprovalStore']['getState']
->;
-function withPipelineApprovalStore(apply: (store: PipelineApprovalStoreState) => void): void {
-  import('@/stores/pipeline-approval-store').then(({ usePipelineApprovalStore }) => {
-    apply(usePipelineApprovalStore.getState());
-  });
-}
-
-type SchedulerStoreState = ReturnType<
-  (typeof import('@/stores/scheduler-store'))['useSchedulerStore']['getState']
->;
-function withSchedulerStore(apply: (store: SchedulerStoreState) => void): void {
-  import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
-    apply(useSchedulerStore.getState());
-  });
-}
-
 type PresenceStoreState = ReturnType<
   (typeof import('@/stores/presence-store'))['usePresenceStore']['getState']
 >;
 function withPresenceStore(apply: (store: PresenceStoreState) => void): void {
   import('@/stores/presence-store').then(({ usePresenceStore }) => {
     apply(usePresenceStore.getState());
-  });
-}
-
-type CommentStoreState = ReturnType<
-  (typeof import('@/stores/comment-store'))['useCommentStore']['getState']
->;
-function withCommentStore(apply: (store: CommentStoreState) => void): void {
-  import('@/stores/comment-store').then(({ useCommentStore }) => {
-    apply(useCommentStore.getState());
   });
 }
 
@@ -496,14 +479,14 @@ function handleThreadComment(threadId: string, data: any): void {
   // A new comment was posted — append it live for every current viewer and
   // bump the header badge. See thread-sharing design D9.
   if (data.comment) {
-    withCommentStore((store) => store.applyAdded(threadId, data.comment));
+    applyCommentAdded(data.comment);
     adjustCommentCount(threadId, +1);
   }
 }
 
 function handleThreadCommentDeleted(threadId: string, data: any): void {
   if (data.commentId) {
-    withCommentStore((store) => store.applyDeleted(threadId, data.commentId));
+    applyCommentDeleted(data.commentId);
     adjustCommentCount(threadId, -1);
     return;
   }
@@ -527,23 +510,14 @@ function hasLocationChange(data: any): boolean {
 }
 
 function patchPermissionMode(threadId: string, permissionMode: any): void {
-  useThreadStore.setState((state) => ({
-    ...threadMutations.patchThread(state, threadId, (thread) => ({
+  patchThreadRow(threadId, (thread) => ({ ...thread, permissionMode }));
+  // Payloads opened before their row exists (a very early event) keep their own copy.
+  useThreadStore.setState((state) =>
+    threadMutations.applyThreadDataPatch(state, threadId, (thread) => ({
       ...thread,
       permissionMode,
     })),
-    ...threadMutations.applyThreadDataPatch(state, threadId, (thread) => ({
-      ...thread,
-      permissionMode,
-    })),
-    // A very early event can arrive before either cache is hydrated.
-    // Keep the active mirror coherent in that narrow window as well.
-    ...(state.activeThread?.id === threadId &&
-    !state.threadsById[threadId] &&
-    !state.threadDataById[threadId]
-      ? { activeThread: { ...state.activeThread, permissionMode } }
-      : {}),
-  }));
+  );
 }
 
 function handleThreadUpdated(threadId: string, data: any): void {
@@ -580,10 +554,21 @@ function handleShareRevoked(threadId: string): void {
   useThreadStore.getState().handleShareRevoked(threadId);
 }
 
+function handleThreadDeleted(threadId: string, data: any): void {
+  // Deleted here, in another tab, or by another client (spec: thread deleted
+  // elsewhere): drop it from every list and leave its detail view if open.
+  const wasOpen = clientComposition.platform.navigation.current().pathname.includes(threadId);
+  withPresenceStore((store) => store.clearThread(threadId));
+  useThreadStore.getState().handleThreadDeleted(threadId);
+  if (!wasOpen) return;
+  const navigate = getNavigate();
+  const projectId = data?.projectId as string | undefined;
+  navigate?.(buildPath(projectId ? `/projects/${projectId}` : '/'));
+}
+
 function handleGitStatus(threadId: string, data: any): void {
-  useGitStatusStore.getState().updateFromWS(data.statuses);
-  const updatedKeys = (data.statuses as Array<{ branchKey: string }>).map((s) => s.branchKey);
-  if (updatedKeys.length > 0) invalidateCooldownsForKeys(updatedKeys);
+  // Fresh server state; also makes the matching request caches stale.
+  applyGitStatusEvent(data.statuses);
   // PR-lookup updates don't touch the working tree — refetching the diff
   // summary for them only repeats an expensive request.
   if (!data.prOnly) notifyReviewDirty(threadId);
@@ -600,18 +585,17 @@ function handleGitRefsUpdated(_threadId: string, data: any): void {
   // thread/project-mode slices are only relevant when that same project is
   // active; refreshing them for unrelated repositories created a second
   // startup wave and repeatedly recomputed the same active-thread status.
-  const gitStore = useGitStatusStore.getState();
-  // Clear cooldowns so the bulk sidebar refetch isn't swallowed by its window.
-  invalidateCooldownsForKeys([data.projectId]);
+  // Mark the project's status stale so the bulk sidebar refetch isn't served from cache.
+  markGitStatusStale([data.projectId]);
   const activeThreadId = getUrlThreadId() ?? useThreadStore.getState().selectedThreadId;
   const activeThreadProjectId = activeThreadId ? getProjectIdForThread(activeThreadId) : undefined;
   if (activeThreadId && activeThreadProjectId === data.projectId) {
-    void gitStore.fetchForThread(activeThreadId, true); // thread-mode pane
+    void fetchForThread(activeThreadId, true); // thread-mode pane
   }
   if (useProjectStore.getState().selectedProjectId === data.projectId) {
-    void gitStore.fetchProjectStatus(data.projectId, true); // project-mode pane slice
+    void fetchProjectStatus(data.projectId, true); // project-mode pane slice
   }
-  void gitStore.fetchForProject(data.projectId); // sidebar bulk badges
+  void fetchForProject(data.projectId); // sidebar bulk badges
 }
 
 const testEventHandler: WebEventHandler = (_threadId, data, type) => {
@@ -650,13 +634,13 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
   'native-git:build_output': handleNativeGitBuild,
   'native-git:build_status': handleNativeGitBuild,
   'automation:run_started': (threadId, data) => {
-    withAutomationStore((store) => store.handleRunStarted({ ...data, threadId }));
+    handleRunStarted({ ...data, threadId });
   },
-  'automation:run_completed': (_threadId, data) => {
-    withAutomationStore((store) => store.handleRunCompleted(data));
+  'automation:run_completed': (threadId, data) => {
+    handleRunCompleted({ ...data, threadId });
   },
-  'automation:run_updated': () => {
-    withAutomationStore((store) => store.loadInbox());
+  'automation:run_updated': (_threadId, data) => {
+    handleRunUpdated(data);
   },
   'watcher:created': upsertWatcher,
   'watcher:fired': upsertWatcher,
@@ -677,10 +661,10 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
     withPipelineStore((store) => store.handlePipelineCompleted(data));
   },
   'pipeline:approval_requested': (_threadId, data) => {
-    withPipelineApprovalStore((store) => store.handleApprovalRequested(data));
+    applyApprovalRequested(data);
   },
   'pipeline:approval_resolved': (_threadId, data) => {
-    withPipelineApprovalStore((store) => store.handleApprovalResolved(data));
+    applyApprovalResolved(data);
   },
   'workflow:node_state': (_threadId, data) => {
     import('@/stores/workflow-run-store').then(({ useWorkflowRunStore }) => {
@@ -688,16 +672,16 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
     });
   },
   'thread:claimed': (threadId, data) => {
-    withSchedulerStore((store) => store.handleClaimed(threadId, data));
+    applyRunClaimed(threadId, data);
   },
   'thread:dispatched': (threadId, data) => {
-    withSchedulerStore((store) => store.handleDispatched(threadId, data));
+    applyRunDispatched(threadId, data);
   },
   'thread:retry-queued': (threadId, data) => {
-    withSchedulerStore((store) => store.handleRetryQueued(threadId, data));
+    applyRunRetryQueued(threadId, data);
   },
   'thread:released': (threadId) => {
-    withSchedulerStore((store) => store.handleReleased(threadId));
+    applyRunReleased(threadId);
   },
   'thread:created': handleThreadCreated,
   'thread:comment': handleThreadComment,
@@ -713,6 +697,7 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
     withPresenceStore((store) => store.removeViewer(threadId, data.clientId));
   },
   'thread:share-revoked': handleShareRevoked,
+  'thread:deleted': handleThreadDeleted,
   'thread:share-granted': () => {
     // A thread was just shared WITH us — pull it into "Shared with me".
     void useThreadStore.getState().loadSharedThreads();
@@ -748,6 +733,10 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
   'browser-session:console': browserSessionEventHandler,
   'browser-session:error': browserSessionEventHandler,
   'browser-session:closed': browserSessionEventHandler,
+  'browser-session:agent-opened': browserSessionEventHandler,
+  'browser-session:viewport': browserSessionEventHandler,
+  'browser-session:controller': browserSessionEventHandler,
+  'browser-session:dialog': browserSessionEventHandler,
   'clone:progress': noop,
   'worktree:setup': (threadId, data) => {
     useThreadStore.getState().handleWSWorktreeSetup(threadId, data);
@@ -772,16 +761,16 @@ function findThread(threadId: string): {
   projectId?: string;
   isScratch?: boolean;
 } {
-  const store = useThreadStore.getState();
-  if (store.activeThread?.id === threadId) {
+  const active = readActiveThreadView(useThreadStore.getState());
+  if (active?.id === threadId) {
     return {
-      title: store.activeThread.title,
-      branch: store.activeThread.branch,
-      projectId: store.activeThread.projectId,
-      isScratch: store.activeThread.isScratch,
+      title: active.title,
+      branch: active.branch,
+      projectId: active.projectId,
+      isScratch: active.isScratch,
     };
   }
-  const t = store.threadsById[threadId];
+  const t = readThreadRow(threadId);
   if (t) {
     return {
       title: t.title,
@@ -878,16 +867,16 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
       data.action === 'commit-pr' ||
       data.action === 'commit-merge')
   ) {
-    import('@/stores/pr-detail-store').then(({ usePRDetailStore }) => {
-      const { activeThread } = useThreadStore.getState();
+    import('@/data/pull-requests/queries').then(({ invalidatePR }) => {
+      const activeThread = readActiveThreadView(useThreadStore.getState());
       if (activeThread) {
-        const gitStatus = useGitStatusStore.getState();
+        const gitStatus = readGitStatusMaps();
         const bk =
           gitStatus.threadToBranchKey[activeThread.id] ??
           `${activeThread.projectId}:${activeThread.branch ?? ''}`;
         const prNum = gitStatus.statusByBranch[bk]?.prNumber;
         if (prNum) {
-          usePRDetailStore.getState().invalidate(activeThread.projectId, prNum);
+          invalidatePR(activeThread.projectId, prNum);
         }
       }
     });
@@ -974,6 +963,7 @@ const ALL_EVENT_TYPES = [
   'presence:leave',
   'thread:share-revoked',
   'thread:share-granted',
+  'thread:deleted',
   'git:status',
   'git:refs-updated',
   'git:workflow_progress',
@@ -1002,6 +992,10 @@ const ALL_EVENT_TYPES = [
   'browser-session:console',
   'browser-session:error',
   'browser-session:closed',
+  'browser-session:agent-opened',
+  'browser-session:viewport',
+  'browser-session:controller',
+  'browser-session:dialog',
 ] as const;
 
 // Tracks Socket.IO listeners we attached, so HMR (or any future dispose path)

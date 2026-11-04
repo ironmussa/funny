@@ -19,6 +19,20 @@ import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 const dlog = createDebugLogger('sdk');
 
 /**
+ * MCP servers whose tools must go through the thread's permission mode instead
+ * of being auto-allowed. `funny_browser` acts on real (often logged-in) web
+ * pages, so in an ask-before-acting mode each action is approved by the user.
+ */
+const PERMISSION_GATED_MCP_SERVERS: ReadonlySet<string> = new Set(['funny_browser']);
+
+/** `mcp__<server>__*` allow-list entries for every server that is not permission-gated. */
+export function mcpAutoAllowWildcards(serverNames: string[]): string[] {
+  return serverNames
+    .filter((name) => !PERMISSION_GATED_MCP_SERVERS.has(name))
+    .map((name) => `mcp__${name}__*`);
+}
+
+/**
  * Tools the Claude CLI advertises but that are INERT inside funny's runtime,
  * so we always disallow them to stop the model from silently relying on them.
  *
@@ -355,9 +369,10 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // Pass MCP servers (e.g., CDP browser tools) if provided
     if (this.options.mcpServers) {
       sdkOptions.mcpServers = this.options.mcpServers;
-      // Auto-allow all tools from MCP servers
-      const mcpWildcards = Object.keys(this.options.mcpServers).map((name) => `mcp__${name}__*`);
-      sdkOptions.allowedTools = [...(sdkOptions.allowedTools || []), ...mcpWildcards];
+      sdkOptions.allowedTools = [
+        ...(sdkOptions.allowedTools || []),
+        ...mcpAutoAllowWildcards(Object.keys(this.options.mcpServers)),
+      ];
     }
 
     dlog.info('Starting SDK query', {

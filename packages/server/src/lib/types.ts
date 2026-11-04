@@ -36,5 +36,11 @@ export type ServerEnv = {
      * instead of re-fetching. Typed loosely as the shared `Thread` shape.
      */
     thread: import('@funny/shared').Thread;
+    /**
+     * Set by the auth middleware when `POST /api/runners/register` carries a
+     * valid `X-Runner-Provision-Token` (thread-sandboxes): the runner becomes the
+     * sandbox runner of this grant's thread.
+     */
+    provisionGrant?: import('../services/runner-provision-tokens.js').ProvisionGrant;
   };
 };

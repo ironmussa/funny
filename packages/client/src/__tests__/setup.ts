@@ -6,10 +6,12 @@ import '@testing-library/jest-dom';
 // fake timers in tests, exercising the same code path as the browser.
 if (typeof globalThis.requestIdleCallback === 'undefined') {
   globalThis.requestIdleCallback = ((cb: (deadline: IdleDeadline) => void) =>
-    setTimeout(
-      () => cb({ didTimeout: false, timeRemaining: () => 0 } as IdleDeadline),
-      1,
-    ) as unknown as number) as typeof globalThis.requestIdleCallback;
+    setTimeout(() => {
+      // A callback queued just before the test environment tears down (e.g.
+      // TanStack DB's idle GC of a live query) must not run without a window.
+      if (typeof window === 'undefined') return;
+      cb({ didTimeout: false, timeRemaining: () => 0 } as IdleDeadline);
+    }, 1) as unknown as number) as typeof globalThis.requestIdleCallback;
   globalThis.cancelIdleCallback = ((id: number) =>
     clearTimeout(id)) as typeof globalThis.cancelIdleCallback;
 }

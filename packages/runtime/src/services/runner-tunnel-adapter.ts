@@ -1,6 +1,7 @@
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
+import { binary, unsigned } from './grpc-wire-values.js';
 
 type TunnelRequestState = {
   method: string;
@@ -14,25 +15,6 @@ type TunnelRequestState = {
 
 export interface RunnerTunnelSender {
   send(name: 'tunnel', message: RunnerGrpcWireMessage): boolean;
-}
-
-function binary(value: unknown): Uint8Array | null {
-  if (value instanceof Uint8Array) return value;
-  if (typeof value !== 'string') return null;
-  try {
-    return Buffer.from(value, 'base64');
-  } catch {
-    return null;
-  }
-}
-
-function unsigned(value: unknown): bigint | null {
-  try {
-    const parsed = BigInt(value as string | number | bigint);
-    return parsed >= 0n ? parsed : null;
-  } catch {
-    return null;
-  }
 }
 
 /** Frames gRPC tunnel requests into local Fetch requests and response frames. */

@@ -22,7 +22,7 @@ import {
 import type { MessageStreamProps } from './message-stream-types';
 import {
   useLastUserMessageTracking,
-  usePaginationScrollEffects,
+  useMessagePaginationEffects,
   useThreadLayoutScrollEffect,
   useThreadSwitchResizeRestore,
   useThreadSwitchSettle,
@@ -470,7 +470,8 @@ export function useMessageStreamScroll({
   const firstMessageId = getFirstMessageId(scrollMessages);
   const lastMessageId = lastMessage?.id ?? null;
 
-  usePaginationScrollEffects({
+  useMessagePaginationEffects({
+    pagination,
     firstMessageId,
     hasMoreAfter,
     hasPagination,

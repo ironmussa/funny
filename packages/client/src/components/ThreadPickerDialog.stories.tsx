@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { useProjectStore } from '@/stores/project-store';
+import { seedProjects } from '@/data/projects/testing';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadPickerDialog } from './ThreadPickerDialog';
@@ -107,7 +107,7 @@ function ThreadPickerTrigger({
         variant="outline"
         data-testid="thread-picker-trigger"
         onClick={() => {
-          useProjectStore.setState({ projects: MOCK_PROJECTS as any });
+          seedProjects(MOCK_PROJECTS as any);
           useThreadStore.setState({ threadsByProject: threads ?? MOCK_THREADS } as any);
           setOpen(true);
         }}

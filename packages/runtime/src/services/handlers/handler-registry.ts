@@ -11,6 +11,10 @@ import { log } from '../../lib/logger.js';
 import { threadEventBus, type ThreadEventMap } from '../thread-event-bus.js';
 import { agentCompletedGitStatusHandler } from './agent-completed-git-status-handler.js';
 import { agentCompletedQueueHandler } from './agent-completed-queue-handler.js';
+import {
+  browserSessionThreadArchivedHandler,
+  browserSessionThreadDeletedHandler,
+} from './browser-session-lifecycle-handler.js';
 // ── Import handlers ─────────────────────────────────────────────
 import { commentHandler } from './comment-handler.js';
 import {
@@ -74,6 +78,8 @@ const allHandlers: EventHandler<any>[] = [
   gitWatcherStopHandler,
   gitWatcherStartOnAgentStartHandler,
   gitWatcherStopOnAgentCompletedHandler,
+  browserSessionThreadDeletedHandler,
+  browserSessionThreadArchivedHandler,
   // Pipeline
   pipelineTriggerHandler,
   // Telemetry

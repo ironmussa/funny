@@ -19,12 +19,60 @@ export function dispatchBrowserSessionEvent(type: string, data: unknown): boolea
     }
 
     case 'browser-session:ready': {
-      const d = data as { sessionId: string; url: string };
+      const d = data as {
+        sessionId: string;
+        url: string;
+        viewport?: { width: number; height: number };
+      };
       import('@/stores/browser-panel-store').then(({ useBrowserPanelStore }) => {
         const store = useBrowserPanelStore.getState();
         if (store.sessionId === d.sessionId) {
           store.setSessionStatus('ready', null);
+          if (d.viewport)
+            store.setSessionViewport(d.sessionId, d.viewport.width, d.viewport.height);
+          // Attaching to an existing session: show the page it is on.
+          if (d.url && !store.loadedUrl)
+            useBrowserPanelStore.setState({ url: d.url, loadedUrl: d.url });
         }
+      });
+      return true;
+    }
+
+    case 'browser-session:agent-opened': {
+      const d = data as { sessionId: string; threadId: string; url: string };
+      Promise.all([import('@/stores/browser-panel-store'), import('@/stores/thread-store')]).then(
+        ([{ useBrowserPanelStore }, { getUrlThreadId }]) => {
+          useBrowserPanelStore
+            .getState()
+            .handleAgentOpened(d.sessionId, d.threadId, getUrlThreadId());
+        },
+      );
+      return true;
+    }
+
+    case 'browser-session:controller': {
+      const d = data as { sessionId: string; controller: 'agent' | 'user' };
+      import('@/stores/browser-panel-store').then(({ useBrowserPanelStore }) => {
+        useBrowserPanelStore.getState().setSessionController(d.sessionId, d.controller);
+      });
+      return true;
+    }
+
+    case 'browser-session:dialog': {
+      const d = data as {
+        sessionId: string;
+        dialog: { type: string; message: string; defaultValue?: string } | null;
+      };
+      import('@/stores/browser-panel-store').then(({ useBrowserPanelStore }) => {
+        useBrowserPanelStore.getState().setSessionDialog(d.sessionId, d.dialog);
+      });
+      return true;
+    }
+
+    case 'browser-session:viewport': {
+      const d = data as { sessionId: string; width: number; height: number };
+      import('@/stores/browser-panel-store').then(({ useBrowserPanelStore }) => {
+        useBrowserPanelStore.getState().setSessionViewport(d.sessionId, d.width, d.height);
       });
       return true;
     }
@@ -52,6 +100,10 @@ export function dispatchBrowserSessionEvent(type: string, data: unknown): boolea
       log.info('session closed', d);
       import('@/stores/browser-panel-store').then(({ useBrowserPanelStore }) => {
         const store = useBrowserPanelStore.getState();
+        if (d.reason === 'not_found') {
+          store.handleSessionNotFound(d.sessionId);
+          return;
+        }
         if (store.sessionId === d.sessionId) {
           const status = d.reason === 'too_many_sessions' ? 'too-many-sessions' : 'disconnected';
           store.setSessionStatus(status, d.message ?? null);

@@ -1,9 +1,12 @@
-import { useCallback, useState } from 'react';
+import { addReferencedEntries, parseReferencedFiles } from '@funny/shared/attachments';
+import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { AvailableMcpServers } from '@/components/AvailableMcpServers';
 import { PromptInput } from '@/components/PromptInput';
+import { FileChip } from '@/components/ui/chip';
+import { useProjectById } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
 import { useProjectStore } from '@/stores/project-store';
@@ -27,10 +30,16 @@ export function ThreadIdleStarter({ activeThread }: Props) {
   const { t } = useTranslation();
   const stableMessages = useThreadMessages();
   const [sending, setSending] = useState(false);
-  const projectPath = useProjectStore((s) => {
-    if (!activeThread.projectId) return undefined;
-    return s.projects.find((p) => p.id === activeThread.projectId)?.path;
-  });
+  const projectPath = useProjectById(activeThread.projectId)?.path;
+
+  // The stored prompt carries the backlog thread's attachments as a leading
+  // `<referenced-files>` manifest. The editor gets only the text; the
+  // manifest is shown as chips and put back on send, where the runtime
+  // reads the files.
+  const stored = useMemo(
+    () => parseReferencedFiles(activeThread.initialPrompt ?? ''),
+    [activeThread.initialPrompt],
+  );
 
   const initialImages = (() => {
     const draftMsg = stableMessages?.find((m) => m.role === 'user');
@@ -60,6 +69,7 @@ export function ThreadIdleStarter({ activeThread }: Props) {
           line: number;
           endLine?: number;
         }[];
+        stagedUploads?: string[];
         baseBranch?: string;
       },
       images?: any[],
@@ -89,13 +99,14 @@ export function ThreadIdleStarter({ activeThread }: Props) {
         })().finally(() => setSending(false));
       }
 
+      const fullPrompt = addReferencedEntries(prompt, stored.entries);
       setSending(true);
       return (async () => {
         useThreadStore
           .getState()
           .appendOptimisticMessage(
             activeThread.id,
-            prompt,
+            fullPrompt,
             images,
             opts.model as any,
             opts.mode as any,
@@ -107,7 +118,7 @@ export function ThreadIdleStarter({ activeThread }: Props) {
         );
         const result = await api.sendMessage(
           activeThread.id,
-          prompt,
+          fullPrompt,
           {
             provider: opts.provider || undefined,
             model: opts.model || undefined,
@@ -117,6 +128,7 @@ export function ThreadIdleStarter({ activeThread }: Props) {
             disallowedTools,
             fileReferences: opts.fileReferences,
             symbolReferences: opts.symbolReferences,
+            stagedUploads: opts.stagedUploads,
             baseBranch: opts.baseBranch,
           },
           images,
@@ -134,19 +146,32 @@ export function ThreadIdleStarter({ activeThread }: Props) {
         return true;
       })().finally(() => setSending(false));
     },
-    [activeThread.id, t],
+    [activeThread.id, stored.entries, t],
   );
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col">
       <div className="flex flex-1 items-center justify-center px-4">
         <div className="w-full max-w-3xl">
+          {stored.entries.length > 0 && (
+            <div data-testid="idle-thread-attachments" className="mb-2 flex flex-wrap gap-1.5">
+              {stored.entries.map((entry) => (
+                <FileChip
+                  key={entry.path}
+                  name={entry.path.split('/').pop() ?? entry.path}
+                  type={entry.type}
+                  title={entry.path}
+                  data-testid={`idle-thread-attachment-${entry.path}`}
+                />
+              ))}
+            </div>
+          )}
           <PromptInput
             onSubmit={handleSend}
             loading={sending}
             isNewThread
             projectId={activeThread.projectId}
-            initialPrompt={activeThread.initialPrompt}
+            initialPrompt={stored.entries.length > 0 ? stored.body : activeThread.initialPrompt}
             initialImages={initialImages}
           />
           <AvailableMcpServers

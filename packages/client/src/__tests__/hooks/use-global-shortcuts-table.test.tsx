@@ -10,6 +10,7 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
+import { withThreadIndex } from '@/data/threads/testing';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadHistoryStore } from '@/stores/thread-history-store';
@@ -43,12 +44,14 @@ function thread(id: string, projectId: string, extra: Record<string, unknown> = 
 describe('useGlobalShortcuts — shortcut table precedence and actions', () => {
   beforeEach(() => {
     mockNavigate.mockReset();
-    useThreadStore.setState({
-      activeThread: null,
-      selectedThreadId: null,
-      threadsById: {},
-      threadIdsByProject: {},
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        activeThread: null,
+        selectedThreadId: null,
+        threadsById: {},
+        threadIdsByProject: {},
+      }),
+    );
     useProjectStore.setState({ selectedProjectId: null });
     useThreadHistoryStore.getState().clear();
     useUIStore.setState({ keyboardShortcutsOpen: false });
@@ -119,16 +122,18 @@ describe('useGlobalShortcuts — shortcut table precedence and actions', () => {
   });
 
   test('Alt+] / Alt+[ cycle visible project threads, even from an input', () => {
-    useThreadStore.setState({
-      selectedThreadId: 'a',
-      threadsById: {
-        a: thread('a', 'p1', { createdAt: '2026-01-03T00:00:00Z' }),
-        b: thread('b', 'p1', { createdAt: '2026-01-02T00:00:00Z' }),
-        c: thread('c', 'p1', { createdAt: '2026-01-01T00:00:00Z', pinned: true }),
-        z: thread('z', 'p1', { archived: true }),
-      },
-      threadIdsByProject: { p1: ['a', 'b', 'c', 'z'] },
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: 'a',
+        threadsById: {
+          a: thread('a', 'p1', { createdAt: '2026-01-03T00:00:00Z' }),
+          b: thread('b', 'p1', { createdAt: '2026-01-02T00:00:00Z' }),
+          c: thread('c', 'p1', { createdAt: '2026-01-01T00:00:00Z', pinned: true }),
+          z: thread('z', 'p1', { archived: true }),
+        },
+        threadIdsByProject: { p1: ['a', 'b', 'c', 'z'] },
+      }),
+    );
     useProjectStore.setState({ selectedProjectId: 'p1' });
     renderShortcuts();
 
@@ -144,10 +149,12 @@ describe('useGlobalShortcuts — shortcut table precedence and actions', () => {
   });
 
   test('Alt+] is not consumed when the project has fewer than two threads', () => {
-    useThreadStore.setState({
-      threadsById: { a: thread('a', 'p1') },
-      threadIdsByProject: { p1: ['a'] },
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { a: thread('a', 'p1') },
+        threadIdsByProject: { p1: ['a'] },
+      }),
+    );
     useProjectStore.setState({ selectedProjectId: 'p1' });
     renderShortcuts();
 
@@ -200,10 +207,12 @@ describe('useGlobalShortcuts — shortcut table precedence and actions', () => {
     press({ key: 'L', ctrlKey: true, shiftKey: true });
     expect(mockNavigate).toHaveBeenLastCalledWith('/list');
 
-    useThreadStore.setState({
-      selectedThreadId: 't1',
-      threadsById: { t1: thread('t1', 'p1') },
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: 't1',
+        threadsById: { t1: thread('t1', 'p1') },
+      }),
+    );
     press({ key: 'l', ctrlKey: true, shiftKey: true });
     expect(mockNavigate).toHaveBeenLastCalledWith('/list?project=p1&returnThread=t1');
   });

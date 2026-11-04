@@ -36,6 +36,8 @@ if (!support.supported) {
     composition,
     application,
     resolveNativeDiagnosticMode(process.env.FUNNY_GPUIX_DIAGNOSTICS),
+    // Closing the host ends the app; disposed services can still hold timers or sockets open.
+    () => process.exit(0),
   );
   void application.start();
 }

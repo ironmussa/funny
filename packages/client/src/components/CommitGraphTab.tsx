@@ -152,17 +152,15 @@ function rebaseLinkNodeEdgeX(lane: number): number {
 }
 
 /**
- * Branch-graph view of git history. Separate from {@link CommitHistoryTab}
- * (the flat list) — this one renders a GitKraken-style lane graph on the left
- * of each commit using `git log --all --date-order` data (parents + refs).
- * Per-commit affordances mirror the History list: GitHub avatar(s), copy-hash,
- * remote commit link when available, and an unpushed marker. Click a commit to
- * open the shared {@link CommitDetailDialog}.
+ * Branch-graph view of git history: a GitKraken-style lane graph on the left
+ * of each commit, from `git log --all --date-order` data (parents + refs).
+ * Each commit shows GitHub avatar(s), copy-hash, a remote commit link when
+ * available, and an unpushed marker. Click a commit to open the
+ * {@link CommitDetailDialog}.
  */
 export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const { t } = useTranslation();
-  // Typography is fixed to match the History list so the font is identical
-  // across every Review-pane tab (see TITLE_PX / META_PX above).
+  // Typography is fixed so the font is identical across every Review-pane tab (see TITLE_PX / META_PX above).
   const titlePx = TITLE_PX;
   const metaPx = META_PX;
   // Variable row heights: the title sits on one line, so ref-less rows are a
@@ -456,7 +454,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   }, [gitContextKey]);
 
   // Walk the GitHub commit-author endpoint, anchored at the first uncovered SHA,
-  // to fill in avatar URLs (same strategy as the History list).
+  // to fill in avatar URLs.
   const ghProjectId = projectModeId ?? (effectiveThreadId ? gitThread?.projectId : null);
   useEffect(() => {
     if (!ghProjectId || entries.length === 0) return;
@@ -1617,8 +1615,7 @@ function GraphCommitRow({
               ))}
             </div>
           )}
-          {/* Same Tailwind classes as the History list (`CommitListPanel`) so the
-              title/meta sizes are rem-based and identical across every tab. */}
+          {/* Rem-based title/meta sizes, identical across every tab. */}
           <div
             className="flex w-full min-w-0 shrink-0 items-center gap-1.5"
             style={{ height: titleLineH }}

@@ -15,6 +15,7 @@
     "tooltipWorktreeWithPath": "Worktree branch: {{branch}} — {{path}}"
   },
   "sidebar": {
+    "openExistingProject": "Open existing project",
     "projects": "Projects",
     "addProject": "Add project",
     "newThread": "New thread",
@@ -231,6 +232,8 @@
     "addProjectDescription": "Open a project from the sidebar to start running agents in parallel",
     "agentWorking": "Agent is working...",
     "waitingForResponse": "Waiting for your response...",
+    "providerAuthExpired": "Your provider session expired or authentication failed. Reconnect, then retry your message.",
+    "reconnectProvider": "Reconnect",
     "providerErrorWaiting": "The provider returned an error. The run is paused — retry or send a message to continue.",
     "planWaitingForResponse": "Accept or reject the plan",
     "rejectPlan": "Reject plan",
@@ -622,6 +625,7 @@
     "resetPromptModels": "Show all models",
     "organizations": "Organizations",
     "runners": "Runners",
+    "sandboxes": "Sandboxes",
     "agentTemplates": "Agent Templates",
     "toolPermissions": "Tool Permissions",
     "toolPermissionsDesc": "Choose how each tool behaves: Allow (auto-approved), Ask (requires approval), or Deny (blocked).",
@@ -758,6 +762,9 @@
     "acceptPlan": "Accept Plan",
     "input": "Input",
     "output": "Output",
+    "mcpError": "Error",
+    "raw": "Raw",
+    "formatted": "Formatted",
     "waitingForOutput": "Waiting for output...",
     "diffUnavailableNoTracking": "The diff cannot be shown because this file is not tracked by Git.",
     "openInEditor": "Open in {{editor}}: {{path}}",
@@ -768,7 +775,40 @@
     "other": "Other",
     "otherPlaceholder": "Write your answer...",
     "next": "Next",
-    "continue": "Continue"
+    "continue": "Continue",
+    "loadTools": "Load tools",
+    "skill": "Skill",
+    "newTask": "New task",
+    "updateTask": "Update task",
+    "taskOutput": "Task output",
+    "stopTask": "Stop task",
+    "scheduleWakeup": "Scheduled wakeup",
+    "monitor": "Monitor",
+    "sendMessage": "Send message",
+    "applyPatch": "Apply patch",
+    "updatePlan": "Update plan",
+    "planMode": "Plan mode",
+    "mcp": {
+      "backgroundJob": "Background job",
+      "scheduledCheck": "Scheduled check",
+      "newThread": "New thread",
+      "searchThreads": "Search threads",
+      "runJavaScript": "Run JavaScript",
+      "browserOpen": "Open page",
+      "browserNavigate": "Navigate",
+      "browserSnapshot": "Read page",
+      "browserAct": "Interact",
+      "browserEvaluate": "Run JavaScript in page",
+      "browserWaitFor": "Wait for page",
+      "browserStatus": "Status",
+      "browserResize": "Resize viewport",
+      "browserClose": "Close browser",
+      "browserDialog": "Answer dialog",
+      "browserSetAppearance": "Set appearance",
+      "browserRecordingStart": "Start recording",
+      "browserRecordingStop": "Stop recording",
+      "showInBrowserPanel": "Show in browser panel"
+    }
   },
   "plan": {
     "reviewPlan": "Review plan",
@@ -936,6 +976,7 @@
     "importError": "Failed to import hooks"
   },
   "preview": {
+    "browser": "Browser",
     "open": "Open Preview",
     "close": "Close Preview",
     "refresh": "Refresh Preview",
@@ -1447,7 +1488,17 @@
       "CONFLICT": "{{message}}",
       "PROCESS_ERROR": "{{message}}",
       "INTERNAL": "Failed to create the project. The server may be experiencing issues."
-    }
+    },
+    "threadUpdateFailed": "Couldn't update the thread. Your change was undone.",
+    "templateUpdateFailed": "Couldn't update the agent template. Your change was undone.",
+    "templateCreateFailed": "Couldn't create the agent template.",
+    "backgroundCancelFailed": "Couldn't cancel it. It is still running.",
+    "automationUpdateFailed": "Couldn't update the automation. Your change was undone.",
+    "automationCreateFailed": "Couldn't create the automation.",
+    "automationTriggerFailed": "Couldn't start the automation run.",
+    "commentDeleteFailed": "Couldn't delete the comment.",
+    "approvalRespondFailed": "Couldn't send your answer. The approval is still waiting.",
+    "projectUpdateFailed": "Couldn't update the project. Your change was undone."
   },
   "agentResources": {
     "subtitle": "Skills, slash commands, and MCP servers scoped to each provider.",

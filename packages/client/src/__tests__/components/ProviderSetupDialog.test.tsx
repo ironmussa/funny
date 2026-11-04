@@ -13,9 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/api/system', () => ({
   systemApi: { providerSetupStatus: mocks.status, installProviderTool: mocks.install },
 }));
-vi.mock('@/stores/runner-providers-store', () => ({
-  useRunnerProvidersStore: { getState: () => ({ fetch: mocks.fetch }) },
-}));
+vi.mock('@/data/runner/queries', () => ({ refreshRunnerProviders: mocks.fetch }));
 vi.mock('@/lib/open-terminal-tab', () => ({ openProviderLoginTerminal: mocks.terminal }));
 const missing = {
   provider: 'gemini',
@@ -46,7 +44,7 @@ describe('ProviderSetupDialog', () => {
     expect(mocks.status).toHaveBeenCalledWith('gemini', 'thread-project');
     expect(mocks.install).toHaveBeenCalledWith('gemini', 'thread-project');
     mocks.status.mockResolvedValue(ok({ ...missing, state: 'installed' }));
-    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalled());
     expect(screen.queryByRole('button', { name: 'Install on runner' })).toBeNull();
     expect(screen.getByText(/does not support automatic session verification/)).toBeTruthy();
   });
@@ -66,7 +64,7 @@ describe('ProviderSetupDialog', () => {
     mocks.install.mockResolvedValue(ok({ ...missing, state: 'installed' }));
     mocks.status.mockResolvedValue(ok({ ...missing, state: 'installed' }));
     fireEvent.click(screen.getByRole('button', { name: 'Install on runner' }));
-    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledWith(true));
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalled());
     expect(screen.queryByRole('alert')).toBeNull();
   });
 
@@ -140,3 +138,26 @@ it('guides Pi installation and opens its login terminal after installation', asy
     label: 'Connect Pi',
   });
 });
+
+it.each(['connected', 'configured'])(
+  'allows reauthentication despite stale %s status',
+  async (auth) => {
+    mocks.status.mockResolvedValue(
+      ok({ ...missing, state: 'installed', auth, loginCommand: 'login' }),
+    );
+    render(
+      <ProviderSetupDialog
+        provider="gemini"
+        label="Gemini"
+        projectId="p1"
+        reauthenticate
+        onClose={vi.fn()}
+      />,
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Connect Gemini' }));
+    expect(mocks.terminal).toHaveBeenCalledWith(
+      expect.objectContaining({ projectId: 'p1', command: 'login' }),
+    );
+    expect(screen.queryByText('Connected. You can return to your message.')).toBeNull();
+  },
+);

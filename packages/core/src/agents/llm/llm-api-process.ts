@@ -14,11 +14,33 @@
 
 import { randomUUID } from 'crypto';
 
+import { z } from 'zod';
+
 import { BaseAgentProcess, type ResultSubtype } from '../base-process.js';
+import { connectMcpTools, mcpInstructionsBlock, type McpToolBridge } from '../mcp-tool-bridge.js';
 import type { CLIMessage } from '../types.js';
 import type { AgentRole, AgentContext, AgentResult } from './agent-context.js';
 import { AgentExecutor, type StepInfo } from './agent-executor.js';
 import { ModelFactory } from './model-factory.js';
+import type { ToolDef } from './types.js';
+
+/** funny's MCP tools (and any other HTTP MCP server) as executor tools. */
+function bridgedToolDefs(bridge: McpToolBridge, signal: AbortSignal): Record<string, ToolDef> {
+  return Object.fromEntries(
+    bridge.tools.map((tool) => [
+      tool.name,
+      {
+        description: tool.description,
+        parameters: z.record(z.string(), z.unknown()),
+        jsonSchema: tool.inputSchema,
+        execute: async (args: unknown) => {
+          const result = await tool.call((args ?? {}) as Record<string, unknown>, signal);
+          return result.isError ? `Error: ${result.text}` : result.text;
+        },
+      } satisfies ToolDef,
+    ]),
+  );
+}
 
 export class LLMApiProcess extends BaseAgentProcess {
   private modelFactory: ModelFactory;
@@ -33,6 +55,7 @@ export class LLMApiProcess extends BaseAgentProcess {
     const startTime = Date.now();
     let numTurns = 0;
     let totalCost = 0;
+    let bridge: McpToolBridge | null = null;
 
     try {
       const { role, context } = this.parsePromptPayload();
@@ -43,13 +66,25 @@ export class LLMApiProcess extends BaseAgentProcess {
       // Create executor with direct HTTP
       const executor = new AgentExecutor(resolved.baseURL, resolved.modelId, resolved.apiKey);
 
+      // funny's own tools (and other HTTP MCP servers) — this loop has no MCP client.
+      bridge = await connectMcpTools(this.options.mcpServers);
+
       // Emit init
-      const toolNames = ['bash', 'read', 'edit', 'glob', 'grep'];
+      const toolNames = [
+        'bash',
+        'read',
+        'edit',
+        'glob',
+        'grep',
+        ...bridge.tools.map((t) => t.name),
+      ];
       this.emitInit(sessionId, toolNames, role.model, context.worktreePath);
 
       // Execute with step callbacks for CLIMessage bridging
       const agentResult = await executor.execute(role, context, {
         signal: this.abortController.signal,
+        extraTools: bridgedToolDefs(bridge, this.abortController.signal),
+        extraInstructions: mcpInstructionsBlock(bridge.instructions),
         onStepFinish: (step: StepInfo) => {
           this.emitStepAsCLIMessages(step);
         },
@@ -85,6 +120,7 @@ export class LLMApiProcess extends BaseAgentProcess {
         errors: [err.message],
       });
     } finally {
+      await bridge?.close();
       this.finalize();
     }
   }

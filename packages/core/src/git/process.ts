@@ -159,7 +159,27 @@ export async function gitWrite(
   args: string[],
   options: ProcessOptions = {},
 ): Promise<ProcessResult> {
-  return writePool(() => _executeRaw('git', args, options));
+  return writePool(async () => {
+    // Bump on both sides of the write so a read that started before it ends,
+    // or while it ran, is never reused afterwards by the read-side caches.
+    gitWriteGeneration++;
+    try {
+      return await _executeRaw('git', args, options);
+    } finally {
+      gitWriteGeneration++;
+    }
+  });
+}
+
+let gitWriteGeneration = 0;
+
+/**
+ * Monotonic counter bumped around every `gitWrite`. Read-side caches record it
+ * when a read starts and only reuse that read while it is unchanged, so a
+ * result computed before a stage/commit/checkout is never served after it.
+ */
+export function getGitWriteGeneration(): number {
+  return gitWriteGeneration;
 }
 
 /**

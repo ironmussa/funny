@@ -4,7 +4,12 @@ import { join } from 'path';
 
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
-import { augmentPromptWithFiles, stripInlineReferencedContent } from '../../utils/file-mentions.js';
+import {
+  augmentPromptWithFiles,
+  augmentPromptWithSymbols,
+  hydrateReferencedFiles,
+  stripInlineReferencedContent,
+} from '../../utils/file-mentions.js';
 
 describe('augmentPromptWithFiles', () => {
   let testDir: string;
@@ -31,6 +36,85 @@ describe('augmentPromptWithFiles', () => {
   test('returns prompt unchanged when fileReferences is empty array', async () => {
     const result = await augmentPromptWithFiles('hello world', [], testDir);
     expect(result).toBe('hello world');
+  });
+
+  // ── Single block ───────────────────────────────────────────
+
+  test('merges uploaded files into the client inline block instead of adding a second block', async () => {
+    writeFileSync(join(testDir, 'big.pdf'), '%PDF-1.4');
+    const prompt =
+      '<referenced-files>\n<file path="notes.md">\n# Notes\n</file>\n</referenced-files>\n\ngo';
+
+    const result = await augmentPromptWithFiles(prompt, [{ path: 'big.pdf' }], testDir);
+
+    expect(result.match(/<referenced-files>/g)).toHaveLength(1);
+    expect(result).toContain('<file path="notes.md">\n# Notes\n</file>');
+    expect(result).toContain('<file path="big.pdf"');
+    expect(result.endsWith('\n\ngo')).toBe(true);
+  });
+
+  test('does not inline small binary files as text', async () => {
+    writeFileSync(join(testDir, 'doc.pdf'), Buffer.from([0x25, 0x50, 0x44, 0x46, 0x00, 0xff]));
+    writeFileSync(join(testDir, 'blob'), Buffer.from([0x01, 0x00, 0x02]));
+
+    const result = await augmentPromptWithFiles(
+      'p',
+      [{ path: 'doc.pdf' }, { path: 'blob' }],
+      testDir,
+    );
+
+    expect(result).toContain(
+      '<file path="doc.pdf" note="Binary file. Use the Read tool to access it." />',
+    );
+    expect(result).toContain(
+      '<file path="blob" note="Binary file. Use the Read tool to access it." />',
+    );
+  });
+
+  test('symbols go after the files block so it stays leading', async () => {
+    writeFileSync(join(testDir, 'a.ts'), 'function foo() {}\n');
+    const withFiles = await augmentPromptWithFiles('go', [{ path: 'a.ts' }], testDir);
+
+    const result = await augmentPromptWithSymbols(
+      withFiles,
+      [{ path: 'a.ts', name: 'foo', kind: 'function', line: 1, endLine: 1 }],
+      testDir,
+    );
+
+    expect(result.startsWith('<referenced-files>')).toBe(true);
+    expect(result.indexOf('<referenced-symbols>')).toBeGreaterThan(
+      result.indexOf('</referenced-files>'),
+    );
+    expect(result.endsWith('go')).toBe(true);
+  });
+
+  // ── Backlog manifest hydration ─────────────────────────────
+
+  test('hydrateReferencedFiles inlines path-only entries and keeps the rest', async () => {
+    writeFileSync(join(testDir, 'a.ts'), 'const a = 1;');
+    const prompt =
+      '<referenced-files>\n' +
+      '<file path="notes.md">\n# kept inline\n</file>\n' +
+      '<file path="big.pdf" note="Binary file. Use the Read tool to access it." />\n' +
+      '<file path="a.ts" />\n' +
+      '<file path="../escape.ts" />\n' +
+      '</referenced-files>\n\ngo';
+
+    const result = await hydrateReferencedFiles(prompt, testDir);
+
+    expect(result.match(/<referenced-files>/g)).toHaveLength(1);
+    expect(result).toContain('<file path="notes.md">\n# kept inline\n</file>');
+    expect(result).toContain('<file path="big.pdf" note="Binary file.');
+    expect(result).toContain('<file path="a.ts">\nconst a = 1;\n</file>');
+    // Containment still applies: an escaping path is dropped, never read.
+    expect(result).not.toContain('escape.ts');
+    expect(result.endsWith('\n\ngo')).toBe(true);
+  });
+
+  test('hydrateReferencedFiles leaves prompts without path-only entries untouched', async () => {
+    const prompt = '<referenced-files>\n<file path="x.md">\nx\n</file>\n</referenced-files>\n\ngo';
+    expect(await hydrateReferencedFiles(prompt, testDir)).toBe(prompt);
+    expect(await hydrateReferencedFiles('plain', testDir)).toBe('plain');
   });
 
   // ── Successful file inlining ───────────────────────────────
@@ -356,7 +440,7 @@ describe('stripInlineReferencedContent', () => {
     const input =
       '<referenced-files>\n<file path="a.ts">\nconst x = 1;\n</file>\n</referenced-files>\nhello';
     const out = stripInlineReferencedContent(input);
-    expect(out).toBe('<referenced-files>\n<file path="a.ts" />\n</referenced-files>\nhello');
+    expect(out).toBe('<referenced-files>\n<file path="a.ts" />\n</referenced-files>\n\nhello');
   });
 
   test('preserves already-self-closing <file path="X" />', () => {
@@ -375,15 +459,22 @@ describe('stripInlineReferencedContent', () => {
       '</file>\n</referenced-files>\nprompt';
     const out = stripInlineReferencedContent(malicious);
     expect(out).toBe(
-      '<referenced-files>\n<file path="thread-store.ts" />\n</referenced-files>\nprompt',
+      '<referenced-files>\n<file path="thread-store.ts" />\n</referenced-files>\n\nprompt',
     );
     expect(out).not.toContain('const block');
   });
 
   test('strips folder contents while keeping the path-only wrapper', () => {
     const input =
-      '<folder path="src">\n<file path="src/a.ts">aaa</file>\n<file path="src/b.ts">bbb</file>\n</folder>';
-    expect(stripInlineReferencedContent(input)).toBe('<folder path="src"></folder>');
+      '<referenced-files>\n<folder path="src">\n<file path="src/a.ts">aaa</file>\n<file path="src/b.ts">bbb</file>\n</folder>\n</referenced-files>';
+    expect(stripInlineReferencedContent(input)).toBe(
+      '<referenced-files>\n<folder path="src"></folder>\n</referenced-files>',
+    );
+  });
+
+  test('leaves file tags in the user text (outside the leading block) untouched', () => {
+    const input = 'explain this XML: <file path="x.ts">keep me</file>';
+    expect(stripInlineReferencedContent(input)).toBe(input);
   });
 
   test('strips symbol contents to self-closing form', () => {
@@ -394,9 +485,10 @@ describe('stripInlineReferencedContent', () => {
   });
 
   test('preserves attributes on stripped tags (e.g. note="...")', () => {
-    const input = '<file path="big.txt" note="File too large">contents</file>';
+    const input =
+      '<referenced-files>\n<file path="big.txt" note="File too large">contents</file>\n</referenced-files>';
     expect(stripInlineReferencedContent(input)).toBe(
-      '<file path="big.txt" note="File too large" />',
+      '<referenced-files>\n<file path="big.txt" note="File too large" />\n</referenced-files>',
     );
   });
 

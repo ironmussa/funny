@@ -22,7 +22,6 @@ import {
   type RefObject,
 } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import type {
   PromptEditorHandle,
@@ -31,13 +30,11 @@ import type {
 import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useDictation } from '@/hooks/use-dictation';
-import { usePushToTalk } from '@/hooks/use-push-to-talk';
+import { useEditorDictation } from '@/hooks/use-editor-dictation';
 import { useSlashSkills } from '@/hooks/use-slash-skills';
 import { createClientLogger } from '@/lib/client-logger';
 import { remarkPlugins } from '@/lib/markdown-components';
 import { cn } from '@/lib/utils';
-import { useProfileStore } from '@/stores/profile-store';
 
 import { AnnotatableContent } from './AnnotatableContent';
 import {
@@ -371,46 +368,10 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   });
 
   // ── Dictation (real-time voice-to-text via AssemblyAI) ──
-  const hasAssemblyaiKey = useProfileStore((s) => s.profile?.hasAssemblyaiKey ?? false);
-  const partialTextRef = useRef('');
-
-  const handlePartialTranscript = useCallback((text: string) => {
-    partialTextRef.current = text;
-    if (text) editorRef.current?.setDictationPreview(text);
-  }, []);
-
-  const handleFinalTranscript = useCallback((text: string) => {
-    if (text) editorRef.current?.commitDictation(text);
-    partialTextRef.current = '';
-  }, []);
-
-  const handleDictationError = useCallback(
-    (message: string) => {
-      toast.error(message || t('prompt.micPermissionDenied', 'Microphone access denied'));
-    },
-    [t],
+  const { hasAssemblyaiKey, isRecording, isTranscribing, toggleRecording } = useEditorDictation(
+    editorRef,
+    editorContainerRef,
   );
-
-  const {
-    isRecording,
-    isConnecting: isTranscribing,
-    start: startRecording,
-    stop: stopRecording,
-    toggle: toggleRecording,
-  } = useDictation({
-    onPartial: handlePartialTranscript,
-    onFinal: handleFinalTranscript,
-    onError: handleDictationError,
-  });
-
-  usePushToTalk({
-    enabled: hasAssemblyaiKey,
-    containerRef: editorContainerRef,
-    isRecording,
-    isTranscribing,
-    startRecording,
-    stopRecording,
-  });
 
   // Track if editor has content for send button state
   const [hasContent, setHasContent] = useState(false);

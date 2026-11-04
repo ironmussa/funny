@@ -3,14 +3,13 @@ import { useCallback, useState, type Dispatch, type SetStateAction } from 'react
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { isDivergedBranchesError } from '@/components/pull-strategy-dialog';
+import { useGitRemoteActions } from '@/hooks/use-git-remote-actions';
 import { type PullStrategy } from '@/lib/api/_core';
 import { browseApi } from '@/lib/api/browse';
 import { gitApi } from '@/lib/api/git';
 import { threadsApi } from '@/lib/api/threads';
 import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
 import { getThreadById } from '@/stores/thread-context';
 
@@ -132,12 +131,6 @@ export function useReviewActions({
   const { t } = useTranslation();
 
   // In-progress flags
-  const [pullInProgress, setPullInProgress] = useState(false);
-  const [pullStrategyDialog, setPullStrategyDialog] = useState<{
-    open: boolean;
-    errorMessage: string;
-  }>({ open: false, errorMessage: '' });
-  const [fetchInProgress, setFetchInProgress] = useState(false);
   const [stashInProgress, setStashInProgress] = useState(false);
   const [resetInProgress, setResetInProgress] = useState(false);
   const [patchStagingInProgress, setPatchStagingInProgress] = useState(false);
@@ -490,84 +483,20 @@ export function useReviewActions({
 
   // ── Network: pull / fetch ──
 
-  const runPull = useCallback(
-    async (strategy: PullStrategy) => {
-      const result = effectiveThreadId
-        ? await gitApi.pull(effectiveThreadId, strategy)
-        : await gitApi.projectPull(projectModeId!, strategy);
-      if (result.isErr()) {
-        const msg = result.error.message;
-        // When ff-only fails because of a diverged branch, offer merge/rebase
-        // instead of just surfacing the raw git hint to the user.
-        if (strategy === 'ff-only' && isDivergedBranchesError(msg)) {
-          setPullStrategyDialog({ open: true, errorMessage: msg });
-          return;
-        }
-        toast.error(
-          t('review.pullFailed', {
-            message: msg,
-            defaultValue: `Pull failed: ${msg}`,
-          }),
-        );
-      } else {
-        toast.success(t('review.pullSuccess', 'Pulled successfully'));
-      }
-      // Force-refresh git status so unpulled badge clears immediately after pull.
-      if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-      else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
-      await refresh();
-    },
-    [effectiveThreadId, projectModeId, refresh, t],
-  );
-
-  const handlePull = useCallback(async () => {
-    if (!hasGitContext || pullInProgress) return;
-    setPullInProgress(true);
-    await runPull('ff-only').finally(() => setPullInProgress(false));
-  }, [hasGitContext, pullInProgress, runPull]);
-
-  const handlePullStrategyChosen = useCallback(
-    async (strategy: Exclude<PullStrategy, 'ff-only'>) => {
-      setPullStrategyDialog({ open: false, errorMessage: '' });
-      if (pullInProgress) return;
-      setPullInProgress(true);
-      await runPull(strategy).finally(() => setPullInProgress(false));
-    },
-    [pullInProgress, runPull],
-  );
-
-  const handleFetchOrigin = useCallback(async () => {
-    if (!hasGitContext || fetchInProgress) return;
-    setFetchInProgress(true);
-    const result = effectiveThreadId
-      ? await gitApi.fetchOrigin(effectiveThreadId)
-      : await gitApi.projectFetchOrigin(projectModeId!);
-    if (result.isErr()) {
-      const msg = result.error.message;
-      const isAuthError =
-        /auth|token|credential|permission|denied|403|fatal:/i.test(msg) ||
-        result.error.type === 'INTERNAL';
-      toast.error(
-        isAuthError
-          ? t('review.fetchAuthFailed', {
-              defaultValue:
-                'Fetch failed: authentication error. Check your GitHub token in Settings > Profile.',
-            })
-          : t('review.fetchFailed', {
-              message: msg,
-              defaultValue: `Fetch failed: ${msg}`,
-            }),
-      );
-    } else {
-      toast.success(t('review.fetchSuccess', 'Fetched from origin'));
-    }
-    setFetchInProgress(false);
-    // Force-refresh git status to bypass client-side cooldown so unpulled/unpushed
-    // counts update immediately after a manual fetch.
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
-    await refresh();
-  }, [hasGitContext, fetchInProgress, effectiveThreadId, projectModeId, refresh, t]);
+  const {
+    pullInProgress,
+    fetchInProgress,
+    pullStrategyDialog,
+    setPullStrategyDialog,
+    handlePull,
+    handlePullStrategyChosen,
+    handleFetchOrigin,
+  } = useGitRemoteActions({
+    threadId: effectiveThreadId,
+    projectId: projectModeId,
+    hasGitContext,
+    afterChange: refresh,
+  });
 
   // ── Stash creation (popping/dropping is in useStashState) ──
 

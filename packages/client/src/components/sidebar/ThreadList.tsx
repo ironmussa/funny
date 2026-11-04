@@ -1,24 +1,16 @@
-import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
-import {
-  useState,
-  useEffect,
-  useMemo,
-  useCallback,
-  useRef,
-  useLayoutEffect,
-  memo,
-  type MutableRefObject,
-} from 'react';
+import { useMemo, useCallback, useRef, useLayoutEffect, memo, type MutableRefObject } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useProjects } from '@/data/projects/hooks';
+import { useLoadedThreads } from '@/data/threads/hooks';
+import { selectActivityThreads } from '@/data/threads/views';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useVisibleGitStatus } from '@/hooks/use-git-status-scope';
+import { useGridThreadDrag } from '@/hooks/use-grid-thread-drag';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSidebarGitStatuses } from '@/hooks/use-sidebar-git-statuses';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
-import { setDashedDragPreview } from '@/lib/drag-preview';
-import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
@@ -31,8 +23,6 @@ import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';
 
 const RUNNING_STATUSES = new Set<ThreadStatus>(['running', 'waiting', 'pending']);
-const FINISHED_STATUSES = new Set<ThreadStatus>(['completed', 'failed', 'stopped', 'interrupted']);
-const VISIBLE_STATUSES = new Set<ThreadStatus>([...RUNNING_STATUSES, ...FINISHED_STATUSES]);
 
 interface EnrichedThread extends Thread {
   projectName: string;
@@ -54,67 +44,35 @@ interface ThreadListProps {
 export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: ThreadListProps) {
   const { t: _t } = useTranslation();
   const navigate = useStableNavigate();
-  const threadsByProject = useThreadsByProject();
-  const scratchThreads = useScratchThreads();
+  // Every loaded project list plus scratch, from a live query on the threads collection.
+  const loadedThreads = useLoadedThreads(null);
   // Highlight follows the URL (route-driven), not the async selectedThreadId.
   const activeThreadId = useActiveThreadId();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
 
   const { threads, totalCount } = useMemo(() => {
-    const result: EnrichedThread[] = [];
-    const seenThreadIds = new Set<string>();
     const projectMap = new Map(
       projects.map((p) => [p.id, { name: p.name, path: p.path, color: p.color }]),
     );
-
-    const includeThread = (
-      thread: Thread,
-      projectName: string,
-      projectPath: string,
-      projectColor?: string,
-    ) => {
-      if (seenThreadIds.has(thread.id)) return;
-      if (!VISIBLE_STATUSES.has(thread.status) || thread.archived || thread.stage === 'done')
-        return;
-      seenThreadIds.add(thread.id);
-      const enriched: EnrichedThread = {
-        ...thread,
-        projectName,
-        projectPath,
-        projectColor,
-      };
-      result.push(enriched);
-    };
-
-    for (const [projectId, projectThreads] of Object.entries(threadsByProject)) {
-      const project = projectMap.get(projectId);
-      for (const thread of projectThreads) {
-        includeThread(thread, project?.name ?? projectId, project?.path ?? '', project?.color);
+    const activity = selectActivityThreads(loadedThreads);
+    const enriched: EnrichedThread[] = activity.threads.map((thread) => {
+      if (thread.isScratch) {
+        return {
+          ...thread,
+          projectName: _t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' }),
+          projectPath: '',
+        };
       }
-    }
-
-    for (const thread of scratchThreads) {
-      includeThread(thread, _t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' }), '');
-    }
-
-    // Running threads always go first, then sort each group by most recent
-    // activity. Without the status priority, a long-running thread with an
-    // old createdAt gets pushed below recently-finished threads and drops
-    // out of the top 5.
-    result.sort((a, b) => {
-      const aRunning = a.status === 'running';
-      const bRunning = b.status === 'running';
-      if (aRunning !== bRunning) return aRunning ? -1 : 1;
-      const dateA = a.completedAt ?? a.createdAt;
-      const dateB = b.completedAt ?? b.createdAt;
-      return new Date(dateB).getTime() - new Date(dateA).getTime();
+      const project = projectMap.get(thread.projectId);
+      return {
+        ...thread,
+        projectName: project?.name ?? thread.projectId,
+        projectPath: project?.path ?? '',
+        projectColor: project?.color,
+      };
     });
-
-    // Always show at most 5 threads total, prioritizing running ones
-    const visible = result.slice(0, 5);
-
-    return { threads: visible, totalCount: result.length };
-  }, [threadsByProject, scratchThreads, projects, _t]);
+    return { threads: enriched, totalCount: activity.totalCount };
+  }, [loadedThreads, projects, _t]);
 
   const gitStatusByThread = useSidebarGitStatuses(threads);
 
@@ -237,25 +195,7 @@ const ThreadListItem = memo(function ThreadListItem({
   }, [thread]);
 
   // Drag support: allow dragging threads into grid cells
-  const dragRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-
-  useEffect(() => {
-    const el = dragRef.current;
-    if (!el) return;
-    return draggable({
-      element: el,
-      getInitialData: () => ({
-        type: 'grid-thread',
-        threadId: thread.id,
-        projectId: thread.projectId,
-      }),
-      onGenerateDragPreview: ({ nativeSetDragImage }) =>
-        setDashedDragPreview({ nativeSetDragImage, source: el }),
-      onDragStart: () => setIsDragging(true),
-      onDrop: () => setIsDragging(false),
-    });
-  }, [thread.id, thread.projectId]);
+  const { dragRef, isDragging } = useGridThreadDrag(thread.id, thread.projectId);
 
   const handleSelect = useCallback(
     () => onSelect(thread.id, thread.projectId),

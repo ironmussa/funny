@@ -1736,6 +1736,15 @@ mark.md-search-match[data-active='true'] {
   min-width: 0;
 }
 
+/* Dockview hides the content container of a collapsed edge group, but the
+   left sidebar renders its collapsed rail (with the expand button) inside
+   that container — `collapsedSize: 40` in DockviewLayout. Keep it visible. */
+.dockview-theme-funny
+  [data-testid='dv-edge-group-left-edge'].dv-edge-collapsed
+  > .dv-content-container {
+  display: block;
+}
+
 /* Right-pane tabs (Changes/History/Stash/PRs/Issues) use a custom tab component
    (`RightTabHeader` in DockviewLayout.tsx) so they render without a close
    button. Terminal tabs keep dockview's default tab with native close. */

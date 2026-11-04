@@ -1,21 +1,6 @@
 import { okAsync, errAsync } from 'neverthrow';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 
-// ── Mock the SDK so `tool()` is capturable and we can invoke the handler ──
-// The real createSdkMcpServer hides the handlers behind an MCP instance; for a
-// unit test we want to call `funny_spawn_thread`'s handler directly. The mock
-// keeps the (name, description, schema, handler) shape so the test can find the
-// tool by name and call its handler with raw args.
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
-  createSdkMcpServer: (config: any) => config,
-  tool: (name: string, description: string, schema: any, handler: any) => ({
-    name,
-    description,
-    schema,
-    handler,
-  }),
-}));
-
 const { getThread, createAndStartThread, remoteSearchThreads } = vi.hoisted(() => ({
   getThread: vi.fn(),
   createAndStartThread: vi.fn(),
@@ -33,24 +18,21 @@ vi.mock('../../lib/logger.js', () => ({
 vi.mock('../../services/agent-job-manager.js', () => ({ spawnJob: vi.fn() }));
 vi.mock('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
 
-import { buildWatchMcpServer } from '../../services/agent-watch-tool.js';
+import { watchToolDefinitions } from '../../services/agent-watch-tool.js';
 
 const PARENT_THREAD = 'parent-thread-1';
 const USER = 'user-abc';
 
-function spawnTool() {
-  const server = buildWatchMcpServer(PARENT_THREAD, USER) as any;
-  const t = server.tools.find((x: any) => x.name === 'funny_spawn_thread');
-  if (!t) throw new Error('funny_spawn_thread tool not registered');
-  return t;
+function toolNamed(name: string) {
+  const t = watchToolDefinitions({ threadId: PARENT_THREAD, userId: USER }).find(
+    (x) => x.name === name,
+  );
+  if (!t) throw new Error(`${name} tool not registered`);
+  return { handler: (args: Record<string, unknown>) => t.run(args, undefined) as Promise<any> };
 }
 
-function searchTool() {
-  const server = buildWatchMcpServer(PARENT_THREAD, USER) as any;
-  const t = server.tools.find((x: any) => x.name === 'funny_search_threads');
-  if (!t) throw new Error('funny_search_threads tool not registered');
-  return t;
-}
+const spawnTool = () => toolNamed('funny_spawn_thread');
+const searchTool = () => toolNamed('funny_search_threads');
 
 beforeEach(() => {
   getThread.mockReset();

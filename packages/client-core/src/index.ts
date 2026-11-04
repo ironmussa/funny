@@ -4,6 +4,7 @@ export * from './endpoint-policy';
 export * from './platform';
 export * from './realtime';
 export * from './renderer-selection';
+export * from './relative-time';
 export * from './route-parser';
 export * from './stores/circuit-breaker';
 export * from './stores/auth-session';

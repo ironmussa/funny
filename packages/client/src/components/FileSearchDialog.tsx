@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { Dialog, DialogOverlay, DialogPortal, DialogTitle } from '@/components/ui/dialog';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { SearchEmptyRow as EmptyRow, SearchLoadingRow } from '@/components/ui/search-placeholder';
+import { useProjects } from '@/data/projects/hooks';
 import { useRankedFileSearch } from '@/hooks/use-ranked-file-search';
 import { api } from '@/lib/api';
 import type { RankedFileSearchMatch, RankedFileSearchTarget } from '@/lib/api/browse';
@@ -38,7 +39,7 @@ export function FileSearchDialog({ open, onOpenChange }: FileSearchDialogProps) 
 function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) {
   const { t } = useTranslation();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const project = projects.find((p) => p.id === selectedProjectId);
   const worktreePath = useThreadWorktreePath();
   const threadCore = useThreadCore();

@@ -8,10 +8,13 @@ test.describe('11. Kanban View', () => {
     const project = await seedProject(api, page, tempRepo, `Kanban-${Date.now()}`);
     projectId = project.id;
 
-    // Create threads in different stages
+    // Create threads in different stages. Idle threads can only start in
+    // backlog or planning, so the later stages are reached with a stage update.
     const stages = ['backlog', 'planning', 'in_progress', 'review', 'done'];
     for (const stage of stages) {
-      const thread = await api.createIdleThread(projectId, `${stage} thread`, { stage });
+      const initial = stage === 'planning' ? 'planning' : 'backlog';
+      const thread = await api.createIdleThread(projectId, `${stage} thread`, { stage: initial });
+      if (stage !== initial) await api.updateThreadStage(thread.id, stage);
       threadIds.push(thread.id);
     }
   });
@@ -113,9 +116,26 @@ test.describe('11. Kanban View', () => {
     expect(true).toBe(true);
   });
 
-  test('11.6 Drag-and-drop - Drags card between columns', async ({ authedPage: _page }) => {
-    // Placeholder test
-    expect(true).toBe(true);
+  test('11.6 Drag-and-drop - Drags card between columns', async ({ authedPage: page, api }) => {
+    const backlogId = threadIds[0];
+    await page.goto('/kanban');
+    await page.waitForLoadState('networkidle');
+
+    const card = page.getByTestId(`kanban-card-${backlogId}`);
+    const planning = page.getByTestId('kanban-column-planning');
+    await expect(card).toBeVisible();
+    await expect(
+      page.getByTestId('kanban-column-backlog').getByTestId(`kanban-card-${backlogId}`),
+    ).toBeVisible();
+
+    await card.dragTo(planning);
+
+    // The move is optimistic: the card lands in the new column at once...
+    await expect(planning.getByTestId(`kanban-card-${backlogId}`)).toBeVisible();
+    // ...and the server confirms the new stage.
+    await expect
+      .poll(async () => (await api.getThreads(projectId)).find((t) => t.id === backlogId)?.stage)
+      .toBe('planning');
   });
 
   test('11.7 Hover states - Cards show hover interactive borders', async ({

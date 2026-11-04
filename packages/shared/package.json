@@ -13,6 +13,7 @@
     },
     "./errors": "./src/errors.ts",
     "./models": "./src/models.ts",
+    "./attachments": "./src/attachments/index.ts",
     "./codex-commands": "./src/codex-commands.ts",
     "./provider-manifest": "./src/provider-manifest.ts",
     "./provider-manifests": "./src/provider-manifests.ts",
@@ -65,7 +66,7 @@
     "pg": "^8.20.0",
     "semver": "^7.7.3",
     "xstate": "^5.32.1",
-    "zod": "^4.5.4"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",

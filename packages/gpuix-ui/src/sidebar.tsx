@@ -441,7 +441,7 @@ export function SidebarProfile({
         <text style={{ color: theme.colors.text, lineClamp: 1 }}>{name}</text>
         {username ? (
           <text style={{ color: theme.colors.muted, fontSize: theme.fontSizes.caption }}>
-            @{username}
+            {`@${username}`}
           </text>
         ) : null}
       </div>

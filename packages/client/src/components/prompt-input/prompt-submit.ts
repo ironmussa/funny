@@ -3,18 +3,22 @@
  * provider-setup gating and the `onSubmit` option payload.
  */
 import type { ImageAttachment, TemplateVariable } from '@funny/shared';
+import { serializeReferencedFiles } from '@funny/shared/attachments';
 
-import type { FileRef, SymbolRef } from '@/lib/thread-payload';
+import { parseRuntimeChoice, type FileRef, type SymbolRef } from '@/lib/thread-payload';
 
 /**
- * Attached files: small files are inlined (`mode: 'inline'`, content is
- * embedded in the prompt on submit); larger files are uploaded to the
- * runner (`mode: 'upload'`, sent as a fileReference for the server to
- * resolve on disk). `mode: 'uploading'` marks an upload in flight.
+ * Attached files: small text files are inlined (`mode: 'inline'`, content is
+ * embedded in the prompt on submit); the rest is uploaded to the runner —
+ * into the thread (`mode: 'upload'`, sent as a fileReference) or, before the
+ * thread exists, into the staging area (`mode: 'staged'`, sent as
+ * `stagedUploads` and adopted on creation). `mode: 'uploading'` marks an
+ * upload in flight.
  */
 export type AttachedTextFile =
   | { mode: 'inline'; name: string; content: string; size: number }
   | { mode: 'upload'; name: string; path: string; size: number }
+  | { mode: 'staged'; name: string; stagedId: string; size: number }
   | { mode: 'uploading'; name: string; size: number };
 
 export interface PromptSubmitOptions {
@@ -24,11 +28,16 @@ export interface PromptSubmitOptions {
   effort?: string;
   threadMode?: string;
   runtime?: string;
+  /** Provider connection used when `runtime === 'sandbox'`. */
+  sandboxConnectionId?: string;
   baseBranch?: string;
   cwd?: string;
   sendToBacklog?: boolean;
   fileReferences?: FileRef[];
   symbolReferences?: SymbolRef[];
+  stagedUploads?: string[];
+  /** Names of attachments not inlined in the prompt (shown in the thread title badge). */
+  attachedFileNames?: string[];
   agentTemplateId?: string;
   templateVariables?: Record<string, string>;
 }
@@ -76,18 +85,17 @@ export function isUploadInFlight(files: readonly AttachedTextFile[]): boolean {
 }
 
 /**
- * Inline-tier files: embed contents in a <referenced-files> block prepended
- * to the prompt (browsers can't expose paths for these small dropped files).
+ * Inline-tier files: embed contents in the prompt's <referenced-files> block
+ * (browsers can't expose paths for these small dropped files).
  */
-function buildInlineFilesBlock(files: readonly AttachedTextFile[]): string {
+function withInlineFiles(files: readonly AttachedTextFile[], text: string): string {
   const inlineFiles = files.filter(
     (f): f is Extract<AttachedTextFile, { mode: 'inline' }> => f.mode === 'inline',
   );
-  if (inlineFiles.length === 0) return '';
-  const body = inlineFiles
-    .map((f) => `<file path="${f.name.replace(/"/g, '&quot;')}">\n${f.content}\n</file>`)
-    .join('\n');
-  return `<referenced-files>\n${body}\n</referenced-files>\n\n`;
+  return serializeReferencedFiles(
+    inlineFiles.map((f) => ({ type: 'file' as const, path: f.name, content: f.content })),
+    text,
+  );
 }
 
 /**
@@ -101,6 +109,13 @@ function collectUploadedRefs(files: readonly AttachedTextFile[]): FileRef[] {
     .map((f) => ({ path: f.path, type: 'file' as const }));
 }
 
+/** Staged files (attached before the thread existed): adopted on creation. */
+function collectStagedIds(files: readonly AttachedTextFile[]): string[] {
+  return files
+    .filter((f): f is Extract<AttachedTextFile, { mode: 'staged' }> => f.mode === 'staged')
+    .map((f) => f.stagedId);
+}
+
 function nonEmpty<T>(items: T[]): T[] | undefined {
   return items.length > 0 ? items : undefined;
 }
@@ -110,6 +125,8 @@ export interface PromptPayload {
   images: ImageAttachment[] | undefined;
   fileReferences: FileRef[] | undefined;
   symbolReferences: SymbolRef[] | undefined;
+  stagedUploads: string[] | undefined;
+  attachedFileNames: string[] | undefined;
 }
 
 export function buildPromptPayload(
@@ -118,10 +135,14 @@ export function buildPromptPayload(
   textFiles: readonly AttachedTextFile[],
 ): PromptPayload {
   return {
-    prompt: buildInlineFilesBlock(textFiles) + serialized.text,
+    prompt: withInlineFiles(textFiles, serialized.text),
     images: nonEmpty(images),
     fileReferences: nonEmpty([...serialized.fileReferences, ...collectUploadedRefs(textFiles)]),
     symbolReferences: nonEmpty(serialized.symbolReferences),
+    stagedUploads: nonEmpty(collectStagedIds(textFiles)),
+    attachedFileNames: nonEmpty(
+      textFiles.filter((f) => f.mode === 'upload' || f.mode === 'staged').map((f) => f.name),
+    ),
   };
 }
 
@@ -158,7 +179,7 @@ export function buildThreadOptions(
   if (!input.isNewThread) return { baseBranch: input.followUpSelectedBranch || undefined };
   return {
     threadMode: input.threadMode,
-    runtime: input.runtime,
+    ...parseRuntimeChoice(input.runtime),
     baseBranch: input.selectedBranch || undefined,
     sendToBacklog: input.sendToBacklog,
     agentTemplateId: input.isDeepAgent ? input.selectedTemplateId : undefined,

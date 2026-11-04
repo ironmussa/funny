@@ -1,6 +1,7 @@
 import type { Job, Thread } from '@funny/shared';
 
 import { isTauri } from '@/components/terminal/xterm-utils';
+import { readProjects } from '@/data/projects/read';
 import { useProjectStore } from '@/stores/project-store';
 import { type TerminalShell, useSettingsStore } from '@/stores/settings-store';
 import {
@@ -115,7 +116,7 @@ export function openThreadTerminal({ thread, shell = 'default' }: OpenThreadTerm
     return;
   }
 
-  const projects = useProjectStore.getState().projects;
+  const projects = readProjects();
   const project = projects.find((p) => p.id === thread.projectId);
   const cwd = thread.worktreePath ?? project?.path ?? '~';
   addTab(buildTab({ projectId: thread.projectId, cwd, shell }));
@@ -128,7 +129,7 @@ export function openProviderLoginTerminal(args: {
   shell: TerminalShell;
   label: string;
 }): void {
-  const project = useProjectStore.getState().projects.find((p) => p.id === args.projectId);
+  const project = readProjects().find((p) => p.id === args.projectId);
   const tab = buildTab({
     projectId: args.projectId,
     cwd: project?.path ?? '~',

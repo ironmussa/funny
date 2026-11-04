@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
+import { fetchProjectStatus } from '@/data/git-status/actions';
 import { gitApi } from '@/lib/api/git';
-import { useGitStatusStore } from '@/stores/git-status-store';
 
 interface UsePublishStateArgs {
   /** Project id used to look up the remote (project-mode or the thread's project). */
@@ -62,7 +62,7 @@ export function usePublishState({
       setRemoteUrl(repoUrl);
       setPublishDialogOpen(false);
       if (remoteCheckProjectId) {
-        useGitStatusStore.getState().fetchProjectStatus(remoteCheckProjectId, true);
+        fetchProjectStatus(remoteCheckProjectId, true);
       }
       toast.success('Repository ready');
     },

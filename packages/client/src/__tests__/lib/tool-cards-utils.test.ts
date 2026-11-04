@@ -10,11 +10,114 @@ import {
   getFileExtension,
   getFileName,
   isTodoToolName,
+  isPathWithin,
+  unwrapShellCommand,
 } from '@/components/tool-cards/format-utils';
+import { getMcpSummary, isBrowserTool } from '@/components/tool-cards/mcp-tool';
 import { extToHljsLang } from '@/hooks/use-highlight';
 import { toEditorUri, toEditorUriWithLine } from '@/lib/editor-utils';
 
 const t = (key: string) => key;
+
+describe('friendly labels for agent and MCP tools', () => {
+  test('MCP tool names become "Server · Action" titles, also for groups', () => {
+    expect(getToolLabel('mcp__linear__save_issue', t)).toBe('Linear · Save issue');
+    expect(getToolLabel('mcp__funny__funny_spawn', t)).toBe('funny · tools.mcp.backgroundJob');
+    expect(getToolLabel('mcp__chrome-devtools__take_snapshot', t)).toBe(
+      'Chrome DevTools · Take snapshot',
+    );
+  });
+
+  test('the chrome-devtools calls from the thread get readable titles', () => {
+    expect(getToolLabel('mcp__chrome-devtools__list_pages', t)).toBe(
+      'Chrome DevTools · List pages',
+    );
+    expect(getToolLabel('mcp__chrome-devtools__navigate_page', t)).toBe(
+      'Chrome DevTools · Navigate page',
+    );
+  });
+
+  test('a command wrapped in /bin/bash -lc shows the command itself', () => {
+    expect(getSummary('Bash', { command: "/bin/bash -lc 'cat migration-state.json'" }, t)).toBe(
+      'cat migration-state.json',
+    );
+    expect(
+      getSummary('Bash', { command: `/bin/bash -lc "python3 - <<'PY'\\nprint(\\"hi\\")"` }, t),
+    ).toBe(`python3 - <<'PY'\\nprint("hi")`);
+    expect(unwrapShellCommand(`bash -lc 'echo '\\''quoted'\\'''`)).toBe("echo 'quoted'");
+    // Not a wrapper: unchanged.
+    expect(unwrapShellCommand('bun run lint && bash -lc x')).toBe('bun run lint && bash -lc x');
+  });
+
+  test('agent tools get a label and a one-line summary', () => {
+    expect(getToolLabel('ToolSearch', t)).toBe('tools.loadTools');
+    expect(getSummary('ToolSearch', { query: 'select:TaskCreate,TaskUpdate' }, t)).toBe(
+      'TaskCreate, TaskUpdate',
+    );
+    expect(getSummary('Skill', { skill: 'query-logs' }, t)).toBe('query-logs');
+    expect(getSummary('TaskCreate', { subject: 'Ship it' }, t)).toBe('Ship it');
+    expect(getSummary('TaskUpdate', { taskId: '14', status: 'completed' }, t)).toBe(
+      '#14 → completed',
+    );
+    expect(getSummary('ScheduleWakeup', { reason: 'Watch CI' }, t)).toBe('Watch CI');
+    expect(getSummary('SendMessage', { to: 'a1', summary: 'Resume fixes' }, t)).toBe(
+      'Resume fixes',
+    );
+    expect(
+      getSummary(
+        'apply_patch',
+        { input: '*** Begin Patch\n*** Update File: a.ts\n*** Add File: b.ts\n' },
+        t,
+      ),
+    ).toBe('a.ts +1');
+    expect(getSummary('ApplyPatch', { changes: [{ path: 'c.ts' }] }, t)).toBe('c.ts');
+    expect(getSummary('Tool', { server: 'supabase', tool: 'get_advisors' }, t)).toBe(
+      'supabase · get_advisors',
+    );
+  });
+});
+
+describe('browser tool cards', () => {
+  const browser = (tool: string) => ({ server: 'funny_browser', tool });
+
+  test('browser tools get translated titles', () => {
+    expect(getToolLabel('mcp__funny_browser__browser_act', t)).toBe(
+      'Browser · tools.mcp.browserAct',
+    );
+    expect(getToolLabel('mcp__funny_browser__browser_open', t)).toBe(
+      'Browser · tools.mcp.browserOpen',
+    );
+    expect(isBrowserTool(browser('browser_act'))).toBe(true);
+    expect(isBrowserTool({ server: 'playwright', tool: 'browser_click' })).toBe(false);
+  });
+
+  test('summaries describe the action, its target and its input', () => {
+    expect(getMcpSummary({ action: 'click', ref: 'e7' }, browser('browser_act'))?.text).toBe(
+      'click e7',
+    );
+    expect(
+      getMcpSummary({ action: 'fill', ref: 'e3', text: 'me@example.com' }, browser('browser_act'))
+        ?.text,
+    ).toBe('fill e3 · "me@example.com"');
+    expect(getMcpSummary({ action: 'press', key: 'Enter' }, browser('browser_act'))?.text).toBe(
+      'press · Enter',
+    );
+    expect(
+      getMcpSummary({ action: 'double_click', x: 10, y: 20 }, browser('browser_act'))?.text,
+    ).toBe('double click (10, 20)');
+    expect(
+      getMcpSummary({ url: 'https://dash.cloudflare.com' }, browser('browser_open'))?.text,
+    ).toBe('https://dash.cloudflare.com');
+    expect(getMcpSummary({ action: 'back' }, browser('browser_navigate'))?.text).toBe('back');
+    expect(getMcpSummary({ width: 800, height: 600 }, browser('browser_resize'))?.text).toBe(
+      '800×600',
+    );
+  });
+
+  test('browser summaries keep every input listed in the card', () => {
+    expect(getMcpSummary({ action: 'click', ref: 'e7' }, browser('browser_act'))?.key).toBe('');
+  });
+});
 
 describe('formatInput', () => {
   test('parses JSON string into object', () => {
@@ -317,5 +420,30 @@ describe('getFileName', () => {
 
   test('returns the input if no separator', () => {
     expect(getFileName('file.ts')).toBe('file.ts');
+  });
+});
+
+describe('isPathWithin', () => {
+  test('accepts the base itself and its descendants', () => {
+    expect(isPathWithin('/repo', '/repo')).toBe(true);
+    expect(isPathWithin('/repo/src/a.ts', '/repo')).toBe(true);
+    expect(isPathWithin('/repo/src/a.ts', '/repo/')).toBe(true);
+  });
+
+  test('rejects paths outside the base', () => {
+    expect(isPathWithin('/tmp/script.sh', '/repo')).toBe(false);
+    expect(isPathWithin('/home/u/.claude/projects/x/memory/a.md', '/repo')).toBe(false);
+  });
+
+  test('rejects sibling-prefix paths', () => {
+    expect(isPathWithin('/repo-other/a.ts', '/repo')).toBe(false);
+  });
+
+  test('normalizes Windows separators', () => {
+    expect(isPathWithin('C:\\repo\\src\\a.ts', 'C:\\repo')).toBe(true);
+  });
+
+  test('rejects an empty base', () => {
+    expect(isPathWithin('/repo/a.ts', '')).toBe(false);
   });
 });

@@ -1,8 +1,10 @@
+import { CircleX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { D4CAnimation } from '@/components/D4CAnimation';
 import type { GitProgressStep } from '@/components/GitProgressModal';
 import { PromptInput } from '@/components/PromptInput';
+import { cn } from '@/lib/utils';
 
 import { UserMessageCard, type UserMessageCardProps } from './UserMessageCard';
 
@@ -31,7 +33,13 @@ export function ThreadPreparationView({
   steps?: GitProgressStep[];
 }) {
   const { t } = useTranslation();
-  const step = steps.find((item) => item.status === 'running') ?? steps.at(-1);
+  // A failed step wins: it is what the user must see (with its error), not the
+  // last step of the list.
+  const step =
+    steps.find((item) => item.status === 'failed') ??
+    steps.find((item) => item.status === 'running') ??
+    steps.at(-1);
+  const failed = step?.status === 'failed';
 
   return (
     <div
@@ -48,10 +56,26 @@ export function ThreadPreparationView({
               <UserMessageCard content={prompt} {...metadata} />
             </div>
           )}
-          <div role="status" className="text-muted-foreground py-1 text-sm">
+          <div
+            role="status"
+            className={cn(
+              'text-muted-foreground py-1 text-sm',
+              failed && 'border-destructive/40 bg-destructive/5 rounded-md border px-3 py-2',
+            )}
+            data-testid="thread-preparation-status"
+          >
             <div className="flex items-center gap-2.5">
-              <D4CAnimation />
-              <span className="text-xs">{step?.label ?? t('common.preparing', 'Preparing…')}</span>
+              {failed ? (
+                <CircleX
+                  className="text-destructive icon-sm shrink-0"
+                  data-testid="thread-preparation-failed"
+                />
+              ) : (
+                <D4CAnimation />
+              )}
+              <span className={cn('text-xs', failed && 'text-destructive font-medium')}>
+                {step?.label ?? t('common.preparing', 'Preparing…')}
+              </span>
             </div>
             {step?.error && (
               <p className="text-destructive mt-2 text-xs whitespace-pre-wrap">{step.error}</p>

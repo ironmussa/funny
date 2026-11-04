@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import type { ModelSelectGroup } from '@/components/PromptInputUI';
+import { readThreadRow } from '@/data/threads/read';
 import { threadsApi } from '@/lib/api/threads';
 import { getEffortLevels } from '@/lib/providers';
 import { canDoGitOps, isScratch, getThreadRoute } from '@/lib/thread-variant';
@@ -36,9 +37,7 @@ export function useCodexCommands(options: Options) {
       if (!command) return false;
       const { name, args } = command;
       const ui = useUIStore.getState();
-      const thread = options.threadId
-        ? useThreadStore.getState().threadsById[options.threadId]
-        : undefined;
+      const thread = readThreadRow(options.threadId);
       const requireThread = () => {
         if (!options.threadId) throw new Error('Open a conversation first.');
         return options.threadId;

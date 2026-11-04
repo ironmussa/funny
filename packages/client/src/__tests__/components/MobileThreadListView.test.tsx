@@ -3,8 +3,9 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { ThreadListView } from '@/components/mobile/ThreadListView';
+import { seedGitStatus } from '@/data/git-status/testing';
+import { withProjects } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -42,7 +43,11 @@ vi.mock('@tanstack/react-virtual', () => ({
 const { threads } = vi.hoisted(() => ({ threads: [] as Thread[] }));
 vi.mock('@/lib/thread-selectors', () => ({ useThreadsForProject: () => threads }));
 
-const ensureStatus = vi.fn();
+const ensureStatus = vi.hoisted(() => vi.fn());
+vi.mock('@/data/git-status/actions', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ensureStatusForThreads: ensureStatus,
+}));
 beforeEach(() => {
   threads.splice(0, threads.length, {
     id: 'thread-1',
@@ -56,18 +61,19 @@ beforeEach(() => {
     createdAt: new Date(Date.now() - 3600000).toISOString(),
     lastAssistantMessage: 'Resumen del trabajo realizado',
   } as Thread);
-  useAppStore.setState({
-    projects: [{ id: 'project-1', name: 'goliiive-cashless', path: '/repo' } as Project],
-    loadThreadsForProject: vi.fn(),
-  });
-  useGitStatusStore.setState({
+  useAppStore.setState(
+    withProjects({
+      projects: [{ id: 'project-1', name: 'goliiive-cashless', path: '/repo' } as Project],
+      loadThreadsForProject: vi.fn(),
+    }),
+  );
+  seedGitStatus({
     statusByBranch: {},
     threadToBranchKey: {},
-    ensureStatusForThreads: ensureStatus,
   });
 });
 
-test('shows desktop metadata on mobile and updates diff stats when git status arrives', () => {
+test('shows desktop metadata on mobile and updates the git state when git status arrives', () => {
   const onSelectThread = vi.fn();
   renderWithProviders(
     <ThreadListView
@@ -90,7 +96,7 @@ test('shows desktop metadata on mobile and updates diff stats when git status ar
   expect(ensureStatus).toHaveBeenCalledWith([threads[0]]);
 
   act(() =>
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: {
         'project-1:main': {
           threadId: 'thread-1',
@@ -108,8 +114,9 @@ test('shows desktop metadata on mobile and updates diff stats when git status ar
       threadToBranchKey: { 'thread-1': 'project-1:main' },
     }),
   );
-  expect(screen.getByText('+12')).toBeVisible();
-  expect(screen.getByText('-3')).toBeVisible();
+  // The row shows the git state as an icon with the dirty-file count; the
+  // +/- line stats live in its tooltip.
+  expect(screen.getByTestId('thread-git-state-thread-1')).toHaveTextContent('2');
   fireEvent.click(screen.getByTestId('thread-item-thread-1'));
   expect(onSelectThread).toHaveBeenCalledWith('thread-1');
   expect(row.querySelector('button button')).toBeNull();

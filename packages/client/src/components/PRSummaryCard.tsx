@@ -1,4 +1,4 @@
-import type { CICheck } from '@funny/shared';
+import type { CICheck, PRDetail } from '@funny/shared';
 import {
   CheckCircle2,
   ChevronDown,
@@ -8,17 +8,17 @@ import {
   Loader2,
   XCircle,
 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 
 import { PRCompactIdentity } from '@/components/pull-requests/PRCompactIdentity';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
+import { usePRDetail, usePRPolling } from '@/data/pull-requests/hooks';
+import { sortChecks } from '@/lib/ci-checks';
 
 export { MergeStatus, ReviewDecisionBadge } from '@/components/pull-requests/PRStatusBadges';
 
-const POLL_INTERVAL = 30_000;
 const MAX_VISIBLE_CHECKS = 6;
 
 interface PRSummaryCardProps {
@@ -57,56 +57,7 @@ export function PRSummaryCard({
   visible,
 }: PRSummaryCardProps) {
   const { detail, loadingDetail, rateLimited } = usePRDetail(projectId, prNumber);
-  const [checksOpen, setChecksOpen] = useState(false);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Fetch on mount + poll while visible
-  useEffect(() => {
-    if (!visible || !projectId || !prNumber) return;
-
-    const store = usePRDetailStore.getState();
-    store.fetchPRDetail(projectId, prNumber);
-    store.fetchPRThreads(projectId, prNumber);
-
-    pollRef.current = setInterval(() => {
-      const s = usePRDetailStore.getState();
-      if (!s.rateLimited) {
-        s.fetchPRDetail(projectId, prNumber);
-        s.fetchPRThreads(projectId, prNumber);
-      }
-    }, POLL_INTERVAL);
-
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [visible, projectId, prNumber]);
-
-  // Sort checks: failures first, then pending, then success
-  const sortedChecks = detail?.checks
-    ? detail.checks.toSorted((a, b) => {
-        const priority = (c: CICheck) => {
-          if (c.status !== 'completed') return 1;
-          if (
-            c.conclusion === 'failure' ||
-            c.conclusion === 'timed_out' ||
-            c.conclusion === 'action_required'
-          )
-            return 0;
-          if (
-            c.conclusion === 'success' ||
-            c.conclusion === 'neutral' ||
-            c.conclusion === 'skipped'
-          )
-            return 2;
-          return 1;
-        };
-        return priority(a) - priority(b);
-      })
-    : [];
-
-  const visibleChecks = checksOpen ? sortedChecks : sortedChecks.slice(0, MAX_VISIBLE_CHECKS);
-  const hasMoreChecks = sortedChecks.length > MAX_VISIBLE_CHECKS;
-  const totalChecks = sortedChecks.length;
+  usePRPolling(projectId, prNumber, visible, { threads: true });
 
   const detailPrState = detail?.merged ? 'MERGED' : detail?.state === 'closed' ? 'CLOSED' : prState;
   const compactPr = detail ?? {
@@ -152,71 +103,87 @@ export function PRSummaryCard({
         }
       />
 
-      {/* Line 3: CI checks */}
-      {detail && totalChecks > 0 && (
-        <Collapsible open={checksOpen} onOpenChange={setChecksOpen} className="mt-1.5">
-          <div className="flex items-center gap-3">
-            <CollapsibleTrigger
-              className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[11px]"
-              data-testid="pr-summary-checks-toggle"
-            >
-              {checksOpen ? (
-                <ChevronDown className="size-3.5" />
-              ) : (
-                <ChevronRight className="size-3.5" />
-              )}
-              <span>
-                CI Checks ({detail.checks_passed}/{totalChecks} passed)
-                {detail.checks_failed > 0 && (
-                  <span className="ml-1 text-red-400">{detail.checks_failed} failed</span>
-                )}
-                {detail.checks_pending > 0 && (
-                  <span className="ml-1 text-yellow-400">{detail.checks_pending} pending</span>
-                )}
-              </span>
-            </CollapsibleTrigger>
-          </div>
-          <CollapsibleContent>
-            <div className="mt-1 space-y-0.5 pl-4" data-testid="pr-summary-checks-list">
-              {visibleChecks.map((check) => (
-                <div key={check.id} className="flex items-center gap-1.5 text-[11px]">
-                  <CheckIcon check={check} />
-                  {check.html_url ? (
-                    <a
-                      href={check.html_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-foreground min-w-0 truncate hover:underline"
-                      data-testid={`pr-check-link-${check.id}`}
-                    >
-                      {check.name}
-                    </a>
-                  ) : (
-                    <span className="truncate">{check.name}</span>
-                  )}
-                  {check.app_name && (
-                    <span className="text-muted-foreground shrink-0">({check.app_name})</span>
-                  )}
-                </div>
-              ))}
-              {hasMoreChecks && !checksOpen && (
-                <button
-                  className="text-primary text-[11px] hover:underline"
-                  onClick={() => setChecksOpen(true)}
-                  data-testid="pr-summary-show-more-checks"
-                >
-                  +{sortedChecks.length - MAX_VISIBLE_CHECKS} more
-                </button>
-              )}
-            </div>
-          </CollapsibleContent>
-        </Collapsible>
-      )}
+      {detail && <PRChecksSection detail={detail} />}
 
       {/* Loading skeleton when no detail yet */}
       {!detail && loadingDetail && (
         <LoadingState fill={false} layout="inline" className="mt-1" label="Loading PR details…" />
       )}
+    </div>
+  );
+}
+
+/** Line 3 of the card: the PR's CI checks, collapsed to the first few. */
+function PRChecksSection({ detail }: { detail: PRDetail }) {
+  const [checksOpen, setChecksOpen] = useState(false);
+  const sortedChecks = sortChecks(detail.checks);
+  const totalChecks = sortedChecks.length;
+  if (totalChecks === 0) return null;
+
+  const visibleChecks = checksOpen ? sortedChecks : sortedChecks.slice(0, MAX_VISIBLE_CHECKS);
+  const hasMoreChecks = totalChecks > MAX_VISIBLE_CHECKS;
+
+  return (
+    <Collapsible open={checksOpen} onOpenChange={setChecksOpen} className="mt-1.5">
+      <div className="flex items-center gap-3">
+        <CollapsibleTrigger
+          className="text-muted-foreground hover:text-foreground flex items-center gap-1 text-[11px]"
+          data-testid="pr-summary-checks-toggle"
+        >
+          {checksOpen ? (
+            <ChevronDown className="size-3.5" />
+          ) : (
+            <ChevronRight className="size-3.5" />
+          )}
+          <span>
+            CI Checks ({detail.checks_passed}/{totalChecks} passed)
+            {detail.checks_failed > 0 && (
+              <span className="ml-1 text-red-400">{detail.checks_failed} failed</span>
+            )}
+            {detail.checks_pending > 0 && (
+              <span className="ml-1 text-yellow-400">{detail.checks_pending} pending</span>
+            )}
+          </span>
+        </CollapsibleTrigger>
+      </div>
+      <CollapsibleContent>
+        <div className="mt-1 space-y-0.5 pl-4" data-testid="pr-summary-checks-list">
+          {visibleChecks.map((check) => (
+            <PRCheckRow key={check.id} check={check} />
+          ))}
+          {hasMoreChecks && !checksOpen && (
+            <button
+              className="text-primary text-[11px] hover:underline"
+              onClick={() => setChecksOpen(true)}
+              data-testid="pr-summary-show-more-checks"
+            >
+              +{totalChecks - MAX_VISIBLE_CHECKS} more
+            </button>
+          )}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
+  );
+}
+
+function PRCheckRow({ check }: { check: CICheck }) {
+  return (
+    <div className="flex items-center gap-1.5 text-[11px]">
+      <CheckIcon check={check} />
+      {check.html_url ? (
+        <a
+          href={check.html_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-foreground min-w-0 truncate hover:underline"
+          data-testid={`pr-check-link-${check.id}`}
+        >
+          {check.name}
+        </a>
+      ) : (
+        <span className="truncate">{check.name}</span>
+      )}
+      {check.app_name && <span className="text-muted-foreground shrink-0">({check.app_name})</span>}
     </div>
   );
 }

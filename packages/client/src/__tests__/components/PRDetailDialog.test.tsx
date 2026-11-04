@@ -4,7 +4,8 @@ import { okAsync } from 'neverthrow';
 import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PRDetailDialog } from '@/components/PRDetailDialog';
-import { usePRDetailStore } from '@/stores/pr-detail-store';
+import { createDataLayer } from '@/data/data-layer';
+import { replaceDataLayer } from '@/data/runtime';
 
 import { mockT } from '../helpers/mock-i18n';
 import { MARKDOWN_PRELOAD_TIMEOUT_MS, preloadMarkdownPipeline } from '../helpers/preload-markdown';
@@ -95,7 +96,7 @@ describe('PRDetailDialog', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    usePRDetailStore.getState().clearAll();
+    replaceDataLayer(createDataLayer({ userId: null }));
     apiMock.githubPRFiles.mockReturnValue(okAsync({ files: [] }));
     apiMock.githubPRCommits.mockReturnValue(okAsync({ commits: [] }));
     apiMock.githubPRThreads.mockReturnValue(okAsync({ threads: [] }));

@@ -43,8 +43,6 @@ export function ThreadStatusPin({
   const { t } = useTranslation();
   const runnerStatus = useRunnerStatusStore((s) => s.status);
   const displayStatus = getDisplayThreadStatus(thread.status, runnerStatus);
-  const cfg = statusConfig[displayStatus] ?? statusConfig.pending;
-  const StatusIcon = cfg.icon;
   // Stop showing the "busy" affordances (no pin/unread dot) once the runner
   // drops — the thread is effectively paused, and the user should be able to
   // pin or notice unread messages in the meantime.
@@ -58,19 +56,12 @@ export function ThreadStatusPin({
   );
   const showUnreadDot = isUnread && !isBusy && !showPinRest;
 
-  const statusIcon = showStatusTooltip ? (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <StatusIcon className={cn('icon-sm', cfg.className)} />
-      </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs">
-        {displayStatus === 'runner_offline'
-          ? t('thread.status.runnerOffline', { defaultValue: 'Runner offline' })
-          : t(`thread.status.${displayStatus}`)}
-      </TooltipContent>
-    </Tooltip>
-  ) : (
-    <StatusIcon className={cn('icon-sm', cfg.className)} />
+  const statusIcon = (
+    <ThreadStatusIcon
+      threadId={thread.id}
+      displayStatus={displayStatus}
+      withTooltip={showStatusTooltip}
+    />
   );
 
   return (
@@ -125,5 +116,45 @@ export function ThreadStatusPin({
       </span>
       <ThreadWatcherIndicator threadId={thread.id} />
     </span>
+  );
+}
+
+/**
+ * The status icon for a thread. A stopped thread renders as a red dot (same
+ * shape as the unread dot) instead of the stop icon.
+ */
+function ThreadStatusIcon({
+  threadId,
+  displayStatus,
+  withTooltip,
+}: {
+  threadId: string;
+  displayStatus: ReturnType<typeof getDisplayThreadStatus>;
+  withTooltip: boolean;
+}) {
+  const { t } = useTranslation();
+  const cfg = statusConfig[displayStatus] ?? statusConfig.pending;
+  const StatusIcon = cfg.icon;
+  const glyph =
+    displayStatus === 'stopped' ? (
+      <span
+        className="block size-2 rounded-full bg-red-500"
+        data-testid={`thread-stopped-dot-${threadId}`}
+      />
+    ) : (
+      <StatusIcon className={cn('icon-sm', cfg.className)} />
+    );
+  if (!withTooltip) return glyph;
+  const label =
+    displayStatus === 'runner_offline'
+      ? t('thread.status.runnerOffline', { defaultValue: 'Runner offline' })
+      : t(`thread.status.${displayStatus}`);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>{glyph}</TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {label}
+      </TooltipContent>
+    </Tooltip>
   );
 }

@@ -8,6 +8,7 @@ import type {
   DeleteThreadConfirmState,
   RenameProjectState,
 } from '@/components/sidebar/SidebarDialogs';
+import { readThreadRow } from '@/data/threads/read';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { isScratch } from '@/lib/thread-variant';
@@ -69,7 +70,7 @@ export function useSidebarActions() {
         branchName,
         isScratch: confirmScratch,
       } = deleteThreadConfirm;
-      const thread = useThreadStore.getState().threadsById[threadId];
+      const thread = readThreadRow(threadId);
       const scratch = confirmScratch ?? isScratch(thread);
       const wasSelected = useThreadStore.getState().selectedThreadId === threadId;
 
@@ -137,8 +138,7 @@ export function useSidebarActions() {
 
   const handleSelectThread = useCallback(
     async (projectId: string, threadId: string) => {
-      const store = useThreadStore.getState();
-      const thread = store.threadsById[threadId];
+      const thread = readThreadRow(threadId);
       // Reading a conversation must not depend on its directory or branch existing.
       goToThread(navigate, thread ?? { id: threadId, projectId, isScratch: false });
     },
@@ -146,7 +146,7 @@ export function useSidebarActions() {
   );
 
   const handleArchiveThread = useCallback((projectId: string, threadId: string, title: string) => {
-    const th = useThreadStore.getState().threadsById[threadId];
+    const th = readThreadRow(threadId);
     setArchiveConfirm({
       threadId,
       projectId,
@@ -170,7 +170,7 @@ export function useSidebarActions() {
   );
 
   const handleDeleteThread = useCallback((projectId: string, threadId: string, title: string) => {
-    const th = useThreadStore.getState().threadsById[threadId];
+    const th = readThreadRow(threadId);
     const isWorktree = th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external';
     setDeleteThreadConfirm({
       threadId,
@@ -192,7 +192,7 @@ export function useSidebarActions() {
 
   const handleDeleteThreadFromList = useCallback(
     (threadId: string, projectId: string, title: string, isWorktree: boolean) => {
-      const th = useThreadStore.getState().threadsById[threadId];
+      const th = readThreadRow(threadId);
       setDeleteThreadConfirm({
         threadId,
         projectId,

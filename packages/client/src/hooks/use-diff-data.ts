@@ -8,11 +8,11 @@ import {
   type SetStateAction,
 } from 'react';
 
+import { fetchForThread, fetchProjectStatus } from '@/data/git-status/actions';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { gitApi } from '@/lib/api/git';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { metric } from '@/lib/telemetry';
-import { useGitStatusStore } from '@/stores/git-status-store';
 
 interface UseDiffDataArgs {
   hasGitContext: boolean;
@@ -162,8 +162,8 @@ export function useDiffData({
     setLoadErrorMessage(null);
 
     // Fire git status refresh in parallel (don't await — it updates its own store).
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId);
+    if (effectiveThreadId) fetchForThread(effectiveThreadId);
+    else if (projectModeId) fetchProjectStatus(projectModeId);
 
     try {
       const result = effectiveThreadId

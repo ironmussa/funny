@@ -4,10 +4,6 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Textarea } from '@/components/ui/textarea';
 import { browserSessionClient } from '@/lib/browser-session-client';
-import {
-  BROWSER_SESSION_VIEWPORT_HEIGHT as VIEWPORT_H,
-  BROWSER_SESSION_VIEWPORT_WIDTH as VIEWPORT_W,
-} from '@/lib/browser-session-viewport';
 import { createClientLogger } from '@/lib/client-logger';
 import { useBrowserPanelStore, type AnnotationDomInfo } from '@/stores/browser-panel-store';
 import {
@@ -29,6 +25,7 @@ interface PinToolProps {
  * the user switches tools). Click-to-add behavior is gated by `isActive`.
  */
 export function PinTool({ overlayRef, canvasRef, isActive }: PinToolProps) {
+  const { width: VIEWPORT_W, height: VIEWPORT_H } = useBrowserPanelStore((s) => s.viewport);
   const annotations = useBrowserPanelStore((s) => s.annotations);
   const addAnnotation = useBrowserPanelStore((s) => s.addAnnotation);
   const updateAnnotationNote = useBrowserPanelStore((s) => s.updateAnnotationNote);

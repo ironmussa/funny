@@ -19,13 +19,14 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { contrastText, pastelize } from '@/components/ui/project-chip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { applyPRMetadata } from '@/data/git-status/actions';
+import { usePRDetail } from '@/data/pull-requests/hooks';
+import { fetchPRDetail } from '@/data/pull-requests/queries';
 import { useGitHubProjectId } from '@/hooks/use-github-project-id';
 import { usePagedGitHubList, type FetchGitHubListPage } from '@/hooks/use-paged-github-list';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn, resolveThreadBranch } from '@/lib/utils';
-import { useGitStatusStore } from '@/stores/git-status-store';
-import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
 import {
   useThreadId,
@@ -66,7 +67,7 @@ function PullRequestRow({
 
   useEffect(() => {
     if (!visible) return;
-    void usePRDetailStore.getState().fetchPRDetail(projectId, pr.number);
+    void fetchPRDetail(projectId, pr.number);
   }, [projectId, pr.number, visible]);
 
   const compactPr = detail
@@ -427,7 +428,7 @@ function useSyncCurrentBranchPR(threadId: string | null | undefined, pr: GitHubP
   const prState = pr ? prBadgeState(pr) : undefined;
   useEffect(() => {
     if (!threadId || !prNumber || !prUrl || !prState) return;
-    useGitStatusStore.getState().applyPRMetadata(threadId, { prNumber, prUrl, prState });
+    applyPRMetadata(threadId, { prNumber, prUrl, prState });
   }, [threadId, prNumber, prUrl, prState]);
 }
 

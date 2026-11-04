@@ -1,6 +1,8 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  copyThreadUploads: vi.fn(),
+  hydrateReferencedFiles: vi.fn(async (prompt: string, _base: string) => prompt),
   tm: {
     getThread: vi.fn(),
     updateThread: vi.fn(async () => undefined),
@@ -83,11 +85,19 @@ vi.mock('../../services/podman-service.js', () => ({
   stopContainer: mocks.stopContainer,
 }));
 
+vi.mock('../../services/thread-service/staged-uploads.js', () => ({
+  copyThreadUploads: mocks.copyThreadUploads,
+}));
+
+vi.mock('../../utils/file-mentions.js', () => ({
+  hydrateReferencedFiles: mocks.hydrateReferencedFiles,
+}));
+
 vi.mock('../../services/project-search-registry.js', () => ({
   projectSearchRegistry: { invalidate: mocks.invalidateSearch },
 }));
 
-import { ok, err } from 'neverthrow';
+import { ok, err, okAsync } from 'neverthrow';
 
 import {
   updateThread,
@@ -301,6 +311,7 @@ describe('updateThread — auto-start idle thread', () => {
     mocks.findWorktreeForBranch.mockResolvedValue(ok(null));
     mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
     mocks.git.mockResolvedValue(ok(undefined));
+    mocks.copyThreadUploads.mockReturnValue(okAsync(undefined));
     mocks.tm.getThreadMessages.mockResolvedValue({
       messages: [{ id: 'draft-1', content: 'hello', images: null }],
       hasMore: false,
@@ -335,6 +346,44 @@ describe('updateThread — auto-start idle thread', () => {
       undefined,
       true,
     );
+  });
+
+  test('inlines the backlog manifest against the project checkout before starting (local)', async () => {
+    mocks.hydrateReferencedFiles.mockResolvedValueOnce('HYDRATED');
+    mocks.tm.getThread.mockImplementation(async () => ({
+      ...baseThread,
+      status: 'idle',
+      initialPrompt: '<referenced-files>\n<file path="src/a.ts" />\n</referenced-files>\n\nGo',
+      stage: 'backlog',
+    }));
+
+    await updateThread({ threadId: 't-1', userId: 'u-1', stage: 'in_progress' });
+
+    expect(mocks.hydrateReferencedFiles).toHaveBeenCalledWith(
+      expect.stringContaining('<file path="src/a.ts" />'),
+      '/repo',
+    );
+    expect((mocks.startAgent.mock.calls[0] as unknown[])[1]).toBe('HYDRATED');
+    // Same checkout: nothing to copy.
+    expect(mocks.copyThreadUploads).not.toHaveBeenCalled();
+  });
+
+  test('copies uploads into the new worktree and hydrates against the project', async () => {
+    mocks.tm.getThread.mockImplementation(async () => ({
+      ...baseThread,
+      status: 'idle',
+      initialPrompt: 'Build',
+      mode: 'worktree',
+      branch: 'my-app/feature',
+      baseBranch: 'main',
+      worktreePath: null,
+    }));
+
+    await updateThread({ threadId: 't-1', userId: 'u-1', stage: 'in_progress' });
+
+    await vi.waitFor(() => expect(mocks.startAgent).toHaveBeenCalled());
+    expect(mocks.copyThreadUploads).toHaveBeenCalledWith('/repo', '/repo/.worktrees/t-1', 't-1');
+    expect(mocks.hydrateReferencedFiles).toHaveBeenCalledWith('Build', '/repo');
   });
 
   test('marks thread failed when project path cannot be resolved', async () => {

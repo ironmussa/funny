@@ -36,6 +36,7 @@ import {
   AgentExecutionProfilesSettings,
   ProjectAgentExecutionProfileSettings,
 } from '@/components/settings/AgentExecutionProfilesSettings';
+import { withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 const workProfile: AgentExecutionProfileResponse = {
@@ -59,10 +60,12 @@ function resetMocks() {
 describe('AgentExecutionProfilesSettings', () => {
   beforeEach(() => {
     resetMocks();
-    useProjectStore.setState({
-      projects: [{ id: 'project-1', name: 'Project One' } as Project],
-      selectedProjectId: 'project-1',
-    });
+    useProjectStore.setState(
+      withProjects({
+        projects: [{ id: 'project-1', name: 'Project One' } as Project],
+        selectedProjectId: 'project-1',
+      }),
+    );
   });
 
   test('loads profiles and the selected project binding', async () => {
@@ -81,7 +84,7 @@ describe('AgentExecutionProfilesSettings', () => {
   });
 
   test('creates a Claude profile', async () => {
-    useProjectStore.setState({ projects: [], selectedProjectId: null });
+    useProjectStore.setState(withProjects({ projects: [], selectedProjectId: null }));
     mockListAgentExecutionProfiles.mockReturnValue(okAsync({ profiles: [] }));
     mockCreateAgentExecutionProfile.mockReturnValue(okAsync(workProfile));
 
@@ -114,7 +117,7 @@ describe('AgentExecutionProfilesSettings', () => {
   });
 
   test('quotes Claude auth command directories with spaces', async () => {
-    useProjectStore.setState({ projects: [], selectedProjectId: null });
+    useProjectStore.setState(withProjects({ projects: [], selectedProjectId: null }));
     mockListAgentExecutionProfiles.mockReturnValue(okAsync({ profiles: [] }));
 
     render(<AgentExecutionProfilesSettings />);

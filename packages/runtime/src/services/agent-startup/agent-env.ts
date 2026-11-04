@@ -22,6 +22,25 @@ async function loadProviderKeyEnv(userId: string, provider: AgentProvider): Prom
   return env;
 }
 
+/**
+ * Sandbox runners (thread-sandboxes) hold no model credential: Claude agents
+ * call Anthropic through the server's LLM proxy with the sandbox's proxy token,
+ * and the server adds the owner's real credential. Explicit per provider —
+ * the token is scrubbed from every other child environment.
+ */
+export function llmProxyEnv(
+  provider: AgentProvider,
+  env: Record<string, string | undefined> = process.env,
+): EnvVars {
+  const token = env.FUNNY_LLM_PROXY_TOKEN;
+  const server = env.TEAM_SERVER_URL;
+  if (!token || !server || provider !== 'claude') return {};
+  return {
+    ANTHROPIC_BASE_URL: `${server.replace(/\/+$/, '')}/api/llm-proxy/anthropic`,
+    ANTHROPIC_AUTH_TOKEN: token,
+  };
+}
+
 async function loadGitIdentityEnv(userId: string): Promise<EnvVars> {
   const gitIdentity = await getServices().profile.getGitIdentity(userId);
   if (!gitIdentity) return {};
@@ -62,6 +81,12 @@ function prepareAssetsDirEnv(threadId: string, userId: string, assetsDir?: strin
  * subprocesses. Returns undefined when nothing applies (no user, or no
  * configured values) so the orchestrator keeps the inherited environment.
  */
+/** `$BROWSER` → open URLs in the thread's browser session (see open-url-bridge). */
+async function loadBrowserOpenEnv(userId: string, threadId: string): Promise<EnvVars> {
+  const { browserOpenEnv } = await import('../browser-automation/open-url-bridge.js');
+  return browserOpenEnv(userId, threadId);
+}
+
 export async function buildAgentEnv(input: {
   threadId: string;
   userId?: string;
@@ -73,8 +98,10 @@ export async function buildAgentEnv(input: {
 
   const env: EnvVars = {
     ...(await loadProviderKeyEnv(userId, provider)),
+    ...llmProxyEnv(provider),
     ...(await loadGitIdentityEnv(userId)),
     ...prepareAssetsDirEnv(threadId, userId, assetsDir),
+    ...(await loadBrowserOpenEnv(userId, threadId)),
   };
   return Object.keys(env).length > 0 ? env : undefined;
 }

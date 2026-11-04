@@ -2,15 +2,36 @@ import type { Project, Thread, GitStatusInfo } from '@funny/shared';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router-dom';
 
-import '@/i18n/config';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import '@/i18n/config';
+import { seedGitStatus } from '@/data/git-status/testing';
+import { withProjects } from '@/data/projects/testing';
+import { seedProjectThreads, seedThreadIndex, withThreadIndex } from '@/data/threads/testing';
 import { useAuthStore } from '@/stores/auth-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { AppSidebar } from './Sidebar';
+
+/** Signed-in admin, closed settings and the given thread selection (rows seeded separately). */
+function seedSessionAndSelection(selectedThreadId: string | null) {
+  useThreadStore.setState({
+    selectedThreadId,
+    activeThread: null,
+    setupProgressByThread: {},
+    contextUsageByThread: {},
+  });
+  useAuthStore.setState({
+    user: { id: 'user-1', username: 'admin', displayName: 'Admin User', role: 'admin' },
+    isAuthenticated: true,
+    isLoading: false,
+    activeOrgId: null,
+    activeOrgName: null,
+    activeOrgSlug: null,
+  });
+  useUIStore.setState({ settingsOpen: false });
+}
 
 // ── Mock factories ───────────────────────────────────────────────
 
@@ -143,42 +164,21 @@ function seedDefault() {
     'proj-3': [],
   };
 
-  useProjectStore.setState({
-    projects,
-    expandedProjects: new Set(['proj-1', 'proj-2']),
-    selectedProjectId: 'proj-1',
-    initialized: true,
-    branchByProject: { 'proj-1': 'master', 'proj-2': 'main' },
-  });
+  useProjectStore.setState(
+    withProjects({
+      projects,
+      expandedProjects: new Set(['proj-1', 'proj-2']),
+      selectedProjectId: 'proj-1',
+      initialized: true,
+      branchByProject: { 'proj-1': 'master', 'proj-2': 'main' },
+    }),
+  );
 
-  const threadsById: Record<string, Thread> = {};
-  const threadIdsByProject: Record<string, string[]> = {};
-  for (const pid in threadsByProject) {
-    threadIdsByProject[pid] = threadsByProject[pid].map((t) => t.id);
-    for (const t of threadsByProject[pid]) threadsById[t.id] = t;
-  }
-  useThreadStore.setState({
-    threadsById,
-    threadIdsByProject,
-    selectedThreadId: 't2',
-    activeThread: null,
-    setupProgressByThread: {},
-    contextUsageByThread: {},
-  });
-
-  useAuthStore.setState({
-    user: { id: 'user-1', username: 'admin', displayName: 'Admin User', role: 'admin' },
-    isAuthenticated: true,
-    isLoading: false,
-    activeOrgId: null,
-    activeOrgName: null,
-    activeOrgSlug: null,
-  });
-
-  useUIStore.setState({ settingsOpen: false });
+  seedProjectThreads(threadsByProject);
+  seedSessionAndSelection('t2');
 
   // Seed git status
-  useGitStatusStore.setState({
+  seedGitStatus({
     statusByBranch: {
       'proj-1:feat/inline-diff': makeGitStatus({
         threadId: 't2',
@@ -217,44 +217,25 @@ function seedDefault() {
       t5: 'proj-2:feat/node22',
     },
     statusByProject: {},
-    loadingProjects: new Set(),
-    _loadingBranchKeys: new Set(),
-    _loadingProjectStatus: new Set(),
   });
 }
 
 function seedEmpty() {
-  useProjectStore.setState({
-    projects: [],
-    expandedProjects: new Set(),
-    selectedProjectId: null,
-    initialized: true,
-    branchByProject: {},
-  });
-  useThreadStore.setState({
-    threadsById: {},
-    threadIdsByProject: {},
-    selectedThreadId: null,
-    activeThread: null,
-    setupProgressByThread: {},
-    contextUsageByThread: {},
-  });
-  useAuthStore.setState({
-    user: { id: 'user-1', username: 'admin', displayName: 'Admin User', role: 'admin' },
-    isAuthenticated: true,
-    isLoading: false,
-    activeOrgId: null,
-    activeOrgName: null,
-    activeOrgSlug: null,
-  });
-  useUIStore.setState({ settingsOpen: false });
-  useGitStatusStore.setState({
+  useProjectStore.setState(
+    withProjects({
+      projects: [],
+      expandedProjects: new Set<string>(),
+      selectedProjectId: null,
+      initialized: true,
+      branchByProject: {},
+    }),
+  );
+  seedThreadIndex({ threadsById: {}, threadIdsByProject: {} });
+  seedSessionAndSelection(null);
+  seedGitStatus({
     statusByBranch: {},
     threadToBranchKey: {},
     statusByProject: {},
-    loadingProjects: new Set(),
-    _loadingBranchKeys: new Set(),
-    _loadingProjectStatus: new Set(),
   });
 }
 
@@ -312,13 +293,15 @@ export const Empty: Story = {
 export const SingleProjectNoActive: Story = {
   name: 'Single Project (No Active)',
   render: () => {
-    useProjectStore.setState({
-      projects: [makeProject({ id: 'proj-1', name: 'funny', color: '#3b82f6' })],
-      expandedProjects: new Set(['proj-1']),
-      selectedProjectId: 'proj-1',
-      initialized: true,
-      branchByProject: { 'proj-1': 'master' },
-    });
+    useProjectStore.setState(
+      withProjects({
+        projects: [makeProject({ id: 'proj-1', name: 'funny', color: '#3b82f6' })],
+        expandedProjects: new Set(['proj-1']),
+        selectedProjectId: 'proj-1',
+        initialized: true,
+        branchByProject: { 'proj-1': 'master' },
+      }),
+    );
     const projThreads = [
       makeThread({ id: 't1', title: 'add the inline diff component' }),
       makeThread({
@@ -335,14 +318,16 @@ export const SingleProjectNoActive: Story = {
         completedAt: new Date(Date.now() - 178 * 60_000).toISOString(),
       }),
     ];
-    useThreadStore.setState({
-      threadsById: Object.fromEntries(projThreads.map((t) => [t.id, t])),
-      threadIdsByProject: { 'proj-1': projThreads.map((t) => t.id) },
-      selectedThreadId: 't1',
-      activeThread: null,
-      setupProgressByThread: {},
-      contextUsageByThread: {},
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: Object.fromEntries(projThreads.map((t) => [t.id, t])),
+        threadIdsByProject: { 'proj-1': projThreads.map((t) => t.id) },
+        selectedThreadId: 't1',
+        activeThread: null,
+        setupProgressByThread: {},
+        contextUsageByThread: {},
+      }),
+    );
     useAuthStore.setState({
       user: { id: 'user-1', username: 'jane', displayName: 'Jane Smith', role: 'user' },
       isAuthenticated: true,
@@ -352,7 +337,7 @@ export const SingleProjectNoActive: Story = {
       activeOrgSlug: null,
     });
     useUIStore.setState({ settingsOpen: false });
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: {
         'proj-1:feat/inline-diff': makeGitStatus({
           threadId: 't1',
@@ -361,9 +346,6 @@ export const SingleProjectNoActive: Story = {
       },
       threadToBranchKey: { t1: 'proj-1:feat/inline-diff' },
       statusByProject: {},
-      loadingProjects: new Set(),
-      _loadingBranchKeys: new Set(),
-      _loadingProjectStatus: new Set(),
     });
     return (
       <SidebarWrapper>

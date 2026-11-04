@@ -21,6 +21,10 @@ message TerminalOpen {
 message TerminalResume {
   string terminal_id = 1;
   uint64 last_seen_output_sequence = 2;
+  // Set by the server when it detects lost output (sequence gap or stream
+  // replacement): replay buffered output only, without re-sending a screen
+  // snapshot that would duplicate content already shown in the browser.
+  bool replay_only = 3;
 }
 
 message TerminalInput {

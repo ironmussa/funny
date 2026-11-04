@@ -19,6 +19,10 @@ import { OperationRequestSchema } from '@funny/shared/browser-v1/operations';
 import { useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
+import { fetchForProject } from '@/data/git-status/actions';
+import { readProjects } from '@/data/projects/read';
+import { resyncDataLayer } from '@/data/resync';
+import { listedProjectIds, readThreadIndex, type ThreadIndexSnapshot } from '@/data/threads/read';
 import { parseRoute } from '@/hooks/route-parser';
 import { createClientLogger } from '@/lib/client-logger';
 import { setBrowserSessionTransport } from '@/lib/realtime/browser-session-realtime';
@@ -27,11 +31,11 @@ import { metric } from '@/lib/telemetry';
 import { clientComposition } from '@/platform/client-composition';
 import { useAuthStore } from '@/stores/auth-store';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import type { ThreadState } from '@/stores/thread-state';
 import { useThreadStore } from '@/stores/thread-store';
+import { readActiveThreadView } from '@/stores/thread-view';
 
 import {
   clearWSDispatchState,
@@ -283,9 +287,9 @@ function connect() {
     // Re-sync git status — do NOT reset cooldowns; the increased cooldown (5s)
     // naturally throttles the thundering herd. WS git:status events will
     // invalidate specific keys when the server pushes fresh data.
-    const loadedProjectIds = Object.keys(useThreadStore.getState().threadIdsByProject);
+    const loadedProjectIds = listedProjectIds();
     for (const pid of loadedProjectIds) {
-      useGitStatusStore.getState().fetchForProject(pid);
+      fetchForProject(pid);
     }
 
     useTerminalStore.getState().resetSessionsChecked();
@@ -325,7 +329,7 @@ function connect() {
             : [];
         if (sessions.length > 0) {
           const { useProjectStore } = await import('@/stores/project-store');
-          const projects = useProjectStore.getState().projects;
+          const projects = readProjects();
           useTerminalStore.getState().restoreTabs(
             sessions as any,
             projects.map((p: any) => ({ id: p.id, path: p.path })),
@@ -424,16 +428,16 @@ type SidebarResyncTargets = {
 };
 
 export function getLoadedSidebarResyncTargets(
-  state: Pick<
-    ThreadState,
+  index: Pick<
+    ThreadIndexSnapshot,
     'threadIdsByProject' | 'threadsById' | 'scratchThreadIds' | 'sharedThreadIds'
-  >,
+  > = readThreadIndex(),
 ): SidebarResyncTargets {
-  return getSidebarResyncTargets(state);
+  return getSidebarResyncTargets(index);
 }
 
 function refreshLoadedSidebarRowsForActiveThreads(store: ThreadState) {
-  const targets = getLoadedSidebarResyncTargets(store);
+  const targets = getLoadedSidebarResyncTargets();
   for (const projectId of targets.projectIds) {
     void store.loadThreadsForProject(projectId);
   }
@@ -464,7 +468,8 @@ const realtimeController = createRealtimeController({
   clock: Date.now,
   actions: {
     refreshForFocus: refreshThreadsOnFocus,
-    refreshForReconnect: () => useThreadStore.getState().refreshAllLoadedThreads(),
+    refreshForReconnect: () =>
+      Promise.all([useThreadStore.getState().refreshAllLoadedThreads(), resyncDataLayer()]),
     skipped(reason, cause) {
       if (cause === 'route') {
         wsLog.debug('Skipping focus resync — route does not display thread data', { reason });
@@ -486,7 +491,7 @@ export function useWS() {
     // announce which thread we're viewing for thread-sharing presence/stream.
     let lastContainerUrl: string | undefined;
     const unsub = useThreadStore.subscribe((state) => {
-      const thread = state.activeThread;
+      const thread = readActiveThreadView(state);
 
       // Presence: tell the server which thread is open so it joins us to the
       // presence room (and, for sharees, the stream room) and broadcasts our

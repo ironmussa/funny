@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { MessageStreamHandle } from '@/components/thread/MessageStream';
+import { readProject } from '@/data/projects/read';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildSendMessagePayload, type SendMessageOpts } from '@/lib/send-message-payload';
@@ -89,9 +90,7 @@ export function useThreadHandlers(refs: Refs) {
       }
       const queuedCount = thread.queuedCount ?? 0;
       const threadIsRunning = thread.status === 'running' || queuedCount > 0;
-      const currentProject = useProjectStore
-        .getState()
-        .projects.find((p) => p.id === thread.projectId);
+      const currentProject = readProject(thread.projectId);
       const followUpMode = currentProject?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
 
       const toolPermissions = useSettingsStore.getState().toolPermissions;

@@ -3,6 +3,7 @@ import { okAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { PromptInput } from '@/components/PromptInput';
+import { withProjects } from '@/data/projects/testing';
 import { api } from '@/lib/api';
 import { systemApi } from '@/lib/api/system';
 import { useAppStore } from '@/stores/app-store';
@@ -161,21 +162,23 @@ beforeEach(() => {
     }),
   );
   mockEditorContent = '';
-  useAppStore.setState({
-    projects: [
-      {
-        id: 'p1',
-        name: 'Test',
-        path: '/tmp/test',
-        userId: 'user-1',
-        createdAt: '',
-        sortOrder: 0,
-      },
-    ],
-    selectedProjectId: 'p1',
-    selectedThreadId: null,
-    activeThread: null,
-  });
+  useAppStore.setState(
+    withProjects({
+      projects: [
+        {
+          id: 'p1',
+          name: 'Test',
+          path: '/tmp/test',
+          userId: 'user-1',
+          createdAt: '',
+          sortOrder: 0,
+        },
+      ],
+      selectedProjectId: 'p1',
+      selectedThreadId: null,
+      activeThread: null,
+    }),
+  );
   useThreadStore.setState({
     threadDataById: {},
     queuedCountByThread: {},
@@ -258,21 +261,23 @@ describe('PromptInput', () => {
   });
 
   test('uses the project default thinking level for a new thread', async () => {
-    useAppStore.setState({
-      projects: [
-        {
-          id: 'p1',
-          name: 'Test',
-          path: '/tmp/test',
-          userId: 'user-1',
-          createdAt: '',
-          sortOrder: 0,
-          defaultProvider: 'codex',
-          defaultModel: 'gpt-5.4',
-          defaultEffort: 'medium',
-        },
-      ],
-    });
+    useAppStore.setState(
+      withProjects({
+        projects: [
+          {
+            id: 'p1',
+            name: 'Test',
+            path: '/tmp/test',
+            userId: 'user-1',
+            createdAt: '',
+            sortOrder: 0,
+            defaultProvider: 'codex',
+            defaultModel: 'gpt-5.4',
+            defaultEffort: 'medium',
+          },
+        ],
+      }),
+    );
     const onSubmit = vi.fn();
     renderWithProviders(<PromptInput onSubmit={onSubmit} isNewThread projectId="p1" />);
 
@@ -378,23 +383,25 @@ describe('PromptInput', () => {
   });
 
   test('notifies the selected default provider on mount for new threads', async () => {
-    useAppStore.setState({
-      projects: [
-        {
-          id: 'p1',
-          name: 'Test',
-          path: '/tmp/test',
-          userId: 'user-1',
-          createdAt: '',
-          sortOrder: 0,
-          defaultProvider: 'codex',
-          defaultModel: 'gpt-5.5',
-        },
-      ],
-      selectedProjectId: 'p1',
-      selectedThreadId: null,
-      activeThread: null,
-    } as any);
+    useAppStore.setState(
+      withProjects({
+        projects: [
+          {
+            id: 'p1',
+            name: 'Test',
+            path: '/tmp/test',
+            userId: 'user-1',
+            createdAt: '',
+            sortOrder: 0,
+            defaultProvider: 'codex',
+            defaultModel: 'gpt-5.5',
+          },
+        ],
+        selectedProjectId: 'p1',
+        selectedThreadId: null,
+        activeThread: null,
+      } as any),
+    );
     const onProviderChange = vi.fn();
 
     renderWithProviders(
@@ -411,29 +418,31 @@ describe('PromptInput', () => {
   });
 
   test('loads new-thread skills from the chosen project instead of the previous thread', async () => {
-    useAppStore.setState({
-      projects: [
-        {
-          id: 'p-old',
-          name: 'Previous project',
-          path: '/tmp/previous-project',
-          userId: 'user-1',
-          createdAt: '',
-          sortOrder: 0,
-        },
-        {
-          id: 'p-new',
-          name: 'Google Live B2',
-          path: '/tmp/google-live-b2',
-          userId: 'user-1',
-          createdAt: '',
-          sortOrder: 1,
-          defaultProvider: 'codex',
-          defaultModel: 'gpt-5.5',
-        },
-      ],
-      selectedProjectId: 'p-new',
-    });
+    useAppStore.setState(
+      withProjects({
+        projects: [
+          {
+            id: 'p-old',
+            name: 'Previous project',
+            path: '/tmp/previous-project',
+            userId: 'user-1',
+            createdAt: '',
+            sortOrder: 0,
+          },
+          {
+            id: 'p-new',
+            name: 'Google Live B2',
+            path: '/tmp/google-live-b2',
+            userId: 'user-1',
+            createdAt: '',
+            sortOrder: 1,
+            defaultProvider: 'codex',
+            defaultModel: 'gpt-5.5',
+          },
+        ],
+        selectedProjectId: 'p-new',
+      }),
+    );
     useThreadStore.setState({
       threadDataById: {
         'old-thread': {
@@ -791,32 +800,34 @@ describe('PromptInput', () => {
     // elsewhere. The powerline must show the THREAD's project — otherwise
     // effectiveProject resolves to the (wrong/missing) global selection and the
     // bar collapses to a gray branch-only segment with no project name.
-    useAppStore.setState({
-      projects: [
-        {
-          id: 'p1',
-          name: 'Alpha',
-          path: '/tmp/alpha',
-          color: '#ff0000',
-          userId: 'user-1',
-          createdAt: '',
-          sortOrder: 0,
-        },
-        {
-          id: 'p2',
-          name: 'Beta',
-          path: '/tmp/beta',
-          color: '#00ff00',
-          userId: 'user-1',
-          createdAt: '',
-          sortOrder: 1,
-        },
-      ],
-      // Global selection points at Beta…
-      selectedProjectId: 'p2',
-      selectedThreadId: null,
-      activeThread: null,
-    } as any);
+    useAppStore.setState(
+      withProjects({
+        projects: [
+          {
+            id: 'p1',
+            name: 'Alpha',
+            path: '/tmp/alpha',
+            color: '#ff0000',
+            userId: 'user-1',
+            createdAt: '',
+            sortOrder: 0,
+          },
+          {
+            id: 'p2',
+            name: 'Beta',
+            path: '/tmp/beta',
+            color: '#00ff00',
+            userId: 'user-1',
+            createdAt: '',
+            sortOrder: 1,
+          },
+        ],
+        // Global selection points at Beta…
+        selectedProjectId: 'p2',
+        selectedThreadId: null,
+        activeThread: null,
+      } as any),
+    );
 
     // …but the column's thread belongs to Alpha.
     useThreadStore.setState({

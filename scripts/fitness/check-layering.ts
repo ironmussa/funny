@@ -9,6 +9,7 @@
  *  - packages/client-core/** must not depend on browser, DOM, Tauri, Vite, or web renderers
  *  - packages/client-benchmark/** must remain renderer-neutral and DOM-free
  *  - packages/client-gpuix/** must not depend on web renderer APIs
+ *  - packages/client/src/data/** (except hooks.ts) must stay renderer-independent
  *
  * Exits non-zero on violation.
  */
@@ -22,7 +23,12 @@ type Rule = {
   name: string;
   pkgDir: string;
   forbidden: RegExp;
+  /** Files (path relative to `pkgDir`) the rule does not apply to. */
+  exclude?: RegExp;
 };
+
+/** The client data layer's React bindings live in `hooks.ts`; everything else is renderer-free. */
+const CLIENT_DATA_EXCLUDE = /(?:^|\/)hooks\.ts$|\.test\.tsx?$/;
 
 const RULES: Rule[] = [
   {
@@ -98,6 +104,20 @@ const RULES: Rule[] = [
     forbidden:
       /\b(?:window|document|localStorage|sessionStorage|navigator|HTMLElement|Element|Node|ResizeObserver|IntersectionObserver|MutationObserver|CustomEvent|Notification)\b/,
   },
+  {
+    name: 'client data layer must not import renderer packages',
+    pkgDir: 'packages/client/src/data',
+    exclude: CLIENT_DATA_EXCLUDE,
+    forbidden:
+      /(?:from\s+|import\s*\()['"](?:react(?:-dom)?(?:\/|['"])|@tanstack\/react-db(?:\/|['"])|zustand(?:\/react)?['"]|sonner(?:\/|['"])|@tauri-apps\/|socket\.io-client(?:\/|['"])|@\/(?:components|hooks)\/)/,
+  },
+  {
+    name: 'client data layer must not use browser or DOM globals/types',
+    pkgDir: 'packages/client/src/data',
+    exclude: CLIENT_DATA_EXCLUDE,
+    forbidden:
+      /\b(?:window|document|localStorage|sessionStorage|navigator|HTMLElement|ResizeObserver|IntersectionObserver|MutationObserver|CustomEvent|Notification)\b/,
+  },
 ];
 
 function findViolations(source: string, rule: Rule, file = 'fixture.ts'): string[] {
@@ -110,7 +130,30 @@ function findViolations(source: string, rule: Rule, file = 'fixture.ts'): string
   return found;
 }
 
-function runSelfTest(): void {
+/** Self-test for the client data-layer rules (allowed / forbidden fixtures, excluded files). */
+function runDataLayerSelfTest(): void {
+  const dataRules = RULES.filter((rule) => rule.pkgDir === 'packages/client/src/data');
+  const cases: Array<[source: string, forbidden: boolean]> = [
+    ["import { createStore } from 'zustand/vanilla';", false],
+    ["import { createCollection } from '@tanstack/db';", false],
+    ["import { create } from 'zustand';", true],
+    ["import { useLiveQuery } from '@tanstack/react-db';", true],
+    ["import { toast } from 'sonner';", true],
+    ["import { Button } from '@/components/ui/button';", true],
+  ];
+  for (const [source, forbidden] of cases) {
+    const flagged = dataRules.some((rule) => findViolations(source, rule).length > 0);
+    if (flagged !== forbidden) {
+      throw new Error(`layering self-test misclassified data-layer source: ${source}`);
+    }
+  }
+  const excluded = ['hooks.ts', 'threads/hooks.ts', 'threads/sync.test.ts'];
+  if (!excluded.every((file) => CLIENT_DATA_EXCLUDE.test(file))) {
+    throw new Error('layering self-test did not exclude a data-layer hooks or test file');
+  }
+}
+
+function runPortableSelfTest(): void {
   const portableRules = RULES.filter(
     (rule) =>
       rule.pkgDir === 'packages/client-core/src' || rule.pkgDir === 'packages/client-benchmark/src',
@@ -128,17 +171,18 @@ function runSelfTest(): void {
     'const root: HTMLElement | null = null;',
     'new ResizeObserver(() => undefined);',
   ];
+  const violates = (source: string) =>
+    portableRules.some((rule) => findViolations(source, rule).length > 0);
 
-  for (const source of allowed) {
-    if (portableRules.some((rule) => findViolations(source, rule).length > 0)) {
-      throw new Error(`layering self-test rejected allowed source: ${source}`);
-    }
-  }
-  for (const source of forbidden) {
-    if (!portableRules.some((rule) => findViolations(source, rule).length > 0)) {
-      throw new Error(`layering self-test accepted forbidden source: ${source}`);
-    }
-  }
+  const rejected = allowed.find(violates);
+  if (rejected) throw new Error(`layering self-test rejected allowed source: ${rejected}`);
+  const accepted = forbidden.find((source) => !violates(source));
+  if (accepted) throw new Error(`layering self-test accepted forbidden source: ${accepted}`);
+}
+
+function runSelfTest(): void {
+  runPortableSelfTest();
+  runDataLayerSelfTest();
   console.log('layering self-test ok — allowed and forbidden fixtures classified correctly');
 }
 
@@ -158,6 +202,7 @@ for (const rule of RULES) {
   const abs = join(ROOT, rule.pkgDir);
   try {
     for (const file of walk(abs)) {
+      if (rule.exclude?.test(relative(abs, file).replaceAll('\\', '/'))) continue;
       const text = readFileSync(file, 'utf8');
       violations.push(...findViolations(text, rule, relative(ROOT, file)));
     }

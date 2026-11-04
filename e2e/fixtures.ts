@@ -48,7 +48,9 @@ class ApiHelper {
   ) {}
 
   private headers() {
-    return { Authorization: `Bearer ${this.token}` };
+    // The server refuses cross-origin writes without an Origin header (403), which
+    // made every afterEach cleanup fail silently and leave projects behind.
+    return { Authorization: `Bearer ${this.token}`, Origin: this.baseURL };
   }
 
   async createProject(name: string, repoPath: string): Promise<Project> {
@@ -128,7 +130,9 @@ class ApiHelper {
       ? `${this.baseURL}/api/threads?projectId=${projectId}`
       : `${this.baseURL}/api/threads`;
     const res = await this.request.get(url, { headers: this.headers() });
-    return res.json();
+    // GET /api/threads is paginated: { threads, total, hasMore }.
+    const body = (await res.json()) as { threads: Thread[] };
+    return body.threads;
   }
 
   async getBranches(

@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { SwitchBranchDialog } from '@/components/SwitchBranchDialog';
+import { fetchProjectStatus } from '@/data/git-status/actions';
 import { api } from '@/lib/api';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 
 interface DialogState {
@@ -80,7 +80,7 @@ export function useBranchSwitch() {
       useProjectStore.getState().setBranch(projectId, targetBranch);
       useBranchPickerStore.getState().setCurrentBranch(targetBranch);
       // Force-refresh git status so ReviewPane shows origin info for the new branch
-      useGitStatusStore.getState().fetchProjectStatus(projectId, true);
+      fetchProjectStatus(projectId, true);
       return true;
     },
     [t],
@@ -100,7 +100,7 @@ export function useBranchSwitch() {
           if (!result.value.worktreePath) {
             useProjectStore.getState().setBranch(dialogState.projectId, dialogState.targetBranch);
             useBranchPickerStore.getState().setCurrentBranch(dialogState.targetBranch);
-            useGitStatusStore.getState().fetchProjectStatus(dialogState.projectId, true);
+            fetchProjectStatus(dialogState.projectId, true);
           }
           setDialogState(null);
           resolverRef.current?.(true);

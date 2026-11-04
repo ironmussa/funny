@@ -33,6 +33,7 @@ import {
   generalRunnerIdsForUser,
   onRunnerScopeChange,
   pinnedRunnerIdsForProject,
+  sandboxRunnerIdForThread,
 } from './runner-scope.js';
 import { getRunnerForThread } from './thread-registry.js';
 
@@ -41,7 +42,10 @@ export interface ResolvedRunner {
 }
 
 /** Why a request could not be routed (drives the 502 message). */
-export type RunnerResolutionFailure = 'project-runner-offline' | 'general-runner-offline';
+export type RunnerResolutionFailure =
+  | 'project-runner-offline'
+  | 'general-runner-offline'
+  | 'thread-sandbox-unavailable';
 
 type CachedThreadRunner = ResolvedRunner & { threadId: string; userId: string };
 
@@ -62,8 +66,14 @@ function isReachable(presence: RunnerPresencePort | undefined, runnerId: string)
   return !!presence?.isAvailable(runnerId);
 }
 
-/** Where a request points: a project, or projectless work. */
-export type RouteTarget = { kind: 'project'; projectId: string } | { kind: 'projectless' };
+/**
+ * Where a request points: a thread bound to its own sandbox runner, a project,
+ * or projectless work.
+ */
+export type RouteTarget =
+  | { kind: 'thread-sandbox'; threadId: string; runnerId: string }
+  | { kind: 'project'; projectId: string }
+  | { kind: 'projectless' };
 
 /**
  * The route target of a proxied request, as `resolveRunnerDetailed` sees it.
@@ -81,6 +91,11 @@ async function resolveTarget(
   projectId: string | null,
   threadId: string | null,
 ): Promise<RouteTarget> {
+  // A sandbox thread is served by its sandbox runner only (thread-sandboxes).
+  if (threadId) {
+    const runnerId = await sandboxRunnerIdForThread(threadId);
+    if (runnerId) return { kind: 'thread-sandbox', threadId, runnerId };
+  }
   if (projectId) return { kind: 'project', projectId };
   if (threadId) {
     const [row] = await db
@@ -92,10 +107,16 @@ async function resolveTarget(
   return { kind: 'projectless' };
 }
 
-async function isAllowed(runnerId: string, target: RouteTarget): Promise<boolean> {
-  return target.kind === 'project'
-    ? canRunnerAccessProject(runnerId, target.projectId)
-    : canRunnerServeProjectless(runnerId);
+/** Scope check for a route target — the same rule `runner-access` re-verifies. */
+async function isRunnerInRouteScope(runnerId: string, target: RouteTarget): Promise<boolean> {
+  switch (target.kind) {
+    case 'thread-sandbox':
+      return runnerId === target.runnerId;
+    case 'project':
+      return canRunnerAccessProject(runnerId, target.projectId);
+    case 'projectless':
+      return canRunnerServeProjectless(runnerId);
+  }
 }
 
 /**
@@ -112,25 +133,95 @@ export async function resolveRunner(
   return resolved.ok ? { runnerId: resolved.runnerId } : null;
 }
 
+type ResolveRunnerResult =
+  | { ok: true; runnerId: string }
+  | { ok: false; reason: RunnerResolutionFailure; projectId?: string };
+
+/** Cached runner of a thread if still reachable; an unreachable entry is dropped. */
+function cachedThreadRunner(
+  userId: string,
+  threadId: string | null | undefined,
+  presence: RunnerPresencePort | undefined,
+): string | null {
+  if (!threadId) return null;
+  const cached = threadRunnerCache.get(threadCacheKey(userId, threadId));
+  if (!cached) return null;
+  if (isReachable(presence, cached.runnerId)) return cached.runnerId;
+  threadRunnerCache.delete(threadCacheKey(userId, threadId));
+  return null;
+}
+
+/** Ordered candidates, all owned by the user (reachability + scope checked by the caller). */
+async function candidateRunnerIds(
+  threadId: string | null | undefined,
+  target: RouteTarget,
+  userId: string,
+): Promise<string[]> {
+  const candidates: string[] = [];
+  if (threadId) {
+    const fromDb = await getRunnerForThread(threadId, userId);
+    if (fromDb) candidates.push(fromDb.runnerId);
+  }
+  if (target.kind === 'project') {
+    candidates.push(...(await assignedRunnerIds(target.projectId, userId)));
+  }
+  candidates.push(...(await generalRunnerIdsForUser(userId)));
+  return candidates;
+}
+
+/** First candidate that is reachable and in scope for the target, or null. */
+async function firstScopedReachable(
+  candidates: string[],
+  target: RouteTarget,
+  presence: RunnerPresencePort | undefined,
+): Promise<string | null> {
+  for (const runnerId of new Set(candidates)) {
+    if (!isReachable(presence, runnerId)) continue;
+    if (!(await isRunnerInRouteScope(runnerId, target))) continue;
+    return runnerId;
+  }
+  return null;
+}
+
+/**
+ * Pinned project: its dedicated runner (+ grants) or nothing. Returns
+ * `undefined` when the project is not pinned (the caller keeps resolving).
+ */
+async function resolvePinnedProject(
+  projectId: string,
+  userId: string,
+  path: string,
+  presence: RunnerPresencePort | undefined,
+  remember: (runnerId: string) => ResolveRunnerResult,
+): Promise<ResolveRunnerResult | undefined> {
+  const pinned = await pinnedRunnerIdsForProject(projectId, userId);
+  if (!pinned) return undefined;
+  const runnerId = pinned.find((id) => isReachable(presence, id));
+  if (runnerId) return remember(runnerId);
+  log.warn('Project runner offline — not falling back', {
+    namespace: 'proxy',
+    userId,
+    projectId,
+    path,
+  });
+  return {
+    ok: false,
+    reason: 'project-runner-offline',
+    projectId,
+  };
+}
+
 export async function resolveRunnerDetailed(
   path: string,
   query: Record<string, string>,
   userId: string,
   presence?: RunnerPresencePort,
-): Promise<
-  | { ok: true; runnerId: string }
-  | { ok: false; reason: RunnerResolutionFailure; projectId?: string }
-> {
+): Promise<ResolveRunnerResult> {
   const threadId = extractThreadId(path);
 
   // Thread cache (entries are dropped on any scope change; verify reachability)
-  if (threadId) {
-    const cached = threadRunnerCache.get(threadCacheKey(userId, threadId));
-    if (cached) {
-      if (isReachable(presence, cached.runnerId)) return { ok: true, runnerId: cached.runnerId };
-      threadRunnerCache.delete(threadCacheKey(userId, threadId));
-    }
-  }
+  const cachedRunnerId = cachedThreadRunner(userId, threadId, presence);
+  if (cachedRunnerId !== null) return { ok: true, runnerId: cachedRunnerId };
 
   const target = await resolveTarget(extractProjectId(path, query), threadId);
   const remember = (runnerId: string) => {
@@ -144,54 +235,48 @@ export async function resolveRunnerDetailed(
     return { ok: true as const, runnerId };
   };
 
+  // Sandbox thread: its sandbox runner or nothing — the caller wakes it up.
+  if (target.kind === 'thread-sandbox') {
+    if (isReachable(presence, target.runnerId)) return remember(target.runnerId);
+    log.warn('Thread sandbox runner unavailable — not falling back', {
+      namespace: 'proxy',
+      userId,
+      threadId: target.threadId,
+      runnerId: target.runnerId,
+      path,
+    });
+    return { ok: false, reason: 'thread-sandbox-unavailable' };
+  }
+
   // Pinned project: its dedicated runner (+ grants) or nothing.
   if (target.kind === 'project') {
-    const pinned = await pinnedRunnerIdsForProject(target.projectId, userId);
-    if (pinned) {
-      const runnerId = pinned.find((id) => isReachable(presence, id));
-      if (runnerId) return remember(runnerId);
-      log.warn('Project runner offline — not falling back', {
-        namespace: 'proxy',
-        userId,
-        projectId: target.projectId,
-        path,
-      });
-      return {
-        ok: false,
-        reason: 'project-runner-offline',
-        projectId: target.projectId,
-      };
-    }
+    const pinnedResult = await resolvePinnedProject(
+      target.projectId,
+      userId,
+      path,
+      presence,
+      remember,
+    );
+    if (pinnedResult) return pinnedResult;
   }
 
   // Ordered candidates, all owned by the user; filtered by reachability + scope.
-  const candidates: string[] = [];
-  if (threadId) {
-    const fromDb = await getRunnerForThread(threadId, userId);
-    if (fromDb) candidates.push(fromDb.runnerId);
-  }
-  if (target.kind === 'project') {
-    candidates.push(...(await assignedRunnerIds(target.projectId, userId)));
-  }
-  candidates.push(...(await generalRunnerIdsForUser(userId)));
+  const candidates = await candidateRunnerIds(threadId, target, userId);
+  const runnerId = await firstScopedReachable(candidates, target, presence);
+  if (runnerId !== null) return remember(runnerId);
 
-  for (const runnerId of new Set(candidates)) {
-    if (!isReachable(presence, runnerId)) continue;
-    if (!(await isAllowed(runnerId, target))) continue;
-    return remember(runnerId);
-  }
-
+  const projectId = target.kind === 'project' ? target.projectId : undefined;
   log.warn('No reachable runner found', {
     namespace: 'proxy',
     requestUserId: userId,
     threadId: threadId ?? 'none',
-    projectId: target.kind === 'project' ? target.projectId : 'none',
+    projectId: projectId ?? 'none',
     path,
   });
   return {
     ok: false,
     reason: 'general-runner-offline',
-    projectId: target.kind === 'project' ? target.projectId : undefined,
+    projectId,
   };
 }
 
@@ -205,6 +290,7 @@ export async function explainUnresolved(
   userId: string,
 ): Promise<RunnerResolutionFailure> {
   const target = await resolveTarget(extractProjectId(path, query), extractThreadId(path));
+  if (target.kind === 'thread-sandbox') return 'thread-sandbox-unavailable';
   if (target.kind === 'project' && (await pinnedRunnerIdsForProject(target.projectId, userId))) {
     return 'project-runner-offline';
   }
@@ -216,15 +302,23 @@ export function describeResolutionFailure(reason: RunnerResolutionFailure): {
   error: string;
   code: RunnerResolutionFailure;
 } {
-  return reason === 'project-runner-offline'
-    ? {
+  switch (reason) {
+    case 'project-runner-offline':
+      return {
         error: "This project's runner is offline. Start or redeploy it from Project Settings.",
         code: reason,
-      }
-    : {
+      };
+    case 'thread-sandbox-unavailable':
+      return {
+        error: "This thread's sandbox is not running. Resume it to continue.",
+        code: reason,
+      };
+    case 'general-runner-offline':
+      return {
         error: 'No runner connected. Check that your runner is online.',
         code: reason,
       };
+  }
 }
 
 /**
@@ -277,7 +371,7 @@ function extractProjectId(path: string, query: Record<string, string>): string |
   return null;
 }
 
-function extractThreadId(path: string): string | null {
+export function extractThreadId(path: string): string | null {
   const threadMatch = path.match(/\/api\/threads\/([^/?]+)/);
   if (threadMatch) return threadMatch[1];
 

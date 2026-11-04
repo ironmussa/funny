@@ -1,19 +1,24 @@
 /**
  * ThreadContext — tells each subtree "which thread to read from".
  *
- * Resolves through the unified `threadDataById` map in the store. Both the
- * right pane and the live-columns grid use the same provider with the same
- * resolution path — the only difference is which `threadId` the provider
- * carries. No `source` distinction, no externally-supplied payload.
+ * Resolves the loaded payload from the unified `threadDataById` map and
+ * puts the thread's collection row on top (`thread-view.ts`), so row fields
+ * (status, title, …) are always the canonical ones. Both the right pane and
+ * the live-columns grid use the same provider with the same resolution path —
+ * the only difference is which `threadId` the provider carries.
  *
  * Hooks throw when used without a provider.
  */
 
+import type { Thread } from '@funny/shared';
 import { createContext, useContext, useMemo, type Context, type ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
+import { useThreadById } from '@/data/threads/hooks';
+
 import type { ThreadWithMessages } from './thread-store';
 import { useThreadStore } from './thread-store';
+import { mergeThreadView, readThreadView } from './thread-view';
 
 interface ThreadContextValue {
   threadId: string | null;
@@ -48,13 +53,20 @@ function useThreadContext(): ThreadContextValue {
   return ctx;
 }
 
-/** Resolves the thread payload inside a Zustand selector. */
+/** Resolves the thread view (payload + row) inside a Zustand selector. */
 function resolveThread(
   state: { threadDataById: Record<string, ThreadWithMessages> },
   ctx: ThreadContextValue,
+  row: Thread | undefined,
 ): ThreadWithMessages | null {
   if (!ctx.threadId) return null;
-  return state.threadDataById[ctx.threadId] ?? null;
+  return mergeThreadView(state.threadDataById[ctx.threadId], row);
+}
+
+/** Context plus the live row, so row changes re-render consumers. */
+function useThreadSource(): { ctx: ThreadContextValue; row: Thread | undefined } {
+  const ctx = useThreadContext();
+  return { ctx, row: useThreadById(ctx.threadId) };
 }
 
 // ── Public hooks ─────────────────────────────────────────────────────
@@ -65,56 +77,62 @@ export function useThreadId(): string | undefined {
 
 /**
  * Generic selector — for one-off reads not covered by the named hooks.
- * Re-runs on every store change AND on context change.
+ * Re-runs on every store change, row change AND context change.
  */
 export function useThreadSelector<T>(selector: (thread: ThreadWithMessages | null) => T): T {
-  const ctx = useThreadContext();
-  return useThreadStore((s) => selector(resolveThread(s, ctx)));
+  const { ctx, row } = useThreadSource();
+  return useThreadStore((s) => selector(resolveThread(s, ctx, row)));
 }
 
 export function useThreadStatus() {
-  const ctx = useThreadContext();
-  return useThreadStore((s) => resolveThread(s, ctx)?.status);
+  const { ctx, row } = useThreadSource();
+  return useThreadStore((s) => resolveThread(s, ctx, row)?.status);
 }
 
 export function useThreadProjectId() {
-  const ctx = useThreadContext();
-  return useThreadStore((s) => resolveThread(s, ctx)?.projectId);
+  const { ctx, row } = useThreadSource();
+  return useThreadStore((s) => resolveThread(s, ctx, row)?.projectId);
 }
 
 export function useThreadWorktreePath() {
-  const ctx = useThreadContext();
-  return useThreadStore((s) => resolveThread(s, ctx)?.worktreePath);
+  const { ctx, row } = useThreadSource();
+  return useThreadStore((s) => resolveThread(s, ctx, row)?.worktreePath);
 }
 
 export function useThreadBranch() {
-  const ctx = useThreadContext();
-  return useThreadStore((s) => resolveThread(s, ctx)?.branch);
+  const { ctx, row } = useThreadSource();
+  return useThreadStore((s) => resolveThread(s, ctx, row)?.branch);
 }
 
 export function useThreadMessages() {
   const ctx = useThreadContext();
-  return useThreadStore((s) => resolveThread(s, ctx)?.messages);
+  return useThreadStore((s) =>
+    ctx.threadId ? s.threadDataById[ctx.threadId]?.messages : undefined,
+  );
 }
 
 export function useThreadEvents() {
   const ctx = useThreadContext();
-  return useThreadStore((s) => resolveThread(s, ctx)?.threadEvents);
+  return useThreadStore((s) =>
+    ctx.threadId ? s.threadDataById[ctx.threadId]?.threadEvents : undefined,
+  );
 }
 
 export function useCompactionEvents() {
   const ctx = useThreadContext();
-  return useThreadStore((s) => resolveThread(s, ctx)?.compactionEvents);
+  return useThreadStore((s) =>
+    ctx.threadId ? s.threadDataById[ctx.threadId]?.compactionEvents : undefined,
+  );
 }
 
 /** Thread minus the high-churn arrays, so updates to messages/events don't re-render core consumers. */
 export type ThreadCore = Omit<ThreadWithMessages, 'messages' | 'threadEvents' | 'compactionEvents'>;
 
 export function useThreadCore(): ThreadCore | null {
-  const ctx = useThreadContext();
+  const { ctx, row } = useThreadSource();
   return useThreadStore(
     useShallow((s) => {
-      const t = resolveThread(s, ctx);
+      const t = resolveThread(s, ctx, row);
       if (!t) return null;
       // eslint-disable-next-line @typescript-eslint/no-unused-vars
       const { messages, threadEvents, compactionEvents, ...core } = t;
@@ -123,13 +141,34 @@ export function useThreadCore(): ThreadCore | null {
   );
 }
 
+// ── Hooks outside a ThreadProvider ───────────────────────────────────
+
+/** The open thread (`activeThread`) with current row fields. */
+export function useActiveThreadView(): ThreadWithMessages | null {
+  const row = useThreadById(useThreadStore((s) => s.activeThread?.id));
+  return useThreadStore((s) => mergeThreadView(s.activeThread, row));
+}
+
+/**
+ * A thread by id: its loaded payload (right pane or live column) with current
+ * row fields, or just its row when the payload is not loaded.
+ */
+export function useThreadViewById(
+  threadId: string | null | undefined,
+): ThreadWithMessages | Thread | null {
+  const row = useThreadById(threadId);
+  const view = useThreadStore((s) =>
+    threadId ? mergeThreadView(s.threadDataById[threadId], row) : null,
+  );
+  return view ?? row ?? null;
+}
+
 // ── Imperative utility ────────────────────────────────────────────────
 //
 // For event handlers / effect callbacks where hooks aren't available.
-// Returns the loaded payload if present, otherwise the base Thread row
-// from the sidebar index, otherwise null.
+// Returns the loaded payload with current row fields, or null when the
+// thread's payload is not loaded.
 
 export function getThreadById(threadId: string): ThreadWithMessages | null {
-  const state = useThreadStore.getState();
-  return state.threadDataById[threadId] ?? null;
+  return readThreadView(useThreadStore.getState(), threadId);
 }

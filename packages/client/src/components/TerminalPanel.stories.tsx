@@ -1,6 +1,8 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
+import { withProjects } from '@/data/projects/testing';
 import '@/i18n/config';
+import { withThreadIndex } from '@/data/threads/testing';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useTerminalStore, type TerminalTab } from '@/stores/terminal-store';
@@ -110,32 +112,36 @@ function seedStores(
     commandMetrics = {},
   } = opts;
 
-  useProjectStore.setState({
-    projects: [
-      {
-        id: PROJECT_ID,
-        name: 'funny',
-        path: '/home/user/projects/funny',
-        color: '#3b82f6',
-        userId: 'user-1',
-        sortOrder: 0,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    expandedProjects: new Set([PROJECT_ID]),
-    selectedProjectId: PROJECT_ID,
-    initialized: true,
-    branchByProject: { [PROJECT_ID]: 'master' },
-  });
+  useProjectStore.setState(
+    withProjects({
+      projects: [
+        {
+          id: PROJECT_ID,
+          name: 'funny',
+          path: '/home/user/projects/funny',
+          color: '#3b82f6',
+          userId: 'user-1',
+          sortOrder: 0,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      expandedProjects: new Set([PROJECT_ID]),
+      selectedProjectId: PROJECT_ID,
+      initialized: true,
+      branchByProject: { [PROJECT_ID]: 'master' },
+    }),
+  );
 
-  useThreadStore.setState({
-    threadsById: {},
-    threadIdsByProject: {},
-    selectedThreadId: null,
-    activeThread: null,
-    setupProgressByThread: {},
-    contextUsageByThread: {},
-  });
+  useThreadStore.setState(
+    withThreadIndex({
+      threadsById: {},
+      threadIdsByProject: {},
+      selectedThreadId: null,
+      activeThread: null,
+      setupProgressByThread: {},
+      contextUsageByThread: {},
+    }),
+  );
 
   useSettingsStore.setState({
     defaultEditor: 'cursor',

@@ -38,16 +38,47 @@ import type {
  *    handler always and a boolean `disabled` prop.
  */
 import { sleep as effectSleep } from '@funny/shared/async';
+import { addReferencedEntries, stripReferencedContents } from '@funny/shared/attachments';
 import { startTransition } from 'react';
 import { create } from 'zustand';
 
+import {
+  archiveThread as archiveThreadRow,
+  deleteThread as deleteThreadRow,
+  moveThreadStage,
+  pinThread as pinThreadRow,
+  renameThread as renameThreadRow,
+  setThreadPermissionMode as setThreadPermissionModeRow,
+  unarchiveThread as unarchiveThreadRow,
+} from '@/data/threads/actions';
+import {
+  addScratchThread as addScratchThreadRow,
+  adoptThreadDetail,
+  applyThreadDetail,
+  beginThreadRequest,
+  dropProjectThreads as clearProjectThreadRows,
+  loadMoreProjectThreads,
+  loadProjectThreads,
+  loadScratchThreads as loadScratchThreadRows,
+  loadSharedThreads as loadSharedThreadRows,
+  removeThreadLocally,
+} from '@/data/threads/loaders';
+import {
+  isProjectListed,
+  listedProjectThreadIds,
+  readThreadIndex,
+  readThreadRow,
+  subscribeProjectLists,
+} from '@/data/threads/read';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { loadContextUsage } from '@/lib/context-usage-storage';
 import { markMemoryPhase } from '@/lib/memory-phase';
 import { metric, startSpan } from '@/lib/telemetry';
 import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
+import { toastError } from '@/lib/toast-error';
 
+import { deriveToolLists, useSettingsStore } from './settings-store';
 import {
   expandProject,
   selectProject as bridgeSelectProject,
@@ -63,8 +94,8 @@ import {
   isThreadDataLoaded,
 } from './thread-machine-bridge';
 import * as mutations from './thread-mutations';
-import { guardOptimisticBoardWrite } from './thread-optimistic-guard';
 import { useThreadReadStore } from './thread-read-store';
+import { patchThreadRow } from './thread-row-writes';
 import {
   computeNextActiveThread,
   deriveResultInfo,
@@ -85,6 +116,7 @@ import {
   setClearThreadSelection,
   getUrlThreadId,
 } from './thread-store-internals';
+import { readActiveThreadView, readThreadView } from './thread-view';
 import * as wsHandlers from './thread-ws-handlers';
 
 // Re-export for external consumers
@@ -247,8 +279,6 @@ function getActiveThread(state: ThreadState): ThreadWithMessages | null {
   return id ? (state.threadDataById[id] ?? null) : null;
 }
 
-const _threadLoadPromises = new Map<string, Promise<void>>();
-
 const refreshLog = createClientLogger('thread-refresh');
 const selectLog = createClientLogger('thread-select');
 
@@ -312,14 +342,27 @@ function mergeMessagesById(local: LocalMessage[], fresh: LocalMessage[]): LocalM
   return [...before, ...fresh, ...after];
 }
 
+function isAgentActive(state: ThreadState, threadId: string): boolean {
+  const status = readThreadRow(threadId)?.status;
+  return status === 'running' || status === 'waiting';
+}
+
+/**
+ * Drop every local trace of a thread that no longer exists for this user
+ * (deleted here or elsewhere, or its share was revoked): status actor,
+ * live-column refcount, loaded payload and selection. The row itself is
+ * removed from the threads collection by the caller.
+ */
+function forgetThread(threadId: string): void {
+  cleanupThreadActor(threadId);
+  _liveThreadRefCounts.delete(threadId);
+  useThreadStore.setState((state) => mutations.clearThreadData(state, threadId));
+  if (useThreadStore.getState().selectedThreadId === threadId) {
+    useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+  }
+}
+
 export const useThreadStore = create<ThreadState>((set, get) => ({
-  threadsById: {},
-  threadIdsByProject: {},
-  scratchThreadIds: [],
-  sharedThreadIds: [],
-  threadTotalByProject: {},
-  scratchThreadTotal: 0,
-  sharedThreadTotal: 0,
   selectedThreadId: null,
   threadDataById: {},
   activeThread: null,
@@ -329,68 +372,22 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   queuedMessagesByThread: {},
   queuedNextMessageByThread: {},
 
-  loadScratchThreads: async () => {
-    const result = await api.listScratchThreads(100);
-    if (result.isOk()) {
-      set((state) =>
-        mutations.replaceScratchThreads(state, result.value.threads, result.value.total),
-      );
-    }
-  },
+  // Thread lists load through the data layer (`src/data/threads`): rows and
+  // list membership land in the threads collection and its list metadata.
+  // Concurrent loads of the same list share one request.
+  loadScratchThreads: () => loadScratchThreadRows(),
 
   addScratchThread: (thread: Thread) => {
-    set((state) => mutations.prependScratchThread(state, thread));
+    addScratchThreadRow(thread);
   },
 
-  loadSharedThreads: async () => {
-    const result = await api.listSharedWithMe();
-    if (result.isOk()) {
-      set((state) => mutations.replaceSharedThreads(state, result.value.threads));
-    }
-  },
+  loadSharedThreads: () => loadSharedThreadRows(),
 
-  loadThreadsForProject: async (projectId: string, includeArchived: boolean = false) => {
-    // Reject empty/falsy projectId. An empty string would otherwise reach
-    // api.listThreads(undefined) and return every user thread, then store
-    // them under threadIdsByProject[''], duplicating every sidebar entry.
-    // Scratch threads (projectId === '') are loaded via loadScratchThreads.
-    if (!projectId) return;
-    // Deduplicate concurrent loads for the same project + flag combo
-    const key = `${projectId}|${includeArchived ? 1 : 0}`;
-    const existing = _threadLoadPromises.get(key);
-    if (existing) return existing;
+  loadThreadsForProject: (projectId: string, includeArchived: boolean = false) =>
+    loadProjectThreads(projectId, includeArchived),
 
-    const promise = (async () => {
-      try {
-        const result = await api.listThreads(projectId, includeArchived, 50);
-        if (result.isOk()) {
-          set((state) =>
-            mutations.replaceProjectThreads(
-              state,
-              projectId,
-              result.value.threads,
-              result.value.total,
-            ),
-          );
-        }
-      } finally {
-        _threadLoadPromises.delete(key);
-      }
-    })();
-
-    _threadLoadPromises.set(key, promise);
-    return promise;
-  },
-
-  loadMoreThreads: async (projectId: string, includeArchived: boolean = false) => {
-    const currentIds = get().threadIdsByProject[projectId] ?? [];
-    const result = await api.listThreads(projectId, includeArchived, 50, currentIds.length);
-    if (result.isOk()) {
-      set((state) =>
-        mutations.appendProjectThreads(state, projectId, result.value.threads, result.value.total),
-      );
-    }
-  },
+  loadMoreThreads: (projectId: string, includeArchived: boolean = false) =>
+    loadMoreProjectThreads(projectId, includeArchived),
 
   selectThread: async (threadId) => {
     // Short-circuit when already deselected to avoid no-op state churn
@@ -522,7 +519,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
       // Ensure project is expanded and threads are loaded
       expandProject(projectId);
-      if (!get().threadIdsByProject[projectId]) {
+      if (!isProjectListed(projectId)) {
         get().loadThreadsForProject(projectId);
       }
 
@@ -576,6 +573,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // content to preserve: publishing at transition priority lets sidebar
       // updates starve the first chat paint (especially while git badges are
       // arriving). Publish the initial thread urgently instead.
+      // The detail view reads row fields from the collection; an opened thread
+      // outside every loaded list gets its row from this detail.
+      adoptThreadDetail(thread);
       const publishHydratedThread = () => {
         set((state) => {
           const queuePatch =
@@ -639,178 +639,97 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     prefetchThreadData(threadId);
   },
 
+  // Board writes are optimistic transactions on the threads collection: they
+  // never revert on a stale list response and roll back (with a toast) on
+  // failure. See data/threads/actions.ts.
   archiveThread: async (threadId) => {
-    guardOptimisticBoardWrite(threadId, { archived: true });
-    set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, archived: true })));
-
-    const result = await api.archiveThread(threadId, true);
-    if (result.isErr()) {
-      guardOptimisticBoardWrite(threadId, { archived: false });
-      set((state) =>
-        mutations.patchThread(state, threadId, (t) => ({
-          ...t,
-          archived: false,
-        })),
-      );
-      return;
-    }
-    cleanupThreadActor(threadId);
+    const result = await archiveThreadRow(threadId);
+    if (result.isOk()) cleanupThreadActor(threadId);
   },
 
   unarchiveThread: async (threadId, _projectId, stage) => {
-    const oldStage = get().threadsById[threadId]?.stage ?? 'backlog';
-
-    guardOptimisticBoardWrite(threadId, { archived: false, stage });
-    set((state) =>
-      mutations.patchThread(state, threadId, (t) => ({
-        ...t,
-        archived: false,
-        stage,
-      })),
-    );
-
-    const archiveResult = await api.archiveThread(threadId, false);
-    if (archiveResult.isErr()) {
-      guardOptimisticBoardWrite(threadId, { archived: true, stage: oldStage });
-      set((state) =>
-        mutations.patchThread(state, threadId, (t) => ({
-          ...t,
-          archived: true,
-          stage: oldStage,
-        })),
-      );
-      return;
-    }
-
-    const stageResult = await api.updateThreadStage(threadId, stage);
-    if (stageResult.isErr()) {
-      guardOptimisticBoardWrite(threadId, { stage: oldStage });
-      set((state) =>
-        mutations.patchThread(state, threadId, (t) => ({
-          ...t,
-          stage: oldStage,
-        })),
-      );
-    }
+    await unarchiveThreadRow(threadId, stage);
   },
 
   renameThread: async (threadId, _projectId, title) => {
-    const oldTitle = get().threadsById[threadId]?.title ?? '';
-
-    set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, title })));
-
-    const result = await api.renameThread(threadId, title);
-    if (result.isErr()) {
-      set((state) =>
-        mutations.patchThread(state, threadId, (t) => ({
-          ...t,
-          title: oldTitle,
-        })),
-      );
-    }
+    await renameThreadRow(threadId, title);
   },
 
   pinThread: async (threadId, _projectId, pinned) => {
-    const oldPinned = get().threadsById[threadId]?.pinned;
-
-    set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, pinned })));
-
-    const result = await api.pinThread(threadId, pinned);
-    if (result.isErr()) {
-      set((state) =>
-        mutations.patchThread(state, threadId, (t) => ({
-          ...t,
-          pinned: oldPinned,
-        })),
-      );
-    }
+    await pinThreadRow(threadId, pinned);
   },
 
   updateThreadStage: async (threadId, _projectId, stage) => {
-    const oldStage = get().threadsById[threadId]?.stage ?? 'backlog';
-
-    guardOptimisticBoardWrite(threadId, { stage });
-    set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, stage })));
-
-    const result = await api.updateThreadStage(threadId, stage);
-    if (result.isErr()) {
-      guardOptimisticBoardWrite(threadId, { stage: oldStage });
-      set((state) =>
-        mutations.patchThread(state, threadId, (t) => ({
-          ...t,
-          stage: oldStage,
-        })),
+    const row = readThreadRow(threadId);
+    // Moving a never-started thread into In Progress starts it. The send
+    // promotes the thread on the runner (stage + reuses its draft), so no
+    // separate stage PATCH — that alone would leave it idle forever.
+    if (stage === 'in_progress' && row?.status === 'idle' && row.initialPrompt) {
+      const { allowedTools, disallowedTools } = deriveToolLists(
+        useSettingsStore.getState().toolPermissions,
       );
+      const result = await api.sendMessage(threadId, row.initialPrompt, {
+        provider: row.provider,
+        model: row.model,
+        permissionMode: row.permissionMode,
+        allowedTools,
+        disallowedTools,
+      });
+      if (result.isErr()) toastError(result.error, 'startIdleThread');
+      return;
     }
+    await moveThreadStage(threadId, stage);
   },
 
   updateThreadPermissionMode: async (threadId, permissionMode) => {
     const current = get();
+    const active = readActiveThreadView(current);
     const previousMode =
-      current.threadsById[threadId]?.permissionMode ??
-      current.threadDataById[threadId]?.permissionMode ??
-      (current.activeThread?.id === threadId ? current.activeThread.permissionMode : undefined);
+      readThreadView(current, threadId)?.permissionMode ??
+      readThreadRow(threadId)?.permissionMode ??
+      (active?.id === threadId ? active.permissionMode : undefined);
     if (!previousMode || previousMode === permissionMode) return true;
 
-    const patchMode = (mode: typeof permissionMode) =>
-      set((state) => ({
-        ...mutations.patchThread(state, threadId, (thread) => ({
+    // The row write is an optimistic transaction (rolls back with a toast on
+    // failure); the loaded payload is patched alongside it.
+    const patchPayload = (mode: typeof permissionMode) =>
+      set((state) =>
+        mutations.applyThreadDataPatch(state, threadId, (thread) => ({
           ...thread,
           permissionMode: mode,
         })),
-        ...mutations.applyThreadDataPatch(state, threadId, (thread) => ({
-          ...thread,
-          permissionMode: mode,
-        })),
-      }));
+      );
 
-    patchMode(permissionMode);
-    const result = await api.updateThreadPermissionMode(threadId, permissionMode);
+    patchPayload(permissionMode);
+    const result = await setThreadPermissionModeRow(threadId, permissionMode);
     if (result.isErr()) {
-      patchMode(previousMode);
+      patchPayload(previousMode);
       return false;
     }
     return true;
   },
 
+  // Deletes are optimistic: the row leaves every list at once and comes back
+  // (with a toast) if the server refuses. Local payload/selection state is
+  // dropped once the delete is confirmed.
   deleteThread: async (threadId) => {
-    const thread = get().threadsById[threadId];
-    if (thread && (thread.status === 'running' || thread.status === 'waiting')) {
-      await api.stopThread(threadId);
-    }
-    cleanupThreadActor(threadId);
-    set((state) => mutations.removeThread(state, threadId));
-    _liveThreadRefCounts.delete(threadId);
-    set((state) => mutations.clearThreadData(state, threadId));
-    if (get().selectedThreadId === threadId) {
-      set({ selectedThreadId: null, activeThread: null });
-    }
-    api.deleteThread(threadId);
+    const result = await deleteThreadRow(threadId, { stopFirst: isAgentActive(get(), threadId) });
+    if (result.isOk()) forgetThread(threadId);
   },
 
   deleteScratchThread: async (threadId) => {
-    const thread = get().threadsById[threadId];
-    if (thread && (thread.status === 'running' || thread.status === 'waiting')) {
-      await api.stopThread(threadId);
-    }
-    cleanupThreadActor(threadId);
-    set((state) => mutations.removeThread(state, threadId));
-    _liveThreadRefCounts.delete(threadId);
-    set((state) => mutations.clearThreadData(state, threadId));
-    if (get().selectedThreadId === threadId) {
-      set({ selectedThreadId: null, activeThread: null });
-    }
-    api.deleteThread(threadId);
+    const result = await deleteThreadRow(threadId, { stopFirst: isAgentActive(get(), threadId) });
+    if (result.isOk()) forgetThread(threadId);
   },
 
   handleShareRevoked: (threadId) => {
-    cleanupThreadActor(threadId);
-    set((state) => mutations.removeThread(state, threadId));
-    _liveThreadRefCounts.delete(threadId);
-    set((state) => mutations.clearThreadData(state, threadId));
-    if (get().selectedThreadId === threadId) {
-      set({ selectedThreadId: null, activeThread: null });
-    }
+    removeThreadLocally(threadId);
+    forgetThread(threadId);
+  },
+
+  handleThreadDeleted: (threadId) => {
+    removeThreadLocally(threadId);
+    forgetThread(threadId);
   },
 
   appendOptimisticMessage: (
@@ -841,18 +760,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         return { model: model || entry.model, cwd, tools: [] as string[] };
       })();
 
-    // Build a minimal <referenced-files> XML header so chips render in the message
-    let messageContent = content;
-    if (fileReferences && fileReferences.length > 0) {
-      const tags = fileReferences
-        .map((ref) =>
-          ref.type === 'folder'
-            ? `<folder path="${ref.path}"></folder>`
-            : `<file path="${ref.path}" />`,
-        )
-        .join('\n');
-      messageContent = `<referenced-files>\n${tags}\n</referenced-files>\n${content}`;
-    }
+    // Path-only entries so chips render in the optimistic message, merged
+    // into any block the prompt already carries (inline attachments).
+    const messageContent = stripReferencedContents(
+      addReferencedEntries(
+        content,
+        (fileReferences ?? []).map((ref) => ({ type: ref.type ?? 'file', path: ref.path })),
+      ),
+    );
 
     const newMessage = {
       id: `${OPTIMISTIC_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,
@@ -875,12 +790,15 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         ? entry.messages.map((m, i) => (i === existingDraftIdx ? newMessage : m))
         : entry.messages.concat(newMessage);
 
+    // Row fields — every view, the detail view included, reads them from the
+    // threads collection.
+    patchThreadRow(threadId, (t) => ({
+      ...t,
+      status: newStatus,
+      initialPrompt: undefined,
+      permissionMode: permissionMode || t.permissionMode,
+    }));
     set((state) => ({
-      // Sidebar status — keeps the row badge in sync regardless of bucket.
-      ...mutations.patchThread(state, threadId, (t) => ({
-        ...t,
-        status: newStatus,
-      })),
       // Payload patch — also mirrors to activeThread when this is the
       // selected thread.
       ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
@@ -1121,6 +1039,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const active = getActiveThread(get());
     if (!active) return;
     const threadId = active.id;
+    const requestSeq = beginThreadRequest();
     const [result, eventsResult] = await Promise.all([
       api.getThread(threadId, 50, undefined, getThreadScrollFetchOptions(threadId)),
       api.getThreadEvents(threadId),
@@ -1156,31 +1075,27 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // arrives during the await above gets clobbered.
     const freshMessages = (thread.messages ?? []) as LocalMessage[];
     set((state) => {
-      const existingSidebarThread = state.threadsById[threadId];
-      const sidebarPatch = existingSidebarThread
-        ? {
-            threadsById: {
-              ...state.threadsById,
-              [threadId]: {
-                ...existingSidebarThread,
-                status: thread.status,
-                cost: thread.cost,
-                stage: thread.stage,
-                completedAt: thread.completedAt,
-                updatedAt: thread.updatedAt,
-                archived: thread.archived,
-                pinned: thread.pinned,
-                mode: thread.mode,
-                branch: thread.branch,
-                worktreePath: thread.worktreePath,
-                baseBranch: thread.baseBranch,
-              },
-            },
-          }
-        : {};
+      // Sidebar row fields go to the threads collection (fenced against
+      // confirmed user writes); threadsById is projected from it.
+      applyThreadDetail(
+        threadId,
+        {
+          status: thread.status,
+          cost: thread.cost,
+          stage: thread.stage,
+          completedAt: thread.completedAt,
+          updatedAt: thread.updatedAt,
+          archived: thread.archived,
+          pinned: thread.pinned,
+          mode: thread.mode,
+          branch: thread.branch,
+          worktreePath: thread.worktreePath,
+          baseBranch: thread.baseBranch,
+        },
+        requestSeq,
+      );
 
       return {
-        ...sidebarPatch,
         ...mutations.applyThreadDataPatch(state, threadId, (current) => {
           const mergedMessages = mergeMessagesById(current.messages, freshMessages);
           const recovered = mergedMessages.length - current.messages.length;
@@ -1240,35 +1155,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   refreshAllLoadedThreads: async () => {
-    const initialState = get();
-    const projectIds = Object.keys(initialState.threadIdsByProject);
-    const refreshScratch = initialState.scratchThreadIds.length > 0;
-    const refreshShared = initialState.sharedThreadIds.length > 0;
+    const lists = readThreadIndex();
+    const projectIds = Object.keys(lists.threadIdsByProject);
+    const refreshScratch = lists.scratchThreadIds.length > 0;
+    const refreshShared = lists.sharedThreadIds.length > 0;
 
-    // Fetch all projects in parallel, then apply each result through the
-    // shared mutation so threadsById stays the single source of truth.
-    const results = await Promise.all(
-      projectIds.map(async (pid) => {
-        const result = await api.listThreads(pid, false, 50);
-        return {
-          pid,
-          threads: result.isOk() ? result.value.threads : null,
-          total: result.isOk() ? result.value.total : 0,
-        };
-      }),
-    );
-
-    set((state) => {
-      let patch: Partial<ThreadState> = {};
-      let workingState = state;
-      for (const { pid, threads, total } of results) {
-        if (!threads) continue;
-        const sub = mutations.replaceProjectThreads(workingState, pid, threads, total);
-        Object.assign(patch, sub);
-        workingState = Object.assign({ ...workingState }, sub) as ThreadState;
-      }
-      return patch;
-    });
+    // Refetch every loaded project list in parallel through the data layer.
+    await Promise.all(projectIds.map((pid) => loadProjectThreads(pid)));
 
     await Promise.all([
       refreshScratch ? get().loadScratchThreads() : Promise.resolve(),
@@ -1279,9 +1172,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   clearProjectThreads: (projectId: string) => {
     set((state) => {
-      const ids = state.threadIdsByProject[projectId];
-      const bucketPatch = mutations.clearProjectBucket(state, projectId);
-      let patch: Partial<ThreadState> = { ...bucketPatch };
+      const ids = listedProjectThreadIds(projectId);
+      clearProjectThreadRows(projectId);
+      let patch: Partial<ThreadState> = {};
       if (ids && ids.length) {
         // Drop any payload entries that belonged to the cleared project. Use a
         // working state so multiple deletions compose without losing earlier
@@ -1330,6 +1223,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Refcount may have dropped while fetching (unmount, race) — only land
     // the data if someone still wants it.
     if ((_liveThreadRefCounts.get(threadId) ?? 0) <= 0) return;
+    adoptThreadDetail(result.value);
     set((state) => mutations.setThreadData(state, threadId, result.value as ThreadWithMessages));
   },
 
@@ -1472,16 +1366,20 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   handleWSWorktreeSetupComplete: (threadId, data) => {
     const { loadThreadsForProject } = get();
+    const setupDone = <T extends Thread>(t: T): T => ({
+      ...t,
+      status: t.status === 'setting_up' ? 'pending' : t.status,
+      branch: data.branch,
+      ...(data.worktreePath ? { worktreePath: data.worktreePath } : {}),
+    });
 
+    patchThreadRow(threadId, setupDone);
     set((state) => {
       const { [threadId]: _, ...restProgress } = state.setupProgressByThread;
       return {
         setupProgressByThread: restProgress,
         ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
-          ...t,
-          status: t.status === 'setting_up' ? 'pending' : t.status,
-          branch: data.branch,
-          ...(data.worktreePath ? { worktreePath: data.worktreePath } : {}),
+          ...setupDone(t),
           setupProgress: undefined,
         })),
       };
@@ -1489,7 +1387,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     // Refresh thread list so sidebar picks up the new status. Look up the
     // project from the unified payload map (or the sidebar index as fallback).
-    const t = get().threadDataById[threadId] ?? get().threadsById[threadId];
+    const t = get().threadDataById[threadId] ?? readThreadRow(threadId);
     if (t?.projectId) {
       loadThreadsForProject(t.projectId);
     }
@@ -1503,15 +1401,9 @@ setClearThreadSelection(() => {
 });
 
 // ── Thread index subscriber ──────────────────────────────────
-// Keep the threadId→projectId index in sync with threadIdsByProject. Runs
-// synchronously after every store update that touches the project bucket.
-let _prevThreadIdsByProject: Record<string, string[]> = {};
-useThreadStore.subscribe((state) => {
-  if (state.threadIdsByProject !== _prevThreadIdsByProject) {
-    _prevThreadIdsByProject = state.threadIdsByProject;
-    rebuildThreadProjectIndex(state.threadIdsByProject);
-  }
-});
+// Keep the threadId→projectId index in sync with the project lists. Runs
+// synchronously after every list change in the data layer.
+subscribeProjectLists(rebuildThreadProjectIndex);
 
 // ── activeThread → threadDataById back-fill (legacy callers) ──────
 //

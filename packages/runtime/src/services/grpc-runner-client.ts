@@ -234,6 +234,7 @@ export class RunnerGrpcClient {
             RunnerCapability.EVENTS,
             RunnerCapability.HTTP_TUNNEL,
             RunnerCapability.TERMINAL,
+            RunnerCapability.USER_EVENTS,
           ],
           requestedLimits: {},
           eventCursors: (this.options.eventCursors ?? []).map((cursor) => ({

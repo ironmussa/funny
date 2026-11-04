@@ -1,4 +1,5 @@
 import type { WSEvent } from '@funny/shared';
+import { isRunnerUserEventType } from '@funny/shared/runner-protocol';
 import { EventDurability } from '@funny/shared/runner-v2/events';
 import { nanoid } from 'nanoid';
 
@@ -19,6 +20,8 @@ export function runnerEventDurability(event: WSEvent): EventDurability {
 /** Publishes replayable application events and applies server receipts. */
 export class RunnerEventPublisher {
   private readonly executions = new Map<string, string>();
+  /** Whether the server enabled `RUNNER_CAPABILITY_USER_EVENTS` this session. */
+  private userEventsEnabled = false;
 
   constructor(
     private readonly sender: RunnerEventSender,
@@ -31,7 +34,10 @@ export class RunnerEventPublisher {
 
   publish(event: WSEvent): void {
     const threadId = event.threadId;
-    if (!threadId) return;
+    if (!threadId) {
+      this.publishUserEvent(event);
+      return;
+    }
     if (event.type === 'agent:init' || !this.executions.has(threadId)) {
       this.executions.set(threadId, nanoid());
     }
@@ -43,6 +49,23 @@ export class RunnerEventPublisher {
     });
     this.send(stored);
     if (stored.durability === EventDurability.TERMINAL) this.executions.delete(threadId);
+  }
+
+  /** Apply the capabilities the server enabled in its hello. */
+  setUserEventsEnabled(enabled: boolean): void {
+    this.userEventsEnabled = enabled;
+  }
+
+  /**
+   * Unscoped events for the runner owner (browser-session frames, panel
+   * state): sent once, never stored or replayed. Dropped when the server did
+   * not enable user events or the type is not allowed.
+   */
+  private publishUserEvent(event: WSEvent): void {
+    if (!this.userEventsEnabled || !isRunnerUserEventType(event.type)) return;
+    this.sender.send('events', {
+      userEvent: { eventType: event.type, data: (event as { data?: unknown }).data ?? {} },
+    });
   }
 
   activated(): void {

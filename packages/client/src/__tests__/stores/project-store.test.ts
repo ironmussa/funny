@@ -57,14 +57,12 @@ vi.mock('@/stores/store-bridge', () => ({
   registerProjectStore: vi.fn(),
 }));
 
-vi.mock('@/stores/git-status-store', () => ({
-  useGitStatusStore: {
-    getState: () => ({
-      fetchForProject: mockFetchForProject,
-    }),
-  },
+vi.mock('@/data/git-status/actions', () => ({
+  fetchForProject: (...args: unknown[]) => mockFetchForProject(...args),
 }));
 
+import { readProjects } from '@/data/projects/read';
+import { withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 const mockApi = mockProjectsApi;
@@ -83,12 +81,14 @@ function makeProject(overrides: Partial<Project> = {}): Project {
 
 describe('ProjectStore', () => {
   beforeEach(() => {
-    useProjectStore.setState({
-      projects: [],
-      expandedProjects: new Set(),
-      selectedProjectId: null,
-      initialized: false,
-    });
+    useProjectStore.setState(
+      withProjects({
+        projects: [],
+        expandedProjects: new Set<string>(),
+        selectedProjectId: null,
+        initialized: false,
+      }),
+    );
     vi.clearAllMocks();
     mockThreadsByProject.current = {};
     mockThreadsApi.listThreads.mockReturnValue(
@@ -98,7 +98,7 @@ describe('ProjectStore', () => {
 
   describe('Initial state', () => {
     test('has empty projects', () => {
-      expect(useProjectStore.getState().projects).toEqual([]);
+      expect(readProjects()).toEqual([]);
     });
 
     test('has no selectedProjectId', () => {
@@ -121,7 +121,7 @@ describe('ProjectStore', () => {
       await useProjectStore.getState().loadProjects();
 
       const state = useProjectStore.getState();
-      expect(state.projects).toEqual(projects);
+      expect(readProjects()).toEqual(projects);
       expect(state.initialized).toBe(true);
     });
 
@@ -193,7 +193,7 @@ describe('ProjectStore', () => {
       await useProjectStore.getState().loadProjects();
 
       const state = useProjectStore.getState();
-      expect(state.projects).toEqual([]);
+      expect(readProjects()).toEqual([]);
       expect(state.initialized).toBe(false);
     });
   });
@@ -305,26 +305,26 @@ describe('ProjectStore', () => {
     test('updates the project in the list', async () => {
       const original = makeProject({ id: 'p1', name: 'Old Name' });
       const renamed = makeProject({ id: 'p1', name: 'New Name' });
-      useProjectStore.setState({ projects: [original] });
+      useProjectStore.setState(withProjects({ projects: [original] }));
       mockApi.renameProject.mockReturnValueOnce(okAsync(renamed) as any);
 
       await useProjectStore.getState().renameProject('p1', 'New Name');
 
       const state = useProjectStore.getState();
-      expect(state.projects).toHaveLength(1);
-      expect(state.projects[0].name).toBe('New Name');
+      expect(readProjects()).toHaveLength(1);
+      expect(readProjects()[0].name).toBe('New Name');
     });
 
     test('handles API errors (no update)', async () => {
       const original = makeProject({ id: 'p1', name: 'Old Name' });
-      useProjectStore.setState({ projects: [original] });
+      useProjectStore.setState(withProjects({ projects: [original] }));
       const error: DomainError = { type: 'NOT_FOUND', message: 'Not found' };
       mockApi.renameProject.mockReturnValueOnce(errAsync(error) as any);
 
       await useProjectStore.getState().renameProject('p1', 'New Name');
 
       const state = useProjectStore.getState();
-      expect(state.projects[0].name).toBe('Old Name');
+      expect(readProjects()[0].name).toBe('Old Name');
     });
   });
 
@@ -332,13 +332,13 @@ describe('ProjectStore', () => {
     test('updates the project in the list', async () => {
       const original = makeProject({ id: 'p1', name: 'Project', color: undefined });
       const updated = makeProject({ id: 'p1', name: 'Project', color: '#ff0000' });
-      useProjectStore.setState({ projects: [original] });
+      useProjectStore.setState(withProjects({ projects: [original] }));
       mockApi.updateProject.mockReturnValueOnce(okAsync(updated) as any);
 
       await useProjectStore.getState().updateProject('p1', { color: '#ff0000' });
 
       const state = useProjectStore.getState();
-      expect(state.projects[0].color).toBe('#ff0000');
+      expect(readProjects()[0].color).toBe('#ff0000');
     });
   });
 
@@ -346,27 +346,31 @@ describe('ProjectStore', () => {
     test('removes project from list', async () => {
       const p1 = makeProject({ id: 'p1' });
       const p2 = makeProject({ id: 'p2', name: 'Project 2' });
-      useProjectStore.setState({
-        projects: [p1, p2],
-        expandedProjects: new Set(['p1']),
-      });
+      useProjectStore.setState(
+        withProjects({
+          projects: [p1, p2],
+          expandedProjects: new Set(['p1']),
+        }),
+      );
       mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined) as any);
 
       await useProjectStore.getState().deleteProject('p1');
 
       const state = useProjectStore.getState();
-      expect(state.projects).toHaveLength(1);
-      expect(state.projects[0].id).toBe('p2');
+      expect(readProjects()).toHaveLength(1);
+      expect(readProjects()[0].id).toBe('p2');
       expect(state.expandedProjects.has('p1')).toBe(false);
     });
 
     test('clears selectedProjectId if deleted project was selected', async () => {
       const p1 = makeProject({ id: 'p1' });
-      useProjectStore.setState({
-        projects: [p1],
-        selectedProjectId: 'p1',
-        expandedProjects: new Set(['p1']),
-      });
+      useProjectStore.setState(
+        withProjects({
+          projects: [p1],
+          selectedProjectId: 'p1',
+          expandedProjects: new Set(['p1']),
+        }),
+      );
       mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined) as any);
 
       await useProjectStore.getState().deleteProject('p1');
@@ -377,11 +381,13 @@ describe('ProjectStore', () => {
     test('does not clear selectedProjectId if different project was selected', async () => {
       const p1 = makeProject({ id: 'p1' });
       const p2 = makeProject({ id: 'p2', name: 'Project 2' });
-      useProjectStore.setState({
-        projects: [p1, p2],
-        selectedProjectId: 'p2',
-        expandedProjects: new Set(['p1']),
-      });
+      useProjectStore.setState(
+        withProjects({
+          projects: [p1, p2],
+          selectedProjectId: 'p2',
+          expandedProjects: new Set(['p1']),
+        }),
+      );
       mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined) as any);
 
       await useProjectStore.getState().deleteProject('p1');
@@ -391,7 +397,7 @@ describe('ProjectStore', () => {
 
     test('clears project threads via thread store', async () => {
       const p1 = makeProject({ id: 'p1' });
-      useProjectStore.setState({ projects: [p1] });
+      useProjectStore.setState(withProjects({ projects: [p1] }));
       mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined) as any);
 
       await useProjectStore.getState().deleteProject('p1');
@@ -401,13 +407,13 @@ describe('ProjectStore', () => {
 
     test('does not remove project on API error', async () => {
       const p1 = makeProject({ id: 'p1' });
-      useProjectStore.setState({ projects: [p1] });
+      useProjectStore.setState(withProjects({ projects: [p1] }));
       const error: DomainError = { type: 'INTERNAL', message: 'Server error' };
       mockApi.deleteProject.mockReturnValueOnce(errAsync(error) as any);
 
       await useProjectStore.getState().deleteProject('p1');
 
-      expect(useProjectStore.getState().projects).toHaveLength(1);
+      expect(readProjects()).toHaveLength(1);
     });
   });
 
@@ -416,20 +422,20 @@ describe('ProjectStore', () => {
       const p1 = makeProject({ id: 'p1', name: 'First', sortOrder: 0 });
       const p2 = makeProject({ id: 'p2', name: 'Second', sortOrder: 1 });
       const p3 = makeProject({ id: 'p3', name: 'Third', sortOrder: 2 });
-      useProjectStore.setState({ projects: [p1, p2, p3] });
+      useProjectStore.setState(withProjects({ projects: [p1, p2, p3] }));
       mockApi.reorderProjects.mockReturnValueOnce(okAsync(undefined) as any);
 
       await useProjectStore.getState().reorderProjects(['p3', 'p1', 'p2']);
 
       const state = useProjectStore.getState();
-      expect(state.projects.map((p) => p.id)).toEqual(['p3', 'p1', 'p2']);
+      expect(readProjects().map((p) => p.id)).toEqual(['p3', 'p1', 'p2']);
     });
 
     test('reverts on API failure', async () => {
       const p1 = makeProject({ id: 'p1', name: 'First', sortOrder: 0 });
       const p2 = makeProject({ id: 'p2', name: 'Second', sortOrder: 1 });
       const p3 = makeProject({ id: 'p3', name: 'Third', sortOrder: 2 });
-      useProjectStore.setState({ projects: [p1, p2, p3] });
+      useProjectStore.setState(withProjects({ projects: [p1, p2, p3] }));
       const error: DomainError = { type: 'INTERNAL', message: 'Server error' };
       mockApi.reorderProjects.mockReturnValueOnce(errAsync(error) as any);
 
@@ -437,7 +443,7 @@ describe('ProjectStore', () => {
 
       // Should revert to original order
       const state = useProjectStore.getState();
-      expect(state.projects.map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
+      expect(readProjects().map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
     });
   });
 });

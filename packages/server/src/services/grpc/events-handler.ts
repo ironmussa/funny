@@ -1,4 +1,5 @@
 import { canonicalJson } from '@funny/shared/lib/canonical-json';
+import { isRunnerUserEventType } from '@funny/shared/runner-protocol';
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
 import { db } from '../../db/index.js';
@@ -33,7 +34,15 @@ type WireRequest = Record<string, any> & {
     earliestAvailableSequence?: string | number | bigint;
     reason?: string;
   };
+  userEvent?: { eventType?: string; data?: unknown };
 };
+
+/** An unscoped transient event for the runner owner (`EventsRequest.user_event`). */
+export interface RunnerUserEvent {
+  type: string;
+  threadId: '';
+  data: Record<string, unknown>;
+}
 
 export interface AcceptedAgentEvent {
   scope: EventScopeIdentity;
@@ -58,7 +67,11 @@ export interface EventsHandlerOptions {
   publishEvent?: (context: RunnerGrpcCallContext, event: AcceptedAgentEvent) => void;
   /** May this runner emit events for `threadId`? (owner + project scope) */
   authorizeThread?: (context: RunnerGrpcCallContext, threadId: string) => Promise<boolean>;
+  publishUserEvent?: (userId: string, event: RunnerUserEvent) => void;
 }
+
+/** How long a thread authorization is reused for user events on one stream. */
+const USER_EVENT_THREAD_AUTH_TTL_MS = 60_000;
 
 function defaultAuthorizeThread(context: RunnerGrpcCallContext, threadId: string) {
   return canRunnerActOnThread(context.principal.runnerId, context.principal.userId, threadId);
@@ -171,9 +184,32 @@ export function createEventsHandler(
   const resynchronizeThread = options.resynchronizeThread ?? defaultResynchronizeThread;
   const publishEvent = options.publishEvent ?? defaultPublishEvent;
   const authorizeThread = options.authorizeThread ?? defaultAuthorizeThread;
+  const publishUserEvent = options.publishUserEvent ?? relayToUser;
 
   return (call: RunnerGrpcCall, context: RunnerGrpcCallContext) => {
     let closed = false;
+    // Screencast frames of a thread session arrive many times per second:
+    // authorize their thread once per minute per stream, not per frame.
+    const threadAuthorizations = new Map<string, { at: number; allowed: Promise<boolean> }>();
+    const userEventThreadAllowed = (threadId: string): Promise<boolean> => {
+      const cached = threadAuthorizations.get(threadId);
+      if (cached && Date.now() - cached.at < USER_EVENT_THREAD_AUTH_TTL_MS) return cached.allowed;
+      const allowed = authorizeThread(context, threadId).catch(() => false);
+      threadAuthorizations.set(threadId, { at: Date.now(), allowed });
+      return allowed;
+    };
+    // Relay to the runner owner only; nothing is persisted, sequenced or
+    // acknowledged. A thread named in the payload must be one this runner may
+    // act on, so a runner cannot address its owner's other threads.
+    const relayUserEvent = async (userEvent: NonNullable<WireRequest['userEvent']>) => {
+      const userId = context.principal.userId;
+      const type = userEvent.eventType ?? '';
+      if (!userId || !isRunnerUserEventType(type)) return;
+      const data = decodeStruct(userEvent.data);
+      const threadId = typeof data.threadId === 'string' ? data.threadId : '';
+      if (threadId && !(await userEventThreadAllowed(threadId))) return;
+      publishUserEvent(userId, { type, threadId: '', data });
+    };
     const close = () => {
       closed = true;
     };
@@ -182,6 +218,14 @@ export function createEventsHandler(
     call.once('error', close);
 
     call.on('data', (request: WireRequest) => {
+      if (request.userEvent) {
+        // Unscoped and unacknowledged: an inactive session's events are dropped.
+        const epoch = parseUnsigned(request.session?.sessionEpoch) ?? 0n;
+        if (sessions.isActive(context.principal.runnerId, epoch)) {
+          void relayUserEvent(request.userEvent).catch(() => {});
+        }
+        return;
+      }
       void (async () => {
         const epoch = parseUnsigned(request.session?.sessionEpoch) ?? 0n;
         const scope =

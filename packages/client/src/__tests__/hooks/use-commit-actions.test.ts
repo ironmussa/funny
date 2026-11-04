@@ -35,9 +35,7 @@ vi.mock('react-i18next', () => ({
 }));
 vi.mock('sonner', () => ({ toast: { success: toastSuccess } }));
 vi.mock('@/lib/toast-error', () => ({ toastError: toastErrorFn }));
-vi.mock('@/stores/git-status-store', () => ({
-  useGitStatusStore: { getState: () => ({ fetchForThread, fetchProjectStatus }) },
-}));
+vi.mock('@/data/git-status/actions', () => ({ fetchForThread, fetchProjectStatus }));
 vi.mock('@/lib/api', () => ({ api }));
 
 beforeEach(() => {

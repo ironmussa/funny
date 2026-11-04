@@ -8,6 +8,7 @@ import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList.constant
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { useThreadCheckpoints } from '@/components/thread/use-thread-checkpoints';
 import { useThreadHandlers } from '@/components/thread/use-thread-handlers';
+import { readProject } from '@/data/projects/read';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
 import { sessionChangesFromEvents } from '@/lib/session-changes-from-events';
@@ -146,9 +147,7 @@ export function ThreadConversation({
 
   const uiQueuedCount = activeThread.queuedCount ?? 0;
   const isRunning = activeThread.status === 'running' || uiQueuedCount > 0;
-  const currentProject = useProjectStore
-    .getState()
-    .projects.find((p) => p.id === activeThread.projectId);
+  const currentProject = readProject(activeThread.projectId);
   const followUpMode = currentProject?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
   const isQueueMode = followUpMode === 'queue';
   const gitOps = canDoGitOps(activeThread);

@@ -23,7 +23,11 @@ import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
 import { runners, runnerTasks, runnerProjectAssignments } from '../db/schema.js';
 import { log } from '../lib/logger.js';
-import { canRunnerAccessProject, pinnedRunnerIdsForProject } from './runner-scope.js';
+import {
+  bindSandboxRunner,
+  canRunnerAccessProject,
+  pinnedRunnerIdsForProject,
+} from './runner-scope.js';
 
 const HEARTBEAT_TIMEOUT_MS = 60_000;
 
@@ -199,6 +203,15 @@ export async function registerRunner(
   }
 
   // New runner — create fresh registration
+  return insertNewRunner(req, userId, now);
+}
+
+async function insertNewRunner(
+  req: RunnerRegisterRequest,
+  userId: string | undefined,
+  now: string,
+  sandboxThreadId?: string,
+): Promise<RunnerRegisterResponse> {
   const runnerId = nanoid();
   const token = `runner_${nanoid(32)}`;
 
@@ -213,6 +226,8 @@ export async function registerRunner(
     workspace: req.workspace ?? null,
     httpUrl: null,
     publicMediaUrl: req.publicMediaUrl ?? null,
+    role: sandboxThreadId ? 'sandbox' : 'general',
+    threadId: sandboxThreadId ?? null,
     activeThreadIds: '[]',
     registeredAt: now,
     lastHeartbeatAt: now,
@@ -223,12 +238,29 @@ export async function registerRunner(
     runnerId,
     name: req.name,
     hostname: req.hostname,
+    sandboxThreadId: sandboxThreadId ?? null,
   });
 
   setAdvertisedProviders(runnerId, req.providers);
   setActiveBuiltins(runnerId, req.activeBuiltins);
   setAvailableProviders(runnerId, req.availableProviders);
   return registerResponse(runnerId, token, userId);
+}
+
+/**
+ * Register the sandbox runner of `threadId` (thread-sandboxes). Always creates a
+ * NEW runner — never reuses one by hostname — so a provisioning token can never
+ * re-role an existing general or dedicated runner.
+ */
+export async function registerSandboxRunner(
+  req: RunnerRegisterRequest,
+  userId: string,
+  threadId: string,
+): Promise<RunnerRegisterResponse> {
+  const result = await insertNewRunner(req, userId, new Date().toISOString(), threadId);
+  // Evict scope/routing caches that may still route the thread elsewhere.
+  await bindSandboxRunner(result.runnerId, threadId);
+  return result;
 }
 
 // ── Authentication ──────────────────────────────────────

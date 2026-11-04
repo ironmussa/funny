@@ -7,7 +7,7 @@ interface UsePromptDropParams {
   editorRef: React.RefObject<PromptEditorHandle | null>;
   loading: boolean;
   addFiles: (files: FileList) => Promise<void>;
-  addImageFile: (file: File) => Promise<void>;
+  addFile: (file: File) => Promise<void>;
   onEditorPaste?: (e: ClipboardEvent) => void;
 }
 
@@ -16,7 +16,7 @@ export function usePromptDrop({
   editorRef,
   loading,
   addFiles,
-  addImageFile,
+  addFile,
   onEditorPaste,
 }: UsePromptDropParams) {
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -68,11 +68,11 @@ export function usePromptDrop({
       for (const item of Array.from(items)) {
         if (!item.type.startsWith('image/')) continue;
         const file = item.getAsFile();
-        if (file) addImageFile(file);
+        if (file) addFile(file);
       }
       onEditorPaste?.(e);
     },
-    [addImageFile, onEditorPaste],
+    [addFile, onEditorPaste],
   );
 
   const endDrag = useCallback(() => setIsDragging(false), []);

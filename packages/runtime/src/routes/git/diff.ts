@@ -97,6 +97,50 @@ async function respondFileDiff(
   return c.json({ diff: result.value });
 }
 
+/** Error response when `cwd` is missing or not a git working tree; null when it is one. */
+async function rejectNonWorkTree(c: Context<HonoEnv>, cwd: string) {
+  if (!existsSync(cwd)) {
+    return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
+  }
+  const workTreeResult = await requireGitWorkingTree(cwd);
+  return workTreeResult.isErr() ? resultToResponse(c, workTreeResult) : null;
+}
+
+async function respondSummary(
+  c: Context<HonoEnv>,
+  spanName: string,
+  spanAttrs: Record<string, unknown>,
+  run: () => ReturnType<typeof getDiffSummary>,
+) {
+  const span = requestSpan(c, spanName, spanAttrs);
+  const result = await run();
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json(result.value);
+}
+
+/** GET .../diff/summary?exclude=&maxFiles= — file list of a working tree, without diff content. */
+async function respondDiffSummary(
+  c: Context<HonoEnv>,
+  cwd: string,
+  spanAttrs: Record<string, unknown>,
+) {
+  const notWorkTree = await rejectNonWorkTree(c, cwd);
+  if (notWorkTree) return notWorkTree;
+  const excludeRaw = c.req.query('exclude');
+  const excludePatterns = excludeRaw
+    ? excludeRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined;
+  const maxFilesRaw = c.req.query('maxFiles');
+  const maxFiles = maxFilesRaw ? parseInt(maxFilesRaw, 10) : undefined;
+  return respondSummary(c, 'git.diff_summary', spanAttrs, () =>
+    getDiffSummary(cwd, { excludePatterns, maxFiles, shareInFlight: true }),
+  );
+}
+
 /** GET .../diff/file?path= */
 function fileDiffHandler(scope: DiffScope) {
   return async (c: Context<HonoEnv>) => {
@@ -121,11 +165,9 @@ function submoduleSummaryHandler(scope: DiffScope) {
     }
     const submoduleCwd = requireSubmoduleCwd(cwd.value, relPath);
     if (submoduleCwd.isErr()) return resultToResponse(c, submoduleCwd);
-    const span = requestSpan(c, 'git.diff_submodule', { ...attrs, path: relPath });
-    const result = await getDiffSummary(submoduleCwd.value);
-    span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
-    if (result.isErr()) return resultToResponse(c, result);
-    return c.json(result.value);
+    return respondSummary(c, 'git.diff_submodule', { ...attrs, path: relPath }, () =>
+      getDiffSummary(submoduleCwd.value),
+    );
   };
 }
 
@@ -161,27 +203,7 @@ diffRoutes.get('/project/:projectId/diff/summary', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const cwd = cwdResult.value;
-  if (!existsSync(cwd)) {
-    return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
-  }
-  const workTreeResult = await requireGitWorkingTree(cwd);
-  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
-  const excludeRaw = c.req.query('exclude');
-  const excludePatterns = excludeRaw
-    ? excludeRaw
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : undefined;
-  const maxFilesRaw = c.req.query('maxFiles');
-  const maxFiles = maxFilesRaw ? parseInt(maxFilesRaw, 10) : undefined;
-  const projectId = c.req.param('projectId');
-  const span = requestSpan(c, 'git.diff_summary', { projectId });
-  const result = await getDiffSummary(cwd, { excludePatterns, maxFiles });
-  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json(result.value);
+  return respondDiffSummary(c, cwdResult.value, { projectId: c.req.param('projectId') });
 });
 
 // GET /api/git/project/:projectId/diff/submodule
@@ -201,26 +223,7 @@ diffRoutes.get('/:threadId/diff/summary', async (c) => {
   const userId = c.get('userId') as string;
   const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const cwd = cwdResult.value;
-  if (!existsSync(cwd)) {
-    return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
-  }
-  const workTreeResult = await requireGitWorkingTree(cwd);
-  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
-  const excludeRaw = c.req.query('exclude');
-  const excludePatterns = excludeRaw
-    ? excludeRaw
-        .split(',')
-        .map((s) => s.trim())
-        .filter(Boolean)
-    : undefined;
-  const maxFilesRaw = c.req.query('maxFiles');
-  const maxFiles = maxFilesRaw ? parseInt(maxFilesRaw, 10) : undefined;
-  const span = requestSpan(c, 'git.diff_summary', { threadId: c.req.param('threadId') });
-  const result = await getDiffSummary(cwd, { excludePatterns, maxFiles });
-  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
-  if (result.isErr()) return resultToResponse(c, result);
-  return c.json(result.value);
+  return respondDiffSummary(c, cwdResult.value, { threadId: c.req.param('threadId') });
 });
 
 // GET /api/git/:threadId/diff/submodule
@@ -241,11 +244,8 @@ diffRoutes.get('/:threadId/diff', async (c) => {
   const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
-  if (!existsSync(cwd)) {
-    return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
-  }
-  const workTreeResult = await requireGitWorkingTree(cwd);
-  if (workTreeResult.isErr()) return resultToResponse(c, workTreeResult);
+  const notWorkTree = await rejectNonWorkTree(c, cwd);
+  if (notWorkTree) return notWorkTree;
   const span = requestSpan(c, 'git.diff', { threadId: c.req.param('threadId') });
   const diffResult = await getDiff(cwd);
   span.end(

@@ -4,8 +4,11 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PullRequestsTab } from '@/components/PullRequestsTab';
-import { useGitStatusStore } from '@/stores/git-status-store';
-import { usePRDetailStore } from '@/stores/pr-detail-store';
+import { createDataLayer } from '@/data/data-layer';
+import { readGitStatusMaps } from '@/data/git-status/read';
+import { seedGitStatus } from '@/data/git-status/testing';
+import { replaceDataLayer } from '@/data/runtime';
+import { withThreadIndex } from '@/data/threads/testing';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -140,7 +143,7 @@ describe('PullRequestsTab', () => {
     apiMock.projectGetRemoteUrl.mockReturnValue(
       okAsync({ remoteUrl: 'https://github.com/acme/repo' }),
     );
-    usePRDetailStore.getState().clearAll();
+    replaceDataLayer(createDataLayer({ userId: null }));
     apiMock.githubStatus.mockReturnValue(okAsync({ connected: true, login: 'argenisleon' }));
     apiMock.githubPRFilterOptions.mockReturnValue(okAsync({ labels: [], users: [] }));
     apiMock.githubPRsSearch.mockReturnValue(okAsync({ prs: [], hasMore: false }));
@@ -175,14 +178,16 @@ describe('PullRequestsTab', () => {
       branchByProject: { 'project-1': 'qa' },
       initialized: true,
     } as any);
-    useThreadStore.setState({
-      threadDataById: { [thread.id]: thread },
-      threadsById: { [thread.id]: thread },
-      threadIdsByProject: { 'project-1': [thread.id] },
-      selectedThreadId: thread.id,
-      activeThread: thread,
-    } as any);
-    useGitStatusStore.setState({
+    useThreadStore.setState(
+      withThreadIndex({
+        threadDataById: { [thread.id]: thread },
+        threadsById: { [thread.id]: thread },
+        threadIdsByProject: { 'project-1': [thread.id] },
+        selectedThreadId: thread.id,
+        activeThread: thread,
+      } as any),
+    );
+    seedGitStatus({
       statusByBranch: { 'project-1:feature/pr-branch': makeStatus() },
       threadToBranchKey: { [thread.id]: 'project-1:feature/pr-branch' },
       statusByProject: {},
@@ -258,9 +263,7 @@ describe('PullRequestsTab', () => {
     );
 
     await waitFor(() => {
-      expect(
-        useGitStatusStore.getState().statusByBranch['project-1:feature/pr-branch']?.prNumber,
-      ).toBe(51);
+      expect(readGitStatusMaps().statusByBranch['project-1:feature/pr-branch']?.prNumber).toBe(51);
     });
   });
 
@@ -305,7 +308,8 @@ describe('PullRequestsTab', () => {
     expect(screen.queryByTestId('prs-toggle-view-all')).not.toBeInTheDocument();
     expect(screen.queryByTestId('prs-branch-focus-indicator')).not.toBeInTheDocument();
     expect(screen.getByTestId('prs-state-trigger')).toHaveTextContent('Open');
-    expect(screen.getAllByText(/Updated/).length).toBeGreaterThan(0);
+    // The list renders when the query resolves, after the request is made.
+    expect((await screen.findAllByText(/Updated/)).length).toBeGreaterThan(0);
     expect(screen.getByText('Last commit by')).toBeInTheDocument();
     expect(screen.getByText('alice')).toBeInTheDocument();
     const mergeLine = screen.getByTestId('pr-merge-line-52');

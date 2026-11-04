@@ -193,19 +193,36 @@ export function createRunnerAccess(deps: RunnerAccessDeps = {}): RunnerAccess {
         return verification.canAccessProject(runnerId, target.projectId);
       case 'projectless':
         return verification.canServeProjectless(runnerId);
-      case 'request': {
-        const route = await verification.routeTarget(target.path, target.query);
-        return route.kind === 'project'
-          ? verification.canAccessProject(runnerId, route.projectId)
-          : verification.canServeProjectless(runnerId);
-      }
+      case 'request':
+        return requestInScope(runnerId, target.path, target.query);
       case 'runner':
-        return target.projectId
-          ? verification.canAccessProject(runnerId, target.projectId)
-          : verification.canServeProjectless(runnerId);
+        return projectOrProjectlessInScope(runnerId, target.projectId);
       case 'owned-runner':
         return true;
     }
+  }
+
+  /** Scope of a raw proxied request: decided by the route's resolved target. */
+  async function requestInScope(
+    runnerId: string,
+    path: string,
+    query: Record<string, string>,
+  ): Promise<boolean> {
+    const route = await verification.routeTarget(path, query);
+    if (route.kind === 'thread-sandbox') return runnerId === route.runnerId;
+    return route.kind === 'project'
+      ? verification.canAccessProject(runnerId, route.projectId)
+      : verification.canServeProjectless(runnerId);
+  }
+
+  /** A project id (when present) is checked against the project rule, else projectless. */
+  async function projectOrProjectlessInScope(
+    runnerId: string,
+    projectId: string | null | undefined,
+  ): Promise<boolean> {
+    return projectId
+      ? verification.canAccessProject(runnerId, projectId)
+      : verification.canServeProjectless(runnerId);
   }
 
   /** Independent re-check of the (actor, runner, target) triple. */

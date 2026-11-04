@@ -23,6 +23,7 @@ import { EmptyState as SharedEmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjects } from '@/data/projects/hooks';
 import { useThreadChangedFiles } from '@/hooks/use-thread-changed-files';
 import { useTodoSnapshotsByAgent } from '@/hooks/use-todo-panel';
 import type { TodoSnapshot } from '@/hooks/use-todo-panel';
@@ -278,7 +279,7 @@ export function ActivityPane() {
 
   const wt = useThreadWorktreePath();
   const pid = useThreadProjectId();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const basePath = useMemo(() => {
     if (wt) return wt;
     if (!pid) return '';

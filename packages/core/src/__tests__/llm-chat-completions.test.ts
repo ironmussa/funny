@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { z } from 'zod';
 
 import type { AgentContext, AgentRole } from '../agents/llm/agent-context.js';
 import { AgentExecutor } from '../agents/llm/agent-executor.js';
@@ -131,5 +132,58 @@ describe('external Chat Completions executor', () => {
       modelId: 'custom-model',
     });
     expect(() => factory.resolve('funny-api-acp', 'sonnet')).toThrow('Unknown LLM provider');
+  });
+
+  it('sends extra (MCP) tools with their own JSON Schema, runs them, and adds their instructions', async () => {
+    const toolCall = {
+      id: 'call-mcp',
+      type: 'function',
+      function: { name: 'mcp__funny__funny_watch', arguments: '{"key":"k"}' },
+    };
+    fetchSpy = vi
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        Response.json({ choices: [{ message: { content: null, tool_calls: [toolCall] } }] }),
+      )
+      .mockResolvedValueOnce(
+        Response.json({
+          choices: [
+            { message: { content: '{"status":"passed","findings":[],"fixes_applied":0}' } },
+          ],
+        }),
+      );
+    const schema = { type: 'object', properties: { key: { type: 'string' } } };
+    const calls: unknown[] = [];
+    await new AgentExecutor('http://127.0.0.1:8317/v1', 'external-model').execute(role, context, {
+      extraTools: {
+        mcp__funny__funny_watch: {
+          description: 'Schedule a wake',
+          parameters: z.record(z.string(), z.unknown()),
+          jsonSchema: schema,
+          execute: async (args) => {
+            calls.push(args);
+            return 'scheduled';
+          },
+        },
+      },
+      extraInstructions: '## Tool server instructions',
+    });
+    const first = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+    expect(first.tools).toContainEqual({
+      type: 'function',
+      function: {
+        name: 'mcp__funny__funny_watch',
+        description: 'Schedule a wake',
+        parameters: schema,
+      },
+    });
+    expect(first.messages[0].content).toContain('## Tool server instructions');
+    expect(calls).toEqual([{ key: 'k' }]);
+    const second = JSON.parse(fetchSpy.mock.calls[1][1]?.body as string);
+    expect(second.messages.at(-1)).toEqual({
+      role: 'tool',
+      tool_call_id: 'call-mcp',
+      content: 'scheduled',
+    });
   });
 });

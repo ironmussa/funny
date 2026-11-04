@@ -11,13 +11,6 @@
  * an event prop on each tick.
  */
 
-// Re-export so existing imports from this module keep working.
-export {
-  BROWSER_SESSION_VIEWPORT_WIDTH,
-  BROWSER_SESSION_VIEWPORT_HEIGHT,
-  BROWSER_SESSION_ASPECT_RATIO,
-} from './browser-session-viewport';
-
 import {
   clearBrowserSessionDiagnostics,
   recordBrowserSessionFrame,

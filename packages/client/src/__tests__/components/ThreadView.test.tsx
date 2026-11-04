@@ -2,6 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ThreadView } from '@/components/ThreadView';
+import { withProjects } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -132,22 +133,24 @@ vi.mock('remark-gfm', () => ({
 
 beforeEach(() => {
   useThreadStore.setState({ threadDataById: {} });
-  useAppStore.setState({
-    projects: [
-      {
-        id: 'p1',
-        name: 'Test',
-        path: '/tmp/test',
-        userId: 'user-1',
-        createdAt: '',
-        sortOrder: 0,
-      },
-    ],
-    selectedProjectId: 'p1',
-    selectedThreadId: null,
-    activeThread: null,
-    newThreadProjectId: null,
-  });
+  useAppStore.setState(
+    withProjects({
+      projects: [
+        {
+          id: 'p1',
+          name: 'Test',
+          path: '/tmp/test',
+          userId: 'user-1',
+          createdAt: '',
+          sortOrder: 0,
+        },
+      ],
+      selectedProjectId: 'p1',
+      selectedThreadId: null,
+      activeThread: null,
+      newThreadProjectId: null,
+    }),
+  );
   vi.clearAllMocks();
 });
 

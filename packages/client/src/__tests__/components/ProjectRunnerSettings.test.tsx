@@ -30,6 +30,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 import { ProjectRunnerSettings } from '@/components/settings/ProjectRunnerSettings';
+import { withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 function runner(runnerId: string, role: 'general' | 'dedicated', online = true): RunnerInfo {
@@ -62,10 +63,12 @@ function settings(overrides: Partial<ProjectRunnerSettingsResponse> = {}) {
 describe('ProjectRunnerSettings', () => {
   beforeEach(() => {
     for (const m of [mockGet, mockUpdate, mockGrant, mockRevoke, mockSetGeneral]) m.mockReset();
-    useProjectStore.setState({
-      projects: [{ id: 'p1', name: 'P1' } as Project],
-      selectedProjectId: 'p1',
-    });
+    useProjectStore.setState(
+      withProjects({
+        projects: [{ id: 'p1', name: 'P1' } as Project],
+        selectedProjectId: 'p1',
+      }),
+    );
   });
 
   test('project on the general runner: no grants list, no warnings', async () => {

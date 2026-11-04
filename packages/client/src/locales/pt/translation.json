@@ -15,6 +15,7 @@
     "tooltipWorktreeWithPath": "Branch do worktree: {{branch}} — {{path}}"
   },
   "sidebar": {
+    "openExistingProject": "Abrir projeto existente",
     "projects": "Projetos",
     "addProject": "Adicionar projeto",
     "newThread": "Nova thread",
@@ -229,6 +230,8 @@
     "addProjectDescription": "Abra um projeto na barra lateral para executar agentes em paralelo",
     "agentWorking": "O agente está trabalhando...",
     "waitingForResponse": "Aguardando sua resposta...",
+    "providerAuthExpired": "Sua sessão com o provedor expirou ou a autenticação falhou. Reconecte e tente enviar sua mensagem novamente.",
+    "reconnectProvider": "Reconectar",
     "providerErrorWaiting": "O provedor retornou um erro. A execução está pausada — tente novamente ou envie uma mensagem para continuar.",
     "planWaitingForResponse": "Aceite ou rejeite o plano",
     "rejectPlan": "Rejeitar plano",
@@ -610,6 +613,7 @@
     "resetPromptModels": "Mostrar todos os modelos",
     "organizations": "Organizações",
     "runners": "Runners",
+    "sandboxes": "Sandboxes",
     "agentTemplates": "Modelos de agente",
     "toolPermissions": "Permissões de Ferramentas",
     "toolPermissionsDesc": "Escolha como cada ferramenta se comporta: Permitir (auto-aprovada), Perguntar (requer aprovação) ou Negar (bloqueada).",
@@ -746,6 +750,9 @@
     "acceptPlan": "Aceitar Plano",
     "input": "Entrada",
     "output": "Saída",
+    "mcpError": "Erro",
+    "raw": "Bruto",
+    "formatted": "Formatado",
     "waitingForOutput": "Aguardando saída...",
     "diffUnavailableNoTracking": "A diferença não pode ser exibida porque este arquivo não é rastreado pelo Git.",
     "openInEditor": "Abrir no {{editor}}: {{path}}",
@@ -756,7 +763,40 @@
     "other": "Outra",
     "otherPlaceholder": "Escreva sua resposta...",
     "next": "Próximo",
-    "continue": "Continuar"
+    "continue": "Continuar",
+    "loadTools": "Carregar ferramentas",
+    "skill": "Skill",
+    "newTask": "Nova tarefa",
+    "updateTask": "Atualizar tarefa",
+    "taskOutput": "Saída da tarefa",
+    "stopTask": "Parar tarefa",
+    "scheduleWakeup": "Despertar agendado",
+    "monitor": "Monitor",
+    "sendMessage": "Enviar mensagem",
+    "applyPatch": "Aplicar patch",
+    "updatePlan": "Atualizar plano",
+    "planMode": "Modo plano",
+    "mcp": {
+      "backgroundJob": "Tarefa em segundo plano",
+      "scheduledCheck": "Verificação agendada",
+      "newThread": "Nova conversa",
+      "searchThreads": "Buscar conversas",
+      "runJavaScript": "Executar JavaScript",
+      "browserOpen": "Abrir página",
+      "browserNavigate": "Navegar",
+      "browserSnapshot": "Ler página",
+      "browserAct": "Interagir",
+      "browserEvaluate": "Executar JavaScript na página",
+      "browserWaitFor": "Aguardar a página",
+      "browserStatus": "Status",
+      "browserResize": "Redimensionar",
+      "browserClose": "Fechar navegador",
+      "browserDialog": "Responder diálogo",
+      "browserSetAppearance": "Alterar aparência",
+      "browserRecordingStart": "Iniciar gravação",
+      "browserRecordingStop": "Parar gravação",
+      "showInBrowserPanel": "Ver no painel do navegador"
+    }
   },
   "plan": {
     "reviewPlan": "Revisar plano",
@@ -924,6 +964,7 @@
     "importError": "Erro ao importar hooks"
   },
   "preview": {
+    "browser": "Navegador",
     "open": "Abrir Preview",
     "close": "Fechar Preview",
     "refresh": "Atualizar Preview",
@@ -1406,7 +1447,17 @@
       "CONFLICT": "{{message}}",
       "PROCESS_ERROR": "{{message}}",
       "INTERNAL": "Falha ao criar o projeto. O servidor pode estar com problemas."
-    }
+    },
+    "threadUpdateFailed": "Não foi possível atualizar a thread. Sua alteração foi desfeita.",
+    "templateUpdateFailed": "Não foi possível atualizar o modelo de agente. Sua alteração foi desfeita.",
+    "templateCreateFailed": "Não foi possível criar o modelo de agente.",
+    "backgroundCancelFailed": "Não foi possível cancelar. Continua em execução.",
+    "automationUpdateFailed": "Não foi possível atualizar a automação. Sua alteração foi desfeita.",
+    "automationCreateFailed": "Não foi possível criar a automação.",
+    "automationTriggerFailed": "Não foi possível iniciar a execução da automação.",
+    "commentDeleteFailed": "Não foi possível excluir o comentário.",
+    "approvalRespondFailed": "Não foi possível enviar sua resposta. A aprovação continua pendente.",
+    "projectUpdateFailed": "Não foi possível atualizar o projeto. Sua alteração foi desfeita."
   },
   "agentResources": {
     "subtitle": "Skills, comandos e servidores MCP por provedor.",

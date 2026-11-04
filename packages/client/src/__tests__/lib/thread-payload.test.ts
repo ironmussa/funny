@@ -1,7 +1,13 @@
 import type { ToolPermission } from '@funny/shared';
 import { describe, test, expect } from 'vitest';
 
-import { buildThreadPayload, type BuildInput } from '@/lib/thread-payload';
+import {
+  buildRuntimeModes,
+  buildThreadPayload,
+  buildThreadTitle,
+  parseRuntimeChoice,
+  type BuildInput,
+} from '@/lib/thread-payload';
 import { ALL_STANDARD_TOOLS } from '@/stores/settings-store';
 
 const defaultPermissions: Record<string, ToolPermission> = Object.fromEntries(
@@ -159,5 +165,103 @@ describe('buildThreadPayload', () => {
 
     expect(result.kind).toBe('normal');
     expect(result.payload).toMatchObject({ mode: 'worktree' });
+  });
+});
+
+describe('buildThreadTitle', () => {
+  test('lists inline and uploaded attachments path-only so the badge counts all of them', () => {
+    const prompt =
+      '<referenced-files>\n<file path="a.md">\n# A\n</file>\n</referenced-files>\n\nRead these';
+    expect(buildThreadTitle(prompt, ['spec.pdf'])).toBe(
+      '<referenced-files>\n<file path="a.md" />\n<file path="spec.pdf" />\n</referenced-files>\n\nRead these',
+    );
+  });
+
+  test('is the plain text when there are no attachments', () => {
+    expect(buildThreadTitle('Fix the bug')).toBe('Fix the bug');
+  });
+
+  test('falls back to the plain text when the attachment list is too long', () => {
+    const names = Array.from({ length: 40 }, (_, i) => `file-${i}.pdf`);
+    expect(buildThreadTitle('Read these', names)).toBe('Read these');
+  });
+});
+
+describe('attachments reach every thread kind', () => {
+  const opts = {
+    model: 'sonnet',
+    mode: 'autoEdit',
+    fileReferences: [{ path: 'src/a.ts' }],
+    stagedUploads: ['s-1', 's-2'],
+  };
+
+  test('backlog (idle) threads keep @-mentions and staged uploads', () => {
+    // Regression: the idle payload used to drop fileReferences entirely.
+    const result = buildThreadPayload(baseInput({ forceIdle: true, opts }));
+    expect(result.kind).toBe('idle');
+    expect(result.payload).toMatchObject({
+      fileReferences: [{ path: 'src/a.ts' }],
+      stagedUploads: ['s-1', 's-2'],
+    });
+  });
+
+  test('normal threads forward staged upload ids', () => {
+    const result = buildThreadPayload(baseInput({ opts }));
+    expect(result.kind).toBe('normal');
+    expect(result.payload).toMatchObject({
+      fileReferences: [{ path: 'src/a.ts' }],
+      stagedUploads: ['s-1', 's-2'],
+    });
+  });
+
+  test('scratch threads forward staged upload ids', () => {
+    const result = buildThreadPayload(baseInput({ isScratch: true, projectId: null, opts }));
+    expect(result.kind).toBe('scratch');
+    expect(result.payload).toMatchObject({
+      fileReferences: [{ path: 'src/a.ts' }],
+      stagedUploads: ['s-1', 's-2'],
+    });
+  });
+});
+
+describe('sandbox runtime (thread-sandboxes)', () => {
+  test('a sandbox choice sends the connection and forces local mode', () => {
+    const built = buildThreadPayload(
+      baseInput({
+        opts: {
+          model: 'sonnet',
+          mode: 'autoEdit',
+          threadMode: 'worktree',
+          ...parseRuntimeChoice('sandbox:conn-1'),
+        },
+      }),
+    );
+    expect(built.kind).toBe('normal');
+    expect(built.payload).toMatchObject({
+      runtime: 'sandbox',
+      mode: 'local',
+      sandbox: { connectionId: 'conn-1' },
+    });
+  });
+
+  test('local and remote choices carry no sandbox', () => {
+    expect(parseRuntimeChoice('local')).toEqual({ runtime: 'local' });
+    expect(parseRuntimeChoice('remote')).toEqual({ runtime: 'remote' });
+    expect(buildThreadPayload(baseInput()).payload).not.toHaveProperty('sandbox');
+  });
+
+  test('runtime modes: one sandbox entry per connection, none for scratch', () => {
+    const sandboxConnections = [
+      { id: 'c1', label: 'Boat' },
+      { id: 'c2', label: 'Work' },
+    ];
+    expect(
+      buildRuntimeModes({ hasLauncher: true, sandboxConnections, isScratch: false }).map(
+        (m) => m.value,
+      ),
+    ).toEqual(['local', 'remote', 'sandbox:c1', 'sandbox:c2']);
+    expect(buildRuntimeModes({ hasLauncher: false, sandboxConnections, isScratch: true })).toEqual([
+      { value: 'local', label: 'Local' },
+    ]);
   });
 });

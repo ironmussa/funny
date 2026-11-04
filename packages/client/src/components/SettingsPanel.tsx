@@ -12,6 +12,7 @@ import {
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useProjectById } from '@/data/projects/hooks';
 import { buildPath } from '@/lib/url';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -24,9 +25,7 @@ export function SettingsPanelBody() {
   const settingsReturnPath = useUIStore((s) => s.settingsReturnPath);
   const setSettingsReturnPath = useUIStore((s) => s.setSettingsReturnPath);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const selectedProject = useProjectStore((s) =>
-    s.selectedProjectId ? s.projects.find((p) => p.id === s.selectedProjectId) : undefined,
-  );
+  const selectedProject = useProjectById(useProjectStore((s) => s.selectedProjectId));
   const authUser = useAuthStore((s) => s.user);
 
   // Project-config tabs mutate shared project state, so they're limited to the

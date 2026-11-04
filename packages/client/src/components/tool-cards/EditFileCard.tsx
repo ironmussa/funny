@@ -21,6 +21,7 @@ import {
   toEditorUri,
   openFileInEditor,
   getEditorLabel,
+  isPathWithin,
   useCurrentProjectPath,
   makeRelativePath,
 } from './utils';
@@ -259,6 +260,11 @@ export function EditFileCard({
     if (!diffMounted) return;
     if (rawDiff) return;
     if (!filePath || newString == null) return;
+    // The runtime only serves files inside the thread's project/worktree; a
+    // read outside it (e.g. `/tmp` scripts, Claude memory files) is a
+    // guaranteed 403 that only adds console noise. Scratch threads have no
+    // client-side base path, so they keep trying.
+    if (projectPath && !isPathWithin(filePath, projectPath)) return;
     let cancelled = false;
     api.readFile(filePath).then((result) => {
       if (cancelled || result.isErr()) return;
@@ -271,7 +277,7 @@ export function EditFileCard({
     return () => {
       cancelled = true;
     };
-  }, [diffMounted, filePath, newString, rawDiff]);
+  }, [diffMounted, filePath, newString, projectPath, rawDiff]);
 
   const diffSlotRef = useCallback(
     (el: HTMLDivElement | null) => {

@@ -3,11 +3,6 @@ import { useEffect, useRef } from 'react';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { browserSessionClient } from '@/lib/browser-session-client';
-import {
-  BROWSER_SESSION_ASPECT_RATIO,
-  BROWSER_SESSION_VIEWPORT_HEIGHT,
-  BROWSER_SESSION_VIEWPORT_WIDTH,
-} from '@/lib/browser-session-frames';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
 import { BrowserSessionCanvas } from './BrowserSessionCanvas';
@@ -18,26 +13,16 @@ import { PinTool } from './tools/PinTool';
 import { RegionTool } from './tools/RegionTool';
 
 // CDP modifiers bitmask: 1=Alt, 2=Ctrl, 4=Meta, 8=Shift
-const buildModifiers = (event: React.KeyboardEvent<HTMLDivElement>): number =>
+const buildModifiers = (event: React.KeyboardEvent | React.MouseEvent): number =>
   (event.altKey ? 1 : 0) |
   (event.ctrlKey ? 2 : 0) |
   (event.metaKey ? 4 : 0) |
   (event.shiftKey ? 8 : 0);
 
 export function BrowserViewport() {
-  const loadedUrl = useBrowserPanelStore((s) => s.loadedUrl);
-  const tool = useBrowserPanelStore((s) => s.tool);
-  const setLoadError = useBrowserPanelStore((s) => s.setLoadError);
-  const overlaysVisible = useBrowserPanelStore((s) => s.overlaysVisible);
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
-  const sessionStatus = useBrowserPanelStore((s) => s.sessionStatus);
-  const sessionError = useBrowserPanelStore((s) => s.sessionError);
-  const openBrowserSession = useBrowserPanelStore((s) => s.openBrowserSession);
-  const inspectActive = useBrowserPanelStore((s) => s.inspectActive);
-
-  const overlayRef = useRef<HTMLDivElement | null>(null);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-
+  const loadedUrl = useBrowserPanelStore((s) => s.loadedUrl);
+  const setLoadError = useBrowserPanelStore((s) => s.setLoadError);
   // Heartbeat: keep the runner session alive while the viewport is mounted.
   // The runner reaps sessions idle for >90s (see HEARTBEAT_TIMEOUT_MS in
   // browser-session-manager.ts).
@@ -54,7 +39,157 @@ export function BrowserViewport() {
     setLoadError(null);
   }, [loadedUrl, setLoadError]);
 
-  // Translate canvas-relative CSS coords → CDP viewport coords (1920×1080).
+  return (
+    <div className="bg-background relative flex h-full w-full items-center justify-center p-2">
+      {sessionId ? (
+        <ActiveBrowserViewport />
+      ) : (
+        <EmptyState
+          fill={false}
+          testId="browser-panel-empty"
+          title={loadedUrl ? null : 'Paste a URL above to start.'}
+        />
+      )}
+      <BrowserSessionStatus />
+    </div>
+  );
+}
+
+function ActiveBrowserViewport() {
+  const userControls = useBrowserPanelStore((s) => !s.sessionThreadId || s.controller === 'user');
+  const tool = useBrowserPanelStore((s) => s.tool);
+  const overlaysVisible = useBrowserPanelStore((s) => s.overlaysVisible);
+  const sessionId = useBrowserPanelStore((s) => s.sessionId);
+  const viewport = useBrowserPanelStore((s) => s.viewport);
+  const inspectActive = useBrowserPanelStore((s) => s.inspectActive);
+
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+  const showAnnotations = userControls && overlaysVisible;
+  const canForwardInput = acceptsBrowserInput(userControls, tool, inspectActive, sessionId);
+  const inputHandlers = useBrowserInputHandlers(canvasRef, viewport, sessionId, canForwardInput);
+
+  return (
+    <div
+      className="relative max-h-full max-w-full"
+      style={{
+        aspectRatio: `${viewport.width} / ${viewport.height}`,
+        width: '100%',
+        maxWidth: `calc((100% - 1rem) * 1)`,
+      }}
+    >
+      <div className="absolute inset-0">
+        <BrowserSessionCanvas canvasRef={canvasRef} />
+      </div>
+
+      <div
+        ref={overlayRef}
+        data-testid="browser-panel-overlay"
+        role="application"
+        aria-label="Remote browser viewport"
+        // Capture-phase shortcuts (Ctrl+F) skip targets inside this.
+        data-keyboard-passthrough
+        tabIndex={userControls ? 0 : -1}
+        className="absolute inset-0 select-none focus:outline-hidden"
+        style={{
+          pointerEvents: userControls ? 'auto' : 'none',
+          WebkitUserSelect: 'none',
+          userSelect: 'none',
+        }}
+        onMouseDown={inputHandlers.onBrowseMouseDownWithFocus}
+        onMouseUp={inputHandlers.onBrowseMouseUp}
+        onMouseMove={inputHandlers.onBrowseMouseMove}
+        onWheel={inputHandlers.onBrowseWheel}
+        onKeyDown={inputHandlers.onBrowseKeyDown}
+        onKeyUp={inputHandlers.onBrowseKeyUp}
+        onContextMenu={inputHandlers.onBrowseContextMenu}
+        onDragStart={(e) => e.preventDefault()}
+      >
+        <BrowserAnnotations
+          overlayRef={overlayRef}
+          canvasRef={canvasRef}
+          showAnnotations={showAnnotations}
+          tool={tool}
+        />
+      </div>
+    </div>
+  );
+}
+
+function DisconnectedBrowser() {
+  const sessionError = useBrowserPanelStore((s) => s.sessionError);
+  const loadedUrl = useBrowserPanelStore((s) => s.loadedUrl);
+  const openBrowserSession = useBrowserPanelStore((s) => s.openBrowserSession);
+  return (
+    <div
+      data-testid="browser-panel-disconnected"
+      className="bg-background/90 text-muted-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-sm"
+    >
+      <div>Browser session disconnected.</div>
+      {sessionError && (
+        <pre
+          data-testid="browser-panel-session-error"
+          className="border-destructive/30 bg-destructive/5 text-destructive max-h-40 max-w-full overflow-auto rounded-md border p-2 text-left text-xs whitespace-pre-wrap"
+        >
+          {sessionError}
+        </pre>
+      )}
+      <button
+        type="button"
+        data-testid="browser-panel-reconnect"
+        onClick={() => {
+          if (loadedUrl) void openBrowserSession(loadedUrl);
+        }}
+        className="border-border bg-card text-foreground hover:bg-muted rounded-md border px-3 py-1"
+      >
+        Reconnect
+      </button>
+    </div>
+  );
+}
+
+function BrowserAnnotations({
+  overlayRef,
+  canvasRef,
+  showAnnotations,
+  tool,
+}: {
+  overlayRef: React.RefObject<HTMLDivElement | null>;
+  canvasRef: React.RefObject<HTMLCanvasElement | null>;
+  showAnnotations: boolean;
+  tool: string;
+}) {
+  return (
+    <div
+      className="absolute inset-0"
+      style={{
+        visibility: showAnnotations ? 'visible' : 'hidden',
+        pointerEvents: showAnnotations ? 'auto' : 'none',
+      }}
+      aria-hidden={!showAnnotations}
+    >
+      <PinTool
+        overlayRef={overlayRef}
+        canvasRef={canvasRef}
+        isActive={showAnnotations && tool === 'pin'}
+      />
+      <RegionTool overlayRef={overlayRef} isActive={showAnnotations && tool === 'region'} />
+      <DrawTool overlayRef={overlayRef} isActive={showAnnotations && tool === 'draw'} />
+      {showAnnotations && <TestIdOverlay />}
+      {showAnnotations && <InspectOverlay overlayRef={overlayRef} canvasRef={canvasRef} />}
+    </div>
+  );
+}
+
+function useBrowserInputHandlers(
+  canvasRef: React.RefObject<HTMLCanvasElement | null>,
+  viewport: { width: number; height: number },
+  sessionId: string | null,
+  canForwardInput: boolean,
+) {
+  // Translate canvas-relative CSS coords → CDP viewport coords (the session's
+  // page viewport — 1920×1080 unless the agent resized it).
   // We measure against the CANVAS (not the overlay) because the canvas is the
   // visible content the user is aiming at — using the overlay's rect can drift
   // by a few pixels if its size doesn't exactly match the canvas (subpixel
@@ -64,27 +199,13 @@ export function BrowserViewport() {
     if (!el) return { x: 0, y: 0 };
     const rect = el.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return { x: 0, y: 0 };
-    const scaleX = BROWSER_SESSION_VIEWPORT_WIDTH / rect.width;
-    const scaleY = BROWSER_SESSION_VIEWPORT_HEIGHT / rect.height;
+    const scaleX = viewport.width / rect.width;
+    const scaleY = viewport.height / rect.height;
     return {
       x: Math.round((e.clientX - rect.left) * scaleX),
       y: Math.round((e.clientY - rect.top) * scaleY),
     };
   };
-
-  // Inspect mode overrides Browse pointer routing — while inspect is on, the
-  // overlay's mousemove drives the hover tooltip and mouse/keys are NOT
-  // forwarded to CDP (you can't simultaneously interact AND inspect, same as
-  // dev tools).
-  const overlayPointer = overlaysVisible ? 'auto' : 'none';
-
-  // Forward browse-mode mouse/wheel to the runner. No-op for non-browse tools.
-  //
-  // `preventDefault()` on every mouse event matters MORE than just stopping
-  // text selection — it also prevents the browser from moving focus to a
-  // selected text node (which strips focus from the overlay div, so
-  // subsequent typing goes to that node instead of being forwarded to CDP).
-  const canForwardInput = tool === 'browse' && !inspectActive && !!sessionId;
 
   const onBrowseMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
@@ -96,6 +217,7 @@ export function BrowserViewport() {
       y,
       button: e.button === 2 ? 'right' : e.button === 1 ? 'middle' : 'left',
       clickCount: e.detail || 1,
+      modifiers: buildModifiers(e),
     });
   };
   const onBrowseMouseUp = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -108,12 +230,19 @@ export function BrowserViewport() {
       y,
       button: e.button === 2 ? 'right' : e.button === 1 ? 'middle' : 'left',
       clickCount: e.detail || 1,
+      modifiers: buildModifiers(e),
     });
   };
   const onBrowseMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
     const { x, y } = toViewportCoords(e);
-    browserSessionClient.input(sessionId!, { kind: 'mouseMove', x, y });
+    browserSessionClient.input(sessionId!, {
+      kind: 'mouseMove',
+      x,
+      y,
+      buttons: e.buttons,
+      modifiers: buildModifiers(e),
+    });
   };
   const onBrowseWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
@@ -137,6 +266,9 @@ export function BrowserViewport() {
   const onBrowseKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
     e.preventDefault(); // don't let the browser handle (e.g. Tab navigation in funny)
+    // Keys typed into the remote page are the page's: funny's own shortcuts
+    // (`?`, Ctrl+P, Alt+←…) listen on `window` and must not see them.
+    e.stopPropagation();
     const printable = e.key.length === 1 && !e.ctrlKey && !e.metaKey;
     browserSessionClient.input(sessionId!, {
       kind: 'keyDown',
@@ -144,17 +276,22 @@ export function BrowserViewport() {
       code: e.code,
       text: printable ? e.key : undefined,
       modifiers: buildModifiers(e),
+      keyCode: e.keyCode,
+      location: e.location,
     });
   };
 
   const onBrowseKeyUp = (e: React.KeyboardEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
     e.preventDefault();
+    e.stopPropagation();
     browserSessionClient.input(sessionId!, {
       kind: 'keyUp',
       key: e.key,
       code: e.code,
       modifiers: buildModifiers(e),
+      keyCode: e.keyCode,
+      location: e.location,
     });
   };
 
@@ -166,64 +303,32 @@ export function BrowserViewport() {
     onBrowseMouseDown(e);
   };
 
+  return {
+    onBrowseMouseDownWithFocus,
+    onBrowseMouseUp,
+    onBrowseMouseMove,
+    onBrowseWheel,
+    onBrowseKeyDown,
+    onBrowseKeyUp,
+    onBrowseContextMenu,
+  };
+}
+
+function acceptsBrowserInput(
+  userControls: boolean,
+  tool: string,
+  inspectActive: boolean,
+  sessionId: string | null,
+) {
+  return userControls && tool === 'browse' && !inspectActive && !!sessionId;
+}
+
+function BrowserSessionStatus() {
+  const sessionStatus = useBrowserPanelStore((s) => s.sessionStatus);
   const showCdpSpinner = sessionStatus === 'spawning';
   const showCdpDisconnected = sessionStatus === 'disconnected';
-
-  // Layout: a 16:9 aspect-ratio wrapper centered in the panel, letterboxed by
-  // `bg-background`. Canvas + overlay both fill that wrapper exactly, so
-  // click coords map cleanly 1:1 to the visible content.
   return (
-    <div className="bg-background relative flex h-full w-full items-center justify-center p-2">
-      {sessionId ? (
-        <div
-          className="relative max-h-full max-w-full"
-          style={{
-            aspectRatio: BROWSER_SESSION_ASPECT_RATIO,
-            width: '100%',
-            maxWidth: `calc((100% - 1rem) * 1)`,
-          }}
-        >
-          <div className="absolute inset-0">
-            <BrowserSessionCanvas canvasRef={canvasRef} />
-          </div>
-
-          <div
-            ref={overlayRef}
-            data-testid="browser-panel-overlay"
-            role="application"
-            aria-label="Remote browser viewport"
-            tabIndex={0}
-            className="absolute inset-0 select-none focus:outline-hidden"
-            style={{
-              pointerEvents: overlayPointer,
-              visibility: overlaysVisible ? 'visible' : 'hidden',
-              WebkitUserSelect: 'none',
-              userSelect: 'none',
-            }}
-            onMouseDown={onBrowseMouseDownWithFocus}
-            onMouseUp={onBrowseMouseUp}
-            onMouseMove={onBrowseMouseMove}
-            onWheel={onBrowseWheel}
-            onKeyDown={onBrowseKeyDown}
-            onKeyUp={onBrowseKeyUp}
-            onContextMenu={onBrowseContextMenu}
-            onDragStart={(e) => e.preventDefault()}
-          >
-            <PinTool overlayRef={overlayRef} canvasRef={canvasRef} isActive={tool === 'pin'} />
-            <RegionTool overlayRef={overlayRef} isActive={tool === 'region'} />
-            <DrawTool overlayRef={overlayRef} isActive={tool === 'draw'} />
-            <TestIdOverlay />
-            <InspectOverlay overlayRef={overlayRef} canvasRef={canvasRef} />
-          </div>
-        </div>
-      ) : (
-        <EmptyState
-          fill={false}
-          testId="browser-panel-empty"
-          title={loadedUrl ? null : 'Paste a URL above to start.'}
-        />
-      )}
-
+    <>
       {showCdpSpinner && (
         <LoadingState
           testId="browser-panel-spawning"
@@ -232,32 +337,7 @@ export function BrowserViewport() {
         />
       )}
 
-      {showCdpDisconnected && (
-        <div
-          data-testid="browser-panel-disconnected"
-          className="bg-background/90 text-muted-foreground absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center text-sm"
-        >
-          <div>Browser session disconnected.</div>
-          {sessionError && (
-            <pre
-              data-testid="browser-panel-session-error"
-              className="border-destructive/30 bg-destructive/5 text-destructive max-h-40 max-w-full overflow-auto rounded-md border p-2 text-left text-xs whitespace-pre-wrap"
-            >
-              {sessionError}
-            </pre>
-          )}
-          <button
-            type="button"
-            data-testid="browser-panel-reconnect"
-            onClick={() => {
-              if (loadedUrl) void openBrowserSession(loadedUrl);
-            }}
-            className="border-border bg-card text-foreground hover:bg-muted rounded-md border px-3 py-1"
-          >
-            Reconnect
-          </button>
-        </div>
-      )}
-    </div>
+      {showCdpDisconnected && <DisconnectedBrowser />}
+    </>
   );
 }

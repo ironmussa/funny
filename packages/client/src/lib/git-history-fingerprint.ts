@@ -1,6 +1,6 @@
 import type { GitStatusInfo } from '@funny/shared';
 
-import type { ProjectGitStatus } from '@/stores/git-status-store';
+import type { ProjectGitStatus } from '@/data/git-status/keys';
 
 /**
  * Reduce a git status to the fields that move when the commit HISTORY moves,

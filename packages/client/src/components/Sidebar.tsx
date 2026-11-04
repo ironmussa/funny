@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Sidebar, useSidebar } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjects } from '@/data/projects/hooks';
 import { useSidebarActions } from '@/hooks/use-sidebar-actions';
 import { useSidebarDragDrop } from '@/hooks/use-sidebar-drag-drop';
 import { useSidebarScrollSync } from '@/hooks/use-sidebar-scroll-sync';
@@ -37,7 +38,7 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
 function AppSidebarBody({ singleProjectId }: { singleProjectId?: string | null }) {
   const navigate = useStableNavigate();
   // project-store
-  const allProjects = useProjectStore((s) => s.projects);
+  const allProjects = useProjects();
   const projects = singleProjectId
     ? allProjects.filter((p) => p.id === singleProjectId)
     : allProjects;

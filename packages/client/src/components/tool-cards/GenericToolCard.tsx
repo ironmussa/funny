@@ -224,7 +224,7 @@ function formatToolValue(value: unknown): string {
   }
 }
 
-function ToolValue({ value }: { value: unknown }) {
+export function ToolValue({ value }: { value: unknown }) {
   const isJson = typeof value !== 'string';
   const text = useMemo(() => formatToolValue(value), [value]);
   const ansiConverter = useMemo(

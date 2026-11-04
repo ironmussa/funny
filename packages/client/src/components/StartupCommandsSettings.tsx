@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjects } from '@/data/projects/hooks';
 import { sendTerminalRealtime } from '@/hooks/use-ws';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
@@ -27,7 +28,7 @@ function stopStartupCommand(cmd: StartupCommand) {
 export function StartupCommandsSettings() {
   const { t } = useTranslation();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const [commands, setCommands] = useState<StartupCommand[]>([]);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);

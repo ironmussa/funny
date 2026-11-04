@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { normalize } from '@/components/ui/highlight-text';
 import { SearchBar } from '@/components/ui/search-bar';
 import { VirtualThreadList } from '@/components/VirtualThreadList';
+import { useProjects } from '@/data/projects/hooks';
 import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
 import { useThreadsForProject } from '@/lib/thread-selectors';
 import { useAppStore } from '@/stores/app-store';
@@ -36,7 +37,7 @@ export function SearchView({
   onSelectThread,
 }: Props) {
   const { t } = useTranslation();
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
   const threads = useThreadsForProject(projectId);
   const project = projects.find((p) => p.id === projectId);
 

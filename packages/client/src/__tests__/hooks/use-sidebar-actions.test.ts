@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { withThreadIndex } from '@/data/threads/testing';
 import { useSidebarActions } from '@/hooks/use-sidebar-actions';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -60,35 +61,39 @@ vi.mock('@/lib/api', () => ({
 describe('useSidebarActions — delete selected thread from Activity', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useThreadStore.setState({
-      selectedThreadId: null,
-      activeThread: null,
-      threadsById: {},
-      threadIdsByProject: {},
-      scratchThreadIds: [],
-      deleteThread: mockDeleteThread,
-      deleteScratchThread: mockDeleteScratchThread,
-      archiveThread: mockArchiveThread,
-      renameThread: mockRenameThread,
-      pinThread: mockPinThread,
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: null,
+        activeThread: null,
+        threadsById: {},
+        threadIdsByProject: {},
+        scratchThreadIds: [],
+        deleteThread: mockDeleteThread,
+        deleteScratchThread: mockDeleteScratchThread,
+        archiveThread: mockArchiveThread,
+        renameThread: mockRenameThread,
+        pinThread: mockPinThread,
+      } as any),
+    );
   });
 
   test('navigates home before deleting a selected scratch thread', async () => {
     const scratchId = 'scratch-hola';
-    useThreadStore.setState({
-      selectedThreadId: scratchId,
-      threadsById: {
-        [scratchId]: {
-          id: scratchId,
-          projectId: '',
-          title: 'hola',
-          isScratch: true,
-          status: 'completed',
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: scratchId,
+        threadsById: {
+          [scratchId]: {
+            id: scratchId,
+            projectId: '',
+            title: 'hola',
+            isScratch: true,
+            status: 'completed',
+          },
         },
-      },
-      scratchThreadIds: [scratchId],
-    } as any);
+        scratchThreadIds: [scratchId],
+      } as any),
+    );
 
     const { result } = renderHook(() => useSidebarActions());
     const callOrder: string[] = [];
@@ -113,18 +118,20 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
 
   test('navigates to project before deleting a selected project thread', async () => {
     const threadId = 't1';
-    useThreadStore.setState({
-      selectedThreadId: threadId,
-      threadsById: {
-        [threadId]: {
-          id: threadId,
-          projectId: 'p1',
-          title: 'Fix bug',
-          status: 'completed',
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: threadId,
+        threadsById: {
+          [threadId]: {
+            id: threadId,
+            projectId: 'p1',
+            title: 'Fix bug',
+            status: 'completed',
+          },
         },
-      },
-      threadIdsByProject: { p1: [threadId] },
-    } as any);
+        threadIdsByProject: { p1: [threadId] },
+      } as any),
+    );
 
     const { result } = renderHook(() => useSidebarActions());
     const callOrder: string[] = [];
@@ -149,18 +156,20 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
 
   test('does not navigate when deleting a thread that is not selected', async () => {
     const threadId = 't2';
-    useThreadStore.setState({
-      selectedThreadId: 'other',
-      threadsById: {
-        [threadId]: {
-          id: threadId,
-          projectId: 'p1',
-          title: 'Other',
-          status: 'completed',
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: 'other',
+        threadsById: {
+          [threadId]: {
+            id: threadId,
+            projectId: 'p1',
+            title: 'Other',
+            status: 'completed',
+          },
         },
-      },
-      threadIdsByProject: { p1: [threadId] },
-    } as any);
+        threadIdsByProject: { p1: [threadId] },
+      } as any),
+    );
 
     const { result } = renderHook(() => useSidebarActions());
 
@@ -180,28 +189,32 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
 describe('useSidebarActions — archive, pin, and select', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useThreadStore.setState({
-      selectedThreadId: null,
-      activeThread: null,
-      threadsById: {},
-      threadIdsByProject: {},
-      scratchThreadIds: [],
-      deleteThread: mockDeleteThread,
-      deleteScratchThread: mockDeleteScratchThread,
-      archiveThread: mockArchiveThread,
-      renameThread: mockRenameThread,
-      pinThread: mockPinThread,
-      selectThread: vi.fn(),
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: null,
+        activeThread: null,
+        threadsById: {},
+        threadIdsByProject: {},
+        scratchThreadIds: [],
+        deleteThread: mockDeleteThread,
+        deleteScratchThread: mockDeleteScratchThread,
+        archiveThread: mockArchiveThread,
+        renameThread: mockRenameThread,
+        pinThread: mockPinThread,
+        selectThread: vi.fn(),
+      } as any),
+    );
   });
 
   test('handleArchiveConfirm archives and navigates away when selected', async () => {
-    useThreadStore.setState({
-      selectedThreadId: 't1',
-      threadsById: {
-        t1: { id: 't1', projectId: 'p1', title: 'Fix', status: 'completed', mode: 'local' },
-      },
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: 't1',
+        threadsById: {
+          t1: { id: 't1', projectId: 'p1', title: 'Fix', status: 'completed', mode: 'local' },
+        },
+      } as any),
+    );
 
     const { result } = renderHook(() => useSidebarActions());
 
@@ -228,18 +241,20 @@ describe('useSidebarActions — archive, pin, and select', () => {
   });
 
   test('opens a local thread even when its branch cannot be checked out', async () => {
-    useThreadStore.setState({
-      threadsById: {
-        t1: {
-          id: 't1',
-          projectId: 'p1',
-          title: 'Thread',
-          branch: 'deleted-branch',
-          status: 'completed',
-          mode: 'local',
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: {
+          t1: {
+            id: 't1',
+            projectId: 'p1',
+            title: 'Thread',
+            branch: 'deleted-branch',
+            status: 'completed',
+            mode: 'local',
+          },
         },
-      },
-    } as any);
+      } as any),
+    );
 
     const { result } = renderHook(() => useSidebarActions());
 

@@ -1,8 +1,9 @@
 import { type ReactNode, createContext, useContext, useMemo } from 'react';
 
+import { useGitStatusForThread } from '@/data/git-status/hooks';
+import type { ProjectGitStatus } from '@/data/git-status/keys';
+import type { usePRDetail } from '@/data/pull-requests/hooks';
 import type { useReviewState } from '@/hooks/use-review-state';
-import type { useGitStatusForThread, ProjectGitStatus } from '@/stores/git-status-store';
-import type { usePRDetail } from '@/stores/pr-detail-store';
 import type { ReviewSubTab } from '@/stores/ui-store';
 
 import { ExpandedDiffPresenter } from './ExpandedDiffPresenter';

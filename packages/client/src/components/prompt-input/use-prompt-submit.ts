@@ -4,7 +4,7 @@
  * empty check → Codex command → provider setup → thread mode → checkout
  * preflight → upload guard → optimistic clear + onSubmit (restored on `false`).
  */
-import type { ImageAttachment, TemplateVariable } from '@funny/shared';
+import type { ImageAttachment, TemplateVariable, Thread } from '@funny/shared';
 import { parseCodexCommand } from '@funny/shared/codex-commands';
 import type { TFunction } from 'i18next';
 import { useCallback, useLayoutEffect, useRef } from 'react';
@@ -16,7 +16,12 @@ import type {
 } from '@/components/prompt-editor/PromptEditor';
 import { serializeEditorContent } from '@/components/prompt-editor/serialize';
 import { systemApi } from '@/lib/api/system';
-import { getLeadingSlashCommand, resolveSlashCommandThreadMode } from '@/lib/thread-payload';
+import {
+  getLeadingSlashCommand,
+  isSandboxRuntimeChoice,
+  resolveSlashCommandThreadMode,
+} from '@/lib/thread-payload';
+import { runsInSandbox } from '@/lib/thread-variant';
 
 import {
   EMPTY_SERIALIZED_PROMPT,
@@ -52,6 +57,8 @@ export interface PromptSubmitParams {
   mode: string;
   effort?: string;
   runtime: string;
+  /** The thread a follow-up goes to (unset for a new thread). */
+  activeThread?: Pick<Thread, 'runtime'>;
   projectId?: string;
   sendToBacklog: boolean;
   isNewThread: boolean;
@@ -97,12 +104,20 @@ async function tryCodexCommand(
   }
 }
 
+/** Whether this send runs in a sandbox: the composer's choice, or the follow-up's thread. */
+function targetsSandbox(p: PromptSubmitParams): boolean {
+  return p.isNewThread ? isSandboxRuntimeChoice(p.runtime) : runsInSandbox(p.activeThread);
+}
+
 /** Opens the provider setup dialog instead of sending when the provider is not ready. */
 async function ensureProviderReady(
   p: PromptSubmitParams,
   checking: React.RefObject<boolean>,
 ): Promise<boolean> {
   if (p.running || p.sendToBacklog || !p.projectId) return true;
+  // A sandbox agent does not use the project's runner or its login: the server
+  // proxies its model calls with the stored subscription token.
+  if (targetsSandbox(p)) return true;
   if (checking.current) return false;
   checking.current = true;
   try {
@@ -137,7 +152,7 @@ async function passesCheckoutPreflight(
   p: PromptSubmitParams,
   threadMode: ThreadMode,
 ): Promise<boolean> {
-  if (!p.isNewThread || threadMode === 'worktree') return true;
+  if (!p.isNewThread || threadMode === 'worktree' || targetsSandbox(p)) return true;
   if (!p.onCheckoutPreflight || !p.selectedBranch) return true;
   return p.onCheckoutPreflight(p.selectedBranch);
 }
@@ -167,6 +182,8 @@ async function sendPrompt(
       ...buildThreadOptions({ ...p, threadMode }),
       fileReferences: payload.fileReferences,
       symbolReferences: payload.symbolReferences,
+      stagedUploads: payload.stagedUploads,
+      attachedFileNames: payload.attachedFileNames,
     },
     payload.images,
   );

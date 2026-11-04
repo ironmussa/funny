@@ -15,6 +15,9 @@ import {
   useSettingsStore,
 } from '@/stores/settings-store';
 
+import { BrowserControlBar } from './BrowserControlBar';
+import { BrowserSessionMenu } from './BrowserSessionMenu';
+
 // Only http(s) are recognised as user-supplied schemes. Anything else —
 // including hostnames with ports (`localhost:5173`), the user typing
 // `apt:firefox`, or hostile schemes like `file:`, `javascript:`, `data:`,
@@ -205,7 +208,9 @@ export function BrowserUrlBar() {
             <TooltipContent side="bottom">Open in annotator window (any origin)</TooltipContent>
           </Tooltip>
         )}
+        <BrowserSessionMenu />
       </form>
+      <BrowserControlBar style={fontStyle} />
       {(loadError || error || sessionError) && (
         <div
           role="alert"

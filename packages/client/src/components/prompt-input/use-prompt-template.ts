@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
+import { useAgentTemplates } from '@/data/templates/hooks';
+import { ensureTemplatesLoaded } from '@/data/templates/loaders';
 
 interface UsePromptTemplateParams {
   defaultTemplateId?: string;
@@ -18,7 +19,7 @@ export function usePromptTemplate({
     defaultTemplateId,
   );
   const [templateVarValues, setTemplateVarValues] = useState<Record<string, string>>({});
-  const { templates, initialized: templatesLoaded, loadTemplates } = useAgentTemplateStore();
+  const templates = useAgentTemplates();
   const selectedTemplate = useMemo(
     () => (selectedTemplateId ? templates.find((t) => t.id === selectedTemplateId) : undefined),
     [selectedTemplateId, templates],
@@ -27,8 +28,8 @@ export function usePromptTemplate({
 
   // Load templates when provider is deepagent and creating a new thread
   useEffect(() => {
-    if (isDeepAgent && isNewThread && !templatesLoaded) loadTemplates();
-  }, [isDeepAgent, isNewThread, templatesLoaded, loadTemplates]);
+    if (isDeepAgent && isNewThread) void ensureTemplatesLoaded();
+  }, [isDeepAgent, isNewThread]);
 
   const handleTemplateChange = useCallback((v: string | undefined) => {
     setSelectedTemplateId(v);

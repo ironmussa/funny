@@ -343,6 +343,28 @@ export class AgentMessageHandler {
     });
   }
 
+  private async reopenContinuedTurn(
+    threadId: string,
+    cliMsgId: string,
+    cliMap: Map<string, string>,
+  ): Promise<void> {
+    // A live provider session can continue after a turn result (for example
+    // during resume). New assistant output must reopen the run; otherwise
+    // the UI stays completed and result deduplication drops its actual end.
+    // Late updates to an already-known message are not a new turn. Preserve
+    // explicit stops and permission waits as well.
+    if (this.state.resultReceived.has(threadId) && !cliMap.has(cliMsgId)) {
+      const thread = await this.threadManager.getThread(threadId);
+      if (thread?.status === 'completed' || thread?.status === 'failed') {
+        const { status } = transitionStatus(threadId, { type: 'START' }, thread.status);
+        await this.threadManager.updateThread(threadId, { status, completedAt: null });
+        this.state.resultReceived.delete(threadId);
+        this.state.completedEmitted.delete(threadId);
+        await this.emitWS(threadId, 'agent:status', { status });
+      }
+    }
+  }
+
   private async handleAssistantMessage(
     threadId: string,
     msg: CLIMessage & { type: 'assistant' },
@@ -352,6 +374,8 @@ export class AgentMessageHandler {
     // Get or init the CLI→DB message ID map for this thread
     const cliMap = this.state.cliToDbMsgId.get(threadId) ?? new Map<string, string>();
     this.state.cliToDbMsgId.set(threadId, cliMap);
+
+    await this.reopenContinuedTurn(threadId, cliMsgId, cliMap);
 
     // Combine all text blocks into a single string
     const textContent = decodeUnicodeEscapes(

@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
+import { withProjects, withSampleProject } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
 
 import { WorktreeSettings } from './WorktreeSettings';
@@ -27,19 +28,7 @@ type Story = StoryObj<typeof meta>;
 /** Default view with a project selected — worktrees loaded from API. */
 export const Default: Story = {
   render: () => {
-    useAppStore.setState({
-      selectedProjectId: 'proj-1',
-      projects: [
-        {
-          id: 'proj-1',
-          name: 'funny',
-          path: '/home/user/projects/funny',
-          userId: 'user-1',
-          sortOrder: 0,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    });
+    useAppStore.setState(withSampleProject());
     return (
       <Wrapper>
         <WorktreeSettings />
@@ -51,7 +40,7 @@ export const Default: Story = {
 /** No project selected — shows empty message. */
 export const NoProject: Story = {
   render: () => {
-    useAppStore.setState({ selectedProjectId: null, projects: [] });
+    useAppStore.setState(withProjects({ selectedProjectId: null, projects: [] }));
     return (
       <Wrapper>
         <WorktreeSettings />

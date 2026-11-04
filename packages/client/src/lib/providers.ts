@@ -203,7 +203,7 @@ export function parseUnifiedModel(combined: string): { provider: string; model: 
 }
 
 /** Why a provider group is unavailable in the picker (model-picker-availability). */
-export type ProviderUnavailableReason = 'not-installed' | 'no-runner';
+export type ProviderUnavailableReason = 'not-installed' | 'no-runner' | 'sandbox-unsupported';
 
 export interface ModelSelectGroup {
   provider: string;

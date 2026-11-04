@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { NewThreadInput } from '@/components/thread/NewThreadInput';
+import { withProjects } from '@/data/projects/testing';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -165,10 +166,12 @@ describe('NewThreadInput', () => {
       newThreadIssueContext: null,
       activeDesignId: null,
     } as any);
-    useProjectStore.setState({
-      projects: [{ id: 'p1', name: 'My Project', path: '/repo', defaultMode: 'local' } as any],
-      selectedProjectId: 'p1',
-    });
+    useProjectStore.setState(
+      withProjects({
+        projects: [{ id: 'p1', name: 'My Project', path: '/repo', defaultMode: 'local' } as any],
+        selectedProjectId: 'p1',
+      }),
+    );
     useBranchPickerStore.setState({
       branches: ['main', 'develop'],
       remoteBranches: [],
@@ -198,25 +201,27 @@ describe('NewThreadInput', () => {
 
   test('uses the explicit new-thread project before the globally selected project', async () => {
     useUIStore.setState({ newThreadProjectId: 'p2' } as any);
-    useProjectStore.setState({
-      projects: [
-        {
-          id: 'p1',
-          name: 'Project One',
-          path: '/repo-one',
-          defaultMode: 'local',
-          defaultProvider: 'codex',
-        } as any,
-        {
-          id: 'p2',
-          name: 'Project Two',
-          path: '/repo-two',
-          defaultMode: 'local',
-          defaultProvider: 'codex',
-        } as any,
-      ],
-      selectedProjectId: 'p1',
-    });
+    useProjectStore.setState(
+      withProjects({
+        projects: [
+          {
+            id: 'p1',
+            name: 'Project One',
+            path: '/repo-one',
+            defaultMode: 'local',
+            defaultProvider: 'codex',
+          } as any,
+          {
+            id: 'p2',
+            name: 'Project Two',
+            path: '/repo-two',
+            defaultMode: 'local',
+            defaultProvider: 'codex',
+          } as any,
+        ],
+        selectedProjectId: 'p1',
+      }),
+    );
 
     renderWithProviders(<NewThreadInput />);
 
@@ -369,18 +374,20 @@ describe('NewThreadInput', () => {
   });
 
   test('reloads available MCP servers only when the selected provider changes', async () => {
-    useProjectStore.setState({
-      projects: [
-        {
-          id: 'p1',
-          name: 'My Project',
-          path: '/repo',
-          defaultMode: 'local',
-          defaultProvider: 'codex',
-        } as any,
-      ],
-      selectedProjectId: 'p1',
-    });
+    useProjectStore.setState(
+      withProjects({
+        projects: [
+          {
+            id: 'p1',
+            name: 'My Project',
+            path: '/repo',
+            defaultMode: 'local',
+            defaultProvider: 'codex',
+          } as any,
+        ],
+        selectedProjectId: 'p1',
+      }),
+    );
 
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
 

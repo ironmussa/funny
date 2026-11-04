@@ -7,6 +7,7 @@ import { z } from 'zod';
 
 import { toACPImageBlocks } from './acp-image.js';
 import { BaseAgentProcess } from './base-process.js';
+import { connectMcpTools, type McpToolBridge } from './mcp-tool-bridge.js';
 import { createPiSessionManager } from './pi-sdk-session.js';
 import type { CLIMessage } from './types.js';
 
@@ -79,6 +80,7 @@ type ModelRegistry = ReturnType<PiSdk['ModelRegistry']['create']>;
 export class PiSDKProcess extends BaseAgentProcess {
   private session: AgentSession | null = null;
   private unsubscribe: (() => void) | null = null;
+  private mcpBridge: McpToolBridge | null = null;
   private startTime = 0;
   private numTurns = 0;
   private totalCost = 0;
@@ -127,6 +129,9 @@ export class PiSDKProcess extends BaseAgentProcess {
         settingsManager,
       );
 
+      // funny's own tools (and other HTTP MCP servers) as pi custom tools.
+      this.mcpBridge = await connectMcpTools(this.options.mcpServers);
+
       const { session } = await sdk.createAgentSession({
         cwd: this.options.cwd,
         agentDir,
@@ -137,7 +142,7 @@ export class PiSDKProcess extends BaseAgentProcess {
         ...(resourceLoader ? { resourceLoader } : {}),
         ...(model ? { model } : {}),
         ...(thinkingLevel ? { thinkingLevel } : {}),
-        tools: resolvePiTools(this.options.allowedTools, this.options.disallowedTools),
+        ...piToolOptions(this.options.allowedTools, this.options.disallowedTools, this.mcpBridge),
       });
 
       this.session = session;
@@ -156,6 +161,8 @@ export class PiSDKProcess extends BaseAgentProcess {
       this.unsubscribe = null;
       this.session?.dispose();
       this.session = null;
+      await this.mcpBridge?.close();
+      this.mcpBridge = null;
       if (!this._exited) this.finalize();
     }
   }
@@ -571,6 +578,41 @@ function normalizeThinkingLevel(effort?: string): any | undefined {
   if (!effort) return undefined;
   const normalized = effort === 'max' ? 'xhigh' : effort;
   return THINKING_LEVELS.has(normalized) ? normalized : undefined;
+}
+
+/**
+ * Active tools and custom (MCP) tools for a session. When an allowlist
+ * applies, the MCP tools join it — pi only enables listed tools.
+ */
+function piToolOptions(
+  allowed: string[] | undefined,
+  disallowed: string[] | undefined,
+  bridge: McpToolBridge,
+) {
+  const active = resolvePiTools(allowed, disallowed);
+  return {
+    tools: active ? [...active, ...bridge.tools.map((t) => t.name)] : undefined,
+    customTools: piToolsFromMcp(bridge),
+  };
+}
+
+/**
+ * MCP tools as pi custom tools. pi validates plain JSON Schema parameters, so
+ * the server's schema is passed through; an MCP error result throws, which pi
+ * reports to the model as a failed tool call.
+ */
+export function piToolsFromMcp(bridge: McpToolBridge) {
+  return bridge.tools.map((tool) => ({
+    name: tool.name,
+    label: tool.name,
+    description: tool.description,
+    parameters: tool.inputSchema as any,
+    execute: async (_toolCallId: string, params: unknown, signal: AbortSignal | undefined) => {
+      const result = await tool.call((params ?? {}) as Record<string, unknown>, signal);
+      if (result.isError) throw new Error(result.text || 'tool failed');
+      return { content: [{ type: 'text' as const, text: result.text }], details: undefined };
+    },
+  }));
 }
 
 export function resolvePiTools(allowed?: string[], disallowed?: string[]): string[] | undefined {

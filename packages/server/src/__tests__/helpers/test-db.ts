@@ -264,9 +264,57 @@ export function createTestDb() {
       http_url TEXT,
       public_media_url TEXT,
       role TEXT NOT NULL DEFAULT 'general',
+      thread_id TEXT,
       active_thread_ids TEXT NOT NULL DEFAULT '[]',
       registered_at TEXT NOT NULL,
       last_heartbeat_at TEXT NOT NULL
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS thread_sandboxes (
+      thread_id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      connection_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      sandbox_id TEXT,
+      runner_id TEXT,
+      size_id TEXT NOT NULL,
+      repo_url TEXT,
+      llm_token_hash TEXT,
+      state TEXT NOT NULL,
+      error TEXT,
+      generation INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS infra_connections (
+      id TEXT PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      provider TEXT NOT NULL,
+      label TEXT NOT NULL,
+      config_json TEXT NOT NULL DEFAULT '{}',
+      credential_enc TEXT NOT NULL,
+      account_label TEXT,
+      created_at TEXT NOT NULL,
+      last_validated_at TEXT
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS runner_provision_tokens (
+      id TEXT PRIMARY KEY,
+      token_hash TEXT NOT NULL UNIQUE,
+      user_id TEXT NOT NULL,
+      project_id TEXT,
+      thread_id TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      expires_at TEXT NOT NULL,
+      used_at TEXT,
+      runner_id TEXT
     )
   `);
 

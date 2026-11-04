@@ -1,4 +1,14 @@
-import { Check, Code, Image, Maximize2, Minimize2, X, ZoomIn, ZoomOut } from 'lucide-react';
+import {
+  Check,
+  Code,
+  Download,
+  Image,
+  Maximize2,
+  Minimize2,
+  X,
+  ZoomIn,
+  ZoomOut,
+} from 'lucide-react';
 import { useCallback, useMemo, useLayoutEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -343,7 +353,7 @@ async function renderChartForExport(chart: string): Promise<string> {
   return renderThreadDiagram(chart, 'export');
 }
 
-async function svgToPngBlob(svgHtml: string): Promise<Blob> {
+function prepareExportSvg(svgHtml: string): { svgEl: SVGSVGElement; w: number; h: number } {
   // Parse as HTML (matches the sanitizer's input) so we work with the same DOM
   // shape mermaid produced, then re-serialize with XMLSerializer below. The
   // HTML outerHTML serializer drops the xmlns="http://www.w3.org/2000/svg"
@@ -371,6 +381,21 @@ async function svgToPngBlob(svgHtml: string): Promise<Blob> {
   // pass explicit w/h.
   svgEl.setAttribute('width', String(w));
   svgEl.setAttribute('height', String(h));
+
+  return { svgEl, w, h };
+}
+
+/** Serialize the export SVG as a standalone file (explicit xmlns + pixel size). */
+function svgToFileBlob(svgHtml: string): Blob {
+  const { svgEl } = prepareExportSvg(svgHtml);
+  const serialized = new XMLSerializer().serializeToString(svgEl);
+  return new Blob([`<?xml version="1.0" encoding="UTF-8"?>\n${serialized}`], {
+    type: 'image/svg+xml;charset=utf-8',
+  });
+}
+
+async function svgToPngBlob(svgHtml: string): Promise<Blob> {
+  const { svgEl, w, h } = prepareExportSvg(svgHtml);
 
   const scale = 2;
   const canvas = document.createElement('canvas');
@@ -406,6 +431,93 @@ async function svgToPngBlob(svgHtml: string): Promise<Blob> {
   });
 }
 
+function errorText(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}
+
+function downloadBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+/** Copy-as-PNG and download-as-SVG for a rendered chart. */
+function useDiagramExport(chart: string, svg: string) {
+  const [copiedImage, setCopiedImage] = useState(false);
+
+  const copyImage = useCallback(async () => {
+    if (!svg) return;
+    try {
+      // Pass the Promise<Blob> directly to ClipboardItem so the user-activation
+      // gesture context is preserved across the SVG→PNG conversion. Awaiting
+      // the blob first and then calling clipboard.write loses the gesture in
+      // Chrome and the write is rejected with NotAllowedError.
+      const pngPromise = renderChartForExport(chart).then(svgToPngBlob);
+      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngPromise })]);
+      setCopiedImage(true);
+      setTimeout(() => setCopiedImage(false), 2000);
+      toast.success('Diagram image copied to clipboard');
+    } catch (err) {
+      log.error('copy-image failed', { error: errorText(err) });
+      toast.error('Could not copy image to clipboard');
+    }
+  }, [chart, svg]);
+
+  const downloadSvg = useCallback(async () => {
+    if (!svg) return;
+    try {
+      downloadBlob(svgToFileBlob(await renderChartForExport(chart)), 'mermaid-diagram.svg');
+    } catch (err) {
+      log.error('download-svg failed', { error: errorText(err) });
+      toast.error('Could not download SVG');
+    }
+  }, [chart, svg]);
+
+  return { copiedImage, copyImage, downloadSvg };
+}
+
+function ToolbarButton({
+  label,
+  testId,
+  onClick,
+  className,
+  children,
+}: {
+  label: string;
+  testId: string;
+  onClick: () => void;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={onClick}
+          className={cn('text-muted-foreground', className)}
+          data-testid={testId}
+        >
+          {children}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
+  );
+}
+
+function CopyFeedbackIcon({ copied, icon: Icon }: { copied: boolean; icon: typeof Code }) {
+  return copied ? (
+    <Check className="icon-base copy-feedback-icon text-green-600" />
+  ) : (
+    <Icon className="icon-base copy-feedback-icon" />
+  );
+}
+
 export function MermaidExpandedDialog({
   chart,
   open,
@@ -419,7 +531,7 @@ export function MermaidExpandedDialog({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const pz = useMermaidPanZoom();
   const [copiedCode, copyCode] = useCopyToClipboard();
-  const [copiedImage, setCopiedImage] = useState(false);
+  const { copiedImage, copyImage, downloadSvg } = useDiagramExport(chart, svg);
   const { fit } = pz;
   // See MermaidBlock — same memoization rationale. The svg arg is gated on
   // `open` so closing the dialog doesn't refit a stale view.
@@ -430,24 +542,6 @@ export function MermaidExpandedDialog({
     },
     [dialogSvg, fit],
   );
-
-  const handleCopyImage = useCallback(async () => {
-    if (!svg) return;
-    try {
-      // Pass the Promise<Blob> directly to ClipboardItem so the user-activation
-      // gesture context is preserved across the SVG→PNG conversion. Awaiting
-      // the blob first and then calling clipboard.write loses the gesture in
-      // Chrome and the write is rejected with NotAllowedError.
-      const pngPromise = renderChartForExport(chart).then(svgToPngBlob);
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': pngPromise })]);
-      setCopiedImage(true);
-      setTimeout(() => setCopiedImage(false), 2000);
-      toast.success('Diagram image copied to clipboard');
-    } catch (err) {
-      log.error('copy-image failed', { error: err instanceof Error ? err.message : String(err) });
-      toast.error('Could not copy image to clipboard');
-    }
-  }, [chart, svg]);
 
   const handleCopyCode = useCallback(() => {
     copyCode(chart);
@@ -471,106 +565,56 @@ export function MermaidExpandedDialog({
           <DialogTitle className="flex items-center gap-2 text-sm">Mermaid Diagram</DialogTitle>
           <DialogDescription className="sr-only">Expanded Mermaid diagram view</DialogDescription>
           <div className="flex items-center gap-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={handleCopyCode}
-                  className="text-muted-foreground"
-                  data-testid="mermaid-copy-code"
-                >
-                  {copiedCode ? (
-                    <Check className="icon-base copy-feedback-icon text-green-600" />
-                  ) : (
-                    <Code className="icon-base copy-feedback-icon" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{copiedCode ? 'Copied!' : 'Copy code'}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={handleCopyImage}
-                  className="text-muted-foreground"
-                  data-testid="mermaid-copy-image"
-                >
-                  {copiedImage ? (
-                    <Check className="icon-base copy-feedback-icon text-green-600" />
-                  ) : (
-                    <Image className="icon-base copy-feedback-icon" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{copiedImage ? 'Copied!' : 'Copy as image'}</TooltipContent>
-            </Tooltip>
+            <ToolbarButton
+              label={copiedCode ? 'Copied!' : 'Copy code'}
+              testId="mermaid-copy-code"
+              onClick={handleCopyCode}
+            >
+              <CopyFeedbackIcon copied={copiedCode} icon={Code} />
+            </ToolbarButton>
+            <ToolbarButton
+              label={copiedImage ? 'Copied!' : 'Copy as image'}
+              testId="mermaid-copy-image"
+              onClick={copyImage}
+            >
+              <CopyFeedbackIcon copied={copiedImage} icon={Image} />
+            </ToolbarButton>
+            <ToolbarButton label="Download SVG" testId="mermaid-download-svg" onClick={downloadSvg}>
+              <Download className="icon-base" />
+            </ToolbarButton>
             <div className="bg-border mx-1 h-4 w-px" />
             <span className="text-muted-foreground mr-1 text-xs">
               {Math.round(pz.displayScale * 100)}%
             </span>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => pz.zoomBy(1 / 1.2)}
-                  className="text-muted-foreground"
-                  data-testid="mermaid-zoom-out"
-                >
-                  <ZoomOut className="icon-base" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Zoom out</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => pz.zoomBy(1.2)}
-                  className="text-muted-foreground"
-                  data-testid="mermaid-zoom-in"
-                >
-                  <ZoomIn className="icon-base" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Zoom in</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={pz.reset}
-                  className="text-muted-foreground text-xs"
-                  data-testid="mermaid-zoom-reset"
-                >
-                  1:1
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Reset zoom</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => setIsFullscreen((prev) => !prev)}
-                  className="text-muted-foreground"
-                  data-testid="mermaid-toggle-fullscreen"
-                >
-                  {isFullscreen ? (
-                    <Minimize2 className="icon-base" />
-                  ) : (
-                    <Maximize2 className="icon-base" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}</TooltipContent>
-            </Tooltip>
+            <ToolbarButton
+              label="Zoom out"
+              testId="mermaid-zoom-out"
+              onClick={() => pz.zoomBy(1 / 1.2)}
+            >
+              <ZoomOut className="icon-base" />
+            </ToolbarButton>
+            <ToolbarButton label="Zoom in" testId="mermaid-zoom-in" onClick={() => pz.zoomBy(1.2)}>
+              <ZoomIn className="icon-base" />
+            </ToolbarButton>
+            <ToolbarButton
+              label="Reset zoom"
+              testId="mermaid-zoom-reset"
+              onClick={pz.reset}
+              className="text-xs"
+            >
+              1:1
+            </ToolbarButton>
+            <ToolbarButton
+              label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              testId="mermaid-toggle-fullscreen"
+              onClick={() => setIsFullscreen((prev) => !prev)}
+            >
+              {isFullscreen ? (
+                <Minimize2 className="icon-base" />
+              ) : (
+                <Maximize2 className="icon-base" />
+              )}
+            </ToolbarButton>
             <Button
               variant="ghost"
               size="icon-sm"

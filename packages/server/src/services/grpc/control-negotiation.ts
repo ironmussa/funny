@@ -81,6 +81,7 @@ const DEFAULT_SUPPORTED_CAPABILITIES = [
   RunnerCapability.EVENTS,
   RunnerCapability.HTTP_TUNNEL,
   RunnerCapability.TERMINAL,
+  RunnerCapability.USER_EVENTS,
 ];
 
 function requestKind(request: ControlRequestWire): string | undefined {

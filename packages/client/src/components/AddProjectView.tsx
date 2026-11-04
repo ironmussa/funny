@@ -22,6 +22,7 @@ import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
+import { useAuthStore } from '@/stores/auth-store';
 
 import { CloneRepoView } from './CloneRepoView';
 import { FolderPicker } from './FolderPicker';
@@ -66,9 +67,29 @@ export function AddProjectView() {
     setIsCreating(false);
   };
 
+  const showExistingProject = async (orgId: string | null, message: string) => {
+    if (useAuthStore.getState().activeOrgId !== orgId) return false;
+    const existing = await api.listProjects(orgId);
+    if (existing.isErr() || useAuthStore.getState().activeOrgId !== orgId) return false;
+    const project = existing.value.find(
+      (p) => p.path === newProjectPath.trim().replace(/\/$/, '') || p.name === newProjectName,
+    );
+    if (!project) return false;
+    await loadProjects();
+    const projectUrl = buildPath(`/projects/${project.id}`);
+    toast.error(message, {
+      action: {
+        label: t('sidebar.openExistingProject'),
+        onClick: () => navigate(projectUrl),
+      },
+    });
+    return true;
+  };
+
   const handleAddProject = async () => {
     if (!newProjectName || !newProjectPath || isCreating) return;
     setIsCreating(true);
+    const orgId = useAuthStore.getState().activeOrgId;
     const result = await api.createProject(newProjectName, newProjectPath);
     if (result.isErr()) {
       if (
@@ -77,6 +98,13 @@ export function AddProjectView() {
       ) {
         setIsCreating(false);
         setGitInitDialogOpen(true);
+        return;
+      }
+      if (
+        result.error.type === 'CONFLICT' &&
+        (await showExistingProject(orgId, result.error.message))
+      ) {
+        setIsCreating(false);
         return;
       }
       toastError(result.error, 'createProject');

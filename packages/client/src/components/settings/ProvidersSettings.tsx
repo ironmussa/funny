@@ -16,9 +16,10 @@ import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Switch } from '@/components/ui/switch';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useRunnerProviders } from '@/data/runner/hooks';
+import { refreshRunnerProviders, setActiveBuiltins } from '@/data/runner/queries';
 import { systemApi, type AdvertisedProvider } from '@/lib/api/system';
 import { createClientLogger } from '@/lib/client-logger';
-import { useRunnerProvidersStore } from '@/stores/runner-providers-store';
 
 const log = createClientLogger('providers-settings');
 
@@ -37,9 +38,8 @@ export function ProvidersSettings() {
   const [installing, setInstalling] = useState(false);
   const [removing, setRemoving] = useState<string | null>(null);
   const [togglingBuiltin, setTogglingBuiltin] = useState<string | null>(null);
-  const refetchPicker = useRunnerProvidersStore((s) => s.fetch);
-  const activeBuiltins = useRunnerProvidersStore((s) => s.activeBuiltins);
-  const setActiveBuiltins = useRunnerProvidersStore((s) => s.setActiveBuiltins);
+  // Loads the picker's provider data on mount; the toggles read its activeBuiltins.
+  const { activeBuiltins } = useRunnerProviders();
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -57,8 +57,7 @@ export function ProvidersSettings() {
 
   useEffect(() => {
     void refresh();
-    void refetchPicker(); // populate the store's activeBuiltins for the toggles
-  }, [refresh, refetchPicker]);
+  }, [refresh]);
 
   const handleInstall = useCallback(async () => {
     const src = source.trim();
@@ -73,12 +72,12 @@ export function ProvidersSettings() {
       });
       setSource('');
       await refresh();
-      await refetchPicker(true); // so the new provider shows in the model picker
+      await refreshRunnerProviders(); // so the new provider shows in the model picker
     } else {
       toast.error('Install failed', { description: result.error.message });
     }
     setInstalling(false);
-  }, [source, refresh, refetchPicker]);
+  }, [source, refresh]);
 
   // A built-in is active when the runner advertises no set (null = unknown, all
   // active — no regression) or when it's in the advertised active set.
@@ -87,26 +86,23 @@ export function ProvidersSettings() {
     [activeBuiltins],
   );
 
-  const handleToggleBuiltin = useCallback(
-    async (id: string, enable: boolean) => {
-      setTogglingBuiltin(id);
-      const result = await systemApi.setBuiltinEnabled(id, enable);
-      if (result.isOk()) {
-        // Optimistic: reflect in the picker now; the server cache catches up on
-        // the next runner heartbeat.
-        setActiveBuiltins(result.value.active);
-        toast.success(`${enable ? 'Enabled' : 'Disabled'} ${id}`, {
-          description: 'Saved — your selection is restored when the runner restarts.',
-        });
-      } else {
-        toast.error(`${enable ? 'Enable' : 'Disable'} failed`, {
-          description: result.error.message,
-        });
-      }
-      setTogglingBuiltin(null);
-    },
-    [setActiveBuiltins],
-  );
+  const handleToggleBuiltin = useCallback(async (id: string, enable: boolean) => {
+    setTogglingBuiltin(id);
+    const result = await systemApi.setBuiltinEnabled(id, enable);
+    if (result.isOk()) {
+      // Optimistic: reflect in the picker now; the server cache catches up on
+      // the next runner heartbeat.
+      setActiveBuiltins(result.value.active);
+      toast.success(`${enable ? 'Enabled' : 'Disabled'} ${id}`, {
+        description: 'Saved — your selection is restored when the runner restarts.',
+      });
+    } else {
+      toast.error(`${enable ? 'Enable' : 'Disable'} failed`, {
+        description: result.error.message,
+      });
+    }
+    setTogglingBuiltin(null);
+  }, []);
 
   const handleRemove = useCallback(
     async (id: string) => {
@@ -115,13 +111,13 @@ export function ProvidersSettings() {
       if (result.isOk()) {
         toast.success(`Removed ${id}`);
         await refresh();
-        await refetchPicker(true);
+        await refreshRunnerProviders();
       } else {
         toast.error('Remove failed', { description: result.error.message });
       }
       setRemoving(null);
     },
-    [refresh, refetchPicker],
+    [refresh],
   );
 
   return (

@@ -36,11 +36,13 @@ jobs:
 
       # Secret detection
       - name: Check for leaked secrets
+        id: secrets
         run: npx secretlint "**/*"
         continue-on-error: false
 
       # Dependency vulnerability scanning with Snyk
       - name: Run Snyk security scan
+        id: snyk
         uses: snyk/actions/node@master
         continue-on-error: true # Don't fail the build, just report
         env:
@@ -54,6 +56,7 @@ jobs:
       # a non-existent package-lock.json and report false positives). `bun audit`
       # audits exactly what bun installs, so it is the correct gate here.
       - name: Audit dependencies (bun audit)
+        id: audit
         run: bun audit --audit-level=moderate
         continue-on-error: false # Fail the build on moderate+ vulnerabilities
 
@@ -65,14 +68,20 @@ jobs:
       # Generate security report
       - name: Generate security summary
         if: always()
+        env:
+          SECRETS_OUTCOME: ${{ steps.secrets.outcome }}
+          AUDIT_OUTCOME: ${{ steps.audit.outcome }}
+          SNYK_OUTCOME: ${{ steps.snyk.outcome }}
         run: |
-          echo "## 🔒 Security Audit Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Secret detection completed" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Dependency audit completed" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ Vulnerability scan completed" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "View detailed results in the job logs above." >> $GITHUB_STEP_SUMMARY
+          {
+            echo "## 🔒 Security Audit Summary"
+            echo ""
+            echo "- Secret detection: $SECRETS_OUTCOME"
+            echo "- Dependency audit: $AUDIT_OUTCOME"
+            echo "- Snyk scan (non-blocking): $SNYK_OUTCOME"
+            echo ""
+            echo "View detailed results in the job logs above."
+          } >> "$GITHUB_STEP_SUMMARY"
 
       # Upload results as artifacts
       - name: Upload security scan results

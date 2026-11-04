@@ -210,8 +210,8 @@ describe('native read-only shell', () => {
     expect(root.renderer.findByType('markdown')).toHaveLength(0);
     expect(root.renderer.findByType('code')).toHaveLength(0);
     expect(root.renderer.getPaintedText()).toContain('Long thread');
-    expect(root.renderer.findByTestId('navigation-diff-summary')).not.toBeNull();
-    expect(root.renderer.findByTestId('files-diff-summary')).not.toBeNull();
+    expect(root.renderer.findByTestId('navigation-diff-summary')).toBeDefined();
+    expect(root.renderer.findByTestId('files-diff-summary')).toBeDefined();
     expect(root.renderer.getPaintedText()).toContain('+24');
     expect(root.renderer.getPaintedText()).toContain('characters hidden');
     expect(root.renderer.getPaintedText()).not.toContain('tail-marker');

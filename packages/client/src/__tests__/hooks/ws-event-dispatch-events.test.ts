@@ -72,6 +72,16 @@ vi.mock('@/stores/terminal-store', () => ({
   },
 }));
 
+const gitActionOverrides = vi.hoisted(() => ({}) as Record<string, (...args: any[]) => unknown>);
+vi.mock('@/data/git-status/actions', async (importOriginal) => {
+  const real = await importOriginal<Record<string, (...args: any[]) => unknown>>();
+  const wrapped: Record<string, (...args: any[]) => unknown> = {};
+  for (const [name, fn] of Object.entries(real)) {
+    wrapped[name] = (...args) => (gitActionOverrides[name] ?? fn)(...args);
+  }
+  return wrapped;
+});
+
 vi.mock('@/hooks/dispatch-test-events', () => ({
   dispatchTestEvent: mockDispatchTestEvent,
 }));
@@ -113,12 +123,15 @@ vi.mock('@/stores/thread-store-internals', async (importOriginal) => {
   };
 });
 
+import { readGitStatusMaps } from '@/data/git-status/read';
+import { seedGitStatus } from '@/data/git-status/testing';
+import { readThreadIndex } from '@/data/threads/read';
+import { withThreadIndex } from '@/data/threads/testing';
 import {
   clearWSDispatchState,
   registerSocketIOHandlers,
   unregisterSocketIOHandlers,
 } from '@/hooks/ws-event-dispatch';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { getProjectIdForThread } from '@/stores/thread-store-internals';
@@ -136,15 +149,15 @@ function captureHandlers() {
 describe('ws-event-dispatch — thread/git/terminal events', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: {},
       threadToBranchKey: {},
-      _loadingBranchKeys: new Set(),
     });
     useProjectStore.setState({ selectedProjectId: null });
   });
 
   afterEach(() => {
+    for (const name of Object.keys(gitActionOverrides)) delete gitActionOverrides[name];
     clearWSDispatchState();
   });
 
@@ -153,17 +166,19 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     const refreshAll = vi.fn();
     const refreshActive = vi.fn();
 
-    useThreadStore.setState({
-      threadsById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
-      threadDataById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
-      selectedThreadId: 't1',
-      activeThread: { id: 't1', permissionMode: 'ask' } as any,
-      handleWSStatus: ((tid: string, data: unknown) => {
-        statusCalls.push({ tid, data });
-      }) as any,
-      refreshAllLoadedThreads: refreshAll as any,
-      refreshActiveThread: refreshActive as any,
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
+        threadDataById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
+        selectedThreadId: 't1',
+        activeThread: { id: 't1', permissionMode: 'ask' } as any,
+        handleWSStatus: ((tid: string, data: unknown) => {
+          statusCalls.push({ tid, data });
+        }) as any,
+        refreshAllLoadedThreads: refreshAll as any,
+        refreshActiveThread: refreshActive as any,
+      }),
+    );
 
     const handlers = captureHandlers();
     handlers['thread:updated']({
@@ -174,7 +189,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     expect(statusCalls).toEqual([{ tid: 't1', data: { status: 'completed' } }]);
     expect(refreshAll).toHaveBeenCalled();
     expect(refreshActive).toHaveBeenCalled();
-    expect(useThreadStore.getState().threadsById.t1.permissionMode).toBe('plan');
+    expect(readThreadIndex().threadsById.t1.permissionMode).toBe('plan');
     expect(useThreadStore.getState().threadDataById.t1.permissionMode).toBe('plan');
     expect(useThreadStore.getState().activeThread?.permissionMode).toBe('plan');
   });
@@ -249,11 +264,11 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       expect(mockNotifyDirty).toHaveBeenCalledWith('t1');
     });
 
-    expect(useGitStatusStore.getState().statusByBranch['p1:main']).toMatchObject({
+    expect(readGitStatusMaps().statusByBranch['p1:main']).toMatchObject({
       threadId: 't1',
       dirtyFileCount: 2,
     });
-    expect(useGitStatusStore.getState().threadToBranchKey.t1).toBe('p1:main');
+    expect(readGitStatusMaps().threadToBranchKey.t1).toBe('p1:main');
   });
 
   test('git:status with prOnly updates the store without marking review dirty', async () => {
@@ -280,7 +295,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     });
 
     await vi.waitFor(() => {
-      expect(useGitStatusStore.getState().statusByBranch['p1:feature']).toMatchObject({
+      expect(readGitStatusMaps().statusByBranch['p1:feature']).toMatchObject({
         prNumber: 42,
       });
     });
@@ -291,7 +306,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     const fetchForThread = vi.fn();
     const fetchProjectStatus = vi.fn();
     const fetchForProject = vi.fn();
-    useGitStatusStore.setState({ fetchForThread, fetchProjectStatus, fetchForProject } as any);
+    Object.assign(gitActionOverrides, { fetchForThread, fetchProjectStatus, fetchForProject });
     useThreadStore.setState({ selectedThreadId: 't1' });
     useProjectStore.setState({ selectedProjectId: 'p1' });
     vi.mocked(getProjectIdForThread).mockReturnValue('p1');
@@ -580,17 +595,19 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       value: Object.assign(function NotificationMock() {}, { permission: 'granted' }),
     });
 
-    useThreadStore.setState({
-      activeThread: {
-        id: 't1',
-        projectId: 'p1',
-        title: 'Fix bug',
-        branch: 'feat/x',
-      } as any,
-      threadsById: {
-        t1: { id: 't1', projectId: 'p1', title: 'Fix bug', branch: 'feat/x' } as any,
-      },
-    });
+    useThreadStore.setState(
+      withThreadIndex({
+        activeThread: {
+          id: 't1',
+          projectId: 'p1',
+          title: 'Fix bug',
+          branch: 'feat/x',
+        } as any,
+        threadsById: {
+          t1: { id: 't1', projectId: 'p1', title: 'Fix bug', branch: 'feat/x' } as any,
+        },
+      }),
+    );
 
     captureHandlers()['agent:result']({
       threadId: 't1',

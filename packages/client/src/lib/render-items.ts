@@ -45,6 +45,57 @@ export type RenderItem =
   | { type: 'compaction-event'; event: CompactionEvent }
   | { type: 'workflow-event-group'; events: ThreadEvent[] };
 
+/**
+ * Which sides of the loaded message window are truncated by pagination.
+ * Thread/compaction events are loaded in full while messages are paged, so an
+ * event outside the loaded range would pile up at the edge of the list
+ * instead of between the messages it belongs to.
+ */
+export interface MessageWindowBounds {
+  hasOlder?: boolean;
+  hasNewer?: boolean;
+}
+
+/** Earliest and latest timestamps of the loaded messages and their tool calls. */
+function messageTimeRange(messages: any[]): { min: string; max: string } | null {
+  let min = '';
+  let max = '';
+  const visit = (ts: string | undefined) => {
+    if (!ts) return;
+    if (!min || ts < min) min = ts;
+    if (!max || ts > max) max = ts;
+  };
+  for (const msg of messages) {
+    visit(msg.timestamp);
+    for (const tc of msg.toolCalls ?? []) visit(tc.timestamp);
+  }
+  return min ? { min, max } : null;
+}
+
+/**
+ * Keep only the events whose timestamp falls inside the loaded message window.
+ * With the full history loaded every event is kept.
+ */
+export function clipEventsToMessageWindow(
+  messages: any[],
+  threadEvents: ThreadEvent[] | undefined,
+  compactionEvents: CompactionEvent[] | undefined,
+  bounds: MessageWindowBounds | undefined,
+): { threadEvents?: ThreadEvent[]; compactionEvents?: CompactionEvent[] } {
+  if (!bounds?.hasOlder && !bounds?.hasNewer) return { threadEvents, compactionEvents };
+  const range = messageTimeRange(messages);
+  // Nothing to anchor the events to yet — show none until messages load.
+  if (!range) return { threadEvents: [], compactionEvents: [] };
+  const before = bounds.hasOlder ? range.min : '';
+  const after = bounds.hasNewer ? range.max : '';
+  const inWindow = (ts: string | undefined) =>
+    !ts || ((!before || ts >= before) && (!after || ts <= after));
+  return {
+    threadEvents: threadEvents?.filter((e) => inWindow(e.createdAt)),
+    compactionEvents: compactionEvents?.filter((e) => inWindow(e.timestamp)),
+  };
+}
+
 /** Get timestamp for a render item (used for chronological interleaving with events) */
 export function getItemTimestamp(item: RenderItem): string {
   if (item.type === 'message') return item.msg.timestamp || '';
@@ -366,7 +417,12 @@ function isStoppedOutcome(e: ThreadEvent): boolean {
  * become individual thread-event items.
  */
 function isStandaloneTimelineEvent(event: ThreadEvent): boolean {
-  return isGitTimelineEventType(event.type) || isStoppedOutcome(event);
+  return (
+    isGitTimelineEventType(event.type) ||
+    isStoppedOutcome(event) ||
+    // Sandbox / provider failures (thread-sandboxes) render as error cards.
+    event.type === 'sandbox:error'
+  );
 }
 
 function buildThreadEventItems(threadEvents: ThreadEvent[]): RenderItem[] {

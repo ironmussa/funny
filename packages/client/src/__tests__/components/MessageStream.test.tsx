@@ -807,6 +807,102 @@ describe('MessageStream sticky bottom', () => {
     expect(loadNewer).toHaveBeenCalledTimes(1);
   });
 
+  test('loads newer pages when the loaded window is too short to scroll', () => {
+    const loadNewer = vi.fn();
+    const loadOlder = vi.fn();
+    const pagination = {
+      hasMore: true,
+      hasMoreAfter: true,
+      loadingMore: false,
+      load: loadOlder,
+      loadAfter: loadNewer,
+      total: 646,
+      windowStart: 420,
+    };
+    const { container, rerender } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('loaded window')}
+        onSend={() => {}}
+        pagination={pagination}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    // A window of grouped tool-call cards that does not fill the viewport:
+    // no scroll event can ever fire, so only the underflow fill can load more.
+    setScrollMetrics(viewport, {
+      scrollHeight: () => 500,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(loadNewer).toHaveBeenCalledTimes(1);
+    expect(loadOlder).not.toHaveBeenCalled();
+
+    // A failed page leaves the same window: do not retry in a loop.
+    rerender(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('loaded window')}
+        onSend={() => {}}
+        pagination={{ ...pagination, loadingMore: true }}
+      />,
+    );
+    rerender(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('loaded window')}
+        onSend={() => {}}
+        pagination={pagination}
+      />,
+    );
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(loadNewer).toHaveBeenCalledTimes(1);
+  });
+
+  test('does not auto-load pages when the loaded window already overflows', () => {
+    const loadNewer = vi.fn();
+    const loadOlder = vi.fn();
+    const { container } = render(
+      <MessageStream
+        threadId="t1"
+        status="idle"
+        messages={makeMessages('loaded window')}
+        onSend={() => {}}
+        pagination={{
+          hasMore: true,
+          hasMoreAfter: true,
+          loadingMore: false,
+          load: loadOlder,
+          loadAfter: loadNewer,
+          total: 646,
+          windowStart: 420,
+        }}
+      />,
+    );
+    const viewport = container.firstElementChild as HTMLDivElement;
+    setScrollMetrics(viewport, {
+      scrollHeight: () => 2000,
+      clientHeight: () => 500,
+    });
+
+    act(() => {
+      vi.runOnlyPendingTimers();
+    });
+
+    expect(loadNewer).not.toHaveBeenCalled();
+    expect(loadOlder).not.toHaveBeenCalled();
+  });
+
   test('keeps the viewport at the loaded bottom after newer messages append', () => {
     let scrollHeight = 1200;
     const loadNewer = vi.fn();

@@ -4,6 +4,8 @@ import type { z, ZodTypeAny } from 'zod';
 export interface ToolDef<TParameters extends ZodTypeAny = ZodTypeAny> {
   description: string;
   parameters: TParameters;
+  /** JSON Schema sent to the model instead of one derived from `parameters` (MCP tools). */
+  jsonSchema?: Record<string, unknown>;
   execute: (args: z.infer<TParameters>) => Promise<string>;
 }
 

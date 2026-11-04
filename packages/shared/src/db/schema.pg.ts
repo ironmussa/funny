@@ -559,6 +559,8 @@ export const agentExecutionProfiles = pgTable('agent_execution_profiles', {
   updatedAt: text('updated_at').notNull(),
 });
 
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
 export const projectAgentProfileBindings = pgTable(
   'project_agent_profile_bindings',
   {
@@ -577,6 +579,8 @@ export const projectAgentProfileBindings = pgTable(
 
 // ── Server-only tables (multi/team mode) ───────────────────────
 
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
 export const runners = pgTable('runners', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -590,6 +594,8 @@ export const runners = pgTable('runners', {
   publicMediaUrl: text('public_media_url'),
   /** 'general' serves projectless + non-overridden work; 'dedicated' only its projects. */
   role: text('role').notNull().default('general'),
+  /** For role 'sandbox': the only thread this runner may serve (change thread-sandboxes). */
+  threadId: text('thread_id'),
   activeThreadIds: text('active_thread_ids').notNull().default('[]'),
   registeredAt: text('registered_at').notNull(),
   lastHeartbeatAt: text('last_heartbeat_at').notNull(),
@@ -721,6 +727,8 @@ export const inviteLinks = pgTable('invite_links', {
   createdAt: text('created_at').notNull(),
 });
 
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
 export const runnerEnrollments = pgTable('runner_enrollments', {
   id: text('id').primaryKey(),
   /** Short, human-readable code shown to the operator (unique). */
@@ -742,6 +750,75 @@ export const runnerEnrollments = pgTable('runner_enrollments', {
   failedAttempts: integer('failed_attempts').notNull().default(0),
   createdAt: text('created_at').notNull(),
   expiresAt: text('expires_at').notNull(),
+});
+
+/**
+ * The sandbox a thread runs in (change thread-sandboxes): which provider
+ * account and machine, its runner, and the normalized lifecycle state.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const threadSandboxes = pgTable('thread_sandboxes', {
+  threadId: text('thread_id').primaryKey(),
+  userId: text('user_id').notNull(),
+  connectionId: text('connection_id').notNull(),
+  provider: text('provider').notNull(),
+  /** Provider machine id; null until the provider accepted the create. */
+  sandboxId: text('sandbox_id'),
+  runnerId: text('runner_id'),
+  sizeId: text('size_id').notNull(),
+  /** Repository cloned into the sandbox; reused for the project's next sandbox. */
+  repoUrl: text('repo_url'),
+  /** SHA-256 of the sandbox's LLM proxy token; the row going away revokes it. */
+  llmTokenHash: text('llm_token_hash'),
+  /** provisioning | installing | connecting | bootstrapping | running | stopping | stopped | failed | lost */
+  state: text('state').notNull(),
+  error: text('error'),
+  /** Bumped on every re-provision; part of the provider idempotency key. */
+  generation: integer('generation').notNull().default(0),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+/**
+ * A user's credential for a sandbox provider such as Boat (change
+ * thread-sandboxes). The credential is encrypted at rest and never returned.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const infraConnections = pgTable('infra_connections', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  provider: text('provider').notNull(),
+  label: text('label').notNull(),
+  /** Non-secret provider config, validated by the provider's schema. */
+  configJson: text('config_json').notNull().default('{}'),
+  credentialEnc: text('credential_enc').notNull(),
+  /** Account label reported by the provider at validation time. */
+  accountLabel: text('account_label'),
+  createdAt: text('created_at').notNull(),
+  lastValidatedAt: text('last_validated_at'),
+});
+
+/**
+ * Single-use, short-lived token that lets a freshly provisioned sandbox runner
+ * register itself as the `sandbox` runner of one thread without device-link
+ * approval (change thread-sandboxes). Only the SHA-256 hash is stored.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const runnerProvisionTokens = pgTable('runner_provision_tokens', {
+  id: text('id').primaryKey(),
+  tokenHash: text('token_hash').notNull().unique(),
+  userId: text('user_id').notNull(),
+  projectId: text('project_id'),
+  threadId: text('thread_id').notNull(),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  /** Set atomically when a runner registers with the token. */
+  usedAt: text('used_at'),
+  /** The runner created by the registration. */
+  runnerId: text('runner_id'),
 });
 
 export const runnerOperationIdempotency = pgTable(
@@ -793,6 +870,8 @@ export const user = pgTable('user', {
   banExpires: dateText('ban_expires'),
 });
 
+// Better Auth requires matching fields in both dialect-specific schemas.
+// fallow-ignore-next-line code-duplication
 export const session = pgTable('session', {
   id: text('id').primaryKey(),
   expiresAt: dateText('expires_at').notNull(),
@@ -801,6 +880,8 @@ export const session = pgTable('session', {
   updatedAt: dateText('updated_at').notNull(),
   ipAddress: text('ip_address'),
   userAgent: text('user_agent'),
+  impersonatedBy: text('impersonated_by'),
+  activeOrganizationId: text('active_organization_id'),
   userId: text('user_id')
     .notNull()
     .references(() => user.id, { onDelete: 'cascade' }),
@@ -876,6 +957,8 @@ export const agentTemplates = pgTable('agent_templates', {
   updatedAt: text('updated_at').notNull(),
 });
 
+// Better Auth requires matching fields in both dialect-specific schemas.
+// fallow-ignore-next-line code-duplication
 export const invitation = pgTable('invitation', {
   id: text('id').primaryKey(),
   organizationId: text('organization_id')
@@ -884,6 +967,7 @@ export const invitation = pgTable('invitation', {
   email: text('email').notNull(),
   role: text('role'),
   status: text('status').notNull(),
+  createdAt: dateText('created_at').notNull(),
   expiresAt: dateText('expires_at').notNull(),
   inviterId: text('inviter_id')
     .notNull()

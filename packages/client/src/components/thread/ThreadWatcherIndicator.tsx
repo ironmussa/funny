@@ -1,16 +1,14 @@
 import { AlarmClock } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { useShallow } from 'zustand/react/shallow';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useThreadJobsById, useThreadWatchersById } from '@/data/background/hooks';
 import { cn } from '@/lib/utils';
 import {
   formatCountdown,
   selectActiveWatchersForThread,
   selectRunningJobsForThread,
 } from '@/lib/watcher-utils';
-import { useJobStore } from '@/stores/job-store';
-import { useWatcherStore } from '@/stores/watcher-store';
 
 /**
  * Small clock shown next to a thread's status icon when the thread has
@@ -23,10 +21,16 @@ import { useWatcherStore } from '@/stores/watcher-store';
  * unaffected in the common case.
  */
 export function ThreadWatcherIndicator({ threadId }: { threadId: string }) {
-  const watchers = useWatcherStore(
-    useShallow((s) => selectActiveWatchersForThread(s.watchersById, threadId)),
+  const threadWatchers = useThreadWatchersById(threadId);
+  const threadJobs = useThreadJobsById(threadId);
+  const watchers = useMemo(
+    () => selectActiveWatchersForThread(threadWatchers, threadId),
+    [threadWatchers, threadId],
   );
-  const jobs = useJobStore(useShallow((s) => selectRunningJobsForThread(s.jobsById, threadId)));
+  const jobs = useMemo(
+    () => selectRunningJobsForThread(threadJobs, threadId),
+    [threadJobs, threadId],
+  );
   const [now, setNow] = useState(() => Date.now());
 
   const hasActive = watchers.length > 0 || jobs.length > 0;

@@ -1,6 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, test } from 'vitest';
 
+import { withThreadIndex } from '@/data/threads/testing';
 import {
   useScratchThreads,
   useThreadById,
@@ -23,19 +24,21 @@ function makeThread(id: string, projectId = 'p1') {
 
 describe('thread-selectors hooks', () => {
   beforeEach(() => {
-    useThreadStore.setState({
-      threadsById: {},
-      threadIdsByProject: {},
-      scratchThreadIds: [],
-      threadTotalByProject: {},
-      scratchThreadTotal: 0,
-      selectedThreadId: null,
-      threadDataById: {},
-      activeThread: null,
-      setupProgressByThread: {},
-      contextUsageByThread: {},
-      queuedCountByThread: {},
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: {},
+        threadIdsByProject: {},
+        scratchThreadIds: [],
+        threadTotalByProject: {},
+        scratchThreadTotal: 0,
+        selectedThreadId: null,
+        threadDataById: {},
+        activeThread: null,
+        setupProgressByThread: {},
+        contextUsageByThread: {},
+        queuedCountByThread: {},
+      } as any),
+    );
   });
 
   test('useThreadById returns undefined for null id', () => {
@@ -45,9 +48,11 @@ describe('thread-selectors hooks', () => {
 
   test('useThreadById reacts to store updates', () => {
     const t1 = makeThread('t1');
-    useThreadStore.setState({
-      threadsById: { t1: t1 as any },
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { t1: t1 as any },
+      } as any),
+    );
 
     const { result } = renderHook(() => useThreadById('t1'));
     expect(result.current?.title).toBe('t1');
@@ -56,10 +61,12 @@ describe('thread-selectors hooks', () => {
   test('useThreadsForProject returns ordered project threads', () => {
     const t1 = makeThread('t1');
     const t2 = makeThread('t2');
-    useThreadStore.setState({
-      threadsById: { t1: t1 as any, t2: t2 as any },
-      threadIdsByProject: { p1: ['t1', 't2'] },
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { t1: t1 as any, t2: t2 as any },
+        threadIdsByProject: { p1: ['t1', 't2'] },
+      } as any),
+    );
 
     const { result } = renderHook(() => useThreadsForProject('p1'));
     expect(result.current.map((t) => t.id)).toEqual(['t1', 't2']);
@@ -67,10 +74,12 @@ describe('thread-selectors hooks', () => {
 
   test('useScratchThreads returns scratch bucket', () => {
     const s1 = { ...makeThread('s1', ''), isScratch: true };
-    useThreadStore.setState({
-      threadsById: { s1: s1 as any },
-      scratchThreadIds: ['s1'],
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { s1: s1 as any },
+        scratchThreadIds: ['s1'],
+      } as any),
+    );
 
     const { result } = renderHook(() => useScratchThreads());
     expect(result.current).toHaveLength(1);
@@ -80,10 +89,12 @@ describe('thread-selectors hooks', () => {
   test('useThreadsByProject exposes all loaded project buckets', () => {
     const t1 = makeThread('t1', 'p1');
     const t2 = makeThread('t2', 'p2');
-    useThreadStore.setState({
-      threadsById: { t1: t1 as any, t2: t2 as any },
-      threadIdsByProject: { p1: ['t1'], p2: ['t2'] },
-    } as any);
+    useThreadStore.setState(
+      withThreadIndex({
+        threadsById: { t1: t1 as any, t2: t2 as any },
+        threadIdsByProject: { p1: ['t1'], p2: ['t2'] },
+      } as any),
+    );
 
     const { result } = renderHook(() => useThreadsByProject());
     expect(Object.keys(result.current).sort()).toEqual(['p1', 'p2']);

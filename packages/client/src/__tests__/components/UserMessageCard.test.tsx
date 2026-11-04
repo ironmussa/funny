@@ -201,12 +201,13 @@ describe('UserMessageCard', () => {
     expect(timestamp).toBeInTheDocument();
     expect(timestamp).toHaveClass('thread-timestamp');
     expect(screen.getByTestId('msg-4').className).not.toContain('grid-cols-[minmax(0,1fr)_auto]');
-    expect(timestamp.parentElement).toHaveAttribute('data-testid', 'user-message-side-meta');
-    expect(timestamp.parentElement?.className).toContain('absolute');
-    expect(timestamp.parentElement?.className).toContain('right-2');
+    const footer = screen.getByTestId('user-message-footer');
+    expect(timestamp.parentElement).toBe(footer);
+    expect(footer).toContainElement(screen.getByText('prompt.autoEdit'));
+    expect(screen.getByTestId('msg-4')).not.toContainElement(footer);
   });
 
-  test('overlays actions and timestamp without reserving a message column', () => {
+  test('places actions and timestamp in a footer below the card', () => {
     const timestampIso = new Date().toISOString();
 
     renderWithProviders(
@@ -220,15 +221,12 @@ describe('UserMessageCard', () => {
 
     const actionsButton = screen.getByTestId('user-message-actions-menu-msg-actions-layout');
     const timestamp = screen.getByText('time.now');
-    const sideMeta = screen.getByTestId('user-message-side-meta');
+    const footer = screen.getByTestId('user-message-footer');
 
-    expect(sideMeta).toContainElement(actionsButton);
-    expect(sideMeta).toContainElement(timestamp);
-    expect(sideMeta.className).toContain('items-end');
-    expect(sideMeta.className).toContain('justify-between');
-    expect(sideMeta.className).toContain('absolute');
-    expect(sideMeta.className).toContain('inset-y-2');
-    expect(actionsButton).toHaveClass('bg-white', 'text-black');
+    expect(footer).toContainElement(actionsButton);
+    expect(footer).toContainElement(timestamp);
+    expect(footer.className).toContain('justify-end');
+    expect(screen.getByTestId('msg-actions-layout')).not.toContainElement(footer);
     expect(screen.getByTestId('msg-actions-layout').className).not.toContain(
       'grid-cols-[minmax(0,1fr)_auto]',
     );
@@ -306,7 +304,7 @@ describe('UserMessageCard', () => {
 
     expect(copyButton).toHaveAttribute('aria-label', 'Copy content');
     expect(copyButton).not.toHaveAttribute('role', 'menuitem');
-    expect(copyButton).toHaveClass('bg-white', 'text-black');
+    expect(screen.getByTestId('user-message-footer')).toContainElement(copyButton);
 
     await act(async () => {
       fireEvent.click(copyButton);

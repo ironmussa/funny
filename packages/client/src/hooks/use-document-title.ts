@@ -1,7 +1,10 @@
 import { useEffect, useRef } from 'react';
 
+import { useProjectById } from '@/data/projects/hooks';
+import { useThreadById } from '@/data/threads/hooks';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { createClientLogger } from '@/lib/client-logger';
+import { cleanThreadTitle } from '@/lib/thread-title';
 import { isScratch } from '@/lib/thread-variant';
 import { resolveLocalThreadBranch, resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
@@ -27,7 +30,9 @@ export function formatDocumentTitle(opts: {
   isScratchThread?: boolean;
 }): string {
   if (opts.isScratchThread) {
-    const title = opts.scratchTitle?.trim();
+    // Titles of threads created with attachments start with the
+    // `<referenced-files>` block — show the prompt text, like the sidebar.
+    const title = opts.scratchTitle ? cleanThreadTitle(opts.scratchTitle).displayTitle.trim() : '';
     return title ? `${title} — funny` : 'funny';
   }
   if (opts.projectName && opts.branch) {
@@ -46,6 +51,26 @@ export function branchForDocumentTitle(thread: ThreadLike | null | undefined): s
   return resolveLocalThreadBranch(thread);
 }
 
+/** Project shown in the title: the focused (non-scratch) thread's, else the selection. */
+function titleProjectId(
+  thread: ThreadLike | undefined,
+  selectedProjectId: string | null,
+): string | undefined {
+  return thread?.projectId || selectedProjectId || undefined;
+}
+
+/**
+ * Thread focused → its own branch only (stable, no async cwd race).
+ * No thread → the project's current cwd branch.
+ */
+function titleBranch(
+  thread: ThreadLike | undefined,
+  cwdBranch: string | undefined,
+): { branch: string | undefined; branchSource: 'thread' | 'cwd' | 'none' } {
+  if (thread) return { branch: branchForDocumentTitle(thread), branchSource: 'thread' };
+  return { branch: cwdBranch, branchSource: cwdBranch ? 'cwd' : 'none' };
+}
+
 /**
  * Sync `document.title` to the focused thread / project.
  *
@@ -58,32 +83,27 @@ export function branchForDocumentTitle(thread: ThreadLike | null | undefined): s
  * switch. `branchByProject` is only used when no thread is focused (a project
  * is selected but no thread is open).
  */
+/** The URL-focused thread's row, falling back to the loaded right-pane payload. */
+function useFocusThread() {
+  const activeThreadId = useActiveThreadId();
+  const listedThread = useThreadById(activeThreadId);
+  const loadedThread = useThreadStore((s) => s.activeThread);
+  return listedThread ?? loadedThread;
+}
+
 export function useDocumentTitle(): void {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   // Focused thread follows the URL, not the async selectedThreadId — the latter
   // lagged a switch and flashed the previous title for a beat.
-  const activeThreadId = useActiveThreadId();
-  const focusThread = useThreadStore((s) => {
-    if (activeThreadId && s.threadsById[activeThreadId]) return s.threadsById[activeThreadId];
-    return s.activeThread;
-  });
+  const focusThread = useFocusThread();
 
   const scratch = isScratch(focusThread);
-  const hasThread = !!focusThread && !scratch;
+  const titleThread = scratch ? undefined : (focusThread ?? undefined);
 
-  const projectId = hasThread
-    ? focusThread.projectId || selectedProjectId || undefined
-    : selectedProjectId || undefined;
-
-  const projectName = useProjectStore((s) =>
-    projectId ? s.projects.find((p) => p.id === projectId)?.name : undefined,
-  );
+  const projectId = titleProjectId(titleThread, selectedProjectId);
+  const projectName = useProjectById(projectId)?.name;
   const cwdBranch = useProjectStore((s) => (projectId ? s.branchByProject[projectId] : undefined));
-
-  // Thread focused → its own branch only (stable, no async cwd race).
-  // No thread → project's current cwd branch.
-  const branch = hasThread ? branchForDocumentTitle(focusThread) : cwdBranch;
-  const branchSource = hasThread ? 'thread' : cwdBranch ? 'cwd' : 'none';
+  const { branch, branchSource } = titleBranch(titleThread, cwdBranch);
 
   const focusThreadId = focusThread?.id;
   const focusThreadMode = focusThread?.mode;

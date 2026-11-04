@@ -141,6 +141,8 @@ export interface ProductionGrpcFixtureOptions {
   handleTunnel?: (request: Request, signal: AbortSignal) => Promise<Response>;
   handleTerminal?: (command: GrpcTerminalCommand, respond: (event: WSEvent) => void) => void;
   browserEvents?: BrowserEventSink;
+  /** Thread authorization for runner events (default: every thread allowed). */
+  authorizeThread?: (threadId: string) => Promise<boolean>;
   runners?: Array<{
     runnerId: string;
     userId: string;
@@ -239,7 +241,8 @@ export async function createProductionGrpcFixture(
       receipts: eventReceipts,
       // Transport fixture: threads are not seeded in a DB. Thread ownership +
       // project scope is covered by data-scope / grpc-runner-server tests.
-      authorizeThread: async () => true,
+      authorizeThread: async (_context, threadId) =>
+        options.authorizeThread ? options.authorizeThread(threadId) : true,
       applyEvent: async (_context, event) => {
         events.push(event);
       },

@@ -271,6 +271,12 @@ app.use('/api/runners/*', rateLimit({ windowMs: 60_000, max: 1200 }));
 const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('./routes/invite-links.js');
 app.route('/api/invite-links', inviteLinkPublicRoutes);
 
+// LLM credential proxy for sandbox agents (thread-sandboxes): authenticated by
+// the sandbox's proxy token, not a session, so it is mounted before auth.
+const { llmProxyRoutes } = await import('./routes/llm-proxy.js');
+app.use('/api/llm-proxy/*', rateLimit({ windowMs: 60_000, max: 600 }));
+app.route('/api/llm-proxy', llmProxyRoutes());
+
 // Better Auth routes — use app.all to handle all HTTP methods (GET, POST, DELETE, etc.)
 app.all('/api/auth/*', (c) => authInstance.handler(c.req.raw));
 
@@ -286,6 +292,7 @@ const { authRoutes } = await import('./routes/auth.js');
 const { projectRoutes } = await import('./routes/projects.js');
 const { projectRunnerSettingsRoutes } = await import('./routes/project-runner-settings.js');
 const { runnerRoutes } = await import('./routes/runners.js');
+const { infraRoutes } = await import('./routes/infra.js');
 const { profileRoutes } = await import('./routes/profile.js');
 const { threadRoutes, requireThreadOwner, requireThreadSteer } =
   await import('./routes/threads.js');
@@ -311,6 +318,7 @@ app.route('/api/projects', projectRunnerSettingsRoutes);
 app.route('/api/projects', projectRoutes);
 app.route('/api/users', userRoutes);
 app.route('/api/runners', runnerRoutes);
+app.route('/api/infra', infraRoutes());
 app.route('/api/media', mediaRoutes);
 app.route('/api/browser-v1/resources', browserV1ResourceRoutes);
 app.route('/api/profile', profileRoutes);
@@ -474,6 +482,12 @@ if (runnerTransport) {
   });
 }
 
+// Thread sandboxes: stop idle ones, wake stopped ones on demand.
+const sandboxLifecycle = await import('./services/thread-sandboxes/sandbox-lifecycle.js');
+if (runnerTransport) {
+  sandboxLifecycle.startSandboxLifecycle({ presence: runnerTransport.presence, browserEvents });
+}
+
 // Runners outside the private network reach the gRPC listener through a
 // WebSocket carrier on this public origin (see services/grpc/websocket-carrier.ts).
 const {
@@ -596,6 +610,7 @@ async function shutdown() {
 
   // Stop firing automations before the runner transport goes away
   automationScheduler.stopAutomationScheduler();
+  sandboxLifecycle.stopSandboxLifecycle();
 
   // Close Socket.IO connections
   await closeSocketIO();

@@ -108,6 +108,8 @@ test.describe('2. Sidebar', () => {
 
     test('2.10 Project context menu - rename', async ({ authedPage: page }) => {
       // Open the project more-actions menu
+      // The actions button only accepts pointer events while the row is hovered.
+      await page.getByTestId(`project-item-${projectId}`).hover();
       await page.getByTestId(`project-more-actions-${projectId}`).click();
       await page.getByTestId('project-menu-rename').click();
 
@@ -125,6 +127,8 @@ test.describe('2. Sidebar', () => {
     });
 
     test('2.10b Project rename cancel', async ({ authedPage: page }) => {
+      // The actions button only accepts pointer events while the row is hovered.
+      await page.getByTestId(`project-item-${projectId}`).hover();
       await page.getByTestId(`project-more-actions-${projectId}`).click();
       await page.getByTestId('project-menu-rename').click();
 
@@ -137,6 +141,8 @@ test.describe('2. Sidebar', () => {
     });
 
     test('2.11 Project context menu - delete', async ({ authedPage: page }) => {
+      // The actions button only accepts pointer events while the row is hovered.
+      await page.getByTestId(`project-item-${projectId}`).hover();
       await page.getByTestId(`project-more-actions-${projectId}`).click();
       await page.getByTestId('project-menu-delete').click();
 
@@ -152,6 +158,8 @@ test.describe('2. Sidebar', () => {
     });
 
     test('2.11b Project delete cancel', async ({ authedPage: page }) => {
+      // The actions button only accepts pointer events while the row is hovered.
+      await page.getByTestId(`project-item-${projectId}`).hover();
       await page.getByTestId(`project-more-actions-${projectId}`).click();
       await page.getByTestId('project-menu-delete').click();
 
@@ -190,6 +198,25 @@ test.describe('2. Sidebar', () => {
       await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/threads/${threadId}`));
     });
 
+    test('2.12b Thread context menu - rename', async ({ authedPage: page, api }) => {
+      await page.getByTestId(`project-item-${projectId}`).click();
+      await page.waitForTimeout(300);
+
+      await page.getByTestId(`thread-item-more-${threadId}`).click();
+      await page.getByTestId(`thread-rename-${threadId}`).click();
+
+      const input = page.getByTestId(`thread-rename-input-${threadId}`);
+      await expect(input).toBeVisible();
+      await input.fill('Renamed Thread');
+      await page.getByTestId('thread-rename-confirm').click();
+
+      // Optimistic rename shows at once; the server keeps it.
+      await expect(page.getByTestId(`thread-item-${threadId}`)).toContainText('Renamed Thread');
+      await expect
+        .poll(async () => (await api.getThreads(projectId)).find((t) => t.id === threadId)?.title)
+        .toBe('Renamed Thread');
+    });
+
     test('2.13 Thread context menu - archive', async ({ authedPage: page }) => {
       await page.getByTestId(`project-item-${projectId}`).click();
       await page.waitForTimeout(300);
@@ -201,8 +228,8 @@ test.describe('2. Sidebar', () => {
       await page.getByText('Archive').click();
 
       // Confirm dialog
-      await expect(page.getByTestId('archive-thread-confirm')).toBeVisible();
-      await page.getByTestId('archive-thread-confirm').click();
+      await expect(page.getByTestId('confirm-dialog-confirm')).toBeVisible();
+      await page.getByTestId('confirm-dialog-confirm').click();
 
       // Thread should disappear from sidebar
       await expect(page.getByTestId(`thread-item-${threadId}`)).not.toBeVisible();
@@ -215,7 +242,7 @@ test.describe('2. Sidebar', () => {
       await page.getByTestId(`thread-item-more-${threadId}`).click();
       await page.getByText('Archive').click();
 
-      await page.getByTestId('archive-thread-cancel').click();
+      await page.getByTestId('confirm-dialog-cancel').click();
 
       // Thread should still be visible
       await expect(page.getByTestId(`thread-item-${threadId}`)).toBeVisible();

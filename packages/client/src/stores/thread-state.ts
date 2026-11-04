@@ -19,19 +19,9 @@ import type {
 import type { AgentInitInfo, ContextUsage, ThreadWithMessages } from './thread-types';
 
 export interface ThreadState {
-  // ── Single source of truth ─────────────────────────────────
-  /** All known threads keyed by id. The only place a Thread row is stored. */
-  threadsById: Record<string, Thread>;
-  /** Per-project ordered IDs. Order matches the server response. */
-  threadIdsByProject: Record<string, string[]>;
-  /** Scratch threads (no project) — ordered, most recent first. */
-  scratchThreadIds: string[];
-  /** Threads other users have shared WITH the current user — ordered. */
-  sharedThreadIds: string[];
-  /** Pagination totals returned by the server. */
-  threadTotalByProject: Record<string, number>;
-  scratchThreadTotal: number;
-  sharedThreadTotal: number;
+  // Thread rows and list order live in the data layer's threads collection
+  // (`src/data/threads`). Read them with the hooks in `data/threads/hooks.ts`
+  // (React) or `data/threads/read.ts` (imperative).
 
   selectedThreadId: string | null;
   /**
@@ -98,6 +88,12 @@ export interface ThreadState {
    * never owned it. Fired by the `thread:share-revoked` WS event.
    */
   handleShareRevoked: (threadId: string) => void;
+  /**
+   * The thread was deleted (here, in another tab, or by another client) —
+   * the `thread:deleted` WS event. Drop it from every list and, if it is
+   * open, clear the selection so the detail view leaves it.
+   */
+  handleThreadDeleted: (threadId: string) => void;
   appendOptimisticMessage: (
     threadId: string,
     content: string,

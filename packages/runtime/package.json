@@ -61,10 +61,11 @@
     "@anthropic-ai/sdk": "^0.128.0",
     "@bufbuild/protobuf": "2.14.0",
     "@grpc/grpc-js": "1.14.6",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@openai/codex-sdk": "0.159.2",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",
-    "better-auth": "^1.6.19",
+    "better-auth": "^1.7.7",
     "drizzle-orm": "^0.45.2",
     "hono": "^4.13.13",
     "nanoid": "^5.0.9",
@@ -74,7 +75,7 @@
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
     "xstate": "^5.32.1",
-    "zod": "^4.5.4"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@funny/core": "workspace:*",
@@ -85,17 +86,17 @@
     "@funny/workflows": "workspace:*",
     "@types/bun": "^1.4.0",
     "@types/pg": "^8.18.0",
-    "@vitest/coverage-istanbul": "^4.1.10",
-    "@vitest/coverage-v8": "^4.1.9",
+    "@vitest/coverage-istanbul": "^4.1.12",
+    "@vitest/coverage-v8": "^4.1.12",
     "drizzle-kit": "^0.31.9",
     "eslint": "^10.6.0",
     "typescript-eslint": "^8.63.0",
     "typescript-eslint-typescript": "npm:typescript@5.9.3",
-    "vitest": "^4.1.9"
+    "vitest": "^4.1.12"
   },
   "optionalDependencies": {
     "node-pty": "^1.1.0",
-    "playwright": "^1.50.0"
+    "playwright": "^1.61.0"
   },
   "engines": {
     "bun": ">=1.4.0"

@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { projectsApi as api } from '@/lib/api/projects';
+import { fetchProjectBranches, type ProjectBranches } from '@/data/projects/branches';
 
 interface BranchPickerState {
   // ── Branch data ──
@@ -74,6 +74,27 @@ function findPreferredBranch(
   );
 }
 
+/**
+ * The branch the picker starts on: the requested branch, else the checked-out
+ * one, else the project's default, else the repo default, else the first.
+ */
+function pickInitialBranch(
+  data: ProjectBranches,
+  remoteBranches: string[],
+  projectDefaultBranch: string | null | undefined,
+  preferredBranch: string | null | undefined,
+): string {
+  const local = (branch: string | null | undefined): branch is string =>
+    !!branch && data.branches.includes(branch);
+  return (
+    findPreferredBranch(preferredBranch, data.branches, remoteBranches) ??
+    (local(data.currentBranch) ? data.currentBranch : null) ??
+    (local(projectDefaultBranch) ? projectDefaultBranch : null) ??
+    (data.defaultBranch || data.branches[0]) ??
+    ''
+  );
+}
+
 export const useBranchPickerStore = create<BranchPickerState>((set) => ({
   ...initialState,
 
@@ -87,23 +108,17 @@ export const useBranchPickerStore = create<BranchPickerState>((set) => ({
       projectId,
       selectedBranch: preferredBranch?.trim() || '',
     });
-    const result = await api.listBranches(projectId);
-    if (result.isOk()) {
-      const data = result.value;
+    // Shared with the sidebar's branch label (`data/projects/branches.ts`);
+    // the picker always wants a fresh listing when it opens.
+    const data = await fetchProjectBranches(projectId, { force: true });
+    if (data) {
       const remoteBranches = normalizeRemoteBranches(data.remoteBranches ?? []);
-      let selected = '';
-      const preferred = findPreferredBranch(preferredBranch, data.branches, remoteBranches);
-      if (preferred) {
-        selected = preferred;
-      } else if (data.currentBranch && data.branches.includes(data.currentBranch)) {
-        selected = data.currentBranch;
-      } else if (projectDefaultBranch && data.branches.includes(projectDefaultBranch)) {
-        selected = projectDefaultBranch;
-      } else if (data.defaultBranch) {
-        selected = data.defaultBranch;
-      } else if (data.branches.length > 0) {
-        selected = data.branches[0];
-      }
+      const selected = pickInitialBranch(
+        data,
+        remoteBranches,
+        projectDefaultBranch,
+        preferredBranch,
+      );
       set({
         branches: data.branches,
         remoteBranches,

@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useThreadById } from '@/data/threads/hooks';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { createClientLogger } from '@/lib/client-logger';
+import { cleanThreadTitle } from '@/lib/thread-title';
 import { isScratch } from '@/lib/thread-variant';
 import { resolveLocalThreadBranch, resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
@@ -28,7 +29,9 @@ export function formatDocumentTitle(opts: {
   isScratchThread?: boolean;
 }): string {
   if (opts.isScratchThread) {
-    const title = opts.scratchTitle?.trim();
+    // Titles of threads created with attachments start with the
+    // `<referenced-files>` block — show the prompt text, like the sidebar.
+    const title = opts.scratchTitle ? cleanThreadTitle(opts.scratchTitle).displayTitle.trim() : '';
     return title ? `${title} — funny` : 'funny';
   }
   if (opts.projectName && opts.branch) {

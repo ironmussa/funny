@@ -3,6 +3,14 @@ import { describe, expect, test } from 'vitest';
 import { branchForDocumentTitle, formatDocumentTitle } from '@/hooks/use-document-title';
 
 describe('formatDocumentTitle', () => {
+  test('scratch title drops the attachments block', () => {
+    const title =
+      '<referenced-files>\n<file path="nota-a.md">\n# Nota A\n</file>\n</referenced-files>\n\nPrueba de adjuntos';
+    expect(formatDocumentTitle({ isScratchThread: true, scratchTitle: title })).toBe(
+      'Prueba de adjuntos — funny',
+    );
+  });
+
   test('project with branch', () => {
     expect(formatDocumentTitle({ projectName: 'funny', branch: 'master' })).toBe(
       'funny [master] — funny',

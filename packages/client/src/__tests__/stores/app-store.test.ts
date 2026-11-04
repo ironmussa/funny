@@ -5,6 +5,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { readThreadIndex } from '@/data/threads/read';
 import { withThreadIndex } from '@/data/threads/testing';
 import { useAppStore } from '@/stores/app-store';
+import { readActiveThreadView } from '@/stores/thread-view';
 
 import { readProjectThreads, seedThreads } from '../helpers/seed-thread-state';
 
@@ -231,8 +232,8 @@ describe('AppStore', () => {
         (t: any) => t.id === 't1',
       );
       expect(archivedThread?.archived).toBe(true);
-      // Active thread also gets archived flag
-      expect(useAppStore.getState().activeThread?.archived).toBe(true);
+      // The open thread's detail view shows the flag too (row fields come from the row)
+      expect(readActiveThreadView(useAppStore.getState())?.archived).toBe(true);
     });
   });
 

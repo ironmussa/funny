@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { getVisualizerForFence } from '@/lib/visualizer-registry';
 import { useAppStore } from '@/stores/app-store';
 import { editorLabels, useSettingsStore } from '@/stores/settings-store';
+import { readActiveThreadView } from '@/stores/thread-view';
 
 type RenderedSegment =
   | { type: 'html'; html: string }
@@ -57,7 +58,9 @@ function getInitialRenderState(segments: SatteriMarkdownSegment[]): RenderState 
 }
 
 function getActiveFileBasePath(): string | null {
-  const { activeThread, projects, selectedProjectId } = useAppStore.getState();
+  const appState = useAppStore.getState();
+  const { projects, selectedProjectId } = appState;
+  const activeThread = readActiveThreadView(appState);
   const projectId = activeThread?.projectId ?? selectedProjectId;
   const projectPath = projectId ? projects.find((project) => project.id === projectId)?.path : null;
   return activeThread?.worktreePath || projectPath || null;

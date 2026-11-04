@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { ProviderSetupDialog } from '@/components/ProviderSetupDialog';
 import { Button } from '@/components/ui/button';
 import { stripAnsi } from '@/lib/ansi-to-html';
+import { useThreadViewById } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
 /** Only inspect the current turn, never errors from an earlier conversation turn. */
@@ -28,8 +29,9 @@ export function findProviderAuthError(thread: ThreadWithMessages | undefined): s
 
 export function ProviderAuthRecovery({ threadId }: { threadId: string }) {
   const errorId = useThreadStore((s) => findProviderAuthError(s.threadDataById[threadId]));
-  const provider = useThreadStore((s) => s.threadDataById[threadId]?.provider);
-  const projectId = useThreadStore((s) => s.threadDataById[threadId]?.projectId);
+  const thread = useThreadViewById(threadId);
+  const provider = thread?.provider;
+  const projectId = thread?.projectId;
   if (!errorId || !provider || !projectId) return null;
   return (
     <RecoveryPrompt key={`${threadId}:${errorId}`} provider={provider} projectId={projectId} />

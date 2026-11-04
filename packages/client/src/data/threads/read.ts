@@ -96,6 +96,22 @@ export function readThreadRow(
   return threadId ? getThreadsData(layer).readThread(threadId) : undefined;
 }
 
+const listedSets = new WeakMap<object, Set<string>>();
+
+/**
+ * Whether a thread is in any loaded list (project, scratch or shared). A
+ * thread opened by URL can have a row without being listed.
+ */
+export function isThreadListed(threadId: string, layer: DataLayer = getDataLayer()): boolean {
+  const members = getThreadsData(layer).meta.getState().members;
+  let listed = listedSets.get(members);
+  if (!listed) {
+    listed = new Set(Object.values(members).flatMap((ids) => ids ?? []));
+    listedSets.set(members, listed);
+  }
+  return listed.has(threadId);
+}
+
 /** IDs of the projects whose thread list has been loaded. */
 export function listedProjectIds(layer: DataLayer = getDataLayer()): string[] {
   return Object.keys(getThreadsData(layer).meta.getState().members)

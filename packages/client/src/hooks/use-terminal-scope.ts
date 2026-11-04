@@ -1,10 +1,11 @@
 import type { Thread } from '@funny/shared';
 
-import { useThreadById } from '@/data/threads/hooks';
 import { readThreadRow } from '@/data/threads/read';
 import { useProjectStore } from '@/stores/project-store';
 import { SCRATCH_TERMINAL_SCOPE_ID } from '@/stores/terminal-store';
+import { useActiveThreadView, useThreadViewById } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
+import { readActiveThreadView, readThreadView } from '@/stores/thread-view';
 import { useUIStore } from '@/stores/ui-store';
 
 /**
@@ -76,14 +77,10 @@ export function resolveTerminalScope({
 
 export function useTerminalScope(): TerminalScope {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const activeThread = useThreadStore((s) => s.activeThread);
+  const activeThread = useActiveThreadView();
   const liveColumnsOpen = useUIStore((s) => s.liveColumnsOpen);
   const gridSelectedThreadId = useUIStore((s) => s.gridSelectedThreadId);
-  const gridPayload = useThreadStore((s) =>
-    gridSelectedThreadId ? (s.threadDataById[gridSelectedThreadId] ?? null) : null,
-  );
-  const gridRow = useThreadById(gridSelectedThreadId);
-  const gridThread = gridPayload ?? gridRow ?? null;
+  const gridThread = useThreadViewById(gridSelectedThreadId);
 
   return resolveTerminalScope({
     liveColumnsOpen,
@@ -99,7 +96,7 @@ export function getTerminalScope(): TerminalScope {
   const threadState = useThreadStore.getState();
   const { liveColumnsOpen, gridSelectedThreadId } = useUIStore.getState();
   const gridThread = gridSelectedThreadId
-    ? (threadState.threadDataById[gridSelectedThreadId] ??
+    ? (readThreadView(threadState, gridSelectedThreadId) ??
       readThreadRow(gridSelectedThreadId) ??
       null)
     : null;
@@ -108,6 +105,6 @@ export function getTerminalScope(): TerminalScope {
     liveColumnsOpen,
     gridThread,
     selectedProjectId,
-    activeThread: threadState.activeThread,
+    activeThread: readActiveThreadView(threadState),
   });
 }

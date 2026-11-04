@@ -1444,6 +1444,7 @@
     "threadUpdateFailed": "No se pudo actualizar el hilo. Se deshizo tu cambio.",
     "templateUpdateFailed": "No se pudo actualizar la plantilla de agente. Se deshizo tu cambio.",
     "templateCreateFailed": "No se pudo crear la plantilla de agente.",
+    "backgroundCancelFailed": "No se pudo cancelar. Sigue en ejecución.",
     "projectUpdateFailed": "No se pudo actualizar el proyecto. Se deshizo tu cambio."
   },
   "agentResources": {

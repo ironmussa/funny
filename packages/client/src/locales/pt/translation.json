@@ -1410,6 +1410,7 @@
     "threadUpdateFailed": "Não foi possível atualizar a thread. Sua alteração foi desfeita.",
     "templateUpdateFailed": "Não foi possível atualizar o modelo de agente. Sua alteração foi desfeita.",
     "templateCreateFailed": "Não foi possível criar o modelo de agente.",
+    "backgroundCancelFailed": "Não foi possível cancelar. Continua em execução.",
     "projectUpdateFailed": "Não foi possível atualizar o projeto. Sua alteração foi desfeita."
   },
   "agentResources": {

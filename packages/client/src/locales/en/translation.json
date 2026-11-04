@@ -1451,6 +1451,7 @@
     "threadUpdateFailed": "Couldn't update the thread. Your change was undone.",
     "templateUpdateFailed": "Couldn't update the agent template. Your change was undone.",
     "templateCreateFailed": "Couldn't create the agent template.",
+    "backgroundCancelFailed": "Couldn't cancel it. It is still running.",
     "projectUpdateFailed": "Couldn't update the project. Your change was undone."
   },
   "agentResources": {

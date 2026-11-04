@@ -7,6 +7,7 @@ import {
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
 
+import { applyJobEvent, applyWatcherEvent } from '@/data/background/loaders';
 import { readThreadRow } from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
 import { showAgentNotification } from '@/hooks/use-notifications';
@@ -422,15 +423,11 @@ function handleNativeGitBuild(_threadId: string, data: any, type: string): void 
 }
 
 function upsertWatcher(_threadId: string, data: any): void {
-  import('@/stores/watcher-store').then(({ useWatcherStore }) => {
-    if (data?.watcher) useWatcherStore.getState().upsert(data.watcher);
-  });
+  if (data?.watcher) applyWatcherEvent(data.watcher);
 }
 
 function upsertJob(_threadId: string, data: any): void {
-  import('@/stores/job-store').then(({ useJobStore }) => {
-    if (data?.job) useJobStore.getState().upsert(data.job);
-  });
+  if (data?.job) applyJobEvent(data.job);
 }
 
 type AutomationStoreState = ReturnType<

@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
+import { getJobsData, getWatchersData } from '@/data/background/store';
 import { readThreadIndex } from '@/data/threads/read';
 import { withThreadIndex } from '@/data/threads/testing';
 import { clearWSDispatchState, dispatchRealtimeEvent } from '@/hooks/ws-event-dispatch';
 import { useAutomationStore } from '@/stores/automation-store';
 import { useCommentStore } from '@/stores/comment-store';
-import { useJobStore } from '@/stores/job-store';
 import { useNativeGitStore } from '@/stores/native-git-store';
 import { usePipelineApprovalStore } from '@/stores/pipeline-approval-store';
 import { usePipelineStore } from '@/stores/pipeline-store';
@@ -13,7 +13,6 @@ import { usePresenceStore } from '@/stores/presence-store';
 import { useSchedulerStore } from '@/stores/scheduler-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { setAppNavigate } from '@/stores/thread-store-internals';
-import { useWatcherStore } from '@/stores/watcher-store';
 import { useWorkflowRunStore } from '@/stores/workflow-run-store';
 
 // The handler table lazily `import()`s these stores. Spy on the real store
@@ -50,19 +49,16 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     });
   });
 
-  test('watcher and job events upsert only when the payload carries the entity', async () => {
-    const w = spyActions(useWatcherStore, ['upsert']);
-    const j = spyActions(useJobStore, ['upsert']);
+  test('watcher and job events upsert only when the payload carries the entity', () => {
+    const jobs = getJobsData();
+    const watchers = getWatchersData();
     dispatchRealtimeEvent('watcher:cancelled', 't1', {});
     dispatchRealtimeEvent('job:killed', 't1', {});
+    expect(jobs.collection.size + watchers.collection.size).toBe(0);
     dispatchRealtimeEvent('watcher:fired', 't1', { watcher: { id: 'w1' } });
     dispatchRealtimeEvent('job:exited', 't1', { job: { id: 'j1' } });
-    await vi.waitFor(() => {
-      expect(w.upsert).toHaveBeenCalledWith({ id: 'w1' });
-      expect(j.upsert).toHaveBeenCalledWith({ id: 'j1' });
-    });
-    expect(w.upsert).toHaveBeenCalledTimes(1);
-    expect(j.upsert).toHaveBeenCalledTimes(1);
+    expect(watchers.getSynced('w1')).toEqual({ id: 'w1' });
+    expect(jobs.getSynced('j1')).toEqual({ id: 'j1' });
   });
 
   test('pipeline, approval and workflow events route to their stores', async () => {

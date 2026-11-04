@@ -3,11 +3,10 @@ import { fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { WatcherPanelButton } from '@/components/sidebar/WatcherPanelButton';
+import { seedBackgroundActivity } from '@/data/background/testing';
 import { useAuthStore } from '@/stores/auth-store';
-import { useJobStore } from '@/stores/job-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
-import { useWatcherStore } from '@/stores/watcher-store';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -68,8 +67,7 @@ describe('WatcherPanelButton', () => {
     useAuthStore.setState({ isAuthenticated: false, isLoading: false, user: null });
     useProjectStore.setState({ selectedProjectId: 'project-1' } as any);
     useThreadStore.setState({ activeThread: null } as any);
-    useJobStore.setState({ jobsById: {} });
-    useWatcherStore.setState({ watchersById: {} });
+    seedBackgroundActivity({});
   });
 
   test('groups active jobs and pending watchers above history', async () => {
@@ -92,17 +90,9 @@ describe('WatcherPanelButton', () => {
       updatedAt: '2026-01-01T00:35:00.000Z',
     });
 
-    useJobStore.setState({
-      jobsById: {
-        [activeJob.id]: activeJob,
-        [historicalJob.id]: historicalJob,
-      },
-    });
-    useWatcherStore.setState({
-      watchersById: {
-        [activeWatcher.id]: activeWatcher,
-        [historicalWatcher.id]: historicalWatcher,
-      },
+    seedBackgroundActivity({
+      jobs: [activeJob, historicalJob],
+      watchers: [activeWatcher, historicalWatcher],
     });
 
     renderWithProviders(<WatcherPanelButton />);

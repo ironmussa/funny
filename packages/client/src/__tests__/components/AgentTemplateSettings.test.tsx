@@ -1,10 +1,20 @@
 import type { AgentTemplate } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
+import { okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
+import { seedTemplates } from '@/data/templates/testing';
 import { useAuthStore } from '@/stores/auth-store';
+
+const actions = vi.hoisted(() => ({ duplicateTemplate: vi.fn() }));
+vi.mock('@/data/templates/actions', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  duplicateTemplate: actions.duplicateTemplate,
+}));
+vi.mock('@/lib/api/agent-templates', () => ({
+  agentTemplatesApi: { getAgentTemplateUsageStats: () => okAsync({ 'template-1': 2 }) },
+}));
 
 const template: AgentTemplate = {
   id: 'template-1',
@@ -20,17 +30,13 @@ const template: AgentTemplate = {
 };
 
 describe('AgentTemplateSettings accessibility', () => {
-  const duplicateTemplate = vi.fn(async () => null);
+  const { duplicateTemplate } = actions;
 
   beforeEach(() => {
-    duplicateTemplate.mockClear();
+    duplicateTemplate.mockReset();
+    duplicateTemplate.mockReturnValue(okAsync(template));
     useAuthStore.setState({ user: { id: 'user-1' } as never });
-    useAgentTemplateStore.setState({
-      templates: [template],
-      usageStats: { [template.id]: 2 },
-      initialized: true,
-      duplicateTemplate,
-    });
+    seedTemplates([template]);
   });
 
   test('exposes separate named actions without nesting interactive controls', () => {

@@ -9,8 +9,8 @@ import { toast } from 'sonner';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PromptInputUI, type PromptInputUIProps } from '@/components/PromptInputUI';
+import { seedTemplates } from '@/data/templates/testing';
 import { systemApi } from '@/lib/api/system';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
 import { renderWithProviders } from '../helpers/render';
 
@@ -154,7 +154,7 @@ beforeEach(() => {
       login: null,
     }) as any,
   );
-  useAgentTemplateStore.setState({ templates: [], initialized: true });
+  seedTemplates([]);
 });
 
 describe('PromptInputUI submit', () => {
@@ -293,20 +293,17 @@ describe('PromptInputUI submit', () => {
   });
 
   test('deep agent new thread sends template id and resolved variables', async () => {
-    useAgentTemplateStore.setState({
-      initialized: true,
-      templates: [
-        {
-          id: 'tpl1',
-          name: 'Tpl',
-          variables: [
-            { name: 'a', defaultValue: 'da' },
-            { name: 'b', defaultValue: 'db' },
-            { name: 'c' },
-          ],
-        } as any,
-      ],
-    });
+    seedTemplates([
+      {
+        id: 'tpl1',
+        name: 'Tpl',
+        variables: [
+          { name: 'a', defaultValue: 'da' },
+          { name: 'b', defaultValue: 'db' },
+          { name: 'c' },
+        ],
+      } as any,
+    ]);
     const { onSubmit, editor } = renderUI({
       isNewThread: true,
       unifiedModel: 'deepagent:m1',

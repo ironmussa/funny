@@ -8,9 +8,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useAgentTemplates } from '@/data/templates/hooks';
+import { ensureTemplatesLoaded } from '@/data/templates/loaders';
 import { projectsApi } from '@/lib/api/projects';
 import { cn } from '@/lib/utils';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
 import { SettingRow } from './setting-primitives';
 
@@ -215,11 +216,11 @@ export function DefaultTemplateSetting({
   currentTemplateId?: string;
   onSave: (id: string, data: Record<string, unknown>) => void;
 }) {
-  const { templates, initialized, loadTemplates } = useAgentTemplateStore();
+  const templates = useAgentTemplates();
 
   useEffect(() => {
-    if (!initialized) loadTemplates();
-  }, [initialized, loadTemplates]);
+    void ensureTemplatesLoaded();
+  }, []);
 
   return (
     <SettingRow

@@ -1449,6 +1449,8 @@
       "INTERNAL": "Failed to create the project. The server may be experiencing issues."
     },
     "threadUpdateFailed": "Couldn't update the thread. Your change was undone.",
+    "templateUpdateFailed": "Couldn't update the agent template. Your change was undone.",
+    "templateCreateFailed": "Couldn't create the agent template.",
     "projectUpdateFailed": "Couldn't update the project. Your change was undone."
   },
   "agentResources": {

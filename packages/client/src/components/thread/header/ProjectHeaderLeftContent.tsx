@@ -13,9 +13,9 @@ import {
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjectById } from '@/data/projects/hooks';
+import { useAgentTemplate } from '@/data/templates/hooks';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useThreadId, useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -32,9 +32,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
   const activeThreadTitle = useThreadSelector((t) => t?.title);
   const activeThreadParentId = useThreadSelector((t) => t?.parentThreadId);
   const activeThreadTemplateId = useThreadSelector((t) => t?.agentTemplateId);
-  const activeTemplate = useAgentTemplateStore((s) =>
-    activeThreadTemplateId ? s.templates.find((t) => t.id === activeThreadTemplateId) : undefined,
-  );
+  const activeTemplate = useAgentTemplate(activeThreadTemplateId);
   const renameThread = useThreadStore((s) => s.renameThread);
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const kanbanContext = useUIStore((s) => s.kanbanContext);

@@ -1,13 +1,13 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { loadTemplates } from '@/data/templates/loaders';
 import { useDocumentTitle } from '@/hooks/use-document-title';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRefreshOnFocus } from '@/hooks/use-refresh-on-focus';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useProjectStore } from '@/stores/project-store';
 import { setAppNavigate, useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -44,7 +44,6 @@ interface ShellState {
 export function useAppShell(): ShellState {
   const navigate = useNavigate();
   const loadProjects = useProjectStore((s) => s.loadProjects);
-  const loadTemplates = useAgentTemplateStore((s) => s.loadTemplates);
   const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
   const loadSharedThreads = useThreadStore((s) => s.loadSharedThreads);
 
@@ -87,10 +86,10 @@ export function useAppShell(): ShellState {
 
   useEffect(() => {
     loadProjects();
-    loadTemplates();
+    void loadTemplates();
     loadScratchThreads();
     loadSharedThreads();
-  }, [loadProjects, loadTemplates, loadScratchThreads, loadSharedThreads]);
+  }, [loadProjects, loadScratchThreads, loadSharedThreads]);
 
   useDocumentTitle();
 

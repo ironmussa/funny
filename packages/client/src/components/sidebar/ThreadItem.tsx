@@ -38,6 +38,7 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAgentTemplate } from '@/data/templates/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { openThreadTerminal } from '@/lib/open-terminal-tab';
@@ -52,7 +53,6 @@ import {
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 export interface ThreadItemProps {
@@ -290,9 +290,7 @@ export const ThreadItem = memo(function ThreadItem({
   const [renameValue, setRenameValue] = useState('');
 
   // Agent template lookup for badge display
-  const agentTemplate = useAgentTemplateStore((s) =>
-    thread.agentTemplateId ? s.templates.find((t) => t.id === thread.agentTemplateId) : undefined,
-  );
+  const agentTemplate = useAgentTemplate(thread.agentTemplateId);
 
   // Create Branch dialog state
   const [isCreateBranchOpen, setIsCreateBranchOpen] = useState(false);

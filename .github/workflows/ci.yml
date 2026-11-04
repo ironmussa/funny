@@ -48,6 +48,12 @@ jobs:
       - name: Lint (oxlint)
         run: bun run lint
 
+      # The evflow viewer is not a workspace: it has its own lockfile and Tailwind.
+      # oxfmt sorts its Tailwind classes against that install, so without it the
+      # check expects a different class order than local runs produce.
+      - name: Install evflow viewer dependencies (Tailwind class sorting)
+        run: bun install --frozen-lockfile --cwd packages/evflow/viewer
+
       - name: Format check (oxfmt)
         run: bun run format:check
 

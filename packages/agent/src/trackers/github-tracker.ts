@@ -77,27 +77,23 @@ export class GitHubTracker implements Tracker {
 
     const raw = JSON.parse(stdout) as any[];
 
-    let issues = raw.map(
-      (item): Issue => ({
-        number: item.number,
-        title: item.title,
-        state: item.state?.toLowerCase() === 'open' ? 'open' : 'closed',
-        body: item.body ?? null,
-        url: item.url,
-        labels: (item.labels ?? []).map(
-          (l: any): IssueLabel => ({
-            name: l.name,
-            color: l.color ?? '',
-          }),
-        ),
-        assignee: item.assignees?.[0]
-          ? { login: item.assignees[0].login, avatarUrl: item.assignees[0].avatarUrl }
-          : null,
-        commentsCount: Array.isArray(item.comments) ? item.comments.length : (item.comments ?? 0),
-        createdAt: item.createdAt,
-        updatedAt: item.updatedAt,
-      }),
-    );
+    let issues = raw.map((item): Issue => ({
+      number: item.number,
+      title: item.title,
+      state: item.state?.toLowerCase() === 'open' ? 'open' : 'closed',
+      body: item.body ?? null,
+      url: item.url,
+      labels: (item.labels ?? []).map((l: any): IssueLabel => ({
+        name: l.name,
+        color: l.color ?? '',
+      })),
+      assignee: item.assignees?.[0]
+        ? { login: item.assignees[0].login, avatarUrl: item.assignees[0].avatarUrl }
+        : null,
+      commentsCount: Array.isArray(item.comments) ? item.comments.length : (item.comments ?? 0),
+      createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
+    }));
 
     // Client-side filtering for excludeLabels (gh CLI doesn't support negation)
     if (filter.excludeLabels?.length) {
@@ -126,14 +122,12 @@ export class GitHubTracker implements Tracker {
 
     const item = JSON.parse(issueJson);
 
-    const comments: IssueComment[] = (item.comments ?? []).map(
-      (c: any): IssueComment => ({
-        id: c.id ?? 0,
-        author: c.author?.login ?? 'unknown',
-        body: c.body ?? '',
-        createdAt: c.createdAt ?? '',
-      }),
-    );
+    const comments: IssueComment[] = (item.comments ?? []).map((c: any): IssueComment => ({
+      id: c.id ?? 0,
+      author: c.author?.login ?? 'unknown',
+      body: c.body ?? '',
+      createdAt: c.createdAt ?? '',
+    }));
 
     // Build full context for the orchestrator agent
     const contextParts = [
@@ -160,12 +154,10 @@ export class GitHubTracker implements Tracker {
             : 'closed',
       body: item.body ?? null,
       url: item.url,
-      labels: (item.labels ?? []).map(
-        (l: any): IssueLabel => ({
-          name: l.name,
-          color: l.color ?? '',
-        }),
-      ),
+      labels: (item.labels ?? []).map((l: any): IssueLabel => ({
+        name: l.name,
+        color: l.color ?? '',
+      })),
       assignee: item.assignees?.[0]
         ? { login: item.assignees[0].login, avatarUrl: item.assignees[0].avatarUrl }
         : null,

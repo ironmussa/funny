@@ -101,8 +101,7 @@ export function useGitRemoteActions({
 
   const runPull = useCallback(
     async (strategy: PullStrategy) => {
-      setPullInProgress(true);
-      try {
+      const pull = async () => {
         const outcome = await pullWithFeedback({ threadId, projectId }, strategy, t);
         // A diverged ff-only pull offers merge/rebase instead of the raw git hint.
         if (outcome) {
@@ -110,9 +109,9 @@ export function useGitRemoteActions({
           return;
         }
         await afterChange();
-      } finally {
-        setPullInProgress(false);
-      }
+      };
+      setPullInProgress(true);
+      await pull().finally(() => setPullInProgress(false));
     },
     [threadId, projectId, t, afterChange],
   );

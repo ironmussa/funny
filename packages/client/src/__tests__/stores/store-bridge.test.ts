@@ -1,5 +1,9 @@
 import { describe, test, expect, vi } from 'vitest';
 
+import { setSourceMembers } from '@/data/threads/list-meta';
+import * as threadsRead from '@/data/threads/read';
+import { getThreadsData } from '@/data/threads/store';
+
 /**
  * We test store-bridge by dynamically importing it fresh for each test
  * so the lazy refs (_projectStoreRef, _threadStoreRef) start as null.
@@ -22,6 +26,9 @@ async function freshBridge() {
   // Clear the cached module so we get fresh lazy refs
   const modulePath = '@/stores/store-bridge';
   vi.resetModules();
+  // Reuse the already-loaded data layer instead of re-importing TanStack DB
+  // on every reset: that import alone can exceed the test timeout in a full run.
+  vi.doMock('@/data/threads/read', () => threadsRead);
   return import(modulePath);
 }
 
@@ -71,8 +78,6 @@ describe('store-bridge', () => {
 
     test('ensureThreadsLoaded skips if threads already loaded', async () => {
       const bridge = await freshBridge();
-      const { getThreadsData } = await import('@/data/threads/store');
-      const { setSourceMembers } = await import('@/data/threads/list-meta');
       setSourceMembers(getThreadsData().meta, 'project:p1', ['t1'], 1);
 
       const loadThreadsForProject = vi.fn();

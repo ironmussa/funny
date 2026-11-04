@@ -1,10 +1,11 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
+import { getRunsData } from '@/data/automations/store';
+import { seedAutomations } from '@/data/automations/testing';
 import { getJobsData, getWatchersData } from '@/data/background/store';
 import { readThreadIndex } from '@/data/threads/read';
 import { withThreadIndex } from '@/data/threads/testing';
 import { clearWSDispatchState, dispatchRealtimeEvent } from '@/hooks/ws-event-dispatch';
-import { useAutomationStore } from '@/stores/automation-store';
 import { useCommentStore } from '@/stores/comment-store';
 import { useNativeGitStore } from '@/stores/native-git-store';
 import { usePipelineApprovalStore } from '@/stores/pipeline-approval-store';
@@ -33,20 +34,26 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     clearWSDispatchState();
   });
 
-  test('automation events route to the automation store', async () => {
-    const s = spyActions(useAutomationStore, [
-      'handleRunStarted',
-      'handleRunCompleted',
-      'loadInbox',
-    ]);
-    dispatchRealtimeEvent('automation:run_started', 't1', { runId: 'r1' });
-    dispatchRealtimeEvent('automation:run_completed', 't1', { runId: 'r1' });
-    dispatchRealtimeEvent('automation:run_updated', 't1', {});
-    await vi.waitFor(() => {
-      expect(s.handleRunStarted).toHaveBeenCalledWith({ runId: 'r1', threadId: 't1' });
-      expect(s.handleRunCompleted).toHaveBeenCalledWith({ runId: 'r1' });
-      expect(s.loadInbox).toHaveBeenCalledTimes(1);
+  test('automation run events are synced writes into a loaded run history', () => {
+    seedAutomations({
+      runs: [
+        {
+          id: 'old',
+          automationId: 'a1',
+          threadId: 't0',
+          status: 'completed',
+          triageStatus: 'pending',
+          startedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
     });
+    dispatchRealtimeEvent('automation:run_started', 't1', { automationId: 'a1', runId: 'r1' });
+    expect(getRunsData().getSynced('r1')).toMatchObject({ status: 'running', threadId: 't1' });
+    dispatchRealtimeEvent('automation:run_updated', 't1', {
+      runId: 'old',
+      triageStatus: 'reviewed',
+    });
+    expect(getRunsData().getSynced('old')?.triageStatus).toBe('reviewed');
   });
 
   test('watcher and job events upsert only when the payload carries the entity', () => {

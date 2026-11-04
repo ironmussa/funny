@@ -1452,6 +1452,9 @@
     "templateUpdateFailed": "Não foi possível atualizar o modelo de agente. Sua alteração foi desfeita.",
     "templateCreateFailed": "Não foi possível criar o modelo de agente.",
     "backgroundCancelFailed": "Não foi possível cancelar. Continua em execução.",
+    "automationUpdateFailed": "Não foi possível atualizar a automação. Sua alteração foi desfeita.",
+    "automationCreateFailed": "Não foi possível criar a automação.",
+    "automationTriggerFailed": "Não foi possível iniciar a execução da automação.",
     "projectUpdateFailed": "Não foi possível atualizar o projeto. Sua alteração foi desfeita."
   },
   "agentResources": {

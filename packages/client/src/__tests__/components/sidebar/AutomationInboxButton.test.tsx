@@ -1,4 +1,5 @@
 import { act, render } from '@testing-library/react';
+import { ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const mockLoadInbox = vi.hoisted(() => vi.fn());
@@ -16,11 +17,10 @@ vi.mock('@/stores/auth-store', () => ({
     selector({ isAuthenticated: true }),
 }));
 
-vi.mock('@/stores/automation-store', () => ({
-  useAutomationStore: (
-    selector: (state: { inboxCount: number; loadInbox: typeof mockLoadInbox }) => unknown,
-  ) => selector({ inboxCount: 0, loadInbox: mockLoadInbox }),
+vi.mock('@/data/automations/hooks', () => ({
+  useAutomationInbox: () => ({ inbox: [], pendingCount: 0 }),
 }));
+vi.mock('@/data/automations/loaders', () => ({ loadInbox: mockLoadInbox }));
 
 vi.mock('@/stores/ui-store', () => ({
   useUIStore: (selector: (state: { automationInboxOpen: boolean }) => unknown) =>
@@ -44,7 +44,7 @@ describe('AutomationInboxButton', () => {
     const load = new Promise<void>((resolve) => {
       resolveLoad = resolve;
     });
-    mockLoadInbox.mockReturnValue(load);
+    mockLoadInbox.mockReturnValue(ResultAsync.fromSafePromise(load));
 
     const { unmount } = render(<AutomationInboxButton />);
     expect(mockLoadInbox).toHaveBeenCalledOnce();

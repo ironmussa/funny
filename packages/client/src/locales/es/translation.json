@@ -1486,6 +1486,9 @@
     "templateUpdateFailed": "No se pudo actualizar la plantilla de agente. Se deshizo tu cambio.",
     "templateCreateFailed": "No se pudo crear la plantilla de agente.",
     "backgroundCancelFailed": "No se pudo cancelar. Sigue en ejecución.",
+    "automationUpdateFailed": "No se pudo actualizar la automatización. Se deshizo tu cambio.",
+    "automationCreateFailed": "No se pudo crear la automatización.",
+    "automationTriggerFailed": "No se pudo iniciar la ejecución de la automatización.",
     "projectUpdateFailed": "No se pudo actualizar el proyecto. Se deshizo tu cambio."
   },
   "agentResources": {

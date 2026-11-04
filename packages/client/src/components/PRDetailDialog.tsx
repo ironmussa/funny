@@ -17,9 +17,10 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { usePRDetail } from '@/data/pull-requests/hooks';
+import { fetchPRDetail } from '@/data/pull-requests/queries';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
-import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
 
 import { DiffStats } from './DiffStats';
 import { FileTree } from './FileTree';
@@ -353,7 +354,7 @@ export function PRDetailDialog({
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
-    void usePRDetailStore.getState().fetchPRDetail(projectId, prNumber);
+    void fetchPRDetail(projectId, prNumber);
     setError(null);
     setSelectedFile(null);
     setSelectedCommit('all');

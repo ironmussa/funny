@@ -867,7 +867,7 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
       data.action === 'commit-pr' ||
       data.action === 'commit-merge')
   ) {
-    import('@/stores/pr-detail-store').then(({ usePRDetailStore }) => {
+    import('@/data/pull-requests/queries').then(({ invalidatePR }) => {
       const activeThread = readActiveThreadView(useThreadStore.getState());
       if (activeThread) {
         const gitStatus = readGitStatusMaps();
@@ -876,7 +876,7 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
           `${activeThread.projectId}:${activeThread.branch ?? ''}`;
         const prNum = gitStatus.statusByBranch[bk]?.prNumber;
         if (prNum) {
-          usePRDetailStore.getState().invalidate(activeThread.projectId, prNum);
+          invalidatePR(activeThread.projectId, prNum);
         }
       }
     });

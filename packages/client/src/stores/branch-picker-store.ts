@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import { projectsApi as api } from '@/lib/api/projects';
+import { fetchProjectBranches } from '@/data/projects/branches';
 
 interface BranchPickerState {
   // ── Branch data ──
@@ -87,9 +87,10 @@ export const useBranchPickerStore = create<BranchPickerState>((set) => ({
       projectId,
       selectedBranch: preferredBranch?.trim() || '',
     });
-    const result = await api.listBranches(projectId);
-    if (result.isOk()) {
-      const data = result.value;
+    // Shared with the sidebar's branch label (`data/projects/branches.ts`);
+    // the picker always wants a fresh listing when it opens.
+    const data = await fetchProjectBranches(projectId, { force: true });
+    if (data) {
       const remoteBranches = normalizeRemoteBranches(data.remoteBranches ?? []);
       let selected = '';
       const preferred = findPreferredBranch(preferredBranch, data.branches, remoteBranches);

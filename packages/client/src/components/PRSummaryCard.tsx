@@ -14,7 +14,8 @@ import { PRCompactIdentity } from '@/components/pull-requests/PRCompactIdentity'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
+import { usePRDetail } from '@/data/pull-requests/hooks';
+import { fetchPRDetail, fetchPRThreads } from '@/data/pull-requests/queries';
 
 export { MergeStatus, ReviewDecisionBadge } from '@/components/pull-requests/PRStatusBadges';
 
@@ -64,17 +65,13 @@ export function PRSummaryCard({
   useEffect(() => {
     if (!visible || !projectId || !prNumber) return;
 
-    const store = usePRDetailStore.getState();
-    store.fetchPRDetail(projectId, prNumber);
-    store.fetchPRThreads(projectId, prNumber);
-
-    pollRef.current = setInterval(() => {
-      const s = usePRDetailStore.getState();
-      if (!s.rateLimited) {
-        s.fetchPRDetail(projectId, prNumber);
-        s.fetchPRThreads(projectId, prNumber);
-      }
-    }, POLL_INTERVAL);
+    const fetchPR = () => {
+      // Both skip while fresh or while GitHub's rate limit pauses polling.
+      void fetchPRDetail(projectId, prNumber);
+      void fetchPRThreads(projectId, prNumber);
+    };
+    fetchPR();
+    pollRef.current = setInterval(fetchPR, POLL_INTERVAL);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);

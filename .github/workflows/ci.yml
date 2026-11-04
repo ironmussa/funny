@@ -92,6 +92,9 @@ jobs:
       - name: Test typecheck baseline runner
         run: bun test scripts/fitness/check-typecheck.test.ts
 
+      - name: Test the suite runner's git isolation
+        run: bun test scripts/__tests__/test-env.test.ts
+
       - name: Run tests (shared)
         run: bun run --cwd packages/shared test
 

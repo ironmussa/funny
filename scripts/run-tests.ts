@@ -1,6 +1,8 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { testSuiteEnv } from './test-env';
+
 interface TestPackage {
   name: string;
   dir: string;
@@ -43,6 +45,7 @@ async function runPackageTests(pkg: TestPackage): Promise<TestResult> {
 
   const proc = Bun.spawn(['bun', 'run', 'test'], {
     cwd: pkg.dir,
+    env: testSuiteEnv(process.env),
     stdout: 'inherit',
     stderr: 'inherit',
     stdin: 'inherit',

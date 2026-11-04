@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { useSandboxConnections } from '@/data/sandbox-connections';
+import { useSandboxConnections } from '@/data/runner/hooks';
 import { applySandboxModelGroups } from '@/hooks/use-runner-provider-groups';
 import { useUnifiedPromptModelGroups } from '@/hooks/use-unified-prompt-model-groups';
 import {

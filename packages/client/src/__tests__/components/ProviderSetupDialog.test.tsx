@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/lib/api/system', () => ({
   systemApi: { providerSetupStatus: mocks.status, installProviderTool: mocks.install },
 }));
-vi.mock('@/data/runner-providers', () => ({ refreshRunnerProviders: mocks.fetch }));
+vi.mock('@/data/runner/queries', () => ({ refreshRunnerProviders: mocks.fetch }));
 vi.mock('@/lib/open-terminal-tab', () => ({ openProviderLoginTerminal: mocks.terminal }));
 const missing = {
   provider: 'gemini',

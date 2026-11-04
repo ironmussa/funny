@@ -23,7 +23,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { refreshSandboxConnections, useSandboxConnections } from '@/data/sandbox-connections';
+import { useSandboxConnections } from '@/data/runner/hooks';
+import { refreshSandboxConnections } from '@/data/runner/queries';
 import { api } from '@/lib/api';
 import type { InfraConnection, SandboxProviderInfo } from '@/lib/api/infra';
 

@@ -2,12 +2,12 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { useRunnerProviders, useSandboxConnections } from '@/data/runner/hooks';
 import {
   refreshRunnerProviders,
+  refreshSandboxConnections,
   setActiveBuiltins,
-  useRunnerProviders,
-} from '@/data/runner-providers';
-import { refreshSandboxConnections, useSandboxConnections } from '@/data/sandbox-connections';
+} from '@/data/runner/queries';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 

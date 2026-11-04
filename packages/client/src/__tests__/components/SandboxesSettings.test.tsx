@@ -25,10 +25,8 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-vi.mock('@/data/sandbox-connections', () => ({
-  useSandboxConnections: () => mocks.storeState,
-  refreshSandboxConnections: mocks.fetch,
-}));
+vi.mock('@/data/runner/hooks', () => ({ useSandboxConnections: () => mocks.storeState }));
+vi.mock('@/data/runner/queries', () => ({ refreshSandboxConnections: mocks.fetch }));
 
 import { SandboxesSettings } from '@/components/settings/SandboxesSettings';
 

@@ -1,5 +1,6 @@
 import {
   hashKey,
+  QueriesObserver,
   QueryObserver,
   type QueryClient,
   type QueryFunction,
@@ -54,4 +55,34 @@ export function useDataQuery<T>(options: DataQueryOptions<T>): QueryObserverResu
   const subscribe = useCallback((onChange: () => void) => observer.subscribe(onChange), [observer]);
   const current = useCallback(() => observer.getCurrentResult(), [observer]);
   return useSyncExternalStore(subscribe, current, current);
+}
+
+const queriesObservers = new WeakMap<QueryClient, Map<string, QueriesObserver>>();
+
+/**
+ * `useDataQuery` for a fixed list of keys (one query per item), so each key
+ * keeps its own freshness and a slow request does not hold up the others.
+ */
+export function useDataQueries<T>(
+  queries: readonly DataQueryOptions<T>[],
+): readonly QueryObserverResult<T>[] {
+  const client = useDataLayer().queryClient;
+  let byKey = queriesObservers.get(client);
+  if (!byKey) {
+    byKey = new Map();
+    queriesObservers.set(client, byKey);
+  }
+  const keyHash = hashKey(queries.map((q) => q.queryKey));
+  let observer = byKey.get(keyHash);
+  if (!observer) {
+    observer = new QueriesObserver(client, [...queries]);
+    byKey.set(keyHash, observer);
+  }
+  const shared = observer;
+  useEffect(() => {
+    shared.setQueries([...queries]);
+  });
+  const subscribe = useCallback((onChange: () => void) => shared.subscribe(onChange), [shared]);
+  const current = useCallback(() => shared.getCurrentResult(), [shared]);
+  return useSyncExternalStore(subscribe, current, current) as QueryObserverResult<T>[];
 }

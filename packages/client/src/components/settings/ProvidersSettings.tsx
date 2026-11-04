@@ -16,11 +16,8 @@ import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Switch } from '@/components/ui/switch';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
-import {
-  refreshRunnerProviders,
-  setActiveBuiltins,
-  useRunnerProviders,
-} from '@/data/runner-providers';
+import { useRunnerProviders } from '@/data/runner/hooks';
+import { refreshRunnerProviders, setActiveBuiltins } from '@/data/runner/queries';
 import { systemApi, type AdvertisedProvider } from '@/lib/api/system';
 import { createClientLogger } from '@/lib/client-logger';
 

@@ -61,8 +61,8 @@ interface Props {
  * right, plus checkout/revert/reset actions (each gated by a ConfirmDialog).
  *
  * Owns its own loaded-files / commit-body / file-search / diff-content
- * state and the 3 destructive-action handlers, so CommitHistoryTab.tsx
- * doesn't have to import the Dialog cluster, FileTree, ExpandedDiffView,
+ * state and the 3 destructive-action handlers, so its parent doesn't have
+ * to import the Dialog cluster, FileTree, ExpandedDiffView,
  * diff-parse, ScrollArea, SearchBar, AuthorBadge, ConfirmDialog, or the
  * checkout/revert/reset icons.
  */

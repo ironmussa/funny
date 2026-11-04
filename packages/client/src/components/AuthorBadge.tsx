@@ -51,7 +51,7 @@ export function AuthorBadge({
 
   const url = avatarUrl ?? emailUrl;
   // Serve from the short-TTL blob cache so re-rendering many badges (e.g. the
-  // virtualized History list) doesn't re-hit GitHub for the same image.
+  // commit graph) doesn't re-hit GitHub for the same image.
   const cachedUrl = useCachedAvatar(url);
 
   return (

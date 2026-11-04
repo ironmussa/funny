@@ -324,3 +324,50 @@ describe('operations handler legacy request mapping', () => {
     }
   });
 });
+
+async function respondVia(result: unknown): Promise<any> {
+  const call = new EventEmitter() as EventEmitter & { write: (message: unknown) => void };
+  const written = new Promise<any>((resolve) => {
+    call.write = resolve;
+  });
+  const handler = createOperationsHandler(
+    resolveRunnerGrpcConfig({}),
+    { isActive: () => true } as unknown as RunnerGrpcSessionRegistry,
+    {
+      execute: async () => result,
+      idempotency: { cleanupExpired: async () => 0 } as any,
+    },
+  );
+  handler(call as unknown as RunnerGrpcCall, {
+    correlationId: 'stream-1',
+    method: 'operations',
+    principal: { runnerId: 'runner-1', userId: 'user-1', tenantId: null },
+  });
+  call.emit('data', {
+    getThreadMessages: { threadId: 't1' },
+    session: { sessionEpoch: '1' },
+    metadata: {
+      correlationId: 'corr-1',
+      deadline: { seconds: String(Math.floor(Date.now() / 1000) + 600) },
+    },
+  });
+  return written;
+}
+
+describe('operations handler lookup responses', () => {
+  test('a message page is a success, not a missing thread', async () => {
+    const message = await respondVia({
+      type: 'data:get_thread_messages_response',
+      messages: [],
+      hasMore: false,
+      hasMoreAfter: false,
+    });
+    expect(message.failure).toBeUndefined();
+    expect(message.success?.threadMessages).toMatchObject({ messages: [], hasMore: false });
+  });
+
+  test('an empty thread lookup is NOT_FOUND', async () => {
+    const message = await respondVia({ type: 'data:get_thread_response', thread: null });
+    expect(message.failure?.code).toBe(FailureCode.NOT_FOUND);
+  });
+});

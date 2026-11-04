@@ -401,6 +401,26 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
   listPermissionRules: principalRulePayload('data:list_permission_rules'),
 };
 
+// Single-entity lookups whose empty result maps to NOT_FOUND. Listed exactly:
+// a `data:get_thread` prefix would also catch `data:get_thread_messages_response`,
+// which carries `messages`, not `thread`.
+const THREAD_LOOKUP_RESPONSES = new Set([
+  'data:get_thread_response',
+  'data:get_thread_by_external_request_id_response',
+  'data:get_thread_by_session_id_response',
+  'data:get_thread_with_messages_response',
+]);
+const TOOL_CALL_LOOKUP_RESPONSES = new Set([
+  'data:get_tool_call_response',
+  'data:find_tool_call_response',
+]);
+
+function isMissingLookup(result: any): boolean {
+  if (THREAD_LOOKUP_RESPONSES.has(result?.type)) return !result.thread;
+  if (TOOL_CALL_LOOKUP_RESPONSES.has(result?.type)) return !result.toolCall;
+  return false;
+}
+
 function isOperationKind(kind: string): kind is OperationKind {
   return Object.hasOwn(LEGACY_MAPPERS, kind);
 }
@@ -622,14 +642,7 @@ export function createOperationsHandler(
               operationError === 'Forbidden' ? FailureCode.PERMISSION_DENIED : FailureCode.INTERNAL,
               operationError === 'Forbidden' ? 'operation is not authorized' : operationError,
             );
-          } else if (
-            ((operationResult as any)?.type?.startsWith('data:get_thread') &&
-              !(operationResult as any).thread) ||
-            ((operationResult as any)?.type === 'data:get_tool_call_response' &&
-              !(operationResult as any).toolCall) ||
-            ((operationResult as any)?.type === 'data:find_tool_call_response' &&
-              !(operationResult as any).toolCall)
-          ) {
+          } else if (isMissingLookup(operationResult)) {
             sendFailure(FailureCode.NOT_FOUND, 'authorized resource was not found');
           } else {
             call.write(success(epoch, correlationId, operationResult));

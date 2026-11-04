@@ -308,7 +308,8 @@ describe('PullRequestsTab', () => {
     expect(screen.queryByTestId('prs-toggle-view-all')).not.toBeInTheDocument();
     expect(screen.queryByTestId('prs-branch-focus-indicator')).not.toBeInTheDocument();
     expect(screen.getByTestId('prs-state-trigger')).toHaveTextContent('Open');
-    expect(screen.getAllByText(/Updated/).length).toBeGreaterThan(0);
+    // The list renders when the query resolves, after the request is made.
+    expect((await screen.findAllByText(/Updated/)).length).toBeGreaterThan(0);
     expect(screen.getByText('Last commit by')).toBeInTheDocument();
     expect(screen.getByText('alice')).toBeInTheDocument();
     const mergeLine = screen.getByTestId('pr-merge-line-52');

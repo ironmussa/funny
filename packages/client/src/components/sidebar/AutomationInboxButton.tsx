@@ -3,9 +3,10 @@ import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { NavItem } from '@/components/ui/nav-item';
+import { useAutomationInbox } from '@/data/automations/hooks';
+import { loadInbox } from '@/data/automations/loaders';
 import { buildPath } from '@/lib/url';
 import { useAuthStore } from '@/stores/auth-store';
-import { useAutomationStore } from '@/stores/automation-store';
 import { useUIStore } from '@/stores/ui-store';
 
 const BASE_POLL_MS = 60_000;
@@ -13,8 +14,7 @@ const MAX_POLL_MS = 300_000; // 5 min cap
 
 export function AutomationInboxButton() {
   const navigate = useNavigate();
-  const inboxCount = useAutomationStore((s) => s.inboxCount);
-  const loadInbox = useAutomationStore((s) => s.loadInbox);
+  const { pendingCount: inboxCount } = useAutomationInbox();
   const automationInboxOpen = useUIStore((s) => s.automationInboxOpen);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
@@ -28,12 +28,8 @@ export function AutomationInboxButton() {
     let cancelled = false;
 
     const poll = async () => {
-      try {
-        await loadInbox();
-        failures = 0; // reset on success
-      } catch {
-        failures++;
-      }
+      const result = await loadInbox();
+      failures = result.isOk() ? 0 : failures + 1; // reset on success
       if (cancelled) return;
       // Exponential backoff: 60s, 120s, 240s, capped at 5 min
       const delay = Math.min(BASE_POLL_MS * Math.pow(2, failures), MAX_POLL_MS);
@@ -45,7 +41,7 @@ export function AutomationInboxButton() {
       cancelled = true;
       if (timer !== undefined) clearTimeout(timer);
     };
-  }, [isAuthenticated, loadInbox]);
+  }, [isAuthenticated]);
 
   return (
     <NavItem

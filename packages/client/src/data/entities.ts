@@ -31,6 +31,12 @@ export interface EntityStore<T extends Entity> {
   fromRow(row: T): T;
   /** Make `rows` the complete synced set: rows not in it are removed. */
   replaceAll(rows: readonly T[]): void;
+  /**
+   * Make `rows` the complete synced set of one scope (a project's
+   * automations, a thread's comments): synced rows matching `inScope` and not
+   * in `rows` are removed; rows outside the scope are untouched.
+   */
+  replaceWhere(inScope: (row: T) => boolean, rows: readonly T[]): void;
   /** Insert or replace synced rows. */
   upsert(rows: readonly T[]): void;
   /** Synced patch; returning the same reference means "no change". */
@@ -103,6 +109,18 @@ export function createEntityStore<T extends Entity>(
     return plain;
   }
 
+  function replaceMatching(inScope: (row: T) => boolean, rows: readonly T[]): void {
+    const keep = new Set(rows.map((row) => row.id));
+    commit((out) => {
+      for (const [id, row] of [...synced]) {
+        if (keep.has(id) || !inScope(row)) continue;
+        synced.delete(id);
+        out.push({ type: 'delete', key: id } as Message);
+      }
+      for (const row of rows) pushRow(out, row);
+    });
+  }
+
   return {
     collection,
     getSynced: (id) => synced.get(id),
@@ -112,16 +130,9 @@ export function createEntityStore<T extends Entity>(
     },
     fromRow: plainOf,
     replaceAll(rows) {
-      const keep = new Set(rows.map((row) => row.id));
-      commit((out) => {
-        for (const id of [...synced.keys()]) {
-          if (keep.has(id)) continue;
-          synced.delete(id);
-          out.push({ type: 'delete', key: id } as Message);
-        }
-        for (const row of rows) pushRow(out, row);
-      });
+      replaceMatching(() => true, rows);
     },
+    replaceWhere: replaceMatching,
     upsert(rows) {
       commit((out) => {
         for (const row of rows) pushRow(out, row);

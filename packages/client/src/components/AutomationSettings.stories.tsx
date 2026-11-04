@@ -3,8 +3,8 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
+import { seedAutomations } from '@/data/automations/testing';
 import { useAppStore } from '@/stores/app-store';
-import { useAutomationStore } from '@/stores/automation-store';
 
 import { AutomationSettings } from './AutomationSettings';
 
@@ -39,10 +39,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
 
 function seedStores({ automations = [] as Automation[] } = {}) {
   useAppStore.setState({ selectedProjectId: 'proj-1' });
-  useAutomationStore.setState({
-    automationsByProject: { 'proj-1': automations },
-    selectedAutomationRuns: [],
-  });
+  seedAutomations({ automations });
 }
 
 const meta = {
@@ -110,7 +107,7 @@ export const WithAutomations: Story = {
 export const NoProject: Story = {
   render: () => {
     useAppStore.setState({ selectedProjectId: null });
-    useAutomationStore.setState({ automationsByProject: {} });
+    seedAutomations({});
     return (
       <Wrapper>
         <AutomationSettings />

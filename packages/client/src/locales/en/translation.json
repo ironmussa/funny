@@ -1452,6 +1452,9 @@
     "templateUpdateFailed": "Couldn't update the agent template. Your change was undone.",
     "templateCreateFailed": "Couldn't create the agent template.",
     "backgroundCancelFailed": "Couldn't cancel it. It is still running.",
+    "automationUpdateFailed": "Couldn't update the automation. Your change was undone.",
+    "automationCreateFailed": "Couldn't create the automation.",
+    "automationTriggerFailed": "Couldn't start the automation run.",
     "projectUpdateFailed": "Couldn't update the project. Your change was undone."
   },
   "agentResources": {

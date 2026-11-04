@@ -22,10 +22,17 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import {
+  createAutomation,
+  deleteAutomation,
+  triggerAutomation,
+  updateAutomation,
+} from '@/data/automations/actions';
+import { useAutomationRuns, useProjectAutomations } from '@/data/automations/hooks';
+import { loadAutomationRuns, loadAutomations } from '@/data/automations/loaders';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
-import { useAutomationStore } from '@/stores/automation-store';
 
 import { SegmentedControl } from './settings/SegmentedControl';
 
@@ -73,26 +80,16 @@ export function AutomationSettings() {
   const location = useLocation();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 
-  const automationsByProject = useAutomationStore((s) => s.automationsByProject);
-  const loadAutomations = useAutomationStore((s) => s.loadAutomations);
-  const createAutomation = useAutomationStore((s) => s.createAutomation);
-  const updateAutomation = useAutomationStore((s) => s.updateAutomation);
-  const deleteAutomation = useAutomationStore((s) => s.deleteAutomation);
-  const triggerAutomation = useAutomationStore((s) => s.triggerAutomation);
-  const selectedAutomationRuns = useAutomationStore((s) => s.selectedAutomationRuns);
-  const loadRuns = useAutomationStore((s) => s.loadRuns);
-
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(defaultForm);
   const [runsAutomationId, setRunsAutomationId] = useState<string | null>(null);
-  const automations = selectedProjectId ? automationsByProject[selectedProjectId] || [] : [];
+  const automations = useProjectAutomations(selectedProjectId);
+  const selectedAutomationRuns = useAutomationRuns(runsAutomationId);
 
   useEffect(() => {
-    if (selectedProjectId) {
-      loadAutomations(selectedProjectId);
-    }
-  }, [selectedProjectId, loadAutomations]);
+    if (selectedProjectId) void loadAutomations(selectedProjectId);
+  }, [selectedProjectId]);
 
   // Auto-open the create dialog when navigated here from the project menu's
   // "Create automation" entry. Clear the history state so a refresh/back won't
@@ -147,7 +144,7 @@ export function AutomationSettings() {
         model: form.model,
         permissionMode: form.permissionMode,
       });
-      automationId = created?.id ?? null;
+      automationId = created.isOk() ? created.value.id : null;
     }
     setDialogOpen(false);
 
@@ -162,7 +159,7 @@ export function AutomationSettings() {
 
   const handleDelete = async (a: Automation) => {
     if (!selectedProjectId) return;
-    await deleteAutomation(a.id, selectedProjectId);
+    await deleteAutomation(a.id);
   };
 
   const handleTrigger = async (a: Automation) => {
@@ -171,7 +168,7 @@ export function AutomationSettings() {
 
   const handleViewRuns = (automationId: string) => {
     setRunsAutomationId(automationId);
-    loadRuns(automationId);
+    void loadAutomationRuns(automationId);
   };
 
   if (!selectedProjectId) {

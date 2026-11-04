@@ -7,6 +7,7 @@ import {
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
 
+import { handleRunCompleted, handleRunStarted, handleRunUpdated } from '@/data/automations/events';
 import { applyJobEvent, applyWatcherEvent } from '@/data/background/loaders';
 import { readThreadRow } from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
@@ -430,15 +431,6 @@ function upsertJob(_threadId: string, data: any): void {
   if (data?.job) applyJobEvent(data.job);
 }
 
-type AutomationStoreState = ReturnType<
-  (typeof import('@/stores/automation-store'))['useAutomationStore']['getState']
->;
-function withAutomationStore(apply: (store: AutomationStoreState) => void): void {
-  import('@/stores/automation-store').then(({ useAutomationStore }) => {
-    apply(useAutomationStore.getState());
-  });
-}
-
 type PipelineStoreState = ReturnType<
   (typeof import('@/stores/pipeline-store'))['usePipelineStore']['getState']
 >;
@@ -656,13 +648,13 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
   'native-git:build_output': handleNativeGitBuild,
   'native-git:build_status': handleNativeGitBuild,
   'automation:run_started': (threadId, data) => {
-    withAutomationStore((store) => store.handleRunStarted({ ...data, threadId }));
+    handleRunStarted({ ...data, threadId });
   },
-  'automation:run_completed': (_threadId, data) => {
-    withAutomationStore((store) => store.handleRunCompleted(data));
+  'automation:run_completed': (threadId, data) => {
+    handleRunCompleted({ ...data, threadId });
   },
-  'automation:run_updated': () => {
-    withAutomationStore((store) => store.loadInbox());
+  'automation:run_updated': (_threadId, data) => {
+    handleRunUpdated(data);
   },
   'watcher:created': upsertWatcher,
   'watcher:fired': upsertWatcher,

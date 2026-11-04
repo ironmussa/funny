@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useDictation } from '@/hooks/use-dictation';
@@ -39,7 +40,6 @@ import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useDraftStore } from '@/stores/draft-store';
-import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProfileStore } from '@/stores/profile-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';

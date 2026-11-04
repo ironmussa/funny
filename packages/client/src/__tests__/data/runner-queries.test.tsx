@@ -3,10 +3,7 @@ import { errAsync, okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useRunnerProviders } from '@/data/runner/hooks';
-import {
-  refreshRunnerProviders,
-  setActiveBuiltins,
-} from '@/data/runner/queries';
+import { refreshRunnerProviders, setActiveBuiltins } from '@/data/runner/queries';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 

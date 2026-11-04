@@ -2,12 +2,11 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { useProjectById } from '@/data/projects/hooks';
 import { AvailableMcpServers } from '@/components/AvailableMcpServers';
 import { PromptInput } from '@/components/PromptInput';
+import { useProjectById } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
-import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadMessages, type ThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';

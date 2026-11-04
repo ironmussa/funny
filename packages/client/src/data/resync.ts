@@ -18,7 +18,6 @@ const SESSION_SOURCES = new Set([
   'watchers',
   'automation-inbox',
   'runner-providers',
-  'sandbox-connections',
 ]);
 
 function shouldResync(query: Query): boolean {

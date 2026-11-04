@@ -6,11 +6,15 @@
  * @domain emits: thread:created
  */
 
+import { mkdir, stat } from 'fs/promises';
+import { join } from 'path';
+
 import {
   createWorktree,
   findWorktreeForBranch,
   getCurrentBranch,
   git,
+  isContainedPath,
   isRegisteredWorktreePath,
 } from '@funny/core/git';
 import { setupWorktree } from '@funny/core/ports';
@@ -21,6 +25,7 @@ import type {
   PermissionMode,
   ImageAttachment,
 } from '@funny/shared';
+import { addReferencedEntries, type ReferencedEntry } from '@funny/shared/attachments';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
 import { ResultAsync } from 'neverthrow';
@@ -47,13 +52,16 @@ import {
   createSetupProgressEmitter,
   emitThreadUpdated,
   slugifyTitle,
+  releaseStagedUploadsOnSuccess,
   stripReferencedFilesBlock,
+  withStagedUploads,
 } from './helpers.js';
 import {
   executeShellEscape,
   extractShellEscapeCommand,
   formatShellEscapeOutput,
 } from './shell-escape.js';
+import { copyThreadUploads } from './staged-uploads.js';
 
 /**
  * Pre-merge "always allow" permission rules into the agent's allowedTools so
@@ -98,10 +106,38 @@ export interface CreateIdleThreadParams {
   baseBranch?: string;
   prompt?: string;
   images?: ImageAttachment[];
+  /** Stored as path-only entries; read when the thread starts. */
+  fileReferences?: FileRef[];
+  /** Ids from POST /api/uploads/staging — adopted into the project checkout. */
+  stagedUploads?: string[];
   stage?: 'backlog' | 'planning';
   designId?: string;
   agentTemplateId?: string;
   templateVariables?: Record<string, string>;
+}
+
+/**
+ * Record a backlog thread's references in its prompt as path-only
+ * `<referenced-files>` entries (the attachment manifest). Nothing is read
+ * now: `hydrateReferencedFiles` inlines them when the thread starts.
+ */
+async function withReferenceManifest(
+  prompt: string,
+  refs: readonly FileRef[],
+  basePath: string,
+): Promise<string> {
+  if (refs.length === 0) return prompt;
+  const entries = await Promise.all(
+    refs.map(async (ref): Promise<ReferencedEntry> => {
+      // Only to pick the chip type; containment is enforced again on hydration.
+      const fullPath = join(basePath, ref.path);
+      const info = isContainedPath(basePath, fullPath)
+        ? await stat(fullPath).catch(() => null)
+        : null;
+      return { type: info?.isDirectory() ? 'folder' : 'file', path: ref.path };
+    }),
+  );
+  return addReferencedEntries(prompt, entries);
 }
 
 export function createIdleThread(
@@ -109,7 +145,41 @@ export function createIdleThread(
 ): ResultAsync<Awaited<ReturnType<typeof createIdleThreadImpl>>, ThreadServiceError> {
   return ResultAsync.fromPromise(createIdleThreadImpl(params), (err) =>
     err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
-  );
+  ).map(releaseStagedUploadsOnSuccess(params));
+}
+
+/**
+ * The stored prompt of a backlog thread: staged uploads are adopted into the
+ * project checkout (a worktree thread gets them copied when it starts) and
+ * every reference is recorded in the attachment manifest.
+ */
+async function idleThreadPrompt(
+  params: CreateIdleThreadParams,
+  threadId: string,
+  projectPath: string,
+): Promise<string | undefined> {
+  const { fileReferences: refs = [] } = await withStagedUploads(params, threadId, projectPath);
+  if (params.prompt === undefined) return undefined;
+  return withReferenceManifest(params.prompt, refs, projectPath);
+}
+
+/** Branch a backlog thread will run on: a new worktree branch, or the checkout's current one. */
+async function idleThreadBranches(
+  params: CreateIdleThreadParams,
+  projectName: string,
+  threadId: string,
+  projectPath: string,
+): Promise<{ branch?: string; baseBranch?: string }> {
+  const resolvedBaseBranch = params.baseBranch?.trim() || undefined;
+  if (params.mode === 'worktree') {
+    // Titles may carry the attachments block (badge) — never slug the XML.
+    const slug = slugifyTitle(stripReferencedFilesBlock(params.title));
+    const branch = `${slugifyTitle(projectName)}/${slug}-${threadId.slice(0, 6)}`;
+    return { branch, baseBranch: resolvedBaseBranch };
+  }
+  const branchResult = await getCurrentBranch(projectPath);
+  const branch = branchResult.isOk() ? branchResult.value : undefined;
+  return { branch, baseBranch: resolvedBaseBranch || branch };
 }
 
 async function createIdleThreadImpl(params: CreateIdleThreadParams) {
@@ -125,20 +195,13 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
   const projectPath = pathResult.value;
 
   const threadId = nanoid();
-  const resolvedBaseBranch = params.baseBranch?.trim() || undefined;
-  let branch: string | undefined;
-  let baseBranch: string | undefined;
-
-  if (params.mode === 'worktree') {
-    const slug = slugifyTitle(params.title);
-    const projectSlug = slugifyTitle(project.name);
-    branch = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
-    baseBranch = resolvedBaseBranch;
-  } else {
-    const branchResult = await getCurrentBranch(projectPath);
-    if (branchResult.isOk()) branch = branchResult.value;
-    baseBranch = resolvedBaseBranch || branch;
-  }
+  const prompt = await idleThreadPrompt(params, threadId, projectPath);
+  const { branch, baseBranch } = await idleThreadBranches(
+    params,
+    project.name,
+    threadId,
+    projectPath,
+  );
 
   const thread = {
     id: threadId,
@@ -156,7 +219,7 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
     branch,
     baseBranch,
     worktreePath: undefined as string | undefined,
-    initialPrompt: params.prompt,
+    initialPrompt: prompt,
     designId: params.designId,
     agentTemplateId: params.agentTemplateId,
     templateVariables: params.templateVariables
@@ -170,11 +233,11 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
 
   await tm.createThread(thread as any);
 
-  if (params.prompt) {
+  if (prompt) {
     await tm.insertMessage({
       threadId,
       role: 'user',
-      content: params.prompt,
+      content: stripInlineReferencedContent(prompt),
       images: params.images?.length ? JSON.stringify(params.images) : null,
     });
   }
@@ -187,7 +250,7 @@ async function createIdleThreadImpl(params: CreateIdleThreadParams) {
     worktreePath: null,
     stage: thread.stage,
     status: 'idle',
-    initialPrompt: params.prompt,
+    initialPrompt: prompt,
   });
 
   return thread;
@@ -214,6 +277,8 @@ export interface CreateAndStartThreadParams {
   disallowedTools?: string[];
   fileReferences?: FileRef[];
   symbolReferences?: SymbolRef[];
+  /** Ids from POST /api/uploads/staging — adopted into the thread on creation. */
+  stagedUploads?: string[];
   worktreePath?: string;
   parentThreadId?: string;
   designId?: string;
@@ -228,7 +293,7 @@ export function createAndStartThread(
 ): ResultAsync<Awaited<ReturnType<typeof createAndStartThreadImpl>>, ThreadServiceError> {
   return ResultAsync.fromPromise(createAndStartThreadImpl(params), (err) =>
     err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
-  );
+  ).map(releaseStagedUploadsOnSuccess(params));
 }
 
 interface ResolvedRunDefaults {
@@ -417,9 +482,16 @@ async function createShellEscapeProjectThread(ctx: ProjectThreadContext, shellCo
  * Create the thread row in `setting_up`, persist the first message and kick
  * off worktree creation + agent start in the background.
  */
-async function createNewWorktreeThread(ctx: ProjectThreadContext) {
+async function createNewWorktreeThread(baseCtx: ProjectThreadContext) {
+  // Adopted into the project checkout (file references are resolved against
+  // it); copied into the worktree once it exists, before the agent starts.
+  const ctx = {
+    ...baseCtx,
+    params: await withStagedUploads(baseCtx.params, baseCtx.threadId, baseCtx.projectPath),
+  };
   const { params, defaults, threadId, projectPath } = ctx;
-  const slug = slugifyTitle(ctx.titleSource);
+  // Titles may carry the attachments block (badge) — never slug the XML.
+  const slug = slugifyTitle(stripReferencedFilesBlock(ctx.titleSource));
   const projectSlug = slugifyTitle(ctx.project.name);
   const branchName = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
 
@@ -538,6 +610,12 @@ async function startAgentInNewWorktree(ctx: ProjectThreadContext, wtPath: string
   // the main repo; untracked/gitignored files won't exist in the freshly
   // created worktree.
   const augmentedPrompt = await augmentPromptReferences(params, ctx.projectPath);
+  // Uploads live under the gitignored `.funny/`, so the new worktree does not
+  // have them — copy them so the agent can Read the referenced paths.
+  const copied = await copyThreadUploads(ctx.projectPath, wtPath, threadId);
+  if (copied.isErr()) {
+    log.warn('Failed to copy uploads into worktree', { threadId, error: copied.error.message });
+  }
   try {
     const allowedToolsForRun = await augmentAllowedToolsWithRules(
       params.userId,
@@ -646,14 +724,20 @@ async function checkoutBaseBranch(
   }
 }
 
-async function createLocalThread(ctx: ProjectThreadContext) {
-  const { params, defaults, threadId, projectPath, resolvedBaseBranch } = ctx;
-  const { worktreePath, threadBranch, needsBranchCheckout } = await resolveLocalPlacement(ctx);
+async function createLocalThread(baseCtx: ProjectThreadContext) {
+  const { worktreePath, threadBranch, needsBranchCheckout } = await resolveLocalPlacement(baseCtx);
+  const cwd = worktreePath ?? baseCtx.projectPath;
 
   if (needsBranchCheckout) {
     // Falls through to the normal path below (status: 'pending')
-    await checkoutBaseBranch(ctx, resolvedBaseBranch!, worktreePath ?? projectPath);
+    await checkoutBaseBranch(baseCtx, baseCtx.resolvedBaseBranch!, cwd);
   }
+
+  const ctx = {
+    ...baseCtx,
+    params: await withStagedUploads(baseCtx.params, baseCtx.threadId, cwd),
+  };
+  const { params, defaults, threadId, resolvedBaseBranch } = ctx;
 
   const thread = {
     ...baseProjectThreadRow(ctx),
@@ -667,8 +751,6 @@ async function createLocalThread(ctx: ProjectThreadContext) {
   };
 
   await tm.createThread(thread as any);
-
-  const cwd = worktreePath ?? projectPath;
 
   threadEventBus.emit('thread:created', {
     threadId,
@@ -823,8 +905,47 @@ async function forwardPromptToContainer(
  * cwd in the `thread:started` event; this function only handles thread-
  * row creation + first message + agent start.
  */
-async function createAndStartScratchThread(params: CreateAndStartThreadParams) {
+/** Scratch cwd for a new thread, with any staged uploads adopted into it. */
+async function prepareScratchThread(rawParams: CreateAndStartThreadParams, threadId: string) {
+  const scratchCwd = scratchPathFor(rawParams.userId, threadId);
+  if (rawParams.stagedUploads?.length) await mkdir(scratchCwd, { recursive: true });
+  return { scratchCwd, params: await withStagedUploads(rawParams, threadId, scratchCwd) };
+}
+
+/** `!cmd` initial prompts in a scratch thread run locally and complete immediately. */
+async function createScratchShellEscapeThread<T extends { id: string }>(
+  thread: T,
+  shellCommand: string,
+  ctx: {
+    params: CreateAndStartThreadParams;
+    cwd: string;
+    model: AgentModel;
+    permissionMode: PermissionMode;
+  },
+) {
+  if (!shellCommand) {
+    throw new ThreadServiceError('Shell escape requires a command after "!".', 400);
+  }
+  const completedThread = { ...thread, status: 'completed' as const, fileCheckpointingEnabled: 0 };
+  await createCompletedShellEscapeThread({
+    thread: completedThread,
+    threadId: thread.id,
+    projectId: '',
+    userId: ctx.params.userId,
+    cwd: ctx.cwd,
+    command: shellCommand,
+    prompt: ctx.params.prompt,
+    images: ctx.params.images,
+    model: ctx.model,
+    permissionMode: ctx.permissionMode,
+    effort: ctx.params.effort,
+  });
+  return completedThread;
+}
+
+async function createAndStartScratchThread(rawParams: CreateAndStartThreadParams) {
   const threadId = nanoid();
+  const { scratchCwd, params } = await prepareScratchThread(rawParams, threadId);
   const titleSource = params.title || stripReferencedFilesBlock(params.prompt) || params.prompt;
 
   const resolvedProvider = (params.provider || 'claude') as AgentProvider;
@@ -868,41 +989,25 @@ async function createAndStartScratchThread(params: CreateAndStartThreadParams) {
 
   const shellCommand = extractShellEscapeCommand(params.prompt);
   if (shellCommand !== null) {
-    if (!shellCommand) {
-      throw new ThreadServiceError('Shell escape requires a command after "!".', 400);
-    }
-
-    const cwd = scratchPathFor(params.userId, threadId);
-    const completedThread = {
-      ...thread,
-      status: 'completed' as const,
-      fileCheckpointingEnabled: 0,
-    };
-    await createCompletedShellEscapeThread({
-      thread: completedThread,
-      threadId,
-      projectId: '',
-      userId: params.userId,
-      cwd,
-      command: shellCommand,
-      prompt: params.prompt,
-      images: params.images,
+    return createScratchShellEscapeThread(thread, shellCommand, {
+      params,
+      cwd: scratchCwd,
       model: resolvedModel,
       permissionMode: resolvedPermissionMode,
-      effort: params.effort,
     });
-
-    return completedThread;
   }
 
   await tm.createThread(thread as any);
 
   // Persist the user message ourselves so we can pass skipMessageInsert
-  // to startAgent (matches the worktree-mode pattern above).
+  // to startAgent (matches the worktree-mode pattern above). Like project
+  // threads, the agent gets file contents inlined; the stored copy keeps
+  // path-only references so the UI renders chips.
+  const augmentedPrompt = await augmentPromptReferences(params, scratchCwd);
   await tm.insertMessage({
     threadId,
     role: 'user',
-    content: params.prompt,
+    content: stripInlineReferencedContent(augmentedPrompt),
     images: params.images?.length ? JSON.stringify(params.images) : null,
     model: params.model ?? null,
     permissionMode: params.permissionMode ?? null,
@@ -925,7 +1030,7 @@ async function createAndStartScratchThread(params: CreateAndStartThreadParams) {
   // best-effort placeholder; agent-lifecycle overrides it.
   await startAgent(
     threadId,
-    params.prompt,
+    augmentedPrompt,
     '',
     resolvedModel,
     resolvedPermissionMode,

@@ -28,6 +28,13 @@ describe('thread-service helpers', () => {
       expect(stripReferencedFilesBlock(input)).toBe('Do the thing');
     });
 
+    test('removes consecutive leading referenced-files blocks', () => {
+      const input =
+        '<referenced-files><file path="a.pdf" /></referenced-files>\n\n' +
+        '<referenced-files><file path="b.md">\n# B\n</file></referenced-files>\n\nDo the thing';
+      expect(stripReferencedFilesBlock(input)).toBe('Do the thing');
+    });
+
     test('returns trimmed text when no block is present', () => {
       expect(stripReferencedFilesBlock('  plain prompt  ')).toBe('plain prompt');
     });

@@ -1,6 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  releaseStagedUploads: vi.fn(),
   tm: {
     createThread: vi.fn(async () => undefined),
     insertMessage: vi.fn(async () => 'msg-1'),
@@ -28,6 +29,10 @@ const mocks = vi.hoisted(() => ({
   launchContainer: vi.fn(),
   safeFetchUserUrl: vi.fn(),
   listPermissionRules: vi.fn(async (): Promise<any[]> => []),
+  adoptStagedUploads: vi.fn(),
+  copyThreadUploads: vi.fn(),
+  mkdir: vi.fn(async () => undefined),
+  stat: vi.fn(async (path: string) => ({ isDirectory: () => !/\.[a-z]+$/.test(path) })),
   executeShellEscape: vi.fn(async (command: string) => ({
     command,
     stdout: 'hello',
@@ -81,6 +86,14 @@ vi.mock('../../utils/file-mentions.js', () => ({
   stripInlineReferencedContent: vi.fn((content: string) => content),
 }));
 
+vi.mock('../../services/thread-service/staged-uploads.js', () => ({
+  releaseStagedUploads: mocks.releaseStagedUploads,
+  adoptStagedUploads: mocks.adoptStagedUploads,
+  copyThreadUploads: mocks.copyThreadUploads,
+}));
+
+vi.mock('fs/promises', () => ({ mkdir: mocks.mkdir, stat: mocks.stat }));
+
 vi.mock('../../services/thread-service/shell-escape.js', async (importOriginal) => {
   const actual =
     await importOriginal<typeof import('../../services/thread-service/shell-escape.js')>();
@@ -96,13 +109,17 @@ vi.mock('@funny/core/git', () => ({
   git: mocks.git,
   findWorktreeForBranch: mocks.findWorktreeForBranch,
   isRegisteredWorktreePath: mocks.isRegisteredWorktreePath,
+  isContainedPath: (base: string, full: string) => full.startsWith(`${base}/`),
 }));
 
 vi.mock('@funny/core/ports', () => ({
   setupWorktree: mocks.setupWorktree,
 }));
 
-import { ok, err } from 'neverthrow';
+import { ok, err, okAsync, errAsync } from 'neverthrow';
+
+// Released on success; the create/send flows await it.
+mocks.releaseStagedUploads.mockImplementation(() => okAsync(undefined));
 
 import { createIdleThread, createAndStartThread } from '../../services/thread-service/create.js';
 import { wsBroker } from '../../services/ws-broker.js';
@@ -211,6 +228,43 @@ describe('createIdleThread', () => {
         content: 'Implement feature X',
       }),
     );
+  });
+
+  test('keeps @-mentions and staged uploads as a path-only manifest in the prompt', async () => {
+    mocks.adoptStagedUploads.mockReturnValue(
+      okAsync([{ path: '.funny/uploads/fixed-thread-id/spec.pdf' }]),
+    );
+
+    const result = await createIdleThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      title: 'Backlog',
+      mode: 'local',
+      prompt: 'Review these',
+      fileReferences: [{ path: 'src/a.ts' }, { path: 'docs' }, { path: '../outside.ts' }],
+      stagedUploads: ['0b6f4a8e-3c2d-4e5f-9a1b-2c3d4e5f6a7b'],
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.adoptStagedUploads).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/projects/my-app', threadId: 'fixed-thread-id' }),
+    );
+    const manifest =
+      '<referenced-files>\n' +
+      '<file path="src/a.ts" />\n' +
+      '<folder path="docs"></folder>\n' +
+      '<file path="../outside.ts" />\n' +
+      '<file path=".funny/uploads/fixed-thread-id/spec.pdf" />\n' +
+      '</referenced-files>\n\nReview these';
+    expect(mocks.tm.createThread).toHaveBeenCalledWith(
+      expect.objectContaining({ initialPrompt: manifest }),
+    );
+    expect(mocks.tm.insertMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ content: manifest }),
+    );
+    // Only the containment-checked paths are stat'ed for the chip type.
+    expect(mocks.stat).not.toHaveBeenCalledWith('/projects/outside.ts');
+    expect(mocks.stat).toHaveBeenCalledWith('/projects/my-app/docs');
   });
 
   test('uses worktree branch naming in worktree mode', async () => {
@@ -422,6 +476,127 @@ describe('createAndStartThread', () => {
       true,
       undefined,
     );
+  });
+
+  describe('staged uploads', () => {
+    const stagedId = '0b6f4a8e-3c2d-4e5f-9a1b-2c3d4e5f6a7b';
+
+    test('keeps staged files for a retry when the agent fails to start', async () => {
+      mocks.adoptStagedUploads.mockReturnValue(
+        okAsync([{ path: '.funny/uploads/fixed-thread-id/spec.pdf' }]),
+      );
+      mocks.startAgent.mockRejectedValueOnce(new Error('spawn failed'));
+
+      const result = await createAndStartThread({
+        projectId: 'p-1',
+        userId: 'u-1',
+        mode: 'local',
+        prompt: 'Read it',
+        stagedUploads: [stagedId],
+      });
+
+      expect(result.isErr()).toBe(true);
+      expect(mocks.releaseStagedUploads).not.toHaveBeenCalled();
+    });
+
+    test('adopts staged files into the local cwd before creating the thread', async () => {
+      mocks.adoptStagedUploads.mockReturnValue(
+        okAsync([{ path: '.funny/uploads/fixed-thread-id/spec.pdf' }]),
+      );
+      const { augmentPromptWithFiles } = await import('../../utils/file-mentions.js');
+
+      const result = await createAndStartThread({
+        projectId: 'p-1',
+        userId: 'u-1',
+        mode: 'local',
+        prompt: 'Read it',
+        fileReferences: [{ path: 'src/a.ts' }],
+        stagedUploads: [stagedId],
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mocks.adoptStagedUploads).toHaveBeenCalledWith({
+        userId: 'u-1',
+        stagedIds: [stagedId],
+        cwd: '/projects/my-app',
+        threadId: 'fixed-thread-id',
+      });
+      expect(augmentPromptWithFiles).toHaveBeenCalledWith(
+        'Read it',
+        [{ path: 'src/a.ts' }, { path: '.funny/uploads/fixed-thread-id/spec.pdf' }],
+        '/projects/my-app',
+      );
+      // Released only once the create succeeded.
+      expect(mocks.releaseStagedUploads).toHaveBeenCalledWith('u-1', [stagedId]);
+    });
+
+    test('fails with 400 and creates nothing when a staged file expired', async () => {
+      mocks.adoptStagedUploads.mockReturnValue(
+        errAsync({ type: 'BAD_REQUEST', message: 'An attached file expired or was not found.' }),
+      );
+
+      const result = await createAndStartThread({
+        projectId: 'p-1',
+        userId: 'u-1',
+        mode: 'local',
+        prompt: 'Read it',
+        stagedUploads: [stagedId],
+      });
+
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) expect(result.error.statusCode).toBe(400);
+      expect(mocks.tm.createThread).not.toHaveBeenCalled();
+      expect(mocks.startAgent).not.toHaveBeenCalled();
+      expect(mocks.releaseStagedUploads).not.toHaveBeenCalled();
+    });
+
+    test('adopts into the scratch directory and inlines references for scratch threads', async () => {
+      mocks.adoptStagedUploads.mockReturnValue(
+        okAsync([{ path: '.funny/uploads/fixed-thread-id/notes.pdf' }]),
+      );
+
+      const result = await createAndStartThread({
+        projectId: null,
+        userId: 'u-1',
+        mode: 'local',
+        prompt: 'Summarize',
+        isScratch: true,
+        stagedUploads: [stagedId],
+      });
+
+      expect(result.isOk()).toBe(true);
+      const cwd = mocks.adoptStagedUploads.mock.calls[0][0].cwd as string;
+      expect(cwd).toMatch(/[\\/]\.funny[\\/]scratch[\\/]u-1[\\/]fixed-thread-id$/);
+      expect(mocks.mkdir).toHaveBeenCalledWith(cwd, { recursive: true });
+    });
+
+    test('copies adopted uploads into the new worktree before starting the agent', async () => {
+      mocks.adoptStagedUploads.mockReturnValue(
+        okAsync([{ path: '.funny/uploads/fixed-thread-id/spec.pdf' }]),
+      );
+      mocks.copyThreadUploads.mockReturnValue(okAsync(undefined));
+      mocks.createWorktree.mockResolvedValue(ok('/projects/my-app/.worktrees/feature'));
+      mocks.setupWorktree.mockResolvedValue(ok({ postCreateErrors: [] }));
+
+      const result = await createAndStartThread({
+        projectId: 'p-1',
+        userId: 'u-1',
+        mode: 'worktree',
+        prompt: 'Read it',
+        stagedUploads: [stagedId],
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mocks.adoptStagedUploads).toHaveBeenCalledWith(
+        expect.objectContaining({ cwd: '/projects/my-app' }),
+      );
+      await vi.waitFor(() => expect(mocks.startAgent).toHaveBeenCalled());
+      expect(mocks.copyThreadUploads).toHaveBeenCalledWith(
+        '/projects/my-app',
+        '/projects/my-app/.worktrees/feature',
+        'fixed-thread-id',
+      );
+    });
   });
 
   test('creates worktree thread in setting_up and kicks off background setup', async () => {

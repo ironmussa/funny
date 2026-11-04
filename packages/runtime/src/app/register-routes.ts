@@ -18,6 +18,7 @@ import skillsRoutes from '../routes/skills.js';
 import { testRoutes } from '../routes/tests.js';
 import { textSearchRoutes } from '../routes/text-search.js';
 import { threadRoutes } from '../routes/threads.js';
+import { uploadRoutes } from '../routes/uploads.js';
 import { workflowRuntimeRoutes } from '../routes/workflows.js';
 import { worktreeRoutes } from '../routes/worktrees.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -32,10 +33,12 @@ export function registerRoutes(app: Hono<HonoEnv>): void {
   app.use('/api/threads/*', mutationRateLimit());
   app.use('/api/git/*', mutationRateLimit());
   app.use('/api/worktrees/*', mutationRateLimit());
+  app.use('/api/uploads/*', mutationRateLimit());
 
   app.route('/api/projects', projectRoutes);
   app.route('/api/threads', sandboxCheckoutRoutes);
   app.route('/api/threads', threadRoutes);
+  app.route('/api/uploads', uploadRoutes);
   app.route('/api/git', gitRoutes);
   app.route('/api/browse', browseRoutes);
   app.route('/api/files', filesRoutes);

@@ -35,6 +35,21 @@ describe('parseReferencedFiles', () => {
     });
   });
 
+  describe('consecutive blocks', () => {
+    test('merges uploaded and inline-tier blocks into one file list', () => {
+      // Server prepends the uploaded-file block in front of the client's
+      // inline-tier block, so the message starts with two blocks.
+      const content =
+        '<referenced-files>\n<file path="a.pdf" />\n<file path="b.pdf" />\n</referenced-files>\n\n' +
+        '<referenced-files>\n<file path="c.md">\n# C\n</file>\n<file path="d.md">\n# D\n</file>\n</referenced-files>\n\n' +
+        'Read these';
+      const result = parseReferencedFiles(content);
+      expect(result.files).toEqual([f('a.pdf'), f('b.pdf'), f('c.md'), f('d.md')]);
+      expect(result.cleanContent).toBe('Read these');
+      expect(result.inlineContent).toBe('Read these');
+    });
+  });
+
   describe('single file reference', () => {
     test('extracts single file path', () => {
       const content =

@@ -182,6 +182,8 @@ async function sendPrompt(
       ...buildThreadOptions({ ...p, threadMode }),
       fileReferences: payload.fileReferences,
       symbolReferences: payload.symbolReferences,
+      stagedUploads: payload.stagedUploads,
+      attachedFileNames: payload.attachedFileNames,
     },
     payload.images,
   );

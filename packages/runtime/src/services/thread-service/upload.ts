@@ -48,7 +48,7 @@ export interface UploadFileResult {
  * filename. Falls back to "upload" when the result would be empty so we
  * never write to a hidden file or an empty name.
  */
-function sanitizeFilename(name: string): string {
+export function sanitizeFilename(name: string): string {
   const base = name.split(/[\\/]/).pop() ?? '';
   const cleaned = base.replace(/[^a-zA-Z0-9._-]+/g, '_').replace(/^\.+/, '');
   return cleaned.length > 0 ? cleaned.slice(0, 200) : 'upload';
@@ -56,6 +56,53 @@ function sanitizeFilename(name: string): string {
 
 const UPLOADS_DIR = '.funny/uploads';
 const GITIGNORE_CONTENTS = '*\n!.gitignore\n';
+
+/** Decode and size-check base64 upload content against the provider's limits. */
+export function decodeUploadContent(
+  provider: AgentProvider,
+  contentBase64: string,
+): Result<Buffer, DomainError> {
+  const limits = getAttachmentLimits(provider);
+  // Buffer.byteLength on a base64 string is the encoded length, not
+  // decoded — decode first to get the real size.
+  let buffer: Buffer;
+  try {
+    buffer = Buffer.from(contentBase64, 'base64');
+  } catch {
+    return err(badRequest('Invalid base64 content'));
+  }
+  if (buffer.length === 0) return err(badRequest('Empty file'));
+  if (buffer.length > limits.uploadMaxBytes) {
+    return err(
+      badRequest(
+        `File too large (${buffer.length} bytes). Max ${limits.uploadMaxBytes} bytes for provider "${provider}"`,
+      ),
+    );
+  }
+  return ok(buffer);
+}
+
+/**
+ * Resolve `<cwd>/.funny/uploads/<threadId>/<safeName>` and make sure the
+ * directory exists (self-gitignored so uploads don't pollute commits).
+ * Returns the absolute target path and its cwd-relative form.
+ */
+export async function prepareThreadUploadPath(
+  cwd: string,
+  threadId: string,
+  safeName: string,
+): Promise<Result<{ fullPath: string; relPath: string }, DomainError>> {
+  const uploadDir = join(cwd, UPLOADS_DIR, threadId);
+  const fullPath = join(uploadDir, safeName);
+  // Defense-in-depth: ensure resolved path stays inside cwd even though
+  // sanitizeFilename strips traversal sequences.
+  if (!resolve(fullPath).startsWith(resolve(cwd) + sep)) {
+    return err(badRequest('Upload path escapes thread cwd'));
+  }
+  await mkdir(uploadDir, { recursive: true });
+  await writeFile(join(cwd, '.funny', '.gitignore'), GITIGNORE_CONTENTS);
+  return ok({ fullPath, relPath: relative(cwd, fullPath) });
+}
 
 export function uploadFile(params: UploadFileParams): ResultAsync<UploadFileResult, DomainError> {
   return ResultAsync.fromPromise(uploadFileImpl(params), (e) => {
@@ -75,59 +122,34 @@ async function uploadFileImpl(
   if (cwdResult.isErr()) return err(cwdResult.error);
   const cwd = cwdResult.value;
 
-  const limits = getAttachmentLimits(params.provider);
+  const decoded = decodeUploadContent(params.provider, params.contentBase64);
+  if (decoded.isErr()) return err(decoded.error);
+  const buffer = decoded.value;
 
-  // Decode base64. Buffer.byteLength on a base64 string is the encoded
-  // length, not decoded — decode first to get the real size.
-  let buffer: Buffer;
+  let target: { fullPath: string; relPath: string };
   try {
-    buffer = Buffer.from(params.contentBase64, 'base64');
-  } catch {
-    return err(badRequest('Invalid base64 content'));
-  }
-  if (buffer.length === 0) return err(badRequest('Empty file'));
-  if (buffer.length > limits.uploadMaxBytes) {
-    return err(
-      badRequest(
-        `File too large (${buffer.length} bytes). Max ${limits.uploadMaxBytes} bytes for provider "${params.provider}"`,
-      ),
+    const prepared = await prepareThreadUploadPath(
+      cwd,
+      params.threadId,
+      sanitizeFilename(params.filename),
     );
-  }
-
-  const safeName = sanitizeFilename(params.filename);
-  const uploadDir = join(cwd, UPLOADS_DIR, params.threadId);
-  const fullPath = join(uploadDir, safeName);
-
-  // Defense-in-depth: ensure resolved path stays inside cwd even though
-  // sanitizeFilename strips traversal sequences.
-  const resolvedCwd = resolve(cwd);
-  const resolvedFull = resolve(fullPath);
-  if (!resolvedFull.startsWith(resolvedCwd + sep)) {
-    return err(badRequest('Upload path escapes thread cwd'));
-  }
-
-  try {
-    await mkdir(uploadDir, { recursive: true });
-    // Self-gitignore the .funny/ directory so uploads don't pollute commits.
-    // Written once per cwd; subsequent writes are no-ops via writeFile overwrite.
-    await writeFile(join(cwd, '.funny', '.gitignore'), GITIGNORE_CONTENTS);
-    await writeFile(fullPath, buffer);
+    if (prepared.isErr()) return err(prepared.error);
+    target = prepared.value;
+    await writeFile(target.fullPath, buffer);
   } catch (e) {
     log.error('uploadFile write failed', {
       namespace: 'thread-service',
       threadId: params.threadId,
-      path: fullPath,
       error: (e as Error).message,
     });
     return err(internal('Failed to write upload'));
   }
 
-  const relPath = relative(cwd, fullPath);
   log.info('uploadFile wrote attachment', {
     namespace: 'thread-service',
     threadId: params.threadId,
-    path: relPath,
+    path: target.relPath,
     size: buffer.length,
   });
-  return ok({ path: relPath, size: buffer.length });
+  return ok({ path: target.relPath, size: buffer.length });
 }

@@ -38,6 +38,7 @@ import type {
  *    handler always and a boolean `disabled` prop.
  */
 import { sleep as effectSleep } from '@funny/shared/async';
+import { addReferencedEntries, stripReferencedContents } from '@funny/shared/attachments';
 import { startTransition } from 'react';
 import { create } from 'zustand';
 
@@ -74,7 +75,9 @@ import { loadContextUsage } from '@/lib/context-usage-storage';
 import { markMemoryPhase } from '@/lib/memory-phase';
 import { metric, startSpan } from '@/lib/telemetry';
 import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
+import { toastError } from '@/lib/toast-error';
 
+import { deriveToolLists, useSettingsStore } from './settings-store';
 import {
   expandProject,
   selectProject as bridgeSelectProject,
@@ -654,6 +657,24 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   updateThreadStage: async (threadId, _projectId, stage) => {
+    const row = readThreadRow(threadId);
+    // Moving a never-started thread into In Progress starts it. The send
+    // promotes the thread on the runner (stage + reuses its draft), so no
+    // separate stage PATCH — that alone would leave it idle forever.
+    if (stage === 'in_progress' && row?.status === 'idle' && row.initialPrompt) {
+      const { allowedTools, disallowedTools } = deriveToolLists(
+        useSettingsStore.getState().toolPermissions,
+      );
+      const result = await api.sendMessage(threadId, row.initialPrompt, {
+        provider: row.provider,
+        model: row.model,
+        permissionMode: row.permissionMode,
+        allowedTools,
+        disallowedTools,
+      });
+      if (result.isErr()) toastError(result.error, 'startIdleThread');
+      return;
+    }
     await moveThreadStage(threadId, stage);
   },
 
@@ -735,18 +756,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         return { model: model || entry.model, cwd, tools: [] as string[] };
       })();
 
-    // Build a minimal <referenced-files> XML header so chips render in the message
-    let messageContent = content;
-    if (fileReferences && fileReferences.length > 0) {
-      const tags = fileReferences
-        .map((ref) =>
-          ref.type === 'folder'
-            ? `<folder path="${ref.path}"></folder>`
-            : `<file path="${ref.path}" />`,
-        )
-        .join('\n');
-      messageContent = `<referenced-files>\n${tags}\n</referenced-files>\n${content}`;
-    }
+    // Path-only entries so chips render in the optimistic message, merged
+    // into any block the prompt already carries (inline attachments).
+    const messageContent = stripReferencedContents(
+      addReferencedEntries(
+        content,
+        (fileReferences ?? []).map((ref) => ({ type: ref.type ?? 'file', path: ref.path })),
+      ),
+    );
 
     const newMessage = {
       id: `${OPTIMISTIC_MESSAGE_ID_PREFIX}${crypto.randomUUID()}`,

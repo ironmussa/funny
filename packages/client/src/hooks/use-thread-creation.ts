@@ -13,11 +13,17 @@
  */
 
 import { useCallback, useState } from 'react';
+import { toast } from 'sonner';
 
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric, startSpan } from '@/lib/telemetry';
-import { buildThreadPayload, type SubmitOpts, type ThreadKind } from '@/lib/thread-payload';
+import {
+  buildThreadPayload,
+  type BuildResult,
+  type SubmitOpts,
+  type ThreadKind,
+} from '@/lib/thread-payload';
 import { toastError } from '@/lib/toast-error';
 import { type ToolPermission } from '@/stores/settings-store';
 
@@ -52,6 +58,22 @@ export interface UseThreadCreationResult {
    * (matching the existing PromptInput.onSubmit contract).
    */
   createThread: (prompt: string, opts: SubmitOpts, images?: any[]) => Promise<boolean>;
+}
+
+/**
+ * Staged files live on the user's runner; a sandbox thread runs on another
+ * runner that cannot adopt them.
+ */
+function rejectsStagedUploads(opts: SubmitOpts): boolean {
+  if (!opts.stagedUploads?.length || opts.runtime !== 'sandbox') return false;
+  toast.error('Files that are not inlined can only be attached once a sandbox thread has started.');
+  return true;
+}
+
+function callCreateEndpoint(built: BuildResult) {
+  if (built.kind === 'scratch') return api.createScratchThread(built.payload);
+  if (built.kind === 'idle') return api.createIdleThread(built.payload);
+  return api.createThread(built.payload);
 }
 
 export function useThreadCreation(options: UseThreadCreationOptions): UseThreadCreationResult {
@@ -99,18 +121,15 @@ export function useThreadCreation(options: UseThreadCreationOptions): UseThreadC
 
       if (!built) return false;
 
+      if (rejectsStagedUploads(opts)) return false;
+
       setCreating(true);
       const span = startSpan('thread.create', {
         attributes: { kind: built.kind, model: opts.model },
       });
 
       try {
-        const result =
-          built.kind === 'scratch'
-            ? await api.createScratchThread(built.payload)
-            : built.kind === 'idle'
-              ? await api.createIdleThread(built.payload)
-              : await api.createThread(built.payload);
+        const result = await callCreateEndpoint(built);
 
         if (result.isErr()) {
           toastError(result.error, 'createThread');

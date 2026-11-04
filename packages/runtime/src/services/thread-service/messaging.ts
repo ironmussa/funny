@@ -13,6 +13,7 @@ import type {
   PermissionMode,
   ImageAttachment,
 } from '@funny/shared';
+import { parseStoredJson } from '@funny/shared/json-validation';
 import {
   DEFAULT_MODEL,
   DEFAULT_PROVIDER,
@@ -20,15 +21,18 @@ import {
   DEFAULT_FOLLOW_UP_MODE,
 } from '@funny/shared/models';
 import { ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import {
   augmentPromptWithFiles,
+  hydrateReferencedFiles,
   augmentPromptWithSymbols,
   stripInlineReferencedContent,
   type FileRef,
   type SymbolRef,
 } from '../../utils/file-mentions.js';
+import { imageAttachmentSchema } from '../../validation/schemas.js';
 import { resolveAgentResources } from '../agent-resources/resolver.js';
 import {
   startAgent,
@@ -45,7 +49,12 @@ import { getServices } from '../service-registry.js';
 import { resolveThreadCwd } from '../thread-context.js';
 import * as tm from '../thread-manager.js';
 import { wsBroker } from '../ws-broker.js';
-import { ThreadServiceError, emitThreadUpdated } from './helpers.js';
+import {
+  ThreadServiceError,
+  emitThreadUpdated,
+  releaseStagedUploadsOnSuccess,
+  withStagedUploads,
+} from './helpers.js';
 import {
   executeShellEscape,
   extractShellEscapeCommand,
@@ -97,6 +106,8 @@ export interface SendMessageParams {
   disallowedTools?: string[];
   fileReferences?: FileRef[];
   symbolReferences?: SymbolRef[];
+  /** Ids from POST /api/uploads/staging (composer had no thread id yet). */
+  stagedUploads?: string[];
   baseBranch?: string;
   forceQueue?: boolean;
 }
@@ -112,29 +123,31 @@ export interface SendMessageResult {
 export function sendMessage(
   params: SendMessageParams,
 ): ResultAsync<SendMessageResult, ThreadServiceError> {
-  return ResultAsync.fromPromise(sendMessageImpl(params), toThreadServiceError);
+  return ResultAsync.fromPromise(sendMessageImpl(params), toThreadServiceError).map(
+    releaseStagedUploadsOnSuccess(params),
+  );
 }
 
 type SendThread = NonNullable<Awaited<ReturnType<typeof tm.getThread>>>;
 type SendProject = Awaited<ReturnType<ReturnType<typeof getServices>['projects']['getProject']>>;
 
-async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageResult> {
+async function sendMessageImpl(rawParams: SendMessageParams): Promise<SendMessageResult> {
   // Read the thread fresh: the server may have just changed it (a sandbox thread
   // leaves `setting_up` right before its first message), and a stale copy would
   // make startAgent write the old status back.
-  invalidateThreadCache(params.threadId);
-  const thread = await tm.getThread(params.threadId);
+  invalidateThreadCache(rawParams.threadId);
+  const thread = await tm.getThread(rawParams.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
   log.info('sendMessage called', {
     namespace: 'thread-service',
-    threadId: params.threadId,
-    userId: thread.userId ?? params.userId ?? 'unknown',
+    threadId: rawParams.threadId,
+    userId: thread.userId ?? rawParams.userId ?? 'unknown',
     projectId: thread.projectId,
     threadStatus: thread.status,
     sessionId: thread.sessionId ?? '',
-    agentRunning: String(isAgentRunning(params.threadId)),
-    contentPreview: params.content.slice(0, 120),
+    agentRunning: String(isAgentRunning(rawParams.threadId)),
+    contentPreview: rawParams.content.slice(0, 120),
   });
 
   // Resolve cwd through the single source of truth (covers scratch / worktree /
@@ -148,6 +161,7 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
   );
   if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
   const cwd = cwdResult.value;
+  let params = await withStagedUploads(rawParams, rawParams.threadId, cwd);
 
   const shellCommand = extractShellEscapeCommand(params.content);
   if (shellCommand !== null) {
@@ -171,7 +185,9 @@ async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageRe
     'autoEdit') as PermissionMode;
 
   await applyThreadSettingChanges(params, thread);
-  let hasDraftMessage = await promoteBacklogThread(params, thread);
+  const promotion = await startIdleThreadIfNeeded(params, thread);
+  params = promotion.params;
+  let hasDraftMessage = promotion.hasDraft;
 
   const { augmentedContent, persistedContent } = await buildMessageContents(
     params,
@@ -377,29 +393,51 @@ async function applyThreadSettingChanges(
 }
 
 /**
- * Auto-move idle backlog threads to in_progress when a message is sent.
- * Returns true when a pre-existing user draft was detected, so the
- * persistence step updates it instead of inserting a duplicate.
+ * The first message of a never-started (idle) thread starts it: the thread
+ * moves to in_progress (from backlog, planning, or a board move that already
+ * set the stage) and its user draft is reused instead of duplicated.
  */
-async function promoteBacklogThread(
+async function promoteIdleThread(
   params: SendMessageParams,
   thread: SendThread,
-): Promise<boolean> {
-  if (thread.status !== 'idle' || thread.stage !== 'backlog') return false;
+): Promise<{ hasDraft: boolean; draftImages?: ImageAttachment[] }> {
+  if (thread.status !== 'idle') return { hasDraft: false };
 
-  const stageUpdates: Record<string, any> = { stage: 'in_progress' };
+  const stageUpdates: Record<string, any> = {};
+  if (thread.stage !== 'in_progress') stageUpdates.stage = 'in_progress';
   if (!thread.initialPrompt || params.content !== thread.initialPrompt) {
     stageUpdates.title = params.content.slice(0, 200);
     stageUpdates.initialPrompt = params.content;
   }
-  await tm.updateThread(params.threadId, stageUpdates);
+  if (Object.keys(stageUpdates).length > 0) await tm.updateThread(params.threadId, stageUpdates);
 
   const { messages: draftMessages } = await tm.getThreadMessages({
     threadId: params.threadId,
     limit: 1,
   });
   const draftMsg = draftMessages[0];
-  return !!draftMsg && draftMsg.role === 'user';
+  if (!draftMsg || draftMsg.role !== 'user') return { hasDraft: false };
+  return { hasDraft: true, draftImages: parseDraftImages(draftMsg.images) };
+}
+
+/**
+ * Promote an idle thread and carry its draft along: images attached to the
+ * draft come with the first send unless it brings its own.
+ */
+async function startIdleThreadIfNeeded(
+  params: SendMessageParams,
+  thread: SendThread,
+): Promise<{ params: SendMessageParams; hasDraft: boolean }> {
+  const { hasDraft, draftImages } = await promoteIdleThread(params, thread);
+  if (params.images?.length || !draftImages?.length) return { params, hasDraft };
+  return { params: { ...params, images: draftImages }, hasDraft };
+}
+
+function parseDraftImages(raw: unknown): ImageAttachment[] | undefined {
+  if (Array.isArray(raw)) return raw as ImageAttachment[];
+  if (typeof raw !== 'string' || !raw) return undefined;
+  const parsed = parseStoredJson(z.array(imageAttachmentSchema), raw, 'draft message images');
+  return parsed.ok ? (parsed.value as ImageAttachment[]) : undefined;
 }
 
 /**
@@ -414,7 +452,9 @@ async function buildMessageContents(
   cwd: string,
 ): Promise<{ augmentedContent: string; persistedContent: string }> {
   const augmentReferences = async (text: string) => {
-    const withFiles = await augmentPromptWithFiles(text, params.fileReferences, cwd);
+    // Path-only entries come from a backlog thread's stored prompt.
+    const hydrated = await hydrateReferencedFiles(text, cwd);
+    const withFiles = await augmentPromptWithFiles(hydrated, params.fileReferences, cwd);
     return augmentPromptWithSymbols(withFiles, params.symbolReferences, cwd);
   };
   let augmentedContent = await augmentReferences(params.content);

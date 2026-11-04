@@ -23,6 +23,7 @@ import { DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_PERMISSION_MODE } from '@funny
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
+import { hydrateReferencedFiles } from '../../utils/file-mentions.js';
 import {
   startAgent,
   stopAgent,
@@ -45,6 +46,7 @@ import {
   emitThreadUpdated,
   slugifyTitle,
 } from './helpers.js';
+import { copyThreadUploads } from './staged-uploads.js';
 
 // ── Update Thread (stage transitions, archive) ──────────────────
 
@@ -169,6 +171,31 @@ async function updateThreadImpl(params: UpdateThreadParams) {
 
 // ── Auto-start idle thread ──────────────────────────────────────
 
+/**
+ * The prompt a backlog thread starts with: its path-only references are
+ * inlined now (resolved against the project checkout, where they were picked
+ * and where staged uploads were adopted), and its uploads are copied into
+ * `cwd` when the agent runs elsewhere (a worktree) so it can Read them.
+ */
+async function startPromptForIdleThread(
+  threadId: string,
+  prompt: string,
+  projectPath: string,
+  cwd: string,
+): Promise<string> {
+  if (cwd !== projectPath) {
+    const copied = await copyThreadUploads(projectPath, cwd, threadId);
+    if (copied.isErr()) {
+      log.warn('Failed to copy uploads into worktree', {
+        namespace: 'agent',
+        threadId,
+        error: copied.error.message,
+      });
+    }
+  }
+  return hydrateReferencedFiles(prompt, projectPath);
+}
+
 async function autoStartIdleThread(
   threadId: string,
   thread: NonNullable<Awaited<ReturnType<typeof tm.getThread>>>,
@@ -241,7 +268,7 @@ async function autoStartIdleThread(
         const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
         await startAgent(
           threadId,
-          thread.initialPrompt!,
+          await startPromptForIdleThread(threadId, thread.initialPrompt!, projectPath, wtPath),
           wtPath,
           (thread.model || project.defaultModel || DEFAULT_MODEL) as AgentModel,
           (thread.permissionMode || DEFAULT_PERMISSION_MODE) as PermissionMode,
@@ -318,9 +345,15 @@ async function autoStartIdleThread(
     const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
     const draftMsg = draftMessages[0];
     const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
-    startAgent(
+    const startPrompt = await startPromptForIdleThread(
       threadId,
       thread.initialPrompt!,
+      projectPath,
+      cwd,
+    );
+    startAgent(
+      threadId,
+      startPrompt,
       cwd,
       (thread.model || project.defaultModel || DEFAULT_MODEL) as AgentModel,
       (thread.permissionMode || DEFAULT_PERMISSION_MODE) as PermissionMode,

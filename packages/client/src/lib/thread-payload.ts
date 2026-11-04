@@ -8,6 +8,7 @@
  */
 
 import type { ImageAttachment } from '@funny/shared';
+import { parseReferencedFiles, serializeReferencedFiles } from '@funny/shared/attachments';
 
 import { deriveToolLists, type ToolPermission } from '@/stores/settings-store';
 
@@ -103,6 +104,10 @@ export interface SubmitOpts {
   sendToBacklog?: boolean;
   fileReferences?: FileRef[];
   symbolReferences?: SymbolRef[];
+  /** Files attached before the thread existed (see `threadsApi.stageUpload`). */
+  stagedUploads?: string[];
+  /** Names of attachments that are not inlined in the prompt (title badge). */
+  attachedFileNames?: string[];
   agentTemplateId?: string;
   templateVariables?: Record<string, string>;
 }
@@ -134,6 +139,45 @@ export type ScratchPayload = Parameters<
 export type IdlePayload = Parameters<typeof import('./api/threads').threadsApi.createIdleThread>[0];
 export type NormalPayload = Parameters<typeof import('./api/threads').threadsApi.createThread>[0];
 
+const TITLE_TEXT_MAX = 200;
+const TITLE_MAX = 500;
+
+/**
+ * Thread title: the prompt text plus a path-only `<referenced-files>` block
+ * listing every attachment — inline files and the uploaded/staged ones — so
+ * the attachment badge counts all of them. Falls back to the bare text when
+ * the block would push the title past the server's limit.
+ */
+export function buildThreadTitle(
+  prompt: string,
+  attachedFileNames: readonly string[] = [],
+): string {
+  const { entries, body } = parseReferencedFiles(prompt);
+  const text = body.slice(0, TITLE_TEXT_MAX);
+  const titled = serializeReferencedFiles(
+    [
+      ...entries.map(({ type, path }) => ({ type, path })),
+      ...attachedFileNames.map((path) => ({ type: 'file' as const, path })),
+    ],
+    text,
+  );
+  return titled.length <= TITLE_MAX ? titled : text;
+}
+
+/**
+ * Attachments every create endpoint accepts. Spread as one block into each
+ * payload so a thread kind cannot silently drop them (backlog threads used
+ * to lose their @-mentions this way). Symbol references stay normal-only:
+ * they are resolved at send time and have no stored form yet.
+ */
+function pickAttachments(opts: SubmitOpts, images: ImageAttachment[] | undefined) {
+  return {
+    images,
+    fileReferences: opts.fileReferences,
+    stagedUploads: opts.stagedUploads,
+  };
+}
+
 export type BuildResult =
   | { kind: 'scratch'; payload: ScratchPayload }
   | { kind: 'idle'; payload: IdlePayload }
@@ -147,7 +191,7 @@ export type BuildResult =
  */
 export function buildThreadPayload(input: BuildInput): BuildResult {
   const { prompt, opts, images, designId, defaultThreadMode, toolPermissions } = input;
-  const title = prompt.slice(0, 200);
+  const title = buildThreadTitle(prompt, opts.attachedFileNames);
 
   if (input.isScratch) {
     return {
@@ -158,7 +202,7 @@ export function buildThreadPayload(input: BuildInput): BuildResult {
         provider: opts.provider,
         model: opts.model,
         permissionMode: opts.mode,
-        images,
+        ...pickAttachments(opts, images),
       },
     };
   }
@@ -179,7 +223,7 @@ export function buildThreadPayload(input: BuildInput): BuildResult {
         mode: threadMode,
         baseBranch: opts.baseBranch,
         prompt,
-        images,
+        ...pickAttachments(opts, images),
         // `stage` only included when provided — server defaults to 'backlog'.
         ...(input.stage ? { stage: input.stage } : {}),
         // `designId` omitted when undefined — never sent as null.
@@ -209,10 +253,9 @@ export function buildThreadPayload(input: BuildInput): BuildResult {
       effort: opts.effort,
       baseBranch: opts.baseBranch,
       prompt,
-      images,
+      ...pickAttachments(opts, images),
       allowedTools,
       disallowedTools,
-      fileReferences: opts.fileReferences,
       symbolReferences: opts.symbolReferences,
       agentTemplateId: opts.agentTemplateId,
       templateVariables: opts.templateVariables,

@@ -10,6 +10,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PromptInputUI, type PromptInputUIProps } from '@/components/PromptInputUI';
 import { systemApi } from '@/lib/api/system';
+import { threadsApi } from '@/lib/api/threads';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
 import { renderWithProviders } from '../helpers/render';
@@ -275,6 +276,32 @@ describe('PromptInputUI submit', () => {
       '<referenced-files>\n<file path="a&quot;b.txt">\nfile body\n</file>\n</referenced-files>\n\nsee file',
     );
     expect(screen.queryByTestId('prompt-attached-file-0')).toBeNull();
+  });
+
+  test('a binary file attached before the thread exists is staged and sent as stagedUploads', async () => {
+    const stageUpload = vi
+      .spyOn(threadsApi, 'stageUpload')
+      .mockReturnValue(okAsync({ stagedId: 'staged-1', name: 'spec.pdf', size: 4 }) as never);
+    const uploadFile = vi.spyOn(threadsApi, 'uploadFile');
+    const { onSubmit, editor } = renderUI({ isNewThread: true, projectId: 'p-1' });
+
+    const input = screen.getByTestId('prompt-file-input') as HTMLInputElement;
+    const pdf = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'spec.pdf', {
+      type: 'application/pdf',
+    });
+    fireEvent.change(input, { target: { files: [pdf] } });
+    await waitFor(() => expect(stageUpload).toHaveBeenCalledTimes(1));
+    expect(stageUpload.mock.calls[0][0]).toMatchObject({ filename: 'spec.pdf' });
+    expect(stageUpload.mock.calls[0][1]).toBe('p-1');
+    expect(uploadFile).not.toHaveBeenCalled();
+    await screen.findByTestId('prompt-attached-file-0');
+
+    type(editor, 'read the spec');
+    submit(editor);
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
+    // Never inlined as text: the prompt carries no referenced-files block.
+    expect(onSubmit.mock.calls[0][0]).toBe('read the spec');
+    expect(onSubmit.mock.calls[0][1].stagedUploads).toEqual(['staged-1']);
   });
 
   test('restores images and text files when onSubmit returns false', async () => {

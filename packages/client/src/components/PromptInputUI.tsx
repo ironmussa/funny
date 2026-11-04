@@ -281,6 +281,7 @@ export const PromptInputUI = memo(function PromptInputUI(rawProps: PromptInputUI
     initialImages: props.initialImages,
     provider,
     threadId: props.threadId,
+    projectId: props.projectId,
     t,
   });
   const { images, attachedTextFiles } = attachments;
@@ -328,7 +329,7 @@ export const PromptInputUI = memo(function PromptInputUI(rawProps: PromptInputUI
     editorRef,
     loading,
     addFiles: attachments.addFiles,
-    addImageFile: attachments.addImageFile,
+    addFile: attachments.addFile,
     onEditorPaste: props.onEditorPaste,
   });
 

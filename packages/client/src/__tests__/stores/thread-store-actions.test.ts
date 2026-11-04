@@ -958,6 +958,34 @@ describe('thread store actions', () => {
 
       expect(readThreadIndex().threadsById.t1.stage).toBe('backlog');
     });
+
+    test('moving an idle thread to In Progress starts it instead of only patching the stage', async () => {
+      useThreadStore.setState({
+        ...seedThreads({
+          p1: [
+            {
+              ...baseThread,
+              status: 'idle',
+              stage: 'backlog',
+              initialPrompt: 'do the thing',
+              model: 'sonnet',
+              permissionMode: 'autoEdit',
+            } as any,
+          ],
+        }),
+      } as any);
+      mockSendMessage.mockReturnValue(okAsync({ ok: true }));
+      mockUpdateThreadStage.mockClear();
+
+      await useThreadStore.getState().updateThreadStage('t1', 'p1', 'in_progress');
+
+      expect(mockSendMessage).toHaveBeenCalledWith(
+        't1',
+        'do the thing',
+        expect.objectContaining({ model: 'sonnet', permissionMode: 'autoEdit' }),
+      );
+      expect(mockUpdateThreadStage).not.toHaveBeenCalled();
+    });
   });
 
   describe('updateThreadPermissionMode', () => {

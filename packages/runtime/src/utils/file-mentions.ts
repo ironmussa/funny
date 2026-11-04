@@ -9,6 +9,17 @@ import { readFile, readdir, stat } from 'fs/promises';
 import { join } from 'path';
 
 import { isContainedPath } from '@funny/core/git';
+import {
+  addReferencedEntries,
+  attachmentTextHint,
+  looksLikeText,
+  parseReferencedFiles,
+  serializeReferencedFiles,
+  stripReferencedContents,
+  type ReferencedEntry,
+  type ReferencedFile,
+  type ReferencedFolder,
+} from '@funny/shared/attachments';
 
 const MAX_FILE_SIZE = 100 * 1024; // 100KB per file
 const MAX_TOTAL_CONTENT = 500 * 1024; // 500KB total
@@ -27,23 +38,37 @@ export interface SymbolRef {
   endLine?: number;
 }
 
+/** True when the file should reach the agent via the Read tool instead of inline. */
+function isBinary(relPath: string, bytes: Buffer): boolean {
+  const hint = attachmentTextHint({ name: relPath, type: '' });
+  if (hint !== 'unknown') return hint === 'binary';
+  return !looksLikeText(bytes.subarray(0, 8192));
+}
+
 async function inlineFile(
   fullPath: string,
   relPath: string,
   totalSize: { value: number },
-): Promise<string> {
+): Promise<ReferencedFile> {
   try {
     const fileStat = await stat(fullPath);
     const size = fileStat.size;
 
     if (size > MAX_FILE_SIZE || totalSize.value + size > MAX_TOTAL_CONTENT) {
-      return `<file path="${relPath}" note="File too large to inline (${Math.round(size / 1024)}KB). Use the Read tool to access it."></file>`;
+      return {
+        type: 'file',
+        path: relPath,
+        note: `File too large to inline (${Math.round(size / 1024)}KB). Use the Read tool to access it.`,
+      };
     }
-    const content = await readFile(fullPath, 'utf-8');
+    const bytes = await readFile(fullPath);
+    if (isBinary(relPath, bytes)) {
+      return { type: 'file', path: relPath, note: 'Binary file. Use the Read tool to access it.' };
+    }
     totalSize.value += size;
-    return `<file path="${relPath}">\n${content}\n</file>`;
+    return { type: 'file', path: relPath, content: bytes.toString('utf-8') };
   } catch {
-    return `<file path="${relPath}" note="File not found or unreadable"></file>`;
+    return { type: 'file', path: relPath, note: 'File not found or unreadable' };
   }
 }
 
@@ -53,22 +78,22 @@ async function inlineFolder(
   folderPath: string,
   relPath: string,
   totalSize: { value: number },
-): Promise<string> {
+): Promise<ReferencedFolder> {
   const entries = await readdir(folderPath, { withFileTypes: true });
   const files = entries.filter((e) => e.isFile()).map((e) => e.name);
-  const folderSections: string[] = [];
+  const children: ReferencedFile[] = [];
   for (const fileName of files.slice(0, MAX_FOLDER_FILES)) {
     if (totalSize.value >= MAX_TOTAL_CONTENT) break;
     const childFullPath = join(folderPath, fileName);
     // A child may itself be a symlink pointing outside the base.
     if (!isContainedPath(basePath, childFullPath)) continue;
-    folderSections.push(await inlineFile(childFullPath, join(relPath, fileName), totalSize));
+    children.push(await inlineFile(childFullPath, join(relPath, fileName), totalSize));
   }
-  const truncNote =
-    files.length > MAX_FOLDER_FILES
-      ? ` note="Showing ${MAX_FOLDER_FILES} of ${files.length} files. Use the Glob/Read tools to access more."`
-      : '';
-  return `<folder path="${relPath}"${truncNote}>\n${folderSections.join('\n')}\n</folder>`;
+  const folder: ReferencedFolder = { type: 'folder', path: relPath, children };
+  if (files.length > MAX_FOLDER_FILES) {
+    folder.note = `Showing ${MAX_FOLDER_FILES} of ${files.length} files. Use the Glob/Read tools to access more.`;
+  }
+  return folder;
 }
 
 /** Inline one file/folder reference, or null when it escapes `basePath`. */
@@ -76,7 +101,7 @@ async function inlineReference(
   basePath: string,
   ref: FileRef,
   totalSize: { value: number },
-): Promise<string | null> {
+): Promise<ReferencedEntry | null> {
   const fullPath = join(basePath, ref.path);
   // Security (M9): sibling-prefix dirs (`/a/proj-secrets` vs `/a/proj`) and
   // symlinks pointing outside the base must not be inlined into the prompt.
@@ -87,10 +112,15 @@ async function inlineReference(
       ? await inlineFolder(basePath, fullPath, ref.path, totalSize)
       : await inlineFile(fullPath, ref.path, totalSize);
   } catch {
-    return `<file path="${ref.path}" note="File not found or unreadable"></file>`;
+    return { type: 'file', path: ref.path, note: 'File not found or unreadable' };
   }
 }
 
+/**
+ * Resolve file references and merge them into the prompt's leading
+ * `<referenced-files>` block — the client may already have put inline
+ * attachments there, and the prompt must carry a single block.
+ */
 export async function augmentPromptWithFiles(
   prompt: string,
   fileReferences: FileRef[] | undefined,
@@ -98,17 +128,33 @@ export async function augmentPromptWithFiles(
 ): Promise<string> {
   if (!fileReferences || fileReferences.length === 0) return prompt;
 
-  const sections: string[] = [];
+  const entries: ReferencedEntry[] = [];
   const totalSize = { value: 0 };
   for (const ref of fileReferences) {
-    const section = await inlineReference(basePath, ref, totalSize);
-    if (section !== null) sections.push(section);
+    const entry = await inlineReference(basePath, ref, totalSize);
+    if (entry !== null) entries.push(entry);
   }
+  return addReferencedEntries(prompt, entries);
+}
 
-  if (sections.length === 0) return prompt;
-
-  const fileContext = `<referenced-files>\n${sections.join('\n')}\n</referenced-files>\n\n`;
-  return fileContext + prompt;
+/**
+ * Resolve the path-only entries of the prompt's leading block (no contents,
+ * no note) against `basePath`. A backlog thread stores its references this
+ * way when it is created and only reads the files when it starts, so the
+ * agent sees their contents as of the start — not as of the creation.
+ */
+export async function hydrateReferencedFiles(prompt: string, basePath: string): Promise<string> {
+  const { entries, body } = parseReferencedFiles(prompt);
+  const isPathOnly = (e: ReferencedEntry) =>
+    e.note === undefined && (e.type === 'file' ? e.content === undefined : !e.children);
+  const pending = entries.filter(isPathOnly);
+  if (pending.length === 0) return prompt;
+  const kept = entries.filter((e) => !isPathOnly(e));
+  return augmentPromptWithFiles(
+    serializeReferencedFiles(kept, body),
+    pending.map((e) => ({ path: e.path })),
+    basePath,
+  );
 }
 
 /**
@@ -157,8 +203,11 @@ export async function augmentPromptWithSymbols(
 
   if (sections.length === 0) return prompt;
 
+  // Keep `<referenced-files>` leading so file chips still parse; symbols go
+  // between the files block and the user's text.
   const symbolContext = `<referenced-symbols>\n${sections.join('\n')}\n</referenced-symbols>\n\n`;
-  return symbolContext + prompt;
+  const { entries, body } = parseReferencedFiles(prompt);
+  return serializeReferencedFiles(entries, symbolContext + body);
 }
 
 /**
@@ -173,15 +222,8 @@ export async function augmentPromptWithSymbols(
  * Self-closing tags (`<file path="X" />`) are preserved as-is.
  */
 export function stripInlineReferencedContent(content: string): string {
-  let out = content;
-  out = out.replace(/<file\b([^>]*?(?<!\/))>[\s\S]*?<\/file>/g, (_m, attrs) => `<file${attrs} />`);
-  out = out.replace(
-    /<folder\b([^>]*?(?<!\/))>[\s\S]*?<\/folder>/g,
-    (_m, attrs) => `<folder${attrs}></folder>`,
-  );
-  out = out.replace(
+  return stripReferencedContents(content).replace(
     /<symbol\b([^>]*?(?<!\/))>[\s\S]*?<\/symbol>/g,
     (_m, attrs) => `<symbol${attrs} />`,
   );
-  return out;
 }

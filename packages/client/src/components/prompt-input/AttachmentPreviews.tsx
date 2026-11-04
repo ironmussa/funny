@@ -59,7 +59,8 @@ function formatAttachmentSize(size: number): string {
 }
 
 function attachmentKey(f: AttachedTextFile): string {
-  return `${f.name}-${f.size}-${f.mode}-${f.mode === 'upload' ? f.path : ''}`;
+  const id = f.mode === 'upload' ? f.path : f.mode === 'staged' ? f.stagedId : '';
+  return `${f.name}-${f.size}-${f.mode}-${id}`;
 }
 
 function attachmentTitle(f: AttachedTextFile, sizeLabel: string): string {

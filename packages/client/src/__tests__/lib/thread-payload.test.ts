@@ -4,6 +4,7 @@ import { describe, test, expect } from 'vitest';
 import {
   buildRuntimeModes,
   buildThreadPayload,
+  buildThreadTitle,
   parseRuntimeChoice,
   type BuildInput,
 } from '@/lib/thread-payload';
@@ -164,6 +165,62 @@ describe('buildThreadPayload', () => {
 
     expect(result.kind).toBe('normal');
     expect(result.payload).toMatchObject({ mode: 'worktree' });
+  });
+});
+
+describe('buildThreadTitle', () => {
+  test('lists inline and uploaded attachments path-only so the badge counts all of them', () => {
+    const prompt =
+      '<referenced-files>\n<file path="a.md">\n# A\n</file>\n</referenced-files>\n\nRead these';
+    expect(buildThreadTitle(prompt, ['spec.pdf'])).toBe(
+      '<referenced-files>\n<file path="a.md" />\n<file path="spec.pdf" />\n</referenced-files>\n\nRead these',
+    );
+  });
+
+  test('is the plain text when there are no attachments', () => {
+    expect(buildThreadTitle('Fix the bug')).toBe('Fix the bug');
+  });
+
+  test('falls back to the plain text when the attachment list is too long', () => {
+    const names = Array.from({ length: 40 }, (_, i) => `file-${i}.pdf`);
+    expect(buildThreadTitle('Read these', names)).toBe('Read these');
+  });
+});
+
+describe('attachments reach every thread kind', () => {
+  const opts = {
+    model: 'sonnet',
+    mode: 'autoEdit',
+    fileReferences: [{ path: 'src/a.ts' }],
+    stagedUploads: ['s-1', 's-2'],
+  };
+
+  test('backlog (idle) threads keep @-mentions and staged uploads', () => {
+    // Regression: the idle payload used to drop fileReferences entirely.
+    const result = buildThreadPayload(baseInput({ forceIdle: true, opts }));
+    expect(result.kind).toBe('idle');
+    expect(result.payload).toMatchObject({
+      fileReferences: [{ path: 'src/a.ts' }],
+      stagedUploads: ['s-1', 's-2'],
+    });
+  });
+
+  test('normal threads forward staged upload ids', () => {
+    const result = buildThreadPayload(baseInput({ opts }));
+    expect(result.kind).toBe('normal');
+    expect(result.payload).toMatchObject({
+      fileReferences: [{ path: 'src/a.ts' }],
+      stagedUploads: ['s-1', 's-2'],
+    });
+  });
+
+  test('scratch threads forward staged upload ids', () => {
+    const result = buildThreadPayload(baseInput({ isScratch: true, projectId: null, opts }));
+    expect(result.kind).toBe('scratch');
+    expect(result.payload).toMatchObject({
+      fileReferences: [{ path: 'src/a.ts' }],
+      stagedUploads: ['s-1', 's-2'],
+    });
   });
 });
 

@@ -10,8 +10,10 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
+  releaseStagedUploads: vi.fn(),
   resolveAgentResources: vi.fn(),
   invalidateThreadCache: vi.fn(),
+  adoptStagedUploads: vi.fn(),
   tm: {
     getThread: vi.fn(),
     updateThread: vi.fn(async () => undefined),
@@ -70,10 +72,15 @@ vi.mock('../../services/ws-broker.js', () => ({
 vi.mock('../../utils/file-mentions.js', () => ({
   augmentPromptWithFiles: vi.fn(async (content: string) => content),
   augmentPromptWithSymbols: vi.fn(async (content: string) => content),
+  hydrateReferencedFiles: vi.fn(async (content: string) => content),
   stripInlineReferencedContent: vi.fn((content: string) => content),
 }));
 
 vi.mock('../../services/thread-manager.js', () => mocks.tm);
+vi.mock('../../services/thread-service/staged-uploads.js', () => ({
+  releaseStagedUploads: mocks.releaseStagedUploads,
+  adoptStagedUploads: mocks.adoptStagedUploads,
+}));
 vi.mock('../../services/remote-thread-data-client.js', () => ({
   invalidateThreadCache: mocks.invalidateThreadCache,
 }));
@@ -87,7 +94,10 @@ vi.mock('../../services/service-registry.js', () => ({
 }));
 
 import { DEFAULT_MODEL, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
-import { ok } from 'neverthrow';
+import { errAsync, ok, okAsync } from 'neverthrow';
+
+// Released on success; the create/send flows await it.
+mocks.releaseStagedUploads.mockImplementation(() => okAsync(undefined));
 
 import {
   startAgent,
@@ -112,6 +122,7 @@ import {
   deleteComment,
 } from '../../services/thread-service/messaging.js';
 import { wsBroker } from '../../services/ws-broker.js';
+import { augmentPromptWithFiles, hydrateReferencedFiles } from '../../utils/file-mentions.js';
 
 describe('respondPermissionRequest', () => {
   beforeEach(() => {
@@ -547,6 +558,36 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(mocks.tm.insertMessage).not.toHaveBeenCalled();
   });
 
+  test('starts an idle thread already moved to in_progress without duplicating its draft', async () => {
+    // Regression: a board move sets stage=in_progress while status stays idle;
+    // the start must still reuse the draft and its images.
+    const images = [
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'x' } },
+    ];
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-idle',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'idle',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: null,
+      worktreePath: null,
+      initialPrompt: 'go',
+    });
+    const draft = { id: 'msg-draft', role: 'user', content: 'go', images: JSON.stringify(images) };
+    mocks.tm.getThreadMessages.mockResolvedValue({ messages: [draft], hasMore: false });
+
+    const result = await sendMessage({ threadId: 't-idle', userId: 'u-1', content: 'go' });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.insertMessage).not.toHaveBeenCalled();
+    expect(mocks.tm.updateMessage).toHaveBeenCalledWith('msg-draft', expect.any(Object));
+    expect((vi.mocked(startAgent).mock.calls[0] as unknown[])[5]).toEqual(images);
+  });
+
   test('sets title from prompt when idle thread has no initialPrompt (live view draft)', async () => {
     mocks.tm.getThread.mockResolvedValue({
       id: 't-draft',
@@ -632,6 +673,75 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(mocks.projects.resolveProjectPath).not.toHaveBeenCalled();
     expect(mocks.projects.getProject).not.toHaveBeenCalled();
     expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('sendMessage — staged uploads', () => {
+  const stagedId = '0b6f4a8e-3c2d-4e5f-9a1b-2c3d4e5f6a7b';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.tm.getThreadMessages.mockResolvedValue({ messages: [], hasMore: false });
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-scratch',
+      userId: 'u-1',
+      projectId: '',
+      isScratch: true,
+      status: 'completed',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+  });
+
+  test('adopts staged files into the thread cwd and references them', async () => {
+    mocks.adoptStagedUploads.mockReturnValue(
+      okAsync([{ path: '.funny/uploads/t-scratch/spec.pdf' }]),
+    );
+
+    const result = await sendMessage({
+      threadId: 't-scratch',
+      userId: 'u-1',
+      content: 'read it',
+      stagedUploads: [stagedId],
+    });
+
+    expect(result.isOk()).toBe(true);
+    const call = mocks.adoptStagedUploads.mock.calls[0][0];
+    expect(call).toMatchObject({ userId: 'u-1', stagedIds: [stagedId], threadId: 't-scratch' });
+    expect(call.cwd).toMatch(/scratch[\\/]u-1[\\/]t-scratch$/);
+    expect(augmentPromptWithFiles).toHaveBeenCalledWith(
+      'read it',
+      [{ path: '.funny/uploads/t-scratch/spec.pdf' }],
+      call.cwd,
+    );
+    expect(mocks.releaseStagedUploads).toHaveBeenCalledWith('u-1', [stagedId]);
+  });
+
+  test('rejects with 400 and persists nothing when a staged file expired', async () => {
+    mocks.adoptStagedUploads.mockReturnValue(
+      errAsync({ type: 'BAD_REQUEST', message: 'An attached file expired or was not found.' }),
+    );
+
+    const result = await sendMessage({
+      threadId: 't-scratch',
+      userId: 'u-1',
+      content: 'read it',
+      stagedUploads: [stagedId],
+    });
+
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(mocks.tm.insertMessage).not.toHaveBeenCalled();
+    expect(mocks.releaseStagedUploads).not.toHaveBeenCalled();
+  });
+
+  test('resolves path-only references (a backlog manifest) before augmenting', async () => {
+    await sendMessage({ threadId: 't-scratch', userId: 'u-1', content: 'go' });
+    expect(hydrateReferencedFiles).toHaveBeenCalledWith('go', expect.any(String));
   });
 });
 

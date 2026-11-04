@@ -1,8 +1,8 @@
 import { GATEABLE_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 
+import { useRunnerProviders } from '@/data/runner-providers';
 import type { AdvertisedProvider } from '@/lib/api/system';
-import { useRunnerProvidersStore } from '@/stores/runner-providers-store';
 
 import type { ModelGroup } from './use-acp-prompt-models';
 
@@ -81,15 +81,7 @@ function markDisabled(g: ModelGroup, reason: 'not-installed' | 'no-runner'): Mod
  *    e.g. an older runner) does NOT gate — no regression.
  */
 export function useRunnerProviderGroups(baseGroups: ModelGroup[]): ModelGroup[] {
-  const providers = useRunnerProvidersStore((s) => s.providers);
-  const activeBuiltins = useRunnerProvidersStore((s) => s.activeBuiltins);
-  const availableProviders = useRunnerProvidersStore((s) => s.availableProviders);
-  const hasRunner = useRunnerProvidersStore((s) => s.hasRunner);
-  const fetch = useRunnerProvidersStore((s) => s.fetch);
-
-  useEffect(() => {
-    void fetch();
-  }, [fetch]);
+  const { providers, activeBuiltins, availableProviders, hasRunner } = useRunnerProviders();
 
   return useMemo(
     () =>

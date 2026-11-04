@@ -7,12 +7,12 @@ import type { ResultAsync } from 'neverthrow';
  *
  * query-core gives us in-flight de-duplication and freshness (`staleTime`)
  * for every list fetch, replacing the per-store `loading`/`loadedAt` maps
- * (`stale-fetch.ts`, the `pid|archived` in-flight map in `thread-store`).
+ * (the former `stale-fetch.ts` and the `pid|archived` in-flight map in `thread-store`).
  * Retries are off: failures surface exactly as they did before the data
  * layer existed, and callers decide whether to retry.
  */
 
-/** Default freshness period, matching `stale-fetch.ts`. */
+/** Default freshness period (as in the former `stale-fetch.ts`). */
 const DEFAULT_STALE_MS = 60_000;
 
 export function createDataQueryClient(): QueryClient {

@@ -10,7 +10,6 @@ import {
 } from '@/components/ui/command';
 import { colorFromName } from '@/components/ui/project-chip';
 import { useProjects } from '@/data/projects/hooks';
-import { useProjectStore } from '@/stores/project-store';
 
 interface Props {
   open: boolean;

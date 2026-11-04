@@ -3,7 +3,6 @@ import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { seedProjects } from '@/data/projects/testing';
-import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadPickerDialog } from './ThreadPickerDialog';

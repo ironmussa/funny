@@ -54,7 +54,7 @@ const DesktopModeSelect = memo(function DesktopModeSelect({
       </SelectTrigger>
       <SelectContent side="top" align="start">
         {modes.map((m) => (
-          <SelectItem key={m.value} value={m.value} size="xs">
+          <SelectItem key={m.value} value={m.value} size="sm">
             {m.label}
           </SelectItem>
         ))}
@@ -117,20 +117,20 @@ function ModelEffortSubmenu({
 }) {
   return (
     <DropdownMenuSub>
-      <DropdownMenuSubTrigger size="xs" data-testid={`prompt-model-option-${m.value}`}>
+      <DropdownMenuSubTrigger size="sm" data-testid={`prompt-model-option-${m.value}`}>
         <SelectLead active={isSelected} />
         <span className="truncate">{m.label}</span>
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
         <DropdownMenuSubContent
-          size="xs"
+          size="sm"
           collisionPadding={8}
           className="max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto overscroll-contain"
         >
           {efforts.map((e) => (
             <DropdownMenuItem
               key={e.value}
-              size="xs"
+              size="sm"
               data-testid={`prompt-effort-option-${m.value}-${e.value}`}
               onSelect={() => {
                 onChange(m.value);
@@ -179,7 +179,7 @@ function ModelOption({
 
   return (
     <DropdownMenuItem
-      size="xs"
+      size="sm"
       disabled={m.disabled}
       data-testid={`prompt-model-option-${m.value}`}
       onSelect={() => onChange(m.value)}
@@ -202,7 +202,7 @@ function ModelGroupSection({
   return (
     <DropdownMenuSub>
       <DropdownMenuSubTrigger
-        size="xs"
+        size="sm"
         data-testid={`prompt-provider-option-${group.provider}`}
         disabled={group.disabled && !canConfigureProvider(group)}
       >
@@ -212,13 +212,13 @@ function ModelGroupSection({
       </DropdownMenuSubTrigger>
       <DropdownMenuPortal>
         <DropdownMenuSubContent
-          size="xs"
+          size="sm"
           collisionPadding={8}
           className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto overscroll-contain"
         >
           {canConfigureProvider(group) && (
             <>
-              <DropdownMenuItem size="xs" onSelect={() => onSetup(group)}>
+              <DropdownMenuItem size="sm" onSelect={() => onSetup(group)}>
                 {group.disabledReason === 'not-installed'
                   ? 'Install / configure provider…'
                   : 'Configure provider…'}
@@ -292,7 +292,7 @@ const DesktopModelSelect = memo(function DesktopModelSelect({
           side="top"
           align="start"
           collisionPadding={8}
-          size="xs"
+          size="sm"
           className="max-h-[var(--radix-dropdown-menu-content-available-height)] min-w-44 overflow-y-auto overscroll-contain"
         >
           {groups.map((group) => (
@@ -335,7 +335,7 @@ const DesktopTemplateSelect = memo(function DesktopTemplateSelect({
   const builtinTemplates = templates.filter((t) => t.id.startsWith('__builtin__'));
 
   const renderItem = (tpl: AgentTemplate) => (
-    <SelectItem key={tpl.id} value={tpl.id} size="xs">
+    <SelectItem key={tpl.id} value={tpl.id} size="sm">
       <span className="flex items-center gap-1.5">
         {tpl.color && (
           <span
@@ -375,7 +375,7 @@ const DesktopTemplateSelect = memo(function DesktopTemplateSelect({
         </span>
       </SelectTrigger>
       <SelectContent side="top" align="start">
-        <SelectItem value="__none__" size="xs">
+        <SelectItem value="__none__" size="sm">
           No template
         </SelectItem>
         {userTemplates.length > 0 && (

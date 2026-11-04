@@ -57,12 +57,8 @@ vi.mock('@/stores/store-bridge', () => ({
   registerProjectStore: vi.fn(),
 }));
 
-vi.mock('@/stores/git-status-store', () => ({
-  useGitStatusStore: {
-    getState: () => ({
-      fetchForProject: mockFetchForProject,
-    }),
-  },
+vi.mock('@/data/git-status/actions', () => ({
+  fetchForProject: (...args: unknown[]) => mockFetchForProject(...args),
 }));
 
 import { readProjects } from '@/data/projects/read';

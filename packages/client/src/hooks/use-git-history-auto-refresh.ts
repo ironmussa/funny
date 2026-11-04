@@ -2,11 +2,11 @@ import { useMachine } from '@xstate/react';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { fromPromise } from 'xstate';
 
+import { useGitStatusForThread, useProjectGitStatus } from '@/data/git-status/hooks';
 import { useStableCallback } from '@/hooks/use-stable-callback';
 import { gitHistoryFingerprint } from '@/lib/git-history-fingerprint';
 import { metric } from '@/lib/telemetry';
 import { historyRefreshMachine } from '@/machines/history-refresh-machine';
-import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
 
 interface GitHistoryAutoRefreshOptions {
   effectiveThreadId: string | undefined;
@@ -60,9 +60,7 @@ export function useGitHistoryAutoRefresh({
   const contextKey = rawContextKey ?? '';
   const visible = !!rawVisible && enabled;
   const threadStatus = useGitStatusForThread(effectiveThreadId);
-  const projectStatus = useGitStatusStore((s) =>
-    !effectiveThreadId && projectModeId ? s.statusByProject[projectModeId] : undefined,
-  );
+  const projectStatus = useProjectGitStatus(effectiveThreadId ? null : projectModeId);
   const fingerprint = gitHistoryFingerprint(effectiveThreadId ? threadStatus : projectStatus);
 
   const stableRefresh = useStableCallback(refresh);

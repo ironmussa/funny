@@ -1,11 +1,9 @@
 import type { GitStatusInfo } from '@funny/shared';
 import { useEffect } from 'react';
 
-import {
-  type ProjectGitStatus,
-  useGitStatusForThread,
-  useGitStatusStore,
-} from '@/stores/git-status-store';
+import { fetchForThread, fetchProjectStatus } from '@/data/git-status/actions';
+import { useGitStatusForThread, useProjectGitStatus } from '@/data/git-status/hooks';
+import type { ProjectGitStatus } from '@/data/git-status/keys';
 
 export interface WorkingTreeStatus {
   /** Latest known status for the thread/project working tree (undefined until fetched). */
@@ -26,16 +24,14 @@ export function useWorkingTreeStatus(
   enabled: boolean,
 ): WorkingTreeStatus {
   const threadStatus = useGitStatusForThread(effectiveThreadId);
-  const projectStatus = useGitStatusStore((s) =>
-    !effectiveThreadId && projectModeId ? s.statusByProject[projectModeId] : undefined,
-  );
+  const projectStatus = useProjectGitStatus(effectiveThreadId ? null : projectModeId);
   const status = effectiveThreadId ? threadStatus : projectStatus;
 
-  // Cooldown-guarded inside the store, so this is safe to fire on every reveal.
+  // Reuses a fresh status (query freshness), so this is safe to fire on every reveal.
   useEffect(() => {
     if (!enabled) return;
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId);
+    if (effectiveThreadId) fetchForThread(effectiveThreadId);
+    else if (projectModeId) fetchProjectStatus(projectModeId);
   }, [enabled, effectiveThreadId, projectModeId]);
 
   const dirty =

@@ -2,9 +2,9 @@ import type { GitStatusInfo } from '@funny/shared';
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { seedGitStatus } from '@/data/git-status/testing';
 import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
 import { HISTORY_REFRESH_DEBOUNCE_MS } from '@/machines/history-refresh-machine';
-import { useGitStatusStore } from '@/stores/git-status-store';
 
 const BK = 'p1:main';
 const clean: GitStatusInfo = {
@@ -22,7 +22,7 @@ const clean: GitStatusInfo = {
 
 function setStatus(status: GitStatusInfo) {
   act(() => {
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: { [BK]: status },
       threadToBranchKey: { t1: BK },
     });
@@ -55,8 +55,10 @@ async function flushDebounce() {
 
 describe('useGitHistoryAutoRefresh', () => {
   beforeEach(() => {
-    vi.useFakeTimers();
-    useGitStatusStore.setState({ statusByBranch: {}, threadToBranchKey: {} });
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval', 'Date'],
+    });
+    seedGitStatus({ statusByBranch: {}, threadToBranchKey: {} });
   });
   afterEach(() => {
     vi.useRealTimers();

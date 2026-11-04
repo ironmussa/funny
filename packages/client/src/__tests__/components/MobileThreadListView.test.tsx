@@ -3,9 +3,9 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { ThreadListView } from '@/components/mobile/ThreadListView';
+import { seedGitStatus } from '@/data/git-status/testing';
 import { withProjects } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -43,7 +43,11 @@ vi.mock('@tanstack/react-virtual', () => ({
 const { threads } = vi.hoisted(() => ({ threads: [] as Thread[] }));
 vi.mock('@/lib/thread-selectors', () => ({ useThreadsForProject: () => threads }));
 
-const ensureStatus = vi.fn();
+const ensureStatus = vi.hoisted(() => vi.fn());
+vi.mock('@/data/git-status/actions', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  ensureStatusForThreads: ensureStatus,
+}));
 beforeEach(() => {
   threads.splice(0, threads.length, {
     id: 'thread-1',
@@ -63,10 +67,9 @@ beforeEach(() => {
       loadThreadsForProject: vi.fn(),
     }),
   );
-  useGitStatusStore.setState({
+  seedGitStatus({
     statusByBranch: {},
     threadToBranchKey: {},
-    ensureStatusForThreads: ensureStatus,
   });
 });
 
@@ -93,7 +96,7 @@ test('shows desktop metadata on mobile and updates diff stats when git status ar
   expect(ensureStatus).toHaveBeenCalledWith([threads[0]]);
 
   act(() =>
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: {
         'project-1:main': {
           threadId: 'thread-1',

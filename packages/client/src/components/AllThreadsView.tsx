@@ -8,6 +8,8 @@ import { AllThreadsContent } from '@/components/all-threads/AllThreadsContent';
 import { AllThreadsToolbar } from '@/components/all-threads/AllThreadsToolbar';
 import { normalize } from '@/components/ui/highlight-text';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useGitStatusMaps } from '@/data/git-status/hooks';
+import { statusBranchKeyForThread } from '@/data/git-status/keys';
 import { useProjects } from '@/data/projects/hooks';
 import { useLoadedThreads, useProjectListTotals } from '@/data/threads/hooks';
 import { readThreadRow } from '@/data/threads/read';
@@ -16,7 +18,6 @@ import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { buildThreadPath } from '@/navigation/thread-paths';
-import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -45,8 +46,7 @@ export function AllThreadsView() {
   const threadTotalByProject = useProjectListTotals();
   const loadMoreThreads = useThreadStore((s) => s.loadMoreThreads);
   const projects = useProjects();
-  const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
-  const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
+  const { statusByBranch, threadToBranchKey } = useGitStatusMaps();
   // Filters and sorts by git state across every loaded thread.
   useGitStatusScope({ all: true, projectIds: Object.keys(threadsByProject) });
 

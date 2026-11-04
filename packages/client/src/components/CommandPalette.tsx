@@ -15,11 +15,11 @@ import {
   CommandItem,
 } from '@/components/ui/command';
 import { EmptyState } from '@/components/ui/empty-state';
+import { fetchForProject } from '@/data/git-status/actions';
 import { useProjects } from '@/data/projects/hooks';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric } from '@/lib/telemetry';
 import { buildPath } from '@/lib/url';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -145,7 +145,7 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
     // close animation, which otherwise causes the palette to flash or stutter.
     setTimeout(() => {
       startNewThread(projectId);
-      useGitStatusStore.getState().fetchForProject(projectId);
+      fetchForProject(projectId);
       navigate(buildPath(`/projects/${projectId}`));
       // Re-select with revealIntent='start' AFTER startNewThread (which calls
       // selectProject without intent and would otherwise reset it to 'nearest')

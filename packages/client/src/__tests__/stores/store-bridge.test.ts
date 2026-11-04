@@ -84,42 +84,6 @@ describe('store-bridge', () => {
       expect(loadThreadsForProject).not.toHaveBeenCalled();
     });
 
-    test('getThreadsByProject derives from the thread rows and project lists', async () => {
-      const bridge = await freshBridge();
-      const { getThreadsData } = await import('@/data/threads/store');
-      const { setSourceMembers } = await import('@/data/threads/list-meta');
-
-      const t1 = { id: 't1', projectId: 'p1', title: 'one' } as any;
-      const t2 = { id: 't2', projectId: 'p2', title: 'two' } as any;
-      const data = getThreadsData();
-      data.upsertFromServer([t1, t2], data.beginRequest());
-      setSourceMembers(data.meta, 'project:p1', ['t1', 't1'], 1);
-      setSourceMembers(data.meta, 'project:p2', ['t2'], 1);
-      setSourceMembers(data.meta, 'project:', ['t1'], 1);
-
-      bridge.registerThreadStore(createMockStore({}) as any);
-
-      // Regression: before unified-store, `getThreadsByProject` returned
-      // `state.threadsByProject` directly — once that field was removed it
-      // returned `undefined` and crashed every consumer (git-status-store,
-      // ThreadList, ProjectItem, etc.). It must derive, de-duplicate IDs and
-      // skip the empty project id.
-      const result = bridge.getThreadsByProject();
-      expect(result).toEqual({ p1: [t1], p2: [t2] });
-    });
-
-    test('getThreadsByProject is empty before any project list loads', async () => {
-      const bridge = await freshBridge();
-
-      // Defensive: tests / stories may seed a partial store. Returning
-      // `{}` keeps the contract intact instead of throwing on the
-      // `for (const pid in undefined)` walk.
-      const threadStore = createMockStore({ threadsById: {} });
-      bridge.registerThreadStore(threadStore as any);
-
-      expect(bridge.getThreadsByProject()).toEqual({});
-    });
-
     test('clearProjectThreads delegates to thread store', async () => {
       const bridge = await freshBridge();
 

@@ -4,11 +4,11 @@ import { useEffect } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 
-import { withProjects } from '@/data/projects/testing';
+import { seedGitStatus } from '@/data/git-status/testing';
 import '@/i18n/config';
+import { withProjects } from '@/data/projects/testing';
 import { withThreadIndex } from '@/data/threads/testing';
 import { useCommitProgressStore } from '@/stores/commit-progress-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useReviewPaneStore } from '@/stores/review-pane-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -423,7 +423,7 @@ function seedStores(
     );
   }
 
-  useGitStatusStore.setState({
+  seedGitStatus({
     statusByBranch: {
       'proj-1:feat/review-pane': makeGitStatus({
         dirtyFileCount: hasChanges ? mockFiles.length : 0,
@@ -437,9 +437,6 @@ function seedStores(
     },
     threadToBranchKey: { 'thread-1': 'proj-1:feat/review-pane' },
     statusByProject: {},
-    loadingProjects: new Set(),
-    _loadingBranchKeys: new Set(),
-    _loadingProjectStatus: new Set(),
   });
 
   useUIStore.setState({

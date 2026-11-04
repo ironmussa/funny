@@ -9,6 +9,8 @@ import { CreatePRDialog, type PRDraft } from '@/components/commit-history/Create
 import { PublishRepoDialog } from '@/components/PublishRepoDialog';
 import { isDivergedBranchesError, PullStrategyDialog } from '@/components/pull-strategy-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { fetchProjectStatus, refreshGitStatus } from '@/data/git-status/actions';
+import { useGitStatusForThread, useProjectGitStatus } from '@/data/git-status/hooks';
 import { useProjectById } from '@/data/projects/hooks';
 import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
@@ -19,7 +21,6 @@ import { useThreadById } from '@/lib/thread-selectors';
 import { canLoadGitHistory } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
-import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadProjectId, useThreadSelector, useThreadStatus } from '@/stores/thread-context';
 
@@ -61,9 +62,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const threadBranch = useThreadSelector((t) => (t ? resolveThreadBranch(t) : undefined));
   const isAgentRunning = useThreadStatus() === 'running';
   const threadGitStatus = useGitStatusForThread(effectiveThreadId);
-  const projectGitStatus = useGitStatusStore((s) =>
-    projectModeId ? s.statusByProject[projectModeId] : undefined,
-  );
+  const projectGitStatus = useProjectGitStatus(projectModeId);
   const gitStatus = threadGitStatus ?? projectGitStatus;
   const isOnDifferentBranch =
     !!effectiveThreadId && !!baseBranch && !!threadBranch && threadBranch !== baseBranch;
@@ -295,8 +294,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       } else {
         toast.success(t('review.pullSuccess', 'Pulled successfully'));
       }
-      if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-      else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+      void refreshGitStatus(effectiveThreadId, projectModeId);
       refreshLog();
     },
     [effectiveThreadId, projectModeId, t, refreshLog],
@@ -349,8 +347,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       toast.success(t('review.fetchSuccess', 'Fetched from origin'));
     }
     setFetchInProgress(false);
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+    void refreshGitStatus(effectiveThreadId, projectModeId);
     refreshLog();
   }, [hasGitContext, fetchInProgress, effectiveThreadId, projectModeId, t, refreshLog]);
 
@@ -370,8 +367,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       setPushInProgress(false);
     } else {
       setPushInProgress(false);
-      if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-      else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+      void refreshGitStatus(effectiveThreadId, projectModeId);
       refreshLog();
     }
   }, [hasGitContext, pushInProgress, effectiveThreadId, projectModeId, t, refreshLog]);
@@ -479,7 +475,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
           setGithubBrowseBaseUrl(resolveGithubBrowseBaseUrl(repoUrl));
           setPublishDialogOpen(false);
           if (remoteCheckProjectId) {
-            useGitStatusStore.getState().fetchProjectStatus(remoteCheckProjectId, true);
+            fetchProjectStatus(remoteCheckProjectId, true);
           }
           toast.success(t('review.publishSuccess', 'Repository ready'));
           refreshLog();

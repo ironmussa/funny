@@ -2,9 +2,9 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { fetchForThread, fetchProjectStatus } from '@/data/git-status/actions';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
-import { useGitStatusStore } from '@/stores/git-status-store';
 
 /** Commit operations offered from the graph context menu + detail dialog that
  * run behind a confirmation dialog (they mutate the working branch / history). */
@@ -50,8 +50,8 @@ export function useCommitActions({
   const hasGitContext = !!(effectiveThreadId || projectModeId);
 
   const refreshAfterAction = useCallback(() => {
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+    if (effectiveThreadId) fetchForThread(effectiveThreadId, true);
+    else if (projectModeId) fetchProjectStatus(projectModeId, true);
     onAfterAction();
   }, [effectiveThreadId, projectModeId, onAfterAction]);
 

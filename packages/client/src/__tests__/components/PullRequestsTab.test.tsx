@@ -4,8 +4,9 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PullRequestsTab } from '@/components/PullRequestsTab';
+import { readGitStatusMaps } from '@/data/git-status/read';
+import { seedGitStatus } from '@/data/git-status/testing';
 import { withThreadIndex } from '@/data/threads/testing';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { usePRDetailStore } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
@@ -185,7 +186,7 @@ describe('PullRequestsTab', () => {
         activeThread: thread,
       } as any),
     );
-    useGitStatusStore.setState({
+    seedGitStatus({
       statusByBranch: { 'project-1:feature/pr-branch': makeStatus() },
       threadToBranchKey: { [thread.id]: 'project-1:feature/pr-branch' },
       statusByProject: {},
@@ -261,9 +262,7 @@ describe('PullRequestsTab', () => {
     );
 
     await waitFor(() => {
-      expect(
-        useGitStatusStore.getState().statusByBranch['project-1:feature/pr-branch']?.prNumber,
-      ).toBe(51);
+      expect(readGitStatusMaps().statusByBranch['project-1:feature/pr-branch']?.prNumber).toBe(51);
     });
   });
 

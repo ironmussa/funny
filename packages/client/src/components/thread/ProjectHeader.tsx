@@ -1,7 +1,7 @@
 import { memo, useEffect, type ReactNode } from 'react';
 
+import { fetchForThread, fetchProjectStatus } from '@/data/git-status/actions';
 import * as variant from '@/lib/thread-variant';
-import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadId, useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 
@@ -60,8 +60,6 @@ export const ProjectHeader = memo(function ProjectHeader({
   const activeThreadProjectId = useThreadProjectId();
   const activeThreadIsScratch = useThreadSelector((t) => variant.isScratch(t));
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const fetchForThread = useGitStatusStore((s) => s.fetchForThread);
-  const fetchProjectStatus = useGitStatusStore((s) => s.fetchProjectStatus);
 
   const projectId = activeThreadProjectId ?? selectedProjectId;
   // Fetch git status when activeThread changes

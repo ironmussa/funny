@@ -31,6 +31,8 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
+import { useGitStatusMaps } from '@/data/git-status/hooks';
+import { branchKey as computeBranchKey } from '@/data/git-status/keys';
 import { useProjects } from '@/data/projects/hooks';
 import { groupThreadsByStage } from '@/data/threads/views';
 import { useGitStatusScope } from '@/hooks/use-git-status-scope';
@@ -43,7 +45,6 @@ import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
-import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -348,8 +349,8 @@ export function KanbanView({
     newStage: ThreadStage;
     gitState: string;
   } | null>(null);
-  const _statusByBranch = useGitStatusStore((s) => s.statusByBranch);
-  const _threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
+  const { statusByBranch: _statusByBranch, threadToBranchKey: _threadToBranchKey } =
+    useGitStatusMaps();
   // Every card shows git state — request the whole project, not the sidebar rows.
   useGitStatusScope({
     all: true,

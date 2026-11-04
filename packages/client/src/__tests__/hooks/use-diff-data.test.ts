@@ -21,14 +21,7 @@ vi.mock('@/lib/api/git', () => ({
   gitApi: gitApiMock,
 }));
 
-vi.mock('@/stores/git-status-store', () => ({
-  useGitStatusStore: {
-    getState: () => ({
-      fetchForThread,
-      fetchProjectStatus: vi.fn(),
-    }),
-  },
-}));
+vi.mock('@/data/git-status/actions', () => ({ fetchForThread, fetchProjectStatus: vi.fn() }));
 
 vi.mock('@/hooks/use-auto-refresh-diff', () => ({
   useAutoRefreshDiff: vi.fn(),

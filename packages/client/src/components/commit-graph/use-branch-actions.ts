@@ -3,8 +3,8 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { fetchForThread, fetchProjectStatus } from '@/data/git-status/actions';
 import { api } from '@/lib/api';
-import { useGitStatusStore } from '@/stores/git-status-store';
 
 interface BranchActionsOptions {
   hasGitContext: boolean;
@@ -19,8 +19,8 @@ function forceRefreshGitStatus(
   threadId: string | undefined,
   projectModeId: string | null,
 ): Promise<void> {
-  if (threadId) return useGitStatusStore.getState().fetchForThread(threadId, true);
-  if (projectModeId) return useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+  if (threadId) return fetchForThread(threadId, true);
+  if (projectModeId) return fetchProjectStatus(projectModeId, true);
   return Promise.resolve();
 }
 

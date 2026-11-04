@@ -15,7 +15,7 @@ import { useProjectById } from '@/data/projects/hooks';
 import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
 import { useGitRemoteActions } from '@/hooks/use-git-remote-actions';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
-import { api, type PullStrategy } from '@/lib/api';
+import { api } from '@/lib/api';
 import { mergeLogEntriesByHash, uniqueLogEntriesByHash } from '@/lib/git-log-merge';
 import { githubBrowseBaseUrl as resolveGithubBrowseBaseUrl } from '@/lib/github-url';
 import { useThreadById } from '@/lib/thread-selectors';

@@ -20,6 +20,7 @@ import { useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
 import { readProjects } from '@/data/projects/read';
+import { resyncDataLayer } from '@/data/resync';
 import { listedProjectIds, readThreadIndex, type ThreadIndexSnapshot } from '@/data/threads/read';
 import { parseRoute } from '@/hooks/route-parser';
 import { createClientLogger } from '@/lib/client-logger';
@@ -467,7 +468,8 @@ const realtimeController = createRealtimeController({
   clock: Date.now,
   actions: {
     refreshForFocus: refreshThreadsOnFocus,
-    refreshForReconnect: () => useThreadStore.getState().refreshAllLoadedThreads(),
+    refreshForReconnect: () =>
+      Promise.all([useThreadStore.getState().refreshAllLoadedThreads(), resyncDataLayer()]),
     skipped(reason, cause) {
       if (cause === 'route') {
         wsLog.debug('Skipping focus resync — route does not display thread data', { reason });

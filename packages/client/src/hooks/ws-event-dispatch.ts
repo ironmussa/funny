@@ -9,6 +9,13 @@ import type { Socket } from 'socket.io-client';
 
 import { handleRunCompleted, handleRunStarted, handleRunUpdated } from '@/data/automations/events';
 import { applyJobEvent, applyWatcherEvent } from '@/data/background/loaders';
+import { applyCommentAdded, applyCommentDeleted } from '@/data/comments/store';
+import {
+  applyRunClaimed,
+  applyRunDispatched,
+  applyRunReleased,
+  applyRunRetryQueued,
+} from '@/data/scheduler/store';
 import { readThreadRow } from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
 import { showAgentNotification } from '@/hooks/use-notifications';
@@ -449,30 +456,12 @@ function withPipelineApprovalStore(apply: (store: PipelineApprovalStoreState) =>
   });
 }
 
-type SchedulerStoreState = ReturnType<
-  (typeof import('@/stores/scheduler-store'))['useSchedulerStore']['getState']
->;
-function withSchedulerStore(apply: (store: SchedulerStoreState) => void): void {
-  import('@/stores/scheduler-store').then(({ useSchedulerStore }) => {
-    apply(useSchedulerStore.getState());
-  });
-}
-
 type PresenceStoreState = ReturnType<
   (typeof import('@/stores/presence-store'))['usePresenceStore']['getState']
 >;
 function withPresenceStore(apply: (store: PresenceStoreState) => void): void {
   import('@/stores/presence-store').then(({ usePresenceStore }) => {
     apply(usePresenceStore.getState());
-  });
-}
-
-type CommentStoreState = ReturnType<
-  (typeof import('@/stores/comment-store'))['useCommentStore']['getState']
->;
-function withCommentStore(apply: (store: CommentStoreState) => void): void {
-  import('@/stores/comment-store').then(({ useCommentStore }) => {
-    apply(useCommentStore.getState());
   });
 }
 
@@ -491,14 +480,14 @@ function handleThreadComment(threadId: string, data: any): void {
   // A new comment was posted — append it live for every current viewer and
   // bump the header badge. See thread-sharing design D9.
   if (data.comment) {
-    withCommentStore((store) => store.applyAdded(threadId, data.comment));
+    applyCommentAdded(data.comment);
     adjustCommentCount(threadId, +1);
   }
 }
 
 function handleThreadCommentDeleted(threadId: string, data: any): void {
   if (data.commentId) {
-    withCommentStore((store) => store.applyDeleted(threadId, data.commentId));
+    applyCommentDeleted(data.commentId);
     adjustCommentCount(threadId, -1);
     return;
   }
@@ -686,16 +675,16 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
     });
   },
   'thread:claimed': (threadId, data) => {
-    withSchedulerStore((store) => store.handleClaimed(threadId, data));
+    applyRunClaimed(threadId, data);
   },
   'thread:dispatched': (threadId, data) => {
-    withSchedulerStore((store) => store.handleDispatched(threadId, data));
+    applyRunDispatched(threadId, data);
   },
   'thread:retry-queued': (threadId, data) => {
-    withSchedulerStore((store) => store.handleRetryQueued(threadId, data));
+    applyRunRetryQueued(threadId, data);
   },
   'thread:released': (threadId) => {
-    withSchedulerStore((store) => store.handleReleased(threadId));
+    applyRunReleased(threadId);
   },
   'thread:created': handleThreadCreated,
   'thread:comment': handleThreadComment,

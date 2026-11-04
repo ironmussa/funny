@@ -3,15 +3,15 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { getRunsData } from '@/data/automations/store';
 import { seedAutomations } from '@/data/automations/testing';
 import { getJobsData, getWatchersData } from '@/data/background/store';
+import { getCommentsData } from '@/data/comments/store';
+import { getSchedulerData } from '@/data/scheduler/store';
 import { readThreadIndex } from '@/data/threads/read';
 import { withThreadIndex } from '@/data/threads/testing';
 import { clearWSDispatchState, dispatchRealtimeEvent } from '@/hooks/ws-event-dispatch';
-import { useCommentStore } from '@/stores/comment-store';
 import { useNativeGitStore } from '@/stores/native-git-store';
 import { usePipelineApprovalStore } from '@/stores/pipeline-approval-store';
 import { usePipelineStore } from '@/stores/pipeline-store';
 import { usePresenceStore } from '@/stores/presence-store';
-import { useSchedulerStore } from '@/stores/scheduler-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { setAppNavigate } from '@/stores/thread-store-internals';
 import { useWorkflowRunStore } from '@/stores/workflow-run-store';
@@ -95,23 +95,20 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     });
   });
 
-  test('scheduler events route to the scheduler store', async () => {
-    const s = spyActions(useSchedulerStore, [
-      'handleClaimed',
-      'handleDispatched',
-      'handleRetryQueued',
-      'handleReleased',
-    ]);
-    dispatchRealtimeEvent('thread:claimed', 't1', { x: 1 });
-    dispatchRealtimeEvent('thread:dispatched', 't1', { x: 2 });
-    dispatchRealtimeEvent('thread:retry-queued', 't1', { x: 3 });
-    dispatchRealtimeEvent('thread:released', 't1', {});
-    await vi.waitFor(() => {
-      expect(s.handleClaimed).toHaveBeenCalledWith('t1', { x: 1 });
-      expect(s.handleDispatched).toHaveBeenCalledWith('t1', { x: 2 });
-      expect(s.handleRetryQueued).toHaveBeenCalledWith('t1', { x: 3 });
-      expect(s.handleReleased).toHaveBeenCalledWith('t1');
+  test('scheduler events patch the run row and release removes it', () => {
+    const runs = getSchedulerData();
+    dispatchRealtimeEvent('thread:claimed', 't1', { userId: 'u1', attempt: 1 });
+    expect(runs.getSynced('t1')).toMatchObject({ userId: 'u1', attempt: 1 });
+    dispatchRealtimeEvent('thread:dispatched', 't1', { pipelineRunId: 'pr1' });
+    dispatchRealtimeEvent('thread:retry-queued', 't1', { attempt: 2, dueAtMs: 5, error: 'x' });
+    expect(runs.getSynced('t1')).toMatchObject({
+      pipelineRunId: 'pr1',
+      attempt: 2,
+      nextRetryAtMs: 5,
+      lastError: 'x',
     });
+    dispatchRealtimeEvent('thread:released', 't1', {});
+    expect(runs.getSynced('t1')).toBeUndefined();
   });
 
   test('presence events route to the presence store', async () => {
@@ -161,22 +158,19 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     });
   });
 
-  test('comment events update the comment store and the thread badge', async () => {
-    const s = spyActions(useCommentStore, ['applyAdded', 'applyDeleted']);
+  test('comment events update the comments and the thread badge in the same tick', () => {
     useThreadStore.setState(
       withThreadIndex({
         threadsById: { t1: { id: 't1', projectId: 'p1', commentCount: 1 } as any },
       }),
     );
 
-    dispatchRealtimeEvent('thread:comment', 't1', { comment: { id: 'c1' } });
+    dispatchRealtimeEvent('thread:comment', 't1', { comment: { id: 'c1', threadId: 't1' } });
     expect(readThreadIndex().threadsById.t1?.commentCount).toBe(2);
+    expect(getCommentsData().getSynced('c1')).toBeDefined();
     dispatchRealtimeEvent('thread:comment_deleted', 't1', { commentId: 'c1' });
     expect(readThreadIndex().threadsById.t1?.commentCount).toBe(1);
-    await vi.waitFor(() => {
-      expect(s.applyAdded).toHaveBeenCalledWith('t1', { id: 'c1' });
-      expect(s.applyDeleted).toHaveBeenCalledWith('t1', 'c1');
-    });
+    expect(getCommentsData().getSynced('c1')).toBeUndefined();
   });
 
   test('native-git build events route by type', async () => {

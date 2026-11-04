@@ -1496,6 +1496,7 @@
     "automationUpdateFailed": "Couldn't update the automation. Your change was undone.",
     "automationCreateFailed": "Couldn't create the automation.",
     "automationTriggerFailed": "Couldn't start the automation run.",
+    "commentDeleteFailed": "Couldn't delete the comment.",
     "projectUpdateFailed": "Couldn't update the project. Your change was undone."
   },
   "agentResources": {

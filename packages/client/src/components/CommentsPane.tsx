@@ -8,13 +8,14 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Textarea } from '@/components/ui/textarea';
+import { useThreadComments } from '@/data/comments/hooks';
+import { deleteComment, postComment } from '@/data/comments/store';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useThreadById } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { canCommentShare } from '@/lib/thread-variant';
 import { useAuthStore } from '@/stores/auth-store';
-import { useCommentStore } from '@/stores/comment-store';
 import { useThreadSelector } from '@/stores/thread-context';
 
 /**
@@ -23,7 +24,7 @@ import { useThreadSelector } from '@/stores/thread-context';
  * from the 💬 header icon, the sibling of the file-manager pane. Both owner and
  * sharee can read and post; only the owner can delete (mirrors the server's
  * `requireThreadOwner` gate on DELETE). Live appends arrive via the
- * `thread:comment` WS event through the comment-store.
+ * `thread:comment` WS event into the comments collection (`data/comments`).
  */
 export function CommentsPane() {
   const { t } = useTranslation();
@@ -39,19 +40,12 @@ export function CommentsPane() {
   // owner and comment/editor sharees can post.
   const canComment = canCommentShare(thread, selfId);
 
-  const comments = useCommentStore((s) => (threadId ? (s.byThread[threadId] ?? null) : null));
-  const loading = useCommentStore((s) => (threadId ? !!s.loadingByThread[threadId] : false));
-  const fetch = useCommentStore((s) => s.fetch);
-  const post = useCommentStore((s) => s.post);
-  const remove = useCommentStore((s) => s.remove);
+  // Fetches the thread's comments on open; realtime events keep them live.
+  const { comments, loading } = useThreadComments(threadId);
 
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const bottomRef = useRef<HTMLDivElement | null>(null);
-
-  useEffect(() => {
-    if (threadId) void fetch(threadId);
-  }, [threadId, fetch]);
 
   // Keep the newest comment in view as the list grows.
   const count = comments?.length ?? 0;
@@ -64,12 +58,9 @@ export function CommentsPane() {
   const submit = async () => {
     if (!canSend || !threadId) return;
     setSending(true);
-    try {
-      const ok = await post(threadId, draft);
-      if (ok) setDraft('');
-    } finally {
-      setSending(false);
-    }
+    const posted = await postComment(threadId, draft).unwrapOr(null);
+    setSending(false);
+    if (posted) setDraft('');
   };
 
   const header = useMemo(
@@ -137,7 +128,7 @@ export function CommentsPane() {
                           variant="ghost"
                           size="icon-sm"
                           className="text-muted-foreground hover:text-status-danger ml-auto h-6 w-6 shrink-0 opacity-0 group-hover:opacity-100"
-                          onClick={() => void remove(threadId, c.id)}
+                          onClick={() => void deleteComment(threadId, c.id)}
                           data-testid={`comment-delete-${c.id}`}
                           aria-label={t('comments.delete', 'Delete comment')}
                         >

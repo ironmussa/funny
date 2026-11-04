@@ -1489,6 +1489,7 @@
     "automationUpdateFailed": "No se pudo actualizar la automatización. Se deshizo tu cambio.",
     "automationCreateFailed": "No se pudo crear la automatización.",
     "automationTriggerFailed": "No se pudo iniciar la ejecución de la automatización.",
+    "commentDeleteFailed": "No se pudo eliminar el comentario.",
     "projectUpdateFailed": "No se pudo actualizar el proyecto. Se deshizo tu cambio."
   },
   "agentResources": {

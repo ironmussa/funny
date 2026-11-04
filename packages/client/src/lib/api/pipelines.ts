@@ -3,6 +3,15 @@ import type { Pipeline, PipelineRun } from '@funny/shared';
 import { request } from './_core';
 
 export const pipelinesApi = {
+  /** Answer a pipeline approval gate (human-in-the-loop). */
+  respondToApproval: (
+    approvalId: string,
+    body: { decision: 'approve' | 'reject'; text?: string },
+  ) =>
+    request<{ ok: boolean }>(`/pipelines/approvals/${encodeURIComponent(approvalId)}/respond`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   listPipelines: (projectId: string) => request<Pipeline[]>(`/pipelines/project/${projectId}`),
   createPipeline: (data: {
     projectId: string;

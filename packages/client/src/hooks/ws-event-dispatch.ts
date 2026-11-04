@@ -7,6 +7,7 @@ import {
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
 
+import { applyApprovalRequested, applyApprovalResolved } from '@/data/approvals/store';
 import { handleRunCompleted, handleRunStarted, handleRunUpdated } from '@/data/automations/events';
 import { applyJobEvent, applyWatcherEvent } from '@/data/background/loaders';
 import { applyCommentAdded, applyCommentDeleted } from '@/data/comments/store';
@@ -447,15 +448,6 @@ function withPipelineStore(apply: (store: PipelineStoreState) => void): void {
   });
 }
 
-type PipelineApprovalStoreState = ReturnType<
-  (typeof import('@/stores/pipeline-approval-store'))['usePipelineApprovalStore']['getState']
->;
-function withPipelineApprovalStore(apply: (store: PipelineApprovalStoreState) => void): void {
-  import('@/stores/pipeline-approval-store').then(({ usePipelineApprovalStore }) => {
-    apply(usePipelineApprovalStore.getState());
-  });
-}
-
 type PresenceStoreState = ReturnType<
   (typeof import('@/stores/presence-store'))['usePresenceStore']['getState']
 >;
@@ -664,10 +656,10 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
     withPipelineStore((store) => store.handlePipelineCompleted(data));
   },
   'pipeline:approval_requested': (_threadId, data) => {
-    withPipelineApprovalStore((store) => store.handleApprovalRequested(data));
+    applyApprovalRequested(data);
   },
   'pipeline:approval_resolved': (_threadId, data) => {
-    withPipelineApprovalStore((store) => store.handleApprovalResolved(data));
+    applyApprovalResolved(data);
   },
   'workflow:node_state': (_threadId, data) => {
     import('@/stores/workflow-run-store').then(({ useWorkflowRunStore }) => {

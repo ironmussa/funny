@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
+import { getApprovalsData } from '@/data/approvals/store';
 import { getRunsData } from '@/data/automations/store';
 import { seedAutomations } from '@/data/automations/testing';
 import { getJobsData, getWatchersData } from '@/data/background/store';
@@ -9,7 +10,6 @@ import { readThreadIndex } from '@/data/threads/read';
 import { withThreadIndex } from '@/data/threads/testing';
 import { clearWSDispatchState, dispatchRealtimeEvent } from '@/hooks/ws-event-dispatch';
 import { useNativeGitStore } from '@/stores/native-git-store';
-import { usePipelineApprovalStore } from '@/stores/pipeline-approval-store';
 import { usePipelineStore } from '@/stores/pipeline-store';
 import { usePresenceStore } from '@/stores/presence-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -74,23 +74,22 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
       'handlePipelineStageUpdate',
       'handlePipelineCompleted',
     ]);
-    const a = spyActions(usePipelineApprovalStore, [
-      'handleApprovalRequested',
-      'handleApprovalResolved',
-    ]);
     const wf = spyActions(useWorkflowRunStore, ['handleNodeState']);
     dispatchRealtimeEvent('pipeline:run_started', 't1', { a: 1 });
     dispatchRealtimeEvent('pipeline:stage_update', 't1', { a: 2 });
     dispatchRealtimeEvent('pipeline:run_completed', 't1', { a: 3 });
-    dispatchRealtimeEvent('pipeline:approval_requested', 't1', { b: 1 });
-    dispatchRealtimeEvent('pipeline:approval_resolved', 't1', { b: 2 });
+    dispatchRealtimeEvent('pipeline:approval_requested', 't1', {
+      approvalId: 'ap1',
+      requestedAt: '2026-01-01',
+    });
+    expect(getApprovalsData().getSynced('ap1')).toBeDefined();
+    dispatchRealtimeEvent('pipeline:approval_resolved', 't1', { approvalId: 'ap1' });
+    expect(getApprovalsData().getSynced('ap1')).toBeUndefined();
     dispatchRealtimeEvent('workflow:node_state', 't1', { c: 1 });
     await vi.waitFor(() => {
       expect(p.handlePipelineStarted).toHaveBeenCalledWith({ a: 1 });
       expect(p.handlePipelineStageUpdate).toHaveBeenCalledWith({ a: 2 });
       expect(p.handlePipelineCompleted).toHaveBeenCalledWith({ a: 3 });
-      expect(a.handleApprovalRequested).toHaveBeenCalledWith({ b: 1 });
-      expect(a.handleApprovalResolved).toHaveBeenCalledWith({ b: 2 });
       expect(wf.handleNodeState).toHaveBeenCalledWith({ c: 1 });
     });
   });

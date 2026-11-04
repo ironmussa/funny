@@ -254,12 +254,12 @@ describe('gitSyncStateConfig', () => {
     expect(gitSyncStateConfig.clean.className).toContain('text-muted-foreground');
   });
 
-  test('pushed has muted foreground class', () => {
-    expect(gitSyncStateConfig.pushed.className).toContain('text-muted-foreground');
+  test('pushed has green class', () => {
+    expect(gitSyncStateConfig.pushed.className).toContain('text-green-500');
   });
 
-  test('merged has muted foreground class', () => {
-    expect(gitSyncStateConfig.merged.className).toContain('text-muted-foreground');
+  test('merged has purple class', () => {
+    expect(gitSyncStateConfig.merged.className).toContain('text-purple-400');
   });
 });
 

@@ -1,4 +1,4 @@
-import type { Thread } from '@funny/shared';
+import type { GitStatusInfo, Thread } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -84,5 +84,63 @@ describe('ThreadItem', () => {
 
     expect(onRename).not.toHaveBeenCalled();
     expect(input).toBeInTheDocument();
+  });
+
+  test('shows git state as an icon instead of the diff-stats chip', () => {
+    const gitStatus: GitStatusInfo = {
+      threadId: 't-1',
+      branchKey: 'p-1:feat/x',
+      state: 'dirty',
+      dirtyFileCount: 21,
+      unpushedCommitCount: 0,
+      unpulledCommitCount: 0,
+      hasRemoteBranch: false,
+      isMergedIntoBase: false,
+      linesAdded: 1218,
+      linesDeleted: 801,
+    };
+    renderWithProviders(
+      <ThreadItem
+        thread={makeThread({
+          id: 't-1',
+          projectId: 'p-1',
+          isScratch: false,
+          status: 'idle',
+          branch: 'feat/x',
+        })}
+        projectPath="/repo"
+        isSelected={false}
+        onSelect={vi.fn()}
+        gitStatus={gitStatus}
+      />,
+    );
+
+    expect(screen.getByTestId('thread-git-state-t-1')).toHaveTextContent('21');
+    expect(screen.queryByText('+1218')).not.toBeInTheDocument();
+  });
+
+  test('shows no git state icon for a clean tree', () => {
+    renderWithProviders(
+      <ThreadItem
+        thread={makeThread({ id: 't-2', projectId: 'p-1', isScratch: false, status: 'idle' })}
+        projectPath="/repo"
+        isSelected={false}
+        onSelect={vi.fn()}
+        gitStatus={{
+          threadId: 't-2',
+          branchKey: 'p-1:main',
+          state: 'clean',
+          dirtyFileCount: 0,
+          unpushedCommitCount: 0,
+          unpulledCommitCount: 0,
+          hasRemoteBranch: true,
+          isMergedIntoBase: false,
+          linesAdded: 0,
+          linesDeleted: 0,
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId('thread-git-state-t-2')).not.toBeInTheDocument();
   });
 });

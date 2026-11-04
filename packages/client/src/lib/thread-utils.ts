@@ -1,3 +1,4 @@
+import { formatCompactElapsed } from '@funny/client-core';
 import type { ThreadStatus, GitSyncState, ThreadStage } from '@funny/shared';
 import {
   Clock,
@@ -7,6 +8,7 @@ import {
   XCircle,
   AlertTriangle,
   CircleDot,
+  FileDiff,
   GitCommitVertical,
   GitPullRequestArrow,
   GitMerge,
@@ -93,35 +95,25 @@ export function timeAgo(
 export function shortTimeAgo(dateStr: string | number, now = Date.now()): string {
   const ms = new Date(dateStr).getTime();
   if (isNaN(ms)) return String(dateStr);
-  const seconds = Math.max(0, Math.floor((now - ms) / 1000));
-  if (seconds < 60) return 'now';
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d`;
-  const months = Math.floor(days / 30);
-  if (months < 12) return `${months}mo`;
-  return `${Math.floor(months / 12)}y`;
+  return formatCompactElapsed(ms, now);
 }
 
 export const gitSyncStateConfig: Record<
   GitSyncState,
   { icon: typeof Clock; className: string; labelKey: string }
 > = {
-  dirty: { icon: CircleDot, className: 'text-muted-foreground', labelKey: 'gitStatus.dirty' },
+  dirty: { icon: FileDiff, className: 'text-muted-foreground', labelKey: 'gitStatus.dirty' },
   unpushed: {
     icon: GitCommitVertical,
-    className: 'text-muted-foreground',
+    className: 'text-blue-400',
     labelKey: 'gitStatus.unpushed',
   },
   pushed: {
     icon: GitPullRequestArrow,
-    className: 'text-muted-foreground',
+    className: 'text-green-500',
     labelKey: 'gitStatus.pushed',
   },
-  merged: { icon: GitMerge, className: 'text-muted-foreground', labelKey: 'gitStatus.merged' },
+  merged: { icon: GitMerge, className: 'text-purple-400', labelKey: 'gitStatus.merged' },
   clean: { icon: CheckCircle2, className: 'text-muted-foreground', labelKey: 'gitStatus.clean' },
 };
 

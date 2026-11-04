@@ -23,6 +23,8 @@ export interface ThreadPowerlineProps {
   projectTooltip?: string;
   /** Git status for DiffStats chip — omit to hide */
   gitStatus?: GitStatusInfo;
+  /** Render the DiffStats chip (default true). The sidebar shows a git-state icon instead. */
+  showDiffStats?: boolean;
   /** DiffStats size variant */
   diffStatsSize?: 'sm' | 'xs' | 'xxs';
   /** PR badge size variant — rendered when gitStatus carries PR metadata */
@@ -60,6 +62,7 @@ export function ThreadPowerline({
   projectColor,
   projectTooltip,
   gitStatus,
+  showDiffStats = true,
   diffStatsSize = 'xs',
   prBadgeSize = 'compact',
   prBadgeTestId,
@@ -70,15 +73,8 @@ export function ThreadPowerline({
   ...props
 }: ThreadPowerlineProps) {
   const { t } = useTranslation();
-  const isWorktree = thread.mode === 'worktree';
-  const effectiveBranch = resolveThreadBranch(thread);
-  const branchName =
-    isWorktree && thread.baseBranch ? thread.baseBranch : effectiveBranch || thread.baseBranch;
-  const worktreeBranchLabel = isWorktree ? (effectiveBranch ?? '') : '';
-  const worktreePath = thread.worktreePath ?? '';
-  const worktreePathShort = worktreePath
-    ? worktreePath.split('/').filter(Boolean).pop() || worktreePath
-    : '';
+  const { isWorktree, branchName, worktreeBranchLabel, worktreePath, worktreePathShort } =
+    resolveBranchLabels(thread);
 
   const rawColor = projectColor || (projectName ? colorFromName(projectName) : '#52525b');
   const baseColor = darkenHex(rawColor, 0.1);
@@ -150,14 +146,11 @@ export function ThreadPowerline({
     t,
   ]);
 
-  const hasDiffStats =
-    gitStatus &&
-    gitStatus.state !== 'clean' &&
-    (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0 || gitStatus.dirtyFileCount > 0);
+  const diffStatus = showDiffStats && hasVisibleDiffStats(gitStatus) ? gitStatus : undefined;
 
   const hasPR = !!gitStatus?.prNumber;
 
-  if (segments.length === 0 && !hasDiffStats && !hasPR) return null;
+  if (segments.length === 0 && !diffStatus && !hasPR) return null;
 
   return (
     <div className={cn('flex min-w-0 items-center gap-1.5', className)}>
@@ -170,30 +163,14 @@ export function ThreadPowerline({
           data-testid={props['data-testid']}
         />
       )}
-      {hasDiffStats &&
-        (onDiffStatsClick ? (
-          <button
-            type="button"
-            onClick={onDiffStatsClick}
-            className="focus-visible:ring-ring shrink-0 rounded-lg transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:outline-none"
-            aria-label={t('review.title')}
-            data-testid="prompt-powerline-diffstats"
-          >
-            <DiffStats
-              linesAdded={gitStatus.linesAdded}
-              linesDeleted={gitStatus.linesDeleted}
-              dirtyFileCount={gitStatus.dirtyFileCount}
-              size={diffStatsSize}
-            />
-          </button>
-        ) : (
-          <DiffStats
-            linesAdded={gitStatus.linesAdded}
-            linesDeleted={gitStatus.linesDeleted}
-            dirtyFileCount={gitStatus.dirtyFileCount}
-            size={diffStatsSize}
-          />
-        ))}
+      {diffStatus && (
+        <PowerlineDiffStats
+          gitStatus={diffStatus}
+          size={diffStatsSize}
+          onClick={onDiffStatsClick}
+          label={t('review.title')}
+        />
+      )}
       {hasPR && gitStatus && (
         <PRBadge
           prNumber={gitStatus.prNumber!}
@@ -204,5 +181,62 @@ export function ThreadPowerline({
         />
       )}
     </div>
+  );
+}
+
+/** Branch, worktree-branch and worktree-path labels shown in the powerline. */
+function resolveBranchLabels(thread: Thread) {
+  const isWorktree = thread.mode === 'worktree';
+  const effectiveBranch = resolveThreadBranch(thread);
+  const branchName =
+    isWorktree && thread.baseBranch ? thread.baseBranch : effectiveBranch || thread.baseBranch;
+  const worktreePath = thread.worktreePath ?? '';
+  return {
+    isWorktree,
+    branchName,
+    worktreeBranchLabel: isWorktree ? (effectiveBranch ?? '') : '',
+    worktreePath,
+    worktreePathShort: worktreePath
+      ? worktreePath.split('/').filter(Boolean).pop() || worktreePath
+      : '',
+  };
+}
+
+function hasVisibleDiffStats(gitStatus: GitStatusInfo | undefined): gitStatus is GitStatusInfo {
+  if (!gitStatus || gitStatus.state === 'clean') return false;
+  return gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0 || gitStatus.dirtyFileCount > 0;
+}
+
+/** The DiffStats chip, as a button when the powerline has a click target. */
+function PowerlineDiffStats({
+  gitStatus,
+  size,
+  onClick,
+  label,
+}: {
+  gitStatus: GitStatusInfo;
+  size: ThreadPowerlineProps['diffStatsSize'];
+  onClick?: ThreadPowerlineProps['onDiffStatsClick'];
+  label: string;
+}) {
+  const stats = (
+    <DiffStats
+      linesAdded={gitStatus.linesAdded}
+      linesDeleted={gitStatus.linesDeleted}
+      dirtyFileCount={gitStatus.dirtyFileCount}
+      size={size}
+    />
+  );
+  if (!onClick) return stats;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="focus-visible:ring-ring shrink-0 rounded-lg transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:outline-none"
+      aria-label={label}
+      data-testid="prompt-powerline-diffstats"
+    >
+      {stats}
+    </button>
   );
 }

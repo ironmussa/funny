@@ -8,6 +8,7 @@ import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAgentTemplate } from '@/data/templates/hooks';
+import { gitSyncStateConfig } from '@/lib/thread-utils';
 import { canShowPowerline, isScratch } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 
@@ -117,6 +118,57 @@ function hasGitDiffStats(gitStatus?: GitStatusInfo): boolean {
   return gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0 || gitStatus.dirtyFileCount > 0;
 }
 
+/**
+ * Git state of the thread as one icon (dirty → file-diff + file count, unpushed →
+ * blue commit, pushed → green PR arrow, merged → purple merge). The file/line
+ * counts live in the tooltip instead of an always-visible chip, so rows that
+ * share a working tree don't repeat the same numbers.
+ */
+function GitStateIcon({ threadId, gitStatus }: { threadId: string; gitStatus: GitStatusInfo }) {
+  const { t } = useTranslation();
+  // Clean trees show nothing; a PR badge already conveys pushed/merged.
+  if (gitStatus.state === 'clean') return null;
+  if (gitStatus.prNumber && (gitStatus.state === 'pushed' || gitStatus.state === 'merged')) {
+    return null;
+  }
+  const cfg = gitSyncStateConfig[gitStatus.state];
+  const Icon = cfg.icon;
+  const hasStats = hasGitDiffStats(gitStatus);
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          className={cn(
+            'ml-auto flex h-3.5 shrink-0 items-center gap-0.5 text-xs leading-none',
+            cfg.className,
+          )}
+          data-testid={`thread-git-state-${threadId}`}
+        >
+          <Icon className="icon-xs" />
+          {gitStatus.state === 'dirty' && gitStatus.dirtyFileCount > 0 && (
+            <span className="font-mono">{gitStatus.dirtyFileCount}</span>
+          )}
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        <div>{t(cfg.labelKey)}</div>
+        {hasStats && (
+          <div className="font-mono">
+            {gitStatus.dirtyFileCount > 0 && (
+              <span className="text-muted-foreground">
+                {t('gitStats.dirtyFiles', { count: gitStatus.dirtyFileCount })}
+                {' · '}
+              </span>
+            )}
+            <span className="text-diff-added">+{gitStatus.linesAdded}</span>{' '}
+            <span className="text-diff-removed">-{gitStatus.linesDeleted}</span>
+          </div>
+        )}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 type SnippetKind = 'highlight' | 'text' | 'launching' | 'backlog' | null;
 
 /**
@@ -205,30 +257,35 @@ interface ThreadItemMetaRowProps {
  * powerline even if older DB rows still carry a stale `branch` value.
  * Instead they get a scratch-pad icon as the row's identifier.
  */
-function hasPowerlineInfo(thread: Thread, subtitle?: string): boolean {
+function hasPowerlineInfo(thread: Thread, subtitle?: string, gitStatus?: GitStatusInfo): boolean {
+  if (gitStatus?.prNumber) return true;
   if (!canShowPowerline(thread)) return false;
   return !!subtitle || !!thread.baseBranch || !!thread.branch;
 }
 
-function resolveMetaRow({
-  thread,
-  subtitle,
-  gitStatus,
-  metadataBadge,
-  contentSnippet,
-  search,
-}: ThreadItemMetaRowProps) {
+/** Whether the row shows anything besides the snippet. */
+function hasMetaContent(
+  showPowerline: boolean,
+  scratch: boolean,
+  { gitStatus, metadataBadge }: ThreadItemMetaRowProps,
+): boolean {
+  return (
+    showPowerline || scratch || !!metadataBadge || (!!gitStatus && gitStatus.state !== 'clean')
+  );
+}
+
+function resolveMetaRow(props: ThreadItemMetaRowProps) {
+  const { thread, subtitle, gitStatus, contentSnippet, search } = props;
   const snippetText = contentSnippet ?? thread.lastAssistantMessage;
   const snippetKind = resolveSnippetKind(thread, snippetText, !!(contentSnippet && search));
   const scratch = isScratch(thread);
-  const showPowerline = hasPowerlineInfo(thread, subtitle) || !!gitStatus?.prNumber;
-  const hasMetadata = showPowerline || hasGitDiffStats(gitStatus) || scratch || !!metadataBadge;
+  const showPowerline = hasPowerlineInfo(thread, subtitle, gitStatus);
   return {
     snippetText,
     snippetKind,
     scratch,
     showPowerline,
-    visible: hasMetadata || snippetKind !== null,
+    visible: snippetKind !== null || hasMetaContent(showPowerline, scratch, props),
   };
 }
 
@@ -247,6 +304,7 @@ export function ThreadItemMetaRow(props: ThreadItemMetaRowProps) {
           projectColor={projectColor}
           projectTooltip={projectPath}
           gitStatus={gitStatus}
+          showDiffStats={false}
           diffStatsSize="xs"
           prBadgeSize="compact"
           prBadgeTestId={`thread-pr-badge-${thread.id}`}
@@ -256,6 +314,7 @@ export function ThreadItemMetaRow(props: ThreadItemMetaRowProps) {
       {row.scratch && <ScratchBadge threadId={thread.id} />}
       {metadataBadge}
       <ThreadSnippet kind={row.snippetKind} text={row.snippetText ?? ''} search={search} />
+      {gitStatus && <GitStateIcon threadId={thread.id} gitStatus={gitStatus} />}
     </div>
   );
 }

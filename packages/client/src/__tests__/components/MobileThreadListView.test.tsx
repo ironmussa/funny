@@ -73,7 +73,7 @@ beforeEach(() => {
   });
 });
 
-test('shows desktop metadata on mobile and updates diff stats when git status arrives', () => {
+test('shows desktop metadata on mobile and updates the git state when git status arrives', () => {
   const onSelectThread = vi.fn();
   renderWithProviders(
     <ThreadListView
@@ -114,8 +114,9 @@ test('shows desktop metadata on mobile and updates diff stats when git status ar
       threadToBranchKey: { 'thread-1': 'project-1:main' },
     }),
   );
-  expect(screen.getByText('+12')).toBeVisible();
-  expect(screen.getByText('-3')).toBeVisible();
+  // The row shows the git state as an icon with the dirty-file count; the
+  // +/- line stats live in its tooltip.
+  expect(screen.getByTestId('thread-git-state-thread-1')).toHaveTextContent('2');
   fireEvent.click(screen.getByTestId('thread-item-thread-1'));
   expect(onSelectThread).toHaveBeenCalledWith('thread-1');
   expect(row.querySelector('button button')).toBeNull();

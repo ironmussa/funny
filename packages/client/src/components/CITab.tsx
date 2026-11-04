@@ -1,6 +1,5 @@
-import type { CICheck } from '@funny/shared';
+import type { CICheck, PRDetail } from '@funny/shared';
 import { CircleDashed, ExternalLink, GitPullRequest, RefreshCw } from 'lucide-react';
-import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { CheckIcon, MergeStatus, ReviewDecisionBadge } from '@/components/PRSummaryCard';
@@ -9,11 +8,10 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { usePRDetail } from '@/data/pull-requests/hooks';
+import { usePRDetail, usePRPolling } from '@/data/pull-requests/hooks';
 import { fetchPRDetail } from '@/data/pull-requests/queries';
+import { sortChecks } from '@/lib/ci-checks';
 import { cn } from '@/lib/utils';
-
-const POLL_INTERVAL = 30_000;
 
 interface CITabProps {
   projectId: string;
@@ -22,40 +20,10 @@ interface CITabProps {
   visible: boolean;
 }
 
-// Failures first, then pending, then successes — so red is always at the top.
-function sortChecks(checks: CICheck[]): CICheck[] {
-  const priority = (c: CICheck) => {
-    if (c.status !== 'completed') return 1;
-    if (
-      c.conclusion === 'failure' ||
-      c.conclusion === 'timed_out' ||
-      c.conclusion === 'action_required'
-    )
-      return 0;
-    if (c.conclusion === 'success' || c.conclusion === 'neutral' || c.conclusion === 'skipped')
-      return 2;
-    return 1;
-  };
-  return checks.toSorted((a, b) => priority(a) - priority(b));
-}
-
 export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
   const { t } = useTranslation();
   const { detail, loadingDetail, rateLimited } = usePRDetail(projectId || undefined, prNumber);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Fetch on mount + poll while visible (mirrors PRSummaryCard cadence).
-  useEffect(() => {
-    if (!visible || !projectId || !prNumber) return;
-
-    // Skips while fresh or while GitHub's rate limit pauses polling.
-    void fetchPRDetail(projectId, prNumber);
-    pollRef.current = setInterval(() => void fetchPRDetail(projectId, prNumber), POLL_INTERVAL);
-
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [visible, projectId, prNumber]);
+  usePRPolling(projectId || undefined, prNumber, visible);
 
   const handleRefresh = () => {
     if (projectId && prNumber) void fetchPRDetail(projectId, prNumber, { force: true });
@@ -93,85 +61,18 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
     <div className="flex min-h-0 flex-1 flex-col" data-testid="ci-tab">
       {/* Toolbar / summary */}
       <div className="border-sidebar-border flex items-center gap-3 border-b px-3 py-1.5 text-xs">
-        {detail && total > 0 && (
-          <span className="font-medium" data-testid="ci-summary-counts">
-            {t('review.ci.passedCount', '{{passed}}/{{total}} passed', {
-              passed: detail.checks_passed,
-              total,
-            })}
-            {detail.checks_failed > 0 && (
-              <span className="ml-1.5 text-red-400">
-                {t('review.ci.failedCount', '{{count}} failed', { count: detail.checks_failed })}
-              </span>
-            )}
-            {detail.checks_pending > 0 && (
-              <span className="ml-1.5 text-yellow-400">
-                {t('review.ci.pendingCount', '{{count}} pending', {
-                  count: detail.checks_pending,
-                })}
-              </span>
-            )}
-          </span>
-        )}
+        {detail && total > 0 && <CISummaryCounts detail={detail} total={total} />}
         {detail && <ReviewDecisionBadge decision={detail.review_decision} />}
         {detail && <MergeStatus mergeable={detail.mergeable_state} merged={detail.merged} />}
 
         <div className="min-w-0 flex-1" />
 
-        {rateLimited && (
-          <Tooltip>
-            <TooltipTrigger>
-              <span className="text-[10px] text-yellow-500">
-                {t('review.ci.rateLimited', 'Rate limited')}
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {t('review.ci.rateLimitedHint', 'GitHub API rate limit reached. Polling paused.')}
-            </TooltipContent>
-          </Tooltip>
-        )}
-
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={handleRefresh}
-              disabled={loadingDetail}
-              className="text-muted-foreground shrink-0"
-              data-testid="ci-refresh"
-            >
-              <RefreshCw className={cn('icon-base', loadingDetail && 'animate-spin')} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
-        </Tooltip>
-
-        {prUrl && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                asChild
-                className="text-muted-foreground shrink-0"
-                data-testid="ci-open-github"
-              >
-                <a
-                  href={prUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={t('review.ci.openOnGithub', 'Open PR on GitHub')}
-                >
-                  <ExternalLink className="icon-base" />
-                </a>
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {t('review.ci.openOnGithub', 'Open PR on GitHub')}
-            </TooltipContent>
-          </Tooltip>
-        )}
+        <CIToolbarActions
+          rateLimited={rateLimited}
+          loading={loadingDetail}
+          prUrl={prUrl}
+          onRefresh={handleRefresh}
+        />
       </div>
 
       {/* Checks list */}
@@ -187,35 +88,132 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
             data-testid="ci-checks-list"
           >
             {checks.map((check) => (
-              <div
-                key={check.id}
-                className="flex items-center gap-2 px-3 py-1.5 text-xs"
-                data-testid={`ci-check-${check.id}`}
-              >
-                <CheckIcon check={check} />
-                <span className="truncate font-medium">{check.name}</span>
-                {check.app_name && (
-                  <span className="text-muted-foreground shrink-0 text-[10px]">
-                    ({check.app_name})
-                  </span>
-                )}
-                {check.html_url && (
-                  <a
-                    href={check.html_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`Open ${check.name} check details`}
-                    className="text-muted-foreground hover:text-foreground ml-auto shrink-0"
-                    data-testid={`ci-check-link-${check.id}`}
-                  >
-                    <ExternalLink className="size-3" />
-                  </a>
-                )}
-              </div>
+              <CICheckRow key={check.id} check={check} />
             ))}
           </div>
         </ScrollArea>
       )}
     </div>
+  );
+}
+
+function CISummaryCounts({ detail, total }: { detail: PRDetail; total: number }) {
+  const { t } = useTranslation();
+  return (
+    <span className="font-medium" data-testid="ci-summary-counts">
+      {t('review.ci.passedCount', '{{passed}}/{{total}} passed', {
+        passed: detail.checks_passed,
+        total,
+      })}
+      {detail.checks_failed > 0 && (
+        <span className="ml-1.5 text-red-400">
+          {t('review.ci.failedCount', '{{count}} failed', { count: detail.checks_failed })}
+        </span>
+      )}
+      {detail.checks_pending > 0 && (
+        <span className="ml-1.5 text-yellow-400">
+          {t('review.ci.pendingCount', '{{count}} pending', { count: detail.checks_pending })}
+        </span>
+      )}
+    </span>
+  );
+}
+
+function CICheckRow({ check }: { check: CICheck }) {
+  return (
+    <div
+      className="flex items-center gap-2 px-3 py-1.5 text-xs"
+      data-testid={`ci-check-${check.id}`}
+    >
+      <CheckIcon check={check} />
+      <span className="truncate font-medium">{check.name}</span>
+      {check.app_name && (
+        <span className="text-muted-foreground shrink-0 text-[10px]">({check.app_name})</span>
+      )}
+      {check.html_url && (
+        <a
+          href={check.html_url}
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label={`Open ${check.name} check details`}
+          className="text-muted-foreground hover:text-foreground ml-auto shrink-0"
+          data-testid={`ci-check-link-${check.id}`}
+        >
+          <ExternalLink className="size-3" />
+        </a>
+      )}
+    </div>
+  );
+}
+
+function CIToolbarActions({
+  rateLimited,
+  loading,
+  prUrl,
+  onRefresh,
+}: {
+  rateLimited: boolean;
+  loading: boolean;
+  prUrl?: string;
+  onRefresh: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      {rateLimited && (
+        <Tooltip>
+          <TooltipTrigger>
+            <span className="text-[10px] text-yellow-500">
+              {t('review.ci.rateLimited', 'Rate limited')}
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            {t('review.ci.rateLimitedHint', 'GitHub API rate limit reached. Polling paused.')}
+          </TooltipContent>
+        </Tooltip>
+      )}
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onRefresh}
+            disabled={loading}
+            className="text-muted-foreground shrink-0"
+            data-testid="ci-refresh"
+          >
+            <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
+      </Tooltip>
+
+      {prUrl && (
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              asChild
+              className="text-muted-foreground shrink-0"
+              data-testid="ci-open-github"
+            >
+              <a
+                href={prUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label={t('review.ci.openOnGithub', 'Open PR on GitHub')}
+              >
+                <ExternalLink className="icon-base" />
+              </a>
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {t('review.ci.openOnGithub', 'Open PR on GitHub')}
+          </TooltipContent>
+        </Tooltip>
+      )}
+    </>
   );
 }

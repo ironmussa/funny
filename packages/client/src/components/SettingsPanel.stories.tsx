@@ -3,6 +3,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
 import { SidebarProvider } from '@/components/ui/sidebar';
+import { withProjects } from '@/data/projects/testing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -24,20 +25,22 @@ function seedStores({
   activeSettingsPage = 'general',
   role = 'admin' as 'admin' | 'user',
 } = {}) {
-  useProjectStore.setState({
-    projects: [
-      {
-        id: 'proj-1',
-        name: 'funny',
-        path: '/home/user/projects/funny',
-        userId: 'user-1',
-        sortOrder: 0,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    selectedProjectId,
-    initialized: true,
-  });
+  useProjectStore.setState(
+    withProjects({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'funny',
+          path: '/home/user/projects/funny',
+          userId: 'user-1',
+          sortOrder: 0,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      selectedProjectId,
+      initialized: true,
+    }),
+  );
   useAuthStore.setState({
     user: { id: 'user-1', username: 'admin', displayName: 'Admin User', role },
     isAuthenticated: true,

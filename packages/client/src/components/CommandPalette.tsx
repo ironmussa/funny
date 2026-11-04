@@ -1,3 +1,4 @@
+import type { Project } from '@funny/shared';
 import { findTextSearchMatches, normalizeSearchText } from '@funny/shared/lib/text-search';
 import { FolderOpen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -14,6 +15,7 @@ import {
   CommandItem,
 } from '@/components/ui/command';
 import { EmptyState } from '@/components/ui/empty-state';
+import { upsertProjects } from '@/data/projects/loaders';
 import { useProjectSearch } from '@/hooks/use-project-search';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric } from '@/lib/telemetry';
@@ -38,7 +40,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   return <CommandPaletteContent open={open} onOpenChange={onOpenChange} />;
 }
 
-type ProjectEntry = ReturnType<typeof useProjectStore.getState>['projects'][number];
+type ProjectEntry = Project;
 
 /** Manual filter for projects + settings. cmdk would mount one DOM node per
  * project (thousands for some users) just to hide most of them; this keeps
@@ -265,13 +267,7 @@ function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
 
 function rememberSelectedProject(projects: ProjectEntry[], projectId: string) {
   const project = projects.find((p) => p.id === projectId);
-  if (project) {
-    useProjectStore.setState((state) => ({
-      projects: state.projects.some((p) => p.id === project.id)
-        ? state.projects.map((p) => (p.id === project.id ? project : p))
-        : [...state.projects, project],
-    }));
-  }
+  if (project) upsertProjects([project]);
 }
 
 function PaletteSearchStatus({

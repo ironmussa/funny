@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { readProject } from '@/data/projects/read';
+
 import { useProjectStore } from './project-store';
 import {
   clearThreadSelection,
@@ -518,7 +520,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   startNewThread: (projectId: string, idleOnly?: boolean, baseBranch?: string | null) => {
     // Block thread creation on shared projects that haven't been set up yet
-    const project = useProjectStore.getState().projects?.find((p) => p.id === projectId);
+    const project = readProject(projectId);
     if (project?.needsSetup) return;
 
     // Set the compose flag BEFORE clearing thread selection — the invariant

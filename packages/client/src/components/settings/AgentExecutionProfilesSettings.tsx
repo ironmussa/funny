@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useProjectById } from '@/data/projects/hooks';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
@@ -239,9 +240,7 @@ export function AgentExecutionProfilesSettings() {
 export function ProjectAgentExecutionProfileSettings() {
   const { t } = useTranslation();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const selectedProject = useProjectStore((s) =>
-    s.projects.find((project) => project.id === s.selectedProjectId),
-  );
+  const selectedProject = useProjectById(useProjectStore((s) => s.selectedProjectId));
   const [profiles, setProfiles] = useState<AgentExecutionProfileResponse[]>([]);
   const [bindingProfileId, setBindingProfileId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);

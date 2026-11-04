@@ -9,6 +9,7 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { SearchBar } from '@/components/ui/search-bar';
 import { SearchEmptyRow as EmptyRow, SearchLoadingRow } from '@/components/ui/search-placeholder';
+import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { FileExtensionIcon } from '@/lib/file-icons';
@@ -70,7 +71,7 @@ function TextSearchDialogContent({ open, onOpenChange }: TextSearchDialogProps) 
   const { t } = useTranslation();
   const threadId = useThreadId() ?? null;
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const projectPath = projects.find((p) => p.id === selectedProjectId)?.path ?? null;
   const searchTarget = useMemo(
     () => (threadId ? { threadId } : projectPath ? { path: projectPath } : null),

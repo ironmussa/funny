@@ -1482,7 +1482,8 @@
       "PROCESS_ERROR": "{{message}}",
       "INTERNAL": "Error al crear el proyecto. El servidor puede estar experimentando problemas."
     },
-    "threadUpdateFailed": "No se pudo actualizar el hilo. Se deshizo tu cambio."
+    "threadUpdateFailed": "No se pudo actualizar el hilo. Se deshizo tu cambio.",
+    "projectUpdateFailed": "No se pudo actualizar el proyecto. Se deshizo tu cambio."
   },
   "agentResources": {
     "subtitle": "Skills, comandos y servidores MCP según el proveedor.",

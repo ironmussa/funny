@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjectById } from '@/data/projects/hooks';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
@@ -236,9 +237,7 @@ export function ProjectHeaderLeftContent({ leading }: ProjectHeaderLeftContentPr
 function ThreadProjectBreadcrumb() {
   const activeThreadId = useThreadId();
   const activeThreadProjectId = useThreadProjectId();
-  const projectName = useProjectStore(
-    (s) => s.projects.find((project) => project.id === activeThreadProjectId)?.name,
-  );
+  const projectName = useProjectById(activeThreadProjectId)?.name;
   return (
     <>
       {activeThreadId && projectName && (

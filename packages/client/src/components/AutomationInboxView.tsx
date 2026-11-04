@@ -18,6 +18,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import { useProjects } from '@/data/projects/hooks';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
@@ -28,7 +29,7 @@ import { useUIStore } from '@/stores/ui-store';
 
 export function AutomationInboxView() {
   const navigate = useNavigate();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
 
   const inbox = useAutomationStore((s) => s.inbox);
   const inboxCount = useAutomationStore((s) => s.inboxCount);

@@ -3,11 +3,15 @@ import type {
   HookType,
   Project,
   ProjectHook,
+  ProjectUpdateFields,
   StartupCommand,
   WeaveStatus,
 } from '@funny/shared';
 
 import { request } from './_core';
+
+/** Fields a project PATCH accepts. */
+export type UpdateProjectInput = ProjectUpdateFields;
 
 export const projectsApi = {
   // Projects
@@ -26,27 +30,8 @@ export const projectsApi = {
     request<Project>('/projects', { method: 'POST', body: JSON.stringify({ name, path }) }),
   renameProject: (id: string, name: string) =>
     request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
-  updateProject: (
-    id: string,
-    data: {
-      name?: string;
-      path?: string;
-      color?: string | null;
-      followUpMode?: string;
-      fastMode?: boolean;
-      defaultProvider?: string | null;
-      defaultModel?: string | null;
-      defaultEffort?: string | null;
-      defaultMode?: string | null;
-      defaultPermissionMode?: string | null;
-      defaultBranch?: string | null;
-      urls?: string[] | null;
-      systemPrompt?: string | null;
-      launcherUrl?: string | null;
-      defaultAgentTemplateId?: string | null;
-      closed?: boolean;
-    },
-  ) => request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updateProject: (id: string, data: UpdateProjectInput) =>
+    request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteProject: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
   reorderProjects: (projectIds: string[]) =>
     request<void>('/projects/reorder', { method: 'PUT', body: JSON.stringify({ projectIds }) }),

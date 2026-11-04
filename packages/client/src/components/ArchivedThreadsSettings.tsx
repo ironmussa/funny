@@ -9,6 +9,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { VirtualThreadList } from '@/components/VirtualThreadList';
+import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 import { statusBranchKeyForThread, useGitStatusStore } from '@/stores/git-status-store';
@@ -17,7 +18,7 @@ const PAGE_SIZE = 100;
 
 export function ArchivedThreadsSettings() {
   const { t } = useTranslation();
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);

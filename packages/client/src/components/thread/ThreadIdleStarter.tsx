@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { AvailableMcpServers } from '@/components/AvailableMcpServers';
 import { PromptInput } from '@/components/PromptInput';
 import { FileChip } from '@/components/ui/chip';
+import { useProjectById } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
 import { useProjectStore } from '@/stores/project-store';
@@ -29,10 +30,7 @@ export function ThreadIdleStarter({ activeThread }: Props) {
   const { t } = useTranslation();
   const stableMessages = useThreadMessages();
   const [sending, setSending] = useState(false);
-  const projectPath = useProjectStore((s) => {
-    if (!activeThread.projectId) return undefined;
-    return s.projects.find((p) => p.id === activeThread.projectId)?.path;
-  });
+  const projectPath = useProjectById(activeThread.projectId)?.path;
 
   // The stored prompt carries the backlog thread's attachments as a leading
   // `<referenced-files>` manifest. The editor gets only the text; the

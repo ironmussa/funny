@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
+import { withProjects } from '@/data/projects/testing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -23,28 +24,30 @@ function seedStores({
   activeSettingsPage = 'general',
   selectedProjectId = 'proj-1' as string | null,
 } = {}) {
-  useProjectStore.setState({
-    projects: [
-      {
-        id: 'proj-1',
-        name: 'funny',
-        path: '/home/user/projects/funny',
-        color: '#3b82f6',
-        userId: 'user-1',
-        sortOrder: 0,
-        createdAt: new Date().toISOString(),
-        defaultMode: 'worktree',
-        defaultModel: 'sonnet',
-        defaultProvider: 'claude',
-        defaultPermissionMode: 'autoEdit',
-        followUpMode: 'interrupt',
-        systemPrompt: 'Always use TypeScript strict mode.',
-        urls: ['https://github.com/example/funny'],
-      },
-    ],
-    selectedProjectId,
-    initialized: true,
-  });
+  useProjectStore.setState(
+    withProjects({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'funny',
+          path: '/home/user/projects/funny',
+          color: '#3b82f6',
+          userId: 'user-1',
+          sortOrder: 0,
+          createdAt: new Date().toISOString(),
+          defaultMode: 'worktree',
+          defaultModel: 'sonnet',
+          defaultProvider: 'claude',
+          defaultPermissionMode: 'autoEdit',
+          followUpMode: 'interrupt',
+          systemPrompt: 'Always use TypeScript strict mode.',
+          urls: ['https://github.com/example/funny'],
+        },
+      ],
+      selectedProjectId,
+      initialized: true,
+    }),
+  );
   useAuthStore.setState({
     user: { id: 'user-1', username: 'admin', displayName: 'Admin', role: 'admin' },
     isAuthenticated: true,

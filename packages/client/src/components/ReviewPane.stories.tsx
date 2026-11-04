@@ -4,8 +4,9 @@ import { useEffect } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 
-import { withThreadIndex } from '@/data/threads/testing';
+import { withProjects } from '@/data/projects/testing';
 import '@/i18n/config';
+import { withThreadIndex } from '@/data/threads/testing';
 import { useCommitProgressStore } from '@/stores/commit-progress-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -356,23 +357,25 @@ function seedStores(
     tab = 'changes',
   } = opts;
 
-  useProjectStore.setState({
-    projects: [
-      {
-        id: 'proj-1',
-        name: 'funny',
-        path: '/home/user/projects/funny',
-        color: '#3b82f6',
-        userId: 'user-1',
-        sortOrder: 0,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    expandedProjects: new Set(['proj-1']),
-    selectedProjectId: 'proj-1',
-    initialized: true,
-    branchByProject: { 'proj-1': 'master' },
-  });
+  useProjectStore.setState(
+    withProjects({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'funny',
+          path: '/home/user/projects/funny',
+          color: '#3b82f6',
+          userId: 'user-1',
+          sortOrder: 0,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      expandedProjects: new Set(['proj-1']),
+      selectedProjectId: 'proj-1',
+      initialized: true,
+      branchByProject: { 'proj-1': 'master' },
+    }),
+  );
 
   const thread = {
     id: 'thread-1',

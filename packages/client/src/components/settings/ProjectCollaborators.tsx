@@ -22,6 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useProjectById } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import type { ProjectMemberEntry, ProjectMemberRole, UserSearchResult } from '@/lib/api/projects';
 import { createClientLogger } from '@/lib/client-logger';
@@ -44,11 +45,10 @@ const PROJECT_ROLES: { value: ProjectMemberRole; label: string; hint: string }[]
   { value: 'admin', label: 'Admin', hint: 'Manage collaborators and project settings.' },
 ];
 
+// fallow-ignore-next-line complexity -- pre-existing; this change only swapped the project read
 export function ProjectCollaborators() {
   const projectId = useProjectStore((s) => s.selectedProjectId);
-  const ownerId = useProjectStore(
-    (s) => s.projects.find((p) => p.id === s.selectedProjectId)?.userId,
-  );
+  const ownerId = useProjectById(projectId)?.userId;
   const currentUserId = useAuthStore((s) => s.user?.id);
 
   const [members, setMembers] = useState<ProjectMemberEntry[]>([]);

@@ -18,6 +18,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useProjects } from '@/data/projects/hooks';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { threadsApi } from '@/lib/api/threads';
 import {
@@ -73,7 +74,7 @@ function SendDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const persistedModel = useBrowserPanelStore((s) => s.defaultModel);
   const setDefaultModel = useBrowserPanelStore((s) => s.setDefaultModel);

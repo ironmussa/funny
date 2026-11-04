@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 import { CommandPalette } from './CommandPalette';
@@ -52,7 +53,7 @@ function CommandPaletteTrigger({
         variant="outline"
         data-testid="command-palette-trigger"
         onClick={() => {
-          useProjectStore.setState({ projects: projects as any });
+          useProjectStore.setState(withProjects({ projects: projects as any }));
           setOpen(true);
         }}
       >

@@ -6,6 +6,7 @@ import { useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
+import { useProjects } from '@/data/projects/hooks';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useSandboxSetupSteps } from '@/hooks/use-sandbox-setup-steps';
@@ -40,7 +41,7 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
   const newThreadIsScratch = useUIStore((s) => s.newThreadIsScratch);
-  const hasProjects = useProjectStore((s) => s.projects.length > 0);
+  const hasProjects = useProjects().length > 0;
   const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
   // Prompt handed over by NewThreadInput so the conversation layout stays put
   // while the freshly created thread loads.

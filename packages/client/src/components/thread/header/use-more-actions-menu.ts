@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { useProjectById } from '@/data/projects/hooks';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
@@ -47,9 +48,7 @@ export function useMoreActionsMenu() {
   const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
   const deleteScratchThread = useThreadStore((s) => s.deleteScratchThread);
   const menuSelectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const project = useProjectStore((s) =>
-    threadProjectId ? s.projects.find((p) => p.id === threadProjectId) : undefined,
-  );
+  const project = useProjectById(threadProjectId);
   const projectBranch = useProjectStore((s) =>
     threadProjectId ? s.branchByProject[threadProjectId] : undefined,
   );

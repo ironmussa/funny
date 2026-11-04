@@ -9,6 +9,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjects } from '@/data/projects/hooks';
 import { getFileExtension } from '@/hooks/use-highlight';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { api } from '@/lib/api';
@@ -59,7 +60,7 @@ export function ProjectFilesPane() {
   const selectedProjectId = useRightPaneProjectId();
   const selectedThreadId = useRightPaneThreadId();
   const lightThread = useThreadById(selectedThreadId);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const project = projects.find((p) => p.id === selectedProjectId);
   const activeThreadWorktreePath = useThreadWorktreePath();
 

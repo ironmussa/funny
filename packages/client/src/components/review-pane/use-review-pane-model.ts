@@ -3,6 +3,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { resolveBasePath } from '@/components/review-pane/resolve-base-path';
+import { useProjects } from '@/data/projects/hooks';
 import { useReviewState } from '@/hooks/use-review-state';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useThreadById } from '@/lib/thread-selectors';
@@ -71,7 +72,7 @@ function useReviewBasePath(
   selectedProjectId: string | null,
 ): string {
   const worktreePath = useThreadWorktreePath();
-  const projectsForPath = useProjectStore((s) => s.projects);
+  const projectsForPath = useProjects();
   return useMemo(
     () =>
       resolveBasePath({

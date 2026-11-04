@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjectById } from '@/data/projects/hooks';
 import { useProjectStore } from '@/stores/project-store';
 import { useTestStore } from '@/stores/test-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -16,11 +17,10 @@ const DEFAULT_SPLIT = 75; // percentage of container width for the left (viewer)
 const MIN_SPLIT = 30;
 const MAX_SPLIT = 90;
 
+// fallow-ignore-next-line complexity -- pre-existing; this change only swapped the project read
 export function TestRunnerPane() {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const projectPath = useProjectStore(
-    (s) => s.projects.find((p) => p.id === s.selectedProjectId)?.path,
-  );
+  const projectPath = useProjectById(selectedProjectId)?.path;
   const {
     files,
     isRunning,

@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { SidebarProvider } from '@/components/ui/sidebar';
 import '@/i18n/config';
+import { withProjects } from '@/data/projects/testing';
 import { seedProjectThreads, seedThreadIndex, withThreadIndex } from '@/data/threads/testing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
@@ -163,13 +164,15 @@ function seedDefault() {
     'proj-3': [],
   };
 
-  useProjectStore.setState({
-    projects,
-    expandedProjects: new Set(['proj-1', 'proj-2']),
-    selectedProjectId: 'proj-1',
-    initialized: true,
-    branchByProject: { 'proj-1': 'master', 'proj-2': 'main' },
-  });
+  useProjectStore.setState(
+    withProjects({
+      projects,
+      expandedProjects: new Set(['proj-1', 'proj-2']),
+      selectedProjectId: 'proj-1',
+      initialized: true,
+      branchByProject: { 'proj-1': 'master', 'proj-2': 'main' },
+    }),
+  );
 
   seedProjectThreads(threadsByProject);
   seedSessionAndSelection('t2');
@@ -221,13 +224,15 @@ function seedDefault() {
 }
 
 function seedEmpty() {
-  useProjectStore.setState({
-    projects: [],
-    expandedProjects: new Set(),
-    selectedProjectId: null,
-    initialized: true,
-    branchByProject: {},
-  });
+  useProjectStore.setState(
+    withProjects({
+      projects: [],
+      expandedProjects: new Set<string>(),
+      selectedProjectId: null,
+      initialized: true,
+      branchByProject: {},
+    }),
+  );
   seedThreadIndex({ threadsById: {}, threadIdsByProject: {} });
   seedSessionAndSelection(null);
   useGitStatusStore.setState({
@@ -294,13 +299,15 @@ export const Empty: Story = {
 export const SingleProjectNoActive: Story = {
   name: 'Single Project (No Active)',
   render: () => {
-    useProjectStore.setState({
-      projects: [makeProject({ id: 'proj-1', name: 'funny', color: '#3b82f6' })],
-      expandedProjects: new Set(['proj-1']),
-      selectedProjectId: 'proj-1',
-      initialized: true,
-      branchByProject: { 'proj-1': 'master' },
-    });
+    useProjectStore.setState(
+      withProjects({
+        projects: [makeProject({ id: 'proj-1', name: 'funny', color: '#3b82f6' })],
+        expandedProjects: new Set(['proj-1']),
+        selectedProjectId: 'proj-1',
+        initialized: true,
+        branchByProject: { 'proj-1': 'master' },
+      }),
+    );
     const projThreads = [
       makeThread({ id: 't1', title: 'add the inline diff component' }),
       makeThread({

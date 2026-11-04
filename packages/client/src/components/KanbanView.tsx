@@ -31,6 +31,7 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
+import { useProjects } from '@/data/projects/hooks';
 import { groupThreadsByStage } from '@/data/threads/views';
 import { useGitStatusScope } from '@/hooks/use-git-status-scope';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
@@ -325,7 +326,7 @@ export function KanbanView({
   const unarchiveThread = useThreadStore((s) => s.unarchiveThread);
   const deleteThread = useThreadStore((s) => s.deleteThread);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
   const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 

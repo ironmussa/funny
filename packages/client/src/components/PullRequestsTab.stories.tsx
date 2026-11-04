@@ -5,6 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 
 import '@/i18n/config';
+import { withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore, type ThreadWithMessages } from '@/stores/thread-store';
@@ -235,24 +236,26 @@ const PROJECT_ID = 'proj-1';
  * shows the full listing + Open/Closed/All filter — the screenshot case.
  */
 function seedProject(currentBranch = 'master') {
-  useProjectStore.setState({
-    projects: [
-      {
-        id: PROJECT_ID,
-        name: 'funny',
-        path: '/home/user/projects/funny',
-        color: '#3b82f6',
-        userId: 'user-1',
-        sortOrder: 0,
-        defaultBranch: 'master',
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    expandedProjects: new Set([PROJECT_ID]),
-    selectedProjectId: PROJECT_ID,
-    initialized: true,
-    branchByProject: { [PROJECT_ID]: currentBranch },
-  });
+  useProjectStore.setState(
+    withProjects({
+      projects: [
+        {
+          id: PROJECT_ID,
+          name: 'funny',
+          path: '/home/user/projects/funny',
+          color: '#3b82f6',
+          userId: 'user-1',
+          sortOrder: 0,
+          defaultBranch: 'master',
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      expandedProjects: new Set([PROJECT_ID]),
+      selectedProjectId: PROJECT_ID,
+      initialized: true,
+      branchByProject: { [PROJECT_ID]: currentBranch },
+    }),
+  );
   useThreadStore.setState({
     threadDataById: {},
     selectedThreadId: null,
@@ -407,12 +410,14 @@ export const BranchFocusEmpty: Story = {
 export const NoProject: Story = {
   name: 'No Project',
   render: () => {
-    useProjectStore.setState({
-      projects: [],
-      selectedProjectId: null,
-      initialized: true,
-      branchByProject: {},
-    });
+    useProjectStore.setState(
+      withProjects({
+        projects: [],
+        selectedProjectId: null,
+        initialized: true,
+        branchByProject: {},
+      }),
+    );
     useThreadStore.setState({
       threadDataById: {},
       selectedThreadId: null,

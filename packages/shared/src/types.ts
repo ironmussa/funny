@@ -409,6 +409,26 @@ export {
 
 // ─── Projects ────────────────────────────────────────────
 
+/** Fields a project PATCH accepts (`null` clears an optional setting). */
+export interface ProjectUpdateFields {
+  name?: string;
+  path?: string;
+  color?: string | null;
+  followUpMode?: string;
+  fastMode?: boolean;
+  defaultProvider?: string | null;
+  defaultModel?: string | null;
+  defaultEffort?: string | null;
+  defaultMode?: string | null;
+  defaultPermissionMode?: string | null;
+  defaultBranch?: string | null;
+  urls?: string[] | null;
+  systemPrompt?: string | null;
+  launcherUrl?: string | null;
+  defaultAgentTemplateId?: string | null;
+  closed?: boolean;
+}
+
 export interface Project {
   id: string;
   name: string;

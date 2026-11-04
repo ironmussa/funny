@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
+import { withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 import { McpServerSettings } from './McpServerSettings';
@@ -15,20 +16,22 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 function seedStores({ selectedProjectId = 'proj-1' as string | null } = {}) {
-  useProjectStore.setState({
-    projects: [
-      {
-        id: 'proj-1',
-        name: 'funny',
-        path: '/home/user/projects/funny',
-        userId: 'user-1',
-        sortOrder: 0,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    selectedProjectId,
-    initialized: true,
-  });
+  useProjectStore.setState(
+    withProjects({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'funny',
+          path: '/home/user/projects/funny',
+          userId: 'user-1',
+          sortOrder: 0,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      selectedProjectId,
+      initialized: true,
+    }),
+  );
 }
 
 const meta = {
@@ -57,7 +60,7 @@ export const Default: Story = {
 export const NoProject: Story = {
   render: () => {
     seedStores({ selectedProjectId: null });
-    useProjectStore.setState({ projects: [], selectedProjectId: null });
+    useProjectStore.setState(withProjects({ projects: [], selectedProjectId: null }));
     return (
       <Wrapper>
         <McpServerSettings />

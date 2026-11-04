@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 
+import { useProjects } from '@/data/projects/hooks';
 import { useProjectStore } from '@/stores/project-store';
 import {
   useThreadProjectId,
@@ -15,7 +16,7 @@ export * from './format-utils';
 export function useCurrentProjectPath(): string | undefined {
   const projectId = useThreadProjectId();
   const worktreePath = useThreadWorktreePath();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   return useMemo(
     () => worktreePath || projects.find((p) => p.id === projectId)?.path,
     [projects, projectId, worktreePath],

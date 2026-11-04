@@ -3,8 +3,18 @@ import type { DomainError } from '@funny/shared/errors';
 import type { Result } from 'neverthrow';
 import { create } from 'zustand';
 
+import {
+  closeProject as closeProjectRow,
+  deleteProject as deleteProjectRow,
+  renameProject as renameProjectRow,
+  reopenProject as reopenProjectRow,
+  reorderProjects as reorderProjectRows,
+  setProjectLocalPath as setProjectLocalPathRow,
+  updateProject as updateProjectRow,
+} from '@/data/projects/actions';
+import { loadProjects as loadProjectRows } from '@/data/projects/loaders';
 import { parseRoute } from '@/hooks/route-parser';
-import { projectsApi } from '@/lib/api/projects';
+import { projectsApi, type UpdateProjectInput } from '@/lib/api/projects';
 import { metric, startSpan } from '@/lib/telemetry';
 import { clientComposition } from '@/platform/client-composition';
 
@@ -44,7 +54,9 @@ function persistExpandedProjects(ids: Set<string>) {
 }
 
 interface ProjectState {
-  projects: Project[];
+  // Project rows live in the data layer's projects collection
+  // (`src/data/projects`). Read them with `useProjects()` / `useProjectById()`
+  // (React) or `readProjects()` / `readProject()` (imperative).
   expandedProjects: Set<string>;
   selectedProjectId: string | null;
   // Bumped every time selectProject is called, even when the same project is
@@ -70,22 +82,7 @@ interface ProjectState {
   renameProject: (projectId: string, name: string) => Promise<void>;
   updateProject: (
     projectId: string,
-    data: {
-      name?: string;
-      path?: string;
-      color?: string | null;
-      followUpMode?: string;
-      fastMode?: boolean;
-      defaultProvider?: string | null;
-      defaultModel?: string | null;
-      defaultEffort?: string | null;
-      defaultMode?: string | null;
-      defaultPermissionMode?: string | null;
-      defaultBranch?: string | null;
-      urls?: string[] | null;
-      systemPrompt?: string | null;
-      launcherUrl?: string | null;
-    },
+    data: UpdateProjectInput,
   ) => Promise<Result<Project, DomainError>>;
   deleteProject: (projectId: string) => Promise<void>;
   closeProject: (projectId: string) => Promise<void>;
@@ -97,7 +94,6 @@ interface ProjectState {
 let _loadProjectsPromise: Promise<void> | null = null;
 
 export const useProjectStore = create<ProjectState>((set, get) => ({
-  projects: [],
   expandedProjects: loadExpandedProjects(),
   selectedProjectId: null,
   revealNonce: 0,
@@ -116,20 +112,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       const t0 = Date.now();
       try {
         const { activeOrgId, activeOrgName } = useAuthStore.getState();
-        const result = await projectsApi.listProjects(activeOrgId);
+        // Rows land in the projects collection (org projects badged as team projects).
+        const result = await loadProjectRows({ orgId: activeOrgId, orgName: activeOrgName });
         if (result.isErr()) {
           loadSpan.end('ERROR', 'listProjects failed');
           return;
         }
-        // When an org is active, all returned projects belong to that org.
-        // Mark them as team projects with the org name so the sidebar shows badges.
-        const projects = activeOrgId
-          ? result.value.map((p) => ({
-              ...p,
-              isTeamProject: true as const,
-              organizationName: p.organizationName || activeOrgName || undefined,
-            }))
-          : result.value;
+        const projects = result.value;
         // Set initialized immediately so the sidebar renders project names right away.
         // Threads load in background and fill in progressively.
         // Prune expanded IDs that no longer exist (deleted projects).
@@ -143,7 +132,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
           }
         }
         if (pruned) persistExpandedProjects(expanded);
-        set({ projects, initialized: true });
+        set({ initialized: true });
         // Project names are now on screen.
         metric('projects.count', projects.length, { type: 'gauge' });
         metric('projects.list_ms', Date.now() - t0, { type: 'gauge' });
@@ -304,94 +293,50 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
+  // Project writes are optimistic transactions on the projects collection:
+  // they show at once everywhere and roll back with a toast on failure. See
+  // data/projects/actions.ts.
   renameProject: async (projectId, name) => {
-    const result = await projectsApi.renameProject(projectId, name);
-    if (result.isErr()) return;
-    const { projects } = get();
-    set({
-      projects: projects.map((p) => (p.id === projectId ? result.value : p)),
-    });
+    await renameProjectRow(projectId, name);
   },
 
-  updateProject: async (projectId, data) => {
-    const result = await projectsApi.updateProject(projectId, data);
-    if (result.isOk()) {
-      const { projects } = get();
-      set({
-        projects: projects.map((p) => (p.id === projectId ? result.value : p)),
-      });
-    }
-    return result;
-  },
+  updateProject: async (projectId, data) => updateProjectRow(projectId, data),
 
   deleteProject: async (projectId) => {
-    const result = await projectsApi.deleteProject(projectId);
+    const result = await deleteProjectRow(projectId);
     if (result.isErr()) return;
-    const { projects, expandedProjects, selectedProjectId } = get();
-    const nextExpanded = new Set(expandedProjects);
-    nextExpanded.delete(projectId);
-
     clearProjectThreads(projectId);
-
-    set({
-      projects: projects.filter((p) => p.id !== projectId),
-      expandedProjects: nextExpanded,
-      ...(selectedProjectId === projectId ? { selectedProjectId: null } : {}),
-    });
-    persistExpandedProjects(nextExpanded);
+    forgetProjectUiState(projectId);
   },
 
   closeProject: async (projectId) => {
-    const result = await projectsApi.updateProject(projectId, { closed: true });
-    if (result.isErr()) return;
-    const { projects, expandedProjects, selectedProjectId } = get();
-    const nextExpanded = new Set(expandedProjects);
-    nextExpanded.delete(projectId);
-    set({
-      projects: projects.map((p) => (p.id === projectId ? result.value : p)),
-      expandedProjects: nextExpanded,
-      ...(selectedProjectId === projectId ? { selectedProjectId: null } : {}),
-    });
-    persistExpandedProjects(nextExpanded);
+    const result = await closeProjectRow(projectId);
+    if (result.isOk()) forgetProjectUiState(projectId);
   },
 
   reopenProject: async (projectId) => {
-    const result = await projectsApi.updateProject(projectId, { closed: false });
-    if (result.isErr()) return;
-    const { projects } = get();
-    set({
-      projects: projects.map((p) => (p.id === projectId ? result.value : p)),
-    });
+    await reopenProjectRow(projectId);
   },
 
-  setProjectLocalPath: async (projectId, localPath) => {
-    const result = await projectsApi.setProjectLocalPath(projectId, localPath);
-    if (result.isErr()) return false;
-    const { projects } = get();
-    set({
-      projects: projects.map((p) =>
-        p.id === projectId ? { ...p, localPath, needsSetup: false } : p,
-      ),
-    });
-    return true;
-  },
+  setProjectLocalPath: async (projectId, localPath) =>
+    (await setProjectLocalPathRow(projectId, localPath)).isOk(),
 
   reorderProjects: async (projectIds) => {
-    const { projects } = get();
-    // Optimistic update: reorder local array immediately
-    const projectMap = new Map(projects.map((p) => [p.id, p]));
-    const reordered = projectIds.map((id) => projectMap.get(id)).filter((p): p is Project => !!p);
-
-    set({ projects: reordered });
-
-    // Persist to server
-    const result = await projectsApi.reorderProjects(projectIds);
-    if (result.isErr()) {
-      // Revert on failure
-      set({ projects });
-    }
+    await reorderProjectRows(projectIds);
   },
 }));
+
+/** Collapse and deselect a project that left the list (deleted or closed). */
+function forgetProjectUiState(projectId: string): void {
+  const { expandedProjects, selectedProjectId } = useProjectStore.getState();
+  const nextExpanded = new Set(expandedProjects);
+  nextExpanded.delete(projectId);
+  useProjectStore.setState({
+    expandedProjects: nextExpanded,
+    ...(selectedProjectId === projectId ? { selectedProjectId: null } : {}),
+  });
+  persistExpandedProjects(nextExpanded);
+}
 
 // Register with the bridge so thread-store can access project state without a direct import
 registerProjectStore(useProjectStore);

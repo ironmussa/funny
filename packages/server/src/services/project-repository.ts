@@ -13,7 +13,7 @@ import {
   validateProjectPathLexical,
   validateProjectRootContainment,
 } from '@funny/core/git/path-validation';
-import type { Project, FollowUpMode } from '@funny/shared';
+import type { Project, FollowUpMode, ProjectUpdateFields } from '@funny/shared';
 import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
 import { eq, and, asc, inArray, notInArray, sql } from 'drizzle-orm';
@@ -341,24 +341,7 @@ export async function createProject(
 
 export async function updateProject(
   id: string,
-  fields: {
-    name?: string;
-    path?: string;
-    color?: string | null;
-    followUpMode?: string;
-    defaultProvider?: string | null;
-    defaultModel?: string | null;
-    defaultEffort?: string | null;
-    defaultMode?: string | null;
-    defaultPermissionMode?: string | null;
-    defaultBranch?: string | null;
-    urls?: string[] | null;
-    systemPrompt?: string | null;
-    launcherUrl?: string | null;
-    defaultAgentTemplateId?: string | null;
-    closed?: boolean;
-    fastMode?: boolean;
-  },
+  fields: ProjectUpdateFields,
 ): Promise<Result<Project, DomainError>> {
   const project = await dbGet(db.select().from(schema.projects).where(eq(schema.projects.id, id)));
   if (!project) {

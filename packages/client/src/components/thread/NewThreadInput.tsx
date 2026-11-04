@@ -1,3 +1,4 @@
+import type { Project } from '@funny/shared';
 import { DEFAULT_PROVIDER, DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import { CircleDot, GitFork, NotebookPen } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect } from 'react';
@@ -6,6 +7,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { useProjects } from '@/data/projects/hooks';
 import { useSaveBacklogOnLeave } from '@/hooks/use-save-backlog-on-leave';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { api } from '@/lib/api';
@@ -505,7 +507,7 @@ function useComposeProject(
   const newThreadIsScratch = isScratchOverride ?? newThreadIsScratchStore;
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const effectiveProjectId = projectIdOverride || newThreadProjectId || selectedProjectId;
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const project = effectiveProjectId
     ? projects.find((p) => p.id === effectiveProjectId)
     : undefined;
@@ -517,9 +519,7 @@ function useComposeProject(
   };
 }
 
-function composeProjectDefaults(
-  project: ReturnType<typeof useProjectStore.getState>['projects'][number] | undefined,
-) {
+function composeProjectDefaults(project: Project | undefined) {
   return {
     defaultThreadMode: project?.defaultMode ?? DEFAULT_THREAD_MODE,
     projectPath: project?.path ?? '',

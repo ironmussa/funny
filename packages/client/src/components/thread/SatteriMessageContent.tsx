@@ -13,6 +13,7 @@ import {
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { readProjects } from '@/data/projects/read';
 import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { toEditorUriWithLine, openFileInEditor } from '@/lib/editor-utils';
 import { MarkdownImage, markdownProseClassName } from '@/lib/markdown-components';
@@ -59,7 +60,8 @@ function getInitialRenderState(segments: SatteriMarkdownSegment[]): RenderState 
 
 function getActiveFileBasePath(): string | null {
   const appState = useAppStore.getState();
-  const { projects, selectedProjectId } = appState;
+  const { selectedProjectId } = appState;
+  const projects = readProjects();
   const activeThread = readActiveThreadView(appState);
   const projectId = activeThread?.projectId ?? selectedProjectId;
   const projectPath = projectId ? projects.find((project) => project.id === projectId)?.path : null;

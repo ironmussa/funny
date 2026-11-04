@@ -11,6 +11,7 @@ import {
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useProjects } from '@/data/projects/hooks';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -18,7 +19,7 @@ export function SettingsDetailView() {
   const { t } = useTranslation();
   const activeSettingsPage = useUIStore((s) => s.activeSettingsPage);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const page = activeSettingsPage as SettingsItemId | null;
   const label = page ? t(settingsLabelKeys[page] ?? page) : null;
   const selectedProject = projects.find((p) => p.id === selectedProjectId);

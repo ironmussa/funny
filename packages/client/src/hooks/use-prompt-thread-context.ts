@@ -9,6 +9,7 @@ import {
 } from '@funny/shared/models';
 import { useMemo } from 'react';
 
+import { useProjects } from '@/data/projects/hooks';
 import { normalizeEffort } from '@/lib/providers';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useGitStatusForThread } from '@/stores/git-status-store';
@@ -80,7 +81,7 @@ export function usePromptProjectContext({
   propProjectId?: string;
   threadOverride?: ThreadOverride;
 }) {
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const storeSelectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const storeThreadProjectId = useThreadSelector((t) => t?.projectId);
   const threadProjectId = threadOverride?.projectId ?? storeThreadProjectId;

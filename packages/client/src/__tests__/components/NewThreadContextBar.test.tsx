@@ -4,6 +4,7 @@ import { beforeEach, expect, test, vi } from 'vitest';
 
 import { NewThreadContextBar } from '@/components/thread/NewThreadContextBar';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { seedProjects } from '@/data/projects/testing';
 
 const remote = vi.hoisted(() => vi.fn());
 const branchState = vi.hoisted(() => ({
@@ -48,6 +49,7 @@ function bar(projectId?: string) {
 }
 
 beforeEach(() => {
+  seedProjects(['one', 'two'].map((id) => ({ id, name: id, path: '/mnt/windows/repo' }) as never));
   remote.mockReset();
   remote.mockReturnValue(okAsync({ remoteUrl: null }));
   ensureBranch.mockReset().mockResolvedValue(true);

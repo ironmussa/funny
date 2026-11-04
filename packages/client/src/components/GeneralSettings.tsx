@@ -1,6 +1,5 @@
 import type { AgentProvider, ToolPermission } from '@funny/shared';
 import { DEFAULT_FOLLOW_UP_MODE, DEFAULT_PROVIDER, getDefaultModel } from '@funny/shared/models';
-import { DYNAMIC_MODEL_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import { GitBranch, Monitor, RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -22,9 +21,9 @@ import {
   SettingRow,
 } from '@/components/general-settings-project/setting-primitives';
 import { useProjects } from '@/data/projects/hooks';
+import { useAcpModels } from '@/data/runner/hooks';
 import { projectsApi } from '@/lib/api/projects';
 import { getEffortLevels, getModelOptions, normalizeEffort, PROVIDERS } from '@/lib/providers';
-import { useAcpModelsStore } from '@/stores/acp-models-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ALL_STANDARD_TOOLS, TOOL_LABELS, useSettingsStore } from '@/stores/settings-store';
 
@@ -87,13 +86,9 @@ export function GeneralSettings() {
   // Dynamic catalogs (pi / cursor / opencode) are discovered at runtime so
   // the Settings combobox lists what each agent actually advertises (e.g.
   // zai/glm-5.1) instead of just the `default` sentinel from the static
-  // registry. One store keyed by provider; the dynamic set comes from the
+  // registry. One query per provider; the dynamic set comes from the
   // manifest registry.
-  const acpByProvider = useAcpModelsStore((s) => s.byProvider);
-  const fetchAcpModels = useAcpModelsStore((s) => s.fetch);
-  useEffect(() => {
-    for (const provider of DYNAMIC_MODEL_PROVIDER_IDS) void fetchAcpModels(provider);
-  }, [fetchAcpModels]);
+  const acpByProvider = useAcpModels();
 
   const projectDefaultProvider = (selectedProject?.defaultProvider ||
     DEFAULT_PROVIDER) as AgentProvider;

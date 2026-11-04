@@ -2,11 +2,11 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { useRunnerProviders } from '@/data/runner/hooks';
 import {
   refreshRunnerProviders,
   setActiveBuiltins,
-  useRunnerProviders,
-} from '@/data/runner-providers';
+} from '@/data/runner/queries';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 

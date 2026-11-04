@@ -1,7 +1,7 @@
 import { GATEABLE_ACP_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 import { useMemo } from 'react';
 
-import { useRunnerProviders } from '@/data/runner-providers';
+import { useRunnerProviders } from '@/data/runner/hooks';
 import type { AdvertisedProvider } from '@/lib/api/system';
 
 import type { ModelGroup } from './use-acp-prompt-models';

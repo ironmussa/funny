@@ -8,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { refreshRunnerProviders } from '@/data/runner-providers';
+import { refreshRunnerProviders } from '@/data/runner/queries';
 import { systemApi, type ProviderSetupStatus } from '@/lib/api/system';
 import { openProviderLoginTerminal } from '@/lib/open-terminal-tab';
 

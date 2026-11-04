@@ -128,7 +128,9 @@ class ApiHelper {
       ? `${this.baseURL}/api/threads?projectId=${projectId}`
       : `${this.baseURL}/api/threads`;
     const res = await this.request.get(url, { headers: this.headers() });
-    return res.json();
+    // GET /api/threads is paginated: { threads, total, hasMore }.
+    const body = (await res.json()) as { threads: Thread[] };
+    return body.threads;
   }
 
   async getBranches(

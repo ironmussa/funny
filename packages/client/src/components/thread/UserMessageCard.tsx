@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { LinearIssueBadge } from '@/components/LinearIssueBadge';
 import { PRBadge } from '@/components/PRBadge';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { CommandLineChip, FileChip, SkillChip } from '@/components/ui/chip';
 import {
   DropdownMenu,
@@ -372,8 +373,9 @@ export function UserMessageCard({
   const unmentionedFiles = files.filter((f) => !inlineContent.includes(`@${f.path}`));
   const hasCopyableContent = visibleContent.length > 0;
   const hasThreadActions = Boolean(onFork || onRewind || onForkAndRewind);
-  const hasSideActions = Boolean(hasCopyableContent || hasThreadActions);
-  const hasSideMeta = Boolean(hasSideActions || timestamp);
+  const hasFooter = Boolean(
+    hasCopyableContent || hasThreadActions || timestamp || model || permissionMode,
+  );
   const handleCardKeyDown = useCallback(
     (event: KeyboardEvent<HTMLDivElement>) => {
       if (!onClick || event.defaultPrevented) return;
@@ -394,166 +396,164 @@ export function UserMessageCard({
     : {};
 
   return (
-    <div
-      data-testid={props['data-testid']}
-      className={cn(
-        'relative group text-sm',
-        'w-full rounded-lg py-2 bg-foreground text-background',
-        'px-3',
-        onClick &&
-          'cursor-pointer focus:outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border',
-        'shadow-md',
-      )}
-      {...interactiveCardProps}
-    >
-      <div className="min-w-0">
-        {/* Image attachments */}
-        {allImages && allImages.length > 0 && (
-          <div className="mb-2 flex flex-wrap gap-2">
-            {allImages.map((img, idx) => (
-              <button
-                key={img.src}
-                type="button"
-                aria-label={`Open ${img.alt}`}
-                className="border-border max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer overflow-hidden rounded border p-0 transition-opacity hover:opacity-80"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onImageClick?.(allImages, idx);
-                }}
-              >
-                <img
-                  src={img.src}
-                  alt={img.alt}
-                  loading="lazy"
-                  className="block max-h-10 min-h-10 max-w-24 min-w-10 object-cover"
-                />
-              </button>
-            ))}
-          </div>
+    <div className="group relative w-full">
+      <div
+        data-testid={props['data-testid']}
+        className={cn(
+          'relative text-sm',
+          'w-full rounded-lg py-2 px-3 bg-foreground text-background',
+          onClick &&
+            'cursor-pointer focus:outline-hidden focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-border',
+          'shadow-md',
         )}
-
-        {/* Attached files not already @-mentioned inline */}
-        {unmentionedFiles.length > 0 && (
-          <div data-testid="user-message-attached-files" className="mb-2 flex flex-wrap gap-1.5">
-            {unmentionedFiles.map((item) => (
-              <ReferencedFileChip key={`attached-${item.path}`} item={item} />
-            ))}
-          </div>
-        )}
-
-        {/* Message content with inline file chips */}
-        <PresentedUserContent
-          automaticContext={presentation.kind === 'context'}
-          content={visibleContent}
-          fileMap={fileMap}
-        />
-        <UserMessageMetadata model={model} permissionMode={permissionMode} effort={effort} />
-      </div>
-
-      {hasSideMeta && (
-        <div
-          data-testid="user-message-side-meta"
-          className="absolute inset-y-2 right-2 z-10 flex min-w-6 flex-col items-end justify-between"
-        >
-          {hasSideActions && (
-            <div className="flex items-center gap-1">
-              {hasCopyableContent && (
+        {...interactiveCardProps}
+      >
+        <div className="min-w-0">
+          {/* Image attachments */}
+          {allImages && allImages.length > 0 && (
+            <div className="mb-2 flex flex-wrap gap-2">
+              {allImages.map((img, idx) => (
                 <button
+                  key={img.src}
                   type="button"
-                  data-testid={`user-message-copy-content-${props['data-testid'] ?? ''}`}
+                  aria-label={`Open ${img.alt}`}
+                  className="border-border max-h-10 min-h-10 max-w-24 min-w-10 cursor-pointer overflow-hidden rounded border p-0 transition-opacity hover:opacity-80"
                   onClick={(e) => {
                     e.stopPropagation();
-                    copyToClipboard(visibleContent);
+                    onImageClick?.(allImages, idx);
                   }}
-                  className="flex h-6 w-6 items-center justify-center rounded bg-white text-black opacity-0 transition-opacity group-hover:opacity-100 hover:bg-white/90 focus-visible:opacity-100"
-                  aria-label={
-                    copied ? t('common.copied', 'Copied') : t('thread.copyContent', 'Copy content')
-                  }
                 >
-                  {copied ? (
-                    <Check className="icon-xs copy-feedback-icon text-green-600" />
-                  ) : (
-                    <Copy className="icon-xs copy-feedback-icon" />
-                  )}
+                  <img
+                    src={img.src}
+                    alt={img.alt}
+                    loading="lazy"
+                    className="block max-h-10 min-h-10 max-w-24 min-w-10 object-cover"
+                  />
                 </button>
-              )}
-              {hasThreadActions && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <button
-                      type="button"
-                      data-testid={`user-message-actions-menu-${props['data-testid'] ?? ''}`}
-                      disabled={forkDisabled && !hasCopyableContent}
-                      onClick={(e) => e.stopPropagation()}
-                      className={cn(
-                        'flex h-6 w-6 items-center justify-center rounded',
-                        'bg-white text-black transition-opacity hover:bg-white/90',
-                        'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
-                        forkDisabled && !hasCopyableContent && 'cursor-not-allowed opacity-50',
-                      )}
-                      aria-label={t('thread.threadActions', 'Thread actions')}
-                    >
-                      <MoreVertical className="icon-xs" />
-                    </button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent
-                    align="end"
-                    className="w-64"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    {onFork && (
-                      <DropdownMenuItem
-                        data-testid={`user-message-fork-${props['data-testid'] ?? ''}`}
-                        disabled={forkDisabled}
-                        onSelect={() => onFork()}
-                      >
-                        <GitBranch className="icon-xs" />
-                        {t('thread.forkConversationFromHere', 'Fork conversation from here')}
-                      </DropdownMenuItem>
-                    )}
-                    {onRewind && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <DropdownMenuItem
-                            data-testid={`user-message-rewind-${props['data-testid'] ?? ''}`}
-                            disabled={forkDisabled || rewindDisabled}
-                            onSelect={() => onRewind()}
-                          >
-                            <Undo2 className="icon-xs" />
-                            {t('thread.rewindCodeToHere', 'Rewind code to here')}
-                          </DropdownMenuItem>
-                        </TooltipTrigger>
-                        {rewindDisabled && rewindDisabledReason ? (
-                          <TooltipContent side="left">{rewindDisabledReason}</TooltipContent>
-                        ) : null}
-                      </Tooltip>
-                    )}
-                    {onForkAndRewind && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <DropdownMenuItem
-                            data-testid={`user-message-fork-rewind-${props['data-testid'] ?? ''}`}
-                            disabled={forkDisabled || rewindDisabled}
-                            onSelect={() => onForkAndRewind()}
-                          >
-                            <RotateCcw className="icon-xs" />
-                            {t('thread.forkAndRewindCode', 'Fork conversation and rewind code')}
-                          </DropdownMenuItem>
-                        </TooltipTrigger>
-                        {rewindDisabled && rewindDisabledReason ? (
-                          <TooltipContent side="left">{rewindDisabledReason}</TooltipContent>
-                        ) : null}
-                      </Tooltip>
-                    )}
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+              ))}
             </div>
           )}
+
+          {/* Attached files not already @-mentioned inline */}
+          {unmentionedFiles.length > 0 && (
+            <div data-testid="user-message-attached-files" className="mb-2 flex flex-wrap gap-1.5">
+              {unmentionedFiles.map((item) => (
+                <ReferencedFileChip key={`attached-${item.path}`} item={item} />
+              ))}
+            </div>
+          )}
+
+          {/* Message content with inline file chips */}
+          <PresentedUserContent
+            automaticContext={presentation.kind === 'context'}
+            content={visibleContent}
+            fileMap={fileMap}
+          />
+        </div>
+      </div>
+
+      {hasFooter && (
+        <div
+          data-testid="user-message-footer"
+          className={cn(
+            'text-muted-foreground absolute top-full right-0 z-10 flex max-w-full min-w-0 flex-wrap items-center justify-end gap-1 rounded-md border border-border bg-background px-1 py-0.5 shadow-sm',
+            'pointer-events-none opacity-0 transition-opacity',
+            'group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100',
+          )}
+        >
+          <UserMessageMetadata model={model} permissionMode={permissionMode} effort={effort} />
           {timestamp && (
-            <span className="thread-timestamp text-background/50 text-right">
+            <span className="thread-timestamp text-muted-foreground mr-1">
               {timeAgo(timestamp, t, now)}
             </span>
+          )}
+          {hasCopyableContent && (
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              data-testid={`user-message-copy-content-${props['data-testid'] ?? ''}`}
+              onClick={(e) => {
+                e.stopPropagation();
+                copyToClipboard(visibleContent);
+              }}
+              className="text-muted-foreground hover:text-foreground"
+              aria-label={
+                copied ? t('common.copied', 'Copied') : t('thread.copyContent', 'Copy content')
+              }
+            >
+              {copied ? (
+                <Check className="icon-xs copy-feedback-icon text-green-600" />
+              ) : (
+                <Copy className="icon-xs copy-feedback-icon" />
+              )}
+            </Button>
+          )}
+          {hasThreadActions && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  data-testid={`user-message-actions-menu-${props['data-testid'] ?? ''}`}
+                  disabled={forkDisabled && !hasCopyableContent}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-muted-foreground hover:text-foreground data-[state=open]:text-foreground"
+                  aria-label={t('thread.threadActions', 'Thread actions')}
+                >
+                  <MoreVertical className="icon-xs" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className="w-64"
+                onClick={(e) => e.stopPropagation()}
+              >
+                {onFork && (
+                  <DropdownMenuItem
+                    data-testid={`user-message-fork-${props['data-testid'] ?? ''}`}
+                    disabled={forkDisabled}
+                    onSelect={() => onFork()}
+                  >
+                    <GitBranch className="icon-xs" />
+                    {t('thread.forkConversationFromHere', 'Fork conversation from here')}
+                  </DropdownMenuItem>
+                )}
+                {onRewind && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuItem
+                        data-testid={`user-message-rewind-${props['data-testid'] ?? ''}`}
+                        disabled={forkDisabled || rewindDisabled}
+                        onSelect={() => onRewind()}
+                      >
+                        <Undo2 className="icon-xs" />
+                        {t('thread.rewindCodeToHere', 'Rewind code to here')}
+                      </DropdownMenuItem>
+                    </TooltipTrigger>
+                    {rewindDisabled && rewindDisabledReason ? (
+                      <TooltipContent side="left">{rewindDisabledReason}</TooltipContent>
+                    ) : null}
+                  </Tooltip>
+                )}
+                {onForkAndRewind && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <DropdownMenuItem
+                        data-testid={`user-message-fork-rewind-${props['data-testid'] ?? ''}`}
+                        disabled={forkDisabled || rewindDisabled}
+                        onSelect={() => onForkAndRewind()}
+                      >
+                        <RotateCcw className="icon-xs" />
+                        {t('thread.forkAndRewindCode', 'Fork conversation and rewind code')}
+                      </DropdownMenuItem>
+                    </TooltipTrigger>
+                    {rewindDisabled && rewindDisabledReason ? (
+                      <TooltipContent side="left">{rewindDisabledReason}</TooltipContent>
+                    ) : null}
+                  </Tooltip>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </div>
       )}
@@ -599,34 +599,25 @@ function UserMessageMetadata({
   effort,
 }: Pick<UserMessageCardProps, 'model' | 'permissionMode' | 'effort'>) {
   const { t } = useTranslation();
+  const badgeClassName = 'text-muted-foreground h-4 px-1.5 py-0 text-[10px] font-medium';
   return (
     <>
-      {(model || permissionMode) && (
-        <div className="mt-1.5 flex min-w-0 flex-wrap gap-1">
-          {model && (
-            <Badge
-              variant="outline"
-              className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
-            >
-              {resolveModelLabel(model, t)}
-              {effort && (
-                <>
-                  {' · '}
-                  {EFFORT_LEVELS.find((e) => e.value === effort)?.label ?? effort}
-                </>
-              )}
-            </Badge>
+      {model && (
+        <Badge variant="outline" className={badgeClassName}>
+          {resolveModelLabel(model, t)}
+          {effort && (
+            <>
+              {' · '}
+              {EFFORT_LEVELS.find((e) => e.value === effort)?.label ?? effort}
+            </>
           )}
-          {permissionMode && (
-            <Badge
-              variant="outline"
-              className="border-background/20 bg-background/10 text-background/60 h-4 px-1.5 py-0 text-[10px] font-medium"
-            >
-              {t(`prompt.${permissionMode}`)}
-            </Badge>
-          )}
-        </div>
-      )}{' '}
+        </Badge>
+      )}
+      {permissionMode && (
+        <Badge variant="outline" className={badgeClassName}>
+          {t(`prompt.${permissionMode}`)}
+        </Badge>
+      )}
     </>
   );
 }

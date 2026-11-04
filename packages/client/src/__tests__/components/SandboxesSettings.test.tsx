@@ -25,9 +25,9 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-vi.mock('@/stores/sandbox-connections-store', () => ({
-  useSandboxConnectionsStore: (sel: (s: unknown) => unknown) =>
-    sel({ ...mocks.storeState, fetch: mocks.fetch }),
+vi.mock('@/data/sandbox-connections', () => ({
+  useSandboxConnections: () => mocks.storeState,
+  refreshSandboxConnections: mocks.fetch,
 }));
 
 import { SandboxesSettings } from '@/components/settings/SandboxesSettings';
@@ -46,7 +46,7 @@ describe('SandboxesSettings', () => {
   test('shows the empty state when there are no connections', () => {
     render(<SandboxesSettings />);
     expect(screen.getByText('No sandbox providers connected yet.')).toBeInTheDocument();
-    expect(mocks.fetch).toHaveBeenCalledWith(true);
+    expect(mocks.fetch).toHaveBeenCalled();
   });
 
   test('add stays disabled until a provider, name and key are filled', async () => {

@@ -9,9 +9,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { refreshRunnerProviders } from '@/data/runner-providers';
 import { systemApi, type ProviderSetupStatus } from '@/lib/api/system';
 import { openProviderLoginTerminal } from '@/lib/open-terminal-tab';
-import { useRunnerProvidersStore } from '@/stores/runner-providers-store';
 
 const descriptions: Record<ProviderSetupStatus['state'], string> = {
   missing: 'No executable was found on this runner. Install it to continue setup.',
@@ -64,7 +64,7 @@ export function ProviderSetupDialog({
       setError(null);
       setStatus(result.value);
       if (result.value.state === 'installing') timer = setTimeout(poll, 1500);
-      if (result.value.state === 'installed') void useRunnerProvidersStore.getState().fetch(true);
+      if (result.value.state === 'installed') void refreshRunnerProviders();
     }
     void poll();
     return () => {

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { useSandboxConnections } from '@/data/sandbox-connections';
 import { applySandboxModelGroups } from '@/hooks/use-runner-provider-groups';
 import { useUnifiedPromptModelGroups } from '@/hooks/use-unified-prompt-model-groups';
 import {
@@ -13,7 +14,6 @@ import {
 } from '@/lib/providers';
 import { buildRuntimeModes, isSandboxRuntimeChoice } from '@/lib/thread-payload';
 import { runsInSandbox } from '@/lib/thread-variant';
-import { useSandboxConnectionsStore } from '@/stores/sandbox-connections-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -51,11 +51,7 @@ function usePromptRuntime({
   const [runtime, setRuntime] = useState<string>('local');
   const hasLauncher = !!launcherUrl;
   const isScratch = useUIStore((s) => s.newThreadIsScratch);
-  const sandboxConnections = useSandboxConnectionsStore((s) => s.connections);
-  const fetchSandboxConnections = useSandboxConnectionsStore((s) => s.fetch);
-  useEffect(() => {
-    if (isNewThread) void fetchSandboxConnections();
-  }, [isNewThread, fetchSandboxConnections]);
+  const { connections: sandboxConnections } = useSandboxConnections({ enabled: isNewThread });
   const runtimeModes = useMemo(
     () => buildRuntimeModes({ hasLauncher, sandboxConnections, isScratch: !!isScratch }),
     [hasLauncher, sandboxConnections, isScratch],

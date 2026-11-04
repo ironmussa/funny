@@ -23,9 +23,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { refreshSandboxConnections, useSandboxConnections } from '@/data/sandbox-connections';
 import { api } from '@/lib/api';
 import type { InfraConnection, SandboxProviderInfo } from '@/lib/api/infra';
-import { useSandboxConnectionsStore } from '@/stores/sandbox-connections-store';
 
 function canSubmitConnection(form: {
   provider: string;
@@ -233,19 +233,17 @@ function ConnectionRow({
 }
 
 export function SandboxesSettings() {
-  const connections = useSandboxConnectionsStore((s) => s.connections);
-  const loading = useSandboxConnectionsStore((s) => s.loading);
-  const fetchConnections = useSandboxConnectionsStore((s) => s.fetch);
+  const { connections, loading } = useSandboxConnections();
   const [providers, setProviders] = useState<SandboxProviderInfo[]>([]);
 
   useEffect(() => {
-    void fetchConnections(true);
+    void refreshSandboxConnections();
     void api.listSandboxProviders().then((result) => {
       if (result.isOk()) setProviders(result.value.providers);
     });
-  }, [fetchConnections]);
+  }, []);
 
-  const refresh = () => void fetchConnections(true);
+  const refresh = () => void refreshSandboxConnections();
   const providerName = (id: string) => providers.find((p) => p.id === id)?.displayName ?? id;
 
   return (

@@ -53,6 +53,7 @@ export function KanbanColumnSurface({
   return (
     <div
       ref={columnRef}
+      data-testid={`kanban-column-${header.stage}`}
       className={cn(
         'flex flex-col w-92 min-w-92 shrink-0 rounded-lg bg-secondary/30 transition-colors',
         isDraggedOver && 'ring-2 ring-ring bg-secondary/50',

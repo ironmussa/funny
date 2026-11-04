@@ -190,6 +190,25 @@ test.describe('2. Sidebar', () => {
       await expect(page).toHaveURL(new RegExp(`/projects/${projectId}/threads/${threadId}`));
     });
 
+    test('2.12b Thread context menu - rename', async ({ authedPage: page, api }) => {
+      await page.getByTestId(`project-item-${projectId}`).click();
+      await page.waitForTimeout(300);
+
+      await page.getByTestId(`thread-item-more-${threadId}`).click();
+      await page.getByTestId(`thread-rename-${threadId}`).click();
+
+      const input = page.getByTestId(`thread-rename-input-${threadId}`);
+      await expect(input).toBeVisible();
+      await input.fill('Renamed Thread');
+      await page.getByTestId('thread-rename-confirm').click();
+
+      // Optimistic rename shows at once; the server keeps it.
+      await expect(page.getByTestId(`thread-item-${threadId}`)).toContainText('Renamed Thread');
+      await expect
+        .poll(async () => (await api.getThreads(projectId)).find((t) => t.id === threadId)?.title)
+        .toBe('Renamed Thread');
+    });
+
     test('2.13 Thread context menu - archive', async ({ authedPage: page }) => {
       await page.getByTestId(`project-item-${projectId}`).click();
       await page.waitForTimeout(300);

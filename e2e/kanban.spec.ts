@@ -113,9 +113,26 @@ test.describe('11. Kanban View', () => {
     expect(true).toBe(true);
   });
 
-  test('11.6 Drag-and-drop - Drags card between columns', async ({ authedPage: _page }) => {
-    // Placeholder test
-    expect(true).toBe(true);
+  test('11.6 Drag-and-drop - Drags card between columns', async ({ authedPage: page, api }) => {
+    const backlogId = threadIds[0];
+    await page.goto('/kanban');
+    await page.waitForLoadState('networkidle');
+
+    const card = page.getByTestId(`kanban-card-${backlogId}`);
+    const planning = page.getByTestId('kanban-column-planning');
+    await expect(card).toBeVisible();
+    await expect(
+      page.getByTestId('kanban-column-backlog').getByTestId(`kanban-card-${backlogId}`),
+    ).toBeVisible();
+
+    await card.dragTo(planning);
+
+    // The move is optimistic: the card lands in the new column at once...
+    await expect(planning.getByTestId(`kanban-card-${backlogId}`)).toBeVisible();
+    // ...and the server confirms the new stage.
+    await expect
+      .poll(async () => (await api.getThreads(projectId)).find((t) => t.id === backlogId)?.stage)
+      .toBe('planning');
   });
 
   test('11.7 Hover states - Cards show hover interactive borders', async ({

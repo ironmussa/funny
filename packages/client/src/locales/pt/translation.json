@@ -1414,6 +1414,7 @@
     "automationUpdateFailed": "Não foi possível atualizar a automação. Sua alteração foi desfeita.",
     "automationCreateFailed": "Não foi possível criar a automação.",
     "automationTriggerFailed": "Não foi possível iniciar a execução da automação.",
+    "commentDeleteFailed": "Não foi possível excluir o comentário.",
     "projectUpdateFailed": "Não foi possível atualizar o projeto. Sua alteração foi desfeita."
   },
   "agentResources": {

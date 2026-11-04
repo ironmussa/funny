@@ -1,5 +1,5 @@
 import { Activity, RefreshCw, Hourglass, Zap, Clock } from 'lucide-react';
-import { useEffect, useMemo } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
@@ -8,11 +8,11 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useSchedulerQueue, useSchedulerRefresh } from '@/data/scheduler/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useSchedulerStore } from '@/stores/scheduler-store';
 
 type RunStatus = 'dispatched' | 'claimed' | 'retry-queued';
 
@@ -63,12 +63,10 @@ function formatRelative(ms: number | null | undefined, now: number): string {
 export function SchedulerView() {
   const now = useMinuteTick();
   const navigate = useNavigate();
-  const runsByThread = useSchedulerStore((s) => s.runsByThread);
-  const loading = useSchedulerStore((s) => s.loading);
-  const refreshing = useSchedulerStore((s) => s.refreshing);
-  const lastError = useSchedulerStore((s) => s.lastError);
-  const loadRuns = useSchedulerStore((s) => s.loadRuns);
-  const refresh = useSchedulerStore((s) => s.refresh);
+  // Loads the queue on mount; scheduler events keep it live.
+  const { runs, loading, error: loadError } = useSchedulerQueue();
+  const { refreshing, error: refreshError, refresh } = useSchedulerRefresh();
+  const lastError = refreshError ?? loadError;
 
   const threadsByProject = useThreadsByProject();
 
@@ -80,14 +78,6 @@ export function SchedulerView() {
     }
     return (threadId: string) => flat.get(threadId);
   }, [threadsByProject]);
-
-  useEffect(() => {
-    loadRuns();
-  }, [loadRuns]);
-
-  const runs = useMemo(() => {
-    return Object.values(runsByThread).sort((a, b) => b.lastEventAtMs - a.lastEventAtMs);
-  }, [runsByThread]);
 
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col" data-testid="scheduler-view">
@@ -103,7 +93,7 @@ export function SchedulerView() {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => refresh()}
+          onClick={() => void refresh()}
           disabled={refreshing}
           data-testid="scheduler-refresh"
         >

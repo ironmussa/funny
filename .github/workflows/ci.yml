@@ -176,9 +176,13 @@ jobs:
       - name: Install dependencies
         run: bun install
 
+      # GPUI renders through Vulkan. The runner has no GPU, so the release smoke
+      # needs Mesa's software Vulkan driver (lavapipe) to create a surface.
       - name: Install system libraries (GPUIX native, Linux)
         if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-x11-0 xvfb
+        run: >-
+          sudo apt-get update && sudo apt-get install -y --no-install-recommends
+          libxkbcommon-x11-0 xvfb libvulkan1 mesa-vulkan-drivers
 
       - name: Run client-core contracts
         run: bun run --cwd packages/client-core test

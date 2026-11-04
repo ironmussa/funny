@@ -12,6 +12,10 @@
  *     owns that shape (`ThreadIndexSnapshot`). Type annotations are allowed.
  *  3. The removed legacy index helpers (`patchThread`, `replaceProjectThreads`,
  *     …) are not reintroduced: thread rows are written through the data layer.
+ *  4. Changing row fields (status, title, branch, …) are not read straight off
+ *     a loaded payload (`activeThread.status`, `threadDataById[id].title`): the
+ *     payload's copy is a load-time snapshot. Read the detail view through
+ *     `stores/thread-view.ts` or the `stores/thread-context` hooks.
  *
  * `--self-test` checks the rules against allowed and forbidden fixtures.
  * Exits non-zero on violation.
@@ -23,7 +27,7 @@ import { join } from 'node:path';
 const ROOT = join(import.meta.dir, '..', '..');
 const CLIENT_SRC = join(ROOT, 'packages/client/src');
 
-/** Migration shims (design D8) that write the threads collection from outside `src/data/`. */
+/** Store-side writers of the threads collection outside `src/data/` (realtime row patches). */
 const WRITER_SHIMS = new Set(['stores/thread-row-writes.ts']);
 
 /**
@@ -40,6 +44,13 @@ const PROJECTED_FIELDS =
 /** `field: <value>` in an object literal — but not `field: Type` annotations. */
 const PROJECTED_WRITE = new RegExp(
   `\\b(?:${PROJECTED_FIELDS})\\s*:(?!\\s*(?:Record<|string\\[\\]|number\\b|Thread\\b|Partial<|readonly\\b))`,
+);
+
+/** Row fields that change after load (id, projectId, isScratch, createdAt never do). */
+const MUTABLE_ROW_FIELDS =
+  'status|title|stage|archived|pinned|branch|baseBranch|worktreePath|mode|model|permissionMode|provider|runtime|containerUrl|containerName|cost|completedAt|updatedAt|initialPrompt|sessionId|lastAssistantMessage|commentCount|contextRecoveryReason|viewerShareLevel';
+const PAYLOAD_ROW_READ = new RegExp(
+  `(?:\\.activeThread|threadDataById\\[[^\\]]+\\])\\??\\.(?:${MUTABLE_ROW_FIELDS})\\b`,
 );
 
 const LEGACY_INDEX_HELPER =
@@ -74,6 +85,11 @@ const LINE_RULES: LineRule[] = [
     label: 'legacy thread-index helper called',
     pattern: LEGACY_INDEX_HELPER,
     appliesTo: (rel) => !LEGACY_HELPER_OWNERS.has(rel),
+  },
+  {
+    label: 'row field read from a loaded payload',
+    pattern: PAYLOAD_ROW_READ,
+    appliesTo: (rel) => !inDataLayer(rel) && rel !== 'stores/thread-view.ts',
   },
   {
     label: 'projected thread index written directly',
@@ -113,7 +129,7 @@ function runSelfTest(): void {
     { rel: 'components/X.tsx', source: "data.collection.update('t1', (d) => d);", violates: true },
     { rel: 'stores/x.ts', source: 'getThreadsData().patchSynced(id, fn);', violates: true },
     { rel: 'stores/thread-row-writes.ts', source: 'data.patchSynced(id, fn);', violates: false },
-    { rel: 'stores/thread-projection.ts', source: 'data.patchSynced(id, fn);', violates: true },
+    { rel: 'stores/thread-store.ts', source: 'data.patchSynced(id, fn);', violates: true },
     { rel: 'components/OrgSwitcher.tsx', source: 'setState({ threadsById: {} });', violates: true },
     { rel: 'hooks/x.ts', source: '  scratchThreadIds: [],', violates: true },
     {
@@ -126,7 +142,11 @@ function runSelfTest(): void {
       source: '  threadIdsByProject: Record<string, string[]>,',
       violates: false,
     },
-    { rel: 'stores/thread-projection.ts', source: '    threadsById: {},', violates: true },
+    { rel: 'stores/thread-store.ts', source: '    threadsById: {},', violates: true },
+    { rel: 'hooks/x.ts', source: 'const s = state.activeThread?.status;', violates: true },
+    { rel: 'components/X.tsx', source: 's.threadDataById[id]?.title', violates: true },
+    { rel: 'hooks/x.ts', source: 'const id = state.activeThread?.id;', violates: false },
+    { rel: 'hooks/x.ts', source: 'const q = state.activeThread?.queuedCount;', violates: false },
     { rel: 'components/X.stories.tsx', source: 'threadsById: {},', violates: false },
     { rel: 'stores/x.ts', source: '// threadsById: {} in a comment', violates: false },
     { rel: 'hooks/x.ts', source: 'threadMutations.patchThread(state, id, fn)', violates: true },

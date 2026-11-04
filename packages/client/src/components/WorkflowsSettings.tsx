@@ -52,6 +52,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
+import { useActiveThreadView } from '@/stores/thread-context';
 import { useWorkflowRunStore } from '@/stores/workflow-run-store';
 
 type WorkflowNodeData = WorkflowGraphNodeData &
@@ -83,7 +84,7 @@ function WorkflowsDesigner({ projectId }: { projectId: string | null }) {
   const storeSelectedProjectId = useAppStore((s) => s.selectedProjectId);
   const selectedProjectId = projectId ?? storeSelectedProjectId;
   const selectedThreadId = useAppStore((s) => s.selectedThreadId);
-  const activeThread = useAppStore((s) => s.activeThread);
+  const activeThread = useActiveThreadView();
   const activeRunId = useWorkflowRunStore((s) => s.activeRunId);
   const runStates = useWorkflowRunStore((s) => (activeRunId ? s.runs[activeRunId] : undefined));
   const setActiveRun = useWorkflowRunStore((s) => s.setActiveRun);

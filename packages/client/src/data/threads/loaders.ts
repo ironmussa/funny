@@ -171,6 +171,56 @@ export function applyThreadDetail(
   data.upsertFromServer([{ ...prev, ...fields }], startedSeq);
 }
 
+/** Detail-response fields that belong to the loaded conversation, not to the thread row. */
+const DETAIL_PAYLOAD_KEYS = new Set([
+  'messages',
+  'hasMore',
+  'hasMoreAfter',
+  'total',
+  'windowStart',
+  'initInfo',
+  'lastUserMessage',
+  'leadingUserMessage',
+  'queuedCount',
+  'queuedNextMessage',
+  'waitingReason',
+  'pendingPermission',
+  'pendingPermissionRequest',
+  'permissionApprovalCapability',
+  'permissionRecoveryReason',
+]);
+
+/** The thread row part of a detail response (`api.getThread`). */
+function threadRowOfDetail(detail: Thread): Thread {
+  return Object.fromEntries(
+    Object.entries(detail).filter(([key]) => !DETAIL_PAYLOAD_KEYS.has(key)),
+  ) as unknown as Thread;
+}
+
+/**
+ * Make sure an opened thread has a row: the detail view reads row fields
+ * (status, title, …) only from the collection. A thread opened by URL can be
+ * outside every loaded list; its row is added without joining a list.
+ *
+ * A held row wins over the detail, which may come from a prefetch cache and
+ * be older than the row's list or realtime updates; the detail only fills in
+ * fields the row lacks.
+ */
+export function adoptThreadDetail(detail: Thread, layer: DataLayer = getDataLayer()): void {
+  const data = getThreadsData(layer);
+  const row = threadRowOfDetail(detail);
+  if (!data.getSynced(row.id)) {
+    data.upsertFresh([row]);
+    return;
+  }
+  data.patchSynced(row.id, (prev) => {
+    const missing = Object.entries(row).filter(
+      ([key, value]) => value !== undefined && prev[key as keyof Thread] === undefined,
+    );
+    return missing.length > 0 ? { ...prev, ...Object.fromEntries(missing) } : prev;
+  });
+}
+
 /** Drop a project's list and its rows (project deleted or closed). */
 export function dropProjectThreads(projectId: string, layer: DataLayer = getDataLayer()): void {
   const data = getThreadsData(layer);

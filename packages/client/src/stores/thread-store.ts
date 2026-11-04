@@ -52,6 +52,7 @@ import {
 } from '@/data/threads/actions';
 import {
   addScratchThread as addScratchThreadRow,
+  adoptThreadDetail,
   applyThreadDetail,
   beginThreadRequest,
   dropProjectThreads as clearProjectThreadRows,
@@ -90,7 +91,6 @@ import {
   isThreadDataLoaded,
 } from './thread-machine-bridge';
 import * as mutations from './thread-mutations';
-import { installActiveThreadMirror } from './thread-projection';
 import { useThreadReadStore } from './thread-read-store';
 import { patchThreadRow } from './thread-row-writes';
 import {
@@ -113,6 +113,7 @@ import {
   setClearThreadSelection,
   getUrlThreadId,
 } from './thread-store-internals';
+import { readActiveThreadView, readThreadView } from './thread-view';
 import * as wsHandlers from './thread-ws-handlers';
 
 // Re-export for external consumers
@@ -368,10 +369,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   queuedMessagesByThread: {},
   queuedNextMessageByThread: {},
 
-  // Thread lists load through the data layer (`src/data/threads`): rows land in
-  // the threads collection and `threadsById` / the bucket arrays are projected
-  // from it (see thread-projection.ts). Concurrent loads of the same list share
-  // one request.
+  // Thread lists load through the data layer (`src/data/threads`): rows and
+  // list membership land in the threads collection and its list metadata.
+  // Concurrent loads of the same list share one request.
   loadScratchThreads: () => loadScratchThreadRows(),
 
   addScratchThread: (thread: Thread) => {
@@ -570,6 +570,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // content to preserve: publishing at transition priority lets sidebar
       // updates starve the first chat paint (especially while git badges are
       // arriving). Publish the initial thread urgently instead.
+      // The detail view reads row fields from the collection; an opened thread
+      // outside every loaded list gets its row from this detail.
+      adoptThreadDetail(thread);
       const publishHydratedThread = () => {
         set((state) => {
           const queuePatch =
@@ -659,10 +662,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   updateThreadPermissionMode: async (threadId, permissionMode) => {
     const current = get();
+    const active = readActiveThreadView(current);
     const previousMode =
+      readThreadView(current, threadId)?.permissionMode ??
       readThreadRow(threadId)?.permissionMode ??
-      current.threadDataById[threadId]?.permissionMode ??
-      (current.activeThread?.id === threadId ? current.activeThread.permissionMode : undefined);
+      (active?.id === threadId ? active.permissionMode : undefined);
     if (!previousMode || previousMode === permissionMode) return true;
 
     // The row write is an optimistic transaction (rolls back with a toast on
@@ -769,12 +773,15 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         ? entry.messages.map((m, i) => (i === existingDraftIdx ? newMessage : m))
         : entry.messages.concat(newMessage);
 
+    // Row fields — every view, the detail view included, reads them from the
+    // threads collection.
+    patchThreadRow(threadId, (t) => ({
+      ...t,
+      status: newStatus,
+      initialPrompt: undefined,
+      permissionMode: permissionMode || t.permissionMode,
+    }));
     set((state) => ({
-      // Sidebar status — keeps the row badge in sync regardless of bucket.
-      ...patchThreadRow(state, threadId, (t) => ({
-        ...t,
-        status: newStatus,
-      })),
       // Payload patch — also mirrors to activeThread when this is the
       // selected thread.
       ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
@@ -1199,6 +1206,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Refcount may have dropped while fetching (unmount, race) — only land
     // the data if someone still wants it.
     if ((_liveThreadRefCounts.get(threadId) ?? 0) <= 0) return;
+    adoptThreadDetail(result.value);
     set((state) => mutations.setThreadData(state, threadId, result.value as ThreadWithMessages));
   },
 
@@ -1341,16 +1349,20 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   handleWSWorktreeSetupComplete: (threadId, data) => {
     const { loadThreadsForProject } = get();
+    const setupDone = <T extends Thread>(t: T): T => ({
+      ...t,
+      status: t.status === 'setting_up' ? 'pending' : t.status,
+      branch: data.branch,
+      ...(data.worktreePath ? { worktreePath: data.worktreePath } : {}),
+    });
 
+    patchThreadRow(threadId, setupDone);
     set((state) => {
       const { [threadId]: _, ...restProgress } = state.setupProgressByThread;
       return {
         setupProgressByThread: restProgress,
         ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
-          ...t,
-          status: t.status === 'setting_up' ? 'pending' : t.status,
-          branch: data.branch,
-          ...(data.worktreePath ? { worktreePath: data.worktreePath } : {}),
+          ...setupDone(t),
           setupProgress: undefined,
         })),
       };
@@ -1367,8 +1379,6 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
 // Register with the bridge so project-store can access thread state without a direct import
 registerThreadStore(useThreadStore);
-// Mirror row changes from the threads collection onto the right-pane payload.
-installActiveThreadMirror(useThreadStore);
 setClearThreadSelection(() => {
   useThreadStore.setState({ selectedThreadId: null, activeThread: null });
 });

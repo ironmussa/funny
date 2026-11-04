@@ -28,6 +28,7 @@ import {
   getProjectIdForThread,
   getUrlThreadId,
 } from '@/stores/thread-store-internals';
+import { readActiveThreadView } from '@/stores/thread-view';
 
 import { dispatchBrowserSessionEvent } from './dispatch-browser-session-events';
 import { dispatchTestEvent } from './dispatch-test-events';
@@ -36,12 +37,10 @@ const wsLog = createClientLogger('ws');
 
 /** Bump a thread's comment-count badge live (floored at 0). */
 function adjustCommentCount(threadId: string, delta: number): void {
-  useThreadStore.setState((state) =>
-    patchThreadRow(state, threadId, (t) => ({
-      ...t,
-      commentCount: Math.max(0, (t.commentCount ?? 0) + delta),
-    })),
-  );
+  patchThreadRow(threadId, (t) => ({
+    ...t,
+    commentCount: Math.max(0, (t.commentCount ?? 0) + delta),
+  }));
 }
 
 // ── Remote container WS connections ─────────────────────────────
@@ -534,23 +533,14 @@ function hasLocationChange(data: any): boolean {
 }
 
 function patchPermissionMode(threadId: string, permissionMode: any): void {
-  useThreadStore.setState((state) => ({
-    ...patchThreadRow(state, threadId, (thread) => ({
+  patchThreadRow(threadId, (thread) => ({ ...thread, permissionMode }));
+  // Payloads opened before their row exists (a very early event) keep their own copy.
+  useThreadStore.setState((state) =>
+    threadMutations.applyThreadDataPatch(state, threadId, (thread) => ({
       ...thread,
       permissionMode,
     })),
-    ...threadMutations.applyThreadDataPatch(state, threadId, (thread) => ({
-      ...thread,
-      permissionMode,
-    })),
-    // A very early event can arrive before either cache is hydrated.
-    // Keep the active mirror coherent in that narrow window as well.
-    ...(state.activeThread?.id === threadId &&
-    !readThreadRow(threadId) &&
-    !state.threadDataById[threadId]
-      ? { activeThread: { ...state.activeThread, permissionMode } }
-      : {}),
-  }));
+  );
 }
 
 function handleThreadUpdated(threadId: string, data: any): void {
@@ -792,13 +782,13 @@ function findThread(threadId: string): {
   projectId?: string;
   isScratch?: boolean;
 } {
-  const store = useThreadStore.getState();
-  if (store.activeThread?.id === threadId) {
+  const active = readActiveThreadView(useThreadStore.getState());
+  if (active?.id === threadId) {
     return {
-      title: store.activeThread.title,
-      branch: store.activeThread.branch,
-      projectId: store.activeThread.projectId,
-      isScratch: store.activeThread.isScratch,
+      title: active.title,
+      branch: active.branch,
+      projectId: active.projectId,
+      isScratch: active.isScratch,
     };
   }
   const t = readThreadRow(threadId);
@@ -899,7 +889,7 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
       data.action === 'commit-merge')
   ) {
     import('@/stores/pr-detail-store').then(({ usePRDetailStore }) => {
-      const { activeThread } = useThreadStore.getState();
+      const activeThread = readActiveThreadView(useThreadStore.getState());
       if (activeThread) {
         const gitStatus = useGitStatusStore.getState();
         const bk =

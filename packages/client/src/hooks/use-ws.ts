@@ -33,6 +33,7 @@ import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import type { ThreadState } from '@/stores/thread-state';
 import { useThreadStore } from '@/stores/thread-store';
+import { readActiveThreadView } from '@/stores/thread-view';
 
 import {
   clearWSDispatchState,
@@ -487,7 +488,7 @@ export function useWS() {
     // announce which thread we're viewing for thread-sharing presence/stream.
     let lastContainerUrl: string | undefined;
     const unsub = useThreadStore.subscribe((state) => {
-      const thread = state.activeThread;
+      const thread = readActiveThreadView(state);
 
       // Presence: tell the server which thread is open so it joins us to the
       // presence room (and, for sharees, the stream room) and broadcasts our

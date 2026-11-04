@@ -130,6 +130,7 @@ import { getThreadsData } from '@/data/threads/store';
 import { withThreadIndex } from '@/data/threads/testing';
 import { prefetchThreadData } from '@/stores/thread-machine-bridge';
 import { useThreadStore } from '@/stores/thread-store';
+import { readActiveThreadView } from '@/stores/thread-view';
 
 import { deferred } from '../helpers/data-layer-harness';
 import { seedThreads } from '../helpers/seed-thread-state';
@@ -1658,8 +1659,8 @@ describe('thread store actions', () => {
 
 // ── Data-layer integration (openspec adopt-tanstack-db-client) ────────
 //
-// Thread rows live in the threads collection; threadsById / buckets and the
-// right-pane row fields are projected from it. These cover the spec
+// Thread rows live in the threads collection; lists and the right pane's row
+// fields are read from it. These cover the spec
 // scenarios end-to-end through the real store.
 describe('thread store actions on the threads collection', () => {
   const t1 = { ...baseThread, stage: 'backlog' } as unknown as Thread;
@@ -1680,7 +1681,8 @@ describe('thread store actions on the threads collection', () => {
 
   const sidebarTitle = () => readThreadIndex().threadsById.t1?.title;
   const boardTitle = () => getThreadsData().readThread('t1')?.title;
-  const headerTitle = () => useThreadStore.getState().activeThread?.title;
+  // The header reads the open thread through the detail view (payload + row).
+  const headerTitle = () => readActiveThreadView(useThreadStore.getState())?.title;
 
   test('spec: rename is reflected in sidebar, board and header at once', async () => {
     const gate = deferred<unknown>();

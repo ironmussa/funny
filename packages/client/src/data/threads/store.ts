@@ -81,8 +81,7 @@ export interface ThreadsData {
   removeRows(threadIds: readonly string[]): void;
   /**
    * Write rows as synced exactly as given (no merge, no fences). Only for
-   * the migration bridge that imports legacy direct writes to the Zustand
-   * thread index (`stores/thread-projection.ts`).
+   * seeding fixtures in tests and stories (`testing.ts`).
    */
   importRows(rows: readonly Thread[]): void;
 }

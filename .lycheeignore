@@ -18,3 +18,10 @@ openspec
 
 # Internal telemetry backend — not reachable from CI runners.
 ^https?://abbacchio\.dev
+
+# Private Abbacchio repository: anonymous CI requests get a 404.
+^https://github\.com/ironmussa/abbacchio
+
+# Production Railway services. Their uptime is not a docs problem, and the
+# runner serves no web page at its root (it answers 502).
+^https://funny-[a-z0-9-]+\.up\.railway\.app

@@ -11,6 +11,7 @@ import { useTerminalDockview } from '@/components/terminal/TerminalDockview';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { LoadingState } from '@/components/ui/loading-state';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
+import { loadTemplates } from '@/data/templates/loaders';
 import { parseRoute } from '@/hooks/route-parser';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useAppScrollLock } from '@/hooks/use-app-scroll-lock';
@@ -28,7 +29,6 @@ import { cn } from '@/lib/utils';
 import { loadInstalledVisualizers } from '@/lib/visualizer-loader';
 import { preloadAllThreadsView } from '@/platform/shortcut-target-preloads';
 import { preloadThreadView } from '@/platform/thread-view-loader';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider, useActiveThreadView, useThreadViewById } from '@/stores/thread-context';
@@ -168,7 +168,6 @@ export function App() {
 
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const projectsInitialized = useProjectStore((s) => s.initialized);
-  const loadTemplates = useAgentTemplateStore((s) => s.loadTemplates);
   const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
   const loadSharedThreads = useThreadStore((s) => s.loadSharedThreads);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
@@ -241,13 +240,13 @@ export function App() {
 
   // Load the remaining app data on mount (auth already initialized by AuthGate).
   useEffect(() => {
-    loadTemplates();
+    void loadTemplates();
     loadScratchThreads();
     loadSharedThreads();
     // Load installed visualizer extensions (best-effort; failures are logged
     // and never block the app). Runs after auth since AuthGate gates App.
     void loadInstalledVisualizers();
-  }, [loadTemplates, loadScratchThreads, loadSharedThreads]);
+  }, [loadScratchThreads, loadSharedThreads]);
 
   useDocumentTitle();
 

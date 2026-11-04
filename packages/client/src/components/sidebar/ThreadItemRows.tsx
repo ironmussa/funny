@@ -7,9 +7,9 @@ import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAgentTemplate } from '@/data/templates/hooks';
 import { canShowPowerline, isScratch } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
 // ── Row 1: title + badges ────────────────────────────────────────────
 
@@ -51,9 +51,7 @@ function RuntimeBadge({ thread }: { thread: Thread }) {
 }
 
 function AgentTemplateBadge({ thread }: { thread: Thread }) {
-  const agentTemplate = useAgentTemplateStore((s) =>
-    thread.agentTemplateId ? s.templates.find((t) => t.id === thread.agentTemplateId) : undefined,
-  );
+  const agentTemplate = useAgentTemplate(thread.agentTemplateId);
   if (!agentTemplate) return null;
   const color = agentTemplate.color;
   return (

@@ -1483,6 +1483,8 @@
       "INTERNAL": "Error al crear el proyecto. El servidor puede estar experimentando problemas."
     },
     "threadUpdateFailed": "No se pudo actualizar el hilo. Se deshizo tu cambio.",
+    "templateUpdateFailed": "No se pudo actualizar la plantilla de agente. Se deshizo tu cambio.",
+    "templateCreateFailed": "No se pudo crear la plantilla de agente.",
     "projectUpdateFailed": "No se pudo actualizar el proyecto. Se deshizo tu cambio."
   },
   "agentResources": {

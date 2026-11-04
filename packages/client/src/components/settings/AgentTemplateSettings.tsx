@@ -39,10 +39,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  createTemplate,
+  deleteTemplate,
+  duplicateTemplate,
+  updateTemplate,
+} from '@/data/templates/actions';
+import { useAgentTemplates, useTemplateUsageStats } from '@/data/templates/hooks';
+import { ensureTemplatesLoaded } from '@/data/templates/loaders';
 import { exportTemplate, importTemplateFile } from '@/lib/agent-template-io';
 import { PROVIDER_MODELS } from '@/lib/providers';
 import { cn } from '@/lib/utils';
-import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useAuthStore } from '@/stores/auth-store';
 
 const PASTEL_COLORS = [
@@ -65,29 +72,21 @@ function isBuiltinTemplate(template: AgentTemplate): boolean {
 // ── Main Component ──────────────────────────────────────────
 
 export function AgentTemplateSettings() {
-  const {
-    templates,
-    usageStats,
-    initialized,
-    loadTemplates,
-    createTemplate,
-    deleteTemplate,
-    duplicateTemplate,
-  } = useAgentTemplateStore();
+  const templates = useAgentTemplates();
+  const usageStats = useTemplateUsageStats();
   const currentUserId = useAuthStore((s) => s.user?.id);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!initialized) loadTemplates();
-  }, [initialized, loadTemplates]);
+    void ensureTemplatesLoaded();
+  }, []);
 
   const handleCreate = useCallback(async () => {
-    const tpl = await createTemplate({ name: 'New Agent Template' });
-    if (tpl) {
-      setEditingId(tpl.id);
-      toast.success('Template created');
-    }
-  }, [createTemplate]);
+    const result = await createTemplate({ name: 'New Agent Template' });
+    if (result.isErr()) return;
+    setEditingId(result.value.id);
+    toast.success('Template created');
+  }, []);
 
   const handleImport = useCallback(async () => {
     const result = await importTemplateFile();
@@ -95,32 +94,28 @@ export function AgentTemplateSettings() {
       toast.error(result);
       return;
     }
-    const tpl = await createTemplate(result);
-    if (tpl) {
-      setEditingId(tpl.id);
-      toast.success(`Imported "${tpl.name}"`);
-    }
-  }, [createTemplate]);
+    const created = await createTemplate(result);
+    if (created.isErr()) return;
+    setEditingId(created.value.id);
+    toast.success(`Imported "${created.value.name}"`);
+  }, []);
 
   const handleDelete = useCallback(
     async (id: string) => {
-      await deleteTemplate(id);
+      const result = await deleteTemplate(id);
+      if (result.isErr()) return;
       if (editingId === id) setEditingId(null);
       toast.success('Template deleted');
     },
-    [deleteTemplate, editingId],
+    [editingId],
   );
 
-  const handleDuplicate = useCallback(
-    async (id: string) => {
-      const tpl = await duplicateTemplate(id);
-      if (tpl) {
-        setEditingId(tpl.id);
-        toast.success('Template duplicated');
-      }
-    },
-    [duplicateTemplate],
-  );
+  const handleDuplicate = useCallback(async (id: string) => {
+    const result = await duplicateTemplate(id);
+    if (result.isErr()) return;
+    setEditingId(result.value.id);
+    toast.success('Template duplicated');
+  }, []);
 
   const ownTemplates = templates.filter((t) => !isBuiltinTemplate(t) && t.userId === currentUserId);
   const sharedTemplates = templates.filter(
@@ -375,13 +370,11 @@ function TemplateEditor({
   onClose: () => void;
   onDelete: () => void;
 }) {
-  const { updateTemplate } = useAgentTemplateStore();
-
   const save = useCallback(
     async (data: Partial<CreateAgentTemplateRequest>) => {
       await updateTemplate(template.id, data);
     },
-    [updateTemplate, template.id],
+    [template.id],
   );
 
   return (

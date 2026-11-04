@@ -6,13 +6,13 @@ import { resolveBasePath } from '@/components/review-pane/resolve-base-path';
 import { fetchForThread, fetchProjectStatus, fetchForProject } from '@/data/git-status/actions';
 import { useGitStatusForThread, useProjectGitStatus } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';
+import { usePRDetail } from '@/data/pull-requests/hooks';
 import { useReviewState } from '@/hooks/use-review-state';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useThreadById } from '@/lib/thread-selectors';
 import { canLoadGitHistory } from '@/lib/thread-variant';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { usePRDetail } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
 import {
   useThreadProjectId,

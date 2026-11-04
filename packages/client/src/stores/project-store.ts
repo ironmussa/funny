@@ -12,9 +12,10 @@ import {
   setProjectLocalPath as setProjectLocalPathRow,
   updateProject as updateProjectRow,
 } from '@/data/projects/actions';
+import { fetchProjectBranches, setProjectCurrentBranch } from '@/data/projects/branches';
 import { loadProjects as loadProjectRows } from '@/data/projects/loaders';
 import { parseRoute } from '@/hooks/route-parser';
-import { projectsApi, type UpdateProjectInput } from '@/lib/api/projects';
+import type { UpdateProjectInput } from '@/lib/api/projects';
 import { metric, startSpan } from '@/lib/telemetry';
 import { clientComposition } from '@/platform/client-composition';
 
@@ -27,17 +28,6 @@ import {
 } from './store-bridge';
 
 const EXPANDED_PROJECTS_KEY = 'funny_expanded_projects';
-
-// Branch fetch cooldown — branches change rarely (only on checkout/merge)
-const BRANCH_COOLDOWN_MS = 10_000;
-const _lastFetchBranch = new Map<string, number>();
-const _inFlightBranch = new Set<string>();
-const _abortBranch = new Map<string, AbortController>();
-// Bumped by the authoritative writer (setBranch, post-checkout). An in-flight
-// fetchBranch reads the cwd branch *before* a checkout completes, so it must
-// discard its result if a setBranch superseded it mid-flight — otherwise the
-// stale value overwrites the fresh one and the branch label flickers back.
-const _branchGen = new Map<string, number>();
 
 function loadExpandedProjects(): Set<string> {
   try {
@@ -256,40 +246,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   setBranch: (projectId, branch) => {
-    // Bypass the fetchBranch cooldown — the caller already knows the new branch
-    // (e.g. just performed a checkout) and needs subscribers to see the change.
-    _lastFetchBranch.set(projectId, Date.now());
-    // Invalidate any in-flight fetchBranch that read the pre-checkout branch.
-    _branchGen.set(projectId, (_branchGen.get(projectId) ?? 0) + 1);
+    // The caller already knows the new branch (e.g. it just checked it out):
+    // record it in the branch query too, cancelling an in-flight listing that
+    // read the pre-checkout branch so it cannot flicker the label back.
+    setProjectCurrentBranch(projectId, branch);
     set({ branchByProject: { ...get().branchByProject, [projectId]: branch } });
   },
 
+  // The listing is a shared query (`data/projects/branches.ts`): its freshness
+  // replaces the old cooldown, and in-flight requests are de-duplicated.
   fetchBranch: async (projectId) => {
-    const now = Date.now();
-    const last = _lastFetchBranch.get(projectId) ?? 0;
-    if (now - last < BRANCH_COOLDOWN_MS) return;
-    _lastFetchBranch.set(projectId, now);
-    const gen = _branchGen.get(projectId) ?? 0;
-
-    // Abort any stale in-flight branch listing for this project
-    _abortBranch.get(projectId)?.abort();
-    const ac = new AbortController();
-    _abortBranch.set(projectId, ac);
-    _inFlightBranch.add(projectId);
-
-    try {
-      const result = await projectsApi.listBranches(projectId, ac.signal);
-      if (result.isErr()) return;
-      // A checkout (setBranch) landed while we were listing — its branch is
-      // authoritative, so drop our now-stale read instead of clobbering it.
-      if ((_branchGen.get(projectId) ?? 0) !== gen) return;
-      const { currentBranch } = result.value;
-      if (currentBranch) {
-        set({ branchByProject: { ...get().branchByProject, [projectId]: currentBranch } });
-      }
-    } finally {
-      _abortBranch.delete(projectId);
-      _inFlightBranch.delete(projectId);
+    const listing = await fetchProjectBranches(projectId);
+    const currentBranch = listing?.currentBranch;
+    if (currentBranch && get().branchByProject[projectId] !== currentBranch) {
+      set({ branchByProject: { ...get().branchByProject, [projectId]: currentBranch } });
     }
   },
 

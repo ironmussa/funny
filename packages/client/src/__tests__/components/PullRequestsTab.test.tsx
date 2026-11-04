@@ -4,10 +4,11 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PullRequestsTab } from '@/components/PullRequestsTab';
+import { createDataLayer } from '@/data/data-layer';
 import { readGitStatusMaps } from '@/data/git-status/read';
 import { seedGitStatus } from '@/data/git-status/testing';
+import { replaceDataLayer } from '@/data/runtime';
 import { withThreadIndex } from '@/data/threads/testing';
-import { usePRDetailStore } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -142,7 +143,7 @@ describe('PullRequestsTab', () => {
     apiMock.projectGetRemoteUrl.mockReturnValue(
       okAsync({ remoteUrl: 'https://github.com/acme/repo' }),
     );
-    usePRDetailStore.getState().clearAll();
+    replaceDataLayer(createDataLayer({ userId: null }));
     apiMock.githubStatus.mockReturnValue(okAsync({ connected: true, login: 'argenisleon' }));
     apiMock.githubPRFilterOptions.mockReturnValue(okAsync({ labels: [], users: [] }));
     apiMock.githubPRsSearch.mockReturnValue(okAsync({ prs: [], hasMore: false }));

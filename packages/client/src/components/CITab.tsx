@@ -9,8 +9,9 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { usePRDetail } from '@/data/pull-requests/hooks';
+import { fetchPRDetail } from '@/data/pull-requests/queries';
 import { cn } from '@/lib/utils';
-import { usePRDetail, usePRDetailStore } from '@/stores/pr-detail-store';
 
 const POLL_INTERVAL = 30_000;
 
@@ -47,11 +48,9 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
   useEffect(() => {
     if (!visible || !projectId || !prNumber) return;
 
-    usePRDetailStore.getState().fetchPRDetail(projectId, prNumber);
-    pollRef.current = setInterval(() => {
-      const s = usePRDetailStore.getState();
-      if (!s.rateLimited) s.fetchPRDetail(projectId, prNumber);
-    }, POLL_INTERVAL);
+    // Skips while fresh or while GitHub's rate limit pauses polling.
+    void fetchPRDetail(projectId, prNumber);
+    pollRef.current = setInterval(() => void fetchPRDetail(projectId, prNumber), POLL_INTERVAL);
 
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
@@ -59,7 +58,7 @@ export function CITab({ projectId, prNumber, prUrl, visible }: CITabProps) {
   }, [visible, projectId, prNumber]);
 
   const handleRefresh = () => {
-    if (projectId && prNumber) usePRDetailStore.getState().fetchPRDetail(projectId, prNumber, true);
+    if (projectId && prNumber) void fetchPRDetail(projectId, prNumber, { force: true });
   };
 
   if (!projectId) {

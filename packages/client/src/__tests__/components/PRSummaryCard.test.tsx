@@ -3,7 +3,9 @@ import { fireEvent, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PRSummaryCard } from '@/components/PRSummaryCard';
-import { usePRDetailStore } from '@/stores/pr-detail-store';
+import { createDataLayer } from '@/data/data-layer';
+import { seedPR } from '@/data/pull-requests/queries';
+import { replaceDataLayer } from '@/data/runtime';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -65,16 +67,12 @@ describe('PRSummaryCard', () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-01-01T00:31:00.000Z'));
-    usePRDetailStore.getState().clearAll();
-    usePRDetailStore.setState({
-      detailByKey: { 'project-1:51': makeDetail() },
-      lastFetchDetail: { 'project-1:51': Date.now() },
-      lastFetchThreads: { 'project-1:51': Date.now() },
-    });
+    // Fresh detail and threads, so the card's mount fetch is skipped.
+    replaceDataLayer(createDataLayer({ userId: null }));
+    seedPR('project-1', 51, { detail: makeDetail(), threads: [] });
   });
 
   afterEach(() => {
-    usePRDetailStore.getState().clearAll();
     vi.useRealTimers();
   });
 
@@ -117,26 +115,24 @@ describe('PRSummaryCard', () => {
   });
 
   test('links CI check titles without rendering a duplicate link icon action', () => {
-    usePRDetailStore.setState({
-      detailByKey: {
-        'project-1:51': makeDetail({
-          checks: [
-            {
-              id: 101,
-              name: 'jest core --coverage (gate)',
-              status: 'completed',
-              conclusion: 'failure',
-              html_url: 'https://github.com/acme/repo/actions/runs/101',
-              started_at: null,
-              completed_at: null,
-              app_name: 'GitHub Actions',
-            },
-          ],
-          checks_passed: 0,
-          checks_failed: 1,
-          checks_pending: 0,
-        }),
-      },
+    seedPR('project-1', 51, {
+      detail: makeDetail({
+        checks: [
+          {
+            id: 101,
+            name: 'jest core --coverage (gate)',
+            status: 'completed',
+            conclusion: 'failure',
+            html_url: 'https://github.com/acme/repo/actions/runs/101',
+            started_at: null,
+            completed_at: null,
+            app_name: 'GitHub Actions',
+          },
+        ],
+        checks_passed: 0,
+        checks_failed: 1,
+        checks_pending: 0,
+      }),
     });
 
     renderWithProviders(
@@ -158,10 +154,8 @@ describe('PRSummaryCard', () => {
   });
 
   test('does not render a redundant merged status badge', () => {
-    usePRDetailStore.setState({
-      detailByKey: {
-        'project-1:51': makeDetail({ state: 'closed', merged: true, mergeable_state: 'unknown' }),
-      },
+    seedPR('project-1', 51, {
+      detail: makeDetail({ state: 'closed', merged: true, mergeable_state: 'unknown' }),
     });
 
     renderWithProviders(

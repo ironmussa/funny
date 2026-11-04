@@ -416,6 +416,7 @@ describe('gitRoutes (mounted)', () => {
     expect(mocks.getDiffSummary).toHaveBeenCalledWith('/tmp/repo', {
       excludePatterns: undefined,
       maxFiles: undefined,
+      shareInFlight: true,
     });
   });
 

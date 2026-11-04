@@ -15,7 +15,7 @@ import {
   type BranchPRInfo,
 } from '@funny/core/git';
 import { badRequest } from '@funny/shared/errors';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { err } from 'neverthrow';
 
 import { startSpan } from '../../lib/telemetry.js';
@@ -90,24 +90,352 @@ statusRoutes.get('/status', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
+  // Concurrent misses for the same project + scope share one computation: the
+  // client fires this alongside the per-thread status/diff calls, and every
+  // extra run is another full working-tree scan competing for disk I/O.
+  const inFlightKey = `${projectId}|${scopeKey}`;
+  let pending = bulkStatusInFlight.get(inFlightKey);
+  if (!pending) {
+    pending = computeBulkStatus(c, { project, projectId, userId, threadScope, scopeKey });
+    bulkStatusInFlight.set(inFlightKey, pending);
+    const settled = pending;
+    void settled.then(
+      () => clearBulkStatusInFlight(inFlightKey, settled),
+      () => clearBulkStatusInFlight(inFlightKey, settled),
+    );
+  }
+  return c.json(await pending);
+});
+
+const bulkStatusInFlight = new Map<string, Promise<{ statuses: any[] }>>();
+
+function clearBulkStatusInFlight(key: string, pending: Promise<{ statuses: any[] }>): void {
+  if (bulkStatusInFlight.get(key) === pending) bulkStatusInFlight.delete(key);
+}
+
+interface BulkStatusInput {
+  project: { path: string };
+  projectId: string;
+  userId: string;
+  threadScope: Set<string> | null;
+  scopeKey: string;
+}
+
+type ProjectThread = Awaited<ReturnType<typeof tm.listThreads>>['threads'][number];
+type StatusSpan = ReturnType<typeof requestSpan>;
+
+async function worktreeThreadStatus(
+  thread: ProjectThread,
+  projectPath: string,
+  statusSpan: StatusSpan,
+): Promise<any> {
+  const span = startSpan('git.status_summary', {
+    traceId: statusSpan.traceId,
+    parentSpanId: statusSpan.spanId,
+    attributes: { threadId: thread.id, mode: 'worktree' },
+  });
+  const summaryResult = await getStatusSummary(
+    thread.worktreePath!,
+    thread.baseBranch ?? undefined,
+    projectPath,
+  );
+  span.end(
+    summaryResult.isOk() ? 'ok' : 'error',
+    summaryResult.isErr() ? summaryResult.error.message : undefined,
+  );
+  if (summaryResult.isErr()) return null;
+  const summary = summaryResult.value;
+  return Object.assign(
+    {
+      threadId: thread.id,
+      branchKey: computeBranchKey(thread as any),
+      state: deriveGitSyncState(summary),
+    },
+    summary,
+  );
+}
+
+// Local threads share the project cwd, but only the thread on the
+// currently checked-out branch reflects the working tree. Threads on other
+// branches get committed-only diff stats (git diff base...branch) so they
+// don't inherit the dirty state of whichever branch is checked out now.
+async function localThreadStatuses(
+  projectPath: string,
+  projectId: string,
+  localThreads: ProjectThread[],
+  statusSpan: StatusSpan,
+): Promise<Array<PromiseSettledResult<any>>> {
+  const currentBranch = await currentBranchOf(projectPath, projectId, statusSpan);
+
+  // Split threads: those matching the checked-out branch use working-tree
+  // summary (shared); others compute committed-only summary per branch.
+  const activeThreads: ProjectThread[] = [];
+  const backgroundThreads: ProjectThread[] = [];
+  for (const thread of localThreads) {
+    if (thread.branch && thread.branch === currentBranch) activeThreads.push(thread);
+    else backgroundThreads.push(thread);
+  }
+
+  const { byKey, unassigned } = groupByBranchPair(backgroundThreads);
+  const [active, background] = await Promise.all([
+    activeThreadStatuses(projectPath, projectId, activeThreads, statusSpan),
+    Promise.all(
+      Array.from(byKey.values()).map((threads) =>
+        committedBranchStatuses(projectPath, projectId, threads, statusSpan),
+      ),
+    ),
+  ]);
+  return [...active, ...background.flat(), ...unassigned.map(cleanStatus)];
+}
+
+async function currentBranchOf(
+  projectPath: string,
+  projectId: string,
+  statusSpan: StatusSpan,
+): Promise<string | null> {
+  const span = startSpan('git.current_branch', {
+    traceId: statusSpan.traceId,
+    parentSpanId: statusSpan.spanId,
+    attributes: { projectId },
+  });
+  const result = await getCurrentBranch(projectPath);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
+  return result.isOk() ? result.value : null;
+}
+
+/**
+ * Background threads grouped by unique (baseBranch, branch). Threads without a
+ * branch or baseBranch are `unassigned` and reported with zero stats.
+ */
+function groupByBranchPair(threads: ProjectThread[]) {
+  const byKey = new Map<string, ProjectThread[]>();
+  const unassigned: ProjectThread[] = [];
+  for (const thread of threads) {
+    if (!thread.branch || !thread.baseBranch) {
+      unassigned.push(thread);
+      continue;
+    }
+    const key = `${thread.baseBranch}..${thread.branch}`;
+    const group = byKey.get(key);
+    if (group) group.push(thread);
+    else byKey.set(key, [thread]);
+  }
+  return { byKey, unassigned };
+}
+
+/** One summary shared by every thread of a group; a failed summary yields null per thread. */
+function sharedSummaryStatuses(
+  summaryResult: Awaited<ReturnType<typeof getStatusSummary>>,
+  threads: ProjectThread[],
+): Array<PromiseSettledResult<any>> {
+  if (summaryResult.isErr()) {
+    return threads.map(() => ({ status: 'fulfilled' as const, value: null }));
+  }
+  const summary = summaryResult.value;
+  const state = deriveGitSyncState(summary);
+  return threads.map((t) => ({
+    status: 'fulfilled' as const,
+    value: Object.assign({ threadId: t.id, branchKey: computeBranchKey(t), state }, summary),
+  }));
+}
+
+// Active group: one getStatusSummary call shared across all threads on
+// the currently-checked-out branch.
+async function activeThreadStatuses(
+  projectPath: string,
+  projectId: string,
+  activeThreads: ProjectThread[],
+  statusSpan: StatusSpan,
+): Promise<Array<PromiseSettledResult<any>>> {
+  if (activeThreads.length === 0) return [];
+  const span = startSpan('git.status_summary', {
+    traceId: statusSpan.traceId,
+    parentSpanId: statusSpan.spanId,
+    attributes: { projectId, mode: 'local-active', threadCount: activeThreads.length },
+  });
+  const summaryResult = await getStatusSummary(
+    projectPath,
+    activeThreads[0].baseBranch ?? undefined,
+    projectPath,
+  );
+  span.end(
+    summaryResult.isOk() ? 'ok' : 'error',
+    summaryResult.isErr() ? summaryResult.error.message : undefined,
+  );
+  return sharedSummaryStatuses(summaryResult, activeThreads);
+}
+
+// Background group: committed-only diff shared by threads on one (baseBranch, branch).
+async function committedBranchStatuses(
+  projectPath: string,
+  projectId: string,
+  threads: ProjectThread[],
+  statusSpan: StatusSpan,
+): Promise<Array<PromiseSettledResult<any>>> {
+  const rep = threads[0];
+  const span = startSpan('git.committed_branch_summary', {
+    traceId: statusSpan.traceId,
+    parentSpanId: statusSpan.spanId,
+    attributes: {
+      projectId,
+      baseBranch: rep.baseBranch!,
+      branch: rep.branch!,
+      threadCount: threads.length,
+    },
+  });
+  const summaryResult = await getCommittedBranchSummary(projectPath, rep.baseBranch!, rep.branch!);
+  span.end(
+    summaryResult.isOk() ? 'ok' : 'error',
+    summaryResult.isErr() ? summaryResult.error.message : undefined,
+  );
+  return sharedSummaryStatuses(summaryResult, threads);
+}
+
+function cleanStatus(t: ProjectThread): PromiseSettledResult<any> {
+  return {
+    status: 'fulfilled',
+    value: {
+      threadId: t.id,
+      branchKey: computeBranchKey(t),
+      state: 'clean' as const,
+      dirtyFileCount: 0,
+      unpushedCommitCount: 0,
+      unpulledCommitCount: 0,
+      hasRemoteBranch: false,
+      isMergedIntoBase: false,
+      linesAdded: 0,
+      linesDeleted: 0,
+    },
+  };
+}
+
+interface ThreadGroups {
+  worktreeThreads: ProjectThread[];
+  mergedThreads: ProjectThread[];
+  localThreads: ProjectThread[];
+}
+
+function groupThreadsByMode(threads: ProjectThread[]): ThreadGroups {
+  return {
+    worktreeThreads: threads.filter((t) => t.mode === 'worktree' && t.worktreePath && t.branch),
+    // Merged threads: worktree was cleaned up after merge (mergedAt is set).
+    // Without the mergedAt check, local-mode threads with branch=null would be
+    // incorrectly classified as merged and always receive hardcoded zero stats.
+    mergedThreads: threads.filter(
+      (t) => !t.worktreePath && !t.branch && t.baseBranch && t.mergedAt,
+    ),
+    localThreads: threads.filter(
+      (t) => !t.worktreePath && !(!t.branch && t.baseBranch && t.mergedAt),
+    ),
+  };
+}
+
+/** threadId → the branch whose PR the thread shows (merged threads: their base branch). */
+function threadPRBranches({ worktreeThreads, localThreads, mergedThreads }: ThreadGroups) {
+  const threadBranchMap = new Map<string, string>();
+  for (const t of worktreeThreads) if (t.branch) threadBranchMap.set(t.id, t.branch);
+  for (const t of localThreads) if (t.branch) threadBranchMap.set(t.id, t.branch);
+  for (const t of mergedThreads) if (t.baseBranch) threadBranchMap.set(t.id, t.baseBranch);
+  return threadBranchMap;
+}
+
+/** Split branches into cached PR metadata and cache misses that need a lookup. */
+function cachedPRs(projectPath: string, branches: Iterable<string>) {
+  const prByBranch = new Map<string, BranchPRInfo>();
+  const branchesNeedingPRLookup: string[] = [];
+  for (const branch of branches) {
+    const cachedPR = getCachedPR(projectPath, branch);
+    if (cachedPR === undefined) branchesNeedingPRLookup.push(branch);
+    else if (cachedPR) prByBranch.set(branch, cachedPR);
+  }
+  return { prByBranch, branchesNeedingPRLookup };
+}
+
+function applyPR(status: any, pr: BranchPRInfo | null | undefined) {
+  if (pr) {
+    status.prNumber = pr.prNumber;
+    status.prUrl = pr.prUrl;
+    status.prState = pr.prState;
+  }
+  return status;
+}
+
+function fulfilledStatuses(results: Array<PromiseSettledResult<any>>): any[] {
+  return results
+    .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+    .map((r) => r.value)
+    .filter(Boolean);
+}
+
+async function mergedThreadStatus(c: Context<HonoEnv>, projectPath: string, t: ProjectThread) {
+  let unpushed = 0;
+  if (t.baseBranch) {
+    const span = requestSpan(c, 'git.unpushed_count', {
+      threadId: t.id,
+      branch: t.baseBranch,
+    });
+    unpushed = await countUnpushedCommits(projectPath, t.baseBranch);
+    span.end('ok');
+  }
+  return {
+    threadId: t.id,
+    branchKey: computeBranchKey(t),
+    state: 'merged' as const,
+    dirtyFileCount: 0,
+    unpushedCommitCount: unpushed,
+    unpulledCommitCount: 0,
+    hasRemoteBranch: unpushed > 0,
+    isMergedIntoBase: true,
+    linesAdded: 0,
+    linesDeleted: 0,
+  };
+}
+
+/** Look up PRs for cache-missed branches after the response; push results over WS. */
+function schedulePRRefreshes(input: {
+  projectPath: string;
+  userId: string;
+  ghEnv: Record<string, string> | undefined;
+  branches: string[];
+  statuses: any[];
+  threadBranchMap: Map<string, string>;
+}): void {
+  for (const branch of input.branches) {
+    const matchingStatuses = input.statuses.filter(
+      (status) => input.threadBranchMap.get(status.threadId) === branch,
+    );
+    if (matchingStatuses.length === 0) continue;
+    schedulePRLookup({
+      projectPath: input.projectPath,
+      branch,
+      ghEnv: input.ghEnv,
+      onUpdate: (pr) => {
+        for (const status of matchingStatuses) {
+          applyPR(status, pr);
+          emitPRUpdateForThread({
+            userId: input.userId,
+            threadId: status.threadId,
+            branchKey: status.branchKey,
+            status,
+            pr,
+          });
+        }
+      },
+    });
+  }
+}
+
+async function computeBulkStatus(
+  c: Context<HonoEnv>,
+  { project, projectId, userId, threadScope, scopeKey }: BulkStatusInput,
+): Promise<{ statuses: any[] }> {
   const { threads: projectThreads } = await tm.listThreads({
     projectId,
     userId,
     isScratch: 'exclude',
   });
-  const threads = filterThreadScope(projectThreads, threadScope);
-  const worktreeThreads = threads.filter(
-    (t) => t.mode === 'worktree' && t.worktreePath && t.branch,
-  );
-  // Merged threads: worktree was cleaned up after merge (mergedAt is set).
-  // Without the mergedAt check, local-mode threads with branch=null would be
-  // incorrectly classified as merged and always receive hardcoded zero stats.
-  const mergedThreads = threads.filter(
-    (t) => !t.worktreePath && !t.branch && t.baseBranch && t.mergedAt,
-  );
-  const localThreads = threads.filter(
-    (t) => !t.worktreePath && !(!t.branch && t.baseBranch && t.mergedAt),
-  );
+  const groups = groupThreadsByMode(filterThreadScope(projectThreads, threadScope));
+  const { worktreeThreads, mergedThreads, localThreads } = groups;
 
   // Resolve GH_TOKEN for PR detection (runs once per request)
   const identity = await resolveIdentity(userId, projectId);
@@ -129,11 +457,8 @@ statusRoutes.get('/status', async (c) => {
     });
   });
 
-  // Collect unique branches for batch PR lookup (deduplicate across all thread types)
-  const uniqueBranches = new Set<string>();
-  for (const t of worktreeThreads) if (t.branch) uniqueBranches.add(t.branch);
-  for (const t of localThreads) if (t.branch) uniqueBranches.add(t.branch);
-  for (const t of mergedThreads) if (t.baseBranch) uniqueBranches.add(t.baseBranch);
+  // Unique branches for batch PR lookup (deduplicated across all thread types)
+  const threadBranchMap = threadPRBranches(groups);
 
   const statusSpan = requestSpan(c, 'git.status.aggregate', {
     projectId,
@@ -145,288 +470,46 @@ statusRoutes.get('/status', async (c) => {
   // PR discovery must not delay or multiply the already-expensive working-tree
   // scan. Attach cached metadata now and refresh cache misses after the status
   // response is ready; the callback pushes the resulting metadata over WS.
-  const prByBranch = new Map<string, BranchPRInfo>();
-  const branchesNeedingPRLookup: string[] = [];
-  for (const branch of uniqueBranches) {
-    const cachedPR = getCachedPR(project.path, branch);
-    if (cachedPR === undefined) branchesNeedingPRLookup.push(branch);
-    else if (cachedPR) prByBranch.set(branch, cachedPR);
-  }
+  const { prByBranch, branchesNeedingPRLookup } = cachedPRs(
+    project.path,
+    new Set(threadBranchMap.values()),
+  );
 
   const [worktreeResults, localResults] = await Promise.all([
     Promise.allSettled(
-      worktreeThreads.map(async (thread) => {
-        const span = startSpan('git.status_summary', {
-          traceId: statusSpan.traceId,
-          parentSpanId: statusSpan.spanId,
-          attributes: { threadId: thread.id, mode: 'worktree' },
-        });
-        const summaryResult = await getStatusSummary(
-          thread.worktreePath!,
-          thread.baseBranch ?? undefined,
-          project.path,
-        );
-        span.end(
-          summaryResult.isOk() ? 'ok' : 'error',
-          summaryResult.isErr() ? summaryResult.error.message : undefined,
-        );
-        if (summaryResult.isErr()) return null;
-        const summary = summaryResult.value;
-        return Object.assign(
-          {
-            threadId: thread.id,
-            branchKey: computeBranchKey(thread as any),
-            state: deriveGitSyncState(summary),
-          },
-          summary,
-        );
-      }),
+      worktreeThreads.map((thread) => worktreeThreadStatus(thread, project.path, statusSpan)),
     ),
-    // Local threads share the project cwd, but only the thread on the
-    // currently checked-out branch reflects the working tree. Threads on other
-    // branches get committed-only diff stats (git diff base...branch) so they
-    // don't inherit the dirty state of whichever branch is checked out now.
-    (async () => {
-      const currentBranchSpan = startSpan('git.current_branch', {
-        traceId: statusSpan.traceId,
-        parentSpanId: statusSpan.spanId,
-        attributes: { projectId },
-      });
-      const currentBranchResult = await getCurrentBranch(project.path);
-      currentBranchSpan.end(
-        currentBranchResult.isOk() ? 'ok' : 'error',
-        currentBranchResult.isErr() ? currentBranchResult.error.message : undefined,
-      );
-      const currentBranch = currentBranchResult.isOk() ? currentBranchResult.value : null;
-
-      // Split threads: those matching the checked-out branch use working-tree
-      // summary (shared); others compute committed-only summary per branch.
-      const activeThreads: typeof localThreads = [];
-      const backgroundThreads: typeof localThreads = [];
-      for (const thread of localThreads) {
-        if (thread.branch && thread.branch === currentBranch) activeThreads.push(thread);
-        else backgroundThreads.push(thread);
-      }
-
-      const results: Array<PromiseSettledResult<any>> = [];
-
-      // Active group: one getStatusSummary call shared across all threads on
-      // the currently-checked-out branch.
-      const activePromise = (async () => {
-        if (activeThreads.length === 0) return;
-        const representative = activeThreads[0];
-        const span = startSpan('git.status_summary', {
-          traceId: statusSpan.traceId,
-          parentSpanId: statusSpan.spanId,
-          attributes: {
-            projectId,
-            mode: 'local-active',
-            threadCount: activeThreads.length,
-          },
-        });
-        const summaryResult = await getStatusSummary(
-          project.path,
-          representative.baseBranch ?? undefined,
-          project.path,
-        );
-        span.end(
-          summaryResult.isOk() ? 'ok' : 'error',
-          summaryResult.isErr() ? summaryResult.error.message : undefined,
-        );
-        if (summaryResult.isErr()) {
-          for (const _t of activeThreads) {
-            results.push({ status: 'fulfilled', value: null });
-          }
-          return;
-        }
-        const summary = summaryResult.value;
-        const state = deriveGitSyncState(summary);
-        for (const t of activeThreads) {
-          results.push({
-            status: 'fulfilled',
-            value: Object.assign(
-              { threadId: t.id, branchKey: computeBranchKey(t), state },
-              summary,
-            ),
-          });
-        }
-      })();
-
-      // Background group: committed-only diff per unique (baseBranch, branch).
-      // Threads without a branch or baseBranch are reported with zero stats.
-      const bgByKey = new Map<string, typeof localThreads>();
-      const bgUnassigned: typeof localThreads = [];
-      for (const thread of backgroundThreads) {
-        if (!thread.branch || !thread.baseBranch) {
-          bgUnassigned.push(thread);
-          continue;
-        }
-        const key = `${thread.baseBranch}..${thread.branch}`;
-        const group = bgByKey.get(key);
-        if (group) group.push(thread);
-        else bgByKey.set(key, [thread]);
-      }
-
-      const backgroundPromise = Promise.all(
-        Array.from(bgByKey.entries()).map(async ([, threads]) => {
-          const rep = threads[0];
-          const span = startSpan('git.committed_branch_summary', {
-            traceId: statusSpan.traceId,
-            parentSpanId: statusSpan.spanId,
-            attributes: {
-              projectId,
-              baseBranch: rep.baseBranch!,
-              branch: rep.branch!,
-              threadCount: threads.length,
-            },
-          });
-          const summaryResult = await getCommittedBranchSummary(
-            project.path,
-            rep.baseBranch!,
-            rep.branch!,
-          );
-          span.end(
-            summaryResult.isOk() ? 'ok' : 'error',
-            summaryResult.isErr() ? summaryResult.error.message : undefined,
-          );
-          if (summaryResult.isErr()) {
-            for (const _t of threads) {
-              results.push({ status: 'fulfilled', value: null });
-            }
-            return;
-          }
-          const summary = summaryResult.value;
-          const state = deriveGitSyncState(summary);
-          for (const t of threads) {
-            results.push({
-              status: 'fulfilled',
-              value: Object.assign(
-                { threadId: t.id, branchKey: computeBranchKey(t), state },
-                summary,
-              ),
-            });
-          }
-        }),
-      );
-
-      await Promise.all([activePromise, backgroundPromise]);
-
-      for (const t of bgUnassigned) {
-        results.push({
-          status: 'fulfilled',
-          value: {
-            threadId: t.id,
-            branchKey: computeBranchKey(t),
-            state: 'clean' as const,
-            dirtyFileCount: 0,
-            unpushedCommitCount: 0,
-            unpulledCommitCount: 0,
-            hasRemoteBranch: false,
-            isMergedIntoBase: false,
-            linesAdded: 0,
-            linesDeleted: 0,
-          },
-        });
-      }
-
-      return results;
-    })(),
+    localThreadStatuses(project.path, projectId, localThreads, statusSpan),
   ]);
 
   statusSpan.end('ok');
 
   /** Merge PR info into a status object based on the thread's branch. */
-  function attachPR(status: any, branch?: string | null) {
-    if (!branch) return status;
-    const pr = prByBranch.get(branch);
-    if (pr) {
-      status.prNumber = pr.prNumber;
-      status.prUrl = pr.prUrl;
-      status.prState = pr.prState;
-    }
-    return status;
-  }
-
-  // Map threadId → branch for worktree threads (branch is on the thread object)
-  const threadBranchMap = new Map<string, string>();
-  for (const t of worktreeThreads) if (t.branch) threadBranchMap.set(t.id, t.branch);
-  for (const t of localThreads) if (t.branch) threadBranchMap.set(t.id, t.branch);
-  for (const t of mergedThreads) if (t.baseBranch) threadBranchMap.set(t.id, t.baseBranch);
+  const attachPR = (status: any) => {
+    const branch = threadBranchMap.get(status.threadId);
+    return branch ? applyPR(status, prByBranch.get(branch)) : status;
+  };
 
   const statuses = [
-    ...worktreeResults
-      .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
-      .map((r) => r.value)
-      .filter(Boolean)
-      .map((s: any) => attachPR(s, threadBranchMap.get(s.threadId))),
-    ...(await Promise.all(
-      mergedThreads.map(async (t) => {
-        let unpushed = 0;
-        if (t.baseBranch) {
-          const span = requestSpan(c, 'git.unpushed_count', {
-            threadId: t.id,
-            branch: t.baseBranch,
-          });
-          unpushed = await countUnpushedCommits(project.path, t.baseBranch);
-          span.end('ok');
-        }
-        return attachPR(
-          {
-            threadId: t.id,
-            branchKey: computeBranchKey(t),
-            state: 'merged' as const,
-            dirtyFileCount: 0,
-            unpushedCommitCount: unpushed,
-            unpulledCommitCount: 0,
-            hasRemoteBranch: unpushed > 0,
-            isMergedIntoBase: true,
-            linesAdded: 0,
-            linesDeleted: 0,
-          },
-          t.baseBranch,
-        );
-      }),
-    )),
-    ...localResults
-      .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
-      .map((r) => r.value)
-      .filter(Boolean)
-      .map((s: any) => attachPR(s, threadBranchMap.get(s.threadId))),
-  ];
+    ...fulfilledStatuses(worktreeResults),
+    ...(await Promise.all(mergedThreads.map((t) => mergedThreadStatus(c, project.path, t)))),
+    ...fulfilledStatuses(localResults),
+  ].map(attachPR);
 
   const response = { statuses };
   _gitStatusCache.set(projectId, { data: response, ts: Date.now(), scope: scopeKey });
 
-  for (const branch of branchesNeedingPRLookup) {
-    const matchingStatuses = statuses.filter(
-      (status) => threadBranchMap.get(status.threadId) === branch,
-    );
-    if (matchingStatuses.length === 0) continue;
-    schedulePRLookup({
-      projectPath: project.path,
-      branch,
-      ghEnv,
-      onUpdate: (pr) => {
-        for (const status of matchingStatuses) {
-          if (pr) {
-            status.prNumber = pr.prNumber;
-            status.prUrl = pr.prUrl;
-            status.prState = pr.prState;
-          }
-          emitPRUpdateForThread({
-            userId,
-            threadId: status.threadId,
-            branchKey: status.branchKey,
-            status,
-            pr,
-          });
-        }
-      },
-    });
-  }
+  schedulePRRefreshes({
+    projectPath: project.path,
+    userId,
+    ghEnv,
+    branches: branchesNeedingPRLookup,
+    statuses,
+    threadBranchMap,
+  });
 
-  return c.json(response);
-});
+  return response;
+}
 
 // GET /api/git/project/:projectId/status
 statusRoutes.get('/project/:projectId/status', async (c) => {

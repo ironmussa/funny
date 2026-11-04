@@ -8,7 +8,7 @@ import { errAsync, ResultAsync } from 'neverthrow';
 
 import { countUntrackedTextFileLines } from './diff.js';
 import { getNativeGit } from './native.js';
-import { gitRead } from './process.js';
+import { getGitWriteGeneration, gitRead } from './process.js';
 import { isSafeGitRefArg } from './ref-guard.js';
 
 // ─── Types ──────────────────────────────────────────────
@@ -29,8 +29,11 @@ const STATUS_CACHE_TTL = 1_000; // 1 second
 const STATUS_CACHE_MAX_ENTRIES = 1_000;
 const UNTRACKED_LINE_COUNT_CONCURRENCY = 4;
 
-const statusCache = new Map<string, { data: GitStatusSummary; ts: number }>();
-const statusInFlight = new Map<string, Promise<GitStatusSummary>>();
+const statusCache = new Map<string, { data: GitStatusSummary; ts: number; generation: number }>();
+const statusInFlight = new Map<
+  string,
+  { promise: Promise<GitStatusSummary>; generation: number }
+>();
 
 function statusCacheKey(cwd: string, baseBranch?: string, projectCwd?: string): string {
   return `${cwd}|${baseBranch ?? ''}|${projectCwd ?? ''}`;
@@ -366,14 +369,15 @@ export function getStatusSummary(
   const baseBranch = isSafeGitRefArg(rawBaseBranch) ? rawBaseBranch : undefined;
   // Check cache first
   const cacheKey = statusCacheKey(worktreeCwd, baseBranch, projectCwd);
+  const generation = getGitWriteGeneration();
   const cached = statusCache.get(cacheKey);
-  if (cached && Date.now() - cached.ts < STATUS_CACHE_TTL) {
+  if (cached && cached.generation === generation && Date.now() - cached.ts < STATUS_CACHE_TTL) {
     return ResultAsync.fromSafePromise(Promise.resolve(cached.data));
   }
 
   const existing = statusInFlight.get(cacheKey);
-  if (existing) {
-    return ResultAsync.fromPromise(existing, (error) => processError(String(error), 1, ''));
+  if (existing && existing.generation === generation) {
+    return ResultAsync.fromPromise(existing.promise, (error) => processError(String(error), 1, ''));
   }
 
   // Try native module first, fall back to CLI
@@ -383,19 +387,15 @@ export function getStatusSummary(
     const result =
       (await nativeStatusSummary(native, worktreeCwd, baseBranch, projectCwd)) ??
       (await cliStatusSummary(worktreeCwd, baseBranch, projectCwd));
-    statusCache.set(cacheKey, { data: result, ts: Date.now() });
+    statusCache.set(cacheKey, { data: result, ts: Date.now(), generation });
     evictStatusCacheIfNeeded();
     return result;
   })();
-  statusInFlight.set(cacheKey, operation);
-  void operation.then(
-    () => {
-      if (statusInFlight.get(cacheKey) === operation) statusInFlight.delete(cacheKey);
-    },
-    () => {
-      if (statusInFlight.get(cacheKey) === operation) statusInFlight.delete(cacheKey);
-    },
-  );
+  statusInFlight.set(cacheKey, { promise: operation, generation });
+  const clearInFlight = () => {
+    if (statusInFlight.get(cacheKey)?.promise === operation) statusInFlight.delete(cacheKey);
+  };
+  void operation.then(clearInFlight, clearInFlight);
   return ResultAsync.fromPromise(operation, (error) => processError(String(error), 1, ''));
 }
 

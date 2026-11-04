@@ -1,7 +1,16 @@
 import type { PRDetail, PRReviewThread } from '@funny/shared';
+import { useEffect } from 'react';
 
 import { useDataQuery } from '../hooks';
-import { githubRateLimitQuery, prDetailQuery, prThreadsQuery } from './queries';
+import {
+  fetchPRDetail,
+  fetchPRThreads,
+  githubRateLimitQuery,
+  prDetailQuery,
+  prThreadsQuery,
+} from './queries';
+
+const PR_POLL_INTERVAL_MS = 30_000;
 
 export interface PRDetailView {
   detail: PRDetail | undefined;
@@ -33,4 +42,26 @@ export function usePRDetail(
     loadingThreads: hasPR && threads.isFetching,
     rateLimited: rateLimited.data ?? false,
   };
+}
+
+/**
+ * Fetch a PR on mount and poll it while `visible`. Each tick skips requests
+ * that are still fresh or paused by GitHub's rate limit.
+ */
+export function usePRPolling(
+  projectId: string | undefined,
+  prNumber: number | undefined,
+  visible: boolean,
+  { threads = false }: { threads?: boolean } = {},
+): void {
+  useEffect(() => {
+    if (!visible || !projectId || !prNumber) return;
+    const fetchPR = () => {
+      void fetchPRDetail(projectId, prNumber);
+      if (threads) void fetchPRThreads(projectId, prNumber);
+    };
+    fetchPR();
+    const timer = setInterval(fetchPR, PR_POLL_INTERVAL_MS);
+    return () => clearInterval(timer);
+  }, [visible, projectId, prNumber, threads]);
 }

@@ -3,14 +3,16 @@ import { fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { WatcherPanelButton } from '@/components/sidebar/WatcherPanelButton';
+import { seedBackgroundActivity } from '@/data/background/testing';
 import { useAuthStore } from '@/stores/auth-store';
-import { useJobStore } from '@/stores/job-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
-import { useWatcherStore } from '@/stores/watcher-store';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
+
+const actions = vi.hoisted(() => ({ cancelJob: vi.fn(), cancelWatcher: vi.fn() }));
+vi.mock('@/data/background/actions', () => actions);
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -68,8 +70,7 @@ describe('WatcherPanelButton', () => {
     useAuthStore.setState({ isAuthenticated: false, isLoading: false, user: null });
     useProjectStore.setState({ selectedProjectId: 'project-1' } as any);
     useThreadStore.setState({ activeThread: null } as any);
-    useJobStore.setState({ jobsById: {} });
-    useWatcherStore.setState({ watchersById: {} });
+    seedBackgroundActivity({});
   });
 
   test('groups active jobs and pending watchers above history', async () => {
@@ -92,17 +93,9 @@ describe('WatcherPanelButton', () => {
       updatedAt: '2026-01-01T00:35:00.000Z',
     });
 
-    useJobStore.setState({
-      jobsById: {
-        [activeJob.id]: activeJob,
-        [historicalJob.id]: historicalJob,
-      },
-    });
-    useWatcherStore.setState({
-      watchersById: {
-        [activeWatcher.id]: activeWatcher,
-        [historicalWatcher.id]: historicalWatcher,
-      },
+    seedBackgroundActivity({
+      jobs: [activeJob, historicalJob],
+      watchers: [activeWatcher, historicalWatcher],
     });
 
     renderWithProviders(<WatcherPanelButton />);
@@ -129,7 +122,7 @@ describe('WatcherPanelButton', () => {
         status: i === 11 ? 'running' : 'exited',
       }),
     );
-    useJobStore.setState({ jobsById: Object.fromEntries(jobs.map((job) => [job.id, job])) });
+    seedBackgroundActivity({ jobs });
     renderWithProviders(<WatcherPanelButton />);
     fireEvent.click(screen.getByTestId('sidebar-watchers'));
     const panel = await screen.findByTestId('watcher-panel');
@@ -148,21 +141,12 @@ describe('WatcherPanelButton', () => {
   });
 
   test('requires confirmation before stopping a process', async () => {
-    const cancelJob = vi.fn();
-    const original = useJobStore.getState().cancelJob;
-    useJobStore.setState({
-      jobsById: { running: makeJob('running', { status: 'running' }) },
-      cancelJob,
-    });
-    try {
-      renderWithProviders(<WatcherPanelButton />);
-      fireEvent.click(screen.getByTestId('sidebar-watchers'));
-      fireEvent.click(await screen.findByRole('button', { name: 'Stop process' }));
-      expect(cancelJob).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole('button', { name: /^Stop$/ }));
-      expect(cancelJob).toHaveBeenCalledWith('running');
-    } finally {
-      useJobStore.setState({ cancelJob: original });
-    }
+    seedBackgroundActivity({ jobs: [makeJob('running', { status: 'running' })] });
+    renderWithProviders(<WatcherPanelButton />);
+    fireEvent.click(screen.getByTestId('sidebar-watchers'));
+    fireEvent.click(await screen.findByRole('button', { name: 'Stop process' }));
+    expect(actions.cancelJob).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: /^Stop$/ }));
+    expect(actions.cancelJob).toHaveBeenCalledWith('running');
   });
 });

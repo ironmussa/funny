@@ -14,6 +14,9 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cancelJob, cancelWatcher } from '@/data/background/actions';
+import { useJobsById, useWatchersById } from '@/data/background/hooks';
+import { loadJobs, loadWatchers } from '@/data/background/loaders';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { openJobLogTerminal } from '@/lib/open-terminal-tab';
 import { timeAgo } from '@/lib/thread-utils';
@@ -23,9 +26,7 @@ import {
   formatClock,
   formatCountdown,
 } from '@/lib/watcher-utils';
-import { useJobStore } from '@/stores/job-store';
 import { findThreadById } from '@/stores/store-bridge';
-import { useWatcherStore } from '@/stores/watcher-store';
 
 /** Compact pill used for status chips in the background-activity panel. */
 const CHIP_CLASS = 'h-4 shrink-0 rounded px-1 py-0 text-[9px] leading-none font-medium';
@@ -63,7 +64,6 @@ function statusVariant(status: WatcherStatus): 'default' | 'secondary' | 'destru
 
 function WatcherRow({ watcher, now }: { watcher: Watcher; now: number }) {
   const { t } = useTranslation();
-  const cancelWatcher = useWatcherStore((s) => s.cancelWatcher);
   const isActive = ACTIVE_STATUSES.includes(watcher.status);
 
   const isPending = watcher.status === 'pending';
@@ -161,7 +161,6 @@ function JobRow({
   onOpened: () => void;
 }) {
   const { t } = useTranslation();
-  const cancelJob = useJobStore((s) => s.cancelJob);
   const [confirmKill, setConfirmKill] = useState(false);
 
   const isRunning = job.status === 'running';
@@ -421,10 +420,8 @@ export function WatcherPanelButton() {
   const [showAll, setShowAll] = useState(false);
   const [now, setNow] = useState(() => Date.now());
   const { scopeId } = useTerminalScope();
-  const watchersById = useWatcherStore((s) => s.watchersById);
-  const loadWatchers = useWatcherStore((s) => s.loadWatchers);
-  const jobsById = useJobStore((s) => s.jobsById);
-  const loadJobs = useJobStore((s) => s.loadJobs);
+  const watchersById = useWatchersById();
+  const jobsById = useJobsById();
 
   const entries = useMemo(
     () => buildActivityEntries(jobsById, watchersById),
@@ -440,7 +437,7 @@ export function WatcherPanelButton() {
   useEffect(() => {
     void loadWatchers();
     void loadJobs();
-  }, [loadWatchers, loadJobs]);
+  }, []);
 
   // Fetch on open; tick the countdown every second while open.
   useEffect(() => {
@@ -450,7 +447,7 @@ export function WatcherPanelButton() {
     setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
-  }, [open, showAll, loadWatchers, loadJobs]);
+  }, [open, showAll]);
 
   return (
     <>

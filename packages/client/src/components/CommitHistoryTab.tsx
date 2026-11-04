@@ -7,12 +7,13 @@ import { CommitHistoryToolbar } from '@/components/commit-history/CommitHistoryT
 import { CommitListPanel } from '@/components/commit-history/CommitListPanel';
 import { CreatePRDialog, type PRDraft } from '@/components/commit-history/CreatePRDialog';
 import { PublishRepoDialog } from '@/components/PublishRepoDialog';
-import { isDivergedBranchesError, PullStrategyDialog } from '@/components/pull-strategy-dialog';
+import { PullStrategyDialog } from '@/components/pull-strategy-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { fetchProjectStatus, refreshGitStatus } from '@/data/git-status/actions';
 import { useGitStatusForThread, useProjectGitStatus } from '@/data/git-status/hooks';
 import { useProjectById } from '@/data/projects/hooks';
 import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
+import { useGitRemoteActions } from '@/hooks/use-git-remote-actions';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { api, type PullStrategy } from '@/lib/api';
 import { mergeLogEntriesByHash, uniqueLogEntriesByHash } from '@/lib/git-log-merge';
@@ -75,12 +76,6 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const loadingRef = useRef(false);
   const loadedLogSkipRef = useRef(0);
 
-  const [pullInProgress, setPullInProgress] = useState(false);
-  const [pullStrategyDialog, setPullStrategyDialog] = useState<{
-    open: boolean;
-    errorMessage: string;
-  }>({ open: false, errorMessage: '' });
-  const [fetchInProgress, setFetchInProgress] = useState(false);
   const [pushInProgress, setPushInProgress] = useState(false);
   const [prInProgress, setPrInProgress] = useState(false);
   const [prDialog, setPrDialog] = useState<PRDraft | null>(null);
@@ -279,77 +274,20 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   // log page's unpushedHashes (which is empty until loadLog finishes).
   const unpushedCommitCount = gitStatus?.unpushedCommitCount ?? 0;
 
-  const runPull = useCallback(
-    async (strategy: PullStrategy) => {
-      const result = effectiveThreadId
-        ? await api.pull(effectiveThreadId, strategy)
-        : await api.projectPull(projectModeId!, strategy);
-      if (result.isErr()) {
-        const msg = result.error.message;
-        if (strategy === 'ff-only' && isDivergedBranchesError(msg)) {
-          setPullStrategyDialog({ open: true, errorMessage: msg });
-          return;
-        }
-        toast.error(t('review.pullFailed', { message: msg, defaultValue: `Pull failed: ${msg}` }));
-      } else {
-        toast.success(t('review.pullSuccess', 'Pulled successfully'));
-      }
-      void refreshGitStatus(effectiveThreadId, projectModeId);
-      refreshLog();
-    },
-    [effectiveThreadId, projectModeId, t, refreshLog],
-  );
-
-  const handlePull = useCallback(async () => {
-    if (!hasGitContext || pullInProgress) return;
-    setPullInProgress(true);
-    try {
-      await runPull('ff-only');
-    } finally {
-      setPullInProgress(false);
-    }
-  }, [hasGitContext, pullInProgress, runPull]);
-
-  const handlePullStrategyChosen = useCallback(
-    async (strategy: Exclude<PullStrategy, 'ff-only'>) => {
-      setPullStrategyDialog({ open: false, errorMessage: '' });
-      if (pullInProgress) return;
-      setPullInProgress(true);
-      try {
-        await runPull(strategy);
-      } finally {
-        setPullInProgress(false);
-      }
-    },
-    [pullInProgress, runPull],
-  );
-
-  const handleFetchOrigin = useCallback(async () => {
-    if (!hasGitContext || fetchInProgress) return;
-    setFetchInProgress(true);
-    const result = effectiveThreadId
-      ? await api.fetchOrigin(effectiveThreadId)
-      : await api.projectFetchOrigin(projectModeId!);
-    if (result.isErr()) {
-      const msg = result.error.message;
-      const isAuthError =
-        /auth|token|credential|permission|denied|403|fatal:/i.test(msg) ||
-        result.error.type === 'INTERNAL';
-      toast.error(
-        isAuthError
-          ? t('review.fetchAuthFailed', {
-              defaultValue:
-                'Fetch failed: authentication error. Check your GitHub token in Settings > Profile.',
-            })
-          : t('review.fetchFailed', { message: msg, defaultValue: `Fetch failed: ${msg}` }),
-      );
-    } else {
-      toast.success(t('review.fetchSuccess', 'Fetched from origin'));
-    }
-    setFetchInProgress(false);
-    void refreshGitStatus(effectiveThreadId, projectModeId);
-    refreshLog();
-  }, [hasGitContext, fetchInProgress, effectiveThreadId, projectModeId, t, refreshLog]);
+  const {
+    pullInProgress,
+    fetchInProgress,
+    pullStrategyDialog,
+    setPullStrategyDialog,
+    handlePull,
+    handlePullStrategyChosen,
+    handleFetchOrigin,
+  } = useGitRemoteActions({
+    threadId: effectiveThreadId,
+    projectId: projectModeId,
+    hasGitContext,
+    afterChange: refreshLog,
+  });
 
   const handlePush = useCallback(async () => {
     if (!hasGitContext || pushInProgress) return;

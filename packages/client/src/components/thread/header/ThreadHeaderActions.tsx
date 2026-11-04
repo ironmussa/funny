@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { ShortcutHint } from '@/components/ui/kbd';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjects } from '@/data/projects/hooks';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
@@ -246,7 +247,7 @@ export const ThreadHeaderActionsBase = memo(function ThreadHeaderActionsBase({
   );
   const activeThreadIsScratch = useThreadSelector((thread) => variant.isScratch(thread));
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const setTestRunnerOpen = useUIStore((s) => s.setTestRunnerOpen);

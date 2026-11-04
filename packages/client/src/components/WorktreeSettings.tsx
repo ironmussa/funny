@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { contrastText, pastelize } from '@/components/ui/project-chip';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 
@@ -200,7 +201,7 @@ export function WorktreeSettings({
   readOnly?: boolean;
 }) {
   const { t } = useTranslation();
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const [worktrees, setWorktrees] = useState<WorktreeInfo[]>([]);
   const [branches, setBranches] = useState<string[]>([]);

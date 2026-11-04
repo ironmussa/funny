@@ -13,6 +13,7 @@ import {
   CommandItem,
 } from '@/components/ui/command';
 import { colorFromName } from '@/components/ui/project-chip';
+import { useProjects } from '@/data/projects/hooks';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { cleanThreadTitle } from '@/lib/thread-title';
 import { getDisplayThreadStatus, statusConfig } from '@/lib/thread-utils';
@@ -65,7 +66,7 @@ function ThreadPickerDialogContent({
 }: ThreadPickerDialogProps) {
   const { t } = useTranslation();
   const threadsByProject = useThreadsByProject();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const runnerStatus = useRunnerStatusStore((s) => s.status);
   const [search, setSearch] = useState('');
 

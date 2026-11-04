@@ -3,6 +3,7 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { ThreadListView } from '@/components/mobile/ThreadListView';
+import { withProjects } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 
@@ -56,10 +57,12 @@ beforeEach(() => {
     createdAt: new Date(Date.now() - 3600000).toISOString(),
     lastAssistantMessage: 'Resumen del trabajo realizado',
   } as Thread);
-  useAppStore.setState({
-    projects: [{ id: 'project-1', name: 'goliiive-cashless', path: '/repo' } as Project],
-    loadThreadsForProject: vi.fn(),
-  });
+  useAppStore.setState(
+    withProjects({
+      projects: [{ id: 'project-1', name: 'goliiive-cashless', path: '/repo' } as Project],
+      loadThreadsForProject: vi.fn(),
+    }),
+  );
   useGitStatusStore.setState({
     statusByBranch: {},
     threadToBranchKey: {},

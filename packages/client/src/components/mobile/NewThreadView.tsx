@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { PromptInput } from '@/components/PromptInput';
 import { NewThreadContextBar } from '@/components/thread/NewThreadContextBar';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useProjects } from '@/data/projects/hooks';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -19,7 +20,7 @@ interface Props {
 export function NewThreadView({ projectId, onBack, onCreated }: Props) {
   const { t } = useTranslation();
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
   const project = projects.find((p) => p.id === projectId);
   const defaultThreadMode = project?.defaultMode ?? DEFAULT_THREAD_MODE;
   const toolPermissions = useSettingsStore((s) => s.toolPermissions);

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, test, vi } from 'vitest';
 
+import { withProjects } from '@/data/projects/testing';
 import { useAppShell } from '@/hooks/use-app-shell';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -34,12 +35,14 @@ test('opening a thread URL loads its conversation without trying to switch branc
       } as any,
     });
   });
-  useProjectStore.setState({
-    initialized: true,
-    selectedProjectId: 'p1',
-    projects: [{ id: 'p1', name: 'Deleted directory', path: '/missing/project' } as any],
-    loadProjects: vi.fn(),
-  });
+  useProjectStore.setState(
+    withProjects({
+      initialized: true,
+      selectedProjectId: 'p1',
+      projects: [{ id: 'p1', name: 'Deleted directory', path: '/missing/project' } as any],
+      loadProjects: vi.fn(),
+    }),
+  );
   useAgentTemplateStore.setState({ loadTemplates: vi.fn() });
   useThreadStore.setState({
     selectedThreadId: null,

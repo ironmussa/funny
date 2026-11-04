@@ -4,6 +4,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { MissingProjectDirectoryDialog } from '@/components/MissingProjectDirectoryDialog';
+import { seedProjects } from '@/data/projects/testing';
 
 const mocks = vi.hoisted(() => ({
   listBranches: vi.fn(),
@@ -33,6 +34,7 @@ function View({ route = '/projects/p1' }: { route?: string }) {
 }
 
 beforeEach(() => {
+  seedProjects(mocks.state.projects as never);
   mocks.listBranches.mockReset();
   mocks.state.selectedProjectId = 'p1';
   mocks.state.revealNonce = 0;

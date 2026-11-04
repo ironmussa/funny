@@ -19,6 +19,7 @@ import { OperationRequestSchema } from '@funny/shared/browser-v1/operations';
 import { useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
+import { readProjects } from '@/data/projects/read';
 import { listedProjectIds, readThreadIndex, type ThreadIndexSnapshot } from '@/data/threads/read';
 import { parseRoute } from '@/hooks/route-parser';
 import { createClientLogger } from '@/lib/client-logger';
@@ -327,7 +328,7 @@ function connect() {
             : [];
         if (sessions.length > 0) {
           const { useProjectStore } = await import('@/stores/project-store');
-          const projects = useProjectStore.getState().projects;
+          const projects = readProjects();
           useTerminalStore.getState().restoreTabs(
             sessions as any,
             projects.map((p: any) => ({ id: p.id, path: p.path })),

@@ -21,6 +21,7 @@ import {
   SegmentedControl,
   SettingRow,
 } from '@/components/general-settings-project/setting-primitives';
+import { useProjects } from '@/data/projects/hooks';
 import { projectsApi } from '@/lib/api/projects';
 import { getEffortLevels, getModelOptions, normalizeEffort, PROVIDERS } from '@/lib/providers';
 import { useAcpModelsStore } from '@/stores/acp-models-store';
@@ -39,7 +40,7 @@ export function GeneralSettings() {
     })),
   );
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const updateProject = useProjectStore((s) => s.updateProject);
   const { t } = useTranslation();

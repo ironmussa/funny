@@ -2,6 +2,7 @@ import type { DomainError } from '@funny/shared/errors';
 import { okAsync, errAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
+import { readProjects } from '@/data/projects/read';
 import { readThreadIndex } from '@/data/threads/read';
 import { withThreadIndex } from '@/data/threads/testing';
 import { useAppStore } from '@/stores/app-store';
@@ -57,7 +58,7 @@ describe('AppStore', () => {
 
   describe('Initial state', () => {
     test('has empty projects', () => {
-      expect(useAppStore.getState().projects).toEqual([]);
+      expect(readProjects()).toEqual([]);
     });
 
     test('has no active thread', () => {
@@ -84,7 +85,7 @@ describe('AppStore', () => {
       );
 
       await useAppStore.getState().loadProjects();
-      expect(useAppStore.getState().projects).toEqual(mockProjects);
+      expect(readProjects()).toEqual(mockProjects);
     });
   });
 

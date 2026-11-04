@@ -3,6 +3,7 @@ import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ThreadList } from '@/components/sidebar/ThreadList';
+import { withProjects } from '@/data/projects/testing';
 import { withThreadIndex } from '@/data/threads/testing';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -88,10 +89,12 @@ const noopHandlers = {
 describe('ThreadList', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useProjectStore.setState({
-      projects: [{ id: 'p1', name: 'My Project', path: '/repo' } as any],
-      expandedProjects: new Set(['p1']),
-    });
+    useProjectStore.setState(
+      withProjects({
+        projects: [{ id: 'p1', name: 'My Project', path: '/repo' } as any],
+        expandedProjects: new Set(['p1']),
+      }),
+    );
     useThreadStore.setState(
       withThreadIndex({
         ...seedThreads({ p1: [] }),

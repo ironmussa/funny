@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { WorktreesPanel } from '@/components/review-pane/panels/WorktreesPanel';
 import { buildSettingsItems, routableSettingsIds } from '@/components/settings/items';
+import { withProjects } from '@/data/projects/testing';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';
 
@@ -26,13 +27,15 @@ beforeEach(() => {
   context.remoteCheckProjectId = 'p2';
   context.viewerReadOnly = false;
   context.basePath = '/second/feature';
-  useProjectStore.setState({
-    selectedProjectId: 'p1',
-    projects: [
-      { id: 'p1', name: 'First', path: '/first' },
-      { id: 'p2', name: 'Second', path: '/second' },
-    ] as any,
-  });
+  useProjectStore.setState(
+    withProjects({
+      selectedProjectId: 'p1',
+      projects: [
+        { id: 'p1', name: 'First', path: '/first' },
+        { id: 'p2', name: 'Second', path: '/second' },
+      ] as any,
+    }),
+  );
   vi.mocked(api.listWorktrees).mockReturnValue(
     okAsync([
       { path: '/second/feature', branch: 'feature/test', commit: 'abcdef12', isMain: false },

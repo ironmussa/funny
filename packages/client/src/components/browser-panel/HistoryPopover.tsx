@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { cn } from '@/lib/utils';
@@ -28,7 +29,7 @@ export function HistoryPopover() {
   const history = useBrowserPanelStore((s) => s.sentHistory);
   const clearSentHistory = useBrowserPanelStore((s) => s.clearSentHistory);
   const closePanel = useBrowserPanelStore((s) => s.closePanel);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const navigate = useStableNavigate();
 
   const [open, setOpen] = useState(false);

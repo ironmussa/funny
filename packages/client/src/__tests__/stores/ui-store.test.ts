@@ -1,3 +1,4 @@
+import type { Project } from '@funny/shared';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 
 // Use vi.hoisted() so these mocks are available when vi.mock factories run (which are hoisted)
@@ -21,6 +22,7 @@ vi.mock('@/stores/thread-store-internals', () => ({
   setThreadSelectListener: vi.fn(),
 }));
 
+import { seedProjects } from '@/data/projects/testing';
 import { useUIStore } from '@/stores/ui-store';
 
 describe('useUIStore', () => {
@@ -450,7 +452,7 @@ describe('useUIStore', () => {
 
   describe('startNewThread guards', () => {
     test('does not open compose when project needs setup', () => {
-      mockProjects.push({ id: 'p-setup', needsSetup: true });
+      seedProjects([{ id: 'p-setup', needsSetup: true } as Project]);
 
       useUIStore.getState().startNewThread('p-setup');
 

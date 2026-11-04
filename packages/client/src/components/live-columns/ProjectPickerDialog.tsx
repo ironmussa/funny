@@ -9,6 +9,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { colorFromName } from '@/components/ui/project-chip';
+import { useProjects } from '@/data/projects/hooks';
 import { useProjectStore } from '@/stores/project-store';
 
 interface Props {
@@ -26,7 +27,7 @@ interface Props {
  */
 export function ProjectPickerDialog({ open, onOpenChange, onSelect, placeholder, title }: Props) {
   const { t } = useTranslation();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
 
   const commit = (projectId: string) => {
     onSelect(projectId);

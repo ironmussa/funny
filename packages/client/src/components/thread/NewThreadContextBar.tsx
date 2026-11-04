@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 
 import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
 import { colorFromName, darkenHex } from '@/components/ui/project-chip';
+import { useProjects } from '@/data/projects/hooks';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { api } from '@/lib/api';
 import { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
@@ -30,7 +31,7 @@ interface NewThreadContextBarProps {
  * "Add thread" dialog (`SlideUpPrompt`) so the bar stays consistent.
  */
 export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const project = projectId ? projects.find((p) => p.id === projectId) : undefined;
 
   // ── Branch picker (shared store) ──

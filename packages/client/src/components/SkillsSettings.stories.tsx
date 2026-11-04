@@ -2,6 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
+import { withSampleProject } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
 
 import { SkillsSettings } from './SkillsSettings';
@@ -27,19 +28,7 @@ type Story = StoryObj<typeof meta>;
 /** Default view with a project selected — skills loaded from API. */
 export const Default: Story = {
   render: () => {
-    useAppStore.setState({
-      selectedProjectId: 'proj-1',
-      projects: [
-        {
-          id: 'proj-1',
-          name: 'funny',
-          path: '/home/user/projects/funny',
-          userId: 'user-1',
-          sortOrder: 0,
-          createdAt: new Date().toISOString(),
-        },
-      ],
-    });
+    useAppStore.setState(withSampleProject());
     return (
       <Wrapper>
         <SkillsSettings />

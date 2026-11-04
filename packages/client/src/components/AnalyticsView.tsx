@@ -17,6 +17,7 @@ import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -58,7 +59,7 @@ interface TimelineData {
 
 export function AnalyticsView() {
   const { t } = useTranslation();
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 
   const [projectId, setProjectId] = useState<string>(() => selectedProjectId || '__all__');

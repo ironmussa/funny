@@ -58,6 +58,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjects } from '@/data/projects/hooks';
 import { showAgentNotification } from '@/hooks/use-notifications';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
@@ -1300,7 +1301,7 @@ export function TerminalPanel() {
       togglePanel: s.togglePanel,
     })),
   );
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const { scopeId: selectedProjectId, scratchThreadId } = useTerminalScope();
   const panelVisible = selectedProjectId
     ? (panelVisibleByProject[selectedProjectId] ?? false)

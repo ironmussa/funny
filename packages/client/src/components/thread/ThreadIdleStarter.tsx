@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { useProjectById } from '@/data/projects/hooks';
 import { AvailableMcpServers } from '@/components/AvailableMcpServers';
 import { PromptInput } from '@/components/PromptInput';
 import { api } from '@/lib/api';
@@ -27,10 +28,7 @@ export function ThreadIdleStarter({ activeThread }: Props) {
   const { t } = useTranslation();
   const stableMessages = useThreadMessages();
   const [sending, setSending] = useState(false);
-  const projectPath = useProjectStore((s) => {
-    if (!activeThread.projectId) return undefined;
-    return s.projects.find((p) => p.id === activeThread.projectId)?.path;
-  });
+  const projectPath = useProjectById(activeThread.projectId)?.path;
 
   const initialImages = (() => {
     const draftMsg = stableMessages?.find((m) => m.role === 'user');

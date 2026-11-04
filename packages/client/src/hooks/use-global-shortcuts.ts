@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { type NavigateFunction, useNavigate } from 'react-router-dom';
 
 import { terminalRegistry } from '@/components/terminal/xterm-utils';
+import { readProject } from '@/data/projects/read';
 import { listedProjectThreadIds, readThreadIndex, readThreadRow } from '@/data/threads/read';
 import { getTerminalScope } from '@/hooks/use-terminal-scope';
 import { createClientLogger } from '@/lib/client-logger';
@@ -263,8 +264,7 @@ function firstTerminalCwd(scopeId: string, worktreePath: string | null | undefin
   // Runner derives the actual cwd from `scratchThreadId`; this placeholder is
   // for display only.
   if (scopeId === SCRATCH_TERMINAL_SCOPE_ID) return '~';
-  const { projects } = useProjectStore.getState();
-  const project = projects.find((p: any) => p.id === scopeId);
+  const project = readProject(scopeId);
   return worktreePath ?? project?.path ?? 'C:\\';
 }
 

@@ -21,6 +21,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import { useProjects } from '@/data/projects/hooks';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useDictation } from '@/hooks/use-dictation';
 import { usePushToTalk } from '@/hooks/use-push-to-talk';
@@ -178,7 +179,7 @@ export function usePromptInputState({
   const queuedNextMessage = storeQueuedNextMessage ?? queuedNextMessageProp;
 
   // ── Project defaults ──
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const selectedProjectIdForDefaults = useProjectStore((s) => s.selectedProjectId);
   // For an existing thread, the project is the thread's OWN project — not the
   // globally-selected one. This matters in the live-columns grid, where each

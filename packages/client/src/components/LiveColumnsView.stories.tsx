@@ -6,6 +6,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import '@/i18n/config';
+import { withProjects } from '@/data/projects/testing';
 import { seedProjectThreads, withThreadIndex } from '@/data/threads/testing';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
@@ -73,7 +74,7 @@ function seedStores({
     activeOrgSlug: null,
   });
 
-  useProjectStore.setState({ projects });
+  useProjectStore.setState(withProjects({ projects }));
 
   seedProjectThreads(threadsByProject);
   useThreadStore.setState(

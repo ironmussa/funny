@@ -8,6 +8,7 @@ import { PromptInput } from '@/components/PromptInput';
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { Badge } from '@/components/ui/badge';
 import { LoadingState } from '@/components/ui/loading-state';
+import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import type { ExternalClaudeTranscript } from '@/lib/api/system';
@@ -26,7 +27,7 @@ export function ExternalClaudeSessionView({ sessionId }: { sessionId: string }) 
   const { t } = useTranslation();
   const streamRef = useRef<MessageStreamHandle>(null);
   const [state, setState] = useState<LoadState>({ status: 'loading', transcript: null });
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
 
   const loadTranscript = useCallback(async () => {
     const result = await api.getExternalClaudeTranscript(sessionId);

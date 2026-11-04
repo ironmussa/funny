@@ -2,6 +2,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { FileSearchDialog } from '@/components/FileSearchDialog';
+import { withProjects } from '@/data/projects/testing';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -46,10 +47,12 @@ describe('FileSearchDialog', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    useProjectStore.setState({
-      selectedProjectId: 'project-1',
-      projects: [{ id: 'project-1', path: '/repo' }],
-    } as never);
+    useProjectStore.setState(
+      withProjects({
+        selectedProjectId: 'project-1',
+        projects: [{ id: 'project-1', path: '/repo' }],
+      } as never),
+    );
     useThreadStore.setState({ activeThread: null, threadDataById: {} } as never);
     useInternalEditorStore.setState({ openFile });
     mocks.rankedSearch.mockReturnValue({

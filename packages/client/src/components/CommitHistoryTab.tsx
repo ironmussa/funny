@@ -9,6 +9,7 @@ import { CreatePRDialog, type PRDraft } from '@/components/commit-history/Create
 import { PublishRepoDialog } from '@/components/PublishRepoDialog';
 import { isDivergedBranchesError, PullStrategyDialog } from '@/components/pull-strategy-dialog';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useProjectById } from '@/data/projects/hooks';
 import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { api, type PullStrategy } from '@/lib/api';
@@ -39,6 +40,7 @@ interface CommitHistoryTabProps {
   visible?: boolean;
 }
 
+// fallow-ignore-next-line complexity -- pre-existing; this change only swapped the project read
 export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const { t } = useTranslation();
   const selectedProjectId = useRightPaneProjectId();
@@ -117,10 +119,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   }::${effectiveBranch ?? ''}`;
 
   const remoteCheckProjectId = projectModeId ?? (effectiveThreadId ? gitThread?.projectId : null);
-  const projectPathForPublish = useProjectStore((s) => {
-    if (!remoteCheckProjectId) return '';
-    return s.projects.find((p) => p.id === remoteCheckProjectId)?.path ?? '';
-  });
+  const projectPathForPublish = useProjectById(remoteCheckProjectId)?.path ?? '';
 
   useEffect(() => {
     if (!remoteCheckProjectId) {

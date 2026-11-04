@@ -2,6 +2,7 @@ import { screen, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { MessageContent } from '@/components/thread/MessageContent';
+import { withProjects } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -13,16 +14,20 @@ describe('MessageContent', () => {
       defaultEditor: 'cursor',
       useInternalEditor: false,
     });
-    useAppStore.setState({
-      projects: [{ id: 'p1', name: 'funny', path: '/home/u/projects/funny' } as any],
-      selectedProjectId: 'p1',
-      activeThread: { id: 't1', projectId: 'p1', worktreePath: null } as any,
-    });
+    useAppStore.setState(
+      withProjects({
+        projects: [{ id: 'p1', name: 'funny', path: '/home/u/projects/funny' } as any],
+        selectedProjectId: 'p1',
+        activeThread: { id: 't1', projectId: 'p1', worktreePath: null } as any,
+      }),
+    );
   });
 
   afterEach(() => {
     cleanup();
-    useAppStore.setState({ projects: [], selectedProjectId: null, activeThread: null });
+    useAppStore.setState(
+      withProjects({ projects: [], selectedProjectId: null, activeThread: null }),
+    );
   });
 
   test('opens absolute local markdown links in the configured editor', async () => {

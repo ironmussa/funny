@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
@@ -88,7 +89,7 @@ function ResourceRow({ resource, dimmed }: { resource: AgentResource; dimmed?: b
 
 export function AgentResourcesSettings() {
   const { t } = useTranslation();
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 
   const [provider, setProvider] = useState<string>('claude');

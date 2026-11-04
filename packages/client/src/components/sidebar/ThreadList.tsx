@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { useProjects } from '@/data/projects/hooks';
 import { useLoadedThreads } from '@/data/threads/hooks';
 import { selectActivityThreads } from '@/data/threads/views';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
@@ -57,7 +58,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   const loadedThreads = useLoadedThreads(null);
   // Highlight follows the URL (route-driven), not the async selectedThreadId.
   const activeThreadId = useActiveThreadId();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
 
   const { threads, totalCount } = useMemo(() => {
     const projectMap = new Map(

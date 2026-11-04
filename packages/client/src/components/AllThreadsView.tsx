@@ -8,6 +8,7 @@ import { AllThreadsContent } from '@/components/all-threads/AllThreadsContent';
 import { AllThreadsToolbar } from '@/components/all-threads/AllThreadsToolbar';
 import { normalize } from '@/components/ui/highlight-text';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useProjects } from '@/data/projects/hooks';
 import { useLoadedThreads, useProjectListTotals } from '@/data/threads/hooks';
 import { readThreadRow } from '@/data/threads/read';
 import { useGitStatusScope } from '@/hooks/use-git-status-scope';
@@ -43,7 +44,7 @@ export function AllThreadsView() {
   const threadsByProject = useThreadsByProject();
   const threadTotalByProject = useProjectListTotals();
   const loadMoreThreads = useThreadStore((s) => s.loadMoreThreads);
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
   const threadToBranchKey = useGitStatusStore((s) => s.threadToBranchKey);
   // Filters and sorts by git state across every loaded thread.

@@ -14,6 +14,7 @@ import { ProjectPickerDialog } from '@/components/live-columns/ProjectPickerDial
 import { ThreadColumn } from '@/components/live-columns/ThreadColumn';
 import { ThreadHeaderActions } from '@/components/thread/ProjectHeader';
 import { Button } from '@/components/ui/button';
+import { useProjects } from '@/data/projects/hooks';
 import { isProjectListed } from '@/data/threads/read';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createClientLogger } from '@/lib/client-logger';
@@ -35,7 +36,7 @@ type OpenLightboxFn = (images: { src: string; alt: string }[], index: number) =>
 export function LiveColumnsView() {
   const { t } = useTranslation();
   useMinuteTick();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const [gridCols, setGridCols] = useState(() => {
     const saved = localStorage.getItem(GRID_COLS_KEY);

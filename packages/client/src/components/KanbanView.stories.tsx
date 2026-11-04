@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { seedProjects } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
@@ -64,7 +65,7 @@ function seedStores(projects: Project[] = [makeProject()]) {
     activeOrgSlug: null,
   });
 
-  useAppStore.setState({ projects });
+  seedProjects(projects);
 
   const noop = (() => Promise.resolve()) as any;
   useThreadStore.setState({

@@ -3,6 +3,7 @@ import { MemoryRouter, useLocation } from 'react-router-dom';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ProjectSettingsView } from '@/components/mobile/ProjectSettingsView';
+import { seedProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 // Mobile project settings: the list shows every project option, tapping one
@@ -34,6 +35,7 @@ vi.mock('@/components/settings/SettingsPageContent', () => ({
 }));
 
 beforeEach(() => {
+  seedProjects([{ id: 'p1', name: 'Proj', role: 'owner', userId: 'u1' } as never]);
   useProjectStore.setState({ selectedProjectId: null });
 });
 

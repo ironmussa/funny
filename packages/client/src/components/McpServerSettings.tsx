@@ -43,6 +43,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { openClaudeSettingsInEditor } from '@/lib/claude-settings';
 import { cn } from '@/lib/utils';
@@ -400,7 +401,7 @@ function RecommendedServerCard({
 
 export function McpServerSettings() {
   const { t } = useTranslation();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const [servers, setServers] = useState<McpServer[]>([]);
   const [recommended, setRecommended] = useState<RecommendedServer[]>([]);

@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
 import { colorFromName } from '@/components/ui/project-chip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
@@ -222,7 +223,7 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
 
 export function SkillsSettings() {
   const { t } = useTranslation();
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [plugins, setPlugins] = useState<Plugin[]>([]);

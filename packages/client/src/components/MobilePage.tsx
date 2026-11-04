@@ -8,6 +8,7 @@ import { SearchView } from '@/components/mobile/SearchView';
 import { ThreadListView } from '@/components/mobile/ThreadListView';
 import { LoadingState } from '@/components/ui/loading-state';
 import { Toaster } from '@/components/ui/sonner';
+import { useProjects } from '@/data/projects/hooks';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { useMobileViewport } from '@/hooks/use-mobile-viewport';
 import { useWS } from '@/hooks/use-ws';
@@ -32,7 +33,7 @@ export function MobilePage() {
   } = useMobileNavigation(ready);
 
   const loadProjects = useAppStore((s) => s.loadProjects);
-  const projects = useAppStore((s) => s.projects);
+  const projects = useProjects();
 
   useWS();
 

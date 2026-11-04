@@ -3,6 +3,7 @@ import { okAsync } from 'neverthrow';
 import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
+import { withProjects } from '@/data/projects/testing';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 
@@ -53,27 +54,29 @@ const MOCK_TIMELINE = {
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
 function seedStores() {
-  useAppStore.setState({
-    projects: [
-      {
-        id: 'proj-1',
-        name: 'funny',
-        path: '/home/user/projects/funny',
-        userId: 'user-1',
-        sortOrder: 0,
-        createdAt: new Date().toISOString(),
-      },
-      {
-        id: 'proj-2',
-        name: 'acme-api',
-        path: '/home/user/projects/acme-api',
-        userId: 'user-1',
-        sortOrder: 1,
-        createdAt: new Date().toISOString(),
-      },
-    ],
-    selectedProjectId: 'proj-1',
-  });
+  useAppStore.setState(
+    withProjects({
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'funny',
+          path: '/home/user/projects/funny',
+          userId: 'user-1',
+          sortOrder: 0,
+          createdAt: new Date().toISOString(),
+        },
+        {
+          id: 'proj-2',
+          name: 'acme-api',
+          path: '/home/user/projects/acme-api',
+          userId: 'user-1',
+          sortOrder: 1,
+          createdAt: new Date().toISOString(),
+        },
+      ],
+      selectedProjectId: 'proj-1',
+    }),
+  );
 }
 
 function mockApi(overviewData: any, timelineData: any) {

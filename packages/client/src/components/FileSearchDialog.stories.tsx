@@ -3,6 +3,7 @@ import { okAsync } from 'neverthrow';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { withProjects } from '@/data/projects/testing';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -31,18 +32,20 @@ const MOCK_FILES = [
 /* ------------------------------------------------------------------ */
 
 function setupStores() {
-  useProjectStore.setState({
-    selectedProjectId: 'proj-1',
-    projects: [
-      {
-        id: 'proj-1',
-        name: 'my-project',
-        path: '/home/user/project',
-        userId: 'u1',
-        createdAt: '2026-01-01T00:00:00Z',
-      },
-    ] as any,
-  });
+  useProjectStore.setState(
+    withProjects({
+      selectedProjectId: 'proj-1',
+      projects: [
+        {
+          id: 'proj-1',
+          name: 'my-project',
+          path: '/home/user/project',
+          userId: 'u1',
+          createdAt: '2026-01-01T00:00:00Z',
+        },
+      ] as any,
+    }),
+  );
   useThreadStore.setState({ activeThread: null } as any);
 }
 

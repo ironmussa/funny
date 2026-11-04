@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useProjectById } from '@/data/projects/hooks';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';

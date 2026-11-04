@@ -1,3 +1,4 @@
+import type { Project } from '@funny/shared';
 import { findTextSearchMatches, normalizeSearchText } from '@funny/shared/lib/text-search';
 import { FolderOpen } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -14,6 +15,7 @@ import {
   CommandItem,
 } from '@/components/ui/command';
 import { EmptyState } from '@/components/ui/empty-state';
+import { useProjects } from '@/data/projects/hooks';
 import { createClientLogger } from '@/lib/client-logger';
 import { metric } from '@/lib/telemetry';
 import { buildPath } from '@/lib/url';
@@ -36,7 +38,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   return <CommandPaletteContent open={open} onOpenChange={onOpenChange} />;
 }
 
-type ProjectEntry = ReturnType<typeof useProjectStore.getState>['projects'][number];
+type ProjectEntry = Project;
 
 /** Manual filter for projects + settings. cmdk would mount one DOM node per
  * project (thousands for some users) just to hide most of them; this keeps
@@ -111,7 +113,7 @@ function usePaletteOpenTiming(open: boolean, projectCount: number) {
 function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const projects = useProjectStore((s) => s.projects);
+  const projects = useProjects();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const startNewThread = useUIStore((s) => s.startNewThread);
   const navigatedRef = useRef(false);

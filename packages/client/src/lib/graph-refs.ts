@@ -50,7 +50,7 @@ interface GraphNodeParentRefLink {
   event?: {
     branch: string | null;
     onto: string | null;
-  };
+  } | null;
 }
 
 /** Branch portion of a remote ref — remote names never contain `/`. */

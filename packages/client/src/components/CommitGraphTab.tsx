@@ -994,7 +994,7 @@ function RebaseCopyLinksOverlay({
           const y1 = source.top + source.nodeY;
           const x2 = rebaseLinkNodeEdgeX(target.lane);
           return (
-            <g key={`${link.event.id}:${link.sourceHash}:${link.targetHash}`}>
+            <g key={`${link.event?.id ?? 'copy'}:${link.sourceHash}:${link.targetHash}`}>
               <path
                 d={roundedRebaseCopyLinkPath({
                   sourceX: x1,

@@ -51,6 +51,7 @@ import {
   sandboxError,
   sandboxOps,
   type ThreadSandboxControlDeps,
+  waitForSandboxRunner,
 } from './thread-sandbox-control.js';
 import type { ThreadSandboxRow, ThreadSandboxState } from './thread-sandbox-store.js';
 
@@ -140,24 +141,6 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
         {
           what: 'sandbox start',
           timeoutMs: deps.readyTimeoutMs ?? 5 * 60_000,
-          intervalMs: pollMs,
-          signal,
-          sleep: deps.sleep,
-        },
-      ).mapErr(sandboxError),
-    );
-
-  /** Poll until the thread's sandbox runner has enrolled and is connected. */
-  const waitConnected = (threadId: string) =>
-    fromResult((signal) =>
-      pollUntil(
-        () =>
-          ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(threadId)).map((runnerId) =>
-            runnerId && deps.presence?.isAvailable(runnerId) ? runnerId : null,
-          ),
-        {
-          what: 'sandbox runner connection',
-          timeoutMs: deps.connectTimeoutMs ?? 3 * 60_000,
           intervalMs: pollMs,
           signal,
           sleep: deps.sleep,
@@ -276,7 +259,11 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
         yield* exec(provider, handle, start.value, 'runner start');
         // The connect timeout starts here, once the runner is started.
         yield* ops.transition(input.threadId, 'CONNECT');
-        const runnerId = yield* waitConnected(input.threadId);
+        const runnerId = yield* waitForSandboxRunner(
+          deps,
+          input.threadId,
+          'sandbox runner connection',
+        );
 
         yield* checkoutProject(input, provider, handle);
         yield* ops.transition(input.threadId, 'READY', { runnerId, error: null });
@@ -284,10 +271,10 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
       }),
     );
 
-  const provision = (input: ProvisionInput) =>
+  /** Refuse a thread with an active sandbox; otherwise yield the next row generation. */
+  const nextGeneration = (threadId: string) =>
     Effect.gen(function* () {
-      const startedAt = Date.now();
-      const existing = yield* ops.get(input.threadId);
+      const existing = yield* ops.get(threadId);
       if (existing && ACTIVE_SANDBOX_STATES.has(existing.state as ThreadSandboxState)) {
         return yield* Effect.fail<ProvisionError>({
           kind: 'already-provisioned',
@@ -299,7 +286,13 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
       if (existing?.sandboxId && existing.state !== 'lost') {
         yield* releaseMachine(existing);
       }
-      const generation = (existing?.generation ?? -1) + 1;
+      return (existing?.generation ?? -1) + 1;
+    });
+
+  const provision = (input: ProvisionInput) =>
+    Effect.gen(function* () {
+      const startedAt = Date.now();
+      const generation = yield* nextGeneration(input.threadId);
       const { provider } = yield* fromResult(() =>
         providerForConnection(deps.connections, input.userId, input.connectionId),
       );

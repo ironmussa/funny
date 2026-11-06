@@ -74,7 +74,7 @@ export function reconcileAction(
 }
 
 /** Every sandbox row with whether its thread still exists. */
-export function listReconcileCandidates(): ResultAsync<ReconcileCandidate[], string> {
+function listReconcileCandidates(): ResultAsync<ReconcileCandidate[], string> {
   return ResultAsync.fromPromise(
     db
       .select({

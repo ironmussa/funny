@@ -150,14 +150,14 @@ export interface TransientRetryPolicy {
   sleep?: (ms: number) => PromiseLike<void>;
 }
 
-export const DEFAULT_TRANSIENT_RETRY: TransientRetryPolicy = {
+const DEFAULT_TRANSIENT_RETRY: TransientRetryPolicy = {
   retries: 3,
   baseDelayMs: 1_000,
   maxDelayMs: 30_000,
 };
 
 /** The wait before retry `retry` (1-based) of a transient error. */
-export function transientRetryDelayMs(
+function transientRetryDelayMs(
   error: SandboxError,
   retry: number,
   policy: Pick<TransientRetryPolicy, 'baseDelayMs' | 'maxDelayMs'>,
@@ -173,7 +173,7 @@ export function transientRetryDelayMs(
  * (rate-limited / unavailable) honoring the provider's `retryAfterMs`. Never
  * use it for `exec`: a command may have run before the error surfaced.
  */
-export function idempotentProviderCall<A>(
+function idempotentProviderCall<A>(
   call: () => ResultAsync<A, SandboxError>,
   policy: TransientRetryPolicy = DEFAULT_TRANSIENT_RETRY,
 ): Effect.Effect<A, ProvisionError> {
@@ -192,27 +192,33 @@ export function idempotentProviderCall<A>(
   return Effect.mapError(attempt(1), sandboxError);
 }
 
-export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
-  const pollMs = deps.pollMs ?? 2_000;
-  const ops = sandboxOps(deps);
+/** Wait until the thread's sandbox runner has enrolled and is connected; yields its id. */
+export const waitForSandboxRunner = (
+  deps: Pick<
+    ThreadSandboxControlDeps,
+    'sandboxRunnerIdForThread' | 'presence' | 'connectTimeoutMs' | 'pollMs' | 'sleep'
+  >,
+  threadId: string,
+  what: string,
+) =>
+  fromResult((signal) =>
+    pollUntil(
+      () =>
+        ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(threadId)).map((runnerId) =>
+          runnerId && deps.presence?.isAvailable(runnerId) ? runnerId : null,
+        ),
+      {
+        what,
+        timeoutMs: deps.connectTimeoutMs ?? 3 * 60_000,
+        intervalMs: deps.pollMs ?? 2_000,
+        signal,
+        sleep: deps.sleep,
+      },
+    ).mapErr(sandboxError),
+  );
 
-  /** Wait until the thread's sandbox runner is connected; yields its id. */
-  const waitForRunner = (threadId: string, what: string) =>
-    fromResult((signal) =>
-      pollUntil(
-        () =>
-          ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(threadId)).map((runnerId) =>
-            runnerId && deps.presence?.isAvailable(runnerId) ? runnerId : null,
-          ),
-        {
-          what,
-          timeoutMs: deps.connectTimeoutMs ?? 3 * 60_000,
-          intervalMs: pollMs,
-          signal,
-          sleep: deps.sleep,
-        },
-      ).mapErr(sandboxError),
-    );
+export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
+  const ops = sandboxOps(deps);
 
   /**
    * Stop an idle sandbox. Disk-preserving providers stop it (resume brings it
@@ -249,7 +255,11 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
           yield* ops.call(() =>
             provider.resume(handle, { lifetimeMs: deps.lifetimeMs ?? DEFAULT_SANDBOX_LIFETIME_MS }),
           );
-          const runnerId = yield* waitForRunner(threadId, 'sandbox runner reconnection');
+          const runnerId = yield* waitForSandboxRunner(
+            deps,
+            threadId,
+            'sandbox runner reconnection',
+          );
           yield* ops.transition(threadId, 'READY', { runnerId, error: null });
           return runnerId;
         }),

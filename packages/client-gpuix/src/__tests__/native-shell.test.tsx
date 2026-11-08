@@ -200,7 +200,6 @@ describe('native read-only shell', () => {
       input: '{}',
       output: `${'x'.repeat(1_000_000)}tail-marker`,
     } as never);
-    // Wide enough that the file tree dock (and its diff summary) shows by default.
     const root = createTestRoot({ width: 1440, height: 900 });
     root.render(<GpuixClientApp application={application} />);
     const virtualLists = root.renderer.findByType('virtual-list');
@@ -224,6 +223,17 @@ describe('native read-only shell', () => {
     );
     expect(root.renderer.getPaintedText()).toContain('Long thread');
     expect(root.renderer.findByTestId('navigation-diff-summary')).toBeDefined();
+    // The files dock shows by default only on wide windows, and the host may cap
+    // the requested width; open it through the toolbar toggle when it is hidden.
+    if (!root.renderer.findByTestId('files-diff-summary')) {
+      const filesToggle = root.renderer.findByTestId('file-tree-toggle');
+      expect(filesToggle).toBeDefined();
+      const toggleBounds = root.renderer.getElementBounds(filesToggle!.id)!;
+      root.renderer.nativeSimulateClick(
+        toggleBounds.x + toggleBounds.width / 2,
+        toggleBounds.y + toggleBounds.height / 2,
+      );
+    }
     expect(root.renderer.findByTestId('files-diff-summary')).toBeDefined();
     expect(root.renderer.getPaintedText()).toContain('+24');
     expect(root.renderer.getPaintedText()).toContain('characters hidden');

@@ -20,6 +20,7 @@ export default defineConfig({
       '@funny/shared/thread-machine': path.join(shared, 'thread-machine.ts'),
       '@funny/shared/lib/child-env': path.join(shared, 'lib/child-env.ts'),
       '@funny/shared/async': path.join(shared, 'async.ts'),
+      '@funny/shared/stale-while-revalidate': path.join(shared, 'stale-while-revalidate.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),
       '@funny/core/agents': path.resolve(__dirname, 'src/agents/index.ts'),
       '@funny/core/git': path.resolve(__dirname, 'src/git/index.ts'),

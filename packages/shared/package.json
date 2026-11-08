@@ -53,7 +53,8 @@
     "./lib/canonical-json": "./src/lib/canonical-json.ts",
     "./lib/file-search": "./src/lib/file-search.ts",
     "./lib/text-search": "./src/lib/text-search.ts",
-    "./async": "./src/async.ts"
+    "./async": "./src/async.ts",
+    "./stale-while-revalidate": "./src/stale-while-revalidate.ts"
   },
   "scripts": {
     "test": "bun test"

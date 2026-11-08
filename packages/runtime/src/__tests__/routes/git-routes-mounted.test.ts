@@ -416,7 +416,7 @@ describe('gitRoutes (mounted)', () => {
     expect(mocks.getDiffSummary).toHaveBeenCalledWith('/tmp/repo', {
       excludePatterns: undefined,
       maxFiles: undefined,
-      shareInFlight: true,
+      onChanged: expect.any(Function),
     });
   });
 
@@ -445,7 +445,9 @@ describe('gitRoutes (mounted)', () => {
     const body = await res.json();
     expect(body.state).toBe('synced');
     expect(body.branch).toBe('main');
-    expect(mocks.getStatusSummary).toHaveBeenCalledWith('/tmp/repo');
+    expect(mocks.getStatusSummary).toHaveBeenCalledWith('/tmp/repo', undefined, undefined, {
+      onChanged: expect.any(Function),
+    });
   });
 
   test('GET /api/git/status?projectId= aggregates thread statuses', async () => {

@@ -13,7 +13,8 @@ import type {
   NestedDirtyStats,
 } from '@funny/shared';
 import { processError, type DomainError } from '@funny/shared/errors';
-import { errAsync, ResultAsync } from 'neverthrow';
+import { createStaleWhileRevalidate } from '@funny/shared/stale-while-revalidate';
+import { err, errAsync, ok, ResultAsync } from 'neverthrow';
 
 import { getNativeGit } from './native.js';
 import { resolveRepoRelativePath } from './path-validation.js';
@@ -435,10 +436,31 @@ export function getDiffSummary(
      * caller that just edited files itself must see a scan started after it.
      */
     shareInFlight?: boolean;
+    /**
+     * Serve the last summary at once and recompute it in the background,
+     * calling this when the recomputed summary differs. Implies sharing an
+     * in-flight scan. Same caveat as `shareInFlight`: only for callers that
+     * refetch when told the summary changed.
+     */
+    onChanged?: (summary: DiffSummaryResponse) => void;
   },
 ): ResultAsync<DiffSummaryResponse, DomainError> {
   const exclude = options?.excludePatterns ?? [];
   const maxFiles = options?.maxFiles ?? 0;
+  if (options?.onChanged) {
+    const onChanged = options.onChanged;
+    return new ResultAsync(
+      diffSummaryCache.get(`${cwd}|${exclude.join(',')}|${maxFiles}`, {
+        lookup: () =>
+          computeDiffSummary(cwd, exclude, maxFiles).then(
+            (summary) => ok(summary),
+            (error) => err(processError(String(error), 1, '')),
+          ),
+        onChanged,
+        version: getGitWriteGeneration(),
+      }),
+    );
+  }
   if (!options?.shareInFlight) {
     return ResultAsync.fromPromise(computeDiffSummary(cwd, exclude, maxFiles), (error) =>
       processError(String(error), 1, ''),
@@ -464,6 +486,23 @@ const diffSummaryInFlight = new Map<
   string,
   { promise: Promise<DiffSummaryResponse>; generation: number }
 >();
+
+// Stale-while-revalidate for route callers (`onChanged`): a working tree whose
+// scan takes seconds serves its last file list at once instead of holding the
+// request open. A git write made through this process bumps the generation and
+// forces a wait for a new scan.
+const diffSummaryCache = createStaleWhileRevalidate<DiffSummaryResponse, DomainError>({
+  freshMs: 1_000,
+  maxStaleMs: 5 * 60_000,
+  capacity: 500,
+  refreshConcurrency: 2,
+});
+
+/** Drop cached diff summaries for a working tree, or all of them. */
+export function invalidateDiffSummaryCache(cwd?: string): void {
+  if (cwd) diffSummaryCache.invalidateWhere((key) => key.startsWith(cwd + '|'));
+  else diffSummaryCache.clear();
+}
 
 type BaseFile = {
   path: string;

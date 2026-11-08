@@ -65,6 +65,17 @@ export interface UseDiffDataResult {
 }
 
 /**
+ * The id dirty signals for this review are keyed on. Project mode has no
+ * thread: project-scoped dirty signals use the project id.
+ */
+function dirtySignalScope(
+  threadId: string | undefined,
+  projectModeId: string | null,
+): string | undefined {
+  return threadId ?? projectModeId ?? undefined;
+}
+
+/**
  * Owns the diff-summary + per-file diff loading lifecycle for ReviewPane.
  * Three operations: `refresh` (full summary + auto-load selected file),
  * `loadDiffForFile` (lazy single-file load on selection), and `requestFullDiff`
@@ -463,7 +474,12 @@ export function useDiffData({
   ]);
 
   // Auto-refresh diffs when agent modifies files (debounced 2s).
-  useAutoRefreshDiff(effectiveThreadId, refresh, 2000, reviewPaneOpen);
+  useAutoRefreshDiff(
+    dirtySignalScope(effectiveThreadId, projectModeId),
+    refresh,
+    2000,
+    reviewPaneOpen,
+  );
 
   return {
     diffCache,

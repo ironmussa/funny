@@ -4,9 +4,10 @@
 
 import type { GitSyncState } from '@funny/shared';
 import { badRequest, processError, type DomainError } from '@funny/shared/errors';
-import { errAsync, ResultAsync } from 'neverthrow';
+import { createStaleWhileRevalidate } from '@funny/shared/stale-while-revalidate';
+import { err, errAsync, ok, ResultAsync, type Result } from 'neverthrow';
 
-import { countUntrackedTextFileLines } from './diff.js';
+import { countUntrackedTextFileLines, invalidateDiffSummaryCache } from './diff.js';
 import { getNativeGit } from './native.js';
 import { getGitWriteGeneration, gitRead } from './process.js';
 import { isSafeGitRefArg } from './ref-guard.js';
@@ -25,41 +26,38 @@ export interface GitStatusSummary {
 
 // ─── Result cache for expensive git queries ─────────────
 
-const STATUS_CACHE_TTL = 1_000; // 1 second
+/** A summary younger than this is served without recomputing. */
+const STATUS_FRESH_MS = 1_000;
+/** A summary older than this is never served; the read waits for a new one. */
+const STATUS_MAX_STALE_MS = 5 * 60_000;
 const STATUS_CACHE_MAX_ENTRIES = 1_000;
+/** Background refreshes running at once, across all repos. */
+const STATUS_REFRESH_CONCURRENCY = 4;
 const UNTRACKED_LINE_COUNT_CONCURRENCY = 4;
 
-const statusCache = new Map<string, { data: GitStatusSummary; ts: number; generation: number }>();
-const statusInFlight = new Map<
-  string,
-  { promise: Promise<GitStatusSummary>; generation: number }
->();
+// Stale-while-revalidate: a repo whose status takes seconds (huge working
+// tree, slow filesystem) serves its last summary at once and recomputes in the
+// background, so a slow repo never holds a request open. A git write made
+// through this process bumps the write generation, which forces the next read
+// to wait for a new summary instead of serving one from before the write.
+const statusCache = createStaleWhileRevalidate<GitStatusSummary, DomainError>({
+  freshMs: STATUS_FRESH_MS,
+  maxStaleMs: STATUS_MAX_STALE_MS,
+  capacity: STATUS_CACHE_MAX_ENTRIES,
+  refreshConcurrency: STATUS_REFRESH_CONCURRENCY,
+});
 
 function statusCacheKey(cwd: string, baseBranch?: string, projectCwd?: string): string {
   return `${cwd}|${baseBranch ?? ''}|${projectCwd ?? ''}`;
 }
 
-/** Evict oldest entries when the cache exceeds the max size. Map iteration order is insertion order. */
-function evictStatusCacheIfNeeded(): void {
-  if (statusCache.size <= STATUS_CACHE_MAX_ENTRIES) return;
-  const toRemove = statusCache.size - STATUS_CACHE_MAX_ENTRIES;
-  let removed = 0;
-  for (const key of statusCache.keys()) {
-    if (removed >= toRemove) break;
-    statusCache.delete(key);
-    removed++;
-  }
-}
-
-/** Invalidate status cache for a specific worktree path, or all entries. */
+/** Invalidate status (and diff summary) caches for a worktree path, or all entries. */
 export function invalidateStatusCache(cwd?: string): void {
-  if (cwd) {
-    for (const key of statusCache.keys()) {
-      if (key.startsWith(cwd + '|')) statusCache.delete(key);
-    }
-  } else {
-    statusCache.clear();
-  }
+  if (cwd) statusCache.invalidateWhere((key) => key.startsWith(cwd + '|'));
+  else statusCache.clear();
+  // Every caller invalidates after changing the working tree, which also
+  // changes its diff summary.
+  invalidateDiffSummaryCache(cwd);
 }
 
 /** Unquote a path from git's porcelain output (C-style escaping inside double quotes). */
@@ -354,49 +352,47 @@ async function nativeStatusSummary(
 
 // ─── Public API ─────────────────────────────────────────
 
+export interface StatusSummaryOptions {
+  /**
+   * Called when a background refresh finds a summary different from the one
+   * this call returned (a stale value is returned at once while it refreshes).
+   */
+  onChanged?: (summary: GitStatusSummary) => void;
+}
+
 /**
- * Get a summary of the git status for a worktree.
+ * Get a summary of the git status for a worktree. May return the last known
+ * summary while a newer one is computed in the background; see `onChanged`.
  */
 export function getStatusSummary(
   worktreeCwd: string,
   rawBaseBranch?: string,
   projectCwd?: string,
+  options?: StatusSummaryOptions,
 ): ResultAsync<GitStatusSummary, DomainError> {
   // Security (M7): baseBranch is persisted from user input and passed
   // positionally to git below; a value like `--output=x` would be parsed as an
   // option. Treat an unsafe value as "no base branch" instead of failing the
   // whole status call.
   const baseBranch = isSafeGitRefArg(rawBaseBranch) ? rawBaseBranch : undefined;
-  // Check cache first
-  const cacheKey = statusCacheKey(worktreeCwd, baseBranch, projectCwd);
-  const generation = getGitWriteGeneration();
-  const cached = statusCache.get(cacheKey);
-  if (cached && cached.generation === generation && Date.now() - cached.ts < STATUS_CACHE_TTL) {
-    return ResultAsync.fromSafePromise(Promise.resolve(cached.data));
-  }
-
-  const existing = statusInFlight.get(cacheKey);
-  if (existing && existing.generation === generation) {
-    return ResultAsync.fromPromise(existing.promise, (error) => processError(String(error), 1, ''));
-  }
-
-  // Try native module first, fall back to CLI
   const native = getNativeGit();
-
-  const operation = (async () => {
-    const result =
-      (await nativeStatusSummary(native, worktreeCwd, baseBranch, projectCwd)) ??
-      (await cliStatusSummary(worktreeCwd, baseBranch, projectCwd));
-    statusCache.set(cacheKey, { data: result, ts: Date.now(), generation });
-    evictStatusCacheIfNeeded();
-    return result;
-  })();
-  statusInFlight.set(cacheKey, { promise: operation, generation });
-  const clearInFlight = () => {
-    if (statusInFlight.get(cacheKey)?.promise === operation) statusInFlight.delete(cacheKey);
+  const lookup = async (): Promise<Result<GitStatusSummary, DomainError>> => {
+    try {
+      return ok(
+        (await nativeStatusSummary(native, worktreeCwd, baseBranch, projectCwd)) ??
+          (await cliStatusSummary(worktreeCwd, baseBranch, projectCwd)),
+      );
+    } catch (error) {
+      return err(processError(String(error), 1, ''));
+    }
   };
-  void operation.then(clearInFlight, clearInFlight);
-  return ResultAsync.fromPromise(operation, (error) => processError(String(error), 1, ''));
+  return new ResultAsync(
+    statusCache.get(statusCacheKey(worktreeCwd, baseBranch, projectCwd), {
+      lookup,
+      onChanged: options?.onChanged,
+      version: getGitWriteGeneration(),
+    }),
+  );
 }
 
 /**

@@ -38,6 +38,7 @@ import {
   countUnpushedCommits,
   emitPRUpdateForThread,
   getCachedPR,
+  notifyStatusChanged,
   requireProjectCwd,
   scheduleBackgroundFetch,
   schedulePRLookup,
@@ -128,6 +129,7 @@ async function worktreeThreadStatus(
   thread: ProjectThread,
   projectPath: string,
   statusSpan: StatusSpan,
+  userId: string,
 ): Promise<any> {
   const span = startSpan('git.status_summary', {
     traceId: statusSpan.traceId,
@@ -138,6 +140,7 @@ async function worktreeThreadStatus(
     thread.worktreePath!,
     thread.baseBranch ?? undefined,
     projectPath,
+    { onChanged: notifyStatusChanged(userId, thread.projectId, thread.id) },
   );
   span.end(
     summaryResult.isOk() ? 'ok' : 'error',
@@ -164,6 +167,7 @@ async function localThreadStatuses(
   projectId: string,
   localThreads: ProjectThread[],
   statusSpan: StatusSpan,
+  userId: string,
 ): Promise<Array<PromiseSettledResult<any>>> {
   const currentBranch = await currentBranchOf(projectPath, projectId, statusSpan);
 
@@ -178,7 +182,7 @@ async function localThreadStatuses(
 
   const { byKey, unassigned } = groupByBranchPair(backgroundThreads);
   const [active, background] = await Promise.all([
-    activeThreadStatuses(projectPath, projectId, activeThreads, statusSpan),
+    activeThreadStatuses(projectPath, projectId, activeThreads, statusSpan, userId),
     Promise.all(
       Array.from(byKey.values()).map((threads) =>
         committedBranchStatuses(projectPath, projectId, threads, statusSpan),
@@ -246,6 +250,7 @@ async function activeThreadStatuses(
   projectId: string,
   activeThreads: ProjectThread[],
   statusSpan: StatusSpan,
+  userId: string,
 ): Promise<Array<PromiseSettledResult<any>>> {
   if (activeThreads.length === 0) return [];
   const span = startSpan('git.status_summary', {
@@ -257,6 +262,7 @@ async function activeThreadStatuses(
     projectPath,
     activeThreads[0].baseBranch ?? undefined,
     projectPath,
+    { onChanged: notifyStatusChanged(userId, projectId) },
   );
   span.end(
     summaryResult.isOk() ? 'ok' : 'error',
@@ -477,9 +483,11 @@ async function computeBulkStatus(
 
   const [worktreeResults, localResults] = await Promise.all([
     Promise.allSettled(
-      worktreeThreads.map((thread) => worktreeThreadStatus(thread, project.path, statusSpan)),
+      worktreeThreads.map((thread) =>
+        worktreeThreadStatus(thread, project.path, statusSpan, userId),
+      ),
     ),
-    localThreadStatuses(project.path, projectId, localThreads, statusSpan),
+    localThreadStatuses(project.path, projectId, localThreads, statusSpan, userId),
   ]);
 
   statusSpan.end('ok');
@@ -537,7 +545,9 @@ statusRoutes.get('/project/:projectId/status', async (c) => {
   });
 
   const statusSpan = requestSpan(c, 'git.status_summary', { projectId });
-  const summaryResult = await getStatusSummary(cwd);
+  const summaryResult = await getStatusSummary(cwd, undefined, undefined, {
+    onChanged: notifyStatusChanged(userId, projectId),
+  });
   statusSpan.end(
     summaryResult.isOk() ? 'ok' : 'error',
     summaryResult.isErr() ? summaryResult.error.message : undefined,
@@ -626,7 +636,9 @@ statusRoutes.get('/:threadId/status', async (c) => {
 
   const cwd = thread.worktreePath || project.path;
   const summarySpan = requestSpan(c, 'git.status_summary', { threadId });
-  const summaryResult = await getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path);
+  const summaryResult = await getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path, {
+    onChanged: notifyStatusChanged(userId, thread.projectId, threadId),
+  });
   summarySpan.end(
     summaryResult.isOk() ? 'ok' : 'error',
     summaryResult.isErr() ? summaryResult.error.message : undefined,

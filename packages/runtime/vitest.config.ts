@@ -58,6 +58,7 @@ export default defineConfig({
       '@funny/shared/lib/child-env': path.join(shared, 'lib/child-env.ts'),
       '@funny/shared/auth/runner-keys': path.join(shared, 'auth/runner-keys.ts'),
       '@funny/shared/async': path.join(shared, 'async.ts'),
+      '@funny/shared/stale-while-revalidate': path.join(shared, 'stale-while-revalidate.ts'),
       '@funny/shared/attachments': path.join(shared, 'attachments/index.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),
       '@funny/evflow': path.join(evflow, 'index.ts'),

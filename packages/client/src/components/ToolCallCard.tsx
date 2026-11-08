@@ -103,6 +103,7 @@ export const ToolCallCard = memo(
           input={childTc.input}
           output={childTc.output}
           author={childTc.author}
+          timestamp={childTc.timestamp}
         />
       ),
     });

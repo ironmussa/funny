@@ -270,9 +270,7 @@ export async function initBetterAuth(): Promise<void> {
       {
         email,
         name: 'Admin',
-        // Postgres stores email_verified as boolean; SQLite as a 0/1 integer
-        // column, so the raw value must stay numeric there.
-        emailVerified: dbDialect === 'pg' ? true : (1 as unknown as boolean),
+        emailVerified: true,
         role: 'admin',
         username,
       },

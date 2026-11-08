@@ -14,6 +14,11 @@
  *    and rejected the boolean values ("column banned is of type integer
  *    but expression is of type boolean"). SQLite stores booleans as 0/1
  *    transparently, so its schema keeps integer columns.
+ *
+ * 3. SQLite read those 0/1 columns back as numbers. Better Auth's cookie
+ *    cache Zod-validates the session payload, so `emailVerified: 1` failed
+ *    validation and the cached session was discarded. The sqlite columns
+ *    must map back to real booleans.
  */
 import { describe, expect, test } from 'bun:test';
 
@@ -45,5 +50,13 @@ describe('Better Auth user schema', () => {
     const cols = getTableColumns(sqliteUser);
     expect(cols.emailVerified.getSQLType()).toBe('integer');
     expect(cols.banned.getSQLType()).toBe('integer');
+  });
+
+  test('sqlite emailVerified and banned read back as booleans (cookie cache is Zod-validated)', () => {
+    const cols = getTableColumns(sqliteUser);
+    expect(cols.emailVerified.mapFromDriverValue(1)).toBe(true);
+    expect(cols.emailVerified.mapFromDriverValue(0)).toBe(false);
+    expect(cols.banned.mapFromDriverValue(1)).toBe(true);
+    expect(cols.banned.mapFromDriverValue(0)).toBe(false);
   });
 });

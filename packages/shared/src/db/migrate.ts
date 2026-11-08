@@ -157,14 +157,13 @@ export async function runMigrations(
     )
   `);
 
+  // One query for every applied migration instead of one per migration: on
+  // PostgreSQL each was a network round trip before the server could serve.
+  const done = await appliedMigrationNames(db, dialect);
   let applied = 0;
 
   for (const migration of migrations) {
-    // Check if already applied
-    const row = await ctx.queryOne<{ name: string }>(
-      sql`SELECT name FROM _migrations WHERE name = ${migration.name}`,
-    );
-    if (row) continue;
+    if (done.has(migration.name)) continue;
 
     try {
       await migration.up();
@@ -182,6 +181,15 @@ export async function runMigrations(
     log.info(`Applied ${applied} migration(s)`, { namespace: label });
   }
   log.info('Tables ready', { namespace: label });
+}
+
+async function appliedMigrationNames(db: any, dialect: DbDialect): Promise<Set<string>> {
+  const query = sql`SELECT name FROM _migrations`;
+  const rows: { name: string }[] =
+    dialect === 'pg'
+      ? await db.execute(query).then((result: any) => result?.rows ?? result ?? [])
+      : (db.all(query) as { name: string }[]);
+  return new Set(rows.map((row) => row.name));
 }
 
 // Re-export sql for use in migration definitions

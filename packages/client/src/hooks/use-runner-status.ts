@@ -10,6 +10,7 @@
 import { useEffect, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { setVisibleInterval } from '@/lib/visible-interval';
 
 export function useRunnerStatus(pollMs = 15_000) {
   const [hasRunner, setHasRunner] = useState<boolean | null>(null);
@@ -30,10 +31,10 @@ export function useRunnerStatus(pollMs = 15_000) {
       setLoading(false);
     };
     poll();
-    const id = setInterval(poll, pollMs);
+    const stopPolling = setVisibleInterval(poll, pollMs);
     return () => {
       cancelled = true;
-      clearInterval(id);
+      stopPolling();
     };
   }, [pollMs]);
 

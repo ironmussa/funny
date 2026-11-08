@@ -2,6 +2,7 @@ import type { FileDiffSummary } from '@funny/shared';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';
+import { setVisibleInterval } from '@/lib/visible-interval';
 import { useReviewPaneStore } from '@/stores/review-pane-store';
 import { useThreadId, useThreadStatus } from '@/stores/thread-context';
 
@@ -83,11 +84,11 @@ function useThreadTouchedPaths(enabled: boolean): Set<string> {
 
     // Re-fetch periodically while the thread is running to pick up new files
     if (isRunning) {
-      const interval = setInterval(fetchPaths, 5000);
+      const stopPolling = setVisibleInterval(fetchPaths, 5000);
       return () => {
         cancelled = true;
         abortRef.current?.abort();
-        clearInterval(interval);
+        stopPolling();
       };
     }
 

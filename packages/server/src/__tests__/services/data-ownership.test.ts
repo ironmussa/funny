@@ -5,7 +5,11 @@
  */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
-import { assertDataOwnership } from '../../services/data-ownership.js';
+import {
+  __resetDataOwnershipCache,
+  assertDataOwnership,
+  forgetThreadOwnership,
+} from '../../services/data-ownership.js';
 import {
   seedMessage,
   seedMessageQueue,
@@ -32,6 +36,7 @@ describe('assertDataOwnership', () => {
   });
 
   beforeEach(() => {
+    __resetDataOwnershipCache();
     for (const table of [
       'pending_permission_requests',
       'watchers',
@@ -67,6 +72,45 @@ describe('assertDataOwnership', () => {
   });
 
   const check = (data: any, user: string | null = 'u1') => assertDataOwnership(user, data);
+
+  describe('ownership fact cache', () => {
+    test('a missing thread is not cached, so it is allowed once it exists', async () => {
+      const msg = { type: 'data:get_thread', threadId: 't-new' };
+      expect(await check(msg)).toEqual(deny('thread t-new not found'));
+      seedThread(db as any, { id: 't-new', projectId: 'p1', userId: 'u1' });
+      expect(await check(msg)).toEqual(OK);
+    });
+
+    test('a forgotten (deleted) thread reads as not found again', async () => {
+      const msg = { type: 'data:get_thread', threadId: 't1' };
+      expect(await check(msg)).toEqual(OK);
+      (db as any).run(`DELETE FROM tool_calls`);
+      (db as any).run(`DELETE FROM messages`);
+      (db as any).run(`DELETE FROM message_queue WHERE thread_id = 't1'`);
+      (db as any).run(`DELETE FROM threads WHERE id = 't1'`);
+      forgetThreadOwnership('t1');
+      expect(await check(msg)).toEqual(deny('thread t1 not found'));
+    });
+
+    test('a cached owner still refuses other users', async () => {
+      const msg = { type: 'data:get_thread', threadId: 't2' };
+      expect(await check(msg, 'u2')).toEqual(OK);
+      expect(await check(msg, 'u1')).toEqual(deny('thread t2 owned by u2'));
+    });
+
+    test('repeated checks for the same thread, message and tool call read the DB once', async () => {
+      const msg = {
+        type: 'data:update_tool_call_output',
+        threadId: 't1',
+        payload: { toolCallId: 'tc1', output: 'x' },
+      };
+      expect(await check(msg)).toEqual(OK);
+      // Change the owner behind the cache (only possible directly in the DB):
+      // a fresh read would now refuse, so OK proves the cached fact was used.
+      (db as any).run(`UPDATE threads SET user_id = 'someone-else' WHERE id = 't1'`);
+      expect(await check(msg)).toEqual(OK);
+    });
+  });
 
   describe('user-neutral and ownerless runners', () => {
     test('user-neutral types pass even without an owning user', async () => {

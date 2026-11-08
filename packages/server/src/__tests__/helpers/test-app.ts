@@ -146,9 +146,11 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   // test's runner owner / role / thread scope.
   const { __resetRunnerScopeCache } = await import('../../services/runner-scope.js');
   const { __resetDataScopeCache } = await import('../../services/data-scope.js');
+  const { __resetDataOwnershipCache } = await import('../../services/data-ownership.js');
   const cleanup = () => {
     __resetRunnerScopeCache();
     __resetDataScopeCache();
+    __resetDataOwnershipCache();
     // Truncate all tables in reverse dependency order
     const tables = [
       'project_runner_grants',

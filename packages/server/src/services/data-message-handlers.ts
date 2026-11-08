@@ -15,12 +15,56 @@ import { and, eq, or } from 'drizzle-orm';
 import { db, dbAll, dbGet } from '../db/index.js';
 import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
+import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import { onAutomationThreadTerminal } from './automation-runs.js';
 import { relayToThreadStream, relayToUser } from './browser-events.js';
+import { forgetThreadOwnership } from './data-ownership.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
 import * as startupCommandsRepo from './startup-commands-repository.js';
+
+/**
+ * Columns that decide who owns a thread and what it belongs to. The data
+ * channel's ownership check runs on the thread as it is, so a runner that could
+ * write these would move its own thread to another user or into a project it
+ * cannot reach. The runner never sets them; drop them and audit the attempt.
+ */
+const RUNNER_IMMUTABLE_THREAD_FIELDS = new Set([
+  'id',
+  'userId',
+  'projectId',
+  'isScratch',
+  'createdBy',
+  'externalRequestId',
+  'parentThreadId',
+  'runnerId',
+  'schedulerManaged',
+  'createdAt',
+]);
+
+function stripRunnerImmutableThreadFields(
+  runnerUserId: string | null,
+  threadId: string,
+  updates: unknown,
+): Record<string, unknown> {
+  if (!updates || typeof updates !== 'object' || Array.isArray(updates)) return {};
+  const allowed: Record<string, unknown> = {};
+  const refused: string[] = [];
+  for (const [key, value] of Object.entries(updates)) {
+    if (RUNNER_IMMUTABLE_THREAD_FIELDS.has(key)) refused.push(key);
+    else allowed[key] = value;
+  }
+  if (refused.length > 0) {
+    audit({
+      action: 'authz.cross_tenant_refused',
+      actorId: runnerUserId,
+      detail: 'Runner tried to change immutable thread fields',
+      meta: { threadId, fields: refused },
+    });
+  }
+  return allowed;
+}
 
 interface DataMessageContext {
   runnerId: string;
@@ -193,7 +237,12 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   },
   'data:update_thread': async ({ runnerUserId, data }) => {
     const threadRepo = repos.threads();
-    await threadRepo.updateThread(data.payload.threadId, data.payload.updates);
+    const updates = stripRunnerImmutableThreadFields(
+      runnerUserId,
+      data.payload.threadId,
+      data.payload.updates,
+    );
+    await threadRepo.updateThread(data.payload.threadId, updates);
     notifyTerminalStatusPersisted(runnerUserId, data.payload.threadId, data.payload.updates);
     return { type: 'data:update_thread_response', ok: true };
   },
@@ -475,6 +524,7 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   'data:delete_thread': async ({ data }) => {
     const tRepo = repos.threads();
     await tRepo.deleteThread(data.threadId);
+    forgetThreadOwnership(data.threadId);
     return { type: 'data:ack', success: true };
   },
   'data:enqueue_message': async ({ data }) => {

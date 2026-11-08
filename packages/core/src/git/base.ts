@@ -18,7 +18,7 @@ import { ResultAsync } from 'neverthrow';
 
 import { toDomainError } from './errors.js';
 import { validatePath, validatePathSync } from './path-validation.js';
-import { gitRead, gitWrite, executeSync, ProcessExecutionError } from './process.js';
+import { gitNetwork, gitRead, gitWrite, executeSync, ProcessExecutionError } from './process.js';
 
 /** Per-user git identity for multi-user mode. */
 export interface GitIdentityOptions {
@@ -157,7 +157,7 @@ export function gitRemote(
   }
 
   return ResultAsync.fromPromise(
-    gitWrite(args, { cwd, env, timeout }).finally(() => {
+    gitNetwork(args, { cwd, env, timeout }).finally(() => {
       if (askpassPath) {
         try {
           // Remove the entire private askpass directory

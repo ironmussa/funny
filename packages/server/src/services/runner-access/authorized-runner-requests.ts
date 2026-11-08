@@ -45,6 +45,8 @@ export interface UnsignedRunnerRequest {
   body?: string | Uint8Array | null;
   signal?: AbortSignal;
   deadlineAt?: number;
+  /** See RunnerRequest.streamBody. */
+  streamBody?: boolean;
 }
 
 /** Exactly the headers `signForwardedIdentity` produces, plus `X-Runner-Auth`. */
@@ -182,6 +184,7 @@ class AuthorizedRunnerRequests {
       body: request.body ?? null,
       signal: request.signal,
       deadlineAt: request.deadlineAt,
+      streamBody: request.streamBody,
     });
   }
 }

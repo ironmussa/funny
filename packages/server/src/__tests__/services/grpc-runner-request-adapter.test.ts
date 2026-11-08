@@ -174,4 +174,93 @@ describe('GrpcRunnerRequestAdapter', () => {
       }),
     ).rejects.toBeInstanceOf(RunnerRequestTimeoutError);
   });
+
+  describe('streamBody', () => {
+    /** A body the test feeds chunk by chunk, like a slow runner. */
+    function controllableExchange() {
+      const queue: Array<Uint8Array | Error | null> = [];
+      let wake: (() => void) | null = null;
+      let cancelled: string | undefined;
+      const body = (async function* () {
+        while (true) {
+          while (queue.length === 0) await new Promise<void>((r) => (wake = r));
+          const next = queue.shift()!;
+          if (next === null) return;
+          if (next instanceof Error) throw next;
+          yield next;
+        }
+      })();
+      const push = (item: Uint8Array | Error | null) => {
+        queue.push(item);
+        wake?.();
+        wake = null;
+      };
+      return {
+        exchange: {
+          response: Promise.resolve({
+            statusCode: 200,
+            headers: [{ name: 'content-type', value: 'application/octet-stream' }],
+          }),
+          body,
+          completed: Promise.resolve(),
+          cancel: (reason?: string) => (cancelled = reason ?? 'cancelled'),
+        },
+        push,
+        cancelled: () => cancelled,
+      };
+    }
+
+    test('hands chunks over as they arrive, as raw bytes', async () => {
+      const ctl = controllableExchange();
+      const adapter = adapterWith(() => ctl.exchange);
+      const response = await adapter.request('r1', {
+        method: 'GET',
+        path: '/api/files/big.bin',
+        headers: {},
+        streamBody: true,
+      });
+
+      expect(response.status).toBe(200);
+      expect(response.body).toBe('');
+      expect(response.bodyEncoding).toBeUndefined();
+      const reader = response.bodyStream!.getReader();
+
+      // The first chunk is readable before the runner has sent the rest.
+      ctl.push(Uint8Array.from([0xff, 0x00]));
+      expect(await reader.read()).toEqual({ done: false, value: Uint8Array.from([0xff, 0x00]) });
+      ctl.push(Uint8Array.from([0x01]));
+      ctl.push(null);
+      expect(await reader.read()).toEqual({ done: false, value: Uint8Array.from([0x01]) });
+      expect((await reader.read()).done).toBe(true);
+    });
+
+    test('a failure after the head errors the stream instead of truncating it', async () => {
+      const ctl = controllableExchange();
+      const adapter = adapterWith(() => ctl.exchange);
+      const response = await adapter.request('r1', {
+        method: 'GET',
+        path: '/x',
+        headers: {},
+        streamBody: true,
+      });
+      const reader = response.bodyStream!.getReader();
+      ctl.push(Uint8Array.from([1]));
+      await reader.read();
+      ctl.push(new Error('runner went away'));
+      await expect(reader.read()).rejects.toThrow('runner went away');
+    });
+
+    test('a reader that goes away cancels the tunnel exchange', async () => {
+      const ctl = controllableExchange();
+      const adapter = adapterWith(() => ctl.exchange);
+      const response = await adapter.request('r1', {
+        method: 'GET',
+        path: '/x',
+        headers: {},
+        streamBody: true,
+      });
+      await response.bodyStream!.cancel('browser closed the response');
+      expect(ctl.cancelled()).toBe('browser closed the response');
+    });
+  });
 });

@@ -21,6 +21,8 @@ import { BrowserV1OutboundQueue } from './browser-v1-outbound-queue.js';
 import { encodeSocketIoCarrier } from './browser-v1-wire.js';
 import { encodeSocketIoStatus } from './browser-v1-wire.js';
 
+type BrowserV1Event = NonNullable<BrowserPublication['browserV1']>;
+
 export const threadStreamRoom = (threadId: string): string => `thread:${threadId}:stream`;
 export const threadPresenceRoom = (threadId: string): string => `thread:${threadId}:presence`;
 
@@ -64,55 +66,92 @@ export class SocketIoBrowserEventSink implements BrowserEventSink {
     const browserV1Event = publication.browserV1
       ? browserV1EventRetention.append(this.protocolScope(publication), publication.browserV1)
       : undefined;
-    const browserV1Payload = browserV1Event ?? publication.browserV1Interactive;
     for (const socket of this.targetSockets(publication)) {
-      const selected = this.selectRepresentation(socket, publication);
-      if (selected === Representation.BROWSER_V1 && browserV1Payload) {
-        const payload = browserV1Event
-          ? this.encodeEvent(browserV1Event)
-          : this.encodeInteractive(publication.browserV1Interactive!);
-        const queued = this.dispatchBrowserV1(socket, publication, payload);
-        this.recordTelemetry({
-          logicalType: publication.logicalType,
-          trafficClass: publication.trafficClass,
-          representation: 'browser.v1',
-          dispatched: queued.result === 'accepted' || queued.result === 'coalesced',
-          payloadBytes: payload.byteLength,
-          queueDepth: queued.queueDepth,
-          reason: queued.result === 'accepted' ? undefined : queued.result,
-        });
-        continue;
-      }
-      if (selected === Representation.SHADOW && browserV1Payload) {
-        const payload = browserV1Event
-          ? this.encodeEvent(browserV1Event)
-          : this.encodeInteractive(publication.browserV1Interactive!);
-        this.recordTelemetry({
-          logicalType: publication.logicalType,
-          trafficClass: publication.trafficClass,
-          representation: 'shadow',
-          dispatched: false,
-          payloadBytes: payload.byteLength,
-        });
-      } else if (selected === Representation.BROWSER_V1) {
-        this.recordTelemetry({
-          logicalType: publication.logicalType,
-          trafficClass: publication.trafficClass,
-          representation: 'legacy',
-          dispatched: true,
-          reason: 'browser-v1-payload-unavailable',
-        });
-      }
-      socket.emit(publication.logicalType, publication.legacyEvent);
-      if (selected !== Representation.SHADOW) {
-        this.recordTelemetry({
-          logicalType: publication.logicalType,
-          trafficClass: publication.trafficClass,
-          representation: 'legacy',
-          dispatched: true,
-        });
-      }
+      this.publishToSocket(socket, publication, browserV1Event);
     }
+  }
+
+  private publishToSocket(
+    socket: Socket,
+    publication: BrowserPublication,
+    browserV1Event: BrowserV1Event | undefined,
+  ): void {
+    const selected = this.selectRepresentation(socket, publication);
+    // Browser sessions have no legacy representation: a socket that did not
+    // negotiate browser.v1 gets none of them.
+    if (publication.trafficClass === 'browserSession' && selected !== Representation.BROWSER_V1) {
+      return;
+    }
+    const hasBrowserV1Payload = Boolean(browserV1Event ?? publication.browserV1Interactive);
+    if (selected === Representation.BROWSER_V1 && hasBrowserV1Payload) {
+      this.sendBrowserV1(socket, publication, this.encodePublication(publication, browserV1Event));
+      return;
+    }
+    this.publishLegacy(socket, publication, selected, hasBrowserV1Payload, browserV1Event);
+  }
+
+  /**
+   * Emit the legacy representation. A shadow socket also gets the browser.v1
+   * payload measured (never sent); a browser.v1 socket only lands here when
+   * the publication carries no browser.v1 payload.
+   */
+  private publishLegacy(
+    socket: Socket,
+    publication: BrowserPublication,
+    selected: Representation,
+    hasBrowserV1Payload: boolean,
+    browserV1Event: BrowserV1Event | undefined,
+  ): void {
+    if (selected === Representation.SHADOW && hasBrowserV1Payload) {
+      this.recordTelemetry({
+        ...this.telemetryOf(publication),
+        representation: 'shadow',
+        dispatched: false,
+        payloadBytes: this.encodePublication(publication, browserV1Event).byteLength,
+      });
+    } else if (selected === Representation.BROWSER_V1) {
+      this.recordTelemetry({
+        ...this.telemetryOf(publication),
+        representation: 'legacy',
+        dispatched: true,
+        reason: 'browser-v1-payload-unavailable',
+      });
+    }
+    socket.emit(publication.logicalType, publication.legacyEvent);
+    if (selected !== Representation.SHADOW) {
+      this.recordTelemetry({
+        ...this.telemetryOf(publication),
+        representation: 'legacy',
+        dispatched: true,
+      });
+    }
+  }
+
+  private sendBrowserV1(socket: Socket, publication: BrowserPublication, payload: Buffer): void {
+    const queued = this.dispatchBrowserV1(socket, publication, payload);
+    this.recordTelemetry({
+      ...this.telemetryOf(publication),
+      representation: 'browser.v1',
+      dispatched: queued.result === 'accepted' || queued.result === 'coalesced',
+      payloadBytes: payload.byteLength,
+      queueDepth: queued.queueDepth,
+      reason: queued.result === 'accepted' ? undefined : queued.result,
+    });
+  }
+
+  private encodePublication(
+    publication: BrowserPublication,
+    browserV1Event: BrowserV1Event | undefined,
+  ): Buffer {
+    return browserV1Event
+      ? this.encodeEvent(browserV1Event)
+      : this.encodeInteractive(publication.browserV1Interactive!);
+  }
+
+  private telemetryOf(
+    publication: BrowserPublication,
+  ): Pick<BrowserSinkTelemetry, 'logicalType' | 'trafficClass'> {
+    return { logicalType: publication.logicalType, trafficClass: publication.trafficClass };
   }
 
   toUser(userId: string, event: Record<string, unknown>): void {

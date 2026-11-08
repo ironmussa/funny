@@ -107,7 +107,6 @@ describe('browser.v1 carrier transport compatibility', () => {
         operations: 'binary',
         events: 'legacy',
         terminal: options.interactiveMode ?? 'legacy',
-        browserSession: options.interactiveMode ?? 'legacy',
       }),
     });
     const server = Bun.serve({
@@ -219,9 +218,15 @@ describe('browser.v1 carrier transport compatibility', () => {
             ),
           ),
         }));
-        expect(legacyMessages).toEqual(expectedLegacy);
+        // Browser sessions have no legacy representation: the socket that did
+        // not negotiate gets none, the negotiated one always gets browser.v1.
+        const expectedTerminalLegacy = expectedLegacy.filter(
+          ({ type }) => !type.startsWith('browser-session:'),
+        );
+        expect(legacyMessages).toEqual(expectedTerminalLegacy);
         if (mode !== 'binary') {
-          expect(negotiatedMessages).toEqual(expectedLegacy);
+          expect(negotiatedMessages.slice(0, -1)).toEqual(expectedTerminalLegacy);
+          expect(negotiatedMessages.at(-1)?.type).toBe(BROWSER_V1_CARRIER_EVENTS.interactive);
         } else {
           expect(negotiatedMessages).toHaveLength(events.length);
           const messages = negotiatedMessages.map(({ type, payload }) => {

@@ -144,8 +144,12 @@ export type {
   WSBrowserSessionViewportData,
   WSBrowserSessionControllerData,
   WSBrowserSessionDialogData,
+  WSBrowserSessionPointerData,
+  WSBrowserSessionNavigatedData,
+  WSBrowserSessionAudioData,
   BrowserSessionController,
   BrowserSessionCloseRequestReason,
+  BrowserSessionPointerKind,
 } from './types/browser-session.js';
 export { threadBrowserSessionId, threadIdFromBrowserSessionId } from './types/browser-session.js';
 
@@ -213,6 +217,7 @@ export type {
   GitStatusInfo,
   WSGitStatusData,
   WSGitRefsUpdatedData,
+  GitRefsUpdatedChange,
   MergeProgress,
   GitWorkflowAction,
   GitWorkflowRequest,
@@ -1009,7 +1014,10 @@ export type WSEvent =
     }
   | { type: 'browser-session:viewport'; threadId: ''; data: WSBrowserSessionViewportData }
   | { type: 'browser-session:controller'; threadId: ''; data: WSBrowserSessionControllerData }
-  | { type: 'browser-session:dialog'; threadId: ''; data: WSBrowserSessionDialogData };
+  | { type: 'browser-session:dialog'; threadId: ''; data: WSBrowserSessionDialogData }
+  | { type: 'browser-session:pointer'; threadId: ''; data: WSBrowserSessionPointerData }
+  | { type: 'browser-session:navigated'; threadId: ''; data: WSBrowserSessionNavigatedData }
+  | { type: 'browser-session:audio'; threadId: ''; data: WSBrowserSessionAudioData };
 
 export interface WSOrgMemberData {
   organizationId: string;
@@ -1139,6 +1147,9 @@ import type {
   WSBrowserSessionViewportData,
   WSBrowserSessionControllerData,
   WSBrowserSessionDialogData,
+  WSBrowserSessionPointerData,
+  WSBrowserSessionNavigatedData,
+  WSBrowserSessionAudioData,
 } from './types/browser-session.js';
 import type {
   WSGitStatusData,

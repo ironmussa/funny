@@ -13,7 +13,6 @@ describe('browser.v1 rollout policy', () => {
       operations: 'binary',
       events: 'shadow',
       terminal: 'legacy',
-      browserSession: 'binary',
       deployments: new Set(['web']),
       cohorts: new Set(['canary']),
     });
@@ -46,7 +45,6 @@ describe('browser.v1 rollout policy', () => {
       operations: 'binary',
       events: 'binary',
       terminal: 'binary',
-      browserSession: 'binary',
       deployments: new Set(['tauri']),
       cohorts: new Set(['canary']),
     });
@@ -90,5 +88,25 @@ describe('browser.v1 rollout policy', () => {
       operations: Representation.BROWSER_V1,
       events: Representation.LEGACY,
     });
+  });
+
+  test('browser sessions use browser.v1 whatever the rollout, cohort or environment', () => {
+    const policy = browserV1RolloutPolicyFromEnvironment({
+      FUNNY_BROWSER_V1_BROWSER_SESSION: 'legacy',
+      FUNNY_BROWSER_V1_COHORTS: 'canary',
+    });
+    expect(
+      policy.assignments({
+        protocolMajor: 1,
+        client: {
+          $typeName: 'browser.v1.ClientDescriptor',
+          instanceId: 'client-1',
+          applicationVersion: 'test',
+          deployment: 'web',
+          cohort: 'stable',
+        },
+        capabilities: [BrowserCapability.BROWSER_SESSION],
+      }).browserSession,
+    ).toBe(Representation.BROWSER_V1);
   });
 });

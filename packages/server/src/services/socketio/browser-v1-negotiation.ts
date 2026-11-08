@@ -60,7 +60,6 @@ export function negotiateBrowserV1(
     operations: 'legacy',
     events: 'legacy',
     terminal: 'legacy',
-    browserSession: 'legacy',
   }),
 ): { outcome: NegotiationOutcome; state?: BrowserV1ConnectionState } {
   if (!principalUserId) {

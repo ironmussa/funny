@@ -4,13 +4,14 @@ import {
   type ClientDescriptor,
 } from '@funny/shared/browser-v1/common';
 
+import { log } from '../../lib/logger.js';
+
 export type BrowserV1RolloutMode = 'legacy' | 'shadow' | 'binary';
 
 export interface BrowserV1RolloutConfig {
   operations: BrowserV1RolloutMode;
   events: BrowserV1RolloutMode;
   terminal: BrowserV1RolloutMode;
-  browserSession: BrowserV1RolloutMode;
   deployments?: ReadonlySet<string>;
   cohorts?: ReadonlySet<string>;
 }
@@ -28,27 +29,40 @@ function representation(mode: BrowserV1RolloutMode): Representation {
   return Representation.LEGACY;
 }
 
+interface BrowserV1RolloutInput {
+  protocolMajor: number;
+  client?: ClientDescriptor;
+  capabilities: readonly BrowserCapability[];
+}
+
+function inAllowList(allowed: ReadonlySet<string> | undefined, value: string | undefined): boolean {
+  return !allowed?.size || (!!value && allowed.has(value));
+}
+
+/** Browser sessions are not part of the rollout: any client that negotiated the capability gets browser.v1. */
+function browserSessionRepresentation(
+  input: BrowserV1RolloutInput,
+  capabilities: ReadonlySet<BrowserCapability>,
+): Representation {
+  return input.protocolMajor === 1 && capabilities.has(CAPABILITY_BY_TRAFFIC.browserSession)
+    ? Representation.BROWSER_V1
+    : Representation.LEGACY;
+}
+
 export class BrowserV1RolloutPolicy {
   constructor(private readonly config: BrowserV1RolloutConfig) {}
 
-  assignments(input: {
-    protocolMajor: number;
-    client?: ClientDescriptor;
-    capabilities: readonly BrowserCapability[];
-  }): {
+  assignments(input: BrowserV1RolloutInput): {
     operations: Representation;
     events: Representation;
     terminal: Representation;
     browserSession: Representation;
   } {
-    const eligible =
-      input.protocolMajor === 1 &&
-      !!input.client &&
-      (!this.config.deployments?.size || this.config.deployments.has(input.client.deployment)) &&
-      (!this.config.cohorts?.size ||
-        (!!input.client.cohort && this.config.cohorts.has(input.client.cohort)));
+    const eligible = this.isEligible(input);
     const capabilities = new Set(input.capabilities);
-    const select = (traffic: keyof typeof CAPABILITY_BY_TRAFFIC): Representation =>
+    const select = (
+      traffic: Exclude<keyof typeof CAPABILITY_BY_TRAFFIC, 'browserSession'>,
+    ): Representation =>
       eligible && capabilities.has(CAPABILITY_BY_TRAFFIC[traffic])
         ? representation(this.config[traffic])
         : Representation.LEGACY;
@@ -56,8 +70,16 @@ export class BrowserV1RolloutPolicy {
       operations: select('operations'),
       events: select('events'),
       terminal: select('terminal'),
-      browserSession: select('browserSession'),
+      browserSession: browserSessionRepresentation(input, capabilities),
     };
+  }
+
+  private isEligible(input: BrowserV1RolloutInput): boolean {
+    if (input.protocolMajor !== 1 || !input.client) return false;
+    return (
+      inAllowList(this.config.deployments, input.client.deployment) &&
+      inAllowList(this.config.cohorts, input.client.cohort)
+    );
   }
 }
 
@@ -76,11 +98,16 @@ function list(value: string | undefined): ReadonlySet<string> | undefined {
 export function browserV1RolloutPolicyFromEnvironment(
   environment: Readonly<Record<string, string | undefined>> = process.env,
 ): BrowserV1RolloutPolicy {
+  if (environment.FUNNY_BROWSER_V1_BROWSER_SESSION !== undefined) {
+    log.warn(
+      'FUNNY_BROWSER_V1_BROWSER_SESSION is no longer read: browser sessions always use browser.v1',
+      { namespace: 'browser-v1' },
+    );
+  }
   return new BrowserV1RolloutPolicy({
     operations: mode(environment.FUNNY_BROWSER_V1_OPERATIONS),
     events: mode(environment.FUNNY_BROWSER_V1_EVENTS),
     terminal: mode(environment.FUNNY_BROWSER_V1_TERMINAL),
-    browserSession: mode(environment.FUNNY_BROWSER_V1_BROWSER_SESSION),
     deployments: list(environment.FUNNY_BROWSER_V1_DEPLOYMENTS),
     cohorts: list(environment.FUNNY_BROWSER_V1_COHORTS),
   });

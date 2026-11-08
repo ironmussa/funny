@@ -18,11 +18,15 @@ import {
   StatusCode,
   StatusSchema,
 } from '@funny/shared/browser-v1/common';
-import { InteractiveEnvelopeSchema } from '@funny/shared/browser-v1/interactive';
+import {
+  BrowserSessionController,
+  BrowserSessionPointerKind,
+  InteractiveEnvelopeSchema,
+} from '@funny/shared/browser-v1/interactive';
 import type { Server as SocketIOServer } from 'socket.io';
 
 import { log } from '../lib/logger.js';
-import type { BrowserEventSink } from './runner-ports.js';
+import type { BrowserDeliveryClass, BrowserEventSink, BrowserPublication } from './runner-ports.js';
 import {
   SocketIoBrowserEventSink,
   threadPresenceRoom,
@@ -65,9 +69,12 @@ export function relayToUser(userId: string, event: Record<string, unknown>): voi
     browserEvents?.publish(terminal);
     return;
   }
-  const browserSession = browserSessionPublication(userId, event);
-  if (browserSession) {
-    browserEvents?.publish(browserSession);
+  if (typeof event.type === 'string' && event.type.startsWith('browser-session:')) {
+    // Browser-session events travel only as browser.v1; one without a typed
+    // mapping is dropped, never sent as a legacy event.
+    const browserSession = browserSessionPublication(userId, event);
+    if (browserSession) browserEvents?.publish(browserSession);
+    else log.warn('Dropping unmapped browser-session event', { type: event.type });
     return;
   }
   browserEvents?.toUser(userId, event);
@@ -93,104 +100,272 @@ function jsonValue(value: unknown, seen: WeakSet<object>): JsonValue {
   );
 }
 
+type BrowserSessionData = Record<string, unknown>;
+
+interface BrowserSessionDelivery {
+  deliveryClass: DeliveryClass;
+  delivery: BrowserDeliveryClass;
+}
+
+/** How one browser-session event travels: its typed payload plus its delivery class. */
+interface BrowserSessionMapping extends BrowserSessionDelivery {
+  payload: any;
+  priority: number;
+  coalescingKey?: string;
+}
+
+interface BrowserSessionContext {
+  userId: string;
+  sessionId: string;
+  data: BrowserSessionData;
+}
+
+type BrowserSessionMapper = (context: BrowserSessionContext) => BrowserSessionMapping;
+
+const SNAPSHOT_RECOVERABLE: BrowserSessionDelivery = {
+  deliveryClass: DeliveryClass.SNAPSHOT_RECOVERABLE,
+  delivery: 'snapshot-recoverable',
+};
+
+/** Latest-state browser-session messages: a newer one replaces a queued older one. */
+const COALESCIBLE: BrowserSessionDelivery = {
+  deliveryClass: DeliveryClass.COALESCIBLE,
+  delivery: 'coalescible',
+};
+
+const VOLATILE: BrowserSessionDelivery = {
+  deliveryClass: DeliveryClass.VOLATILE,
+  delivery: 'volatile',
+};
+
+const POINTER_KINDS: Record<string, BrowserSessionPointerKind> = {
+  move: BrowserSessionPointerKind.MOVE,
+  click: BrowserSessionPointerKind.CLICK,
+  down: BrowserSessionPointerKind.DOWN,
+  up: BrowserSessionPointerKind.UP,
+};
+
+function viewportOf(value: unknown): { width: number; height: number } | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const { width, height } = value as { width?: unknown; height?: unknown };
+  if (typeof width !== 'number' || typeof height !== 'number') return undefined;
+  return { width: Math.round(width), height: Math.round(height) };
+}
+
+function controllerOf(value: unknown): BrowserSessionController {
+  if (value === 'agent') return BrowserSessionController.AGENT;
+  if (value === 'user') return BrowserSessionController.USER;
+  return BrowserSessionController.UNSPECIFIED;
+}
+
+function stringOrUndefined(value: unknown): string | undefined {
+  return typeof value === 'string' ? value : undefined;
+}
+
+function numberOrUndefined(value: unknown): number | undefined {
+  return typeof value === 'number' ? value : undefined;
+}
+
+/** A snapshot-recoverable mapping at priority 0, unless `overrides` says otherwise. */
+function sessionMapping(
+  payload: unknown,
+  overrides: Partial<Omit<BrowserSessionMapping, 'payload'>> = {},
+): BrowserSessionMapping {
+  return { ...SNAPSHOT_RECOVERABLE, priority: 0, ...overrides, payload };
+}
+
+/** A latest-state mapping coalesced per session under `browser-<name>:<sessionId>`. */
+function coalescedMapping(name: string, sessionId: string, payload: unknown) {
+  return sessionMapping(payload, { ...COALESCIBLE, coalescingKey: `browser-${name}:${sessionId}` });
+}
+
+function frameMapping({ userId, sessionId, data }: BrowserSessionContext): BrowserSessionMapping {
+  const coalescingKey = `browser-frame:${sessionId}`;
+  const encoded = typeof data.data === 'string' ? data.data.replace(/^data:[^,]+,/, '') : '';
+  const resource = browserV1ResourceStore.put(userId, Buffer.from(encoded, 'base64'), 'image/jpeg');
+  if (!resource) {
+    const status = create(StatusSchema, {
+      code: StatusCode.RESOURCE_EXHAUSTED,
+      message: 'Browser frame exceeds the authorized resource budget',
+      retryable: true,
+    });
+    return sessionMapping({ case: 'status', value: status }, { priority: 100, coalescingKey });
+  }
+  const sequence = (browserSessionSequences.get(sessionId) ?? 0n) + 1n;
+  browserSessionSequences.set(sessionId, sequence);
+  const frame = create(LargeResourceReferenceSchema, {
+    resource: create(ResourceReferenceSchema, {
+      kind: ResourceKind.HTTP_OBJECT,
+      id: resource.id,
+      parentId: sessionId,
+    }),
+    authorizedUrl: `/api/browser-v1/resources/${resource.id}`,
+    mediaType: resource.mediaType,
+    byteLength: BigInt(resource.bytes.byteLength),
+    expiresAt: timestampFromDate(resource.expiresAt),
+    entityTag: resource.entityTag,
+  });
+  return sessionMapping(
+    { case: 'frame', value: { sequence, frame } },
+    { ...COALESCIBLE, coalescingKey },
+  );
+}
+
+function dialogValue(dialog: BrowserSessionData | null | undefined) {
+  if (!dialog) return undefined;
+  return {
+    type: String(dialog.type ?? ''),
+    message: String(dialog.message ?? ''),
+    defaultValue: stringOrUndefined(dialog.defaultValue),
+  };
+}
+
+function consoleValue(data: BrowserSessionData) {
+  return {
+    level: String(data.level ?? ''),
+    text: String(data.text ?? ''),
+    url: stringOrUndefined(data.url),
+    line: numberOrUndefined(data.line),
+    column: numberOrUndefined(data.column),
+    occurredAtMs: BigInt(typeof data.timestamp === 'number' ? Math.floor(data.timestamp) : 0),
+  };
+}
+
+/** Every browser-session event type with a typed browser.v1 mapping. */
+const BROWSER_SESSION_MAPPERS = new Map<string, BrowserSessionMapper>([
+  ['browser-session:frame', frameMapping],
+  [
+    'browser-session:ready',
+    ({ data }) =>
+      sessionMapping({
+        case: 'ready',
+        value: {
+          targetUrl: String(data.url ?? ''),
+          viewport: viewportOf(data.viewport),
+          controller: controllerOf(data.controller),
+          audioMuted: data.audioMuted !== false,
+        },
+      }),
+  ],
+  [
+    'browser-session:viewport',
+    ({ sessionId, data }) =>
+      coalescedMapping('viewport', sessionId, {
+        case: 'viewport',
+        value: viewportOf(data) ?? { width: 0, height: 0 },
+      }),
+  ],
+  [
+    'browser-session:navigated',
+    ({ sessionId, data }) =>
+      coalescedMapping('navigated', sessionId, {
+        case: 'navigated',
+        value: { url: String(data.url ?? '') },
+      }),
+  ],
+  [
+    'browser-session:controller',
+    ({ sessionId, data }) =>
+      coalescedMapping('controller', sessionId, {
+        case: 'controller',
+        value: { controller: controllerOf(data.controller) },
+      }),
+  ],
+  [
+    'browser-session:dialog',
+    ({ data }) =>
+      sessionMapping({
+        case: 'dialog',
+        value: { dialog: dialogValue(data.dialog as BrowserSessionData | null | undefined) },
+      }),
+  ],
+  [
+    'browser-session:agent-opened',
+    ({ data }) =>
+      sessionMapping({
+        case: 'agentOpened',
+        value: { threadId: String(data.threadId ?? ''), url: String(data.url ?? '') },
+      }),
+  ],
+  [
+    'browser-session:audio',
+    ({ sessionId, data }) =>
+      coalescedMapping('audio', sessionId, {
+        case: 'audio',
+        value: { muted: data.muted !== false },
+      }),
+  ],
+  [
+    'browser-session:pointer',
+    ({ data }) =>
+      sessionMapping(
+        {
+          case: 'pointer',
+          value: {
+            x: Math.round(Number(data.x) || 0),
+            y: Math.round(Number(data.y) || 0),
+            kind: POINTER_KINDS[String(data.kind)] ?? BrowserSessionPointerKind.UNSPECIFIED,
+          },
+        },
+        VOLATILE,
+      ),
+  ],
+  [
+    'browser-session:result',
+    ({ data }) =>
+      sessionMapping({
+        case: 'result',
+        value: { value: jsonObject({ ok: data.ok, value: data.value, error: data.error }) },
+      }),
+  ],
+  [
+    'browser-session:console',
+    ({ data }) => sessionMapping({ case: 'console', value: consoleValue(data) }, VOLATILE),
+  ],
+  [
+    'browser-session:error',
+    ({ data }) =>
+      sessionMapping(
+        {
+          case: 'status',
+          value: create(StatusSchema, {
+            code: StatusCode.INTERNAL,
+            message: typeof data.message === 'string' ? data.message : 'Browser session failed',
+          }),
+        },
+        { priority: 100 },
+      ),
+  ],
+  [
+    'browser-session:closed',
+    ({ data }) =>
+      sessionMapping(
+        { case: 'close', value: { reason: String(data.reason ?? 'closed') } },
+        { priority: 100 },
+      ),
+  ],
+]);
+
+function eventData(event: Record<string, unknown>): BrowserSessionData {
+  return event.data && typeof event.data === 'object' ? (event.data as BrowserSessionData) : {};
+}
+
 function browserSessionPublication(
   userId: string,
   event: Record<string, unknown>,
-): import('./runner-ports.js').BrowserPublication | null {
+): BrowserPublication | null {
   const type = typeof event.type === 'string' ? event.type : '';
-  if (!type.startsWith('browser-session:')) return null;
-  const data =
-    event.data && typeof event.data === 'object'
-      ? (event.data as Record<string, unknown>)
-      : ({} as Record<string, unknown>);
+  const mapper = BROWSER_SESSION_MAPPERS.get(type);
+  if (!mapper) return null;
+  const data = eventData(event);
   const sessionId = typeof data.sessionId === 'string' ? data.sessionId : '';
   if (!sessionId) return null;
-  let deliveryClass = DeliveryClass.SNAPSHOT_RECOVERABLE;
-  let delivery: import('./runner-ports.js').BrowserDeliveryClass = 'snapshot-recoverable';
-  let priority = 0;
-  let coalescingKey: string | undefined;
-  let payload: any;
-  if (type === 'browser-session:frame') {
-    deliveryClass = DeliveryClass.COALESCIBLE;
-    delivery = 'coalescible';
-    coalescingKey = `browser-frame:${sessionId}`;
-    const encoded = typeof data.data === 'string' ? data.data.replace(/^data:[^,]+,/, '') : '';
-    const resource = browserV1ResourceStore.put(
-      userId,
-      Buffer.from(encoded, 'base64'),
-      'image/jpeg',
-    );
-    if (!resource) {
-      payload = {
-        case: 'status',
-        value: create(StatusSchema, {
-          code: StatusCode.RESOURCE_EXHAUSTED,
-          message: 'Browser frame exceeds the authorized resource budget',
-          retryable: true,
-        }),
-      };
-      deliveryClass = DeliveryClass.SNAPSHOT_RECOVERABLE;
-      delivery = 'snapshot-recoverable';
-      priority = 100;
-    } else {
-      const sequence = (browserSessionSequences.get(sessionId) ?? 0n) + 1n;
-      browserSessionSequences.set(sessionId, sequence);
-      payload = {
-        case: 'frame',
-        value: {
-          sequence,
-          frame: create(LargeResourceReferenceSchema, {
-            resource: create(ResourceReferenceSchema, {
-              kind: ResourceKind.HTTP_OBJECT,
-              id: resource.id,
-              parentId: sessionId,
-            }),
-            authorizedUrl: `/api/browser-v1/resources/${resource.id}`,
-            mediaType: resource.mediaType,
-            byteLength: BigInt(resource.bytes.byteLength),
-            expiresAt: timestampFromDate(resource.expiresAt),
-            entityTag: resource.entityTag,
-          }),
-        },
-      };
-    }
-  } else if (type === 'browser-session:ready') {
-    payload = { case: 'ready', value: { targetUrl: String(data.url ?? '') } };
-  } else if (type === 'browser-session:result') {
-    payload = {
-      case: 'result',
-      value: { value: jsonObject({ ok: data.ok, value: data.value, error: data.error }) },
-    };
-  } else if (type === 'browser-session:console') {
-    deliveryClass = DeliveryClass.VOLATILE;
-    delivery = 'volatile';
-    payload = {
-      case: 'console',
-      value: {
-        level: String(data.level ?? ''),
-        text: String(data.text ?? ''),
-        url: typeof data.url === 'string' ? data.url : undefined,
-        line: typeof data.line === 'number' ? data.line : undefined,
-        column: typeof data.column === 'number' ? data.column : undefined,
-        occurredAtMs: BigInt(typeof data.timestamp === 'number' ? Math.floor(data.timestamp) : 0),
-      },
-    };
-  } else if (type === 'browser-session:error') {
-    priority = 100;
-    payload = {
-      case: 'status',
-      value: create(StatusSchema, {
-        code: StatusCode.INTERNAL,
-        message: typeof data.message === 'string' ? data.message : 'Browser session failed',
-      }),
-    };
-  } else if (type === 'browser-session:closed') {
-    priority = 100;
-    payload = { case: 'close', value: { reason: String(data.reason ?? 'closed') } };
-  } else {
-    return null;
-  }
-  const requestId = typeof data.requestId === 'string' ? data.requestId : undefined;
+  const { payload, deliveryClass, delivery, priority, coalescingKey } = mapper({
+    userId,
+    sessionId,
+    data,
+  });
+  const requestId = stringOrUndefined(data.requestId);
   return {
     scope: { kind: 'user', userId },
     logicalType: type,

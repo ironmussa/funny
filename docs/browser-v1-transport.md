@@ -11,18 +11,19 @@
 
 ## Feature controls
 
-Every traffic class defaults fail-closed to `legacy`. Accepted values are `legacy`, `shadow`, and `binary`:
+The operations, events and terminal traffic classes default fail-closed to `legacy`. Accepted values are `legacy`, `shadow`, and `binary`:
 
 ```text
 FUNNY_BROWSER_V1_OPERATIONS
 FUNNY_BROWSER_V1_EVENTS
 FUNNY_BROWSER_V1_TERMINAL
-FUNNY_BROWSER_V1_BROWSER_SESSION
 ```
+
+Browser sessions (the browser panel) are not part of the rollout: they are delivered only as `browser.v1`, to every client that negotiated the `BROWSER_SESSION` capability, and never as legacy Socket.IO events. A client that has not negotiated receives no browser-session events. `FUNNY_BROWSER_V1_BROWSER_SESSION` is no longer read; the server logs a warning if it is still set. See the OpenSpec change `retire-browser-session-legacy-transport`.
 
 `FUNNY_BROWSER_V1_DEPLOYMENTS` and `FUNNY_BROWSER_V1_COHORTS` are optional comma-separated allowlists. Shadow mode encodes and measures the typed payload but dispatches only legacy state. A logical message is never dispatched through both representations.
 
-Rollback is independent per traffic class: set only the affected class to `legacy` and restart the server. Authoritative state and retained idempotency outcomes survive representation changes. At-most-once terminal and browser input is never replayed during rollback.
+Rollback is independent per traffic class: set only the affected class to `legacy` and restart the server. Browser sessions have no such switch; rolling them back means redeploying the previous server and client build. Authoritative state and retained idempotency outcomes survive representation changes. At-most-once terminal and browser input is never replayed during rollback.
 
 ## Recovery and budgets
 
@@ -58,4 +59,4 @@ bun run typecheck
 
 ## Compatibility window
 
-Legacy Socket.IO representations remain supported for the entire `browser.v1` release line and cannot be retired by this change. A custom Socket.IO parser, native WebSocket transport, native gRPC adapter, changed compatibility window, or legacy retirement requires a separate reviewed OpenSpec change with browser/WebView and production soak evidence.
+Legacy Socket.IO representations remain supported for the entire `browser.v1` release line for the operations, events and terminal classes. The browser-session class was retired by `retire-browser-session-legacy-transport`. A custom Socket.IO parser, native WebSocket transport, native gRPC adapter, changed compatibility window, or legacy retirement requires a separate reviewed OpenSpec change with browser/WebView and production soak evidence.

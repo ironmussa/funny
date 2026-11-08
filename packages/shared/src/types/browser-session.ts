@@ -190,6 +190,35 @@ export interface WSBrowserSessionViewportData {
   height: number;
 }
 
+/** The session's page changed (link, redirect, agent action, popup): the panel's URL bar follows. */
+export interface WSBrowserSessionNavigatedData {
+  sessionId: string;
+  threadId?: string;
+  url: string;
+}
+
+/** The session's page audio was turned on or off. */
+export interface WSBrowserSessionAudioData {
+  sessionId: string;
+  threadId?: string;
+  muted: boolean;
+}
+
+/** What the agent's pointer does at a point: move there, or press there. */
+export type BrowserSessionPointerKind = 'move' | 'click' | 'down' | 'up';
+
+/**
+ * Where the agent's mouse goes, in page viewport pixels. The screencast never
+ * shows a cursor, so the panel draws one from these.
+ */
+export interface WSBrowserSessionPointerData {
+  sessionId: string;
+  threadId?: string;
+  x: number;
+  y: number;
+  kind: BrowserSessionPointerKind;
+}
+
 export interface WSBrowserSessionFrameData {
   sessionId: string;
   /** base64-encoded JPEG payload from CDP `Page.screencastFrame`. */

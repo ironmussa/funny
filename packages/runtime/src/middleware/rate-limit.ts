@@ -5,6 +5,10 @@
  * @domain depends: ShutdownManager
  */
 
+import {
+  startSlidingWindowPrune,
+  type SlidingWindowHits,
+} from '@funny/shared/lib/sliding-window-hits';
 import type { Context, Next } from 'hono';
 
 import { shutdownManager, ShutdownPhase } from '../services/shutdown-manager.js';
@@ -30,21 +34,8 @@ shutdownManager.register(
  */
 export function rateLimit(opts: { windowMs: number; max: number }) {
   const { windowMs, max } = opts;
-  const hits = new Map<string, number[]>();
-
-  // Periodically prune stale entries to prevent memory growth
-  const pruneTimer = setInterval(() => {
-    const now = Date.now();
-    for (const [key, timestamps] of hits) {
-      const valid = timestamps.filter((t) => now - t < windowMs);
-      if (valid.length === 0) {
-        hits.delete(key);
-      } else {
-        hits.set(key, valid);
-      }
-    }
-  }, windowMs);
-  pruneTimer.unref();
+  const hits: SlidingWindowHits = new Map();
+  const pruneTimer = startSlidingWindowPrune(hits, windowMs);
   pruneTimers.push(pruneTimer);
 
   return async (c: Context, next: Next) => {

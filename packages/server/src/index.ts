@@ -283,9 +283,23 @@ app.all('/api/auth/*', (c) => authInstance.handler(c.req.raw));
 // Auth middleware for all API routes
 app.use('/api/*', authMiddleware);
 
+// Browser-panel screencast frames are fetched by reference, one GET per frame:
+// a playing video means tens per second. They get their own bucket so the
+// panel can never use up the API limit and lock the rest of the UI out (429).
+const BROWSER_V1_RESOURCES_PREFIX = '/api/browser-v1/resources/';
+app.use(`${BROWSER_V1_RESOURCES_PREFIX}*`, rateLimit({ windowMs: 60_000, max: 6000 }));
+
 // Per-user rate limit on authenticated API endpoints (runs after auth so the
 // limiter can key off userId; otherwise every request looks anonymous).
-app.use('/api/*', rateLimit({ windowMs: 60_000, max: 1200, perUser: true }));
+app.use(
+  '/api/*',
+  rateLimit({
+    windowMs: 60_000,
+    max: 1200,
+    perUser: true,
+    skip: (c) => c.req.path.startsWith(BROWSER_V1_RESOURCES_PREFIX),
+  }),
+);
 
 // ── Server-managed data routes ───────────────────────────
 const { authRoutes } = await import('./routes/auth.js');

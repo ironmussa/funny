@@ -15,6 +15,10 @@
  *     bucket, which is itself a denial-of-service vector.
  */
 
+import {
+  startSlidingWindowPrune,
+  type SlidingWindowHits,
+} from '@funny/shared/lib/sliding-window-hits';
 import type { Context, Next } from 'hono';
 import { getConnInfo } from 'hono/bun';
 
@@ -27,23 +31,12 @@ export function rateLimit(opts: {
   max: number;
   /** Also enforce a per-user limit (uses userId from context). Defaults to false. */
   perUser?: boolean;
+  /** Requests this limiter does not count (they have a limiter of their own). */
+  skip?: (c: Context) => boolean;
 }) {
-  const { windowMs, max, perUser } = opts;
-  const hits = new Map<string, number[]>();
-
-  // Periodically prune stale entries to prevent memory growth
-  const pruneTimer = setInterval(() => {
-    const now = Date.now();
-    for (const [key, timestamps] of hits) {
-      const valid = timestamps.filter((t) => now - t < windowMs);
-      if (valid.length === 0) {
-        hits.delete(key);
-      } else {
-        hits.set(key, valid);
-      }
-    }
-  }, windowMs);
-  pruneTimer.unref();
+  const { windowMs, max, perUser, skip } = opts;
+  const hits: SlidingWindowHits = new Map();
+  startSlidingWindowPrune(hits, windowMs);
 
   function check(key: string, now: number): boolean {
     const timestamps = hits.get(key) ?? [];
@@ -73,6 +66,7 @@ export function rateLimit(opts: {
   }
 
   return async (c: Context, next: Next) => {
+    if (skip?.(c)) return next();
     const now = Date.now();
     const userId = c.get('userId') as string | undefined;
     const ip = resolveIp(c);

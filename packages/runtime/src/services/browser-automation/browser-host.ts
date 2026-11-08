@@ -12,17 +12,20 @@
 
 import { execFile, spawn, type ChildProcess } from 'child_process';
 import { existsSync } from 'fs';
-import { chmod, mkdir, readdir } from 'fs/promises';
+import { chmod, mkdir, readdir, readFile, rm, writeFile } from 'fs/promises';
 import { homedir } from 'os';
 import { join } from 'path';
 import { promisify } from 'util';
 
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { buildChildEnv } from '@funny/shared/lib/child-env';
 import { ResultAsync } from 'neverthrow';
 import type { Browser, BrowserContext, Page } from 'playwright';
+import { z } from 'zod';
 
 import { DATA_DIR } from '../../lib/data-dir.js';
 import { log } from '../../lib/logger.js';
+import { reclaimOrphanedProfile } from './profile-lock.js';
 import { parseChromeMajor, regularChromeUserAgent } from './user-agent.js';
 
 const NS = 'browser-host';
@@ -30,6 +33,62 @@ const SPAWN_TIMEOUT_MS = 30_000;
 const execFileAsync = promisify(execFile);
 
 export type BrowserProfileKind = 'persistent' | 'ephemeral';
+
+/** Chromium's `Default/Preferences`: only `profile` is read; every other key is kept as is. */
+const chromePreferencesSchema = z
+  .object({
+    profile: z
+      .object({ exit_type: z.string().optional(), exited_cleanly: z.boolean().optional() })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+
+/**
+ * Chromium is stopped abruptly whenever the runner restarts, so the profile
+ * records a crash and the next launch restores every tab of the last run.
+ * Those tabs belong to no session: the panel never shows them, Stop cannot
+ * close them, and a restored video plays sound on the runner host. Drop the
+ * saved tabs and mark the last exit clean. Cookies and logins stay.
+ */
+async function forgetLastSession(profileDir: string): Promise<void> {
+  const defaultDir = join(profileDir, 'Default');
+  await rm(join(defaultDir, 'Sessions'), { recursive: true, force: true }).catch(() => {});
+  const prefsPath = join(defaultDir, 'Preferences');
+  try {
+    const parsed = parseStoredJson(
+      chromePreferencesSchema,
+      await readFile(prefsPath, 'utf8'),
+      'Chromium profile preferences',
+    );
+    if (!parsed.ok) return;
+    const prefs = parsed.value;
+    prefs.profile = { ...prefs.profile, exit_type: 'Normal', exited_cleanly: true };
+    await writeFile(prefsPath, JSON.stringify(prefs), { mode: 0o600 });
+  } catch {
+    /* new profile, or unreadable preferences: nothing to restore */
+  }
+}
+
+/** Close any page Chromium opened on its own at launch, keeping one blank tab. */
+async function closeLeftoverPages(browser: Browser): Promise<void> {
+  const pages = browser.contexts()[0]?.pages() ?? [];
+  let keptBlank = false;
+  const leftovers = pages.filter((page) => {
+    if (!keptBlank && page.url() === 'about:blank') {
+      keptBlank = true;
+      return false;
+    }
+    return true;
+  });
+  if (leftovers.length > 0) {
+    log.warn('Closing pages left over from the last Chromium run', {
+      namespace: NS,
+      count: leftovers.length,
+    });
+  }
+  await Promise.all(leftovers.map((page) => page.close().catch(() => {})));
+}
 
 async function targetIdOf(context: BrowserContext, page: Page): Promise<string> {
   const cdp = await context.newCDPSession(page);
@@ -162,6 +221,10 @@ export class BrowserHost {
   private static async launchInner(opts: BrowserHostOptions): Promise<BrowserHost> {
     await mkdir(opts.profileDir, { recursive: true, mode: 0o700 });
     await chmod(opts.profileDir, 0o700).catch(() => {});
+    // A Chromium left behind by a runtime that died without its shutdown
+    // hooks still holds the profile; launching would exit with code 21.
+    await reclaimOrphanedProfile(opts.profileDir);
+    await forgetLastSession(opts.profileDir);
     const userAgent = await userAgentFor(opts.binary);
 
     const args = [
@@ -239,6 +302,7 @@ export class BrowserHost {
     const { chromium } = await import('playwright');
     try {
       const browser = await chromium.connectOverCDP(`http://127.0.0.1:${opts.port}`);
+      await closeLeftoverPages(browser);
       return new BrowserHost(proc, exitedPromise, browser, opts.port, userAgent);
     } catch (e) {
       proc.kill('SIGKILL');

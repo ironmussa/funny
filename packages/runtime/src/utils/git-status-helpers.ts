@@ -2,9 +2,10 @@
  * Shared git-status helpers used by route handlers and event handlers.
  */
 
-import { invalidateStatusCache, getPRForBranch, getCurrentBranch } from '@funny/core/git';
+import { invalidateStatusCache, getCurrentBranch } from '@funny/core/git';
 
 import type { HandlerServiceContext } from '../services/handlers/types.js';
+import { getPRInfoCached } from '../services/pr-info-cache.js';
 
 /** Compute a stable cache key that groups threads sharing the same git working state. */
 export function computeBranchKey(thread: {
@@ -91,7 +92,7 @@ export async function emitGitStatusForThread(
   // Run git status + PR lookup in parallel
   const [summaryResult, prInfo] = await Promise.all([
     ctx.getGitStatusSummary(effectiveCwd, thread.baseBranch ?? undefined, project.path),
-    branchForPR ? getPRForBranch(project.path, branchForPR, opts.ghEnv) : Promise.resolve(null),
+    branchForPR ? getPRInfoCached(project.path, branchForPR, opts.ghEnv) : Promise.resolve(null),
   ]);
 
   if (summaryResult.isErr()) {

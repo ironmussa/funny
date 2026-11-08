@@ -33,6 +33,11 @@ fi
 # errors (pre-existing baseline errors are tracked in
 # .fitness/typecheck-baseline.txt). Skipped when no .ts/.tsx files are
 # staged so non-TS commits stay fast.
-if git diff --cached --name-only --diff-filter=ACM | grep -qE '\.(ts|tsx)$'; then
-  bun scripts/fitness/check-typecheck.ts || exit 1
+# Only the projects the staged files can affect are checked (CI checks all).
+STAGED_TS=$(git diff --cached --name-only --diff-filter=ACMR | grep -E '\.(ts|tsx)$' || true)
+if [ -n "$STAGED_TS" ]; then
+  # Config and manifest changes can affect every project, so pass them too.
+  STAGED_CONFIG=$(git diff --cached --name-only --diff-filter=ACMRD | grep -E '(^|/)(package\.json|bun\.lockb?|tsconfig[^/]*\.json)$' || true)
+  # shellcheck disable=SC2086
+  bun scripts/fitness/check-typecheck.ts --affected $STAGED_TS $STAGED_CONFIG || exit 1
 fi

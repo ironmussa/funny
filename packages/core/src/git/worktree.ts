@@ -67,6 +67,21 @@ async function ensureSafeDirectory(dirPath: string): Promise<void> {
   });
 }
 
+/**
+ * Drop a directory from the global safe.directory list. Every worktree used to
+ * leave its entry behind, so ~/.gitconfig grew by one line per worktree ever
+ * created. `--fixed-value` matches the path literally, not as a regex.
+ */
+async function forgetSafeDirectory(dirPath: string): Promise<void> {
+  if (!shouldRegisterSafeDirectory(dirPath)) return;
+  await gitWrite(
+    ['config', '--global', '--fixed-value', '--unset-all', 'safe.directory', dirPath],
+    {
+      reject: false,
+    },
+  );
+}
+
 export const WORKTREE_DIR_NAME = '.funny-worktrees';
 
 /** Compute the worktree base path without creating the directory. */
@@ -390,7 +405,10 @@ export function removeWorktree(
       });
 
       // If git worktree remove succeeded or the directory is already gone, we're done.
-      if (result.exitCode === 0 || !existsSync(worktreePath)) return;
+      if (result.exitCode === 0 || !existsSync(worktreePath)) {
+        await forgetSafeDirectory(worktreePath);
+        return;
+      }
 
       // Fallback: on Windows, file locks (antivirus, IDE, stale processes) commonly
       // prevent `git worktree remove`. Force-delete the directory, then prune the
@@ -409,11 +427,42 @@ export function removeWorktree(
           `Failed to remove worktree directory: ${worktreePath} — ${result.stderr.trim()}`,
         );
       }
+      await forgetSafeDirectory(worktreePath);
     })(),
     (error) => {
       if ((error as DomainError).type) return error as DomainError;
       return internal(String(error));
     },
+  );
+}
+
+/**
+ * Remove safe.directory entries left by worktrees that no longer exist (from
+ * before removeWorktree cleaned up after itself). Only entries inside a
+ * `.funny-worktrees` directory are considered, so a user's own entries are
+ * never touched. Resolves to the number of entries removed.
+ */
+export function pruneStaleWorktreeSafeDirectories(): ResultAsync<number, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const listed = await gitRead(['config', '--global', '--get-all', 'safe.directory'], {
+        reject: false,
+      });
+      // Exit 1 means the key is absent: nothing to prune.
+      if (listed.exitCode !== 0) return 0;
+      const marker = `/${WORKTREE_DIR_NAME}/`;
+      const stale = [
+        ...new Set(
+          listed.stdout
+            .split('\n')
+            .map((line) => line.trim())
+            .filter((dir) => dir.replace(/\\/g, '/').includes(marker) && !existsSync(dir)),
+        ),
+      ];
+      for (const dir of stale) await forgetSafeDirectory(dir);
+      return stale.length;
+    })(),
+    (error) => internal(String(error)),
   );
 }
 

@@ -95,11 +95,13 @@ export function DiffStats({
     >
       <Icon name="file" size={10} color={theme.colors.muted} />
       <text style={{ color: theme.colors.muted, fontSize: theme.fontSizes.caption }}>{files}</text>
+      {/* One string per stat: `+{added}` would be two text children ("+" and
+          the number), which GPUIX paints as separate runs. */}
       <text style={{ color: theme.colors.success, fontSize: theme.fontSizes.caption }}>
-        +{added}
+        {`+${added}`}
       </text>
       <text style={{ color: theme.colors.danger, fontSize: theme.fontSizes.caption }}>
-        -{deleted}
+        {`-${deleted}`}
       </text>
     </div>
   );

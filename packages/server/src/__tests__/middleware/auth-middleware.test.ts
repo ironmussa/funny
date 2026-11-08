@@ -68,6 +68,7 @@ function protectedApp() {
   const app = new Hono<ServerEnv>();
   app.use('*', authMiddleware);
   app.get('/api/health', (c) => c.json({ ok: true }));
+  app.get('/api/org-name', (c) => c.json({ organizationName: c.get('organizationName') ?? null }));
   app.get('/api/protected', (c) =>
     c.json({
       userId: c.get('userId') ?? null,
@@ -147,6 +148,28 @@ describe('authMiddleware (integration)', () => {
       runnerId: null,
       userRole: 'user',
     });
+  });
+
+  test('looks up the organization name once per user and org, not on every request', async () => {
+    const calls: string[] = [];
+    const original = authMockState.orgs;
+    authMockState.orgs = new Proxy(original, {
+      get(target, key: string) {
+        calls.push(key);
+        return target[key];
+      },
+    });
+    try {
+      for (let i = 0; i < 3; i++) {
+        const res = await app.request('/api/org-name', {
+          headers: { cookie: 'funny.session=valid' },
+        });
+        expect(await res.json()).toEqual({ organizationName: 'Acme Corp' });
+      }
+      expect(calls.filter((key) => key === 'org-acme')).toHaveLength(1);
+    } finally {
+      authMockState.orgs = original;
+    }
   });
 
   test('accepts Bearer runner_ token and sets isRunner', async () => {

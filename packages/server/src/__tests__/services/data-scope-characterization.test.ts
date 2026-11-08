@@ -1,3 +1,6 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+
+import * as schema from '../../db/schema.js';
 /**
  * Characterization tests for `assertRunnerDataScope` (project-runner-binding):
  * every way a data request can reference a thread — directly, or indirectly via
@@ -9,9 +12,7 @@
  * general runner (serves `py` and projectless work, but not the pinned `px`).
  * Entities suffixed `x` live in `px`, entities suffixed `y` live in `py`.
  */
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
-
-import * as schema from '../../db/schema.js';
+import { __resetDataOwnershipCache } from '../../services/data-ownership.js';
 import {
   __resetDataScopeCache,
   assertRunnerDataScope,
@@ -235,6 +236,7 @@ describe('assertRunnerDataScope characterization', () => {
     }
     __resetRunnerScopeCache();
     __resetDataScopeCache();
+    __resetDataOwnershipCache();
     const now = new Date().toISOString();
     for (const s of ['x', 'y'] as const) {
       seedProject(db as any, { id: `p${s}`, userId: 'alice', path: `/${s}` });

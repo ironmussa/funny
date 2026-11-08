@@ -34,6 +34,7 @@ import {
   type CreationIntent,
   type ForkVariant,
 } from '../modules/threads/index.js';
+import { forgetThreadOwnership } from '../services/data-ownership.js';
 import * as messageQueueRepo from '../services/message-queue-repository.js';
 import {
   authorizedRunnerRequests,
@@ -993,6 +994,7 @@ threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
 
   // Delete from local DB
   await threadRepo.deleteThread(threadId);
+  forgetThreadOwnership(threadId);
 
   // Find which runner handles this thread and clean up there too
   const runnerInfo = await threadRegistry.getRunnerForThread(threadId, userId);

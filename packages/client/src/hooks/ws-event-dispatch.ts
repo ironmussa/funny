@@ -78,6 +78,17 @@ interface BufferedMessage {
 // arrived between flushes — e.g. while the tab was hidden and RAF was paused.
 let pendingMessages = new Map<string, BufferedMessage>();
 let pendingToolOutputs: Array<{ threadId: string; data: any }> = [];
+// Tool calls, with the messages that arrived before each one, in arrival
+// order. A tool call must apply after the messages queued ahead of it (its
+// parent may only exist as one of them), so they are moved here together and
+// applied first in the next flush — the order an immediate apply used to give,
+// but in the frame's single commit instead of one commit per tool call.
+interface OrderedOp {
+  kind: 'message' | 'toolCall';
+  threadId: string;
+  data: any;
+}
+let pendingOrdered: OrderedOp[] = [];
 let pendingStatuses = new Map<string, BufferedMessage>();
 let rafId: number | null = null;
 let fallbackFlushTimer: ReturnType<typeof setTimeout> | null = null;
@@ -113,9 +124,10 @@ function flushBatch() {
     fallbackFlushTimer = null;
   }
 
-  const { msgs, toolOutputs, statuses } = drainPendingBatch();
+  const batch = drainPendingBatch();
+  const { msgs, toolOutputs, statuses, ordered } = batch;
 
-  const total = msgs.length + toolOutputs.length + statuses.length;
+  const total = msgs.length + toolOutputs.length + statuses.length + ordered.length;
   if (total === 0) return;
 
   const span = startSpan('ws.flushBatch', {
@@ -123,25 +135,15 @@ function flushBatch() {
       'batch.messages': msgs.length,
       'batch.tool_outputs': toolOutputs.length,
       'batch.statuses': statuses.length,
+      'batch.ordered': ordered.length,
     },
   });
   const t0 = performance.now();
 
   startTransition(() => {
-    const store = useThreadStore.getState();
     // One synced commit for every thread-row change in this frame, so the
     // sidebar projection and live queries (Kanban, lists) recompute once.
-    getThreadsData().batchWrites(() => {
-      for (const entry of statuses) {
-        store.handleWSStatus(entry.threadId, entry.data);
-      }
-      for (const entry of msgs) {
-        store.handleWSMessage(entry.threadId, entry.data);
-      }
-      for (const entry of toolOutputs) {
-        store.handleWSToolOutput(entry.threadId, entry.data);
-      }
-    });
+    getThreadsData().batchWrites(() => applyBatch(useThreadStore.getState(), batch));
   });
 
   const elapsed = performance.now() - t0;
@@ -278,18 +280,45 @@ function isViewingThread(store: ThreadStoreState, threadId: string): boolean {
   return (getUrlThreadId() ?? store.selectedThreadId) === threadId;
 }
 
-function drainPendingBatch(): {
+interface PendingBatch {
   msgs: BufferedMessage[];
   toolOutputs: Array<{ threadId: string; data: any }>;
   statuses: BufferedMessage[];
-} {
+  ordered: OrderedOp[];
+}
+
+function drainPendingBatch(): PendingBatch {
   const msgs = Array.from(pendingMessages.values());
   const toolOutputs = pendingToolOutputs.slice();
   const statuses = Array.from(pendingStatuses.values());
+  const ordered = pendingOrdered;
   pendingMessages.clear();
   pendingToolOutputs = [];
   pendingStatuses.clear();
-  return { msgs, toolOutputs, statuses };
+  pendingOrdered = [];
+  return { msgs, toolOutputs, statuses, ordered };
+}
+
+/**
+ * Apply a drained batch. Ordered ops (tool calls and the messages queued
+ * before them) go first: they arrived before everything still pending.
+ */
+function applyBatch(store: ThreadStoreState, batch: PendingBatch): void {
+  for (const op of batch.ordered) {
+    if (op.kind === 'message') store.handleWSMessage(op.threadId, op.data);
+    else store.handleWSToolCall(op.threadId, op.data);
+  }
+  for (const entry of batch.statuses) store.handleWSStatus(entry.threadId, entry.data);
+  for (const entry of batch.msgs) store.handleWSMessage(entry.threadId, entry.data);
+  for (const entry of batch.toolOutputs) store.handleWSToolOutput(entry.threadId, entry.data);
+}
+
+/** Move the messages queued so far into the ordered queue, ahead of a tool call. */
+function takePendingMessagesInOrder(): void {
+  for (const entry of pendingMessages.values()) {
+    pendingOrdered.push({ kind: 'message', threadId: entry.threadId, data: entry.data });
+  }
+  pendingMessages.clear();
 }
 
 function handleAgentMessage(threadId: string, data: any): void {
@@ -356,12 +385,10 @@ function logAgentResult(threadId: string, data: any, resultStatus: string): void
 /** Cancel the scheduled flush and apply everything pending synchronously. */
 function flushPendingBatchNow(): void {
   cancelScheduledFlush();
-  const { msgs, toolOutputs, statuses } = drainPendingBatch();
-  if (statuses.length === 0 && msgs.length === 0 && toolOutputs.length === 0) return;
-  const store = useThreadStore.getState();
-  for (const entry of statuses) store.handleWSStatus(entry.threadId, entry.data);
-  for (const entry of msgs) store.handleWSMessage(entry.threadId, entry.data);
-  for (const entry of toolOutputs) store.handleWSToolOutput(entry.threadId, entry.data);
+  const batch = drainPendingBatch();
+  const { statuses, msgs, toolOutputs, ordered } = batch;
+  if (statuses.length + msgs.length + toolOutputs.length + ordered.length === 0) return;
+  applyBatch(useThreadStore.getState(), batch);
 }
 
 function handleAgentResult(threadId: string, data: any): void {
@@ -397,17 +424,20 @@ function handleAgentToolCall(threadId: string, data: any): void {
       toolCallId: data.toolCallId ?? '',
     });
   }
-  const hasPendingTC = pendingMessages.size > 0;
-  if (hasPendingTC) cancelScheduledFlush();
-  startTransition(() => {
-    if (hasPendingTC) {
-      const msgs = Array.from(pendingMessages.values());
-      pendingMessages.clear();
-      const store = useThreadStore.getState();
-      for (const entry of msgs) store.handleWSMessage(entry.threadId, entry.data);
-    }
-    useThreadStore.getState().handleWSToolCall(threadId, data);
-  });
+  takePendingMessagesInOrder();
+  pendingOrdered.push({ kind: 'toolCall', threadId, data });
+  if (data.name === 'AskUserQuestion' || data.name === 'ExitPlanMode') {
+    // Interactive tools apply at once, as before: a `waiting` status is not
+    // batched, so deferring the question card would show the thread waiting
+    // without it for a frame.
+    const ordered = pendingOrdered;
+    pendingOrdered = [];
+    startTransition(() => {
+      applyBatch(useThreadStore.getState(), { ordered, msgs: [], statuses: [], toolOutputs: [] });
+    });
+  } else {
+    scheduleFlush();
+  }
   if (FILE_MODIFYING_TOOLS.has(data.name)) {
     notifyReviewDirty(threadId);
   }
@@ -1105,6 +1135,7 @@ export function clearWSDispatchState(): void {
   pendingMessages.clear();
   pendingToolOutputs = [];
   pendingStatuses.clear();
+  pendingOrdered = [];
   lastStatusByThread.clear();
 }
 

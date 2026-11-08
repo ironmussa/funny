@@ -415,7 +415,8 @@ function AssistantMessageItem({ item }: { item: MessageItem }) {
         className="px-3 py-1.5 text-sm leading-relaxed wrap-break-word"
       >
         <div className="flex items-start gap-2">
-          {msg.author && <AuthorAvatar author={msg.author} />}
+          {/* Imported Claude Code transcripts once tagged replies with a synthetic author. */}
+          {msg.author && msg.author !== 'Claude Code' && <AuthorAvatar author={msg.author} />}
           <div className="min-w-0 flex-1">
             {frozenViewer ? (
               <FrozenMessage content={msg.content.trim()} />

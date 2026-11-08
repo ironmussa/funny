@@ -211,6 +211,8 @@ function transcriptToMessages(transcript: ExternalClaudeTranscript): (Message & 
       threadId: `external-claude:${transcript.sessionId}`,
       role: message.role,
       content: message.content,
+      ...(message.images?.length ? { images: message.images } : {}),
+      ...(message.author ? { author: message.author } : {}),
       timestamp,
       ...(message.toolCalls && message.toolCalls.length > 0
         ? {

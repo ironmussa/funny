@@ -371,9 +371,53 @@ describe('external Claude sessions', () => {
         threadId: 'thread-shell',
         role: 'assistant',
         content: 'bien',
-        author: 'Claude Code',
+        author: null,
       }),
     );
+  });
+
+  test('attaches pasted images instead of dumping them as JSON text', () => {
+    const homeDir = makeHome();
+    const sessionId = 'session-image';
+    const projectDir = join(homeDir, '.claude/projects', '-work-funny');
+    mkdirSync(projectDir, { recursive: true });
+    const image = {
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' },
+    };
+    writeFileSync(
+      join(projectDir, `${sessionId}.jsonl`),
+      [
+        {
+          type: 'user',
+          sessionId,
+          cwd: '/work/funny',
+          message: { role: 'user', content: [{ type: 'text', text: 'Imagen rota' }, image] },
+        },
+        {
+          type: 'user',
+          sessionId,
+          isMeta: true,
+          message: {
+            role: 'user',
+            content: [{ type: 'text', text: '[Image: source: /tmp/claude/images/1.png]' }],
+          },
+        },
+        { type: 'assistant', sessionId, message: { role: 'assistant', content: 'Revisando' } },
+      ]
+        .map((entry) => JSON.stringify(entry))
+        .join('\n'),
+    );
+
+    const transcript = readExternalClaudeTranscript(sessionId, { homeDir });
+    expect(transcript?.messages).toHaveLength(2);
+    expect(transcript?.messages[0]).toMatchObject({
+      role: 'user',
+      content: 'Imagen rota',
+      images: [image],
+    });
+    expect(transcript?.messages[1]).toMatchObject({ role: 'assistant', content: 'Revisando' });
+    expect(transcript?.messages[1]?.author).toBeUndefined();
   });
 
   test('identifies meta user entries as automatic Claude context', () => {

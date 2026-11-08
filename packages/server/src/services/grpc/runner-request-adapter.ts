@@ -8,7 +8,11 @@ import {
   type RunnerRequestPort,
   type RunnerResponse,
 } from '../runner-ports.js';
-import { RunnerGrpcTunnelDispatcher, TunnelDispatchError } from './tunnel-handler.js';
+import {
+  RunnerGrpcTunnelDispatcher,
+  TunnelDispatchError,
+  type TunnelExchange,
+} from './tunnel-handler.js';
 
 const DEFAULT_TIMEOUT_MS = 30_000;
 const MAX_CAPACITY_RETRY_DELAY_MS = 50;
@@ -60,6 +64,34 @@ function dispatchWithCapacityRetry<T>(
   });
 }
 
+/**
+ * Relay a tunnel body chunk by chunk. A failure after the head (deadline,
+ * runner gone) errors the stream, so the browser sees a broken response rather
+ * than a silently truncated one; a reader that goes away cancels the exchange.
+ */
+function streamTunnelBody(exchange: TunnelExchange): ReadableStream<Uint8Array> {
+  const chunks = exchange.body[Symbol.asyncIterator]();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      try {
+        const next = await chunks.next();
+        if (!next.done) {
+          controller.enqueue(next.value);
+          return;
+        }
+        await exchange.completed;
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      }
+    },
+    cancel(reason) {
+      exchange.cancel(typeof reason === 'string' ? reason : 'browser closed the response');
+      void chunks.return?.();
+    },
+  });
+}
+
 /** Adapts framed gRPC tunnel exchanges to the request capability used by HTTP handlers. */
 export class GrpcRunnerRequestAdapter implements RunnerRequestPort {
   constructor(
@@ -100,6 +132,14 @@ export class GrpcRunnerRequestAdapter implements RunnerRequestPort {
         exchange = await dispatchWithCapacityRetry(dispatch, error, deadlineAt, request.signal);
       }
       const head = await exchange.response;
+      if (request.streamBody) {
+        return {
+          status: head.statusCode,
+          headers: Object.fromEntries(head.headers.map(({ name, value }) => [name, value])),
+          body: '',
+          bodyStream: streamTunnelBody(exchange),
+        };
+      }
       const chunks: Uint8Array[] = [];
       let byteLength = 0;
       for await (const chunk of exchange.body) {

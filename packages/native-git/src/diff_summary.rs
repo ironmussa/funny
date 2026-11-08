@@ -115,7 +115,9 @@ pub async fn get_diff_summary(
       .into_index_worktree_iter(empty_patterns)
       .map_err(|e| napi::Error::from_reason(format!("Failed to iterate status: {e}")))?;
 
-    let mut all_files: Vec<FileDiffSummaryItem> = Vec::new();
+    // Unstaged entries, with a flag for untracked files so they can be
+    // ordered after tracked changes like the CLI (`diff`, then `ls-files`).
+    let mut unstaged: Vec<(bool, FileDiffSummaryItem)> = Vec::new();
     let mut worktree_changed_paths = HashSet::new();
 
     for entry in status_iter {
@@ -198,27 +200,32 @@ pub async fn get_diff_summary(
       };
 
       worktree_changed_paths.insert(path.clone());
-      all_files.push(FileDiffSummaryItem {
-        path,
-        status,
-        staged: false,
-        additions,
-        deletions,
-      });
+      unstaged.push((
+        is_untracked,
+        FileDiffSummaryItem {
+          path,
+          status,
+          staged: false,
+          additions,
+          deletions,
+        },
+      ));
     }
 
     // ── Phase 2: HEAD-vs-index changes (staged) ──
     // Detects files staged in the index that differ from HEAD (or all index
     // entries when HEAD doesn't exist, e.g. repos with no commits yet).
+    // Files with both staged and unstaged changes are reported once, as
+    // staged, matching the CLI (`diff --staged` wins over `diff`).
     let head_tree = repo.head_commit().ok().and_then(|c| c.tree().ok());
+    let mut staged: Vec<FileDiffSummaryItem> = Vec::new();
 
     for entry in index.entries().iter() {
-      let path_str = entry.path(&index).to_str_lossy().to_string();
-
-      // Skip files already reported as worktree changes
-      if worktree_changed_paths.contains(&path_str) {
+      // `git add -N` entries are not staged content; Phase 1 reports them.
+      if entry.flags.contains(gix::index::entry::Flags::INTENT_TO_ADD) {
         continue;
       }
+      let path_str = entry.path(&index).to_str_lossy().to_string();
 
       // Returns (is_staged, status, head_blob_oid).
       let (is_staged, status, head_oid) = match &head_tree {
@@ -257,7 +264,7 @@ pub async fn get_diff_summary(
         }
       };
 
-      all_files.push(FileDiffSummaryItem {
+      staged.push(FileDiffSummaryItem {
         path: path_str,
         status: status.to_string(),
         staged: true,
@@ -265,6 +272,53 @@ pub async fn get_diff_summary(
         deletions,
       });
     }
+
+    // Staged deletions: in HEAD but no longer in the index. They have no index
+    // entry, so neither the worktree status nor the loop above can see them.
+    if let Some(tree) = &head_tree {
+      let mut recorder = gix::traverse::tree::Recorder::default();
+      tree
+        .traverse()
+        .breadthfirst(&mut recorder)
+        .map_err(|e| napi::Error::from_reason(format!("Failed to walk HEAD tree: {e}")))?;
+      for record in recorder.records {
+        if record.mode.is_tree() {
+          continue;
+        }
+        let path_str = record.filepath.to_str_lossy().to_string();
+        if index_oid_by_path.contains_key(&path_str) {
+          continue;
+        }
+        if !exclude.is_empty() && matches_any_pattern(&path_str, &exclude) {
+          continue;
+        }
+        let deletions = if record.mode.is_commit() {
+          0
+        } else {
+          count_lines(&read_blob(repo, record.oid))
+        };
+        staged.push(FileDiffSummaryItem {
+          path: path_str,
+          status: "deleted".to_string(),
+          staged: true,
+          additions: 0,
+          deletions,
+        });
+      }
+    }
+
+    // Same order as the CLI so `max_files` truncates the same entries:
+    // staged (by path), then tracked unstaged, then untracked (each by path).
+    staged.sort_by(|a, b| a.path.cmp(&b.path));
+    unstaged.sort_by(|(ua, a), (ub, b)| ua.cmp(ub).then_with(|| a.path.cmp(&b.path)));
+    let staged_paths: HashSet<String> = staged.iter().map(|f| f.path.clone()).collect();
+    let mut all_files = staged;
+    all_files.extend(
+      unstaged
+        .into_iter()
+        .map(|(_, f)| f)
+        .filter(|f| !staged_paths.contains(&f.path)),
+    );
 
     // ── Phase 3: stranded gitlinks ──
     // gix's submodule status only inspects entries listed in `.gitmodules`,

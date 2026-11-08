@@ -21,6 +21,13 @@ export interface NativeGitStatusSummary {
   linesDeleted: number;
 }
 
+export interface NativeWorktreeEntry {
+  path: string;
+  commit: string;
+  /** Short branch name; absent when HEAD is detached. */
+  branch?: string;
+}
+
 export interface NativeGitLogEntry {
   hash: string;
   shortHash: string;
@@ -127,6 +134,7 @@ interface NativeGitModule {
   checkIgnore(cwd: string, paths: string[]): Promise<string[]>;
   listUnmergedFiles(cwd: string): Promise<string[]>;
   getRefFingerprint(cwd: string, extraRefs: string[]): Promise<string>;
+  listWorktrees(cwd: string): Promise<NativeWorktreeEntry[]>;
   getBranchSummary(
     cwd: string,
     baseBranch: string,
@@ -178,6 +186,7 @@ export interface PooledNativeGitModule {
   checkIgnore(cwd: string, paths: string[]): Promise<string[]>;
   listUnmergedFiles(cwd: string): Promise<string[]>;
   getRefFingerprint(cwd: string, extraRefs: string[]): Promise<string>;
+  listWorktrees(cwd: string): Promise<NativeWorktreeEntry[]>;
   getBranchSummary(
     cwd: string,
     baseBranch: string,
@@ -211,6 +220,7 @@ function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
     checkIgnore: (...args) => lightPool(() => mod.checkIgnore(...args)),
     listUnmergedFiles: (...args) => lightPool(() => mod.listUnmergedFiles(...args)),
     getRefFingerprint: (...args) => lightPool(() => mod.getRefFingerprint(...args)),
+    listWorktrees: (...args) => lightPool(() => mod.listWorktrees(...args)),
     getBranchSummary: (...args) => heavyPool(() => mod.getBranchSummary(...args)),
     blameFile: (...args) => lightPool(() => mod.blameFile(...args)),
   };

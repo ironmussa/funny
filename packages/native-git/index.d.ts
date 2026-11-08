@@ -222,6 +222,13 @@ export interface ListFilesOptions {
  */
 export declare function listUnmergedFiles(cwd: string): Promise<Array<string>>;
 
+/**
+ * List the main worktree followed by every linked worktree (sorted by path),
+ * like `git worktree list --porcelain`, without spawning git. Linked worktrees
+ * whose directory is gone are still listed, as git does.
+ */
+export declare function listWorktrees(cwd: string): Promise<Array<WorktreeEntry>>;
+
 /** Simple ping function to verify the native module loads correctly. */
 export declare function ping(): string;
 
@@ -237,4 +244,16 @@ export interface StashFileEntry {
   path: string;
   additions: number;
   deletions: number;
+}
+
+/** One entry of `git worktree list --porcelain`. */
+export interface WorktreeEntry {
+  path: string;
+  /**
+   * Commit `HEAD` resolves to; empty when it cannot be read (unborn branch,
+   * worktree whose git dir is gone).
+   */
+  commit: string;
+  /** Short branch name; `None` when `HEAD` is detached. */
+  branch?: string;
 }

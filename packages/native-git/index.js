@@ -801,5 +801,6 @@ module.exports.listBranches = nativeBinding.listBranches;
 module.exports.listBranchesDetailed = nativeBinding.listBranchesDetailed;
 module.exports.listFiles = nativeBinding.listFiles;
 module.exports.listUnmergedFiles = nativeBinding.listUnmergedFiles;
+module.exports.listWorktrees = nativeBinding.listWorktrees;
 module.exports.ping = nativeBinding.ping;
 module.exports.resetSoft = nativeBinding.resetSoft;

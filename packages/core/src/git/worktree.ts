@@ -7,6 +7,9 @@ import { ResultAsync } from 'neverthrow';
 
 import type { SetupProgressFn } from '../ports/setup-progress.js';
 import { git } from './base.js';
+import { toDomainError } from './errors.js';
+import { getNativeGit } from './native.js';
+import { validatePath } from './path-validation.js';
 import { gitRead, gitWrite } from './process.js';
 
 /**
@@ -222,25 +225,54 @@ export function createWorktree(
   );
 }
 
-export function listWorktrees(projectPath: string): ResultAsync<WorktreeInfo[], DomainError> {
-  return git(['worktree', 'list', '--porcelain'], projectPath).andThen((output) => {
-    const entries: Array<Omit<WorktreeInfo, 'isMain' | 'lastActivityMs'>> = [];
-    let current: Partial<WorktreeInfo> = {};
+type WorktreeEntry = Omit<WorktreeInfo, 'isMain' | 'lastActivityMs'>;
 
-    for (const raw of output.split('\n')) {
-      const line = raw.replace(/\r$/, '');
-      if (line.startsWith('worktree ')) {
-        if (current.path) entries.push(current as WorktreeInfo);
-        current = { path: line.slice('worktree '.length) };
-      } else if (line.startsWith('HEAD ')) {
-        current.commit = line.slice('HEAD '.length);
-      } else if (line.startsWith('branch ')) {
-        current.branch = line.slice('branch refs/heads/'.length);
-      }
+/** Parse `git worktree list --porcelain` output. */
+export function parseWorktreeListPorcelain(output: string): WorktreeEntry[] {
+  const entries: WorktreeEntry[] = [];
+  let current: Partial<WorktreeInfo> = {};
+
+  for (const raw of output.split('\n')) {
+    const line = raw.replace(/\r$/, '');
+    if (line.startsWith('worktree ')) {
+      if (current.path) entries.push(current as WorktreeEntry);
+      current = { path: line.slice('worktree '.length) };
+    } else if (line.startsWith('HEAD ')) {
+      current.commit = line.slice('HEAD '.length);
+    } else if (line.startsWith('branch ')) {
+      current.branch = line.slice('branch refs/heads/'.length);
     }
+  }
 
-    if (current.path) entries.push(current as WorktreeInfo);
+  if (current.path) entries.push(current as WorktreeEntry);
+  return entries;
+}
 
+/**
+ * Registered worktrees (main first), read in-process with gitoxide when the
+ * native module is available, else via `git worktree list` on the read pool.
+ * It is a read: it must not take a write slot or bump the write generation,
+ * which would invalidate every repository's cached git status.
+ */
+function readWorktreeEntries(projectPath: string): ResultAsync<WorktreeEntry[], DomainError> {
+  return validatePath(projectPath).andThen((cwd) => {
+    const cli = () =>
+      ResultAsync.fromPromise(
+        gitRead(['worktree', 'list', '--porcelain'], { cwd }),
+        toDomainError,
+      ).map((result) => parseWorktreeListPorcelain(result.stdout));
+    const native = getNativeGit();
+    if (!native) return cli();
+    return ResultAsync.fromPromise(native.listWorktrees(cwd), toDomainError)
+      .map((list) =>
+        list.map((w) => ({ path: w.path, commit: w.commit, branch: w.branch }) as WorktreeEntry),
+      )
+      .orElse(() => cli());
+  });
+}
+
+export function listWorktrees(projectPath: string): ResultAsync<WorktreeInfo[], DomainError> {
+  return readWorktreeEntries(projectPath).andThen((entries) => {
     const normalizedProject = normalize(projectPath);
 
     return ResultAsync.fromPromise(
@@ -478,18 +510,11 @@ export function pruneOrphanWorktrees(projectPath: string): ResultAsync<number, D
       if (!existsSync(base)) return 0;
 
       // List registered worktrees
-      const listResult = await gitRead(['worktree', 'list', '--porcelain'], {
-        cwd: projectPath,
-        reject: false,
-      });
-      const registeredPaths = new Set<string>();
-      if (listResult.exitCode === 0) {
-        for (const line of listResult.stdout.split('\n')) {
-          if (line.startsWith('worktree ')) {
-            registeredPaths.add(normalize(line.slice('worktree '.length)));
-          }
-        }
-      }
+      const listResult = await readWorktreeEntries(projectPath);
+      // Without the registered list every directory would look orphaned and
+      // be deleted, including live worktrees: skip the cleanup instead.
+      if (listResult.isErr()) return 0;
+      const registeredPaths = new Set<string>(listResult.value.map((w) => normalize(w.path)));
 
       // Check for orphan directories under the worktree base
       let pruned = 0;

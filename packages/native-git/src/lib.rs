@@ -15,6 +15,7 @@ mod list_files;
 mod stash;
 mod stage_helpers;
 mod branch_summary;
+mod ref_fingerprint;
 
 pub use status_summary::*;
 pub use diff_summary::*;

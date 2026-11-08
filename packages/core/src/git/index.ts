@@ -27,6 +27,7 @@ export {
 export { isSafeGitRefArg } from './ref-guard.js';
 
 export { getNativeGit, getNativeGitStatus, type NativeGitStatus } from './native.js';
+export { baseBranchRefs, getRefFingerprint } from './ref-fingerprint.js';
 
 export { toDomainError } from './errors.js';
 

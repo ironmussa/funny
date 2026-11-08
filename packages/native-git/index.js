@@ -789,6 +789,7 @@ module.exports.getDefaultBranch = nativeBinding.getDefaultBranch;
 module.exports.getDiffSummary = nativeBinding.getDiffSummary;
 module.exports.getFullContextFileDiff = nativeBinding.getFullContextFileDiff;
 module.exports.getLog = nativeBinding.getLog;
+module.exports.getRefFingerprint = nativeBinding.getRefFingerprint;
 module.exports.getRemoteUrl = nativeBinding.getRemoteUrl;
 module.exports.getSingleFileDiff = nativeBinding.getSingleFileDiff;
 module.exports.getStashFileDiff = nativeBinding.getStashFileDiff;

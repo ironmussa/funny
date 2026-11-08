@@ -7,13 +7,19 @@
  *
  * Watches `.git/` internals (index, HEAD, refs/) for external changes.
  * Per-project lifecycle: starts watching when the first thread is created,
- * stops when the last thread is deleted. Emits `git:changed` on the
- * ThreadEventBus for all active (non-archived) threads in that project.
+ * stops when the last thread is deleted. On a change it emits `git:changed`
+ * on the ThreadEventBus only for the threads whose git state moved, compared
+ * with a gitoxide ref fingerprint (HEAD, upstream, base branch, index). A
+ * commit in one worktree therefore no longer recomputes the status of every
+ * thread in the project. Without native git, every registered thread is
+ * notified as before.
  */
 
 import { watch, type FSWatcher } from 'fs';
 import { existsSync } from 'fs';
 import { join } from 'path';
+
+import { baseBranchRefs, getNativeGit, getRefFingerprint } from '@funny/core/git';
 
 import { log } from '../lib/logger.js';
 import { getServices } from './service-registry.js';
@@ -25,6 +31,10 @@ const DEBOUNCE_MS = 300;
 interface ThreadMeta {
   userId: string;
   worktreePath: string | null;
+  /** Base branch, looked up once on the first refresh (`null` when none). */
+  baseBranch?: string | null;
+  /** Last ref fingerprint seen; unset until the first refresh. */
+  fingerprint?: string;
 }
 
 interface ProjectWatcher {
@@ -36,6 +46,10 @@ interface ProjectWatcher {
   debounceTimer: ReturnType<typeof setTimeout> | null;
   /** Project path (for resolving .git/) */
   projectPath: string;
+  /** A refresh pass is computing fingerprints */
+  refreshing: boolean;
+  /** Another change arrived during the running refresh pass */
+  refreshPending: boolean;
 }
 
 const projectWatchers = new Map<string, ProjectWatcher>();
@@ -70,6 +84,8 @@ export function startWatching(
     watchers: [],
     debounceTimer: null,
     projectPath,
+    refreshing: false,
+    refreshPending: false,
   };
 
   const gitDir = join(projectPath, '.git');
@@ -139,12 +155,83 @@ function onGitChange(projectId: string): void {
 
   pw.debounceTimer = setTimeout(() => {
     pw.debounceTimer = null;
-    emitForAllThreads(projectId, pw);
+    void refreshThreads(projectId, pw);
   }, DEBOUNCE_MS);
 }
 
+type ThreadEntry = [threadId: string, meta: ThreadMeta];
+
 /**
- * Emit `git:changed` for every thread registered in this project watcher.
+ * Pick the threads whose fingerprint changed since the last pass and store the
+ * new fingerprints. A thread whose fingerprint cannot be computed (`null`) is
+ * always selected, so an error never hides a change.
+ */
+export async function selectChangedThreads(
+  entries: ThreadEntry[],
+  fingerprint: (threadId: string, meta: ThreadMeta) => Promise<string | null>,
+): Promise<ThreadEntry[]> {
+  const results = await Promise.all(
+    entries.map(async ([threadId, meta]) => {
+      const next = await fingerprint(threadId, meta);
+      const changed = next === null || next !== meta.fingerprint;
+      meta.fingerprint = next ?? undefined;
+      return changed;
+    }),
+  );
+  return entries.filter((_, i) => results[i]);
+}
+
+async function threadFingerprint(
+  threadId: string,
+  meta: ThreadMeta,
+  projectPath: string,
+): Promise<string | null> {
+  if (meta.baseBranch === undefined) {
+    try {
+      const thread = await getServices().threads.getThread(threadId);
+      meta.baseBranch = thread?.baseBranch ?? null;
+    } catch {
+      return null;
+    }
+  }
+  const result = await getRefFingerprint(
+    meta.worktreePath ?? projectPath,
+    baseBranchRefs(meta.baseBranch),
+  );
+  return result.isOk() ? result.value : null;
+}
+
+/** Serialized refresh: changes arriving mid-pass trigger one more pass. */
+async function refreshThreads(projectId: string, pw: ProjectWatcher): Promise<void> {
+  if (pw.refreshing) {
+    pw.refreshPending = true;
+    return;
+  }
+  pw.refreshing = true;
+  try {
+    do {
+      pw.refreshPending = false;
+      const entries = Array.from(pw.threads.entries());
+      const changed = getNativeGit()
+        ? await selectChangedThreads(entries, (id, meta) =>
+            threadFingerprint(id, meta, pw.projectPath),
+          )
+        : entries;
+      if (projectWatchers.get(projectId) !== pw) return;
+      emitForThreads(projectId, pw, changed, entries.length);
+    } while (pw.refreshPending);
+  } catch (err) {
+    log.warn(`Git watcher: refresh failed for project ${projectId}`, {
+      namespace: 'git-watcher',
+      error: err,
+    });
+  } finally {
+    pw.refreshing = false;
+  }
+}
+
+/**
+ * Emit `git:changed` for the given threads of this project watcher.
  * Staggers emissions in batches to avoid a thundering herd when projects
  * have hundreds of threads — each batch is offset by STAGGER_MS so the
  * downstream per-thread debounce timers don't all fire simultaneously.
@@ -152,8 +239,13 @@ function onGitChange(projectId: string): void {
 const BATCH_SIZE = 10;
 const STAGGER_MS = 100;
 
-function emitForAllThreads(projectId: string, pw: ProjectWatcher): void {
-  const entries = Array.from(pw.threads.entries());
+function emitForThreads(
+  projectId: string,
+  pw: ProjectWatcher,
+  entries: ThreadEntry[],
+  registered: number,
+): void {
+  if (entries.length === 0) return;
 
   for (let i = 0; i < entries.length; i += BATCH_SIZE) {
     const batch = entries.slice(i, i + BATCH_SIZE);
@@ -191,7 +283,7 @@ function emitForAllThreads(projectId: string, pw: ProjectWatcher): void {
   }
 
   log.debug(
-    `Git watcher: emitted git:changed for ${entries.length} thread(s) in project ${projectId} (${Math.ceil(entries.length / BATCH_SIZE)} batches)`,
+    `Git watcher: emitted git:changed for ${entries.length}/${registered} thread(s) in project ${projectId} (${Math.ceil(entries.length / BATCH_SIZE)} batches)`,
     { namespace: 'git-watcher' },
   );
 }

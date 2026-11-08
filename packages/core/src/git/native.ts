@@ -126,6 +126,7 @@ interface NativeGitModule {
   getStashFileDiff(cwd: string, stashRef: string, filePath: string): Promise<string>;
   checkIgnore(cwd: string, paths: string[]): Promise<string[]>;
   listUnmergedFiles(cwd: string): Promise<string[]>;
+  getRefFingerprint(cwd: string, extraRefs: string[]): Promise<string>;
   getBranchSummary(
     cwd: string,
     baseBranch: string,
@@ -176,6 +177,7 @@ export interface PooledNativeGitModule {
   getStashFileDiff(cwd: string, stashRef: string, filePath: string): Promise<string>;
   checkIgnore(cwd: string, paths: string[]): Promise<string[]>;
   listUnmergedFiles(cwd: string): Promise<string[]>;
+  getRefFingerprint(cwd: string, extraRefs: string[]): Promise<string>;
   getBranchSummary(
     cwd: string,
     baseBranch: string,
@@ -208,6 +210,7 @@ function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
     getStashFileDiff: (...args) => heavyPool(() => mod.getStashFileDiff(...args)),
     checkIgnore: (...args) => lightPool(() => mod.checkIgnore(...args)),
     listUnmergedFiles: (...args) => lightPool(() => mod.listUnmergedFiles(...args)),
+    getRefFingerprint: (...args) => lightPool(() => mod.getRefFingerprint(...args)),
     getBranchSummary: (...args) => heavyPool(() => mod.getBranchSummary(...args)),
     blameFile: (...args) => lightPool(() => mod.blameFile(...args)),
   };

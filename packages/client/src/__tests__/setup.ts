@@ -1,4 +1,6 @@
 import '@testing-library/jest-dom';
+import { cleanup } from '@testing-library/react';
+import { afterAll, vi } from 'vitest';
 
 // Polyfill requestIdleCallback / cancelIdleCallback (not in jsdom). Backed by a
 // near-zero setTimeout so idle-deferred work (sidebar git status, MCP server
@@ -38,4 +40,15 @@ Object.defineProperty(window, 'matchMedia', {
     removeEventListener: () => {},
     dispatchEvent: () => false,
   }),
+});
+
+// Radix FocusScope dispatches a CustomEvent from a setTimeout(0) when it
+// unmounts. On a loaded machine that timer can outlive the file's jsdom
+// environment and throw "parameter 1 is not of type 'Event'" as an unhandled
+// error, failing the run even though every test passed. Unmount what is left
+// and let pending zero-delay timers run while the window still exists.
+afterAll(async () => {
+  vi.useRealTimers();
+  cleanup();
+  await new Promise((resolve) => setTimeout(resolve, 10));
 });

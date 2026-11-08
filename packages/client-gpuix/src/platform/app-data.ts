@@ -1,4 +1,4 @@
-import { isAbsolute, join, win32 } from 'node:path';
+import { posix, win32 } from 'node:path';
 
 export interface NativeAppDataInput {
   platform: string;
@@ -7,21 +7,25 @@ export interface NativeAppDataInput {
 
 export function resolveNativeAppDataDirectory(input: NativeAppDataInput): string {
   const environment = input.environment;
+  // Pick the target platform's path rules, not the host's: `node:path` on a
+  // Windows host would join Linux/macOS roots with backslashes.
+  const pathApi = input.platform === 'win32' ? win32 : posix;
   let root: string | undefined;
   if (input.platform === 'darwin') {
-    root = environment.HOME ? join(environment.HOME, 'Library', 'Application Support') : undefined;
+    root = environment.HOME
+      ? pathApi.join(environment.HOME, 'Library', 'Application Support')
+      : undefined;
   } else if (input.platform === 'linux') {
     root =
       environment.XDG_DATA_HOME ??
-      (environment.HOME ? join(environment.HOME, '.local', 'share') : undefined);
+      (environment.HOME ? pathApi.join(environment.HOME, '.local', 'share') : undefined);
   } else if (input.platform === 'win32') {
     root =
       environment.LOCALAPPDATA ??
       (environment.USERPROFILE
-        ? win32.join(environment.USERPROFILE, 'AppData', 'Local')
+        ? pathApi.join(environment.USERPROFILE, 'AppData', 'Local')
         : undefined);
   }
-  const pathApi = input.platform === 'win32' ? win32 : { isAbsolute, join };
   if (!root || !pathApi.isAbsolute(root)) {
     throw new Error(`Unable to resolve an absolute Funny data directory on ${input.platform}`);
   }

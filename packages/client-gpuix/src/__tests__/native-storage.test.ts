@@ -105,7 +105,11 @@ describe('native persistence', () => {
     );
     service.write('theme', 'dark');
     expect(service.read('theme')).toBe('dark');
-    expect(diagnostics).toHaveLength(2);
+    // POSIX reports ENOTDIR for the initial load (diagnosed); Windows reports
+    // ENOENT, which is a normal first run. The failed write is diagnosed on both.
+    expect(diagnostics.map((diagnostic) => diagnostic.operation)).toEqual(
+      process.platform === 'win32' ? ['write'] : ['load', 'write'],
+    );
     expect(diagnostics.at(-1)).toMatchObject({ capability: 'storage', operation: 'write' });
   });
 

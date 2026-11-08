@@ -18,6 +18,7 @@ import {
   showAgentNotification,
   useNotifications,
 } from '@/hooks/use-notifications';
+import { changeLanguage, SUPPORTED_LANGUAGES } from '@/i18n/config';
 import { disableWebPush } from '@/lib/web-push';
 import {
   editorLabels,
@@ -113,10 +114,9 @@ function LanguageRow() {
 
   const handleLanguageChange = useCallback(
     (code: string) => {
-      i18n.changeLanguage(code);
-      toastSettingsSaved(t);
+      void changeLanguage(code).then(() => toastSettingsSaved(t));
     },
-    [i18n, t],
+    [t],
   );
 
   return (
@@ -126,7 +126,7 @@ function LanguageRow() {
           <SelectValue />
         </SelectTrigger>
         <SelectContent>
-          {Object.keys(i18n.options.resources ?? {}).map((code) => (
+          {SUPPORTED_LANGUAGES.map((code) => (
             <SelectItem key={code} value={code}>
               {getLanguageName(code)}
             </SelectItem>

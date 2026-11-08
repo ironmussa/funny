@@ -7,6 +7,8 @@ describe('resolveCorsOrigins', () => {
     expect(resolveCorsOrigins({ VITE_PORT: '5173', PORT: '3001' } as any)).toEqual([
       'http://localhost:5173',
       'http://127.0.0.1:5173',
+      'https://localhost:5173',
+      'https://127.0.0.1:5173',
       'http://localhost:3001',
       'http://127.0.0.1:3001',
     ]);
@@ -22,6 +24,8 @@ describe('resolveCorsOrigins', () => {
     ).toEqual([
       'http://localhost:5173',
       'http://127.0.0.1:5173',
+      'https://localhost:5173',
+      'https://127.0.0.1:5173',
       'http://localhost:3001',
       'http://127.0.0.1:3001',
       'https://app.example.com',

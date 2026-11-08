@@ -1,6 +1,8 @@
+import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 import { VISUALIZER_IMPORT_MAP_JSON } from '@funny/shared/visualizer-importmap';
+import basicSsl from '@vitejs/plugin-basic-ssl';
 import react from '@vitejs/plugin-react';
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 
@@ -20,6 +22,38 @@ function visualizerImportMap(): Plugin {
       return html.replace('</head>', `    ${tag}\n  </head>`);
     },
   };
+}
+
+type ViteEnv = Record<string, string>;
+type HttpsCert = { cert: Buffer; key: Buffer };
+
+// VITE_HTTPS=true serves the dev client over HTTPS, which Vite serves as
+// HTTP/2. Over plain HTTP the browser caps each origin at 6 connections, so a
+// few slow git requests can queue every other API call behind them. Point
+// VITE_HTTPS_CERT / VITE_HTTPS_KEY at a trusted cert (e.g. from mkcert);
+// without them a self-signed cert is generated, which the browser warns
+// about and which blocks the push-notification service worker.
+function isHttpsEnabled(env: ViteEnv): boolean {
+  return env.VITE_HTTPS === 'true' || env.VITE_HTTPS === '1';
+}
+
+/** The configured cert/key pair, or undefined when HTTPS is off or no pair is set. */
+function resolveHttpsCert(env: ViteEnv): HttpsCert | undefined {
+  if (!isHttpsEnabled(env) || !env.VITE_HTTPS_CERT || !env.VITE_HTTPS_KEY) return undefined;
+  return { cert: readFileSync(env.VITE_HTTPS_CERT), key: readFileSync(env.VITE_HTTPS_KEY) };
+}
+
+/** HTTPS without a configured pair falls back to a generated self-signed cert. */
+function httpsPlugins(httpsEnabled: boolean, httpsCert: HttpsCert | undefined): Plugin[] {
+  return httpsEnabled && !httpsCert ? [basicSsl()] : [];
+}
+
+function httpsServerOptions(httpsCert: HttpsCert | undefined): { https?: HttpsCert } {
+  return httpsCert ? { https: httpsCert } : {};
+}
+
+function forwardedProto(httpsEnabled: boolean): 'https' | 'http' {
+  return httpsEnabled ? 'https' : 'http';
 }
 
 export default defineConfig(({ mode }) => {
@@ -54,6 +88,9 @@ export default defineConfig(({ mode }) => {
           ? env.VITE_HOST
           : true;
 
+  const httpsEnabled = isHttpsEnabled(env);
+  const httpsCert = resolveHttpsCert(env);
+
   return {
     envDir: monorepoRoot,
     // Inject the git-derived build identity as a compile-time constant so the
@@ -62,7 +99,11 @@ export default defineConfig(({ mode }) => {
     define: {
       __BUILD_INFO__: JSON.stringify(getBuildInfo()),
     },
-    plugins: [react({ compiler: true }), visualizerImportMap()],
+    plugins: [
+      react({ compiler: true }),
+      visualizerImportMap(),
+      ...httpsPlugins(httpsEnabled, httpsCert),
+    ],
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
@@ -125,6 +166,7 @@ export default defineConfig(({ mode }) => {
     },
     server: {
       host: viteHost,
+      ...httpsServerOptions(httpsCert),
       port: clientPort,
       allowedHosts: true,
       proxy: {
@@ -138,7 +180,7 @@ export default defineConfig(({ mode }) => {
               const host = req.headers.host;
               if (host) {
                 proxyReq.setHeader('X-Forwarded-Host', host);
-                proxyReq.setHeader('X-Forwarded-Proto', 'http');
+                proxyReq.setHeader('X-Forwarded-Proto', forwardedProto(httpsEnabled));
               }
             });
           },

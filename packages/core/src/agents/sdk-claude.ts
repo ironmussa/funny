@@ -54,6 +54,23 @@ export function mergeDisallowedTools(callerDisallowed?: string[]): string[] {
   return [...new Set([...FUNNY_DEAD_CLAUDE_TOOLS, ...(callerDisallowed ?? [])])];
 }
 
+function isSessionIdle(msg: any): boolean {
+  return msg.subtype === 'session_state_changed' && msg.state === 'idle';
+}
+
+/** Ambient tasks (live-update watchers) never end on their own, so they are not tracked. */
+function activeBackgroundTaskIds(tasks: any[] | undefined): Set<string> {
+  return new Set((tasks ?? []).filter((t) => !t.ambient).map((t) => t.task_id));
+}
+
+function isBackgroundTaskStart(msg: any): boolean {
+  return Boolean(msg.is_backgrounded) && !msg.ambient;
+}
+
+function isTerminalTaskStatus(status: string | undefined): boolean {
+  return !!status && status !== 'pending' && status !== 'running' && status !== 'paused';
+}
+
 /**
  * Detect the Anthropic 400 that fires when a resumed/continued conversation
  * carries a `thinking` / `redacted_thinking` block that was altered from the
@@ -486,35 +503,51 @@ export class SDKClaudeProcess extends BaseAgentProcess {
    * so we only close once no background task is pending.
    */
   private trackInputLifetime(sdkMsg: SDKMessage): void {
-    if (this.inputClosed) return;
     const msg = sdkMsg as any;
-    if (msg.type === 'result') {
-      if (!this.steerable && this.backgroundTaskIds.size === 0) this.closeInput();
-      return;
-    }
+    this.trackBackgroundTasks(msg);
+    if (this.inputClosed || this.steerable || this.backgroundTaskIds.size > 0) return;
+    // `session_state_changed: idle` also fires right after a turn whose
+    // background Bash is still running, so neither signal alone means "done".
+    if (msg.type === 'result' || isSessionIdle(msg)) this.closeInput();
+  }
+
+  private trackBackgroundTasks(msg: any): void {
     if (msg.type !== 'system') return;
     switch (msg.subtype) {
+      case 'background_tasks_changed':
+        // Level signal (replace semantics): self-heals a missed start/end edge.
+        this.backgroundTaskIds = activeBackgroundTaskIds(msg.tasks);
+        break;
       case 'task_started':
-        // Ambient tasks (live-update watchers) never end on their own.
-        if (msg.is_backgrounded && !msg.ambient) this.backgroundTaskIds.add(msg.task_id);
+        if (isBackgroundTaskStart(msg)) this.backgroundTaskIds.add(msg.task_id);
         break;
-      case 'task_updated': {
-        const { status, is_backgrounded } = msg.patch ?? {};
-        if (status && status !== 'pending' && status !== 'running' && status !== 'paused') {
-          this.backgroundTaskIds.delete(msg.task_id);
-        } else if (is_backgrounded) {
-          this.backgroundTaskIds.add(msg.task_id);
-        }
+      case 'task_updated':
+        this.applyTaskUpdate(msg.task_id, msg.patch);
         break;
-      }
       case 'task_notification':
         this.backgroundTaskIds.delete(msg.task_id);
         break;
-      case 'session_state_changed':
-        // Authoritative "turn and background work are over" signal.
-        if (msg.state === 'idle' && !this.steerable) this.closeInput();
-        break;
     }
+  }
+
+  private applyTaskUpdate(taskId: string, patch: any): void {
+    const { status, is_backgrounded } = patch ?? {};
+    if (isTerminalTaskStatus(status)) {
+      this.backgroundTaskIds.delete(taskId);
+    } else if (is_backgrounded) {
+      this.backgroundTaskIds.add(taskId);
+    }
+  }
+
+  /**
+   * Idle with a background task still running is only the end of a turn; the
+   * task's notification starts another one. Otherwise release the deferred result.
+   */
+  private takeResultOnIdle(): CLIMessage | null {
+    if (this.backgroundTaskIds.size > 0) return null;
+    const result = this.deferredResult;
+    this.deferredResult = null;
+    return result;
   }
 
   // ── PreToolUse hook ─────────────────────────────────────────────
@@ -749,15 +782,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   private translateMessage(sdkMsg: SDKMessage): CLIMessage | null {
     switch (sdkMsg.type) {
       case 'system':
-        if (
-          (sdkMsg as any).subtype === 'session_state_changed' &&
-          (sdkMsg as any).state === 'idle'
-        ) {
-          this.backgroundTaskIds.clear();
-          const result = this.deferredResult;
-          this.deferredResult = null;
-          return result;
-        }
+        if (isSessionIdle(sdkMsg)) return this.takeResultOnIdle();
         if ('subtype' in sdkMsg && sdkMsg.subtype === 'init') {
           return {
             type: 'system',

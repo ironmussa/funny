@@ -362,7 +362,7 @@ async function sessionStep(c: Context<ServerEnv>, path: string): Promise<AuthSte
   c.set('organizationId', activeOrgId);
 
   // Resolve org name for forwarding to runtime
-  c.set('organizationName', await resolveOrgName(c, auth, activeOrgId));
+  c.set('organizationName', await resolveOrgName(c, auth, session.user.id, activeOrgId));
 
   return PROCEED;
 }
@@ -392,21 +392,66 @@ function resolveSessionRole(user: any) {
   return role;
 }
 
-async function resolveOrgName(
+/**
+ * The org name is only forwarded to the runtime for display, yet looking it up
+ * costs a Better Auth call (and its DB reads) on every authenticated request.
+ * Cache it briefly per (user, org): keying by user keeps the membership check
+ * that getFullOrganization performs per user. A rename shows within the TTL.
+ */
+const ORG_NAME_TTL_MS = 60_000;
+const ORG_NAME_CACHE_MAX = 1_000;
+const orgNameCache = new Map<string, { name: string | null; expiresAt: number }>();
+const orgNameInFlight = new Map<string, Promise<string | null>>();
+
+/** Test-only: drop cached organization names. */
+export function resetOrgNameCacheForTests(): void {
+  orgNameCache.clear();
+  orgNameInFlight.clear();
+}
+
+async function fetchOrgName(
   c: Context<ServerEnv>,
   auth: any,
-  activeOrgId: string | null,
-): Promise<string | null> {
-  if (!activeOrgId) return null;
+  activeOrgId: string,
+): Promise<{ name: string | null; ok: boolean }> {
   try {
     const org = await auth.api.getFullOrganization({
       headers: c.req.raw.headers,
       query: { organizationId: activeOrgId },
     });
-    return org?.name ?? null;
+    return { name: org?.name ?? null, ok: true };
   } catch {
-    // Org name unavailable
-    return null;
+    // Org name unavailable; do not cache the failure.
+    return { name: null, ok: false };
+  }
+}
+
+async function resolveOrgName(
+  c: Context<ServerEnv>,
+  auth: any,
+  userId: string,
+  activeOrgId: string | null,
+): Promise<string | null> {
+  if (!activeOrgId) return null;
+  const key = `${userId}\0${activeOrgId}`;
+  const cached = orgNameCache.get(key);
+  if (cached && cached.expiresAt > Date.now()) return cached.name;
+
+  const pending = orgNameInFlight.get(key);
+  if (pending) return pending;
+
+  const lookup = fetchOrgName(c, auth, activeOrgId).then(({ name, ok }) => {
+    if (ok) {
+      if (orgNameCache.size >= ORG_NAME_CACHE_MAX) orgNameCache.clear();
+      orgNameCache.set(key, { name, expiresAt: Date.now() + ORG_NAME_TTL_MS });
+    }
+    return name;
+  });
+  orgNameInFlight.set(key, lookup);
+  try {
+    return await lookup;
+  } finally {
+    orgNameInFlight.delete(key);
   }
 }
 

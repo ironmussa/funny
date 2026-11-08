@@ -84,10 +84,41 @@ describe('SDKClaudeProcess input-channel lifetime', () => {
     expect(await ch.isClosed()).toBe(true);
   });
 
-  test('session_state_changed idle closes even with a task still tracked', async () => {
+  // Sequence captured from the real CLI (SDK 0.3.314): `idle` arrives right
+  // after the turn's result while a run_in_background Bash is still running.
+  // Closing there auto-denied every tool call of the notification turn.
+  test('idle does not close while a background Bash runs; closes after the notification turn', async () => {
     const ch = await setup();
-    ch.track(sys('task_started', { task_id: 't3', is_backgrounded: true }));
+    const task = { task_id: 'b1', task_type: 'local_bash', description: 'suite' };
+    ch.track(sys('background_tasks_changed', { tasks: [task] }));
+    ch.track(sys('task_started', { task_id: 'b1', is_backgrounded: true }));
+    ch.track(result);
     ch.track(sys('session_state_changed', { state: 'idle' }));
+    expect(await ch.isClosed()).toBe(false);
+
+    ch.track(sys('task_updated', { task_id: 'b1', patch: { status: 'completed' } }));
+    ch.track(sys('task_notification', { task_id: 'b1', status: 'completed' }));
+    ch.track(sys('background_tasks_changed', { tasks: [] }));
+    ch.track(sys('session_state_changed', { state: 'running' }));
+    expect(await ch.isClosed()).toBe(false);
+    ch.track(result);
+    expect(await ch.isClosed()).toBe(true);
+  });
+
+  test('background_tasks_changed replaces the set, healing a missed end edge', async () => {
+    const ch = await setup();
+    ch.track(sys('task_started', { task_id: 'lost', is_backgrounded: true }));
+    ch.track(result);
+    expect(await ch.isClosed()).toBe(false);
+    ch.track(sys('background_tasks_changed', { tasks: [] }));
+    ch.track(sys('session_state_changed', { state: 'idle' }));
+    expect(await ch.isClosed()).toBe(true);
+  });
+
+  test('ambient entries in background_tasks_changed do not keep the channel open', async () => {
+    const ch = await setup();
+    ch.track(sys('background_tasks_changed', { tasks: [{ task_id: 'w', ambient: true }] }));
+    ch.track(result);
     expect(await ch.isClosed()).toBe(true);
   });
 
@@ -142,7 +173,10 @@ describe('SDKClaudeProcess completion with background agents', () => {
       const receive = messageStream({ steerable });
       receive(sys('task_started', { task_id: 'a', is_backgrounded: true }));
       expect(receive({ ...result, total_cost_usd: 1 })).toBeNull();
+      // Idle while the task still runs is only the end of a turn.
+      expect(receive(sys('session_state_changed', { state: 'idle' }))).toBeNull();
       expect(receive({ ...result, total_cost_usd: 2 })).toBeNull();
+      receive(sys('background_tasks_changed', { tasks: [] }));
       expect(receive(sys('session_state_changed', { state: 'idle' }))).toMatchObject({
         ...result,
         total_cost_usd: 2,

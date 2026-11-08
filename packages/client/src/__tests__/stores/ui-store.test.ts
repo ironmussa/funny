@@ -181,6 +181,15 @@ describe('useUIStore', () => {
       expect(state.addProjectOpen).toBe(false);
     });
 
+    test('bumps the compose id so the compose form remounts even on the same route', () => {
+      const before = useUIStore.getState().newThreadComposeId;
+      useUIStore.getState().startNewThread('project-1');
+      useUIStore.getState().startNewThread('project-1');
+      expect(useUIStore.getState().newThreadComposeId).toBe(before + 2);
+      useUIStore.getState().startNewScratchThread();
+      expect(useUIStore.getState().newThreadComposeId).toBe(before + 3);
+    });
+
     test('calls selectProject with the project id', () => {
       useUIStore.getState().startNewThread('project-1');
       expect(mockSelectProject).toHaveBeenCalledWith('project-1');

@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Schema } from '@tiptap/pm/model';
 import { findSuggestionMatch } from '@tiptap/suggestion';
-import { createRef } from 'react';
+import { createRef, StrictMode } from 'react';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
 import {
@@ -88,6 +88,15 @@ describe('PromptEditor', () => {
         value: originalElementFromPoint,
       });
     }
+  });
+
+  test('shows the placeholder while disabled', () => {
+    // Regression: the read-only prompt dock in the thread preparation view
+    // rendered empty because TipTap hides placeholders on non-editable editors.
+    render(<PromptEditor placeholder="Next prompt" disabled />);
+    expect(
+      screen.getByTestId('prompt-editor').querySelector('[data-placeholder="Next prompt"]'),
+    ).not.toBeNull();
   });
 
   test('selects a slash command without fragment conversion errors', async () => {
@@ -192,6 +201,48 @@ describe('PromptEditor', () => {
       );
     });
     expect(onSubmit).not.toHaveBeenCalled();
+  });
+
+  test('selecting a slash command with Enter keeps the text after the caret', async () => {
+    const ref = createRef<PromptEditorHandle>();
+
+    // StrictMode calls state updaters twice. Running the insert from inside one
+    // re-applied the stale range and deleted text after the chip.
+    render(
+      <StrictMode>
+        <PromptEditor
+          ref={ref}
+          sdkSlashCommands={['implement']}
+          commandProvider="codex"
+          onSubmit={vi.fn()}
+        />
+      </StrictMode>,
+    );
+
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    const editorEl = screen.getByTestId('prompt-editor') as HTMLElement & {
+      editor: { commands: { setTextSelection: (pos: number) => boolean } };
+    };
+    act(() => {
+      ref.current?.insertText(' docs/plan.md');
+      // Put the caret back at the start, then type the command before the text.
+      editorEl.editor.commands.setTextSelection(1);
+      ref.current?.insertText('/imple');
+    });
+
+    await screen.findByTestId('slash-item-implement');
+    fireEvent.keyDown(editorEl, { key: 'Enter' });
+
+    await waitFor(() => {
+      const paragraph = ref.current?.getJSON()?.content?.[0];
+      expect(paragraph?.content?.[0]).toEqual(
+        expect.objectContaining({
+          type: 'slashCommand',
+          attrs: expect.objectContaining({ id: 'implement' }),
+        }),
+      );
+    });
+    expect(ref.current?.getText()).toMatch(/ docs\/plan\.md$/);
   });
 });
 

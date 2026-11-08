@@ -46,7 +46,8 @@ export function ThreadStatusPin({
   // Stop showing the "busy" affordances (no pin/unread dot) once the runner
   // drops — the thread is effectively paused, and the user should be able to
   // pin or notice unread messages in the meantime.
-  const isBusy = displayStatus === 'running' || displayStatus === 'setting_up';
+  const isBusy =
+    displayStatus === 'running' || displayStatus === 'setting_up' || displayStatus === 'pending';
   const canPin = !!onPin;
   const showPinRest = canPin && thread.pinned && !isBusy;
   const hideOnHover = canPin ? HIDE_ON_HOVER[hoverGroup] : '';

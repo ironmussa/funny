@@ -50,6 +50,34 @@ interface NewThreadInputProps {
   onCancel?: () => void;
 }
 
+/**
+ * State plus a ref holding the same initial value. Callers write the ref next
+ * to the state, for async callbacks that may close over a stale render.
+ */
+function useStateWithRef<T>(initial: T) {
+  const [value, setValue] = useState(initial);
+  const ref = useRef(initial);
+  return [value, setValue, ref] as const;
+}
+
+/**
+ * Whether the user left this compose form (e.g. Alt+N remounts it) while a
+ * create was still in flight. The thread is still created and listed, but
+ * opening it would yank the user out of whatever they moved on to. Embedded
+ * callers (`onCreated`) still want the id after closing the form, so they
+ * never count as abandoned.
+ */
+function useComposeAttempt(onCreated: NewThreadInputProps['onCreated']) {
+  const abandonedRef = useRef(false);
+  useEffect(() => {
+    abandonedRef.current = false;
+    return () => {
+      abandonedRef.current = true;
+    };
+  }, []);
+  return useCallback(() => abandonedRef.current && !onCreated, [onCreated]);
+}
+
 export function NewThreadInput({
   projectIdOverride,
   isScratchOverride,
@@ -131,11 +159,12 @@ export function NewThreadInput({
     });
 
   const [restoredPrompt, setRestoredPrompt] = useState<string | null>(null);
-  const [submittedPrompt, setSubmittedPrompt] = useState('');
-  // Read by the async onSuccess callback, which may close over a stale render.
-  const submittedPromptRef = useRef('');
-  const [submittedMetadata, setSubmittedMetadata] = useState<PreparationMessageMetadata>();
-  const submittedMetadataRef = useRef<PreparationMessageMetadata>(undefined);
+  // The refs are read by the async onSuccess callback, which may close over a
+  // stale render.
+  const [submittedPrompt, setSubmittedPrompt, submittedPromptRef] = useStateWithRef('');
+  const [submittedMetadata, setSubmittedMetadata, submittedMetadataRef] = useStateWithRef<
+    PreparationMessageMetadata | undefined
+  >(undefined);
   // Pin the "Preparing…" loader from a successful submit until this component
   // unmounts via the navigation onSuccess triggers. The hook flips its local
   // `creating` flag back to false as soon as onSuccess resolves, but react-
@@ -147,6 +176,7 @@ export function NewThreadInput({
   const [submitted, setSubmitted] = useState(false);
   const [workflowSubmitting, setWorkflowSubmitting] = useState(false);
   const [requestPending, setRequestPending] = useState(false);
+  const isAbandoned = useComposeAttempt(onCreated);
 
   const handleThreadCreated = useCallback(
     async (threadId: string, kind: 'scratch' | 'idle' | 'normal', thread: any) => {
@@ -155,26 +185,15 @@ export function NewThreadInput({
       if (kind === 'scratch' || kind === 'normal') {
         justSubmittedRef.current = true;
       }
-      setReviewPaneOpen(false);
+      if (!isAbandoned()) setReviewPaneOpen(false);
 
       if (kind === 'scratch') {
         addScratchThread(thread);
-        finishCreatedThread(
-          threadId,
-          onCreated,
-          cancelNewThread,
-          navigate,
-          buildPath(getThreadRoute(thread)),
-          {
-            pendingPrompt: submittedPromptRef.current,
-            pendingMetadata: submittedMetadataRef.current,
-          },
-        );
-        return;
+      } else {
+        // Idle + normal both refresh the project's thread list.
+        await refreshCreatedProject(effectiveProjectId, kind, loadThreadsForProject);
       }
-
-      // Idle + normal both refresh the project's thread list.
-      await refreshCreatedProject(effectiveProjectId, kind, loadThreadsForProject);
+      if (isAbandoned()) return;
 
       if (kind === 'idle') {
         toast.success(t('toast.threadCreated', { title: thread?.title ?? '' }));
@@ -186,15 +205,12 @@ export function NewThreadInput({
         return;
       }
 
-      // kind === 'normal'
       finishCreatedThread(
         threadId,
         onCreated,
         cancelNewThread,
         navigate,
-        !activeDesignId && effectiveProjectId
-          ? buildPath(`/projects/${effectiveProjectId}/threads/${threadId}`)
-          : undefined,
+        createdThreadPath(kind, threadId, thread, effectiveProjectId, activeDesignId),
         {
           pendingPrompt: submittedPromptRef.current,
           pendingMetadata: submittedMetadataRef.current,
@@ -206,6 +222,7 @@ export function NewThreadInput({
       addScratchThread,
       cancelNewThread,
       effectiveProjectId,
+      isAbandoned,
       loadThreadsForProject,
       navigate,
       onCreated,
@@ -479,6 +496,20 @@ function shouldNavigateAfterCreate(
   hasDesign: boolean,
 ) {
   return !hasCallback && !idleOnly && (scratch || !hasDesign);
+}
+
+/** Where a created scratch or normal thread opens; `undefined` stays in place. */
+function createdThreadPath(
+  kind: 'scratch' | 'normal',
+  threadId: string,
+  thread: Parameters<typeof getThreadRoute>[0],
+  projectId: string | null | undefined,
+  designId: string | null | undefined,
+) {
+  if (kind === 'scratch') return buildPath(getThreadRoute(thread));
+  return !designId && projectId
+    ? buildPath(`/projects/${projectId}/threads/${threadId}`)
+    : undefined;
 }
 
 function finishCreatedThread(

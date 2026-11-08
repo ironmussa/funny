@@ -543,6 +543,23 @@ function SuggestionPopup({
 
 // ── PromptEditor ─────────────────────────────────────────────────
 
+/**
+ * Refs for suggestion state accessed inside closures captured at editor
+ * creation time. The caller keeps them current (in a layout effect).
+ */
+function useSuggestionStateRefs(
+  items: SuggestionItem[],
+  type: SuggestionMenuType | null,
+  query: string,
+  index: number,
+) {
+  const suggestionItemsRef = useRef(items);
+  const suggestionTypeRef = useRef(type);
+  const suggestionQueryRef = useRef(query);
+  const suggestionIndexRef = useRef(index);
+  return { suggestionItemsRef, suggestionTypeRef, suggestionQueryRef, suggestionIndexRef };
+}
+
 export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(function PromptEditor(
   {
     placeholder,
@@ -593,10 +610,8 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   const workflowsLoadingRef = useRef(workflowsLoading);
   const commandProviderRef = useRef(commandProvider);
 
-  // Refs for suggestion state accessed inside closures captured at editor creation time
-  const suggestionItemsRef = useRef(suggestionItems);
-  const suggestionTypeRef = useRef(suggestionType);
-  const suggestionQueryRef = useRef(suggestionQuery);
+  const { suggestionItemsRef, suggestionTypeRef, suggestionQueryRef, suggestionIndexRef } =
+    useSuggestionStateRefs(suggestionItems, suggestionType, suggestionQuery, suggestionIndex);
 
   useLayoutEffect(() => {
     slashSkillsRef.current = slashSkills ?? [];
@@ -610,6 +625,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     suggestionItemsRef.current = suggestionItems;
     suggestionTypeRef.current = suggestionType;
     suggestionQueryRef.current = suggestionQuery;
+    suggestionIndexRef.current = suggestionIndex;
   }, [
     commandProvider,
     cwd,
@@ -617,6 +633,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     sdkSlashCommands,
     slashSkills,
     slashSkillsLoading,
+    suggestionIndex,
     suggestionItems,
     suggestionQuery,
     suggestionType,
@@ -690,16 +707,12 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           return true;
         }
         if (event.key === 'Enter' || event.key === 'Tab') {
-          const items = suggestionItemsRef.current;
-          if (items.length > 0) {
-            // Use setSuggestionIndex to read the latest index, then select
-            setSuggestionIndex((currentIndex) => {
-              const item = items[currentIndex];
-              if (item) {
-                suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
-              }
-              return currentIndex;
-            });
+          // Run the command here, never inside a state updater: React may call
+          // an updater twice (StrictMode, replayed renders), and a second run
+          // re-applies the stale range and deletes the text after the chip.
+          const item = suggestionItemsRef.current[suggestionIndexRef.current];
+          if (item) {
+            suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
           }
           return true;
         }
@@ -1107,7 +1120,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       Text,
       HardBreak,
       History,
-      Placeholder.configure({ placeholder: placeholder ?? '' }),
+      // Keep the hint visible while disabled (e.g. the prompt dock shown
+      // during thread preparation), not just while editable.
+      Placeholder.configure({ placeholder: placeholder ?? '', showOnlyWhenEditable: false }),
       // File mentions (@ trigger)
       Mention.extend({
         name: 'fileMention',

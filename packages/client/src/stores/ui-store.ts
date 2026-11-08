@@ -58,6 +58,12 @@ interface UIState {
   newThreadBaseBranch: string | null;
   /** True when the user is composing a scratch (projectless) thread. */
   newThreadIsScratch: boolean;
+  /**
+   * Bumped on every startNewThread / startNewScratchThread. ThreadView keys the
+   * compose form on it so a new-thread request always opens a fresh form, even
+   * when the URL does not change (e.g. Alt+N while "Preparing…" is showing).
+   */
+  newThreadComposeId: number;
   allThreadsProjectId: string | null;
   automationInboxOpen: boolean;
   addProjectOpen: boolean;
@@ -223,6 +229,7 @@ export const useUIStore = create<UIState>((set) => ({
   newThreadIdleOnly: false,
   newThreadBaseBranch: null,
   newThreadIsScratch: false,
+  newThreadComposeId: 0,
   allThreadsProjectId: null,
   automationInboxOpen: false,
   addProjectOpen: false,
@@ -526,7 +533,8 @@ export const useUIStore = create<UIState>((set) => ({
     // Set the compose flag BEFORE clearing thread selection — the invariant
     // guard subscribes to thread-store changes and would otherwise re-select
     // the previous thread (from a stale URL) before the flag is visible to it.
-    set({
+    set((s) => ({
+      newThreadComposeId: s.newThreadComposeId + 1,
       newThreadProjectId: projectId,
       newThreadIdleOnly: idleOnly ?? false,
       newThreadBaseBranch: baseBranch ?? null,
@@ -536,7 +544,7 @@ export const useUIStore = create<UIState>((set) => ({
       addProjectOpen: false,
       reviewPaneOpen: false,
       testRunnerOpen: false,
-    });
+    }));
     clearSelectedThread();
     useProjectStore.getState().selectProject(projectId);
     persistRightPane(false);
@@ -545,7 +553,8 @@ export const useUIStore = create<UIState>((set) => ({
   startNewScratchThread: () => {
     // Set the compose flag BEFORE clearing thread selection — see note in
     // startNewThread above for why order matters.
-    set({
+    set((s) => ({
+      newThreadComposeId: s.newThreadComposeId + 1,
       newThreadProjectId: null,
       newThreadIdleOnly: false,
       newThreadBaseBranch: null,
@@ -555,7 +564,7 @@ export const useUIStore = create<UIState>((set) => ({
       addProjectOpen: false,
       reviewPaneOpen: false,
       testRunnerOpen: false,
-    });
+    }));
     clearSelectedThread();
     useProjectStore.getState().selectProject(null);
     persistRightPane(false);

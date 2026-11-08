@@ -65,8 +65,12 @@ describe('statusConfig', () => {
     expect(statusConfig.failed.className).toContain('red');
   });
 
-  test('pending has yellow color class', () => {
-    expect(statusConfig.pending.className).toContain('yellow');
+  // setting_up → pending → running is one launch; a different icon for
+  // pending made the spinner flicker off and on while a thread started.
+  test('pending uses the same spinner as setting_up and running', () => {
+    expect(statusConfig.pending.icon).toBe(statusConfig.running.icon);
+    expect(statusConfig.pending.icon).toBe(statusConfig.setting_up.icon);
+    expect(statusConfig.pending.className).toContain('animate-spin');
   });
 });
 

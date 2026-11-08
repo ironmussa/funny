@@ -366,6 +366,30 @@ describe('NewThreadInput', () => {
     });
   });
 
+  test('does not navigate to the created thread after the form was abandoned', async () => {
+    // Regression: Alt+N while "Preparing…" remounts the compose form. The old
+    // in-flight create must not pull the user out of the fresh form.
+    let finishCreate!: (result: unknown) => void;
+    mockCreateIdleThread.mockReturnValueOnce(
+      new Promise((resolve) => {
+        finishCreate = resolve;
+      }),
+    );
+    const { unmount } = renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+    fireEvent.click(screen.getByTestId('mock-workflow-submit'));
+    expect(screen.getByTestId('thread-preparation-view')).toBeInTheDocument();
+
+    unmount();
+    await act(async () => {
+      finishCreate(
+        await okAsync({ id: 'thread-workflow', projectId: 'p1', title: 't', status: 'idle' }),
+      );
+    });
+
+    expect(mockRunWorkflow).toHaveBeenCalled();
+    expect(mockNavigate).not.toHaveBeenCalled();
+  });
+
   test('shows worktree branch preview when worktree mode is enabled', () => {
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
 

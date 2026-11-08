@@ -54,7 +54,7 @@ pub async fn list_worktrees(cwd: String) -> napi::Result<Vec<WorktreeEntry>> {
       // Fail rather than skip: a caller pruning orphan directories would
       // treat a silently omitted worktree as orphaned and delete it.
       let base = proxy.base().map_err(|e| {
-        napi::Error::from_reason(format!("Failed to read worktree {}: {e}", proxy.id()))
+        napi::Error::from_reason(format!("Failed to read worktree {}: {e}", proxy.git_dir().display()))
       })?;
       let (commit, branch) = proxy
         .into_repo_with_possibly_inaccessible_worktree()

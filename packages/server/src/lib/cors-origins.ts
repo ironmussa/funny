@@ -6,6 +6,9 @@ export function resolveCorsOrigins(
   const defaultOrigins = [
     `http://localhost:${devClientPort}`,
     `http://127.0.0.1:${devClientPort}`,
+    // Dev client served over HTTPS/HTTP2 (VITE_HTTPS=true).
+    `https://localhost:${devClientPort}`,
+    `https://127.0.0.1:${devClientPort}`,
     `http://localhost:${serverPort}`,
     `http://127.0.0.1:${serverPort}`,
   ];

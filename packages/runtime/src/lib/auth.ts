@@ -129,7 +129,12 @@ export const auth = betterAuth({
   database: buildAuthDatabase(),
   basePath: '/api/auth',
   secret: getOrCreateSecret(),
-  trustedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
+  trustedOrigins: [
+    'http://localhost:5173',
+    'http://127.0.0.1:5173',
+    'https://localhost:5173',
+    'https://127.0.0.1:5173',
+  ],
   emailAndPassword: {
     enabled: true,
     disableSignUp: true,

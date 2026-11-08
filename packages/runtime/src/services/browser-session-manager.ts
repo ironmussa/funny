@@ -26,6 +26,7 @@ import { join } from 'path';
 import type { ChromeSession } from '@funny/core/chrome';
 import type {
   BrowserSessionClosedReason,
+  BrowserSessionPointerKind,
   WSBrowserSessionInputData,
   WSBrowserSessionResultData,
 } from '@funny/shared';
@@ -47,6 +48,7 @@ import {
   type BrowserProfileKind,
   type BrowserTab,
 } from './browser-automation/browser-host.js';
+import { applyPageAudio, installPageAudio } from './browser-automation/page-audio.js';
 import type { ViewportRecorder } from './browser-automation/recorder.js';
 import { RefGenerations } from './browser-automation/snapshot-refs.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
@@ -119,6 +121,8 @@ export interface BrowserSession {
   panelAttached: boolean;
   lastAgentActivity: number;
   controller: BrowserController;
+  /** Page audio is held muted until the user unmutes it (see `page-audio.ts`). */
+  audioMuted: boolean;
   refs: RefGenerations;
   /** The open JavaScript dialog; the page is frozen until it is answered. */
   pendingDialog: PendingDialog | null;
@@ -174,6 +178,7 @@ function newSessionRecord(init: {
     panelAttached: init.origin === 'panel',
     lastAgentActivity: init.origin === 'agent' ? now : 0,
     controller: 'agent',
+    audioMuted: true,
     refs: new RefGenerations(),
     pendingDialog: null,
     recorder: null,
@@ -255,7 +260,7 @@ function key(type: 'keyDown' | 'keyUp'): PanelInputHandler {
 /** Panel input event → CDP dispatch on the session's tab. */
 type PointerOrKeyKind = Exclude<
   WSBrowserSessionInputData['kind'],
-  'takeControl' | 'releaseControl' | 'dialog'
+  'takeControl' | 'releaseControl' | 'dialog' | 'audio'
 >;
 
 const PANEL_INPUT: Record<PointerOrKeyKind, PanelInputHandler> = {
@@ -296,6 +301,8 @@ class BrowserSessionManager {
       sessionId: s.sessionId,
       url: s.url,
       viewport: s.viewport,
+      controller: s.controller,
+      audioMuted: s.audioMuted,
     });
     this.emit(s, 'browser-session:viewport', { sessionId: s.sessionId, ...s.viewport });
     // A re-attaching panel starts from defaults: restate who controls the page
@@ -312,6 +319,13 @@ class BrowserSessionManager {
         if (frame) this.emit(s, 'browser-session:frame', { sessionId: s.sessionId, ...frame });
       })
       .catch(() => {});
+  }
+
+  /** The page the session shows changed: keep the panel's URL bar on it. */
+  private setUrl(s: BrowserSession, url: string): void {
+    if (url === s.url) return;
+    s.url = url;
+    this.emit(s, 'browser-session:navigated', { sessionId: s.sessionId, url });
   }
 
   private emitDialog(s: BrowserSession): void {
@@ -409,6 +423,11 @@ class BrowserSessionManager {
         onExit: (detail) => this.onHostExit(userId, detail),
       });
       if (result.isErr()) throw result.error;
+      // Safety net: every page of the profile is held muted from its first
+      // script, even one no session tracks (it would play on the runner host).
+      result.value.browser.contexts()[0]?.on('page', (page) => {
+        void installPageAudio(page, () => this.pageAudioMuted(page)).catch(() => {});
+      });
       return result.value;
     })();
     entry.launching = launching;
@@ -611,7 +630,7 @@ class BrowserSessionManager {
   private async startSession(session: BrowserSession, url: string): Promise<void> {
     try {
       await this.attachChromeSession(session, session.tab.targetId);
-      this.watchPage(session, session.tab.page);
+      await this.hookPage(session, session.tab.page);
       if (url) await chromeOf(session).navigate(url);
       await chromeOf(session)
         .execute(INSPECT_HELPERS)
@@ -710,11 +729,35 @@ class BrowserSessionManager {
     if (previous) await previous.disconnect().catch(() => {});
   }
 
+  /** Watch a tab's page and hold its audio at the session's setting. */
+  private async hookPage(s: BrowserSession, page: Page): Promise<void> {
+    this.watchPage(s, page);
+    await installPageAudio(page, () => this.pageAudioMuted(page)).catch((err: unknown) => {
+      log.warn('Could not hook page audio', {
+        namespace: NS,
+        sessionId: s.sessionId,
+        error: errorMessage(err),
+      });
+    });
+  }
+
+  /** Turn the session's page audio on or off (it starts muted). */
+  async setAudioMuted(s: BrowserSession, muted: boolean): Promise<void> {
+    if (s.audioMuted === muted) return;
+    s.audioMuted = muted;
+    await Promise.all([s.tab, ...s.backgroundTabs].map((tab) => applyPageAudio(tab.page, muted)));
+    metric('browser_session.audio_changed', 1, {
+      type: 'sum',
+      attributes: { muted: String(muted) },
+    });
+    this.emit(s, 'browser-session:audio', { sessionId: s.sessionId, muted });
+  }
+
   /** Playwright-side listeners: navigation invalidates refs, dialogs, popups, errors. */
   private watchPage(s: BrowserSession, page: Page): void {
     page.on('framenavigated', (frame) => {
       if (s.tab.page !== page || frame !== page.mainFrame()) return;
-      s.url = frame.url();
+      this.setUrl(s, frame.url());
       s.refs.invalidate('navigation');
     });
     page.on('dialog', (dialog) => {
@@ -744,7 +787,12 @@ class BrowserSessionManager {
       if (s.tab.page === page && s.backgroundTabs.length > 0) void this.restorePreviousTab(s);
     });
     page.on('popup', (popup) => {
-      if (s.tab.page !== page) return;
+      // A background tab's popup stays in the background, but belongs to the
+      // session: it is muted with it and closed by Stop.
+      if (s.tab.page !== page) {
+        void this.adoptBackgroundPopup(s, popup);
+        return;
+      }
       void this.followPopup(s, popup).catch((err) => {
         log.warn('Could not follow popup', {
           namespace: NS,
@@ -755,6 +803,23 @@ class BrowserSessionManager {
     });
   }
 
+  /** Track a popup opened by a background tab, so it is closed with the session. */
+  private async adoptBackgroundPopup(s: BrowserSession, popup: Page): Promise<void> {
+    s.backgroundTabs.push({ page: popup, targetId: '', ephemeralContext: null });
+    log.info('Session adopted a background popup', { namespace: NS, sessionId: s.sessionId });
+    await this.hookPage(s, popup);
+  }
+
+  /** The audio setting of the session that owns a page; pages of no session stay muted. */
+  private pageAudioMuted(page: Page): boolean {
+    for (const s of this.sessions.values()) {
+      if (s.tab.page === page || s.backgroundTabs.some((tab) => tab.page === page)) {
+        return s.audioMuted;
+      }
+    }
+    return true;
+  }
+
   /** Keep one active tab per session: switch the session (and panel) to a popup. */
   private async followPopup(s: BrowserSession, popup: Page): Promise<void> {
     const cdp = await popup.context().newCDPSession(popup);
@@ -763,8 +828,8 @@ class BrowserSessionManager {
     s.backgroundTabs.push(s.tab);
     s.tab = { page: popup, targetId: info.targetInfo.targetId, ephemeralContext: null };
     s.refs.invalidate('navigation');
-    s.url = popup.url();
-    this.watchPage(s, popup);
+    this.setUrl(s, popup.url());
+    await this.hookPage(s, popup);
     await this.attachChromeSession(s, info.targetInfo.targetId);
     log.info('Session followed popup', { namespace: NS, sessionId: s.sessionId, url: s.url });
   }
@@ -779,7 +844,7 @@ class BrowserSessionManager {
       return;
     }
     s.tab = previous;
-    s.url = previous.page.url();
+    this.setUrl(s, previous.page.url());
     s.refs.invalidate('navigation');
     try {
       await this.attachChromeSession(s, previous.targetId);
@@ -803,7 +868,8 @@ class BrowserSessionManager {
     await chromeOf(s)
       .execute(INSPECT_HELPERS)
       .catch(() => {});
-    s.url = url;
+    // The page's own URL, after redirects (the navigation already reported it).
+    this.setUrl(s, s.tab.page.url() || url);
     s.lastHeartbeat = Date.now();
   }
 
@@ -864,6 +930,10 @@ class BrowserSessionManager {
       await this.answerDialog(s, input.accept === true, input.promptText);
       return;
     }
+    if (input.kind === 'audio') {
+      await this.setAudioMuted(s, input.muted !== false);
+      return;
+    }
     const cs = chromeOf(s);
     const handler = PANEL_INPUT[input.kind];
     await this.runExclusive(s, () => handler(cs, input));
@@ -884,6 +954,20 @@ class BrowserSessionManager {
       attributes: { controller },
     });
     this.emit(s, 'browser-session:controller', { sessionId: s.sessionId, controller });
+  }
+
+  /** Tell the panel where the agent's mouse goes (it draws the cursor). */
+  emitPointer(
+    s: BrowserSession,
+    point: { x: number; y: number },
+    kind: BrowserSessionPointerKind,
+  ): void {
+    this.emit(s, 'browser-session:pointer', {
+      sessionId: s.sessionId,
+      x: Math.round(point.x),
+      y: Math.round(point.y),
+      kind,
+    });
   }
 
   /** Accept or dismiss the pending dialog. Returns false when none is open. */

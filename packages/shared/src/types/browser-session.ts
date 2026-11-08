@@ -34,7 +34,9 @@ export type BrowserSessionInputKind =
   /** Shared control: the user hands the session back to the agent. */
   | 'releaseControl'
   /** Answer the pending JavaScript dialog (`accept`, optional `promptText`). */
-  | 'dialog';
+  | 'dialog'
+  /** Turn the page's audio on or off (`muted`). Sessions start muted. */
+  | 'audio';
 
 export interface WSBrowserSessionInputData {
   sessionId: string;
@@ -64,6 +66,8 @@ export interface WSBrowserSessionInputData {
   accept?: boolean;
   /** For `dialog` on a `prompt()`: the text to answer with. */
   promptText?: string;
+  /** For `audio`: mute (true) or unmute (false) the page. */
+  muted?: boolean;
 }
 
 export interface WSBrowserSessionInspectAtData {

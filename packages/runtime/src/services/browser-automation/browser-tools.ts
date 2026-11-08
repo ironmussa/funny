@@ -17,6 +17,7 @@ import {
   resolve as resolvePath,
 } from 'path';
 
+import type { BrowserSessionPointerKind } from '@funny/shared';
 import { ResultAsync } from 'neverthrow';
 import type { Locator, Page } from 'playwright';
 import { z } from 'zod';
@@ -477,7 +478,27 @@ async function centerOf(locator: Locator): Promise<{ x: number; y: number } | nu
   return box ? { x: box.x + box.width / 2, y: box.y + box.height / 2 } : null;
 }
 
+/**
+ * Show the agent's pointer in the panel before a mouse action. A ref is
+ * scrolled into view first, so the point matches where Playwright will press.
+ * Best effort: a missing box leaves the cursor where it was, and the action
+ * reports its own error.
+ */
+async function showPointer(ctx: ActionContext, kind: BrowserSessionPointerKind): Promise<void> {
+  let point: { x: number; y: number } | null = null;
+  if (ctx.target) {
+    point = await ctx.target
+      .scrollIntoViewIfNeeded({ timeout })
+      .then(() => centerOf(ctx.target!))
+      .catch(() => null);
+  } else if (ctx.args.x !== undefined && ctx.args.y !== undefined) {
+    point = { x: ctx.args.x, y: ctx.args.y };
+  }
+  if (point) browserSessionManager.emitPointer(ctx.s, point, kind);
+}
+
 async function clickAction(ctx: ActionContext, clickCount: 1 | 2): Promise<string> {
+  await showPointer(ctx, 'click');
   if (ctx.target) {
     await (clickCount === 2 ? ctx.target.dblclick({ timeout }) : ctx.target.click({ timeout }));
   } else {
@@ -488,6 +509,7 @@ async function clickAction(ctx: ActionContext, clickCount: 1 | 2): Promise<strin
 }
 
 async function hoverAction(ctx: ActionContext): Promise<string> {
+  await showPointer(ctx, 'move');
   if (ctx.target) await ctx.target.hover({ timeout });
   else {
     const p = requirePoint(ctx.args, 'hover');
@@ -532,7 +554,10 @@ async function scrollAction(ctx: ActionContext): Promise<string> {
   } else if (args.x !== undefined && args.y !== undefined) {
     at = { x: args.x, y: args.y };
   }
-  if (at) await page.mouse.move(at.x, at.y);
+  if (at) {
+    browserSessionManager.emitPointer(ctx.s, at, 'move');
+    await page.mouse.move(at.x, at.y);
+  }
   const dx = args.deltaX ?? 0;
   const dy = args.deltaY ?? 0;
   await page.mouse.wheel(dx, dy);
@@ -543,6 +568,9 @@ async function dragAction(ctx: ActionContext): Promise<string> {
   const to = ctx.args.to;
   if (!to) throw new ToolFailure('invalid-arguments', 'drag needs to.');
   if (ctx.target && 'ref' in to) {
+    await showPointer(ctx, 'down');
+    const end = await centerOf(locatorFor(ctx.s, to.ref)).catch(() => null);
+    if (end) browserSessionManager.emitPointer(ctx.s, end, 'up');
     await ctx.target.dragTo(locatorFor(ctx.s, to.ref), { timeout });
     return `Dragged ${ctx.label}.`;
   }
@@ -550,8 +578,10 @@ async function dragAction(ctx: ActionContext): Promise<string> {
   const end = 'ref' in to ? await centerOf(locatorFor(ctx.s, to.ref)) : to;
   if (!start || !end)
     throw new ToolFailure('action-failed', 'Drag source or target is not visible.');
+  browserSessionManager.emitPointer(ctx.s, start, 'down');
   await ctx.page.mouse.move(start.x, start.y);
   await ctx.page.mouse.down();
+  browserSessionManager.emitPointer(ctx.s, end, 'up');
   await ctx.page.mouse.move(end.x, end.y, { steps: 10 });
   await ctx.page.mouse.up();
   return `Dragged ${ctx.label}.`;

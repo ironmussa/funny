@@ -63,6 +63,8 @@ const PAGES: Record<string, string> = {
     <a href="/popup" target="_blank">Open popup</a>
     <button onclick="setTimeout(() => document.body.insertAdjacentHTML('beforeend', '<p>Later</p>'), 300)">Delay</button>`,
   '/done': `<title>Done</title><h1>Welcome</h1>`,
+  '/audio': `<title>Audio</title><audio id="a" loop></audio>
+    <iframe srcdoc="<audio id='b'></audio>"></iframe>`,
   '/popup': `<title>Popup</title><h1>Popup page</h1>`,
   '/upload': `<title>Upload</title><label>File <input type="file" id="f"></label>`,
   // Animated so the screencast keeps sending frames.
@@ -423,6 +425,115 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     expect(path && existsSync(path)).toBe(true);
     rmSync(assetsDir, { recursive: true, force: true });
   }, 120_000);
+
+  test('mouse actions tell the panel where the agent pointer goes', async () => {
+    unwrap(await browserOpen(ctx, { url: `${base}/login` }));
+    const snap = allText(unwrap(await browserSnapshot(ctx, {})));
+    const delay = refOf(snap, /button "Delay"[^\n]*\[ref=(e\d+)\]/);
+    const emitToUser = vi.mocked(wsBroker.emitToUser);
+    const pointers = () =>
+      emitToUser.mock.calls
+        .map(([, event]) => event as unknown as { type: string; data: Record<string, unknown> })
+        .filter((event) => event.type === 'browser-session:pointer')
+        .map((event) => event.data);
+
+    emitToUser.mockClear();
+    unwrap(await browserAct(ctx, { action: 'click', ref: delay }));
+    const [click] = pointers();
+    expect(click).toMatchObject({ sessionId: `thread:${ctx.threadId}`, kind: 'click' });
+    expect(click.x).toBeGreaterThan(0);
+    expect(click.y).toBeGreaterThan(0);
+
+    emitToUser.mockClear();
+    unwrap(await browserAct(ctx, { action: 'hover', x: 40, y: 50 }));
+    expect(pointers()).toEqual([expect.objectContaining({ x: 40, y: 50, kind: 'move' })]);
+  }, 60_000);
+
+  test('navigations tell the panel the new URL', async () => {
+    unwrap(await browserOpen(ctx, { url: `${base}/login` }));
+    const snap = allText(unwrap(await browserSnapshot(ctx, {})));
+    const submit = refOf(snap, /button "Sign in" \[ref=(e\d+)\]/);
+    const emitToUser = vi.mocked(wsBroker.emitToUser);
+    emitToUser.mockClear();
+
+    unwrap(await browserAct(ctx, { action: 'click', ref: submit }));
+    const urls = emitToUser.mock.calls
+      .map(([, event]) => event as unknown as { type: string; data: { url?: string } })
+      .filter((event) => event.type === 'browser-session:navigated')
+      .map((event) => event.data.url);
+    expect(urls).toContainEqual(expect.stringContaining(`${base}/done`));
+  }, 60_000);
+
+  test('page audio starts muted and the panel turns it on and off', async () => {
+    unwrap(await browserOpen(ctx, { url: `${base}/audio` }));
+    const sessionId = `thread:${ctx.threadId}`;
+    const session = browserSessionManager.getOwned(ctx.userId, sessionId)!;
+    expect(session.audioMuted).toBe(true);
+    const mutedState = () =>
+      Promise.all(
+        session.tab.page
+          .frames()
+          .map((frame) =>
+            frame.evaluate(() => (document.querySelector('audio') as HTMLAudioElement).muted),
+          ),
+      );
+    const input = (muted: boolean) =>
+      browserSessionManager.dispatchInput(ctx.userId, sessionId, {
+        sessionId,
+        kind: 'audio',
+        muted,
+      });
+    const emitToUser = vi.mocked(wsBroker.emitToUser);
+    emitToUser.mockClear();
+
+    await input(false);
+    await input(true);
+    // Muting holds every media element, in iframes too.
+    expect(await mutedState()).toEqual([true, true]);
+    await input(false);
+    expect(await mutedState()).toEqual([false, false]);
+    expect(
+      emitToUser.mock.calls
+        .map(([, event]) => event as unknown as { type: string; data: { muted?: boolean } })
+        .filter((event) => event.type === 'browser-session:audio')
+        .map((event) => event.data.muted),
+    ).toEqual([false, true, false]);
+    await input(true);
+  }, 60_000);
+
+  test("a background tab's popup is muted and closed with the session", async () => {
+    const other = { userId: ctx.userId, threadId: 'thread-bg-popup' };
+    unwrap(await browserOpen(other, { url: `${base}/login` }));
+    const session = browserSessionManager.findByThread(other.userId, other.threadId)!;
+    // The link popup becomes the active tab; /login goes to the background.
+    const snap = allText(unwrap(await browserSnapshot(other, {})));
+    unwrap(
+      await browserAct(other, {
+        action: 'click',
+        ref: refOf(snap, /link "Open popup" \[ref=(e\d+)\]/),
+      }),
+    );
+    await expect.poll(() => session.backgroundTabs.length).toBe(1);
+    const background = session.backgroundTabs[0].page;
+
+    await background.evaluate((url) => void window.open(url), `${base}/audio`);
+    await expect.poll(() => session.backgroundTabs.length).toBe(2);
+    const stray = session.backgroundTabs[1].page;
+    await stray.waitForLoadState();
+    await expect
+      .poll(() =>
+        stray.evaluate(() => {
+          const el = document.querySelector('audio') as HTMLAudioElement;
+          void el.play().catch(() => {});
+          return el.muted;
+        }),
+      )
+      .toBe(true);
+
+    await browserSessionManager.close(session.sessionId, 'user');
+    expect(stray.isClosed()).toBe(true);
+    expect(background.isClosed()).toBe(true);
+  }, 60_000);
 
   test('close ends the session', async () => {
     expect(allText(unwrap(await browserClose(ctx)))).toContain('closed');

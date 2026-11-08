@@ -71,3 +71,38 @@ describe('runMigrations — half-applied guard', () => {
     expect(cols).toContain('b');
   });
 });
+
+describe('runMigrations — applied lookup', () => {
+  test('reads applied migrations with one query and runs only the new ones', async () => {
+    const db = makeDb();
+    const ran: string[] = [];
+    const migrations: Migration[] = ['001_a', '002_b', '003_c'].map((name) => ({
+      name,
+      async up() {
+        ran.push(name);
+      },
+    }));
+
+    await runMigrations(db, migrations.slice(0, 2), silentLogger, 'test');
+    expect(ran).toEqual(['001_a', '002_b']);
+
+    const lookups: string[] = [];
+    const spy = new Proxy(db, {
+      get(target, prop, receiver) {
+        const value = Reflect.get(target, prop, receiver);
+        if ((prop === 'get' || prop === 'all') && typeof value === 'function') {
+          return (query: any) => {
+            lookups.push(String(prop));
+            return value.call(target, query);
+          };
+        }
+        return typeof value === 'function' ? value.bind(target) : value;
+      },
+    });
+
+    await runMigrations(spy, migrations, silentLogger, 'test');
+    expect(ran).toEqual(['001_a', '002_b', '003_c']);
+    expect(appliedNames(db)).toEqual(['001_a', '002_b', '003_c']);
+    expect(lookups).toEqual(['all']); // not one `get` per migration
+  });
+});

@@ -6,6 +6,7 @@ export {
   executeShell,
   gitRead,
   gitWrite,
+  gitNetwork,
   SHELL,
   ProcessExecutionError,
   type ProcessResult,

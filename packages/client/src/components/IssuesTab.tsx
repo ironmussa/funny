@@ -295,7 +295,7 @@ function IssueRow({
   const { t } = useTranslation();
   return (
     <div
-      className="group hover:bg-sidebar-accent/50 flex items-start gap-2 px-3 py-2 transition-colors"
+      className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors"
       data-testid={`issue-item-${issue.number}`}
     >
       {issue.state === 'open' ? (
@@ -303,26 +303,18 @@ function IssueRow({
       ) : (
         <CircleCheck className="icon-base mt-0.5 shrink-0 text-purple-500" />
       )}
-      <div className="min-w-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-baseline gap-1.5">
           <a
             href={issue.html_url}
             target="_blank"
             rel="noopener noreferrer"
-            className="hover:text-primary line-clamp-2 text-xs leading-tight font-medium transition-colors"
+            className="hover:text-primary text-foreground line-clamp-2 text-[11px] leading-5 font-medium transition-colors"
           >
             {issue.title}
           </a>
         </div>
-        {issue.body ? (
-          <p
-            className="text-muted-foreground mt-1 line-clamp-3 text-[10px] whitespace-pre-wrap"
-            data-testid={`issue-body-${issue.number}`}
-          >
-            {issue.body}
-          </p>
-        ) : null}
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-muted-foreground text-[10px]">#{issue.number}</span>
           <IssueBadges issue={issue} badgeClassName="h-3.5 text-[9px] leading-none" />
           <span className="text-muted-foreground text-[10px]">
@@ -338,6 +330,14 @@ function IssueRow({
             </span>
           )}
         </div>
+        {issue.body ? (
+          <p
+            className="text-muted-foreground mt-1 line-clamp-3 text-[10px] whitespace-pre-wrap"
+            data-testid={`issue-body-${issue.number}`}
+          >
+            {issue.body}
+          </p>
+        ) : null}
       </div>
 
       {!issue.linkedBranch && (

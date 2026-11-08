@@ -15,8 +15,8 @@ import {
 } from '@/components/pull-requests/PRFilterBar';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
+import { LabelBadge } from '@/components/ui/label-badge';
 import { LoadingState } from '@/components/ui/loading-state';
-import { contrastText, pastelize } from '@/components/ui/project-chip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { applyPRMetadata } from '@/data/git-status/actions';
@@ -102,18 +102,11 @@ function PullRequestRow({
         contentAfterMerge={
           pr.labels.length > 0 ? (
             <div className="flex flex-wrap gap-1">
-              {pr.labels.map((label) => {
-                const bg = pastelize(`#${label.color}`);
-                return (
-                  <span
-                    key={label.name}
-                    className="rounded-full px-1.5 py-0 text-[9px] leading-4 font-medium"
-                    style={{ backgroundColor: bg, color: contrastText(bg) }}
-                  >
-                    {label.name}
-                  </span>
-                );
-              })}
+              {pr.labels.map((label) => (
+                <LabelBadge key={label.name} color={label.color}>
+                  {label.name}
+                </LabelBadge>
+              ))}
             </div>
           ) : null
         }

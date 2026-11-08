@@ -1,8 +1,9 @@
 import type { GitStatusInfo, Thread } from '@funny/shared';
-import { Bot, NotebookPen } from 'lucide-react';
+import { Bot, Globe, NotebookPen } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { PRBadge } from '@/components/PRBadge';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { HighlightText } from '@/components/ui/highlight-text';
@@ -11,6 +12,7 @@ import { useAgentTemplate } from '@/data/templates/hooks';
 import { gitSyncStateConfig } from '@/lib/thread-utils';
 import { canShowPowerline, isScratch } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
+import { useThreadHasLiveBrowser } from '@/stores/browser-live-threads-store';
 
 // ── Row 1: title + badges ────────────────────────────────────────────
 
@@ -86,10 +88,12 @@ export function ThreadItemTitleRow({
   thread,
   search,
   titleBadge,
+  gitStatus,
 }: {
   thread: Thread;
   search?: string;
   titleBadge?: ReactNode;
+  gitStatus?: GitStatusInfo;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-1.5">
@@ -101,6 +105,17 @@ export function ThreadItemTitleRow({
         badgeTestId={`thread-item-attachments-${thread.id}`}
       />
       {titleBadge}
+      {/* The thread's PR sits beside the title, not in the powerline row */}
+      {gitStatus?.prNumber ? (
+        <PRBadge
+          prNumber={gitStatus.prNumber}
+          prState={gitStatus.prState ?? 'OPEN'}
+          prUrl={gitStatus.prUrl}
+          size="compact"
+          className="shrink-0"
+          data-testid={`thread-pr-badge-${thread.id}`}
+        />
+      ) : null}
       {/* External creator icon */}
       <CreatedByIcon createdBy={thread.createdBy} />
       {/* Remote / sandbox runtime badge */}
@@ -241,6 +256,25 @@ function ScratchBadge({ threadId }: { threadId: string }) {
   );
 }
 
+function LiveBrowserIcon({ threadId }: { threadId: string }) {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <span
+          data-testid={`thread-browser-open-${threadId}`}
+          className="text-muted-foreground flex shrink-0 items-center leading-none"
+        >
+          <Globe className="icon-xs" />
+        </span>
+      </TooltipTrigger>
+      <TooltipContent side="top" className="text-xs">
+        {t('thread.browserOpenTooltip', { defaultValue: 'Browser open' })}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
 interface ThreadItemMetaRowProps {
   thread: Thread;
   subtitle?: string;
@@ -257,8 +291,7 @@ interface ThreadItemMetaRowProps {
  * powerline even if older DB rows still carry a stale `branch` value.
  * Instead they get a scratch-pad icon as the row's identifier.
  */
-function hasPowerlineInfo(thread: Thread, subtitle?: string, gitStatus?: GitStatusInfo): boolean {
-  if (gitStatus?.prNumber) return true;
+function hasPowerlineInfo(thread: Thread, subtitle?: string): boolean {
   if (!canShowPowerline(thread)) return false;
   return !!subtitle || !!thread.baseBranch || !!thread.branch;
 }
@@ -267,32 +300,38 @@ function hasPowerlineInfo(thread: Thread, subtitle?: string, gitStatus?: GitStat
 function hasMetaContent(
   showPowerline: boolean,
   scratch: boolean,
+  liveBrowser: boolean,
   { gitStatus, metadataBadge }: ThreadItemMetaRowProps,
 ): boolean {
   return (
-    showPowerline || scratch || !!metadataBadge || (!!gitStatus && gitStatus.state !== 'clean')
+    showPowerline ||
+    scratch ||
+    liveBrowser ||
+    !!metadataBadge ||
+    (!!gitStatus && gitStatus.state !== 'clean')
   );
 }
 
-function resolveMetaRow(props: ThreadItemMetaRowProps) {
-  const { thread, subtitle, gitStatus, contentSnippet, search } = props;
+function resolveMetaRow(props: ThreadItemMetaRowProps, liveBrowser: boolean) {
+  const { thread, subtitle, contentSnippet, search } = props;
   const snippetText = contentSnippet ?? thread.lastAssistantMessage;
   const snippetKind = resolveSnippetKind(thread, snippetText, !!(contentSnippet && search));
   const scratch = isScratch(thread);
-  const showPowerline = hasPowerlineInfo(thread, subtitle, gitStatus);
+  const showPowerline = hasPowerlineInfo(thread, subtitle);
   return {
     snippetText,
     snippetKind,
     scratch,
     showPowerline,
-    visible: snippetKind !== null || hasMetaContent(showPowerline, scratch, props),
+    visible: snippetKind !== null || hasMetaContent(showPowerline, scratch, liveBrowser, props),
   };
 }
 
 /** Row 2: Powerline (project → branch) + Git status + Snippet. */
 export function ThreadItemMetaRow(props: ThreadItemMetaRowProps) {
   const { thread, subtitle, projectColor, projectPath, gitStatus, metadataBadge, search } = props;
-  const row = resolveMetaRow(props);
+  const liveBrowser = useThreadHasLiveBrowser(thread.id);
+  const row = resolveMetaRow(props, liveBrowser);
   if (!row.visible) return null;
 
   return (
@@ -305,12 +344,12 @@ export function ThreadItemMetaRow(props: ThreadItemMetaRowProps) {
           projectTooltip={projectPath}
           gitStatus={gitStatus}
           showDiffStats={false}
+          showPRBadge={false}
           diffStatsSize="xs"
-          prBadgeSize="compact"
-          prBadgeTestId={`thread-pr-badge-${thread.id}`}
           data-testid={`thread-powerline-${thread.id}`}
         />
       )}
+      {liveBrowser && <LiveBrowserIcon threadId={thread.id} />}
       {row.scratch && <ScratchBadge threadId={thread.id} />}
       {metadataBadge}
       <ThreadSnippet kind={row.snippetKind} text={row.snippetText ?? ''} search={search} />

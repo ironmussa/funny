@@ -51,10 +51,15 @@ describe('expandable native diff', () => {
     ).toBeTrue();
     const bounds = root.renderer.getElementBounds(truncated!.id);
     expect(bounds).not.toBeNull();
-    root.renderer.nativeSimulateClick(
-      bounds!.x + bounds!.width / 2,
-      bounds!.y + bounds!.height - 8,
-    );
+    // The Show more row follows the last painted line, but the element can be
+    // taller than its rows (it stretches to the test root), so a fixed offset
+    // from its bottom edge may land in empty space. Probe upward through real
+    // GPUI hit testing until the row is hit; other rows ignore the click.
+    const isExpanded = () =>
+      root.renderer.findByTestId('diff')?.customProps?.maxLines === undefined;
+    for (let y = bounds!.y + bounds!.height - 4; y > bounds!.y && !isExpanded(); y -= 6) {
+      root.renderer.nativeSimulateClick(bounds!.x + bounds!.width / 2, y);
+    }
 
     expect(root.renderer.findByTestId('diff')?.customProps?.maxLines).toBeUndefined();
     expect(

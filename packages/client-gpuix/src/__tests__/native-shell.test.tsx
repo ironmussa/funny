@@ -170,6 +170,8 @@ describe('native read-only shell', () => {
         status: 'idle',
       } as never,
     ]);
+    // Without a ready status the app stays on "Restoring session…".
+    application.statusState.setState({ phase: 'ready', error: null });
     application.workspaceState.getState().selectThread(fixture.threadId);
     application.gitStatusState.getState().replace([
       {

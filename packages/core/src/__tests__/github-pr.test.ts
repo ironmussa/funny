@@ -147,6 +147,9 @@ describe('lookupPRForBranch', () => {
 
     mockExecute.mockResolvedValueOnce({ exitCode: 0, stdout: 'not json', stderr: '' });
     expect((await lookupPRForBranch('/repo', 'feature/x')).isErr()).toBe(true);
+
+    mockExecute.mockResolvedValueOnce({ exitCode: 0, stdout: '  \n', stderr: '' });
+    expect((await lookupPRForBranch('/repo', 'feature/x')).isErr()).toBe(true);
   });
 
   test('getPRForBranch keeps reporting failures as no PR', async () => {

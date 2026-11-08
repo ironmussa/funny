@@ -263,7 +263,9 @@ export function lookupPRForBranch(
     if (result.exitCode !== 0) {
       return errAsync(processError('gh pr list failed', result.exitCode, result.stderr));
     }
-    if (!result.stdout.trim()) return okAsync(null);
+    // `--json` prints `[]` when there is no PR: empty output is a failure,
+    // not a confirmed "no PR" a cache could keep.
+    if (!result.stdout.trim()) return errAsync(internal('gh pr list returned no output'));
     const parsed = parseStoredJson(GH_PR_LIST_SCHEMA, result.stdout, 'gh pr list');
     if (!parsed.ok) return errAsync(internal(parsed.error));
     const expectedHeadRef = branchHeadRefName(branch);

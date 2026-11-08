@@ -1806,6 +1806,39 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    // Every foreign key below had no index, so its lookups (automation run by
+    // thread, org membership by user, comments/stage history by thread, …)
+    // scanned the table, and each ON DELETE CASCADE from threads, projects,
+    // users and organizations scanned every child table. The threads lookups
+    // by session_id / external_request_id also run on the runner data channel's
+    // ownership checks. Found by checking PRAGMA foreign_key_list against
+    // PRAGMA index_list on a fully migrated database.
+    name: '089_index_foreign_keys_and_thread_lookups',
+    async up() {
+      const indexes: Array<[name: string, table: string, column: string]> = [
+        ['idx_automation_runs_thread', 'automation_runs', 'thread_id'],
+        ['idx_automation_runs_automation', 'automation_runs', 'automation_id'],
+        ['idx_automations_project', 'automations', 'project_id'],
+        ['idx_thread_comments_thread', 'thread_comments', 'thread_id'],
+        ['idx_stage_history_thread', 'stage_history', 'thread_id'],
+        ['idx_startup_commands_project', 'startup_commands', 'project_id'],
+        ['idx_pipelines_project', 'pipelines', 'project_id'],
+        ['idx_project_hooks_project', 'project_hooks', 'project_id'],
+        ['idx_session_user', 'session', 'user_id'],
+        ['idx_account_user', 'account', 'user_id'],
+        ['idx_member_user', 'member', 'user_id'],
+        ['idx_member_organization', 'member', 'organization_id'],
+        ['idx_invitation_inviter', 'invitation', 'inviter_id'],
+        ['idx_invitation_organization', 'invitation', 'organization_id'],
+        ['idx_threads_session', 'threads', 'session_id'],
+        ['idx_threads_external_request', 'threads', 'external_request_id'],
+      ];
+      for (const [name, table, column] of indexes) {
+        await ctx().exec(sql.raw(`CREATE INDEX IF NOT EXISTS ${name} ON ${table} (${column})`));
+      }
+    },
+  },
 ];
 
 /**

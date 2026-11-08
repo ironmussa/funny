@@ -9,9 +9,11 @@
  * DB-agnostic tool call repository. Accepts db + schema via dependency injection.
  */
 
-import { eq, and, isNull, inArray, desc } from 'drizzle-orm';
+import { eq, and, isNull, inArray, desc, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
 
+import { parseStoredJson } from '../json-validation.js';
 import type { RepoDeps } from './deps.js';
 
 export type ToolCallRepositoryDeps = RepoDeps;
@@ -93,12 +95,22 @@ export function createToolCallRepository(deps: ToolCallRepositoryDeps) {
   /**
    * Get unique file paths touched by file-modifying tool calls (Write, Edit, NotebookEdit)
    * for a given thread. Queries ALL tool calls regardless of message pagination.
+   *
+   * A Write's input holds the whole file, so only the first bytes of each input
+   * are read: the path is a leading top-level key in practice. A row whose
+   * prefix does not settle it (path after a large value, or truncated) falls
+   * back to its full input, so the result matches parsing every input.
    */
   async function getTouchedFiles(threadId: string): Promise<string[]> {
     const FILE_MODIFYING_TOOLS = ['Write', 'Edit', 'NotebookEdit'];
-    const rows = await dbAll(
+    const rows = await dbAll<{ id: string; head: string | null }>(
       db
-        .select({ input: schema.toolCalls.input })
+        .select({
+          id: schema.toolCalls.id,
+          head: sql<
+            string | null
+          >`substr(${schema.toolCalls.input}, 1, ${sql.raw(String(TOUCHED_FILE_PREFIX_CHARS))})`,
+        })
         .from(schema.toolCalls)
         .innerJoin(schema.messages, eq(schema.toolCalls.messageId, schema.messages.id))
         .where(
@@ -110,14 +122,24 @@ export function createToolCallRepository(deps: ToolCallRepositoryDeps) {
     );
 
     const paths = new Set<string>();
+    const unresolved: string[] = [];
     for (const row of rows) {
-      if (!row.input) continue;
-      try {
-        const parsed = JSON.parse(row.input);
-        const fp = parsed.file_path ?? parsed.notebook_path ?? null;
+      if (!row.head) continue;
+      const fromPrefix = touchedPathFromPrefix(row.head);
+      if (fromPrefix === undefined) unresolved.push(row.id);
+      else if (fromPrefix) paths.add(fromPrefix);
+    }
+
+    for (let i = 0; i < unresolved.length; i += 500) {
+      const full = await dbAll<{ input: string | null }>(
+        db
+          .select({ input: schema.toolCalls.input })
+          .from(schema.toolCalls)
+          .where(inArray(schema.toolCalls.id, unresolved.slice(i, i + 500))),
+      );
+      for (const row of full) {
+        const fp = touchedPathFromInput(row.input);
         if (fp) paths.add(fp);
-      } catch {
-        // skip invalid JSON
       }
     }
     return Array.from(paths).sort();
@@ -131,4 +153,43 @@ export function createToolCallRepository(deps: ToolCallRepositoryDeps) {
     findLastUnansweredInteractiveToolCall,
     getTouchedFiles,
   };
+}
+
+/** The path keys of a tool input; every other key passes through unchecked. */
+const TOOL_INPUT_PATHS = z
+  .object({ file_path: z.unknown().optional(), notebook_path: z.unknown().optional() })
+  .passthrough();
+
+/** Leading characters of a tool input read to find its file path. */
+const TOUCHED_FILE_PREFIX_CHARS = 1024;
+
+const JSON_STRING = String.raw`"(?:[^"\\]|\\.)*"`;
+const JSON_SCALAR = String.raw`(?:${JSON_STRING}|-?\d[\d.eE+-]*|true|false|null)`;
+/** `{` followed by any leading flat `"key": scalar,` pairs, then a path key. */
+const LEADING_PATH_KEY = new RegExp(
+  String.raw`^\s*\{\s*(?:${JSON_STRING}\s*:\s*${JSON_SCALAR}\s*,\s*)*?"(file_path|notebook_path)"\s*:\s*(${JSON_STRING})`,
+);
+
+/**
+ * The file path from the start of a tool input, or `undefined` when the
+ * prefix cannot settle it and the full input must be parsed. Only flat
+ * top-level pairs are walked, so a key inside a nested value never matches.
+ */
+function touchedPathFromPrefix(head: string): string | null | undefined {
+  const match = LEADING_PATH_KEY.exec(head);
+  if (!match) return undefined;
+  // file_path wins over notebook_path, as in the full parse: if notebook_path
+  // came first, file_path might still follow.
+  if (match[1] === 'notebook_path') return undefined;
+  const value = parseStoredJson(z.string(), match[2], 'tool input path');
+  if (!value.ok) return undefined;
+  return value.value || null;
+}
+
+function touchedPathFromInput(input: string | null): string | null {
+  if (!input) return null;
+  const parsed = parseStoredJson(TOOL_INPUT_PATHS, input, 'tool input');
+  if (!parsed.ok) return null; // skip invalid JSON
+  const fp = parsed.value.file_path ?? parsed.value.notebook_path ?? null;
+  return typeof fp === 'string' && fp ? fp : null;
 }

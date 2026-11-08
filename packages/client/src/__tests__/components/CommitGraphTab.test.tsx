@@ -694,6 +694,81 @@ describe('inferRebaseCopyLinks', () => {
     expect(missingOriginal).toEqual([]);
     expect(missingTarget).toEqual([]);
   });
+
+  test('links cherry-picked copies that left no rebase in the reflog', () => {
+    const commit = (hash: string, committedAt: string, overrides = {}) => ({
+      hash,
+      shortHash: hash.slice(0, 4),
+      authorEmail: 'dev@example.com',
+      authoredAt: 1_762_210_111,
+      committedAt,
+      message: 'feat(client): add the data layer',
+      parentHashes: ['parent'],
+      ...overrides,
+    });
+
+    const links = inferRebaseCopyLinks(
+      [],
+      [
+        commit('copy-2', '2026-11-05T10:00:00Z'),
+        commit('copy-1', '2026-11-04T10:00:00Z'),
+        commit('orig', '2026-11-03T10:00:00Z'),
+        commit('other-author', '2026-11-04T11:00:00Z', { authorEmail: 'else@example.com' }),
+        commit('other-date', '2026-11-04T12:00:00Z', { authoredAt: 1_762_210_112 }),
+        commit('merge', '2026-11-04T13:00:00Z', { parentHashes: ['a', 'b'] }),
+      ],
+    );
+
+    expect(links.map((link) => [link.event, link.sourceHash, link.targetHash])).toEqual([
+      [null, 'orig', 'copy-1'],
+      [null, 'orig', 'copy-2'],
+    ]);
+  });
+
+  test('prefers the reflog pair over an inferred one for the same copy', () => {
+    const commit = (hash: string, committedAt: string) => ({
+      hash,
+      authorEmail: 'dev@example.com',
+      authoredAt: 1_762_210_111,
+      committedAt,
+      message: 'feature one',
+      parentHashes: ['parent'],
+    });
+    const event = {
+      id: 'rebase-1',
+      kind: 'rebase' as const,
+      label: 'rebase',
+      branch: 'feature',
+      onto: 'main',
+      startedAt: null,
+      finishedAt: null,
+      startHash: null,
+      startShortHash: null,
+      finishHash: null,
+      finishShortHash: null,
+      completed: true,
+      steps: [],
+      commitHashes: ['new-one'],
+      commitPairs: [
+        {
+          originalHash: 'old-one',
+          originalShortHash: 'old1',
+          rebasedHash: 'new-one',
+          rebasedShortHash: 'new1',
+          subject: 'feature one',
+        },
+      ],
+    };
+
+    const links = inferRebaseCopyLinks(
+      [event],
+      [commit('new-one', '2026-11-04T10:00:00Z'), commit('old-one', '2026-11-03T10:00:00Z')],
+    );
+
+    expect(links.map((link) => [link.event?.id, link.sourceHash, link.targetHash])).toEqual([
+      ['rebase-1', 'old-one', 'new-one'],
+    ]);
+  });
 });
 
 describe('rebaseEventScopeLabel', () => {

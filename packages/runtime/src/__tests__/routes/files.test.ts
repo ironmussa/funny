@@ -11,6 +11,7 @@ import { mkdirSync, writeFileSync, symlinkSync, mkdtempSync, rmSync, realpathSyn
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import { getNativeGit } from '@funny/core/git';
 import { signMediaClaim } from '@funny/shared/auth/media-url-signature';
 import { deriveRunnerForwardingKey, deriveRunnerMediaKey } from '@funny/shared/auth/runner-keys';
 import { Hono } from 'hono';
@@ -162,6 +163,11 @@ describe('files routes — per-user temp assets scope', () => {
   });
 });
 
+// Blame is native-only (no CLI fallback, see core/git/blame.ts). A checkout
+// without the built @funny/native-git addon, such as a fresh worktree, gets
+// a 500 by design; CI builds the addon before the runtime suite.
+const nativeGitAvailable = getNativeGit() !== null;
+
 describe('files routes — git blame', () => {
   let repoDir: string;
   let outsideDir: string;
@@ -262,22 +268,25 @@ describe('files routes — git blame', () => {
     }
   });
 
-  test('GET /blame attributes every committed line to the commit that added it', async () => {
-    const tracked = join(repoDir, 'tracked.ts');
-    const res = await app.request(`/blame?path=${encodeURIComponent(tracked)}`);
-    expect(res.status).toBe(200);
-    const body = (await res.json()) as {
-      hunks: Array<{ startLine: number; lineCount: number; author: string; commitHash: string }>;
-      blamedLineCount: number;
-    };
-    expect(body.blamedLineCount).toBe(3);
-    expect(body.hunks.length).toBeGreaterThanOrEqual(1);
-    // The whole file came from one commit, so the hunks cover lines 1..3.
-    const coveredLines = body.hunks.reduce((n, h) => n + h.lineCount, 0);
-    expect(coveredLines).toBe(3);
-    expect(body.hunks[0].author).toBe('Blame Tester');
-    expect(body.hunks[0].commitHash).toMatch(/^[0-9a-f]{40}$/);
-  });
+  test.skipIf(!nativeGitAvailable)(
+    'GET /blame attributes every committed line to the commit that added it',
+    async () => {
+      const tracked = join(repoDir, 'tracked.ts');
+      const res = await app.request(`/blame?path=${encodeURIComponent(tracked)}`);
+      expect(res.status).toBe(200);
+      const body = (await res.json()) as {
+        hunks: Array<{ startLine: number; lineCount: number; author: string; commitHash: string }>;
+        blamedLineCount: number;
+      };
+      expect(body.blamedLineCount).toBe(3);
+      expect(body.hunks.length).toBeGreaterThanOrEqual(1);
+      // The whole file came from one commit, so the hunks cover lines 1..3.
+      const coveredLines = body.hunks.reduce((n, h) => n + h.lineCount, 0);
+      expect(coveredLines).toBe(3);
+      expect(body.hunks[0].author).toBe('Blame Tester');
+      expect(body.hunks[0].commitHash).toMatch(/^[0-9a-f]{40}$/);
+    },
+  );
 
   test('GET /blame denies a symlink that escapes the project scope', async () => {
     const escape = join(repoDir, 'escape.txt');

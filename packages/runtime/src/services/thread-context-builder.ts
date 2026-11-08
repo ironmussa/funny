@@ -26,15 +26,19 @@ const MAX_CONTEXT_MESSAGES = 40;
 const MAX_CONTEXT_LENGTH = 200_000;
 
 export async function buildThreadContext(threadId: string): Promise<string | null> {
-  const threadData = await tm.getThreadWithMessages(threadId);
+  // Only the most recent messages are used (avoids OOM in the agent
+  // subprocess), so only those are fetched: loading the whole history over the
+  // runner tunnel just to drop most of it was the old cost.
+  const threadData = await tm.getThreadWithMessages(threadId, MAX_CONTEXT_MESSAGES);
   if (!threadData || !threadData.messages.length) {
     return null;
   }
 
-  // Only keep the most recent messages to avoid OOM in the agent subprocess
-  const allMessages = threadData.messages;
-  const truncated = allMessages.length > MAX_CONTEXT_MESSAGES;
-  const messages = truncated ? allMessages.slice(-MAX_CONTEXT_MESSAGES) : allMessages;
+  const loaded = threadData.messages;
+  const messages =
+    loaded.length > MAX_CONTEXT_MESSAGES ? loaded.slice(-MAX_CONTEXT_MESSAGES) : loaded;
+  const total: number = Math.max(threadData.total ?? loaded.length, loaded.length);
+  const truncated = total > messages.length;
 
   const parts: string[] = [];
 
@@ -44,7 +48,7 @@ export async function buildThreadContext(threadId: string): Promise<string | nul
   );
   if (truncated) {
     parts.push(
-      `[NOTE: Showing last ${MAX_CONTEXT_MESSAGES} of ${allMessages.length} messages. Earlier messages were omitted to save memory.]`,
+      `[NOTE: Showing last ${messages.length} of ${total} messages. Earlier messages were omitted to save memory.]`,
     );
   }
   parts.push('');

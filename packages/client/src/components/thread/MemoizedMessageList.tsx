@@ -169,6 +169,8 @@ export const MemoizedMessageList = memo(
 
     const rowBottomKey = `${threadId}:${Math.round(listScrollMargin)}`;
     const prevRowBottomKeyRef = useRef(rowBottomKey);
+    // Signature seen by the last measurement pass; null until the first one.
+    const prevRowsSignatureRef = useRef<string | null>(null);
 
     usePretextWarmup(groupedItems, fontConfig);
 
@@ -282,6 +284,23 @@ export const MemoizedMessageList = memo(
         setMeasuredContentBottom((prev) => (prev === 0 ? prev : 0));
         measureRowsEvent();
       }
+
+      // While a reply streams in, rows are only appended: existing rows keep
+      // their keys and indices, so their cached sizes stay valid and the
+      // virtualizer measures the new rows through measureElement. A full reset
+      // (measure() plus a getBoundingClientRect of every mounted row, up to
+      // three times) on each new row was the per-update layout cost on long
+      // threads. Anything else (a row inserted, removed or re-keyed) still
+      // resets.
+      const previousSignature = prevRowsSignatureRef.current;
+      prevRowsSignatureRef.current = virtualRowsSignature;
+      const appendedOnly =
+        !layoutChanged &&
+        !rowBottomChanged &&
+        previousSignature !== null &&
+        previousSignature !== '' &&
+        virtualRowsSignature.startsWith(`${previousSignature}\n`);
+      if (appendedOnly) return;
 
       let secondRafId: number | null = null;
       const firstRafId = requestAnimationFrame(() => {

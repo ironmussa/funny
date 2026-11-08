@@ -831,6 +831,37 @@ describe('MemoizedMessageList virtualization', () => {
     expect(virtualizerMockState.lastOptions.estimateSize(0)).toBe(480);
   });
 
+  test('appending rows while a reply streams does not reset every measured row', async () => {
+    const flushFrames = () => act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    const { rerender } = render(<Harness messages={makeMessages(4)} />);
+    await flushFrames();
+    virtualizerMockState.measureCalls = 0;
+
+    rerender(<Harness messages={makeMessages(6)} />);
+    await flushFrames();
+
+    expect(virtualizerMockState.measureCalls).toBe(0);
+  });
+
+  test('a row inserted before existing rows still resets the measurements', async () => {
+    const flushFrames = () => act(() => new Promise((resolve) => setTimeout(resolve, 50)));
+    const messages = makeMessages(4);
+    const { rerender } = render(<Harness messages={messages} />);
+    await flushFrames();
+    virtualizerMockState.measureCalls = 0;
+
+    const inserted = {
+      id: 'm-earlier',
+      role: 'assistant',
+      content: 'an earlier message',
+      timestamp: new Date(1700000000500).toISOString(),
+    };
+    rerender(<Harness messages={[messages[0], inserted, ...messages.slice(1)]} />);
+    await flushFrames();
+
+    expect(virtualizerMockState.measureCalls).toBeGreaterThan(0);
+  });
+
   test('reserves observed row overflow beyond the virtualizer total estimate', async () => {
     virtualizerMockState.start = 0;
     virtualizerMockState.visibleCount = 2;

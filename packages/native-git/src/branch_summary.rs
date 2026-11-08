@@ -73,7 +73,8 @@ pub async fn get_branch_summary(
     // the branch tip (i.e. branch tip is reachable from base).
     let merge_base_id = repo
       .merge_base(base_id, branch_id)
-      .map_err(|e| napi::Error::from_reason(format!("Failed to compute merge base: {e}")))?;
+      .map_err(|e| napi::Error::from_reason(format!("Failed to compute merge base: {e}")))?
+      .ok_or_else(|| napi::Error::from_reason("Failed to compute merge base: no common ancestor"))?;
     let is_merged_into_base = merge_base_id == branch_id.detach();
 
     // Diff the merge-base tree against the branch tip tree to mirror the

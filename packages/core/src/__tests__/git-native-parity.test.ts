@@ -18,6 +18,7 @@ import {
   getCommitFileDiff,
   getCommitFiles,
   getCommittedBranchSummary,
+  getDiff,
   getDiffSummary,
   getFullContextFileDiff,
   getLog,
@@ -258,6 +259,70 @@ describe.skipIf(!nativeAvailable)('native vs CLI parity', () => {
       expect(n.additions ?? 0).toBe(c.additions ?? 0);
       expect(n.deletions ?? 0).toBe(c.deletions ?? 0);
     }
+  });
+
+  test('getDiffSummary: staged deletion and staged+unstaged changes on one file', async () => {
+    const repo = initRepo();
+    writeFileSync(resolve(repo, 'both.txt'), 'x\n');
+    writeFileSync(resolve(repo, 'gone.txt'), 'g1\ng2\n');
+    mkdirSync(resolve(repo, 'dir'), { recursive: true });
+    writeFileSync(resolve(repo, 'dir', 'nested-gone.txt'), 'n\n');
+    commitAll(repo, 'initial');
+
+    // MM: stage one change, then change the worktree again.
+    writeFileSync(resolve(repo, 'both.txt'), 'x\ny\n');
+    executeSync('git', ['add', 'both.txt'], { cwd: repo });
+    writeFileSync(resolve(repo, 'both.txt'), 'x\ny\nz\n');
+    // D in the index (no longer an index entry, so not in the worktree status either).
+    executeSync('git', ['rm', '-q', 'gone.txt', 'dir/nested-gone.txt'], { cwd: repo });
+
+    const cli = await runCli(() => getDiffSummary(repo));
+    const native = await runNative(() => getDiffSummary(repo));
+    if (!cli.isOk() || !native.isOk()) throw new Error('getDiffSummary failed');
+
+    const rows = (xs: typeof cli.value.files) =>
+      xs.map((f) => `${f.staged ? 'S' : 'U'} ${f.status} ${f.path} +${f.additions}-${f.deletions}`);
+    expect(rows(cli.value.files).sort()).toEqual([
+      'S deleted dir/nested-gone.txt +0-1',
+      'S deleted gone.txt +0-2',
+      'S modified both.txt +1-0',
+    ]);
+    // Same entries in the same order (staged first), so `maxFiles` truncates alike.
+    expect(rows(native.value.files)).toEqual(rows(cli.value.files));
+    expect(native.value.total).toBe(cli.value.total);
+  });
+
+  test('getDiffSummary: a staged rename shows as delete + add on both paths', async () => {
+    const repo = initRepo();
+    writeFileSync(resolve(repo, 'old.txt'), 'r1\nr2\nr3\nr4\n');
+    commitAll(repo, 'initial');
+    executeSync('git', ['mv', 'old.txt', 'new.txt'], { cwd: repo });
+
+    const cli = await runCli(() => getDiffSummary(repo));
+    const native = await runNative(() => getDiffSummary(repo));
+    if (!cli.isOk() || !native.isOk()) throw new Error('getDiffSummary failed');
+
+    const rows = (xs: typeof cli.value.files) =>
+      xs.map((f) => `${f.staged ? 'S' : 'U'} ${f.status} ${f.path} +${f.additions}-${f.deletions}`);
+    expect(rows(cli.value.files)).toEqual(['S added new.txt +4-0', 'S deleted old.txt +0-4']);
+    expect(rows(native.value.files)).toEqual(rows(cli.value.files));
+  });
+
+  test('getDiff (CLI): a staged rename lists both files with their diffs', async () => {
+    const repo = initRepo();
+    writeFileSync(resolve(repo, 'old.txt'), 'r1\nr2\n');
+    commitAll(repo, 'initial');
+    executeSync('git', ['mv', 'old.txt', 'new.txt'], { cwd: repo });
+
+    const result = await runCli(() => getDiff(repo));
+    if (!result.isOk()) throw new Error('getDiff failed');
+    const files = result.value.map((d) => ({
+      key: `${d.staged ? 'S' : 'U'} ${d.status} ${d.path}`,
+      diff: d.diff,
+    }));
+    expect(files.map((f) => f.key)).toEqual(['S added new.txt', 'S deleted old.txt']);
+    expect(files[0].diff).toContain('+r1');
+    expect(files[1].diff).toContain('-r1');
   });
 
   test('getDiffSummary: clean repo returns no files', async () => {

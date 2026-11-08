@@ -333,7 +333,14 @@ export function createEventsHandler(
           ...(request.event.occurredAt ? { occurredAt: request.event.occurredAt } : {}),
         };
         const result = await receipts.accept(
-          { runnerId: context.principal.runnerId, scope, sequence },
+          {
+            runnerId: context.principal.runnerId,
+            scope,
+            sequence,
+            // Only the default applyEvent is known to write nothing for
+            // transient events; a custom one keeps the transactional path.
+            durable: event.durability >= 2 || options.applyEvent !== undefined,
+          },
           () => applyEvent(context, event),
         );
         if (result.kind === 'accepted') publishEvent(context, event);

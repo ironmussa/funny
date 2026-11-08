@@ -39,6 +39,10 @@ function reservePort(): number {
   return port;
 }
 
+/** A cold server boot on a fresh DB runs every migration; Windows CI runners
+ * have taken over 10 s for it, so leave room. */
+const SERVER_START_TIMEOUT_MS = 30_000;
+
 async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 10_000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
@@ -46,6 +50,18 @@ async function waitFor(predicate: () => boolean | Promise<boolean>, timeoutMs = 
     await Bun.sleep(40);
   }
   throw new Error(`Condition was not met within ${timeoutMs}ms`);
+}
+
+/** Read a stream to the end in the background, keeping only its last bytes. */
+function drainTail(stream: ReadableStream<Uint8Array>, keep = 8_192): () => string {
+  let tail = '';
+  void (async () => {
+    const decoder = new TextDecoder();
+    for await (const chunk of stream) {
+      tail = (tail + decoder.decode(chunk, { stream: true })).slice(-keep);
+    }
+  })().catch(() => undefined);
+  return () => tail || '(empty)';
 }
 
 async function startServer(options: {
@@ -75,17 +91,27 @@ async function startServer(options: {
       RUNNER_GRPC_ENABLED: 'false',
     },
     stdout: 'ignore',
-    stderr: 'ignore',
+    // Kept (last few KB) so a failed start says why; drained continuously so
+    // a chatty server never blocks on a full pipe.
+    stderr: 'pipe',
   });
   processes.push(child);
-  await waitFor(async () => {
-    if (child.exitCode !== null) throw new Error(`Funny server exited with ${child.exitCode}`);
-    try {
-      return (await fetch(`${origin}/api/health`)).ok;
-    } catch {
-      return false;
-    }
-  });
+  const stderrTail = drainTail(child.stderr);
+  try {
+    await waitFor(async () => {
+      if (child.exitCode !== null) throw new Error(`Funny server exited with ${child.exitCode}`);
+      try {
+        return (await fetch(`${origin}/api/health`)).ok;
+      } catch {
+        return false;
+      }
+    }, SERVER_START_TIMEOUT_MS);
+  } catch (error) {
+    throw new Error(
+      `${(error as Error).message} while starting the Funny server. Server stderr:\n${stderrTail()}`,
+      { cause: error },
+    );
+  }
   return child;
 }
 
@@ -194,5 +220,6 @@ describe('native client with a local Funny server', () => {
     restored.composition.transport.dispose();
     first.composition.transport.dispose();
     await stopServer(server);
-  }, 30_000);
+    // Two cold server starts plus the flow itself.
+  }, 90_000);
 });

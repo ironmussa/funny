@@ -8,6 +8,7 @@ import { loadSync } from '@grpc/proto-loader';
 
 import { resolveRunnerGrpcConfig } from '../../services/grpc/config.js';
 import type { EventReceiptStore } from '../../services/grpc/event-receipts.js';
+import type { EventsHandlerOptions } from '../../services/grpc/events-handler.js';
 import { SqlOperationIdempotencyStore } from '../../services/grpc/operation-idempotency.js';
 import {
   startRunnerGrpcEndpoint,
@@ -140,6 +141,8 @@ function runnerHello(overrides: Record<string, unknown> = {}): Record<string, un
 
 class MemoryEventReceiptStore implements EventReceiptStore {
   private readonly cursors = new Map<string, bigint>();
+  /** The `durable` flag of every accept call, in order. */
+  readonly durableFlags: Array<boolean | undefined> = [];
 
   constructor(initial: Record<string, bigint> = {}) {
     for (const [executionId, sequence] of Object.entries(initial)) {
@@ -156,9 +159,11 @@ class MemoryEventReceiptStore implements EventReceiptStore {
       runnerId: string;
       scope: { threadId: string; executionId: string };
       sequence: bigint;
+      durable?: boolean;
     },
     apply: () => Promise<void>,
   ) {
+    this.durableFlags.push(input.durable);
     const key = `${input.runnerId}\0${input.scope.executionId}`;
     const highestContiguousSequence = this.cursors.get(key) ?? 0n;
     if (input.sequence <= highestContiguousSequence) {
@@ -1350,5 +1355,55 @@ describe('runner gRPC operations stream', () => {
       failure: { code: 'FAILURE_CODE_DEADLINE_EXCEEDED' },
     });
     stream.cancel();
+  });
+});
+
+describe('runner gRPC events stream — receipt durability', () => {
+  async function sendEvents(durabilities: string[], events: EventsHandlerOptions) {
+    endpoint = await startRunnerGrpcEndpoint({
+      config: config(),
+      dependencies: {
+        authenticateRunner: async () => 'runner-1',
+        getRunnerUserId: async () => 'user-1',
+      },
+      events,
+    });
+    client = createClient(endpoint!.port);
+    const control = client.control(metadata('good-token'));
+    const hello = nextMessage(control);
+    control.write({ hello: runnerHello() });
+    await hello;
+    const stream = client.events(metadata('good-token'));
+    for (const [index, durability] of durabilities.entries()) {
+      const reply = nextMessage(stream);
+      stream.write({
+        session: { sessionEpoch: '1' },
+        scope: { threadId: 'thread-1', executionId: 'execution-1' },
+        sequence: String(index + 1),
+        event: { eventType: 'agent:chunk', data: { fields: {} }, durability },
+      });
+      expect(await reply).toMatchObject({
+        accepted: { highestContiguousSequence: String(index + 1) },
+      });
+    }
+  }
+
+  test('marks only transient events of the default applyEvent as non-durable', async () => {
+    const receipts = new MemoryEventReceiptStore();
+    await sendEvents(['EVENT_DURABILITY_TRANSIENT', 'EVENT_DURABILITY_TRANSIENT'], {
+      receipts,
+      authorizeThread: async () => true,
+    });
+    expect(receipts.durableFlags).toEqual([false, false]);
+  });
+
+  test('a custom applyEvent keeps every event on the transactional path', async () => {
+    const receipts = new MemoryEventReceiptStore();
+    await sendEvents(['EVENT_DURABILITY_TRANSIENT'], {
+      receipts,
+      authorizeThread: async () => true,
+      applyEvent: async () => {},
+    });
+    expect(receipts.durableFlags).toEqual([true]);
   });
 });

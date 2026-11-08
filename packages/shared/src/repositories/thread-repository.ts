@@ -52,49 +52,37 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
 
   /**
    * Fetch the last non-empty assistant message snippet for a batch of thread IDs.
-   * Uses Drizzle with MAX(timestamp) subquery -- works on both SQLite and PostgreSQL.
+   *
+   * One correlated subquery per thread walks `idx_messages_thread_timestamp`
+   * backwards and stops at the first non-empty assistant row, usually after
+   * one or two rows. The previous MAX(timestamp) GROUP BY read the full
+   * `content` of every assistant message of every listed thread to evaluate
+   * `content <> ''`. Works on both SQLite and PostgreSQL.
    */
   async function getLastAssistantSnippets(threadIds: string[]): Promise<Map<string, string>> {
     if (threadIds.length === 0) return new Map();
 
-    // Single JOIN query — avoids large OR expression trees that hit SQLite's depth limit (1000)
-    const latestSq = db
-      .select({
-        threadId: schema.messages.threadId,
-        maxTs: sql<string>`MAX(${schema.messages.timestamp})`.as('max_ts'),
-      })
-      .from(schema.messages)
-      .where(
-        and(
-          inArray(schema.messages.threadId, threadIds),
-          eq(schema.messages.role, 'assistant'),
-          ne(schema.messages.content, ''),
-        ),
-      )
-      .groupBy(schema.messages.threadId)
-      .as('latest');
-
-    const rows = await dbAll<{ threadId: string; content: string }>(
+    // `"threads"."id"` is spelled out: inside a select Drizzle renders the
+    // column unqualified, which the subquery would resolve to `m.id`.
+    const snippet = sql<string | null>`(
+      SELECT substr(m.content, 1, ${sql.raw(String(SNIPPET_MAX_LENGTH))})
+      FROM messages m
+      WHERE m.thread_id = "threads"."id"
+        AND m.role = 'assistant'
+        AND m.content <> ''
+      ORDER BY m.timestamp DESC
+      LIMIT 1
+    )`;
+    const rows = await dbAll<{ threadId: string; content: string | null }>(
       db
-        .select({
-          threadId: schema.messages.threadId,
-          content: schema.messages.content,
-        })
-        .from(schema.messages)
-        .innerJoin(
-          latestSq,
-          and(
-            eq(schema.messages.threadId, latestSq.threadId),
-            eq(schema.messages.timestamp, latestSq.maxTs),
-          ),
-        ) as any,
+        .select({ threadId: schema.threads.id, content: snippet.as('content') })
+        .from(schema.threads)
+        .where(inArray(schema.threads.id, threadIds)) as any,
     );
 
     const map = new Map<string, string>();
     for (const row of rows) {
-      if (!map.has(row.threadId)) {
-        map.set(row.threadId, row.content.slice(0, SNIPPET_MAX_LENGTH));
-      }
+      if (row.content) map.set(row.threadId, row.content.slice(0, SNIPPET_MAX_LENGTH));
     }
     return map;
   }

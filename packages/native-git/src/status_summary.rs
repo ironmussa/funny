@@ -425,7 +425,9 @@ pub async fn get_status_summary(
           let branch_ref_name = format!("refs/heads/{}", branch);
           if let Ok(branch_ref) = project_repo.find_reference(&branch_ref_name) {
             if let Ok(branch_id) = branch_ref.into_fully_peeled_id() {
-              if let Ok(mb_id) = project_repo.merge_base(base_id, branch_id) {
+              // `None` (no common ancestor) falls through, like the error
+              // the pre-0.90 API returned for it.
+              if let Ok(Some(mb_id)) = project_repo.merge_base(base_id, branch_id) {
                 return Ok(mb_id != branch_id.detach());
               }
             }

@@ -156,13 +156,15 @@ function isTunnelTimeout(tunnelErr: unknown): boolean {
 
 /** Map a tunnel response onto an HTTP Response for the browser. */
 function toBrowserResponse(tunnelResp: RunnerResponse): Response {
-  // A binary response (image, video, PDF…) arrives base64-encoded so its
-  // bytes survive the JSON ack — decode it back to raw bytes here. A text
-  // response (the common JSON API payload) is passed through verbatim.
+  // Relayed requests stream the runner's bytes straight through (no full
+  // buffer, no base64 round trip). Otherwise a binary response (image, video,
+  // PDF…) arrives base64-encoded so its bytes survive the JSON ack — decode it
+  // back to raw bytes here — and a text response is passed through verbatim.
   const tunnelBody =
-    tunnelResp.bodyEncoding === 'base64' && tunnelResp.body != null
+    tunnelResp.bodyStream ??
+    (tunnelResp.bodyEncoding === 'base64' && tunnelResp.body != null
       ? Buffer.from(tunnelResp.body, 'base64')
-      : tunnelResp.body;
+      : tunnelResp.body);
 
   // Security M5: filter runner response headers on the tunnel path too —
   // Leaving it unfiltered would let a malicious runner
@@ -341,7 +343,9 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
     signal: c.req.raw.signal,
   };
 
+  // The OAuth callback parses the runner's body, so it keeps the buffered path.
   if (isOAuthCallback) return handleOAuthCallback(c, url, access, presence, sink, request);
+  request.streamBody = true;
 
   const requester = runnerActor({
     userId: userId!,

@@ -131,6 +131,24 @@ export declare function getLog(
   limit?: number | undefined | null,
 ): Promise<Array<GitLogEntry>>;
 
+/**
+ * Cheap, in-process fingerprint of the git state that a thread's status
+ * summary depends on, apart from working-tree edits:
+ *
+ * - `HEAD`: the symbolic ref it points to and the commit it resolves to.
+ * - `refs/remotes/origin/<branch>` and the configured upstream of the
+ *   checked-out branch (remote presence, ahead/behind).
+ * - Each ref in `extra_refs` (e.g. the base branch and its remote, for
+ *   ahead-of-base / merged checks).
+ * - The modification time and size of the repository's index file.
+ *
+ * The git watcher compares fingerprints to emit `git:changed` only for the
+ * threads whose state actually moved, instead of recomputing the full status
+ * of every thread in the project on any `.git/` change. The format is opaque:
+ * callers must only compare two fingerprints for equality.
+ */
+export declare function getRefFingerprint(cwd: string, extraRefs: Array<string>): Promise<string>;
+
 export declare function getRemoteUrl(cwd: string): Promise<string | null>;
 
 export declare function getSingleFileDiff(
@@ -204,6 +222,13 @@ export interface ListFilesOptions {
  */
 export declare function listUnmergedFiles(cwd: string): Promise<Array<string>>;
 
+/**
+ * List the main worktree followed by every linked worktree (sorted by path),
+ * like `git worktree list --porcelain`, without spawning git. Linked worktrees
+ * whose directory is gone are still listed, as git does.
+ */
+export declare function listWorktrees(cwd: string): Promise<Array<WorktreeEntry>>;
+
 /** Simple ping function to verify the native module loads correctly. */
 export declare function ping(): string;
 
@@ -219,4 +244,16 @@ export interface StashFileEntry {
   path: string;
   additions: number;
   deletions: number;
+}
+
+/** One entry of `git worktree list --porcelain`. */
+export interface WorktreeEntry {
+  path: string;
+  /**
+   * Commit `HEAD` resolves to; empty when it cannot be read (unborn branch,
+   * worktree whose git dir is gone).
+   */
+  commit: string;
+  /** Short branch name; `None` when `HEAD` is detached. */
+  branch?: string;
 }

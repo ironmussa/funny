@@ -7,13 +7,22 @@ export interface RunnerRequest {
   body?: string | Uint8Array | null;
   signal?: AbortSignal;
   deadlineAt?: number;
+  /**
+   * Hand the response body over as it arrives (`bodyStream`) instead of
+   * collecting it into `body`. For callers that relay the body unread (the
+   * HTTP proxy); callers that parse it leave this off.
+   */
+  streamBody?: boolean;
 }
 
 export interface RunnerResponse {
   status: number;
   headers: Record<string, string>;
+  /** The whole body; empty when `bodyStream` is set. */
   body: string;
   bodyEncoding?: 'utf8' | 'base64';
+  /** Raw body bytes as they arrive, when the request asked for `streamBody`. */
+  bodyStream?: ReadableStream<Uint8Array>;
 }
 
 export interface RunnerRequestPort {

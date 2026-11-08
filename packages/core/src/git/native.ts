@@ -21,6 +21,13 @@ export interface NativeGitStatusSummary {
   linesDeleted: number;
 }
 
+export interface NativeWorktreeEntry {
+  path: string;
+  commit: string;
+  /** Short branch name; absent when HEAD is detached. */
+  branch?: string;
+}
+
 export interface NativeGitLogEntry {
   hash: string;
   shortHash: string;
@@ -126,6 +133,8 @@ interface NativeGitModule {
   getStashFileDiff(cwd: string, stashRef: string, filePath: string): Promise<string>;
   checkIgnore(cwd: string, paths: string[]): Promise<string[]>;
   listUnmergedFiles(cwd: string): Promise<string[]>;
+  getRefFingerprint(cwd: string, extraRefs: string[]): Promise<string>;
+  listWorktrees(cwd: string): Promise<NativeWorktreeEntry[]>;
   getBranchSummary(
     cwd: string,
     baseBranch: string,
@@ -142,6 +151,7 @@ const lightPool = createConcurrencyLimiter(20);
 let _native: NativeGitModule | null = null;
 let _pooled: PooledNativeGitModule | null = null;
 let _attempted = false;
+let nativeLoadError: string | null = null;
 
 /** Pooled wrapper that throttles native calls to avoid I/O saturation. */
 export interface PooledNativeGitModule {
@@ -175,6 +185,8 @@ export interface PooledNativeGitModule {
   getStashFileDiff(cwd: string, stashRef: string, filePath: string): Promise<string>;
   checkIgnore(cwd: string, paths: string[]): Promise<string[]>;
   listUnmergedFiles(cwd: string): Promise<string[]>;
+  getRefFingerprint(cwd: string, extraRefs: string[]): Promise<string>;
+  listWorktrees(cwd: string): Promise<NativeWorktreeEntry[]>;
   getBranchSummary(
     cwd: string,
     baseBranch: string,
@@ -207,6 +219,8 @@ function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
     getStashFileDiff: (...args) => heavyPool(() => mod.getStashFileDiff(...args)),
     checkIgnore: (...args) => lightPool(() => mod.checkIgnore(...args)),
     listUnmergedFiles: (...args) => lightPool(() => mod.listUnmergedFiles(...args)),
+    getRefFingerprint: (...args) => lightPool(() => mod.getRefFingerprint(...args)),
+    listWorktrees: (...args) => lightPool(() => mod.listWorktrees(...args)),
     getBranchSummary: (...args) => heavyPool(() => mod.getBranchSummary(...args)),
     blameFile: (...args) => lightPool(() => mod.blameFile(...args)),
   };
@@ -225,10 +239,27 @@ export function getNativeGit(): PooledNativeGitModule | null {
     _native = require('@funny/native-git') as NativeGitModule;
     _pooled = createPooledModule(_native);
     // native git module loaded successfully
-  } catch {
+  } catch (error) {
     _native = null;
     _pooled = null;
     // native module not available, CLI fallback will be used
+    nativeLoadError = error instanceof Error ? error.message : String(error);
   }
   return _pooled;
+}
+
+export type NativeGitStatus =
+  | { state: 'loaded' }
+  | { state: 'disabled' }
+  | { state: 'unavailable'; error: string };
+
+/**
+ * Whether the gitoxide module is in use. Attempts the load if it has not
+ * happened yet, so callers can report the outcome at startup instead of the
+ * CLI fallback kicking in silently.
+ */
+export function getNativeGitStatus(): NativeGitStatus {
+  if (process.env.FUNNY_DISABLE_NATIVE_GIT === '1') return { state: 'disabled' };
+  if (getNativeGit()) return { state: 'loaded' };
+  return { state: 'unavailable', error: nativeLoadError ?? 'unknown error' };
 }

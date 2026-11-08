@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing';
 
 import { FileTree } from '../file-tree';
+import { buildFileTreeRows } from '../file-tree-model';
 import { fileTreeWindowSizeForViewport } from '../file-tree-window';
 
 describe('native file tree window', () => {
@@ -31,7 +32,14 @@ describe('native file tree window', () => {
 
     const list = root.renderer.findByType('virtual-list')[0];
     expect(list?.children).toHaveLength(fileTreeWindowSizeForViewport(500, 1_001));
-    root.renderer.scrollToItem(list!.id, 901);
+    // Rows sort by name, so `file-900.ts` is not row 901 (`file-10` sorts before
+    // `file-2`). Scroll to the row it really is on; assuming 901 left it just
+    // above the retained window and failed on every native renderer.
+    const target = buildFileTreeRows(files, new Set()).findIndex(
+      (row) => row.path === 'src/file-900.ts',
+    );
+    expect(target).toBeGreaterThan(800);
+    root.renderer.scrollToItem(list!.id, target);
     root.renderer.flush();
     root.renderer.dispatchNativeEvents();
     root.renderer.flush();

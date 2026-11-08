@@ -65,6 +65,8 @@ export function VirtualThreadList({
     estimateSize: () => ROW_ESTIMATE_PX,
     getItemKey: (index) => threads[index]?.id ?? index,
     overscan: 10,
+    // Re-render on scroll through React's scheduler, not a blocking flushSync.
+    useFlushSync: false,
   });
 
   useEffect(() => {

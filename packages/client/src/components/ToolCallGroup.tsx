@@ -14,6 +14,8 @@ export interface ToolCallItem {
   input: string | Record<string, unknown>;
   output?: string;
   author?: string;
+  /** ISO timestamp of when this tool call was executed */
+  timestamp?: string;
 }
 
 export interface ToolCallGroupProps {

@@ -30,6 +30,15 @@ export interface ThreadViewProps {
   onReady?: () => void;
 }
 
+/**
+ * The compose form, keyed on `newThreadComposeId`: every new-thread request
+ * opens a fresh form, even when the route does not change.
+ */
+function FreshNewThreadInput() {
+  const composeId = useUIStore((s) => s.newThreadComposeId);
+  return <NewThreadInput key={composeId} />;
+}
+
 export function ThreadView({ onReady }: ThreadViewProps = {}) {
   const { t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
@@ -59,7 +68,7 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   if (newThreadIsScratch && !activeThreadId) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <NewThreadInput />
+        <FreshNewThreadInput />
       </div>
     );
   }
@@ -69,7 +78,7 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
   if (newThreadProjectId && !activeThreadId) {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
-        <NewThreadInput />
+        <FreshNewThreadInput />
       </div>
     );
   }
@@ -78,7 +87,7 @@ export function ThreadView({ onReady }: ThreadViewProps = {}) {
     if (selectedProjectId && hasProjects) {
       return (
         <div className="flex h-full min-w-0 flex-1 flex-col">
-          <NewThreadInput />
+          <FreshNewThreadInput />
         </div>
       );
     }

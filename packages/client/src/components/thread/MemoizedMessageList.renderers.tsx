@@ -2,6 +2,7 @@ import type { ThreadEvent } from '@funny/shared';
 import { useContext, useMemo } from 'react';
 
 import { getItemKey, type RenderItem, type ToolItem } from '@/lib/render-items';
+import { useThreadById } from '@/lib/thread-selectors';
 import { turnOutcomesFromEvents } from '@/lib/turn-outcomes-from-events';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -89,6 +90,7 @@ function ToolItemRenderer({
               input={call.input}
               output={call.output}
               author={call.author}
+              timestamp={call.timestamp}
               childToolCalls={call['_childToolCalls']}
               hideLabel
               onRespond={
@@ -256,13 +258,15 @@ export function UserMessageRenderer({
  * stopped — the status tail's stopped card (with Continue) shows it then.
  */
 function StoppedOutcomeRow({ event }: { event: ThreadEvent }) {
-  const shownByTail = useThreadStore((s) => {
-    const thread = s.threadDataById[event.threadId];
-    if (thread?.status !== 'stopped') return false;
-    const latest = thread.threadEvents?.findLast((e) => e.type === 'turn_outcome');
-    return latest?.id === event.id;
-  });
-  if (shownByTail) return null;
+  // Status comes from the thread row: the payload's copy is a load-time
+  // snapshot and stays `running` after a live stop, which doubled the card.
+  const isStopped = useThreadById(event.threadId)?.status === 'stopped';
+  const isLatestOutcome = useThreadStore(
+    (s) =>
+      s.threadDataById[event.threadId]?.threadEvents?.findLast((e) => e.type === 'turn_outcome')
+        ?.id === event.id,
+  );
+  if (isStopped && isLatestOutcome) return null;
   let completedAt: string | undefined;
   try {
     completedAt = JSON.parse(event.data as string)?.completedAt;

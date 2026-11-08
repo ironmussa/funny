@@ -150,15 +150,15 @@ export function getObservedBlockSize(entry: ResizeObserverEntry | undefined) {
   return 'blockSize' in size ? size.blockSize : size[0]?.blockSize;
 }
 
-export function getElementBottomRelativeToContainer(
-  element: HTMLElement,
-  container: HTMLElement | null,
-) {
-  if (!container) return undefined;
-  if (!container.contains(element)) return undefined;
-  const elementRect = element.getBoundingClientRect();
-  const containerRect = container.getBoundingClientRect();
-  return elementRect.bottom - containerRect.top;
+/**
+ * Bottom of a mounted row relative to the item container, from the offset the
+ * row was rendered at (`data-row-offset`, the same value as its translateY).
+ * Reads no layout, so measuring a row never forces a synchronous reflow.
+ */
+export function getRowBottomFromRenderedOffset(element: HTMLElement, height: number) {
+  if (!element.isConnected) return undefined;
+  const offset = Number(element.dataset.rowOffset);
+  return Number.isFinite(offset) ? offset + height : undefined;
 }
 
 export function buildFallbackVirtualItems(

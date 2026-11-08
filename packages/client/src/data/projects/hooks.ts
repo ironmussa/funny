@@ -4,6 +4,7 @@ import { useLiveQuery } from '@tanstack/react-db';
 import { useMemo } from 'react';
 
 import { useDataLayer } from '../hooks';
+import { liveQueryKey } from '../live-query-key';
 import { compareProjects, getProjectsData } from './store';
 
 /**
@@ -16,7 +17,10 @@ const NO_PROJECTS: Project[] = [];
 /** Every project of the session, in list order. */
 export function useProjects(): Project[] {
   const data = getProjectsData(useDataLayer());
-  const { data: rows } = useLiveQuery((q) => q.from({ project: data.collection }));
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('projects:useProjects', data.collection),
+    query: (q) => q.from({ project: data.collection }),
+  });
   return useMemo(() => {
     if (!rows || rows.length === 0) return NO_PROJECTS;
     return rows.map((row) => data.fromRow(row as Project)).sort(compareProjects(data));
@@ -26,9 +30,10 @@ export function useProjects(): Project[] {
 export function useProjectById(projectId: string | null | undefined): Project | undefined {
   const data = getProjectsData(useDataLayer());
   const id = projectId ?? '';
-  const { data: rows } = useLiveQuery((q) =>
-    q.from({ project: data.collection }).where(({ project }) => eq(project.id, id)),
-  );
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('projects:useProjectById', data.collection, id),
+    query: (q) => q.from({ project: data.collection }).where(({ project }) => eq(project.id, id)),
+  });
   const row = rows?.[0] as Project | undefined;
   return useMemo(() => (row ? data.fromRow(row) : undefined), [row, data]);
 }

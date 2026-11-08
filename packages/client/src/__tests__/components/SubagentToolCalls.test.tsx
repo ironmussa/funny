@@ -84,6 +84,36 @@ describe('Subagent tool calls', () => {
     expect(screen.queryByText('First result')).not.toBeInTheDocument();
   });
 
+  test('grouped subagent commands show their own time', () => {
+    const minutesAgo = (m: number) => new Date(Date.now() - m * 60_000).toISOString();
+    renderWithProviders(
+      <ToolCallCard
+        name="Agent"
+        input={{ description: 'Inspect dependencies' }}
+        childToolCalls={[
+          {
+            id: 'first',
+            name: 'Bash',
+            input: { command: 'echo first' },
+            timestamp: minutesAgo(20),
+          },
+          {
+            id: 'second',
+            name: 'Bash',
+            input: { command: 'echo second' },
+            timestamp: minutesAgo(5),
+          },
+        ]}
+      />,
+    );
+
+    const group = screen.getByRole('button', { name: /Run Command.*×2/ });
+    expect(group).toHaveTextContent('20m');
+    fireEvent.click(group);
+    expect(screen.getByRole('button', { name: /echo first/ })).toHaveTextContent('20m');
+    expect(screen.getByRole('button', { name: /echo second/ })).toHaveTextContent('5m');
+  });
+
   test.each(['Task', 'Agent'])(
     '%s keeps agent icons in groups and cards with hidden labels',
     (name) => {

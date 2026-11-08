@@ -50,6 +50,7 @@ const renderTask: CardRenderer = ({
           key={`group-${item.name}-${item.calls.map((call) => call.id).join('-')}`}
           name={item.name}
           calls={item.calls}
+          timestamp={item.calls[0]?.timestamp}
           renderCall={renderToolCall}
         />
       ) : (

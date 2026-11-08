@@ -4,6 +4,7 @@ import { useLiveQuery } from '@tanstack/react-db';
 import { useMemo } from 'react';
 
 import { useDataLayer, useDataQuery } from '../hooks';
+import { liveQueryKey } from '../live-query-key';
 import { fetchTemplateUsage, TEMPLATE_USAGE_KEY } from './loaders';
 import { compareTemplates, getTemplatesData } from './store';
 
@@ -15,7 +16,10 @@ const NO_USAGE: Record<string, number> = {};
 /** Every template of the session, in list order (built-ins last). */
 export function useAgentTemplates(): AgentTemplate[] {
   const data = getTemplatesData(useDataLayer());
-  const { data: rows } = useLiveQuery((q) => q.from({ template: data.collection }));
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('templates:useAgentTemplates', data.collection),
+    query: (q) => q.from({ template: data.collection }),
+  });
   return useMemo(() => {
     if (!rows || rows.length === 0) return NO_TEMPLATES;
     return rows.map((row) => data.fromRow(row as AgentTemplate)).sort(compareTemplates(data));
@@ -25,9 +29,11 @@ export function useAgentTemplates(): AgentTemplate[] {
 export function useAgentTemplate(templateId: string | null | undefined): AgentTemplate | undefined {
   const data = getTemplatesData(useDataLayer());
   const id = templateId ?? '';
-  const { data: rows } = useLiveQuery((q) =>
-    q.from({ template: data.collection }).where(({ template }) => eq(template.id, id)),
-  );
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('templates:useAgentTemplate', data.collection, id),
+    query: (q) =>
+      q.from({ template: data.collection }).where(({ template }) => eq(template.id, id)),
+  });
   const row = rows?.[0] as AgentTemplate | undefined;
   return useMemo(() => (row ? data.fromRow(row) : undefined), [row, data]);
 }

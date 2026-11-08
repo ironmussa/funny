@@ -52,4 +52,18 @@ describe('buildThreadContext', () => {
     expect(context).not.toContain('USER:\nmessage-0\n');
     expect(context).toContain('USER:\nmessage-40\n');
   });
+
+  test('fetches only the recent window and reports the thread total', async () => {
+    getThreadWithMessages.mockResolvedValue({
+      total: 500,
+      messages: Array.from({ length: 40 }, (_, index) => ({
+        role: 'user',
+        content: `message-${460 + index}`,
+      })),
+    });
+    const context = await buildThreadContext('thread');
+    expect(getThreadWithMessages).toHaveBeenCalledWith('thread', 40);
+    expect(context).toContain('Showing last 40 of 500 messages');
+    expect(context).toContain('USER:\nmessage-499\n');
+  });
 });

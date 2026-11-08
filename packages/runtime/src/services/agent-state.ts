@@ -48,6 +48,22 @@ export class AgentStateTracker {
    */
   readonly cliToDbMsgId = new Map<string, Map<string, string>>();
 
+  /**
+   * Assistant message DB IDs this process inserted, per thread. Every tool
+   * call under such a message was inserted by this process and recorded in
+   * `processedToolUseIds` (both are dropped together in `cleanupThread`), so
+   * the DB duplicate check for re-sent tool_use blocks can be skipped for
+   * them: it only matters for messages from before a runner restart.
+   */
+  readonly ownMessageIds = new Map<string, Set<string>>();
+
+  /**
+   * Tool name per DB tool call ID, per thread, recorded when the tool call is
+   * inserted or found. Lets tool_result handling skip a server round trip to
+   * learn the name. Inputs are not kept (a Write input is a whole file).
+   */
+  readonly toolCallNames = new Map<string, Map<string, string>>();
+
   /** Threads waiting for user input (AskUserQuestion / ExitPlanMode) */
   readonly pendingUserInput = new Map<string, WaitingReason>();
 
@@ -112,6 +128,26 @@ export class AgentStateTracker {
     }
   }
 
+  markOwnMessage(threadId: string, messageId: string): void {
+    let ids = this.ownMessageIds.get(threadId);
+    if (!ids) this.ownMessageIds.set(threadId, (ids = new Set()));
+    ids.add(messageId);
+  }
+
+  isOwnMessage(threadId: string, messageId: string): boolean {
+    return this.ownMessageIds.get(threadId)?.has(messageId) ?? false;
+  }
+
+  rememberToolCall(threadId: string, toolCallId: string, name: string): void {
+    let names = this.toolCallNames.get(threadId);
+    if (!names) this.toolCallNames.set(threadId, (names = new Map()));
+    names.set(toolCallId, name);
+  }
+
+  toolCallName(threadId: string, toolCallId: string): string | undefined {
+    return this.toolCallNames.get(threadId)?.get(toolCallId);
+  }
+
   /**
    * Clear stale state when starting a new agent run.
    * processedToolUseIds and cliToDbMsgId are intentionally preserved
@@ -136,6 +172,8 @@ export class AgentStateTracker {
     this.completedEmitted.delete(threadId);
     this.currentAssistantMsgId.delete(threadId);
     this.processedToolUseIds.delete(threadId);
+    this.ownMessageIds.delete(threadId);
+    this.toolCallNames.delete(threadId);
     this.cliToDbMsgId.delete(threadId);
     this.pendingUserInput.delete(threadId);
     this.pendingPermissionRequest.delete(threadId);

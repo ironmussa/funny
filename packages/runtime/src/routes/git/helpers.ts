@@ -7,15 +7,18 @@
 
 import { git, gitRead, type BranchPRInfo, type GitIdentityOptions } from '@funny/core/git';
 import { badRequest, type DomainError } from '@funny/shared/errors';
+import type { Context } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
 
+import { metric } from '../../lib/telemetry.js';
 import {
   GIT_STATUS_CACHE_TTL_MS,
   gitRuntimeService,
   gitStatusCache,
 } from '../../services/git-runtime-service.js';
 import { wsBroker } from '../../services/ws-broker.js';
-import { requireProject } from '../../utils/route-helpers.js';
+import type { HonoEnv } from '../../types/hono-env.js';
+import { requireProject, requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
 import { requireWorkingDirectory } from '../../utils/working-directory.js';
 
 // computeBranchKey is imported from utils/git-status-helpers.ts
@@ -67,6 +70,41 @@ export function invalidateGitStatusCacheByProject(projectId: string) {
   gitRuntimeService.invalidateProjectStatus(projectId);
 }
 
+/** Coalesces change notices from one project's summaries (a bulk status can refresh many). */
+const STATUS_CHANGE_DEBOUNCE_MS = 250;
+const pendingStatusChanges = new Map<string, { threadId: string; timer: Timer }>();
+
+/**
+ * `onChanged` for `getStatusSummary`: a read may return a stale summary while a
+ * newer one is computed in the background. When the newer one differs, drop
+ * the project's bulk status (it was built from the stale summary) and hint the
+ * client to refetch — the same `git:refs-updated` path a background fetch uses.
+ */
+export function notifyStatusChanged(userId: string, projectId: string, threadId = '') {
+  return () => {
+    // Counts stale summaries that turned out wrong: how often SWR served old data.
+    metric('git.status.stale_changed', 1, { attributes: { projectId } });
+    const key = `${userId}|${projectId}`;
+    const pending = pendingStatusChanges.get(key);
+    if (pending) {
+      // Several threads changed: the hint stays project-wide.
+      if (pending.threadId !== threadId) pending.threadId = '';
+      return;
+    }
+    const timer = setTimeout(() => {
+      const fired = pendingStatusChanges.get(key);
+      pendingStatusChanges.delete(key);
+      gitRuntimeService.invalidateProjectStatus(projectId);
+      wsBroker.emitToUser(userId, {
+        type: 'git:refs-updated',
+        threadId: fired?.threadId ?? threadId,
+        data: { projectId, changed: ['status'] },
+      });
+    }, STATUS_CHANGE_DEBOUNCE_MS);
+    pendingStatusChanges.set(key, { threadId, timer });
+  };
+}
+
 /**
  * Throttled background `git fetch`. Returns immediately; the network fetch runs
  * detached so /api/git/status responses aren't blocked by remote round-trips.
@@ -115,6 +153,32 @@ export async function requireProjectCwd(
   const projectResult = await requireProject(projectId, userId, organizationId ?? undefined);
   if (projectResult.isErr()) return projectResult.map(() => '');
   return requireWorkingDirectory(projectResult.value.path);
+}
+
+/** Working directory of the route's `:projectId`, for the requesting user and organization. */
+export function requireProjectCwdFromContext(
+  c: Context<HonoEnv>,
+): Promise<Result<string, DomainError>> {
+  return requireProjectCwd(
+    c.req.param('projectId') as string,
+    c.get('userId') as string,
+    c.get('organizationId'),
+  );
+}
+
+/**
+ * Working directory of the route's `:threadId`, for the requesting user.
+ * Steer sharees are allowed (thread-sharing-steer): use it only on routes on
+ * the steer allow-list.
+ */
+export function requireSteerableThreadCwdFromContext(
+  c: Context<HonoEnv>,
+): Promise<Result<string, DomainError>> {
+  return requireThreadCwd(
+    c.req.param('threadId') as string,
+    c.get('userId') as string,
+    steerFromContext(c),
+  );
 }
 
 /**

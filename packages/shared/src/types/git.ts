@@ -90,7 +90,16 @@ export interface WSGitStatusData {
  */
 export interface WSGitRefsUpdatedData {
   projectId: string;
+  /**
+   * Set when a background recompute (not a fetch) found newer data than a
+   * stale value already served: only these views need a refetch. Absent means
+   * the remote-tracking refs moved, so every git status view refetches.
+   */
+  changed?: GitRefsUpdatedChange[];
 }
+
+/** A view whose server-side cached value went stale and was recomputed. */
+export type GitRefsUpdatedChange = 'status' | 'diff' | 'branches';
 
 // ─── Merge Agent ─────────────────────────────────────────
 

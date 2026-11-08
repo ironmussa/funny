@@ -6,10 +6,13 @@ import {
   git,
   invalidateStatusCache,
   findWorktreeForBranch,
+  getGitWriteGeneration,
   listBranchesDetailed,
   stash,
 } from '@funny/core/git';
-import { Hono } from 'hono';
+import { createStaleWhileRevalidate } from '@funny/shared/stale-while-revalidate';
+import { Hono, type Context } from 'hono';
+import { ok, type Result } from 'neverthrow';
 
 import { requestSpan } from '../../middleware/tracing.js';
 import { gitRuntimeService } from '../../services/git-runtime-service.js';
@@ -56,25 +59,63 @@ projectGitRoutes.get('/:id/branches', async (c) => {
     identity,
     attrs: { route: 'project.branches' },
   });
+  const listing = await branchListingCache.get(`${project.id}|${project.path}`, {
+    lookup: async () => ok(await computeBranchListing(c, project.id, project.path)),
+    onChanged: () =>
+      wsBroker.emitToUser(userId, {
+        type: 'git:refs-updated',
+        threadId: '',
+        data: { projectId: project.id, changed: ['branches'] },
+      }),
+    version: getGitWriteGeneration(),
+  });
+  // The lookup never fails (each part falls back on its own); a defect throws.
+  if (listing.isErr()) throw listing.error;
+  return c.json({ ...listing.value, directoryExists });
+});
+
+interface BranchListing {
+  branches: string[];
+  remoteBranches: string[];
+  defaultBranch: string | null;
+  currentBranch: string | null;
+}
+
+// Stale-while-revalidate: a repo whose branch listing is slow (git pool busy
+// behind a fetch, huge ref count) answers with its last listing at once and
+// recomputes in the background; a changed listing is pushed as a refetch hint.
+// A checkout made through funny bumps the git write generation, so the next
+// read waits for a new listing instead of serving the old current branch.
+const branchListingCache = createStaleWhileRevalidate<BranchListing, never>({
+  freshMs: 2_000,
+  maxStaleMs: 10 * 60_000,
+  capacity: 200,
+  refreshConcurrency: 2,
+});
+
+/** Runs a git read inside a request span that records whether it failed. */
+async function spanned<T, E extends { message: string }>(
+  c: Context<HonoEnv>,
+  name: string,
+  attrs: Record<string, unknown>,
+  run: () => PromiseLike<Result<T, E>>,
+): Promise<Result<T, E>> {
+  const span = requestSpan(c, name, attrs);
+  const r = await run();
+  span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
+  return r;
+}
+
+async function computeBranchListing(
+  c: Context<HonoEnv>,
+  projectId: string,
+  projectPath: string,
+): Promise<BranchListing> {
+  const attrs = { projectId };
   const [branchesResult, defaultBranchResult, currentBranchResult] = await Promise.all([
-    (async () => {
-      const span = requestSpan(c, 'git.branches_detailed', { projectId: project.id });
-      const r = await listBranchesDetailed(project.path);
-      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
-      return r;
-    })(),
-    (async () => {
-      const span = requestSpan(c, 'git.default_branch', { projectId: project.id });
-      const r = await getDefaultBranch(project.path);
-      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
-      return r;
-    })(),
-    (async () => {
-      const span = requestSpan(c, 'git.current_branch', { projectId: project.id });
-      const r = await getCurrentBranch(project.path);
-      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
-      return r;
-    })(),
+    spanned(c, 'git.branches_detailed', attrs, () => listBranchesDetailed(projectPath)),
+    spanned(c, 'git.default_branch', attrs, () => getDefaultBranch(projectPath)),
+    spanned(c, 'git.current_branch', attrs, () => getCurrentBranch(projectPath)),
   ]);
 
   const detailed = branchesResult.isOk() ? branchesResult.value : [];
@@ -86,8 +127,8 @@ projectGitRoutes.get('/:id/branches', async (c) => {
   const branches = detailed.filter((b) => b.isLocal).map((b) => b.name);
   const remoteBranches = detailed.filter((b) => b.isRemote).map((b) => b.name);
 
-  return c.json({ branches, remoteBranches, defaultBranch, currentBranch, directoryExists });
-});
+  return { branches, remoteBranches, defaultBranch, currentBranch };
+}
 
 // GET /api/projects/:id/checkout-preflight?branch=<branch>
 projectGitRoutes.get('/:id/checkout-preflight', async (c) => {

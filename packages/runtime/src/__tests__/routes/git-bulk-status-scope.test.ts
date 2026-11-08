@@ -99,7 +99,9 @@ describe('GET /status bulk thread scope', () => {
     expect(await statusIds('/status?projectId=p1&threadIds=a,b')).toEqual(['a', 'b']);
     // The worktree and the off-branch thread were not requested: no git work for them.
     expect(mocks.getStatusSummary).toHaveBeenCalledTimes(1);
-    expect(mocks.getStatusSummary).toHaveBeenCalledWith('/repo', 'master', '/repo');
+    expect(mocks.getStatusSummary).toHaveBeenCalledWith('/repo', 'master', '/repo', {
+      onChanged: expect.any(Function),
+    });
     expect(mocks.getCommittedBranchSummary).not.toHaveBeenCalled();
   });
 

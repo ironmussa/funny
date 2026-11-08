@@ -14,6 +14,7 @@ vi.mock('@funny/core/git', () => ({
   git: vi.fn(),
   invalidateStatusCache: vi.fn(),
   findWorktreeForBranch: vi.fn(),
+  getGitWriteGeneration: vi.fn(() => 0),
   stash: vi.fn(),
 }));
 vi.mock('../../middleware/tracing.js', () => ({ requestSpan: () => ({ end: vi.fn() }) }));

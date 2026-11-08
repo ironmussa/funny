@@ -20,12 +20,26 @@ import { Hono, type Context } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
 
 import { requestSpan } from '../../middleware/tracing.js';
+import * as tm from '../../services/thread-manager.js';
+import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
-import { requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
-import { requireGitWorkingTree, requireProjectCwd } from './helpers.js';
+import {
+  requireGitWorkingTree,
+  requireProjectCwdFromContext,
+  requireSteerableThreadCwdFromContext,
+} from './helpers.js';
 
 export const diffRoutes = new Hono<HonoEnv>();
+
+/** Hint the client that a diff summary it was served stale has changed. */
+function emitDiffChanged(userId: string, projectId: string, threadId: string): void {
+  wsBroker.emitToUser(userId, {
+    type: 'git:refs-updated',
+    threadId,
+    data: { projectId, changed: ['diff'] },
+  });
+}
 
 /**
  * Validate a cwd-relative path from the query string (submodule dir or file):
@@ -42,21 +56,13 @@ type DiffScope = (
 ) => Promise<{ cwd: Result<string, DomainError>; attrs: Record<string, unknown> }>;
 
 const projectScope: DiffScope = async (c) => ({
-  cwd: await requireProjectCwd(
-    c.req.param('projectId') as string,
-    c.get('userId') as string,
-    c.get('organizationId'),
-  ),
+  cwd: await requireProjectCwdFromContext(c),
   attrs: { projectId: c.req.param('projectId') },
 });
 
 // Steer sharees reach the thread variants (thread-sharing-steer).
 const threadScope: DiffScope = async (c) => ({
-  cwd: await requireThreadCwd(
-    c.req.param('threadId') as string,
-    c.get('userId') as string,
-    steerFromContext(c),
-  ),
+  cwd: await requireSteerableThreadCwdFromContext(c),
   attrs: { threadId: c.req.param('threadId') },
 });
 
@@ -124,6 +130,7 @@ async function respondDiffSummary(
   c: Context<HonoEnv>,
   cwd: string,
   spanAttrs: Record<string, unknown>,
+  onChanged: () => void,
 ) {
   const notWorkTree = await rejectNonWorkTree(c, cwd);
   if (notWorkTree) return notWorkTree;
@@ -137,7 +144,9 @@ async function respondDiffSummary(
   const maxFilesRaw = c.req.query('maxFiles');
   const maxFiles = maxFilesRaw ? parseInt(maxFilesRaw, 10) : undefined;
   return respondSummary(c, 'git.diff_summary', spanAttrs, () =>
-    getDiffSummary(cwd, { excludePatterns, maxFiles, shareInFlight: true }),
+    // May serve the last summary while a newer one is computed; `onChanged`
+    // tells the client to refetch when the newer one differs.
+    getDiffSummary(cwd, { excludePatterns, maxFiles, onChanged }),
   );
 }
 
@@ -200,10 +209,12 @@ function submoduleFileHandler(scope: DiffScope) {
 // GET /api/git/project/:projectId/diff/summary
 diffRoutes.get('/project/:projectId/diff/summary', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
+  const cwdResult = await requireProjectCwdFromContext(c);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  return respondDiffSummary(c, cwdResult.value, { projectId: c.req.param('projectId') });
+  const projectId = c.req.param('projectId');
+  return respondDiffSummary(c, cwdResult.value, { projectId }, () =>
+    emitDiffChanged(userId, projectId, ''),
+  );
 });
 
 // GET /api/git/project/:projectId/diff/submodule
@@ -221,9 +232,16 @@ diffRoutes.get('/project/:projectId/diff/file', fileDiffHandler(projectScope));
 // GET /api/git/:threadId/diff/summary
 diffRoutes.get('/:threadId/diff/summary', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
+  const cwdResult = await requireSteerableThreadCwdFromContext(c);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  return respondDiffSummary(c, cwdResult.value, { threadId: c.req.param('threadId') });
+  const threadId = c.req.param('threadId');
+  return respondDiffSummary(c, cwdResult.value, { threadId }, () => {
+    // Resolved only when a change is reported, not on every request.
+    void (async () => {
+      const thread = await tm.getThread(threadId);
+      if (thread) emitDiffChanged(userId, thread.projectId, threadId);
+    })();
+  });
 });
 
 // GET /api/git/:threadId/diff/submodule
@@ -240,8 +258,7 @@ diffRoutes.get('/:threadId/diff/file', fileDiffHandler(threadScope));
 
 // GET /api/git/:threadId/diff
 diffRoutes.get('/:threadId/diff', async (c) => {
-  const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, steerFromContext(c));
+  const cwdResult = await requireSteerableThreadCwdFromContext(c);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const notWorkTree = await rejectNonWorkTree(c, cwd);

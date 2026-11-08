@@ -7,6 +7,7 @@ export {
   gitRead,
   gitWrite,
   gitNetwork,
+  getGitWriteGeneration,
   SHELL,
   ProcessExecutionError,
   type ProcessResult,
@@ -90,6 +91,7 @@ export {
   invalidateStatusCache,
   deriveGitSyncState,
   type GitStatusSummary,
+  type StatusSummaryOptions,
 } from './status.js';
 
 export {

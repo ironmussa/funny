@@ -74,6 +74,12 @@ railway up --service funny-server --detach
   default (`Linked service: None`).
 - `--detach` returns after upload; the build runs async on Railway (Railpack →
   `bun run build`). Without it the command streams build logs and blocks.
+- The runner build (`build:runner-deploy` → `scripts/build-runner-deploy.sh`)
+  compiles `@funny/native-git` (gitoxide) before bundling the runtime, installing
+  Rust with rustup when `cargo` is missing (about a minute cold). A failed native
+  build fails the deploy; set `FUNNY_NATIVE_GIT_OPTIONAL=1` on the service to
+  ship with the git CLI fallback instead. After deploying, the runner logs
+  `Native git (gitoxide) loaded`, or a `native-git` warning with the load error.
 - **Deploy both services** when your change touches models/agents:
   - server → the model registry (`packages/shared/src/models.ts`), so the UI
     offers the model and the API doesn't reject it.

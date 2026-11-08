@@ -24,11 +24,17 @@ import { getGitWriteGeneration, gitRead } from './process.js';
 /**
  * Parse git status line to extract file status
  */
+/**
+ * Parse one `--name-status` line. Callers pass `--no-renames`, matching the
+ * native (gitoxide) summary: a rename is a delete plus an add. Should a
+ * rename or copy line (`R100\told\tnew`) still arrive, its score is accepted
+ * and the destination path is used, instead of dropping the line.
+ */
 function parseStatusLine(line: string): {
   status: FileDiff['status'];
   path: string;
 } | null {
-  const match = line.match(/^([MADR?U])\s+(.+)$/);
+  const match = line.match(/^([MADRCTU?])\d*\t(.+)$/) ?? line.match(/^([MADR?U])\s+(.+)$/);
   if (!match) return null;
 
   const statusMap: Record<string, FileDiff['status']> = {
@@ -36,13 +42,15 @@ function parseStatusLine(line: string): {
     M: 'modified',
     D: 'deleted',
     R: 'renamed',
+    C: 'added',
+    T: 'modified',
     '?': 'added',
     U: 'conflicted',
   };
 
   return {
     status: statusMap[match[1]] ?? 'modified',
-    path: match[2].trim(),
+    path: match[2].split('\t').at(-1)!.trim(),
   };
 }
 
@@ -284,8 +292,8 @@ async function readWorkingTreeFiles(cwd: string): Promise<{
   stagedPaths: Set<string>;
 }> {
   const [stagedStatusResult, unstagedStatusResult, untrackedResult] = await Promise.all([
-    gitRead(['diff', '--staged', '--name-status'], { cwd, reject: false }),
-    gitRead(['diff', '--name-status'], { cwd, reject: false }),
+    gitRead(['diff', '--staged', '--name-status', '--no-renames'], { cwd, reject: false }),
+    gitRead(['diff', '--name-status', '--no-renames'], { cwd, reject: false }),
     gitRead(['ls-files', '--others', '--exclude-standard'], { cwd, reject: false }),
   ]);
   const parse = (result: { exitCode: number; stdout: string }) =>
@@ -341,8 +349,8 @@ export function getDiff(cwd: string): ResultAsync<FileDiff[], DomainError> {
       const [{ stagedFiles, allUnstaged, stagedPaths }, stagedDiffResult, unstagedDiffResult] =
         await Promise.all([
           readWorkingTreeFiles(cwd),
-          gitRead(['diff', '--staged'], { cwd, reject: false }),
-          gitRead(['diff'], { cwd, reject: false }),
+          gitRead(['diff', '--staged', '--no-renames'], { cwd, reject: false }),
+          gitRead(['diff', '--no-renames'], { cwd, reject: false }),
         ]);
 
       // Parse the full diff blobs into per-file maps
@@ -531,8 +539,8 @@ async function withLineStats(cwd: string, baseFiles: BaseFile[]): Promise<BaseFi
   // 2. Enrich with line stats via numstat (CLI fallback only — the
   // native path already returns additions/deletions per file).
   const [stagedNumstat, unstagedNumstat] = await Promise.all([
-    gitRead(['diff', '--staged', '--numstat'], { cwd, reject: false }),
-    gitRead(['diff', '--numstat'], { cwd, reject: false }),
+    gitRead(['diff', '--staged', '--numstat', '--no-renames'], { cwd, reject: false }),
+    gitRead(['diff', '--numstat', '--no-renames'], { cwd, reject: false }),
   ]);
 
   const statMap = new Map<string, { additions: number; deletions: number }>();

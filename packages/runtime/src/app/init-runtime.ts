@@ -1,6 +1,6 @@
 import {
   deriveGitSyncState,
-  getNativeGit,
+  getNativeGitStatus,
   getStatusSummary,
   pruneStaleWorktreeSafeDirectories,
 } from '@funny/core/git';
@@ -21,6 +21,7 @@ import { wsBroker } from '../services/ws-broker.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { logProviderStatus } from '../utils/provider-detection.js';
 import { handleBrowserSessionMessage } from './browser-session-message-handler.js';
+import { reportNativeGitStatus } from './native-git-status.js';
 import { handlePtyMessage } from './pty-message-handler.js';
 
 /**
@@ -84,7 +85,7 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   activateProviderTools();
   await logProviderStatus();
   await ptyManager.reattachSessions();
-  getNativeGit();
+  reportNativeGitStatus(getNativeGitStatus(), log);
 
   // Older runners left one safe.directory entry per worktree in ~/.gitconfig.
   void pruneStaleWorktreeSafeDirectories().match(

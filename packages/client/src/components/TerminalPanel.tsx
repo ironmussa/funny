@@ -62,11 +62,12 @@ import { useProjects } from '@/data/projects/hooks';
 import { showAgentNotification } from '@/hooks/use-notifications';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
-import { getActiveWS, sendTerminalRealtime } from '@/hooks/use-ws';
+import { getActiveWS, sendTerminalRealtime, subscribeActiveWS } from '@/hooks/use-ws';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
 import { jobsApi } from '@/lib/api/jobs';
 import { markMemoryPhase } from '@/lib/memory-phase';
+import { watchSocketConnection } from '@/lib/realtime/watch-socket-connection';
 import { cn } from '@/lib/utils';
 import {
   renderPhaseFromState,
@@ -365,20 +366,15 @@ export function WebTerminalTabContent({
 
   // Bridge socket connection state. Re-fires every time the underlying
   // socket reconnects, so retries during a runner reconnect storm pick up
-  // automatically without needing a manual restart.
-  useEffect(() => {
-    const ws = getActiveWS();
-    if (!ws) return;
-    const onConnect = () => send({ type: 'SOCKET_CONNECTED', connected: true });
-    const onDisconnect = () => send({ type: 'SOCKET_CONNECTED', connected: false });
-    ws.on('connect', onConnect);
-    ws.on('disconnect', onDisconnect);
-    if (ws.connected) send({ type: 'SOCKET_CONNECTED', connected: true });
-    return () => {
-      ws.off('connect', onConnect);
-      ws.off('disconnect', onDisconnect);
-    };
-  }, [send]);
+  // automatically without needing a manual restart — and follows the socket
+  // when it is replaced (HMR / teardown), instead of the one seen at mount.
+  useEffect(
+    () =>
+      watchSocketConnection(getActiveWS, subscribeActiveWS, (connected) =>
+        send({ type: 'SOCKET_CONNECTED', connected }),
+      ),
+    [send],
+  );
 
   // The effect cleanup clears the focus timeout, cancels both RAFs, and invokes terminal teardown.
   // react-doctor-disable-next-line effect-needs-cleanup

@@ -1,4 +1,9 @@
-import { deriveGitSyncState, getNativeGit, getStatusSummary } from '@funny/core/git';
+import {
+  deriveGitSyncState,
+  getNativeGit,
+  getStatusSummary,
+  pruneStaleWorktreeSafeDirectories,
+} from '@funny/core/git';
 import type { AgentModel, PermissionMode } from '@funny/shared';
 import type { Hono } from 'hono';
 
@@ -80,6 +85,20 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   await logProviderStatus();
   await ptyManager.reattachSessions();
   getNativeGit();
+
+  // Older runners left one safe.directory entry per worktree in ~/.gitconfig.
+  void pruneStaleWorktreeSafeDirectories().match(
+    (removed) => {
+      if (removed > 0) {
+        log.info('Pruned stale worktree safe.directory entries', { namespace: 'git', removed });
+      }
+    },
+    (error) =>
+      log.warn('Could not prune stale safe.directory entries', {
+        namespace: 'git',
+        error: error.message,
+      }),
+  );
 
   // No RUNNER_AUTH_SECRET is NOT a fatal error: a runner with no credentials
   // (no secret, no invite token, no persisted creds) enrolls via the device-link

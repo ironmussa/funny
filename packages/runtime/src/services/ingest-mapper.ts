@@ -14,6 +14,7 @@ import { scheduleRepeating } from '@funny/shared/async';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
 
+import { parseGithubOwnerRepo } from '../lib/github-remote.js';
 import { log } from '../lib/logger.js';
 import { getServices } from './service-registry.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
@@ -164,11 +165,8 @@ async function resolveProjectId(workingPath: string): Promise<string | null> {
 
 /** Extract owner/repo from a GitHub remote URL. */
 export function parseOwnerRepo(remoteUrl: string): string | null {
-  const httpsMatch = remoteUrl.match(/github\.com[/:]([^/]+\/[^/.]+?)(?:\.git)?$/);
-  if (httpsMatch) return httpsMatch[1];
-  const sshMatch = remoteUrl.match(/git@github\.com:([^/]+\/[^/.]+?)(?:\.git)?$/);
-  if (sshMatch) return sshMatch[1];
-  return null;
+  const parsed = parseGithubOwnerRepo(remoteUrl);
+  return parsed ? `${parsed.owner}/${parsed.repo}` : null;
 }
 
 /**

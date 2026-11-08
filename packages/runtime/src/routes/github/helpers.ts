@@ -1,6 +1,7 @@
 import { execute, getRemoteUrl } from '@funny/core/git';
 import type { GitHubIssue, PRReactionSummary } from '@funny/shared';
 
+import { parseGithubOwnerRepo } from '../../lib/github-remote.js';
 import { log } from '../../lib/logger.js';
 import { getServices } from '../../services/service-registry.js';
 import { requireProject } from '../../utils/route-helpers.js';
@@ -21,19 +22,10 @@ export const GITHUB_API = 'https://api.github.com';
 export const DEVICE_CODE_URL = 'https://github.com/login/device/code';
 export const ACCESS_TOKEN_URL = 'https://github.com/login/oauth/access_token';
 
+export { parseGithubOwnerRepo };
+
 export function getClientId(): string | null {
   return process.env.GITHUB_CLIENT_ID || null;
-}
-
-/** Extract owner/repo from a GitHub remote URL. Returns null if not a GitHub URL. */
-export function parseGithubOwnerRepo(remoteUrl: string): { owner: string; repo: string } | null {
-  // HTTPS: https://github.com/owner/repo.git
-  const httpsMatch = remoteUrl.match(/github\.com[/:]([^/]+)\/([^/.]+?)(?:\.git)?$/);
-  if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
-  // SSH: git@github.com:owner/repo.git
-  const sshMatch = remoteUrl.match(/git@github\.com:([^/]+)\/([^/.]+?)(?:\.git)?$/);
-  if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
-  return null;
 }
 
 /**

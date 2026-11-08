@@ -172,6 +172,7 @@ export class AgentEventRouter {
           completedAt: new Date().toISOString(),
         });
         this.emitWSToUser(threadId, userId, 'agent:status', { status });
+        await this.persistChangedFilesSummary(threadId);
         if (thread) {
           await this.emitAgentCompleted(threadId, thread, 'stopped');
         }
@@ -271,6 +272,17 @@ export class AgentEventRouter {
     });
   }
 
+  /** Stopped or failed runs still get their "files changed" card. Best-effort. */
+  private async persistChangedFilesSummary(threadId: string): Promise<void> {
+    await this.messageHandler.persistChangedFilesSummary(threadId).catch((err) => {
+      log.warn('Failed to persist changed-files summary', {
+        namespace: 'agent',
+        threadId,
+        error: (err as Error)?.message ?? String(err),
+      });
+    });
+  }
+
   private async handleAgentFailure(threadId: string, errorMessage: string): Promise<void> {
     log.error('Agent failure', { namespace: 'agent', threadId, error: errorMessage });
     const lostPermissionContinuation = await this.expireStructuredPermission(threadId);
@@ -303,6 +315,16 @@ export class AgentEventRouter {
       status,
       ...(lostPermissionContinuation ? { permissionRecoveryReason: 'runner_lost' as const } : {}),
     });
+    await this.finishFailedRun(threadId, thread, status);
+  }
+
+  /** Summary + `agent:completed` for a failed run; a recoverable wait gets neither summary. */
+  private async finishFailedRun(
+    threadId: string,
+    thread: Awaited<ReturnType<IThreadManager['getThread']>>,
+    status: ThreadStatus,
+  ): Promise<void> {
+    if (status !== 'waiting') await this.persistChangedFilesSummary(threadId);
     if (thread) {
       await this.emitAgentCompleted(threadId, thread, status as 'completed' | 'failed' | 'stopped');
     }

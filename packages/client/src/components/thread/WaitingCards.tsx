@@ -96,17 +96,13 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
   );
 }
 
+/**
+ * A run that ended on a provider error (rate limit / API error) and is still
+ * recorded as `waiting` — threads persisted before such runs ended as
+ * `failed`. Nothing is waiting for input, so offer only a retry.
+ */
 export function ProviderErrorCard({ onSend }: { onSend: (text: string) => void }) {
   const { t } = useTranslation();
-  const [input, setInput] = useState('');
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  const handleSubmitInput = () => {
-    const text = input.trim();
-    if (!text) return;
-    onSend(text);
-    setInput('');
-  };
 
   return (
     <div
@@ -115,7 +111,7 @@ export function ProviderErrorCard({ onSend }: { onSend: (text: string) => void }
     >
       <div className="text-status-warning/80 flex items-center gap-2 text-xs">
         <AlertTriangle className="icon-sm" />
-        {t('thread.providerErrorWaiting', 'The provider returned an error. The run is paused.')}
+        {t('thread.providerErrorWaiting', 'The provider returned an error. Retry when ready.')}
       </div>
 
       <div className="flex gap-2">
@@ -126,39 +122,6 @@ export function ProviderErrorCard({ onSend }: { onSend: (text: string) => void }
         >
           <RotateCw className="icon-sm" />
           {t('common.retry')}
-        </button>
-      </div>
-
-      <div className="flex gap-2">
-        <Input
-          ref={inputRef}
-          data-testid="provider-error-input"
-          type="text"
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.nativeEvent.isComposing) return;
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmitInput();
-            }
-          }}
-          placeholder={t('thread.waitingInputPlaceholder')}
-          className="h-auto flex-1 py-1.5"
-        />
-        <button
-          data-testid="provider-error-send"
-          onClick={handleSubmitInput}
-          disabled={!input.trim()}
-          className={cn(
-            'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-            input.trim()
-              ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'bg-muted text-muted-foreground cursor-not-allowed',
-          )}
-        >
-          <Send className="icon-xs" />
-          {t('thread.send')}
         </button>
       </div>
     </div>

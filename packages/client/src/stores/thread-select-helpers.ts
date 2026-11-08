@@ -31,6 +31,8 @@ export function deriveWaitingState(
     const lastTC = tcs[tcs.length - 1];
     if (lastTC.name === 'AskUserQuestion') return { waitingReason: 'question' };
     if (lastTC.name === 'ExitPlanMode') return { waitingReason: 'plan' };
+    // Legacy: runs that ended on a provider error used to stay `waiting`.
+    if (lastTC.name === 'ProviderError') return { waitingReason: 'provider_error' };
     if (lastTC.output && PERMISSION_DENY_PATTERN.test(lastTC.output)) {
       return { waitingReason: 'permission', pendingPermission: { toolName: lastTC.name } };
     }

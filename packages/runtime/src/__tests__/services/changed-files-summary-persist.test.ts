@@ -40,13 +40,9 @@ function makeHandler(threadWithMessages: any) {
     emitToUser: (_uid: string, e: any) => wsEvents.push(e),
   };
   const getProject = vi.fn(async () => ({ id: 'p1', path: '/repo' }));
-  const handler = new AgentMessageHandler(
-    new AgentStateTracker(),
-    threadManager,
-    wsBroker,
-    getProject as any,
-  );
-  return { handler, wsEvents };
+  const state = new AgentStateTracker();
+  const handler = new AgentMessageHandler(state, threadManager, wsBroker, getProject as any);
+  return { handler, wsEvents, state };
 }
 
 const session = (userId: string, ...absPaths: string[]) => [
@@ -157,5 +153,61 @@ describe('AgentMessageHandler.persistChangedFilesSummary', () => {
     await (handler as any).persistChangedFilesSummary('t1');
 
     expect(mocks.saveThreadEvent).not.toHaveBeenCalled();
+  });
+
+  test('includes files a shell command changed since the run baseline', async () => {
+    mocks.getDiffSummary.mockReturnValue(
+      ok({
+        files: [
+          { path: 'src/dirty.ts', status: 'modified', staged: false, additions: 1, deletions: 0 },
+          { path: 'src/script.ts', status: 'modified', staged: false, additions: 4, deletions: 2 },
+        ],
+        total: 2,
+      }),
+    );
+    const { handler, state } = makeHandler({
+      projectId: 'p1',
+      worktreePath: null,
+      isScratch: false,
+      messages: [
+        { id: 'u1', role: 'user', content: 'go', toolCalls: [] },
+        {
+          id: 'a1',
+          role: 'assistant',
+          content: '',
+          toolCalls: [{ id: 'tc0', name: 'Bash', input: { command: 'python3 fix.py' } }],
+        },
+      ],
+    });
+    state.runDiffBaselines.set(
+      't1',
+      Promise.resolve([
+        { path: 'src/dirty.ts', status: 'modified', staged: false, additions: 1, deletions: 0 },
+      ]),
+    );
+
+    await handler.persistChangedFilesSummary('t1');
+
+    const [, , data]: any = mocks.saveThreadEvent.mock.calls[0] as any;
+    expect(data.files.map((f: any) => f.path)).toEqual(['src/script.ts']);
+  });
+
+  test('persists once per run even when several terminal paths call it', async () => {
+    mocks.getDiffSummary.mockReturnValue(ok({ files: [], total: 0 }));
+    const { handler, state } = makeHandler({
+      projectId: 'p1',
+      worktreePath: null,
+      isScratch: false,
+      messages: session('u1', '/repo/src/a.ts'),
+    });
+
+    await handler.persistChangedFilesSummary('t1');
+    await handler.persistChangedFilesSummary('t1');
+    expect(mocks.saveThreadEvent).toHaveBeenCalledTimes(1);
+
+    // A new run starts clean and gets its own summary.
+    state.clearRunState('t1');
+    await handler.persistChangedFilesSummary('t1');
+    expect(mocks.saveThreadEvent).toHaveBeenCalledTimes(2);
   });
 });

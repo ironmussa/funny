@@ -115,16 +115,53 @@ export function latestSessionChanges(
   messages: any[],
   changedFiles: FileDiffSummary[],
   basePath?: string,
+  /**
+   * Working-tree diff taken when the session started. When given and the
+   * session ran a shell command, files whose diff changed since then are added
+   * too — edits made by scripts, `sed` or formatters have no tool call.
+   */
+  baseline?: FileDiffSummary[],
 ): ChangedFilesSummaryEventData | null {
-  const all = collectSessionChanges(messages, changedFiles, basePath);
-  if (all.size === 0) return null;
   // The last user turn in document order is the session that just completed.
   let lastUserMessageId: string | null = null;
-  for (const msg of messages) {
-    if (msg.role === 'user') lastUserMessageId = String(msg.id);
-  }
+  let lastUserIndex = -1;
+  messages.forEach((msg, index) => {
+    if (msg.role !== 'user') return;
+    lastUserMessageId = String(msg.id);
+    lastUserIndex = index;
+  });
   if (!lastUserMessageId) return null;
-  const files = all.get(lastUserMessageId);
-  if (!files || files.length === 0) return null;
+
+  const files = [
+    ...(collectSessionChanges(messages, changedFiles, basePath).get(lastUserMessageId) ?? []),
+  ];
+  const ranShell = messages
+    .slice(lastUserIndex)
+    .some((msg) => (msg.toolCalls ?? []).some((tc: any) => SHELL_TOOLS.has(tc?.name)));
+  if (baseline && ranShell) {
+    const listed = new Set(files.map((f) => f.path));
+    for (const file of workingTreeChangesSince(baseline, changedFiles)) {
+      if (!listed.has(file.path)) files.push(file);
+    }
+  }
+  if (files.length === 0) return null;
   return { userMessageId: lastUserMessageId, files };
+}
+
+/** Tool calls that run arbitrary shell commands, which can edit files without a tool card. */
+const SHELL_TOOLS = new Set(['Bash', 'shell']);
+
+/**
+ * Working-tree entries that are new or whose status / +/- changed since
+ * `baseline`. A file that was already dirty and keeps identical stats is not
+ * reported — the diff summary carries no content hash.
+ */
+function workingTreeChangesSince(
+  baseline: FileDiffSummary[],
+  current: FileDiffSummary[],
+): FileDiffSummary[] {
+  const fingerprint = (f: FileDiffSummary) =>
+    `${f.status}|${f.staged}|${f.additions ?? ''}|${f.deletions ?? ''}`;
+  const before = new Map(baseline.map((f) => [f.path, fingerprint(f)]));
+  return current.filter((f) => before.get(f.path) !== fingerprint(f));
 }

@@ -157,6 +157,7 @@
     "openDesign": "Open design"
   },
   "thread": {
+    "browserOpenTooltip": "Browser open",
     "claudeContext": "Claude Code · Automatic context",
     "claudeContextDescription": "Instructions supplied to Claude Code, not a message written by you.",
     "status": {
@@ -234,7 +235,7 @@
     "waitingForResponse": "Waiting for your response...",
     "providerAuthExpired": "Your provider session expired or authentication failed. Reconnect, then retry your message.",
     "reconnectProvider": "Reconnect",
-    "providerErrorWaiting": "The provider returned an error. The run is paused — retry or send a message to continue.",
+    "providerErrorWaiting": "The provider returned an error. Retry when ready.",
     "planWaitingForResponse": "Accept or reject the plan",
     "rejectPlan": "Reject plan",
     "copyLatestTurn": "Copy latest prompt and response",

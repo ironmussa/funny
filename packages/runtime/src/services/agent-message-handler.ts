@@ -17,7 +17,7 @@ import {
   getIgnoredFileStats,
   getExternalRepoFileStats,
 } from '@funny/core/git';
-import type { WSEvent, ThreadStatus } from '@funny/shared';
+import type { FileDiffSummary, ThreadStatus, WaitingReason, WSEvent } from '@funny/shared';
 import { latestSessionChanges } from '@funny/shared';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { z } from 'zod';
@@ -81,6 +81,39 @@ function serializeToolInput(toolName: string, input: unknown): string | undefine
   } catch {
     return undefined;
   }
+}
+
+type ResultMessage = CLIMessage & { type: 'result' };
+
+/** Machine event for a result: a wait wins, then success without a provider error. */
+function resultEventType(
+  isWaitingForUser: boolean,
+  subtype: ResultMessage['subtype'],
+  providerError: string | undefined,
+): 'WAIT' | 'COMPLETE' | 'FAIL' {
+  if (isWaitingForUser) return 'WAIT';
+  return subtype === 'success' && providerError === undefined ? 'COMPLETE' : 'FAIL';
+}
+
+/** `errorReason` + `error` for a failed result: the provider error, else the result or errors array. */
+function resultErrorFields(
+  msg: ResultMessage,
+  providerError: string | undefined,
+): { errorReason: string; error: string | undefined } {
+  if (providerError !== undefined) return { errorReason: 'provider_error', error: providerError };
+  const error = msg.result ? decodeUnicodeEscapes(msg.result) : (msg.errors?.[0] ?? undefined);
+  return { errorReason: msg.subtype, error };
+}
+
+/** Fill +/- for stat-less files from `stats`; files that already have stats are kept. */
+function backfillStats(
+  files: FileDiffSummary[],
+  stats: Map<string, { additions: number; deletions: number }>,
+): FileDiffSummary[] {
+  return files.map((f) => {
+    const s = f.additions == null ? stats.get(f.path) : undefined;
+    return s ? { ...f, additions: s.additions, deletions: s.deletions } : f;
+  });
 }
 
 /**
@@ -415,7 +448,7 @@ export class AgentMessageHandler {
 
     // Real assistant text means the agent made progress AFTER any earlier
     // provider error — so it recovered. Clear the pending-provider-error flag
-    // so the run isn't forced into `waiting` at result time.
+    // so the run isn't forced into `failed` at result time.
     if (textContent) {
       this.state.providerErrorPending.delete(threadId);
     }
@@ -636,15 +669,14 @@ export class AgentMessageHandler {
         }
 
         // Track provider errors (rate limits / API errors rendered as a
-        // `ProviderError` tool card). A still-pending flag at result time turns
-        // the run into `waiting` so the user can resume instead of seeing a
-        // misleading "completed". Any other (real) tool call means the agent
-        // moved on, so clear it.
+        // `ProviderError` tool card). A still-pending error at result time
+        // turns the run into `failed` instead of a misleading "completed".
+        // Any other (real) tool call means the agent moved on, so clear it.
         if (block.name === 'ProviderError') {
-          log.info('ProviderError detected — marking thread for provider-error waiting', {
+          log.info('ProviderError detected — marking thread for provider-error failure', {
             ...(await this.threadCtx(threadId)),
           });
-          this.state.providerErrorPending.add(threadId);
+          this.recordProviderError(threadId, block.input);
         } else {
           this.state.providerErrorPending.delete(threadId);
         }
@@ -894,6 +926,36 @@ export class AgentMessageHandler {
 
   // ── Result handling ────────────────────────────────────────────
 
+  /** Remember the provider's error text until the agent recovers or the run ends. */
+  private recordProviderError(threadId: string, input: unknown): void {
+    const errorInput = (input ?? {}) as { error?: unknown };
+    this.state.providerErrorPending.set(
+      threadId,
+      typeof errorInput.error === 'string' ? errorInput.error : 'Provider error',
+    );
+  }
+
+  /**
+   * The unrecovered provider error that ends this run as `failed`, if any.
+   * A real user-input/permission wait wins over it.
+   */
+  private resolveProviderError(
+    threadId: string,
+    waitingReason: WaitingReason | undefined,
+    resultSubtype: string,
+  ): string | undefined {
+    if (waitingReason) return undefined;
+    const providerError = this.state.providerErrorPending.get(threadId);
+    if (providerError !== undefined) {
+      log.info('handleResult forcing provider-error failure', {
+        namespace: 'agent-message',
+        threadId,
+        resultSubtype,
+      });
+    }
+    return providerError;
+  }
+
   private async handleResult(
     threadId: string,
     msg: CLIMessage & { type: 'result' },
@@ -943,28 +1005,22 @@ export class AgentMessageHandler {
       });
     }
 
-    // An unrecovered provider error (rate limit / API error) should leave the
-    // thread in `waiting` — not `completed`/`failed` — so the user can nudge it
-    // to retry. Lowest priority: a real user-input/permission wait wins.
-    if (!waitingReason && this.state.providerErrorPending.has(threadId)) {
-      waitingReason = 'provider_error';
-      log.info('handleResult forcing provider-error waiting status', {
-        namespace: 'agent-message',
-        threadId,
-        resultSubtype: msg.subtype,
-      });
-    }
-
+    // An unrecovered provider error (rate limit / API error) ends the run as
+    // `failed`, even when the SDK reports `success`: the process has exited,
+    // so there is nothing waiting for input. A real user-input/permission wait
+    // still wins.
     const isWaitingForUser = !!waitingReason;
+    const providerError = this.resolveProviderError(threadId, waitingReason, msg.subtype);
+
     const preThread = await this.threadManager.getThread(threadId);
     const currentStatus = preThread?.status ?? 'running';
 
     // Determine the machine event based on the result
-    const resultEvent = isWaitingForUser
-      ? { type: 'WAIT' as const, cost: msg.total_cost_usd, duration: msg.duration_ms }
-      : msg.subtype === 'success'
-        ? { type: 'COMPLETE' as const, cost: msg.total_cost_usd, duration: msg.duration_ms }
-        : { type: 'FAIL' as const, cost: msg.total_cost_usd, duration: msg.duration_ms };
+    const resultEvent = {
+      type: resultEventType(isWaitingForUser, msg.subtype, providerError),
+      cost: msg.total_cost_usd,
+      duration: msg.duration_ms,
+    };
 
     const { status: finalStatus } = transitionStatus(
       threadId,
@@ -1034,21 +1090,13 @@ export class AgentMessageHandler {
     const threadWithStage =
       finalStatus !== 'waiting' ? await this.threadManager.getThread(threadId) : preThread;
 
-    // Build the error text from the result or errors array
-    const errorText =
-      finalStatus === 'failed'
-        ? msg.result
-          ? decodeUnicodeEscapes(msg.result)
-          : (msg.errors?.[0] ?? undefined)
-        : undefined;
-
     await this.emitWS(threadId, 'agent:result', {
       result: msg.result ? decodeUnicodeEscapes(msg.result) : msg.result,
       cost: msg.total_cost_usd,
       duration: msg.duration_ms,
       status: finalStatus,
       stage: threadWithStage?.stage,
-      ...(finalStatus === 'failed' ? { errorReason: msg.subtype, error: errorText } : {}),
+      ...(finalStatus === 'failed' ? resultErrorFields(msg, providerError) : {}),
       ...(waitingReason ? { waitingReason } : {}),
       ...(permReq
         ? { permissionRequest: { toolName: permReq.toolName, toolInput: permReq.toolInput } }
@@ -1080,14 +1128,6 @@ export class AgentMessageHandler {
   // ── Changed-files session summary ──────────────────────────────
 
   /**
-   * Snapshot the files modified during the just-completed session and persist
-   * them as a `changed_files_summary` thread event, keyed by the session's
-   * user-message id. The file list comes from the session's file-mutating tool
-   * calls; +/- stats from a one-shot working-tree diff taken at completion. The
-   * snapshot is frozen — the client renders it verbatim on reload instead of
-   * recomputing against the live working tree.
-   */
-  /**
    * The thread with enough recent history to cover its latest user turn,
    * which is all `latestSessionChanges` reads. Fetching the whole history at
    * every turn end moved megabytes over the runner tunnel on long threads.
@@ -1108,7 +1148,40 @@ export class AgentMessageHandler {
 
   static readonly LATEST_TURN_WINDOW = 100;
 
-  private async persistChangedFilesSummary(threadId: string): Promise<void> {
+  /**
+   * Claims this run's changed-files summary. A run can end through more than
+   * one path (result, then stop/exit); only the first claim persists it.
+   */
+  private claimChangedFilesSummary(threadId: string): boolean {
+    if (this.state.changedFilesSummaryPersisted.has(threadId)) return false;
+    this.state.changedFilesSummaryPersisted.add(threadId);
+    return true;
+  }
+
+  /** The thread's worktree, else its project directory; '' when neither is known. */
+  private async summaryCwd(data: object): Promise<string> {
+    const project = await this.getProject((data as unknown as { projectId: string }).projectId);
+    return (data as { worktreePath?: string | null }).worktreePath || project?.path || '';
+  }
+
+  /** The working-tree diff taken when the run started, if the scan succeeded. */
+  private async runDiffBaseline(threadId: string): Promise<FileDiffSummary[] | undefined> {
+    return (await this.state.runDiffBaselines.get(threadId)) ?? undefined;
+  }
+
+  /**
+   * Snapshot the files modified during the just-completed session and persist
+   * them as a `changed_files_summary` thread event, keyed by the session's
+   * user-message id. Called once per run from every terminal path (result,
+   * stop, failure). The file list comes from the session's file-mutating tool
+   * calls plus, when it ran shell commands, the working-tree changes since the
+   * run's baseline; +/- stats from a one-shot working-tree diff at completion. The
+   * snapshot is frozen — the client renders it verbatim on reload instead of
+   * recomputing against the live working tree.
+   */
+  async persistChangedFilesSummary(threadId: string): Promise<void> {
+    if (!this.claimChangedFilesSummary(threadId)) return;
+
     const data = await this.loadLatestTurn(threadId);
     if (!data) return;
     // Scratch threads have no repo — nothing to diff or summarize.
@@ -1117,8 +1190,7 @@ export class AgentMessageHandler {
     const messages = (data as { messages?: any[] }).messages ?? [];
     if (messages.length === 0) return;
 
-    const project = await this.getProject((data as unknown as { projectId: string }).projectId);
-    const cwd = (data as { worktreePath?: string | null }).worktreePath || project?.path || '';
+    const cwd = await this.summaryCwd(data);
     if (!cwd) return;
 
     // Best-effort working-tree diff for +/- stats. A failure (or a clean tree)
@@ -1127,7 +1199,8 @@ export class AgentMessageHandler {
     const diffResult = await getDiffSummary(cwd);
     if (diffResult.isOk()) changedFiles = diffResult.value.files;
 
-    const summary = latestSessionChanges(messages, changedFiles, cwd);
+    const baseline = await this.runDiffBaseline(threadId);
+    const summary = latestSessionChanges(messages, changedFiles, cwd, baseline);
     if (!summary) return;
 
     // Gitignored files (e.g. openspec/ docs) never appear in the working-tree
@@ -1139,11 +1212,7 @@ export class AgentMessageHandler {
     if (statless.length > 0) {
       const ignoredStats = await getIgnoredFileStats(cwd, statless);
       if (ignoredStats.isOk() && ignoredStats.value.size > 0) {
-        const m = ignoredStats.value;
-        summary.files = summary.files.map((f) => {
-          const s = f.additions == null ? m.get(f.path) : undefined;
-          return s ? { ...f, additions: s.additions, deletions: s.deletions } : f;
-        });
+        summary.files = backfillStats(summary.files, ignoredStats.value);
       }
     }
 
@@ -1157,11 +1226,7 @@ export class AgentMessageHandler {
     if (externalStatless.length > 0) {
       const externalStats = await getExternalRepoFileStats(externalStatless, cwd);
       if (externalStats.isOk() && externalStats.value.size > 0) {
-        const m = externalStats.value;
-        summary.files = summary.files.map((f) => {
-          const s = f.additions == null ? m.get(f.path) : undefined;
-          return s ? { ...f, additions: s.additions, deletions: s.deletions } : f;
-        });
+        summary.files = backfillStats(summary.files, externalStats.value);
       }
     }
 

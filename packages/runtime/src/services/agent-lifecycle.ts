@@ -12,6 +12,7 @@
 
 import type { AgentOrchestrator } from '@funny/core/agents';
 import { reapOrphanedAgents, resolvePermissionApprovalCapability } from '@funny/core/agents';
+import { getDiffSummary } from '@funny/core/git';
 import type {
   AgentProvider,
   AgentModel,
@@ -479,6 +480,18 @@ export class AgentLifecycleManager {
     // user message immediately before it can modify the worktree.
     if (provider === 'codex' && canDoGitOps(variant)) {
       await this.captureCodexRewindCheckpoint(threadId, cwd);
+    }
+
+    // Baseline for the changed-files summary. Not awaited: the scan runs while
+    // the agent spawns, long before its first tool call can edit anything.
+    if (canDoGitOps(variant)) {
+      this.state.runDiffBaselines.set(
+        threadId,
+        getDiffSummary(cwd).match(
+          (summary) => summary.files,
+          () => null,
+        ),
+      );
     }
   }
 

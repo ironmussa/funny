@@ -1175,6 +1175,7 @@ const ERROR_REASON_MESSAGES: Record<string, string> = {
   error_max_turns: 'Max turns reached — send a follow-up to continue',
   error_max_budget_usd: 'Budget limit exceeded',
   error_during_execution: 'Error during execution',
+  provider_error: 'Provider error (rate limit or API error)',
 };
 
 function notifyThreadResult(

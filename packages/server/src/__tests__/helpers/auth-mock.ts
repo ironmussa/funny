@@ -78,6 +78,8 @@ export function createAuthApiMock(
 
 /** Clear cached auth instance so requirePermission re-imports the mock. */
 export async function resetAuthMiddlewareCache(): Promise<void> {
-  const { resetAuthInstanceForTests } = await import('../../middleware/auth.js');
+  const { resetAuthInstanceForTests, resetOrgNameCacheForTests } =
+    await import('../../middleware/auth.js');
   resetAuthInstanceForTests();
+  resetOrgNameCacheForTests();
 }

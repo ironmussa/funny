@@ -178,4 +178,93 @@ describe('SqlEventReceiptStore', () => {
     ).toEqual({ kind: 'out_of_order', highestContiguousSequence: 1n });
     expect(await store.highestAccepted('runner-2', 'execution-1')).toBe(0n);
   });
+
+  describe('transient events', () => {
+    function countingStore() {
+      let transactions = 0;
+      const store = new SqlEventReceiptStore({
+        database: connection.db,
+        transaction: async (work) => {
+          transactions += 1;
+          return work();
+        },
+      });
+      return { store, transactions: () => transactions };
+    }
+    const scope = { threadId: 'thread-1', executionId: 'execution-1' };
+    const noop = async () => {};
+
+    test('after the first receipt, advance without a transaction but persist every receipt', async () => {
+      const { store, transactions } = countingStore();
+      await store.accept({ runnerId: 'runner-1', scope, sequence: 1n, durable: false }, noop);
+      expect(transactions()).toBe(1); // cold cache: read + write in a transaction
+
+      for (const sequence of [2n, 3n, 4n]) {
+        expect(
+          await store.accept({ runnerId: 'runner-1', scope, sequence, durable: false }, noop),
+        ).toEqual({ kind: 'accepted', highestContiguousSequence: sequence });
+      }
+      expect(transactions()).toBe(1);
+      // Persisted each time: a fresh store (a restarted server) sees the latest receipt.
+      expect(await createStore().highestAccepted('runner-1', 'execution-1')).toBe(4n);
+    });
+
+    test('duplicates and gaps are decided from the cached receipt without applying', async () => {
+      const { store } = countingStore();
+      let applied = 0;
+      const apply = async () => {
+        applied += 1;
+      };
+      await store.accept({ runnerId: 'runner-1', scope, sequence: 1n, durable: false }, apply);
+      expect(
+        await store.accept({ runnerId: 'runner-1', scope, sequence: 1n, durable: false }, apply),
+      ).toEqual({ kind: 'duplicate', highestContiguousSequence: 1n });
+      expect(
+        await store.accept({ runnerId: 'runner-1', scope, sequence: 3n, durable: false }, apply),
+      ).toEqual({ kind: 'out_of_order', highestContiguousSequence: 1n });
+      expect(applied).toBe(1);
+      expect(await createStore().highestAccepted('runner-1', 'execution-1')).toBe(1n);
+    });
+
+    test('durable events keep the transaction and continue the cached sequence', async () => {
+      const { store, transactions } = countingStore();
+      await store.accept({ runnerId: 'runner-1', scope, sequence: 1n, durable: false }, noop);
+      await store.accept({ runnerId: 'runner-1', scope, sequence: 2n, durable: false }, noop);
+      expect(await store.accept({ runnerId: 'runner-1', scope, sequence: 3n }, noop)).toEqual({
+        kind: 'accepted',
+        highestContiguousSequence: 3n,
+      });
+      expect(transactions()).toBe(2);
+      expect(await createStore().highestAccepted('runner-1', 'execution-1')).toBe(3n);
+    });
+
+    test('a failed apply does not advance the cached or persisted receipt', async () => {
+      const { store } = countingStore();
+      await store.accept({ runnerId: 'runner-1', scope, sequence: 1n, durable: false }, noop);
+      await expect(
+        store.accept({ runnerId: 'runner-1', scope, sequence: 2n, durable: false }, async () => {
+          throw new Error('apply failed');
+        }),
+      ).rejects.toThrow('apply failed');
+      expect(
+        await store.accept({ runnerId: 'runner-1', scope, sequence: 2n, durable: false }, noop),
+      ).toEqual({ kind: 'accepted', highestContiguousSequence: 2n });
+    });
+
+    test('an execution cached for one thread is still refused for another', async () => {
+      const { store } = countingStore();
+      await store.accept({ runnerId: 'runner-1', scope, sequence: 1n, durable: false }, noop);
+      expect(
+        await store.accept(
+          {
+            runnerId: 'runner-1',
+            scope: { threadId: 'thread-2', executionId: 'execution-1' },
+            sequence: 2n,
+            durable: false,
+          },
+          noop,
+        ),
+      ).toEqual({ kind: 'out_of_order', highestContiguousSequence: 1n });
+    });
+  });
 });

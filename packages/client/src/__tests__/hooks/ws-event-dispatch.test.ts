@@ -340,30 +340,70 @@ describe('ws-event-dispatch — additional event types', () => {
     return handlers;
   }
 
-  test('agent:tool_call flushes pending messages before applying tool call', async () => {
-    const messageCalls: any[] = [];
-    const toolCalls: any[] = [];
+  function recordOrder() {
+    const order: string[] = [];
     useThreadStore.setState({
-      handleWSMessage: ((tid: string, data: any) => {
-        messageCalls.push({ tid, data });
+      handleWSMessage: ((_tid: string, data: any) => {
+        order.push(`message:${data.messageId}:${data.content}`);
       }) as any,
-      handleWSToolCall: ((tid: string, data: any) => {
-        toolCalls.push({ tid, data });
+      handleWSToolCall: ((_tid: string, data: any) => {
+        order.push(`toolCall:${data.toolCallId}`);
+      }) as any,
+      handleWSToolOutput: ((_tid: string, data: any) => {
+        order.push(`toolOutput:${data.toolCallId}`);
       }) as any,
     });
+    return order;
+  }
 
+  test('agent:tool_call applies with the frame batch, after the messages queued before it', async () => {
+    const order = recordOrder();
     const handlers = await captureHandlers();
     handlers['agent:message']({
       threadId: 't1',
       data: { messageId: 'm1', role: 'assistant', content: 'partial' },
     });
+    handlers['agent:tool_call']({ threadId: 't1', data: { toolCallId: 'tc1', name: 'Read' } });
+
+    // Deferred to the frame instead of one commit per tool call.
+    expect(order).toEqual([]);
+    drainRaf();
+    expect(order).toEqual(['message:m1:partial', 'toolCall:tc1']);
+  });
+
+  test('a burst of tool calls applies in one flush, in arrival order', async () => {
+    const order = recordOrder();
+    const handlers = await captureHandlers();
+    handlers['agent:message']({ threadId: 't1', data: { messageId: 'm1', content: 'a' } });
+    handlers['agent:tool_call']({ threadId: 't1', data: { toolCallId: 'tc1', name: 'Read' } });
+    handlers['agent:message']({ threadId: 't1', data: { messageId: 'm2', content: 'b' } });
+    handlers['agent:tool_call']({ threadId: 't1', data: { toolCallId: 'tc2', name: 'Grep' } });
+    handlers['agent:tool_output']({ threadId: 't1', data: { toolCallId: 'tc1', output: 'x' } });
+    // A later chunk of m2 must not jump ahead of tc2.
+    handlers['agent:message']({ threadId: 't1', data: { messageId: 'm2', content: 'b2' } });
+
+    expect(rafCallbacks.length).toBe(1);
+    drainRaf();
+    expect(order).toEqual([
+      'message:m1:a',
+      'toolCall:tc1',
+      'message:m2:b',
+      'toolCall:tc2',
+      'message:m2:b2',
+      'toolOutput:tc1',
+    ]);
+  });
+
+  test('interactive tool calls still apply immediately', async () => {
+    const order = recordOrder();
+    const handlers = await captureHandlers();
+    handlers['agent:message']({ threadId: 't1', data: { messageId: 'm1', content: 'q' } });
     handlers['agent:tool_call']({
       threadId: 't1',
-      data: { toolCallId: 'tc1', name: 'Read' },
+      data: { toolCallId: 'ask', name: 'AskUserQuestion' },
     });
 
-    expect(messageCalls).toHaveLength(1);
-    expect(toolCalls).toEqual([{ tid: 't1', data: { toolCallId: 'tc1', name: 'Read' } }]);
+    expect(order).toEqual(['message:m1:q', 'toolCall:ask']);
   });
 
   test('agent:error routes to handleWSError immediately', async () => {

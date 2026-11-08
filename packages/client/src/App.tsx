@@ -31,7 +31,11 @@ import { preloadAllThreadsView } from '@/platform/shortcut-target-preloads';
 import { preloadThreadView } from '@/platform/thread-view-loader';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useProjectStore } from '@/stores/project-store';
-import { ThreadProvider, useActiveThreadView, useThreadViewById } from '@/stores/thread-context';
+import {
+  ThreadProvider,
+  useActiveThreadSelect,
+  useThreadViewSelect,
+} from '@/stores/thread-context';
 import { setAppNavigate, useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';
@@ -154,10 +158,11 @@ function WorktreesTab({ ready }: { ready: boolean }) {
  * while the grid is open, the active thread otherwise.
  */
 function useRightPaneCanShowGit(liveColumnsOpen: boolean, gridSelectedThreadId: string | null) {
-  const gridSelectedThread = useThreadViewById(gridSelectedThreadId);
-  const activeThreadView = useActiveThreadView();
-  if (!liveColumnsOpen) return canDoGitOps(activeThreadView);
-  return canDoGitOps(gridSelectedThreadId ? gridSelectedThread : null);
+  // Boolean selections: App must not re-render on every streamed message.
+  const gridSelectedCanDoGit = useThreadViewSelect(gridSelectedThreadId, canDoGitOps);
+  const activeCanDoGit = useActiveThreadSelect(canDoGitOps);
+  if (!liveColumnsOpen) return activeCanDoGit;
+  return gridSelectedThreadId ? gridSelectedCanDoGit : false;
 }
 
 export function App() {

@@ -62,3 +62,42 @@ describe('resolveTerminalScope', () => {
     });
   });
 });
+
+describe('useTerminalScope subscriptions', () => {
+  test('does not re-render when only the open thread messages change', async () => {
+    const { act, renderHook } = await import('@testing-library/react');
+    const { useTerminalScope } = await import('@/hooks/use-terminal-scope');
+    const { useThreadStore } = await import('@/stores/thread-store');
+    const base = {
+      id: 'active-thread',
+      projectId: 'p1',
+      isScratch: false,
+      worktreePath: '/worktrees/active-thread',
+      messages: [] as any[],
+    };
+    act(() => useThreadStore.setState({ activeThread: base as any }));
+
+    let renders = 0;
+    const { result } = renderHook(() => {
+      renders += 1;
+      return useTerminalScope();
+    });
+    expect(result.current.scopeId).toBe('p1');
+    const before = renders;
+
+    act(() =>
+      useThreadStore.setState({
+        activeThread: { ...base, messages: [{ id: 'm1', content: 'streamed' }] } as any,
+      }),
+    );
+    expect(renders).toBe(before);
+
+    act(() =>
+      useThreadStore.setState({
+        activeThread: { ...base, worktreePath: '/worktrees/moved' } as any,
+      }),
+    );
+    expect(renders).toBe(before + 1);
+    expect(result.current.worktreePath).toBe('/worktrees/moved');
+  });
+});

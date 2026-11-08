@@ -163,6 +163,28 @@ export function useThreadViewById(
   return view ?? row ?? null;
 }
 
+/**
+ * Select one value from the open thread's view. Unlike `useActiveThreadView`,
+ * the component re-renders only when the selected value changes, not on every
+ * streamed message. Return a primitive, or pass `useShallow(select)` for an
+ * object.
+ */
+export function useActiveThreadSelect<T>(select: (thread: ThreadWithMessages | null) => T): T {
+  const row = useThreadById(useThreadStore((s) => s.activeThread?.id));
+  return useThreadStore((s) => select(mergeThreadView(s.activeThread, row)));
+}
+
+/** `useThreadViewById` narrowed by `select`; see `useActiveThreadSelect`. */
+export function useThreadViewSelect<T>(
+  threadId: string | null | undefined,
+  select: (thread: ThreadWithMessages | Thread | null) => T,
+): T {
+  const row = useThreadById(threadId);
+  return useThreadStore((s) =>
+    select((threadId ? mergeThreadView(s.threadDataById[threadId], row) : null) ?? row ?? null),
+  );
+}
+
 // ── Imperative utility ────────────────────────────────────────────────
 //
 // For event handlers / effect callbacks where hooks aren't available.

@@ -1,9 +1,10 @@
 import type { Thread } from '@funny/shared';
+import { useShallow } from 'zustand/react/shallow';
 
 import { readThreadRow } from '@/data/threads/read';
 import { useProjectStore } from '@/stores/project-store';
 import { SCRATCH_TERMINAL_SCOPE_ID } from '@/stores/terminal-store';
-import { useActiveThreadView, useThreadViewById } from '@/stores/thread-context';
+import { useActiveThreadSelect, useThreadViewSelect } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { readActiveThreadView, readThreadView } from '@/stores/thread-view';
 import { useUIStore } from '@/stores/ui-store';
@@ -75,12 +76,24 @@ export function resolveTerminalScope({
   };
 }
 
+function pickTerminalThread(thread: TerminalThread | null): TerminalThread | null {
+  if (!thread) return null;
+  return {
+    id: thread.id,
+    projectId: thread.projectId,
+    isScratch: thread.isScratch,
+    worktreePath: thread.worktreePath,
+  };
+}
+
 export function useTerminalScope(): TerminalScope {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const activeThread = useActiveThreadView();
+  // Only the fields the scope needs: the full view changes on every streamed
+  // message and re-rendered every terminal consumer.
+  const activeThread = useActiveThreadSelect(useShallow(pickTerminalThread));
   const liveColumnsOpen = useUIStore((s) => s.liveColumnsOpen);
   const gridSelectedThreadId = useUIStore((s) => s.gridSelectedThreadId);
-  const gridThread = useThreadViewById(gridSelectedThreadId);
+  const gridThread = useThreadViewSelect(gridSelectedThreadId, useShallow(pickTerminalThread));
 
   return resolveTerminalScope({
     liveColumnsOpen,

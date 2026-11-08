@@ -1,13 +1,14 @@
-/**
- * Project scope on the runner→server data channel (project-runner-binding):
- * a dedicated runner can only read/write its own project's data, even when
- * every project belongs to the same user.
- */
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
 import { handleDataMessageWithAck } from '../../services/data-handler.js';
+/**
+ * Project scope on the runner→server data channel (project-runner-binding):
+ * a dedicated runner can only read/write its own project's data, even when
+ * every project belongs to the same user.
+ */
+import { __resetDataOwnershipCache } from '../../services/data-ownership.js';
 import {
   DATA_SCOPE_RULES,
   __resetDataScopeCache,
@@ -61,6 +62,7 @@ describe('dedicated runner data scope', () => {
     }
     __resetRunnerScopeCache();
     __resetDataScopeCache();
+    __resetDataOwnershipCache();
     seedProject(db as any, { id: 'px', userId: 'alice', path: '/x' });
     seedProject(db as any, { id: 'py', userId: 'alice', path: '/y' });
     seedThread(db as any, { id: 'tx', projectId: 'px', userId: 'alice' });

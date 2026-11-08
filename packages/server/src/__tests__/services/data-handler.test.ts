@@ -8,6 +8,7 @@ import { eq } from 'drizzle-orm';
 
 import { setIO } from '../../services/browser-events.js';
 import { handleDataMessageWithAck } from '../../services/data-handler.js';
+import { __resetDataOwnershipCache } from '../../services/data-ownership.js';
 import { __resetDataScopeCache } from '../../services/data-scope.js';
 import { SqlOperationIdempotencyStore } from '../../services/grpc/operation-idempotency.js';
 import { upsertProfile } from '../../services/profile-service.js';
@@ -69,6 +70,7 @@ describe('data-handler handleDataMessageWithAck', () => {
     }
     __resetRunnerScopeCache();
     __resetDataScopeCache();
+    __resetDataOwnershipCache();
     // The authenticated runner sending every request below (a general runner).
     seedRunner(db as any, { id: 'runner-1', userId: 'user-1', token: 'token-runner-1' });
     seedProject(db as any, { id: 'p1', userId: 'user-1', path: '/tmp/repo' });
@@ -1099,6 +1101,32 @@ describe('data-handler handleDataMessageWithAck', () => {
     const row = await db.select().from(schema.threads).where(eq(schema.threads.id, 't1')).get();
     expect(row?.status).toBe('running');
     expect(row?.title).toBe('Renamed from runner');
+  });
+
+  test('update_thread cannot reassign the thread to another owner or project', async () => {
+    seedProject(db as any, { id: 'victim-project', userId: 'victim-user', path: '/tmp/victim' });
+    const before = await db.select().from(schema.threads).where(eq(schema.threads.id, 't1')).get();
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:update_thread',
+      threadId: 't1',
+      payload: {
+        threadId: 't1',
+        updates: {
+          status: 'running',
+          userId: 'victim-user',
+          projectId: 'victim-project',
+          isScratch: 1,
+          createdBy: 'victim-user',
+        },
+      },
+    });
+
+    expect(res).toEqual({ type: 'data:update_thread_response', ok: true });
+    const row = await db.select().from(schema.threads).where(eq(schema.threads.id, 't1')).get();
+    expect(row?.status).toBe('running');
+    expect(row?.userId).toBe(before?.userId);
+    expect(row?.projectId).toBe(before?.projectId);
+    expect(row?.isScratch).toBe(before?.isScratch);
   });
 
   describe('update_thread terminal-status broadcast', () => {

@@ -45,23 +45,88 @@ function nonEmptyString(value: unknown): string | undefined {
 }
 
 // ── Row lookups ─────────────────────────────────────────────────
+//
+// Every data message re-checks ownership, so the same few rows are read for
+// each event of a running thread. Cache only facts that never change once a
+// row exists: a thread's owner (the runner cannot write it, see
+// data-message-handlers), a message's thread and a tool call's message. Only
+// found rows are cached, so a row created later is never shadowed by a miss;
+// project ownership and membership can change and are always read fresh.
+
+const OWNERSHIP_CACHE_TTL_MS = 5 * 60_000;
+const OWNERSHIP_CACHE_MAX = 10_000;
+
+function createFactCache<V>() {
+  const entries = new Map<string, { value: V; expiresAt: number }>();
+  return {
+    async get(key: string, load: () => Promise<V | undefined>): Promise<V | undefined> {
+      const hit = entries.get(key);
+      if (hit && hit.expiresAt > Date.now()) return hit.value;
+      const value = await load();
+      if (value !== undefined) {
+        if (entries.size >= OWNERSHIP_CACHE_MAX) entries.clear();
+        entries.set(key, { value, expiresAt: Date.now() + OWNERSHIP_CACHE_TTL_MS });
+      }
+      return value;
+    },
+    delete: (key: string) => entries.delete(key),
+    clear: () => entries.clear(),
+  };
+}
+
+const threadOwners = createFactCache<UserRow>();
+const messageThreads = createFactCache<ThreadRefRow>();
+const toolCallMessages = createFactCache<{ messageId: string }>();
+
+/** Drop a deleted thread so a later request about it reads "not found" again. */
+export function forgetThreadOwnership(threadId: string): void {
+  threadOwners.delete(threadId);
+}
+
+/** Test-only: drop every cached ownership fact. */
+export function __resetDataOwnershipCache(): void {
+  threadOwners.clear();
+  messageThreads.clear();
+  toolCallMessages.clear();
+}
 
 async function findThread(threadId: string): Promise<UserRow | undefined> {
-  return (await dbGet(
-    db
-      .select({ userId: schema.threads.userId })
-      .from(schema.threads)
-      .where(eq(schema.threads.id, threadId)),
-  )) as UserRow | undefined;
+  return threadOwners.get(
+    threadId,
+    async () =>
+      (await dbGet(
+        db
+          .select({ userId: schema.threads.userId })
+          .from(schema.threads)
+          .where(eq(schema.threads.id, threadId)),
+      )) as UserRow | undefined,
+  );
 }
 
 async function findMessage(messageId: string): Promise<ThreadRefRow | undefined> {
-  return (await dbGet(
-    db
-      .select({ threadId: schema.messages.threadId })
-      .from(schema.messages)
-      .where(eq(schema.messages.id, messageId)),
-  )) as ThreadRefRow | undefined;
+  return messageThreads.get(
+    messageId,
+    async () =>
+      (await dbGet(
+        db
+          .select({ threadId: schema.messages.threadId })
+          .from(schema.messages)
+          .where(eq(schema.messages.id, messageId)),
+      )) as ThreadRefRow | undefined,
+  );
+}
+
+async function findToolCallMessage(toolCallId: string): Promise<{ messageId: string } | undefined> {
+  return toolCallMessages.get(
+    toolCallId,
+    async () =>
+      (await dbGet(
+        db
+          .select({ messageId: schema.toolCalls.messageId })
+          .from(schema.toolCalls)
+          .where(eq(schema.toolCalls.id, toolCallId)),
+      )) as { messageId: string } | undefined,
+  );
 }
 
 const isOwnedBy = (row: UserRow | undefined, userId: string): boolean =>
@@ -219,12 +284,7 @@ async function checkToolCallId(
   userId: string,
 ): Promise<Denial | null> {
   if (!toolCallId) return null;
-  const tc = (await dbGet(
-    db
-      .select({ messageId: schema.toolCalls.messageId })
-      .from(schema.toolCalls)
-      .where(eq(schema.toolCalls.id, toolCallId)),
-  )) as { messageId: string } | undefined;
+  const tc = await findToolCallMessage(toolCallId);
   if (!tc) return deny(`tool call ${toolCallId} not found`);
   const m = await findMessage(tc.messageId);
   if (!m) return deny(`tool call ${toolCallId} orphaned`);

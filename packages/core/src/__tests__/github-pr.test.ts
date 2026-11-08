@@ -5,7 +5,7 @@ vi.mock('../git/process.js', () => ({
   ProcessExecutionError: class ProcessExecutionError extends Error {},
 }));
 
-import { getPRForBranch } from '../git/github.js';
+import { getPRForBranch, lookupPRForBranch } from '../git/github.js';
 import { execute } from '../git/process.js';
 
 const mockExecute = execute as ReturnType<typeof vi.fn>;
@@ -119,5 +119,38 @@ describe('getPRForBranch', () => {
     const pr = await getPRForBranch('/repo', 'acme:feature/x');
 
     expect(pr?.prNumber).toBe(52);
+  });
+});
+
+describe('lookupPRForBranch', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  test('tells a failed gh call apart from a branch without a PR', async () => {
+    mockExecute.mockResolvedValueOnce({
+      exitCode: 1,
+      stdout: '',
+      stderr: 'API rate limit exceeded',
+    });
+    const failed = await lookupPRForBranch('/repo', 'feature/x');
+    expect(failed.isErr()).toBe(true);
+
+    mockExecute.mockResolvedValueOnce({ exitCode: 0, stdout: '[]', stderr: '' });
+    const none = await lookupPRForBranch('/repo', 'feature/x');
+    expect(none.isOk() && none.value).toBeNull();
+  });
+
+  test('reports a timeout or spawn error and invalid output as failures', async () => {
+    mockExecute.mockRejectedValueOnce(new Error('timed out'));
+    expect((await lookupPRForBranch('/repo', 'feature/x')).isErr()).toBe(true);
+
+    mockExecute.mockResolvedValueOnce({ exitCode: 0, stdout: 'not json', stderr: '' });
+    expect((await lookupPRForBranch('/repo', 'feature/x')).isErr()).toBe(true);
+  });
+
+  test('getPRForBranch keeps reporting failures as no PR', async () => {
+    mockExecute.mockResolvedValueOnce({ exitCode: 1, stdout: '', stderr: 'auth required' });
+    expect(await getPRForBranch('/repo', 'feature/x')).toBeNull();
   });
 });

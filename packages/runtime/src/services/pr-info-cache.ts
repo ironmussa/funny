@@ -11,7 +11,7 @@
  * value meaning "no PR exists for this branch".
  */
 
-import { getPRForBranch, type BranchPRInfo } from '@funny/core/git';
+import { lookupPRForBranch, type BranchPRInfo } from '@funny/core/git';
 
 import { log } from '../lib/logger.js';
 import { startSpan } from '../lib/telemetry.js';
@@ -20,6 +20,9 @@ const PR_INFO_CACHE_TTL_MS = 60_000; // 1 minute
 
 const prInfoCache = new Map<string, { data: BranchPRInfo | null; ts: number }>();
 const prFetchInflight = new Map<string, Promise<BranchPRInfo | null>>();
+// Bumped by invalidatePRInfo: a lookup that started before an invalidation
+// must not write its (possibly stale) answer back afterwards.
+const prGeneration = new Map<string, number>();
 
 function prCacheKey(projectPath: string, branch: string): string {
   return `${projectPath}::${branch}`;
@@ -47,17 +50,21 @@ function fetchPR(
   const inflight = prFetchInflight.get(key);
   if (inflight) return inflight;
   const span = startSpan('github.pr_lookup', { attributes: { branch, background } });
-  const promise = getPRForBranch(projectPath, branch, ghEnv).then(
-    (pr) => {
-      span.end('ok');
-      prInfoCache.set(key, { data: pr, ts: Date.now() });
-      return pr;
-    },
-    (error) => {
-      span.end('error', String(error));
-      throw error;
-    },
-  );
+  const generation = prGeneration.get(key) ?? 0;
+  // A failed lookup (gh error, rate limit, timeout) rejects instead of reading
+  // as "no PR", so it is never cached and the next call retries.
+  const promise = (async () => {
+    const result = await lookupPRForBranch(projectPath, branch, ghEnv);
+    if (result.isErr()) {
+      span.end('error', result.error.message);
+      throw new Error(result.error.message);
+    }
+    span.end('ok');
+    if ((prGeneration.get(key) ?? 0) === generation) {
+      prInfoCache.set(key, { data: result.value, ts: Date.now() });
+    }
+    return result.value;
+  })();
   prFetchInflight.set(key, promise);
   const clear = () => {
     if (prFetchInflight.get(key) === promise) prFetchInflight.delete(key);
@@ -124,8 +131,14 @@ export function schedulePRLookup(opts: {
  */
 export function invalidatePRInfo(branch: string): void {
   const suffix = `::${branch}`;
-  for (const key of prInfoCache.keys()) {
-    if (key.endsWith(suffix)) prInfoCache.delete(key);
+  const keys = new Set([...prInfoCache.keys(), ...prFetchInflight.keys()]);
+  for (const key of keys) {
+    if (!key.endsWith(suffix)) continue;
+    prInfoCache.delete(key);
+    // Detach a lookup already in flight: callers start a fresh one, and its
+    // completion can no longer overwrite the cache.
+    prFetchInflight.delete(key);
+    prGeneration.set(key, (prGeneration.get(key) ?? 0) + 1);
   }
 }
 
@@ -133,4 +146,5 @@ export function invalidatePRInfo(branch: string): void {
 export function resetPRInfoCacheForTests(): void {
   prInfoCache.clear();
   prFetchInflight.clear();
+  prGeneration.clear();
 }

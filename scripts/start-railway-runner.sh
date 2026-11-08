@@ -21,11 +21,13 @@ if [ "$(id -u)" = 0 ]; then
   mkdir -p "$runner_home"
   # Fix ownership once: the volume holds worktrees, scratch dirs and the
   # runner's $HOME, so a recursive chown on every boot grew with its size.
-  # After the first full pass only the runtime (as funny) writes here, so later
-  # boots just fix the top-level dirs. Delete the marker to force a full pass.
+  # After the first full pass the runtime (as funny) does the writing, so later
+  # boots only repair the top two levels, where a root writer (railway ssh, a
+  # volume restore) would leave runner-credentials.json or a worktree dir.
+  # Delete the marker to force a full pass.
   ownership_marker="$FUNNY_DATA_DIR/.funny-ownership-v1"
   if [ -f "$ownership_marker" ]; then
-    chown funny:funny "$FUNNY_DATA_DIR" "$FUNNY_DATA_DIR/home" "$runner_home"
+    find "$FUNNY_DATA_DIR" -maxdepth 2 \( ! -user funny -o ! -group funny \) -exec chown -h funny:funny {} +
   else
     # Only touch entries with the wrong owner (no inode writes for the rest).
     find "$FUNNY_DATA_DIR" \( ! -user funny -o ! -group funny \) -exec chown -h funny:funny {} +

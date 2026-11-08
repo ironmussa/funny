@@ -6,7 +6,9 @@
  */
 
 import { processError, internal, type DomainError } from '@funny/shared/errors';
-import { ResultAsync } from 'neverthrow';
+import { parseStoredJson } from '@funny/shared/json-validation';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { execute, ProcessExecutionError } from './process.js';
 
@@ -218,13 +220,29 @@ export function publishRepo(
 
 // ── PR Queries ──────────────────────────────────────────────
 
-export async function getPRForBranch(
+const GH_PR_LIST_SCHEMA = z.array(
+  z
+    .object({
+      number: z.number(),
+      url: z.string(),
+      state: z.string().optional(),
+      headRefName: z.string().optional(),
+    })
+    .passthrough(),
+);
+
+/**
+ * The PR whose head is `branch`, `null` when there is none, or an error when
+ * the lookup itself failed (gh exit code, timeout, auth, rate limit, bad
+ * output). Callers that cache the answer must not cache a failure as "no PR".
+ */
+export function lookupPRForBranch(
   cwd: string,
   branch: string,
   env?: Record<string, string>,
-): Promise<BranchPRInfo | null> {
-  try {
-    const result = await execute(
+): ResultAsync<BranchPRInfo | null, DomainError> {
+  return ResultAsync.fromPromise(
+    execute(
       'gh',
       [
         'pr',
@@ -239,19 +257,31 @@ export async function getPRForBranch(
         '10',
       ],
       { cwd, timeout: 10_000, reject: false, env },
-    );
-    if (result.exitCode !== 0 || !result.stdout.trim()) return null;
-    const data = JSON.parse(result.stdout);
-    if (!Array.isArray(data) || data.length === 0) return null;
+    ),
+    (error) => internal(`gh pr list failed: ${String(error)}`),
+  ).andThen((result) => {
+    if (result.exitCode !== 0) {
+      return errAsync(processError('gh pr list failed', result.exitCode, result.stderr));
+    }
+    if (!result.stdout.trim()) return okAsync(null);
+    const parsed = parseStoredJson(GH_PR_LIST_SCHEMA, result.stdout, 'gh pr list');
+    if (!parsed.ok) return errAsync(internal(parsed.error));
     const expectedHeadRef = branchHeadRefName(branch);
-    const pr = data.find((candidate) => candidate?.headRefName === expectedHeadRef);
-    if (!pr) return null;
-    return {
+    const pr = parsed.value.find((candidate) => candidate.headRefName === expectedHeadRef);
+    if (!pr) return okAsync(null);
+    return okAsync({
       prNumber: pr.number,
       prUrl: pr.url,
-      prState: pr.state ?? 'OPEN',
-    };
-  } catch {
-    return null;
-  }
+      prState: (pr.state ?? 'OPEN') as BranchPRInfo['prState'],
+    });
+  });
+}
+
+/** {@link lookupPRForBranch} with failures reported as "no PR". */
+export async function getPRForBranch(
+  cwd: string,
+  branch: string,
+  env?: Record<string, string>,
+): Promise<BranchPRInfo | null> {
+  return (await lookupPRForBranch(cwd, branch, env)).unwrapOr(null);
 }

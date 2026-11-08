@@ -52,13 +52,20 @@ describe('expandable native diff', () => {
     const bounds = root.renderer.getElementBounds(truncated!.id);
     expect(bounds).not.toBeNull();
     // The Show more row follows the last painted line, but the element can be
-    // taller than its rows (it stretches to the test root), so a fixed offset
-    // from its bottom edge may land in empty space. Probe upward through real
-    // GPUI hit testing until the row is hit; other rows ignore the click.
+    // taller than its rows, so a fixed offset from its bottom edge may land in
+    // empty space. Probe upward through real GPUI hit testing, within the
+    // window, until the row is hit; other rows ignore the click.
     const isExpanded = () =>
       root.renderer.findByTestId('diff')?.customProps?.maxLines === undefined;
-    for (let y = bounds!.y + bounds!.height - 4; y > bounds!.y && !isExpanded(); y -= 6) {
+    const window = root.renderer.getWindowSize();
+    const bottom = Math.min(bounds!.y + bounds!.height, window.height) - 2;
+    const top = Math.max(bounds!.y, bottom - 400);
+    for (let y = bottom; y > top && !isExpanded(); y -= 4) {
       root.renderer.nativeSimulateClick(bounds!.x + bounds!.width / 2, y);
+    }
+    if (!isExpanded()) {
+      // Surfaces the geometry in CI logs: the native renderer is unavailable on Linux.
+      console.error('show-more row not hit', JSON.stringify({ bounds, window }));
     }
 
     expect(root.renderer.findByTestId('diff')?.customProps?.maxLines).toBeUndefined();

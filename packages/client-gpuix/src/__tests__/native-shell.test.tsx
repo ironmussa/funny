@@ -206,7 +206,11 @@ describe('native read-only shell', () => {
     expect(virtualLists).toHaveLength(2);
     expect(virtualLists[0]!.children.length).toBeGreaterThan(2);
     expect(virtualLists[1]!.children).toHaveLength(THREAD_RETAINED_WINDOW_SIZE);
-    const sidebarBounds = root.renderer.getElementBounds(virtualLists[0]!.id);
+    // GPUIX reports bounds for layout elements, not for the <virtual-list>
+    // itself; measure the scrollable container it fills instead.
+    const sidebarContainer = virtualLists[0]!.parentId;
+    expect(sidebarContainer).not.toBeNull();
+    const sidebarBounds = root.renderer.getElementBounds(sidebarContainer!);
     expect(sidebarBounds?.width).toBeGreaterThan(0);
     expect(sidebarBounds?.height).toBeGreaterThan(0);
     expect(root.renderer.findByType('markdown')).toHaveLength(0);

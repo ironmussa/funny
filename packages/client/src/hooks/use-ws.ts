@@ -11,6 +11,7 @@ import {
   DeliveryMetadataSchema,
   ScopeKind,
   ScopeReferenceSchema,
+  StatusCode,
 } from '@funny/shared/browser-v1/common';
 import { SubscriptionRequestSchema } from '@funny/shared/browser-v1/events';
 import { InteractiveEnvelopeSchema } from '@funny/shared/browser-v1/interactive';
@@ -23,9 +24,13 @@ import { fetchForProject } from '@/data/git-status/actions';
 import { readProjects } from '@/data/projects/read';
 import { resyncDataLayer } from '@/data/resync';
 import { listedProjectIds, readThreadIndex, type ThreadIndexSnapshot } from '@/data/threads/read';
+import { recoverBrowserPanelSession } from '@/hooks/dispatch-browser-session-events';
 import { parseRoute } from '@/hooks/route-parser';
 import { createClientLogger } from '@/lib/client-logger';
 import { setBrowserSessionTransport } from '@/lib/realtime/browser-session-realtime';
+import { browserSessionEventFromV1 } from '@/lib/realtime/browser-session-v1-events';
+import { createLatestFrameFetcher } from '@/lib/realtime/latest-frame-fetcher';
+import { notifyIncompatibleProtocol } from '@/lib/realtime/protocol-mismatch';
 import { SocketIoClientRealtimePort } from '@/lib/realtime/socketio-realtime-port';
 import { metric } from '@/lib/telemetry';
 import { clientComposition } from '@/platform/client-composition';
@@ -99,6 +104,7 @@ function connect() {
   });
 
   activeSocket = socket;
+  notifyActiveWSChanged();
   const realtimePort = new SocketIoClientRealtimePort(socket);
   activeRealtimePort = realtimePort;
   setBrowserSessionTransport({
@@ -113,6 +119,15 @@ function connect() {
       const threadId = typeof data.threadId === 'string' ? data.threadId : '';
       dispatchRealtimeEvent(payload.value.eventType, threadId, data);
     }
+  });
+  const browserFrames = createLatestFrameFetcher({
+    fetch: authorizedResourceBase64,
+    deliver: (sessionId, data) =>
+      dispatchRealtimeEvent('browser-session:frame', '', { sessionId, data }),
+    onError: (error) =>
+      wsLog.warn('browser.v1 frame resource unavailable', {
+        error: error instanceof Error ? error.message : String(error),
+      }),
   });
   realtimePort.onInteractive((message) => {
     const payload = message.payload;
@@ -142,72 +157,23 @@ function connect() {
     }
     if (payload.case === 'browserSession') {
       const browser = payload.value;
-      switch (browser.payload.case) {
-        case 'frame':
-          if (browser.payload.value.frame?.authorizedUrl) {
-            void authorizedResourceBase64(browser.payload.value.frame.authorizedUrl)
-              .then((data) =>
-                dispatchRealtimeEvent('browser-session:frame', '', {
-                  sessionId: browser.browserSessionId,
-                  data,
-                }),
-              )
-              .catch((error) =>
-                wsLog.warn('browser.v1 frame resource unavailable', {
-                  error: error instanceof Error ? error.message : String(error),
-                }),
-              );
-          }
-          break;
-        case 'result':
-          {
-            const result = browser.payload.value.value ?? {};
-            dispatchRealtimeEvent('browser-session:result', '', {
-              sessionId: browser.browserSessionId,
-              requestId: message.metadata?.requestId,
-              ok: result.ok === true,
-              value: result.value,
-              error: typeof result.error === 'string' ? result.error : undefined,
-            });
-          }
-          break;
-        case 'status':
-          dispatchRealtimeEvent('browser-session:error', '', {
-            sessionId: browser.browserSessionId,
-            message: browser.payload.value.message,
-          });
-          break;
-        case 'close':
-          dispatchRealtimeEvent('browser-session:closed', '', {
-            sessionId: browser.browserSessionId,
-            reason: browser.payload.value.reason,
-          });
-          break;
-        case 'ready':
-          dispatchRealtimeEvent('browser-session:ready', '', {
-            sessionId: browser.browserSessionId,
-            url: browser.payload.value.targetUrl,
-          });
-          break;
-        case 'console':
-          dispatchRealtimeEvent('browser-session:console', '', {
-            sessionId: browser.browserSessionId,
-            level: browser.payload.value.level,
-            text: browser.payload.value.text,
-            url: browser.payload.value.url,
-            line: browser.payload.value.line,
-            column: browser.payload.value.column,
-            timestamp: Number(browser.payload.value.occurredAtMs),
-          });
-          break;
+      if (browser.payload.case === 'frame') {
+        const frameUrl = browser.payload.value.frame?.authorizedUrl;
+        if (frameUrl) browserFrames.push(browser.browserSessionId, frameUrl);
+        return;
       }
+      const event = browserSessionEventFromV1(browser, message.metadata?.requestId);
+      if (event) dispatchRealtimeEvent(event.type, '', event.data);
     }
   });
   realtimePort.onRecoveryRequired((scope) => {
     wsLog.warn('browser.v1 authoritative resynchronization required', {
       scope: ScopeKind[scope.kind] ?? String(scope.kind),
     });
-    if (scope.kind === ScopeKind.USER) void useThreadStore.getState().loadSharedThreads();
+    if (scope.kind === ScopeKind.USER) {
+      void useThreadStore.getState().loadSharedThreads();
+      recoverBrowserPanelSession();
+    }
     if (
       (scope.kind === ScopeKind.THREAD_STREAM || scope.kind === ScopeKind.THREAD_PRESENCE) &&
       useThreadStore.getState().selectedThreadId === scope.id
@@ -261,6 +227,11 @@ function connect() {
               }),
             );
           }
+        } else if (
+          outcome.outcome.case === 'status' &&
+          outcome.outcome.value.code === StatusCode.INCOMPATIBLE
+        ) {
+          notifyIncompatibleProtocol(outcome.outcome.value.message);
         }
       })
       .catch((error) => {
@@ -388,6 +359,7 @@ function teardown() {
     unregisterSocketIOHandlers(activeSocket);
     activeSocket.disconnect();
     activeSocket = null;
+    notifyActiveWSChanged();
   }
 }
 
@@ -549,6 +521,22 @@ export function useWS() {
 /** Get the active Socket.IO instance (for sending messages from components) */
 export function getActiveWS(): Socket | null {
   return activeSocket;
+}
+
+const activeWSListeners = new Set<(socket: Socket | null) => void>();
+
+/**
+ * Be told when the active socket instance is created or torn down. Listeners
+ * that bind to socket events must re-bind here: a teardown (HMR, last
+ * `useWS` unmount) replaces the instance, and the old one never reconnects.
+ */
+export function subscribeActiveWS(listener: (socket: Socket | null) => void): () => void {
+  activeWSListeners.add(listener);
+  return () => activeWSListeners.delete(listener);
+}
+
+function notifyActiveWSChanged(): void {
+  for (const listener of activeWSListeners) listener(activeSocket);
 }
 
 export type TerminalRealtimeCommand =

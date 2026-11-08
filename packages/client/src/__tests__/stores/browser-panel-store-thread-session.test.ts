@@ -111,13 +111,55 @@ describe('browser panel thread sessions', () => {
     await vi.waitFor(() => expect(mocks.close).toHaveBeenCalledWith(id, 'user'));
   });
 
-  test('switching threads detaches the old session and probes the new one', async () => {
-    useBrowserPanelStore.setState({ open: true });
-    await store().attachThreadSession('t1');
+  test('switching to a thread with the panel open detaches the old session and probes the new one', async () => {
+    store().syncActiveThread('t2');
+    store().togglePanel();
+    store().syncActiveThread('t1');
+    store().togglePanel();
+    await vi.waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t1', ''));
     store().syncActiveThread('t2');
     await vi.waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t2', ''));
     expect(mocks.close).toHaveBeenCalledWith('thread:t1', 'detach');
+    expect(store().open).toBe(true);
     expect(store().sessionId).toBe('thread:t2');
+  });
+
+  test('the panel remembers open or closed per thread', async () => {
+    store().syncActiveThread('t1');
+    store().togglePanel();
+    expect(store().open).toBe(true);
+
+    store().syncActiveThread('t2');
+    expect(store().open).toBe(false);
+    expect(store().sessionId).toBeNull();
+    await vi.waitFor(() => expect(mocks.close).toHaveBeenCalledWith('thread:t1', 'detach'));
+
+    store().syncActiveThread('t1');
+    expect(store().open).toBe(true);
+    await vi.waitFor(() => expect(mocks.open).toHaveBeenLastCalledWith('thread:t1', ''));
+
+    store().closePanel();
+    store().syncActiveThread('t2');
+    store().syncActiveThread('t1');
+    expect(store().open).toBe(false);
+  });
+
+  test('views without a thread keep their own panel state', () => {
+    store().syncActiveThread(null);
+    store().togglePanel();
+    store().syncActiveThread('t1');
+    expect(store().open).toBe(false);
+    store().syncActiveThread(null);
+    expect(store().open).toBe(true);
+  });
+
+  test('agent-opened marks that thread open for later switches', async () => {
+    store().syncActiveThread('t1');
+    store().handleAgentOpened('thread:t1', 't1', 't1');
+    store().syncActiveThread('t2');
+    expect(store().open).toBe(false);
+    store().syncActiveThread('t1');
+    expect(store().open).toBe(true);
   });
 
   test('not_found clears an attach attempt', async () => {

@@ -92,6 +92,13 @@ interface SentHistoryEntry {
 
 interface BrowserPanelState {
   open: boolean;
+  /**
+   * Whether the panel is open, per thread (`''` = views without a thread).
+   * Switching threads restores that thread's state. In memory only.
+   */
+  openByThread: Record<string, boolean>;
+  /** Thread `open` currently applies to; `undefined` until the first sync. */
+  panelThreadId: string | null | undefined;
   url: string;
   loadedUrl: string | null;
   /**
@@ -132,6 +139,8 @@ interface BrowserPanelState {
   viewport: { width: number; height: number };
   /** Who drives a thread-bound session: the agent, or the user after "Take over". */
   controller: BrowserSessionController;
+  /** Whether the session's page audio is muted (sessions start muted). */
+  audioMuted: boolean;
   /** JavaScript dialog waiting for an answer (the page is frozen meanwhile). */
   dialog: BrowserSessionDialog | null;
   sessionStatus: SessionStatus;
@@ -191,6 +200,9 @@ interface BrowserPanelState {
   clearBrowserProfile: () => Promise<void>;
   setSessionController: (sessionId: string, controller: BrowserSessionController) => void;
   setSessionDialog: (sessionId: string, dialog: BrowserSessionDialog | null) => void;
+  setSessionAudio: (sessionId: string, muted: boolean) => void;
+  /** Turn the session's page audio on or off. */
+  setAudioMuted: (muted: boolean) => Promise<void>;
   /** Take the session over from the agent (or hand it back with `false`). */
   setUserControl: (userControls: boolean) => Promise<void>;
   /** Answer the pending dialog from the panel. */
@@ -301,6 +313,7 @@ const FRESH = {
   sessionThreadId: null as string | null,
   viewport: { width: BROWSER_SESSION_VIEWPORT_WIDTH, height: BROWSER_SESSION_VIEWPORT_HEIGHT },
   controller: 'agent' as BrowserSessionController,
+  audioMuted: true,
   dialog: null as BrowserSessionDialog | null,
   sessionStatus: 'idle' as SessionStatus,
   sessionError: null as string | null,
@@ -321,6 +334,7 @@ const DETACHED = {
   sessionStatus: 'idle' as SessionStatus,
   sessionError: null as string | null,
   viewport: { width: BROWSER_SESSION_VIEWPORT_WIDTH, height: BROWSER_SESSION_VIEWPORT_HEIGHT },
+  audioMuted: true,
 };
 
 // Lazy-loaded so the panel's transport code stays out of the initial bundle;
@@ -340,11 +354,41 @@ async function releaseSession(sessionId: string, reason: 'user' | 'detach'): Pro
   clearLatestFrame(sessionId);
 }
 
+/** Let go of the panel's session, if any: detach a thread-bound one (never close it), close a free one. */
+function releaseHeldSession(state: Pick<BrowserPanelState, 'sessionId' | 'sessionThreadId'>): void {
+  if (!state.sessionId) return;
+  void releaseSession(state.sessionId, state.sessionThreadId ? 'detach' : 'user');
+}
+
+/** The panel is open but holds no session (e.g. after a detach). */
+function needsSession(state: Pick<BrowserPanelState, 'open' | 'sessionId'>): boolean {
+  return state.open && !state.sessionId;
+}
+
+/** Panel state when it switches to `threadId`, restoring that thread's open/closed state. */
+function panelStateForThread(threadId: string | null, open: boolean) {
+  return open
+    ? { ...DETACHED, url: '', loadedUrl: null, open, panelThreadId: threadId }
+    : { ...FRESH, open, panelThreadId: threadId };
+}
+
 /** On a thread the session is the thread's (shared with its agent); otherwise a fresh id. */
 function newPanelSessionId(threadId: string | null): string {
   if (threadId) return threadBrowserSessionId(threadId);
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) return crypto.randomUUID();
   return `bp-session-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+/** `openByThread` key: the thread id, or `''` for views without a thread. */
+function threadKey(threadId: string | null | undefined): string {
+  return threadId ?? '';
+}
+
+function rememberOpen(
+  state: Pick<BrowserPanelState, 'openByThread' | 'panelThreadId'>,
+  open: boolean,
+): Record<string, boolean> {
+  return { ...state.openByThread, [threadKey(state.panelThreadId)]: open };
 }
 
 function urlProtocol(url: string): string {
@@ -357,6 +401,8 @@ function errorMessage(error: unknown): string {
 
 export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
   ...FRESH,
+  openByThread: {},
+  panelThreadId: undefined,
   browserPanelWidth: readInitialWidth(),
   defaultModel: initialDefaults.defaultModel,
   sentHistory: readHistory(),
@@ -366,18 +412,20 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
     if (opening) {
       log.info('panel opened');
       metric('browser_panel.opened', 1, { type: 'sum' });
-      set({ open: true });
+      set({ open: true, openByThread: rememberOpen(get(), true) });
+      // On a thread, show its (agent-shared) session if it already has one.
+      const { panelThreadId, sessionId } = get();
+      if (panelThreadId && !sessionId) void get().attachThreadSession(panelThreadId);
     } else {
-      // Closing the panel tears down a panel-owned session (frames keep
-      // streaming otherwise) and detaches from a thread-bound one.
-      void get().closeBrowserSession();
-      set({ ...FRESH, open: false });
+      get().closePanel();
     }
   },
 
   closePanel: () => {
+    // Closing the panel tears down a panel-owned session (frames keep
+    // streaming otherwise) and detaches from a thread-bound one.
     void get().closeBrowserSession();
-    set({ ...FRESH, open: false });
+    set({ ...FRESH, open: false, openByThread: rememberOpen(get(), false) });
   },
 
   setUrl: (url) => set({ url }),
@@ -573,23 +621,30 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
   syncActiveThread: (threadId) => {
     const state = get();
-    if (!state.open) return;
-    if (state.sessionThreadId && state.sessionThreadId !== threadId && state.sessionId) {
-      void releaseSession(state.sessionId, 'detach');
-      set({ ...DETACHED, url: '', loadedUrl: null });
+    if (state.panelThreadId === threadId) {
+      if (threadId && needsSession(state)) void get().attachThreadSession(threadId);
+      return;
     }
-    if (threadId && !get().sessionId) void get().attachThreadSession(threadId);
+    // Another thread: let go of this one's session (detach — never close — a
+    // thread-bound one) and restore the new thread's open/closed state.
+    releaseHeldSession(state);
+    const open = state.openByThread[threadKey(threadId)] ?? false;
+    set(panelStateForThread(threadId, open));
+    if (open && threadId) void get().attachThreadSession(threadId);
   },
 
   handleAgentOpened: (sessionId, threadId, activeThreadId) => {
     if (threadId !== activeThreadId) return;
     const state = get();
     if (state.sessionId === sessionId) return;
-    if (state.sessionId) {
-      void releaseSession(state.sessionId, state.sessionThreadId ? 'detach' : 'user');
-    }
+    releaseHeldSession(state);
     log.info('agent opened browser on active thread — attaching', { threadId });
-    set({ ...DETACHED, open: true });
+    set({
+      ...DETACHED,
+      open: true,
+      panelThreadId: threadId,
+      openByThread: { ...state.openByThread, [threadKey(threadId)]: true },
+    });
     void get().attachThreadSession(threadId);
   },
 
@@ -612,6 +667,22 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
   setSessionDialog: (sessionId, dialog) => {
     if (get().sessionId !== sessionId) return;
     set({ dialog });
+  },
+
+  setSessionAudio: (sessionId, muted) => {
+    if (get().sessionId !== sessionId) return;
+    set({ audioMuted: muted });
+  },
+
+  setAudioMuted: async (muted) => {
+    const { sessionId } = get();
+    if (!sessionId) return;
+    const { browserSessionClient } = await loadClient();
+    browserSessionClient.input(sessionId, { kind: 'audio', muted });
+    metric('browser_panel.audio_toggled', 1, {
+      type: 'sum',
+      attributes: { muted: String(muted) },
+    });
   },
 
   setUserControl: async (userControls) => {
@@ -676,5 +747,5 @@ export const useBrowserPanelStore = create<BrowserPanelState>((set, get) => ({
 
   toggleInspectActive: () => set((state) => ({ inspectActive: !state.inspectActive })),
 
-  reset: () => set({ ...FRESH, open: false }),
+  reset: () => set({ ...FRESH, open: false, openByThread: {}, panelThreadId: undefined }),
 }));

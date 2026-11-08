@@ -4,6 +4,7 @@ import {
   type RealtimeEffect,
   type RealtimeEvent,
 } from '@funny/client-core';
+import type { GitRefsUpdatedChange, WSGitRefsUpdatedData } from '@funny/shared';
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
 
@@ -19,6 +20,7 @@ import {
   markGitStatusStale,
 } from '@/data/git-status/actions';
 import { readGitStatusMaps } from '@/data/git-status/read';
+import { fetchProjectBranches } from '@/data/projects/branches';
 import {
   applyRunClaimed,
   applyRunDispatched,
@@ -185,7 +187,11 @@ const actionPorts: RealtimeActionPorts = {
   workflow: applyThroughWebStore,
   presence: applyThroughWebStore,
   testing: applyThroughWebStore,
-  browserSession: applyThroughWebStore,
+  // Browser sessions arrive only as browser.v1 (decoded in use-ws.ts), never
+  // as Socket.IO events, so they skip the web event table.
+  browserSession: (event) => {
+    dispatchBrowserSessionEvent(event.type, event.data);
+  },
   infrastructure: applyThroughWebStore,
 };
 
@@ -604,7 +610,28 @@ function handleGitStatus(threadId: string, data: any): void {
   if (!data.prOnly) notifyReviewDirty(threadId);
 }
 
-function handleGitRefsUpdated(_threadId: string, data: any): void {
+function handleGitRefsUpdated(threadId: string, data: WSGitRefsUpdatedData): void {
+  // A background recompute on the runtime found that a value it served stale
+  // has changed: refetch only the views named in `changed`.
+  const changed = data.changed;
+  if (changed && !changed.includes('status')) {
+    refetchChangedGitViews(threadId, data.projectId, changed);
+    return;
+  }
+  refetchGitStatusAfterRefsMoved(data.projectId);
+}
+
+function refetchChangedGitViews(
+  threadId: string,
+  projectId: string,
+  changed: readonly GitRefsUpdatedChange[],
+): void {
+  // Thread-mode panes key on the thread id, project-mode panes on the project id.
+  if (changed.includes('diff')) notifyReviewDirty(threadId || projectId);
+  if (changed.includes('branches')) void fetchProjectBranches(projectId, { force: true });
+}
+
+function refetchGitStatusAfterRefsMoved(projectId: string): void {
   // A background `git fetch` advanced the remote-tracking refs (origin may
   // have new commits). Re-fetch status through the normal — now cache-fresh
   // — path so the incoming-commit count surfaces without a second manual
@@ -616,24 +643,20 @@ function handleGitRefsUpdated(_threadId: string, data: any): void {
   // active; refreshing them for unrelated repositories created a second
   // startup wave and repeatedly recomputed the same active-thread status.
   // Mark the project's status stale so the bulk sidebar refetch isn't served from cache.
-  markGitStatusStale([data.projectId]);
+  markGitStatusStale([projectId]);
   const activeThreadId = getUrlThreadId() ?? useThreadStore.getState().selectedThreadId;
   const activeThreadProjectId = activeThreadId ? getProjectIdForThread(activeThreadId) : undefined;
-  if (activeThreadId && activeThreadProjectId === data.projectId) {
+  if (activeThreadId && activeThreadProjectId === projectId) {
     void fetchForThread(activeThreadId, true); // thread-mode pane
   }
-  if (useProjectStore.getState().selectedProjectId === data.projectId) {
-    void fetchProjectStatus(data.projectId, true); // project-mode pane slice
+  if (useProjectStore.getState().selectedProjectId === projectId) {
+    void fetchProjectStatus(projectId, true); // project-mode pane slice
   }
-  void fetchForProject(data.projectId); // sidebar bulk badges
+  void fetchForProject(projectId); // sidebar bulk badges
 }
 
 const testEventHandler: WebEventHandler = (_threadId, data, type) => {
   dispatchTestEvent(type, data);
-};
-
-const browserSessionEventHandler: WebEventHandler = (_threadId, data, type) => {
-  dispatchBrowserSessionEvent(type, data);
 };
 
 /**
@@ -757,16 +780,6 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
   'test:network': testEventHandler,
   'test:error': testEventHandler,
   'test:action': testEventHandler,
-  'browser-session:frame': browserSessionEventHandler,
-  'browser-session:ready': browserSessionEventHandler,
-  'browser-session:result': browserSessionEventHandler,
-  'browser-session:console': browserSessionEventHandler,
-  'browser-session:error': browserSessionEventHandler,
-  'browser-session:closed': browserSessionEventHandler,
-  'browser-session:agent-opened': browserSessionEventHandler,
-  'browser-session:viewport': browserSessionEventHandler,
-  'browser-session:controller': browserSessionEventHandler,
-  'browser-session:dialog': browserSessionEventHandler,
   'clone:progress': noop,
   'worktree:setup': (threadId, data) => {
     useThreadStore.getState().handleWSWorktreeSetup(threadId, data);
@@ -1016,16 +1029,6 @@ const ALL_EVENT_TYPES = [
   'native-git:build_output',
   'native-git:build_status',
   'runner:status',
-  'browser-session:ready',
-  'browser-session:frame',
-  'browser-session:result',
-  'browser-session:console',
-  'browser-session:error',
-  'browser-session:closed',
-  'browser-session:agent-opened',
-  'browser-session:viewport',
-  'browser-session:controller',
-  'browser-session:dialog',
 ] as const;
 
 // Tracks Socket.IO listeners we attached, so HMR (or any future dispose path)

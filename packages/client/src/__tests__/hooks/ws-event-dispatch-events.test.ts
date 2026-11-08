@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const {
   mockNotifyDirty,
+  mockFetchProjectBranches,
   mockSetRunnerStatus,
   mockEmitPtyData,
   mockAppendCommandOutput,
@@ -19,6 +20,7 @@ const {
   mockSetTabError,
 } = vi.hoisted(() => ({
   mockNotifyDirty: vi.fn(),
+  mockFetchProjectBranches: vi.fn(),
   mockSetRunnerStatus: vi.fn(),
   mockEmitPtyData: vi.fn(),
   mockAppendCommandOutput: vi.fn(),
@@ -51,6 +53,10 @@ vi.mock('@/stores/review-pane-store', () => ({
   useReviewPaneStore: {
     getState: () => ({ notifyDirty: mockNotifyDirty }),
   },
+}));
+
+vi.mock('@/data/projects/branches', () => ({
+  fetchProjectBranches: mockFetchProjectBranches,
 }));
 
 vi.mock('@/stores/runner-status-store', () => ({
@@ -128,6 +134,7 @@ import { seedGitStatus } from '@/data/git-status/testing';
 import { readThreadIndex } from '@/data/threads/read';
 import { withThreadIndex } from '@/data/threads/testing';
 import {
+  dispatchRealtimeEvent,
   clearWSDispatchState,
   registerSocketIOHandlers,
   unregisterSocketIOHandlers,
@@ -325,6 +332,49 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     expect(fetchForProject).toHaveBeenCalledWith('p1');
   });
 
+  test('git:refs-updated with changed diff refreshes only the review pane', async () => {
+    const fetchForThread = vi.fn();
+    const fetchProjectStatus = vi.fn();
+    const fetchForProject = vi.fn();
+    Object.assign(gitActionOverrides, { fetchForThread, fetchProjectStatus, fetchForProject });
+    const handler = captureHandlers()['git:refs-updated'];
+
+    // One at a time: concurrent dynamic imports of a mocked module can resolve
+    // the second to the real module under vitest.
+    handler({ threadId: 't1', data: { projectId: 'p1', changed: ['diff'] } });
+    await vi.waitFor(() => expect(mockNotifyDirty).toHaveBeenCalledWith('t1'));
+    // Project-mode summaries carry no thread: the pane keys on the project id.
+    handler({ threadId: '', data: { projectId: 'p2', changed: ['diff'] } });
+    await vi.waitFor(() => expect(mockNotifyDirty).toHaveBeenCalledWith('p2'));
+    expect(fetchForThread).not.toHaveBeenCalled();
+    expect(fetchProjectStatus).not.toHaveBeenCalled();
+    expect(fetchForProject).not.toHaveBeenCalled();
+    expect(mockFetchProjectBranches).not.toHaveBeenCalled();
+  });
+
+  test('git:refs-updated with changed branches refetches the branch listing', () => {
+    const fetchForProject = vi.fn();
+    Object.assign(gitActionOverrides, { fetchForProject });
+    captureHandlers()['git:refs-updated']({
+      threadId: '',
+      data: { projectId: 'p1', changed: ['branches'] },
+    });
+
+    expect(mockFetchProjectBranches).toHaveBeenCalledWith('p1', { force: true });
+    expect(fetchForProject).not.toHaveBeenCalled();
+  });
+
+  test('git:refs-updated with changed status refreshes git status slices', () => {
+    const fetchForProject = vi.fn();
+    Object.assign(gitActionOverrides, { fetchForProject });
+    captureHandlers()['git:refs-updated']({
+      threadId: '',
+      data: { projectId: 'p1', changed: ['status'] },
+    });
+
+    expect(fetchForProject).toHaveBeenCalledWith('p1');
+  });
+
   test('thread:created loads project threads when projectId is present', async () => {
     const loadProject = vi.fn();
     useThreadStore.setState({ loadThreadsForProject: loadProject as any });
@@ -458,12 +508,17 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     const handlers = captureHandlers();
 
     handlers['test:output']({ threadId: 't1', data: { line: 'ok' } });
-    handlers['browser-session:frame']({ threadId: 't1', data: { frame: 1 } });
+    dispatchRealtimeEvent('browser-session:frame', '', { frame: 1 });
 
     expect(mockDispatchTestEvent).toHaveBeenCalledWith('test:output', { line: 'ok' });
     expect(mockDispatchBrowserSessionEvent).toHaveBeenCalledWith('browser-session:frame', {
       frame: 1,
     });
+  });
+
+  test('browser-session events have no Socket.IO handler (browser.v1 only)', () => {
+    const handlers = captureHandlers();
+    expect(Object.keys(handlers).filter((type) => type.startsWith('browser-session:'))).toEqual([]);
   });
 
   test('clone:progress dispatches a window CustomEvent', async () => {

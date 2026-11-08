@@ -1,21 +1,53 @@
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { BrowserControlBar } from '@/components/browser-panel/BrowserControlBar';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
+import { renderWithProviders as render } from '../helpers/render';
+
 const setUserControl = vi.fn(async () => {});
 const answerDialog = vi.fn(async () => {});
+const setAudioMuted = vi.fn(async () => {});
+const endBrowserSession = vi.fn(async () => {});
 
 describe('BrowserControlBar', () => {
   beforeEach(() => {
     useBrowserPanelStore.getState().reset();
     setUserControl.mockClear();
     answerDialog.mockClear();
-    useBrowserPanelStore.setState({ setUserControl, answerDialog });
+    setAudioMuted.mockClear();
+    endBrowserSession.mockClear();
+    useBrowserPanelStore.setState({
+      setUserControl,
+      answerDialog,
+      setAudioMuted,
+      endBrowserSession,
+    });
   });
 
-  test('renders nothing for a panel-owned session', () => {
+  test('audio starts off; the toggle turns it on, then off', () => {
+    useBrowserPanelStore.setState({ sessionId: 'thread:t1', sessionThreadId: 't1' });
+    const { rerender } = render(<BrowserControlBar />);
+    const toggle = screen.getByTestId('browser-panel-audio-toggle');
+    expect(toggle).toHaveAttribute('aria-pressed', 'false');
+    fireEvent.click(toggle);
+    expect(setAudioMuted).toHaveBeenCalledWith(false);
+
+    useBrowserPanelStore.setState({ audioMuted: false });
+    rerender(<BrowserControlBar />);
+    fireEvent.click(screen.getByTestId('browser-panel-audio-toggle'));
+    expect(setAudioMuted).toHaveBeenLastCalledWith(true);
+  });
+
+  test('Stop closes the session for good, also a panel-owned one', () => {
+    useBrowserPanelStore.setState({ sessionId: 'bp-1', sessionThreadId: null });
+    render(<BrowserControlBar />);
+    fireEvent.click(screen.getByTestId('browser-panel-stop'));
+    expect(endBrowserSession).toHaveBeenCalled();
+  });
+
+  test('renders nothing without a session', () => {
     const { container } = render(<BrowserControlBar />);
     expect(container).toBeEmptyDOMElement();
   });

@@ -39,11 +39,23 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       # remote-connector's Rust lint links libdbus-sys (keyring), which needs dbus-1 via pkg-config.
       - name: Install system libraries (remote-connector)
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
+
+      # `lint` ends with `cargo clippy` on remote-connector (~300 crates):
+      # without a cache it compiled them all from scratch on every run.
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache Rust dependencies (remote-connector)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/remote-connector
 
       - name: Lint (oxlint)
         run: bun run lint
@@ -57,9 +69,24 @@ jobs:
       - name: Format check (oxfmt)
         run: bun run format:check
 
+  # Split by package so the suites run in parallel instead of one after another.
+  # Each shard installs its own dependencies (cached) and only the system
+  # libraries and native builds it needs.
   test:
+    name: test (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - shard: core
+            native-git: true
+          - shard: runtime
+            native-git: true
+          - shard: server
+          - shard: client
+            gpuix-libs: true
 
     steps:
       - name: Checkout
@@ -78,59 +105,71 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       # The renderer benchmark loads the GPUIX native addon, which links libxkbcommon-x11.
       - name: Install system libraries (GPUIX native)
+        if: matrix.gpuix-libs
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libxkbcommon-x11-0
 
       - name: Install Rust stable
+        if: matrix.native-git
         uses: dtolnay/rust-toolchain@stable
 
       - name: Cache Rust dependencies (native-git)
+        if: matrix.native-git
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: packages/native-git
 
-      - name: Build native-git (for core parity tests)
+      # core runs the native/CLI parity suites; runtime tests the gitoxide paths.
+      - name: Build native-git
+        if: matrix.native-git
         run: bun run build:native
 
       - name: Test typecheck baseline runner
+        if: matrix.shard == 'core'
         run: bun test scripts/fitness/check-typecheck.test.ts
 
       - name: Test the suite runner's git isolation
+        if: matrix.shard == 'core'
         run: bun test scripts/__tests__/test-env.test.ts
 
       - name: Run tests (shared)
+        if: matrix.shard == 'core'
         run: bun run --cwd packages/shared test
 
       - name: Run tests (core)
+        if: matrix.shard == 'core'
         run: bun run --cwd packages/core test
 
       - name: Run tests (agent)
+        if: matrix.shard == 'core'
         run: bun run --cwd packages/agent test
 
       - name: Run tests (runtime)
+        if: matrix.shard == 'runtime'
         run: bun run --cwd packages/runtime test
 
-      - name: Run tests (server)
-        run: bun run --cwd packages/server test
-
-      - name: Run server coverage gate
+      # The coverage gate runs the full server suite (bun test --coverage
+      # --isolate) and fails on any test failure, so a separate plain run
+      # would execute every server test twice.
+      - name: Run tests with coverage gate (server)
+        if: matrix.shard == 'server'
         run: bun run --cwd packages/server test:coverage:gate
 
-      - name: Run tests (client)
-        run: bun run --cwd packages/client test
-
-      - name: Run renderer benchmark contract smoke
-        run: bun run test:renderer-benchmark
-
-      - name: Run client coverage (scoped logic layers)
+      # Same suite as `test`, plus coverage: one run instead of two.
+      - name: Run tests with coverage (client)
+        if: matrix.shard == 'client'
         run: bun run --cwd packages/client test:coverage
 
-  build:
+      - name: Run renderer benchmark contract smoke
+        if: matrix.shard == 'client'
+        run: bun run test:renderer-benchmark
+
+  # CI did not type-check at all: only the pre-commit hook did.
+  typecheck:
     runs-on: ubuntu-latest
-    needs: test
     timeout-minutes: 15
 
     steps:
@@ -150,7 +189,46 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
+
+      # `typecheck` also runs `cargo check` on remote-connector (libdbus-sys).
+      - name: Install system libraries (remote-connector)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libdbus-1-dev pkg-config
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Rust dependencies (remote-connector)
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: packages/remote-connector
+
+      - name: Typecheck
+        run: bun run typecheck
+
+  # Independent of the tests: building in parallel instead of after them.
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.4
+
+      - name: Cache bun dependencies
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Build
         run: bun run build
@@ -173,8 +251,15 @@ jobs:
         with:
           bun-version: 1.4.4
 
+      - name: Cache bun dependencies
+        uses: actions/cache@v6
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       # GPUI renders through Vulkan. The runner has no GPU, so the release smoke
       # needs Mesa's software Vulkan driver (lavapipe) to create a surface.
@@ -245,7 +330,7 @@ jobs:
           restore-keys: bun-${{ runner.os }}-
 
       - name: Install dependencies
-        run: bun install
+        run: bun install --frozen-lockfile
 
       - name: Build Chrome extension
         run: bun run --cwd packages/chrome-extension build

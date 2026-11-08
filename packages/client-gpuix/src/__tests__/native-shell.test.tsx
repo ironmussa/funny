@@ -200,7 +200,8 @@ describe('native read-only shell', () => {
       input: '{}',
       output: `${'x'.repeat(1_000_000)}tail-marker`,
     } as never);
-    const root = createTestRoot();
+    // Wide enough that the file tree dock (and its diff summary) shows by default.
+    const root = createTestRoot({ width: 1440, height: 900 });
     root.render(<GpuixClientApp application={application} />);
     const virtualLists = root.renderer.findByType('virtual-list');
     expect(virtualLists).toHaveLength(2);

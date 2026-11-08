@@ -2,7 +2,7 @@
  * SQLite database adapter.
  *
  * Uses Bun's native SQLite driver with WAL mode, foreign keys,
- * and periodic WAL checkpointing.
+ * synchronous=NORMAL, a larger page cache, and periodic WAL checkpointing.
  */
 
 import { chmodSync } from 'fs';
@@ -45,6 +45,15 @@ export function createSqliteProvider(options: CreateSqliteOptions): DatabaseProv
   sqliteDb.exec('PRAGMA journal_mode = WAL');
   sqliteDb.exec('PRAGMA foreign_keys = ON');
   sqliteDb.exec('PRAGMA busy_timeout = 5000');
+  // In WAL mode, NORMAL only syncs at checkpoints instead of on every commit.
+  // The database stays consistent after a crash or power loss; only the last
+  // commits before it may be lost. Every write (agent messages, tool calls,
+  // event receipts) otherwise paid an fsync.
+  sqliteDb.exec('PRAGMA synchronous = NORMAL');
+  // 64 MiB page cache (negative = KiB) instead of the 2 MiB default, and
+  // in-memory temp tables for sorts and GROUP BY.
+  sqliteDb.exec('PRAGMA cache_size = -65536');
+  sqliteDb.exec('PRAGMA temp_store = MEMORY');
 
   const WAL_CHECKPOINT_INTERVAL_MS = 5 * 60 * 1000;
   const walCheckpointTimer = setInterval(() => {

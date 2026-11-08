@@ -11,6 +11,13 @@ import {
 import { homedir } from 'os';
 import { basename, dirname, join } from 'path';
 
+import type {
+  ExternalClaudeSession,
+  ExternalClaudeTranscript,
+  ExternalClaudeTranscriptMessage,
+  ExternalClaudeTranscriptToolCall,
+  ImageAttachment,
+} from '@funny/shared';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
@@ -34,9 +41,22 @@ const RESUME_NOTE_PREFIX =
   '[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution.';
 const RECOVERED_USER_MESSAGE_MARKER = 'USER (new message):';
 const CLAUDE_CODE_SYNTHETIC_AUTHOR = 'Claude Code';
+/** Claude Code's meta note naming the file a pasted image was saved to. */
+const IMAGE_SOURCE_NOTE_RE = /^(?:\s*\[Image(?: #\d+)?: source: [^\]\n]+\]\s*)+$/;
+/** Content blocks that never render as message text (images travel as attachments). */
+const NON_TEXT_BLOCK_TYPES = new Set(['thinking', 'redacted_thinking', 'tool_use', 'image']);
 let dismissedSessionIdsCache: Set<string> | null = null;
 
 const dismissedSessionIdsSchema = z.array(z.string());
+
+const imageBlockSchema = z.object({
+  type: z.literal('image'),
+  source: z.object({
+    type: z.literal('base64'),
+    media_type: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
+    data: z.string(),
+  }),
+});
 
 const claudeJsonlEntrySchema = z
   .object({
@@ -66,54 +86,6 @@ export interface ProcessInfo {
   elapsedSeconds: number | null;
   command: string;
   args: string;
-}
-
-export interface ExternalClaudeSession {
-  id: string;
-  source: 'claude-code';
-  pid: number | null;
-  ppid: number | null;
-  isRunning: boolean;
-  sessionId: string | null;
-  cwd: string | null;
-  projectId?: string | null;
-  projectName: string | null;
-  gitBranch: string | null;
-  title: string;
-  lastPrompt: string | null;
-  command: string | null;
-  startedAt: string | null;
-  elapsedSeconds: number | null;
-  updatedAt: string | null;
-}
-
-export interface ExternalClaudeTranscriptMessage {
-  id: string;
-  role: 'user' | 'assistant' | 'system';
-  content: string;
-  timestamp: string | null;
-  author?: string | null;
-  toolCalls?: ExternalClaudeTranscriptToolCall[];
-}
-
-export interface ExternalClaudeTranscriptToolCall {
-  id: string;
-  name: string;
-  input: string;
-  output?: string;
-  timestamp: string | null;
-  author?: string;
-}
-
-export interface ExternalClaudeTranscript {
-  sessionId: string;
-  cwd: string | null;
-  projectName: string | null;
-  gitBranch: string | null;
-  title: string;
-  startedAt: string | null;
-  updatedAt: string | null;
-  messages: ExternalClaudeTranscriptMessage[];
 }
 
 interface SessionMetadata {
@@ -423,6 +395,10 @@ async function hydrateExternalClaudeThread(params: {
   return { ok: true, imported: true, thread };
 }
 
+function serializeImages(images: ImageAttachment[] | undefined): string | null {
+  return images?.length ? JSON.stringify(images) : null;
+}
+
 async function insertTranscriptMessages(
   threadId: string,
   transcript: ExternalClaudeTranscript,
@@ -434,7 +410,8 @@ async function insertTranscriptMessages(
       threadId,
       role: message.role,
       content: message.content,
-      author: message.author ?? (message.role === 'user' ? null : CLAUDE_CODE_SYNTHETIC_AUTHOR),
+      images: serializeImages(message.images),
+      author: message.author ?? null,
       timestamp: message.timestamp ?? fallbackTimestamp,
     });
 
@@ -929,32 +906,66 @@ function entryToTranscriptMessage(
   if (!role || message.content === undefined) return null;
 
   if (role === 'user' && contentLooksLikeToolResult(message.content)) {
-    const orphanToolCalls = applyToolResults(message.content, entry, index, toolCallsByClaudeId);
-    if (orphanToolCalls.length === 0) return null;
-    return {
-      id: entry.uuid ?? `tool-results-${index}`,
-      role: 'assistant',
-      content: '',
-      timestamp: entry.timestamp ?? null,
-      toolCalls: orphanToolCalls,
-    };
+    return toolResultTranscriptMessage(entry, message.content, index, toolCallsByClaudeId);
   }
 
-  const assistantToolCalls =
-    role === 'assistant'
-      ? extractToolCalls(message.content, entry, index, toolCallsByClaudeId)
-      : [];
   const content = contentToText(message.content);
-  if (!content.trim() && assistantToolCalls.length === 0) return null;
+  const parts =
+    role === 'user'
+      ? userMessageParts(entry, message.content, content)
+      : { toolCalls: extractToolCalls(message.content, entry, index, toolCallsByClaudeId) };
+  if (!parts || !hasVisibleContent(content, parts)) return null;
 
   return {
     id: entry.uuid ?? `${role}-${index}`,
     role,
     content,
-    ...(role === 'user' && entry.isMeta ? { author: CLAUDE_CODE_SYNTHETIC_AUTHOR } : {}),
+    ...withoutEmptyLists(parts),
     timestamp: entry.timestamp ?? null,
-    ...(assistantToolCalls.length > 0 ? { toolCalls: assistantToolCalls } : {}),
   };
+}
+
+/** A user turn of bare tool results: fills earlier tool cards, keeping only orphans. */
+function toolResultTranscriptMessage(
+  entry: z.infer<typeof claudeJsonlEntrySchema>,
+  content: unknown,
+  index: number,
+  toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
+): ExternalClaudeTranscriptMessage | null {
+  const orphanToolCalls = applyToolResults(content, entry, index, toolCallsByClaudeId);
+  if (orphanToolCalls.length === 0) return null;
+  return {
+    id: entry.uuid ?? `tool-results-${index}`,
+    role: 'assistant',
+    content: '',
+    timestamp: entry.timestamp ?? null,
+    toolCalls: orphanToolCalls,
+  };
+}
+
+function hasVisibleContent(
+  content: string,
+  parts: Pick<ExternalClaudeTranscriptMessage, 'images' | 'toolCalls'>,
+): boolean {
+  return content.trim().length > 0 || !!parts.toolCalls?.length || !!parts.images?.length;
+}
+
+/** Attachments and authorship of a user turn, or null when the turn is not shown. */
+function userMessageParts(
+  entry: z.infer<typeof claudeJsonlEntrySchema>,
+  rawContent: unknown,
+  content: string,
+): Pick<ExternalClaudeTranscriptMessage, 'images' | 'author' | 'toolCalls'> | null {
+  if (!entry.isMeta) return { images: extractImages(rawContent) };
+  // Claude Code follows a pasted image with a meta note holding only its temp path.
+  if (IMAGE_SOURCE_NOTE_RE.test(content)) return null;
+  return { images: extractImages(rawContent), author: CLAUDE_CODE_SYNTHETIC_AUTHOR };
+}
+
+function withoutEmptyLists<T extends Record<string, unknown>>(parts: T): Partial<T> {
+  return Object.fromEntries(
+    Object.entries(parts).filter(([, value]) => !Array.isArray(value) || value.length > 0),
+  ) as Partial<T>;
 }
 
 function extractToolCalls(
@@ -1035,6 +1046,14 @@ function contentToText(content: unknown): string {
   return stripClaudeInternalPromptMarkers(stripIdeOpenedFileMarkers(text));
 }
 
+function extractImages(content: unknown): ImageAttachment[] {
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((block): ImageAttachment[] => {
+    const parsed = imageBlockSchema.safeParse(block);
+    return parsed.success ? [parsed.data] : [];
+  });
+}
+
 function blockToText(block: unknown): string {
   if (typeof block === 'string') return block;
   if (!block || typeof block !== 'object') return stringifyUnknown(block);
@@ -1043,7 +1062,7 @@ function blockToText(block: unknown): string {
   const type = typeof record.type === 'string' ? record.type : null;
 
   if (type === 'text' && typeof record.text === 'string') return record.text;
-  if (type === 'thinking' || type === 'redacted_thinking' || type === 'tool_use') return '';
+  if (type && NON_TEXT_BLOCK_TYPES.has(type)) return '';
   if (type === 'tool_result') {
     return `Tool result\n\n${contentToText(record.content)}`;
   }

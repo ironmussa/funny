@@ -95,6 +95,12 @@ export type {
 } from './types/review.js';
 
 export type { WeaveStatus } from './types/weave.js';
+export type {
+  ExternalClaudeSession,
+  ExternalClaudeTranscript,
+  ExternalClaudeTranscriptMessage,
+  ExternalClaudeTranscriptToolCall,
+} from './types/external-claude.js';
 
 export type { HookType, HookCommand, ProjectHook } from './types/hooks.js';
 export { HOOK_TYPES } from './types/hooks.js';

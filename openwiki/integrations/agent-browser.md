@@ -20,6 +20,13 @@ Browser-session events (`frame`, `ready`, `closed`, `agent-opened`, `controller`
 
 Without this path, the runner drops every event that has no thread.
 
+## Transport: server → client
+
+The server delivers browser-session events only as `browser.v1` interactive envelopes (`BrowserSessionMessage` in `protocol/browser/v1/interactive.proto`), never as legacy Socket.IO events. `services/browser-events.ts` maps each type to a payload and a delivery class: `pointer` volatile; `frame`, `viewport`, `navigated` and `controller` coalescible per session; `ready`, `dialog`, `agent_opened`, `close` and `result` snapshot-recoverable. An unmapped `browser-session:*` type is dropped with a warning. A client that did not negotiate `browser.v1` gets none of them. The client decodes them in `lib/realtime/browser-session-v1-events.ts` (frames are fetched from their authorized resource in `hooks/use-ws.ts`) and hands them to `hooks/dispatch-browser-session-events.ts`. On a resynchronization request for the user scope, the panel re-attaches its thread session, whose `ready` restates the page URL, viewport and controller.
+
+- **Agent cursor.** Before each mouse action of `browser_act` (click, double click, hover, scroll, drag), the runner emits `pointer { x, y, kind }`; the panel draws it over the screencast (`components/browser-panel/AgentPointer.tsx`) while the agent has control.
+- **URL following.** Every main-frame navigation emits `navigated { url }`; the URL bar follows unless the user is editing it.
+
 ## Profile on disk
 
 - Location: `<FUNNY_DATA_DIR or ~/.funny>/browser-profiles/<userId>/default` on the runner, mode `0700`. It holds cookies, local storage and logins, so sites stay signed in across sessions and runner restarts.

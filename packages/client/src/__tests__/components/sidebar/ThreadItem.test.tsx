@@ -1,8 +1,9 @@
 import type { GitStatusInfo, Thread } from '@funny/shared';
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { ThreadItem } from '@/components/sidebar/ThreadItem';
+import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
 
 import { mockT } from '../../helpers/mock-i18n';
 import { renderWithProviders } from '../../helpers/render';
@@ -142,5 +143,57 @@ describe('ThreadItem', () => {
     );
 
     expect(screen.queryByTestId('thread-git-state-t-2')).not.toBeInTheDocument();
+  });
+
+  test('shows the PR badge on the title row, not in the powerline', () => {
+    renderWithProviders(
+      <ThreadItem
+        thread={makeThread({
+          id: 't-3',
+          projectId: 'p-1',
+          isScratch: false,
+          status: 'idle',
+          branch: 'feat/pr',
+        })}
+        projectPath="/repo"
+        subtitle="repo"
+        isSelected={false}
+        onSelect={vi.fn()}
+        gitStatus={{
+          threadId: 't-3',
+          branchKey: 'p-1:feat/pr',
+          state: 'pushed',
+          dirtyFileCount: 0,
+          unpushedCommitCount: 0,
+          unpulledCommitCount: 0,
+          hasRemoteBranch: true,
+          isMergedIntoBase: false,
+          linesAdded: 0,
+          linesDeleted: 0,
+          prNumber: 731,
+          prState: 'OPEN',
+        }}
+      />,
+    );
+
+    const badge = screen.getByTestId('thread-pr-badge-t-3');
+    expect(badge).toHaveTextContent('731');
+    expect(screen.getByTestId('thread-powerline-t-3').parentElement).not.toContainElement(badge);
+  });
+
+  test('shows a browser icon while the thread has a live browser session', () => {
+    useBrowserLiveThreadsStore.setState({ byThread: { 't-4': true } });
+    renderWithProviders(
+      <ThreadItem
+        thread={makeThread({ id: 't-4', projectId: 'p-1', isScratch: false, status: 'idle' })}
+        projectPath="/repo"
+        isSelected={false}
+        onSelect={vi.fn()}
+      />,
+    );
+    expect(screen.getByTestId('thread-browser-open-t-4')).toBeInTheDocument();
+
+    act(() => useBrowserLiveThreadsStore.getState().markClosed('t-4'));
+    expect(screen.queryByTestId('thread-browser-open-t-4')).not.toBeInTheDocument();
   });
 });

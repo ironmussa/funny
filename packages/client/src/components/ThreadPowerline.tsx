@@ -27,6 +27,8 @@ export interface ThreadPowerlineProps {
   showDiffStats?: boolean;
   /** DiffStats size variant */
   diffStatsSize?: 'sm' | 'xs' | 'xxs';
+  /** Render the PR badge (default true). The sidebar shows it on the title row instead. */
+  showPRBadge?: boolean;
   /** PR badge size variant — rendered when gitStatus carries PR metadata */
   prBadgeSize?: 'sm' | 'xs' | 'compact' | 'xxs';
   /** data-testid for the PR badge (kept explicit so callers can preserve stable selectors) */
@@ -148,9 +150,9 @@ export function ThreadPowerline({
 
   const diffStatus = showDiffStats && hasVisibleDiffStats(gitStatus) ? gitStatus : undefined;
 
-  const hasPR = !!gitStatus?.prNumber;
+  const prStatus = prBadgeStatus(gitStatus, props.showPRBadge);
 
-  if (segments.length === 0 && !diffStatus && !hasPR) return null;
+  if (segments.length === 0 && !diffStatus && !prStatus) return null;
 
   return (
     <div className={cn('flex min-w-0 items-center gap-1.5', className)}>
@@ -171,17 +173,25 @@ export function ThreadPowerline({
           label={t('review.title')}
         />
       )}
-      {hasPR && gitStatus && (
+      {prStatus && (
         <PRBadge
-          prNumber={gitStatus.prNumber!}
-          prState={gitStatus.prState ?? 'OPEN'}
-          prUrl={gitStatus.prUrl}
+          prNumber={prStatus.prNumber!}
+          prState={prStatus.prState ?? 'OPEN'}
+          prUrl={prStatus.prUrl}
           size={prBadgeSize}
           data-testid={prBadgeTestId}
         />
       )}
     </div>
   );
+}
+
+/** The git status to badge a PR for: only when the badge is wanted and the status carries a PR. */
+function prBadgeStatus(
+  gitStatus: GitStatusInfo | undefined,
+  show = true,
+): GitStatusInfo | undefined {
+  return show && gitStatus?.prNumber ? gitStatus : undefined;
 }
 
 /** Branch, worktree-branch and worktree-path labels shown in the powerline. */

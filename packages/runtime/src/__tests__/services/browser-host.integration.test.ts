@@ -80,3 +80,42 @@ describeWithChromium('BrowserHost (real Chromium)', () => {
     await host.closeTab(tab);
   }, 30_000);
 });
+
+describeWithChromium('BrowserHost after an abrupt stop (real Chromium)', () => {
+  test('tabs of the last run are not restored', async () => {
+    const profileDir = mkdtempSync(join(tmpdir(), 'funny-host-restore-'));
+    const launch = async () =>
+      unwrap(
+        await BrowserHost.launch({
+          binary: binary as string,
+          profileDir: join(profileDir, 'default'),
+          port: 9440 + Math.floor(Math.random() * 50),
+          windowWidth: 800,
+          windowHeight: 600,
+          onExit: () => {},
+        }),
+      );
+    try {
+      const first = await launch();
+      const tab = unwrap(await first.newTab('persistent'));
+      await tab.page.goto('data:text/html,<title>left over</title>');
+      // Let Chromium write its session file, then stop it the way a runner
+      // restart does: no clean shutdown.
+      await new Promise((resolve) => setTimeout(resolve, 2_500));
+      (first as unknown as { proc: { kill(signal: string): void } }).proc.kill('SIGKILL');
+      await (first as unknown as { exited: Promise<void> }).exited;
+
+      const second = await launch();
+      // Give a session restore time to open its tabs.
+      await new Promise((resolve) => setTimeout(resolve, 2_000));
+      const urls = second.browser
+        .contexts()[0]!
+        .pages()
+        .map((page) => page.url());
+      expect(urls.filter((url) => url !== 'about:blank')).toEqual([]);
+      await second.shutdown();
+    } finally {
+      rmSync(profileDir, { recursive: true, force: true });
+    }
+  }, 90_000);
+});

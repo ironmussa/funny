@@ -1,7 +1,6 @@
 import { act, render, screen, cleanup } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-vi.mock('@/hooks/use-active-thread-id', () => ({ useActiveThreadId: () => 't1' }));
 vi.mock('@/components/browser-panel/BrowserUrlBar', () => ({
   BrowserUrlBar: () => <div>URL bar</div>,
 }));

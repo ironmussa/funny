@@ -437,7 +437,12 @@ export const ThreadItem = memo(function ThreadItem({
         className="focus-visible:ring-ring flex min-w-0 flex-1 cursor-pointer flex-col gap-1 overflow-hidden bg-transparent py-1.5 pl-1.5 text-left focus:outline-hidden focus-visible:ring-1"
       >
         {/* Row 1: Title */}
-        <ThreadItemTitleRow thread={thread} search={search} titleBadge={titleBadge} />
+        <ThreadItemTitleRow
+          thread={thread}
+          search={search}
+          titleBadge={titleBadge}
+          gitStatus={effectiveGitStatus}
+        />
 
         {/* Row 2: Powerline (project → branch) + Git status + Snippet */}
         <ThreadItemMetaRow

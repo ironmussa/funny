@@ -1,6 +1,3 @@
-import { useEffect } from 'react';
-
-import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
 import { AnnotationList } from './AnnotationList';
@@ -28,14 +25,6 @@ export function BrowserPanel() {
       (!s.sessionThreadId || s.controller === 'user'),
   );
   const open = useBrowserPanelStore((s) => s.open);
-  const syncActiveThread = useBrowserPanelStore((s) => s.syncActiveThread);
-  const activeThreadId = useActiveThreadId();
-
-  // Follow the active thread: show its (agent-shared) browser session, and
-  // detach — never close — the previous thread's one.
-  useEffect(() => {
-    if (open) syncActiveThread(activeThreadId);
-  }, [open, activeThreadId, syncActiveThread]);
 
   if (!open) return null;
 

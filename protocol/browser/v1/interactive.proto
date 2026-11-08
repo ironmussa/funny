@@ -107,8 +107,69 @@ message BrowserSessionHistoryNavigation {
 
 message BrowserSessionScreenshot {}
 
+message BrowserSessionViewport {
+  uint32 width = 1;
+  uint32 height = 2;
+}
+
+enum BrowserSessionController {
+  BROWSER_SESSION_CONTROLLER_UNSPECIFIED = 0;
+  BROWSER_SESSION_CONTROLLER_AGENT = 1;
+  BROWSER_SESSION_CONTROLLER_USER = 2;
+}
+
 message BrowserSessionReady {
   string target_url = 1;
+  // Full restorable state, so a re-attaching panel needs no other message.
+  optional BrowserSessionViewport viewport = 2;
+  BrowserSessionController controller = 3;
+  bool audio_muted = 4;
+}
+
+// The page's audio was turned on or off (sessions start muted).
+message BrowserSessionAudio {
+  bool muted = 1;
+}
+
+// The page changed (link, redirect, agent action, popup, previous tab).
+message BrowserSessionNavigated {
+  string url = 1;
+}
+
+message BrowserSessionControllerChanged {
+  BrowserSessionController controller = 1;
+}
+
+message BrowserSessionDialog {
+  string type = 1;
+  string message = 2;
+  optional string default_value = 3;
+}
+
+// A JavaScript dialog is waiting for an answer; absent `dialog` = answered.
+message BrowserSessionDialogChanged {
+  optional BrowserSessionDialog dialog = 1;
+}
+
+// The agent opened (or navigated) its thread's session.
+message BrowserSessionAgentOpened {
+  string thread_id = 1;
+  string url = 2;
+}
+
+enum BrowserSessionPointerKind {
+  BROWSER_SESSION_POINTER_KIND_UNSPECIFIED = 0;
+  BROWSER_SESSION_POINTER_KIND_MOVE = 1;
+  BROWSER_SESSION_POINTER_KIND_CLICK = 2;
+  BROWSER_SESSION_POINTER_KIND_DOWN = 3;
+  BROWSER_SESSION_POINTER_KIND_UP = 4;
+}
+
+// Where the agent's mouse goes, in page viewport pixels.
+message BrowserSessionPointer {
+  int32 x = 1;
+  int32 y = 2;
+  BrowserSessionPointerKind kind = 3;
 }
 
 message BrowserSessionConsole {
@@ -150,6 +211,13 @@ message BrowserSessionMessage {
     BrowserSessionScreenshot screenshot = 21;
     BrowserSessionReady ready = 22;
     BrowserSessionConsole console = 23;
+    BrowserSessionViewport viewport = 24;
+    BrowserSessionNavigated navigated = 25;
+    BrowserSessionControllerChanged controller = 26;
+    BrowserSessionDialogChanged dialog = 27;
+    BrowserSessionAgentOpened agent_opened = 28;
+    BrowserSessionPointer pointer = 29;
+    BrowserSessionAudio audio = 30;
   }
 }
 

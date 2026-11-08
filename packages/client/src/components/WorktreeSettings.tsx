@@ -16,18 +16,14 @@ import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
+import { LabelBadge } from '@/components/ui/label-badge';
 import { LoadingState } from '@/components/ui/loading-state';
-import { contrastText, pastelize } from '@/components/ui/project-chip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 
 import { BranchPicker } from './SearchablePicker';
-
-const MAIN_CHIP_COLOR = pastelize('#7CB9E8');
-const ACTIVE_CHIP_COLOR = pastelize('#A8D5A2');
-const WORKTREE_CHIP_CLASS = 'shrink-0 rounded-full px-1.5 py-0 text-[9px] leading-4 font-medium';
 
 interface WorktreeInfo {
   path: string;
@@ -60,25 +56,22 @@ function WorktreeCard({
               {worktree.branch}
             </span>
             {worktree.isMain && (
-              <span
-                className={WORKTREE_CHIP_CLASS}
-                style={{ backgroundColor: MAIN_CHIP_COLOR, color: contrastText(MAIN_CHIP_COLOR) }}
+              <LabelBadge
+                color="#7CB9E8"
                 title={t('worktreeSettings.mainDescription')}
+                data-testid="worktree-badge-main"
               >
                 {t('worktreeSettings.main')}
-              </span>
+              </LabelBadge>
             )}
             {active && (
-              <span
-                className={WORKTREE_CHIP_CLASS}
-                style={{
-                  backgroundColor: ACTIVE_CHIP_COLOR,
-                  color: contrastText(ACTIVE_CHIP_COLOR),
-                }}
+              <LabelBadge
+                color="#A8D5A2"
                 title={t('worktreeSettings.activeDescription')}
+                data-testid="worktree-badge-active"
               >
                 {t('worktreeSettings.active')}
-              </span>
+              </LabelBadge>
             )}
           </div>
           <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[10px]">

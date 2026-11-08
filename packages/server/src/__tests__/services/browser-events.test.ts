@@ -139,4 +139,106 @@ describe('browser-events Socket.IO delivery', () => {
     ).toBe('jpeg');
     expect(browserV1ResourceStore.get(resourceId, 'bob')).toBeUndefined();
   });
+
+  test.each([
+    [
+      'ready',
+      { url: 'https://a.test/', viewport: { width: 800, height: 600 }, controller: 'user' },
+      'ready',
+      'snapshot-recoverable',
+      undefined,
+      {
+        targetUrl: 'https://a.test/',
+        viewport: { width: 800, height: 600 },
+        controller: 2,
+        audioMuted: true,
+      },
+    ],
+    [
+      'viewport',
+      { width: 1280, height: 720 },
+      'viewport',
+      'coalescible',
+      'browser-viewport:s1',
+      { width: 1280, height: 720 },
+    ],
+    [
+      'navigated',
+      { url: 'https://b.test/' },
+      'navigated',
+      'coalescible',
+      'browser-navigated:s1',
+      { url: 'https://b.test/' },
+    ],
+    [
+      'controller',
+      { controller: 'agent' },
+      'controller',
+      'coalescible',
+      'browser-controller:s1',
+      { controller: 1 },
+    ],
+    [
+      'dialog',
+      { dialog: { type: 'confirm', message: 'Delete?' } },
+      'dialog',
+      'snapshot-recoverable',
+      undefined,
+      { dialog: { type: 'confirm', message: 'Delete?' } },
+    ],
+    [
+      'agent-opened',
+      { threadId: 't1', url: 'https://c.test/' },
+      'agentOpened',
+      'snapshot-recoverable',
+      undefined,
+      { threadId: 't1', url: 'https://c.test/' },
+    ],
+    ['audio', { muted: false }, 'audio', 'coalescible', 'browser-audio:s1', { muted: false }],
+    [
+      'pointer',
+      { x: 10.4, y: 20.6, kind: 'click' },
+      'pointer',
+      'volatile',
+      undefined,
+      { x: 10, y: 21, kind: 2 },
+    ],
+  ] as const)(
+    'browser-session:%s is published as browser.v1 %s',
+    (type, data, payloadCase, deliveryClass, coalescingKey, value) => {
+      const sink = new FakeBrowserEventSink();
+      setBrowserEventSink(sink);
+      relayToUser('alice', {
+        type: `browser-session:${type}`,
+        threadId: '',
+        data: { sessionId: 's1', ...data },
+      });
+
+      // One typed publication, no separate legacy toUser delivery.
+      expect(sink.deliveries).toHaveLength(1);
+      const publication = sink.publications[0];
+      expect(publication).toMatchObject({
+        trafficClass: 'browserSession',
+        delivery: { class: deliveryClass, coalescingKey },
+        browserV1Interactive: {
+          payload: {
+            case: 'browserSession',
+            value: { browserSessionId: 's1', payload: { case: payloadCase, value } },
+          },
+        },
+      });
+    },
+  );
+
+  test('an unmapped browser-session event is dropped, not sent as a legacy event', () => {
+    const sink = new FakeBrowserEventSink();
+    setBrowserEventSink(sink);
+    relayToUser('alice', {
+      type: 'browser-session:unknown',
+      threadId: '',
+      data: { sessionId: 's1' },
+    });
+    expect(sink.publications).toEqual([]);
+    expect(sink.deliveries).toEqual([]);
+  });
 });

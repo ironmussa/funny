@@ -3,8 +3,8 @@
 /* eslint-disable */
 
 import type { JsonObject, Message } from '@bufbuild/protobuf';
-import type { GenFile, GenMessage } from '@bufbuild/protobuf/codegenv2';
-import { fileDesc, messageDesc } from '@bufbuild/protobuf/codegenv2';
+import type { GenEnum, GenFile, GenMessage } from '@bufbuild/protobuf/codegenv2';
+import { enumDesc, fileDesc, messageDesc } from '@bufbuild/protobuf/codegenv2';
 import { file_google_protobuf_struct } from '@bufbuild/protobuf/wkt';
 
 import type {
@@ -20,7 +20,7 @@ import { file_browser_v1_common } from './common_pb.js';
  * Describes the file browser/v1/interactive.proto.
  */
 export const file_browser_v1_interactive: GenFile /*@__PURE__*/ = fileDesc(
-  'Chxicm93c2VyL3YxL2ludGVyYWN0aXZlLnByb3RvEgpicm93c2VyLnYxIuoBCg1UZXJtaW5hbFNwYXduEhMKC3Rlcm1pbmFsX2lkGAEgASgJEgsKA2N3ZBgCIAEoCRIPCgdjb2x1bW5zGAMgASgNEgwKBHJvd3MYBCABKA0SEgoFc2hlbGwYBSABKAlIAIgBARIXCgpwcm9qZWN0X2lkGAYgASgJSAGIAQESEgoFbGFiZWwYByABKAlIAogBARIeChFzY3JhdGNoX3RocmVhZF9pZBgIIAEoCUgDiAEBQggKBl9zaGVsbEINCgtfcHJvamVjdF9pZEIICgZfbGFiZWxCFAoSX3NjcmF0Y2hfdGhyZWFkX2lkIjQKDVRlcm1pbmFsV3JpdGUSFQoNaW5wdXRfb3JkaW5hbBgBIAEoBBIMCgRkYXRhGAIgASgMIi8KDlRlcm1pbmFsUmVzaXplEg8KB2NvbHVtbnMYASABKA0SDAoEcm93cxgCIAEoDSIgCg5UZXJtaW5hbFNpZ25hbBIOCgZzaWduYWwYASABKAkiHwoOVGVybWluYWxSZW5hbWUSDQoFdGl0bGUYASABKAkiNgoRVGVybWluYWxSZWNvbm5lY3QSIQoZbGFzdF9zZWVuX291dHB1dF9zZXF1ZW5jZRgBIAEoBCIRCg9UZXJtaW5hbFJlc3RvcmUiHwoNVGVybWluYWxDbG9zZRIOCgZyZWFzb24YASABKAkiMAoOVGVybWluYWxPdXRwdXQSEAoIc2VxdWVuY2UYASABKAQSDAoEZGF0YRgCIAEoDCJUCgxUZXJtaW5hbEV4aXQSFgoJZXhpdF9jb2RlGAEgASgFSACIAQESEwoGc2lnbmFsGAIgASgJSAGIAQFCDAoKX2V4aXRfY29kZUIJCgdfc2lnbmFsIjMKDVRlcm1pbmFsRXJyb3ISIgoGc3RhdHVzGAEgASgLMhIuYnJvd3Nlci52MS5TdGF0dXMipwQKD1Rlcm1pbmFsTWVzc2FnZRITCgt0ZXJtaW5hbF9pZBgBIAEoCRIqCgVzcGF3bhgKIAEoCzIZLmJyb3dzZXIudjEuVGVybWluYWxTcGF3bkgAEioKBXdyaXRlGAsgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbFdyaXRlSAASLAoGcmVzaXplGAwgASgLMhouYnJvd3Nlci52MS5UZXJtaW5hbFJlc2l6ZUgAEiwKBnNpZ25hbBgNIAEoCzIaLmJyb3dzZXIudjEuVGVybWluYWxTaWduYWxIABIsCgZyZW5hbWUYDiABKAsyGi5icm93c2VyLnYxLlRlcm1pbmFsUmVuYW1lSAASMgoJcmVjb25uZWN0GA8gASgLMh0uYnJvd3Nlci52MS5UZXJtaW5hbFJlY29ubmVjdEgAEi4KB3Jlc3RvcmUYECABKAsyGy5icm93c2VyLnYxLlRlcm1pbmFsUmVzdG9yZUgAEioKBWNsb3NlGBEgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbENsb3NlSAASLAoGb3V0cHV0GBIgASgLMhouYnJvd3Nlci52MS5UZXJtaW5hbE91dHB1dEgAEigKBGV4aXQYEyABKAsyGC5icm93c2VyLnYxLlRlcm1pbmFsRXhpdEgAEioKBWVycm9yGBQgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbEVycm9ySABCCQoHcGF5bG9hZCJQChJCcm93c2VyU2Vzc2lvbk9wZW4SEgoKdGFyZ2V0X3VybBgBIAEoCRIXCgpwcm9qZWN0X2lkGAIgASgJSACIAQFCDQoLX3Byb2plY3RfaWQiLAoWQnJvd3NlclNlc3Npb25OYXZpZ2F0ZRISCgp0YXJnZXRfdXJsGAEgASgJIlUKE0Jyb3dzZXJTZXNzaW9uSW5wdXQSFQoNaW5wdXRfb3JkaW5hbBgBIAEoBBInCgZhY3Rpb24YAiABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IkIKFUJyb3dzZXJTZXNzaW9uSW5zcGVjdBIpCghzZWxlY3RvchgBIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QiKwoVQnJvd3NlclNlc3Npb25FeGVjdXRlEhIKCmV4cHJlc3Npb24YASABKAkiKgoXQnJvd3NlclNlc3Npb25IZWFydGJlYXQSDwoHb3JkaW5hbBgBIAEoBCIxCh9Ccm93c2VyU2Vzc2lvbkhpc3RvcnlOYXZpZ2F0aW9uEg4KBmFjdGlvbhgBIAEoCSIaChhCcm93c2VyU2Vzc2lvblNjcmVlbnNob3QiKQoTQnJvd3NlclNlc3Npb25SZWFkeRISCgp0YXJnZXRfdXJsGAEgASgJIqIBChVCcm93c2VyU2Vzc2lvbkNvbnNvbGUSDQoFbGV2ZWwYASABKAkSDAoEdGV4dBgCIAEoCRIQCgN1cmwYAyABKAlIAIgBARIRCgRsaW5lGAQgASgNSAGIAQESEwoGY29sdW1uGAUgASgNSAKIAQESFgoOb2NjdXJyZWRfYXRfbXMYBiABKARCBgoEX3VybEIHCgVfbGluZUIJCgdfY29sdW1uIloKE0Jyb3dzZXJTZXNzaW9uRnJhbWUSEAoIc2VxdWVuY2UYASABKAQSMQoFZnJhbWUYAiABKAsyIi5icm93c2VyLnYxLkxhcmdlUmVzb3VyY2VSZWZlcmVuY2UiJQoTQnJvd3NlclNlc3Npb25DbG9zZRIOCgZyZWFzb24YASABKAkiPgoUQnJvd3NlclNlc3Npb25SZXN1bHQSJgoFdmFsdWUYASABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IqsGChVCcm93c2VyU2Vzc2lvbk1lc3NhZ2USGgoSYnJvd3Nlcl9zZXNzaW9uX2lkGAEgASgJEi4KBG9wZW4YCiABKAsyHi5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uT3BlbkgAEjYKCG5hdmlnYXRlGAsgASgLMiIuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbk5hdmlnYXRlSAASMAoFaW5wdXQYDCABKAsyHy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uSW5wdXRIABI0CgdpbnNwZWN0GA0gASgLMiEuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkluc3BlY3RIABI0CgdleGVjdXRlGA4gASgLMiEuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkV4ZWN1dGVIABI4CgloZWFydGJlYXQYDyABKAsyIy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uSGVhcnRiZWF0SAASMAoFZnJhbWUYECABKAsyHy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uRnJhbWVIABIwCgVjbG9zZRgRIAEoCzIfLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25DbG9zZUgAEjIKBnJlc3VsdBgSIAEoCzIgLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25SZXN1bHRIABIkCgZzdGF0dXMYEyABKAsyEi5icm93c2VyLnYxLlN0YXR1c0gAEkkKEmhpc3RvcnlfbmF2aWdhdGlvbhgUIAEoCzIrLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25IaXN0b3J5TmF2aWdhdGlvbkgAEjoKCnNjcmVlbnNob3QYFSABKAsyJC5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uU2NyZWVuc2hvdEgAEjAKBXJlYWR5GBYgASgLMh8uYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvblJlYWR5SAASNAoHY29uc29sZRgXIAEoCzIhLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25Db25zb2xlSABCCQoHcGF5bG9hZCKgAgoTSW50ZXJhY3RpdmVFbnZlbG9wZRItCghtZXRhZGF0YRgBIAEoCzIbLmJyb3dzZXIudjEuUmVxdWVzdE1ldGFkYXRhEi4KCGRlbGl2ZXJ5GAIgASgLMhwuYnJvd3Nlci52MS5EZWxpdmVyeU1ldGFkYXRhEjAKCXJlc291cmNlcxgDIAMoCzIdLmJyb3dzZXIudjEuUmVzb3VyY2VSZWZlcmVuY2USLwoIdGVybWluYWwYCiABKAsyGy5icm93c2VyLnYxLlRlcm1pbmFsTWVzc2FnZUgAEjwKD2Jyb3dzZXJfc2Vzc2lvbhgLIAEoCzIhLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25NZXNzYWdlSABCCQoHcGF5bG9hZGIGcHJvdG8z',
+  'Chxicm93c2VyL3YxL2ludGVyYWN0aXZlLnByb3RvEgpicm93c2VyLnYxIuoBCg1UZXJtaW5hbFNwYXduEhMKC3Rlcm1pbmFsX2lkGAEgASgJEgsKA2N3ZBgCIAEoCRIPCgdjb2x1bW5zGAMgASgNEgwKBHJvd3MYBCABKA0SEgoFc2hlbGwYBSABKAlIAIgBARIXCgpwcm9qZWN0X2lkGAYgASgJSAGIAQESEgoFbGFiZWwYByABKAlIAogBARIeChFzY3JhdGNoX3RocmVhZF9pZBgIIAEoCUgDiAEBQggKBl9zaGVsbEINCgtfcHJvamVjdF9pZEIICgZfbGFiZWxCFAoSX3NjcmF0Y2hfdGhyZWFkX2lkIjQKDVRlcm1pbmFsV3JpdGUSFQoNaW5wdXRfb3JkaW5hbBgBIAEoBBIMCgRkYXRhGAIgASgMIi8KDlRlcm1pbmFsUmVzaXplEg8KB2NvbHVtbnMYASABKA0SDAoEcm93cxgCIAEoDSIgCg5UZXJtaW5hbFNpZ25hbBIOCgZzaWduYWwYASABKAkiHwoOVGVybWluYWxSZW5hbWUSDQoFdGl0bGUYASABKAkiNgoRVGVybWluYWxSZWNvbm5lY3QSIQoZbGFzdF9zZWVuX291dHB1dF9zZXF1ZW5jZRgBIAEoBCIRCg9UZXJtaW5hbFJlc3RvcmUiHwoNVGVybWluYWxDbG9zZRIOCgZyZWFzb24YASABKAkiMAoOVGVybWluYWxPdXRwdXQSEAoIc2VxdWVuY2UYASABKAQSDAoEZGF0YRgCIAEoDCJUCgxUZXJtaW5hbEV4aXQSFgoJZXhpdF9jb2RlGAEgASgFSACIAQESEwoGc2lnbmFsGAIgASgJSAGIAQFCDAoKX2V4aXRfY29kZUIJCgdfc2lnbmFsIjMKDVRlcm1pbmFsRXJyb3ISIgoGc3RhdHVzGAEgASgLMhIuYnJvd3Nlci52MS5TdGF0dXMipwQKD1Rlcm1pbmFsTWVzc2FnZRITCgt0ZXJtaW5hbF9pZBgBIAEoCRIqCgVzcGF3bhgKIAEoCzIZLmJyb3dzZXIudjEuVGVybWluYWxTcGF3bkgAEioKBXdyaXRlGAsgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbFdyaXRlSAASLAoGcmVzaXplGAwgASgLMhouYnJvd3Nlci52MS5UZXJtaW5hbFJlc2l6ZUgAEiwKBnNpZ25hbBgNIAEoCzIaLmJyb3dzZXIudjEuVGVybWluYWxTaWduYWxIABIsCgZyZW5hbWUYDiABKAsyGi5icm93c2VyLnYxLlRlcm1pbmFsUmVuYW1lSAASMgoJcmVjb25uZWN0GA8gASgLMh0uYnJvd3Nlci52MS5UZXJtaW5hbFJlY29ubmVjdEgAEi4KB3Jlc3RvcmUYECABKAsyGy5icm93c2VyLnYxLlRlcm1pbmFsUmVzdG9yZUgAEioKBWNsb3NlGBEgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbENsb3NlSAASLAoGb3V0cHV0GBIgASgLMhouYnJvd3Nlci52MS5UZXJtaW5hbE91dHB1dEgAEigKBGV4aXQYEyABKAsyGC5icm93c2VyLnYxLlRlcm1pbmFsRXhpdEgAEioKBWVycm9yGBQgASgLMhkuYnJvd3Nlci52MS5UZXJtaW5hbEVycm9ySABCCQoHcGF5bG9hZCJQChJCcm93c2VyU2Vzc2lvbk9wZW4SEgoKdGFyZ2V0X3VybBgBIAEoCRIXCgpwcm9qZWN0X2lkGAIgASgJSACIAQFCDQoLX3Byb2plY3RfaWQiLAoWQnJvd3NlclNlc3Npb25OYXZpZ2F0ZRISCgp0YXJnZXRfdXJsGAEgASgJIlUKE0Jyb3dzZXJTZXNzaW9uSW5wdXQSFQoNaW5wdXRfb3JkaW5hbBgBIAEoBBInCgZhY3Rpb24YAiABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0IkIKFUJyb3dzZXJTZXNzaW9uSW5zcGVjdBIpCghzZWxlY3RvchgBIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QiKwoVQnJvd3NlclNlc3Npb25FeGVjdXRlEhIKCmV4cHJlc3Npb24YASABKAkiKgoXQnJvd3NlclNlc3Npb25IZWFydGJlYXQSDwoHb3JkaW5hbBgBIAEoBCIxCh9Ccm93c2VyU2Vzc2lvbkhpc3RvcnlOYXZpZ2F0aW9uEg4KBmFjdGlvbhgBIAEoCSIaChhCcm93c2VyU2Vzc2lvblNjcmVlbnNob3QiNwoWQnJvd3NlclNlc3Npb25WaWV3cG9ydBINCgV3aWR0aBgBIAEoDRIOCgZoZWlnaHQYAiABKA0iwAEKE0Jyb3dzZXJTZXNzaW9uUmVhZHkSEgoKdGFyZ2V0X3VybBgBIAEoCRI5Cgh2aWV3cG9ydBgCIAEoCzIiLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25WaWV3cG9ydEgAiAEBEjgKCmNvbnRyb2xsZXIYAyABKA4yJC5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQ29udHJvbGxlchITCgthdWRpb19tdXRlZBgEIAEoCEILCglfdmlld3BvcnQiJAoTQnJvd3NlclNlc3Npb25BdWRpbxINCgVtdXRlZBgBIAEoCCImChdCcm93c2VyU2Vzc2lvbk5hdmlnYXRlZBILCgN1cmwYASABKAkiWwofQnJvd3NlclNlc3Npb25Db250cm9sbGVyQ2hhbmdlZBI4Cgpjb250cm9sbGVyGAEgASgOMiQuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkNvbnRyb2xsZXIiYwoUQnJvd3NlclNlc3Npb25EaWFsb2cSDAoEdHlwZRgBIAEoCRIPCgdtZXNzYWdlGAIgASgJEhoKDWRlZmF1bHRfdmFsdWUYAyABKAlIAIgBAUIQCg5fZGVmYXVsdF92YWx1ZSJfChtCcm93c2VyU2Vzc2lvbkRpYWxvZ0NoYW5nZWQSNQoGZGlhbG9nGAEgASgLMiAuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkRpYWxvZ0gAiAEBQgkKB19kaWFsb2ciOwoZQnJvd3NlclNlc3Npb25BZ2VudE9wZW5lZBIRCgl0aHJlYWRfaWQYASABKAkSCwoDdXJsGAIgASgJImIKFUJyb3dzZXJTZXNzaW9uUG9pbnRlchIJCgF4GAEgASgFEgkKAXkYAiABKAUSMwoEa2luZBgDIAEoDjIlLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25Qb2ludGVyS2luZCKiAQoVQnJvd3NlclNlc3Npb25Db25zb2xlEg0KBWxldmVsGAEgASgJEgwKBHRleHQYAiABKAkSEAoDdXJsGAMgASgJSACIAQESEQoEbGluZRgEIAEoDUgBiAEBEhMKBmNvbHVtbhgFIAEoDUgCiAEBEhYKDm9jY3VycmVkX2F0X21zGAYgASgEQgYKBF91cmxCBwoFX2xpbmVCCQoHX2NvbHVtbiJaChNCcm93c2VyU2Vzc2lvbkZyYW1lEhAKCHNlcXVlbmNlGAEgASgEEjEKBWZyYW1lGAIgASgLMiIuYnJvd3Nlci52MS5MYXJnZVJlc291cmNlUmVmZXJlbmNlIiUKE0Jyb3dzZXJTZXNzaW9uQ2xvc2USDgoGcmVhc29uGAEgASgJIj4KFEJyb3dzZXJTZXNzaW9uUmVzdWx0EiYKBXZhbHVlGAEgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdCLCCQoVQnJvd3NlclNlc3Npb25NZXNzYWdlEhoKEmJyb3dzZXJfc2Vzc2lvbl9pZBgBIAEoCRIuCgRvcGVuGAogASgLMh4uYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbk9wZW5IABI2CghuYXZpZ2F0ZRgLIAEoCzIiLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25OYXZpZ2F0ZUgAEjAKBWlucHV0GAwgASgLMh8uYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbklucHV0SAASNAoHaW5zcGVjdBgNIAEoCzIhLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25JbnNwZWN0SAASNAoHZXhlY3V0ZRgOIAEoCzIhLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25FeGVjdXRlSAASOAoJaGVhcnRiZWF0GA8gASgLMiMuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkhlYXJ0YmVhdEgAEjAKBWZyYW1lGBAgASgLMh8uYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkZyYW1lSAASMAoFY2xvc2UYESABKAsyHy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQ2xvc2VIABIyCgZyZXN1bHQYEiABKAsyIC5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uUmVzdWx0SAASJAoGc3RhdHVzGBMgASgLMhIuYnJvd3Nlci52MS5TdGF0dXNIABJJChJoaXN0b3J5X25hdmlnYXRpb24YFCABKAsyKy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uSGlzdG9yeU5hdmlnYXRpb25IABI6CgpzY3JlZW5zaG90GBUgASgLMiQuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvblNjcmVlbnNob3RIABIwCgVyZWFkeRgWIAEoCzIfLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25SZWFkeUgAEjQKB2NvbnNvbGUYFyABKAsyIS5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQ29uc29sZUgAEjYKCHZpZXdwb3J0GBggASgLMiIuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvblZpZXdwb3J0SAASOAoJbmF2aWdhdGVkGBkgASgLMiMuYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbk5hdmlnYXRlZEgAEkEKCmNvbnRyb2xsZXIYGiABKAsyKy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uQ29udHJvbGxlckNoYW5nZWRIABI5CgZkaWFsb2cYGyABKAsyJy5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uRGlhbG9nQ2hhbmdlZEgAEj0KDGFnZW50X29wZW5lZBgcIAEoCzIlLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25BZ2VudE9wZW5lZEgAEjQKB3BvaW50ZXIYHSABKAsyIS5icm93c2VyLnYxLkJyb3dzZXJTZXNzaW9uUG9pbnRlckgAEjAKBWF1ZGlvGB4gASgLMh8uYnJvd3Nlci52MS5Ccm93c2VyU2Vzc2lvbkF1ZGlvSABCCQoHcGF5bG9hZCKgAgoTSW50ZXJhY3RpdmVFbnZlbG9wZRItCghtZXRhZGF0YRgBIAEoCzIbLmJyb3dzZXIudjEuUmVxdWVzdE1ldGFkYXRhEi4KCGRlbGl2ZXJ5GAIgASgLMhwuYnJvd3Nlci52MS5EZWxpdmVyeU1ldGFkYXRhEjAKCXJlc291cmNlcxgDIAMoCzIdLmJyb3dzZXIudjEuUmVzb3VyY2VSZWZlcmVuY2USLwoIdGVybWluYWwYCiABKAsyGy5icm93c2VyLnYxLlRlcm1pbmFsTWVzc2FnZUgAEjwKD2Jyb3dzZXJfc2Vzc2lvbhgLIAEoCzIhLmJyb3dzZXIudjEuQnJvd3NlclNlc3Npb25NZXNzYWdlSABCCQoHcGF5bG9hZCqRAQoYQnJvd3NlclNlc3Npb25Db250cm9sbGVyEioKJkJST1dTRVJfU0VTU0lPTl9DT05UUk9MTEVSX1VOU1BFQ0lGSUVEEAASJAogQlJPV1NFUl9TRVNTSU9OX0NPTlRST0xMRVJfQUdFTlQQARIjCh9CUk9XU0VSX1NFU1NJT05fQ09OVFJPTExFUl9VU0VSEAIq5AEKGUJyb3dzZXJTZXNzaW9uUG9pbnRlcktpbmQSLAooQlJPV1NFUl9TRVNTSU9OX1BPSU5URVJfS0lORF9VTlNQRUNJRklFRBAAEiUKIUJST1dTRVJfU0VTU0lPTl9QT0lOVEVSX0tJTkRfTU9WRRABEiYKIkJST1dTRVJfU0VTU0lPTl9QT0lOVEVSX0tJTkRfQ0xJQ0sQAhIlCiFCUk9XU0VSX1NFU1NJT05fUE9JTlRFUl9LSU5EX0RPV04QAxIjCh9CUk9XU0VSX1NFU1NJT05fUE9JTlRFUl9LSU5EX1VQEARiBnByb3RvMw',
   [file_browser_v1_common, file_google_protobuf_struct],
 );
 
@@ -532,6 +532,28 @@ export const BrowserSessionScreenshotSchema: GenMessage<BrowserSessionScreenshot
   messageDesc(file_browser_v1_interactive, 19);
 
 /**
+ * @generated from message browser.v1.BrowserSessionViewport
+ */
+export type BrowserSessionViewport = Message<'browser.v1.BrowserSessionViewport'> & {
+  /**
+   * @generated from field: uint32 width = 1;
+   */
+  width: number;
+
+  /**
+   * @generated from field: uint32 height = 2;
+   */
+  height: number;
+};
+
+/**
+ * Describes the message browser.v1.BrowserSessionViewport.
+ * Use `create(BrowserSessionViewportSchema)` to create a new message.
+ */
+export const BrowserSessionViewportSchema: GenMessage<BrowserSessionViewport> /*@__PURE__*/ =
+  messageDesc(file_browser_v1_interactive, 20);
+
+/**
  * @generated from message browser.v1.BrowserSessionReady
  */
 export type BrowserSessionReady = Message<'browser.v1.BrowserSessionReady'> & {
@@ -539,6 +561,23 @@ export type BrowserSessionReady = Message<'browser.v1.BrowserSessionReady'> & {
    * @generated from field: string target_url = 1;
    */
   targetUrl: string;
+
+  /**
+   * Full restorable state, so a re-attaching panel needs no other message.
+   *
+   * @generated from field: optional browser.v1.BrowserSessionViewport viewport = 2;
+   */
+  viewport?: BrowserSessionViewport | undefined;
+
+  /**
+   * @generated from field: browser.v1.BrowserSessionController controller = 3;
+   */
+  controller: BrowserSessionController;
+
+  /**
+   * @generated from field: bool audio_muted = 4;
+   */
+  audioMuted: boolean;
 };
 
 /**
@@ -547,8 +586,165 @@ export type BrowserSessionReady = Message<'browser.v1.BrowserSessionReady'> & {
  */
 export const BrowserSessionReadySchema: GenMessage<BrowserSessionReady> /*@__PURE__*/ = messageDesc(
   file_browser_v1_interactive,
-  20,
+  21,
 );
+
+/**
+ * The page's audio was turned on or off (sessions start muted).
+ *
+ * @generated from message browser.v1.BrowserSessionAudio
+ */
+export type BrowserSessionAudio = Message<'browser.v1.BrowserSessionAudio'> & {
+  /**
+   * @generated from field: bool muted = 1;
+   */
+  muted: boolean;
+};
+
+/**
+ * Describes the message browser.v1.BrowserSessionAudio.
+ * Use `create(BrowserSessionAudioSchema)` to create a new message.
+ */
+export const BrowserSessionAudioSchema: GenMessage<BrowserSessionAudio> /*@__PURE__*/ = messageDesc(
+  file_browser_v1_interactive,
+  22,
+);
+
+/**
+ * The page changed (link, redirect, agent action, popup, previous tab).
+ *
+ * @generated from message browser.v1.BrowserSessionNavigated
+ */
+export type BrowserSessionNavigated = Message<'browser.v1.BrowserSessionNavigated'> & {
+  /**
+   * @generated from field: string url = 1;
+   */
+  url: string;
+};
+
+/**
+ * Describes the message browser.v1.BrowserSessionNavigated.
+ * Use `create(BrowserSessionNavigatedSchema)` to create a new message.
+ */
+export const BrowserSessionNavigatedSchema: GenMessage<BrowserSessionNavigated> /*@__PURE__*/ =
+  messageDesc(file_browser_v1_interactive, 23);
+
+/**
+ * @generated from message browser.v1.BrowserSessionControllerChanged
+ */
+export type BrowserSessionControllerChanged =
+  Message<'browser.v1.BrowserSessionControllerChanged'> & {
+    /**
+     * @generated from field: browser.v1.BrowserSessionController controller = 1;
+     */
+    controller: BrowserSessionController;
+  };
+
+/**
+ * Describes the message browser.v1.BrowserSessionControllerChanged.
+ * Use `create(BrowserSessionControllerChangedSchema)` to create a new message.
+ */
+export const BrowserSessionControllerChangedSchema: GenMessage<BrowserSessionControllerChanged> /*@__PURE__*/ =
+  messageDesc(file_browser_v1_interactive, 24);
+
+/**
+ * @generated from message browser.v1.BrowserSessionDialog
+ */
+export type BrowserSessionDialog = Message<'browser.v1.BrowserSessionDialog'> & {
+  /**
+   * @generated from field: string type = 1;
+   */
+  type: string;
+
+  /**
+   * @generated from field: string message = 2;
+   */
+  message: string;
+
+  /**
+   * @generated from field: optional string default_value = 3;
+   */
+  defaultValue?: string | undefined;
+};
+
+/**
+ * Describes the message browser.v1.BrowserSessionDialog.
+ * Use `create(BrowserSessionDialogSchema)` to create a new message.
+ */
+export const BrowserSessionDialogSchema: GenMessage<BrowserSessionDialog> /*@__PURE__*/ =
+  messageDesc(file_browser_v1_interactive, 25);
+
+/**
+ * A JavaScript dialog is waiting for an answer; absent `dialog` = answered.
+ *
+ * @generated from message browser.v1.BrowserSessionDialogChanged
+ */
+export type BrowserSessionDialogChanged = Message<'browser.v1.BrowserSessionDialogChanged'> & {
+  /**
+   * @generated from field: optional browser.v1.BrowserSessionDialog dialog = 1;
+   */
+  dialog?: BrowserSessionDialog | undefined;
+};
+
+/**
+ * Describes the message browser.v1.BrowserSessionDialogChanged.
+ * Use `create(BrowserSessionDialogChangedSchema)` to create a new message.
+ */
+export const BrowserSessionDialogChangedSchema: GenMessage<BrowserSessionDialogChanged> /*@__PURE__*/ =
+  messageDesc(file_browser_v1_interactive, 26);
+
+/**
+ * The agent opened (or navigated) its thread's session.
+ *
+ * @generated from message browser.v1.BrowserSessionAgentOpened
+ */
+export type BrowserSessionAgentOpened = Message<'browser.v1.BrowserSessionAgentOpened'> & {
+  /**
+   * @generated from field: string thread_id = 1;
+   */
+  threadId: string;
+
+  /**
+   * @generated from field: string url = 2;
+   */
+  url: string;
+};
+
+/**
+ * Describes the message browser.v1.BrowserSessionAgentOpened.
+ * Use `create(BrowserSessionAgentOpenedSchema)` to create a new message.
+ */
+export const BrowserSessionAgentOpenedSchema: GenMessage<BrowserSessionAgentOpened> /*@__PURE__*/ =
+  messageDesc(file_browser_v1_interactive, 27);
+
+/**
+ * Where the agent's mouse goes, in page viewport pixels.
+ *
+ * @generated from message browser.v1.BrowserSessionPointer
+ */
+export type BrowserSessionPointer = Message<'browser.v1.BrowserSessionPointer'> & {
+  /**
+   * @generated from field: int32 x = 1;
+   */
+  x: number;
+
+  /**
+   * @generated from field: int32 y = 2;
+   */
+  y: number;
+
+  /**
+   * @generated from field: browser.v1.BrowserSessionPointerKind kind = 3;
+   */
+  kind: BrowserSessionPointerKind;
+};
+
+/**
+ * Describes the message browser.v1.BrowserSessionPointer.
+ * Use `create(BrowserSessionPointerSchema)` to create a new message.
+ */
+export const BrowserSessionPointerSchema: GenMessage<BrowserSessionPointer> /*@__PURE__*/ =
+  messageDesc(file_browser_v1_interactive, 28);
 
 /**
  * @generated from message browser.v1.BrowserSessionConsole
@@ -590,7 +786,7 @@ export type BrowserSessionConsole = Message<'browser.v1.BrowserSessionConsole'> 
  * Use `create(BrowserSessionConsoleSchema)` to create a new message.
  */
 export const BrowserSessionConsoleSchema: GenMessage<BrowserSessionConsole> /*@__PURE__*/ =
-  messageDesc(file_browser_v1_interactive, 21);
+  messageDesc(file_browser_v1_interactive, 29);
 
 /**
  * @generated from message browser.v1.BrowserSessionFrame
@@ -613,7 +809,7 @@ export type BrowserSessionFrame = Message<'browser.v1.BrowserSessionFrame'> & {
  */
 export const BrowserSessionFrameSchema: GenMessage<BrowserSessionFrame> /*@__PURE__*/ = messageDesc(
   file_browser_v1_interactive,
-  22,
+  30,
 );
 
 /**
@@ -632,7 +828,7 @@ export type BrowserSessionClose = Message<'browser.v1.BrowserSessionClose'> & {
  */
 export const BrowserSessionCloseSchema: GenMessage<BrowserSessionClose> /*@__PURE__*/ = messageDesc(
   file_browser_v1_interactive,
-  23,
+  31,
 );
 
 /**
@@ -650,7 +846,7 @@ export type BrowserSessionResult = Message<'browser.v1.BrowserSessionResult'> & 
  * Use `create(BrowserSessionResultSchema)` to create a new message.
  */
 export const BrowserSessionResultSchema: GenMessage<BrowserSessionResult> /*@__PURE__*/ =
-  messageDesc(file_browser_v1_interactive, 24);
+  messageDesc(file_browser_v1_interactive, 32);
 
 /**
  * @generated from message browser.v1.BrowserSessionMessage
@@ -763,6 +959,55 @@ export type BrowserSessionMessage = Message<'browser.v1.BrowserSessionMessage'> 
         value: BrowserSessionConsole;
         case: 'console';
       }
+    | {
+        /**
+         * @generated from field: browser.v1.BrowserSessionViewport viewport = 24;
+         */
+        value: BrowserSessionViewport;
+        case: 'viewport';
+      }
+    | {
+        /**
+         * @generated from field: browser.v1.BrowserSessionNavigated navigated = 25;
+         */
+        value: BrowserSessionNavigated;
+        case: 'navigated';
+      }
+    | {
+        /**
+         * @generated from field: browser.v1.BrowserSessionControllerChanged controller = 26;
+         */
+        value: BrowserSessionControllerChanged;
+        case: 'controller';
+      }
+    | {
+        /**
+         * @generated from field: browser.v1.BrowserSessionDialogChanged dialog = 27;
+         */
+        value: BrowserSessionDialogChanged;
+        case: 'dialog';
+      }
+    | {
+        /**
+         * @generated from field: browser.v1.BrowserSessionAgentOpened agent_opened = 28;
+         */
+        value: BrowserSessionAgentOpened;
+        case: 'agentOpened';
+      }
+    | {
+        /**
+         * @generated from field: browser.v1.BrowserSessionPointer pointer = 29;
+         */
+        value: BrowserSessionPointer;
+        case: 'pointer';
+      }
+    | {
+        /**
+         * @generated from field: browser.v1.BrowserSessionAudio audio = 30;
+         */
+        value: BrowserSessionAudio;
+        case: 'audio';
+      }
     | { case: undefined; value?: undefined };
 };
 
@@ -771,7 +1016,7 @@ export type BrowserSessionMessage = Message<'browser.v1.BrowserSessionMessage'> 
  * Use `create(BrowserSessionMessageSchema)` to create a new message.
  */
 export const BrowserSessionMessageSchema: GenMessage<BrowserSessionMessage> /*@__PURE__*/ =
-  messageDesc(file_browser_v1_interactive, 25);
+  messageDesc(file_browser_v1_interactive, 33);
 
 /**
  * @generated from message browser.v1.InteractiveEnvelope
@@ -819,5 +1064,67 @@ export type InteractiveEnvelope = Message<'browser.v1.InteractiveEnvelope'> & {
  */
 export const InteractiveEnvelopeSchema: GenMessage<InteractiveEnvelope> /*@__PURE__*/ = messageDesc(
   file_browser_v1_interactive,
-  26,
+  34,
 );
+
+/**
+ * @generated from enum browser.v1.BrowserSessionController
+ */
+export enum BrowserSessionController {
+  /**
+   * @generated from enum value: BROWSER_SESSION_CONTROLLER_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_CONTROLLER_AGENT = 1;
+   */
+  AGENT = 1,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_CONTROLLER_USER = 2;
+   */
+  USER = 2,
+}
+
+/**
+ * Describes the enum browser.v1.BrowserSessionController.
+ */
+export const BrowserSessionControllerSchema: GenEnum<BrowserSessionController> /*@__PURE__*/ =
+  enumDesc(file_browser_v1_interactive, 0);
+
+/**
+ * @generated from enum browser.v1.BrowserSessionPointerKind
+ */
+export enum BrowserSessionPointerKind {
+  /**
+   * @generated from enum value: BROWSER_SESSION_POINTER_KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_POINTER_KIND_MOVE = 1;
+   */
+  MOVE = 1,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_POINTER_KIND_CLICK = 2;
+   */
+  CLICK = 2,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_POINTER_KIND_DOWN = 3;
+   */
+  DOWN = 3,
+
+  /**
+   * @generated from enum value: BROWSER_SESSION_POINTER_KIND_UP = 4;
+   */
+  UP = 4,
+}
+
+/**
+ * Describes the enum browser.v1.BrowserSessionPointerKind.
+ */
+export const BrowserSessionPointerKindSchema: GenEnum<BrowserSessionPointerKind> /*@__PURE__*/ =
+  enumDesc(file_browser_v1_interactive, 1);

@@ -3,6 +3,7 @@ import { GitBranch } from 'lucide-react';
 
 import { PRBadge } from '@/components/PRBadge';
 import { Badge } from '@/components/ui/badge';
+import { LabelBadge } from '@/components/ui/label-badge';
 import { cn } from '@/lib/utils';
 
 function toPRBadgeState(state: string): 'OPEN' | 'MERGED' | 'CLOSED' {
@@ -23,17 +24,9 @@ export function IssueBadges({
   return (
     <>
       {issue.labels.map((label) => (
-        <Badge
-          key={label.name}
-          variant="outline"
-          className={cn('px-1', badgeClassName)}
-          style={{
-            borderColor: `#${label.color}`,
-            color: `#${label.color}`,
-          }}
-        >
+        <LabelBadge key={label.name} color={label.color}>
           {label.name}
-        </Badge>
+        </LabelBadge>
       ))}
       {issue.linkedBranch && (
         <Badge

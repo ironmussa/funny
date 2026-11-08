@@ -127,5 +127,115 @@
       }
     },
     "wireHex": "0a0f62726f777365722e76313a7465737462270a250a170a15726571756573742d7468726561642d6f70656e2d315a0a0a087468726561642d31"
+  },
+  {
+    "name": "browser_session_ready",
+    "messageType": "browser.v1.InteractiveEnvelope",
+    "protoJson": {
+      "delivery": {
+        "deliveryClass": "DELIVERY_CLASS_SNAPSHOT_RECOVERABLE"
+      },
+      "browserSession": {
+        "browserSessionId": "thread:t1",
+        "ready": {
+          "targetUrl": "https://example.com/",
+          "viewport": {
+            "width": 1920,
+            "height": 1080
+          },
+          "controller": "BROWSER_SESSION_CONTROLLER_AGENT",
+          "audioMuted": true
+        }
+      }
+    },
+    "wireHex": "120208025a300a097468726561643a7431b201220a1468747470733a2f2f6578616d706c652e636f6d2f120608800f10b80818012001"
+  },
+  {
+    "name": "browser_session_navigated",
+    "messageType": "browser.v1.InteractiveEnvelope",
+    "protoJson": {
+      "delivery": {
+        "deliveryClass": "DELIVERY_CLASS_COALESCIBLE",
+        "coalescingKey": "browser-navigated:thread:t1"
+      },
+      "browserSession": {
+        "browserSessionId": "thread:t1",
+        "navigated": {
+          "url": "https://example.com/next"
+        }
+      }
+    },
+    "wireHex": "121f08031a1b62726f777365722d6e61766967617465643a7468726561643a74315a280a097468726561643a7431ca011a0a1868747470733a2f2f6578616d706c652e636f6d2f6e657874"
+  },
+  {
+    "name": "browser_session_dialog",
+    "messageType": "browser.v1.InteractiveEnvelope",
+    "protoJson": {
+      "delivery": {
+        "deliveryClass": "DELIVERY_CLASS_SNAPSHOT_RECOVERABLE"
+      },
+      "browserSession": {
+        "browserSessionId": "thread:t1",
+        "dialog": {
+          "dialog": {
+            "type": "confirm",
+            "message": "Delete?"
+          }
+        }
+      }
+    },
+    "wireHex": "120208025a220a097468726561643a7431da01140a120a07636f6e6669726d120744656c6574653f"
+  },
+  {
+    "name": "browser_session_agent_opened",
+    "messageType": "browser.v1.InteractiveEnvelope",
+    "protoJson": {
+      "delivery": {
+        "deliveryClass": "DELIVERY_CLASS_SNAPSHOT_RECOVERABLE"
+      },
+      "browserSession": {
+        "browserSessionId": "thread:t1",
+        "agentOpened": {
+          "threadId": "t1",
+          "url": "https://example.com/"
+        }
+      }
+    },
+    "wireHex": "120208025a280a097468726561643a7431e2011a0a027431121468747470733a2f2f6578616d706c652e636f6d2f"
+  },
+  {
+    "name": "browser_session_pointer",
+    "messageType": "browser.v1.InteractiveEnvelope",
+    "protoJson": {
+      "delivery": {
+        "deliveryClass": "DELIVERY_CLASS_VOLATILE"
+      },
+      "browserSession": {
+        "browserSessionId": "thread:t1",
+        "pointer": {
+          "x": 640,
+          "y": 360,
+          "kind": "BROWSER_SESSION_POINTER_KIND_CLICK"
+        }
+      }
+    },
+    "wireHex": "120208045a160a097468726561643a7431ea010808800510e8021802"
+  },
+  {
+    "name": "browser_session_audio",
+    "messageType": "browser.v1.InteractiveEnvelope",
+    "protoJson": {
+      "delivery": {
+        "deliveryClass": "DELIVERY_CLASS_COALESCIBLE",
+        "coalescingKey": "browser-audio:thread:t1"
+      },
+      "browserSession": {
+        "browserSessionId": "thread:t1",
+        "audio": {
+          "muted": false
+        }
+      }
+    },
+    "wireHex": "121b08031a1762726f777365722d617564696f3a7468726561643a74315a0e0a097468726561643a7431f20100"
   }
 ]

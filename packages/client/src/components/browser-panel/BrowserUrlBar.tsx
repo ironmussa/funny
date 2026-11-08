@@ -1,5 +1,4 @@
 import { ArrowLeft, ArrowRight, ExternalLink, RotateCw } from 'lucide-react';
-import { useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
@@ -49,14 +48,13 @@ function normalizeUrl(input: string): { url: string; protocol: string } | null {
 export function BrowserUrlBar() {
   const url = useBrowserPanelStore((s) => s.url);
   const loadedUrl = useBrowserPanelStore((s) => s.loadedUrl);
-  const loadError = useBrowserPanelStore((s) => s.loadError);
   const setUrl = useBrowserPanelStore((s) => s.setUrl);
   const openBrowserSession = useBrowserPanelStore((s) => s.openBrowserSession);
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
-  const sessionError = useBrowserPanelStore((s) => s.sessionError);
   const fontSize = useSettingsStore((s) => s.fontSize);
 
-  const [error, setError] = useState<string | null>(null);
+  // Errors are shown centered in the viewport (BrowserViewport), not here.
+  const setError = useBrowserPanelStore((s) => s.setLoadError);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -211,16 +209,6 @@ export function BrowserUrlBar() {
         <BrowserSessionMenu />
       </form>
       <BrowserControlBar style={fontStyle} />
-      {(loadError || error || sessionError) && (
-        <div
-          role="alert"
-          data-testid="browser-panel-url-error"
-          className="text-destructive"
-          style={fontStyle}
-        >
-          {loadError ?? error ?? sessionError}
-        </div>
-      )}
     </div>
   );
 }

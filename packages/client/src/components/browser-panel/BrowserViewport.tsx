@@ -5,6 +5,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { browserSessionClient } from '@/lib/browser-session-client';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
+import { AgentPointer } from './AgentPointer';
 import { BrowserSessionCanvas } from './BrowserSessionCanvas';
 import { InspectOverlay } from './InspectOverlay';
 import { TestIdOverlay } from './TestIdOverlay';
@@ -23,6 +24,7 @@ export function BrowserViewport() {
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
   const loadedUrl = useBrowserPanelStore((s) => s.loadedUrl);
   const setLoadError = useBrowserPanelStore((s) => s.setLoadError);
+  const hasMessage = useBrowserPanelStore((s) => !!(s.loadError ?? s.sessionError));
   // Heartbeat: keep the runner session alive while the viewport is mounted.
   // The runner reaps sessions idle for >90s (see HEARTBEAT_TIMEOUT_MS in
   // browser-session-manager.ts).
@@ -47,7 +49,7 @@ export function BrowserViewport() {
         <EmptyState
           fill={false}
           testId="browser-panel-empty"
-          title={loadedUrl ? null : 'Paste a URL above to start.'}
+          title={loadedUrl || hasMessage ? null : 'Paste a URL above to start.'}
         />
       )}
       <BrowserSessionStatus />
@@ -113,6 +115,8 @@ function ActiveBrowserViewport() {
           tool={tool}
         />
       </div>
+
+      {!userControls && sessionId && <AgentPointer sessionId={sessionId} viewport={viewport} />}
     </div>
   );
 }
@@ -325,8 +329,11 @@ function acceptsBrowserInput(
 
 function BrowserSessionStatus() {
   const sessionStatus = useBrowserPanelStore((s) => s.sessionStatus);
+  const message = useBrowserPanelStore((s) => s.loadError ?? s.sessionError);
   const showCdpSpinner = sessionStatus === 'spawning';
   const showCdpDisconnected = sessionStatus === 'disconnected';
+  // The disconnected screen shows the session error itself.
+  const showMessage = !!message && !showCdpSpinner && !showCdpDisconnected;
   return (
     <>
       {showCdpSpinner && (
@@ -338,6 +345,18 @@ function BrowserSessionStatus() {
       )}
 
       {showCdpDisconnected && <DisconnectedBrowser />}
+
+      {showMessage && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-6">
+          <div
+            role="alert"
+            data-testid="browser-panel-error"
+            className="border-destructive/30 bg-background/95 text-destructive max-w-full rounded-md border px-3 py-2 text-center text-sm"
+          >
+            {message}
+          </div>
+        </div>
+      )}
     </>
   );
 }

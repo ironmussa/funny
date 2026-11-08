@@ -185,19 +185,12 @@ describe('production TypeScript runner gRPC adapters', () => {
       data: { sessionId: 'panel-1', url: 'https://example.com' },
     } as any);
 
-    await waitFor(
-      () => delivered.length === 1 && published.length === 1,
-      'browser-session events were not relayed',
-    );
+    await waitFor(() => published.length === 2, 'browser-session events were not relayed');
     await Bun.sleep(100);
-    expect(delivered).toEqual([
-      {
-        userId: 'user-1',
-        type: 'browser-session:agent-opened',
-        data: { sessionId: 'thread:own', threadId: 'own-thread', url: 'https://example.com' },
-      },
-    ]);
+    // Browser-session events travel only as browser.v1, never as legacy user events.
+    expect(delivered).toEqual([]);
     expect(published).toEqual([
+      { scope: { kind: 'user', userId: 'user-1' }, logicalType: 'browser-session:agent-opened' },
       { scope: { kind: 'user', userId: 'user-1' }, logicalType: 'browser-session:ready' },
     ]);
     // Unscoped events are never persisted as thread events.

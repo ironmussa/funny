@@ -34,7 +34,9 @@ export type BrowserSessionInputKind =
   /** Shared control: the user hands the session back to the agent. */
   | 'releaseControl'
   /** Answer the pending JavaScript dialog (`accept`, optional `promptText`). */
-  | 'dialog';
+  | 'dialog'
+  /** Turn the page's audio on or off (`muted`). Sessions start muted. */
+  | 'audio';
 
 export interface WSBrowserSessionInputData {
   sessionId: string;
@@ -64,6 +66,8 @@ export interface WSBrowserSessionInputData {
   accept?: boolean;
   /** For `dialog` on a `prompt()`: the text to answer with. */
   promptText?: string;
+  /** For `audio`: mute (true) or unmute (false) the page. */
+  muted?: boolean;
 }
 
 export interface WSBrowserSessionInspectAtData {
@@ -188,6 +192,35 @@ export interface WSBrowserSessionViewportData {
   threadId?: string;
   width: number;
   height: number;
+}
+
+/** The session's page changed (link, redirect, agent action, popup): the panel's URL bar follows. */
+export interface WSBrowserSessionNavigatedData {
+  sessionId: string;
+  threadId?: string;
+  url: string;
+}
+
+/** The session's page audio was turned on or off. */
+export interface WSBrowserSessionAudioData {
+  sessionId: string;
+  threadId?: string;
+  muted: boolean;
+}
+
+/** What the agent's pointer does at a point: move there, or press there. */
+export type BrowserSessionPointerKind = 'move' | 'click' | 'down' | 'up';
+
+/**
+ * Where the agent's mouse goes, in page viewport pixels. The screencast never
+ * shows a cursor, so the panel draws one from these.
+ */
+export interface WSBrowserSessionPointerData {
+  sessionId: string;
+  threadId?: string;
+  x: number;
+  y: number;
+  kind: BrowserSessionPointerKind;
 }
 
 export interface WSBrowserSessionFrameData {

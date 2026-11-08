@@ -154,6 +154,29 @@ function WorktreesTab({ ready }: { ready: boolean }) {
 }
 
 /**
+ * Project loading normally starts in AuthGate so it overlaps the lazy App
+ * chunk. Keep this fallback for callers that mount App directly.
+ */
+function useProjectsFallbackLoad() {
+  const loadProjects = useProjectStore((s) => s.loadProjects);
+  const projectsInitialized = useProjectStore((s) => s.initialized);
+  useEffect(() => {
+    if (!projectsInitialized) loadProjects();
+  }, [loadProjects, projectsInitialized]);
+}
+
+/**
+ * The browser panel is open or closed per thread: follow the active thread,
+ * restoring its state and detaching — never closing — the previous one's session.
+ */
+function useBrowserPanelThreadSync(activeThreadId: string | null) {
+  const syncBrowserThread = useBrowserPanelStore((s) => s.syncActiveThread);
+  useEffect(() => {
+    syncBrowserThread(activeThreadId);
+  }, [activeThreadId, syncBrowserThread]);
+}
+
+/**
  * Whether the thread the right pane follows supports git: the grid selection
  * while the grid is open, the active thread otherwise.
  */
@@ -171,8 +194,6 @@ export function App() {
   const [primaryViewReady, setPrimaryViewReady] = useState(false);
   const markPrimaryViewReady = useCallback(() => setPrimaryViewReady(true), []);
 
-  const loadProjects = useProjectStore((s) => s.loadProjects);
-  const projectsInitialized = useProjectStore((s) => s.initialized);
   const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
   const loadSharedThreads = useThreadStore((s) => s.loadSharedThreads);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
@@ -225,6 +246,7 @@ export function App() {
   const browserPanelOpen = useBrowserPanelStore((s) => s.open);
   const browserPanelWidth = useBrowserPanelStore((s) => s.browserPanelWidth);
   const togglebrowserPanel = useBrowserPanelStore((s) => s.togglePanel);
+  useBrowserPanelThreadSync(activeThreadId);
 
   // Register navigate so the store can trigger navigation (e.g. from toasts)
   useEffect(() => {
@@ -237,11 +259,7 @@ export function App() {
   // Sync URL ↔ store
   useRouteSync();
 
-  // Project loading normally starts in AuthGate so it overlaps the lazy App
-  // chunk. Keep this fallback for callers that mount App directly.
-  useEffect(() => {
-    if (!projectsInitialized) loadProjects();
-  }, [loadProjects, projectsInitialized]);
+  useProjectsFallbackLoad();
 
   // Load the remaining app data on mount (auth already initialized by AuthGate).
   useEffect(() => {

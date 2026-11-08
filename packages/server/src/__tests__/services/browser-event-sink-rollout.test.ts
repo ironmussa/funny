@@ -9,6 +9,7 @@ import {
   StatusCode,
 } from '@funny/shared/browser-v1/common';
 import { ApplicationEventSchema } from '@funny/shared/browser-v1/events';
+import { InteractiveEnvelopeSchema } from '@funny/shared/browser-v1/interactive';
 
 import {
   SocketIoBrowserEventSink,
@@ -84,6 +85,50 @@ describe('rollout-aware browser event sink', () => {
     expect(telemetry).toContainEqual(
       expect.objectContaining({ representation: 'shadow', dispatched: false }),
     );
+  });
+
+  test('browser sessions are never sent as legacy events', () => {
+    const legacy = socket('legacy');
+    const shadow = socket('shadow');
+    const binary = socket('binary');
+    const sockets = new Map([
+      [legacy.id, legacy],
+      [shadow.id, shadow],
+      [binary.id, binary],
+    ]);
+    const browser = {
+      sockets,
+      adapter: { rooms: new Map([['user:user-1', new Set(sockets.keys())]]) },
+    };
+    const sink = new SocketIoBrowserEventSink({ of: () => browser } as any, {
+      selectRepresentation: (candidate) =>
+        candidate.id === 'binary'
+          ? Representation.BROWSER_V1
+          : candidate.id === 'shadow'
+            ? Representation.SHADOW
+            : Representation.LEGACY,
+    });
+
+    sink.publish({
+      scope: { kind: 'user', userId: 'user-1' },
+      logicalType: 'browser-session:pointer',
+      trafficClass: 'browserSession',
+      delivery: { class: 'volatile' },
+      legacyEvent: { type: 'browser-session:pointer', data: { sessionId: 's1' } },
+      browserV1Interactive: create(InteractiveEnvelopeSchema, {
+        delivery: { deliveryClass: DeliveryClass.VOLATILE },
+        payload: {
+          case: 'browserSession',
+          value: { browserSessionId: 's1', payload: { case: 'pointer', value: { x: 1, y: 2 } } },
+        },
+      }),
+    });
+
+    expect(legacy.emitted).toEqual([]);
+    expect(shadow.emitted).toEqual([]);
+    expect(binary.emitted.map(({ event }) => event)).toEqual([
+      BROWSER_V1_CARRIER_EVENTS.interactive,
+    ]);
   });
 
   test('evicts revoked sharees and sends typed outcomes to binary subscribers', () => {

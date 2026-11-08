@@ -86,10 +86,18 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
           )
         : []);
 
+    // Group once instead of filtering every tool call per message (O(m × t)
+    // on long threads). Insertion order keeps each message's calls in order.
+    const toolCallsByMessage = new Map<string, typeof toolCalls>();
+    for (const tc of toolCalls) {
+      const group = toolCallsByMessage.get(tc.messageId);
+      if (group) group.push(tc);
+      else toolCallsByMessage.set(tc.messageId, [tc]);
+    }
     return messages.map((msg) => ({
       ...msg,
       images: msg.images ? JSON.parse(msg.images) : undefined,
-      toolCalls: toolCalls.filter((tc) => tc.messageId === msg.id),
+      toolCalls: toolCallsByMessage.get(msg.id) ?? [],
     }));
   }
 

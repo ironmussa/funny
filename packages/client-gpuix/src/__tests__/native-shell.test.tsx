@@ -213,8 +213,14 @@ describe('native read-only shell', () => {
     const sidebarBounds = root.renderer.getElementBounds(sidebarContainer!);
     expect(sidebarBounds?.width).toBeGreaterThan(0);
     expect(sidebarBounds?.height).toBeGreaterThan(0);
-    expect(root.renderer.findByType('markdown')).toHaveLength(0);
-    expect(root.renderer.findByType('code')).toHaveLength(0);
+    // Rich presentation is the default, so retained rows may render markdown;
+    // what matters is that the 500-message history is not laid out at once.
+    expect(root.renderer.findByType('markdown').length).toBeLessThanOrEqual(
+      THREAD_RETAINED_WINDOW_SIZE,
+    );
+    expect(root.renderer.findByType('code').length).toBeLessThanOrEqual(
+      THREAD_RETAINED_WINDOW_SIZE,
+    );
     expect(root.renderer.getPaintedText()).toContain('Long thread');
     expect(root.renderer.findByTestId('navigation-diff-summary')).toBeDefined();
     expect(root.renderer.findByTestId('files-diff-summary')).toBeDefined();

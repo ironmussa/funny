@@ -236,8 +236,10 @@ describe('native read-only shell', () => {
     }
     expect(root.renderer.findByTestId('files-diff-summary')).toBeDefined();
     expect(root.renderer.getPaintedText()).toContain('+24');
-    expect(root.renderer.getPaintedText()).toContain('characters hidden');
-    expect(root.renderer.getPaintedText()).not.toContain('tail-marker');
+    // Painted runs are whole strings ("999,771 characters hidden"), so match substrings.
+    const painted = root.renderer.getPaintedText();
+    expect(painted.some((text) => text.includes('characters hidden'))).toBeTrue();
+    expect(painted.some((text) => text.includes('tail-marker'))).toBeFalse();
     application.dispose();
     root.unmount();
   });

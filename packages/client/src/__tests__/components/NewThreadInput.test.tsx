@@ -306,7 +306,12 @@ describe('NewThreadInput', () => {
     fireEvent.click(screen.getByTestId('mock-prompt-submit'));
 
     await waitFor(() => expect(mockCreateThread).toHaveBeenCalled());
-    expect(screen.queryByTestId('new-thread-creating')).not.toBeInTheDocument();
+    // The loader shows while the request is in flight; what must not happen is
+    // that it stays. Checking right after the call raced the resolution and
+    // failed intermittently in CI; a pinned loader still times this out.
+    await waitFor(() =>
+      expect(screen.queryByTestId('new-thread-creating')).not.toBeInTheDocument(),
+    );
     expect(screen.getByTestId('mock-prompt-input')).toBeInTheDocument();
   });
 

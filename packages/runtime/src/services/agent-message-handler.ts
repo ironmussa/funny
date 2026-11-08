@@ -169,6 +169,9 @@ export class AgentMessageHandler {
   }
 
   async handle(threadId: string, msg: CLIMessage): Promise<void> {
+    // Every message is activity: without this the stale sweep (1h) evicted a
+    // long-running agent's dedup maps mid-run, duplicating messages/tool calls.
+    this.state.touch(threadId);
     log.debug('handle() raw message', {
       namespace: 'agent',
       threadId,

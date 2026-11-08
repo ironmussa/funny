@@ -37,6 +37,7 @@ import { badRequest, internal, notFound } from '@funny/shared/errors';
 import { type Result, ResultAsync, err, errAsync, ok } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { invalidatePRInfo } from './pr-info-cache.js';
 import { projectSearchRegistry } from './project-search-registry.js';
 import { getServices } from './service-registry.js';
 import { threadEventBus } from './thread-event-bus.js';
@@ -689,6 +690,8 @@ export function createPullRequest(params: CreatePRParams): ResultAsync<string, D
           thread?.baseBranch ?? undefined,
           identity,
         ).andThen((prUrl) => {
+          // Show the new PR on the next status refresh instead of after the TTL.
+          if (thread?.branch) invalidatePRInfo(thread.branch);
           const prData = { title: params.title, url: prUrl };
           return ResultAsync.fromSafePromise(
             getServices()

@@ -123,6 +123,8 @@ export function ChangesFilesPanel(props: ChangesFilesPanelProps) {
       treeRows[index]?.kind === 'folder' ? FOLDER_ROW_HEIGHT : FILE_ROW_HEIGHT,
     getItemKey: (index) => treeRowKey(treeRows[index]),
     overscan: 15,
+    // Re-render on scroll through React's scheduler, not a blocking flushSync.
+    useFlushSync: false,
   });
 
   return (

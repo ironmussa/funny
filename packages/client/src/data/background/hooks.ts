@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 
 import type { EntityStore } from '../entities';
 import { useDataLayer } from '../hooks';
+import { liveQueryKey } from '../live-query-key';
 import { getJobsData, getWatchersData } from './store';
 
 /**
@@ -23,7 +24,10 @@ function toById<T extends { id: string }>(
 }
 
 function useById<T extends { id: string }>(data: EntityStore<T>): Record<string, T> {
-  const { data: rows } = useLiveQuery((q) => q.from({ row: data.collection }));
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('background:useById', data.collection),
+    query: (q) => q.from({ row: data.collection }),
+  });
   return useMemo(() => toById(rows as T[] | undefined, data), [rows, data]);
 }
 
@@ -31,9 +35,10 @@ function useByIdForThread<T extends { id: string; threadId: string }>(
   data: EntityStore<T>,
   threadId: string,
 ): Record<string, T> {
-  const { data: rows } = useLiveQuery((q) =>
-    q.from({ row: data.collection }).where(({ row }) => eq(row.threadId, threadId)),
-  );
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('background:useByIdForThread', data.collection, threadId),
+    query: (q) => q.from({ row: data.collection }).where(({ row }) => eq(row.threadId, threadId)),
+  });
   return useMemo(() => toById(rows as T[] | undefined, data), [rows, data]);
 }
 

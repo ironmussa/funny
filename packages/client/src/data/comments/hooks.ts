@@ -4,6 +4,7 @@ import { useLiveQuery } from '@tanstack/react-db';
 import { useMemo } from 'react';
 
 import { useDataLayer, useDataQuery } from '../hooks';
+import { liveQueryKey } from '../live-query-key';
 import { commentsQuery, compareComments, getCommentsData } from './store';
 
 /**
@@ -18,9 +19,11 @@ export function useThreadComments(threadId: string | null | undefined): {
   const data = getCommentsData(layer);
   const id = threadId ?? '';
   const query = useDataQuery({ ...commentsQuery(id, layer), enabled: !!threadId });
-  const { data: rows } = useLiveQuery((q) =>
-    q.from({ comment: data.collection }).where(({ comment }) => eq(comment.threadId, id)),
-  );
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('comments:useThreadComments', data.collection, id),
+    query: (q) =>
+      q.from({ comment: data.collection }).where(({ comment }) => eq(comment.threadId, id)),
+  });
   const loaded = query.data !== undefined;
   return useMemo(() => {
     if (!threadId || (!loaded && (!rows || rows.length === 0))) {

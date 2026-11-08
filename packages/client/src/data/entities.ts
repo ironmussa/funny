@@ -1,6 +1,7 @@
-import { createCollection, type Collection } from '@tanstack/db';
+import type { Collection } from '@tanstack/db';
 
 import type { DataLayer } from './data-layer';
+import { createSyncedCollection, type SyncParams } from './synced-collection';
 
 /**
  * A server-backed entity collection with an explicit sync writer, for
@@ -58,29 +59,15 @@ export function createEntityStore<T extends Entity>(
 ): EntityStore<T> {
   const synced = new Map<string, T>();
   const plainCopies = new WeakMap<object, T>();
-  type SyncParams = Parameters<
-    NonNullable<Parameters<typeof createCollection<T, string>>[0]['sync']>['sync']
-  >[0];
-  type Message = Parameters<SyncParams['write']>[0];
-  let sync: SyncParams | null = null;
+  type Message = Parameters<SyncParams<T>['write']>[0];
+  let sync: SyncParams<T> | null = null;
 
-  const collection = createCollection<T, string>({
-    id: `${name}:${layer.userId ?? 'anonymous'}:${layer.orgId ?? 'personal'}`,
-    getKey: (row) => row.id,
-    startSync: true,
-    // Rows must outlive their subscribers; the layer's dispose() cleans up.
-    gcTime: 0,
-    sync: {
-      rowUpdateMode: 'full',
-      sync: (params) => {
-        sync = params;
-        params.markReady();
-        return () => {
-          sync = null;
-        };
-      },
+  const collection = createSyncedCollection<T>(
+    `${name}:${layer.userId ?? 'anonymous'}:${layer.orgId ?? 'personal'}`,
+    (params) => {
+      sync = params;
     },
-  });
+  );
 
   /** Commit one synced batch; skipped once the layer is disposed (late response). */
   function commit(collect: (out: Message[]) => void): void {

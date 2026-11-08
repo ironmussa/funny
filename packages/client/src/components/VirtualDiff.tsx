@@ -475,6 +475,8 @@ export const VirtualDiff = memo(function VirtualDiff({
     getScrollElement: () => scrollRef.current,
     estimateSize: (index) => (rowHeightMap ? (rowHeightMap.get(index) ?? rowHeight) : rowHeight),
     overscan: 30,
+    // Re-render on scroll through React's scheduler, not a blocking flushSync.
+    useFlushSync: false,
   });
 
   // Re-measure all rows when word-wrap is toggled off or font size changes

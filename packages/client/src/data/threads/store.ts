@@ -1,8 +1,12 @@
 import type { Thread } from '@funny/shared';
-import { createCollection, type Collection } from '@tanstack/db';
+import type { Collection } from '@tanstack/db';
 
 import type { DataLayer } from '../data-layer';
 import { getDataLayer } from '../runtime';
+import {
+  createSyncedCollection,
+  type SyncParams as SyncedCollectionParams,
+} from '../synced-collection';
 import { createThreadListMeta, type ThreadListMetaStore } from './list-meta';
 import { fenceFields, mergeIncomingThread, takeFencedFields, type FieldFences } from './merge';
 
@@ -39,9 +43,7 @@ function toPlainThread(row: Thread): Thread {
   return plain as unknown as Thread;
 }
 
-type SyncParams = Parameters<
-  NonNullable<Parameters<typeof createCollection<Thread, string>>[0]['sync']>['sync']
->[0];
+type SyncParams = SyncedCollectionParams<Thread>;
 
 export interface ThreadsData {
   readonly collection: Collection<Thread, string>;
@@ -92,23 +94,12 @@ function createThreadsData(layer: DataLayer): ThreadsData {
   let sync: SyncParams | null = null;
   const fromRowCache = new WeakMap<object, Thread>();
 
-  const collection = createCollection<Thread, string>({
-    id: `threads:${layer.userId ?? 'anonymous'}:${layer.orgId ?? 'personal'}`,
-    getKey: (thread) => thread.id,
-    startSync: true,
-    // Rows must outlive their subscribers; the layer's dispose() cleans up.
-    gcTime: 0,
-    sync: {
-      rowUpdateMode: 'full',
-      sync: (params) => {
-        sync = params;
-        params.markReady();
-        return () => {
-          sync = null;
-        };
-      },
+  const collection = createSyncedCollection<Thread>(
+    `threads:${layer.userId ?? 'anonymous'}:${layer.orgId ?? 'personal'}`,
+    (params) => {
+      sync = params;
     },
-  });
+  );
 
   type Message = Parameters<SyncParams['write']>[0];
 

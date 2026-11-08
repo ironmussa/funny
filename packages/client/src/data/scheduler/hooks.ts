@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from 'react';
 import type { SchedulerRun } from '@/lib/api/scheduler';
 
 import { useDataLayer, useDataQuery } from '../hooks';
+import { liveQueryKey } from '../live-query-key';
 import { getSchedulerData, refreshScheduler, schedulerRunsQuery, type SchedulerRow } from './store';
 
 /** The scheduler queue, most recent event first, fetched when a reader mounts. */
@@ -15,7 +16,10 @@ export function useSchedulerQueue(): {
   const layer = useDataLayer();
   const data = getSchedulerData(layer);
   const query = useDataQuery(schedulerRunsQuery(layer));
-  const { data: rows } = useLiveQuery((q) => q.from({ run: data.collection }));
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('scheduler:useSchedulerQueue', data.collection),
+    query: (q) => q.from({ run: data.collection }),
+  });
   const runs = useMemo(
     () =>
       (rows ?? [])

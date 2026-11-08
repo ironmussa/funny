@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { useStore } from 'zustand';
 
 import { useDataLayer } from '../hooks';
+import { liveQueryKey } from '../live-query-key';
 import type { ThreadListMetaState, ThreadSourceKey } from './list-meta';
 import { getThreadsData, type ThreadsData } from './store';
 import { boardThreadIds, deriveOrderedThreads, unionIds } from './views';
@@ -37,9 +38,11 @@ function useMembers(data: ThreadsData): ThreadListMetaState['members'] {
 
 /** Live rows for `ids`, keyed by id. */
 function useRowsById(data: ThreadsData, ids: string[]): Record<string, Thread> {
-  const { data: rows } = useLiveQuery((q) =>
-    q.from({ thread: data.collection }).where(({ thread }) => inArray(thread.id, ids)),
-  );
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('threads:by-ids', data.collection, ids),
+    query: (q) =>
+      q.from({ thread: data.collection }).where(({ thread }) => inArray(thread.id, ids)),
+  });
   return useMemo(() => {
     const byId: Record<string, Thread> = {};
     for (const row of rows ?? []) {
@@ -61,11 +64,13 @@ function useSourceThreads(source: ThreadSourceKey): Thread[] {
 /** Reactive lookup for a single thread. */
 export function useThreadById(threadId: string | null | undefined): Thread | undefined {
   const data = useThreadsData();
-  const { data: rows } = useLiveQuery((q) =>
-    threadId
-      ? q.from({ thread: data.collection }).where(({ thread }) => eq(thread.id, threadId))
-      : null,
-  );
+  const { data: rows } = useLiveQuery({
+    queryKey: liveQueryKey('threads:by-id', data.collection, threadId ?? null),
+    query: (q) =>
+      threadId
+        ? q.from({ thread: data.collection }).where(({ thread }) => eq(thread.id, threadId))
+        : null,
+  });
   const row = rows?.[0] as Thread | undefined;
   return row ? data.fromRow(row) : undefined;
 }

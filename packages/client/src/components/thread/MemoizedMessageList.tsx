@@ -2,6 +2,7 @@ import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   useState,
   useRef,
+  useEffect,
   useEffectEvent,
   useLayoutEffect,
   useCallback,
@@ -29,7 +30,7 @@ import {
   buildFallbackVirtualItems,
   estimateItemHeight,
   estimateVirtualRowHeight,
-  getElementBottomRelativeToContainer,
+  getRowBottomFromRenderedOffset,
   getMeasuredLastRowBottom,
   getObservedBlockSize,
   getVirtualContentHeight,
@@ -94,6 +95,48 @@ function messageListAreEqual(prev: MemoizedMessageListProps, next: MemoizedMessa
   );
 }
 
+/**
+ * Bottom of the lowest measured row. Every row measured in a frame publishes
+ * one max-bottom update, instead of one state update (and a scan of the whole
+ * cache) per row.
+ */
+function useMaxRowBottom() {
+  const measuredRowBottomCacheRef = useRef<Map<string, number> | null>(null);
+  if (measuredRowBottomCacheRef.current === null) {
+    measuredRowBottomCacheRef.current = new Map();
+  }
+  const measuredRowBottomCache = measuredRowBottomCacheRef.current;
+  const [measuredContentBottom, setMeasuredContentBottom] = useState(0);
+  const measuredBottomRafRef = useRef<number | null>(null);
+  const scheduleMeasuredContentBottom = useCallback(() => {
+    if (measuredBottomRafRef.current !== null) return;
+    measuredBottomRafRef.current = requestAnimationFrame(() => {
+      measuredBottomRafRef.current = null;
+      let nextMeasuredBottom = 0;
+      measuredRowBottomCache.forEach((value) => {
+        nextMeasuredBottom = Math.max(nextMeasuredBottom, value);
+      });
+      setMeasuredContentBottom((prev) =>
+        Math.abs(prev - nextMeasuredBottom) > 1 ? nextMeasuredBottom : prev,
+      );
+    });
+  }, [measuredRowBottomCache]);
+  useEffect(
+    () => () => {
+      if (measuredBottomRafRef.current !== null) {
+        cancelAnimationFrame(measuredBottomRafRef.current);
+      }
+    },
+    [],
+  );
+  return {
+    measuredRowBottomCache,
+    measuredContentBottom,
+    setMeasuredContentBottom,
+    scheduleMeasuredContentBottom,
+  };
+}
+
 /** Memoized message list with true virtualization over loaded grouped items. */
 export const MemoizedMessageList = memo(
   // eslint-disable-next-line max-lines-per-function, react-doctor/no-giant-component -- Legacy virtualized renderer; this pass only extracts measurement and row helpers.
@@ -150,12 +193,12 @@ export const MemoizedMessageList = memo(
       heightCacheRef.current = new Map();
     }
     const heightCache = heightCacheRef.current;
-    const measuredRowBottomCacheRef = useRef<Map<string, number> | null>(null);
-    if (measuredRowBottomCacheRef.current === null) {
-      measuredRowBottomCacheRef.current = new Map();
-    }
-    const measuredRowBottomCache = measuredRowBottomCacheRef.current;
-    const [measuredContentBottom, setMeasuredContentBottom] = useState(0);
+    const {
+      measuredRowBottomCache,
+      measuredContentBottom,
+      setMeasuredContentBottom,
+      scheduleMeasuredContentBottom,
+    } = useMaxRowBottom();
     const itemContainerRef = useRef<HTMLDivElement>(null);
     const stickySectionContentRef = useRef<HTMLDivElement>(null);
     const listScrollMargin = useListScrollMargin(scrollRef, itemContainerRef);
@@ -222,23 +265,17 @@ export const MemoizedMessageList = memo(
         if (key && height > 0) {
           heightCache.set(key, height);
 
-          const bottom = getElementBottomRelativeToContainer(
-            element as HTMLElement,
-            itemContainerRef.current,
-          );
+          const bottom = getRowBottomFromRenderedOffset(element as HTMLElement, height);
           if (bottom !== undefined && bottom > 0) {
             measuredRowBottomCache.set(key, bottom);
-            let nextMeasuredBottom = 0;
-            measuredRowBottomCache.forEach((value) => {
-              nextMeasuredBottom = Math.max(nextMeasuredBottom, value);
-            });
-            setMeasuredContentBottom((prev) =>
-              Math.abs(prev - nextMeasuredBottom) > 1 ? nextMeasuredBottom : prev,
-            );
+            scheduleMeasuredContentBottom();
           }
         }
         return height;
       },
+      // Scroll events re-render through React's scheduler instead of a
+      // synchronous flushSync, so mounting rows never blocks the scroll handler.
+      useFlushSync: false,
     });
     rowVirtualizer.shouldAdjustScrollPositionOnItemSizeChange =
       shouldAdjustScrollPositionOnItemSizeChange;
@@ -757,6 +794,7 @@ export const MemoizedMessageList = memo(
               ref={measureVirtualRowElement}
               data-index={virtualItem.index}
               data-virtual-row-key={row.key}
+              data-row-offset={virtualItem.start - listScrollMargin + leadingStickySpacerHeight}
               {...(row.type === 'item' &&
               row.item.type === 'message' &&
               row.item.msg.role === 'user'

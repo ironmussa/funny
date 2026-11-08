@@ -165,7 +165,11 @@ export interface BoatProviderOptions {
   pollMs?: number;
   readyTimeoutMs?: number;
   snapshotTimeoutMs?: number;
+  /** Per-request cap, so a hung Boat call cannot block an operation forever. */
+  requestTimeoutMs?: number;
 }
+
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 export function createBoatProvider(
   apiKey: string,
@@ -176,11 +180,15 @@ export function createBoatProvider(
   const pollMs = options.pollMs ?? 3_000;
   const baseUrl = (config.apiBaseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
 
+  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
+
+  /** One Boat API call. `timeoutMs` extends the cap for calls that wait server-side (exec). */
   function call(
     method: string,
     path: string,
-    options: { body?: unknown; headers?: Record<string, string> } = {},
+    options: { body?: unknown; headers?: Record<string, string>; timeoutMs?: number } = {},
   ): ResultAsync<any, SandboxError> {
+    const timeoutMs = options.timeoutMs ?? requestTimeoutMs;
     const request = fetchImpl(`${baseUrl}${path}`, {
       method,
       headers: {
@@ -189,10 +197,16 @@ export function createBoatProvider(
         ...options.headers,
       },
       body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+      signal: AbortSignal.timeout(timeoutMs),
     });
     return ResultAsync.fromPromise(request, (error): SandboxError => ({
       kind: 'unavailable',
-      message: error instanceof Error ? error.message : String(error),
+      message:
+        error instanceof Error && error.name === 'TimeoutError'
+          ? `Boat API ${method} ${path} timed out after ${Math.round(timeoutMs / 1000)}s`
+          : error instanceof Error
+            ? error.message
+            : String(error),
     })).andThen((res) =>
       ResultAsync.fromSafePromise(res.json().catch(() => ({}))).andThen((body) =>
         res.ok ? okAsync(body) : errAsync(mapBoatError(res, body)),
@@ -305,20 +319,21 @@ export function createBoatProvider(
         .map(() => undefined)
         .orElse((error) => (error.kind === 'not-found' ? okAsync(undefined) : errAsync(error))),
 
-    exec: (handle, command, opts) =>
-      call('POST', `/sandboxes/${handle.sandboxId}/commands`, {
-        body: {
-          command,
-          timeoutSeconds: Math.min(
-            600,
-            Math.max(1, Math.ceil((opts?.timeoutMs ?? 300_000) / 1000)),
-          ),
-        },
+    exec: (handle, command, opts) => {
+      const timeoutSeconds = Math.min(
+        600,
+        Math.max(1, Math.ceil((opts?.timeoutMs ?? 300_000) / 1000)),
+      );
+      // The request waits for the command: its cap is the command's plus slack.
+      return call('POST', `/sandboxes/${handle.sandboxId}/commands`, {
+        body: { command, timeoutSeconds },
+        timeoutMs: timeoutSeconds * 1000 + requestTimeoutMs,
       }).map((body): ExecResult => ({
         exitCode: typeof body?.exitCode === 'number' ? body.exitCode : -1,
         stdout: String(body?.stdout ?? ''),
         stderr: String(body?.stderr ?? ''),
-      })),
+      }));
+    },
 
     listTemplates: () =>
       call('GET', '/saved-snapshots').map((body): TemplateRef[] => {

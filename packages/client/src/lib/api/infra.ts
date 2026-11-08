@@ -1,3 +1,5 @@
+import type { SandboxState } from '@funny/shared/sandbox-machine';
+
 import { request } from './_core';
 
 /** A sandbox size a provider offers. */
@@ -24,16 +26,8 @@ export interface InfraConnection {
   lastValidatedAt: string | null;
 }
 
-export type ThreadSandboxState =
-  | 'provisioning'
-  | 'installing'
-  | 'connecting'
-  | 'bootstrapping'
-  | 'running'
-  | 'stopping'
-  | 'stopped'
-  | 'failed'
-  | 'lost';
+/** The shared sandbox machine's states (type-only: the machine itself stays server-side). */
+export type ThreadSandboxState = SandboxState;
 
 export interface ThreadSandboxInfo {
   threadId: string;

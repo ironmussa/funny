@@ -1,9 +1,12 @@
 /**
  * Process-wide sandbox lifecycle (change thread-sandboxes): the idle sweeper
- * that stops unused sandboxes, and wake-on-demand that resumes a stopped one
- * when its thread is used again. Started once by the server entry point.
+ * that stops unused sandboxes, the reconciler that cleans up after crashed or
+ * failed operations, and wake-on-demand that resumes a stopped one when its
+ * thread is used again. Started once by the server entry point; the periodic
+ * pass is an Effect fiber that shutdown interrupts.
  */
 
+import { Effect, Fiber, Schedule } from 'effect';
 import { errAsync, ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
@@ -13,8 +16,9 @@ import { sandboxRunnerIdForThread } from '../runner-scope.js';
 import { createSandboxIdleSweeper, DEFAULT_SANDBOX_IDLE_MS } from './idle-sweeper.js';
 import { createInfraConnectionService } from './infra-connections.js';
 import { productionSandboxProviders } from './provider-catalog.js';
-import { cancelProvision } from './provision-registry.js';
+import { cancelAllProvisions, cancelProvision } from './provision-registry.js';
 import { postSandboxError, sandboxErrorEventData } from './sandbox-events.js';
+import { createSandboxReconciler } from './sandbox-reconciler.js';
 import { createThreadSandboxControl, type ThreadSandboxControl } from './thread-sandbox-control.js';
 import type { ProvisionError } from './thread-sandbox-service.js';
 import { sqlThreadSandboxStore, type ThreadSandboxStore } from './thread-sandbox-store.js';
@@ -86,7 +90,7 @@ export function createSandboxWaker(deps: {
 
 let waker: SandboxWaker | null = null;
 let control: ThreadSandboxControl | null = null;
-let sweepTimer: ReturnType<typeof setInterval> | null = null;
+let lifecycleFiber: Fiber.Fiber<unknown, unknown> | null = null;
 
 /**
  * Destroy a deleted thread's sandbox, if it has one. Never throws; failures
@@ -122,7 +126,7 @@ export function startSandboxLifecycle(deps: {
   presence: { isAvailable(runnerId: string): boolean } | undefined;
   browserEvents?: { toUser(userId: string, event: Record<string, unknown>): void };
 }): void {
-  if (sweepTimer) return;
+  if (lifecycleFiber) return;
   const registry = productionSandboxProviders();
   if (registry.isErr()) {
     log.error('Sandbox lifecycle disabled: provider registry invalid', {
@@ -148,20 +152,51 @@ export function startSandboxLifecycle(deps: {
       ),
   });
   const sweeper = createSandboxIdleSweeper({ control, idleMs: idleWindowMs() });
-  let sweeping = false;
-  sweepTimer = setInterval(() => {
-    if (sweeping) return;
-    sweeping = true;
-    void sweeper.sweep().finally(() => {
-      sweeping = false;
-    });
-  }, SWEEP_INTERVAL_MS);
-  sweepTimer.unref?.();
+  const reconciler = createSandboxReconciler({ control, bootedAtMs: Date.now() });
+
+  // Reconcile first (sandboxes a previous process left mid-operation), then
+  // every interval; passes never overlap. A failing pass is logged and the
+  // loop goes on.
+  const pass = Effect.promise(async () => {
+    const report = await reconciler.reconcile();
+    const acted = Object.values(report.done).some((n) => n > 0) || report.failed > 0;
+    if (acted) log.info('Sandbox reconcile pass', { namespace: 'thread-sandboxes', ...report });
+    await sweeper.sweep();
+  });
+  lifecycleFiber = Effect.runFork(
+    Effect.repeat(
+      Effect.catchCause(pass, (cause) =>
+        Effect.sync(() =>
+          log.error('Sandbox lifecycle pass failed', {
+            namespace: 'thread-sandboxes',
+            error: String(cause),
+          }),
+        ),
+      ),
+      Schedule.spaced(SWEEP_INTERVAL_MS),
+    ),
+  );
 }
 
-export function stopSandboxLifecycle(): void {
-  if (sweepTimer) clearInterval(sweepTimer);
-  sweepTimer = null;
+/** Bound on how long shutdown waits for cancelled setups to destroy their machines. */
+const SHUTDOWN_GRACE_MS = 3_000;
+
+/**
+ * Stop the periodic pass and cancel every sandbox setup in flight, so each
+ * destroys the machine it created before the process exits. What does not
+ * finish within the grace period is cleaned up by the next start's reconcile.
+ */
+export async function stopSandboxLifecycle(): Promise<void> {
+  const fiber = lifecycleFiber;
+  lifecycleFiber = null;
   waker = null;
   control = null;
+  const cancelled = await cancelAllProvisions(SHUTDOWN_GRACE_MS);
+  if (cancelled > 0) {
+    log.info('Cancelled sandbox setups on shutdown', {
+      namespace: 'thread-sandboxes',
+      cancelled,
+    });
+  }
+  if (fiber) await Effect.runPromise(Fiber.interrupt(fiber));
 }

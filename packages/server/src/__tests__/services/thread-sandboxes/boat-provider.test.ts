@@ -188,4 +188,19 @@ describe('boat adapter specifics', () => {
     expectOk(await provider.deleteTemplate!({ providerId: 'boat', ref: 'funny-runner-gone' }));
     expect(provider.api.savedSnapshots.has('unrelated-snapshot')).toBe(true);
   });
+
+  test('a hung Boat request times out as a transient error instead of blocking forever', async () => {
+    // A request that never answers, but honors its abort signal like fetch does.
+    const hung = (_url: string, init?: RequestInit) =>
+      new Promise<Response>((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal!.reason));
+      });
+    const provider = createBoatProvider('boat_test_key', BASE, {
+      fetch: hung,
+      requestTimeoutMs: 20,
+    });
+    const result = await provider.status({ providerId: 'boat', sandboxId: 'sb-1' });
+    expect(result.isErr() && result.error.kind).toBe('unavailable');
+    expect(result.isErr() && result.error.message).toContain('timed out');
+  });
 });

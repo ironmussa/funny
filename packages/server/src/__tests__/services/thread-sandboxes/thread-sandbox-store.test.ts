@@ -64,8 +64,8 @@ describe('sqlThreadSandboxStore', () => {
 
   test('put, update and get round-trip; put replaces an older generation', async () => {
     expect(expectOk(await sqlThreadSandboxStore.get('t-1'))).toBeNull();
-    expectOk(await sqlThreadSandboxStore.put(row()));
-    expectOk(await sqlThreadSandboxStore.update('t-1', { state: 'running', runnerId: 'r-box' }));
+    expectOk(await sqlThreadSandboxStore.put(row({ state: 'connecting' })));
+    expectOk(await sqlThreadSandboxStore.transition('t-1', 'READY', { runnerId: 'r-box' }));
     expect(expectOk(await sqlThreadSandboxStore.get('t-1'))).toMatchObject({
       state: 'running',
       runnerId: 'r-box',
@@ -76,6 +76,30 @@ describe('sqlThreadSandboxStore', () => {
       generation: 1,
       state: 'provisioning',
       runnerId: null,
+    });
+  });
+
+  test('a transition only applies from a state that accepts it — the loser of a race is refused', async () => {
+    expectOk(await sqlThreadSandboxStore.put(row({ state: 'running' })));
+    // Illegal from `running`: refused, the state is untouched.
+    expect(expectOk(await sqlThreadSandboxStore.transition('t-1', 'RESUME'))).toEqual({
+      applied: false,
+      current: 'running',
+    });
+    // Two stops race: the first applies, the second finds `stopping` and is refused.
+    expect(expectOk(await sqlThreadSandboxStore.transition('t-1', 'STOP'))).toEqual({
+      applied: true,
+      state: 'stopping',
+    });
+    expect(expectOk(await sqlThreadSandboxStore.transition('t-1', 'STOP'))).toEqual({
+      applied: false,
+      current: 'stopping',
+    });
+    // Gone (thread deleted): refused with no current state.
+    expectOk(await sqlThreadSandboxStore.remove('t-1'));
+    expect(expectOk(await sqlThreadSandboxStore.transition('t-1', 'FAIL'))).toEqual({
+      applied: false,
+      current: null,
     });
   });
 
@@ -98,10 +122,12 @@ describe('sqlThreadSandboxStore', () => {
     expect(expectOk(await resolveLlmProxyToken('llmp_unknown'))).toBeNull();
     expect(expectOk(await resolveLlmProxyToken('not-a-proxy-token'))).toBeNull();
 
-    expectOk(await sqlThreadSandboxStore.update('t-1', { state: 'stopped' }));
+    expectOk(await sqlThreadSandboxStore.transition('t-1', 'STOP'));
+    expectOk(await sqlThreadSandboxStore.transition('t-1', 'STOPPED'));
     expect(expectOk(await resolveLlmProxyToken(llm.token))).toBeNull();
 
-    expectOk(await sqlThreadSandboxStore.update('t-1', { state: 'running' }));
+    expectOk(await sqlThreadSandboxStore.transition('t-1', 'RESUME'));
+    expectOk(await sqlThreadSandboxStore.transition('t-1', 'READY'));
     expectOk(await sqlThreadSandboxStore.remove('t-1'));
     expect(expectOk(await resolveLlmProxyToken(llm.token))).toBeNull();
   });

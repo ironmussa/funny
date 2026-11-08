@@ -610,7 +610,8 @@ async function shutdown() {
 
   // Stop firing automations before the runner transport goes away
   automationScheduler.stopAutomationScheduler();
-  sandboxLifecycle.stopSandboxLifecycle();
+  // Cancelled sandbox setups destroy their machines (bounded wait, under forceExit).
+  await sandboxLifecycle.stopSandboxLifecycle();
 
   // Close Socket.IO connections
   await closeSocketIO();

@@ -109,6 +109,7 @@ async function startServer(options: {
   } catch (error) {
     throw new Error(
       `${(error as Error).message} while starting the Funny server. Server stderr:\n${stderrTail()}`,
+      { cause: error },
     );
   }
   return child;

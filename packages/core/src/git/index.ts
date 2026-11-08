@@ -136,6 +136,7 @@ export {
   getLastGitActivity,
   previewWorktree,
   pruneOrphanWorktrees,
+  pruneStaleWorktreeSafeDirectories,
   checkWorktreePathInProject,
   WORKTREE_DIR_NAME,
   type WorktreeInfo,

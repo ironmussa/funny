@@ -157,3 +157,55 @@ describe('AgentEventRouter — lost structured permission recovery', () => {
     }
   });
 });
+
+describe('AgentEventRouter — changed-files summary on runs that end without a result', () => {
+  function makeEndingRouter() {
+    const listeners = new Map<string, (...args: any[]) => void>();
+    const orchestrator = {
+      on: vi.fn((event: string, fn: (...args: any[]) => void) => listeners.set(event, fn)),
+    } as any;
+    const messageHandler = { persistChangedFilesSummary: vi.fn(async () => undefined) } as any;
+    const threadManager = {
+      getThread: vi.fn(async () => ({
+        id: 't-1',
+        projectId: 'p-1',
+        userId: 'u-1',
+        status: 'running',
+        cost: 0,
+      })),
+      updateThread: vi.fn(async () => undefined),
+      getThreadWithMessages: vi.fn(async () => null),
+    } as any;
+    const wsBroker = { emit: vi.fn(), emitToUser: vi.fn() } as any;
+    const router = new AgentEventRouter(
+      orchestrator,
+      new AgentStateTracker(),
+      messageHandler,
+      threadManager,
+      wsBroker,
+    );
+    return { router, listeners, messageHandler };
+  }
+
+  test('persists the summary when the run fails', async () => {
+    const { router, messageHandler } = makeEndingRouter();
+    try {
+      await (router as any).handleAgentFailure('t-1', 'process crashed');
+      expect(messageHandler.persistChangedFilesSummary).toHaveBeenCalledWith('t-1');
+    } finally {
+      router.destroy();
+    }
+  });
+
+  test('persists the summary when the user stops the run', async () => {
+    const { router, listeners, messageHandler } = makeEndingRouter();
+    try {
+      listeners.get('agent:stopped')!('t-1');
+      await vi.waitFor(() =>
+        expect(messageHandler.persistChangedFilesSummary).toHaveBeenCalledWith('t-1'),
+      );
+    } finally {
+      router.destroy();
+    }
+  });
+});

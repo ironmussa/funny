@@ -156,6 +156,7 @@
     "openDesign": "Abrir design"
   },
   "thread": {
+    "browserOpenTooltip": "Navegador aberto",
     "claudeContext": "Claude Code · Contexto automático",
     "claudeContextDescription": "Instruções fornecidas ao Claude Code; não é uma mensagem escrita por você.",
     "status": {
@@ -232,7 +233,7 @@
     "waitingForResponse": "Aguardando sua resposta...",
     "providerAuthExpired": "Sua sessão com o provedor expirou ou a autenticação falhou. Reconecte e tente enviar sua mensagem novamente.",
     "reconnectProvider": "Reconectar",
-    "providerErrorWaiting": "O provedor retornou um erro. A execução está pausada — tente novamente ou envie uma mensagem para continuar.",
+    "providerErrorWaiting": "O provedor retornou um erro. Tente novamente quando estiver pronto.",
     "planWaitingForResponse": "Aceite ou rejeite o plano",
     "rejectPlan": "Rejeitar plano",
     "copyLatestTurn": "Copiar a última mensagem e a resposta",

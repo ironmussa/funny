@@ -5,7 +5,7 @@
  * @domain layer: domain
  */
 
-import type { PendingPermissionRequest, WaitingReason } from '@funny/shared';
+import type { FileDiffSummary, PendingPermissionRequest, WaitingReason } from '@funny/shared';
 
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
@@ -80,11 +80,22 @@ export class AgentStateTracker {
    * Threads whose current run hit a provider error (rate limit / API error)
    * that the agent did NOT recover from. Set when a `ProviderError` tool card
    * is emitted, cleared as soon as the agent makes real progress afterwards.
-   * At result time a still-set flag turns the run into a `waiting` state
-   * (waitingReason `provider_error`) so the user can resume instead of seeing
-   * a misleading "completed".
+   * Holds the provider's error text. At result time a still-set entry turns
+   * the run into `failed` (with that text as the error) instead of a
+   * misleading "completed". The process has already exited, so nothing is
+   * waiting for input — the user resumes through the failed card's Continue.
    */
-  readonly providerErrorPending = new Set<string>();
+  readonly providerErrorPending = new Map<string, string>();
+
+  /**
+   * Working-tree diff taken when the current run started. The changed-files
+   * summary compares against it to include edits made by shell commands,
+   * which have no Edit/Write tool call. Resolves to null when the scan failed.
+   */
+  readonly runDiffBaselines = new Map<string, Promise<FileDiffSummary[] | null>>();
+
+  /** Threads whose changed-files summary is already persisted for the current run. */
+  readonly changedFilesSummaryPersisted = new Set<string>();
 
   /** Cumulative input token count per thread (tracks context window usage) */
   readonly cumulativeInputTokens = new Map<string, number>();
@@ -155,33 +166,33 @@ export class AgentStateTracker {
    */
   clearRunState(threadId: string): void {
     this.touch(threadId);
-    this.currentAssistantMsgId.delete(threadId);
-    this.resultReceived.delete(threadId);
-    this.completedEmitted.delete(threadId);
-    this.pendingUserInput.delete(threadId);
-    this.pendingPermissionRequest.delete(threadId);
-    this.structuredPermissionRequests.delete(threadId);
-    this.providerErrorPending.delete(threadId);
-    this.cumulativeInputTokens.delete(threadId);
+    this.clearRunScopedState(threadId);
   }
 
   /** Completely remove all in-memory state for a thread. */
   cleanupThread(threadId: string): void {
     this.touchedAt.delete(threadId);
-    this.resultReceived.delete(threadId);
-    this.completedEmitted.delete(threadId);
-    this.currentAssistantMsgId.delete(threadId);
+    this.clearRunScopedState(threadId);
     this.processedToolUseIds.delete(threadId);
     this.ownMessageIds.delete(threadId);
     this.toolCallNames.delete(threadId);
     this.cliToDbMsgId.delete(threadId);
+    this.supportedSlashCommands.delete(threadId);
+    this.threadUserIds.delete(threadId);
+  }
+
+  /** State that belongs to a single run; shared by clearRunState and cleanupThread. */
+  private clearRunScopedState(threadId: string): void {
+    this.currentAssistantMsgId.delete(threadId);
+    this.resultReceived.delete(threadId);
+    this.completedEmitted.delete(threadId);
     this.pendingUserInput.delete(threadId);
     this.pendingPermissionRequest.delete(threadId);
     this.structuredPermissionRequests.delete(threadId);
     this.providerErrorPending.delete(threadId);
     this.cumulativeInputTokens.delete(threadId);
-    this.supportedSlashCommands.delete(threadId);
-    this.threadUserIds.delete(threadId);
+    this.runDiffBaselines.delete(threadId);
+    this.changedFilesSummaryPersisted.delete(threadId);
   }
 
   /**

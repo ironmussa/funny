@@ -84,8 +84,8 @@ function successResult(): CLIMessage {
   } as unknown as CLIMessage;
 }
 
-describe('AgentMessageHandler — provider error → waiting', () => {
-  test('a ProviderError followed by a success result leaves the thread waiting', async () => {
+describe('AgentMessageHandler — provider error → failed', () => {
+  test('a ProviderError followed by a success result fails the thread', async () => {
     const { handler, state, emitted, updates } = makeHandler();
 
     await handler.handle(THREAD_ID, providerErrorAssistant());
@@ -93,15 +93,19 @@ describe('AgentMessageHandler — provider error → waiting', () => {
 
     await handler.handle(THREAD_ID, successResult());
 
-    // Thread must end in `waiting`, NOT `completed`.
+    // The process has exited: the thread must end `failed` — neither
+    // `completed` nor `waiting` (nothing is waiting for input).
     const statusUpdate = updates.find((u) => 'status' in u);
-    expect(statusUpdate?.status).toBe('waiting');
-    // completedAt must NOT be stamped for a waiting thread.
-    expect(statusUpdate && 'completedAt' in statusUpdate).toBe(false);
+    expect(statusUpdate?.status).toBe('failed');
+    expect(statusUpdate && 'completedAt' in statusUpdate).toBe(true);
 
     const result = emitted.find((e) => e.type === 'agent:result');
-    expect(result?.data.status).toBe('waiting');
-    expect(result?.data.waitingReason).toBe('provider_error');
+    expect(result?.data.status).toBe('failed');
+    expect(result?.data.waitingReason).toBeUndefined();
+    expect(result?.data.errorReason).toBe('provider_error');
+    expect(result?.data.error).toBe(
+      'API Error: Server is temporarily limiting requests · Rate limited',
+    );
 
     // Flag is cleared after the result so the next run starts clean.
     expect(state.providerErrorPending.has(THREAD_ID)).toBe(false);

@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
     clearRunState: vi.fn(),
     cleanupThread: vi.fn(),
     threadUserIds: new Map<string, string>(),
+    runDiffBaselines: new Map(),
   },
   eventRouter: {
     emitWSToUser: vi.fn(),

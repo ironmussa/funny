@@ -80,3 +80,51 @@ describe('latestSessionChanges', () => {
     expect(latestSessionChanges([], [])).toBeNull();
   });
 });
+
+function bashMsg(id: string) {
+  return {
+    id,
+    role: 'assistant',
+    content: '',
+    toolCalls: [{ id: `${id}-tc0`, name: 'Bash', input: { command: 'python3 fix.py' } }],
+  };
+}
+
+describe('latestSessionChanges with a session-start baseline', () => {
+  test('includes files a shell command changed since the session started', () => {
+    const messages = [userMsg('u1'), bashMsg('a1')];
+    const result = latestSessionChanges(
+      messages,
+      [diff('src/already-dirty.ts', 2, 0), diff('src/by-script.ts', 5, 1)],
+      '/repo',
+      [diff('src/already-dirty.ts', 2, 0)],
+    );
+    expect(result?.userMessageId).toBe('u1');
+    expect(result?.files.map((f) => f.path)).toEqual(['src/by-script.ts']);
+  });
+
+  test('counts an already-dirty file whose stats changed during the session', () => {
+    const messages = [userMsg('u1'), bashMsg('a1')];
+    const result = latestSessionChanges(messages, [diff('src/a.ts', 9, 0)], '/repo', [
+      diff('src/a.ts', 2, 0),
+    ]);
+    expect(result?.files).toEqual([diff('src/a.ts', 9, 0)]);
+  });
+
+  test('ignores working-tree changes when the session ran no shell command', () => {
+    const messages = [userMsg('u1'), editMsg('a1', '/repo/src/a.ts')];
+    const result = latestSessionChanges(
+      messages,
+      [diff('src/a.ts', 1, 0), diff('src/someone-else.ts', 3, 0)],
+      '/repo',
+      [],
+    );
+    expect(result?.files.map((f) => f.path)).toEqual(['src/a.ts']);
+  });
+
+  test('does not list a file twice when both a tool call and the diff report it', () => {
+    const messages = [userMsg('u1'), editMsg('a1', '/repo/src/a.ts'), bashMsg('a2')];
+    const result = latestSessionChanges(messages, [diff('src/a.ts', 4, 0)], '/repo', []);
+    expect(result?.files.map((f) => f.path)).toEqual(['src/a.ts']);
+  });
+});

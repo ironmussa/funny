@@ -609,7 +609,7 @@ export function seedOrgMember(
       id: userId,
       name: userId,
       email: `${userId}@local.host`,
-      emailVerified: 0,
+      emailVerified: false,
       createdAt: now,
       updatedAt: now,
     } as any)

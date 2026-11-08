@@ -856,14 +856,16 @@ export const user = sqliteTable('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   email: text('email').notNull().unique(),
-  emailVerified: integer('email_verified').notNull().default(0),
+  // Better Auth expects real booleans (its cookie-cache payload is Zod-validated),
+  // so read the 0/1 integer columns back as booleans.
+  emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   image: text('image'),
   createdAt: dateText('created_at').notNull(),
   updatedAt: dateText('updated_at').notNull(),
   username: text('username').unique(),
   displayUsername: text('display_username'),
   role: text('role'),
-  banned: integer('banned'),
+  banned: integer('banned', { mode: 'boolean' }),
   banReason: text('ban_reason'),
   banExpires: dateText('ban_expires'),
 });

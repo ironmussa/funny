@@ -324,7 +324,7 @@ describe('project collaborators', () => {
             name: 'Carol Danvers',
             email: 'carol@local.host',
             username: 'carol',
-            emailVerified: 0,
+            emailVerified: false,
             createdAt: now,
             updatedAt: now,
           },
@@ -350,7 +350,7 @@ describe('project collaborators', () => {
           rows.map((r) => ({
             ...r,
             email: `${r.username}@local.host`,
-            emailVerified: 0,
+            emailVerified: false,
             createdAt: now,
             updatedAt: now,
           })),

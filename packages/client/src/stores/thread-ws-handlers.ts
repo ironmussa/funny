@@ -304,7 +304,7 @@ export function handleWSMessage(
   const state = get();
   const hydrated = isHydrated(state, threadId);
 
-  wsLog.info('handleWSMessage applying', {
+  wsLog.debug('handleWSMessage applying', {
     threadId,
     messageId: data?.messageId ?? '',
     role: data?.role ?? '',

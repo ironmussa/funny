@@ -93,4 +93,32 @@ describe('SatteriMessageContent', () => {
     expect(pending).toHaveClass('prose', 'max-w-none', 'text-foreground', 'whitespace-pre-wrap');
     expect(pending).not.toHaveClass('text-muted-foreground');
   });
+
+  test('keeps the rendered DOM while streamed text grows instead of remounting it', () => {
+    markdown.renderReadyMarkdownToSafeHtml.mockImplementation((md: string) => `<p>${md}</p>`);
+
+    const { rerender } = render(<SatteriMessageContent content="Hello" />);
+    const root = screen.getByTestId('satteri-markdown');
+    root.dataset.marker = 'first-mount';
+
+    rerender(<SatteriMessageContent content="Hello world" />);
+
+    const after = screen.getByTestId('satteri-markdown');
+    expect(after).toBe(root);
+    expect(after.dataset.marker).toBe('first-mount');
+    expect(after).toHaveTextContent('Hello world');
+  });
+
+  test('a compile failure does not stick to the next message version', async () => {
+    markdown.renderMarkdownToSafeHtml.mockRejectedValueOnce(new Error('bad delta'));
+
+    const { rerender } = render(<SatteriMessageContent content="## broken" />);
+    expect(await screen.findByRole('alert')).toHaveTextContent('## broken');
+
+    markdown.renderReadyMarkdownToSafeHtml.mockReturnValue('<h2>Fixed</h2>');
+    rerender(<SatteriMessageContent content="## Fixed" />);
+
+    expect(screen.getByRole('heading', { name: 'Fixed' })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
 });

@@ -295,7 +295,7 @@ function drainPendingBatch(): {
 function handleAgentMessage(threadId: string, data: any): void {
   const key = pendingMessageKey(threadId, data);
   const collapsed = pendingMessages.has(key);
-  wsLog.info('agent:message received', {
+  wsLog.debug('agent:message received', {
     threadId,
     messageId: data?.messageId ?? '',
     role: data?.role ?? '',
@@ -326,7 +326,7 @@ function handleAgentStatus(threadId: string, data: any): void {
   if (prev === statusKey) return;
   lastStatusByThread.set(threadId, statusKey);
 
-  wsLog.info('agent:status', {
+  wsLog.debug('agent:status', {
     threadId,
     status: data.status,
     waitingReason: data.waitingReason ?? '',

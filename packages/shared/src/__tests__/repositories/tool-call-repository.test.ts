@@ -181,3 +181,64 @@ describe('findLastUnansweredInteractiveToolCall', () => {
     expect(found).toBeUndefined();
   });
 });
+
+describe('getTouchedFiles', () => {
+  const insert = (name: string, input: unknown) =>
+    repo.insertToolCall({
+      messageId: 'm1',
+      name,
+      input: typeof input === 'string' ? input : JSON.stringify(input),
+    });
+
+  test('returns sorted unique paths of file-modifying tools only', async () => {
+    await insert('Write', { file_path: '/repo/b.ts', content: 'x' });
+    await insert('Edit', { file_path: '/repo/a.ts', old_string: 'a', new_string: 'b' });
+    await insert('Edit', { file_path: '/repo/a.ts', old_string: 'b', new_string: 'c' });
+    await insert('NotebookEdit', { notebook_path: '/repo/n.ipynb', new_source: '' });
+    await insert('Read', { file_path: '/repo/ignored.ts' });
+    expect(await repo.getTouchedFiles('t1')).toEqual(['/repo/a.ts', '/repo/b.ts', '/repo/n.ipynb']);
+  });
+
+  test('finds a path that comes after a large file body', async () => {
+    await insert('Write', { content: 'y'.repeat(50_000), file_path: '/repo/late.ts' });
+    expect(await repo.getTouchedFiles('t1')).toEqual(['/repo/late.ts']);
+  });
+
+  test('ignores a path-like key nested inside an earlier value', async () => {
+    await insert('Write', { meta: { file_path: '/wrong.ts' }, file_path: '/repo/right.ts' });
+    await insert('Write', { content: '"file_path": "/also-wrong.ts"', file_path: '/repo/x.ts' });
+    expect(await repo.getTouchedFiles('t1')).toEqual(['/repo/right.ts', '/repo/x.ts']);
+  });
+
+  test('decodes escaped characters in the path', async () => {
+    await insert('Write', { file_path: '/repo/quote"d\\name ñ.ts', content: 'z'.repeat(5_000) });
+    expect(await repo.getTouchedFiles('t1')).toEqual(['/repo/quote"d\\name ñ.ts']);
+  });
+
+  test('prefers file_path over notebook_path like the full parse', async () => {
+    await insert('NotebookEdit', { notebook_path: '/repo/n.ipynb', file_path: '/repo/f.ts' });
+    expect(await repo.getTouchedFiles('t1')).toEqual(['/repo/f.ts']);
+  });
+
+  test('skips invalid JSON and inputs without a path', async () => {
+    await insert('Write', '{not json');
+    await insert('Edit', { old_string: 'a', new_string: 'b' });
+    await insert('Write', { file_path: '', content: 'x' });
+    expect(await repo.getTouchedFiles('t1')).toEqual([]);
+  });
+
+  test('reads only a bounded prefix when the path leads the input', async () => {
+    await insert('Write', { file_path: '/repo/big.ts', content: 'q'.repeat(200_000) });
+    const statements: string[] = [];
+    const tracked = createToolCallRepository({
+      ...deps,
+      dbAll: ((query: { toSQL(): { sql: string } }) => {
+        statements.push(query.toSQL().sql);
+        return deps.dbAll(query as never);
+      }) as typeof deps.dbAll,
+    });
+    expect(await tracked.getTouchedFiles('t1')).toEqual(['/repo/big.ts']);
+    expect(statements).toHaveLength(1);
+    expect(statements[0]).toContain('substr(');
+  });
+});

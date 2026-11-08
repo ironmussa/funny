@@ -226,12 +226,23 @@ function highlightCodeBlocks(root: HTMLElement): void {
 
 class SatteriErrorBoundary extends Component<
   { content: string; children: ReactNode },
-  { failed: boolean }
+  { failed: boolean; content: string }
 > {
-  state = { failed: false };
+  state = { failed: false, content: this.props.content };
 
   static getDerivedStateFromError() {
     return { failed: true };
+  }
+
+  // Reset for each new message version, so a malformed streaming delta cannot
+  // pin the completed message to the error state. This replaces a
+  // content-keyed remount, which tore down and rebuilt the whole subtree
+  // (DOM, islands, code highlighting) on every streamed chunk.
+  static getDerivedStateFromProps(
+    props: { content: string },
+    state: { failed: boolean; content: string },
+  ) {
+    return props.content === state.content ? null : { failed: false, content: props.content };
   }
 
   componentDidCatch() {
@@ -308,11 +319,23 @@ function SatteriMessageContentInner({ content }: { content: string }) {
       splitSatteriMarkdownSegments(content, (language) => Boolean(getVisualizerForFence(language))),
     [content],
   );
-  // The content-keyed boundary remounts this state for each message version.
-  const [state, setState] = useState<RenderState>(() => getInitialRenderState(segments));
+  // Rendered synchronously when the compiler is ready (the common case);
+  // otherwise the async result is kept with the segments it belongs to, so a
+  // newer message version never shows an older compile.
+  const initialState = useMemo(() => getInitialRenderState(segments), [segments]);
+  const [asyncResult, setAsyncResult] = useState<{
+    segments: SatteriMarkdownSegment[];
+    state: RenderState;
+  } | null>(null);
+  const state: RenderState =
+    initialState.status !== 'loading'
+      ? initialState
+      : asyncResult?.segments === segments
+        ? asyncResult.state
+        : initialState;
 
   useEffect(() => {
-    if (state.status !== 'loading') return;
+    if (initialState.status !== 'loading') return;
     let cancelled = false;
     void Promise.all(
       segments.map(async (segment): Promise<RenderedSegment> => {
@@ -321,18 +344,19 @@ function SatteriMessageContentInner({ content }: { content: string }) {
       }),
     )
       .then((renderedSegments) => {
-        if (!cancelled) setState({ status: 'ready', segments: renderedSegments });
+        if (!cancelled)
+          setAsyncResult({ segments, state: { status: 'ready', segments: renderedSegments } });
       })
       .catch(() => {
         if (!cancelled) {
           metric('markdown.satteri_error', 1, { attributes: { reason: 'compile' } });
-          setState({ status: 'failed' });
+          setAsyncResult({ segments, state: { status: 'failed' } });
         }
       });
     return () => {
       cancelled = true;
     };
-  }, [content, segments, state.status]);
+  }, [segments, initialState.status]);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -398,7 +422,8 @@ function SatteriMessageContentInner({ content }: { content: string }) {
     >
       {state.segments.map((segment, index) =>
         segment.type === 'html' ? (
-          // The content-keyed error boundary remounts this static segment list as a unit.
+          // Segment order is fixed by the source; React only rewrites innerHTML when
+          // a segment's HTML changed, so finished segments keep their DOM.
           // react-doctor-disable-next-line no-array-index-as-key
           <div
             key={`html-${index}`}
@@ -406,7 +431,7 @@ function SatteriMessageContentInner({ content }: { content: string }) {
             dangerouslySetInnerHTML={{ __html: segment.html }}
           />
         ) : (
-          // Islands cannot reorder within a compiled result and remount when message content changes.
+          // Islands cannot reorder within a compiled result; they stay mounted while text streams.
           // react-doctor-disable-next-line no-array-index-as-key
           <MarkdownIsland key={`island-${index}`} segment={segment} />
         ),
@@ -420,10 +445,8 @@ export const SatteriMessageContent = memo(function SatteriMessageContent({
 }: {
   content: string;
 }) {
-  // Reset the error boundary for a changed message so a malformed streaming
-  // delta cannot pin the completed message to a plain-text error state.
   return (
-    <SatteriErrorBoundary key={content} content={content}>
+    <SatteriErrorBoundary content={content}>
       <SatteriMessageContentInner content={content} />
     </SatteriErrorBoundary>
   );

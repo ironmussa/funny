@@ -134,9 +134,41 @@ export class ProcessExecutionError extends Error {
 // .git/index.lock, so they can safely run at high concurrency.
 const readPool = createConcurrencyLimiter(20);
 
-// Mutating git commands (add, commit, push, …) take locks and must be
+// Mutating local git commands (add, commit, checkout, …) take locks and must be
 // limited to avoid contention and corruption.
 const writePool = createConcurrencyLimiter(4);
+
+// Network git commands (push, pull, fetch) can take minutes on a slow remote.
+// They get their own pool so a few slow pushes never stall local commits.
+const networkPool = createConcurrencyLimiter(4);
+
+// Local writes in one working directory contend for the same index.lock, so
+// run them one at a time per directory instead of failing on the lock. Writes
+// in other directories still run in parallel (up to the write pool).
+const directoryTails = new Map<string, Promise<unknown>>();
+
+function serializeByDirectory<T>(cwd: string | undefined, work: () => Promise<T>): Promise<T> {
+  if (!cwd) return work();
+  const previous = directoryTails.get(cwd) ?? Promise.resolve();
+  const current = previous.then(work, work);
+  const tail = current.catch(() => undefined);
+  directoryTails.set(cwd, tail);
+  void tail.then(() => {
+    if (directoryTails.get(cwd) === tail) directoryTails.delete(cwd);
+  });
+  return current;
+}
+
+async function runTrackedWrite(args: string[], options: ProcessOptions): Promise<ProcessResult> {
+  // Bump on both sides of the write so a read that started before it ends,
+  // or while it ran, is never reused afterwards by the read-side caches.
+  gitWriteGeneration++;
+  try {
+    return await _executeRaw('git', args, options);
+  } finally {
+    gitWriteGeneration++;
+  }
+}
 
 // Non-git commands (shell, gh CLI, etc.) — unchanged from original.
 const processPool = createConcurrencyLimiter(6);
@@ -159,16 +191,24 @@ export async function gitWrite(
   args: string[],
   options: ProcessOptions = {},
 ): Promise<ProcessResult> {
-  return writePool(async () => {
-    // Bump on both sides of the write so a read that started before it ends,
-    // or while it ran, is never reused afterwards by the read-side caches.
-    gitWriteGeneration++;
-    try {
-      return await _executeRaw('git', args, options);
-    } finally {
-      gitWriteGeneration++;
-    }
-  });
+  // Wait for this directory's turn before taking a pool slot, so queued writes
+  // to one busy directory never hold slots other directories could use.
+  // `worktree` commands run from the main checkout but write other worktrees,
+  // so they do not queue behind (or block) that checkout's own writes.
+  const directory = args[0] === 'worktree' ? undefined : options.cwd;
+  return serializeByDirectory(directory, () => writePool(() => runTrackedWrite(args, options)));
+}
+
+/**
+ * Execute a network git command (push, pull, fetch) through its own pool.
+ * Like gitWrite it bumps the write generation, since it moves refs or the
+ * working tree, but it never competes with local writes for a slot.
+ */
+export async function gitNetwork(
+  args: string[],
+  options: ProcessOptions = {},
+): Promise<ProcessResult> {
+  return networkPool(() => runTrackedWrite(args, options));
 }
 
 let gitWriteGeneration = 0;

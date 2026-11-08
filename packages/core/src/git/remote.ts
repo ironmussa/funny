@@ -8,7 +8,7 @@ import { ResultAsync } from 'neverthrow';
 import { git, gitRemote, gitOptional, type GitIdentityOptions } from './base.js';
 import { getCurrentBranch } from './branch.js';
 import { toDomainError } from './errors.js';
-import { gitWrite, execute, ProcessExecutionError } from './process.js';
+import { gitRead, gitWrite, execute, ProcessExecutionError } from './process.js';
 
 /**
  * Push to remote.
@@ -158,9 +158,9 @@ export function mergeBranch(
       }
 
       // ── 2. Validate main working tree is clean ──
-      const statusResult = await git(['status', '--porcelain'], cwd);
-      if (statusResult.isErr()) throw statusResult.error;
-      if (statusResult.value.trim()) {
+      // A read: run it in the read pool, not behind (or blocking) local writes.
+      const status = await gitRead(['status', '--porcelain'], { cwd });
+      if (status.stdout.trim()) {
         throw badRequest(
           'Cannot merge: the main working tree has uncommitted changes. Please commit or stash changes first.',
         );

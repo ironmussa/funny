@@ -96,7 +96,14 @@ export default defineConfig(({ mode }) => {
           manualChunks(id: string) {
             if (id.includes('react-markdown') || id.includes('remark-gfm')) return 'markdown';
             if (id.includes('/motion/')) return 'motion';
-            if (id.includes('/highlight.js/')) return 'syntax';
+            // Only the highlight.js core: each language stays its own lazy chunk,
+            // loaded by use-highlight.ts when a code block needs it. (The import
+            // condition resolves `lib/languages/*` to `es/languages/*`.)
+            if (
+              id.includes('/highlight.js/') &&
+              !/\/highlight\.js\/(?:es|lib)\/languages\//.test(id)
+            )
+              return 'syntax';
             if (id.includes('@monaco-editor/react')) return 'monaco';
             if (id.includes('/beautiful-mermaid/')) return 'mermaid';
             if (id.includes('@tiptap/react') || id.includes('@tiptap/core')) return 'tiptap';

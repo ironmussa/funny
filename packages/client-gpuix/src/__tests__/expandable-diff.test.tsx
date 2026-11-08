@@ -34,27 +34,46 @@ describe('expandable native diff', () => {
   });
 
   nativeTest('expands a truncated diff through the native show-more row', () => {
+    // The host caps the window at the display height (642px on CI runners), far
+    // shorter than 120 diff rows, so scroll the Show more row into view first.
     const root = createTestRoot({ width: 1000, height: 5000 });
     root.render(
-      <ExpandableNativeDiff
-        patch={patchWithContextLines(NATIVE_DIFF_INITIAL_MAX_LINES + 5)}
-        testId="diff"
-      />,
+      <div testId="diff-scroller" style={{ width: '100%', height: '100%', overflowY: 'scroll' }}>
+        <ExpandableNativeDiff
+          patch={patchWithContextLines(NATIVE_DIFF_INITIAL_MAX_LINES + 5)}
+          testId="diff"
+        />
+      </div>,
     );
 
     const truncated = root.renderer.findByTestId('diff');
     expect(truncated?.customProps?.maxLines).toBe(NATIVE_DIFF_INITIAL_MAX_LINES);
+    const scroller = root.renderer.findByTestId('diff-scroller');
+    const initial = root.renderer.getElementBounds(truncated!.id);
+    expect(scroller).toBeDefined();
+    expect(initial).not.toBeNull();
+    root.renderer.scrollTo(scroller!.id, 0, -initial!.height);
+    root.renderer.flush();
     expect(
       root.renderer
         .getPaintedText()
         .some((text) => text.startsWith('Show ') && text.includes('more line')),
     ).toBeTrue();
-    const bounds = root.renderer.getElementBounds(truncated!.id);
-    expect(bounds).not.toBeNull();
-    root.renderer.nativeSimulateClick(
-      bounds!.x + bounds!.width / 2,
-      bounds!.y + bounds!.height - 8,
-    );
+
+    // Probe upward from the bottom of what is visible: the Show more row is the
+    // last row, and the line rows above it ignore the click.
+    const isExpanded = () =>
+      root.renderer.findByTestId('diff')?.customProps?.maxLines === undefined;
+    const window = root.renderer.getWindowSize();
+    const bounds = root.renderer.getElementBounds(truncated!.id)!;
+    const bottom = Math.min(bounds.y + bounds.height, window.height) - 2;
+    for (let y = bottom; y > Math.max(0, bottom - 200) && !isExpanded(); y -= 4) {
+      root.renderer.nativeSimulateClick(bounds.x + bounds.width / 2, y);
+    }
+    if (!isExpanded()) {
+      // Surfaces the geometry in CI logs: the native renderer is unavailable on Linux.
+      console.error('show-more row not hit', JSON.stringify({ initial, bounds, window }));
+    }
 
     expect(root.renderer.findByTestId('diff')?.customProps?.maxLines).toBeUndefined();
     expect(

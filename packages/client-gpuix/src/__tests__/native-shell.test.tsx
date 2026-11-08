@@ -170,6 +170,8 @@ describe('native read-only shell', () => {
         status: 'idle',
       } as never,
     ]);
+    // Without a ready status the app stays on "Restoring session…".
+    application.statusState.setState({ phase: 'ready', error: null });
     application.workspaceState.getState().selectThread(fixture.threadId);
     application.gitStatusState.getState().replace([
       {
@@ -198,23 +200,46 @@ describe('native read-only shell', () => {
       input: '{}',
       output: `${'x'.repeat(1_000_000)}tail-marker`,
     } as never);
-    const root = createTestRoot();
+    const root = createTestRoot({ width: 1440, height: 900 });
     root.render(<GpuixClientApp application={application} />);
     const virtualLists = root.renderer.findByType('virtual-list');
     expect(virtualLists).toHaveLength(2);
     expect(virtualLists[0]!.children.length).toBeGreaterThan(2);
     expect(virtualLists[1]!.children).toHaveLength(THREAD_RETAINED_WINDOW_SIZE);
-    const sidebarBounds = root.renderer.getElementBounds(virtualLists[0]!.id);
+    // GPUIX reports bounds for layout elements, not for the <virtual-list>
+    // itself; measure the scrollable container it fills instead.
+    const sidebarContainer = virtualLists[0]!.parentId;
+    expect(sidebarContainer).not.toBeNull();
+    const sidebarBounds = root.renderer.getElementBounds(sidebarContainer!);
     expect(sidebarBounds?.width).toBeGreaterThan(0);
     expect(sidebarBounds?.height).toBeGreaterThan(0);
-    expect(root.renderer.findByType('markdown')).toHaveLength(0);
-    expect(root.renderer.findByType('code')).toHaveLength(0);
+    // Rich presentation is the default, so retained rows may render markdown;
+    // what matters is that the 500-message history is not laid out at once.
+    expect(root.renderer.findByType('markdown').length).toBeLessThanOrEqual(
+      THREAD_RETAINED_WINDOW_SIZE,
+    );
+    expect(root.renderer.findByType('code').length).toBeLessThanOrEqual(
+      THREAD_RETAINED_WINDOW_SIZE,
+    );
     expect(root.renderer.getPaintedText()).toContain('Long thread');
     expect(root.renderer.findByTestId('navigation-diff-summary')).toBeDefined();
+    // The files dock shows by default only on wide windows, and the host may cap
+    // the requested width; open it through the toolbar toggle when it is hidden.
+    if (!root.renderer.findByTestId('files-diff-summary')) {
+      const filesToggle = root.renderer.findByTestId('file-tree-toggle');
+      expect(filesToggle).toBeDefined();
+      const toggleBounds = root.renderer.getElementBounds(filesToggle!.id)!;
+      root.renderer.nativeSimulateClick(
+        toggleBounds.x + toggleBounds.width / 2,
+        toggleBounds.y + toggleBounds.height / 2,
+      );
+    }
     expect(root.renderer.findByTestId('files-diff-summary')).toBeDefined();
     expect(root.renderer.getPaintedText()).toContain('+24');
-    expect(root.renderer.getPaintedText()).toContain('characters hidden');
-    expect(root.renderer.getPaintedText()).not.toContain('tail-marker');
+    // Painted runs are whole strings ("999,771 characters hidden"), so match substrings.
+    const painted = root.renderer.getPaintedText();
+    expect(painted.some((text) => text.includes('characters hidden'))).toBeTrue();
+    expect(painted.some((text) => text.includes('tail-marker'))).toBeFalse();
     application.dispose();
     root.unmount();
   });

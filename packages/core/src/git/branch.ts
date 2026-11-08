@@ -8,7 +8,7 @@ import { ResultAsync } from 'neverthrow';
 
 import { git, gitOptional, type GitIdentityOptions, gitRemote } from './base.js';
 import { getNativeGit } from './native.js';
-import { gitRead } from './process.js';
+import { gitNetwork, gitRead } from './process.js';
 
 /**
  * Get the current branch name.
@@ -191,8 +191,15 @@ export function fetchRemote(
   }
   return ResultAsync.fromPromise(
     (async () => {
-      const result = await gitOptional(['fetch', '--prune', '--quiet'], cwd);
-      return result !== null;
+      // `fetch --quiet` prints nothing, so judge success by the exit code
+      // (gitOptional would read empty output as a failure).
+      const result = await gitNetwork(['fetch', '--prune', '--quiet'], {
+        cwd,
+        reject: false,
+        env: { GIT_TERMINAL_PROMPT: '0' },
+        timeout: 120_000,
+      });
+      return result.exitCode === 0;
     })(),
     (error) => internal(String(error)),
   );

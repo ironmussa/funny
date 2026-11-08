@@ -19,6 +19,8 @@ import {
 } from '@funny/core/git';
 import type { WSEvent, ThreadStatus } from '@funny/shared';
 import { latestSessionChanges } from '@funny/shared';
+import { parseStoredJson } from '@funny/shared/json-validation';
+import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { computeBranchKey } from '../utils/git-status-helpers.js';
@@ -167,6 +169,9 @@ export class AgentMessageHandler {
   }
 
   async handle(threadId: string, msg: CLIMessage): Promise<void> {
+    // Every message is activity: without this the stale sweep (1h) evicted a
+    // long-running agent's dedup maps mid-run, duplicating messages/tool calls.
+    this.state.touch(threadId);
     log.debug('handle() raw message', {
       namespace: 'agent',
       threadId,
@@ -441,6 +446,7 @@ export class AgentMessageHandler {
           role: 'assistant',
           content: textContent,
         });
+        this.state.markOwnMessage(threadId, msgId);
         await this.emitWS(threadId, 'agent:message', {
           messageId: msgId,
           role: 'assistant',
@@ -518,7 +524,13 @@ export class AgentMessageHandler {
     }
 
     // Handle tool calls (deduplicate — streaming sends cumulative content)
-    const seen = this.state.processedToolUseIds.get(threadId) ?? new Map<string, string>();
+    // Register the map up front: `ownMessageIds` relies on every inserted tool
+    // call being recorded here, even if a later block in this loop throws.
+    let seen = this.state.processedToolUseIds.get(threadId);
+    if (!seen) {
+      seen = new Map<string, string>();
+      this.state.processedToolUseIds.set(threadId, seen);
+    }
 
     // Resolve parent_tool_use_id → DB parentToolCallId for subagent tool calls
     const parentToolCallId = msg.parent_tool_use_id
@@ -580,17 +592,20 @@ export class AgentMessageHandler {
             role: 'assistant',
             content: '',
           });
+          this.state.markOwnMessage(threadId, parentMsgId);
         }
         this.state.currentAssistantMsgId.set(threadId, parentMsgId);
         cliMap.set(cliMsgId, parentMsgId);
 
-        // Check DB for existing duplicate (guards against session resume re-sending old tool_use blocks)
+        // Check DB for existing duplicate (guards against session resume
+        // re-sending old tool_use blocks). Skipped for messages this process
+        // created: their tool calls are all in `seen`, so a re-send was
+        // already caught above and the lookup would cost a server round trip
+        // (shipping the full input) for nothing.
         const inputJson = JSON.stringify(block.input);
-        const existingTC = await this.threadManager.findToolCall(
-          parentMsgId,
-          block.name,
-          inputJson,
-        );
+        const existingTC = this.state.isOwnMessage(threadId, parentMsgId)
+          ? null
+          : await this.threadManager.findToolCall(parentMsgId, block.name, inputJson);
 
         if (existingTC) {
           log.debug('Dedup: found existing ToolCall in DB (resume re-send)', {
@@ -600,6 +615,7 @@ export class AgentMessageHandler {
             existingId: existingTC.id,
           });
           seen.set(block.id, existingTC.id);
+          this.state.rememberToolCall(threadId, existingTC.id, block.name);
         } else {
           const toolCallId = await this.threadManager.insertToolCall({
             messageId: parentMsgId,
@@ -608,6 +624,7 @@ export class AgentMessageHandler {
             parentToolCallId,
           });
           seen.set(block.id, toolCallId);
+          this.state.rememberToolCall(threadId, toolCallId, block.name);
 
           await this.emitWS(threadId, 'agent:tool_call', {
             toolCallId,
@@ -721,7 +738,6 @@ export class AgentMessageHandler {
         this.state.currentAssistantMsgId.delete(threadId);
       }
     }
-    this.state.processedToolUseIds.set(threadId, seen);
   }
 
   // ── Tool result handling ───────────────────────────────────────
@@ -767,8 +783,15 @@ export class AgentMessageHandler {
             output: decodedOutput.slice(0, 500),
           });
 
-          // Look up the tool call once for all checks below
-          const tc = await this.threadManager.getToolCall(toolCallId);
+          // The name recorded at insert covers the common case without a
+          // server round trip. Interactive tools still read the row (they need
+          // to know whether the user already answered), as does an unknown
+          // tool call (e.g. state lost across a runner restart).
+          const knownName = this.state.toolCallName(threadId, toolCallId);
+          const needsRow =
+            !knownName || knownName === 'AskUserQuestion' || knownName === 'ExitPlanMode';
+          const tc: { name?: string; input?: string | null; output?: string | null } | undefined =
+            needsRow ? await this.threadManager.getToolCall(toolCallId) : { name: knownName };
 
           // For interactive tools (ExitPlanMode / AskUserQuestion): detect and
           // discard auto-denial results from the preToolUseHook or SDK timeout.
@@ -826,12 +849,12 @@ export class AgentMessageHandler {
 
           if (permissionDeniedMatch && tc?.name) {
             log.warn('Permission denied detected', { namespace: 'agent', threadId, tool: tc.name });
-            let parsedInput: unknown = undefined;
-            try {
-              parsedInput = tc.input ? JSON.parse(tc.input) : undefined;
-            } catch {
-              parsedInput = undefined;
-            }
+            // Rare path: the input is only kept in the DB.
+            const input =
+              tc.input ??
+              (needsRow ? null : (await this.threadManager.getToolCall(toolCallId))?.input);
+            const parsed = input ? parseStoredJson(z.unknown(), input, 'tool input') : null;
+            const parsedInput: unknown = parsed?.ok ? parsed.value : undefined;
             this.state.pendingPermissionRequest.set(threadId, {
               toolName: tc.name,
               toolUseId: block.tool_use_id,
@@ -1064,8 +1087,29 @@ export class AgentMessageHandler {
    * snapshot is frozen — the client renders it verbatim on reload instead of
    * recomputing against the live working tree.
    */
+  /**
+   * The thread with enough recent history to cover its latest user turn,
+   * which is all `latestSessionChanges` reads. Fetching the whole history at
+   * every turn end moved megabytes over the runner tunnel on long threads.
+   * The newest window is enough when it holds a user message (the newest one
+   * in the window is then the newest overall, and its turn follows it inside
+   * the window); otherwise the turn started earlier and the full history is
+   * loaded as before.
+   */
+  private async loadLatestTurn(threadId: string): Promise<any> {
+    const recent = await this.threadManager.getThreadWithMessages(
+      threadId,
+      AgentMessageHandler.LATEST_TURN_WINDOW,
+    );
+    const messages: { role?: string }[] = recent?.messages ?? [];
+    if (!recent || !recent.hasMore || messages.some((m) => m.role === 'user')) return recent;
+    return this.threadManager.getThreadWithMessages(threadId);
+  }
+
+  static readonly LATEST_TURN_WINDOW = 100;
+
   private async persistChangedFilesSummary(threadId: string): Promise<void> {
-    const data = await this.threadManager.getThreadWithMessages(threadId);
+    const data = await this.loadLatestTurn(threadId);
     if (!data) return;
     // Scratch threads have no repo — nothing to diff or summarize.
     if (!canDoGitOps(data as { isScratch?: boolean })) return;

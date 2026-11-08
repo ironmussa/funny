@@ -1,0 +1,48 @@
+name: Setup Bun (with retries)
+description: >
+  oven-sh/setup-bun, retried when the Bun download from GitHub releases fails.
+  Those downloads intermittently return 5xx (seen as HTTP 504 on macOS runners),
+  which killed whole jobs before any test ran. setup-bun already retries a few
+  seconds apart; this waits longer between full attempts so a short outage of
+  the release CDN does not fail CI.
+inputs:
+  bun-version:
+    description: Exact Bun version to install.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun (attempt 1)
+      id: attempt1
+      continue-on-error: true
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Wait before retrying the Bun download
+      if: steps.attempt1.outcome == 'failure'
+      shell: bash
+      run: sleep 30
+
+    - name: Setup Bun (attempt 2)
+      id: attempt2
+      if: steps.attempt1.outcome == 'failure'
+      continue-on-error: true
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Wait before the last retry
+      if: steps.attempt1.outcome == 'failure' && steps.attempt2.outcome == 'failure'
+      shell: bash
+      run: sleep 90
+
+    - name: Setup Bun (attempt 3)
+      if: steps.attempt1.outcome == 'failure' && steps.attempt2.outcome == 'failure'
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: ${{ inputs.bun-version }}
+
+    - name: Verify Bun
+      shell: bash
+      run: bun --version

@@ -26,7 +26,7 @@ export {
 
 export { isSafeGitRefArg } from './ref-guard.js';
 
-export { getNativeGit } from './native.js';
+export { getNativeGit, getNativeGitStatus, type NativeGitStatus } from './native.js';
 
 export { toDomainError } from './errors.js';
 

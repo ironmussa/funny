@@ -1,4 +1,4 @@
-import { deriveGitSyncState, getNativeGit, getStatusSummary } from '@funny/core/git';
+import { deriveGitSyncState, getNativeGitStatus, getStatusSummary } from '@funny/core/git';
 import type { AgentModel, PermissionMode } from '@funny/shared';
 import type { Hono } from 'hono';
 
@@ -16,6 +16,7 @@ import { wsBroker } from '../services/ws-broker.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { logProviderStatus } from '../utils/provider-detection.js';
 import { handleBrowserSessionMessage } from './browser-session-message-handler.js';
+import { reportNativeGitStatus } from './native-git-status.js';
 import { handlePtyMessage } from './pty-message-handler.js';
 
 /**
@@ -79,7 +80,7 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   activateProviderTools();
   await logProviderStatus();
   await ptyManager.reattachSessions();
-  getNativeGit();
+  reportNativeGitStatus(getNativeGitStatus(), log);
 
   // No RUNNER_AUTH_SECRET is NOT a fatal error: a runner with no credentials
   // (no secret, no invite token, no persisted creds) enrolls via the device-link

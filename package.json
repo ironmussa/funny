@@ -43,7 +43,7 @@
     "build:client:gpuix": "bun run --cwd packages/client-gpuix build",
     "build:railway": "bun install && bun run build",
     "build:server-deploy": "bun run --cwd packages/client build && bun run --cwd packages/server build",
-    "build:runner-deploy": "bun run --cwd packages/runtime build",
+    "build:runner-deploy": "sh scripts/build-runner-deploy.sh",
     "start:railway": "cd packages/server && bun run start",
     "prepublishOnly": "npm run build",
     "docs:dev": "vitepress dev docs",

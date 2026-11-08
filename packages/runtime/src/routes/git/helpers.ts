@@ -5,18 +5,10 @@
  * @domain layer: infrastructure
  */
 
-import {
-  getPRForBranch,
-  git,
-  gitRead,
-  type BranchPRInfo,
-  type GitIdentityOptions,
-} from '@funny/core/git';
+import { git, gitRead, type BranchPRInfo, type GitIdentityOptions } from '@funny/core/git';
 import { badRequest, type DomainError } from '@funny/shared/errors';
 import { err, ok, type Result } from 'neverthrow';
 
-import { log } from '../../lib/logger.js';
-import { startSpan } from '../../lib/telemetry.js';
 import {
   GIT_STATUS_CACHE_TTL_MS,
   gitRuntimeService,
@@ -32,68 +24,9 @@ import { requireWorkingDirectory } from '../../utils/working-directory.js';
 export { GIT_STATUS_CACHE_TTL_MS };
 export const _gitStatusCache = gitStatusCache;
 
-// Per-branch PR info cache. `gh pr list` averages ~320ms per call and is the
-// dominant cost in /api/git/:threadId/status. Cache result so the synchronous
-// path is free, then refresh in the background and push updates via WS.
-// `null` is a valid cached value meaning "no PR exists for this branch".
-const _prInfoCache = new Map<string, { data: BranchPRInfo | null; ts: number }>();
-const _prFetchInflight = new Set<string>();
-const PR_INFO_CACHE_TTL_MS = 60_000; // 1 minute
-
-function prCacheKey(projectPath: string, branch: string): string {
-  return `${projectPath}::${branch}`;
-}
-
-/** Read cached PR info. Returns `undefined` on miss, `null` for known-no-PR, otherwise the cached value. */
-export function getCachedPR(projectPath: string, branch: string): BranchPRInfo | null | undefined {
-  const cached = _prInfoCache.get(prCacheKey(projectPath, branch));
-  if (!cached) return undefined;
-  if (Date.now() - cached.ts >= PR_INFO_CACHE_TTL_MS) return undefined;
-  return cached.data;
-}
-
-/**
- * Fire-and-forget PR lookup. Caches the result and invokes `onUpdate` so the
- * caller can broadcast a follow-up WS event with the freshly-resolved PR info.
- * Deduped per (projectPath, branch) so concurrent thread switches don't pile
- * up `gh pr list` invocations.
- */
-export function schedulePRLookup(opts: {
-  projectPath: string;
-  branch: string;
-  ghEnv?: Record<string, string>;
-  onUpdate?: (pr: BranchPRInfo | null) => void;
-}): void {
-  const { projectPath, branch, ghEnv, onUpdate } = opts;
-  const key = prCacheKey(projectPath, branch);
-  if (_prFetchInflight.has(key)) return;
-  const cached = _prInfoCache.get(key);
-  if (cached && Date.now() - cached.ts < PR_INFO_CACHE_TTL_MS) {
-    onUpdate?.(cached.data);
-    return;
-  }
-  _prFetchInflight.add(key);
-  const span = startSpan('github.pr_lookup', {
-    attributes: { branch, background: true },
-  });
-  getPRForBranch(projectPath, branch, ghEnv).then(
-    (pr) => {
-      span.end('ok');
-      _prInfoCache.set(key, { data: pr, ts: Date.now() });
-      _prFetchInflight.delete(key);
-      onUpdate?.(pr);
-    },
-    (error) => {
-      span.end('error', String(error));
-      _prFetchInflight.delete(key);
-      log.warn('Background PR lookup failed', {
-        namespace: 'git-service',
-        branch,
-        error: String(error),
-      });
-    },
-  );
-}
+// The per-branch PR info cache lives in services/pr-info-cache.ts so the
+// `git:changed` status path shares it with these routes.
+export { getCachedPR, schedulePRLookup } from '../../services/pr-info-cache.js';
 
 /**
  * Emit a `git:status` WS event for a single thread carrying just the PR fields.

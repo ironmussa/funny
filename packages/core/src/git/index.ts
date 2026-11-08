@@ -148,6 +148,7 @@ export {
   getPRDiff,
   postPRReview,
   getPRForBranch,
+  lookupPRForBranch,
   type PRInfo,
   type ReviewEvent,
   type BranchPRInfo,

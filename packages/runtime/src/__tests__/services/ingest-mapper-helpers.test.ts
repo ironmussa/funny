@@ -74,7 +74,8 @@ describe('parseOwnerRepo', () => {
     expect(parseOwnerRepo('https://github.com/my-org_123/my-repo')).toBe('my-org_123/my-repo');
   });
 
-  test('returns null for repo with dots in name (non-git suffix)', () => {
-    expect(parseOwnerRepo('https://github.com/acme/my.repo.name')).toBeNull();
+  test('keeps dots in the repo name', () => {
+    expect(parseOwnerRepo('https://github.com/acme/my.repo.name')).toBe('acme/my.repo.name');
+    expect(parseOwnerRepo('git@github.com:acme/lodash.js.git')).toBe('acme/lodash.js');
   });
 });

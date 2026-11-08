@@ -10,12 +10,14 @@
 
 import { readFileSync, readdirSync, existsSync, rmSync, unlinkSync } from 'fs';
 import { homedir } from 'os';
-import { basename, join } from 'path';
+import { basename, dirname, join } from 'path';
 
 import { execute } from '@funny/core/git';
 import type { AgentResource, Skill } from '@funny/shared';
 import { type DomainError, processError } from '@funny/shared/errors';
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { defaultClaudeConfigDir, normalizeClaudeConfigDir } from '../utils/claude-profile-paths.js';
@@ -274,10 +276,125 @@ interface InstalledPluginsFile {
   >;
 }
 
+interface PluginLayout {
+  name: string;
+  /** Absolute paths to each command `.md` file. */
+  commandFiles: string[];
+  /** Absolute paths to each skill's `SKILL.md`. */
+  skillFiles: string[];
+}
+
+/** Manifest path fields accept a single string or an array of strings. */
+const manifestPathsSchema = z
+  .union([z.string(), z.array(z.string())])
+  .optional()
+  .catch(undefined)
+  .transform((v) => (v === undefined ? [] : typeof v === 'string' ? [v] : v));
+
+/** The parts of `.claude-plugin/plugin.json` we read; a bad field is ignored. */
+const pluginManifestSchema = z.object({
+  name: z.string().optional().catch(undefined),
+  commands: manifestPathsSchema,
+  skills: manifestPathsSchema,
+});
+
+/** `dir/*.md` (non-recursive). */
+function mdFilesIn(dir: string): string[] {
+  try {
+    return readdirSync(dir)
+      .filter((f) => f.endsWith('.md'))
+      .map((f) => join(dir, f));
+  } catch {
+    return [];
+  }
+}
+
+/** A skill dir (`dir/SKILL.md`) or a folder of skill dirs (`dir/<skill>/SKILL.md`). */
+function skillFilesIn(dir: string): string[] {
+  const own = join(dir, 'SKILL.md');
+  if (existsSync(own)) return [own];
+  try {
+    return readdirSync(dir, { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => join(dir, e.name, 'SKILL.md'))
+      .filter((f) => existsSync(f));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Resolve a plugin's name and the files of its commands and skills. Mirrors
+ * Claude Code: the default `commands/` and `skills/` folders are always scanned,
+ * and `commands` / `skills` paths in `.claude-plugin/plugin.json` add to them
+ * (e.g. nested layouts like `./skills/engineering/implement`).
+ */
+function readPluginLayout(installPath: string, pluginKey: string): PluginLayout {
+  const manifest = readPluginManifest(installPath, pluginKey);
+  return {
+    name: manifest.name,
+    commandFiles: collectCommandFiles(installPath, manifest.commands),
+    skillFiles: collectSkillFiles(installPath, manifest.skills),
+  };
+}
+
+/** `.claude-plugin/plugin.json`, or the fallback name and no extra paths when absent or invalid. */
+function readPluginManifest(
+  installPath: string,
+  pluginKey: string,
+): { name: string; commands: string[]; skills: string[] } {
+  // fallback: "commit-commands" from "commit-commands@claude-plugins-official"
+  const fallback = { name: pluginKey.split('@')[0], commands: [], skills: [] };
+  const pluginJsonPath = join(installPath, '.claude-plugin', 'plugin.json');
+  if (!existsSync(pluginJsonPath)) return fallback;
+  try {
+    const parsed = parseStoredJson(
+      pluginManifestSchema,
+      readFileSync(pluginJsonPath, 'utf-8'),
+      'plugin.json',
+    );
+    if (!parsed.ok) return fallback;
+    return { ...parsed.value, name: parsed.value.name || fallback.name };
+  } catch {
+    /* unreadable manifest: use fallback name and default folders */
+    return fallback;
+  }
+}
+
+/** Default `commands/*.md` plus each manifest path (a `.md` file or a folder of them). */
+function collectCommandFiles(installPath: string, manifestPaths: string[]): string[] {
+  const files = new Set(mdFilesIn(join(installPath, 'commands')));
+  for (const rel of manifestPaths) {
+    const abs = join(installPath, rel);
+    const found = abs.endsWith('.md') ? [abs].filter((f) => existsSync(f)) : mdFilesIn(abs);
+    for (const f of found) files.add(f);
+  }
+  return [...files];
+}
+
+/** Default `skills/` folder plus each manifest path, de-duplicated in order. */
+function collectSkillFiles(installPath: string, manifestPaths: string[]): string[] {
+  const dirs = ['skills', ...manifestPaths].map((rel) => join(installPath, rel));
+  return [...new Set(dirs.flatMap(skillFilesIn))];
+}
+
+/** Most recent installation of each installed plugin that still exists on disk, with its layout. */
+function* installedPluginLayouts(
+  data: InstalledPluginsFile,
+): Generator<{ install: InstalledPluginsFile['plugins'][string][number]; plugin: PluginLayout }> {
+  for (const [pluginKey, installations] of Object.entries(data.plugins)) {
+    if (!installations?.length) continue;
+    // Use the most recent installation
+    const install = installations[0];
+    if (!existsSync(install.installPath)) continue;
+    yield { install, plugin: readPluginLayout(install.installPath, pluginKey) };
+  }
+}
+
 /**
  * List commands and skills from installed Claude Code plugins.
- * Reads ~/.claude/plugins/installed_plugins.json and scans each plugin's
- * commands/*.md and skills/SKILL.md directories.
+ * Reads ~/.claude/plugins/installed_plugins.json and resolves each plugin's
+ * commands and skills via {@link readPluginLayout}.
  */
 export function listPluginCommands(options: ClaudeResourceScanOptions = {}): Skill[] {
   const pluginsFile = installedPluginsFile(options);
@@ -288,73 +405,30 @@ export function listPluginCommands(options: ClaudeResourceScanOptions = {}): Ski
     const data: InstalledPluginsFile = JSON.parse(raw);
     const skills: Skill[] = [];
 
-    for (const [pluginKey, installations] of Object.entries(data.plugins)) {
-      if (!installations?.length) continue;
-
-      // Use the most recent installation
-      const install = installations[0];
-      const installPath = install.installPath;
-      if (!existsSync(installPath)) continue;
-
-      // Read plugin name from .claude-plugin/plugin.json
-      const pluginJsonPath = join(installPath, '.claude-plugin', 'plugin.json');
-      let pluginName = pluginKey.split('@')[0]; // fallback: "commit-commands" from "commit-commands@claude-plugins-official"
-      if (existsSync(pluginJsonPath)) {
-        try {
-          const pj = JSON.parse(readFileSync(pluginJsonPath, 'utf-8'));
-          if (pj.name) pluginName = pj.name;
-        } catch {
-          /* use fallback name */
-        }
+    for (const { install, plugin } of installedPluginLayouts(data)) {
+      for (const cmdPath of plugin.commandFiles) {
+        const fm = parseCommandFrontmatter(cmdPath);
+        skills.push({
+          name: `${plugin.name}:${basename(cmdPath, '.md')}`,
+          description: fm.description || '',
+          source: plugin.name,
+          installedAt: install.installedAt,
+          updatedAt: install.lastUpdated,
+          scope: 'global',
+          threadMode: fm.threadMode,
+        });
       }
 
-      // Scan commands/*.md
-      const commandsDir = join(installPath, 'commands');
-      if (existsSync(commandsDir)) {
-        try {
-          const cmdEntries = readdirSync(commandsDir);
-          for (const cmdFile of cmdEntries) {
-            if (!cmdFile.endsWith('.md')) continue;
-            const cmdName = basename(cmdFile, '.md');
-            const fm = parseCommandFrontmatter(join(commandsDir, cmdFile));
-            skills.push({
-              name: `${pluginName}:${cmdName}`,
-              description: fm.description || '',
-              source: pluginName,
-              installedAt: install.installedAt,
-              updatedAt: install.lastUpdated,
-              scope: 'global',
-              threadMode: fm.threadMode,
-            });
-          }
-        } catch {
-          /* skip unreadable commands dir */
-        }
-      }
-
-      // Scan skills/*/SKILL.md
-      const skillsDir = join(installPath, 'skills');
-      if (existsSync(skillsDir)) {
-        try {
-          const skillEntries = readdirSync(skillsDir, { withFileTypes: true });
-          for (const entry of skillEntries) {
-            if (!entry.isDirectory()) continue;
-            const skillMdPath = join(skillsDir, entry.name, 'SKILL.md');
-            if (!existsSync(skillMdPath)) continue;
-
-            const fm = parseSkillFrontmatter(skillMdPath);
-            skills.push({
-              name: `${pluginName}:${fm.name || entry.name}`,
-              description: fm.description || '',
-              source: pluginName,
-              installedAt: install.installedAt,
-              updatedAt: install.lastUpdated,
-              scope: 'global',
-            });
-          }
-        } catch {
-          /* skip unreadable skills dir */
-        }
+      for (const skillMdPath of plugin.skillFiles) {
+        const fm = parseSkillFrontmatter(skillMdPath);
+        skills.push({
+          name: `${plugin.name}:${fm.name || basename(dirname(skillMdPath))}`,
+          description: fm.description || '',
+          source: plugin.name,
+          installedAt: install.installedAt,
+          updatedAt: install.lastUpdated,
+          scope: 'global',
+        });
       }
     }
 
@@ -544,7 +618,7 @@ function skillToResource(
 
 /**
  * Scan installed Claude plugins, tagging each entry as a `slash-command`
- * (commands/*.md) or `skill` (skills/SKILL.md). Mirrors {@link listPluginCommands}
+ * or `skill`, using the same {@link readPluginLayout} file resolution. Mirrors {@link listPluginCommands}
  * but keeps the two kinds distinct instead of flattening both into `Skill[]`.
  */
 function scanPluginResources(options: ClaudeResourceScanOptions = {}): AgentResource[] {
@@ -556,72 +630,37 @@ function scanPluginResources(options: ClaudeResourceScanOptions = {}): AgentReso
     const data: InstalledPluginsFile = JSON.parse(raw);
     const resources: AgentResource[] = [];
 
-    for (const [pluginKey, installations] of Object.entries(data.plugins)) {
-      if (!installations?.length) continue;
-      const install = installations[0];
-      const installPath = install.installPath;
-      if (!existsSync(installPath)) continue;
-
-      const pluginJsonPath = join(installPath, '.claude-plugin', 'plugin.json');
-      let pluginName = pluginKey.split('@')[0];
-      if (existsSync(pluginJsonPath)) {
-        try {
-          const pj = JSON.parse(readFileSync(pluginJsonPath, 'utf-8'));
-          if (pj.name) pluginName = pj.name;
-        } catch {
-          /* use fallback name */
-        }
+    for (const { install, plugin } of installedPluginLayouts(data)) {
+      for (const cmdPath of plugin.commandFiles) {
+        const fm = parseCommandFrontmatter(cmdPath);
+        resources.push({
+          kind: 'slash-command',
+          name: `${plugin.name}:${basename(cmdPath, '.md')}`,
+          description: fm.description || '',
+          origin: 'claude-plugin',
+          compatibleProviders: CLAUDE_ONLY,
+          usable: true,
+          commandTier: 'custom',
+          scope: 'global',
+          installedAt: install.installedAt,
+          updatedAt: install.lastUpdated,
+          threadMode: fm.threadMode,
+        });
       }
 
-      const commandsDir = join(installPath, 'commands');
-      if (existsSync(commandsDir)) {
-        try {
-          for (const cmdFile of readdirSync(commandsDir)) {
-            if (!cmdFile.endsWith('.md')) continue;
-            const cmdName = basename(cmdFile, '.md');
-            const fm = parseCommandFrontmatter(join(commandsDir, cmdFile));
-            resources.push({
-              kind: 'slash-command',
-              name: `${pluginName}:${cmdName}`,
-              description: fm.description || '',
-              origin: 'claude-plugin',
-              compatibleProviders: CLAUDE_ONLY,
-              usable: true,
-              commandTier: 'custom',
-              scope: 'global',
-              installedAt: install.installedAt,
-              updatedAt: install.lastUpdated,
-              threadMode: fm.threadMode,
-            });
-          }
-        } catch {
-          /* skip unreadable commands dir */
-        }
-      }
-
-      const skillsDir = join(installPath, 'skills');
-      if (existsSync(skillsDir)) {
-        try {
-          for (const entry of readdirSync(skillsDir, { withFileTypes: true })) {
-            if (!entry.isDirectory()) continue;
-            const skillMdPath = join(skillsDir, entry.name, 'SKILL.md');
-            if (!existsSync(skillMdPath)) continue;
-            const fm = parseSkillFrontmatter(skillMdPath);
-            resources.push({
-              kind: 'skill',
-              name: `${pluginName}:${fm.name || entry.name}`,
-              description: fm.description || '',
-              origin: 'claude-plugin',
-              compatibleProviders: CLAUDE_ONLY,
-              usable: true,
-              scope: 'global',
-              installedAt: install.installedAt,
-              updatedAt: install.lastUpdated,
-            });
-          }
-        } catch {
-          /* skip unreadable skills dir */
-        }
+      for (const skillMdPath of plugin.skillFiles) {
+        const fm = parseSkillFrontmatter(skillMdPath);
+        resources.push({
+          kind: 'skill',
+          name: `${plugin.name}:${fm.name || basename(dirname(skillMdPath))}`,
+          description: fm.description || '',
+          origin: 'claude-plugin',
+          compatibleProviders: CLAUDE_ONLY,
+          usable: true,
+          scope: 'global',
+          installedAt: install.installedAt,
+          updatedAt: install.lastUpdated,
+        });
       }
     }
 

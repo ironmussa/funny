@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { _resetGithubCache } from '../../routes/github/github-cache.js';
-import { fetchRepoIssues } from '../../routes/github/helpers.js';
+import { fetchRepoIssues, parseGithubOwnerRepo } from '../../routes/github/helpers.js';
 import { prRoutes } from '../../routes/github/prs.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { validate, cloneRepoSchema, githubPollSchema } from '../../validation/schemas.js';
@@ -14,16 +14,6 @@ import { validate, cloneRepoSchema, githubPollSchema } from '../../validation/sc
  * we test the validation schemas and the parseGithubOwnerRepo utility inline,
  * plus route plumbing with a lightweight Hono app.
  */
-
-// ── parseGithubOwnerRepo (extracted logic) ──────────────────────
-
-function parseGithubOwnerRepo(remoteUrl: string): { owner: string; repo: string } | null {
-  const httpsMatch = remoteUrl.match(/github\.com[/:]([^/]+)\/([^/.]+?)(?:\.git)?$/);
-  if (httpsMatch) return { owner: httpsMatch[1], repo: httpsMatch[2] };
-  const sshMatch = remoteUrl.match(/git@github\.com:([^/]+)\/([^/.]+?)(?:\.git)?$/);
-  if (sshMatch) return { owner: sshMatch[1], repo: sshMatch[2] };
-  return null;
-}
 
 describe('GitHub Routes', () => {
   describe('parseGithubOwnerRepo', () => {
@@ -58,6 +48,39 @@ describe('GitHub Routes', () => {
     test('handles repos with hyphens', () => {
       const result = parseGithubOwnerRepo('https://github.com/my-org/my-repo-name.git');
       expect(result).toEqual({ owner: 'my-org', repo: 'my-repo-name' });
+    });
+
+    // Regression: dotted repo names used to parse as "not a GitHub project",
+    // so pr-detail / pr-threads answered 400.
+    test.each([
+      ['https://github.com/owner/my.repo', 'my.repo'],
+      ['https://github.com/owner/user.github.io.git', 'user.github.io'],
+      ['git@github.com:owner/lodash.js.git', 'lodash.js'],
+    ])('keeps dots in the repo name (%s)', (url, repo) => {
+      expect(parseGithubOwnerRepo(url)).toEqual({ owner: 'owner', repo });
+    });
+
+    test('accepts a trailing slash and surrounding whitespace', () => {
+      expect(parseGithubOwnerRepo(' https://github.com/owner/repo/\n')).toEqual({
+        owner: 'owner',
+        repo: 'repo',
+      });
+    });
+
+    test('parses ssh:// and credentialed HTTPS URLs', () => {
+      expect(parseGithubOwnerRepo('ssh://git@github.com/owner/repo.git')).toEqual({
+        owner: 'owner',
+        repo: 'repo',
+      });
+      expect(parseGithubOwnerRepo('https://x-access-token:t@github.com/owner/repo.git')).toEqual({
+        owner: 'owner',
+        repo: 'repo',
+      });
+    });
+
+    test('does not match look-alike hosts', () => {
+      expect(parseGithubOwnerRepo('https://notgithub.com/owner/repo.git')).toBeNull();
+      expect(parseGithubOwnerRepo('https://github.com/owner/repo/tree/main')).toBeNull();
     });
   });
 

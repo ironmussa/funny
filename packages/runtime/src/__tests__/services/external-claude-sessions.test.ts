@@ -410,6 +410,69 @@ describe('external Claude sessions', () => {
     expect(transcript?.messages[1]?.author).toBeUndefined();
   });
 
+  test('ignores api-request-blob entries and titles the session with its ai-title', () => {
+    const homeDir = makeHome();
+    const cwd = '/work/funny';
+    const sessionId = 'session-api-blobs';
+    const projectDir = join(homeDir, '.claude/projects', cwd.replace(/[\\/]/g, '-'));
+    mkdirSync(projectDir, { recursive: true });
+    writeFileSync(
+      join(projectDir, `${sessionId}.jsonl`),
+      [
+        {
+          type: 'user',
+          sessionId,
+          cwd,
+          message: {
+            role: 'user',
+            content:
+              '<command-message>setup-skills</command-message>\n<command-name>/setup-skills</command-name>',
+          },
+        },
+        {
+          type: 'api-request-blob',
+          sessionId,
+          message: {
+            role: 'user',
+            content: [
+              { type: 'text', text: '<system-reminder>\nInstructions\n</system-reminder>' },
+            ],
+          },
+        },
+        {
+          type: 'api-request-blob',
+          sessionId,
+          message: {
+            role: 'system',
+            content: [
+              { type: 'text', text: '# Environment' },
+              { type: 'tool_addition', tool: { name: 'Bash' } },
+            ],
+          },
+        },
+        { type: 'ai-title', sessionId, aiTitle: 'Setup skills' },
+        {
+          type: 'assistant',
+          sessionId,
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Exploring the repo.' }] },
+        },
+        {
+          type: 'api-request-blob',
+          sessionId,
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Exploring the repo.' }] },
+        },
+      ]
+        .map((entry) => JSON.stringify(entry))
+        .join('\n'),
+    );
+
+    const transcript = readExternalClaudeTranscript(sessionId, { homeDir });
+
+    expect(transcript?.title).toBe('Setup skills');
+    expect(transcript?.messages.map((message) => message.role)).toEqual(['user', 'assistant']);
+    expect(transcript?.messages[1]?.content).toBe('Exploring the repo.');
+  });
+
   test('reads a Claude JSONL transcript without importing it as a thread', () => {
     const homeDir = makeHome();
     const cwd = '/work/funny';

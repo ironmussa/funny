@@ -46,6 +46,7 @@ const claudeJsonlEntrySchema = z
     gitBranch: z.string().optional(),
     timestamp: z.string().optional(),
     lastPrompt: z.string().optional(),
+    aiTitle: z.string().optional(),
     summary: z.string().optional(),
     uuid: z.string().optional(),
     isMeta: z.boolean().optional(),
@@ -120,6 +121,8 @@ interface SessionMetadata {
   cwd: string | null;
   gitBranch: string | null;
   lastPrompt: string | null;
+  /** Title Claude Code generated for the session (`ai-title` entries). */
+  aiTitle: string | null;
   startedAt: string | null;
   updatedAt: string | null;
   hasDisplayableContent: boolean;
@@ -512,7 +515,7 @@ function listRunningExternalClaudeSessions(
         cwd: effectiveCwd,
         projectName,
         gitBranch: metadata?.gitBranch ?? null,
-        title: metadata?.lastPrompt ?? projectName ?? 'Claude Code',
+        title: sessionTitle(metadata, projectName ?? 'Claude Code'),
         lastPrompt: metadata?.lastPrompt ?? null,
         command: proc.args,
         startedAt,
@@ -562,7 +565,7 @@ function listProjectClaudeSessions(
       projectId: project.id,
       projectName: project.name,
       gitBranch: metadata.gitBranch ?? running?.gitBranch ?? null,
-      title: metadata.lastPrompt ?? running?.title ?? project.name,
+      title: sessionTitle(metadata, running?.title ?? project.name),
       lastPrompt: metadata.lastPrompt ?? running?.lastPrompt ?? null,
       command: running?.command ?? null,
       startedAt: metadata.startedAt ?? running?.startedAt ?? null,
@@ -599,34 +602,10 @@ export function readExternalClaudeTranscript(
 
   const messages: ExternalClaudeTranscriptMessage[] = [];
   const toolCallsByClaudeId = new Map<string, ExternalClaudeTranscriptToolCall>();
-  const metadata: SessionMetadata = {
-    sessionId,
-    cwd: null,
-    gitBranch: null,
-    lastPrompt: null,
-    startedAt: null,
-    updatedAt: null,
-    hasDisplayableContent: false,
-  };
-  let startedAt: string | null = null;
+  const metadata = emptySessionMetadata(sessionId);
 
-  for (const line of raw.split('\n')) {
-    if (!line.trim()) continue;
-    const parsed = parseStoredJson(claudeJsonlEntrySchema, line, 'Claude Code session JSONL');
-    if (!parsed.ok) continue;
-
-    const entry = parsed.value;
-    if (entry.sessionId) metadata.sessionId = entry.sessionId;
-    if (entry.cwd) metadata.cwd = entry.cwd;
-    if (entry.gitBranch) metadata.gitBranch = entry.gitBranch;
-    if (entry.timestamp) {
-      startedAt ??= entry.timestamp;
-      metadata.updatedAt = entry.timestamp;
-    }
-    if (entry.type === 'last-prompt' && entry.lastPrompt) {
-      const lastPrompt = contentToText(entry.lastPrompt);
-      if (lastPrompt) metadata.lastPrompt = lastPrompt;
-    }
+  for (const [, entry] of parseJsonlEntries(raw)) {
+    applyEntryMetadata(metadata, entry);
 
     const message = entryToTranscriptMessage(entry, messages.length, toolCallsByClaudeId);
     if (message) {
@@ -644,8 +623,8 @@ export function readExternalClaudeTranscript(
     cwd: metadata.cwd,
     projectName,
     gitBranch: metadata.gitBranch,
-    title: metadata.lastPrompt ?? projectName ?? 'Claude Code',
-    startedAt,
+    title: sessionTitle(metadata, projectName ?? 'Claude Code'),
+    startedAt: metadata.startedAt,
     updatedAt: metadata.updatedAt,
     messages,
   };
@@ -773,6 +752,65 @@ function listClaudeSessionFiles(homeDir: string): Array<{ path: string; sessionI
     .map(({ path, sessionId }) => ({ path, sessionId }));
 }
 
+/** Title shown for a session: Claude Code's generated title, else the last prompt. */
+function sessionTitle(
+  metadata: Pick<SessionMetadata, 'aiTitle' | 'lastPrompt'> | null,
+  fallback: string,
+): string {
+  return metadata?.aiTitle ?? metadata?.lastPrompt ?? fallback;
+}
+
+type ClaudeJsonlEntry = z.infer<typeof claudeJsonlEntrySchema>;
+
+function emptySessionMetadata(sessionId: string): SessionMetadata {
+  return {
+    sessionId,
+    cwd: null,
+    gitBranch: null,
+    lastPrompt: null,
+    aiTitle: null,
+    startedAt: null,
+    updatedAt: null,
+    hasDisplayableContent: false,
+  };
+}
+
+/** Valid entries of a session JSONL file, with their line index; blank and invalid lines are skipped. */
+function* parseJsonlEntries(raw: string): Generator<[number, ClaudeJsonlEntry]> {
+  for (const [index, line] of raw.split('\n').entries()) {
+    if (!line.trim()) continue;
+    const parsed = parseStoredJson(claudeJsonlEntrySchema, line, 'Claude Code session JSONL');
+    if (parsed.ok) yield [index, parsed.value];
+  }
+}
+
+/** Fold one JSONL entry's session-level fields (ids, timestamps, prompt, title) into `metadata`. */
+function applyEntryMetadata(metadata: SessionMetadata, entry: ClaudeJsonlEntry): void {
+  applyEntryContext(metadata, entry);
+  applyEntryTitles(metadata, entry);
+}
+
+/** Session id, cwd, branch and the first / last timestamps. */
+function applyEntryContext(metadata: SessionMetadata, entry: ClaudeJsonlEntry): void {
+  if (entry.sessionId) metadata.sessionId = entry.sessionId;
+  if (entry.cwd) metadata.cwd = entry.cwd;
+  if (entry.gitBranch) metadata.gitBranch = entry.gitBranch;
+  if (entry.timestamp) {
+    metadata.startedAt ??= entry.timestamp;
+    metadata.updatedAt = entry.timestamp;
+  }
+}
+
+/** `last-prompt` and `ai-title` entries. */
+function applyEntryTitles(metadata: SessionMetadata, entry: ClaudeJsonlEntry): void {
+  if (entry.type === 'last-prompt' && entry.lastPrompt) {
+    const lastPrompt = contentToText(entry.lastPrompt);
+    if (lastPrompt) metadata.lastPrompt = lastPrompt;
+  }
+  const aiTitle = entry.type === 'ai-title' ? entry.aiTitle?.trim() : undefined;
+  if (aiTitle) metadata.aiTitle = aiTitle;
+}
+
 function parseClaudeJsonl(path: string, fallbackSessionId: string): SessionMetadata | null {
   let raw = '';
   try {
@@ -781,33 +819,11 @@ function parseClaudeJsonl(path: string, fallbackSessionId: string): SessionMetad
     return null;
   }
 
-  const metadata: SessionMetadata = {
-    sessionId: fallbackSessionId,
-    cwd: null,
-    gitBranch: null,
-    lastPrompt: null,
-    startedAt: null,
-    updatedAt: null,
-    hasDisplayableContent: false,
-  };
+  const metadata = emptySessionMetadata(fallbackSessionId);
   const toolCallsByClaudeId = new Map<string, ExternalClaudeTranscriptToolCall>();
 
-  for (const [index, line] of raw.split('\n').entries()) {
-    if (!line.trim()) continue;
-    const parsed = parseStoredJson(claudeJsonlEntrySchema, line, 'Claude Code session JSONL');
-    if (!parsed.ok) continue;
-    const entry = parsed.value;
-    if (entry.sessionId) metadata.sessionId = entry.sessionId;
-    if (entry.cwd) metadata.cwd = entry.cwd;
-    if (entry.gitBranch) metadata.gitBranch = entry.gitBranch;
-    if (entry.timestamp) {
-      metadata.startedAt ??= entry.timestamp;
-      metadata.updatedAt = entry.timestamp;
-    }
-    if (entry.type === 'last-prompt' && entry.lastPrompt) {
-      const lastPrompt = contentToText(entry.lastPrompt);
-      if (lastPrompt) metadata.lastPrompt = lastPrompt;
-    }
+  for (const [index, entry] of parseJsonlEntries(raw)) {
+    applyEntryMetadata(metadata, entry);
     const message = entry.message;
     if (!metadata.lastPrompt && entry.type === 'user' && message?.content !== undefined) {
       metadata.lastPrompt = firstLine(contentToText(message.content));
@@ -891,13 +907,22 @@ function summaryTranscriptMessage(
   return null;
 }
 
+/**
+ * Newer Claude Code versions also log the raw API request (`api-request-blob`: system
+ * prompt, tool definitions, reminders, a copy of the assistant turn) with a
+ * `message.role`; only `user` / `assistant` entries are conversation.
+ */
+function isConversationEntry(entry: z.infer<typeof claudeJsonlEntrySchema>): boolean {
+  return entry.type === 'user' || entry.type === 'assistant';
+}
+
 function entryToTranscriptMessage(
   entry: z.infer<typeof claudeJsonlEntrySchema>,
   index: number,
   toolCallsByClaudeId: Map<string, ExternalClaudeTranscriptToolCall>,
 ): ExternalClaudeTranscriptMessage | null {
-  const summary = summaryTranscriptMessage(entry, index);
-  if (summary) return summary;
+  // Besides summaries, only conversation entries are messages.
+  if (!isConversationEntry(entry)) return summaryTranscriptMessage(entry, index);
 
   const message = entry.message;
   const role = message?.role;

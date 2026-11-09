@@ -36,7 +36,6 @@ describe('thread-selectors hooks', () => {
         activeThread: null,
         setupProgressByThread: {},
         contextUsageByThread: {},
-        queuedCountByThread: {},
       } as any),
     );
   });

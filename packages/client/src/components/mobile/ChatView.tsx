@@ -10,6 +10,7 @@ import { MessageStream, type MessageStreamHandle } from '@/components/thread/Mes
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { useThreadHandlers } from '@/components/thread/use-thread-handlers';
 import { LoadingState } from '@/components/ui/loading-state';
+import { useQueuedCount } from '@/data/queue/hooks';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
 import { useAppStore } from '@/stores/app-store';
@@ -99,7 +100,8 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
   }, [snapshots]);
 
   const isExternal = activeThread?.provider === 'external';
-  const isRunning = activeThread?.status === 'running' || (activeThread?.queuedCount ?? 0) > 0;
+  const queuedCount = useQueuedCount(activeThread?.id);
+  const isRunning = activeThread?.status === 'running' || queuedCount > 0;
   const hasMore = activeThread?.hasMore ?? false;
   const loadingMore = activeThread?.loadingMore ?? false;
   const totalMessages = activeThread?.totalMessages ?? 0;

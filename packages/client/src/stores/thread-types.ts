@@ -75,6 +75,4 @@ export interface ThreadWithMessages extends Thread {
   setupProgress?: GitProgressStep[];
   lastUserMessage?: Message & { toolCalls?: any[] };
   leadingUserMessage?: Message & { toolCalls?: any[] };
-  queuedCount?: number;
-  queuedNextMessage?: string;
 }

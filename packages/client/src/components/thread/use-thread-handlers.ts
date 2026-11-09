@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 
 import type { MessageStreamHandle } from '@/components/thread/MessageStream';
 import { readProject } from '@/data/projects/read';
+import { applyQueueCount, readQueuedCount } from '@/data/queue/store';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildSendMessagePayload, type SendMessageOpts } from '@/lib/send-message-payload';
@@ -88,7 +89,7 @@ export function useThreadHandlers(refs: Refs) {
           setSendingSafely(false);
         }
       }
-      const queuedCount = thread.queuedCount ?? 0;
+      const queuedCount = readQueuedCount(thread.id);
       const threadIsRunning = thread.status === 'running' || queuedCount > 0;
       const currentProject = readProject(thread.projectId);
       const followUpMode = currentProject?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
@@ -227,18 +228,7 @@ export function useThreadHandlers(refs: Refs) {
 
 function applyQueuedCount(threadId: string, responseQueuedCount: unknown) {
   if (typeof responseQueuedCount !== 'number') return;
-  const current = useThreadStore.getState().activeThread;
-  const { queuedCountByThread } = useThreadStore.getState();
-  if (current?.id === threadId) {
-    useThreadStore.setState({
-      activeThread: { ...current, queuedCount: responseQueuedCount },
-      queuedCountByThread: { ...queuedCountByThread, [threadId]: responseQueuedCount },
-    });
-  } else {
-    useThreadStore.setState({
-      queuedCountByThread: { ...queuedCountByThread, [threadId]: responseQueuedCount },
-    });
-  }
+  applyQueueCount(threadId, responseQueuedCount);
 }
 
 /**

@@ -7,14 +7,7 @@
  * which would close a cycle (those modules are imported by `thread-store`).
  */
 
-import type {
-  Thread,
-  AgentModel,
-  EffortLevel,
-  PermissionMode,
-  QueuedMessage,
-  ThreadStage,
-} from '@funny/shared';
+import type { Thread, AgentModel, EffortLevel, PermissionMode, ThreadStage } from '@funny/shared';
 
 import type { AgentInitInfo, ContextUsage, ThreadWithMessages } from './thread-types';
 
@@ -46,12 +39,6 @@ export interface ThreadState {
   setupProgressByThread: Record<string, import('@/components/GitProgressModal').GitProgressStep[]>;
   /** Context usage keyed by threadId — survives thread switches */
   contextUsageByThread: Record<string, ContextUsage>;
-  /** Queued message count keyed by threadId — survives thread switches */
-  queuedCountByThread: Record<string, number>;
-  /** Queued messages keyed by threadId — survives thread switches */
-  queuedMessagesByThread: Record<string, QueuedMessage[]>;
-  /** Preview of the next queued message keyed by threadId */
-  queuedNextMessageByThread: Record<string, string>;
 
   loadThreadsForProject: (projectId: string, includeArchived?: boolean) => Promise<void>;
   /** Load the current user's scratch threads. */

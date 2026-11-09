@@ -4,12 +4,14 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { PromptInput } from '@/components/PromptInput';
 import { withProjects } from '@/data/projects/testing';
+import { seedQueues } from '@/data/queue/testing';
 import { api } from '@/lib/api';
 import { systemApi } from '@/lib/api/system';
 import { useAppStore } from '@/stores/app-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
+import { installTestDataLayer } from '../helpers/data-layer-harness';
 import { renderWithProviders } from '../helpers/render';
 
 vi.mock('@/lib/api/system', async (importOriginal) => {
@@ -57,6 +59,12 @@ vi.mock('@/lib/api', async () => {
       cancelQueuedMessage: vi.fn().mockReturnValue(okAsync({ ok: true, queuedCount: 0 })),
     },
   };
+});
+
+// The queue data layer calls threadsApi directly; route it to the mocked api.
+vi.mock('@/lib/api/threads', async () => {
+  const { api } = await import('@/lib/api');
+  return { threadsApi: api };
 });
 
 vi.mock('@/components/ImageLightbox', () => ({
@@ -152,6 +160,7 @@ vi.mock('@/components/prompt-editor/serialize', () => ({
 // ── Setup ───────────────────────────────────────────────────────
 
 beforeEach(() => {
+  installTestDataLayer();
   vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
     okAsync({
       provider: 'claude',
@@ -181,9 +190,6 @@ beforeEach(() => {
   );
   useThreadStore.setState({
     threadDataById: {},
-    queuedCountByThread: {},
-    queuedMessagesByThread: {},
-    queuedNextMessageByThread: {},
   } as any);
   vi.clearAllMocks();
 });
@@ -592,7 +598,8 @@ describe('PromptInput', () => {
       ]),
     );
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} queuedCount={2} />, {
+    seedQueues({ 'thread-1': { count: 2 } });
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-1',
     });
 
@@ -609,7 +616,8 @@ describe('PromptInput', () => {
       ]),
     );
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} queuedCount={1} />, {
+    seedQueues({ 'thread-1': { count: 1 } });
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-1',
     });
 
@@ -640,7 +648,8 @@ describe('PromptInput', () => {
       ]),
     );
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} queuedCount={1} />, {
+    seedQueues({ 'thread-1': { count: 1 } });
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-1',
     });
 
@@ -655,13 +664,9 @@ describe('PromptInput', () => {
   });
 
   test('regression bug 2: switching threads clears the previous thread queue immediately', async () => {
-    // Seed two threads with distinct queues. Without the fix, the local
-    // queuedMessages state would carry from thread A into thread B's render
-    // window before the new fetch resolves, briefly showing A's messages
-    // under B's input bar.
-    useThreadStore.setState({
-      queuedCountByThread: { 'thread-a': 1, 'thread-b': 1 },
-    } as any);
+    // Seed two threads with distinct queues. Thread A's messages must never
+    // render under thread B's input bar while B's fetch is in flight.
+    seedQueues({ 'thread-a': { count: 1 }, 'thread-b': { count: 1 } });
 
     vi.mocked(api.listQueue).mockImplementation((tid: string) => {
       if (tid === 'thread-a') {
@@ -687,7 +692,7 @@ describe('PromptInput', () => {
     function Host({ threadId }: { threadId: string }) {
       return (
         <ThreadProvider threadId={threadId}>
-          <PromptInput onSubmit={vi.fn()} queuedCount={1} />
+          <PromptInput onSubmit={vi.fn()} />
         </ThreadProvider>
       );
     }
@@ -706,16 +711,10 @@ describe('PromptInput', () => {
   });
 
   test('regression bug 1: queue stays visible after switching away and back to a thread', async () => {
-    // queuedCountByThread is the persistent source of truth — even if the
-    // payload's queuedCount field is stale/missing (because the thread was
-    // unloaded from threadDataById), the queue must still render when we
-    // come back.
-    useThreadStore.setState({
-      queuedCountByThread: { 'thread-a': 2 },
-      // Intentionally leave threadDataById empty so the payload path
-      // returns 0; the fallback to queuedCountByThread must kick in.
-      threadDataById: {},
-    } as any);
+    // The queue row outlives the thread payload: with the payload unloaded
+    // from threadDataById, the queue must still render when we come back.
+    seedQueues({ 'thread-a': { count: 2 } });
+    useThreadStore.setState({ threadDataById: {} } as any);
 
     vi.mocked(api.listQueue).mockReturnValue(
       okAsync([
@@ -736,10 +735,7 @@ describe('PromptInput', () => {
       ]),
     );
 
-    // Caller passes queuedCount=0 (e.g. because activeThread doesn't have it)
-    // — the hook must still discover the count via queuedCountByThread and
-    // render the queue.
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} queuedCount={0} />, {
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-a',
     });
 
@@ -752,16 +748,10 @@ describe('PromptInput', () => {
   test('shows queued message preview while queue details are still loading', async () => {
     vi.mocked(api.listQueue).mockReturnValueOnce(new Promise(() => {}) as any);
 
-    renderWithProviders(
-      <PromptInput
-        onSubmit={vi.fn()}
-        queuedCount={1}
-        queuedNextMessage="mensaje pendiente despues del refresh"
-      />,
-      {
-        threadId: 'thread-a',
-      },
-    );
+    seedQueues({ 'thread-a': { count: 1, next: 'mensaje pendiente despues del refresh' } });
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
+      threadId: 'thread-a',
+    });
 
     expect(screen.getByText('mensaje pendiente despues del refresh')).toBeInTheDocument();
     expect(screen.queryByText('Loading queued messages...')).toBeNull();
@@ -770,10 +760,11 @@ describe('PromptInput', () => {
   });
 
   test('uses cached queued messages before refetching after a thread switch', async () => {
-    useThreadStore.setState({
-      queuedCountByThread: { 'thread-a': 1 },
-      queuedMessagesByThread: {
-        'thread-a': [
+    seedQueues({
+      'thread-a': {
+        count: 1,
+        stale: true,
+        messages: [
           {
             id: 'qa1',
             threadId: 'thread-a',
@@ -783,10 +774,10 @@ describe('PromptInput', () => {
           },
         ],
       },
-    } as any);
+    });
     vi.mocked(api.listQueue).mockReturnValueOnce(new Promise(() => {}) as any);
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} queuedCount={0} />, {
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-a',
     });
 

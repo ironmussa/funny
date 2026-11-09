@@ -42,8 +42,8 @@ import { addReferencedEntries, stripReferencedContents } from '@funny/shared/att
 import { startTransition } from 'react';
 import { create } from 'zustand';
 
-import { seedQueueSummary } from '@/data/queue/store';
 import { restoreContextUsage } from '@/data/context-usage/store';
+import { seedQueueSummary } from '@/data/queue/store';
 import {
   archiveThread as archiveThreadRow,
   deleteThread as deleteThreadRow,

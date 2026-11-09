@@ -27,8 +27,8 @@ import type {
 } from '@funny/shared';
 import { toast } from 'sonner';
 
-import { applyQueueSummary } from '@/data/queue/store';
 import { applyContextUsageEvent, resetContextUsage } from '@/data/context-usage/store';
+import { applyQueueSummary } from '@/data/queue/store';
 import {
   isThreadListed,
   listedProjectIds,

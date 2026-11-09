@@ -79,3 +79,41 @@ describe('AgentMessageHandler — compaction summary usage', () => {
     expect(usageEvents[0].data.cumulativeInputTokens).toBe(20_100);
   });
 });
+
+describe('AgentMessageHandler — context breakdown', () => {
+  const breakdown = {
+    model: 'claude-opus-5-5',
+    totalTokens: 48_000,
+    maxTokens: 1_000_000,
+    percentage: 5,
+    categories: [{ id: 'messages', name: 'Messages', tokens: 30_000, kind: 'used' as const }],
+    mcpServers: [],
+    memoryFiles: [],
+    capturedAt: '2026-11-09T10:00:00.000Z',
+  };
+
+  test('forwards the snapshot on agent:context_usage with the tracked token count', async () => {
+    const { handler, state, emitted } = makeHandler();
+    state.cumulativeInputTokens.set(THREAD_ID, 50_000);
+
+    await handler.handle(THREAD_ID, { type: 'context_breakdown', breakdown });
+
+    const usageEvents = emitted.filter((e) => e.type === 'agent:context_usage');
+    expect(usageEvents).toHaveLength(1);
+    expect(usageEvents[0].data).toEqual({
+      inputTokens: 50_000,
+      outputTokens: 0,
+      cumulativeInputTokens: 50_000,
+      breakdown,
+    });
+  });
+
+  test('falls back to the snapshot total when no usage was tracked yet', async () => {
+    const { handler, emitted } = makeHandler();
+
+    await handler.handle(THREAD_ID, { type: 'context_breakdown', breakdown });
+
+    const [event] = emitted.filter((e) => e.type === 'agent:context_usage');
+    expect(event.data.cumulativeInputTokens).toBe(48_000);
+  });
+});

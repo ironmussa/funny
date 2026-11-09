@@ -324,18 +324,13 @@ export class AgentMessageHandler {
       return;
     }
 
-    // Rate limit — claude.ai subscription quota update
+    if (msg.type === 'context_breakdown') {
+      await this.handleContextBreakdown(threadId, msg);
+      return;
+    }
+
     if (msg.type === 'rate_limit') {
-      log.info('Rate limit info', {
-        namespace: 'agent',
-        threadId,
-        status: msg.info.status,
-        rateLimitType: msg.info.rateLimitType ?? '',
-        utilization: msg.info.utilization ?? 0,
-        resetsAt: msg.info.resetsAt ?? 0,
-        isUsingOverage: msg.info.isUsingOverage ?? false,
-      });
-      await this.emitWS(threadId, 'agent:rate_limit', { info: msg.info });
+      await this.handleRateLimit(threadId, msg);
       return;
     }
 
@@ -343,6 +338,40 @@ export class AgentMessageHandler {
     if (msg.type === 'result') {
       await this.handleResult(threadId, msg);
     }
+  }
+
+  /**
+   * End-of-turn context breakdown (Claude SDK) — rides on the existing
+   * context-usage event so the client's ring keeps a single source.
+   */
+  private async handleContextBreakdown(
+    threadId: string,
+    msg: Extract<CLIMessage, { type: 'context_breakdown' }>,
+  ): Promise<void> {
+    const cumulative = this.state.cumulativeInputTokens.get(threadId) ?? msg.breakdown.totalTokens;
+    await this.emitWS(threadId, 'agent:context_usage', {
+      inputTokens: cumulative,
+      outputTokens: 0,
+      cumulativeInputTokens: cumulative,
+      breakdown: msg.breakdown,
+    });
+  }
+
+  /** Rate limit — claude.ai subscription quota update. */
+  private async handleRateLimit(
+    threadId: string,
+    msg: Extract<CLIMessage, { type: 'rate_limit' }>,
+  ): Promise<void> {
+    log.info('Rate limit info', {
+      namespace: 'agent',
+      threadId,
+      status: msg.info.status,
+      rateLimitType: msg.info.rateLimitType ?? '',
+      utilization: msg.info.utilization ?? 0,
+      resetsAt: msg.info.resetsAt ?? 0,
+      isUsingOverage: msg.info.isUsingOverage ?? false,
+    });
+    await this.emitWS(threadId, 'agent:rate_limit', { info: msg.info });
   }
 
   // ── Assistant message handling ─────────────────────────────────

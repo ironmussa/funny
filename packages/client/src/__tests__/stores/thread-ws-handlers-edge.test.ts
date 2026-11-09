@@ -263,6 +263,39 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
     expect(state.contextUsageByThread[THREAD_ID].cumulativeInputTokens).toBe(100);
   });
 
+  test('handleWSContextUsage keeps the last breakdown across per-message usage events', () => {
+    const state = makeState();
+    const { get, set } = makeGetSet(state);
+    const breakdown = {
+      model: 'claude-opus-5-5',
+      totalTokens: 5000,
+      maxTokens: 1_000_000,
+      percentage: 1,
+      categories: [{ id: 'messages', name: 'Messages', tokens: 4000, kind: 'used' as const }],
+      mcpServers: [],
+      memoryFiles: [],
+      capturedAt: '2026-11-09T10:00:00.000Z',
+    };
+
+    handleWSContextUsage(get, set, THREAD_ID, {
+      inputTokens: 5000,
+      outputTokens: 0,
+      cumulativeInputTokens: 5000,
+      breakdown,
+    });
+    handleWSContextUsage(get, set, THREAD_ID, {
+      inputTokens: 6000,
+      outputTokens: 20,
+      cumulativeInputTokens: 6000,
+    });
+
+    expect(state.contextUsageByThread[THREAD_ID]).toMatchObject({
+      cumulativeInputTokens: 6000,
+      breakdown,
+    });
+    expect(state.threadDataById[THREAD_ID].contextUsage.breakdown).toBe(breakdown);
+  });
+
   test('handleWSStatus schedules project refresh for unknown sidebar thread', async () => {
     vi.useFakeTimers();
     const loadThreads = vi.fn();

@@ -1,4 +1,10 @@
-import type { GitStatusInfo, ImageAttachment, QueuedMessage, Thread } from '@funny/shared';
+import type {
+  ContextBreakdown,
+  GitStatusInfo,
+  ImageAttachment,
+  QueuedMessage,
+  Thread,
+} from '@funny/shared';
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -165,6 +171,8 @@ export interface PromptInputUIProps {
   contextPct?: number;
   contextUsedTokens?: number;
   contextMaxTokens?: number;
+  /** Per-category breakdown shown in the context ring's hover card. */
+  contextBreakdown?: ContextBreakdown;
   onCompact?: () => void;
 }
 

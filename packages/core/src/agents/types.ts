@@ -5,6 +5,8 @@
  * these types without pulling in a concrete process implementation.
  */
 
+import type { ContextBreakdown } from '@funny/shared';
+
 // ── CLI Message Types ──────────────────────────────────────────────
 
 export interface CLISystemMessage {
@@ -101,6 +103,12 @@ export interface CLIRateLimitMessage {
   sessionId: string;
 }
 
+/** End-of-turn per-category context window breakdown (Claude SDK `getContextUsage`). */
+export interface CLIContextBreakdownMessage {
+  type: 'context_breakdown';
+  breakdown: ContextBreakdown;
+}
+
 /** Exact decision supported by a live, structured provider permission request. */
 export type PermissionDecision = 'allow_once' | 'allow_always' | 'deny';
 
@@ -128,6 +136,7 @@ export type CLIMessage =
   | CLIResultMessage
   | CLICompactBoundaryMessage
   | CLIRateLimitMessage
+  | CLIContextBreakdownMessage
   | CLIPermissionRequestMessage;
 
 // ── Process Options ────────────────────────────────────────────────

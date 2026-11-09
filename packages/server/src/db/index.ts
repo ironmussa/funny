@@ -7,6 +7,13 @@
  *
  * Exports `db` and `schema` as lazy Proxies so the 22+ consumer files
  * that import from this module require zero changes.
+ *
+ * Hosts (docs/plans/cloudflare-portability.md, Phase 1):
+ *   - `initDatabase()` builds the process-wide provider from the environment
+ *     (the Bun host).
+ *   - `useDatabaseProvider(provider)` installs a provider the host built itself.
+ *   - `runWithDatabase(provider, work)` scopes a provider to one async context,
+ *     for hosts that open a connection per request. `db` reads it first.
  */
 
 import { existsSync, writeFileSync, chmodSync } from 'fs';
@@ -35,11 +42,45 @@ export type { AppDatabase };
 
 // ── Dialect resolution ───────────────────────────────────────────
 
-/** The active database dialect for this server instance. */
-export const dbDialect: DbDialect = process.env.DATABASE_URL ? 'pg' : 'sqlite';
+/**
+ * The active database dialect for this server instance. A live binding:
+ * `useDatabaseProvider` sets it from the installed provider, so a host that
+ * builds its own provider does not depend on `DATABASE_URL` at import time.
+ */
+export let dbDialect: DbDialect = process.env.DATABASE_URL ? 'pg' : 'sqlite';
 
 let _provider: DatabaseProvider | null = null;
 const transactionContext = new AsyncLocalStorage<any>();
+/** Per-async-context provider (one connection per request), read before `_provider`. */
+const requestDatabase = new AsyncLocalStorage<DatabaseProvider>();
+
+function activeProvider(): DatabaseProvider {
+  const provider = requestDatabase.getStore() ?? _provider;
+  if (!provider) {
+    throw new Error('Database not initialized. Call initDatabase() at startup.');
+  }
+  return provider;
+}
+
+/** Install the process-wide provider (and its dialect). */
+export function useDatabaseProvider(provider: DatabaseProvider): void {
+  _provider = provider;
+  dbDialect = provider.dialect;
+}
+
+/**
+ * Run `work` with `provider` as the database for this async context, e.g. a
+ * connection opened for one request. Transactions started inside use it too.
+ * Its dialect must match the instance dialect: SQL branches read `dbDialect`.
+ */
+export function runWithDatabase<T>(provider: DatabaseProvider, work: () => T): T {
+  if (provider.dialect !== dbDialect) {
+    throw new Error(
+      `runWithDatabase: provider dialect "${provider.dialect}" does not match the instance dialect "${dbDialect}"`,
+    );
+  }
+  return requestDatabase.run(provider, work);
+}
 
 // Legacy compat — kept so `setConnection()` callers
 // (middleware/auth.ts, server/index.ts) continue to work.
@@ -56,11 +97,13 @@ export function initDatabase(options?: {
   sqlitePath?: string;
 }): ResultAsync<void, string> {
   if (dbDialect === 'pg') {
-    _provider = createDatabase({
-      dialect: 'pg',
-      connectionString: process.env.DATABASE_URL!,
-      log,
-    });
+    useDatabaseProvider(
+      createDatabase({
+        dialect: 'pg',
+        connectionString: process.env.DATABASE_URL!,
+        log,
+      }),
+    );
   } else {
     const dbPath = options?.sqlitePath ?? resolve(DATA_DIR, 'data.db');
     // SQLite's in-memory sentinel — never touch the filesystem.
@@ -77,14 +120,15 @@ export function initDatabase(options?: {
       }
     }
     // Use the legacy wrapper so _legacyConnection stays populated
-    _legacyConnection = createSqliteDatabase({ mode: 'sqlite', path: dbPath, log });
-    _provider = {
-      db: _legacyConnection.db,
-      schema: _legacyConnection.schema,
+    const connection = createSqliteDatabase({ mode: 'sqlite', path: dbPath, log });
+    _legacyConnection = connection;
+    useDatabaseProvider({
+      db: connection.db,
+      schema: connection.schema,
       dialect: 'sqlite',
-      rawDriver: _legacyConnection.sqlite,
-      close: () => _legacyConnection!.close(),
-    };
+      rawDriver: connection.sqlite,
+      close: () => connection.close(),
+    });
   }
   return okAsync(undefined);
 }
@@ -94,10 +138,7 @@ export function initDatabase(options?: {
 /** The Drizzle database instance. `initDatabase()` must be called first. */
 export const db: AppDatabase = new Proxy({} as AppDatabase, {
   get(_target, prop) {
-    if (!_provider) {
-      throw new Error('Database not initialized. Call initDatabase() at startup.');
-    }
-    return (transactionContext.getStore() ?? (_provider.db as any))[prop];
+    return (transactionContext.getStore() ?? (activeProvider().db as any))[prop];
   },
 });
 
@@ -107,9 +148,9 @@ export const db: AppDatabase = new Proxy({} as AppDatabase, {
  * execution there rather than a transaction that commits before awaited work ends.
  */
 export async function withDatabaseTransaction<T>(work: () => Promise<T>): Promise<T> {
-  if (!_provider) throw new Error('Database not initialized. Call initDatabase() at startup.');
-  if (_provider.dialect === 'sqlite') return work();
-  return _provider.db.transaction((tx: any) => transactionContext.run(tx, work));
+  const provider = activeProvider();
+  if (provider.dialect === 'sqlite') return work();
+  return provider.db.transaction((tx: any) => transactionContext.run(tx, work));
 }
 
 export { schema };
@@ -119,13 +160,13 @@ export { schema };
 /** Set a pre-existing connection (e.g. shared from runtime). */
 export function setConnection(conn: DatabaseConnection): void {
   _legacyConnection = conn;
-  _provider = {
+  useDatabaseProvider({
     db: conn.db,
     schema: conn.schema,
     dialect: 'sqlite',
     rawDriver: conn.sqlite,
     close: () => conn.close(),
-  };
+  });
 }
 
 export async function closeDatabase(): Promise<void> {
@@ -138,6 +179,7 @@ export async function closeDatabase(): Promise<void> {
 export function resetDatabaseForTests(): void {
   _provider = null;
   _legacyConnection = null;
+  dbDialect = process.env.DATABASE_URL ? 'pg' : 'sqlite';
 }
 
 // ── Compat helpers ───────────────────────────────────────────────

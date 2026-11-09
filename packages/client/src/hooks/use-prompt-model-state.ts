@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { useSandboxConnections } from '@/data/runner/hooks';
+import { useProjectSandbox } from '@/data/runner/hooks';
 import { applySandboxModelGroups } from '@/hooks/use-runner-provider-groups';
 import { useUnifiedPromptModelGroups } from '@/hooks/use-unified-prompt-model-groups';
 import {
@@ -28,14 +28,42 @@ function findSandboxFallbackModel(groups: ModelGroups, unifiedModel: string) {
   return usable && !selectedUsable ? usable.value : undefined;
 }
 
-/** Runtime (local / launcher / sandbox) + worktree toggle for the composer. */
+/** The composer's sandbox on/off toggle for the project, or null when it has none. */
+export interface SandboxToggle {
+  label: string;
+  enabled: boolean;
+  setEnabled: (enabled: boolean) => void;
+}
+
+/**
+ * The project's sandbox toggle (change project-sandboxes): shown for a new,
+ * non-scratch thread when the user configured a sandbox for the project. It
+ * starts at the configured default; a choice only holds for that project.
+ */
+export function useSandboxToggle(projectId: string | null | undefined, offered: boolean) {
+  const { sandbox } = useProjectSandbox(offered ? projectId : null);
+  const [choice, setChoice] = useState<{ projectId: string; enabled: boolean } | null>(null);
+  return useMemo((): SandboxToggle | null => {
+    if (!sandbox) return null;
+    const { projectId: id, enabledByDefault } = sandbox.settings;
+    return {
+      label: sandbox.connection?.label ?? 'Sandbox',
+      enabled: choice?.projectId === id ? choice.enabled : enabledByDefault,
+      setEnabled: (enabled) => setChoice({ projectId: id, enabled }),
+    };
+  }, [sandbox, choice]);
+}
+
+/** Runtime (local / launcher / project sandbox) + worktree toggle for the composer. */
 function usePromptRuntime({
   isNewThread,
+  projectId,
   launcherUrl,
   defaultThreadMode,
   onWorktreeModeChange,
 }: {
   isNewThread: boolean;
+  projectId: string | null | undefined;
   launcherUrl: string | null | undefined;
   defaultThreadMode: string;
   onWorktreeModeChange?: (enabled: boolean) => void;
@@ -48,15 +76,23 @@ function usePromptRuntime({
     },
     [onWorktreeModeChange],
   );
-  const [runtime, setRuntime] = useState<string>('local');
+  const [selectedRuntime, setRuntime] = useState<string>('local');
   const hasLauncher = !!launcherUrl;
+  // Scratch threads have no repository to clone: never a sandbox.
   const isScratch = useUIStore((s) => s.newThreadIsScratch);
-  const { connections: sandboxConnections } = useSandboxConnections({ enabled: isNewThread });
-  const runtimeModes = useMemo(
-    () => buildRuntimeModes({ hasLauncher, sandboxConnections, isScratch: !!isScratch }),
-    [hasLauncher, sandboxConnections, isScratch],
-  );
-  return { createWorktree, setCreateWorktree, runtime, setRuntime, runtimeModes, hasLauncher };
+  const sandboxToggle = useSandboxToggle(projectId, isNewThread && !isScratch);
+  const runtimeModes = useMemo(() => buildRuntimeModes({ hasLauncher }), [hasLauncher]);
+  // A sandbox that is on replaces the local / remote choice.
+  const runtime = sandboxToggle?.enabled ? 'sandbox' : selectedRuntime;
+  return {
+    createWorktree,
+    setCreateWorktree,
+    runtime,
+    setRuntime,
+    runtimeModes,
+    hasLauncher,
+    sandboxToggle,
+  };
 }
 
 /** Visible model groups, restricted to sandbox-capable providers when targeting a sandbox. */
@@ -324,6 +360,7 @@ export function usePromptSelection({
   effectiveThreadId: string | undefined;
   project: {
     effectiveProject?: { launcherUrl?: string | null };
+    resolvedProjectId?: string | null;
     defaultProvider: string;
     defaultModel: string;
     defaultEffort: string;
@@ -343,6 +380,7 @@ export function usePromptSelection({
 }) {
   const runtimeState = usePromptRuntime({
     isNewThread,
+    projectId: project.resolvedProjectId,
     launcherUrl: project.effectiveProject?.launcherUrl,
     defaultThreadMode: project.defaultThreadMode,
     onWorktreeModeChange,

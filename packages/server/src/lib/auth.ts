@@ -5,7 +5,7 @@
  * Supports both SQLite (default/local) and PostgreSQL (team/cloud) modes.
  */
 
-import { randomBytes } from 'crypto';
+import { createHmac, randomBytes } from 'crypto';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
@@ -57,6 +57,14 @@ function getOrCreateSecret(): string {
   writeFileSync(SECRET_PATH, secret, { mode: 0o600 });
   log.info('Generated new auth secret', { namespace: 'auth' });
   return secret;
+}
+
+/**
+ * A key for `purpose` derived from the auth secret: stable across restarts and
+ * never the secret itself (e.g. the reverse runner link's per-sandbox secrets).
+ */
+export function deriveServerKey(purpose: string): Buffer {
+  return createHmac('sha256', getOrCreateSecret()).update(`funny-key:${purpose}`).digest();
 }
 
 // ── Access Control ──────────────────────────────────────────────

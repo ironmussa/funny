@@ -26,6 +26,21 @@ export interface InfraConnection {
   lastValidatedAt: string | null;
 }
 
+/** The user's sandbox for one project (change project-sandboxes). */
+export interface ProjectSandboxSettings {
+  projectId: string;
+  connectionId: string;
+  sizeId: string;
+  enabledByDefault: boolean;
+  updatedAt: string;
+}
+
+export interface SaveProjectSandboxInput {
+  connectionId: string;
+  sizeId?: string;
+  enabledByDefault: boolean;
+}
+
 /** The shared sandbox machine's states (type-only: the machine itself stays server-side). */
 export type ThreadSandboxState = SandboxState;
 
@@ -46,10 +61,24 @@ export const infraApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  renameInfraConnection: (id: string, label: string) =>
+    request<InfraConnection>(`/infra/connections/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ label }),
+    }),
   testInfraConnection: (id: string) =>
     request<unknown>(`/infra/connections/${id}/test`, { method: 'POST' }),
   deleteInfraConnection: (id: string) =>
     request<{ ok: boolean }>(`/infra/connections/${id}`, { method: 'DELETE' }),
+  getProjectSandbox: (projectId: string) =>
+    request<{ settings: ProjectSandboxSettings | null }>(`/infra/projects/${projectId}/sandbox`),
+  saveProjectSandbox: (projectId: string, data: SaveProjectSandboxInput) =>
+    request<{ settings: ProjectSandboxSettings }>(`/infra/projects/${projectId}/sandbox`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  clearProjectSandbox: (projectId: string) =>
+    request<{ ok: boolean }>(`/infra/projects/${projectId}/sandbox`, { method: 'DELETE' }),
   getThreadSandbox: (threadId: string) =>
     request<ThreadSandboxInfo>(`/infra/threads/${threadId}/sandbox`),
 };

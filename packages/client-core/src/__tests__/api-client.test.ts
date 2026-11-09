@@ -91,6 +91,21 @@ describe('API client', () => {
     });
   });
 
+  test('passes a server-provided friendly message through to the error', async () => {
+    const fixture = createDependencies(async () =>
+      response(409, {
+        error: 'Sandboxes need the server build commit',
+        code: 'missing-build-commit',
+        friendlyMessage: 'Sandboxes need the server build commit',
+      }),
+    );
+    await expect(fixture.client.request('/threads', { method: 'POST' })).rejects.toEqual({
+      type: 'CONFLICT',
+      message: 'Sandboxes need the server build commit',
+      friendlyMessage: 'Sandboxes need the server build commit',
+    });
+  });
+
   test('handles server errors, exclusions, and unauthorized callbacks', async () => {
     const server = createDependencies(async () => response(500, { error: 'broken' }));
     await expect(server.client.request('/projects')).rejects.toMatchObject({

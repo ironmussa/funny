@@ -12,6 +12,7 @@ import type {
   SandboxCapabilities,
   SandboxError,
   SandboxHandle,
+  SandboxIngress,
   SandboxProvider,
   SandboxStatus,
   TemplateBuildRequest,
@@ -36,6 +37,8 @@ export interface FakeProviderOptions {
   maxLifetimeMs?: number | null;
   validCredential?: string;
   templates?: string[];
+  /** Base URL `exposePort` publishes on (`<base>/<sandboxId>/<port>`); absent: no ingress. */
+  ingressBaseUrl?: string;
 }
 
 function fakeCapabilities(opts: FakeProviderOptions = {}): SandboxCapabilities {
@@ -58,6 +61,7 @@ export interface FakeSandboxProvider extends SandboxProvider {
   readonly sandboxes: ReadonlyMap<string, FakeSandbox>;
   readonly commands: ReadonlyArray<{ sandboxId: string; command: string }>;
   readonly templateBuilds: ReadonlyArray<TemplateBuildRequest>;
+  readonly exposedPorts: ReadonlyArray<{ sandboxId: string; port: number }>;
   failNext(error: SandboxError): void;
   expire(sandboxId: string): void;
 }
@@ -73,6 +77,7 @@ export function createFakeSandboxProvider(
   const commands: Array<{ sandboxId: string; command: string }> = [];
   const templateBuilds: TemplateBuildRequest[] = [];
   const byIdempotencyKey = new Map<string, string>();
+  const exposedPorts: Array<{ sandboxId: string; port: number }> = [];
   let pendingFailure: SandboxError | null = null;
   let counter = 0;
 
@@ -99,6 +104,7 @@ export function createFakeSandboxProvider(
     sandboxes,
     commands,
     templateBuilds,
+    exposedPorts,
     failNext: (error) => {
       pendingFailure = error;
     },
@@ -192,6 +198,21 @@ export function createFakeSandboxProvider(
           return okAsync({ exitCode: 0, stdout: '', stderr: '' });
         }),
       ),
+
+    ...(opts.ingressBaseUrl
+      ? {
+          exposePort: (handle: SandboxHandle, port: number) =>
+            guard(() =>
+              find(handle).map((): SandboxIngress => {
+                exposedPorts.push({ sandboxId: handle.sandboxId, port });
+                return {
+                  url: `${opts.ingressBaseUrl}/${handle.sandboxId}/${port}`,
+                  headers: { 'x-fake-ingress': 'token' },
+                };
+              }),
+            ),
+        }
+      : {}),
 
     listTemplates: () =>
       guard(() =>

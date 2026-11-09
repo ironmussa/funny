@@ -18,7 +18,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { db } from '../../db/index.js';
-import { infraConnections } from '../../db/schema.js';
+import { infraConnections, projectSandboxSettings } from '../../db/schema.js';
 import { decrypt, encrypt } from '../../lib/crypto.js';
 import type { SandboxError, SandboxProvider } from './contract.js';
 import type { SandboxProviderRegistry } from './registry.js';
@@ -134,14 +134,42 @@ export function createInfraConnectionService(registry: SandboxProviderRegistry) 
       ).map((rows) => rows.map(toView));
     },
 
+    /** Also removes the project sandboxes that use it (change project-sandboxes). */
     remove(userId: string, id: string): ResultAsync<void, InfraConnectionError> {
       return ownedRow(userId, id).andThen(() =>
         ResultAsync.fromPromise(
-          db
-            .delete(infraConnections)
-            .where(and(eq(infraConnections.id, id), eq(infraConnections.userId, userId))),
+          db.transaction(async (tx) => {
+            await tx
+              .delete(projectSandboxSettings)
+              .where(
+                and(
+                  eq(projectSandboxSettings.connectionId, id),
+                  eq(projectSandboxSettings.userId, userId),
+                ),
+              );
+            await tx
+              .delete(infraConnections)
+              .where(and(eq(infraConnections.id, id), eq(infraConnections.userId, userId)));
+          }),
           storage,
         ).map(() => undefined),
+      );
+    },
+
+    /** Rename a connection; the credential and provider stay as they are. */
+    rename(
+      userId: string,
+      id: string,
+      label: string,
+    ): ResultAsync<InfraConnectionView, InfraConnectionError> {
+      return ownedRow(userId, id).andThen((row) =>
+        ResultAsync.fromPromise(
+          db
+            .update(infraConnections)
+            .set({ label })
+            .where(and(eq(infraConnections.id, id), eq(infraConnections.userId, userId))),
+          storage,
+        ).map(() => toView({ ...row, label })),
       );
     },
 

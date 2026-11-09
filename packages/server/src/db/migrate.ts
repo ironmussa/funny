@@ -1839,6 +1839,35 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    // project-sandboxes: each user's sandbox (connection, size, default) per project.
+    name: '090_project_sandbox_settings',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS project_sandbox_settings (
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          connection_id TEXT NOT NULL,
+          size_id TEXT NOT NULL,
+          enabled_by_default INTEGER NOT NULL DEFAULT 0,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (project_id, user_id)
+        )
+      `);
+      // Removing a connection deletes its rows by connection id.
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_project_sandbox_settings_connection
+        ON project_sandbox_settings (connection_id)
+      `);
+    },
+  },
+  {
+    // thread-sandboxes: how the sandbox runner reaches the server (null = direct).
+    name: '091_thread_sandboxes_runner_link',
+    async up() {
+      await ctx().addColumn('thread_sandboxes', 'runner_link', 'TEXT');
+    },
+  },
 ];
 
 /**

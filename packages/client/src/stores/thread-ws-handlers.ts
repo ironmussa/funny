@@ -37,6 +37,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import { emitContextUsage } from '@/lib/context-usage-events';
 import { buildPath } from '@/lib/url';
 
+import { parseToolInput, useThreadActiveToolStore } from './thread-active-tool-store';
 import {
   invalidateThreadData,
   transitionThreadStatus,
@@ -96,6 +97,8 @@ function patchSidebarThread(threadId: string, updater: (thread: Thread) => Threa
  */
 function patchSidebarLastAssistant(threadId: string, content: string): void {
   const snippet = content.slice(0, 120);
+  // The agent's text replaces the tool it was running as the row's snippet.
+  useThreadActiveToolStore.getState().clear(threadId);
   patchSidebarThread(threadId, (t) =>
     t.lastAssistantMessage === snippet ? t : { ...t, lastAssistantMessage: snippet },
   );
@@ -429,6 +432,11 @@ export function handleWSToolCall(
 ): void {
   const state = get();
 
+  // Sidebar snippet: what the agent is doing right now.
+  useThreadActiveToolStore
+    .getState()
+    .setActive(threadId, { name: data.name, input: parseToolInput(data.input) });
+
   // Drop the cached snapshot so the next selectThread() refetches and includes
   // this tool call. Runs unconditionally so the active thread's cache stays in
   // sync with the live payload.
@@ -563,6 +571,8 @@ export function handleWSStatus(
     maybeBuffer(state, threadId, 'status', data);
     // Sidebar still gets the status update below.
   }
+
+  if (data.status !== 'running') useThreadActiveToolStore.getState().clear(threadId);
 
   const machineEvent = wsEventToMachineEvent('agent:status', data);
   if (!machineEvent) {
@@ -769,6 +779,8 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     maybeBuffer(state, threadId, 'result', data);
     // Sidebar status still applied below.
   }
+
+  useThreadActiveToolStore.getState().clear(threadId);
 
   const machineEvent = wsEventToMachineEvent('agent:result', data);
   if (!machineEvent) {

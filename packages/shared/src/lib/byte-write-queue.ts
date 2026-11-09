@@ -1,8 +1,30 @@
 /**
  * Bounded FIFO of byte chunks waiting for a writable sink (a TCP socket that
- * accepted only part of a write). Used by both ends of the runner gRPC
- * WebSocket carrier so a slow peer can never grow memory without limit.
+ * accepted only part of a write), plus the client WebSocket surface the byte
+ * pipes use. Shared by both ends of the runner gRPC WebSocket carrier and the
+ * reverse runner link, so a slow peer can never grow memory without limit.
  */
+
+/** Minimal client WebSocket surface (WHATWG / Bun `WebSocket`) of a byte pipe. */
+export interface ByteWebSocket {
+  binaryType: string;
+  readonly bufferedAmount: number;
+  readonly readyState: number;
+  onopen: ((ev: unknown) => void) | null;
+  onmessage: ((ev: { data: unknown }) => void) | null;
+  onclose: ((ev: unknown) => void) | null;
+  onerror: ((ev: unknown) => void) | null;
+  send(data: Uint8Array): void;
+  close(code?: number, reason?: string): void;
+}
+
+/** A binary WebSocket frame as bytes; null for a text frame. */
+export function frameBytes(data: unknown): Uint8Array | null {
+  if (data instanceof ArrayBuffer) return new Uint8Array(data);
+  if (ArrayBuffer.isView(data))
+    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
+  return null;
+}
 
 export interface PartialWriter {
   /** Returns bytes accepted (may be fewer than offered), or a negative number when closed. */

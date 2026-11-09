@@ -8,7 +8,7 @@
  * runner bearer token still authenticates every gRPC stream end-to-end.
  */
 
-import { ByteWriteQueue } from '@funny/shared/lib/byte-write-queue';
+import { ByteWriteQueue, frameBytes, type ByteWebSocket } from '@funny/shared/lib/byte-write-queue';
 import { RUNNER_GRPC_WS_MAX_BUFFERED_BYTES } from '@funny/shared/runner-protocol';
 
 import { log } from '../lib/logger.js';
@@ -20,17 +20,7 @@ export interface GrpcWebSocketBridge {
 }
 
 /** Minimal client WebSocket surface (WHATWG `WebSocket`). */
-export interface BridgeWebSocket {
-  binaryType: string;
-  readonly bufferedAmount: number;
-  readonly readyState: number;
-  onopen: ((ev: unknown) => void) | null;
-  onmessage: ((ev: { data: unknown }) => void) | null;
-  onclose: ((ev: unknown) => void) | null;
-  onerror: ((ev: unknown) => void) | null;
-  send(data: Uint8Array): void;
-  close(code?: number, reason?: string): void;
-}
+export type BridgeWebSocket = ByteWebSocket;
 
 export interface GrpcWebSocketBridgeOptions {
   maxBufferedBytes?: number;
@@ -54,13 +44,6 @@ const WS_OPEN = 1;
 
 export function isWebSocketEndpoint(endpoint: string): boolean {
   return /^wss?:\/\//i.test(endpoint.trim());
-}
-
-function toBytes(data: unknown): Uint8Array | null {
-  if (data instanceof ArrayBuffer) return new Uint8Array(data);
-  if (ArrayBuffer.isView(data))
-    return new Uint8Array(data.buffer, data.byteOffset, data.byteLength);
-  return null;
 }
 
 export function startGrpcWebSocketBridge(
@@ -104,7 +87,7 @@ export function startGrpcWebSocketBridge(
         };
         ws.onmessage = (event) => {
           if (conn.closed) return;
-          const bytes = toBytes(event.data);
+          const bytes = frameBytes(event.data);
           if (!bytes) return shut(socket as BridgeSocket, 'unexpected text frame');
           if (!conn.toSocket.push(bytes))
             return shut(socket as BridgeSocket, 'grpc client too slow');

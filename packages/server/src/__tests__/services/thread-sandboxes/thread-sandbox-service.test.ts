@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'bun:test';
 
+import { REVERSE_LINK_LOOPBACK_PORT } from '@funny/shared/reverse-link';
 import { nextSandboxState, type SandboxState } from '@funny/shared/sandbox-machine';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 
@@ -9,6 +10,10 @@ import {
   type FakeSandboxProvider,
 } from '../../../services/thread-sandboxes/providers/fake/fake-provider.js';
 import { resolveRunnerBuild } from '../../../services/thread-sandboxes/runner-build.js';
+import {
+  reverseLinkSecret,
+  type RunnerLink,
+} from '../../../services/thread-sandboxes/runner-link.js';
 import { createRunnerTemplateManager } from '../../../services/thread-sandboxes/template-manager.js';
 import { createThreadSandboxService } from '../../../services/thread-sandboxes/thread-sandbox-service.js';
 import type {
@@ -60,7 +65,12 @@ interface Setup {
 }
 
 function setup(
-  opts: { templates?: string[]; runnerConnects?: boolean; checkoutFails?: boolean } = {},
+  opts: {
+    templates?: string[];
+    runnerConnects?: boolean;
+    checkoutFails?: boolean;
+    runnerLink?: RunnerLink;
+  } = {},
 ): Setup {
   const provider = createFakeSandboxProvider('fake-valid', { templates: opts.templates ?? [] });
   const store = memoryStore();
@@ -78,7 +88,7 @@ function setup(
     },
     templates: createRunnerTemplateManager(build),
     build,
-    serverUrl: 'https://funny.example',
+    runnerLink: opts.runnerLink ?? { kind: 'direct', serverUrl: 'https://funny.example' },
     issueToken: ({ threadId }) => {
       const token = `rprov_${threadId}`;
       issued.push(token);
@@ -127,6 +137,19 @@ describe('thread sandbox provisioning', () => {
     expect(store.rows.get('t-1')?.sandboxId).toBe(
       sandbox ? [...provider.sandboxes.keys()][0] : null,
     );
+  });
+
+  test('a reverse link points the runner at the relay and gives it its secret', async () => {
+    const secretKey = Buffer.from('k'.repeat(32));
+    const { provider, store, service } = setup({
+      templates: [build.version],
+      runnerLink: { kind: 'reverse', secretKey },
+    });
+    expectOk(await service.provision(input));
+    const start = provider.commands.map((c) => c.command).at(-1);
+    expect(start).toContain(`TEAM_SERVER_URL=http://127.0.0.1:${REVERSE_LINK_LOOPBACK_PORT}`);
+    expect(start).toContain(`FUNNY_REVERSE_LINK_SECRET=${reverseLinkSecret(secretKey, 't-1', 0)}`);
+    expect(store.rows.get('t-1')?.runnerLink).toBe('reverse');
   });
 
   test('without a template: install on the fly and build the template for the next thread', async () => {
@@ -245,7 +268,7 @@ describe('stop and resume edge cases (state machine + Effect)', () => {
       connections: { providerFor: (_u, id) => okAsync({ connectionId: id, provider }) },
       templates: createRunnerTemplateManager(build),
       build,
-      serverUrl: 'https://funny.example',
+      runnerLink: { kind: 'direct', serverUrl: 'https://funny.example' },
       issueToken: () => okAsync({ token: 'rprov_x' }),
       sandboxRunnerIdForThread: async () => 'r-box',
       presence: { isAvailable: () => runner.online },
@@ -336,7 +359,7 @@ describe('step ordering and cancellation', () => {
       connections: { providerFor: (_u, id) => okAsync({ connectionId: id, provider }) },
       templates: createRunnerTemplateManager(build),
       build,
-      serverUrl: 'https://funny.example',
+      runnerLink: { kind: 'direct', serverUrl: 'https://funny.example' },
       issueToken: () => okAsync({ token: 'rprov_x' }),
       sandboxRunnerIdForThread: async () => (started() ? 'r-box' : null),
       presence: { isAvailable: (id) => id === 'r-box' },
@@ -380,7 +403,7 @@ describe('ephemeral providers', () => {
       connections: { providerFor: (_u, id) => okAsync({ connectionId: id, provider }) },
       templates: createRunnerTemplateManager(build),
       build,
-      serverUrl: 'https://funny.example',
+      runnerLink: { kind: 'direct', serverUrl: 'https://funny.example' },
       issueToken: () => okAsync({ token: 'rprov_x' }),
       sandboxRunnerIdForThread: async () => 'r-box',
       presence: { isAvailable: () => true },
@@ -428,7 +451,7 @@ describe('resilience: transient retries, release, abandon, recover', () => {
       connections: { providerFor: (_u, id) => okAsync({ connectionId: id, provider }) },
       templates: createRunnerTemplateManager(build),
       build,
-      serverUrl: 'https://funny.example',
+      runnerLink: { kind: 'direct', serverUrl: 'https://funny.example' },
       issueToken: () => okAsync({ token: 'rprov_x' }),
       sandboxRunnerIdForThread: async () => 'r-box',
       presence: { isAvailable: () => runner.online },

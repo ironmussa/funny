@@ -47,45 +47,21 @@ export interface SymbolRef {
   endLine?: number;
 }
 
-const SANDBOX_RUNTIME_PREFIX = 'sandbox:';
-
 /**
- * Runtime choices for a new thread: local, remote (project launcher) and one
- * sandbox entry per provider connection (`sandbox:<connectionId>`). Scratch
- * threads have no repository to clone, so they never get sandbox entries.
+ * Runtime choices for a new thread: local and remote (project launcher). The
+ * project's sandbox is a separate on/off toggle (change project-sandboxes).
  */
 export function buildRuntimeModes(input: {
   hasLauncher: boolean;
-  sandboxConnections: ReadonlyArray<{ id: string; label: string }>;
-  isScratch: boolean;
 }): Array<{ value: string; label: string }> {
   const modes = [{ value: 'local', label: 'Local' }];
   if (input.hasLauncher) modes.push({ value: 'remote', label: 'Remote' });
-  if (!input.isScratch) {
-    for (const connection of input.sandboxConnections) {
-      modes.push({
-        value: `${SANDBOX_RUNTIME_PREFIX}${connection.id}`,
-        label: `Sandbox · ${connection.label}`,
-      });
-    }
-  }
   return modes;
 }
 
-/** True when the composer's runtime choice starts the thread in a sandbox. */
+/** True when the composer starts the thread in the project's sandbox. */
 export function isSandboxRuntimeChoice(choice: string | undefined): boolean {
-  return !!choice?.startsWith(SANDBOX_RUNTIME_PREFIX);
-}
-
-/** Splits a runtime choice into the thread runtime and its sandbox connection. */
-export function parseRuntimeChoice(choice: string | undefined): {
-  runtime?: string;
-  sandboxConnectionId?: string;
-} {
-  if (choice?.startsWith(SANDBOX_RUNTIME_PREFIX)) {
-    return { runtime: 'sandbox', sandboxConnectionId: choice.slice(SANDBOX_RUNTIME_PREFIX.length) };
-  }
-  return { runtime: choice };
+  return choice === 'sandbox';
 }
 
 /** Per-submit options coming from PromptInput. */
@@ -97,9 +73,8 @@ export interface SubmitOpts {
   effort?: string;
   /** local | worktree — named `threadMode` in PromptInput's onSubmit. */
   threadMode?: string;
+  /** `sandbox` runs it in the caller's project sandbox, resolved by the server. */
   runtime?: string;
-  /** Provider connection used when `runtime === 'sandbox'`. */
-  sandboxConnectionId?: string;
   baseBranch?: string;
   sendToBacklog?: boolean;
   fileReferences?: FileRef[];
@@ -234,19 +209,16 @@ export function buildThreadPayload(input: BuildInput): BuildResult {
 
   // Normal: create + execute.
   const { allowedTools, disallowedTools } = deriveToolLists(toolPermissions);
-  // A sandbox already isolates the thread, so it always runs in local mode.
-  const sandbox =
-    opts.runtime === 'sandbox' && opts.sandboxConnectionId
-      ? { connectionId: opts.sandboxConnectionId }
-      : undefined;
+  // A sandbox already isolates the thread, so it always runs in local mode. The
+  // server picks the connection and size from the project (project-sandboxes).
+  const inSandbox = opts.runtime === 'sandbox';
   return {
     kind: 'normal',
     payload: {
       projectId: input.projectId,
       title,
-      mode: sandbox ? 'local' : threadMode,
+      mode: inSandbox ? 'local' : threadMode,
       runtime: opts.runtime as 'local' | 'remote' | 'sandbox' | undefined,
-      ...(sandbox ? { sandbox } : {}),
       provider: opts.provider,
       model: opts.model,
       permissionMode: opts.mode,

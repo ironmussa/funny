@@ -437,17 +437,15 @@ describe('PromptInputUI submit', () => {
     const { onSubmit, editor } = renderUI({
       projectId: 'p1',
       isNewThread: true,
-      runtime: 'sandbox:conn-1',
+      runtime: 'sandbox',
       selectedBranch: 'main',
       onCheckoutPreflight,
     });
     type(editor, 'task');
     submit(editor);
     await waitFor(() => expect(onSubmit).toHaveBeenCalledTimes(1));
-    expect(onSubmit.mock.calls[0][1]).toMatchObject({
-      runtime: 'sandbox',
-      sandboxConnectionId: 'conn-1',
-    });
+    expect(onSubmit.mock.calls[0][1]).toMatchObject({ runtime: 'sandbox' });
+    expect(onSubmit.mock.calls[0][1]).not.toHaveProperty('sandboxConnectionId');
     expect(systemApi.providerSetupStatus).not.toHaveBeenCalled();
     expect(onCheckoutPreflight).not.toHaveBeenCalled();
   });

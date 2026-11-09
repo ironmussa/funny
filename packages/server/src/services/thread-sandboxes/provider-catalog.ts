@@ -5,9 +5,10 @@
  */
 
 import { boatProviderEntry } from './providers/boat/boat-provider.js';
+import { instaboxProviderEntry } from './providers/instabox/instabox-provider.js';
 import { createSandboxProviderRegistry, type SandboxProviderEntry } from './registry.js';
 
-const PROVIDERS: SandboxProviderEntry<any>[] = [boatProviderEntry];
+const PROVIDERS: SandboxProviderEntry<any>[] = [boatProviderEntry, instaboxProviderEntry];
 
 /** Registry of every production sandbox provider. */
 export function productionSandboxProviders() {

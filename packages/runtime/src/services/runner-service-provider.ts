@@ -267,7 +267,8 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
       async resolveEffectiveProfile(projectId, userId) {
         const { remoteResolveAgentExecutionProfile } =
           await import('./remote-project-identity-client.js');
-        return remoteResolveAgentExecutionProfile(projectId, userId);
+        const { profileForThisRunner } = await import('./sandbox-runner.js');
+        return profileForThisRunner(await remoteResolveAgentExecutionProfile(projectId, userId));
       },
     },
 

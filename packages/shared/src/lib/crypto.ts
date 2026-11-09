@@ -36,7 +36,7 @@
  */
 
 import { randomBytes, createCipheriv, createDecipheriv } from 'crypto';
-import { readFileSync, writeFileSync, existsSync, statSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
 import { resolve } from 'path';
 
 const ALGORITHM = 'aes-256-gcm';
@@ -148,6 +148,7 @@ export function fileKeyringSource(dataDir: string): KeyringSource {
       return keyring;
     },
     save(keyring) {
+      mkdirSync(dataDir, { recursive: true, mode: 0o700 });
       writeFileSync(keysPath, JSON.stringify(keyring, null, 2), { mode: 0o600 });
       return true;
     },

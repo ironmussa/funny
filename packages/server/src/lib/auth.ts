@@ -18,7 +18,7 @@ import { createAccessControl } from 'better-auth/plugins/access';
 import { db, dbDialect } from '../db/index.js';
 import { audit } from './audit.js';
 import { resolveCorsOrigins } from './cors-origins.js';
-import { DATA_DIR } from './data-dir.js';
+import { ensureDataDir } from './data-dir.js';
 import { log } from './logger.js';
 import { validatePasswordStrength } from './password-policy.js';
 import { getAuthSecret } from './server-secrets.js';
@@ -283,7 +283,7 @@ export async function initBetterAuth(): Promise<void> {
         // capture stderr and would persist the secret indefinitely. Instead
         // write it to a mode-0600 file that only the server user can read,
         // and print just the file path to stderr as a one-time setup hint.
-        const passwordPath = resolve(DATA_DIR, 'admin-password.txt');
+        const passwordPath = resolve(ensureDataDir(), 'admin-password.txt');
         const body =
           `Generated admin credentials for funny\n` +
           `Username: ${username}\n` +

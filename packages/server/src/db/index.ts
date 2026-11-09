@@ -34,7 +34,7 @@ import {
 import { okAsync } from 'neverthrow';
 import type { ResultAsync } from 'neverthrow';
 
-import { DATA_DIR } from '../lib/data-dir.js';
+import { ensureDataDir } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import * as schema from './schema.js';
 
@@ -105,7 +105,7 @@ export function initDatabase(options?: {
       }),
     );
   } else {
-    const dbPath = options?.sqlitePath ?? resolve(DATA_DIR, 'data.db');
+    const dbPath = options?.sqlitePath ?? resolve(ensureDataDir(), 'data.db');
     // SQLite's in-memory sentinel — never touch the filesystem.
     if (dbPath !== ':memory:') {
       // Ensure restrictive permissions on the database file (owner-only read/write)

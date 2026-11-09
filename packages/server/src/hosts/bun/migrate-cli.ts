@@ -6,10 +6,11 @@
  * else SQLite under the data dir).
  */
 
-import { log } from '../../lib/logger.js';
+import { attachFileLogTransport, log } from '../../lib/logger.js';
 
 /** Returns the process exit code: 0 when migrations applied, 1 otherwise. */
 export async function runMigrateCommand(): Promise<number> {
+  attachFileLogTransport();
   const { initDatabase, closeDatabase, dbDialect } = await import('../../db/index.js');
   const { autoMigrate } = await import('../../db/migrate.js');
 

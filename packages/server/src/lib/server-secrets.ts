@@ -21,7 +21,7 @@
  */
 
 import { hkdfSync, randomBytes } from 'node:crypto';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 import {
@@ -63,6 +63,7 @@ export function createFileSecretSource(opts: {
       return value.length > 0 ? value : undefined;
     },
     persist(name, value) {
+      mkdirSync(opts.dataDir, { recursive: true, mode: 0o700 });
       writeFileSync(resolve(opts.dataDir, name), value, { mode: 0o600 });
       return true;
     },

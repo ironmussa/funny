@@ -1,6 +1,6 @@
 # Plan: Portable server (Bun or Cloudflare Workers + Durable Objects)
 
-Status: **In progress** — Phase 1. Owner: TBD.
+Status: **In progress** — Phase 1 done (pending Railway deploy check); Phase 0 spike next. Owner: TBD.
 
 ## Goal
 
@@ -75,7 +75,7 @@ Throwaway prototype outside the main tree. Answers the unknowns that could kill 
 - [x] `SecretProvider` port: auth secret, encryption keyring, OAuth state key, runner auth secret. Bun implementation keeps today's env-then-`DATA_DIR` behavior. **Fix**: OAuth state HMAC key no longer random per process (needed for any multi-instance setup). _Done: `src/lib/server-secrets.ts` (`SecretSource`, auth secret, HKDF-derived OAuth state key) and the keyring as a `KeyringSource` in `@funny/shared/lib/crypto` (files by default, read-only `FUNNY_ENCRYPTION_KEYS`). `RUNNER_AUTH_SECRET` stays a plain env var checked at boot._
 - [x] DB: injected factory instead of the env-driven one; make the `db` Proxy resolve the connection from request context (ALS) so a host can supply one per request. Keep the Bun singleton path. _Done: `useDatabaseProvider` / `runWithDatabase` in `db/index.ts`. The lazy `require()` in `@funny/shared/db/connection` stays (it keeps `pg` and `bun:sqlite` from loading together); a Workers host builds its provider from `adapters/pg.ts` directly and must alias `bun:sqlite` out of its bundle (Phase 5)._
 - [x] Migrations runnable as a standalone command (`bun run db:migrate`); Bun host still auto-migrates at boot. _Done: `src/hosts/bun/migrate-cli.ts`._
-- [ ] Logger sink port (winston file transport on Bun; console/OTLP-over-fetch elsewhere). `data-dir.ts` stops creating directories on import.
+- [x] Logger sink port (winston file transport on Bun; console/OTLP-over-fetch elsewhere). `data-dir.ts` stops creating directories on import. _Done: `ensureDataDir()` and `attachFileLogTransport()`, both called by the Bun host at boot. Still to check in Phase 0/5: Winston and `@abbacchio/transport` under `nodejs_compat`._
 - [x] Client IP via a host-provided function (`getConnInfo` on Bun, `cf-connecting-ip` on Workers). _Done: `src/lib/client-ip.ts` reads the `IP` the host puts in the env. **Fixed a bug on the way:** `hono/bun` `getConnInfo` always threw with the server's env, so anonymous requests were never rate-limited by IP unless `TRUST_PROXY=true`._
 
 **Exit:** `bun run lint`, `bun run typecheck`, full server test suite green; deploy to Railway unchanged.

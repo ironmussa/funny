@@ -9,7 +9,8 @@ import { scheduleRepeating } from '@funny/shared/async';
 
 import { createServerApp } from '../../app.js';
 import { resolveCorsOrigins } from '../../lib/cors-origins.js';
-import { log } from '../../lib/logger.js';
+import { ensureDataDir } from '../../lib/data-dir.js';
+import { attachFileLogTransport, log } from '../../lib/logger.js';
 import { mountBunAssets } from './assets.js';
 
 export interface BunHostOptions {
@@ -18,6 +19,10 @@ export interface BunHostOptions {
 }
 
 export async function startBunServer(opts: BunHostOptions) {
+  // The data dir and the log file are host concerns: nothing creates them on import.
+  ensureDataDir();
+  attachFileLogTransport();
+
   // Ensure a RUNNER_AUTH_SECRET exists
   if (!process.env.RUNNER_AUTH_SECRET) {
     log.error('RUNNER_AUTH_SECRET is required. Set it in your .env file.', {

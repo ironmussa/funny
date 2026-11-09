@@ -18,7 +18,6 @@ import {
   canRewindCode,
   canSteerShare,
   isReadOnlyShare,
-  supportsCodeRewind,
 } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -193,14 +192,10 @@ export function ThreadConversation({
         }
         forkingMessageId={forkingMessageId}
         rewindDisabled={!canRewindCode(activeThread)}
-        rewindDisabledReason={
-          !supportsCodeRewind(activeThread)
-            ? t(
-                'thread.rewindNotSupportedProvider',
-                'Rewind is only available for Claude and Codex threads',
-              )
-            : t('thread.rewindNoCheckpoints', 'This thread was started without file checkpointing')
-        }
+        rewindDisabledReason={t(
+          'thread.rewindNoCheckpoints',
+          'No file checkpoint has been captured for this thread yet',
+        )}
         pagination={
           enablePagination
             ? {

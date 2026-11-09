@@ -255,9 +255,6 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       // binary is exec'd directly, so omit it in that case.
       ...(cli.kind === 'js' ? { executable: 'node' as const } : {}),
       env: sdkEnv,
-      // Track per-file checkpoints so the UI can offer "Rewind code to here" /
-      // "Fork conversation and rewind code". Required for query.rewindFiles().
-      enableFileCheckpointing: true,
       systemPrompt: this.options.systemPrefix
         ? {
             type: 'preset' as const,

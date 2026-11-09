@@ -5,37 +5,35 @@
  * @domain layer: application
  * @domain emits: (none — uses tm.updateThread which broadcasts via WS broker)
  *
- * Rewind a thread back to a specific user message:
- *   1. Resolve the SDK transcript UUID for the target DB message.
- *   2. Open a temporary `query({ resume })` and call `rewindFiles(uuid)`
- *      to restore on-disk files to their state right before that turn.
- *   3. Slice the transcript via `forkSession({ upToMessageId })` and adopt
- *      the new session as the thread's active session.
- *   4. Truncate the DB messages strictly after the anchor.
+ * Rewind a thread back to a specific user message, natively in funny for
+ * every provider:
+ *   1. Restore the Git checkpoint captured right before that user message
+ *      (`git-checkpoints.ts`, taken by the agent lifecycle before each turn).
+ *   2. Truncate the DB messages strictly after the anchor.
+ *   3. Drop the provider session: no SDK can resume at an earlier turn from
+ *      outside its own storage, so the next follow-up starts a fresh session
+ *      seeded with the truncated transcript (`contextRecoveryReason: 'rewound'`).
  *
- * The thread MUST be idle — a running runner owns the SDK process, so
- * spawning another with the same `resume` would race over the session
- * file. Callers are responsible for stopping the agent first.
+ * The thread MUST be idle — a running agent owns the worktree. Callers are
+ * responsible for stopping the agent first.
  *
  * Two operations:
  *   - `rewindCode()` — rewind in place on the source thread
- *   - `forkAndRewind()` — fork the conversation first, then rewind the
- *     fork. The source thread is left untouched.
+ *   - `forkAndRewind()` — fork the conversation first, then restore the
+ *     checkpoint for the fork. The source thread's transcript is left
+ *     untouched; its files are shared with the fork (same worktree).
  */
 
-import { forkSession, query } from '@anthropic-ai/claude-agent-sdk';
-import type { Query, RewindFilesResult } from '@anthropic-ai/claude-agent-sdk';
-import { resolveSDKCli } from '@funny/core/agents';
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric, startSpan } from '../../lib/telemetry.js';
-import { restoreCodexCheckpoint } from '../codex-git-checkpoints.js';
+import { restoreGitCheckpoint, type GitCheckpointRestoreResult } from '../git-checkpoints.js';
 import { getServices } from '../service-registry.js';
+import { canDoGitOps } from '../thread-context.js';
 import * as tm from '../thread-manager.js';
 import { forkThread } from './fork.js';
 import { ThreadServiceError } from './helpers.js';
-import { resolveSdkUserMessageUuid } from './sdk-session.js';
 
 export interface RewindCodeParams {
   threadId: string;
@@ -45,8 +43,9 @@ export interface RewindCodeParams {
 
 export interface RewindCodeResult {
   threadId: string;
-  newSessionId: string | null;
-  rewind: RewindFilesResult;
+  /** Always null: rewinding drops the provider session (see module doc). */
+  newSessionId: null;
+  rewind: GitCheckpointRestoreResult;
   deletedMessageCount: number;
 }
 
@@ -59,51 +58,7 @@ export interface ForkAndRewindParams {
 
 export interface ForkAndRewindResult {
   thread: Record<string, any>;
-  rewind: RewindFilesResult;
-}
-
-// ── Temp query helper ───────────────────────────────────────────────
-
-/**
- * Spawn a short-lived SDK Query against an existing session purely to
- * invoke `rewindFiles()`. The CLI is started with a never-yielding
- * prompt so it doesn't burn a model turn, then aborted.
- */
-async function withResumedQueryForRewind<T>(
-  sessionId: string,
-  cwd: string,
-  fn: (q: Query) => Promise<T>,
-): Promise<T> {
-  const controller = new AbortController();
-  async function* emptyPrompt(): AsyncGenerator<any, void, unknown> {
-    // Never yield. The CLI control channel still comes up, but no turn runs.
-  }
-  const cli = resolveSDKCli();
-  const q = query({
-    prompt: emptyPrompt(),
-    options: {
-      resume: sessionId,
-      enableFileCheckpointing: true,
-      cwd,
-      pathToClaudeCodeExecutable: cli.path,
-      abortController: controller,
-      ...(cli.kind === 'js' ? { executable: 'node' as const } : {}),
-      maxTurns: 0,
-    } as any,
-  });
-  try {
-    return await fn(q);
-  } finally {
-    try {
-      (q as any).close?.();
-    } catch (err) {
-      log.warn('rewind: query.close() threw', {
-        namespace: 'thread-rewind',
-        error: (err as Error)?.message,
-      });
-    }
-    controller.abort();
-  }
+  rewind: GitCheckpointRestoreResult;
 }
 
 // ── Shared validation ───────────────────────────────────────────────
@@ -112,7 +67,6 @@ interface ResolvedAnchor {
   sourceThread: Record<string, any>;
   provider: string;
   cwd: string;
-  uuid?: string;
   anchorIdx: number;
   anchorTimestamp: string;
 }
@@ -127,17 +81,14 @@ async function resolveAnchor(params: {
     throw new ThreadServiceError('Thread not found', 404);
   }
   const provider = (source as any).provider ?? 'claude';
-  if (provider !== 'claude' && provider !== 'codex') {
-    throw new ThreadServiceError('Rewind is only available for Claude and Codex threads', 400);
+  if (!canDoGitOps({ isScratch: !!(source as any).isScratch })) {
+    throw new ThreadServiceError('Rewind is unavailable for scratch threads', 400);
   }
   if (!(source as any).fileCheckpointingEnabled) {
     throw new ThreadServiceError(
       'This thread was started without file checkpointing. Rewind is unavailable.',
       400,
     );
-  }
-  if (provider === 'claude' && !(source as any).sessionId) {
-    throw new ThreadServiceError('Thread has no session to rewind', 400);
   }
   if ((source as any).status === 'running') {
     throw new ThreadServiceError('Stop the agent before rewinding', 409);
@@ -159,40 +110,27 @@ async function resolveAnchor(params: {
   if (anchor.role !== 'user') {
     throw new ThreadServiceError('Can only rewind to a user message', 400);
   }
-  let uuid: string | undefined;
-  if (provider === 'claude') {
-    const userMsgIndex =
-      dbMessages.slice(0, anchorIdx + 1).filter((m) => m.role === 'user').length - 1;
-    uuid = (
-      await resolveSdkUserMessageUuid(
-        { sessionId: (source as any).sessionId, cwd, userMsgIndex },
-        (code, detail) => {
-          log.error('rewind: failed to resolve SDK uuid', {
-            namespace: 'thread-rewind',
-            threadId: source.id,
-            sessionId: (source as any).sessionId,
-            code,
-            detail,
-          });
-          throw new ThreadServiceError(
-            code === 'transcript_read_failed'
-              ? 'Failed to read agent session transcript'
-              : 'Could not locate matching message in agent session transcript',
-            500,
-          );
-        },
-      )
-    ).uuid;
-  }
 
   return {
     sourceThread: source as any,
     provider,
     cwd,
-    uuid,
     anchorIdx,
     anchorTimestamp: anchor.timestamp,
   };
+}
+
+/** Restore the checkpoint captured for `messageId`, or throw a 400 when there is none. */
+async function restoreCheckpointOrThrow(params: {
+  threadId: string;
+  messageId: string;
+  cwd: string;
+}): Promise<GitCheckpointRestoreResult> {
+  const rewindResult = await restoreGitCheckpoint(params);
+  if (!rewindResult.canRewind) {
+    throw new ThreadServiceError(rewindResult.error ?? 'No Git checkpoint available', 400);
+  }
+  return rewindResult;
 }
 
 // ── Public API ──────────────────────────────────────────────────────
@@ -211,94 +149,41 @@ async function rewindCodeImpl(params: RewindCodeParams): Promise<RewindCodeResul
   });
   try {
     const anchor = await resolveAnchor(params);
-    if (anchor.provider === 'codex') {
-      const rewindResult = await restoreCodexCheckpoint({
-        threadId: params.threadId,
-        messageId: params.messageId,
-        cwd: anchor.cwd,
-      });
-      if (!rewindResult.canRewind) {
-        span.end('error', rewindResult.error ?? 'cannot_rewind');
-        throw new ThreadServiceError(rewindResult.error ?? 'No Git checkpoint available', 400);
-      }
 
-      const deletedMessageCount = await tm.deleteMessagesAfter(params.threadId, params.messageId);
-      // Codex cannot fork/resume a session at an earlier turn. The next
-      // follow-up starts a fresh session with the truncated DB transcript.
-      await tm.updateThread(params.threadId, {
-        sessionId: null,
-        contextRecoveryReason: 'rewound',
-        fileCheckpointingEnabled: 1,
-        status: 'idle',
-      });
-
-      log.info('Codex thread rewound from Git checkpoint', {
-        namespace: 'thread-rewind',
-        threadId: params.threadId,
-        filesChanged: rewindResult.filesChanged.length,
-        deletedMessageCount,
-      });
-      metric('threads.rewound', 1, { type: 'sum' });
-      span.end('ok');
-      return {
-        threadId: params.threadId,
-        newSessionId: null,
-        rewind: rewindResult,
-        deletedMessageCount,
-      };
-    }
-    const sourceSessionId = (anchor.sourceThread as any).sessionId as string;
-
-    // 1. Restore files via a temp query.
-    const rewindResult = await withResumedQueryForRewind<RewindFilesResult>(
-      sourceSessionId,
-      anchor.cwd,
-      (q) => (q as any).rewindFiles(anchor.uuid!) as Promise<RewindFilesResult>,
-    );
-    if (!rewindResult.canRewind) {
-      span.end('error', rewindResult.error ?? 'cannot_rewind');
-      throw new ThreadServiceError(
-        rewindResult.error ?? 'No checkpoint available for this message',
-        400,
-      );
-    }
-
-    // 2. Slice the SDK transcript at the anchor; adopt the new session.
-    const fork = await forkSession(sourceSessionId, {
-      upToMessageId: anchor.uuid,
-      dir: anchor.cwd,
+    // 1. Restore files from the checkpoint taken before the anchor turn.
+    const rewindResult = await restoreCheckpointOrThrow({
+      threadId: params.threadId,
+      messageId: params.messageId,
+      cwd: anchor.cwd,
     });
 
-    // 3. Truncate DB transcript and update thread.
+    // 2. Truncate the DB transcript and drop the provider session. The next
+    //    follow-up starts a fresh session seeded with the truncated transcript.
     const deletedMessageCount = await tm.deleteMessagesAfter(params.threadId, params.messageId);
     await tm.updateThread(params.threadId, {
-      sessionId: fork.sessionId,
-      // Forks lose checkpoint history — re-enable for the new session so
-      // future edits are tracked again.
+      sessionId: null,
+      contextRecoveryReason: 'rewound',
       fileCheckpointingEnabled: 1,
       status: 'idle',
     });
 
-    log.info('Thread code rewound', {
+    log.info('Thread rewound from Git checkpoint', {
       namespace: 'thread-rewind',
       threadId: params.threadId,
-      newSessionId: fork.sessionId,
-      filesChanged: rewindResult.filesChanged?.length ?? 0,
+      provider: anchor.provider,
+      filesChanged: rewindResult.filesChanged.length,
       deletedMessageCount,
     });
     metric('threads.rewound', 1, { type: 'sum' });
     span.end('ok');
-
     return {
       threadId: params.threadId,
-      newSessionId: fork.sessionId,
+      newSessionId: null,
       rewind: rewindResult,
       deletedMessageCount,
     };
   } catch (err) {
-    if (!(err instanceof ThreadServiceError)) {
-      span.end('error', (err as Error)?.message ?? 'unknown');
-    }
+    span.end('error', (err as Error)?.message ?? 'unknown');
     throw err;
   }
 }
@@ -324,12 +209,6 @@ async function forkAndRewindImpl(params: ForkAndRewindParams): Promise<ForkAndRe
       messageId: params.messageId,
       userId: params.userId,
     });
-    if (anchor.provider !== 'claude') {
-      throw new ThreadServiceError(
-        'Fork and rewind is not available for Codex because a fork shares the current worktree.',
-        400,
-      );
-    }
 
     const forkResult = await forkThread({
       sourceThreadId: params.sourceThreadId,
@@ -339,39 +218,31 @@ async function forkAndRewindImpl(params: ForkAndRewindParams): Promise<ForkAndRe
     });
     if (forkResult.isErr()) throw forkResult.error;
     const newThread = forkResult.value;
-    const newSessionId = (newThread as any).sessionId as string | null;
     const newCwd = (newThread as any).worktreePath ?? anchor.cwd;
-    if (!newSessionId) {
-      throw new ThreadServiceError('Forked thread has no session to rewind', 500);
-    }
 
-    const rewindResult = await withResumedQueryForRewind<RewindFilesResult>(
-      newSessionId,
-      newCwd,
-      (q) => (q as any).rewindFiles(anchor.uuid!) as Promise<RewindFilesResult>,
-    );
-    if (!rewindResult.canRewind) {
-      log.warn('fork_and_rewind: rewindFiles returned canRewind=false', {
-        namespace: 'thread-rewind',
-        forkedThreadId: (newThread as any).id,
-        error: rewindResult.error,
-      });
-    }
+    // The fork re-points the source's checkpoint refs at its copied messages,
+    // but the trees are identical, so restore from the source's checkpoint:
+    // it is the one `resolveAnchor` validated and it exists even if copying
+    // was skipped.
+    const rewindResult = await restoreCheckpointOrThrow({
+      threadId: params.sourceThreadId,
+      messageId: params.messageId,
+      cwd: newCwd,
+    });
 
     log.info('Thread forked and code rewound', {
       namespace: 'thread-rewind',
       sourceThreadId: params.sourceThreadId,
       newThreadId: (newThread as any).id,
-      filesChanged: rewindResult.filesChanged?.length ?? 0,
+      provider: anchor.provider,
+      filesChanged: rewindResult.filesChanged.length,
     });
     metric('threads.fork_rewound', 1, { type: 'sum' });
     span.end('ok');
 
     return { thread: newThread, rewind: rewindResult };
   } catch (err) {
-    if (!(err instanceof ThreadServiceError)) {
-      span.end('error', (err as Error)?.message ?? 'unknown');
-    }
+    span.end('error', (err as Error)?.message ?? 'unknown');
     throw err;
   }
 }

@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
     insertMessage: vi.fn(async () => 'msg-new'),
     insertToolCall: vi.fn(async () => 'tc-new'),
     updateToolCallOutput: vi.fn(async () => undefined),
+    updateThread: vi.fn(async () => undefined),
   },
   projects: {
     resolveProjectPath: vi.fn(),
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
   },
   getSessionMessages: vi.fn(),
   forkSession: vi.fn(),
-  forkAcpSession: vi.fn(),
+  copyGitCheckpoint: vi.fn(async () => true),
 }));
 
 vi.mock('nanoid', () => ({ nanoid: () => 'fork-thread-id' }));
@@ -41,13 +42,17 @@ vi.mock('../../services/thread-event-bus.js', () => ({
   threadEventBus: mocks.threadEventBus,
 }));
 
+vi.mock('../../services/git-checkpoints.js', () => ({
+  copyGitCheckpoint: mocks.copyGitCheckpoint,
+}));
+
+vi.mock('../../services/git-checkpoints.js', () => ({
+  copyGitCheckpoint: mocks.copyGitCheckpoint,
+}));
+
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
   getSessionMessages: mocks.getSessionMessages,
   forkSession: mocks.forkSession,
-}));
-
-vi.mock('@funny/core/agents', () => ({
-  forkAcpSession: mocks.forkAcpSession,
 }));
 
 import { ok, err } from 'neverthrow';
@@ -63,6 +68,7 @@ const sourceThread = {
   mode: 'local',
   runtime: 'local',
   provider: 'claude',
+  fileCheckpointingEnabled: 1,
   permissionMode: 'autoEdit',
   model: 'opus',
   branch: 'main',
@@ -112,7 +118,7 @@ describe('forkThread', () => {
     }
   });
 
-  test('returns 400 when thread has no session', async () => {
+  test('forks a thread that has no provider session yet', async () => {
     mocks.tm.getThread.mockResolvedValue({ ...sourceThread, sessionId: null });
 
     const result = await forkThread({
@@ -121,11 +127,10 @@ describe('forkThread', () => {
       userId: 'u-1',
     });
 
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.statusCode).toBe(400);
-      expect(result.error.message).toContain('no session');
-    }
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.createThread).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: null, contextRecoveryReason: 'forked' }),
+    );
   });
 
   test('returns 400 when fork point is not a user message', async () => {
@@ -157,12 +162,10 @@ describe('forkThread', () => {
     }
   });
 
-  test('forks claude session and copies message prefix', async () => {
-    mocks.getSessionMessages.mockResolvedValue([
-      { type: 'user', uuid: 'sdk-u-1', message: { content: 'Hello' } },
-    ]);
-    mocks.forkSession.mockResolvedValue({ sessionId: 'sess-fork' });
-
+  test('forks a claude thread natively without touching the SDK transcript', async () => {
+    // Regression: the SDK looked for the transcript under the runtime's own
+    // CLAUDE_CONFIG_DIR, not the thread profile's, and failed with
+    // "Could not locate matching message in agent session transcript".
     const result = await forkThread({
       sourceThreadId: 'src-1',
       messageId: 'm-1',
@@ -171,24 +174,69 @@ describe('forkThread', () => {
     });
 
     expect(result.isOk()).toBe(true);
-    expect(mocks.forkSession).toHaveBeenCalledWith(
-      'sess-1',
-      expect.objectContaining({ upToMessageId: 'sdk-u-1', title: 'Branch A' }),
-    );
+    expect(mocks.getSessionMessages).not.toHaveBeenCalled();
+    expect(mocks.forkSession).not.toHaveBeenCalled();
     expect(mocks.tm.createThread).toHaveBeenCalledWith(
       expect.objectContaining({
         id: 'fork-thread-id',
-        sessionId: 'sess-fork',
+        sessionId: null,
+        contextRecoveryReason: 'forked',
         parentThreadId: 'src-1',
         title: 'Branch A',
         status: 'idle',
       }),
     );
     expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(1);
+    // The fork inherits the source's Git checkpoint so it can rewind to m-1.
+    expect(mocks.copyGitCheckpoint).toHaveBeenCalledWith({
+      cwd: '/repo',
+      from: { threadId: 'src-1', messageId: 'm-1' },
+      to: { threadId: 'fork-thread-id', messageId: 'msg-new' },
+    });
+    expect(mocks.tm.updateThread).toHaveBeenCalledWith('fork-thread-id', {
+      fileCheckpointingEnabled: 1,
+    });
+    if (result.isOk()) expect(result.value.fileCheckpointingEnabled).toBe(1);
     expect(mocks.threadEventBus.emit).toHaveBeenCalledWith(
       'thread:created',
       expect.objectContaining({ threadId: 'fork-thread-id' }),
     );
+  });
+
+  test('re-points the source Git checkpoints at the copied user messages', async () => {
+    mocks.tm.getThread.mockResolvedValue({ ...sourceThread, fileCheckpointingEnabled: 1 });
+    mocks.tm.insertMessage.mockResolvedValueOnce('new-user-1');
+
+    const result = await forkThread({
+      sourceThreadId: 'src-1',
+      messageId: 'm-1',
+      userId: 'u-1',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.copyGitCheckpoint).toHaveBeenCalledWith({
+      cwd: '/repo',
+      from: { threadId: 'src-1', messageId: 'm-1' },
+      to: { threadId: 'fork-thread-id', messageId: 'new-user-1' },
+    });
+    expect(mocks.tm.updateThread).toHaveBeenCalledWith('fork-thread-id', {
+      fileCheckpointingEnabled: 1,
+    });
+    if (result.isOk()) expect(result.value.fileCheckpointingEnabled).toBe(1);
+  });
+
+  test('keeps rewind disabled on the fork when no checkpoint could be copied', async () => {
+    mocks.tm.getThread.mockResolvedValue({ ...sourceThread, fileCheckpointingEnabled: 1 });
+    mocks.copyGitCheckpoint.mockRejectedValueOnce(new Error('not a git repo'));
+
+    const result = await forkThread({
+      sourceThreadId: 'src-1',
+      messageId: 'm-1',
+      userId: 'u-1',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.updateThread).not.toHaveBeenCalled();
   });
 
   test('returns 404 when fork message id is missing', async () => {
@@ -205,63 +253,7 @@ describe('forkThread', () => {
     }
   });
 
-  test('returns 500 when SDK transcript cannot be read', async () => {
-    mocks.getSessionMessages.mockRejectedValue(new Error('ENOENT'));
-
-    const result = await forkThread({
-      sourceThreadId: 'src-1',
-      messageId: 'm-1',
-      userId: 'u-1',
-    });
-
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.statusCode).toBe(500);
-      expect(result.error.message).toContain('transcript');
-    }
-  });
-
-  test('returns 500 when SDK transcript has no matching user message', async () => {
-    mocks.getSessionMessages.mockResolvedValue([
-      { type: 'assistant', uuid: 'sdk-a-1', message: { content: 'Hi' } },
-    ]);
-
-    const result = await forkThread({
-      sourceThreadId: 'src-1',
-      messageId: 'm-1',
-      userId: 'u-1',
-    });
-
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.statusCode).toBe(500);
-    }
-  });
-
-  test('returns 500 when forkSession throws', async () => {
-    mocks.getSessionMessages.mockResolvedValue([
-      { type: 'user', uuid: 'sdk-u-1', message: { content: 'Hello' } },
-    ]);
-    mocks.forkSession.mockRejectedValue(new Error('fork failed'));
-
-    const result = await forkThread({
-      sourceThreadId: 'src-1',
-      messageId: 'm-1',
-      userId: 'u-1',
-    });
-
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.statusCode).toBe(500);
-      expect(result.error.message).toContain('Failed to fork agent session');
-    }
-  });
-
   test('copies nested tool calls with remapped parent ids', async () => {
-    mocks.getSessionMessages.mockResolvedValue([
-      { type: 'user', uuid: 'sdk-u-1', message: { content: 'Hello' } },
-    ]);
-    mocks.forkSession.mockResolvedValue({ sessionId: 'sess-fork' });
     mocks.tm.insertMessage.mockResolvedValueOnce('new-msg-1');
     mocks.tm.insertToolCall
       .mockResolvedValueOnce('new-tc-parent')
@@ -307,69 +299,32 @@ describe('forkThread', () => {
     expect(mocks.tm.updateToolCallOutput).toHaveBeenCalledTimes(2);
   });
 
-  test('marks a Codex SDK fork for context recovery instead of using ACP', async () => {
-    mocks.tm.getThread.mockResolvedValue({ ...sourceThread, provider: 'codex' });
+  test.each(['codex', 'gemini', 'pi', 'custom'])(
+    'forks a %s thread natively and marks it for context recovery',
+    async (provider) => {
+      mocks.tm.getThread.mockResolvedValue({ ...sourceThread, provider });
+      // No checkpoint exists for the source message: the fork stays without
+      // rewind support instead of pointing at a ref that is not there.
+      mocks.copyGitCheckpoint.mockResolvedValueOnce(false);
 
-    const result = await forkThread({
-      sourceThreadId: 'src-1',
-      messageId: 'm-1',
-      userId: 'u-1',
-    });
+      const result = await forkThread({
+        sourceThreadId: 'src-1',
+        messageId: 'm-1',
+        userId: 'u-1',
+      });
 
-    expect(result.isOk()).toBe(true);
-    expect(mocks.forkAcpSession).not.toHaveBeenCalled();
-    expect(mocks.getSessionMessages).not.toHaveBeenCalled();
-    expect(mocks.tm.createThread).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: null,
-        contextRecoveryReason: 'forked',
-        fileCheckpointingEnabled: 0,
-      }),
-    );
-  });
-
-  test('falls back to DB-only fork when ACP fork is unavailable', async () => {
-    mocks.tm.getThread.mockResolvedValue({ ...sourceThread, provider: 'gemini' });
-    mocks.forkAcpSession.mockResolvedValue({
-      ok: false,
-      reason: 'unsupported',
-      message: 'not advertised',
-    });
-
-    const result = await forkThread({
-      sourceThreadId: 'src-1',
-      messageId: 'm-1',
-      userId: 'u-1',
-    });
-
-    expect(result.isOk()).toBe(true);
-    expect(mocks.tm.createThread).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: null,
-        contextRecoveryReason: 'forked',
-        fileCheckpointingEnabled: 0,
-      }),
-    );
-  });
-
-  test('copies DB messages only for providers without native fork', async () => {
-    mocks.tm.getThread.mockResolvedValue({ ...sourceThread, provider: 'custom' });
-
-    const result = await forkThread({
-      sourceThreadId: 'src-1',
-      messageId: 'm-1',
-      userId: 'u-1',
-    });
-
-    expect(result.isOk()).toBe(true);
-    expect(mocks.getSessionMessages).not.toHaveBeenCalled();
-    expect(mocks.forkAcpSession).not.toHaveBeenCalled();
-    expect(mocks.tm.createThread).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: null,
-        contextRecoveryReason: 'forked',
-        title: 'Fork: Original',
-      }),
-    );
-  });
+      expect(result.isOk()).toBe(true);
+      expect(mocks.getSessionMessages).not.toHaveBeenCalled();
+      expect(mocks.tm.updateThread).not.toHaveBeenCalled();
+      expect(mocks.tm.createThread).toHaveBeenCalledWith(
+        expect.objectContaining({
+          provider,
+          sessionId: null,
+          contextRecoveryReason: 'forked',
+          fileCheckpointingEnabled: 0,
+          title: 'Fork: Original',
+        }),
+      );
+    },
+  );
 });

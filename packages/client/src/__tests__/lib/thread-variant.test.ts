@@ -17,7 +17,6 @@ import {
   getSidebarBucket,
   getThreadRoute,
   isScratch,
-  supportsCodeRewind,
 } from '@/lib/thread-variant';
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
@@ -87,26 +86,20 @@ describe('canLoadGitHistory', () => {
   });
 });
 
-describe('Codex rewind capabilities', () => {
-  test('allows a checkpointed Codex thread to rewind but not fork and rewind', () => {
-    const thread = makeThread({ provider: 'codex', fileCheckpointingEnabled: true });
+describe('rewind capabilities', () => {
+  test.each(['claude', 'codex', 'gemini'] as const)(
+    'allows a checkpointed %s thread to rewind and fork-and-rewind',
+    (provider) => {
+      const thread = makeThread({ provider, fileCheckpointingEnabled: true });
 
-    expect(supportsCodeRewind(thread)).toBe(true);
-    expect(canRewindCode(thread)).toBe(true);
-    expect(canForkAndRewindCode(thread)).toBe(false);
-  });
+      expect(canRewindCode(thread)).toBe(true);
+      expect(canForkAndRewindCode(thread)).toBe(true);
+    },
+  );
 
-  test('requires a checkpoint and keeps Claude fork-and-rewind support', () => {
-    expect(canRewindCode(makeThread({ provider: 'codex', fileCheckpointingEnabled: false }))).toBe(
-      false,
-    );
-    expect(canForkAndRewindCode(makeThread({ provider: 'claude' }))).toBe(true);
-  });
+  test('requires a captured checkpoint', () => {
+    const thread = makeThread({ provider: 'claude', fileCheckpointingEnabled: false });
 
-  test('does not support rewind for other providers', () => {
-    const thread = makeThread({ provider: 'gemini', fileCheckpointingEnabled: true });
-
-    expect(supportsCodeRewind(thread)).toBe(false);
     expect(canRewindCode(thread)).toBe(false);
     expect(canForkAndRewindCode(thread)).toBe(false);
   });

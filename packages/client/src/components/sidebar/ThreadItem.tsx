@@ -444,7 +444,7 @@ export const ThreadItem = memo(function ThreadItem({
           gitStatus={effectiveGitStatus}
         />
 
-        {/* Row 2: Powerline (project → branch) + Git status + Snippet */}
+        {/* Row 2: Powerline (project → branch) + Snippet */}
         <ThreadItemMetaRow
           thread={thread}
           subtitle={subtitle}

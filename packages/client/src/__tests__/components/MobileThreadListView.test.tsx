@@ -116,7 +116,7 @@ test('shows desktop metadata on mobile and updates the git state when git status
   );
   // The row shows the git state as an icon with the dirty-file count; the
   // +/- line stats live in its tooltip.
-  expect(screen.getByTestId('thread-git-state-thread-1')).toHaveTextContent('2');
+  expect(screen.getByTestId('thread-git-dirty-thread-1')).toHaveTextContent('2');
   fireEvent.click(screen.getByTestId('thread-item-thread-1'));
   expect(onSelectThread).toHaveBeenCalledWith('thread-1');
   expect(row.querySelector('button button')).toBeNull();

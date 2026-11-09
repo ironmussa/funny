@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { ThreadItem } from '@/components/sidebar/ThreadItem';
 import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
+import { useThreadActiveToolStore } from '@/stores/thread-active-tool-store';
 
 import { mockT } from '../../helpers/mock-i18n';
 import { renderWithProviders } from '../../helpers/render';
@@ -42,6 +43,25 @@ describe('ThreadItem', () => {
 
     expect(screen.getByTestId('thread-item-scratch-1')).toHaveTextContent('Launching...');
     expect(screen.queryByText('Ready to Launch')).not.toBeInTheDocument();
+  });
+
+  test('shows the tool a running thread is executing instead of launching', () => {
+    useThreadActiveToolStore
+      .getState()
+      .setActive('scratch-1', { name: 'Bash', input: { command: 'grep -rn sandbox packages' } });
+    renderWithProviders(
+      <ThreadItem
+        thread={makeThread({ status: 'running' })}
+        projectPath=""
+        isSelected={false}
+        onSelect={vi.fn()}
+      />,
+    );
+
+    const row = screen.getByTestId('thread-item-scratch-1');
+    expect(row).toHaveTextContent('grep -rn sandbox packages');
+    expect(row).not.toHaveTextContent('Launching...');
+    useThreadActiveToolStore.getState().clear('scratch-1');
   });
 
   test('renders the pin control beside the thread selection button', () => {
@@ -116,7 +136,7 @@ describe('ThreadItem', () => {
       />,
     );
 
-    expect(screen.getByTestId('thread-git-state-t-1')).toHaveTextContent('21');
+    expect(screen.getByTestId('thread-git-dirty-t-1')).toHaveTextContent('21');
     expect(screen.queryByText('+1218')).not.toBeInTheDocument();
   });
 
@@ -142,7 +162,40 @@ describe('ThreadItem', () => {
       />,
     );
 
-    expect(screen.queryByTestId('thread-git-state-t-2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('thread-git-dirty-t-2')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('thread-git-sync-t-2')).not.toBeInTheDocument();
+  });
+
+  test('shows uncommitted files and unpushed commits as separate icons', () => {
+    renderWithProviders(
+      <ThreadItem
+        thread={makeThread({
+          id: 't-4',
+          projectId: 'p-1',
+          isScratch: false,
+          status: 'idle',
+          branch: 'feat/y',
+        })}
+        projectPath="/repo"
+        isSelected={false}
+        onSelect={vi.fn()}
+        gitStatus={{
+          threadId: 't-4',
+          branchKey: 'p-1:feat/y',
+          state: 'dirty',
+          dirtyFileCount: 2,
+          unpushedCommitCount: 3,
+          unpulledCommitCount: 0,
+          hasRemoteBranch: true,
+          isMergedIntoBase: false,
+          linesAdded: 10,
+          linesDeleted: 4,
+        }}
+      />,
+    );
+
+    expect(screen.getByTestId('thread-git-dirty-t-4')).toHaveTextContent('2');
+    expect(screen.getByTestId('thread-git-sync-t-4')).toHaveTextContent('3');
   });
 
   test('shows the PR badge on the title row, not in the powerline', () => {

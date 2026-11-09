@@ -220,6 +220,7 @@
     "prClosed": "PR #{{number}} (cerrado)",
     "createdBy": "Creado por {{creator}}",
     "readyToLaunch": "Listo para lanzar",
+    "launching": "Iniciando...",
     "send": "Enviar",
     "stop": "Detener",
     "placeholder": "Escribe tu mensaje...",

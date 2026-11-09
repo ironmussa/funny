@@ -219,6 +219,7 @@
     "prClosed": "PR #{{number}} (fechado)",
     "createdBy": "Criado por {{creator}}",
     "readyToLaunch": "Pronto para lançar",
+    "launching": "Iniciando...",
     "send": "Enviar",
     "stop": "Parar",
     "placeholder": "Digite sua mensagem...",

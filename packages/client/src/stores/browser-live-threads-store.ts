@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+import { omitThread } from './by-thread';
+
 interface BrowserLiveThreadsState {
   /** Threads with a live runner browser session, keyed by thread id. */
   byThread: Record<string, true>;
@@ -19,9 +21,8 @@ export const useBrowserLiveThreadsStore = create<BrowserLiveThreadsState>((set) 
     set((s) => (s.byThread[threadId] ? s : { byThread: { ...s.byThread, [threadId]: true } })),
   markClosed: (threadId) =>
     set((s) => {
-      if (!s.byThread[threadId]) return s;
-      const { [threadId]: _removed, ...rest } = s.byThread;
-      return { byThread: rest };
+      const byThread = omitThread(s.byThread, threadId);
+      return byThread === s.byThread ? s : { byThread };
     }),
 }));
 

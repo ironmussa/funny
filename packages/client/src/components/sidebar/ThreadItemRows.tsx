@@ -1,11 +1,12 @@
 import type { GitStatusInfo, Thread } from '@funny/shared';
-import { Bot, Globe, NotebookPen } from 'lucide-react';
+import { Bot, Globe, NotebookPen, type LucideIcon } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PRBadge } from '@/components/PRBadge';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
+import { getSummary, getToolLabel } from '@/components/tool-cards/format-utils';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAgentTemplate } from '@/data/templates/hooks';
@@ -13,6 +14,7 @@ import { gitSyncStateConfig } from '@/lib/thread-utils';
 import { canShowPowerline, isScratch } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useThreadHasLiveBrowser } from '@/stores/browser-live-threads-store';
+import { useThreadActiveTool, type ActiveTool } from '@/stores/thread-active-tool-store';
 
 // ── Row 1: title + badges ────────────────────────────────────────────
 
@@ -116,6 +118,7 @@ export function ThreadItemTitleRow({
           data-testid={`thread-pr-badge-${thread.id}`}
         />
       ) : null}
+      {gitStatus && <GitStateIcons threadId={thread.id} gitStatus={gitStatus} />}
       {/* External creator icon */}
       <CreatedByIcon createdBy={thread.createdBy} />
       {/* Remote / sandbox runtime badge */}
@@ -126,93 +129,155 @@ export function ThreadItemTitleRow({
   );
 }
 
-// ── Row 2: powerline + git status + snippet ──────────────────────────
+// ── Git state icons (shown in row 1) ─────────────────────────────────
 
-function hasGitDiffStats(gitStatus?: GitStatusInfo): boolean {
-  if (!gitStatus || gitStatus.state === 'clean') return false;
-  return gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0 || gitStatus.dirtyFileCount > 0;
-}
+type BranchSyncState = 'unpushed' | 'pushed' | 'merged';
 
 /**
- * Git state of the thread as one icon (dirty → file-diff + file count, unpushed →
- * blue commit, pushed → green PR arrow, merged → purple merge). The file/line
- * counts live in the tooltip instead of an always-visible chip, so rows that
- * share a working tree don't repeat the same numbers.
+ * Where the branch stands against the remote, independent of the working tree:
+ * a thread can have uncommitted files AND unpushed commits at the same time,
+ * which the single derived `state` collapses into `dirty`.
  */
-function GitStateIcon({ threadId, gitStatus }: { threadId: string; gitStatus: GitStatusInfo }) {
-  const { t } = useTranslation();
-  // Clean trees show nothing; a PR badge already conveys pushed/merged.
+function resolveBranchSyncState(gitStatus: GitStatusInfo): BranchSyncState | null {
   if (gitStatus.state === 'clean') return null;
-  if (gitStatus.prNumber && (gitStatus.state === 'pushed' || gitStatus.state === 'merged')) {
-    return null;
-  }
-  const cfg = gitSyncStateConfig[gitStatus.state];
-  const Icon = cfg.icon;
-  const hasStats = hasGitDiffStats(gitStatus);
+  if (gitStatus.unpushedCommitCount > 0) return 'unpushed';
+  // A PR badge already conveys pushed/merged.
+  if (gitStatus.prNumber) return null;
+  if (gitStatus.isMergedIntoBase) return 'merged';
+  if (gitStatus.hasRemoteBranch) return 'pushed';
+  return null;
+}
+
+function GitIconChip({
+  testId,
+  className,
+  icon: Icon,
+  count,
+  tooltip,
+}: {
+  testId: string;
+  className: string;
+  icon: LucideIcon;
+  count?: number;
+  tooltip: ReactNode;
+}) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className={cn(
-            'ml-auto flex h-3.5 shrink-0 items-center gap-0.5 text-xs leading-none',
-            cfg.className,
-          )}
-          data-testid={`thread-git-state-${threadId}`}
+          className={cn('flex shrink-0 items-center gap-0.5 text-xs leading-none', className)}
+          data-testid={testId}
         >
-          <Icon className="icon-xs" />
-          {gitStatus.state === 'dirty' && gitStatus.dirtyFileCount > 0 && (
-            <span className="font-mono">{gitStatus.dirtyFileCount}</span>
-          )}
+          <Icon className="icon-sm" />
+          {count ? <span className="font-mono">{count}</span> : null}
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
-        <div>{t(cfg.labelKey)}</div>
-        {hasStats && (
-          <div className="font-mono">
-            {gitStatus.dirtyFileCount > 0 && (
-              <span className="text-muted-foreground">
-                {t('gitStats.dirtyFiles', { count: gitStatus.dirtyFileCount })}
-                {' · '}
-              </span>
-            )}
-            <span className="text-diff-added">+{gitStatus.linesAdded}</span>{' '}
-            <span className="text-diff-removed">-{gitStatus.linesDeleted}</span>
-          </div>
-        )}
+        {tooltip}
       </TooltipContent>
     </Tooltip>
   );
 }
 
-type SnippetKind = 'highlight' | 'text' | 'launching' | 'backlog' | null;
+/**
+ * Two independent git indicators: the working tree (uncommitted files, with
+ * the +/- line counts in the tooltip so rows sharing a working tree don't
+ * repeat the same numbers) and the branch against the remote (unpushed →
+ * blue commit + count, pushed → green PR arrow, merged → purple merge).
+ */
+function GitStateIcons({ threadId, gitStatus }: { threadId: string; gitStatus: GitStatusInfo }) {
+  const { t } = useTranslation();
+  const dirty = gitStatus.dirtyFileCount > 0;
+  const syncState = resolveBranchSyncState(gitStatus);
+  const dirtyCfg = gitSyncStateConfig.dirty;
+  const syncCfg = syncState ? gitSyncStateConfig[syncState] : null;
+  return (
+    <>
+      {dirty && (
+        <GitIconChip
+          testId={`thread-git-dirty-${threadId}`}
+          className={dirtyCfg.className}
+          icon={dirtyCfg.icon}
+          count={gitStatus.dirtyFileCount}
+          tooltip={
+            <>
+              <div>{t(dirtyCfg.labelKey)}</div>
+              <div className="font-mono">
+                <span className="text-muted-foreground">
+                  {t('gitStats.dirtyFiles', { count: gitStatus.dirtyFileCount })}
+                  {' · '}
+                </span>
+                <span className="text-diff-added">+{gitStatus.linesAdded}</span>{' '}
+                <span className="text-diff-removed">-{gitStatus.linesDeleted}</span>
+              </div>
+            </>
+          }
+        />
+      )}
+      {syncState && syncCfg && (
+        <GitIconChip
+          testId={`thread-git-sync-${threadId}`}
+          className={syncCfg.className}
+          icon={syncCfg.icon}
+          count={syncState === 'unpushed' ? gitStatus.unpushedCommitCount : undefined}
+          tooltip={t(syncCfg.labelKey)}
+        />
+      )}
+    </>
+  );
+}
+
+const LAUNCHING_STATUSES: ReadonlySet<Thread['status']> = new Set([
+  'running',
+  'setting_up',
+  'pending',
+]);
+
+type SnippetKind = 'highlight' | 'text' | 'tool' | 'launching' | 'backlog' | null;
 
 /**
- * What the snippet slot shows. A newly-created thread is returned as `pending`
- * before the runner emits its first `running` status, so it counts as launching
- * and never briefly looks like an idle backlog item ("Ready to Launch").
+ * What the snippet slot shows. While the thread runs, the tool it is executing
+ * wins over older text (it is cleared when the agent writes new text). A
+ * newly-created thread is returned as `pending` before the runner emits its
+ * first `running` status, so it counts as launching and never briefly looks
+ * like an idle backlog item ("Ready to Launch").
  */
 function resolveSnippetKind(
   thread: Thread,
   snippetText: string | undefined,
   highlight: boolean,
+  activeTool: ActiveTool | undefined,
 ): SnippetKind {
-  if (snippetText) return highlight ? 'highlight' : 'text';
-  const isBusy = thread.status === 'running' || thread.status === 'setting_up';
-  if (isBusy || thread.status === 'pending') return 'launching';
-  if (!thread.stage || thread.stage === 'backlog') return 'backlog';
-  return null;
+  if (highlight) return 'highlight';
+  if (activeTool && thread.status === 'running') return 'tool';
+  if (snippetText) return 'text';
+  if (LAUNCHING_STATUSES.has(thread.status)) return 'launching';
+  return (thread.stage ?? 'backlog') === 'backlog' ? 'backlog' : null;
 }
 
 const SNIPPET_CLASS = 'text-muted-foreground/50 min-w-0 flex-1 truncate text-xs';
+
+function ActiveToolSnippet({ tool }: { tool: ActiveTool }) {
+  const { t } = useTranslation();
+  const summary = getSummary(tool.name, tool.input, t);
+  return (
+    <span className={SNIPPET_CLASS}>
+      <span className="text-muted-foreground">{getToolLabel(tool.name, t)}</span>
+      {summary ? <span className="font-mono"> · {summary}</span> : null}
+    </span>
+  );
+}
 
 function ThreadSnippet({
   kind,
   text,
   search,
+  activeTool,
 }: {
   kind: SnippetKind;
   text: string;
   search?: string;
+  activeTool?: ActiveTool;
 }) {
   const { t } = useTranslation();
   switch (kind) {
@@ -220,6 +285,8 @@ function ThreadSnippet({
       return <HighlightText text={text} query={search!} className={SNIPPET_CLASS} />;
     case 'text':
       return <span className={SNIPPET_CLASS}>{text}</span>;
+    case 'tool':
+      return activeTool ? <ActiveToolSnippet tool={activeTool} /> : null;
     case 'launching':
       return (
         <span className={cn(SNIPPET_CLASS, 'italic')}>{t('thread.launching', 'Launching...')}</span>
@@ -301,21 +368,24 @@ function hasMetaContent(
   showPowerline: boolean,
   scratch: boolean,
   liveBrowser: boolean,
-  { gitStatus, metadataBadge }: ThreadItemMetaRowProps,
+  { metadataBadge }: ThreadItemMetaRowProps,
 ): boolean {
-  return (
-    showPowerline ||
-    scratch ||
-    liveBrowser ||
-    !!metadataBadge ||
-    (!!gitStatus && gitStatus.state !== 'clean')
-  );
+  return showPowerline || scratch || liveBrowser || !!metadataBadge;
 }
 
-function resolveMetaRow(props: ThreadItemMetaRowProps, liveBrowser: boolean) {
+function resolveMetaRow(
+  props: ThreadItemMetaRowProps,
+  liveBrowser: boolean,
+  activeTool: ActiveTool | undefined,
+) {
   const { thread, subtitle, contentSnippet, search } = props;
   const snippetText = contentSnippet ?? thread.lastAssistantMessage;
-  const snippetKind = resolveSnippetKind(thread, snippetText, !!(contentSnippet && search));
+  const snippetKind = resolveSnippetKind(
+    thread,
+    snippetText,
+    !!(contentSnippet && search),
+    activeTool,
+  );
   const scratch = isScratch(thread);
   const showPowerline = hasPowerlineInfo(thread, subtitle);
   return {
@@ -327,11 +397,12 @@ function resolveMetaRow(props: ThreadItemMetaRowProps, liveBrowser: boolean) {
   };
 }
 
-/** Row 2: Powerline (project → branch) + Git status + Snippet. */
+/** Row 2: Powerline (project → branch) + Snippet. */
 export function ThreadItemMetaRow(props: ThreadItemMetaRowProps) {
   const { thread, subtitle, projectColor, projectPath, gitStatus, metadataBadge, search } = props;
   const liveBrowser = useThreadHasLiveBrowser(thread.id);
-  const row = resolveMetaRow(props, liveBrowser);
+  const activeTool = useThreadActiveTool(thread.id);
+  const row = resolveMetaRow(props, liveBrowser, activeTool);
   if (!row.visible) return null;
 
   return (
@@ -352,8 +423,12 @@ export function ThreadItemMetaRow(props: ThreadItemMetaRowProps) {
       {liveBrowser && <LiveBrowserIcon threadId={thread.id} />}
       {row.scratch && <ScratchBadge threadId={thread.id} />}
       {metadataBadge}
-      <ThreadSnippet kind={row.snippetKind} text={row.snippetText ?? ''} search={search} />
-      {gitStatus && <GitStateIcon threadId={thread.id} gitStatus={gitStatus} />}
+      <ThreadSnippet
+        kind={row.snippetKind}
+        text={row.snippetText ?? ''}
+        search={search}
+        activeTool={activeTool}
+      />
     </div>
   );
 }

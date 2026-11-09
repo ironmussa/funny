@@ -27,6 +27,7 @@ import {
   bindSandboxRunner,
   canRunnerAccessProject,
   pinnedRunnerIdsForProject,
+  runnersDeleted,
 } from './runner-scope.js';
 
 const HEARTBEAT_TIMEOUT_MS = 60_000;
@@ -617,6 +618,7 @@ export async function getRunnerPublicMediaUrl(runnerId: string): Promise<string 
 export async function removeRunner(runnerId: string): Promise<void> {
   await db.delete(runnerProjectAssignments).where(eq(runnerProjectAssignments.runnerId, runnerId));
   await db.delete(runners).where(eq(runners.id, runnerId));
+  await runnersDeleted([runnerId]);
   log.info('Runner removed', { namespace: 'runner', runnerId });
 }
 
@@ -633,6 +635,7 @@ export async function purgeOfflineRunners(olderThanMs = 60_000): Promise<number>
     .delete(runnerProjectAssignments)
     .where(inArray(runnerProjectAssignments.runnerId, staleIds));
   await db.delete(runners).where(inArray(runners.id, staleIds));
+  await runnersDeleted(staleIds);
 
   if (stale.length > 0) {
     log.info(`Purged ${stale.length} stale offline runner(s)`, {
@@ -695,6 +698,7 @@ export async function purgeStaleRunners(): Promise<void> {
     .delete(runnerProjectAssignments)
     .where(inArray(runnerProjectAssignments.runnerId, staleIds));
   await db.delete(runners).where(inArray(runners.id, staleIds));
+  await runnersDeleted(staleIds);
   log.info(`Purged ${staleIds.length} stale runner(s)`, {
     namespace: 'runner',
   });
@@ -732,6 +736,7 @@ export async function removeRunnerForUser(runnerId: string, userId: string): Pro
   if (!rows[0]) return false;
 
   await db.delete(runners).where(eq(runners.id, runnerId));
+  await runnersDeleted([runnerId]);
   log.info('Runner removed by owner', {
     namespace: 'runner',
     runnerId,

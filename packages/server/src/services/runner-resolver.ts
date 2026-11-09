@@ -30,10 +30,12 @@ import type { RunnerPresencePort } from './runner-ports.js';
 import {
   canRunnerAccessProject,
   canRunnerServeProjectless,
+  currentRunnerPolicyVersion,
   generalRunnerIdsForUser,
   onRunnerScopeChange,
   pinnedRunnerIdsForProject,
   sandboxRunnerIdForThread,
+  syncRunnerPolicyVersion,
 } from './runner-scope.js';
 import { getRunnerForThread } from './thread-registry.js';
 
@@ -47,7 +49,12 @@ export type RunnerResolutionFailure =
   | 'general-runner-offline'
   | 'thread-sandbox-unavailable';
 
-type CachedThreadRunner = ResolvedRunner & { threadId: string; userId: string };
+type CachedThreadRunner = ResolvedRunner & {
+  threadId: string;
+  userId: string;
+  /** Runner policy version the route was resolved at (see runner-scope.ts). */
+  policyVersion: number;
+};
 
 // In-memory cache scoped by userId + threadId. A thread id alone is not a
 // sufficient authorization boundary because cache hits bypass DB ownership
@@ -55,7 +62,9 @@ type CachedThreadRunner = ResolvedRunner & { threadId: string; userId: string };
 const threadRunnerCache = new Map<string, CachedThreadRunner>();
 
 // Any change to runner roles / project pins / grants can invalidate a cached
-// route — drop them all (cheap: the cache only saves one DB round-trip).
+// route — drop them all (cheap: the cache only saves one DB round-trip). Entries
+// are also tagged with the policy version, so a change made on another server
+// instance invalidates them on the next sync.
 onRunnerScopeChange(() => threadRunnerCache.clear());
 
 function threadCacheKey(userId: string, threadId: string): string {
@@ -149,6 +158,10 @@ async function cachedThreadRunner(
   if (!threadId) return null;
   const cached = threadRunnerCache.get(threadCacheKey(userId, threadId));
   if (!cached) return null;
+  if (cached.policyVersion !== currentRunnerPolicyVersion()) {
+    threadRunnerCache.delete(threadCacheKey(userId, threadId));
+    return null;
+  }
   if (await isReachable(presence, cached.runnerId)) return cached.runnerId;
   threadRunnerCache.delete(threadCacheKey(userId, threadId));
   return null;
@@ -222,6 +235,7 @@ export async function resolveRunnerDetailed(
   presence?: RunnerPresencePort,
 ): Promise<ResolveRunnerResult> {
   const threadId = extractThreadId(path);
+  const policyVersion = await syncRunnerPolicyVersion();
 
   // Thread cache (entries are dropped on any scope change; verify reachability)
   const cachedRunnerId = await cachedThreadRunner(userId, threadId, presence);
@@ -234,6 +248,7 @@ export async function resolveRunnerDetailed(
         runnerId,
         threadId,
         userId,
+        policyVersion,
       });
     }
     return { ok: true as const, runnerId };
@@ -333,6 +348,8 @@ export function cacheThreadRunner(threadId: string, userId: string, runnerId: st
     threadId,
     userId,
     runnerId,
+    // Called right after the route was certified, which synced the version.
+    policyVersion: currentRunnerPolicyVersion(),
   });
 }
 

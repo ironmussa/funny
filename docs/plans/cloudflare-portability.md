@@ -93,7 +93,7 @@ Move every item of the inventory behind a port, with today's code as the in-memo
 - [ ] Stores: v1 event retention, input ordinals, resource store, thread presence roster, pipeline approval waiters, scheduler event buffer (or delete it if confirmed unused), receipt/idempotency in-flight coordination.
 - [ ] `RateLimitStore` for `middleware/rate-limit.ts`, login throttle, socket rate counters.
 - [ ] `JobScheduler` port with "fire once per schedule" semantics for automations and the sandbox lifecycle tick; replace boot-time `purgeAllRunners` with presence-derived state.
-- [ ] Cache invalidation port for `runner-scope` / `runner-resolver` / `data-scope` / `data-ownership` (in-process call today; see Risks for the cross-isolate design).
+- [x] Cache invalidation port for `runner-scope` / `runner-resolver` / `data-scope` / `data-ownership` (in-process call today; see Risks for the cross-isolate design). _Done (option 1, version in the DB): `runner_policy_version` (migration 090) is bumped by every scope write, including runner deletion (which did not invalidate before); `runner-scope` and `runner-resolver` sync it before using an entry, and entries are tagged with the version they were read at, so a stale read cannot be re-cached after a change. An unreadable version bypasses the caches. `data-scope` / `data-ownership` hold immutable thread/message ownership facts and are unchanged._
 
 **Exit:** no module-level mutable state outside port implementations (add a fitness check that flags new module-level `Map`/`Set` in `services/**` outside `*/memory/*` implementations).
 
@@ -155,7 +155,7 @@ Serving the client from Cloudflare (Static Assets) with the server elsewhere wor
 
 ## Risks and open decisions
 
-- **Cache invalidation across isolates (security).** `runner-scope` caches routing policy for 30 s with in-process invalidation. On Cloudflare a grant revocation or dedicated-runner change could be served stale by other isolates. Options: version stamp in the DB checked per request, invalidation broadcast through a DO, or no cache for policy reads. **Must be decided in Phase 2**; a stale window is not acceptable for revocations.
+- **Cache invalidation across isolates (security).** _Decided and done in Phase 2: a policy version in the DB, checked on every cached read._ Cost: one primary-key read per routing check.
 - **Async presence ripple.** Making presence async touches the `RunnerFor` prover; keep the change mechanical and covered by `typecheck:proofs`.
 - **Head-of-line blocking** if the runner carrier multiplexes all classes on one socket (large tunnel bodies stalling heartbeats) — mitigated by one socket per class.
 - **Backpressure** is weaker on DO WebSockets than HTTP/2 flow control; rely on the in-band buffer budgets that already exist.

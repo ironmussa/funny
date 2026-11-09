@@ -345,6 +345,8 @@ describe('AgentLifecycleManager', () => {
 
       expect(mocks.mkdirSync).toHaveBeenCalledWith(scratchCwd, { recursive: true });
       expect(mocks.loadProjectMcpServers).not.toHaveBeenCalled();
+      // No git in a scratch thread: no rewind checkpoint either.
+      expect(mocks.captureGitCheckpoint).not.toHaveBeenCalled();
       expect(mocks.orchestrator.startAgent).toHaveBeenCalledWith(
         expect.objectContaining({ cwd: scratchCwd }),
       );

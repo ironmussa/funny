@@ -194,7 +194,7 @@ export function ThreadConversation({
         rewindDisabled={!canRewindCode(activeThread)}
         rewindDisabledReason={t(
           'thread.rewindNoCheckpoints',
-          'This thread was started without file checkpointing',
+          'No file checkpoint has been captured for this thread yet',
         )}
         pagination={
           enablePagination

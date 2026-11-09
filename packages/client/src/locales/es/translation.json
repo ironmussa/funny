@@ -1059,7 +1059,7 @@
     "rewindSuccess_other": "{{count}} archivos rebobinados",
     "rewindFailed": "Error al rebobinar el código",
     "rewindFailedGeneric": "Error al rebobinar: {{error}}",
-    "rewindNoCheckpoints": "Este hilo se inició sin checkpoints de archivos",
+    "rewindNoCheckpoints": "Todavía no se ha capturado ningún checkpoint de archivos en este hilo",
     "forkAndRewindSuccess": "Conversación bifurcada y código rebobinado",
     "forkAndRewindFailed": "Error al bifurcar y rebobinar"
   },

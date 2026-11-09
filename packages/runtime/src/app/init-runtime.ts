@@ -106,6 +106,10 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   // flow inside initTeamMode → maybeEnroll, which obtains the secret on approval.
   // resumeSession also restores a persisted secret. So we proceed unconditionally
   // and let team-client decide how to authenticate.
+  // A sandbox the server dials into: its server origin is the relay (reverse-link).
+  const { startReverseLinkRelayFromEnv } = await import('../services/reverse-link-relay.js');
+  startReverseLinkRelayFromEnv();
+
   const { initTeamMode, setBrowserWSHandler, setLocalApp } =
     await import('../services/team-client.js');
   setLocalApp(app);

@@ -108,6 +108,7 @@ describe('createSandboxWaker', () => {
     sizeId: 'small',
     repoUrl: null,
     llmTokenHash: null,
+    runnerLink: null,
     state: 'stopped',
     error: null,
     generation: 0,

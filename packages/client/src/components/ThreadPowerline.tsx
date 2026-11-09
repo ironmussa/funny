@@ -1,5 +1,5 @@
 import type { Thread, GitStatusInfo } from '@funny/shared';
-import { Folder, GitBranch } from 'lucide-react';
+import { Cloud, Folder, GitBranch } from 'lucide-react';
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,6 +11,7 @@ import {
   type PowerlineSegmentData,
 } from '@/components/ui/powerline-bar';
 import { colorFromName, darkenHex } from '@/components/ui/project-chip';
+import { runsInSandbox } from '@/lib/thread-variant';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 
 export interface ThreadPowerlineProps {
@@ -87,19 +88,14 @@ export function ThreadPowerline({
   // same value as the worktree branch (e.g. ingested threads default baseBranch to
   // branch). Drop it so we don't render two identical segments.
   const showBaseBranch = !isWorktree || branchName !== worktreeBranchLabel;
+  const inSandbox = runsInSandbox(thread);
 
   const segments = useMemo<PowerlineSegmentData[]>(() => {
     const segs: PowerlineSegmentData[] = [];
     if (projectName) {
-      segs.push({
-        key: 'project',
-        icon: Folder,
-        label: projectName,
-        color: baseColor,
-        tooltip: projectTooltip || projectName,
-        // Copy the full local project path when available, else the name.
-        copyValue: copyable ? projectTooltip || projectName : undefined,
-      });
+      segs.push(
+        projectSegment({ projectName, projectTooltip, inSandbox, color: baseColor, copyable, t }),
+      );
     }
     if (branchName && showBaseBranch) {
       const branchTooltip = isWorktree
@@ -134,6 +130,7 @@ export function ThreadPowerline({
     return segs;
   }, [
     projectName,
+    inSandbox,
     baseColor,
     projectTooltip,
     branchName,
@@ -184,6 +181,30 @@ export function ThreadPowerline({
       )}
     </div>
   );
+}
+
+/**
+ * The project segment. A sandbox thread runs in the cloud, on a clone of the
+ * project: it says so instead of showing the local folder and its path.
+ */
+function projectSegment(p: {
+  projectName: string;
+  projectTooltip?: string;
+  inSandbox: boolean;
+  color: string;
+  copyable: boolean;
+  t: (key: string, values?: Record<string, string>) => string;
+}): PowerlineSegmentData {
+  const localLabel = p.projectTooltip || p.projectName;
+  return {
+    key: 'project',
+    icon: p.inSandbox ? Cloud : Folder,
+    label: p.projectName,
+    color: p.color,
+    tooltip: p.inSandbox ? p.t('powerline.tooltipSandbox', { project: p.projectName }) : localLabel,
+    // Copy the full local project path when available, else the name.
+    copyValue: p.copyable ? localLabel : undefined,
+  };
 }
 
 /** The git status to badge a PR for: only when the badge is wanted and the status carries a PR. */

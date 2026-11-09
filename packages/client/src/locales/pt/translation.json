@@ -12,7 +12,8 @@
     "tooltipLocalBranch": "Branch local: {{branch}}",
     "tooltipBaseBranch": "Branch base: {{branch}}",
     "tooltipWorktree": "Branch do worktree: {{branch}}",
-    "tooltipWorktreeWithPath": "Branch do worktree: {{branch}} — {{path}}"
+    "tooltipWorktreeWithPath": "Branch do worktree: {{branch}} — {{path}}",
+    "tooltipSandbox": "{{project}} — executando em um sandbox na nuvem, sobre um clone do repositório"
   },
   "sidebar": {
     "openExistingProject": "Abrir projeto existente",
@@ -219,6 +220,7 @@
     "prClosed": "PR #{{number}} (fechado)",
     "createdBy": "Criado por {{creator}}",
     "readyToLaunch": "Pronto para lançar",
+    "launching": "Iniciando...",
     "send": "Enviar",
     "stop": "Parar",
     "placeholder": "Digite sua mensagem...",

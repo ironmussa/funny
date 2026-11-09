@@ -10,17 +10,21 @@ import { err, ok, type Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
 import { threadSandboxes, threads } from '../../db/schema.js';
+import { deriveServerKey } from '../../lib/auth.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { issueThreadProvisionToken } from '../runner-provision-tokens.js';
 import { sandboxRunnerIdForThread } from '../runner-scope.js';
 import type { InfraConnectionService } from './infra-connections.js';
 import { withProvisionTracking } from './provision-registry.js';
 import { resolvePublicServerUrl } from './public-server-url.js';
-import { resolveRunnerBuild } from './runner-build.js';
+import { resolveServerRunnerBuild } from './runner-build.js';
+import { chooseRunnerLink, type RunnerLink } from './runner-link.js';
 import { createSandboxRunnerCalls } from './sandbox-runner-calls.js';
 import { createRunnerTemplateManager, type RunnerTemplateManager } from './template-manager.js';
 import { createThreadSandboxService, type ProvisionError } from './thread-sandbox-service.js';
 import { sqlThreadSandboxStore, type ThreadSandboxRow } from './thread-sandbox-store.js';
+
+const defaultReverseLinkKey = () => deriveServerKey('reverse-link');
 
 /** One template manager per server build, shared by every launch. */
 const templateManagers = new Map<string, RunnerTemplateManager>();
@@ -40,6 +44,8 @@ export interface SandboxLaunchPorts {
   connections: Pick<InfraConnectionService, 'providerFor'>;
   requests?: RunnerRequestPort;
   presence?: RunnerPresencePort;
+  /** Key of the reverse link's secrets; defaults to one derived from the auth secret. */
+  reverseLinkKey?: () => Buffer;
 }
 
 /** Why a launch was refused before anything was created (HTTP 409). */
@@ -71,16 +77,30 @@ async function lastRepoUrlForProject(userId: string, projectId: string): Promise
   return row?.repoUrl ?? null;
 }
 
+/** Direct when the server is public; otherwise the provider must let the server dial in. */
+async function resolveRunnerLink(
+  req: SandboxLaunchRequest,
+  ports: SandboxLaunchPorts,
+): Promise<Result<RunnerLink, SandboxLaunchRefusal>> {
+  const publicUrl = resolvePublicServerUrl();
+  if (publicUrl.isOk()) return ok({ kind: 'direct', serverUrl: publicUrl.value });
+  const provider = await ports.connections.providerFor(req.userId, req.connectionId);
+  if (provider.isErr()) return err({ code: 'connection', message: provider.error.message });
+  return chooseRunnerLink(
+    publicUrl,
+    provider.value.provider,
+    ports.reverseLinkKey ?? defaultReverseLinkKey,
+  );
+}
+
 export async function prepareSandboxLaunch(
   req: SandboxLaunchRequest,
   ports: SandboxLaunchPorts,
 ): Promise<Result<PreparedSandboxLaunch, SandboxLaunchRefusal>> {
-  const build = resolveRunnerBuild();
+  const build = await resolveServerRunnerBuild();
   if (build.isErr()) return err({ code: build.error.kind, message: build.error.message });
-  const serverUrl = resolvePublicServerUrl();
-  if (serverUrl.isErr()) {
-    return err({ code: serverUrl.error.kind, message: serverUrl.error.message });
-  }
+  const runnerLink = await resolveRunnerLink(req, ports);
+  if (runnerLink.isErr()) return err(runnerLink.error);
   const existing = await sqlThreadSandboxStore.get(req.threadId);
   if (
     existing.isOk() &&
@@ -117,7 +137,7 @@ export async function prepareSandboxLaunch(
     connections: ports.connections,
     templates,
     build: build.value,
-    serverUrl: serverUrl.value,
+    runnerLink: runnerLink.value,
     issueToken: issueThreadProvisionToken,
     sandboxRunnerIdForThread,
     requestCheckout: calls.checkout,

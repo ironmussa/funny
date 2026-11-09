@@ -751,7 +751,10 @@ async function handleCreateSandboxThread(c: Context<ServerEnv>, payload: Record<
   const userId = c.get('userId') as string;
   const result = await sandboxThreadLauncherFor(c.env ?? {}).create(userId, payload);
   if (result.isErr()) {
-    return c.json({ error: result.error.message, code: result.error.code }, result.error.status);
+    // The refusal explains what to fix (configure a sandbox, set FUNNY_PUBLIC_URL…):
+    // show it to the user instead of the generic per-status text.
+    const { message, code, status } = result.error;
+    return c.json({ error: message, code, friendlyMessage: message }, status);
   }
   return c.json(result.value.thread as any, 201);
 }

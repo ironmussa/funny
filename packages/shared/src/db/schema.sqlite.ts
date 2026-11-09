@@ -782,6 +782,8 @@ export const threadSandboxes = sqliteTable('thread_sandboxes', {
   repoUrl: text('repo_url'),
   /** SHA-256 of the sandbox's LLM proxy token; the row going away revokes it. */
   llmTokenHash: text('llm_token_hash'),
+  /** How the runner reaches the server: `direct` (null) or `reverse` (the server dials in). */
+  runnerLink: text('runner_link'),
   /** provisioning | installing | connecting | bootstrapping | running | stopping | stopped | failed | lost */
   state: text('state').notNull(),
   error: text('error'),
@@ -810,6 +812,30 @@ export const infraConnections = sqliteTable('infra_connections', {
   createdAt: text('created_at').notNull(),
   lastValidatedAt: text('last_validated_at'),
 });
+
+/**
+ * A user's sandbox for one project (change project-sandboxes): which of their
+ * own provider connections new threads use, at what size, and whether the
+ * composer starts with the sandbox on. Per user, so in a shared project nobody
+ * launches machines on another member's account. Rows of a connection are
+ * removed with it by the connection service.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const projectSandboxSettings = sqliteTable(
+  'project_sandbox_settings',
+  {
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
+    connectionId: text('connection_id').notNull(),
+    sizeId: text('size_id').notNull(),
+    enabledByDefault: integer('enabled_by_default').notNull().default(0),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.projectId, t.userId] })],
+);
 
 /**
  * Single-use, short-lived token that lets a freshly provisioned sandbox runner

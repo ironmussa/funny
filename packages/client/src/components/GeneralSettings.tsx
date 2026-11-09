@@ -16,6 +16,7 @@ import {
 } from '@/components/general-settings-project/project-section-rows';
 import { ProjectColorPicker } from '@/components/general-settings-project/ProjectColorPicker';
 import { ProjectPathSetting } from '@/components/general-settings-project/ProjectPathSetting';
+import { ProjectSandboxSetting } from '@/components/general-settings-project/ProjectSandboxSetting';
 import {
   SegmentedControl,
   SettingRow,
@@ -319,6 +320,10 @@ export function GeneralSettings() {
               onSave={saveProject}
             />
             <WeaveStatusSetting projectId={selectedProject.id} />
+            <ProjectSandboxSetting
+              projectId={selectedProject.id}
+              ownerId={selectedProject.userId}
+            />
             <DefaultTemplateSetting
               projectId={selectedProject.id}
               currentTemplateId={selectedProject.defaultAgentTemplateId}

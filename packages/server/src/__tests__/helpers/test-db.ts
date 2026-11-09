@@ -282,6 +282,7 @@ export function createTestDb() {
       size_id TEXT NOT NULL,
       repo_url TEXT,
       llm_token_hash TEXT,
+      runner_link TEXT,
       state TEXT NOT NULL,
       error TEXT,
       generation INTEGER NOT NULL DEFAULT 0,
@@ -301,6 +302,18 @@ export function createTestDb() {
       account_label TEXT,
       created_at TEXT NOT NULL,
       last_validated_at TEXT
+    )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS project_sandbox_settings (
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      connection_id TEXT NOT NULL,
+      size_id TEXT NOT NULL,
+      enabled_by_default INTEGER NOT NULL DEFAULT 0,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, user_id)
     )
   `);
 
@@ -347,7 +360,7 @@ export function createTestDb() {
     )
   `);
 
-  // Routing-policy version (runner-scope.ts); seeded like migration 090.
+  // Routing-policy version (runner-scope.ts); seeded like migration 092.
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS runner_policy_version (
       id INTEGER PRIMARY KEY,

@@ -95,6 +95,16 @@ export interface SandboxStatus {
   detail?: string;
 }
 
+/**
+ * A port of a sandbox reachable from the server (the provider's published
+ * HTTPS URL), with what each request to it must carry. `url` may hold a
+ * query (an access token); it is a credential and must not be logged.
+ */
+export interface SandboxIngress {
+  url: string;
+  headers: Record<string, string>;
+}
+
 export interface SandboxProvider {
   readonly id: string;
   capabilities(): SandboxCapabilities;
@@ -115,6 +125,14 @@ export interface SandboxProvider {
     command: string,
     opts?: { timeoutMs?: number },
   ): ResultAsync<ExecResult, SandboxError>;
+  /**
+   * Publish `port` of a running sandbox on an HTTPS URL that only the server
+   * can use (WebSockets included). Idempotent per sandbox and port; each call
+   * returns usable credentials, rotating them when the provider cannot show
+   * them again. Optional: without it the sandbox runner must reach a public
+   * server URL (reverse runner link, `runner-link.ts`).
+   */
+  exposePort?(handle: SandboxHandle, port: number): ResultAsync<SandboxIngress, SandboxError>;
   /**
    * Build the runner template for `serverVersion` by running `installScript`
    * (with `scriptEnv`) on a throwaway machine and saving it. Optional: providers

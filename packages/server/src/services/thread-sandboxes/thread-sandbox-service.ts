@@ -41,6 +41,7 @@ import { fromResult, runToResult } from './effect-bridge.js';
 import { pollUntil } from './poll.js';
 import type { RunnerBuild } from './runner-build.js';
 import { runnerInstallCommand, startRunnerCommand } from './runner-install-script.js';
+import { runnerLinkEnv, type RunnerLink } from './runner-link.js';
 import { providerForConnection } from './sandbox-store-ops.js';
 import type { RunnerTemplateManager } from './template-manager.js';
 import {
@@ -71,8 +72,8 @@ export type ProvisionError =
 export interface ThreadSandboxDeps extends ThreadSandboxControlDeps {
   templates: RunnerTemplateManager;
   build: RunnerBuild;
-  /** Public origin the sandbox runner connects to. */
-  serverUrl: string;
+  /** How the sandbox runner reaches this server (`runner-link.ts`). */
+  runnerLink: RunnerLink;
   issueToken(input: {
     userId: string;
     threadId: string;
@@ -238,7 +239,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
     Effect.scoped(
       Effect.gen(function* () {
         const start = startRunnerCommand({
-          TEAM_SERVER_URL: deps.serverUrl,
+          ...runnerLinkEnv(deps.runnerLink, row),
           RUNNER_PROVISION_TOKEN: provisionToken,
           // Model calls go through the server's LLM proxy with this token (llm-proxy).
           FUNNY_LLM_PROXY_TOKEN: llmToken,
@@ -316,6 +317,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
         sizeId: size.id,
         repoUrl: input.checkout?.repoUrl ?? null,
         llmTokenHash: llm.hash,
+        runnerLink: deps.runnerLink.kind,
         state: 'provisioning',
         error: null,
         generation,

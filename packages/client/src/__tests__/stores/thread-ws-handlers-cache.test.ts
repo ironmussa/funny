@@ -59,6 +59,8 @@ const {
   handleWSInit,
 } = await import('@/stores/thread-ws-handlers');
 
+const { useThreadActiveToolStore } = await import('@/stores/thread-active-tool-store');
+
 const THREAD_ID = 'thread-active';
 
 function makeState(overrides: Record<string, unknown> = {}) {
@@ -244,6 +246,24 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     const { get, set } = makeGetSet(makeState());
     handleWSToolCall(get, set, THREAD_ID, { name: 'Bash', input: {} });
     expect(mockInvalidate).toHaveBeenCalledWith(THREAD_ID);
+  });
+
+  test('tracks the running tool for the sidebar until the agent writes text or the run ends', () => {
+    const { get, set } = makeGetSet(makeState());
+    const active = () => useThreadActiveToolStore.getState().byThread[THREAD_ID];
+
+    handleWSToolCall(get, set, THREAD_ID, {
+      name: 'Bash',
+      input: JSON.stringify({ command: 'ls' }),
+    });
+    expect(active()).toEqual({ name: 'Bash', input: { command: 'ls' } });
+
+    handleWSMessage(get, set, THREAD_ID, { role: 'assistant', content: 'Done' });
+    expect(active()).toBeUndefined();
+
+    handleWSToolCall(get, set, THREAD_ID, { name: 'Read', input: { file_path: 'a.ts' } });
+    handleWSResult(get, set, THREAD_ID, { status: 'completed', cost: 0, duration: 1 });
+    expect(active()).toBeUndefined();
   });
 
   test('handleWSToolOutput invalidates when thread is active', () => {

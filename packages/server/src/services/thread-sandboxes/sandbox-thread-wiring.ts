@@ -11,6 +11,7 @@ import { repos } from '../../db/repos.js';
 import { projects } from '../../db/schema.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { createInfraConnectionService } from './infra-connections.js';
+import { createProjectSandboxSettingsService } from './project-sandbox-settings.js';
 import { productionSandboxProviders } from './provider-catalog.js';
 import { postSandboxError } from './sandbox-events.js';
 import { prepareSandboxLaunch } from './sandbox-launch.js';
@@ -30,6 +31,7 @@ export function sandboxThreadLauncherFor(env: {
   const registry = productionSandboxProviders();
   if (registry.isErr()) throw new Error(`sandbox provider registry: ${registry.error.kind}`);
   const connections = createInfraConnectionService(registry.value);
+  const projectSandboxes = createProjectSandboxSettingsService(connections);
   const ports = { requests: env.runnerRequests, presence: env.runnerPresence };
   const calls = createSandboxRunnerCalls(ports);
   const threadRepo = repos.threads();
@@ -41,6 +43,12 @@ export function sandboxThreadLauncherFor(env: {
         .from(projects)
         .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
       return row ?? null;
+    },
+    projectSandbox: async (userId, projectId) => {
+      const configured = await projectSandboxes.forThread(userId, projectId);
+      // A storage failure is a 500, never "no sandbox configured".
+      if (configured.isErr()) throw new Error(configured.error.message);
+      return configured.value;
     },
     prepare: (req) => prepareSandboxLaunch(req, { connections, ...ports }),
     insertThread: (row) => threadRepo.createThread(row),

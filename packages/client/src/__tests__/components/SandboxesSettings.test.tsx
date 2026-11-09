@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   addInfraConnection: vi.fn(),
   testInfraConnection: vi.fn(),
   deleteInfraConnection: vi.fn(),
+  renameInfraConnection: vi.fn(),
   fetch: vi.fn(),
   storeState: {
     connections: [] as Array<Record<string, unknown>>,
@@ -20,6 +21,7 @@ vi.mock('@/lib/api', () => ({
     addInfraConnection: mocks.addInfraConnection,
     testInfraConnection: mocks.testInfraConnection,
     deleteInfraConnection: mocks.deleteInfraConnection,
+    renameInfraConnection: mocks.renameInfraConnection,
   },
 }));
 
@@ -39,6 +41,30 @@ describe('SandboxesSettings', () => {
     mocks.storeState.loading = false;
     mocks.fetch.mockResolvedValue(undefined);
     mocks.listSandboxProviders.mockReturnValue(okAsync({ providers: [provider] }));
+  });
+
+  test('renames a connection in place: Enter saves, Escape cancels', async () => {
+    mocks.storeState.connections = [
+      { id: 'c1', provider: 'boat', label: 'funny-laptop', accountLabel: null },
+    ];
+    mocks.renameInfraConnection.mockReturnValue(okAsync({ id: 'c1', label: 'Personal Boat' }));
+    render(<SandboxesSettings />);
+
+    fireEvent.click(screen.getByTestId('sandbox-connection-rename-c1'));
+    const input = screen.getByTestId('sandbox-connection-name-c1');
+    fireEvent.change(input, { target: { value: 'Discarded' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    expect(screen.queryByTestId('sandbox-connection-name-c1')).toBeNull();
+    expect(mocks.renameInfraConnection).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('sandbox-connection-rename-c1'));
+    const again = screen.getByTestId('sandbox-connection-name-c1');
+    fireEvent.change(again, { target: { value: '  Personal Boat ' } });
+    fireEvent.keyDown(again, { key: 'Enter' });
+    await waitFor(() =>
+      expect(mocks.renameInfraConnection).toHaveBeenCalledWith('c1', 'Personal Boat'),
+    );
+    await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
   });
 
   test('shows the empty state when there are no connections', () => {

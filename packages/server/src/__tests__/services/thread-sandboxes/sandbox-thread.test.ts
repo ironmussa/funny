@@ -19,6 +19,7 @@ function setup(
     refusal?: { code: string; message: string };
     provisionError?: ProvisionError;
     messageFails?: boolean;
+    projectSandbox?: { connectionId: string; sizeId: string } | null;
   } = {},
 ) {
   const inserted: NewSandboxThreadRow[] = [];
@@ -33,6 +34,8 @@ function setup(
         : userId === 'alice' && projectId === 'p1'
           ? { path: '/home/alice/app' }
           : null,
+    projectSandbox: async (userId, projectId) =>
+      userId === 'alice' && projectId === 'p1' ? (opts.projectSandbox ?? null) : null,
     prepare: async (req) => {
       prepared.push(req);
       if (opts.refusal) return err(opts.refusal);
@@ -62,6 +65,10 @@ function setup(
   return { launcher, inserted, prepared, messages, failed, events };
 }
 
+function expectOkCreate(result: { isOk(): boolean; isErr(): boolean } & object) {
+  if (result.isErr()) throw new Error(`expected ok, got ${JSON.stringify(result)}`);
+}
+
 const payload = {
   projectId: 'p1',
   prompt: 'Fix the login bug',
@@ -74,6 +81,39 @@ const payload = {
 };
 
 describe('sandbox thread creation', () => {
+  test("without a connection it uses the caller's project sandbox (connection and size)", async () => {
+    const { launcher, prepared } = setup({
+      projectSandbox: { connectionId: 'conn-instabox', sizeId: 'large' },
+    });
+    const { sandbox: _sandbox, ...rest } = payload;
+    expectOkCreate(await launcher.create('alice', rest));
+    expect(prepared[0]).toMatchObject({ connectionId: 'conn-instabox', sizeId: 'large' });
+
+    const sized = setup({ projectSandbox: { connectionId: 'conn-instabox', sizeId: 'large' } });
+    expectOkCreate(await sized.launcher.create('alice', { ...rest, sandbox: { sizeId: 'small' } }));
+    expect(sized.prepared[0]).toMatchObject({ connectionId: 'conn-instabox', sizeId: 'small' });
+  });
+
+  test('an explicit connection wins over the project sandbox', async () => {
+    const { launcher, prepared } = setup({
+      projectSandbox: { connectionId: 'conn-instabox', sizeId: 'large' },
+    });
+    expectOkCreate(await launcher.create('alice', payload));
+    expect(prepared[0]).toMatchObject({ connectionId: 'conn-1', sizeId: 'default' });
+  });
+
+  test('without a connection or a project sandbox nothing is created (409)', async () => {
+    const { launcher, inserted, prepared } = setup();
+    const { sandbox: _sandbox, ...rest } = payload;
+    const result = await launcher.create('alice', rest);
+    expect(result.isErr() && result.error).toMatchObject({
+      status: 409,
+      code: 'project-sandbox-not-configured',
+    });
+    expect(prepared).toEqual([]);
+    expect(inserted).toEqual([]);
+  });
+
   test('creates a local setting_up thread, provisions, then sends the prompt to the sandbox', async () => {
     const { launcher, inserted, prepared, messages, failed, events } = setup();
     const result = await launcher.create('alice', payload);

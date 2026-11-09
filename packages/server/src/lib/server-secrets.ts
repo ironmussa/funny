@@ -8,9 +8,9 @@
  * is then refused, so a missing secret fails loudly instead of silently changing
  * on every isolate.
  *
- * Keys the server uses only internally (never shared with runners or other
- * services) are derived from the auth secret with HKDF and a per-purpose label,
- * so they are stable across restarts and instances without new configuration.
+ * Server-internal keys are derived from the auth secret with HMAC-SHA256 and a
+ * per-purpose label (`deriveServerKey`), so they are stable across restarts and
+ * instances without new configuration.
  * Secrets that cross a trust boundary (RUNNER_AUTH_SECRET, …) stay separate and
  * are checked by `secret-check.ts`.
  *
@@ -20,7 +20,7 @@
  * the files, so it must contain every key that encrypted existing rows.
  */
 
-import { hkdfSync, randomBytes } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -120,22 +120,27 @@ export function getAuthSecret(): string {
   return getOrCreate('auth-secret');
 }
 
-/** Purposes of server-internal keys derived from the auth secret. */
-export type DerivedKeyPurpose = 'oauth-callback-state';
-
 /**
- * A 32-byte key for one server-internal purpose, derived from the auth secret
- * (HKDF-SHA256). Same auth secret → same key on every instance and restart;
- * different purposes → independent keys.
+ * A 32-byte key for one server-internal `purpose` (e.g. `oauth-callback-state`,
+ * `reverse-link`), derived from the auth secret with HMAC-SHA256. Same auth
+ * secret → same key on every instance and restart; different purposes →
+ * independent keys; never the secret itself. The derivation must not change:
+ * keys handed to sandboxes (reverse runner link) depend on it.
  */
-export function deriveServerKey(purpose: DerivedKeyPurpose): Buffer {
+export function deriveServerKey(purpose: string): Buffer {
   const cached = derived.get(purpose);
   if (cached) return cached;
-  const key = Buffer.from(
-    hkdfSync('sha256', getAuthSecret(), 'funny-server-keys', `funny/${purpose}/v1`, 32),
-  );
+  const key = createHmac('sha256', getAuthSecret()).update(`funny-key:${purpose}`).digest();
   derived.set(purpose, key);
   return key;
+}
+
+/** Test-only: forget the configured source and every cached value. */
+export function resetServerSecretsForTests(): void {
+  source = null;
+  keyringSource = null;
+  resolved.clear();
+  derived.clear();
 }
 
 // ── Encryption keyring ───────────────────────────────────────────
@@ -179,12 +184,4 @@ export const serverKeyringSource: KeyringSource = {
 function currentKeyringSource(): KeyringSource {
   keyringSource ??= defaultKeyringSource({ env: process.env, dataDir: DATA_DIR });
   return keyringSource;
-}
-
-/** Test-only: forget the configured sources and every cached value. */
-export function resetServerSecretsForTests(): void {
-  source = null;
-  keyringSource = null;
-  resolved.clear();
-  derived.clear();
 }

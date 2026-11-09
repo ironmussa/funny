@@ -17,6 +17,7 @@ import { createSandboxIdleSweeper, DEFAULT_SANDBOX_IDLE_MS } from './idle-sweepe
 import { createInfraConnectionService } from './infra-connections.js';
 import { productionSandboxProviders } from './provider-catalog.js';
 import { cancelAllProvisions, cancelProvision } from './provision-registry.js';
+import { startReverseLinks, type ReverseLinks } from './reverse-link/wiring.js';
 import { postSandboxError, sandboxErrorEventData } from './sandbox-events.js';
 import { createSandboxReconciler } from './sandbox-reconciler.js';
 import { createThreadSandboxControl, type ThreadSandboxControl } from './thread-sandbox-control.js';
@@ -91,6 +92,7 @@ export function createSandboxWaker(deps: {
 let waker: SandboxWaker | null = null;
 let control: ThreadSandboxControl | null = null;
 let lifecycleFiber: Fiber.Fiber<unknown, unknown> | null = null;
+let reverseLinks: ReverseLinks | null = null;
 
 /**
  * Destroy a deleted thread's sandbox, if it has one. Never throws; failures
@@ -125,6 +127,8 @@ function idleWindowMs(): number {
 export function startSandboxLifecycle(deps: {
   presence: { isAvailable(runnerId: string): Promise<boolean> } | undefined;
   browserEvents?: { toUser(userId: string, event: Record<string, unknown>): void };
+  /** The server's reverse-link listener; absent: no reverse links are dialed. */
+  reverseLinkTarget?: { hostname: string; port: number };
 }): void {
   if (lifecycleFiber) return;
   const registry = productionSandboxProviders();
@@ -135,8 +139,12 @@ export function startSandboxLifecycle(deps: {
     });
     return;
   }
+  const connections = createInfraConnectionService(registry.value);
+  if (deps.reverseLinkTarget) {
+    reverseLinks = startReverseLinks({ connections, target: deps.reverseLinkTarget });
+  }
   control = createThreadSandboxControl({
-    connections: createInfraConnectionService(registry.value),
+    connections,
     sandboxRunnerIdForThread,
     presence: deps.presence,
     store: sqlThreadSandboxStore,
@@ -189,6 +197,8 @@ const SHUTDOWN_GRACE_MS = 3_000;
 export async function stopSandboxLifecycle(): Promise<void> {
   const fiber = lifecycleFiber;
   lifecycleFiber = null;
+  await reverseLinks?.stop();
+  reverseLinks = null;
   waker = null;
   control = null;
   const cancelled = await cancelAllProvisions(SHUTDOWN_GRACE_MS);

@@ -1,8 +1,11 @@
 import type { GitStatusInfo, Thread } from '@funny/shared';
+import { Boxes } from 'lucide-react';
 
 import { ModeSelect } from '@/components/PromptSelectors';
 import { ContextUsageRing } from '@/components/thread/ContextUsageRing';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import type { SandboxToggle } from '@/hooks/use-prompt-model-state';
 
 export interface RuntimeMode {
   value: string;
@@ -15,6 +18,8 @@ export interface PromptFooterBarProps {
   runtimeModes: RuntimeMode[];
   runtime: string;
   onRuntimeChange: (v: string) => void;
+  /** The project's sandbox on/off toggle; absent when the project has none. */
+  sandboxToggle?: SandboxToggle | null;
   powerlineThread?: Thread;
   powerlineProjectName?: string;
   powerlineProjectColor?: string;
@@ -35,6 +40,7 @@ type FooterLeadingProps = Pick<
   | 'runtimeModes'
   | 'runtime'
   | 'onRuntimeChange'
+  | 'sandboxToggle'
   | 'powerlineThread'
   | 'powerlineProjectName'
   | 'powerlineProjectColor'
@@ -43,16 +49,86 @@ type FooterLeadingProps = Pick<
   | 'onOpenReview'
 >;
 
+const SANDBOX_VALUE = 'sandbox';
+
+/**
+ * Local (or remote) vs. the project's sandbox, as one switch. Only the sandbox
+ * configured for the project is offered, never every connection.
+ */
+function RuntimeSwitch({
+  modes,
+  runtime,
+  onRuntimeChange,
+  toggle,
+}: {
+  modes: RuntimeMode[];
+  runtime: string;
+  onRuntimeChange: (v: string) => void;
+  toggle: SandboxToggle;
+}) {
+  const value = toggle.enabled ? SANDBOX_VALUE : runtime;
+  const onValueChange = (next: string) => {
+    // Clicking the selected item would clear a single ToggleGroup: keep it.
+    if (!next || next === value) return;
+    if (next === SANDBOX_VALUE) {
+      toggle.setEnabled(true);
+      return;
+    }
+    toggle.setEnabled(false);
+    onRuntimeChange(next);
+  };
+  const itemClass = 'h-6 gap-1 px-2 text-xs [&_svg]:size-3.5';
+  return (
+    <ToggleGroup
+      type="single"
+      size="sm"
+      value={value}
+      onValueChange={onValueChange}
+      className="border-border shrink-0 gap-0 rounded-md border"
+      data-testid="prompt-runtime-switch"
+    >
+      {modes.map((m) => (
+        <ToggleGroupItem
+          key={m.value}
+          value={m.value}
+          className={itemClass}
+          data-testid={`prompt-runtime-switch-${m.value}`}
+        >
+          {m.label}
+        </ToggleGroupItem>
+      ))}
+      <ToggleGroupItem
+        value={SANDBOX_VALUE}
+        aria-label={`Sandbox · ${toggle.label}`}
+        className={itemClass}
+        data-testid="prompt-sandbox-toggle"
+      >
+        <Boxes />
+        {`Sandbox · ${toggle.label}`}
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
+
 function FooterLeading(props: FooterLeadingProps) {
   if (props.isNewThread) {
     return (
       <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
-        {props.runtimeModes.length > 1 && (
-          <ModeSelect
-            value={props.runtime}
-            onChange={props.onRuntimeChange}
+        {props.sandboxToggle ? (
+          <RuntimeSwitch
             modes={props.runtimeModes}
+            runtime={props.runtime}
+            onRuntimeChange={props.onRuntimeChange}
+            toggle={props.sandboxToggle}
           />
+        ) : (
+          props.runtimeModes.length > 1 && (
+            <ModeSelect
+              value={props.runtime}
+              onChange={props.onRuntimeChange}
+              modes={props.runtimeModes}
+            />
+          )
         )}
       </div>
     );
@@ -88,7 +164,9 @@ function FooterLeading(props: FooterLeadingProps) {
 export function PromptFooterBar(props: PromptFooterBarProps) {
   const { contextPct, isNewThread } = props;
   const hasContext = typeof contextPct === 'number';
-  const hasLeading = isNewThread ? props.runtimeModes.length > 1 : !!props.powerlineThread;
+  const hasLeading = isNewThread
+    ? props.runtimeModes.length > 1 || !!props.sandboxToggle
+    : !!props.powerlineThread;
   if (!hasContext && !hasLeading) return null;
 
   return (

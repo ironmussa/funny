@@ -44,8 +44,12 @@ import { getAuthSecret } from './server-secrets.js';
  * The secret is resolved by `server-secrets.ts` (env `BETTER_AUTH_SECRET`,
  * else `<data dir>/auth-secret`). Server-internal keys are derived from it
  * (`deriveServerKey`), so rotating it also invalidates in-flight MCP OAuth
- * states.
+ * states and the reverse runner link's per-sandbox secrets.
  */
+
+// Re-exported for existing callers (reverse runner link); defined with the
+// other server secrets.
+export { deriveServerKey } from './server-secrets.js';
 
 // ── Access Control ──────────────────────────────────────────────
 

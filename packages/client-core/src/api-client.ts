@@ -84,6 +84,36 @@ function parseBody(text: string): Record<string, unknown> {
   }
 }
 
+function httpErrorMessage(body: Record<string, unknown>, status: number): string {
+  const rawError = body.error;
+  if (typeof rawError === 'string' && rawError.length > 0) return rawError;
+  return rawError ? JSON.stringify(rawError) : `HTTP ${status}`;
+}
+
+const HTTP_STATUS_TYPES: Record<number, ApiErrorType> = {
+  404: 'NOT_FOUND',
+  403: 'FORBIDDEN',
+  409: 'CONFLICT',
+};
+
+/** The error thrown for a non-OK HTTP response. */
+function httpError(body: Record<string, unknown>, status: number, message: string): ApiClientError {
+  if (body.stderr || body.exitCode != null) {
+    return {
+      type: 'PROCESS_ERROR',
+      message,
+      exitCode: typeof body.exitCode === 'number' ? body.exitCode : undefined,
+      stderr: typeof body.stderr === 'string' ? body.stderr : undefined,
+    };
+  }
+  const type = HTTP_STATUS_TYPES[status] ?? (status >= 500 ? 'INTERNAL' : 'BAD_REQUEST');
+  // A server message written for the user replaces the generic per-type text.
+  const { friendlyMessage } = body;
+  return typeof friendlyMessage === 'string' && friendlyMessage.length > 0
+    ? { type, message, friendlyMessage }
+    : { type, message };
+}
+
 function asApiError(error: unknown): ApiClientError {
   if (error && typeof error === 'object' && 'type' in error && 'message' in error) {
     return error as ApiClientError;
@@ -190,32 +220,9 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
         }
         const responseText = await response.text().catch(() => '');
         const body = parseBody(responseText);
-        const rawError = body.error;
-        const message =
-          typeof rawError === 'string' && rawError.length > 0
-            ? rawError
-            : rawError
-              ? JSON.stringify(rawError)
-              : `HTTP ${response.status}`;
+        const message = httpErrorMessage(body, response.status);
         reportFailure('http', response.status, message);
-        if (body.stderr || body.exitCode != null) {
-          throw {
-            type: 'PROCESS_ERROR',
-            message,
-            exitCode: typeof body.exitCode === 'number' ? body.exitCode : undefined,
-            stderr: typeof body.stderr === 'string' ? body.stderr : undefined,
-          } satisfies ApiClientError;
-        }
-        const statusTypes: Record<number, ApiErrorType> = {
-          404: 'NOT_FOUND',
-          403: 'FORBIDDEN',
-          409: 'CONFLICT',
-        };
-        throw {
-          type:
-            statusTypes[response.status] ?? (response.status >= 500 ? 'INTERNAL' : 'BAD_REQUEST'),
-          message,
-        } satisfies ApiClientError;
+        throw httpError(body, response.status, message);
       }
 
       span.end('OK');

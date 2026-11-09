@@ -6,7 +6,7 @@
  * The credential is sent once, validated by the server against the provider
  * and stored encrypted; it is never returned.
  */
-import { Boxes, CheckCircle2, Trash2 } from 'lucide-react';
+import { Boxes, CheckCircle2, Pencil, Trash2 } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 
@@ -151,14 +151,71 @@ function AddConnectionForm({
   );
 }
 
+/** The connection's name, editable in place: Enter or blur saves, Escape cancels. */
+function ConnectionName({
+  connection,
+  onRenamed,
+}: {
+  connection: InfraConnection;
+  onRenamed: () => void;
+}) {
+  const [draft, setDraft] = useState<string | null>(null);
+
+  const save = async () => {
+    const label = draft?.trim();
+    setDraft(null);
+    if (!label || label === connection.label) return;
+    const result = await api.renameInfraConnection(connection.id, label);
+    if (result.isErr()) {
+      toast.error(result.error.message || 'Could not rename the connection');
+      return;
+    }
+    onRenamed();
+  };
+
+  if (draft !== null) {
+    return (
+      <Input
+        autoFocus
+        value={draft}
+        maxLength={120}
+        aria-label="Connection name"
+        className="h-6 max-w-[240px] text-sm"
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => void save()}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') void save();
+          if (e.key === 'Escape') setDraft(null);
+        }}
+        data-testid={`sandbox-connection-name-${connection.id}`}
+      />
+    );
+  }
+  return (
+    <>
+      <span className="truncate text-sm font-medium">{connection.label}</span>
+      <Button
+        size="icon-xs"
+        variant="ghost"
+        aria-label="Rename"
+        className="text-muted-foreground"
+        onClick={() => setDraft(connection.label)}
+        data-testid={`sandbox-connection-rename-${connection.id}`}
+      >
+        <Pencil className="icon-xs" />
+      </Button>
+    </>
+  );
+}
+
 function ConnectionRow({
   connection,
   providerName,
-  onRemoved,
+  onChanged,
 }: {
   connection: InfraConnection;
   providerName: string;
-  onRemoved: () => void;
+  onChanged: () => void;
 }) {
   const [testing, setTesting] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
@@ -181,7 +238,7 @@ function ConnectionRow({
       toast.error(result.error.message || 'Could not remove the connection');
       return;
     }
-    onRemoved();
+    onChanged();
   };
 
   return (
@@ -191,7 +248,7 @@ function ConnectionRow({
     >
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
-          <span className="truncate text-sm font-medium">{connection.label}</span>
+          <ConnectionName connection={connection} onRenamed={onChanged} />
           <Badge variant="secondary">{providerName}</Badge>
         </div>
         {connection.accountLabel && (
@@ -270,7 +327,7 @@ export function SandboxesSettings() {
                 key={c.id}
                 connection={c}
                 providerName={providerName(c.provider)}
-                onRemoved={refresh}
+                onChanged={refresh}
               />
             ))}
           </div>

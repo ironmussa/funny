@@ -3,6 +3,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useCodexCommands } from '@/hooks/use-codex-commands';
+import type { SandboxToggle } from '@/hooks/use-prompt-model-state';
 
 import { ImageLightbox } from './ImageLightbox';
 import type { PromptEditorHandle, PromptSlashResource } from './prompt-editor/PromptEditor';
@@ -80,9 +81,11 @@ export interface PromptInputUIProps {
   projectId?: string;
   createWorktree?: boolean;
   onCreateWorktreeChange?: (v: boolean) => void;
-  /** Runtime of the new thread: `local`, `remote` or `sandbox:<connectionId>`. */
+  /** Runtime of the new thread: `local`, `remote` or `sandbox` (the project's sandbox). */
   runtime?: string;
   onRuntimeChange?: (v: string) => void;
+  /** The project's sandbox on/off toggle (change project-sandboxes). */
+  sandboxToggle?: SandboxToggle | null;
   /** Runtime choices; the selector shows when there is more than one. */
   runtimeModes?: RuntimeMode[];
 

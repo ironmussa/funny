@@ -126,6 +126,33 @@ describe('infra routes', () => {
     expect(others.connections).toHaveLength(0);
   });
 
+  test('renames a connection; another user cannot, and an empty name is refused', async () => {
+    const created = await app().request('/api/infra/connections', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ provider: 'fake', label: 'Mine', credential: 'fake-valid' }),
+    });
+    const { id } = await created.json();
+    const rename = (label: string, userId = 'alice') =>
+      app(userId).request(`/api/infra/connections/${id}`, {
+        method: 'PATCH',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ label }),
+      });
+
+    const renamed = await rename('  Work InstaBox  ');
+    expect(renamed.status).toBe(200);
+    expect(await renamed.json()).toMatchObject({ id, label: 'Work InstaBox' });
+    expect((await rename('Stolen', 'mallory')).status).toBe(404);
+    expect((await rename('   ')).status).toBe(400);
+
+    const listed = await (await app().request('/api/infra/connections')).json();
+    expect(listed.connections[0].label).toBe('Work InstaBox');
+    // The credential still works after the rename.
+    const tested = await app().request(`/api/infra/connections/${id}/test`, { method: 'POST' });
+    expect(tested.status).toBe(200);
+  });
+
   test('rejected credentials answer 422 and malformed bodies 400', async () => {
     const rejected = await app().request('/api/infra/connections', {
       method: 'POST',

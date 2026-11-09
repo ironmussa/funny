@@ -5,7 +5,7 @@ import {
   buildRuntimeModes,
   buildThreadPayload,
   buildThreadTitle,
-  parseRuntimeChoice,
+  isSandboxRuntimeChoice,
   type BuildInput,
 } from '@/lib/thread-payload';
 import { ALL_STANDARD_TOOLS } from '@/stores/settings-store';
@@ -224,44 +224,30 @@ describe('attachments reach every thread kind', () => {
   });
 });
 
-describe('sandbox runtime (thread-sandboxes)', () => {
-  test('a sandbox choice sends the connection and forces local mode', () => {
+describe('sandbox runtime (project-sandboxes)', () => {
+  test('a sandbox thread forces local mode and leaves the connection to the server', () => {
     const built = buildThreadPayload(
       baseInput({
-        opts: {
-          model: 'sonnet',
-          mode: 'autoEdit',
-          threadMode: 'worktree',
-          ...parseRuntimeChoice('sandbox:conn-1'),
-        },
+        opts: { model: 'sonnet', mode: 'autoEdit', threadMode: 'worktree', runtime: 'sandbox' },
       }),
     );
     expect(built.kind).toBe('normal');
-    expect(built.payload).toMatchObject({
-      runtime: 'sandbox',
-      mode: 'local',
-      sandbox: { connectionId: 'conn-1' },
-    });
+    expect(built.payload).toMatchObject({ runtime: 'sandbox', mode: 'local' });
+    expect(built.payload).not.toHaveProperty('sandbox');
   });
 
   test('local and remote choices carry no sandbox', () => {
-    expect(parseRuntimeChoice('local')).toEqual({ runtime: 'local' });
-    expect(parseRuntimeChoice('remote')).toEqual({ runtime: 'remote' });
+    expect(isSandboxRuntimeChoice('local')).toBe(false);
+    expect(isSandboxRuntimeChoice('remote')).toBe(false);
+    expect(isSandboxRuntimeChoice('sandbox')).toBe(true);
     expect(buildThreadPayload(baseInput()).payload).not.toHaveProperty('sandbox');
   });
 
-  test('runtime modes: one sandbox entry per connection, none for scratch', () => {
-    const sandboxConnections = [
-      { id: 'c1', label: 'Boat' },
-      { id: 'c2', label: 'Work' },
-    ];
-    expect(
-      buildRuntimeModes({ hasLauncher: true, sandboxConnections, isScratch: false }).map(
-        (m) => m.value,
-      ),
-    ).toEqual(['local', 'remote', 'sandbox:c1', 'sandbox:c2']);
-    expect(buildRuntimeModes({ hasLauncher: false, sandboxConnections, isScratch: true })).toEqual([
-      { value: 'local', label: 'Local' },
+  test('runtime modes list local and remote only, never provider connections', () => {
+    expect(buildRuntimeModes({ hasLauncher: true }).map((m) => m.value)).toEqual([
+      'local',
+      'remote',
     ]);
+    expect(buildRuntimeModes({ hasLauncher: false })).toEqual([{ value: 'local', label: 'Local' }]);
   });
 });

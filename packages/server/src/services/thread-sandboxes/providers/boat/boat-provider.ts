@@ -8,12 +8,11 @@
  * a provider-specific dependency.
  */
 
-import { errAsync, okAsync, ResultAsync, type Result } from 'neverthrow';
+import { errAsync, okAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import {
   type CreateSandboxRequest,
-  type ExecResult,
   type NormalizedSandboxState,
   type SandboxCapabilities,
   type SandboxError,
@@ -22,9 +21,21 @@ import {
   type SandboxStatus,
   type TemplateRef,
 } from '../../contract.js';
-import { pollUntil } from '../../poll.js';
 import type { SandboxProviderEntry } from '../../registry.js';
-import { scriptCommand } from '../../runner-install-script.js';
+import {
+  createJsonApi,
+  credentialErrorRule,
+  createPoller,
+  execResultFrom,
+  execTimeoutSeconds,
+  ignoreNotFound,
+  mapByRules,
+  installRunner,
+  transientErrorRules,
+  withThrowawayMachine,
+  type ErrorRule,
+  type Fetch,
+} from '../shared/json-api.js';
 
 const BOAT_PROVIDER_ID = 'boat';
 const TEMPLATE_PREFIX = 'funny-runner-';
@@ -67,8 +78,6 @@ const boatConfigSchema = z
 
 type BoatConfig = z.infer<typeof boatConfigSchema>;
 
-type Fetch = (input: string, init?: RequestInit) => Promise<Response>;
-
 /** Saved-snapshot name of the funny runner template for a server version. */
 export function boatTemplateName(serverVersion: string): string {
   return `${TEMPLATE_PREFIX}${serverVersion.replace(/[^A-Za-z0-9.-]/g, '-')}`;
@@ -93,20 +102,14 @@ interface BoatErrorContext {
  * Ordered Boat error rules: the first match wins, anything else is a generic
  * `provider` error.
  */
-const BOAT_ERROR_RULES: Array<{
-  when: (e: BoatErrorContext) => boolean;
-  map: (e: BoatErrorContext) => SandboxError;
-}> = [
+const BOAT_ERROR_RULES: ErrorRule<BoatErrorContext>[] = [
   // An account feature the plan does not include (e.g. saved snapshots on the
   // free trial) is not a bad credential.
   {
     when: (e) => e.status === 403 && e.code.endsWith('_not_allowed'),
     map: (e) => ({ kind: 'unsupported', message: e.message }),
   },
-  {
-    when: (e) => e.status === 401 || e.status === 403,
-    map: (e) => ({ kind: 'auth', message: e.message }),
-  },
+  credentialErrorRule<BoatErrorContext>(),
   {
     when: (e) => e.status === 402 || e.code === 'billing_required',
     map: (e) => ({
@@ -123,15 +126,7 @@ const BOAT_ERROR_RULES: Array<{
     when: (e) => e.code === 'sandbox_starting' || e.code === 'machine_not_running',
     map: (e) => ({ kind: 'unavailable', message: e.message, retryAfterMs: 3_000 }),
   },
-  {
-    when: (e) => e.status === 429 && e.code === 'rate_limited',
-    map: (e) => ({ kind: 'rate-limited', message: e.message, retryAfterMs: e.retryAfterMs() }),
-  },
-  { when: (e) => e.status === 429, map: (e) => ({ kind: 'quota', message: e.message }) },
-  {
-    when: (e) => e.status >= 500,
-    map: (e) => ({ kind: 'unavailable', message: e.message, retryAfterMs: e.retryAfterMs() }),
-  },
+  ...transientErrorRules<BoatErrorContext>((e) => e.code === 'rate_limited'),
 ];
 
 /** Boat error envelope → normalized `SandboxError`. */
@@ -150,11 +145,7 @@ function boatErrorContext(res: Response, body: any): BoatErrorContext {
 }
 
 function mapBoatError(res: Response, body: any): SandboxError {
-  const context = boatErrorContext(res, body);
-  const rule = BOAT_ERROR_RULES.find((r) => r.when(context));
-  if (rule) return rule.map(context);
-  const { code, message } = context;
-  return { kind: 'provider', message: code ? `${code}: ${message}` : message };
+  return mapByRules(BOAT_ERROR_RULES, boatErrorContext(res, body));
 }
 
 export interface BoatProviderOptions {
@@ -169,57 +160,20 @@ export interface BoatProviderOptions {
   requestTimeoutMs?: number;
 }
 
-const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
-
 export function createBoatProvider(
   apiKey: string,
   config: BoatConfig = {},
   options: BoatProviderOptions = {},
 ): SandboxProvider {
-  const fetchImpl: Fetch = options.fetch ?? ((input, init) => fetch(input, init));
-  const pollMs = options.pollMs ?? 3_000;
-  const baseUrl = (config.apiBaseUrl ?? DEFAULT_BASE_URL).replace(/\/$/, '');
-
-  const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS;
-
-  /** One Boat API call. `timeoutMs` extends the cap for calls that wait server-side (exec). */
-  function call(
-    method: string,
-    path: string,
-    options: { body?: unknown; headers?: Record<string, string>; timeoutMs?: number } = {},
-  ): ResultAsync<any, SandboxError> {
-    const timeoutMs = options.timeoutMs ?? requestTimeoutMs;
-    const request = fetchImpl(`${baseUrl}${path}`, {
-      method,
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
-        ...options.headers,
-      },
-      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-      signal: AbortSignal.timeout(timeoutMs),
-    });
-    return ResultAsync.fromPromise(request, (error): SandboxError => ({
-      kind: 'unavailable',
-      message:
-        error instanceof Error && error.name === 'TimeoutError'
-          ? `Boat API ${method} ${path} timed out after ${Math.round(timeoutMs / 1000)}s`
-          : error instanceof Error
-            ? error.message
-            : String(error),
-    })).andThen((res) =>
-      ResultAsync.fromSafePromise(res.json().catch(() => ({}))).andThen((body) =>
-        res.ok ? okAsync(body) : errAsync(mapBoatError(res, body)),
-      ),
-    );
-  }
-
-  const poll = <T>(
-    what: string,
-    timeoutMs: number,
-    check: () => ResultAsync<T | null, SandboxError>,
-    signal?: AbortSignal,
-  ) => pollUntil(check, { what, timeoutMs, intervalMs: pollMs, signal, sleep: options.sleep });
+  const { call, requestTimeoutMs } = createJsonApi({
+    label: 'Boat',
+    baseUrl: config.apiBaseUrl ?? DEFAULT_BASE_URL,
+    authHeaders: { Authorization: `Bearer ${apiKey}` },
+    fetch: options.fetch,
+    requestTimeoutMs: options.requestTimeoutMs,
+    mapError: mapBoatError,
+  });
+  const poll = createPoller(options.pollMs ?? 3_000, options.sleep);
 
   const savedSnapshotStatus = (body: any): string | undefined =>
     body?.snapshot?.status ?? body?.savedSnapshot?.status;
@@ -313,26 +267,19 @@ export function createBoatProvider(
       }).map(() => undefined),
 
     destroy: (handle) =>
-      call('DELETE', `/sandboxes/${handle.sandboxId}`, {
-        headers: { 'X-Ascii-Confirm-Delete': handle.sandboxId },
-      })
-        .map(() => undefined)
-        .orElse((error) => (error.kind === 'not-found' ? okAsync(undefined) : errAsync(error))),
+      ignoreNotFound(
+        call('DELETE', `/sandboxes/${handle.sandboxId}`, {
+          headers: { 'X-Ascii-Confirm-Delete': handle.sandboxId },
+        }),
+      ),
 
     exec: (handle, command, opts) => {
-      const timeoutSeconds = Math.min(
-        600,
-        Math.max(1, Math.ceil((opts?.timeoutMs ?? 300_000) / 1000)),
-      );
+      const timeoutSeconds = execTimeoutSeconds(opts?.timeoutMs, 600);
       // The request waits for the command: its cap is the command's plus slack.
       return call('POST', `/sandboxes/${handle.sandboxId}/commands`, {
         body: { command, timeoutSeconds },
         timeoutMs: timeoutSeconds * 1000 + requestTimeoutMs,
-      }).map((body): ExecResult => ({
-        exitCode: typeof body?.exitCode === 'number' ? body.exitCode : -1,
-        stdout: String(body?.stdout ?? ''),
-        stderr: String(body?.stderr ?? ''),
-      }));
+      }).map(execResultFrom);
     },
 
     listTemplates: () =>
@@ -345,9 +292,7 @@ export function createBoatProvider(
       }),
 
     deleteTemplate: (template) =>
-      call('DELETE', `/saved-snapshots/${encodeURIComponent(template.ref)}`)
-        .map(() => undefined)
-        .orElse((error) => (error.kind === 'not-found' ? okAsync(undefined) : errAsync(error))),
+      ignoreNotFound(call('DELETE', `/saved-snapshots/${encodeURIComponent(template.ref)}`)),
 
     /**
      * Throwaway `small` sandbox → install script → saved snapshot → poll until
@@ -370,25 +315,11 @@ export function createBoatProvider(
             }),
       );
       return created.andThen((handle) => {
-        const steps = poll(
-          'template sandbox start',
-          options.readyTimeoutMs ?? 5 * 60_000,
-          () => provider.status(handle).map((s) => (s.state === 'running' ? true : null)),
-          req.signal,
-        )
-          .andThen(() =>
-            provider.exec(handle, scriptCommand(req.installScript, req.scriptEnv), {
-              timeoutMs: 600_000,
-            }),
-          )
-          .andThen((result) =>
-            result.exitCode === 0
-              ? okAsync<void, SandboxError>(undefined)
-              : errAsync<void, SandboxError>({
-                  kind: 'provider',
-                  message: `runner install failed (exit ${result.exitCode}): ${result.stderr.slice(-500)}`,
-                }),
-          )
+        const steps = installRunner(provider, handle, req, {
+          poll,
+          readyTimeoutMs: options.readyTimeoutMs,
+          execTimeoutMs: 600_000,
+        })
           .andThen(() =>
             call('POST', '/saved-snapshots', { body: { sandboxId: handle.sandboxId, name } }),
           )
@@ -412,12 +343,7 @@ export function createBoatProvider(
           )
           .map((): TemplateRef => ({ providerId: BOAT_PROVIDER_ID, ref: name }));
         // Always delete the throwaway sandbox, then surface the build outcome.
-        const finish = async (): Promise<Result<TemplateRef, SandboxError>> => {
-          const outcome = await steps;
-          await provider.destroy(handle);
-          return outcome;
-        };
-        return new ResultAsync(finish());
+        return withThrowawayMachine(handle, steps, provider.destroy);
       });
     },
   };

@@ -221,6 +221,39 @@ describe('browser PTY sink — sandbox threads', () => {
   });
 });
 
+describe('browser pty:list sink — sandbox terminals', () => {
+  test("a reload lists a sandbox thread's terminal along with the general runner's", async () => {
+    let lastTarget: RunnerTarget | undefined;
+    const f = fixture();
+    f.terminals.available.add('runner-box');
+    f.terminals.sessions.set('runner-box\0user-1', [{ ptyId: 'pty-sb', cwd: '/repo' }]);
+    const dependencies = {
+      ...f.dependencies,
+      runnerAccess: fakeRunnerAccess({
+        onSelect: (_userId, target) => (lastTarget = target),
+        // The sandbox thread route resolves to the sandbox's runner.
+        runnerFor: () => (lastTarget?.kind === 'request' ? 'runner-box' : 'runner-1'),
+        owners: { ...RUNNER_OWNERS, 'runner-box': 'user-1' },
+      }),
+    };
+    setupBrowserPtyHandlers(f.socket, 'user-1', dependencies);
+    setupBrowserPtyListRpc(f.socket, 'user-1', dependencies);
+
+    await f.socket.trigger('pty:spawn', {
+      id: 'pty-sb',
+      projectId: 'p-mine',
+      sandboxThreadId: 'thread-sb',
+      cwd: '/repo',
+    });
+    let response: { status?: string; sessions?: Array<{ ptyId: string }> } = {};
+    await f.socket.triggerRpc('pty:list', {}, (value) => (response = value as typeof response));
+
+    expect(response.status).toBe('ok');
+    expect(response.sessions?.map((session) => session.ptyId).sort()).toEqual(['pty-a', 'pty-sb']);
+    await f.socket.trigger('pty:close', { id: 'pty-sb' });
+  });
+});
+
 describe('browser pty:list sink', () => {
   test("lists the caller's sessions on the caller's runner", async () => {
     const f = fixture();

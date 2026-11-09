@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
-import { withProjects } from '@/data/projects/testing';
+import { seedProjectCurrentBranches, withProjects } from '@/data/projects/testing';
 import '@/i18n/config';
 import { withThreadIndex } from '@/data/threads/testing';
 import { useProjectStore } from '@/stores/project-store';
@@ -112,6 +112,7 @@ function seedStores(
     commandMetrics = {},
   } = opts;
 
+  seedProjectCurrentBranches({ [PROJECT_ID]: 'master' });
   useProjectStore.setState(
     withProjects({
       projects: [
@@ -128,7 +129,6 @@ function seedStores(
       expandedProjects: new Set([PROJECT_ID]),
       selectedProjectId: PROJECT_ID,
       initialized: true,
-      branchByProject: { [PROJECT_ID]: 'master' },
     }),
   );
 

@@ -23,7 +23,7 @@ export interface ProjectBranches {
 /** Branches change rarely (only on checkout/merge). */
 const BRANCHES_STALE_MS = 10_000;
 
-function projectBranchesQuery(projectId: string) {
+export function projectBranchesQuery(projectId: string) {
   return {
     queryKey: ['project-branches', projectId] as const,
     queryFn: ({ signal }: { signal: AbortSignal }): Promise<ProjectBranches> =>
@@ -51,10 +51,21 @@ export async function fetchProjectBranches(
   return layer.queryClient.getQueryData<ProjectBranches>(query.queryKey);
 }
 
+/** The project's checked-out branch from the cached listing, without fetching. */
+export function readProjectCurrentBranch(
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): string | undefined {
+  const { queryKey } = projectBranchesQuery(projectId);
+  return layer.queryClient.getQueryData<ProjectBranches>(queryKey)?.currentBranch ?? undefined;
+}
+
 /**
  * Record a branch the caller already knows (e.g. it just checked it out).
  * Cancels an in-flight listing, which read the pre-checkout branch, so it
- * cannot overwrite this value.
+ * cannot overwrite this value. With no listing cached yet, the branch is
+ * recorded in an entry marked stale (`updatedAt: 0`): the label shows it at
+ * once, and the next `fetchProjectBranches` still fetches the full listing.
  */
 export function setProjectCurrentBranch(
   projectId: string,
@@ -65,9 +76,12 @@ export function setProjectCurrentBranch(
   void layer.queryClient.cancelQueries({ queryKey });
   const cached = layer.queryClient.getQueryData<ProjectBranches>(queryKey);
   if (cached) {
-    layer.queryClient.setQueryData<ProjectBranches>(queryKey, {
-      ...cached,
-      currentBranch: branch,
-    });
+    layer.queryClient.setQueryData<ProjectBranches>(queryKey, { ...cached, currentBranch: branch });
+    return;
   }
+  layer.queryClient.setQueryData<ProjectBranches>(
+    queryKey,
+    { branches: [], remoteBranches: [], defaultBranch: null, currentBranch: branch },
+    { updatedAt: 0 },
+  );
 }

@@ -5,7 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { resolveBasePath } from '@/components/review-pane/resolve-base-path';
 import { fetchForThread, fetchProjectStatus, fetchForProject } from '@/data/git-status/actions';
 import { useGitStatusForThread, useProjectGitStatus } from '@/data/git-status/hooks';
-import { useProjects } from '@/data/projects/hooks';
+import { useProjectCurrentBranch, useProjects } from '@/data/projects/hooks';
 import { usePRDetail } from '@/data/pull-requests/hooks';
 import { useReviewState } from '@/hooks/use-review-state';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
@@ -13,7 +13,6 @@ import { useThreadById } from '@/lib/thread-selectors';
 import { canLoadGitHistory } from '@/lib/thread-variant';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { useProjectStore } from '@/stores/project-store';
 import {
   useThreadProjectId,
   useThreadSelector,
@@ -146,9 +145,7 @@ function useReviewBranches(targetProjectId: string | null | undefined) {
     if (t.mode !== 'worktree') return undefined;
     return resolveThreadBranch(t);
   });
-  const projectBranch = useProjectStore((s) =>
-    targetProjectId ? s.branchByProject[targetProjectId] : undefined,
-  );
+  const projectBranch = useProjectCurrentBranch(targetProjectId);
   return { isWorktree, baseBranch, threadBranch, currentBranch: threadBranch || projectBranch };
 }
 

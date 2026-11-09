@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { useProjectById } from '@/data/projects/hooks';
+import { useProjectById, useProjectCurrentBranch } from '@/data/projects/hooks';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
@@ -49,9 +49,7 @@ export function useMoreActionsMenu() {
   const deleteScratchThread = useThreadStore((s) => s.deleteScratchThread);
   const menuSelectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const project = useProjectById(threadProjectId);
-  const projectBranch = useProjectStore((s) =>
-    threadProjectId ? s.branchByProject[threadProjectId] : undefined,
-  );
+  const projectBranch = useProjectCurrentBranch(threadProjectId);
   const timelineVisible = useUIStore((s) => s.timelineVisible);
   const setTimelineVisible = useUIStore((s) => s.setTimelineVisible);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);

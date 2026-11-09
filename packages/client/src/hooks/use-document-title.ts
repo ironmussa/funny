@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 
-import { useProjectById } from '@/data/projects/hooks';
+import { useProjectById, useProjectCurrentBranch } from '@/data/projects/hooks';
 import { useThreadById } from '@/data/threads/hooks';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { createClientLogger } from '@/lib/client-logger';
@@ -75,13 +75,13 @@ function titleBranch(
  * Sync `document.title` to the focused thread / project.
  *
  * The branch label is derived ONLY from the focused thread's own metadata
- * (same source as ThreadPowerline), never from `branchByProject`. The cwd
- * branch lags a thread switch: `selectedThreadId` updates synchronously on
- * click, but the project checkout runs async, so `branchByProject` still
- * holds the *previous* thread's branch for a beat. Falling back to it made
- * the tab title flash the old branch then the new one on every back-and-forth
- * switch. `branchByProject` is only used when no thread is focused (a project
- * is selected but no thread is open).
+ * (same source as ThreadPowerline), never from the project's branch listing.
+ * The cwd branch lags a thread switch: `selectedThreadId` updates
+ * synchronously on click, but the project checkout runs async, so the listing
+ * still holds the *previous* thread's branch for a beat. Falling back to it
+ * made the tab title flash the old branch then the new one on every
+ * back-and-forth switch. The listing is only used when no thread is focused
+ * (a project is selected but no thread is open).
  */
 /** The URL-focused thread's row, falling back to the loaded right-pane payload. */
 function useFocusThread() {
@@ -102,7 +102,7 @@ export function useDocumentTitle(): void {
 
   const projectId = titleProjectId(titleThread, selectedProjectId);
   const projectName = useProjectById(projectId)?.name;
-  const cwdBranch = useProjectStore((s) => (projectId ? s.branchByProject[projectId] : undefined));
+  const cwdBranch = useProjectCurrentBranch(projectId);
   const { branch, branchSource } = titleBranch(titleThread, cwdBranch);
 
   const focusThreadId = focusThread?.id;

@@ -74,6 +74,15 @@ describe('ProjectSandboxSetting', () => {
     expect(screen.queryByTestId('settings-project-sandbox-default')).toBeNull();
   });
 
+  test('choosing a connection starts with the sandbox off, so new threads run locally', async () => {
+    // jsdom has no scrollIntoView; the open Radix Select calls it.
+    Element.prototype.scrollIntoView = vi.fn();
+    render(<ProjectSandboxSetting projectId="p1" ownerId="alice" />);
+    fireEvent.keyDown(screen.getByTestId('settings-project-sandbox-connection'), { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('option', { name: /funny-laptop/ }));
+    expect(mocks.save).toHaveBeenCalledWith('p1', { connectionId: 'c1', enabledByDefault: false });
+  });
+
   test('configured: size and default are shown; toggling the default saves it', () => {
     mocks.settings = {
       projectId: 'p1',

@@ -79,7 +79,7 @@ function ProjectSandboxRows({ projectId }: { projectId: string }) {
     // A new connection may be another provider: start from its default size.
     void saveProjectSandbox(projectId, {
       connectionId: value,
-      enabledByDefault: settings?.enabledByDefault ?? true,
+      enabledByDefault: settings?.enabledByDefault ?? false,
     });
   };
 

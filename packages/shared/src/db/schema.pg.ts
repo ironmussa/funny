@@ -818,7 +818,7 @@ export const projectSandboxSettings = pgTable(
     userId: text('user_id').notNull(),
     connectionId: text('connection_id').notNull(),
     sizeId: text('size_id').notNull(),
-    enabledByDefault: integer('enabled_by_default').notNull().default(1),
+    enabledByDefault: integer('enabled_by_default').notNull().default(0),
     updatedAt: text('updated_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.userId] })],

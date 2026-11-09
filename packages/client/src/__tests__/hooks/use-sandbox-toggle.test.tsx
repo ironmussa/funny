@@ -75,29 +75,44 @@ describe('PromptFooterBar sandbox toggle', () => {
     onRequestCompact: vi.fn(),
   };
 
-  test('when on it replaces the runtime selector; turning it off shows it again', () => {
+  test('a Local / project-sandbox switch replaces the runtime selector', () => {
     const setEnabled = vi.fn();
+    const onRuntimeChange = vi.fn();
     const { rerender } = render(
       <PromptFooterBar
         {...base}
+        runtimeModes={[{ value: 'local', label: 'Local' }]}
+        onRuntimeChange={onRuntimeChange}
         sandboxToggle={{ label: 'InstaBox', enabled: true, setEnabled }}
       />,
     );
-    const toggle = screen.getByTestId('prompt-sandbox-toggle');
-    expect(toggle).toHaveTextContent('Sandbox · InstaBox');
-    expect(toggle).toHaveAttribute('data-state', 'on');
     expect(screen.queryByTestId('prompt-mode-select')).toBeNull();
+    const sandbox = screen.getByTestId('prompt-sandbox-toggle');
+    expect(sandbox).toHaveTextContent('Sandbox · InstaBox');
+    expect(sandbox).toHaveAttribute('data-state', 'on');
+    // Only Local and the project's sandbox are offered.
+    expect(screen.getByTestId('prompt-runtime-switch').children).toHaveLength(2);
 
-    fireEvent.click(toggle);
+    fireEvent.click(screen.getByTestId('prompt-runtime-switch-local'));
     expect(setEnabled).toHaveBeenCalledWith(false);
+    expect(onRuntimeChange).toHaveBeenCalledWith('local');
 
     rerender(
       <PromptFooterBar
         {...base}
+        runtimeModes={[{ value: 'local', label: 'Local' }]}
+        onRuntimeChange={onRuntimeChange}
         sandboxToggle={{ label: 'InstaBox', enabled: false, setEnabled }}
       />,
     );
-    expect(screen.getByTestId('prompt-mode-select')).toBeInTheDocument();
+    expect(screen.getByTestId('prompt-runtime-switch-local')).toHaveAttribute('data-state', 'on');
+    // Clicking the selected side keeps it selected.
+    setEnabled.mockClear();
+    fireEvent.click(screen.getByTestId('prompt-runtime-switch-local'));
+    expect(setEnabled).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('prompt-sandbox-toggle'));
+    expect(setEnabled).toHaveBeenCalledWith(true);
   });
 
   test('without a project sandbox there is no toggle', () => {

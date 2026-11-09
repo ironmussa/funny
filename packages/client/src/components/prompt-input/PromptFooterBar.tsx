@@ -4,7 +4,7 @@ import { Boxes } from 'lucide-react';
 import { ModeSelect } from '@/components/PromptSelectors';
 import { ContextUsageRing } from '@/components/thread/ContextUsageRing';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
-import { Toggle } from '@/components/ui/toggle';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { SandboxToggle } from '@/hooks/use-prompt-model-state';
 
 export interface RuntimeMode {
@@ -49,35 +49,86 @@ type FooterLeadingProps = Pick<
   | 'onOpenReview'
 >;
 
-function SandboxToggleButton({ toggle }: { toggle: SandboxToggle }) {
+const SANDBOX_VALUE = 'sandbox';
+
+/**
+ * Local (or remote) vs. the project's sandbox, as one switch. Only the sandbox
+ * configured for the project is offered, never every connection.
+ */
+function RuntimeSwitch({
+  modes,
+  runtime,
+  onRuntimeChange,
+  toggle,
+}: {
+  modes: RuntimeMode[];
+  runtime: string;
+  onRuntimeChange: (v: string) => void;
+  toggle: SandboxToggle;
+}) {
+  const value = toggle.enabled ? SANDBOX_VALUE : runtime;
+  const onValueChange = (next: string) => {
+    // Clicking the selected item would clear a single ToggleGroup: keep it.
+    if (!next || next === value) return;
+    if (next === SANDBOX_VALUE) {
+      toggle.setEnabled(true);
+      return;
+    }
+    toggle.setEnabled(false);
+    onRuntimeChange(next);
+  };
+  const itemClass = 'h-6 gap-1 px-2 text-xs [&_svg]:size-3.5';
   return (
-    <Toggle
+    <ToggleGroup
+      type="single"
       size="sm"
-      pressed={toggle.enabled}
-      onPressedChange={toggle.setEnabled}
-      aria-label={`Sandbox · ${toggle.label}`}
-      data-testid="prompt-sandbox-toggle"
-      className="text-muted-foreground h-6 gap-1 px-1.5 text-xs [&_svg]:size-3.5"
+      value={value}
+      onValueChange={onValueChange}
+      className="border-border shrink-0 gap-0 rounded-md border"
+      data-testid="prompt-runtime-switch"
     >
-      <Boxes />
-      {`Sandbox · ${toggle.label}`}
-    </Toggle>
+      {modes.map((m) => (
+        <ToggleGroupItem
+          key={m.value}
+          value={m.value}
+          className={itemClass}
+          data-testid={`prompt-runtime-switch-${m.value}`}
+        >
+          {m.label}
+        </ToggleGroupItem>
+      ))}
+      <ToggleGroupItem
+        value={SANDBOX_VALUE}
+        aria-label={`Sandbox · ${toggle.label}`}
+        className={itemClass}
+        data-testid="prompt-sandbox-toggle"
+      >
+        <Boxes />
+        {`Sandbox · ${toggle.label}`}
+      </ToggleGroupItem>
+    </ToggleGroup>
   );
 }
 
 function FooterLeading(props: FooterLeadingProps) {
   if (props.isNewThread) {
-    const sandboxOn = !!props.sandboxToggle?.enabled;
     return (
       <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
-        {props.sandboxToggle && <SandboxToggleButton toggle={props.sandboxToggle} />}
-        {/* A sandbox that is on replaces the local / remote choice. */}
-        {!sandboxOn && props.runtimeModes.length > 1 && (
-          <ModeSelect
-            value={props.runtime}
-            onChange={props.onRuntimeChange}
+        {props.sandboxToggle ? (
+          <RuntimeSwitch
             modes={props.runtimeModes}
+            runtime={props.runtime}
+            onRuntimeChange={props.onRuntimeChange}
+            toggle={props.sandboxToggle}
           />
+        ) : (
+          props.runtimeModes.length > 1 && (
+            <ModeSelect
+              value={props.runtime}
+              onChange={props.onRuntimeChange}
+              modes={props.runtimeModes}
+            />
+          )
         )}
       </div>
     );

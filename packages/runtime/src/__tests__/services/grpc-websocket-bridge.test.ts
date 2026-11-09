@@ -57,6 +57,32 @@ describe('runner gRPC WebSocket bridge', () => {
     expect(received).toEqual([1, 2, 3, 4, 5, 6]);
   });
 
+  test('sends the runner bearer token on the WebSocket upgrade', async () => {
+    const seen: Array<string | null> = [];
+    const server = Bun.serve({
+      port: 0,
+      hostname: '127.0.0.1',
+      fetch: (req, srv) => {
+        seen.push(req.headers.get('authorization'));
+        return srv.upgrade(req) ? undefined : new Response('no', { status: 400 });
+      },
+      websocket: { message: (ws, message) => void ws.send(message) },
+    });
+    cleanups.push(() => server.stop(true));
+    const bridge = startGrpcWebSocketBridge(`ws://127.0.0.1:${server.port}${RUNNER_GRPC_WS_PATH}`, {
+      bearerToken: 'runner-secret-token',
+    });
+    cleanups.push(() => bridge.close());
+
+    const echoed = new Promise<void>((resolve) => {
+      void connectTcp(bridge.address, () => resolve()).then((socket) => {
+        socket.write(new Uint8Array([7]));
+      });
+    });
+    await echoed;
+    expect(seen).toEqual(['Bearer runner-secret-token']);
+  });
+
   test('closes the TCP connection when the carrier cannot be reached', async () => {
     const server = startEchoWebSocketServer();
     const port = server.port;

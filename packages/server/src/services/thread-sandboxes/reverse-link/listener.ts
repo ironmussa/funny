@@ -29,7 +29,7 @@ export function startReverseLinkListener(options: {
     req: Request,
     server: Bun.Server<any>,
     ip: ReverseLinkCallerIp,
-  ): Response | Promise<Response> | undefined;
+  ): Response | Promise<Response | undefined> | undefined;
 }): ReverseLinkListener {
   const server = Bun.serve<any>({
     ...(options.serve as object),

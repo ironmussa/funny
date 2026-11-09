@@ -154,10 +154,18 @@ export async function startBunServer(opts: BunHostOptions) {
     createRunnerGrpcWebSocketCarrier,
     carrierTargetFor,
     routeRunnerCarrier,
+    unauthenticatedCarrierPolicyFromEnv,
     withRunnerCarrier,
   } = await import('../../services/grpc/websocket-carrier.js');
+  // The carrier authenticates the upgrade with the runner's token before it
+  // opens a pipe to the gRPC listener; tokenless (older) runners get a small,
+  // separate pool unless RUNNER_GRPC_WS_ALLOW_UNAUTHENTICATED=false.
   const runnerCarrier = runnerTransport
-    ? createRunnerGrpcWebSocketCarrier({ target: carrierTargetFor(runnerTransport.endpoint) })
+    ? createRunnerGrpcWebSocketCarrier({
+        target: carrierTargetFor(runnerTransport.endpoint),
+        authenticate: browserRunnerManager.authenticateRunner,
+        unauthenticated: unauthenticatedCarrierPolicyFromEnv(),
+      })
     : null;
   const socketEngineHandler = socketEngine.handler();
   const appEnv = {
@@ -183,7 +191,12 @@ export async function startBunServer(opts: BunHostOptions) {
       if (url.pathname.startsWith('/socket.io/')) {
         return socketEngine.handleRequest(req, server);
       }
-      const carried = routeRunnerCarrier(req, server, runnerCarrier);
+      const carried = routeRunnerCarrier(
+        req,
+        server,
+        runnerCarrier,
+        server.requestIP(req)?.address ?? '',
+      );
       if (carried !== null) return carried;
       return app.fetch(req, { ...appEnv, IP: server.requestIP(req) });
     },
@@ -205,7 +218,7 @@ export async function startBunServer(opts: BunHostOptions) {
           websocket: withRunnerCarrier(socketEngineHandler.websocket, runnerCarrier),
         },
         fetch(req, server, ip) {
-          const carried = routeRunnerCarrier(req, server, runnerCarrier);
+          const carried = routeRunnerCarrier(req, server, runnerCarrier, ip.address);
           if (carried !== null) return carried;
           return app.fetch(req, { ...appEnv, IP: ip });
         },

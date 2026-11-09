@@ -108,7 +108,9 @@ function createGrpcTransport(endpoint: string, token: string): RunnerGrpcTranspo
     RunnerTransportService.name,
   );
   // `ws(s)://` endpoints go through the WebSocket carrier via a loopback bridge.
-  const bridge = isWebSocketEndpoint(endpoint) ? startGrpcWebSocketBridge(endpoint.trim()) : null;
+  const bridge = isWebSocketEndpoint(endpoint)
+    ? startGrpcWebSocketBridge(endpoint.trim(), { bearerToken: token })
+    : null;
   const { address, secure } = bridge
     ? { address: bridge.address, secure: false }
     : normalizeEndpoint(endpoint);

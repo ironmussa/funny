@@ -175,7 +175,7 @@ The server and runner are **always separate processes** — the runner is never 
 The gRPC connection has two carriers:
 
 - **Direct** — `RUNNER_GRPC_ENDPOINT` (e.g. a private network address such as `server.railway.internal:50051`).
-- **WebSocket carrier** (default when `RUNNER_GRPC_ENDPOINT` is unset) — the runner derives `wss://<TEAM_SERVER_URL host>/api/runner-grpc/ws` and pipes gRPC bytes through it (`runtime services/grpc-websocket-bridge.ts`, `server services/grpc/websocket-carrier.ts`). The carrier only moves bytes; authentication and the protocol stay in gRPC.
+- **WebSocket carrier** (default when `RUNNER_GRPC_ENDPOINT` is unset) — the runner derives `wss://<TEAM_SERVER_URL host>/api/runner-grpc/ws` and pipes gRPC bytes through it (`runtime services/grpc-websocket-bridge.ts`, `server services/grpc/websocket-carrier.ts`). The carrier only moves bytes; the protocol and per-stream authentication stay in gRPC. It does authenticate the upgrade itself: the runner sends its token as `Authorization: Bearer`, and a bad token gets 401. Runners from before that check send no token; they get a separate pool (64 sockets, 4 per address, closed if silent for 10 s) so they cannot crowd out authenticated runners. Set `RUNNER_GRPC_WS_ALLOW_UNAUTHENTICATED=false` to refuse them once every runner is updated.
 
 Data flow: `Browser ⇄ Server` over Socket.IO; `Server ⇄ Runner` over gRPC (direct or WebSocket carrier).
 

@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { api } from '@/lib/api';
+import { updateProfile } from '@/data/profile/actions';
 import { cn } from '@/lib/utils';
 import { type FontSize, type ThreadViewer, useSettingsStore } from '@/stores/settings-store';
 
@@ -115,7 +115,7 @@ function ThemeGrid() {
   const handleThemeChange = useCallback(
     (value: string) => {
       setTheme(value);
-      api.updateProfile({ theme: value });
+      void updateProfile({ theme: value });
       toastSettingsSaved(t);
     },
     [setTheme, t],

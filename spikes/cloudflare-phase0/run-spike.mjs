@@ -4,6 +4,7 @@
  * local Postgres. Prints a JSON report. Usage: node run-spike.mjs
  */
 
+import { createHmac } from 'node:crypto';
 import { mkdtempSync, rmSync } from 'node:fs';
 import http from 'node:http';
 import { tmpdir } from 'node:os';
@@ -19,7 +20,7 @@ import { unstable_startWorker } from 'wrangler';
 const PG_URL =
   process.env.PG_URL ?? `postgres://${['spike', 'spike'].join(':')}@127.0.0.1:55432/funny`;
 process.env.CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE = PG_URL;
-const RUNNER_TOKEN = 'runner-token-spike';
+const RUNNER_TOKEN_SECRET = 'runner-token-secret-spike';
 const AUTH_SECRET = 'spike-auth-secret-0123456789abcdef0123456789abcdef';
 const persistDir = mkdtempSync(join(tmpdir(), 'funny-spike-do-'));
 const report = {};
@@ -106,10 +107,12 @@ async function openSocket(path, headers) {
 
 const fetchWorker = (path, init) => fetch(`${base}${path}`, init);
 
-const runnerHeaders = (runnerId, owner, token = RUNNER_TOKEN) => ({
+/** What enrollment would hand a runner: its identity, signed (see verifyRunnerToken). */
+const mintRunnerToken = (runnerId, owner) =>
+  `${runnerId}.${owner}.${createHmac('sha256', RUNNER_TOKEN_SECRET).update(`${runnerId}.${owner}`).digest('hex')}`;
+
+const runnerHeaders = (runnerId, owner, token = mintRunnerToken(runnerId, owner)) => ({
   authorization: `Bearer ${token}`,
-  'x-runner-id': runnerId,
-  'x-runner-owner': owner,
 });
 const json = (m) => (typeof m.data === 'string' ? JSON.parse(m.data) : null);
 
@@ -313,14 +316,30 @@ console.error('[spike] E6 browser socket authorized by the session cookie; fan-o
   await otherUser.next();
   otherUser.ws.send(JSON.stringify({ type: 'event', seq: 'leak' }));
   const leaked = await browser.next((x) => json(x)?.seq === 'leak', 1000);
+  // Impersonation attempt: a valid credential for the attacker's own runner,
+  // plus headers naming the victim's runner and the victim as owner.
+  const spoof = await openSocket('/runner/connect', {
+    ...runnerHeaders('r-attacker', 'attacker'),
+    'x-runner-id': 'r6',
+    'x-runner-owner': userId,
+  });
+  await spoof.next();
+  spoof.ws.send(JSON.stringify({ type: 'event', seq: 'spoofed' }));
+  const spoofed = await browser.next((x) => json(x)?.seq === 'spoofed', 1000);
+  const forgedOwner = await upgradeStatus(
+    '/runner/connect',
+    runnerHeaders('r6', userId, `r6.${userId}.${'0'.repeat(64)}`),
+  );
   report.browserFanout = {
     anonymousUpgrade: anon.status,
     authenticatedUpgrade: browser.status,
     delivered: latencies.length,
     latencyMs: { p50: pct(latencies, 50), p95: pct(latencies, 95), max: Math.max(...latencies) },
     otherUsersEventReachedThisBrowser: Boolean(leaked),
+    spoofedIdentityHeadersReachedThisBrowser: Boolean(spoofed),
+    forgedTokenUpgrade: forgedOwner,
   };
-  for (const x of [browser, runner, otherUser]) {
+  for (const x of [browser, runner, otherUser, spoof]) {
     try {
       x.ws.close(1000, 'done');
     } catch {}

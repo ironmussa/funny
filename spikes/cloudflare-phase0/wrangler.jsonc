@@ -13,7 +13,7 @@
   "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RunnerSessionDO", "UserHubDO"] }],
   // Fake spike-only values (local runs only).
   "vars": {
-    "RUNNER_TOKEN": "runner-token-spike",
+    "RUNNER_TOKEN_SECRET": "runner-token-secret-spike",
     "AUTH_SECRET": "spike-auth-secret-0123456789abcdef0123456789abcdef",
   },
   "hyperdrive": [

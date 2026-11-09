@@ -66,18 +66,45 @@ app.on(['GET', 'POST'], '/api/auth/*', (c) =>
   withAuth(c.env, c.req.raw, (auth) => auth.handler(c.req.raw)),
 );
 
-// Runner: Bearer at upgrade, then the socket goes to the runner's DO.
+/**
+ * A runner's identity comes only from its credential, as on the real server
+ * (enrollment binds a token to one runner and its owner): the token is
+ * `<runnerId>.<ownerId>.<hex HMAC-SHA256 over "runnerId.ownerId">` with
+ * RUNNER_TOKEN_SECRET. Caller-supplied identity headers are ignored, so one
+ * runner cannot connect as another runner or deliver into another user's hub.
+ */
+async function verifyRunnerToken(secret, token) {
+  const parts = token?.split('.') ?? [];
+  if (parts.length !== 3) return null;
+  const [runnerId, ownerId, mac] = parts;
+  if (!runnerId || !ownerId || !/^[0-9a-f]{64}$/.test(mac)) return null;
+  const key = await crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode(secret),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['verify'],
+  );
+  const signature = Uint8Array.from(mac.match(/../g), (byte) => parseInt(byte, 16));
+  const valid = await crypto.subtle.verify(
+    'HMAC',
+    key,
+    signature,
+    new TextEncoder().encode(`${runnerId}.${ownerId}`),
+  );
+  return valid ? { runnerId, ownerId } : null;
+}
+
+// Runner: identity from the Bearer credential at upgrade, then the runner's DO.
 app.get('/runner/connect', async (c) => {
-  if (c.req.header('authorization') !== `Bearer ${c.env.RUNNER_TOKEN}`) {
-    return c.text('unauthorized', 401);
-  }
-  const runnerId = c.req.header('x-runner-id');
-  const userId = c.req.header('x-runner-owner');
-  if (!runnerId || !userId) return c.text('missing runner identity', 400);
-  const stub = c.env.RUNNER.get(c.env.RUNNER.idFromName(runnerId));
+  const bearer = c.req.header('authorization')?.replace(/^Bearer /, '');
+  const identity = await verifyRunnerToken(c.env.RUNNER_TOKEN_SECRET, bearer);
+  if (!identity) return c.text('unauthorized', 401);
+  const stub = c.env.RUNNER.get(c.env.RUNNER.idFromName(identity.runnerId));
   const headers = new Headers(c.req.raw.headers);
-  headers.set('x-owner', userId);
-  headers.set('x-runner-id', runnerId);
+  headers.delete('x-runner-owner');
+  headers.set('x-owner', identity.ownerId);
+  headers.set('x-runner-id', identity.runnerId);
   return stub.fetch(new Request(c.req.raw, { headers }));
 });
 

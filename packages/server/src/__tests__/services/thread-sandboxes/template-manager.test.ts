@@ -30,6 +30,23 @@ describe('resolveRunnerBuild', () => {
     expect(resolveRunnerBuild({}).isErr()).toBe(true);
     expect(resolveRunnerBuild({ FUNNY_BUILD_COMMIT: 'abc123' }).isErr()).toBe(true);
   });
+
+  test('falls back to the pushed HEAD of the local checkout', () => {
+    const local = expectOk(resolveRunnerBuild({}, { commit: 'D'.repeat(40), pushed: true }));
+    expect(local.commit).toBe('d'.repeat(40));
+  });
+
+  test('refuses an unpushed local HEAD with a push hint', () => {
+    const result = resolveRunnerBuild({}, { commit: 'e'.repeat(40), pushed: false });
+    expect(result.isErr() && result.error.kind).toBe('build-commit-not-pushed');
+  });
+
+  test('prefers the configured commit over the local checkout', () => {
+    const configured = expectOk(
+      resolveRunnerBuild({ FUNNY_BUILD_COMMIT: SHA }, { commit: 'e'.repeat(40), pushed: false }),
+    );
+    expect(configured.commit).toBe(SHA);
+  });
 });
 
 describe('runner install script', () => {

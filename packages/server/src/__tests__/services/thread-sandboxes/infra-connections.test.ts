@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
+import { tmpdir } from 'node:os';
 
 import { Hono } from 'hono';
 
@@ -191,10 +192,33 @@ describe('infra routes', () => {
 
     test('refuses without a known build commit', async () => {
       delete process.env.FUNNY_BUILD_COMMIT;
-      const res = await post('alice', 't-1');
+      // Outside a git checkout, so the local-HEAD fallback has nothing to use.
+      const cwd = process.cwd();
+      process.chdir(tmpdir());
+      const res = await Promise.resolve(post('alice', 't-1')).finally(() => process.chdir(cwd));
       restore();
       expect(res.status).toBe(409);
       expect((await res.json()).code).toBe('missing-build-commit');
+    });
+
+    test('without a public server URL, refuses a provider that cannot publish a port', async () => {
+      delete process.env.FUNNY_PUBLIC_URL;
+      const created = await app().request('/api/infra/connections', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ provider: 'fake', label: 'Mine', credential: 'fake-valid' }),
+      });
+      const connection = await created.json();
+      const res = await app().request('/api/infra/threads/t-1/sandbox', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ connectionId: connection.id }),
+      });
+      restore();
+      expect(res.status).toBe(409);
+      const body = await res.json();
+      expect(body.code).toBe('no-runner-link');
+      expect(body.error).toContain('cannot publish a port');
     });
 
     test('refuses another user’s thread and an already active sandbox', async () => {
@@ -212,6 +236,7 @@ describe('infra routes', () => {
           sizeId: 'default',
           repoUrl: null,
           llmTokenHash: null,
+          runnerLink: null,
           state: 'running',
           error: null,
           generation: 0,
@@ -237,6 +262,7 @@ describe('infra routes', () => {
           sizeId: 'default',
           repoUrl: null,
           llmTokenHash: null,
+          runnerLink: null,
           state: 'provisioning',
           error: null,
           generation: 0,
@@ -272,6 +298,7 @@ describe('infra routes', () => {
           sizeId: 'default',
           repoUrl: 'https://github.com/acme/px.git',
           llmTokenHash: null,
+          runnerLink: null,
           state: 'stopped',
           error: null,
           generation: 0,

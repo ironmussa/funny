@@ -63,7 +63,7 @@ bun run db:studio
 
 ### Server Architecture
 
-**Entry point:** `packages/server/src/index.ts` — Initializes auth, database, and starts `Bun.serve()` with WebSocket support. All agent/filesystem/git operations are proxied to remote runners connected over gRPC (see Deployment Architecture).
+**Entry point:** `packages/server/src/index.ts` starts the Bun host (`src/hosts/bun/main.ts`): validates secrets, initializes the database and auth, starts Socket.IO, the runner transport and background jobs, and listens with `Bun.serve()`. The HTTP composition (middleware, routes, runner proxy) is host-independent in `src/app.ts` (`createServerApp`); host-specific assets (client bundle, extensions) are mounted by `hosts/bun/assets.ts`. Server secrets go through `src/lib/server-secrets.ts`. All agent/filesystem/git operations are proxied to remote runners connected over gRPC (see Deployment Architecture).
 
 **Database:** SQLite via `bun:sqlite` (Bun's native SQLite driver) + Drizzle ORM. DB file lives at `~/.funny/data.db`. Tables are auto-created on startup via `db/migrate.ts` (raw SQL, not Drizzle migrations). Schema in `db/schema.ts` defines: `projects`, `threads`, `messages`, `tool_calls`.
 

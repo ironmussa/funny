@@ -151,7 +151,10 @@ export async function syncRunnerPolicyVersion(): Promise<number> {
       .select({ version: runnerPolicyVersion.version })
       .from(runnerPolicyVersion)
       .where(eq(runnerPolicyVersion.id, 1));
-    version = Number(row?.version ?? 0);
+    // A missing row (migration 092 seeds it) cannot prove the cache is
+    // current either: bumps would update nothing.
+    if (!row) throw new Error('runner_policy_version row is missing');
+    version = Number(row.version);
   } catch (error) {
     log.warn('Runner policy version unavailable — routing caches bypassed', {
       namespace: 'runner-scope',
@@ -186,7 +189,8 @@ async function invalidateRunnerScope(change: { runnerId?: string; projectId?: st
       .set({ version: sql`${runnerPolicyVersion.version} + 1` })
       .where(eq(runnerPolicyVersion.id, 1))
       .returning({ version: runnerPolicyVersion.version });
-    if (row) knownVersion = Math.max(knownVersion, Number(row.version));
+    if (!row) throw new Error('runner_policy_version row is missing');
+    knownVersion = Math.max(knownVersion, Number(row.version));
   } catch (error) {
     // Other instances keep their caches until the TTL: make that loud.
     log.error('Runner policy version bump failed — other instances may serve stale routing', {

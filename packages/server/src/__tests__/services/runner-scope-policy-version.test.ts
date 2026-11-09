@@ -102,6 +102,15 @@ describe('runner policy version', () => {
     expect(await instanceB.canRunnerAccessProject('r-other', 'p1')).toBe(false);
   });
 
+  test('without the version row the caches are bypassed too', async () => {
+    expect(await instanceA.grantProjectRunner('p1', 'alice', 'r-other')).toBe(true);
+    expect(await instanceB.canRunnerAccessProject('r-other', 'p1')).toBe(true);
+
+    testDb.db.run(sql`DELETE FROM runner_policy_version`);
+    await instanceA.revokeProjectRunner('p1', 'alice', 'r-other');
+    expect(await instanceB.canRunnerAccessProject('r-other', 'p1')).toBe(false);
+  });
+
   test('reads are served from the cache while the version is unchanged', async () => {
     expect(await instanceB.canRunnerServeProjectless('r-general')).toBe(true);
     // A write that bypasses runner-scope (no version bump) is not seen until

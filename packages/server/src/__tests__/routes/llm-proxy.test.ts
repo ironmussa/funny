@@ -117,3 +117,40 @@ describe('LLM proxy — Anthropic', () => {
     expect(isAllowedAnthropicPath('/../v1/messages')).toBe(false);
   });
 });
+
+describe('LLM proxy — per-sandbox limit', () => {
+  test('one sandbox over its limit gets 429 while another sandbox is still served', async () => {
+    const routes = createLlmProxyRoutes({
+      resolveToken: (token) =>
+        okAsync(
+          token === 'llmp_a'
+            ? { userId: 'alice', threadId: 't-a' }
+            : token === 'llmp_b'
+              ? { userId: 'alice', threadId: 't-b' }
+              : null,
+        ),
+      credentialFor: async () => OAUTH,
+      upstream: 'https://anthropic.test',
+      fetch: (async () => new Response('{}', { status: 200 })) as unknown as typeof fetch,
+      perSandboxLimit: { windowMs: 60_000, max: 2 },
+    });
+    const send = (token: string) =>
+      routes.request('/anthropic/v1/messages', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${token}` },
+        body: '{}',
+      });
+
+    expect((await send('llmp_a')).status).toBe(200);
+    expect((await send('llmp_a')).status).toBe(200);
+    const limited = await send('llmp_a');
+    expect(limited.status).toBe(429);
+    expect(limited.headers.get('retry-after')).toBe('60');
+    expect(((await limited.json()) as { error: { type: string } }).error.type).toBe(
+      'rate_limit_error',
+    );
+    expect((await send('llmp_b')).status).toBe(200);
+    // Invalid tokens are refused before they touch any sandbox's budget.
+    expect((await send('llmp_bad')).status).toBe(401);
+  });
+});

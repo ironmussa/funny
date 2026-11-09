@@ -4,7 +4,16 @@
  * without a filesystem.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -39,6 +48,16 @@ describe('fileKeyringSource', () => {
 
     const restarted = createCrypto({ dataDir: dir });
     expect(restarted.decrypt(ciphertext)).toBe('secret');
+  });
+
+  test('save replaces the keyring through a rename and leaves no temp file', () => {
+    const source = fileKeyringSource(dir);
+    source.save({ active: 'k1', keys: { k1: KEY_A } });
+    source.save({ active: 'k2', keys: { k1: KEY_A, k2: KEY_B } });
+    expect(readdirSync(dir)).toEqual(['encryption.keys.json']);
+    const path = join(dir, 'encryption.keys.json');
+    expect(statSync(path).mode & 0o777).toBe(0o600);
+    expect(source.load()).toEqual({ active: 'k2', keys: { k1: KEY_A, k2: KEY_B } });
   });
 
   test('mounts the legacy key as keyId "legacy" without rewriting it', () => {

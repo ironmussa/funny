@@ -155,7 +155,14 @@ console.error(
   const first = await openSocket('/runner/connect', runnerHeaders('r2', 'u1'));
   const e1 = json(await first.next()).epoch;
   const second = await openSocket('/runner/connect', runnerHeaders('r2', 'u1'));
+  const replacedAt = Date.now();
   const e2 = json(await second.next()).epoch;
+  // The old socket's close (its close frame reaches the DO within ms) must not
+  // mark the replacement offline. Checked well inside the heartbeat timeout so
+  // the alarm cannot be the cause; the local client's own close event lags ~12 s.
+  await new Promise((r) => setTimeout(r, 500));
+  const presenceAfterReplacement = await (await fetchWorker('/runner/presence/r2')).json();
+  const presenceCheckedAfterMs = Date.now() - replacedAt;
   const firstClose = await first.closed;
   second.ws.close(1000, 'done');
   await second.closed;
@@ -169,6 +176,8 @@ console.error(
     first: e1,
     replacement: e2,
     oldSocketCloseCode: firstClose.code,
+    onlineAfterReplacement: presenceAfterReplacement.online,
+    presenceCheckedAfterMs,
     afterRestart: e3,
   };
 }

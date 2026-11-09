@@ -26,6 +26,24 @@ import { log } from '../lib/logger.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
 
+/** A sliding-window counter per key; `hit` records one request and says if it is over the limit. */
+export function createSlidingWindowLimiter(opts: { windowMs: number; max: number }): {
+  hit(key: string, now?: number): boolean;
+} {
+  const { windowMs, max } = opts;
+  const hits: SlidingWindowHits = new Map();
+  startSlidingWindowPrune(hits, windowMs);
+  return {
+    hit(key, now = Date.now()) {
+      const valid = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+      if (valid.length >= max) return true;
+      valid.push(now);
+      hits.set(key, valid);
+      return false;
+    },
+  };
+}
+
 export function rateLimit(opts: {
   windowMs: number;
   max: number;
@@ -34,18 +52,9 @@ export function rateLimit(opts: {
   /** Requests this limiter does not count (they have a limiter of their own). */
   skip?: (c: Context) => boolean;
 }) {
-  const { windowMs, max, perUser, skip } = opts;
-  const hits: SlidingWindowHits = new Map();
-  startSlidingWindowPrune(hits, windowMs);
-
-  function check(key: string, now: number): boolean {
-    const timestamps = hits.get(key) ?? [];
-    const valid = timestamps.filter((t) => now - t < windowMs);
-    if (valid.length >= max) return true; // rate limited
-    valid.push(now);
-    hits.set(key, valid);
-    return false;
-  }
+  const { windowMs, perUser, skip } = opts;
+  const limiter = createSlidingWindowLimiter(opts);
+  const check = (key: string, now: number): boolean => limiter.hit(key, now);
 
   return async (c: Context, next: Next) => {
     if (skip?.(c)) return next();

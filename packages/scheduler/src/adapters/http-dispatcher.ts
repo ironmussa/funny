@@ -24,7 +24,7 @@ import type {
   SchedulerLogger,
 } from '../service.js';
 import type { HttpSchedulerClient } from './http-client.js';
-import type { HttpEventStream } from './http-event-stream.js';
+import type { EventStreamEvent, HttpEventStream } from './http-event-stream.js';
 
 export interface HttpDispatcherOptions {
   client: HttpSchedulerClient;
@@ -40,6 +40,21 @@ interface DispatchResponseBody {
   ok?: boolean;
   pipelineRunId?: string;
   error?: { message?: string };
+}
+
+/** Where a terminal outcome goes: held until the handle exists, then delivered. */
+interface TerminalWatch {
+  early: DispatchOutcome | null;
+  deliver: ((outcome: DispatchOutcome) => void) | null;
+}
+
+function terminalOutcome(event: EventStreamEvent): DispatchOutcome | null {
+  if (event.kind !== 'agent_terminal') return null;
+  const kind = event.payload.kind as string | undefined;
+  const error = event.payload.error as string | undefined;
+  if (kind === 'completed') return { kind: 'completed' };
+  if (kind === 'stopped') return { kind: 'cancelled' };
+  return { kind: 'failed', error: error ?? 'agent failed' };
 }
 
 function pickPrompt(thread: Thread): string {
@@ -67,10 +82,23 @@ export class HttpDispatcher implements Dispatcher {
     };
     if (this.pipelineName) payload.pipelineName = this.pipelineName;
 
+    // Subscribe BEFORE dispatching: the stream does not replay, and a run that
+    // ends fast (e.g. the agent fails at once) can publish its terminal event
+    // before `/dispatch` answers. An outcome seen before the handle exists is
+    // held and delivered to it.
+    const terminal: TerminalWatch = { early: null, deliver: null };
+    const unsubscribe = this.events.subscribe(thread.id, (event) => {
+      const outcome = terminalOutcome(event);
+      if (!outcome) return;
+      if (terminal.deliver) terminal.deliver(outcome);
+      else terminal.early ??= outcome;
+    });
+
     let response: DispatchResponseBody;
     try {
       response = await this.client.post<DispatchResponseBody>('/dispatch', payload);
     } catch (err) {
+      unsubscribe();
       const message = err instanceof Error ? err.message : String(err);
       this.log.warn('HTTP dispatch failed', {
         namespace: NS,
@@ -81,14 +109,23 @@ export class HttpDispatcher implements Dispatcher {
     }
 
     if (!response.ok || !response.pipelineRunId) {
+      unsubscribe();
       const message = response.error?.message ?? 'dispatch returned ok=false without pipelineRunId';
       return { ok: false, error: { message } };
     }
 
-    return { ok: true, handle: this.buildHandle(thread, response.pipelineRunId) };
+    return {
+      ok: true,
+      handle: this.buildHandle(thread, response.pipelineRunId, terminal, unsubscribe),
+    };
   }
 
-  private buildHandle(thread: Thread, pipelineRunId: string): DispatchHandle {
+  private buildHandle(
+    thread: Thread,
+    pipelineRunId: string,
+    terminal: TerminalWatch,
+    unsubscribe: () => void,
+  ): DispatchHandle {
     let resolveFinished!: (outcome: DispatchOutcome) => void;
     const finished = new Promise<DispatchOutcome>((resolve) => {
       resolveFinished = resolve;
@@ -106,14 +143,8 @@ export class HttpDispatcher implements Dispatcher {
       resolveFinished(outcome);
     };
 
-    const unsubscribe = this.events.subscribe(thread.id, (event) => {
-      if (event.kind !== 'agent_terminal') return;
-      const kind = event.payload.kind as string | undefined;
-      const error = event.payload.error as string | undefined;
-      if (kind === 'completed') settle({ kind: 'completed' });
-      else if (kind === 'stopped') settle({ kind: 'cancelled' });
-      else settle({ kind: 'failed', error: error ?? 'agent failed' });
-    });
+    terminal.deliver = settle;
+    if (terminal.early) settle(terminal.early);
 
     const abort = (): void => {
       if (settled) return;

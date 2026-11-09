@@ -36,7 +36,15 @@
  */
 
 import { randomBytes, createCipheriv, createDecipheriv } from 'crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
+import {
+  readFileSync,
+  writeFileSync,
+  existsSync,
+  mkdirSync,
+  renameSync,
+  rmSync,
+  statSync,
+} from 'fs';
 import { resolve } from 'path';
 
 import { z } from 'zod';
@@ -162,7 +170,17 @@ export function fileKeyringSource(dataDir: string): KeyringSource {
     },
     save(keyring) {
       mkdirSync(dataDir, { recursive: true, mode: 0o700 });
-      writeFileSync(keysPath, JSON.stringify(keyring, null, 2), { mode: 0o600 });
+      // Write a temp file and rename it over the keyring, so a crash mid-write
+      // can never leave a truncated keyring (every stored token would become
+      // unreadable).
+      const tmpPath = `${keysPath}.${process.pid}.${randomBytes(4).toString('hex')}.tmp`;
+      try {
+        writeFileSync(tmpPath, JSON.stringify(keyring, null, 2), { mode: 0o600, flag: 'wx' });
+        renameSync(tmpPath, keysPath);
+      } catch (error) {
+        rmSync(tmpPath, { force: true });
+        throw error;
+      }
       return true;
     },
   };

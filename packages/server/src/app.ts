@@ -15,6 +15,7 @@ import { csrf } from 'hono/csrf';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 
+import { clientIp, REVERSE_LINK_CALLER_ADDRESS } from './lib/client-ip.js';
 import {
   MCP_OAUTH_CALLBACK_CSP,
   MCP_OAUTH_CALLBACK_SCRIPT,
@@ -205,7 +206,17 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   // LLM credential proxy for sandbox agents (thread-sandboxes): authenticated by
   // the sandbox's proxy token, not a session, so it is mounted before auth.
   const { llmProxyRoutes } = await import('./routes/llm-proxy.js');
-  app.use('/api/llm-proxy/*', rateLimit({ windowMs: 60_000, max: 600 }));
+  // Per IP before the token is checked. Reverse-link callers all share one
+  // address, so they skip this bucket; every sandbox is limited by its own
+  // token inside the routes instead.
+  app.use(
+    '/api/llm-proxy/*',
+    rateLimit({
+      windowMs: 60_000,
+      max: 600,
+      skip: (c) => clientIp(c) === REVERSE_LINK_CALLER_ADDRESS,
+    }),
+  );
   app.route('/api/llm-proxy', llmProxyRoutes());
 
   // Better Auth routes — use app.all to handle all HTTP methods (GET, POST, DELETE, etc.)

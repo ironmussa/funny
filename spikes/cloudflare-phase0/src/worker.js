@@ -192,8 +192,16 @@ export class RunnerSessionDO extends DurableObject {
   }
 
   async webSocketClose(ws, code) {
-    if (this.ctx.getWebSockets().length <= 1) await this.ctx.storage.put('online', false);
-    ws.close(code, 'closing');
+    // Only the current session's socket decides presence: after a replacement
+    // the old socket's close runs while the new one is open.
+    try {
+      const current = await this.ctx.storage.get('epoch');
+      if (this.ctx.getTags(ws).includes(`epoch:${current}`)) {
+        await this.ctx.storage.put('online', false);
+      }
+    } finally {
+      ws.close(code, 'closing');
+    }
   }
 
   async alarm() {

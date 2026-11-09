@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { Hono } from 'hono';
 
-import { clientIp } from '../../lib/client-ip.js';
+import { callerAddress, clientIp } from '../../lib/client-ip.js';
 
 function probe(trustProxy: boolean) {
   const app = new Hono();
@@ -35,5 +35,21 @@ describe('clientIp', () => {
   test('null when nothing identifies the caller', async () => {
     expect(await probe(false)({})).toBeNull();
     expect(await probe(false)({}, { IP: null })).toBeNull();
+  });
+});
+
+describe('callerAddress (raw requests, e.g. the runner carrier)', () => {
+  const forwarded = new Headers({ 'x-forwarded-for': '203.0.113.7, 10.0.0.1' });
+
+  test('uses the forwarded client behind a trusted proxy', () => {
+    expect(callerAddress(forwarded, '10.0.0.1', true)).toBe('203.0.113.7');
+  });
+
+  test('keeps the peer when proxy headers are not trusted', () => {
+    expect(callerAddress(forwarded, '10.0.0.1', false)).toBe('10.0.0.1');
+  });
+
+  test('null when nothing identifies the caller', () => {
+    expect(callerAddress(new Headers(), undefined, false)).toBeNull();
   });
 });

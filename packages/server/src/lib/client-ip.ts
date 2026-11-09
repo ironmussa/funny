@@ -15,6 +15,14 @@
 
 import type { Context } from 'hono';
 
+/**
+ * Caller address of every request on the reverse-link listener (thread
+ * sandboxes). It is one value for all sandboxes, so an IP bucket keyed on it
+ * is shared by all of them: limit those callers by their authenticated
+ * identity instead.
+ */
+export const REVERSE_LINK_CALLER_ADDRESS = 'sandbox-reverse-link';
+
 /** The per-request peer address a host supplies in the env. */
 export interface ClientAddress {
   address?: string;
@@ -23,10 +31,22 @@ export interface ClientAddress {
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
 
 export function clientIp(c: Context, trustProxy: boolean = TRUST_PROXY): string | null {
+  const peer = (c.env as { IP?: ClientAddress | null } | undefined)?.IP?.address;
+  return callerAddress(c.req.raw.headers, peer, trustProxy);
+}
+
+/**
+ * The same rule for a raw request (paths served before Hono, e.g. the runner
+ * carrier): the first `X-Forwarded-For` hop under `TRUST_PROXY`, else the peer.
+ */
+export function callerAddress(
+  headers: Headers,
+  peer: string | null | undefined,
+  trustProxy: boolean = TRUST_PROXY,
+): string | null {
   if (trustProxy) {
-    const first = c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+    const first = headers.get('x-forwarded-for')?.split(',')[0]?.trim();
     if (first) return first;
   }
-  const address = (c.env as { IP?: ClientAddress | null } | undefined)?.IP?.address;
-  return typeof address === 'string' && address.length > 0 ? address : null;
+  return typeof peer === 'string' && peer.length > 0 ? peer : null;
 }

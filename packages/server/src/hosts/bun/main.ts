@@ -8,6 +8,7 @@
 import { scheduleRepeating } from '@funny/shared/async';
 
 import { createServerApp } from '../../app.js';
+import { callerAddress } from '../../lib/client-ip.js';
 import { resolveCorsOrigins } from '../../lib/cors-origins.js';
 import { ensureDataDir } from '../../lib/data-dir.js';
 import { attachFileLogTransport, log } from '../../lib/logger.js';
@@ -195,7 +196,9 @@ export async function startBunServer(opts: BunHostOptions) {
         req,
         server,
         runnerCarrier,
-        server.requestIP(req)?.address ?? '',
+        // Behind a trusted proxy every runner has the proxy's peer address; use
+        // the forwarded client address so they do not share one cap.
+        callerAddress(req.headers, server.requestIP(req)?.address) ?? '',
       );
       if (carried !== null) return carried;
       return app.fetch(req, { ...appEnv, IP: server.requestIP(req) });

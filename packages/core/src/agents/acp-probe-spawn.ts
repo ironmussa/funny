@@ -1,8 +1,8 @@
 /**
- * Spawn a short-lived ACP CLI probe (model discovery, session fork) and wait
+ * Spawn a short-lived ACP CLI probe (model discovery) and wait
  * until it has actually started.
  *
- * Shared by `acp-discover` and `acp-fork`. The child env is built with
+ * Used by `acp-discover`. The child env is built with
  * `buildChildEnv`, so funny's infrastructure secrets are never inherited
  * (security M8). On POSIX the child leads its own process group so cleanup can
  * reap any helpers / MCP grandchildren it spawns.

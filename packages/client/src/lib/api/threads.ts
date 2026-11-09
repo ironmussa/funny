@@ -232,7 +232,8 @@ export const threadsApi = {
   rewindCode: (threadId: string, messageId: string) =>
     request<{
       threadId: string;
-      newSessionId: string;
+      /** Rewind no longer forks a provider session: the next turn rebuilds the history. */
+      newSessionId: null;
       rewind: {
         canRewind: boolean;
         error?: string;

@@ -42,7 +42,7 @@ import { ensureLazyCwd, syncWorktreeProjectAssets } from './agent-startup/prepar
 import { recoverThreadContext } from './agent-startup/recover-context.js';
 import { buildSystemPrefix, projectInstructionsBlock } from './agent-startup/system-prefix.js';
 import type { AgentStateTracker } from './agent-state.js';
-import { captureCodexCheckpoint } from './codex-git-checkpoints.js';
+import { captureGitCheckpoint } from './git-checkpoints.js';
 import type { IThreadManager, RuntimeThreadRecord } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 import { canDoGitOps, hasLazyCwd, resolveThreadCwd, tmpAssetsPathFor } from './thread-context.js';
@@ -225,7 +225,7 @@ export class AgentLifecycleManager {
       const resolvedCwd = await this.resolveCwdOrFail(threadId, thread, project);
       if (resolvedCwd === null) return;
       cwd = resolvedCwd;
-      await this.prepareWorkspace(threadId, thread, project, cwd, provider);
+      await this.prepareWorkspace(threadId, thread, project, cwd);
     }
 
     const activeAgentProfile = await resolveActiveAgentProfile(thread, provider);
@@ -464,7 +464,6 @@ export class AgentLifecycleManager {
     thread: RuntimeThreadRecord,
     project: StartProject,
     cwd: string,
-    provider: AgentProvider,
   ): Promise<void> {
     const variant = thread as unknown as Thread;
     if (thread.mode === 'worktree' && project?.path && cwd !== project.path) {
@@ -476,10 +475,10 @@ export class AgentLifecycleManager {
       ensureLazyCwd(threadId, thread.userId, cwd);
     }
 
-    // Codex has no native rewind API. Capture a Git snapshot for the latest
-    // user message immediately before it can modify the worktree.
-    if (provider === 'codex' && canDoGitOps(variant)) {
-      await this.captureCodexRewindCheckpoint(threadId, cwd);
+    // Rewind is funny-native for every provider: capture a Git snapshot for
+    // the latest user message immediately before it can modify the worktree.
+    if (canDoGitOps(variant)) {
+      await this.captureRewindCheckpoint(threadId, cwd);
     }
 
     // Baseline for the changed-files summary. Not awaited: the scan runs while
@@ -496,7 +495,7 @@ export class AgentLifecycleManager {
   }
 
   /** A failed capture must not block the agent; it simply keeps rewind disabled. */
-  private async captureCodexRewindCheckpoint(threadId: string, cwd: string): Promise<void> {
+  private async captureRewindCheckpoint(threadId: string, cwd: string): Promise<void> {
     try {
       const detail = await this.threadManager.getThreadWithMessages(threadId);
       const latestUserMessage = detail?.messages
@@ -506,11 +505,11 @@ export class AgentLifecycleManager {
       if (!latestUserMessage?.id) {
         throw new Error('No user message is available for checkpointing');
       }
-      await captureCodexCheckpoint({ threadId, messageId: latestUserMessage.id, cwd });
+      await captureGitCheckpoint({ threadId, messageId: latestUserMessage.id, cwd });
       await this.threadManager.updateThread(threadId, { fileCheckpointingEnabled: 1 });
     } catch (err) {
       await this.threadManager.updateThread(threadId, { fileCheckpointingEnabled: 0 });
-      log.warn('Failed to capture Codex Git checkpoint; rewind remains disabled', {
+      log.warn('Failed to capture Git checkpoint; rewind remains disabled', {
         namespace: 'agent',
         threadId,
         cwd,

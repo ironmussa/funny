@@ -63,7 +63,7 @@ bun run db:studio
 
 ### Server Architecture
 
-**Entry point:** `packages/server/src/index.ts` — Initializes auth, database, and starts `Bun.serve()` with WebSocket support. All agent/filesystem/git operations are proxied to remote runners connected via WebSocket tunnel.
+**Entry point:** `packages/server/src/index.ts` — Initializes auth, database, and starts `Bun.serve()` with WebSocket support. All agent/filesystem/git operations are proxied to remote runners connected over gRPC (see Deployment Architecture).
 
 **Database:** SQLite via `bun:sqlite` (Bun's native SQLite driver) + Drizzle ORM. DB file lives at `~/.funny/data.db`. Tables are auto-created on startup via `db/migrate.ts` (raw SQL, not Drizzle migrations). Schema in `db/schema.ts` defines: `projects`, `threads`, `messages`, `tool_calls`.
 
@@ -94,7 +94,8 @@ bun run db:studio
 - `/api/projects` — CRUD + branch listing
 - `/api/threads` — CRUD + start/stop agents + send follow-up messages
 - `/api/git/:threadId/*` — Diff, stage, unstage, revert, commit, push, create PR
-- `/ws` — WebSocket endpoint (multiplexed for all threads)
+- `/socket.io/` — Browser realtime endpoint (Socket.IO, multiplexed for all threads; `services/socketio/`)
+- `/api/runner-grpc/ws` — WebSocket carrier for the runner gRPC connection (`RUNNER_GRPC_WS_PATH`)
 - `/api/browse` — Filesystem browsing (drive roots, directory listing, repo name detection, git init)
 
 ### Client Architecture
@@ -112,7 +113,7 @@ bun run db:studio
 
 **Thread rows.** Every thread row lives once, in the threads collection (`data/threads/store.ts`). List membership and order per project, scratch and shared bucket are list metadata (`data/threads/list-meta.ts`), not copies of rows. Read rows with the hooks re-exported from [`lib/thread-selectors.ts`](packages/client/src/lib/thread-selectors.ts) (`useThreadById`, `useThreadsForProject`, `useScratchThreads`, `useSharedThreads`, `useThreadsByProject`). Read the open thread's changing fields (status, title, branch) through `stores/thread-view.ts` or the `stores/thread-context` hooks, not off the loaded payload, which is a load-time snapshot. Realtime row patches (status, `lastAssistantMessage`, cost, stage) go through `patchThreadRow` in `stores/thread-row-writes.ts`. `stores/thread-mutations.ts` only patches the loaded payload map (`threadDataById`) and its `activeThread` mirror.
 
-**Real-time updates:** `hooks/use-ws.ts` connects to `/ws` and dispatches WebSocket events to the store (agent:message, agent:status, agent:result, agent:tool_call).
+**Real-time updates:** `hooks/use-ws.ts` connects to the server with `socket.io-client` and dispatches realtime events to the store (agent:message, agent:status, agent:result, agent:tool_call).
 
 **UI components:** Built with shadcn/ui (Radix UI primitives + Tailwind). Components in `components/ui/` include Button, Select, Dialog, ScrollArea, Tooltip, and Collapsible.
 
@@ -169,9 +170,14 @@ The admin can create additional users from **Settings > Users** in the UI. Self-
 The server and runner are **always separate processes** — the runner is never embedded in the server.
 
 - **Server** (`packages/server`) — Handles authentication, serves the client UI, and owns the database. Proxies all agent/filesystem/git requests to runners. The server is the single entry point for all client requests.
-- **Runner** (`packages/runtime`) — Stateless process that executes agent work (spawning Claude CLI processes, managing git worktrees, PTY sessions). Runners connect to the server via WebSocket tunnel and can work behind NAT. The runner has **no database** — all data is proxied to the server via the WebSocket data channel.
+- **Runner** (`packages/runtime`) — Stateless process that executes agent work (spawning Claude CLI processes, managing git worktrees, PTY sessions). Runners dial out to the server over **gRPC** (`runner.v2` protocol; runtime `services/grpc-runner-client.ts`, server `services/grpc/`), so they can work behind NAT. The runner has **no database** — all data is proxied to the server via the gRPC data channel (`data:*` messages). Server → runner HTTP requests travel inside the same connection as gRPC `tunnel` frames.
 
-Data flow: `Client → Server → Runner (via WS tunnel or direct HTTP)`
+The gRPC connection has two carriers:
+
+- **Direct** — `RUNNER_GRPC_ENDPOINT` (e.g. a private network address such as `server.railway.internal:50051`).
+- **WebSocket carrier** (default when `RUNNER_GRPC_ENDPOINT` is unset) — the runner derives `wss://<TEAM_SERVER_URL host>/api/runner-grpc/ws` and pipes gRPC bytes through it (`runtime services/grpc-websocket-bridge.ts`, `server services/grpc/websocket-carrier.ts`). The carrier only moves bytes; authentication and the protocol stay in gRPC.
+
+Data flow: `Browser ⇄ Server` over Socket.IO; `Server ⇄ Runner` over gRPC (direct or WebSocket carrier).
 
 **Deploying to Railway (production):** the prod stack runs on Railway as two services (`funny-server`, `funny-runner`) plus Postgres. See [docs/guides/railway-deploy.md](docs/guides/railway-deploy.md) for the connect + deploy runbook — how to load the project token (`source` `.env.railway-token.local`, never `cat` it), `railway up --service …`, verifying builds, and the rule that a new Claude model needs **both** a server deploy (model registry) and a runner deploy (bundled Claude Code CLI version).
 

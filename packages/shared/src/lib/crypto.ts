@@ -39,6 +39,10 @@ import { randomBytes, createCipheriv, createDecipheriv } from 'crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync, statSync } from 'fs';
 import { resolve } from 'path';
 
+import { z } from 'zod';
+
+import { parseStoredJson } from '../json-validation.js';
+
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
 const LEGACY_KEY_ID = 'legacy';
@@ -63,6 +67,12 @@ export interface SerializedKeyring {
   active: string;
   keys: Record<string, string>;
 }
+
+/** Shape of a stored keyring (`encryption.keys.json`, or a secret binding). */
+export const serializedKeyringSchema = z.object({
+  active: z.string().min(1),
+  keys: z.record(z.string(), z.string()),
+});
 
 /** Where the keyring is read from and written to. */
 export interface KeyringSource {
@@ -125,10 +135,13 @@ export function fileKeyringSource(dataDir: string): KeyringSource {
       let keyring: SerializedKeyring | null = null;
       if (existsSync(keysPath)) {
         assertSecureMode(keysPath);
-        keyring = JSON.parse(readFileSync(keysPath, 'utf-8')) as SerializedKeyring;
-        if (!keyring.active || typeof keyring.keys !== 'object' || keyring.keys === null) {
-          throw new Error('Malformed encryption.keys.json');
-        }
+        const parsed = parseStoredJson(
+          serializedKeyringSchema,
+          readFileSync(keysPath, 'utf-8'),
+          'encryption.keys.json',
+        );
+        if (!parsed.ok) throw new Error(`Malformed encryption.keys.json (${parsed.error})`);
+        keyring = parsed.value;
       }
       // Legacy single-key file — mount under keyId `legacy` so old ciphertexts
       // still decrypt. If a newer keys file exists, the legacy key is still

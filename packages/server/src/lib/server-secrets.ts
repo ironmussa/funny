@@ -24,11 +24,12 @@ import { hkdfSync, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
+import { parseStoredJson } from '@funny/shared/json-validation';
 import {
   fileKeyringSource,
   readOnlyKeyringSource,
+  serializedKeyringSchema,
   type KeyringSource,
-  type SerializedKeyring,
 } from '@funny/shared/lib/crypto';
 
 import { DATA_DIR } from './data-dir.js';
@@ -150,16 +151,15 @@ export function defaultKeyringSource(opts: {
 }): KeyringSource {
   const raw = opts.env[KEYRING_ENV_VAR];
   if (!raw) return fileKeyringSource(opts.dataDir);
-  let parsed: SerializedKeyring;
-  try {
-    parsed = JSON.parse(raw) as SerializedKeyring;
-  } catch {
-    throw new Error(`${KEYRING_ENV_VAR} is not valid JSON`);
+  const parsed = parseStoredJson(serializedKeyringSchema, raw, KEYRING_ENV_VAR);
+  if (!parsed.ok) {
+    throw new Error(
+      parsed.error.includes('invalid JSON')
+        ? `${KEYRING_ENV_VAR} is not valid JSON`
+        : `${KEYRING_ENV_VAR} must look like {"active":"k1","keys":{"k1":"<hex-64>"}}`,
+    );
   }
-  if (typeof parsed?.active !== 'string' || typeof parsed.keys !== 'object' || !parsed.keys) {
-    throw new Error(`${KEYRING_ENV_VAR} must look like {"active":"k1","keys":{"k1":"<hex-64>"}}`);
-  }
-  return readOnlyKeyringSource(parsed);
+  return readOnlyKeyringSource(parsed.value);
 }
 
 /** Called by a host that supplies its own keyring source. */

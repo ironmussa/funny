@@ -1103,6 +1103,32 @@ describe('data-handler handleDataMessageWithAck', () => {
     expect(row?.title).toBe('Renamed from runner');
   });
 
+  test('update_thread feeds the scheduler event stream with terminal and stage changes', async () => {
+    const { getSchedulerEventBuffer } = await import('../../services/scheduler-event-buffer.js');
+    const buffer = getSchedulerEventBuffer();
+    const since = (await buffer.waitForEvents(0, 0)).nextSeq;
+
+    await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:update_thread',
+      threadId: 't1',
+      payload: { threadId: 't1', updates: { status: 'running' } },
+    });
+    await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:update_thread',
+      threadId: 't1',
+      payload: { threadId: 't1', updates: { status: 'completed', stage: 'review' } },
+    });
+
+    const { events } = await buffer.waitForEvents(since, 0);
+    // 'running' is not terminal: only the completion and the stage change reach the stream.
+    expect(events.map((e) => ({ kind: e.kind, threadId: e.threadId, payload: e.payload }))).toEqual(
+      [
+        { kind: 'agent_terminal', threadId: 't1', payload: { kind: 'completed' } },
+        { kind: 'thread_stage', threadId: 't1', payload: { stage: 'review' } },
+      ],
+    );
+  });
+
   test('update_thread cannot reassign the thread to another owner or project', async () => {
     seedProject(db as any, { id: 'victim-project', userId: 'victim-user', path: '/tmp/victim' });
     const before = await db.select().from(schema.threads).where(eq(schema.threads.id, 't1')).get();

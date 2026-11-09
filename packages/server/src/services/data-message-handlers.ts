@@ -22,6 +22,7 @@ import { relayToThreadStream, relayToUser } from './browser-events.js';
 import { forgetThreadOwnership } from './data-ownership.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
+import { getSchedulerEventBuffer } from './scheduler-event-buffer.js';
 import * as startupCommandsRepo from './startup-commands-repository.js';
 
 /**
@@ -119,6 +120,26 @@ function notifyTerminalStatusPersisted(
   const event = { type: 'thread:updated', threadId, data: { status } };
   relayToUser(runnerUserId, event);
   relayToThreadStream(threadId, event);
+}
+
+/**
+ * Feed the scheduler's event stream (`GET /api/scheduler/system/events`) from
+ * the persisted update — the same durable signal as above. The standalone
+ * scheduler settles a dispatched run only on `agent_terminal`; without it a
+ * finished run held its slot until the next reconcile, which then cancelled
+ * it and queued a spurious retry.
+ */
+function publishSchedulerThreadEvents(threadId: unknown, updates: Record<string, unknown>): void {
+  if (typeof threadId !== 'string') return;
+  const buffer = getSchedulerEventBuffer();
+  const { status, stage } = updates;
+  if (typeof status === 'string' && TERMINAL_THREAD_STATUSES.has(status)) {
+    // `kind` is read by the scheduler's dispatcher: completed | stopped | anything else = failed.
+    buffer.publish({ kind: 'agent_terminal', threadId, payload: { kind: status } });
+  }
+  if (typeof stage === 'string') {
+    buffer.publish({ kind: 'thread_stage', threadId, payload: { stage } });
+  }
 }
 
 async function isOrgMember(userId: string, orgId: string): Promise<boolean> {
@@ -244,6 +265,7 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     );
     await threadRepo.updateThread(data.payload.threadId, updates);
     notifyTerminalStatusPersisted(runnerUserId, data.payload.threadId, data.payload.updates);
+    publishSchedulerThreadEvents(data.payload.threadId, updates);
     return { type: 'data:update_thread_response', ok: true };
   },
   'data:create_pending_permission_request': async ({ data }) => {

@@ -9,9 +9,11 @@ import { cn } from '@/lib/utils';
 
 import { UserMessageCard, type UserMessageCardProps } from './UserMessageCard';
 
+/** The submitted message as the card shows it, images included, so the swap to
+ * the real conversation does not make the attachments pop in. */
 export type PreparationMessageMetadata = Pick<
   UserMessageCardProps,
-  'model' | 'permissionMode' | 'effort' | 'timestamp'
+  'model' | 'permissionMode' | 'effort' | 'timestamp' | 'images'
 >;
 
 const ignoreSubmit = async () => false;

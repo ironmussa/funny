@@ -252,6 +252,7 @@ export function NewThreadInput({
         permissionMode: opts.mode as PreparationMessageMetadata['permissionMode'],
         effort: opts.effort as PreparationMessageMetadata['effort'],
         timestamp: new Date().toISOString(),
+        images,
       };
       setSubmittedMetadata(metadata);
       submittedMetadataRef.current = metadata;

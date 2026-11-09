@@ -61,6 +61,7 @@ vi.mock('@/data/git-status/actions', () => ({
   fetchForProject: (...args: unknown[]) => mockFetchForProject(...args),
 }));
 
+import { readProjectCurrentBranch } from '@/data/projects/branches';
 import { readProjects } from '@/data/projects/read';
 import { withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
@@ -279,14 +280,14 @@ describe('ProjectStore', () => {
 
       // A checkout completes (ensureBranch → setBranch) before the listing returns.
       useProjectStore.getState().setBranch(pid, 'feat/x');
-      expect(useProjectStore.getState().branchByProject[pid]).toBe('feat/x');
+      expect(readProjectCurrentBranch(pid)).toBe('feat/x');
 
       // The in-flight listing resolves with the pre-checkout (stale) branch.
       resolveList({ isErr: () => false, value: { currentBranch: 'master' } });
       await fetchPromise;
 
       // Stale value must NOT clobber the authoritative checkout result.
-      expect(useProjectStore.getState().branchByProject[pid]).toBe('feat/x');
+      expect(readProjectCurrentBranch(pid)).toBe('feat/x');
     });
 
     test('applies fetchBranch result when no checkout intervenes', async () => {
@@ -297,7 +298,23 @@ describe('ProjectStore', () => {
 
       await useProjectStore.getState().fetchBranch(pid);
 
-      expect(useProjectStore.getState().branchByProject[pid]).toBe('main');
+      expect(readProjectCurrentBranch(pid)).toBe('main');
+    });
+
+    test('a branch recorded before any listing still lets the full listing load', async () => {
+      const pid = 'race-p3';
+      useProjectStore.getState().setBranch(pid, 'feat/y');
+      expect(readProjectCurrentBranch(pid)).toBe('feat/y');
+
+      mockApi.listBranches.mockClear();
+      mockApi.listBranches.mockReturnValueOnce(
+        Promise.resolve({ isErr: () => false, value: { currentBranch: 'feat/y' } }) as any,
+      );
+      await useProjectStore.getState().fetchBranch(pid);
+
+      // The placeholder entry is stale, so the listing is still requested.
+      expect(mockApi.listBranches).toHaveBeenCalledTimes(1);
+      expect(readProjectCurrentBranch(pid)).toBe('feat/y');
     });
   });
 

@@ -7,6 +7,7 @@ import { PullRequestsTab } from '@/components/PullRequestsTab';
 import { createDataLayer } from '@/data/data-layer';
 import { readGitStatusMaps } from '@/data/git-status/read';
 import { seedGitStatus } from '@/data/git-status/testing';
+import { seedProjectCurrentBranches } from '@/data/projects/testing';
 import { replaceDataLayer } from '@/data/runtime';
 import { withThreadIndex } from '@/data/threads/testing';
 import { useProjectStore } from '@/stores/project-store';
@@ -161,6 +162,7 @@ describe('PullRequestsTab', () => {
     );
 
     const thread = makeThread();
+    seedProjectCurrentBranches({ 'project-1': 'qa' });
     useProjectStore.setState({
       projects: [
         {
@@ -175,7 +177,6 @@ describe('PullRequestsTab', () => {
         },
       ],
       selectedProjectId: 'project-1',
-      branchByProject: { 'project-1': 'qa' },
       initialized: true,
     } as any);
     useThreadStore.setState(

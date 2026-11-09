@@ -334,7 +334,7 @@ export function useReviewState(args: UseReviewStateArgs) {
   useEffect(() => {
     const contextChanged = gitContextKey !== prevGitContextKeyRef.current;
     const branchChanged = currentBranch !== prevCurrentBranchRef.current;
-    // `currentBranch` comes from `branchByProject`, which hydrates asynchronously
+    // `currentBranch` comes from the project's branch listing, which hydrates asynchronously
     // AFTER mount (undefined → "main"). That first resolution is NOT a real
     // checkout — the worktree was always on that branch, we just learned its
     // name — so the destructive reset below would clear a freshly-loaded summary

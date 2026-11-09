@@ -59,7 +59,6 @@ interface ProjectState {
   // amount needed (sidebar/header clicks where the row is usually visible).
   revealIntent: 'start' | 'nearest';
   initialized: boolean;
-  branchByProject: Record<string, string>;
 
   loadProjects: () => Promise<void>;
   toggleProject: (projectId: string) => void;
@@ -89,7 +88,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   revealNonce: 0,
   revealIntent: 'nearest',
   initialized: false,
-  branchByProject: {},
 
   loadProjects: async () => {
     // Deduplicate concurrent calls (StrictMode, cascading re-renders, etc.)
@@ -247,20 +245,15 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   setBranch: (projectId, branch) => {
     // The caller already knows the new branch (e.g. it just checked it out):
-    // record it in the branch query too, cancelling an in-flight listing that
+    // record it in the branch query, cancelling an in-flight listing that
     // read the pre-checkout branch so it cannot flicker the label back.
     setProjectCurrentBranch(projectId, branch);
-    set({ branchByProject: { ...get().branchByProject, [projectId]: branch } });
   },
 
   // The listing is a shared query (`data/projects/branches.ts`): its freshness
   // replaces the old cooldown, and in-flight requests are de-duplicated.
   fetchBranch: async (projectId) => {
-    const listing = await fetchProjectBranches(projectId);
-    const currentBranch = listing?.currentBranch;
-    if (currentBranch && get().branchByProject[projectId] !== currentBranch) {
-      set({ branchByProject: { ...get().branchByProject, [projectId]: currentBranch } });
-    }
+    await fetchProjectBranches(projectId);
   },
 
   // Project writes are optimistic transactions on the projects collection:

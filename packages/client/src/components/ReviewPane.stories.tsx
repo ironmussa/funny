@@ -6,7 +6,7 @@ import { Toaster } from 'sonner';
 
 import { seedGitStatus } from '@/data/git-status/testing';
 import '@/i18n/config';
-import { withProjects } from '@/data/projects/testing';
+import { seedProjectCurrentBranches, withProjects } from '@/data/projects/testing';
 import { withThreadIndex } from '@/data/threads/testing';
 import { useCommitProgressStore } from '@/stores/commit-progress-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -357,6 +357,7 @@ function seedStores(
     tab = 'changes',
   } = opts;
 
+  seedProjectCurrentBranches({ 'proj-1': 'master' });
   useProjectStore.setState(
     withProjects({
       projects: [
@@ -373,7 +374,6 @@ function seedStores(
       expandedProjects: new Set(['proj-1']),
       selectedProjectId: 'proj-1',
       initialized: true,
-      branchByProject: { 'proj-1': 'master' },
     }),
   );
 

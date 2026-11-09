@@ -2,6 +2,7 @@ import type { Project } from '@funny/shared';
 
 import type { DataLayer } from '../data-layer';
 import { getDataLayer } from '../runtime';
+import { projectBranchesQuery, type ProjectBranches } from './branches';
 import { getProjectsData } from './store';
 
 /**
@@ -45,4 +46,19 @@ export function withSampleProject(): { selectedProjectId: string } {
     },
   ]);
   return { selectedProjectId: 'proj-1' };
+}
+
+/** Seed projects' checked-out branches into their branch listings (tests and stories). */
+export function seedProjectCurrentBranches(
+  branchByProject: Record<string, string>,
+  layer: DataLayer = getDataLayer(),
+): void {
+  for (const [projectId, currentBranch] of Object.entries(branchByProject)) {
+    layer.queryClient.setQueryData<ProjectBranches>(projectBranchesQuery(projectId).queryKey, {
+      branches: [currentBranch],
+      remoteBranches: [],
+      defaultBranch: currentBranch,
+      currentBranch,
+    });
+  }
 }

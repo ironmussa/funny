@@ -3,8 +3,9 @@ import { eq } from '@tanstack/db';
 import { useLiveQuery } from '@tanstack/react-db';
 import { useMemo } from 'react';
 
-import { useDataLayer } from '../hooks';
+import { useDataLayer, useDataQuery } from '../hooks';
 import { liveQueryKey } from '../live-query-key';
+import { projectBranchesQuery } from './branches';
 import { compareProjects, getProjectsData } from './store';
 
 /**
@@ -36,4 +37,14 @@ export function useProjectById(projectId: string | null | undefined): Project | 
   });
   const row = rows?.[0] as Project | undefined;
   return useMemo(() => (row ? data.fromRow(row) : undefined), [row, data]);
+}
+
+/**
+ * The project's checked-out branch, from the shared branch listing. Observes
+ * the cache only: the listing is fetched where the project is selected or
+ * expanded (`project-store.fetchBranch`), so mounting a reader adds no request.
+ */
+export function useProjectCurrentBranch(projectId: string | null | undefined): string | undefined {
+  const { data } = useDataQuery({ ...projectBranchesQuery(projectId ?? ''), enabled: false });
+  return projectId ? (data?.currentBranch ?? undefined) : undefined;
 }

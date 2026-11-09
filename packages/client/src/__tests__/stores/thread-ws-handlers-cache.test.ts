@@ -92,9 +92,6 @@ function makeState(overrides: Record<string, unknown> = {}) {
     activeThread,
     setupProgressByThread: {},
     contextUsageByThread: {},
-    queuedCountByThread: {},
-    queuedMessagesByThread: {},
-    queuedNextMessageByThread: {},
     loadThreadsForProject: vi.fn(),
     ...overrides,
   } as any;

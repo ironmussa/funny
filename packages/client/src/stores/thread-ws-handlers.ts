@@ -26,6 +26,7 @@ import type {
 } from '@funny/shared';
 import { toast } from 'sonner';
 
+import { applyQueueSummary } from '@/data/queue/store';
 import {
   isThreadListed,
   listedProjectIds,
@@ -977,56 +978,24 @@ export function handleWSQueueUpdate(
     pendingDequeuedMessages.set(threadId, dequeuedMsg);
   }
 
-  set((state) => {
-    const updatedMap =
-      data.queuedCount > 0
-        ? { ...state.queuedCountByThread, [threadId]: data.queuedCount }
-        : (() => {
-            const { [threadId]: _, ...rest } = state.queuedCountByThread;
-            return rest;
-          })();
-    const updatedMessageMap =
-      data.queuedCount > 0 && data.nextMessage
-        ? { ...state.queuedNextMessageByThread, [threadId]: data.nextMessage }
-        : (() => {
-            const { [threadId]: _, ...rest } = state.queuedNextMessageByThread;
-            return rest;
-          })();
-    const cachedQueue = state.queuedMessagesByThread[threadId];
-    const shouldKeepCachedQueue =
-      data.queuedCount > 0 && (!data.nextMessage || cachedQueue?.[0]?.content === data.nextMessage);
-    const updatedQueueMap = shouldKeepCachedQueue
-      ? state.queuedMessagesByThread
-      : (() => {
-          const { [threadId]: _, ...rest } = state.queuedMessagesByThread;
-          return rest;
-        })();
-    return {
-      queuedCountByThread: updatedMap,
-      queuedMessagesByThread: updatedQueueMap,
-      queuedNextMessageByThread: updatedMessageMap,
-      ...mutations.applyThreadDataPatch(state, threadId, (t) => {
-        const nextThread = {
-          ...t,
-          queuedCount: data.queuedCount,
-          queuedNextMessage: data.nextMessage,
-        };
-        if (!dequeuedMsg) return nextThread;
-        if (dequeuedUserAlreadyShownInTurn(t.messages, dequeuedMsg.content)) {
-          pendingDequeuedMessages.delete(threadId);
-          return nextThread;
-        }
-        const insertionIndex = trailingAssistantScaffoldStart(t.messages);
-        if (insertionIndex < t.messages.length) {
-          pendingDequeuedMessages.delete(threadId);
-          const messages = t.messages.slice();
-          messages.splice(insertionIndex, 0, makeDequeuedUserMessage(threadId, dequeuedMsg));
-          return { ...nextThread, messages };
-        }
-        return nextThread;
-      }),
-    };
-  });
+  // The queue lives in the data layer for every thread, loaded or not.
+  applyQueueSummary(threadId, data.queuedCount, data.nextMessage);
+  if (!dequeuedMsg) return;
+
+  set((state) =>
+    mutations.applyThreadDataPatch(state, threadId, (t) => {
+      if (dequeuedUserAlreadyShownInTurn(t.messages, dequeuedMsg.content)) {
+        pendingDequeuedMessages.delete(threadId);
+        return t;
+      }
+      const insertionIndex = trailingAssistantScaffoldStart(t.messages);
+      if (insertionIndex >= t.messages.length) return t;
+      pendingDequeuedMessages.delete(threadId);
+      const messages = t.messages.slice();
+      messages.splice(insertionIndex, 0, makeDequeuedUserMessage(threadId, dequeuedMsg));
+      return { ...t, messages };
+    }),
+  );
 }
 
 // ── Compact boundary ────────────────────────────────────────────

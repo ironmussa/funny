@@ -55,11 +55,11 @@ afterEach(() => {
 
 describe('mergeThreadView', () => {
   test('row fields win over the payload copy; payload fields are kept', () => {
-    const entry = payload('t1', { title: 'old', queuedCount: 2 });
+    const entry = payload('t1', { title: 'old', totalMessages: 2 });
     const view = mergeThreadView(entry, thread('t1', { title: 'new', status: 'running' }));
     expect(view?.title).toBe('new');
     expect(view?.status).toBe('running');
-    expect(view?.queuedCount).toBe(2);
+    expect(view?.totalMessages).toBe(2);
     expect(view?.messages).toBe(entry.messages);
   });
 

@@ -252,6 +252,7 @@
     "manuallyStopped": "You stopped this task. Send a message to continue.",
     "serverRestarted": "The server was restarted while this task was running. Send a message to continue.",
     "nextPrompt": "What do you want to do next?",
+    "retrySandboxPrompt": "Write a message to retry the sandbox…",
     "agentWorkingQueue": "Agent is working... type to queue a follow-up",
     "describeTaskDefault": "Describe the task, @ to add a file, / to use a skill, # to add a function",
     "acceptContinue": "Continue",

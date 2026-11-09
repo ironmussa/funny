@@ -71,6 +71,16 @@ export function canDoGitOps(thread: Pick<Thread, 'isScratch'>): boolean {
 }
 
 /**
+ * Returns true for a thread that runs in its own sandbox (thread-sandboxes).
+ * Its checkout lives on the sandbox runner, so its git status is never the
+ * project checkout's: it gets its own status key, and a project runner's bulk
+ * status leaves it out.
+ */
+export function runsInSandbox(thread: { runtime?: string | null }): boolean {
+  return thread.runtime === 'sandbox';
+}
+
+/**
  * Returns true when the runner owns the thread's working directory and creates
  * it on demand (scratch threads). Project and worktree directories must
  * already exist — never mkdir them.

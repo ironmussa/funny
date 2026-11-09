@@ -250,6 +250,7 @@
     "manuallyStopped": "Você parou esta tarefa. Envie uma mensagem para continuar.",
     "serverRestarted": "O servidor foi reiniciado enquanto esta tarefa estava em execução. Envie uma mensagem para continuar.",
     "nextPrompt": "O que você quer fazer a seguir?",
+    "retrySandboxPrompt": "Escreva uma mensagem para tentar o sandbox novamente…",
     "agentWorkingQueue": "O agente está trabalhando... digite para enfileirar um acompanhamento",
     "describeTaskDefault": "Descreva a tarefa, @ para adicionar arquivo, / para usar skill",
     "acceptContinue": "Continuar",

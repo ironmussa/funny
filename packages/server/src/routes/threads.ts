@@ -46,6 +46,7 @@ import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
 import { destroyThreadSandbox } from '../services/thread-sandboxes/sandbox-lifecycle.js';
 import { sandboxThreadLauncherFor } from '../services/thread-sandboxes/sandbox-thread-wiring.js';
+import { retrySandboxThreadSchema } from '../services/thread-sandboxes/sandbox-thread.js';
 import { parseJsonBody, parseQuery } from '../validation/request.js';
 
 // Canonical thread-lifecycle enums — kept in sync with
@@ -750,13 +751,22 @@ function creationFailureResponse(
 async function handleCreateSandboxThread(c: Context<ServerEnv>, payload: Record<string, unknown>) {
   const userId = c.get('userId') as string;
   const result = await sandboxThreadLauncherFor(c.env ?? {}).create(userId, payload);
+  return sandboxLaunchResponse(c, result, 201);
+}
+
+/** A sandbox launch's reply: the thread, or the refusal shown as is. */
+function sandboxLaunchResponse(
+  c: Context<ServerEnv>,
+  result: Awaited<ReturnType<ReturnType<typeof sandboxThreadLauncherFor>['create']>>,
+  okStatus: 201 | 202,
+) {
   if (result.isErr()) {
     // The refusal explains what to fix (configure a sandbox, set FUNNY_PUBLIC_URL…):
     // show it to the user instead of the generic per-status text.
     const { message, code, status } = result.error;
     return c.json({ error: message, code, friendlyMessage: message }, status);
   }
-  return c.json(result.value.thread as any, 201);
+  return c.json(result.value.thread as any, okStatus);
 }
 
 // POST /api/threads — Create a new thread
@@ -801,6 +811,20 @@ threadRoutes.post('/:id/scheduler/workflow-event', async (c) => {
 // non-owner may reach; the gate runs BEFORE proxyToRunner so a `view` sharee /
 // non-sharee gets 404 here instead of crossing runner isolation.
 threadRoutes.post('/:id/message', requireThreadSteer, proxyToRunner);
+
+// A follow-up on a sandbox thread whose setup failed: provision a new sandbox
+// for it and start the agent there (thread-sandboxes). Owner only.
+threadRoutes.post('/:id/sandbox-retry', requireThreadOwner, async (c) => {
+  const userId = c.get('userId') as string;
+  const parsed = await parseJsonBody(c, retrySandboxThreadSchema);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const result = await sandboxThreadLauncherFor(c.env ?? {}).retry(
+    userId,
+    c.req.param('id'),
+    parsed.value,
+  );
+  return sandboxLaunchResponse(c, result, 202);
+});
 
 // POST /api/threads/:id/upload — upload a user-attached file to the runner.
 // Owner-only: writes a file onto the owner's machine. NOT part of the steer

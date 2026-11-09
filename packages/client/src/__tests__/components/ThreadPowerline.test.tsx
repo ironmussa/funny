@@ -14,6 +14,7 @@ vi.mock('react-i18next', () => ({
         'powerline.tooltipBaseBranch': 'Base branch: {{branch}}',
         'powerline.tooltipWorktree': 'Worktree branch: {{branch}}',
         'powerline.tooltipWorktreeWithPath': 'Worktree branch: {{branch}} — {{path}}',
+        'powerline.tooltipSandbox': '{{project}} — running in a cloud sandbox',
       };
       return Object.entries(values ?? {}).reduce(
         (message, [name, value]) => message.replaceAll(`{{${name}}}`, value),
@@ -148,6 +149,40 @@ describe('ThreadPowerline', () => {
 
     expect(screen.getByTestId('powerline-segment-branch')).toHaveTextContent('master');
     expect(screen.queryByTestId('powerline-segment-worktree-branch')).not.toBeInTheDocument();
+  });
+
+  test('a sandbox thread says it runs in the cloud, not in the local folder', async () => {
+    const localPath = '/mnt/windows/Users/me/funny';
+    renderWithProviders(
+      <ThreadPowerline
+        thread={mockThread({ mode: 'local', runtime: 'sandbox' })}
+        projectName="funny"
+        projectTooltip={localPath}
+      />,
+    );
+
+    const project = screen.getByTestId('powerline-segment-project');
+    fireEvent.pointerMove(project, { pointerType: 'mouse' });
+
+    expect(await screen.findAllByText('funny — running in a cloud sandbox')).not.toHaveLength(0);
+    expect(screen.queryByText(localPath)).not.toBeInTheDocument();
+  });
+
+  test('a local thread keeps the project path as its tooltip', async () => {
+    const localPath = '/mnt/windows/Users/me/funny';
+    renderWithProviders(
+      <ThreadPowerline
+        thread={mockThread({ mode: 'local' })}
+        projectName="funny"
+        projectTooltip={localPath}
+      />,
+    );
+
+    fireEvent.pointerMove(screen.getByTestId('powerline-segment-project'), {
+      pointerType: 'mouse',
+    });
+
+    expect(await screen.findAllByText(localPath)).not.toHaveLength(0);
   });
 
   test('local branch tooltip includes the full branch name', async () => {

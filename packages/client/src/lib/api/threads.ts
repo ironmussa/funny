@@ -28,6 +28,17 @@ export interface ThreadShareGrant {
   user: { id: string; name: string; image: string | null; username: string | null } | null;
 }
 
+/** Agent options a written message carries. */
+interface MessageOptions {
+  provider?: string;
+  model?: string;
+  permissionMode?: string;
+  effort?: string;
+  allowedTools?: string[];
+  disallowedTools?: string[];
+  fileReferences?: { path: string }[];
+}
+
 export const threadsApi = {
   listThreads: (projectId?: string, includeArchived?: boolean, limit?: number, offset?: number) => {
     const params = new URLSearchParams();
@@ -185,14 +196,7 @@ export const threadsApi = {
   sendMessage: (
     threadId: string,
     content: string,
-    opts?: {
-      provider?: string;
-      model?: string;
-      permissionMode?: string;
-      effort?: string;
-      allowedTools?: string[];
-      disallowedTools?: string[];
-      fileReferences?: { path: string }[];
+    opts?: MessageOptions & {
       symbolReferences?: {
         path: string;
         name: string;
@@ -210,6 +214,20 @@ export const threadsApi = {
     request<{ ok: boolean; handledLocally?: 'shell_escape' }>(`/threads/${threadId}/message`, {
       method: 'POST',
       // Undefined options are dropped by JSON.stringify.
+      body: JSON.stringify({ content, images, ...opts }),
+    }),
+  /**
+   * A message written on a sandbox thread whose setup failed: the server
+   * provisions a new sandbox and starts the agent with it (thread-sandboxes).
+   */
+  retrySandboxThread: (
+    threadId: string,
+    content: string,
+    opts?: MessageOptions,
+    images?: ImageAttachment[],
+  ) =>
+    request<Thread>(`/threads/${threadId}/sandbox-retry`, {
+      method: 'POST',
       body: JSON.stringify({ content, images, ...opts }),
     }),
   stopThread: (threadId: string) =>

@@ -24,7 +24,10 @@ import { toast } from 'sonner';
 import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 import { GraphGutter, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
 import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
-import { HistoryFilters } from '@/components/commit-graph/HistoryFilters';
+import {
+  DEFAULT_GRAPH_BRANCH_SCOPE,
+  HistoryFilters,
+} from '@/components/commit-graph/HistoryFilters';
 import { useBranchActions } from '@/components/commit-graph/use-branch-actions';
 import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDialog';
 import { DiffStats } from '@/components/DiffStats';
@@ -43,7 +46,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
 import { api } from '@/lib/api';
-import type { GitRebaseReflogEventDTO, GraphRefDTO } from '@/lib/api/git';
+import type { GitRebaseReflogEventDTO, GraphBranchScope, GraphRefDTO } from '@/lib/api/git';
 import { authorAvatarUrl } from '@/lib/author-avatar';
 import { useCachedAvatar } from '@/lib/avatar-cache';
 import { createClientLogger } from '@/lib/client-logger';
@@ -197,7 +200,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const [logErrorMessage, setLogErrorMessage] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
   const hasMoreRef = useRef(false);
-  const [allBranches, setAllBranches] = useState(true);
+  const [branchScope, setBranchScope] = useState<GraphBranchScope>(DEFAULT_GRAPH_BRANCH_SCOPE);
   const [selectedHash, setSelectedHash] = useState<string | null>(null);
   const [unpushed, setUnpushed] = useState<Set<string>>(new Set());
   const [unpulled, setUnpulled] = useState<Set<string>>(new Set());
@@ -237,7 +240,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
 
   const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${
     gitThread?.projectId ?? projectModeId ?? ''
-  }::${allBranches}`;
+  }::${branchScope}`;
 
   const loadLog = useCallback(
     async (
@@ -252,8 +255,8 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
       const signal = abortRef.current?.signal;
       try {
         const result = effectiveThreadId
-          ? await api.getGitGraphLog(effectiveThreadId, PAGE_SIZE, allBranches, skip, signal)
-          : await api.projectGitGraphLog(projectModeId!, PAGE_SIZE, allBranches, skip, signal);
+          ? await api.getGitGraphLog(effectiveThreadId, PAGE_SIZE, branchScope, skip, signal)
+          : await api.projectGitGraphLog(projectModeId!, PAGE_SIZE, branchScope, skip, signal);
         if (signal?.aborted) return null;
         let out: { entries: GraphEntry[]; hasMore: boolean } | null = null;
         if (result.isOk()) {
@@ -300,7 +303,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         loadingRef.current = false;
       }
     },
-    [hasGitContext, effectiveThreadId, projectModeId, allBranches, t],
+    [hasGitContext, effectiveThreadId, projectModeId, branchScope, t],
   );
 
   const loadMore = useCallback(() => {
@@ -664,7 +667,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     >
       <GraphToolbar
         logLoading={logLoading}
-        allBranches={allBranches}
+        branchScope={branchScope}
         commitCount={displayEntries.length}
         syncFilter={syncFilter}
         authors={authors}
@@ -678,7 +681,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
         }}
         onToggleSyncFilter={toggleSyncFilter}
         onRefresh={refreshLog}
-        onToggleAllBranches={() => setAllBranches((v) => !v)}
+        onBranchScopeChange={setBranchScope}
       />
 
       <div className="border-sidebar-border bg-background border-b px-2 py-1">
@@ -1067,7 +1070,7 @@ function useEmailAvatars(entries: GraphEntry[]): Map<string, string> {
 /** Toolbar: refresh, branch scope, sync filters, and a commit counter. */
 function GraphToolbar({
   logLoading,
-  allBranches,
+  branchScope,
   commitCount,
   syncFilter,
   onToggleSyncFilter,
@@ -1078,10 +1081,10 @@ function GraphToolbar({
   hasMoreAuthors,
   onLoadMoreAuthors,
   onRefresh,
-  onToggleAllBranches,
+  onBranchScopeChange,
 }: {
   logLoading: boolean;
-  allBranches: boolean;
+  branchScope: GraphBranchScope;
   commitCount: number;
   syncFilter: CommitSyncFilter;
   authors: string[];
@@ -1092,7 +1095,7 @@ function GraphToolbar({
   onLoadMoreAuthors: () => void;
   onToggleSyncFilter: (filter: Exclude<CommitSyncFilter, 'all'>) => void;
   onRefresh: () => void;
-  onToggleAllBranches: () => void;
+  onBranchScopeChange: (scope: GraphBranchScope) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -1108,8 +1111,8 @@ function GraphToolbar({
         <RefreshCw className={cn('icon-base', logLoading && 'animate-spin')} />
       </Button>
       <HistoryFilters
-        allBranches={allBranches}
-        onToggleAllBranches={onToggleAllBranches}
+        branchScope={branchScope}
+        onBranchScopeChange={onBranchScopeChange}
         syncFilter={syncFilter}
         onToggleSyncFilter={onToggleSyncFilter}
         authors={authors}

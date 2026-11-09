@@ -28,8 +28,19 @@ export function isScratch(thread: ThreadLike): boolean {
  * runner, checkout and model credential live there, not on the project's
  * runner, so project-runner readiness checks do not apply to it.
  */
-export function runsInSandbox(thread: { runtime?: string } | null | undefined): boolean {
+export function runsInSandbox(thread: { runtime?: string | null } | null | undefined): boolean {
   return thread?.runtime === 'sandbox';
+}
+
+/**
+ * A sandbox thread whose setup failed before its agent ever started (no
+ * session). It keeps showing its setup steps, and the next message the user
+ * writes retries the sandbox instead of going to a runner.
+ */
+export function sandboxSetupFailed(
+  thread: { runtime?: string; status?: string; sessionId?: string | null } | null | undefined,
+): boolean {
+  return runsInSandbox(thread) && thread?.status === 'failed' && !thread.sessionId;
 }
 
 /**

@@ -163,7 +163,6 @@ describe('thread store actions', () => {
         activeThread: null,
         setupProgressByThread: {},
         contextUsageByThread: {},
-        queuedCountByThread: {},
       }),
     );
   });

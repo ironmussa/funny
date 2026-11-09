@@ -1,3 +1,6 @@
+import type { ContextBreakdown } from '@funny/shared';
+
+import { ContextBreakdownPanel, formatTokens } from '@/components/thread/ContextBreakdownPanel';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '@/components/ui/hover-card';
 import { cn } from '@/lib/utils';
 
@@ -5,6 +8,8 @@ interface Props {
   pct: number;
   usedTokens?: number;
   maxTokens?: number;
+  /** End-of-turn per-category snapshot; shown in the hover card when present. */
+  breakdown?: ContextBreakdown;
   onCompact?: () => void;
   disabled?: boolean;
 }
@@ -14,13 +19,14 @@ const STROKE = 1.25;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRC = 2 * Math.PI * RADIUS;
 
-const formatTokens = (n: number): string => {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 2)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
-  return String(n);
-};
-
-export function ContextUsageRing({ pct, usedTokens, maxTokens, onCompact, disabled }: Props) {
+export function ContextUsageRing({
+  pct,
+  usedTokens,
+  maxTokens,
+  breakdown,
+  onCompact,
+  disabled,
+}: Props) {
   const clamped = Math.max(0, Math.min(100, pct));
   const remaining = Math.max(0, Math.round(100 - clamped));
   const dash = (clamped / 100) * CIRC;
@@ -73,7 +79,11 @@ export function ContextUsageRing({ pct, usedTokens, maxTokens, onCompact, disabl
           <span className="leading-none tabular-nums">{Math.round(clamped)}% de contexto</span>
         </button>
       </HoverCardTrigger>
-      <HoverCardContent side="top" align="end" className="w-64 text-sm">
+      <HoverCardContent
+        side="top"
+        align="end"
+        className={cn('text-sm', breakdown ? 'w-80' : 'w-64')}
+      >
         <p className="font-medium">{remaining}% of context remaining until auto-compact.</p>
         {showTokens && (
           <p className="text-muted-foreground mt-1 text-xs">
@@ -82,6 +92,7 @@ export function ContextUsageRing({ pct, usedTokens, maxTokens, onCompact, disabl
           </p>
         )}
         <p className="text-muted-foreground mt-1 text-xs">Click to compact now.</p>
+        {breakdown && <ContextBreakdownPanel breakdown={breakdown} />}
       </HoverCardContent>
     </HoverCard>
   );

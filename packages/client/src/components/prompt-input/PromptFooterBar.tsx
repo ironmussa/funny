@@ -1,4 +1,4 @@
-import type { GitStatusInfo, Thread } from '@funny/shared';
+import type { ContextBreakdown, GitStatusInfo, Thread } from '@funny/shared';
 import { Boxes } from 'lucide-react';
 
 import { ModeSelect } from '@/components/PromptSelectors';
@@ -29,6 +29,7 @@ export interface PromptFooterBarProps {
   contextPct?: number;
   contextUsedTokens?: number;
   contextMaxTokens?: number;
+  contextBreakdown?: ContextBreakdown;
   /** When set, the context ring offers compaction (confirmed via {@link onRequestCompact}). */
   onCompact?: () => void;
   onRequestCompact: () => void;
@@ -180,6 +181,7 @@ export function PromptFooterBar(props: PromptFooterBarProps) {
             pct={contextPct}
             usedTokens={props.contextUsedTokens}
             maxTokens={props.contextMaxTokens}
+            breakdown={props.contextBreakdown}
             onCompact={props.onCompact ? props.onRequestCompact : undefined}
             disabled={!props.onCompact}
           />

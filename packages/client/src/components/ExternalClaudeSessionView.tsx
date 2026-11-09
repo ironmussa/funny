@@ -113,7 +113,6 @@ export function ExternalClaudeSessionView({ sessionId }: { sessionId: string }) 
               <PromptInput
                 onSubmit={handleSend}
                 running={false}
-                queuedCount={0}
                 placeholder={t('externalClaude.promptPlaceholder', 'Continue in Claude Code...')}
                 threadOverride={{
                   provider: 'claude',
@@ -123,7 +122,6 @@ export function ExternalClaudeSessionView({ sessionId }: { sessionId: string }) 
                   baseBranch: state.transcript.gitBranch,
                   worktreePath: state.transcript.cwd,
                   projectId: project?.id,
-                  queuedCount: 0,
                 }}
               />
             }

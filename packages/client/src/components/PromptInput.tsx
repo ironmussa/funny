@@ -15,8 +15,6 @@ interface PromptInputProps {
   onStop?: () => void;
   loading?: boolean;
   running?: boolean;
-  queuedCount?: number;
-  queuedNextMessage?: string;
   isQueueMode?: boolean;
   placeholder?: string;
   isNewThread?: boolean;
@@ -44,8 +42,6 @@ export const PromptInput = memo(function PromptInput({
   onStop,
   loading = false,
   running = false,
-  queuedCount: queuedCountProp = 0,
-  queuedNextMessage: queuedNextMessageProp,
   isQueueMode = false,
   placeholder,
   isNewThread = false,
@@ -67,8 +63,6 @@ export const PromptInput = memo(function PromptInput({
     onWorktreeModeChange,
     loading,
     running,
-    queuedCountProp,
-    queuedNextMessageProp,
     isNewThread,
     propProjectId,
     initialPromptProp,
@@ -156,6 +150,7 @@ export const PromptInput = memo(function PromptInput({
         contextPct={state.contextPct}
         contextUsedTokens={state.activeThreadContextTokens}
         contextMaxTokens={state.contextMaxTokens}
+        contextBreakdown={state.contextBreakdown}
         onCompact={state.effectiveThreadId ? state.handleCompact : undefined}
       />
 

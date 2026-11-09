@@ -68,10 +68,11 @@ function isReachable(presence: RunnerPresencePort | undefined, runnerId: string)
 
 /**
  * Where a request points: a thread bound to its own sandbox runner, a project,
- * or projectless work.
+ * or projectless work. A sandbox thread whose runner never registered (its
+ * setup failed) has `runnerId: null`: nothing may serve it.
  */
 export type RouteTarget =
-  | { kind: 'thread-sandbox'; threadId: string; runnerId: string }
+  | { kind: 'thread-sandbox'; threadId: string; runnerId: string | null }
   | { kind: 'project'; projectId: string }
   | { kind: 'projectless' };
 
@@ -92,19 +93,23 @@ async function resolveTarget(
   threadId: string | null,
 ): Promise<RouteTarget> {
   // A sandbox thread is served by its sandbox runner only (thread-sandboxes).
-  if (threadId) {
-    const runnerId = await sandboxRunnerIdForThread(threadId);
-    if (runnerId) return { kind: 'thread-sandbox', threadId, runnerId };
-  }
+  if (threadId) return targetForThread(threadId, projectId);
   if (projectId) return { kind: 'project', projectId };
-  if (threadId) {
-    const [row] = await db
-      .select({ projectId: threads.projectId })
-      .from(threads)
-      .where(eq(threads.id, threadId));
-    if (row?.projectId) return { kind: 'project', projectId: row.projectId };
-  }
   return { kind: 'projectless' };
+}
+
+async function targetForThread(threadId: string, projectId: string | null): Promise<RouteTarget> {
+  const runnerId = await sandboxRunnerIdForThread(threadId);
+  if (runnerId) return { kind: 'thread-sandbox', threadId, runnerId };
+  const [row] = await db
+    .select({ projectId: threads.projectId, runtime: threads.runtime })
+    .from(threads)
+    .where(eq(threads.id, threadId));
+  // Without its runner a sandbox thread has nowhere to go: never the
+  // project's runner, whose checkout is not the thread's.
+  if (row?.runtime === 'sandbox') return { kind: 'thread-sandbox', threadId, runnerId: null };
+  const owningProject = projectId ?? row?.projectId;
+  return owningProject ? { kind: 'project', projectId: owningProject } : { kind: 'projectless' };
 }
 
 /** Scope check for a route target — the same rule `runner-access` re-verifies. */
@@ -237,7 +242,9 @@ export async function resolveRunnerDetailed(
 
   // Sandbox thread: its sandbox runner or nothing — the caller wakes it up.
   if (target.kind === 'thread-sandbox') {
-    if (isReachable(presence, target.runnerId)) return remember(target.runnerId);
+    if (target.runnerId && isReachable(presence, target.runnerId)) {
+      return remember(target.runnerId);
+    }
     log.warn('Thread sandbox runner unavailable — not falling back', {
       namespace: 'proxy',
       userId,

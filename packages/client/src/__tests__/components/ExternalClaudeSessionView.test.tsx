@@ -134,13 +134,11 @@ describe('ExternalClaudeSessionView', () => {
     expect(promptInputMock).toHaveBeenCalledWith(
       expect.objectContaining({
         running: false,
-        queuedCount: 0,
         threadOverride: expect.objectContaining({
           provider: 'claude',
           permissionMode: 'auto',
           branch: 'feature/external',
           worktreePath: '/work/funny',
-          queuedCount: 0,
         }),
       }),
     );

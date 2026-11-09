@@ -12,6 +12,7 @@ import { scrubSensitiveEnv } from '@funny/shared/lib/child-env';
 
 import { createDebugLogger } from '../debug.js';
 import { BaseAgentProcess } from './base-process.js';
+import { toContextBreakdown } from './context-breakdown.js';
 import type { IAgentProcess } from './interfaces.js';
 import { resolveSDKCli } from './resolve-sdk-cli.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
@@ -83,6 +84,9 @@ function isTerminalTaskStatus(status: string | undefined): boolean {
 export function isThinkingBlockError(text: string): boolean {
   return /(?:thinking|redacted_thinking)[\s\S]*?cannot be modified/i.test(text);
 }
+
+/** Upper bound on the end-of-turn `getContextUsage` request before the turn's result is released. */
+const CONTEXT_BREAKDOWN_TIMEOUT_MS = 3_000;
 
 export class SDKClaudeProcess extends BaseAgentProcess {
   private activeQuery: Query | null = null;
@@ -415,6 +419,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
             type: sdkMsg.type,
             subtype: (sdkMsg as any).subtype,
           });
+          // Before trackInputLifetime: it may close the input channel on this
+          // very result, and the breakdown request needs the CLI's stdin.
+          await this.captureContextBreakdown(sdkMsg);
           this.trackInputLifetime(sdkMsg);
 
           // Synthetic assistant messages (model: "<synthetic>") carry provider
@@ -481,6 +488,32 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       this.activeQuery = null;
       this.finalize();
     }
+  }
+
+  /**
+   * Ask the live session for its per-category context usage and emit it as a
+   * `context_breakdown` message. `summary` detail answers from the last
+   * response's usage plus local estimates — no token-count API calls. Best
+   * effort: a failure or timeout only means the hover card shows no breakdown.
+   * Only end-of-turn `result` messages trigger a snapshot.
+   */
+  private async captureContextBreakdown(sdkMsg: { type: string }): Promise<void> {
+    const q = this.activeQuery;
+    if (sdkMsg.type !== 'result' || !q || this.isAborted || this.inputClosed) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timer = setTimeout(() => resolve(null), CONTEXT_BREAKDOWN_TIMEOUT_MS);
+    });
+    const res = await Promise.race([
+      q.getContextUsage({ detail: 'summary' }).catch((err: unknown) => {
+        dlog.debug('getContextUsage failed', { error: String(err) });
+        return null;
+      }),
+      timeout,
+    ]);
+    clearTimeout(timer);
+    if (!res || this.isAborted) return;
+    this.emit('message', { type: 'context_breakdown', breakdown: toContextBreakdown(res) });
   }
 
   // ── Prompt building ─────────────────────────────────────────────

@@ -496,12 +496,6 @@ if (runnerTransport) {
   });
 }
 
-// Thread sandboxes: stop idle ones, wake stopped ones on demand.
-const sandboxLifecycle = await import('./services/thread-sandboxes/sandbox-lifecycle.js');
-if (runnerTransport) {
-  sandboxLifecycle.startSandboxLifecycle({ presence: runnerTransport.presence, browserEvents });
-}
-
 // Runners outside the private network reach the gRPC listener through a
 // WebSocket carrier on this public origin (see services/grpc/websocket-carrier.ts).
 const {
@@ -546,6 +540,35 @@ const server = Bun.serve<any>({
 log.info(`funny-server running on http://${HOST}:${PORT}`, {
   namespace: 'server',
 });
+
+// Sandboxes that cannot reach this server get dialed into (reverse runner
+// link); their traffic enters through a separate loopback listener so it is
+// never mistaken for a local caller (see reverse-link/listener.ts).
+const { startReverseLinkListener } =
+  await import('./services/thread-sandboxes/reverse-link/listener.js');
+const reverseLinkListener = runnerTransport
+  ? startReverseLinkListener({
+      serve: {
+        ...socketEngineHandler,
+        websocket: withRunnerCarrier(socketEngineHandler.websocket, runnerCarrier),
+      },
+      fetch(req, server, ip) {
+        const carried = routeRunnerCarrier(req, server, runnerCarrier);
+        if (carried !== null) return carried;
+        return app.fetch(req, { ...appEnv, IP: ip });
+      },
+    })
+  : null;
+
+// Thread sandboxes: stop idle ones, wake stopped ones on demand.
+const sandboxLifecycle = await import('./services/thread-sandboxes/sandbox-lifecycle.js');
+if (runnerTransport) {
+  sandboxLifecycle.startSandboxLifecycle({
+    presence: runnerTransport.presence,
+    browserEvents,
+    reverseLinkTarget: reverseLinkListener?.target,
+  });
+}
 
 // Native runner transport uses a dedicated HTTP/2 listener and is disabled by
 // default. The deployment ingress terminates public TLS before forwarding to
@@ -635,6 +658,7 @@ async function shutdown() {
 
   // Stop accepting new connections (don't wait for in-flight)
   server.stop();
+  reverseLinkListener?.stop();
 
   // Close the server DB connection
   try {

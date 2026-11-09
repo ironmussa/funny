@@ -203,4 +203,20 @@ describe('boat adapter specifics', () => {
     expect(result.isErr() && result.error.kind).toBe('unavailable');
     expect(result.isErr() && result.error.message).toContain('timed out');
   });
+
+  test('exposePort publishes a token-gated URL for the port', async () => {
+    const provider = providerWith('boat_test_key');
+    const handle = expectOk(
+      await provider.create({ threadId: 't1', sizeId: 'default', env: {}, idempotencyKey: 't1:0' }),
+    );
+    const ingress = expectOk(await provider.exposePort!(handle, 7810));
+    expect(ingress.url).toBe(
+      `https://${handle.sandboxId}-7810.on.boat.test?_token=tok_${handle.sandboxId}`,
+    );
+    expect(ingress.headers).toEqual({});
+    const host = provider.api.requests.find(
+      (r) => r.path === `/sandboxes/${handle.sandboxId}/host`,
+    );
+    expect(host?.body).toMatchObject({ port: 7810, public: false });
+  });
 });

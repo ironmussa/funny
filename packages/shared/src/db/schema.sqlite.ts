@@ -770,6 +770,8 @@ export const threadSandboxes = sqliteTable('thread_sandboxes', {
   repoUrl: text('repo_url'),
   /** SHA-256 of the sandbox's LLM proxy token; the row going away revokes it. */
   llmTokenHash: text('llm_token_hash'),
+  /** How the runner reaches the server: `direct` (null) or `reverse` (the server dials in). */
+  runnerLink: text('runner_link'),
   /** provisioning | installing | connecting | bootstrapping | running | stopping | stopped | failed | lost */
   state: text('state').notNull(),
   error: text('error'),

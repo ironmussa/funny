@@ -1861,6 +1861,13 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // thread-sandboxes: how the sandbox runner reaches the server (null = direct).
+    name: '091_thread_sandboxes_runner_link',
+    async up() {
+      await ctx().addColumn('thread_sandboxes', 'runner_link', 'TEXT');
+    },
+  },
 ];
 
 /**

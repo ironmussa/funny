@@ -235,4 +235,20 @@ describe('instabox adapter specifics', () => {
     expect(result.isErr() && result.error.kind).toBe('unavailable');
     expect(result.isErr() && result.error.message).toContain('timed out');
   });
+
+  test('exposePort publishes a private port and returns its fresh token as a bearer header', async () => {
+    const provider = providerWith('ibk_test_key');
+    const handle = expectOk(
+      await provider.create({ threadId: 't1', sizeId: 'default', env: {}, idempotencyKey: 't1:0' }),
+    );
+    const first = expectOk(await provider.exposePort!(handle, 7810));
+    expect(first.url).toBe(`https://7810-${handle.sandboxId.slice(2)}.instabox.test`);
+    expect(first.headers.Authorization).toMatch(/^Bearer ibp_/);
+    // The token is only shown when issued, so a second call rotates it.
+    const second = expectOk(await provider.exposePort!(handle, 7810));
+    expect(second.headers.Authorization).not.toBe(first.headers.Authorization);
+    const publish = provider.api.requests.find((r) => r.path.endsWith('/ports'));
+    expect(publish?.body).toMatchObject({ port: 7810, access: 'private', rotateToken: true });
+    expect(publish?.headers['idempotency-key']).toBeTruthy();
+  });
 });

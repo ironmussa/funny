@@ -99,6 +99,17 @@ export function createInstaboxApiFake(validKey = 'ibk_test_key'): InstaboxApiFak
       nextExitCode = undefined;
       return json(200, { exitCode, stdout: 'ok', stderr: exitCode ? 'boom' : '' });
     },
+    'POST ports': (m, _headers, { port, access = 'public', rotateToken = false }) => {
+      const issued = access === 'private' && rotateToken;
+      return json(201, {
+        id: `pp_${++counter}`,
+        machineId: m.id,
+        port,
+        url: `https://${port}-${m.id.slice(2)}.instabox.test`,
+        access,
+        ...(issued ? { token: `ibp_${counter}` } : {}),
+      });
+    },
     'POST snapshots': (m, _headers, body) => {
       if (m.state !== 'stopped') return error(409, 'operation_conflict', 'not stopped');
       const id = `sn_fake${++counter}`;

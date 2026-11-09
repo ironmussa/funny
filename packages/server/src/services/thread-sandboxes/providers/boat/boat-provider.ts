@@ -17,6 +17,7 @@ import {
   type SandboxCapabilities,
   type SandboxError,
   type SandboxHandle,
+  type SandboxIngress,
   type SandboxProvider,
   type SandboxStatus,
   type TemplateRef,
@@ -281,6 +282,19 @@ export function createBoatProvider(
         timeoutMs: timeoutSeconds * 1000 + requestTimeoutMs,
       }).map(execResultFrom);
     },
+
+    // A token-gated URL on on.boat.dev; the same port returns the same URL and token.
+    exposePort: (handle, port) =>
+      call('POST', `/sandboxes/${handle.sandboxId}/host`, {
+        body: { port, public: false, title: 'funny runner link' },
+      }).andThen((body) =>
+        typeof body?.url === 'string' && body.url
+          ? okAsync<SandboxIngress, SandboxError>({ url: body.url, headers: {} })
+          : errAsync<SandboxIngress, SandboxError>({
+              kind: 'provider',
+              message: 'Boat host returned no URL',
+            }),
+      ),
 
     listTemplates: () =>
       call('GET', '/saved-snapshots').map((body): TemplateRef[] => {

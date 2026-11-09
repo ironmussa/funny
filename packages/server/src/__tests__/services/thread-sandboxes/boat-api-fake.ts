@@ -100,6 +100,17 @@ export function createBoatApiFake(validKey = 'boat_test_key'): BoatApiFake {
       sandbox.ttlSeconds = body?.ttlSeconds ?? sandbox.ttlSeconds;
       return json(200, { ok: true, type: 'sandbox.resuming', sandbox });
     },
+    'POST host': (sandbox, { body }) => {
+      if (sandbox.state !== 'ready') return error(409, 'machine_not_running');
+      const url = `https://${sandbox.id}-${body?.port}.on.boat.test`;
+      return json(200, {
+        ok: true,
+        type: 'port.hosted',
+        port: body?.port,
+        url: body?.public ? url : `${url}?_token=tok_${sandbox.id}`,
+        access: body?.public ? 'public' : 'private',
+      });
+    },
     'PATCH ': (sandbox, { body }) => {
       sandbox.ttlSeconds = body?.ttlSeconds ?? null;
       return json(200, { ok: true, sandbox });
@@ -175,7 +186,7 @@ export function createBoatApiFake(validKey = 'boat_test_key'): BoatApiFake {
       },
     },
     { method: 'POST', path: /^\/sandboxes$/, handle: createSandbox },
-    { path: /^\/sandboxes\/([^/]+)(\/(stop|resume))?$/, handle: sandboxRoute },
+    { path: /^\/sandboxes\/([^/]+)(\/(stop|resume|host))?$/, handle: sandboxRoute },
     { path: /^\/sandboxes\/([^/]+)\/commands$/, handle: runCommand },
   ];
 

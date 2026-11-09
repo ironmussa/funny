@@ -25,6 +25,7 @@ import type {
   SandboxCapabilities,
   SandboxError,
   SandboxHandle,
+  SandboxIngress,
   SandboxProvider,
   SandboxStatus,
   TemplateBuildRequest,
@@ -378,6 +379,23 @@ export function createInstaboxProvider(
         timeoutMs: timeoutSeconds * 1000 + requestTimeoutMs,
       }).map(execResultFrom);
     },
+
+    // A private port; its token is only shown when issued, so every call rotates it.
+    exposePort: (handle, port) =>
+      mutate(`${machinePath(handle)}/ports`, {
+        port,
+        name: 'funny runner link',
+        access: 'private',
+        rotateToken: true,
+      }).andThen((body): ResultAsync<SandboxIngress, SandboxError> => {
+        if (typeof body?.url !== 'string' || !body.url || typeof body?.token !== 'string') {
+          return errAsync({
+            kind: 'provider',
+            message: 'InstaBox publish returned no URL or token',
+          });
+        }
+        return okAsync({ url: body.url, headers: { Authorization: `Bearer ${body.token}` } });
+      }),
 
     listTemplates: () =>
       listSnapshots().map((snapshots): TemplateRef[] =>

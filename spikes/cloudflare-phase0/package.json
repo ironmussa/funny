@@ -1,8 +1,8 @@
 {
   "name": "funny-spike-cloudflare-phase0",
   "private": true,
-  "type": "module",
   "description": "Phase 0 spike (docs/plans/cloudflare-portability.md). Throwaway; not a workspace package.",
+  "type": "module",
   "scripts": {
     "build": "wrangler deploy --dry-run --outdir dist",
     "spike": "node run-spike.mjs"

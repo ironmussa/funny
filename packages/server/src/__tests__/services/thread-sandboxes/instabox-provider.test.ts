@@ -196,15 +196,39 @@ describe('instabox adapter specifics', () => {
     expect(provider.api.snapshots.has('sn_failed')).toBe(false);
   });
 
-  test('buildTemplate keeps a pending snapshot of the same name (a concurrent build)', async () => {
+  test('buildTemplate waits for a pending snapshot of the same name instead of colliding', async () => {
     const provider = providerWith('ibk_test_key');
     provider.api.snapshots.set('sn_pending', {
       id: 'sn_pending',
       name: 'funny-runner-v2',
       status: 'pending',
     });
-    await provider.buildTemplate!({ serverVersion: 'v2', installScript: '', scriptEnv: {} });
+    const result = await provider.buildTemplate!({
+      serverVersion: 'v2',
+      installScript: '',
+      scriptEnv: {},
+    });
+    expect(result.isErr() && result.error.kind).toBe('unavailable');
     expect(provider.api.snapshots.has('sn_pending')).toBe(true);
+    expect(
+      provider.api.requests.some((r) => r.method === 'POST' && r.path === '/v1/machines'),
+    ).toBe(false);
+  });
+
+  test('buildTemplate reuses a ready snapshot of the same name without building', async () => {
+    const provider = providerWith('ibk_test_key');
+    provider.api.snapshots.set('sn_ready', {
+      id: 'sn_ready',
+      name: 'funny-runner-v2',
+      status: 'ready',
+    });
+    const template = expectOk(
+      await provider.buildTemplate!({ serverVersion: 'v2', installScript: '', scriptEnv: {} }),
+    );
+    expect(template.ref).toBe('sn_ready');
+    expect(
+      provider.api.requests.some((r) => r.method === 'POST' && r.path === '/v1/machines'),
+    ).toBe(false);
   });
 
   test('a failed install surfaces the error and still deletes the throwaway machine', async () => {

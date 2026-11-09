@@ -82,7 +82,19 @@ describe('resolveRunnerBuild', () => {
         return run.stdout.toString().trim();
       };
       git('init', '-q');
-      git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'x');
+      git(
+        '-c',
+        'user.name=t',
+        '-c',
+        'user.email=t@t',
+        '-c',
+        'commit.gpgsign=false',
+        'commit',
+        '-q',
+        '--allow-empty',
+        '-m',
+        'x',
+      );
       git('remote', 'add', 'origin', remoteUrl);
       git('update-ref', 'refs/remotes/origin/main', 'HEAD');
       return { dir, head: git('rev-parse', 'HEAD') };

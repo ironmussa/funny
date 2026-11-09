@@ -288,6 +288,27 @@ export function createInstaboxProvider(
       )
       .map((id): TemplateRef => ({ providerId: INSTABOX_PROVIDER_ID, ref: id }));
 
+  /**
+   * The snapshot already holding `name`: a ready one is the template (another
+   * build finished it), a pending one is a build still saving (retry later),
+   * and a failed one is deleted so the name is free again. Yields the ready
+   * template, or null when a build may start.
+   */
+  const settleExistingSnapshot = (name: string) =>
+    listSnapshots().andThen((snapshots): ResultAsync<TemplateRef | null, SandboxError> => {
+      const named = snapshots.filter((s) => s?.name === name);
+      const ready = named.find((s) => s.status === 'ready');
+      if (ready) return okAsync({ providerId: INSTABOX_PROVIDER_ID, ref: String(ready.id) });
+      if (named.some((s) => s.status === 'pending')) {
+        return errAsync({
+          kind: 'unavailable',
+          message: `InstaBox snapshot ${name} is still saving`,
+          retryAfterMs: 15_000,
+        });
+      }
+      return ResultAsync.combine(named.map((s) => deleteSnapshot(String(s.id)))).map(() => null);
+    });
+
   const provider: SandboxProvider = {
     id: INSTABOX_PROVIDER_ID,
     capabilities: () => instaboxCapabilities,
@@ -413,28 +434,22 @@ export function createInstaboxProvider(
      */
     buildTemplate: (req) => {
       const name = instaboxTemplateName(req.serverVersion);
-      // A failed snapshot of an earlier build holds the name: drop it first.
-      const clearStale = listSnapshots().andThen((snapshots) =>
-        ResultAsync.combine(
-          snapshots
-            .filter((s) => s?.name === name && s?.status === 'failed')
-            .map((s) => deleteSnapshot(String(s.id))),
-        ),
+      // Snapshot names are unique: settle one that already holds the name first.
+      return settleExistingSnapshot(name).andThen((existing) =>
+        existing
+          ? okAsync<TemplateRef, SandboxError>(existing)
+          : call('POST', '/v1/machines', {
+              headers: { 'Idempotency-Key': `funny-template:${name}:${newKey()}` },
+              body: {
+                deleteAfterSeconds: 2 * 3600,
+                metadata: { 'funny-template': req.serverVersion },
+              },
+            })
+              .andThen(machineHandle)
+              .andThen((handle) =>
+                withThrowawayMachine(handle, buildOn(handle, req, name), provider.destroy),
+              ),
       );
-      return clearStale
-        .andThen(() =>
-          call('POST', '/v1/machines', {
-            headers: { 'Idempotency-Key': `funny-template:${name}:${newKey()}` },
-            body: {
-              deleteAfterSeconds: 2 * 3600,
-              metadata: { 'funny-template': req.serverVersion },
-            },
-          }),
-        )
-        .andThen(machineHandle)
-        .andThen((handle) =>
-          withThrowawayMachine(handle, buildOn(handle, req, name), provider.destroy),
-        );
     },
   };
   return provider;

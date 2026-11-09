@@ -35,7 +35,6 @@ describe('thread-selectors hooks', () => {
         threadDataById: {},
         activeThread: null,
         setupProgressByThread: {},
-        contextUsageByThread: {},
       } as any),
     );
   });

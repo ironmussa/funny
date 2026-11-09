@@ -9,6 +9,7 @@ import {
 } from '@funny/shared/models';
 import { useMemo } from 'react';
 
+import { useContextUsage } from '@/data/context-usage/hooks';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';
 import { normalizeEffort } from '@/lib/providers';
@@ -173,9 +174,10 @@ export function usePromptActiveThread(
   const sdkSlashCommands =
     useThreadSelector((t) => t?.initInfo?.slashCommands) ?? EMPTY_SLASH_COMMANDS;
   const activeThreadGitStatus = useGitStatusForThread(threadId);
-  const storeContextTokens = useThreadSelector((t) => t?.contextUsage?.cumulativeInputTokens ?? 0);
-  const activeThreadContextTokens = o.contextUsage?.cumulativeInputTokens ?? storeContextTokens;
-  const activeThreadContextBreakdown = useThreadSelector((t) => t?.contextUsage?.breakdown);
+  const contextUsage = useContextUsage(threadId);
+  const activeThreadContextTokens =
+    o.contextUsage?.cumulativeInputTokens ?? contextUsage?.cumulativeInputTokens ?? 0;
+  const activeThreadContextBreakdown = contextUsage?.breakdown;
   const activeThreadLastEffort = useThreadSelector((t) => t?.lastUserMessage?.effort);
   const activeThreadRuntime = useThreadSelector((t) => t?.runtime);
   const updateThreadPermissionMode = useThreadStore((s) => s.updateThreadPermissionMode);

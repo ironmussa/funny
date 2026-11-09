@@ -1,15 +1,16 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { getContextUsageStore } from '@/data/context-usage/store';
+import { seedContextUsage } from '@/data/context-usage/testing';
 import { attachThreadIndex } from '@/data/threads/testing';
+import { loadContextUsage } from '@/lib/context-usage-storage';
 
-const { mockInvalidate, mockBuffer, mockEmitContextUsage, mockMarkRead, mockToastError } =
-  vi.hoisted(() => ({
-    mockInvalidate: vi.fn(),
-    mockBuffer: vi.fn(),
-    mockEmitContextUsage: vi.fn(),
-    mockMarkRead: vi.fn(),
-    mockToastError: vi.fn(),
-  }));
+const { mockInvalidate, mockBuffer, mockMarkRead, mockToastError } = vi.hoisted(() => ({
+  mockInvalidate: vi.fn(),
+  mockBuffer: vi.fn(),
+  mockMarkRead: vi.fn(),
+  mockToastError: vi.fn(),
+}));
 
 const mockWsEventToMachine = vi.hoisted(() =>
   vi.fn((_kind: string, data: any) => ({
@@ -38,8 +39,6 @@ vi.mock('@/stores/thread-store-internals', () => ({
   getUrlThreadId: () => null,
   setUrlThreadId: vi.fn(),
 }));
-
-vi.mock('@/lib/context-usage-events', () => ({ emitContextUsage: mockEmitContextUsage }));
 
 vi.mock('sonner', () => ({
   toast: {
@@ -88,7 +87,6 @@ function makeState(overrides: Record<string, unknown> = {}) {
     threadDataById: { [THREAD_ID]: activeThread },
     activeThread,
     setupProgressByThread: {},
-    contextUsageByThread: {},
     loadThreadsForProject: vi.fn(),
     ...overrides,
   } as any;
@@ -221,78 +219,20 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
     expect(state.threadDataById[THREAD_ID].status).toBe('idle');
   });
 
-  test('handleWSContextUsage updates hydrated payload and emits event', () => {
-    const state = makeState();
-    const { get, set } = makeGetSet(state);
+  test('handleWSContextUsage writes and persists usage without buffering for hydration', () => {
+    seedContextUsage({});
 
-    handleWSContextUsage(get, set, THREAD_ID, {
-      inputTokens: 100,
-      outputTokens: 50,
-      cumulativeInputTokens: 5000,
-    });
-
-    expect(mockEmitContextUsage).toHaveBeenCalledWith(THREAD_ID, {
-      cumulativeInputTokens: 5000,
-      lastInputTokens: 100,
-      lastOutputTokens: 50,
-    });
-    expect(state.contextUsageByThread[THREAD_ID].cumulativeInputTokens).toBe(5000);
-    expect(state.threadDataById[THREAD_ID].contextUsage.cumulativeInputTokens).toBe(5000);
-  });
-
-  test('handleWSContextUsage buffers when selected but not hydrated', () => {
-    const state = makeState({
-      selectedThreadId: THREAD_ID,
-      threadDataById: {},
-      activeThread: null,
-    });
-    const { get, set } = makeGetSet(state);
-
-    handleWSContextUsage(get, set, THREAD_ID, {
+    handleWSContextUsage(THREAD_ID, {
       inputTokens: 10,
       outputTokens: 5,
       cumulativeInputTokens: 100,
     });
 
-    expect(mockBuffer).toHaveBeenCalledWith(
-      THREAD_ID,
-      'context_usage',
-      expect.objectContaining({ cumulativeInputTokens: 100 }),
-    );
-    expect(state.contextUsageByThread[THREAD_ID].cumulativeInputTokens).toBe(100);
-  });
-
-  test('handleWSContextUsage keeps the last breakdown across per-message usage events', () => {
-    const state = makeState();
-    const { get, set } = makeGetSet(state);
-    const breakdown = {
-      model: 'claude-opus-5-5',
-      totalTokens: 5000,
-      maxTokens: 1_000_000,
-      percentage: 1,
-      categories: [{ id: 'messages', name: 'Messages', tokens: 4000, kind: 'used' as const }],
-      mcpServers: [],
-      memoryFiles: [],
-      capturedAt: '2026-11-09T10:00:00.000Z',
-    };
-
-    handleWSContextUsage(get, set, THREAD_ID, {
-      inputTokens: 5000,
-      outputTokens: 0,
-      cumulativeInputTokens: 5000,
-      breakdown,
-    });
-    handleWSContextUsage(get, set, THREAD_ID, {
-      inputTokens: 6000,
-      outputTokens: 20,
-      cumulativeInputTokens: 6000,
-    });
-
-    expect(state.contextUsageByThread[THREAD_ID]).toMatchObject({
-      cumulativeInputTokens: 6000,
-      breakdown,
-    });
-    expect(state.threadDataById[THREAD_ID].contextUsage.breakdown).toBe(breakdown);
+    const expected = { cumulativeInputTokens: 100, lastInputTokens: 10, lastOutputTokens: 5 };
+    expect(mockBuffer).not.toHaveBeenCalled();
+    expect(getContextUsageStore().read(THREAD_ID)).toMatchObject(expected);
+    // Persisted so the ring survives a reload (the runtime keeps usage in memory only).
+    expect(loadContextUsage(THREAD_ID)).toEqual(expected);
   });
 
   test('handleWSStatus schedules project refresh for unknown sidebar thread', async () => {

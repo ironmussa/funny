@@ -9,7 +9,7 @@
 
 import type { Thread, AgentModel, EffortLevel, PermissionMode, ThreadStage } from '@funny/shared';
 
-import type { AgentInitInfo, ContextUsage, ThreadWithMessages } from './thread-types';
+import type { AgentInitInfo, ThreadWithMessages } from './thread-types';
 
 export interface ThreadState {
   // Thread rows and list order live in the data layer's threads collection
@@ -19,7 +19,7 @@ export interface ThreadState {
   selectedThreadId: string | null;
   /**
    * The "thread gordo" map — payload (messages, toolCalls, threadEvents,
-   * initInfo, contextUsage, …) for every thread that's currently visible
+   * initInfo, …) for every thread that's currently visible
    * either in the right pane (anchored by `selectedThreadId`) or in a
    * live column (anchored by `registerLiveThread` refcount). Both surfaces
    * read and write through this single map; WS handlers patch it via
@@ -37,8 +37,6 @@ export interface ThreadState {
   activeThread: ThreadWithMessages | null;
   /** Setup progress keyed by threadId — survives thread switches */
   setupProgressByThread: Record<string, import('@/components/GitProgressModal').GitProgressStep[]>;
-  /** Context usage keyed by threadId — survives thread switches */
-  contextUsageByThread: Record<string, ContextUsage>;
 
   loadThreadsForProject: (projectId: string, includeArchived?: boolean) => Promise<void>;
   /** Load the current user's scratch threads. */

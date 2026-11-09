@@ -28,6 +28,7 @@ import type {
 import { toast } from 'sonner';
 
 import { applyQueueSummary } from '@/data/queue/store';
+import { applyContextUsageEvent, resetContextUsage } from '@/data/context-usage/store';
 import {
   isThreadListed,
   listedProjectIds,
@@ -36,7 +37,7 @@ import {
 } from '@/data/threads/read';
 import i18n from '@/i18n/config';
 import { createClientLogger } from '@/lib/client-logger';
-import { emitContextUsage } from '@/lib/context-usage-events';
+import { saveContextUsage } from '@/lib/context-usage-storage';
 import { buildPath } from '@/lib/url';
 
 import { parseToolInput, useThreadActiveToolStore } from './thread-active-tool-store';
@@ -1022,65 +1023,20 @@ export function handleWSCompactBoundary(
   // until the next agent turn emits a fresh context_usage event. Use the
   // SDK-reported post-compaction size when available so the ring reflects the
   // real reduced context instead of dropping to 0 (which hides the ring).
-  const post = data.postTokens ?? 0;
-  const resetUsage = {
-    cumulativeInputTokens: post,
-    lastInputTokens: post,
-    lastOutputTokens: 0,
-  };
-  emitContextUsage(threadId, resetUsage);
-  set((s) => ({
-    contextUsageByThread: { ...s.contextUsageByThread, [threadId]: resetUsage },
-    ...mutations.applyThreadDataPatch(s, threadId, (t) => ({
+  saveContextUsage(threadId, resetContextUsage(threadId, data.postTokens ?? 0));
+  set((s) =>
+    mutations.applyThreadDataPatch(s, threadId, (t) => ({
       ...t,
-      contextUsage: resetUsage,
       compactionEvents: [...(t.compactionEvents ?? []), data],
     })),
-  }));
+  );
 }
 
 // ── Context usage ───────────────────────────────────────────────
 
-export function handleWSContextUsage(
-  get: Get,
-  set: Set,
-  threadId: string,
-  data: WSContextUsageData,
-): void {
-  // Per-message usage events carry no breakdown; keep the last end-of-turn
-  // snapshot until the next one replaces it.
-  const breakdown = data.breakdown ?? get().contextUsageByThread[threadId]?.breakdown;
-  const usage = {
-    cumulativeInputTokens: data.cumulativeInputTokens,
-    lastInputTokens: data.inputTokens,
-    lastOutputTokens: data.outputTokens,
-    ...(breakdown ? { breakdown } : {}),
-  };
-
+export function handleWSContextUsage(threadId: string, data: WSContextUsageData): void {
   // Persist across page reloads — the runtime only keeps usage in memory.
-  // context-usage-storage subscribes to this event and writes to localStorage.
-  emitContextUsage(threadId, usage);
-
-  set((state) => {
-    const updates: Partial<ThreadState> = {
-      contextUsageByThread: {
-        ...state.contextUsageByThread,
-        [threadId]: usage,
-      },
-    };
-    if (!isHydrated(state, threadId)) {
-      if ((getUrlThreadId() ?? state.selectedThreadId) === threadId)
-        bufferWSEvent(threadId, 'context_usage', data);
-      return updates;
-    }
-    return {
-      ...updates,
-      ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
-        ...t,
-        contextUsage: usage,
-      })),
-    };
-  });
+  saveContextUsage(threadId, applyContextUsageEvent(threadId, data));
 }
 
 // ── Error ────────────────────────────────────────────────────────

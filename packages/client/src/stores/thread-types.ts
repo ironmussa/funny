@@ -1,9 +1,8 @@
 /**
  * Pure type definitions for the thread store.
  *
- * Lives in its own file so peers (`thread-store-internals`, `thread-ws-handlers`,
- * `lib/context-usage-storage`) can reference these shapes without importing
- * `thread-store.ts` — which would create a runtime import cycle.
+ * Lives in its own file so peers (`thread-store-internals`, `thread-ws-handlers`)
+ * can reference these shapes without importing `thread-store.ts` — which would create a runtime import cycle.
  *
  * Only types belong here. No values, no side effects.
  *
@@ -22,10 +21,7 @@ import type {
   PermissionRecoveryReason,
 } from '@funny/shared';
 
-import type { ContextUsage } from '@/lib/context-usage-types';
 import type { GitProgressStep } from '@/lib/git-progress-types';
-
-export type { ContextUsage };
 
 export interface AgentInitInfo {
   tools: string[];
@@ -70,7 +66,6 @@ export interface ThreadWithMessages extends Thread {
   totalMessages?: number;
   /** Number of messages before the loaded window. */
   windowStart?: number;
-  contextUsage?: ContextUsage;
   compactionEvents?: CompactionEvent[];
   setupProgress?: GitProgressStep[];
   lastUserMessage?: Message & { toolCalls?: any[] };

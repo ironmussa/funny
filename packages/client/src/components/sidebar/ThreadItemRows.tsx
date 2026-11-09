@@ -131,23 +131,6 @@ export function ThreadItemTitleRow({
 
 // ── Git state icons (shown in row 1) ─────────────────────────────────
 
-type BranchSyncState = 'unpushed' | 'pushed' | 'merged';
-
-/**
- * Where the branch stands against the remote, independent of the working tree:
- * a thread can have uncommitted files AND unpushed commits at the same time,
- * which the single derived `state` collapses into `dirty`.
- */
-function resolveBranchSyncState(gitStatus: GitStatusInfo): BranchSyncState | null {
-  if (gitStatus.state === 'clean') return null;
-  if (gitStatus.unpushedCommitCount > 0) return 'unpushed';
-  // A PR badge already conveys pushed/merged.
-  if (gitStatus.prNumber) return null;
-  if (gitStatus.isMergedIntoBase) return 'merged';
-  if (gitStatus.hasRemoteBranch) return 'pushed';
-  return null;
-}
-
 function GitIconChip({
   testId,
   className,
@@ -180,17 +163,17 @@ function GitIconChip({
 }
 
 /**
- * Two independent git indicators: the working tree (uncommitted files, with
- * the +/- line counts in the tooltip so rows sharing a working tree don't
- * repeat the same numbers) and the branch against the remote (unpushed →
- * blue commit + count, pushed → green PR arrow, merged → purple merge).
+ * Pending work the PR badge cannot show: uncommitted files (with the +/- line
+ * counts in the tooltip so rows sharing a working tree don't repeat the same
+ * numbers) and commits not yet pushed. Pushed / merged branches have no icon:
+ * the PR badge beside the title carries that state.
  */
 function GitStateIcons({ threadId, gitStatus }: { threadId: string; gitStatus: GitStatusInfo }) {
   const { t } = useTranslation();
   const dirty = gitStatus.dirtyFileCount > 0;
-  const syncState = resolveBranchSyncState(gitStatus);
+  const unpushed = gitStatus.state !== 'clean' && gitStatus.unpushedCommitCount > 0;
   const dirtyCfg = gitSyncStateConfig.dirty;
-  const syncCfg = syncState ? gitSyncStateConfig[syncState] : null;
+  const unpushedCfg = gitSyncStateConfig.unpushed;
   return (
     <>
       {dirty && (
@@ -214,13 +197,13 @@ function GitStateIcons({ threadId, gitStatus }: { threadId: string; gitStatus: G
           }
         />
       )}
-      {syncState && syncCfg && (
+      {unpushed && (
         <GitIconChip
           testId={`thread-git-sync-${threadId}`}
-          className={syncCfg.className}
-          icon={syncCfg.icon}
-          count={syncState === 'unpushed' ? gitStatus.unpushedCommitCount : undefined}
-          tooltip={t(syncCfg.labelKey)}
+          className={unpushedCfg.className}
+          icon={unpushedCfg.icon}
+          count={gitStatus.unpushedCommitCount}
+          tooltip={t(unpushedCfg.labelKey)}
         />
       )}
     </>

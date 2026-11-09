@@ -198,6 +198,32 @@ describe('ThreadItem', () => {
     expect(screen.getByTestId('thread-git-sync-t-4')).toHaveTextContent('3');
   });
 
+  test.each([
+    ['pushed', { state: 'pushed', hasRemoteBranch: true, isMergedIntoBase: false }],
+    ['merged', { state: 'merged', hasRemoteBranch: true, isMergedIntoBase: true }],
+  ] as const)('shows no sync icon for a %s branch (the PR badge carries it)', (_, status) => {
+    renderWithProviders(
+      <ThreadItem
+        thread={makeThread({ id: 't-5', projectId: 'p-1', isScratch: false, status: 'idle' })}
+        projectPath="/repo"
+        isSelected={false}
+        onSelect={vi.fn()}
+        gitStatus={{
+          threadId: 't-5',
+          branchKey: 'p-1:feat/z',
+          dirtyFileCount: 0,
+          unpushedCommitCount: 0,
+          unpulledCommitCount: 0,
+          linesAdded: 0,
+          linesDeleted: 0,
+          ...status,
+        }}
+      />,
+    );
+
+    expect(screen.queryByTestId('thread-git-sync-t-5')).not.toBeInTheDocument();
+  });
+
   test('shows the PR badge on the title row, not in the powerline', () => {
     renderWithProviders(
       <ThreadItem

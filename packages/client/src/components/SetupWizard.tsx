@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { LoadingState } from '@/components/ui/loading-state';
+import { completeSetup } from '@/data/profile/actions';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
@@ -216,10 +217,10 @@ export function SetupWizard({ onComplete }: { onComplete: () => void }) {
   }, []);
 
   const handleFinish = async () => {
-    const res = await api.completeSetup();
+    const res = await completeSetup();
     if (res.isErr()) {
       // Retry once before proceeding
-      await api.completeSetup();
+      await completeSetup();
     }
     localStorage.setItem('funny:setupCompleted', 'true');
     onComplete();

@@ -3,9 +3,9 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import { useProfile } from '@/data/profile/hooks';
 import { useDictation } from '@/hooks/use-dictation';
 import { usePushToTalk } from '@/hooks/use-push-to-talk';
-import { useProfileStore } from '@/stores/profile-store';
 
 /**
  * Real-time dictation (AssemblyAI streaming) into a PromptEditor, plus
@@ -17,7 +17,7 @@ export function useEditorDictation(
   containerRef: RefObject<HTMLDivElement | null>,
 ) {
   const { t } = useTranslation();
-  const hasAssemblyaiKey = useProfileStore((s) => s.profile?.hasAssemblyaiKey ?? false);
+  const hasAssemblyaiKey = useProfile()?.hasAssemblyaiKey ?? false;
   const partialTextRef = useRef('');
 
   const handlePartialTranscript = useCallback(

@@ -31,12 +31,11 @@ import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { LoadingState } from './components/ui/loading-state';
 import { TooltipProvider } from './components/ui/tooltip';
-import { profileApi } from './lib/api/profile';
+import { loadProfile } from './data/profile/queries';
 import { resolveClientLogLevel } from './lib/client-logger';
 import { bindDataLayerToSession } from './lib/data-layer-session';
 import { otlpEnabled, otlpEndpoint } from './lib/otlp-config';
 import { useAuthStore } from './stores/auth-store';
-import { useProfileStore } from './stores/profile-store';
 import { useProjectStore } from './stores/project-store';
 import { useSettingsStore } from './stores/settings-store';
 import '@fontsource/geist-sans/latin.css';
@@ -154,11 +153,9 @@ function AuthGate() {
     let cancelled = false;
 
     const fetchProfile = () => {
-      profileApi.getProfile().then((res) => {
-        if (cancelled) return;
-        if (res.isOk()) {
-          const profile = res.value;
-          useProfileStore.getState().setProfile(profile);
+      loadProfile().then(
+        (profile) => {
+          if (cancelled) return;
           const completed = profile.setupCompleted ?? false;
           setSetupCompleted(completed);
           if (completed) {
@@ -170,11 +167,15 @@ function AuthGate() {
           if (profile.theme) {
             setTheme(profile.theme);
           }
-        } else if (retries < maxRetries) {
-          // Server might still be starting — retry with backoff
-          retries++;
-          retryTimeout = setTimeout(fetchProfile, retries * 1000);
-        } else {
+        },
+        () => {
+          if (cancelled) return;
+          if (retries < maxRetries) {
+            // Server might still be starting — retry with backoff
+            retries++;
+            retryTimeout = setTimeout(fetchProfile, retries * 1000);
+            return;
+          }
           // The request layer does not auto-logout on initial profile 401.
           // Re-check Better Auth session; if the cookie never stuck, this clears
           // isAuthenticated and returns to login with a real cause.
@@ -186,8 +187,8 @@ function AuthGate() {
               if (!useAuthStore.getState().isAuthenticated) return;
               setSetupCompleted((current) => current ?? false);
             });
-        }
-      });
+        },
+      );
     };
 
     fetchProfile();

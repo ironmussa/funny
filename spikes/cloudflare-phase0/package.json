@@ -1,0 +1,20 @@
+{
+  "name": "funny-spike-cloudflare-phase0",
+  "private": true,
+  "type": "module",
+  "description": "Phase 0 spike (docs/plans/cloudflare-portability.md). Throwaway; not a workspace package.",
+  "scripts": {
+    "build": "wrangler deploy --dry-run --outdir dist",
+    "spike": "node run-spike.mjs"
+  },
+  "dependencies": {
+    "better-auth": "1.7.7",
+    "drizzle-orm": "0.45.2",
+    "hono": "4.13.13",
+    "pg": "8.20.0"
+  },
+  "devDependencies": {
+    "miniflare": "5.20261019.2-beta",
+    "wrangler": "4.152.0"
+  }
+}

@@ -1,6 +1,6 @@
 # Plan: Portable server (Bun or Cloudflare Workers + Durable Objects)
 
-Status: **In progress** — Phase 1 done (pending Railway deploy check); Phase 0 spike next. Owner: TBD.
+Status: **In progress** — Phase 1 done (pending Railway deploy check); Phase 0 done locally (technical go; real-account checks pending). Owner: TBD.
 
 ## Goal
 
@@ -62,10 +62,13 @@ Estimates assume one engineer familiar with the codebase; they are ranges, not c
 
 Throwaway prototype outside the main tree. Answers the unknowns that could kill the Cloudflare host before we invest in Phases 3–5:
 
-- [ ] A DO terminating an outbound runner WebSocket: max message size vs our 32 MiB / frame limits, hibernation API with a socket that must stay open for hours, send backpressure signals (`bufferedAmount` equivalent), alarm-based heartbeat expiry.
-- [ ] Browser WebSocket into a per-user DO with cookie auth at upgrade (Better Auth session check from the Worker).
-- [ ] `pg` over Hyperdrive with Drizzle: per-request client, an interactive transaction, latency from a DO.
-- [ ] Cost model for a realistic workload (N users, M runners, event rates) on DOs vs a Railway instance.
+- [x] A DO terminating an outbound runner WebSocket: max message size vs our 32 MiB / frame limits, hibernation API with a socket that must stay open for hours, send backpressure signals (`bufferedAmount` equivalent), alarm-based heartbeat expiry. _Local `workerd`: 32 MiB accepted / 33 MiB rejected inbound; epoch in DO storage survives a restart; alarm expiry on time; **no `bufferedAmount`** on the DO side. Hours-long hibernated sockets need a real account._
+- [x] Browser WebSocket into a per-user DO with cookie auth at upgrade (Better Auth session check from the Worker). _401 without cookie, 101 with; fan-out p50 3 ms locally; no cross-user leak._
+- [x] `pg` over Hyperdrive with Drizzle: per-request client, an interactive transaction, latency from a DO. _Interactive transaction and rollback work over a per-request client (p50 11 ms locally)._
+- [x] Cost model for a realistic workload (N users, M runners, event rates) on DOs vs a Railway instance. _≈ $10–42/month for a 50-user team + Postgres — same range as a small Railway service; batching runner events is the lever._
+- [x] (added) Bundle and boot the real `createServerApp` in `workerd`. _Bundles (1.3 MiB gzip) with `bun:sqlite` aliased out; fails at global scope (`crypto.randomUUID()` in the logger's telemetry identity); boots and serves when imported inside the handler._
+
+**Result (2026-11-09): technical go, no economic case on hosting cost alone.** Details, numbers and how to re-run: [`spikes/cloudflare-phase0/README.md`](../../spikes/cloudflare-phase0/README.md). Before Phase 5: one day on a real account (hibernated runner sockets over hours, close handshake, production frame cap, sign-in CPU time, cold start, real latency) and confirmation that a Cloudflare deployment option is wanted.
 
 **Exit:** written go/no-go. If no-go, Phases 1–4 still proceed for their Bun-side value (testability, multi-instance readiness, dropping the HTTP/2-over-WS bridge); Phase 5 is cancelled.
 
@@ -132,6 +135,8 @@ Move every item of the inventory behind a port, with today's code as the in-memo
 - [ ] Migrations as a deploy step; admin bootstrap via env secret or one-time setup route (no `admin-password.txt`).
 - [ ] Mail via an HTTP API; verify web-push and Abbacchio telemetry under `nodejs_compat`.
 - [ ] Deploy guide (`docs/guides/cloudflare-deploy.md`) and a one-click deploy template.
+- [ ] (from Phase 0) No random values, timers or I/O at module scope in the server's import graph — first offender `getTelemetryIdentity` (`@funny/shared/lib/telemetry-identity`); add a fitness check, or import the app lazily in the Worker entry.
+- [ ] (from Phase 0) Alias `bun:sqlite` out of the Worker bundle; batch runner events before the RunnerDO → UserHubDO hop; enforce the in-band buffer budgets instead of `bufferedAmount`; account for scrypt CPU time on sign-in.
 
 **Exit:** the full E2E suite (`e2e/`) passes against a Cloudflare deployment with a Railway runner and a local runner; all invariants' tests pass against the DO implementations.
 

@@ -1,0 +1,8 @@
+{
+  // Bundling probe only (see src/server-probe.ts).
+  "name": "funny-spike-server-probe",
+  "main": "src/server-probe.ts",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "alias": { "bun:sqlite": "./src/stubs/bun-sqlite.js" },
+}

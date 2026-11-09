@@ -225,7 +225,7 @@ export class AgentLifecycleManager {
       const resolvedCwd = await this.resolveCwdOrFail(threadId, thread, project);
       if (resolvedCwd === null) return;
       cwd = resolvedCwd;
-      await this.prepareWorkspace(threadId, thread, project, cwd, provider);
+      await this.prepareWorkspace(threadId, thread, project, cwd);
     }
 
     const activeAgentProfile = await resolveActiveAgentProfile(thread, provider);
@@ -464,7 +464,6 @@ export class AgentLifecycleManager {
     thread: RuntimeThreadRecord,
     project: StartProject,
     cwd: string,
-    provider: AgentProvider,
   ): Promise<void> {
     const variant = thread as unknown as Thread;
     if (thread.mode === 'worktree' && project?.path && cwd !== project.path) {

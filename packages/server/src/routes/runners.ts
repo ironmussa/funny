@@ -13,9 +13,9 @@ import type {
   EnrollPollResponse,
 } from '@funny/shared/runner-protocol';
 import { Hono, type Context } from 'hono';
-import { getConnInfo } from 'hono/bun';
 
 import { audit } from '../lib/audit.js';
+import { clientIp } from '../lib/client-ip.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import * as enroll from '../services/runner-enrollment-service.js';
@@ -26,24 +26,6 @@ import {
 } from '../services/runner-provision-tokens.js';
 
 export const runnerRoutes = new Hono<ServerEnv>();
-
-const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
-
-/** Best-effort originating IP of the caller (honors X-Forwarded-For only under TRUST_PROXY). */
-function callerIp(c: Context<ServerEnv>): string {
-  if (TRUST_PROXY) {
-    const xff = c.req.header('x-forwarded-for');
-    const first = xff?.split(',')[0]?.trim();
-    if (first) return first;
-  }
-  try {
-    const addr = getConnInfo(c).remote.address;
-    if (typeof addr === 'string' && addr.length > 0) return addr;
-  } catch {
-    // getConnInfo throws when the adapter isn't Bun (e.g. in tests).
-  }
-  return '';
-}
 
 // ── Registration ────────────────────────────────────────
 
@@ -155,7 +137,7 @@ runnerRoutes.post('/enroll/start', async (c) => {
   const result = await enroll.startEnrollment({
     hostname: String(body.hostname).slice(0, 255),
     os: String(body.os).slice(0, 64),
-    ip: callerIp(c),
+    ip: clientIp(c) ?? '',
   });
   return c.json(result, 201);
 });

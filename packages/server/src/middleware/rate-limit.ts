@@ -20,8 +20,8 @@ import {
   type SlidingWindowHits,
 } from '@funny/shared/lib/sliding-window-hits';
 import type { Context, Next } from 'hono';
-import { getConnInfo } from 'hono/bun';
 
+import { clientIp } from '../lib/client-ip.js';
 import { log } from '../lib/logger.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
@@ -47,29 +47,11 @@ export function rateLimit(opts: {
     return false;
   }
 
-  function resolveIp(c: Context): string | null {
-    if (TRUST_PROXY) {
-      const xff = c.req.header('x-forwarded-for');
-      if (xff) {
-        const first = xff.split(',')[0]?.trim();
-        if (first) return first;
-      }
-    }
-    try {
-      const info = getConnInfo(c);
-      const addr = info.remote.address;
-      if (typeof addr === 'string' && addr.length > 0) return addr;
-    } catch {
-      // getConnInfo throws when the runtime adapter isn't Bun (e.g. in tests).
-    }
-    return null;
-  }
-
   return async (c: Context, next: Next) => {
     if (skip?.(c)) return next();
     const now = Date.now();
     const userId = c.get('userId') as string | undefined;
-    const ip = resolveIp(c);
+    const ip = clientIp(c);
 
     // Authenticated: userId is the primary bucket so a single abusive IP
     // cannot exhaust the limit for every legitimate user.

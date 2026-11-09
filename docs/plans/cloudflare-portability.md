@@ -76,7 +76,7 @@ Throwaway prototype outside the main tree. Answers the unknowns that could kill 
 - [x] DB: injected factory instead of the env-driven one; make the `db` Proxy resolve the connection from request context (ALS) so a host can supply one per request. Keep the Bun singleton path. _Done: `useDatabaseProvider` / `runWithDatabase` in `db/index.ts`. The lazy `require()` in `@funny/shared/db/connection` stays (it keeps `pg` and `bun:sqlite` from loading together); a Workers host builds its provider from `adapters/pg.ts` directly and must alias `bun:sqlite` out of its bundle (Phase 5)._
 - [x] Migrations runnable as a standalone command (`bun run db:migrate`); Bun host still auto-migrates at boot. _Done: `src/hosts/bun/migrate-cli.ts`._
 - [ ] Logger sink port (winston file transport on Bun; console/OTLP-over-fetch elsewhere). `data-dir.ts` stops creating directories on import.
-- [ ] Client IP via a host-provided function (`getConnInfo` on Bun, `cf-connecting-ip` on Workers).
+- [x] Client IP via a host-provided function (`getConnInfo` on Bun, `cf-connecting-ip` on Workers). _Done: `src/lib/client-ip.ts` reads the `IP` the host puts in the env. **Fixed a bug on the way:** `hono/bun` `getConnInfo` always threw with the server's env, so anonymous requests were never rate-limited by IP unless `TRUST_PROXY=true`._
 
 **Exit:** `bun run lint`, `bun run typecheck`, full server test suite green; deploy to Railway unchanged.
 

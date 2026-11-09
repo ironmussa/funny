@@ -6,7 +6,7 @@
  */
 
 import { randomBytes } from 'crypto';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 import { getSchema } from '@funny/shared/db/schema';
@@ -21,8 +21,7 @@ import { resolveCorsOrigins } from './cors-origins.js';
 import { DATA_DIR } from './data-dir.js';
 import { log } from './logger.js';
 import { validatePasswordStrength } from './password-policy.js';
-
-const SECRET_PATH = resolve(DATA_DIR, 'auth-secret');
+import { getAuthSecret } from './server-secrets.js';
 
 /**
  * Security M7 (decision needed): there is no graceful rotation flow for the
@@ -41,23 +40,12 @@ const SECRET_PATH = resolve(DATA_DIR, 'auth-secret');
  * so the implementation will require either a custom verifier hook or a
  * patch upstream. Tracked separately — do not regress this comment until a
  * design exists.
+ *
+ * The secret is resolved by `server-secrets.ts` (env `BETTER_AUTH_SECRET`,
+ * else `<data dir>/auth-secret`). Server-internal keys are derived from it
+ * (`deriveServerKey`), so rotating it also invalidates in-flight MCP OAuth
+ * states.
  */
-function getOrCreateSecret(): string {
-  // Prefer env var (essential for platforms like Railway where the filesystem is ephemeral)
-  if (process.env.BETTER_AUTH_SECRET) {
-    return process.env.BETTER_AUTH_SECRET;
-  }
-
-  if (existsSync(SECRET_PATH)) {
-    const secret = readFileSync(SECRET_PATH, 'utf-8').trim();
-    if (secret.length > 0) return secret;
-  }
-
-  const secret = randomBytes(64).toString('hex');
-  writeFileSync(SECRET_PATH, secret, { mode: 0o600 });
-  log.info('Generated new auth secret', { namespace: 'auth' });
-  return secret;
-}
 
 // ── Access Control ──────────────────────────────────────────────
 
@@ -167,7 +155,7 @@ export async function initBetterAuth(): Promise<void> {
     database: buildDatabaseConfig(),
     baseURL: process.env.BETTER_AUTH_BASE_URL || `http://localhost:${PORT}`,
     basePath: '/api/auth',
-    secret: getOrCreateSecret(),
+    secret: getAuthSecret(),
     trustedOrigins: corsOrigins,
     emailAndPassword: {
       enabled: true,

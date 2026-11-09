@@ -6,6 +6,8 @@
 import { afterEach, beforeEach, describe, expect, mock, spyOn, test } from 'bun:test';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
+// The OAuth state key derives from the auth secret; never touch a real data dir.
+process.env.BETTER_AUTH_SECRET = 'test-auth-secret';
 
 import {
   NONCE_HEADER,
@@ -19,6 +21,11 @@ import {
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import * as auditModule from '../../lib/audit.js';
+import {
+  configureSecretSource,
+  createReadOnlySecretSource,
+  resetServerSecretsForTests,
+} from '../../lib/server-secrets.js';
 import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
 import {
   authorizedRunnerRequests,
@@ -250,6 +257,39 @@ async function oauthRoute(state: string | undefined) {
   });
   return { result: result.isOk() ? result.value : result.error, ran };
 }
+
+/**
+ * The state key derives from the auth secret, so a restarted server (or a
+ * second instance sharing the secret) verifies states minted before. A fresh
+ * module instance (distinct import query) is what a restarted process loads;
+ * with the old per-process random key it rejected every earlier state.
+ */
+describe('OAuth callback state key — stable across restarts and instances', () => {
+  afterEach(() => resetServerSecretsForTests());
+
+  test('a state minted before a restart verifies in a fresh server instance', async () => {
+    runner('r-alice', 'alice');
+    const state = await boundState(alice, 'r-alice');
+    // A non-literal specifier: the query makes Bun load a fresh module instance.
+    const freshInstance = '../../services/runner-access/oauth-callback-state.ts?instance=restarted';
+    const restarted = (await import(
+      freshInstance
+    )) as typeof import('../../services/runner-access/oauth-callback-state.js');
+    expect(restarted.verifyOAuthCallbackState(state)).toEqual({
+      userId: 'alice',
+      runnerId: 'r-alice',
+    });
+  });
+
+  test('a server with a different auth secret routes the state nowhere', async () => {
+    runner('r-alice', 'alice');
+    const state = await boundState(alice, 'r-alice');
+    configureSecretSource(createReadOnlySecretSource({ 'auth-secret': 'another-secret' }));
+    const { result, ran } = await oauthRoute(state);
+    expect(ran).toBe(0);
+    expect(result).toEqual({ kind: 'oauth-state-invalid' });
+  });
+});
 
 describe('withOAuthCallbackRunner — routed only by the server-signed state (H3/M3)', () => {
   test("a state bound to alice's runner reaches that runner, never another tenant's", async () => {

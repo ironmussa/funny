@@ -407,7 +407,6 @@ function seedStores(
         selectedThreadId: 'thread-1',
         activeThread: { ...thread, messages: [] },
         setupProgressByThread: {},
-        contextUsageByThread: {},
       }),
     );
   } else {
@@ -418,7 +417,6 @@ function seedStores(
         selectedThreadId: null,
         activeThread: null,
         setupProgressByThread: {},
-        contextUsageByThread: {},
       }),
     );
   }

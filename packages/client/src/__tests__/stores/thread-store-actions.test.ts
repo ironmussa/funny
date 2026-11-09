@@ -162,7 +162,6 @@ describe('thread store actions', () => {
         threadDataById: {},
         activeThread: null,
         setupProgressByThread: {},
-        contextUsageByThread: {},
       }),
     );
   });

@@ -139,7 +139,6 @@ function seedStores(
       selectedThreadId: null,
       activeThread: null,
       setupProgressByThread: {},
-      contextUsageByThread: {},
     }),
   );
 

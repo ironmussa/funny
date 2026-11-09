@@ -36,7 +36,6 @@ function emptyState(overrides: Partial<ThreadState> = {}): ThreadState {
     threadDataById: {},
     activeThread: null,
     setupProgressByThread: {},
-    contextUsageByThread: {},
     ...overrides,
   } as ThreadState;
 }

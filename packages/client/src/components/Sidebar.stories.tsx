@@ -20,7 +20,6 @@ function seedSessionAndSelection(selectedThreadId: string | null) {
     selectedThreadId,
     activeThread: null,
     setupProgressByThread: {},
-    contextUsageByThread: {},
   });
   useAuthStore.setState({
     user: { id: 'user-1', username: 'admin', displayName: 'Admin User', role: 'admin' },
@@ -324,7 +323,6 @@ export const SingleProjectNoActive: Story = {
         selectedThreadId: 't1',
         activeThread: null,
         setupProgressByThread: {},
-        contextUsageByThread: {},
       }),
     );
     useAuthStore.setState({

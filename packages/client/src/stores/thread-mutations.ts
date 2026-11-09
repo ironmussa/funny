@@ -15,7 +15,7 @@ import type { ThreadWithMessages } from './thread-types';
 // ── Public mutations: threadDataById ("thread gordo") ──────────────────
 //
 // `threadDataById` is the single source of truth for the loaded thread
-// payload (messages, toolCalls, threadEvents, initInfo, contextUsage, …).
+// payload (messages, toolCalls, threadEvents, initInfo, …).
 // Both the right pane (single thread) and the live-columns grid read and
 // write through this map — so a single write path is enough for every
 // surface that needs the thread.

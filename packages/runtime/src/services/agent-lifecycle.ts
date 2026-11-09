@@ -260,7 +260,7 @@ export class AgentLifecycleManager {
     this.beginRunSpan(threadId, model, provider, permissionMode);
 
     // Resolve per-user API keys and git identity for agent subprocesses.
-    const baseEnv = await buildAgentEnv({ threadId, userId, provider, assetsDir });
+    const baseEnv = await buildAgentEnv({ threadId, userId, thread, provider, assetsDir });
     const agentEnv = await this.applyAgentProfile(threadId, activeAgentProfile, baseEnv);
 
     await this.launchAgent(

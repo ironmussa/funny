@@ -14,12 +14,12 @@ export class FakeRunnerRequestPort implements RunnerRequestPort {
   readonly available = new Set<string>();
   response: RunnerResponse = { status: 200, headers: {}, body: '', bodyEncoding: 'utf8' };
 
-  isAvailable(runnerId: string): boolean {
+  async isAvailable(runnerId: string): Promise<boolean> {
     return this.available.has(runnerId);
   }
 
   async request(runnerId: string, request: RunnerRequest): Promise<RunnerResponse> {
-    if (!this.isAvailable(runnerId)) throw new Error(`Runner ${runnerId} is unavailable`);
+    if (!this.available.has(runnerId)) throw new Error(`Runner ${runnerId} is unavailable`);
     this.requests.push({ runnerId, request });
     return structuredClone(this.response);
   }
@@ -30,16 +30,16 @@ export class FakeRunnerTerminalPort implements RunnerTerminalPort {
   readonly events: Array<{ runnerId: string; userId: string; event: RunnerTerminalEvent }> = [];
   readonly sessions = new Map<string, Array<Record<string, unknown>>>();
 
-  isAvailable(runnerId: string): boolean {
+  async isAvailable(runnerId: string): Promise<boolean> {
     return this.available.has(runnerId);
   }
 
-  dispatch(runnerId: string, userId: string, event: RunnerTerminalEvent): void {
-    if (!this.isAvailable(runnerId)) throw new Error(`Runner ${runnerId} is unavailable`);
+  async dispatch(runnerId: string, userId: string, event: RunnerTerminalEvent): Promise<void> {
+    if (!this.available.has(runnerId)) throw new Error(`Runner ${runnerId} is unavailable`);
     this.events.push({ runnerId, userId, event });
   }
 
-  listSessions(runnerId: string, userId: string): Array<Record<string, unknown>> {
+  async listSessions(runnerId: string, userId: string): Promise<Array<Record<string, unknown>>> {
     return structuredClone(this.sessions.get(`${runnerId}\0${userId}`) ?? []);
   }
 }
@@ -47,19 +47,19 @@ export class FakeRunnerTerminalPort implements RunnerTerminalPort {
 export class FakeRunnerPresencePort implements RunnerPresencePort {
   readonly owners = new Map<string, string | null>();
 
-  isAvailable(runnerId: string): boolean {
+  async isAvailable(runnerId: string): Promise<boolean> {
     return this.owners.has(runnerId);
   }
 
-  userHasAvailableRunner(userId: string): boolean {
+  async userHasAvailableRunner(userId: string): Promise<boolean> {
     return [...this.owners.values()].includes(userId);
   }
 
-  userIdForRunner(runnerId: string): string | null {
+  async userIdForRunner(runnerId: string): Promise<string | null> {
     return this.owners.get(runnerId) ?? null;
   }
 
-  availableRunnerCount(): number {
+  async availableRunnerCount(): Promise<number> {
     return this.owners.size;
   }
 }

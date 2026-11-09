@@ -123,7 +123,7 @@ function idleWindowMs(): number {
 }
 
 export function startSandboxLifecycle(deps: {
-  presence: { isAvailable(runnerId: string): boolean } | undefined;
+  presence: { isAvailable(runnerId: string): Promise<boolean> } | undefined;
   browserEvents?: { toUser(userId: string, event: Record<string, unknown>): void };
 }): void {
   if (lifecycleFiber) return;

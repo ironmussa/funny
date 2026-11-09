@@ -86,7 +86,7 @@ function setup(
     },
     sandboxRunnerIdForThread: async () =>
       opts.runnerConnects === false ? null : started() ? 'r-box' : null,
-    presence: { isAvailable: (id) => id === 'r-box' },
+    presence: { isAvailable: async (id) => id === 'r-box' },
     requestCheckout: ({ threadId, path, repoUrl }) => {
       checkouts.push({ threadId, path, repoUrl });
       return opts.checkoutFails ? errAsync('clone failed') : okAsync(undefined);
@@ -248,7 +248,7 @@ describe('stop and resume edge cases (state machine + Effect)', () => {
       serverUrl: 'https://funny.example',
       issueToken: () => okAsync({ token: 'rprov_x' }),
       sandboxRunnerIdForThread: async () => 'r-box',
-      presence: { isAvailable: () => runner.online },
+      presence: { isAvailable: async () => runner.online },
       store,
       sleep: async () => {},
       pollMs: 1,
@@ -339,7 +339,7 @@ describe('step ordering and cancellation', () => {
       serverUrl: 'https://funny.example',
       issueToken: () => okAsync({ token: 'rprov_x' }),
       sandboxRunnerIdForThread: async () => (started() ? 'r-box' : null),
-      presence: { isAvailable: (id) => id === 'r-box' },
+      presence: { isAvailable: async (id) => id === 'r-box' },
       store,
       sleep: async () => {},
       pollMs: 1,
@@ -383,7 +383,7 @@ describe('ephemeral providers', () => {
       serverUrl: 'https://funny.example',
       issueToken: () => okAsync({ token: 'rprov_x' }),
       sandboxRunnerIdForThread: async () => 'r-box',
-      presence: { isAvailable: () => true },
+      presence: { isAvailable: async () => true },
       store,
       sleep: async () => {},
       pollMs: 1,
@@ -431,7 +431,7 @@ describe('resilience: transient retries, release, abandon, recover', () => {
       serverUrl: 'https://funny.example',
       issueToken: () => okAsync({ token: 'rprov_x' }),
       sandboxRunnerIdForThread: async () => 'r-box',
-      presence: { isAvailable: () => runner.online },
+      presence: { isAvailable: async () => runner.online },
       store,
       sleep: async (ms) => {
         waits.push(ms);

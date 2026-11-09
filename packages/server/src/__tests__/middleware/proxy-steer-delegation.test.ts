@@ -41,7 +41,7 @@ function spyTransport() {
       onSelect: (userId) => calls.push(userId),
     }),
     requests: {
-      isAvailable: () => true,
+      isAvailable: async () => true,
       request: async (_runnerId, request) => {
         sentHeaders.push(request.headers);
         return {

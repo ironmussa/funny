@@ -113,7 +113,24 @@ describe('setupBrowserNamespace', () => {
     // The connection handler emits readiness asynchronously.
     await new Promise((r) => setTimeout(r, 0));
 
-    expect(socket.emitted.some((e) => e.event === 'runner:status')).toBe(true);
-    expect(presence.userHasAvailableRunner('user-1')).toBe(false);
+    // The value, not just the event: a presence answer that is a Promise must
+    // be awaited, or it reads as truthy and every browser sees "online".
+    expect(socket.emitted.find((e) => e.event === 'runner:status')?.data).toEqual({
+      status: 'offline',
+    });
+    expect(await presence.userHasAvailableRunner('user-1')).toBe(false);
+
+    presence.activate('runner-1', { invalidate: () => {} }, 'user-1');
+    const second = createMockSocket({
+      data: { userId: 'user-1' },
+      conn: { transport: { name: 'websocket' } },
+      join: mock(() => {}),
+    } as any);
+    connectionHandlers[0]?.(second);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(second.emitted.find((e) => e.event === 'runner:status')?.data).toEqual({
+      status: 'online',
+    });
+    presence.closeAll();
   });
 });

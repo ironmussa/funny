@@ -229,7 +229,7 @@ runnerRoutes.post('/heartbeat', async (c) => {
   // This lets the runner detect stale connections (e.g. after server restart).
   return c.json({
     ok: true,
-    grpcConnected: c.env?.runnerPresence?.isAvailable(runnerId) ?? false,
+    grpcConnected: (await c.env?.runnerPresence?.isAvailable(runnerId)) ?? false,
   });
 });
 

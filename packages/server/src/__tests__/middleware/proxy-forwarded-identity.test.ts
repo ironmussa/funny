@@ -25,7 +25,7 @@ describe('gRPC proxy forwarded identity', () => {
     const transport: ProxyTransport = {
       runnerAccess: createRunnerAccessMock(),
       requests: {
-        isAvailable: () => true,
+        isAvailable: async () => true,
         request: async (runnerId, request) => {
           runnerIds.push(runnerId);
           captured.push(

@@ -21,7 +21,7 @@ function appWith(transport: ProxyTransport) {
 }
 
 const requests: NonNullable<ProxyTransport['requests']> = {
-  isAvailable: () => true,
+  isAvailable: async () => true,
   request: async () => ({
     status: 200,
     headers: { 'content-type': 'application/json' },

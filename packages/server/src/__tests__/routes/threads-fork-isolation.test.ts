@@ -44,12 +44,13 @@ describe('Thread fork — authorization and runner isolation', () => {
   beforeAll(async () => {
     t = await createTestApp({
       runnerPresence: {
-        isAvailable: (id) => online.has(id),
-        userHasAvailableRunner: (userId) => [...online].some((id) => RUNNER_OWNERS[id] === userId),
-        userIdForRunner: (id) => RUNNER_OWNERS[id] ?? null,
-        availableRunnerCount: () => online.size,
+        isAvailable: async (id) => online.has(id),
+        userHasAvailableRunner: async (userId) =>
+          [...online].some((id) => RUNNER_OWNERS[id] === userId),
+        userIdForRunner: async (id) => RUNNER_OWNERS[id] ?? null,
+        availableRunnerCount: async () => online.size,
       },
-      runnerRequests: { isAvailable: (id) => online.has(id), request: tunnelFetch },
+      runnerRequests: { isAvailable: async (id) => online.has(id), request: tunnelFetch },
     });
   });
 

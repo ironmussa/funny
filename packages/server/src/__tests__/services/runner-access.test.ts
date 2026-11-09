@@ -537,8 +537,11 @@ describe('AuthorizedRunnerTerminal', () => {
       presence,
       async (a, r, proof) => {
         const terminal = authorizedRunnerTerminal(port);
-        expect(terminal.isAvailable(r)).toBe(true);
-        terminal.dispatch(a, r, proof, { type: 'pty:write', data: { id: 'p1', data: 'ls\n' } });
+        expect(await terminal.isAvailable(r)).toBe(true);
+        await terminal.dispatch(a, r, proof, {
+          type: 'pty:write',
+          data: { id: 'p1', data: 'ls\n' },
+        });
         return terminal.listSessions(a, r, proof);
       },
     );

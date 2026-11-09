@@ -255,7 +255,7 @@ function sendViaCertifiedRunner(ctx: ProxySendContext) {
     { kind: 'request', path, query },
     presence,
     async (actor, runner, proof) => {
-      if (!sink.isAvailable(runner)) {
+      if (!(await sink.isAvailable(runner))) {
         return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
       }
       // Bind the OAuth flow this runner is about to start to (user, runner):
@@ -421,7 +421,7 @@ async function handleOAuthCallback(
       );
     }
     if (!code) return oauthCallbackPage(c, false, 'Missing code or state parameter', 400);
-    if (!sink.isAvailable(runner)) {
+    if (!(await sink.isAvailable(runner))) {
       return oauthCallbackPage(c, false, 'Your runner is not connected', 502);
     }
     try {

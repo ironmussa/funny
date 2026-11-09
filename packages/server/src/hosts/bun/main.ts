@@ -219,17 +219,20 @@ export async function startBunServer(opts: BunHostOptions) {
         const allRunners = await rm.listRunners();
         const presence = runnerTransport?.presence;
 
-        if (allRunners.length === 0 && !presence?.availableRunnerCount()) return; // nothing to report
+        const connectedCount = (await presence?.availableRunnerCount()) ?? 0;
+        if (allRunners.length === 0 && !connectedCount) return; // nothing to report
 
-        const runnerDetails = allRunners.map((r) => ({
-          id: r.runnerId.slice(0, 8),
-          name: r.name,
-          dbStatus: r.status,
-          connected: presence?.isAvailable(r.runnerId) ?? false,
-          lastHb: r.lastHeartbeatAt,
-          threads: r.activeThreadCount,
-          projects: r.assignedProjectIds.length,
-        }));
+        const runnerDetails = await Promise.all(
+          allRunners.map(async (r) => ({
+            id: r.runnerId.slice(0, 8),
+            name: r.name,
+            dbStatus: r.status,
+            connected: (await presence?.isAvailable(r.runnerId)) ?? false,
+            lastHb: r.lastHeartbeatAt,
+            threads: r.activeThreadCount,
+            projects: r.assignedProjectIds.length,
+          })),
+        );
 
         // Warn when there's a mismatch between Socket.IO connection and DB status
         const hasIssue = runnerDetails.some(
@@ -247,7 +250,7 @@ export async function startBunServer(opts: BunHostOptions) {
         const level = hasIssue ? 'warn' : 'info';
         log[level]('Runner status', {
           namespace: 'runner-monitor',
-          runners: presence?.availableRunnerCount() ?? 0,
+          runners: connectedCount,
           browsers: stats.browserClients,
           runnerDetails: JSON.stringify(runnerDetails),
         });

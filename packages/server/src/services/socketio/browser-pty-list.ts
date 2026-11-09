@@ -39,7 +39,9 @@ export function setupBrowserPtyListRpc(
           { kind: 'projectless' },
           dependencies.presence,
           async (actor, runner, proof) =>
-            terminal.isAvailable(runner) ? terminal.listSessions(actor, runner, proof) : null,
+            (await terminal.isAvailable(runner))
+              ? terminal.listSessions(actor, runner, proof)
+              : null,
         );
         if (listed.isErr()) {
           ack({ status: 'no-runner', sessions: [] });

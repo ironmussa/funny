@@ -112,19 +112,33 @@ export class RunnerGrpcSessionRegistry implements RunnerPresencePort {
     return this.active.get(runnerId)?.epoch ?? null;
   }
 
-  isAvailable(runnerId: string): boolean {
+  // Synchronous reads for the transport itself (same process as the sessions).
+  hasSession(runnerId: string): boolean {
     return this.active.has(runnerId);
   }
 
-  userHasAvailableRunner(userId: string): boolean {
+  userHasSession(userId: string): boolean {
     return (this.runnersByUser.get(userId)?.size ?? 0) > 0;
   }
 
-  userIdForRunner(runnerId: string): string | null {
+  sessionOwner(runnerId: string): string | null {
     return this.active.get(runnerId)?.userId ?? null;
   }
 
-  availableRunnerCount(): number {
+  // RunnerPresencePort.
+  async isAvailable(runnerId: string): Promise<boolean> {
+    return this.hasSession(runnerId);
+  }
+
+  async userHasAvailableRunner(userId: string): Promise<boolean> {
+    return this.userHasSession(userId);
+  }
+
+  async userIdForRunner(runnerId: string): Promise<string | null> {
+    return this.sessionOwner(runnerId);
+  }
+
+  async availableRunnerCount(): Promise<number> {
     return this.active.size;
   }
 

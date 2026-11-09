@@ -15,7 +15,7 @@ import { createRunnerAccessMock } from '../helpers/proxy-test-mocks.js';
 let capturedHeaders: Record<string, string> = {};
 
 const requests = {
-  isAvailable: () => true,
+  isAvailable: async () => true,
   request: async (_runnerId: string, req: { headers: Record<string, string> }) => {
     capturedHeaders = req.headers;
     return {

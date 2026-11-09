@@ -45,13 +45,13 @@ describe('Thread creation — characterization', () => {
   beforeAll(async () => {
     t = await createTestApp({
       runnerPresence: {
-        isAvailable: () => runnerAvailable,
-        userHasAvailableRunner: () => true,
-        userIdForRunner: () => 'user-1',
-        availableRunnerCount: () => 1,
+        isAvailable: async () => runnerAvailable,
+        userHasAvailableRunner: async () => true,
+        userIdForRunner: async () => 'user-1',
+        availableRunnerCount: async () => 1,
       },
       runnerRequests: {
-        isAvailable: () => true,
+        isAvailable: async () => true,
         request: (runnerId, request) => {
           effects.push('remote');
           return tunnelFetch(runnerId, request);

@@ -17,7 +17,7 @@ const ORIGINAL_BYTES = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0xff, 0xfe, 0x00,
 let tunnelBodyEncoding: 'utf8' | 'base64' = 'base64';
 
 const requests = {
-  isAvailable: () => true,
+  isAvailable: async () => true,
   request: async () => ({
     status: 200,
     headers: { 'content-type': 'image/png' },

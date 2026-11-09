@@ -51,21 +51,21 @@ describe('RunnerGrpcSessionRegistry', () => {
     registry.closeAll();
   });
 
-  test('is the authoritative runner and user presence index', () => {
+  test('is the authoritative runner and user presence index', async () => {
     const registry = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
     const firstEpoch = registry.activate('runner-1', connection([]), 'user-1');
     const secondEpoch = registry.activate('runner-2', connection([]), 'user-1');
 
-    expect(registry.isAvailable('runner-1')).toBe(true);
-    expect(registry.userIdForRunner('runner-1')).toBe('user-1');
-    expect(registry.userHasAvailableRunner('user-1')).toBe(true);
-    expect(registry.availableRunnerCount()).toBe(2);
+    expect(await registry.isAvailable('runner-1')).toBe(true);
+    expect(await registry.userIdForRunner('runner-1')).toBe('user-1');
+    expect(await registry.userHasAvailableRunner('user-1')).toBe(true);
+    expect(await registry.availableRunnerCount()).toBe(2);
 
     registry.deactivate('runner-1', firstEpoch);
-    expect(registry.userHasAvailableRunner('user-1')).toBe(true);
+    expect(await registry.userHasAvailableRunner('user-1')).toBe(true);
     registry.activate('runner-2', connection([]), 'user-2');
-    expect(registry.userHasAvailableRunner('user-1')).toBe(false);
-    expect(registry.userHasAvailableRunner('user-2')).toBe(true);
+    expect(await registry.userHasAvailableRunner('user-1')).toBe(false);
+    expect(await registry.userHasAvailableRunner('user-2')).toBe(true);
     expect(registry.deactivate('runner-2', secondEpoch)).toBe(false);
     registry.closeAll();
   });

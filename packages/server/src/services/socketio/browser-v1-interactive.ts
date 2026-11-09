@@ -283,7 +283,7 @@ export function setupBrowserV1Interactive(
           targetFor(projectId),
           dependencies.presence,
           async (a, runner, proof) => {
-            if (!sink.isAvailable(runner)) return false;
+            if (!(await sink.isAvailable(runner))) return false;
             await sink.send(a, runner, proof, {
               method: 'POST',
               path: '/api/browser-session/command',
@@ -340,8 +340,8 @@ export function setupBrowserV1Interactive(
         targetFor(projectId),
         dependencies.presence,
         async (a, runner, proof) => {
-          if (!terminalSink.isAvailable(runner)) return false;
-          terminalSink.dispatch(a, runner, proof, event);
+          if (!(await terminalSink.isAvailable(runner))) return false;
+          await terminalSink.dispatch(a, runner, proof, event);
           return true;
         },
       );

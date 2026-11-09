@@ -83,9 +83,7 @@ export function setupBrowserNamespace(dependencies: BrowserNamespaceDependencies
       transport: socket.conn.transport.name,
     });
 
-    socket.emit('runner:status', {
-      status: dependencies.presence?.userHasAvailableRunner(userId) ? 'online' : 'offline',
-    });
+    void reportRunnerStatus(socket, userId, dependencies.presence);
 
     setupBrowserPtyHandlers(socket, userId, dependencies);
     setupBrowserPtyListRpc(socket, userId, dependencies);
@@ -108,4 +106,23 @@ export function setupBrowserNamespace(dependencies: BrowserNamespaceDependencies
       });
     });
   });
+}
+
+/** Tell a newly connected browser whether the user has a runner online. */
+async function reportRunnerStatus(
+  socket: Socket,
+  userId: string,
+  presence: RunnerPresencePort | undefined,
+): Promise<void> {
+  let online = false;
+  try {
+    online = (await presence?.userHasAvailableRunner(userId)) ?? false;
+  } catch (error) {
+    log.warn('Runner presence lookup failed; reporting offline', {
+      namespace: 'socketio',
+      userId,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
+  socket.emit('runner:status', { status: online ? 'online' : 'offline' });
 }

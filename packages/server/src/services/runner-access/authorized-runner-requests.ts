@@ -112,8 +112,8 @@ function signedIdentityHeaders(
 class AuthorizedRunnerRequests {
   constructor(private readonly port: RunnerRequestPort | undefined) {}
 
-  isAvailable<R>(runner: Named<R, RunnerId>): boolean {
-    return !!this.port?.isAvailable(runner.value);
+  async isAvailable<R>(runner: Named<R, RunnerId>): Promise<boolean> {
+    return this.port ? await this.port.isAvailable(runner.value) : false;
   }
 
   /** Send as `actor` to `runner`. The proof binds the two. */
@@ -193,25 +193,25 @@ class AuthorizedRunnerRequests {
 class AuthorizedRunnerTerminal {
   constructor(private readonly port: RunnerTerminalPort | undefined) {}
 
-  isAvailable<R>(runner: Named<R, RunnerId>): boolean {
-    return !!this.port?.isAvailable(runner.value);
+  async isAvailable<R>(runner: Named<R, RunnerId>): Promise<boolean> {
+    return this.port ? await this.port.isAvailable(runner.value) : false;
   }
 
-  dispatch<A, R>(
+  async dispatch<A, R>(
     actor: Named<A, RunnerActor>,
     runner: Named<R, RunnerId>,
     _proof: RunnerFor<A, R>,
     event: RunnerTerminalEvent,
-  ): void {
+  ): Promise<void> {
     if (!this.port) throw new Error('Runner terminal transport is not available');
-    this.port.dispatch(runner.value, actor.value.userId, event);
+    await this.port.dispatch(runner.value, actor.value.userId, event);
   }
 
-  listSessions<A, R>(
+  async listSessions<A, R>(
     actor: Named<A, RunnerActor>,
     runner: Named<R, RunnerId>,
     _proof: RunnerFor<A, R>,
-  ): Array<Record<string, unknown>> {
+  ): Promise<Array<Record<string, unknown>>> {
     if (!this.port) throw new Error('Runner terminal transport is not available');
     return this.port.listSessions(runner.value, actor.value.userId);
   }

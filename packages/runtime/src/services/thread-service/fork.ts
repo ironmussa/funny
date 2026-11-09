@@ -5,57 +5,35 @@
  * @domain layer: application
  * @domain emits: thread:created
  *
- * Fork a thread at a specific user message. For Claude threads, uses the
- * Claude Agent SDK's native `forkSession()` to slice the SDK transcript at
- * the matching transcript message UUID. For Pi, uses the Pi SDK session
- * manager. For ACP-based providers (gemini, cursor, opencode), spawns the
- * agent CLI briefly and calls ACP's `unstable_forkSession()` if the capability
- * is advertised. Codex SDK does not expose native session forking, so Codex
- * falls back to a DB-backed conversation branch. Forks without a native
- * session are marked for context recovery, so the first follow-up rebuilds
- * the copied transcript instead of starting the agent with no history. In all
- * cases the prefix of DB messages and tool calls are mirrored into a new
- * (idle) thread.
+ * Fork a thread at a specific user message, natively in funny: the prefix of
+ * DB messages and tool calls up to (and including) that message is mirrored
+ * into a new idle thread. No provider session is forked — the provider SDKs
+ * locate transcripts by their own config dir / storage layout, which funny
+ * cannot reliably reach (e.g. a Claude profile with a custom
+ * CLAUDE_CONFIG_DIR). Instead the fork is marked for context recovery, so its
+ * first follow-up starts a fresh session seeded with the copied transcript —
+ * the same path used after interruptions and model/provider changes. The
+ * source's Git checkpoints are re-pointed at the copied messages, so the fork
+ * can still rewind to the turns it inherited.
  */
 
-import { forkSession, getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
-import type { SessionMessage } from '@anthropic-ai/claude-agent-sdk';
-import { forkAcpSession, forkPiSession } from '@funny/core/agents';
-import {
-  GATEABLE_ACP_PROVIDER_IDS,
-  type GateableAcpProvider,
-} from '@funny/shared/provider-manifests';
 import { nanoid } from 'nanoid';
 import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric, startSpan } from '../../lib/telemetry.js';
+import { copyGitCheckpoint } from '../git-checkpoints.js';
 import { getServices } from '../service-registry.js';
+import { canDoGitOps } from '../thread-context.js';
 import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
 import { ThreadServiceError } from './helpers.js';
-
-// Derived from the manifest registry — adding an ACP manifest makes its
-// threads forkable here automatically.
-const ACP_PROVIDERS = new Set<string>(GATEABLE_ACP_PROVIDER_IDS);
 
 export interface ForkThreadParams {
   sourceThreadId: string;
   messageId: string;
   userId: string;
   title?: string;
-}
-
-/** A SessionMessage from the SDK whose `message` payload is a real user prompt
- *  (not a tool_result). Tool result entries are also `type: 'user'` in the
- *  transcript, so we filter them out by inspecting content blocks. */
-function isPromptUserMessage(sm: SessionMessage): boolean {
-  if (sm.type !== 'user') return false;
-  const m = (sm as any).message;
-  if (!m) return false;
-  if (typeof m.content === 'string') return true;
-  if (!Array.isArray(m.content)) return true;
-  return !m.content.some((b: any) => b?.type === 'tool_result');
 }
 
 export function forkThread(
@@ -76,11 +54,6 @@ async function forkThreadImpl(params: ForkThreadParams) {
     span.end('error', 'thread_not_found');
     throw new ThreadServiceError('Thread not found', 404);
   }
-  if (!source.sessionId) {
-    span.end('error', 'no_session');
-    throw new ThreadServiceError('Thread has no session to fork', 400);
-  }
-
   const pathResult = await getServices().projects.resolveProjectPath(
     source.projectId,
     params.userId,
@@ -107,120 +80,6 @@ async function forkThreadImpl(params: ForkThreadParams) {
     throw new ThreadServiceError('Can only fork at a user message', 400);
   }
 
-  // Index of the target user message among role==='user' rows
-  const userMsgIndex =
-    dbMessages.slice(0, targetIdx + 1).filter((m: any) => m.role === 'user').length - 1;
-
-  // Determine native session-fork strategy by provider.
-  // - claude (or unset): use the Claude SDK's transcript-aware forkSession()
-  // - pi: use Pi SDK session manager
-  // - gemini / cursor / opencode: spawn the agent CLI briefly and call ACP unstable_forkSession()
-  // - codex: no native fork in the SDK yet; copy DB messages with no sessionId
-  // - other providers: no native fork — copy DB messages with no sessionId
-  let newSessionId: string | null = null;
-  let forkedAtSdkUuid: string | undefined;
-  const provider = source.provider ?? 'claude';
-
-  if (provider === 'claude') {
-    let transcript: SessionMessage[];
-    try {
-      transcript = await getSessionMessages(source.sessionId, { dir: cwd });
-    } catch (err) {
-      log.error('Failed to read SDK session transcript for fork', {
-        namespace: 'thread-fork',
-        threadId: source.id,
-        sessionId: source.sessionId,
-        cwd,
-        error: (err as Error)?.message,
-      });
-      span.end('error', 'transcript_read_failed');
-      throw new ThreadServiceError('Failed to read agent session transcript', 500);
-    }
-
-    const promptMessages = transcript.filter(isPromptUserMessage);
-    const targetSdkMsg = promptMessages[userMsgIndex];
-    if (!targetSdkMsg?.uuid) {
-      log.error('No matching SDK transcript message for fork', {
-        namespace: 'thread-fork',
-        threadId: source.id,
-        sessionId: source.sessionId,
-        userMsgIndex,
-        promptCount: promptMessages.length,
-        transcriptCount: transcript.length,
-      });
-      span.end('error', 'sdk_message_not_found');
-      throw new ThreadServiceError(
-        'Could not locate matching message in agent session transcript',
-        500,
-      );
-    }
-
-    forkedAtSdkUuid = targetSdkMsg.uuid;
-
-    try {
-      const result = await forkSession(source.sessionId, {
-        upToMessageId: targetSdkMsg.uuid,
-        dir: cwd,
-        title: params.title,
-      });
-      newSessionId = result.sessionId;
-    } catch (err) {
-      log.error('SDK forkSession failed', {
-        namespace: 'thread-fork',
-        threadId: source.id,
-        sessionId: source.sessionId,
-        cwd,
-        error: (err as Error)?.message,
-      });
-      span.end('error', 'sdk_fork_failed');
-      throw new ThreadServiceError('Failed to fork agent session', 500);
-    }
-  } else if (provider === 'pi') {
-    const result = await forkPiSession({
-      sessionId: source.sessionId,
-      cwd,
-      userMessageIndex: userMsgIndex,
-    });
-    if (result.ok) {
-      newSessionId = result.newSessionId;
-    } else {
-      log.warn('Pi SDK fork unavailable, falling back to DB-only branch copy', {
-        namespace: 'thread-fork',
-        threadId: source.id,
-        provider,
-        sessionId: source.sessionId,
-        reason: result.reason,
-        message: result.message,
-      });
-      metric('threads.fork_pi_fallback', 1, { type: 'sum' });
-    }
-  } else if (ACP_PROVIDERS.has(provider)) {
-    const acpResult = await forkAcpSession({
-      provider: provider as GateableAcpProvider,
-      sessionId: source.sessionId,
-      cwd,
-    });
-    if (acpResult.ok) {
-      newSessionId = acpResult.newSessionId;
-    } else {
-      log.warn('ACP fork unavailable, falling back to DB-only branch copy', {
-        namespace: 'thread-fork',
-        threadId: source.id,
-        provider,
-        sessionId: source.sessionId,
-        reason: acpResult.reason,
-        message: acpResult.message,
-      });
-      metric('threads.fork_acp_fallback', 1, { type: 'sum' });
-    }
-  } else {
-    log.info('Provider has no native session fork; copying DB messages only', {
-      namespace: 'thread-fork',
-      threadId: source.id,
-      provider,
-    });
-  }
-
   // Create the new thread row
   const newThreadId = nanoid();
   const now = new Date().toISOString();
@@ -241,16 +100,14 @@ async function forkThreadImpl(params: ForkThreadParams) {
     branch: source.branch,
     baseBranch: source.baseBranch,
     worktreePath: source.worktreePath,
-    sessionId: newSessionId,
-    // A DB-only fork has no provider session to resume. Rebuild the copied
-    // transcript for its first follow-up so it remains a functional branch,
-    // rather than merely displaying the source conversation in the UI.
-    contextRecoveryReason: newSessionId ? null : 'forked',
+    // No provider session to resume: rebuild the copied transcript on the
+    // first follow-up so the fork is a functional branch, not just a copy of
+    // the source conversation in the UI.
+    sessionId: null,
+    contextRecoveryReason: 'forked',
     parentThreadId: source.id,
-    // Forked SDK sessions start without undo history (per the Claude SDK
-    // docs), so even if the source thread had checkpointing on, the fork's
-    // own future edits start a fresh checkpoint store.
-    fileCheckpointingEnabled: provider === 'claude' ? 1 : 0,
+    // Set once the source's checkpoints are copied below.
+    fileCheckpointingEnabled: 0,
     cost: 0,
     createdAt: now,
     updatedAt: now,
@@ -260,6 +117,7 @@ async function forkThreadImpl(params: ForkThreadParams) {
   // Mirror the prefix of DB messages (and their tool calls) into the new thread
   const messagesToCopy: any[] = dbMessages.slice(0, targetIdx + 1);
   const toolCallIdMap = new Map<string, string>();
+  let copiedCheckpoints = 0;
 
   for (const m of messagesToCopy) {
     const newMsgId = await tm.insertMessage({
@@ -291,6 +149,32 @@ async function forkThreadImpl(params: ForkThreadParams) {
         }
       }
     }
+
+    if (
+      m.role === 'user' &&
+      source.fileCheckpointingEnabled &&
+      canDoGitOps({ isScratch: !!source.isScratch })
+    ) {
+      const copied = await copyGitCheckpoint({
+        cwd,
+        from: { threadId: source.id, messageId: m.id },
+        to: { threadId: newThreadId, messageId: newMsgId },
+      }).catch((err) => {
+        log.warn('Failed to copy Git checkpoint to fork', {
+          namespace: 'thread-fork',
+          threadId: source.id,
+          messageId: m.id,
+          error: (err as Error)?.message,
+        });
+        return false;
+      });
+      if (copied) copiedCheckpoints++;
+    }
+  }
+
+  if (copiedCheckpoints > 0) {
+    newThread.fileCheckpointingEnabled = 1;
+    await tm.updateThread(newThreadId, { fileCheckpointingEnabled: 1 });
   }
 
   threadEventBus.emit('thread:created', {
@@ -308,11 +192,10 @@ async function forkThreadImpl(params: ForkThreadParams) {
     threadId: source.id,
     newThreadId,
     sessionId: source.sessionId,
-    newSessionId,
     forkedAtMessageId: params.messageId,
-    forkedAtSdkUuid,
-    provider,
+    provider: source.provider ?? 'claude',
     copiedMessageCount: messagesToCopy.length,
+    copiedCheckpoints,
   });
   metric('threads.forked', 1, { type: 'sum' });
   span.end('ok');

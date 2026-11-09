@@ -1059,7 +1059,6 @@
     "rewindSuccess_other": "{{count}} archivos rebobinados",
     "rewindFailed": "Error al rebobinar el código",
     "rewindFailedGeneric": "Error al rebobinar: {{error}}",
-    "rewindNotSupportedProvider": "Rebobinar solo está disponible para hilos de Claude",
     "rewindNoCheckpoints": "Este hilo se inició sin checkpoints de archivos",
     "forkAndRewindSuccess": "Conversación bifurcada y código rebobinado",
     "forkAndRewindFailed": "Error al bifurcar y rebobinar"

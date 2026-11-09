@@ -1045,7 +1045,6 @@
     "rewindSuccess_other": "{{count}} arquivos revertidos",
     "rewindFailed": "Falha ao reverter o código",
     "rewindFailedGeneric": "Falha ao reverter: {{error}}",
-    "rewindNotSupportedProvider": "Reverter só está disponível para threads do Claude",
     "rewindNoCheckpoints": "Este thread foi iniciado sem checkpoints de arquivos",
     "forkAndRewindSuccess": "Conversa bifurcada e código revertido",
     "forkAndRewindFailed": "Falha ao bifurcar e reverter"

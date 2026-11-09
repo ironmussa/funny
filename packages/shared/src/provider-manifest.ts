@@ -185,8 +185,7 @@ export interface ProviderManifest {
 
 /**
  * Resolve a manifest's {@link SpawnConfig} against the current environment into
- * a concrete `{ command, args }`. Reproduces the per-provider logic that lived
- * in `acp-fork.ts`'s `resolveAcpCommand` switch.
+ * a concrete `{ command, args }`.
  */
 export function resolveSpawnCommand(
   spawn: SpawnConfig,

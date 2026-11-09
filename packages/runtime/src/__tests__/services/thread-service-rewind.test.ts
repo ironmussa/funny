@@ -10,12 +10,8 @@ const mocks = vi.hoisted(() => ({
   projects: {
     resolveProjectPath: vi.fn(),
   },
-  getSessionMessages: vi.fn(),
-  forkSession: vi.fn(),
-  query: vi.fn(),
   forkThread: vi.fn(),
-  rewindFiles: vi.fn(),
-  restoreCodexCheckpoint: vi.fn(),
+  restoreGitCheckpoint: vi.fn(),
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -37,18 +33,8 @@ vi.mock('../../services/thread-service/fork.js', () => ({
   forkThread: mocks.forkThread,
 }));
 
-vi.mock('../../services/codex-git-checkpoints.js', () => ({
-  restoreCodexCheckpoint: mocks.restoreCodexCheckpoint,
-}));
-
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
-  getSessionMessages: mocks.getSessionMessages,
-  forkSession: mocks.forkSession,
-  query: mocks.query,
-}));
-
-vi.mock('@funny/core/agents', () => ({
-  resolveSDKCli: () => ({ path: '/bin/claude', kind: 'binary' }),
+vi.mock('../../services/git-checkpoints.js', () => ({
+  restoreGitCheckpoint: mocks.restoreGitCheckpoint,
 }));
 
 import { ok, err } from 'neverthrow';
@@ -73,23 +59,11 @@ const dbMessages = [
   { id: 'm-user-2', role: 'user', timestamp: '2024-01-01T00:02:00Z' },
 ];
 
-function seedAnchorMocks() {
-  mocks.tm.getThread.mockResolvedValue(claudeThread);
-  mocks.tm.getThreadWithMessages.mockResolvedValue({
-    ...claudeThread,
-    messages: dbMessages,
-  });
+function seedAnchorMocks(thread: Record<string, unknown> = claudeThread) {
+  mocks.tm.getThread.mockResolvedValue(thread);
+  mocks.tm.getThreadWithMessages.mockResolvedValue({ ...thread, messages: dbMessages });
   mocks.projects.resolveProjectPath.mockResolvedValue(ok('/repo'));
-  mocks.getSessionMessages.mockResolvedValue([
-    { type: 'user', uuid: 'sdk-uuid-0', message: { content: 'first' } },
-    { type: 'user', uuid: 'sdk-uuid-1', message: { content: 'second' } },
-  ]);
-  mocks.rewindFiles.mockResolvedValue({ canRewind: true, filesChanged: ['src/a.ts'] });
-  mocks.query.mockImplementation(() => ({
-    rewindFiles: mocks.rewindFiles,
-    close: vi.fn(),
-  }));
-  mocks.forkSession.mockResolvedValue({ sessionId: 'sess-forked' });
+  mocks.restoreGitCheckpoint.mockResolvedValue({ canRewind: true, filesChanged: ['src/a.ts'] });
 }
 
 describe('rewindCode — validation', () => {
@@ -116,13 +90,14 @@ describe('rewindCode — validation', () => {
     if (result.isErr()) expect(result.error.statusCode).toBe(404);
   });
 
-  test('returns 400 for a provider without rewind support', async () => {
-    mocks.tm.getThread.mockResolvedValue({ ...claudeThread, provider: 'gemini' });
+  test('returns 400 for a scratch thread (no git, no checkpoints)', async () => {
+    mocks.tm.getThread.mockResolvedValue({ ...claudeThread, isScratch: 1 });
 
     const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-1', userId: 'u-1' });
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(mocks.restoreGitCheckpoint).not.toHaveBeenCalled();
   });
 
   test('returns 400 when file checkpointing was disabled', async () => {
@@ -137,13 +112,12 @@ describe('rewindCode — validation', () => {
     }
   });
 
-  test('returns 400 when thread has no session', async () => {
-    mocks.tm.getThread.mockResolvedValue({ ...claudeThread, sessionId: null });
+  test('does not require a provider session: checkpoints are funny-native', async () => {
+    seedAnchorMocks({ ...claudeThread, sessionId: null });
 
     const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-1', userId: 'u-1' });
 
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(result.isOk()).toBe(true);
   });
 
   test('returns 409 when agent is still running', async () => {
@@ -157,7 +131,6 @@ describe('rewindCode — validation', () => {
 
   test('returns 404 when anchor message is missing', async () => {
     seedAnchorMocks();
-    mocks.tm.getThreadWithMessages.mockResolvedValue({ ...claudeThread, messages: dbMessages });
 
     const result = await rewindCode({ threadId: 't-1', messageId: 'missing', userId: 'u-1' });
 
@@ -172,6 +145,7 @@ describe('rewindCode — validation', () => {
 
     expect(result.isErr()).toBe(true);
     if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    expect(mocks.restoreGitCheckpoint).not.toHaveBeenCalled();
   });
 });
 
@@ -181,89 +155,49 @@ describe('rewindCode — success and failures', () => {
     seedAnchorMocks();
   });
 
-  test('rewinds files, forks session, and truncates DB messages', async () => {
-    const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-2', userId: 'u-1' });
+  test.each(['claude', 'codex', 'gemini'])(
+    'restores the Git checkpoint for a %s thread, truncates DB messages and drops the session',
+    async (provider) => {
+      seedAnchorMocks({ ...claudeThread, provider });
 
-    expect(result.isOk()).toBe(true);
-    if (result.isOk()) {
-      expect(result.value.newSessionId).toBe('sess-forked');
-      expect(result.value.deletedMessageCount).toBe(2);
-      expect(result.value.rewind.filesChanged).toEqual(['src/a.ts']);
-    }
-    expect(mocks.rewindFiles).toHaveBeenCalledWith('sdk-uuid-1');
-    expect(mocks.forkSession).toHaveBeenCalledWith('sess-1', {
-      upToMessageId: 'sdk-uuid-1',
-      dir: '/repo',
-    });
-    expect(mocks.tm.deleteMessagesAfter).toHaveBeenCalledWith('t-1', 'm-user-2');
-    expect(mocks.tm.updateThread).toHaveBeenCalledWith(
-      't-1',
-      expect.objectContaining({
-        sessionId: 'sess-forked',
-        fileCheckpointingEnabled: 1,
-        status: 'idle',
-      }),
+      const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-2', userId: 'u-1' });
+
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.newSessionId).toBeNull();
+        expect(result.value.deletedMessageCount).toBe(2);
+        expect(result.value.rewind.filesChanged).toEqual(['src/a.ts']);
+      }
+      expect(mocks.restoreGitCheckpoint).toHaveBeenCalledWith({
+        threadId: 't-1',
+        messageId: 'm-user-2',
+        cwd: '/repo',
+      });
+      expect(mocks.tm.deleteMessagesAfter).toHaveBeenCalledWith('t-1', 'm-user-2');
+      expect(mocks.tm.updateThread).toHaveBeenCalledWith(
+        't-1',
+        expect.objectContaining({
+          sessionId: null,
+          contextRecoveryReason: 'rewound',
+          fileCheckpointingEnabled: 1,
+          status: 'idle',
+        }),
+      );
+    },
+  );
+
+  test('restores inside the worktree when the thread has one', async () => {
+    seedAnchorMocks({ ...claudeThread, worktreePath: '/repo/.worktrees/t-1' });
+
+    await rewindCode({ threadId: 't-1', messageId: 'm-user-1', userId: 'u-1' });
+
+    expect(mocks.restoreGitCheckpoint).toHaveBeenCalledWith(
+      expect.objectContaining({ cwd: '/repo/.worktrees/t-1' }),
     );
   });
 
-  test('returns 400 when SDK reports canRewind=false', async () => {
-    mocks.rewindFiles.mockResolvedValue({ canRewind: false, error: 'no checkpoint' });
-
-    const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-1', userId: 'u-1' });
-
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) {
-      expect(result.error.statusCode).toBe(400);
-      expect(result.error.message).toContain('checkpoint');
-    }
-    expect(mocks.forkSession).not.toHaveBeenCalled();
-  });
-
-  test('returns 500 when SDK transcript cannot be read', async () => {
-    mocks.getSessionMessages.mockRejectedValue(new Error('ENOENT'));
-
-    const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-1', userId: 'u-1' });
-
-    expect(result.isErr()).toBe(true);
-    if (result.isErr()) expect(result.error.statusCode).toBe(500);
-  });
-
-  test('restores a Codex Git checkpoint then starts the next turn with rebuilt context', async () => {
-    const codexThread = { ...claudeThread, provider: 'codex', sessionId: 'codex-session' };
-    mocks.tm.getThread.mockResolvedValue(codexThread);
-    mocks.tm.getThreadWithMessages.mockResolvedValue({ ...codexThread, messages: dbMessages });
-    mocks.restoreCodexCheckpoint.mockResolvedValue({
-      canRewind: true,
-      filesChanged: ['src/before.ts'],
-    });
-
-    const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-2', userId: 'u-1' });
-
-    expect(result.isOk()).toBe(true);
-    if (result.isOk()) expect(result.value.newSessionId).toBeNull();
-    expect(mocks.restoreCodexCheckpoint).toHaveBeenCalledWith({
-      threadId: 't-1',
-      messageId: 'm-user-2',
-      cwd: '/repo',
-    });
-    expect(mocks.rewindFiles).not.toHaveBeenCalled();
-    expect(mocks.forkSession).not.toHaveBeenCalled();
-    expect(mocks.tm.deleteMessagesAfter).toHaveBeenCalledWith('t-1', 'm-user-2');
-    expect(mocks.tm.updateThread).toHaveBeenCalledWith(
-      't-1',
-      expect.objectContaining({
-        sessionId: null,
-        contextRecoveryReason: 'rewound',
-        fileCheckpointingEnabled: 1,
-      }),
-    );
-  });
-
-  test('does not truncate a Codex thread when its checkpoint is unavailable', async () => {
-    const codexThread = { ...claudeThread, provider: 'codex', sessionId: 'codex-session' };
-    mocks.tm.getThread.mockResolvedValue(codexThread);
-    mocks.tm.getThreadWithMessages.mockResolvedValue({ ...codexThread, messages: dbMessages });
-    mocks.restoreCodexCheckpoint.mockResolvedValue({
+  test('returns 400 and does not truncate when the checkpoint is unavailable', async () => {
+    mocks.restoreGitCheckpoint.mockResolvedValue({
       canRewind: false,
       filesChanged: [],
       error: 'No Git checkpoint exists for this message',
@@ -272,8 +206,12 @@ describe('rewindCode — success and failures', () => {
     const result = await rewindCode({ threadId: 't-1', messageId: 'm-user-2', userId: 'u-1' });
 
     expect(result.isErr()).toBe(true);
-    if (result.isErr()) expect(result.error.statusCode).toBe(400);
+    if (result.isErr()) {
+      expect(result.error.statusCode).toBe(400);
+      expect(result.error.message).toContain('checkpoint');
+    }
     expect(mocks.tm.deleteMessagesAfter).not.toHaveBeenCalled();
+    expect(mocks.tm.updateThread).not.toHaveBeenCalled();
   });
 });
 
@@ -284,13 +222,13 @@ describe('forkAndRewind', () => {
     mocks.forkThread.mockResolvedValue(
       ok({
         id: 't-fork',
-        sessionId: 'sess-fork',
+        sessionId: null,
         worktreePath: '/repo/.worktrees/t-fork',
       }),
     );
   });
 
-  test('forks thread then rewinds files on the fork', async () => {
+  test("forks the thread then restores the source checkpoint in the fork's cwd", async () => {
     const result = await forkAndRewind({
       sourceThreadId: 't-1',
       messageId: 'm-user-1',
@@ -299,6 +237,10 @@ describe('forkAndRewind', () => {
     });
 
     expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value.thread.id).toBe('t-fork');
+      expect(result.value.rewind.filesChanged).toEqual(['src/a.ts']);
+    }
     expect(mocks.forkThread).toHaveBeenCalledWith(
       expect.objectContaining({
         sourceThreadId: 't-1',
@@ -306,16 +248,30 @@ describe('forkAndRewind', () => {
         title: 'Rewound fork',
       }),
     );
-    expect(mocks.rewindFiles).toHaveBeenCalledWith('sdk-uuid-0');
-    expect(mocks.query).toHaveBeenCalledWith(
-      expect.objectContaining({
-        options: expect.objectContaining({ resume: 'sess-fork', cwd: '/repo/.worktrees/t-fork' }),
-      }),
-    );
+    expect(mocks.restoreGitCheckpoint).toHaveBeenCalledWith({
+      threadId: 't-1',
+      messageId: 'm-user-1',
+      cwd: '/repo/.worktrees/t-fork',
+    });
+    // The source transcript is left untouched.
+    expect(mocks.tm.deleteMessagesAfter).not.toHaveBeenCalled();
   });
 
-  test('returns 400 for Codex before attempting to fork', async () => {
-    mocks.tm.getThread.mockResolvedValue({ ...claudeThread, provider: 'codex' });
+  test('works for Codex threads too', async () => {
+    seedAnchorMocks({ ...claudeThread, provider: 'codex' });
+
+    const result = await forkAndRewind({
+      sourceThreadId: 't-1',
+      messageId: 'm-user-1',
+      userId: 'u-1',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.forkThread).toHaveBeenCalled();
+  });
+
+  test('validates before forking: a missing checkpoint flag never forks', async () => {
+    mocks.tm.getThread.mockResolvedValue({ ...claudeThread, fileCheckpointingEnabled: 0 });
 
     const result = await forkAndRewind({
       sourceThreadId: 't-1',
@@ -341,8 +297,12 @@ describe('forkAndRewind', () => {
     if (result.isErr()) expect(result.error.message).toBe('Fork failed');
   });
 
-  test('returns 500 when forked thread has no session', async () => {
-    mocks.forkThread.mockResolvedValue(ok({ id: 't-fork', sessionId: null }));
+  test('returns 400 when the checkpoint cannot be restored after forking', async () => {
+    mocks.restoreGitCheckpoint.mockResolvedValue({
+      canRewind: false,
+      filesChanged: [],
+      error: 'Failed to restore Git checkpoint: boom',
+    });
 
     const result = await forkAndRewind({
       sourceThreadId: 't-1',
@@ -351,6 +311,6 @@ describe('forkAndRewind', () => {
     });
 
     expect(result.isErr()).toBe(true);
-    if (result.isErr()) expect(result.error.statusCode).toBe(500);
+    if (result.isErr()) expect(result.error.statusCode).toBe(400);
   });
 });

@@ -7,7 +7,7 @@ export { GeminiACPProcess } from './gemini-acp.js';
 export { CursorACPProcess } from './cursor-acp.js';
 export { OpenCodeACPProcess } from './opencode-acp.js';
 export { PiSDKProcess, discoverPiModels } from './pi-sdk.js';
-export { createPiSessionManager, findPiSessionById, forkPiSession } from './pi-sdk-session.js';
+export { createPiSessionManager, findPiSessionById } from './pi-sdk-session.js';
 export { DeepAgentProcess } from './deepagent-process.js';
 export {
   inferACPToolName,
@@ -72,12 +72,6 @@ export {
   type ResolvedSDKCli,
   type SDKCliKind,
 } from './resolve-sdk-cli.js';
-export {
-  forkAcpSession,
-  type ForkAcpSessionOptions,
-  type ForkAcpSessionResult,
-  type ForkAcpSessionUnsupported,
-} from './acp-fork.js';
 export {
   discoverAcpModels,
   type DiscoveredAcpModel,

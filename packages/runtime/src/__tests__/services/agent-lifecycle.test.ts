@@ -75,7 +75,7 @@ const mocks = vi.hoisted(() => ({
   findPermissionRule: vi.fn(),
   runSensitivePathBypass: vi.fn(),
   syncClaudeProjectAssets: vi.fn(),
-  captureCodexCheckpoint: vi.fn(async (..._args: unknown[]) => undefined),
+  captureGitCheckpoint: vi.fn(async (..._args: unknown[]) => undefined),
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -145,8 +145,8 @@ vi.mock('../../services/sensitive-path-bypass.js', () => ({
   runSensitivePathBypass: (...args: unknown[]) => mocks.runSensitivePathBypass(...args),
 }));
 
-vi.mock('../../services/codex-git-checkpoints.js', () => ({
-  captureCodexCheckpoint: (...args: unknown[]) => mocks.captureCodexCheckpoint(...args),
+vi.mock('../../services/git-checkpoints.js', () => ({
+  captureGitCheckpoint: (...args: unknown[]) => mocks.captureGitCheckpoint(...args),
 }));
 
 import { log } from '../../lib/logger.js';
@@ -447,7 +447,7 @@ describe('AgentLifecycleManager', () => {
     });
   });
 
-  describe('startAgent — Codex checkpoints', () => {
+  describe('startAgent — Git checkpoints', () => {
     test('captures a Git checkpoint for the newest user message before Codex starts', async () => {
       const thread = seedProjectThread();
       mocks.threadManager.getThreadWithMessages.mockResolvedValue({
@@ -472,7 +472,7 @@ describe('AgentLifecycleManager', () => {
         'codex',
       );
 
-      expect(mocks.captureCodexCheckpoint).toHaveBeenCalledWith({
+      expect(mocks.captureGitCheckpoint).toHaveBeenCalledWith({
         threadId: 'thread-1',
         messageId: 'user-2',
         cwd: '/tmp/repo',
@@ -482,13 +482,30 @@ describe('AgentLifecycleManager', () => {
       });
     });
 
-    test('keeps Codex rewind disabled when checkpoint capture fails', async () => {
+    test('captures a Git checkpoint before a Claude turn too', async () => {
       const thread = seedProjectThread();
       mocks.threadManager.getThreadWithMessages.mockResolvedValue({
         ...thread,
         messages: [{ id: 'user-1', role: 'user' }],
       });
-      mocks.captureCodexCheckpoint.mockRejectedValueOnce(new Error('not a Git worktree'));
+
+      const manager = createManager();
+      await manager.startAgent('thread-1', 'hello', '/tmp/repo', 'sonnet', 'autoEdit');
+
+      expect(mocks.captureGitCheckpoint).toHaveBeenCalledWith({
+        threadId: 'thread-1',
+        messageId: 'user-1',
+        cwd: '/tmp/repo',
+      });
+    });
+
+    test('keeps rewind disabled when checkpoint capture fails', async () => {
+      const thread = seedProjectThread();
+      mocks.threadManager.getThreadWithMessages.mockResolvedValue({
+        ...thread,
+        messages: [{ id: 'user-1', role: 'user' }],
+      });
+      mocks.captureGitCheckpoint.mockRejectedValueOnce(new Error('not a Git worktree'));
 
       const manager = createManager();
       await manager.startAgent(

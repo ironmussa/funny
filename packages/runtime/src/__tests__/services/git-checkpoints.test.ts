@@ -6,9 +6,10 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, test } from 'vitest';
 
 import {
-  captureCodexCheckpoint,
-  restoreCodexCheckpoint,
-} from '../../services/codex-git-checkpoints.js';
+  captureGitCheckpoint,
+  copyGitCheckpoint,
+  restoreGitCheckpoint,
+} from '../../services/git-checkpoints.js';
 
 const repos: string[] = [];
 
@@ -17,7 +18,7 @@ function git(cwd: string, ...args: string[]): string {
 }
 
 async function createRepo(): Promise<string> {
-  const cwd = await mkdtemp(join(tmpdir(), 'funny-codex-checkpoints-test-'));
+  const cwd = await mkdtemp(join(tmpdir(), 'funny-checkpoints-test-'));
   repos.push(cwd);
   git(cwd, 'init');
   git(cwd, 'config', 'user.name', 'Funny Tests');
@@ -32,7 +33,7 @@ afterEach(async () => {
   await Promise.all(repos.splice(0).map((cwd) => rm(cwd, { recursive: true, force: true })));
 });
 
-describe('Codex Git checkpoints', () => {
+describe('Git checkpoints', () => {
   test('restores the pre-turn worktree while preserving its original index state', async () => {
     const cwd = await createRepo();
     await writeFile(join(cwd, 'tracked.txt'), 'before turn\n');
@@ -40,14 +41,14 @@ describe('Codex Git checkpoints', () => {
     await writeFile(join(cwd, 'staged-before.txt'), 'staged\n');
     git(cwd, 'add', 'staged-before.txt');
 
-    await captureCodexCheckpoint({ threadId: 'thread_1', messageId: 'message_1', cwd });
+    await captureGitCheckpoint({ threadId: 'thread_1', messageId: 'message_1', cwd });
 
     await writeFile(join(cwd, 'tracked.txt'), 'after turn\n');
     await writeFile(join(cwd, 'untracked-before.txt'), 'changed after turn\n');
     await writeFile(join(cwd, 'untracked-after.txt'), 'remove me\n');
     git(cwd, 'add', 'tracked.txt');
 
-    const result = await restoreCodexCheckpoint({
+    const result = await restoreGitCheckpoint({
       threadId: 'thread_1',
       messageId: 'message_1',
       cwd,
@@ -66,7 +67,7 @@ describe('Codex Git checkpoints', () => {
     const cwd = await createRepo();
     await writeFile(join(cwd, 'tracked.txt'), 'unchanged\n');
 
-    const result = await restoreCodexCheckpoint({
+    const result = await restoreGitCheckpoint({
       threadId: 'thread_1',
       messageId: 'missing',
       cwd,
@@ -74,5 +75,38 @@ describe('Codex Git checkpoints', () => {
 
     expect(result).toMatchObject({ canRewind: false, filesChanged: [] });
     await expect(readFile(join(cwd, 'tracked.txt'), 'utf8')).resolves.toBe('unchanged\n');
+  });
+
+  test('copies a checkpoint to another thread message', async () => {
+    const cwd = await createRepo();
+    await captureGitCheckpoint({ threadId: 'thread_1', messageId: 'message_1', cwd });
+    await writeFile(join(cwd, 'tracked.txt'), 'changed\n');
+
+    const copied = await copyGitCheckpoint({
+      cwd,
+      from: { threadId: 'thread_1', messageId: 'message_1' },
+      to: { threadId: 'fork_1', messageId: 'message_9' },
+    });
+    const result = await restoreGitCheckpoint({
+      threadId: 'fork_1',
+      messageId: 'message_9',
+      cwd,
+    });
+
+    expect(copied).toBe(true);
+    expect(result.canRewind).toBe(true);
+    expect(await readFile(join(cwd, 'tracked.txt'), 'utf8')).toBe('initial\n');
+  });
+
+  test('does not copy a checkpoint that does not exist', async () => {
+    const cwd = await createRepo();
+
+    const copied = await copyGitCheckpoint({
+      cwd,
+      from: { threadId: 'thread_1', messageId: 'missing' },
+      to: { threadId: 'fork_1', messageId: 'message_9' },
+    });
+
+    expect(copied).toBe(false);
   });
 });

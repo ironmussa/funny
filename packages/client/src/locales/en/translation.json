@@ -1061,7 +1061,6 @@
     "rewindSuccess_other": "Rewound {{count}} files",
     "rewindFailed": "Failed to rewind code",
     "rewindFailedGeneric": "Rewind failed: {{error}}",
-    "rewindNotSupportedProvider": "Rewind is only available for Claude threads",
     "rewindNoCheckpoints": "This thread was started without file checkpointing",
     "forkAndRewindSuccess": "Forked and rewound code",
     "forkAndRewindFailed": "Failed to fork and rewind"

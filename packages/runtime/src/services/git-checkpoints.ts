@@ -1,9 +1,9 @@
 /**
- * Local Git checkpoints used by Codex threads.
+ * funny-native Git checkpoints backing code rewind for every provider.
  *
- * The Codex SDK has no rewind/checkpoint API.  Before each Codex turn we
- * therefore snapshot the worktree into private Git refs keyed by thread and
- * user-message id.  The snapshot has two trees: the full working tree (which
+ * Before each agent turn we snapshot the worktree into private Git refs keyed
+ * by thread and user-message id, so rewind never depends on a provider SDK's
+ * own checkpoint store.  The snapshot has two trees: the full working tree (which
  * includes untracked, non-ignored files) and the original index, so restore
  * does not turn every local change into a staged change.
  */
@@ -14,15 +14,22 @@ import { join } from 'node:path';
 
 import { gitWrite } from '@funny/core/git';
 
+// Kept under the original Codex-only name so checkpoints captured before
+// rewind became provider-agnostic stay restorable.
 const CHECKPOINT_REF_PREFIX = 'refs/funny/codex-checkpoints';
+const CHECKPOINT_KINDS = ['worktree', 'index'] as const;
 
-export interface CodexCheckpointRestoreResult {
+export interface GitCheckpointRestoreResult {
   canRewind: boolean;
   filesChanged: string[];
   error?: string;
 }
 
-function checkpointRef(threadId: string, messageId: string, kind: 'worktree' | 'index'): string {
+function checkpointRef(
+  threadId: string,
+  messageId: string,
+  kind: (typeof CHECKPOINT_KINDS)[number],
+): string {
   // Thread/message IDs originate in our database, but validate them before
   // incorporating them into a Git ref so this helper remains safe at its API
   // boundary as well.
@@ -40,8 +47,8 @@ async function runGit(args: string[], cwd: string, env?: Record<string, string>)
   return result.stdout.trim();
 }
 
-/** Capture the exact Git-visible state immediately before a Codex turn. */
-export async function captureCodexCheckpoint(params: {
+/** Capture the exact Git-visible state immediately before an agent turn. */
+export async function captureGitCheckpoint(params: {
   threadId: string;
   messageId: string;
   cwd: string;
@@ -49,10 +56,10 @@ export async function captureCodexCheckpoint(params: {
   const { threadId, messageId, cwd } = params;
   const repoCheck = await gitWrite(['rev-parse', '--is-inside-work-tree'], { cwd, reject: false });
   if (repoCheck.exitCode !== 0 || repoCheck.stdout.trim() !== 'true') {
-    throw new Error('Codex rewind requires a Git worktree');
+    throw new Error('Rewind requires a Git worktree');
   }
 
-  const tempDir = await mkdtemp(join(tmpdir(), 'funny-codex-checkpoint-'));
+  const tempDir = await mkdtemp(join(tmpdir(), 'funny-checkpoint-'));
   const alternateIndex = join(tempDir, 'index');
   const alternateEnv = { GIT_INDEX_FILE: alternateIndex };
   try {
@@ -78,12 +85,12 @@ export async function captureCodexCheckpoint(params: {
   }
 }
 
-/** Restore a Codex checkpoint without moving the branch HEAD. */
-export async function restoreCodexCheckpoint(params: {
+/** Restore a checkpoint without moving the branch HEAD. */
+export async function restoreGitCheckpoint(params: {
   threadId: string;
   messageId: string;
   cwd: string;
-}): Promise<CodexCheckpointRestoreResult> {
+}): Promise<GitCheckpointRestoreResult> {
   const { threadId, messageId, cwd } = params;
   let worktreeTree: string;
   let indexTree: string;
@@ -100,8 +107,7 @@ export async function restoreCodexCheckpoint(params: {
     return {
       canRewind: false,
       filesChanged: [],
-      error:
-        'No Git checkpoint exists for this message. Codex checkpoints are available from new turns.',
+      error: 'No Git checkpoint exists for this message. Checkpoints are available from new turns.',
     };
   }
 
@@ -137,4 +143,30 @@ export async function restoreCodexCheckpoint(params: {
       error: `Failed to restore Git checkpoint: ${(err as Error).message}`,
     };
   }
+}
+
+/**
+ * Point a forked thread's message at the source thread's checkpoint, so the
+ * fork can rewind to turns it inherited. Refs share the same tree objects, so
+ * this costs nothing. Returns false when the source message has no checkpoint.
+ */
+export async function copyGitCheckpoint(params: {
+  cwd: string;
+  from: { threadId: string; messageId: string };
+  to: { threadId: string; messageId: string };
+}): Promise<boolean> {
+  const { cwd, from, to } = params;
+  const trees: string[] = [];
+  for (const kind of CHECKPOINT_KINDS) {
+    const tree = await gitWrite(
+      ['rev-parse', '--verify', '--quiet', checkpointRef(from.threadId, from.messageId, kind)],
+      { cwd, reject: false },
+    );
+    if (tree.exitCode !== 0) return false;
+    trees.push(tree.stdout.trim());
+  }
+  for (const [i, kind] of CHECKPOINT_KINDS.entries()) {
+    await runGit(['update-ref', checkpointRef(to.threadId, to.messageId, kind), trees[i]], cwd);
+  }
+  return true;
 }

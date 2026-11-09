@@ -22,6 +22,7 @@ import {
 import { badRequest, type DomainError } from '@funny/shared/errors';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { err, type Result, type ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import { requestSpan } from '../../middleware/tracing.js';
@@ -29,6 +30,7 @@ import { resolveIdentity, resolveThreadIdentity } from '../../services/git-servi
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
+import { parseQuery, queryBoolean } from '../../validation/request.js';
 import { gitRefSchema, validate } from '../../validation/schemas.js';
 import {
   getCachedPR,
@@ -244,6 +246,8 @@ async function enrichGraphRefsWithPullRequests(
   }
 }
 
+const graphLogFilterSchema = z.object({ hideMerged: queryBoolean.default(false) });
+
 /** The branch a full ref name tracks: `refs/heads/x` → `x`, `refs/remotes/origin/x` → `x`. */
 function branchOfFullRef(ref: string): string | null {
   if (ref.startsWith('refs/heads/')) return ref.slice('refs/heads/'.length);
@@ -257,7 +261,8 @@ function branchOfFullRef(ref: string): string | null {
  * stays visible; the PR enrichment of this response looks it up for next time.
  */
 async function mergedBranchRefs(c: Context<HonoEnv>, cwd: string): Promise<string[]> {
-  if (c.req.query('hideMerged') !== 'true') return [];
+  const query = parseQuery(c, graphLogFilterSchema);
+  if (query.isErr() || !query.value.hideMerged) return [];
   const refs = await listBranchRefs(cwd);
   if (refs.isErr()) return [];
   return refs.value.filter((ref) => {

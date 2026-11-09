@@ -61,6 +61,11 @@ export const infraApi = {
       method: 'POST',
       body: JSON.stringify(data),
     }),
+  renameInfraConnection: (id: string, label: string) =>
+    request<InfraConnection>(`/infra/connections/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ label }),
+    }),
   testInfraConnection: (id: string) =>
     request<unknown>(`/infra/connections/${id}/test`, { method: 'POST' }),
   deleteInfraConnection: (id: string) =>

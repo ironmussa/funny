@@ -5,6 +5,7 @@
  *   GET    /api/infra/connections             — the caller's connections (no secrets)
  *   POST   /api/infra/connections             — validate + store a credential
  *   POST   /api/infra/connections/:id/test    — re-validate a stored credential
+ *   PATCH  /api/infra/connections/:id         — rename a connection
  *   DELETE /api/infra/connections/:id
  *   GET    /api/infra/projects/:projectId/sandbox — the caller's sandbox for a project
  *   PUT    /api/infra/projects/:projectId/sandbox — set it (connection, size, default)
@@ -73,6 +74,8 @@ function respondProjectSandbox(c: Context<ServerEnv>, error: ProjectSandboxError
   }
 }
 
+const renameConnectionSchema = z.object({ label: z.string().trim().min(1).max(120) }).strict();
+
 const addConnectionSchema = z
   .object({
     provider: z.string().min(1).max(64),
@@ -125,6 +128,13 @@ export function createInfraRoutes(registry: SandboxProviderRegistry) {
       meta: { connectionId: result.value.id, provider: result.value.provider },
     });
     return c.json(result.value, 201);
+  });
+
+  routes.patch('/connections/:id', async (c) => {
+    const parsed = renameConnectionSchema.safeParse(await c.req.json().catch(() => null));
+    if (!parsed.success) return c.json({ error: 'Invalid name', code: 'invalid' }, 400);
+    const result = await connections.rename(c.get('userId'), c.req.param('id'), parsed.data.label);
+    return result.isOk() ? c.json(result.value) : respond(c, result.error);
   });
 
   routes.post('/connections/:id/test', async (c) => {

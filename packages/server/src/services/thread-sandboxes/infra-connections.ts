@@ -156,6 +156,23 @@ export function createInfraConnectionService(registry: SandboxProviderRegistry) 
       );
     },
 
+    /** Rename a connection; the credential and provider stay as they are. */
+    rename(
+      userId: string,
+      id: string,
+      label: string,
+    ): ResultAsync<InfraConnectionView, InfraConnectionError> {
+      return ownedRow(userId, id).andThen((row) =>
+        ResultAsync.fromPromise(
+          db
+            .update(infraConnections)
+            .set({ label })
+            .where(and(eq(infraConnections.id, id), eq(infraConnections.userId, userId))),
+          storage,
+        ).map(() => toView({ ...row, label })),
+      );
+    },
+
     /** Re-validate a stored credential and record when it last worked. */
     test(userId: string, id: string): ResultAsync<InfraConnectionView, InfraConnectionError> {
       return ownedRow(userId, id).andThen((row) =>

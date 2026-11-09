@@ -1,6 +1,8 @@
 # Plan: Portable server (Bun or Cloudflare Workers + Durable Objects)
 
-Status: **In progress** — Phase 1 done (pending Railway deploy check); Phase 0 done locally (technical go; real-account checks pending). Owner: TBD.
+Status: **Paused (2026-11-09)** — Phases 0 (locally) and 1 done; Phase 2 closed for a single instance (see below). Owner: TBD.
+
+> **Decision 2026-11-09: one server instance is enough.** Multi-instance Bun is not a goal, so the remaining Phase 2 items (they only matter when state must be shared between processes) move to Phase 5 and are done only if the Cloudflare host goes ahead. Phase 3 is not started either: it rewrites a transport that works in production, and its Bun-only payoff (no `grpc-js`, no HTTP/2-over-WS bridge) does not justify the risk on its own. **Next step:** the one-day real-account check from Phase 0 and confirming demand for a Cloudflare deployment option; resume at Phase 3 (or straight to a narrower Phase 5) only on a "go".
 
 ## Goal
 
@@ -83,16 +85,16 @@ Throwaway prototype outside the main tree. Answers the unknowns that could kill 
 
 **Exit:** `bun run lint`, `bun run typecheck`, full server test suite green; deploy to Railway unchanged.
 
-### Phase 2 — Async state ports (≈2–3 weeks, no behavior change)
+### Phase 2 — Async state ports (≈2–3 weeks, no behavior change) — closed for a single instance
 
 Move every item of the inventory behind a port, with today's code as the in-memory implementation:
 
 - [x] **Make `RunnerPresencePort` async** (`isAvailable`, `userHasAvailableRunner`, `userIdForRunner`) and update callers, including `runner-access/runner-for.ts`. `RunnerTerminalPort` likewise. Proof types and fitness checks unchanged. _Done, plus `RunnerRequestPort.isAvailable`. The session registry keeps synchronous `hasSession` / `userHasSession` / `sessionOwner` for the transport itself; terminals go through `GrpcRunnerTerminalAdapter`. **Caveat:** TypeScript does not flag a `Promise` used as a boolean (`if (!port.isAvailable(r))` compiles and is always false), so every call site was reviewed and checked with oxlint's type-aware `no-misused-promises` (no new findings vs. `HEAD`). Consider enabling that rule in `bun run lint` (needs `oxlint-tsgolint`; 40 existing findings, mostly in tests)._
-- [ ] `RunnerSessionHub` port: activate/heartbeat/invalidate, epoch allocation, tunnel and terminal stream attachment (wraps `session-registry.ts`, `tunnel-handler.ts`, `terminal-handler.ts`).
-- [ ] `RealtimeHub` port (server inbound side of the browser): join/leave scopes, fan-out targets, eviction, connected-user listing — today implemented with Socket.IO rooms. `BrowserEventSink` already covers outbound.
-- [ ] Stores: v1 event retention, input ordinals, resource store, thread presence roster, pipeline approval waiters, scheduler event buffer, receipt/idempotency in-flight coordination. _(The scheduler event buffer had no publisher; fixed — `data:update_thread` now publishes `agent_terminal` / `thread_stage`. It still needs a store port.)_
-- [ ] `RateLimitStore` for `middleware/rate-limit.ts`, login throttle, socket rate counters.
-- [ ] `JobScheduler` port with "fire once per schedule" semantics for automations and the sandbox lifecycle tick; replace boot-time `purgeAllRunners` with presence-derived state.
+- [x] `RunnerSessionHub` port: activate/heartbeat/invalidate, epoch allocation, tunnel and terminal stream attachment (wraps `session-registry.ts`, `tunnel-handler.ts`, `terminal-handler.ts`). _Covered, no new code: `startRunnerServerComposition` already returns the host-facing boundary (`requests`, `terminals`, `presence`, `browserEvents`, `shutdown`), now async, and nothing outside the transport uses its internals. The registry and the tunnel/terminal dispatchers move as one unit (into a RunnerSessionDO in Phase 5); epochs are never persisted, so per-process epochs are safe._
+- [ ] _(moved to Phase 4: the inbound side is tied to Socket.IO and gets replaced there)_ `RealtimeHub` port (server inbound side of the browser): join/leave scopes, fan-out targets, eviction, connected-user listing — today implemented with Socket.IO rooms. `BrowserEventSink` already covers outbound.
+- [ ] _(moved to Phase 5)_ Stores: v1 event retention, input ordinals, resource store, thread presence roster, pipeline approval waiters, scheduler event buffer, receipt/idempotency in-flight coordination. _(The scheduler event buffer had no publisher; fixed — `data:update_thread` now publishes `agent_terminal` / `thread_stage`. It still needs a store port.)_
+- [ ] _(moved to Phase 5)_ `RateLimitStore` for `middleware/rate-limit.ts`, login throttle, socket rate counters.
+- [ ] _(moved to Phase 5)_ `JobScheduler` port with "fire once per schedule" semantics for automations and the sandbox lifecycle tick; replace boot-time `purgeAllRunners` with presence-derived state.
 - [x] Cache invalidation port for `runner-scope` / `runner-resolver` / `data-scope` / `data-ownership` (in-process call today; see Risks for the cross-isolate design). _Done (option 1, version in the DB): `runner_policy_version` (migration 090) is bumped by every scope write, including runner deletion (which did not invalidate before); `runner-scope` and `runner-resolver` sync it before using an entry, and entries are tagged with the version they were read at, so a stale read cannot be re-cached after a change. An unreadable version bypasses the caches. `data-scope` / `data-ownership` hold immutable thread/message ownership facts and are unchanged._
 
 **Exit:** no module-level mutable state outside port implementations (add a fitness check that flags new module-level `Map`/`Set` in `services/**` outside `*/memory/*` implementations).
@@ -167,14 +169,14 @@ Serving the client from Cloudflare (Static Assets) with the server elsewhere wor
 
 ## Sequencing summary
 
-| Phase                 | Depends on  | Value on Bun alone                            | Estimate |
-| --------------------- | ----------- | --------------------------------------------- | -------- |
-| 0 Spike               | —           | Decision                                      | ~1 wk    |
-| 1 Host seam           | —           | Testability, secrets cleanup, OAuth state fix | 2–3 wk   |
-| 2 Async ports         | 1           | Multi-instance readiness, no stray state      | 2–3 wk   |
-| 3 Runner WS carrier   | 2           | Drops grpc-js and the HTTP/2-over-WS bridge   | 3–4 wk   |
-| 4 Browser WS carrier  | 2           | Drops Socket.IO, finishes `browser.v1`        | 4–6 wk   |
-| 5 Cloudflare host     | 0 (go), 1–4 | —                                             | 4–6 wk   |
-| 6 CF sandbox provider | —           | Cheaper sandboxes option                      | 1–2 wk   |
+| Phase                 | Depends on  | Value on Bun alone                                                     | Estimate |
+| --------------------- | ----------- | ---------------------------------------------------------------------- | -------- |
+| 0 Spike               | —           | Decision                                                               | ~1 wk    |
+| 1 Host seam           | —           | Testability, secrets cleanup, OAuth state fix                          | 2–3 wk   |
+| 2 Async ports         | 1           | Async ports, cross-instance cache invalidation (done); rest moved to 5 | done     |
+| 3 Runner WS carrier   | 2           | Drops grpc-js and the HTTP/2-over-WS bridge                            | 3–4 wk   |
+| 4 Browser WS carrier  | 2           | Drops Socket.IO, finishes `browser.v1`                                 | 4–6 wk   |
+| 5 Cloudflare host     | 0 (go), 1–4 | —                                                                      | 4–6 wk   |
+| 6 CF sandbox provider | —           | Cheaper sandboxes option                                               | 1–2 wk   |
 
 Phases 3 and 4 can run in parallel after Phase 2.

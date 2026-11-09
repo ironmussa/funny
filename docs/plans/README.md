@@ -4,8 +4,8 @@ Active or proposed features that are not yet fully documented in code. **Complet
 
 > `openspec/` exists locally for OpenSpec workflow but is **gitignored**. Use this directory for plans that should live in version control.
 
-| Plan                                                     | Status                                                                                        |
-| -------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| [cloudflare-portability.md](./cloudflare-portability.md) | In progress (Phases 0–1 done) — run the server on Bun or Cloudflare Workers + Durable Objects |
-| [memory-optimization.md](./memory-optimization.md)       | Active — prioritized memory/performance backlog                                               |
-| [observability.md](./observability.md)                   | Not started — `@funny/observability` package + local Victoria stack                           |
+| Plan                                                     | Status                                                                                                                             |
+| -------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| [cloudflare-portability.md](./cloudflare-portability.md) | Paused — Phases 0–1 done, Phase 2 closed; next: real-account check — run the server on Bun or Cloudflare Workers + Durable Objects |
+| [memory-optimization.md](./memory-optimization.md)       | Active — prioritized memory/performance backlog                                                                                    |
+| [observability.md](./observability.md)                   | Not started — `@funny/observability` package + local Victoria stack                                                                |

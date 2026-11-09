@@ -65,3 +65,13 @@ export function terminalRoute(userId: string, op: TerminalOp): TerminalRoute {
   };
   return { target, dispatched: forget };
 }
+
+/** The distinct routes of a user's open terminals, e.g. a sandbox thread's. */
+export function terminalRoutesOf(userId: string): RunnerTarget[] {
+  const prefix = `${userId}\0`;
+  const routes = new Map<string, RunnerTarget>();
+  for (const [terminalKey, target] of targets) {
+    if (terminalKey.startsWith(prefix)) routes.set(JSON.stringify(target), target);
+  }
+  return [...routes.values()];
+}

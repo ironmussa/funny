@@ -10,10 +10,12 @@ import {
 import type { RunnerPresencePort, RunnerTerminalPort } from '../runner-ports.js';
 import { isRateLimited } from '../socketio-rate-limit.js';
 import { registerSocketRpc } from './router.js';
+import { withRoutedTerminalSessions } from './terminal-list.js';
 
 /**
  * Ack-based RPC for `pty:list`. Sessions are listed from one of the caller's
- * own general runners, certified by `withRunnerFor`.
+ * own general runners, plus the runners of their other terminal routes (a
+ * sandbox thread's), each certified by `withRunnerFor`.
  */
 export function setupBrowserPtyListRpc(
   socket: Socket,
@@ -49,7 +51,12 @@ export function setupBrowserPtyListRpc(
           ack({ status: 'no-runner', sessions: [] });
           return;
         }
-        ack({ status: 'ok', sessions: listed.value as any });
+        const sessions = await withRoutedTerminalSessions(listed.value, userId, {
+          access,
+          terminals: dependencies.terminals,
+          presence: dependencies.presence,
+        });
+        ack({ status: 'ok', sessions: sessions as any });
       } catch (err) {
         ack({ status: 'error', sessions: [], error: (err as Error).message });
       }

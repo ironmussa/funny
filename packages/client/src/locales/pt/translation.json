@@ -12,7 +12,8 @@
     "tooltipLocalBranch": "Branch local: {{branch}}",
     "tooltipBaseBranch": "Branch base: {{branch}}",
     "tooltipWorktree": "Branch do worktree: {{branch}}",
-    "tooltipWorktreeWithPath": "Branch do worktree: {{branch}} — {{path}}"
+    "tooltipWorktreeWithPath": "Branch do worktree: {{branch}} — {{path}}",
+    "tooltipSandbox": "{{project}} — executando em um sandbox na nuvem, sobre um clone do repositório"
   },
   "sidebar": {
     "openExistingProject": "Abrir projeto existente",

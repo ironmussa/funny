@@ -97,6 +97,7 @@ export {
 export {
   getLog,
   getGraphLog,
+  listBranchRefs,
   getRebaseReflogEvents,
   getCommitBody,
   getCommitFiles,

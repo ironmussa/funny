@@ -19,6 +19,15 @@ describe('PRBadge', () => {
     expect(screen.getByTestId(`pr-badge-${state}`)).toHaveClass(textClass);
   });
 
+  test.each(['OPEN', 'MERGED', 'CLOSED'] as const)(
+    'shows the %s glyph, so a merged PR does not look like an open one',
+    (state) => {
+      renderWithProviders(<PRBadge prNumber={7} prState={state} data-testid="pr" />);
+
+      expect(screen.getByTestId(`pr-icon-${state}`)).toBeInTheDocument();
+    },
+  );
+
   test('supports a 15px compact size for powerline rows', () => {
     renderWithProviders(<PRBadge prNumber={31} size="compact" data-testid="pr-badge-compact" />);
 

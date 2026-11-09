@@ -110,18 +110,32 @@ function renderRefIcon(ref: FoldedRef) {
   return ref.syncedRemote ? <CloudCheck {...props} /> : <Monitor {...props} />;
 }
 
+/**
+ * A branch whose PR is merged. After a squash merge its own commits never join
+ * the base branch, so the graph still draws its lane: the chip says the code
+ * is already there instead of looking like pending work.
+ */
+function isMergedRef(ref: FoldedRef): boolean {
+  return ref.pullRequest?.state === 'MERGED';
+}
+
 function tooltipForRef(
   t: ReturnType<typeof useTranslation>['t'],
   ref: FoldedRef,
   summary: GraphBranchSummary | undefined,
 ) {
-  const pullRequestTooltip = ref.pullRequest
-    ? t('graph.pullRequest', {
-        number: ref.pullRequest.number,
-        state: ref.pullRequest.state,
-        defaultValue: `PR #${ref.pullRequest.number} (${ref.pullRequest.state})`,
-      })
-    : null;
+  const pullRequestTooltip = !ref.pullRequest
+    ? null
+    : isMergedRef(ref)
+      ? t('graph.pullRequestMerged', {
+          number: ref.pullRequest.number,
+          defaultValue: `PR #${ref.pullRequest.number} merged — its code is already in the base branch`,
+        })
+      : t('graph.pullRequest', {
+          number: ref.pullRequest.number,
+          state: ref.pullRequest.state,
+          defaultValue: `PR #${ref.pullRequest.number} (${ref.pullRequest.state})`,
+        });
 
   let refTooltip: string;
   if (ref.kind === 'tag') {
@@ -445,9 +459,13 @@ function GraphRefChip({
 
   return (
     <div
-      className="inline-flex h-[15px] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90"
+      className={cn(
+        'inline-flex h-[15px] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
+        isMergedRef(ref) && 'opacity-60',
+      )}
       style={{ backgroundColor: color, color: textColor }}
       data-testid={`graph-ref-chip-${ref.kind}:${ref.name}`}
+      data-merged={isMergedRef(ref) || undefined}
     >
       <Popover>
         <PopoverTrigger asChild>

@@ -14,6 +14,19 @@ interface GitLogEntryDTO {
 }
 
 /** How a graph ref relates to the repo (mirrors core's `GraphRefKind`). */
+
+/**
+ * Which branches the commit graph walks: every branch except those whose PR is
+ * merged (their squash-merged lanes never join the base branch), every branch,
+ * or only the current one.
+ */
+export type GraphBranchScope = 'unmerged' | 'all' | 'current';
+
+function graphScopeQuery(scope: GraphBranchScope): string {
+  if (scope === 'current') return '&all=false';
+  return scope === 'unmerged' ? '&all=true&hideMerged=true' : '&all=true';
+}
+
 export type GraphRefKind = 'local' | 'remote' | 'tag';
 
 /** A branch/tag decoration on a commit, classified local/remote/tag server-side. */
@@ -216,9 +229,15 @@ export const gitApi = {
       `/git/${threadId}/log?limit=${limit}${all ? '&all=true' : ''}${skip > 0 ? `&skip=${skip}` : ''}`,
       { signal },
     ),
-  getGitGraphLog: (threadId: string, limit = 50, all = true, skip = 0, signal?: AbortSignal) =>
+  getGitGraphLog: (
+    threadId: string,
+    limit = 50,
+    scope: GraphBranchScope = 'all',
+    skip = 0,
+    signal?: AbortSignal,
+  ) =>
     request<LogResponse<GitGraphLogEntryDTO>>(
-      `/git/${threadId}/graph-log?limit=${limit}&all=${all ? 'true' : 'false'}${skip > 0 ? `&skip=${skip}` : ''}`,
+      `/git/${threadId}/graph-log?limit=${limit}${graphScopeQuery(scope)}${skip > 0 ? `&skip=${skip}` : ''}`,
       { signal },
     ),
   getReflogEvents: (threadId: string, signal?: AbortSignal) =>
@@ -522,9 +541,15 @@ export const gitApi = {
       `/git/project/${projectId}/log?limit=${limit}${skip > 0 ? `&skip=${skip}` : ''}`,
       { signal },
     ),
-  projectGitGraphLog: (projectId: string, limit = 50, all = true, skip = 0, signal?: AbortSignal) =>
+  projectGitGraphLog: (
+    projectId: string,
+    limit = 50,
+    scope: GraphBranchScope = 'all',
+    skip = 0,
+    signal?: AbortSignal,
+  ) =>
     request<LogResponse<GitGraphLogEntryDTO>>(
-      `/git/project/${projectId}/graph-log?limit=${limit}&all=${all ? 'true' : 'false'}${skip > 0 ? `&skip=${skip}` : ''}`,
+      `/git/project/${projectId}/graph-log?limit=${limit}${graphScopeQuery(scope)}${skip > 0 ? `&skip=${skip}` : ''}`,
       { signal },
     ),
   projectReflogEvents: (projectId: string, signal?: AbortSignal) =>

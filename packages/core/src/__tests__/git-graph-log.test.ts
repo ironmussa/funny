@@ -100,6 +100,40 @@ describe('getGraphLog', () => {
     expect(merge!.headBranch).toBe('main');
   });
 
+  it('leaves excluded refs out of the traversal (a squash-merged branch)', async () => {
+    const repo = resolve(TMP, 'squash');
+    mkdirSync(repo, { recursive: true });
+    git(repo, ['init']);
+    git(repo, ['config', 'user.email', 'test@test.com']);
+    git(repo, ['config', 'user.name', 'Test']);
+    git(repo, ['branch', '-M', 'main']);
+    writeCommit(repo, 'README.md', '# Test', 'base');
+    git(repo, ['checkout', '-b', 'feat/merged']);
+    writeCommit(repo, 'a.txt', 'a', 'merged branch work');
+    git(repo, ['checkout', 'main']);
+    // The squash commit lands on main; the branch's own commit never does.
+    writeCommit(repo, 'a.txt', 'a', 'squash: merged branch work (#1)');
+
+    const withAll = (await getGraphLog(repo, { all: true }))._unsafeUnwrap();
+    expect(withAll.map((e) => e.message)).toContain('merged branch work');
+
+    const hidden = (
+      await getGraphLog(repo, { all: true, excludeRefs: ['refs/heads/feat/merged'] })
+    )._unsafeUnwrap();
+    expect(hidden.map((e) => e.message)).toEqual(['squash: merged branch work (#1)', 'base']);
+  });
+
+  it('ignores exclude values that are not plain branch refs', async () => {
+    const repo = initMergeRepo();
+    const result = await getGraphLog(repo, {
+      all: true,
+      excludeRefs: ['refs/heads/*', 'feature', 'refs/heads/../x'],
+    });
+    // Nothing was excluded: the feature tip is still there.
+    const featureTip = result._unsafeUnwrap().find((e) => e.message === 'feature commit');
+    expect(featureTip).toBeDefined();
+  });
+
   it('excludes T3 checkpoint refs before pagination without hiding shared history', async () => {
     const repo = initMergeRepo();
     const baseline = (await getGraphLog(repo, { all: true }))._unsafeUnwrap();

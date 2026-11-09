@@ -175,6 +175,7 @@ export function usePromptInputState(args: UsePromptInputStateArgs) {
     contextPct: active.contextPct,
     activeThreadContextTokens: active.activeThreadContextTokens,
     contextMaxTokens: active.contextMaxTokens,
+    contextBreakdown: active.activeThreadContextBreakdown,
     handleCompact: handlers.handleCompact,
 
     // Branch-switch dialog (rendered by parent)

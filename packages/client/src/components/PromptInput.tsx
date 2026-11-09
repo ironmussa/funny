@@ -156,6 +156,7 @@ export const PromptInput = memo(function PromptInput({
         contextPct={state.contextPct}
         contextUsedTokens={state.activeThreadContextTokens}
         contextMaxTokens={state.contextMaxTokens}
+        contextBreakdown={state.contextBreakdown}
         onCompact={state.effectiveThreadId ? state.handleCompact : undefined}
       />
 

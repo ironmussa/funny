@@ -22,6 +22,11 @@
  * data keeps decrypting via the `legacy` entry and rotation does not
  * require a blocking backfill.
  *
+ * Where the keyring lives is a `KeyringSource`: by default the files above
+ * (`fileKeyringSource(dataDir)`); a host without a filesystem passes a
+ * read-only source (`readOnlyKeyringSource`, e.g. from a secret binding), and
+ * then generating or rotating a key is refused instead of being lost.
+ *
  * Security ME-11 — this is the single source of truth, shared by
  * `@funny/server` and `@funny/runtime`. Both packages used to maintain
  * their own copies (one v1-aware, one legacy-only) which read the same
@@ -53,9 +58,28 @@ const SILENT_LOG: CryptoLog = {
   info: () => undefined,
 };
 
+/** A keyring as stored: key ids → hex-encoded 32-byte keys, plus the active id. */
+export interface SerializedKeyring {
+  active: string;
+  keys: Record<string, string>;
+}
+
+/** Where the keyring is read from and written to. */
+export interface KeyringSource {
+  /** The stored keyring, or null when none exists yet. */
+  load(): SerializedKeyring | null;
+  /** Persist the keyring. Returns false when this source cannot store keys. */
+  save(keyring: SerializedKeyring): boolean;
+}
+
 export interface CreateCryptoOptions {
-  /** Data dir used to resolve `encryption.key` (legacy) + `encryption.keys.json` (v1). */
-  dataDir: string;
+  /**
+   * Data dir used to resolve `encryption.key` (legacy) + `encryption.keys.json`
+   * (v1). Ignored when `keyring` is given.
+   */
+  dataDir?: string;
+  /** Keyring source; defaults to `fileKeyringSource(dataDir)`. */
+  keyring?: KeyringSource;
   /** Optional logger; defaults to a silent stub. */
   log?: CryptoLog;
 }
@@ -79,91 +103,130 @@ interface KeyStore {
   keys: Record<string, Buffer>;
 }
 
+function assertSecureMode(path: string): void {
+  const st = statSync(path);
+  if ((st.mode & 0o077) !== 0) {
+    throw new Error(
+      `Encryption key file has insecure permissions: ${path} = ${(st.mode & 0o777).toString(8)}. Expected 0600.`,
+    );
+  }
+}
+
 /**
- * Build a crypto API bound to `dataDir`. The returned object holds an
- * in-memory key cache, so each caller should `createCrypto` once and
- * reuse the instance — not per request.
+ * The keyring in `<dataDir>/encryption.keys.json`, merged with the legacy
+ * `<dataDir>/encryption.key` (mounted as keyId `legacy`, never rewritten).
+ * Both files must be owner-only (0600).
  */
-export function createCrypto({ dataDir, log = SILENT_LOG }: CreateCryptoOptions): CryptoApi {
-  const LEGACY_KEY_PATH = resolve(dataDir, 'encryption.key');
-  const KEYS_PATH = resolve(dataDir, 'encryption.keys.json');
+export function fileKeyringSource(dataDir: string): KeyringSource {
+  const legacyKeyPath = resolve(dataDir, 'encryption.key');
+  const keysPath = resolve(dataDir, 'encryption.keys.json');
+  return {
+    load() {
+      let keyring: SerializedKeyring | null = null;
+      if (existsSync(keysPath)) {
+        assertSecureMode(keysPath);
+        keyring = JSON.parse(readFileSync(keysPath, 'utf-8')) as SerializedKeyring;
+        if (!keyring.active || typeof keyring.keys !== 'object' || keyring.keys === null) {
+          throw new Error('Malformed encryption.keys.json');
+        }
+      }
+      // Legacy single-key file — mount under keyId `legacy` so old ciphertexts
+      // still decrypt. If a newer keys file exists, the legacy key is still
+      // registered there (we treat the legacy file as read-only after migration).
+      if (existsSync(legacyKeyPath)) {
+        assertSecureMode(legacyKeyPath);
+        const legacyHex = readFileSync(legacyKeyPath, 'utf-8').trim();
+        if (Buffer.from(legacyHex, 'hex').length !== 32) {
+          throw new Error('Legacy encryption.key is not 32 bytes');
+        }
+        if (keyring) {
+          keyring.keys[LEGACY_KEY_ID] ??= legacyHex;
+        } else {
+          keyring = { active: LEGACY_KEY_ID, keys: { [LEGACY_KEY_ID]: legacyHex } };
+        }
+      }
+      return keyring;
+    },
+    save(keyring) {
+      writeFileSync(keysPath, JSON.stringify(keyring, null, 2), { mode: 0o600 });
+      return true;
+    },
+  };
+}
+
+/**
+ * A fixed keyring (e.g. JSON from a secret binding:
+ * `{"active":"k1","keys":{"k1":"<hex-64>"}}`). It cannot store keys, so a
+ * missing keyring or a rotation fails instead of producing keys that are lost.
+ */
+export function readOnlyKeyringSource(keyring: SerializedKeyring | null): KeyringSource {
+  return {
+    load: () => (keyring ? { active: keyring.active, keys: { ...keyring.keys } } : null),
+    save: () => false,
+  };
+}
+
+/** Parse and validate a stored keyring into key buffers. */
+function toKeyStore(serialized: SerializedKeyring): KeyStore {
+  const keys: Record<string, Buffer> = {};
+  for (const [id, hex] of Object.entries(serialized.keys)) {
+    keys[id] = Buffer.from(hex, 'hex');
+    if (keys[id].length !== 32) {
+      throw new Error(`Encryption key "${id}" is not 32 bytes`);
+    }
+  }
+  if (!keys[serialized.active]) {
+    throw new Error(`Active key "${serialized.active}" not found in the encryption keyring`);
+  }
+  return { active: serialized.active, keys };
+}
+
+function serialize(store: KeyStore): SerializedKeyring {
+  const keys: Record<string, string> = {};
+  for (const [id, buf] of Object.entries(store.keys)) keys[id] = buf.toString('hex');
+  return { active: store.active, keys };
+}
+
+/**
+ * Build a crypto API bound to a keyring source (default: the files in
+ * `dataDir`). The returned object holds an in-memory key cache, so each caller
+ * should `createCrypto` once and reuse the instance — not per request.
+ */
+export function createCrypto({
+  dataDir,
+  keyring,
+  log = SILENT_LOG,
+}: CreateCryptoOptions): CryptoApi {
+  const source =
+    keyring ??
+    (dataDir !== undefined
+      ? fileKeyringSource(dataDir)
+      : (() => {
+          throw new Error('createCrypto needs a dataDir or a keyring source');
+        })());
   let cachedStore: KeyStore | null = null;
   let legacyDecryptLogged = false;
 
-  function assertSecureMode(path: string): void {
-    const st = statSync(path);
-    if ((st.mode & 0o077) !== 0) {
+  function persist(store: KeyStore, what: string): void {
+    if (!source.save(serialize(store))) {
       throw new Error(
-        `Encryption key file has insecure permissions: ${path} = ${(st.mode & 0o777).toString(8)}. Expected 0600.`,
+        `Cannot ${what}: this host's encryption keyring is read-only (configure the keyring instead)`,
       );
     }
   }
 
-  function writeKeysFile(store: { active: string; keys: Record<string, string> }): void {
-    const payload = JSON.stringify(store, null, 2);
-    writeFileSync(KEYS_PATH, payload, { mode: 0o600 });
-  }
-
   function loadStore(): KeyStore {
     if (cachedStore) return cachedStore;
-    let store: KeyStore | null = null;
-
-    if (existsSync(KEYS_PATH)) {
-      assertSecureMode(KEYS_PATH);
-      const parsed = JSON.parse(readFileSync(KEYS_PATH, 'utf-8')) as {
-        active: string;
-        keys: Record<string, string>;
-      };
-      if (!parsed.active || typeof parsed.keys !== 'object') {
-        throw new Error('Malformed encryption.keys.json');
-      }
-      const keys: Record<string, Buffer> = {};
-      for (const [id, hex] of Object.entries(parsed.keys)) {
-        keys[id] = Buffer.from(hex, 'hex');
-        if (keys[id].length !== 32) {
-          throw new Error(`Encryption key "${id}" is not 32 bytes`);
-        }
-      }
-      if (!keys[parsed.active]) {
-        throw new Error(`Active key "${parsed.active}" not found in encryption.keys.json`);
-      }
-      store = { active: parsed.active, keys };
-    }
-
-    // Legacy single-key file — mount under keyId `legacy` so old ciphertexts
-    // still decrypt. If a newer keys file exists, the legacy key is still
-    // registered there (we treat the legacy file as read-only after migration).
-    if (existsSync(LEGACY_KEY_PATH)) {
-      assertSecureMode(LEGACY_KEY_PATH);
-      const legacyKey = Buffer.from(readFileSync(LEGACY_KEY_PATH, 'utf-8').trim(), 'hex');
-      if (legacyKey.length !== 32) {
-        throw new Error('Legacy encryption.key is not 32 bytes');
-      }
-      if (store) {
-        if (!store.keys[LEGACY_KEY_ID]) {
-          store.keys[LEGACY_KEY_ID] = legacyKey;
-        }
-      } else {
-        store = { active: LEGACY_KEY_ID, keys: { [LEGACY_KEY_ID]: legacyKey } };
-      }
-    }
-
-    if (!store) {
+    const serialized = source.load();
+    let store: KeyStore;
+    if (serialized) {
+      store = toKeyStore(serialized);
+    } else {
       // First run: generate a fresh key and persist as the active key.
       const id = `k${Date.now().toString(36)}`;
-      const key = randomBytes(32);
-      try {
-        writeKeysFile({ active: id, keys: { [id]: key.toString('hex') } });
-      } catch (err: unknown) {
-        if ((err as NodeJS.ErrnoException).code === 'EEXIST') {
-          cachedStore = null;
-          return loadStore();
-        }
-        throw err;
-      }
-      store = { active: id, keys: { [id]: key } };
+      store = { active: id, keys: { [id]: randomBytes(32) } };
+      persist(store, 'create an encryption key');
     }
-
     cachedStore = store;
     return store;
   }
@@ -236,20 +299,14 @@ export function createCrypto({ dataDir, log = SILENT_LOG }: CreateCryptoOptions)
     },
 
     rotateKey() {
-      const store = loadStore();
+      const current = loadStore();
       const id = `k${Date.now().toString(36)}`;
-      if (store.keys[id]) {
+      if (current.keys[id]) {
         throw new Error('Key id collision — retry');
       }
-      const key = randomBytes(32);
-      store.keys[id] = key;
-      store.active = id;
-      cachedStore = store;
-      const serialized: Record<string, string> = {};
-      for (const [kid, buf] of Object.entries(store.keys)) {
-        serialized[kid] = buf.toString('hex');
-      }
-      writeKeysFile({ active: id, keys: serialized });
+      const next: KeyStore = { active: id, keys: { ...current.keys, [id]: randomBytes(32) } };
+      persist(next, 'rotate the encryption key');
+      cachedStore = next;
       log.info('Encryption key rotated', { namespace: 'crypto', newKeyId: id });
       return id;
     },

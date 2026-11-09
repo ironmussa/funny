@@ -196,13 +196,15 @@ Each user can configure their own git identity and GitHub credentials from **Set
 - **Git Name / Email** — Used as `--author` on commits and merges
 - **GitHub Personal Access Token** — Used as `GH_TOKEN` for push and PR operations
 
-Tokens are encrypted at rest using **AES-256-GCM**. The encryption key is auto-generated on first use and stored at:
+Tokens are encrypted at rest using **AES-256-GCM** with a rotatable keyring (`packages/shared/src/lib/crypto.ts`). The keyring is auto-generated on first use and stored at:
 
 ```
-~/.funny/encryption.key
+~/.funny/encryption.keys.json   # plus the legacy ~/.funny/encryption.key, still read as keyId "legacy"
 ```
 
-> **Important:** If this file is deleted, any previously saved GitHub tokens become unrecoverable. Back it up if needed. The file is created with restricted permissions (`0600`).
+On the server, `FUNNY_ENCRYPTION_KEYS` (JSON: `{"active":"k1","keys":{"k1":"<hex-64>"}}`) replaces those files and is read-only — useful when the data dir is not persistent. It must contain every key that encrypted existing rows. The source is chosen in `packages/server/src/lib/server-secrets.ts`.
+
+> **Important:** If the keyring is lost, any previously saved GitHub tokens become unrecoverable. Back it up if needed. The files are created with restricted permissions (`0600`) and refused if readable by others.
 
 ### Auth Architecture
 

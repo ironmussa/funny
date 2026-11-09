@@ -13,11 +13,23 @@
  * so they are stable across restarts and instances without new configuration.
  * Secrets that cross a trust boundary (RUNNER_AUTH_SECRET, …) stay separate and
  * are checked by `secret-check.ts`.
+ *
+ * The encryption keyring (user tokens at rest) has its own source: the files in
+ * `DATA_DIR` by default, or — when `FUNNY_ENCRYPTION_KEYS` is set — that JSON,
+ * read-only (`{"active":"k1","keys":{"k1":"<hex-64>"}}`). Setting it replaces
+ * the files, so it must contain every key that encrypted existing rows.
  */
 
 import { hkdfSync, randomBytes } from 'node:crypto';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+
+import {
+  fileKeyringSource,
+  readOnlyKeyringSource,
+  type KeyringSource,
+  type SerializedKeyring,
+} from '@funny/shared/lib/crypto';
 
 import { DATA_DIR } from './data-dir.js';
 import { log } from './logger.js';
@@ -124,9 +136,54 @@ export function deriveServerKey(purpose: DerivedKeyPurpose): Buffer {
   return key;
 }
 
-/** Test-only: forget the configured source and every cached value. */
+// ── Encryption keyring ───────────────────────────────────────────
+
+const KEYRING_ENV_VAR = 'FUNNY_ENCRYPTION_KEYS';
+
+let keyringSource: KeyringSource | null = null;
+
+/** Env `FUNNY_ENCRYPTION_KEYS` (read-only) when set, else the files in `dataDir`. */
+export function defaultKeyringSource(opts: {
+  env: Readonly<Record<string, string | undefined>>;
+  dataDir: string;
+}): KeyringSource {
+  const raw = opts.env[KEYRING_ENV_VAR];
+  if (!raw) return fileKeyringSource(opts.dataDir);
+  let parsed: SerializedKeyring;
+  try {
+    parsed = JSON.parse(raw) as SerializedKeyring;
+  } catch {
+    throw new Error(`${KEYRING_ENV_VAR} is not valid JSON`);
+  }
+  if (typeof parsed?.active !== 'string' || typeof parsed.keys !== 'object' || !parsed.keys) {
+    throw new Error(`${KEYRING_ENV_VAR} must look like {"active":"k1","keys":{"k1":"<hex-64>"}}`);
+  }
+  return readOnlyKeyringSource(parsed);
+}
+
+/** Called by a host that supplies its own keyring source. */
+export function configureKeyringSource(next: KeyringSource): void {
+  keyringSource = next;
+}
+
+/**
+ * The keyring source, resolved on first use so a host can configure it after
+ * modules load. Pass this to `createCrypto({ keyring })`.
+ */
+export const serverKeyringSource: KeyringSource = {
+  load: () => currentKeyringSource().load(),
+  save: (keyring) => currentKeyringSource().save(keyring),
+};
+
+function currentKeyringSource(): KeyringSource {
+  keyringSource ??= defaultKeyringSource({ env: process.env, dataDir: DATA_DIR });
+  return keyringSource;
+}
+
+/** Test-only: forget the configured sources and every cached value. */
 export function resetServerSecretsForTests(): void {
   source = null;
+  keyringSource = null;
   resolved.clear();
   derived.clear();
 }

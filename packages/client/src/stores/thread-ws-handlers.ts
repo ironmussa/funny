@@ -23,6 +23,7 @@ import type {
   PendingPermissionRequest,
   PermissionApprovalCapability,
   PermissionRecoveryReason,
+  WSContextUsageData,
 } from '@funny/shared';
 import { toast } from 'sonner';
 
@@ -1044,16 +1045,16 @@ export function handleWSContextUsage(
   get: Get,
   set: Set,
   threadId: string,
-  data: {
-    inputTokens: number;
-    outputTokens: number;
-    cumulativeInputTokens: number;
-  },
+  data: WSContextUsageData,
 ): void {
+  // Per-message usage events carry no breakdown; keep the last end-of-turn
+  // snapshot until the next one replaces it.
+  const breakdown = data.breakdown ?? get().contextUsageByThread[threadId]?.breakdown;
   const usage = {
     cumulativeInputTokens: data.cumulativeInputTokens,
     lastInputTokens: data.inputTokens,
     lastOutputTokens: data.outputTokens,
+    ...(breakdown ? { breakdown } : {}),
   };
 
   // Persist across page reloads — the runtime only keeps usage in memory.

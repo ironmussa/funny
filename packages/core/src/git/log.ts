@@ -289,11 +289,46 @@ function parseRefs(decoration: string): {
  * branches appear; otherwise walks HEAD only. Bypasses the native fast-path
  * (which doesn't return parents or refs) and goes straight to `git log`.
  */
+/**
+ * Every branch and remote-tracking branch, as full ref names
+ * (`refs/heads/x`, `refs/remotes/origin/x`); remote `HEAD` aliases are left out.
+ */
+export function listBranchRefs(cwd: string): ResultAsync<string[], DomainError> {
+  return ResultAsync.fromPromise(
+    gitRead(['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes'], {
+      cwd,
+      reject: false,
+    }),
+    (error) => processError(String(error)),
+  ).map((result) =>
+    result.exitCode !== 0
+      ? []
+      : result.stdout
+          .split('\n')
+          .map((line) => line.trim())
+          .filter((ref) => ref && !ref.endsWith('/HEAD')),
+  );
+}
+
+/** A full branch / remote ref name, safe to pass as an `--exclude` pattern. */
+function isFullRefName(ref: string): boolean {
+  return /^refs\/(heads|remotes)\/[\w./-]+$/.test(ref) && !ref.includes('..');
+}
+
 export function getGraphLog(
   cwd: string,
-  opts: { limit?: number; skip?: number; all?: boolean } = {},
+  opts: {
+    limit?: number;
+    skip?: number;
+    all?: boolean;
+    /**
+     * With `all`: full ref names left out of the traversal (e.g. branches whose
+     * PR is merged). Their commits still show when another ref reaches them.
+     */
+    excludeRefs?: readonly string[];
+  } = {},
 ): ResultAsync<GitGraphLogEntry[], DomainError> {
-  const { limit = 50, skip = 0, all = false } = opts;
+  const { limit = 50, skip = 0, all = false, excludeRefs = [] } = opts;
   const FIELD_SEP = '\x1f';
   const RECORD_SEP = '\x1e';
   // hash, shortHash, author, author email, author timestamp, committer,
@@ -316,7 +351,13 @@ export function getGraphLog(
   if (skip > 0) args.push(`--skip=${skip}`);
   // Exclude checkpoint refs before traversal so they neither create graph lanes
   // nor consume pagination slots. Commits reachable from normal branches remain.
-  if (all) args.push('--exclude=refs/t3/*', '--all');
+  if (all) {
+    args.push(
+      '--exclude=refs/t3/*',
+      ...excludeRefs.filter(isFullRefName).map((ref) => `--exclude=${ref}`),
+      '--all',
+    );
+  }
   return ResultAsync.fromPromise(
     (async () => {
       const result = await gitRead(args, { cwd, reject: false });

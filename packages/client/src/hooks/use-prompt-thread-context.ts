@@ -175,6 +175,7 @@ export function usePromptActiveThread(
   const activeThreadGitStatus = useGitStatusForThread(threadId);
   const storeContextTokens = useThreadSelector((t) => t?.contextUsage?.cumulativeInputTokens ?? 0);
   const activeThreadContextTokens = o.contextUsage?.cumulativeInputTokens ?? storeContextTokens;
+  const activeThreadContextBreakdown = useThreadSelector((t) => t?.contextUsage?.breakdown);
   const activeThreadLastEffort = useThreadSelector((t) => t?.lastUserMessage?.effort);
   const activeThreadRuntime = useThreadSelector((t) => t?.runtime);
   const updateThreadPermissionMode = useThreadStore((s) => s.updateThreadPermissionMode);
@@ -187,6 +188,7 @@ export function usePromptActiveThread(
     sdkSlashCommands,
     activeThreadGitStatus,
     activeThreadContextTokens,
+    activeThreadContextBreakdown,
     activeThreadLastEffort,
     activeThreadRuntime,
     updateThreadPermissionMode,

@@ -719,10 +719,39 @@ export interface WSCompactBoundaryData {
   timestamp: string;
 }
 
+/** Row classification of a {@link ContextBreakdown} category (mirrors the Claude Agent SDK). */
+export type ContextBreakdownKind = 'used' | 'free' | 'buffer' | 'deferred';
+
+/**
+ * Per-category context window breakdown — the data behind Claude Code's
+ * `/context` report. Only the Claude SDK provider reports it; it is a
+ * snapshot taken at the end of each turn.
+ */
+export interface ContextBreakdown {
+  model: string;
+  totalTokens: number;
+  maxTokens: number;
+  percentage: number;
+  categories: {
+    /** Stable row id (e.g. `messages`, `mcp_tools`); absent on older CLIs. */
+    id?: string;
+    name: string;
+    tokens: number;
+    kind: ContextBreakdownKind;
+  }[];
+  /** MCP tool tokens aggregated per server. */
+  mcpServers: { name: string; tools: number; tokens: number }[];
+  memoryFiles: { path: string; type: string; tokens: number }[];
+  /** ISO timestamp of when the snapshot was taken. */
+  capturedAt: string;
+}
+
 export interface WSContextUsageData {
   inputTokens: number;
   outputTokens: number;
   cumulativeInputTokens: number;
+  /** Present on the end-of-turn snapshot from providers that report it (Claude SDK). */
+  breakdown?: ContextBreakdown;
 }
 
 export interface WSCommandOutputData {

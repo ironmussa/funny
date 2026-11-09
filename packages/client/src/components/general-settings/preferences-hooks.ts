@@ -3,11 +3,13 @@
  * `PreferencesContent` can own them once (state survives page switches) and
  * hand them to the page sections.
  */
-import type { UserProfile } from '@funny/shared';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { updateProfile } from '@/data/profile/actions';
+import { useProfile } from '@/data/profile/hooks';
+import { refreshProfile } from '@/data/profile/queries';
 import { api } from '@/lib/api';
 
 /** Toast shown after every auto-saved preference (deduped by id). */
@@ -19,6 +21,8 @@ export function toastSettingsSaved(t: (key: string) => string) {
 
 type KeyMap<T> = Record<string, T>;
 
+const NO_KEYS: KeyMap<boolean> = {};
+
 /** Updater that sets one provider id in a per-key map. */
 function withKey<T>(id: string, value: T) {
   return (prev: KeyMap<T>): KeyMap<T> => ({ ...prev, [id]: value });
@@ -27,17 +31,13 @@ function withKey<T>(id: string, value: T) {
 export function useProviderKeys() {
   const { t } = useTranslation();
   const [keyInputs, setKeyInputs] = useState<KeyMap<string>>({});
-  const [keyPresence, setKeyPresence] = useState<KeyMap<boolean>>({});
   const [keySaving, setKeySaving] = useState<KeyMap<boolean>>({});
+  // Saved writes update the profile query, so presence follows them.
+  const keyPresence = useProfile()?.providerKeys ?? NO_KEYS;
 
+  // Opening the settings page reads a fresh profile (keys may have changed elsewhere).
   useEffect(() => {
-    api.getProfile().then((result) => {
-      if (result.isOk() && result.value) {
-        const profile = result.value as UserProfile;
-        setKeyPresence(profile.providerKeys ?? {});
-      }
-    });
-    setKeyInputs({});
+    void refreshProfile();
   }, []);
 
   const handleSave = useCallback(
@@ -45,9 +45,8 @@ export function useProviderKeys() {
       const value = keyInputs[id];
       if (!value) return;
       setKeySaving(withKey(id, true));
-      const result = await api.updateProfile({ providerKey: { id, value } });
+      const result = await updateProfile({ providerKey: { id, value } });
       if (result.isOk()) {
-        setKeyPresence(result.value.providerKeys ?? {});
         setKeyInputs(withKey(id, ''));
         toast.success(t('profile.tokenSaved'));
       } else {
@@ -61,9 +60,8 @@ export function useProviderKeys() {
   const handleClear = useCallback(
     async (id: string) => {
       setKeySaving(withKey(id, true));
-      const result = await api.updateProfile({ providerKey: { id, value: null } });
+      const result = await updateProfile({ providerKey: { id, value: null } });
       if (result.isOk()) {
-        setKeyPresence(result.value.providerKeys ?? {});
         setKeyInputs(withKey(id, ''));
         toast.success(t('profile.tokenCleared'));
       }

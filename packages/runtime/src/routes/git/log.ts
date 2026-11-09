@@ -8,6 +8,7 @@
 import {
   getLog,
   getGraphLog,
+  listBranchRefs,
   getRebaseReflogEvents,
   getUnpushedHashes,
   getCommitBody,
@@ -21,6 +22,7 @@ import {
 import { badRequest, type DomainError } from '@funny/shared/errors';
 import { Hono, type Context, type MiddlewareHandler } from 'hono';
 import { err, type Result, type ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import { requestSpan } from '../../middleware/tracing.js';
@@ -28,6 +30,7 @@ import { resolveIdentity, resolveThreadIdentity } from '../../services/git-servi
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
+import { parseQuery, queryBoolean } from '../../validation/request.js';
 import { gitRefSchema, validate } from '../../validation/schemas.js';
 import {
   getCachedPR,
@@ -243,6 +246,31 @@ async function enrichGraphRefsWithPullRequests(
   }
 }
 
+const graphLogFilterSchema = z.object({ hideMerged: queryBoolean.default(false) });
+
+/** The branch a full ref name tracks: `refs/heads/x` → `x`, `refs/remotes/origin/x` → `x`. */
+function branchOfFullRef(ref: string): string | null {
+  if (ref.startsWith('refs/heads/')) return ref.slice('refs/heads/'.length);
+  const remote = /^refs\/remotes\/[^/]+\/(.+)$/.exec(ref);
+  return remote ? remote[1] : null;
+}
+
+/**
+ * Refs whose branch has a merged PR (from the PR cache), to leave out of the
+ * graph when the user hides merged branches. A branch not in the cache yet
+ * stays visible; the PR enrichment of this response looks it up for next time.
+ */
+async function mergedBranchRefs(c: Context<HonoEnv>, cwd: string): Promise<string[]> {
+  const query = parseQuery(c, graphLogFilterSchema);
+  if (query.isErr() || !query.value.hideMerged) return [];
+  const refs = await listBranchRefs(cwd);
+  if (refs.isErr()) return [];
+  return refs.value.filter((ref) => {
+    const branch = branchOfFullRef(ref);
+    return branch !== null && getCachedPR(cwd, branch)?.prState === 'MERGED';
+  });
+}
+
 // ─── Project-scoped routes ──────────────────────────────
 
 // GET /api/git/project/:projectId/log
@@ -278,9 +306,10 @@ logRoutes.get('/project/:projectId/graph-log', async (c) => {
   const all = c.req.query('all') !== 'false';
   const identity = await resolveIdentity(userId, projectId);
   const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
+  const excludeRefs = await mergedBranchRefs(c, cwd);
   const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.graph_log', { projectId }, () =>
-      getGraphLog(cwd, { limit: limit + 1, skip, all }),
+      getGraphLog(cwd, { limit: limit + 1, skip, all, excludeRefs }),
     ),
     fetchUnpushedSpanned(c, cwd, { projectId }),
     fetchUnpulledSpanned(c, cwd, { projectId }),
@@ -414,9 +443,10 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
   const all = c.req.query('all') !== 'false';
   const identity = await resolveThreadIdentity(userId, threadId);
   const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
+  const excludeRefs = await mergedBranchRefs(c, cwd);
   const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.graph_log', { threadId }, () =>
-      getGraphLog(cwd, { limit: limit + 1, skip, all }),
+      getGraphLog(cwd, { limit: limit + 1, skip, all, excludeRefs }),
     ),
     fetchUnpushedSpanned(c, cwd, { threadId }),
     fetchUnpulledSpanned(c, cwd, { threadId }),

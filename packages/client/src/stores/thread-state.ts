@@ -158,7 +158,7 @@ export interface ThreadState {
   ) => void;
   handleWSContextUsage: (
     threadId: string,
-    data: { inputTokens: number; outputTokens: number; cumulativeInputTokens: number },
+    data: import('@funny/shared').WSContextUsageData,
   ) => void;
 
   // Worktree setup progress handlers

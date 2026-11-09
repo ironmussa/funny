@@ -61,9 +61,7 @@ vi.mock('@/hooks/use-slash-skills', () => ({
     ensureSlashSkills: vi.fn(),
   }),
 }));
-vi.mock('@/stores/profile-store', () => ({
-  useProfileStore: (selector: (state: { profile: null }) => unknown) => selector({ profile: null }),
-}));
+vi.mock('@/data/profile/hooks', () => ({ useProfile: () => undefined }));
 
 import { AskQuestionCard } from '@/components/tool-cards/AskQuestionCard';
 

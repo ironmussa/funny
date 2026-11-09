@@ -196,6 +196,17 @@ describe('instabox adapter specifics', () => {
     expect(provider.api.snapshots.has('sn_failed')).toBe(false);
   });
 
+  test('buildTemplate keeps a pending snapshot of the same name (a concurrent build)', async () => {
+    const provider = providerWith('ibk_test_key');
+    provider.api.snapshots.set('sn_pending', {
+      id: 'sn_pending',
+      name: 'funny-runner-v2',
+      status: 'pending',
+    });
+    await provider.buildTemplate!({ serverVersion: 'v2', installScript: '', scriptEnv: {} });
+    expect(provider.api.snapshots.has('sn_pending')).toBe(true);
+  });
+
   test('a failed install surfaces the error and still deletes the throwaway machine', async () => {
     const provider = providerWith('ibk_test_key');
     provider.api.failNextCommand(2);

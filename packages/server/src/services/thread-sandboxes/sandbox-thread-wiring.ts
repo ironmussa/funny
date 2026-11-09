@@ -46,7 +46,9 @@ export function sandboxThreadLauncherFor(env: {
     },
     projectSandbox: async (userId, projectId) => {
       const configured = await projectSandboxes.forThread(userId, projectId);
-      return configured.isOk() ? configured.value : null;
+      // A storage failure is a 500, never "no sandbox configured".
+      if (configured.isErr()) throw new Error(configured.error.message);
+      return configured.value;
     },
     prepare: (req) => prepareSandboxLaunch(req, { connections, ...ports }),
     insertThread: (row) => threadRepo.createThread(row),

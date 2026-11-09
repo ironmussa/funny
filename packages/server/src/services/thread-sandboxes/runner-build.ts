@@ -25,7 +25,7 @@ export interface RunnerBuild {
 /** HEAD of the git checkout the server runs from. */
 export interface LocalCheckout {
   commit: string;
-  /** Whether a remote-tracking branch contains `commit`. */
+  /** Whether a remote-tracking branch of the funny repository contains `commit`. */
   pushed: boolean;
 }
 
@@ -65,14 +65,52 @@ export function resolveRunnerBuild(
   return ok({ commit: configured, version: configured.slice(0, 12), repoUrl });
 }
 
-/** HEAD of the checkout at `cwd`, or null when the server is not in a git checkout. */
-async function readLocalCheckout(cwd: string = process.cwd()): Promise<LocalCheckout | null> {
+/** `host/owner/repo` of a git URL (https, ssh or scp-like), for comparing remotes. */
+function repositoryKey(url: string): string {
+  return url
+    .trim()
+    .toLowerCase()
+    .replace(/^[a-z+]+:\/\//, '')
+    .replace(/^[^@/]+@/, '')
+    .replace(/^([^/:]+):(?!\d+\/)/, '$1/')
+    .replace(/:\d+\//, '/')
+    .replace(/\.git$/, '')
+    .replace(/\/+$/, '');
+}
+
+/** Whether two git URLs name the same repository (`git@github.com:a/b` = `https://github.com/a/b.git`). */
+export function sameRepository(a: string, b: string): boolean {
+  return repositoryKey(a) === repositoryKey(b);
+}
+
+/**
+ * HEAD of the checkout at `cwd`, when it is a checkout of `repoUrl` (a remote
+ * of it points there); null otherwise, e.g. a server started inside another
+ * project's repository, whose commits the sandbox could never clone.
+ */
+async function readLocalCheckout(
+  repoUrl: string,
+  cwd: string = process.cwd(),
+): Promise<LocalCheckout | null> {
   try {
     const head = await gitRead(['rev-parse', 'HEAD'], { cwd, reject: false });
     const commit = head.stdout.trim();
     if (head.exitCode !== 0 || !SHA_RE.test(commit)) return null;
-    const remotes = await gitRead(['branch', '-r', '--contains', commit], { cwd, reject: false });
-    return { commit, pushed: remotes.exitCode === 0 && remotes.stdout.trim().length > 0 };
+    const listed = await gitRead(['remote', '-v'], { cwd, reject: false });
+    const remotes = new Set(
+      listed.stdout
+        .split('\n')
+        .map((line) => line.trim().split(/\s+/))
+        .filter(([name, url]) => name && url && sameRepository(url, repoUrl))
+        .map(([name]) => name),
+    );
+    if (remotes.size === 0) return null;
+    // Pushed: a remote-tracking branch of one of those remotes contains it.
+    const branches = await gitRead(['branch', '-r', '--contains', commit], { cwd, reject: false });
+    const pushed =
+      branches.exitCode === 0 &&
+      branches.stdout.split('\n').some((line) => remotes.has(line.trim().split('/')[0] ?? ''));
+    return { commit, pushed };
   } catch {
     return null;
   }
@@ -82,5 +120,6 @@ async function readLocalCheckout(cwd: string = process.cwd()): Promise<LocalChec
 export async function resolveServerRunnerBuild(): Promise<Result<RunnerBuild, RunnerBuildError>> {
   const env = process.env;
   const configured = env.FUNNY_BUILD_COMMIT || env.RAILWAY_GIT_COMMIT_SHA;
-  return resolveRunnerBuild(env, configured ? null : await readLocalCheckout());
+  const repoUrl = (env.FUNNY_REPO_URL || DEFAULT_FUNNY_REPO_URL).trim();
+  return resolveRunnerBuild(env, configured ? null : await readLocalCheckout(repoUrl));
 }

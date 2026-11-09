@@ -37,6 +37,9 @@ export interface ReverseLinkSupervisorDeps {
     secret: string;
     onUnhealthy: () => void;
   }): ReverseLinkDialer;
+  /** Retry delays of a sandbox whose link failed to start (defaults: 3 s doubling to 60 s). */
+  retry?: { baseMs: number; maxMs: number };
+  now?: () => number;
 }
 
 export interface ReverseLinkSupervisor {
@@ -53,6 +56,14 @@ export function createReverseLinkSupervisor(
   const dialers = new Map<string, ReverseLinkDialer>();
   /** Sandboxes whose dialer is being set up, so overlapping passes do not double it. */
   const starting = new Set<string>();
+  /**
+   * Back-off of sandboxes whose link failed to start: a booting machine is
+   * retried soon, a permanent failure (connection deleted, machine gone) does
+   * not hit the provider API and the log on every pass.
+   */
+  const retryAt = new Map<string, { at: number; delayMs: number }>();
+  const retry = deps.retry ?? { baseMs: 3_000, maxMs: 60_000 };
+  const now = deps.now ?? Date.now;
 
   const stop = (key: string) => {
     dialers.get(key)?.close();
@@ -79,12 +90,17 @@ export function createReverseLinkSupervisor(
           onUnhealthy: () => stop(key),
         }),
       );
+      retryAt.delete(key);
       return true;
     } catch (error) {
-      // The machine may still be booting: the next pass retries.
+      const previous = retryAt.get(key)?.delayMs;
+      const delayMs = previous ? Math.min(previous * 2, retry.maxMs) : retry.baseMs;
+      retryAt.set(key, { at: now() + delayMs, delayMs });
+      // The machine may still be booting: retried once the delay has passed.
       log.warn('Reverse link not established yet', {
         namespace: 'reverse-link',
         threadId: sandbox.threadId,
+        retryInMs: delayMs,
         error: error instanceof Error ? error.message : String(error),
       });
       return false;
@@ -111,7 +127,11 @@ export function createReverseLinkSupervisor(
           stopped += 1;
         }
       }
-      const fresh = [...wanted].filter(([key]) => !dialers.has(key) && !starting.has(key));
+      for (const key of [...retryAt.keys()]) if (!wanted.has(key)) retryAt.delete(key);
+      const due = (key: string) => (retryAt.get(key)?.at ?? 0) <= now();
+      const fresh = [...wanted].filter(
+        ([key]) => !dialers.has(key) && !starting.has(key) && due(key),
+      );
       const results = await Promise.all(fresh.map(([key, sandbox]) => start(sandbox, key)));
       return { linked: dialers.size, started: results.filter(Boolean).length, stopped };
     },

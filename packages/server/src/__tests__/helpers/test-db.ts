@@ -311,7 +311,7 @@ export function createTestDb() {
       user_id TEXT NOT NULL,
       connection_id TEXT NOT NULL,
       size_id TEXT NOT NULL,
-      enabled_by_default INTEGER NOT NULL DEFAULT 1,
+      enabled_by_default INTEGER NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL,
       PRIMARY KEY (project_id, user_id)
     )

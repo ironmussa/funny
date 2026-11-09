@@ -416,7 +416,9 @@ export function createInstaboxProvider(
       // A failed snapshot of an earlier build holds the name: drop it first.
       const clearStale = listSnapshots().andThen((snapshots) =>
         ResultAsync.combine(
-          snapshots.filter((s) => s?.name === name).map((s) => deleteSnapshot(String(s.id))),
+          snapshots
+            .filter((s) => s?.name === name && s?.status === 'failed')
+            .map((s) => deleteSnapshot(String(s.id))),
         ),
       );
       return clearStale

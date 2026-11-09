@@ -37,9 +37,16 @@ function setup(opts: { ingress?: boolean } = {}) {
     closed: boolean;
     unhealthy: () => void;
   }> = [];
+  const clock = { ms: 0 };
+  const attempts: number[] = [];
   const supervisor = createReverseLinkSupervisor({
+    now: () => clock.ms,
+    retry: { baseMs: 1_000, maxMs: 4_000 },
     listLinked: () => okAsync(linked),
-    providerFor: () => okAsync(provider),
+    providerFor: () => {
+      attempts.push(clock.ms);
+      return okAsync(provider);
+    },
     secretFor: (s) => reverseLinkSecret(KEY, s.threadId, s.generation),
     startDialer: ({ sandbox, ingress, secret, onUnhealthy }) => {
       const entry = { sandbox, url: ingress.url, secret, closed: false, unhealthy: onUnhealthy };
@@ -72,6 +79,8 @@ function setup(opts: { ingress?: boolean } = {}) {
     };
   };
   return {
+    attempts,
+    clock,
     provider,
     supervisor,
     started,
@@ -131,13 +140,40 @@ describe('reverse link supervisor', () => {
     expect(t.provider.exposedPorts).toHaveLength(2);
   });
 
-  test('a provider that cannot publish yet is retried on the next pass', async () => {
+  test('a provider that cannot publish yet is retried once its back-off has passed', async () => {
     const t = setup();
     const a = await t.machine('t-a');
     t.setLinked([a]);
     t.provider.failNext({ kind: 'unavailable', message: 'booting' });
     expect(await t.supervisor.sync()).toEqual({ linked: 0, started: 0, stopped: 0 });
+    // Not before the delay: no provider call, no log, on every pass.
+    expect(await t.supervisor.sync()).toEqual({ linked: 0, started: 0, stopped: 0 });
+    expect(t.provider.exposedPorts).toHaveLength(0);
+    t.clock.ms = 1_000;
     expect(await t.supervisor.sync()).toEqual({ linked: 1, started: 1, stopped: 0 });
+  });
+
+  test('repeated failures double the back-off up to its cap', async () => {
+    const t = setup({ ingress: false });
+    t.setLinked([await t.machine('t-a')]);
+    for (let ms = 0; ms <= 12_000; ms += 500) {
+      t.clock.ms = ms;
+      await t.supervisor.sync();
+    }
+    // 1 s, then 2 s, then capped at 4 s.
+    expect(t.attempts).toEqual([0, 1_000, 3_000, 7_000, 11_000]);
+  });
+
+  test('a sandbox that leaves and comes back starts without a stale back-off', async () => {
+    const t = setup();
+    const a = await t.machine('t-a');
+    t.setLinked([a]);
+    t.provider.failNext({ kind: 'unavailable', message: 'booting' });
+    await t.supervisor.sync();
+    t.setLinked([]);
+    await t.supervisor.sync();
+    t.setLinked([a]);
+    expect(await t.supervisor.sync()).toMatchObject({ linked: 1, started: 1 });
   });
 
   test('a provider without exposePort never gets a dialer', async () => {

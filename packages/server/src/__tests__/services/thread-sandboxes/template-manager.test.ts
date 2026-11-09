@@ -1,7 +1,14 @@
 import { describe, expect, test } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { createFakeSandboxProvider } from '../../../services/thread-sandboxes/providers/fake/fake-provider.js';
-import { resolveRunnerBuild } from '../../../services/thread-sandboxes/runner-build.js';
+import {
+  resolveRunnerBuild,
+  resolveServerRunnerBuild,
+  sameRepository,
+} from '../../../services/thread-sandboxes/runner-build.js';
 import {
   INSTALLED_COMMIT_FILE,
   RUNNER_INSTALL_SCRIPT,
@@ -46,6 +53,69 @@ describe('resolveRunnerBuild', () => {
       resolveRunnerBuild({ FUNNY_BUILD_COMMIT: SHA }, { commit: 'e'.repeat(40), pushed: false }),
     );
     expect(configured.commit).toBe(SHA);
+  });
+
+  test('compares repositories across https, ssh and scp-like URLs', () => {
+    const funny = 'https://github.com/ironmussa/funny.git';
+    for (const same of [
+      'git@github.com:ironmussa/funny.git',
+      'ssh://git@github.com:22/ironmussa/funny',
+      'https://x-access-token:abc@github.com/IronMussa/funny/',
+    ]) {
+      expect(sameRepository(same, funny)).toBe(true);
+    }
+    expect(sameRepository('git@github.com:someone/funny.git', funny)).toBe(false);
+    expect(sameRepository('https://gitlab.com/ironmussa/funny.git', funny)).toBe(false);
+  });
+
+  describe('local checkout fallback', () => {
+    /** A repo whose HEAD is "pushed" to `remoteUrl` (a remote-tracking ref holds it). */
+    function checkout(remoteUrl: string) {
+      const dir = mkdtempSync(join(tmpdir(), 'funny-runner-build-'));
+      // Hook-inherited GIT_* vars would point git at the funny repository.
+      const env = Object.fromEntries(
+        Object.entries(process.env).filter(([key]) => !key.startsWith('GIT_')),
+      );
+      const git = (...args: string[]) => {
+        const run = Bun.spawnSync(['git', ...args], { cwd: dir, env });
+        if (run.exitCode !== 0) throw new Error(run.stderr.toString());
+        return run.stdout.toString().trim();
+      };
+      git('init', '-q');
+      git('-c', 'user.name=t', '-c', 'user.email=t@t', 'commit', '-q', '--allow-empty', '-m', 'x');
+      git('remote', 'add', 'origin', remoteUrl);
+      git('update-ref', 'refs/remotes/origin/main', 'HEAD');
+      return { dir, head: git('rev-parse', 'HEAD') };
+    }
+
+    async function buildIn(dir: string) {
+      const saved = { ...process.env };
+      const cwd = process.cwd();
+      for (const key of Object.keys(process.env))
+        if (key.startsWith('GIT_')) delete process.env[key];
+      delete process.env.FUNNY_BUILD_COMMIT;
+      delete process.env.RAILWAY_GIT_COMMIT_SHA;
+      delete process.env.FUNNY_REPO_URL;
+      process.chdir(dir);
+      try {
+        return await resolveServerRunnerBuild();
+      } finally {
+        process.chdir(cwd);
+        Object.assign(process.env, saved);
+        rmSync(dir, { recursive: true, force: true });
+      }
+    }
+
+    test('uses the pushed HEAD of a checkout of the funny repository', async () => {
+      const { dir, head } = checkout('git@github.com:ironmussa/funny.git');
+      expect(expectOk(await buildIn(dir)).commit).toBe(head);
+    });
+
+    test('ignores the checkout of another repository, even when pushed', async () => {
+      const { dir } = checkout('https://github.com/someone/other-project.git');
+      const result = await buildIn(dir);
+      expect(result.isErr() && result.error.kind).toBe('missing-build-commit');
+    });
   });
 });
 

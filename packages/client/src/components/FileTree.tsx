@@ -20,6 +20,7 @@ import { type CSSProperties, useCallback, useMemo, useRef, useState } from 'reac
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { HostDropdownMenuItem } from '@/components/HostOnly';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -364,7 +365,7 @@ export function FileTree({
                 className="min-w-[220px]"
                 onCloseAutoFocus={(e) => e.preventDefault()}
               >
-                <DropdownMenuItem
+                <HostDropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
                     void handleOpenDirectory(row.path, false);
@@ -373,7 +374,7 @@ export function FileTree({
                 >
                   <FolderOpenDot />
                   {t('sidebar.openDirectory')}
-                </DropdownMenuItem>
+                </HostDropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={(e) => {
@@ -544,7 +545,7 @@ export function FileTree({
             className="min-w-[220px]"
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <DropdownMenuItem
+            <HostDropdownMenuItem
               onClick={(e) => {
                 e.stopPropagation();
                 const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
@@ -553,7 +554,7 @@ export function FileTree({
             >
               <ExternalLink />
               {t('review.openInEditor', { editor: getEditorLabel() })}
-            </DropdownMenuItem>
+            </HostDropdownMenuItem>
             <DropdownMenuItem
               onClick={(e) => {
                 e.stopPropagation();
@@ -566,7 +567,7 @@ export function FileTree({
               {t('review.openInInternalEditor')}
             </DropdownMenuItem>
             {basePath && (
-              <DropdownMenuItem
+              <HostDropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
                   void handleOpenDirectory(f.path, true);
@@ -575,7 +576,7 @@ export function FileTree({
               >
                 <FolderOpenDot />
                 {t('sidebar.openDirectory')}
-              </DropdownMenuItem>
+              </HostDropdownMenuItem>
             )}
             {onRevertFile && (
               <>

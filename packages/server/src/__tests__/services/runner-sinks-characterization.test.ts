@@ -19,6 +19,7 @@ import {
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import * as auditModule from '../../lib/audit.js';
+import type { RunnerTarget } from '../../services/runner-access/index.js';
 import { setupBrowserPtyListRpc } from '../../services/socketio/browser-pty-list.js';
 import { setupBrowserPtyHandlers } from '../../services/socketio/browser-pty.js';
 import { setupBrowserSessionHandlers } from '../../services/socketio/browser-session.js';
@@ -176,6 +177,47 @@ describe('browser PTY sink', () => {
       },
     ]);
     expect(f.terminals.events).toHaveLength(0);
+  });
+});
+
+describe('browser PTY sink — sandbox threads', () => {
+  test("a sandbox thread terminal spawns on the thread's runner and its later input follows it", async () => {
+    const targets: RunnerTarget[] = [];
+    const f = fixture();
+    const dependencies = {
+      ...f.dependencies,
+      runnerAccess: fakeRunnerAccess({
+        runnerFor: () => 'runner-1',
+        owners: RUNNER_OWNERS,
+        onSelect: (_userId, target) => targets.push(target),
+      }),
+    };
+    setupBrowserPtyHandlers(f.socket, 'user-1', dependencies);
+
+    await f.socket.trigger('pty:spawn', {
+      id: 'pty-sb',
+      projectId: 'p-mine',
+      sandboxThreadId: 'thread-sb',
+      cwd: '/repo',
+    });
+    await f.socket.trigger('pty:write', { id: 'pty-sb', data: 'ls\n' });
+    await f.socket.trigger('pty:close', { id: 'pty-sb' });
+    await f.socket.trigger('pty:write', { id: 'pty-sb', data: 'late\n' });
+
+    const threadRoute: RunnerTarget = {
+      kind: 'request',
+      path: '/api/threads/thread-sb',
+      query: {},
+    };
+    // Never the project's checkout runner: the sandbox thread route, for the
+    // spawn and every op until the terminal closes.
+    expect(targets).toEqual([threadRoute, threadRoute, threadRoute, { kind: 'projectless' }]);
+    expect(f.terminals.events.map((e) => e.event.type)).toEqual([
+      'pty:spawn',
+      'pty:write',
+      'pty:close',
+      'pty:write',
+    ]);
   });
 });
 

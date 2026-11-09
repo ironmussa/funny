@@ -88,3 +88,32 @@ describe('proxy wakes a stopped thread sandbox', () => {
     expect(wakes).toEqual([]);
   });
 });
+
+describe('proxy routes on the thread context header', () => {
+  test("a workspace request carrying the open thread resolves that thread's runner", async () => {
+    const targets: unknown[] = [];
+    const response = await appWith({
+      runnerAccess: fakeRunnerAccess({ onSelect: (_userId, target) => targets.push(target) }),
+      requests,
+    }).request('/api/files/read?path=%2Frepo%2Fa.ts', {
+      headers: { 'X-Funny-Thread-Id': 't-box' },
+    });
+    expect(response.status).toBe(200);
+    expect(targets).toEqual([
+      {
+        kind: 'request',
+        path: '/api/files/read',
+        query: { path: '/repo/a.ts', threadId: 't-box' },
+      },
+    ]);
+  });
+
+  test('a stopped sandbox named by the header is woken like a thread route', async () => {
+    const { transport, wakes } = sandboxThread(true);
+    const response = await appWith(transport).request('/api/browse/files?path=%2Frepo', {
+      headers: { 'X-Funny-Thread-Id': 't1' },
+    });
+    expect(response.status).toBe(200);
+    expect(wakes).toEqual([['t1', 'user-1']]);
+  });
+});

@@ -52,6 +52,8 @@ export interface ChangesFileRowContext {
   fileSelectionState: Map<string, LineSelectionState>;
   basePath: string | undefined;
   readOnly?: boolean;
+  /** False for a sandbox thread: no external editor / file manager. */
+  openOnHost?: boolean;
   /** Opens the diff for a row unless a row menu just closed. */
   openFileDiff: (path: string) => void;
   onMenuClosed: () => void;
@@ -264,6 +266,7 @@ function FileRowSummary({ file: f, fileSearch }: { file: FileDiffSummary; fileSe
 function FileRowMenuItems({ file: f, ctx }: { file: FileDiffSummary; ctx: ChangesFileRowContext }) {
   const { t } = useTranslation();
   const { basePath } = ctx;
+  const onHost = ctx.openOnHost !== false;
   const openWith = (open: (absPath: string) => void) =>
     stopThen(() => {
       if (!basePath) {
@@ -274,10 +277,12 @@ function FileRowMenuItems({ file: f, ctx }: { file: FileDiffSummary; ctx: Change
     });
   return (
     <>
-      <DropdownMenuItem onClick={openWith(openFileInExternalEditor)}>
-        <ExternalLink />
-        {t('review.openInEditor', { editor: getEditorLabel() })}
-      </DropdownMenuItem>
+      {onHost && (
+        <DropdownMenuItem onClick={openWith(openFileInExternalEditor)}>
+          <ExternalLink />
+          {t('review.openInEditor', { editor: getEditorLabel() })}
+        </DropdownMenuItem>
+      )}
       <DropdownMenuItem
         onClick={openWith(openFileInInternalEditor)}
         data-testid={`review-open-internal-editor-${f.path}`}
@@ -285,7 +290,7 @@ function FileRowMenuItems({ file: f, ctx }: { file: FileDiffSummary; ctx: Change
         <FileCode />
         {t('review.openInInternalEditor')}
       </DropdownMenuItem>
-      {basePath && (
+      {basePath && onHost && (
         <DropdownMenuItem
           onClick={stopThen(() => void ctx.handleOpenDirectory(f.path, true))}
           data-testid={`review-file-open-directory-${f.path}`}

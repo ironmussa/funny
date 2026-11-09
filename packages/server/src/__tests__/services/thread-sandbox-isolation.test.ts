@@ -139,6 +139,58 @@ describe('routing', () => {
     expect(await resolve('/api/browse/roots')).toBeNull();
   });
 
+  test("a request made from a sandbox thread's view runs on its sandbox", async () => {
+    runner('r-general');
+    runner('r-box');
+    await bindSandboxRunner('r-box', 't-box');
+    const context = { threadId: 't-box' };
+    expect((await resolve('/api/files/read', context))?.runnerId).toBe('r-box');
+    expect((await resolve('/api/browse/files', context))?.runnerId).toBe('r-box');
+    expect(
+      (await resolve('/api/skills/resources', { ...context, projectId: 'px' }))?.runnerId,
+    ).toBe('r-box');
+    expect((await resolve('/api/git/project/px/remote-url', context))?.runnerId).toBe('r-box');
+    // Without the thread context the same requests stay on the project's runner.
+    expect((await resolve('/api/files/read'))?.runnerId).toBe('r-general');
+  });
+
+  test('a sandbox thread context never falls back to the local runner', async () => {
+    runner('r-general');
+    runner('r-box', false);
+    await bindSandboxRunner('r-box', 't-box');
+    expect(await resolve('/api/files/read', { threadId: 't-box' })).toBeNull();
+    expect(await explainUnresolved('/api/files/read', { threadId: 't-box' }, 'alice')).toBe(
+      'thread-sandbox-unavailable',
+    );
+  });
+
+  test('a sandbox thread context whose runner never registered never falls back', async () => {
+    runner('r-general');
+    seedThread(testDb.db, {
+      id: 't-failed-box',
+      projectId: 'px',
+      userId: 'alice',
+      runtime: 'sandbox',
+      status: 'failed',
+    });
+    expect(await resolve('/api/files/read', { threadId: 't-failed-box' })).toBeNull();
+    expect(await explainUnresolved('/api/files/read', { threadId: 't-failed-box' }, 'alice')).toBe(
+      'thread-sandbox-unavailable',
+    );
+  });
+
+  test('a thread context only steers requests about its own project', async () => {
+    runner('r-general');
+    runner('r-box');
+    await bindSandboxRunner('r-box', 't-box');
+    seedProject(testDb.db, { id: 'py', userId: 'alice', path: '/home/alice/y' });
+    expect((await resolve('/api/projects/py/branches', { threadId: 't-box' }))?.runnerId).toBe(
+      'r-general',
+    );
+    // A local thread's context keeps its project's runner.
+    expect((await resolve('/api/files/read', { threadId: 't-other' }))?.runnerId).toBe('r-general');
+  });
+
   test('binding a sandbox evicts a thread route cached on the general runner', async () => {
     runner('r-general');
     runner('r-box');

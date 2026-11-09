@@ -45,6 +45,7 @@ import {
 import { isHtmlFile } from '@/lib/html-preview';
 import { markdownProseClassName } from '@/lib/markdown-components';
 import { isMarkdownFile } from '@/lib/markdown-file';
+import { toRawFileSrc } from '@/lib/raw-file-src';
 import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
@@ -90,7 +91,7 @@ export function MonacoEditorDialog({
   const canPreview = isMarkdown || isHtml || !!fileVisualizer;
   // Raw-bytes URL for the current file — handed to binary visualizers (images,
   // Parquet, …) whose `source` text would be corrupt. Text visualizers ignore it.
-  const rawFileSrc = `/api/files/raw?path=${encodeURIComponent(filePath)}`;
+  const rawFileSrc = toRawFileSrc(filePath);
   // A binary visualizer has no meaningful text view — lock to preview so the
   // code/preview toggle (which would show an empty Monaco) is hidden.
   const lockPreview = !!fileVisualizer?.contributes.binary;

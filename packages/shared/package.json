@@ -25,6 +25,7 @@
     "./prompts": "./src/prompts/index.ts",
     "./runner-protocol": "./src/runner-protocol.ts",
     "./reverse-link": "./src/reverse-link.ts",
+    "./thread-context": "./src/thread-context.ts",
     "./browser-protocol": "./src/browser-protocol.ts",
     "./browser-delivery-policy": "./src/browser-delivery-policy.ts",
     "./runner-v2/*": "./src/generated/runner-v2/runner/v2/*_pb.ts",

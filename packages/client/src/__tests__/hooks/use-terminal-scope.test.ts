@@ -27,6 +27,7 @@ describe('resolveTerminalScope', () => {
     ).toEqual({
       scopeId: 'grid-project',
       scratchThreadId: null,
+
       worktreePath: '/worktrees/grid-thread',
     });
   });
@@ -58,8 +59,46 @@ describe('resolveTerminalScope', () => {
     ).toEqual({
       scopeId: SCRATCH_TERMINAL_SCOPE_ID,
       scratchThreadId: 'scratch-thread',
+
       worktreePath: null,
     });
+  });
+
+  test('routes a sandbox thread terminal to its sandbox', () => {
+    const sandboxThread = { ...regularThread, id: 'sandbox-thread', runtime: 'sandbox' as const };
+    const expected = {
+      scopeId: 'grid-project',
+      scratchThreadId: null,
+      sandboxThreadId: 'sandbox-thread',
+      worktreePath: '/worktrees/grid-thread',
+    };
+    expect(
+      resolveTerminalScope({
+        liveColumnsOpen: false,
+        gridThread: null,
+        selectedProjectId: 'grid-project',
+        activeThread: sandboxThread,
+      }),
+    ).toEqual(expected);
+    expect(
+      resolveTerminalScope({
+        liveColumnsOpen: true,
+        gridThread: sandboxThread,
+        selectedProjectId: null,
+        activeThread: null,
+      }),
+    ).toEqual(expected);
+  });
+
+  test('a sandbox thread from another project does not route the selected project terminal', () => {
+    expect(
+      resolveTerminalScope({
+        liveColumnsOpen: false,
+        gridThread: null,
+        selectedProjectId: 'other-project',
+        activeThread: { ...regularThread, runtime: 'sandbox' as const },
+      }).sandboxThreadId,
+    ).toBeUndefined();
   });
 });
 

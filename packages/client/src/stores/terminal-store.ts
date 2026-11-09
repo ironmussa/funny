@@ -42,6 +42,9 @@ export interface TerminalTab {
   /** Scratch thread id when this tab is for a scratch (projectless) thread.
    * The runner uses this to derive the cwd as `~/.funny/scratch/<userId>/<threadId>`. */
   scratchThreadId?: string;
+  /** Sandbox thread id when this tab opens in a sandbox thread: the server
+   * routes the terminal to that thread's sandbox runner, not the local one. */
+  sandboxThreadId?: string;
 }
 
 // Buffer for pty:data that arrives before a callback is registered.
@@ -398,3 +401,8 @@ export const useTerminalStore = create<TerminalState>()(
     },
   ),
 );
+
+/** The sandbox thread a terminal tab opens in (its spawn goes to that sandbox's runner). */
+export function tabSandboxThreadId(tabId: string): string | undefined {
+  return useTerminalStore.getState().tabs.find((tab) => tab.id === tabId)?.sandboxThreadId;
+}

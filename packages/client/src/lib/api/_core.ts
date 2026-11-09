@@ -6,6 +6,7 @@ import {
   type ClientCancellation,
 } from '@funny/client-core';
 import type { DomainError } from '@funny/shared/errors';
+import { THREAD_CONTEXT_HEADER } from '@funny/shared/thread-context';
 import { ResultAsync } from 'neverthrow';
 
 import i18n from '@/i18n/config';
@@ -80,4 +81,40 @@ export function request<T>(path: string, init?: RequestInit): ResultAsync<T, Dom
     cancellation: cancellationFromSignal(init?.signal),
   });
   return ResultAsync.fromPromise(promise, (error) => error as ApiClientError as DomainError);
+}
+
+// ─── Thread context ──────────────────────────────────────────────────────────
+// The thread whose view is open. Requests about that thread's workspace (files,
+// search, skills) carry it so the server runs them where the thread runs — its
+// own sandbox, or the machine holding its checkout. Registered by
+// `lib/thread-context-source.ts`; null outside a thread.
+let threadContextSource: () => string | null = () => null;
+
+export function setThreadContextSource(source: () => string | null): void {
+  threadContextSource = source;
+}
+
+/** Headers naming the open thread, for a `fetch` made outside `request`. */
+export function threadContextHeaders(): Record<string, string> {
+  const threadId = threadContextSource();
+  return threadId ? { [THREAD_CONTEXT_HEADER]: threadId } : {};
+}
+
+/** `request` for the open thread's workspace (see `THREAD_CONTEXT_HEADER`). */
+export function requestInThread<T>(path: string, init?: RequestInit): ResultAsync<T, DomainError> {
+  const context = threadContextHeaders();
+  if (!context[THREAD_CONTEXT_HEADER]) return request<T>(path, init);
+  const headers = new Headers(init?.headers);
+  headers.set(THREAD_CONTEXT_HEADER, context[THREAD_CONTEXT_HEADER]);
+  return request<T>(path, { ...init, headers });
+}
+
+/**
+ * A URL the browser loads by itself (`<img src>`, iframes), which cannot carry
+ * the header: the open thread goes in `?threadId=` instead.
+ */
+export function urlInThread(url: string): string {
+  const threadId = threadContextSource();
+  if (!threadId) return url;
+  return `${url}${url.includes('?') ? '&' : '?'}threadId=${encodeURIComponent(threadId)}`;
 }

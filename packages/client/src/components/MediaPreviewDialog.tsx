@@ -13,7 +13,7 @@ import {
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useBoxZoomPan } from '@/hooks/use-box-zoom-pan';
 import { detectMediaKind } from '@/lib/media-preview';
-import { isExternalUrl } from '@/lib/raw-file-src';
+import { isExternalUrl, toRawFileSrc } from '@/lib/raw-file-src';
 import { cn } from '@/lib/utils';
 
 interface MediaPreviewDialogProps {
@@ -35,9 +35,7 @@ export function MediaPreviewDialog({ open, onOpenChange, filePath }: MediaPrevie
     if (!filePath) return null;
     // An external web/data URL loads directly; a local path streams through the
     // runner's raw-file endpoint.
-    return isExternalUrl(filePath)
-      ? filePath
-      : `/api/files/raw?path=${encodeURIComponent(filePath)}`;
+    return isExternalUrl(filePath) ? filePath : toRawFileSrc(filePath);
   }, [filePath]);
 
   const kind = useMemo(() => detectMediaKind(fileName), [fileName]);

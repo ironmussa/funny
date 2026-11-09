@@ -299,7 +299,7 @@ function toggleTerminal(e: KeyboardEvent, ctx: ShortcutContext): void {
   e.preventDefault();
   log.info('shortcut.terminal_toggle');
   const store = useTerminalStore.getState();
-  const { scopeId, scratchThreadId, worktreePath } = getTerminalScope();
+  const { scopeId, scratchThreadId, sandboxThreadId, worktreePath } = getTerminalScope();
   if (!scopeId) return;
   const scopeTabs = store.tabs.filter((t) => t.projectId === scopeId);
   const isVisible = store.panelVisibleByProject[scopeId] ?? false;
@@ -312,6 +312,7 @@ function toggleTerminal(e: KeyboardEvent, ctx: ShortcutContext): void {
       projectId: scopeId,
       type: ctx.isTauri ? undefined : 'pty',
       scratchThreadId: scratchThreadId ?? undefined,
+      sandboxThreadId,
     });
     return;
   }

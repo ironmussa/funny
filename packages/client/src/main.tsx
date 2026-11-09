@@ -34,6 +34,7 @@ import { TooltipProvider } from './components/ui/tooltip';
 import { loadProfile } from './data/profile/queries';
 import { resolveClientLogLevel } from './lib/client-logger';
 import { bindDataLayerToSession } from './lib/data-layer-session';
+import './lib/thread-context-source';
 import { otlpEnabled, otlpEndpoint } from './lib/otlp-config';
 import { useAuthStore } from './stores/auth-store';
 import { useProjectStore } from './stores/project-store';

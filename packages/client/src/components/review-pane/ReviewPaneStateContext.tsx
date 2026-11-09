@@ -49,6 +49,9 @@ type ReviewPaneContextValue = ReturnType<typeof useReviewState> & {
    * affordances so a steer sharee sees a clean read-only diff view.
    */
   viewerReadOnly: boolean;
+  /** False for a sandbox thread: its files are not on this machine, so no
+   *  external editor / file manager (`canOpenOnHost`). */
+  openOnHost: boolean;
 };
 
 const ReviewPaneContext = createContext<ReviewPaneContextValue | null>(null);
@@ -101,6 +104,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
     // owner) or while auth loads, this is false, so the owner never loses
     // write controls.
     viewerReadOnly,
+    openOnHost,
     expanded,
   } = useReviewPaneModel();
 
@@ -128,6 +132,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       confirmDialog,
       setConfirmDialog,
       viewerReadOnly,
+      openOnHost,
     }),
     [
       review,
@@ -152,6 +157,7 @@ export function ReviewPaneStateProvider({ children }: { children: ReactNode }) {
       confirmDialog,
       setConfirmDialog,
       viewerReadOnly,
+      openOnHost,
     ],
   );
 

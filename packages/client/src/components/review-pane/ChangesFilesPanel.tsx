@@ -93,6 +93,8 @@ interface ChangesFilesPanelProps {
    *  actions (stage/unstage/revert/discard/ignore) are owner-only, so they're
    *  hidden. Read-only items (open, copy path) stay. */
   readOnly?: boolean;
+  /** False for a sandbox thread: no external editor / file manager. Default true. */
+  openOnHost?: boolean;
 }
 
 type FileListProps = ChangesFilesPanelProps & {
@@ -271,6 +273,7 @@ function VirtualizedRows({
   fileSearch,
   basePath,
   readOnly,
+  openOnHost = true,
   toggleFolder,
   handleOpenDirectory,
   handleDiscardFolder,
@@ -289,6 +292,7 @@ function VirtualizedRows({
     fileSearch,
     basePath,
     readOnly,
+    openOnHost,
     handleIgnore,
     handleOpenDirectory,
     onMenuClosed,
@@ -334,6 +338,7 @@ function VirtualizedRows({
                 fileSearch={fileSearch}
                 basePath={basePath}
                 readOnly={readOnly}
+                openOnHost={openOnHost}
                 toggleFolder={toggleFolder}
                 handleOpenDirectory={handleOpenDirectory}
                 handleDiscardFolder={handleDiscardFolder}

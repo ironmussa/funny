@@ -8,6 +8,10 @@
  * marks the thread `pending` (as a ready worktree does) and sends the first
  * message there, which starts the agent. A failure marks the
  * thread `failed` and the prompt stays on the thread as its initial prompt.
+ *
+ * A thread whose sandbox failed before its agent ever started can be retried:
+ * the user's next message provisions a new sandbox for the same thread and
+ * starts the agent with the initial prompt plus that message.
  */
 
 import { err, ok, type Result, type ResultAsync } from 'neverthrow';
@@ -48,6 +52,17 @@ const createSandboxThreadSchema = z
   // plus the message extras forwarded below.
   .passthrough();
 
+/** A follow-up written on a failed sandbox thread; it retries the sandbox. */
+export const retrySandboxThreadSchema = z
+  .object({
+    content: z.string().min(1).max(500_000),
+    provider: createSandboxThreadSchema.shape.provider,
+    model: z.string().min(1).max(128).optional(),
+    permissionMode: z.string().min(1).max(64).optional(),
+    effort: z.string().min(1).max(32).optional(),
+  })
+  .passthrough();
+
 /** Message fields forwarded verbatim; the runner validates them. */
 const FORWARDED_MESSAGE_FIELDS = [
   'images',
@@ -81,6 +96,15 @@ export interface NewSandboxThreadRow {
   updatedAt: string;
 }
 
+/** What a retry needs to know about the thread. */
+export interface RetryableSandboxThread {
+  projectId: string;
+  runtime?: string | null;
+  status: string;
+  sessionId?: string | null;
+  initialPrompt?: string | null;
+}
+
 export interface SandboxThreadDeps {
   findOwnedProject(userId: string, projectId: string): Promise<{ path: string } | null>;
   /** The caller's sandbox for the project (project-sandboxes), or null when none. */
@@ -91,6 +115,14 @@ export interface SandboxThreadDeps {
   prepare(req: SandboxLaunchRequest): Promise<Result<PreparedSandboxLaunch, SandboxLaunchRefusal>>;
   insertThread(row: NewSandboxThreadRow): Promise<void>;
   loadThread(threadId: string): Promise<unknown>;
+  /** The caller's own thread, or null (another user's thread is not found). */
+  findOwnedThread(userId: string, threadId: string): Promise<RetryableSandboxThread | null>;
+  /** The machine the thread's last sandbox used, so a retry provisions the same. */
+  previousSandbox(
+    threadId: string,
+  ): Promise<{ connectionId: string; sizeId: string | null; repoUrl: string | null } | null>;
+  /** A retry started: `failed` → `setting_up`. */
+  markSettingUp(threadId: string): Promise<void>;
   /** The sandbox is ready: `setting_up` → `pending`, so the agent can start. */
   markReady(threadId: string): Promise<void>;
   /** Mark the thread failed and post the failure as a card in it. */
@@ -154,6 +186,39 @@ function firstMessageBody(input: SandboxThreadInput, payload: unknown): Record<s
   return body;
 }
 
+/** The retried first message: the never-answered initial prompt, then what the user wrote. */
+function retryMessageBody(
+  thread: RetryableSandboxThread,
+  input: z.infer<typeof retrySandboxThreadSchema>,
+): Record<string, unknown> {
+  const initial = thread.initialPrompt?.trim();
+  const written = input.content.trim();
+  const content =
+    !initial || initial === written ? input.content : `${initial}\n\n${input.content}`;
+  return { ...input, content };
+}
+
+/**
+ * Only a sandbox that failed before its agent started can be retried: once
+ * there is a session, follow-ups go to the sandbox runner (woken on demand).
+ */
+function checkRetryable(
+  thread: RetryableSandboxThread | null,
+): Result<RetryableSandboxThread, SandboxThreadFailure> {
+  if (!thread) return err({ status: 404, code: 'not-found', message: 'Thread not found' });
+  if (thread.runtime !== 'sandbox' || thread.status !== 'failed' || thread.sessionId) {
+    return err({
+      status: 409,
+      code: 'sandbox-not-retryable',
+      message: 'Only a sandbox thread whose setup failed can be retried.',
+    });
+  }
+  return ok(thread);
+}
+
+/** Threads with a retry being prepared, so a double submit starts one sandbox. */
+const retriesInFlight = new Set<string>();
+
 export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
   const now = deps.now ?? (() => new Date().toISOString());
 
@@ -215,7 +280,113 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     });
   }
 
+  function startInBackground(
+    userId: string,
+    threadId: string,
+    launch: PreparedSandboxLaunch,
+    body: Record<string, unknown>,
+  ): Promise<void> {
+    return runInBackground(userId, threadId, launch, body).catch((error) => {
+      log.error('Sandbox thread launch crashed', {
+        namespace: 'thread-sandboxes',
+        threadId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    });
+  }
+
+  /** The machine a retry provisions: the thread's last one, else the project's sandbox. */
+  async function retryMachine(
+    userId: string,
+    threadId: string,
+    projectId: string,
+  ): Promise<
+    Result<{ connectionId: string; sizeId?: string; repoUrl?: string }, SandboxThreadFailure>
+  > {
+    const previous = await deps.previousSandbox(threadId);
+    if (previous) {
+      return ok({
+        connectionId: previous.connectionId,
+        sizeId: previous.sizeId ?? undefined,
+        repoUrl: previous.repoUrl ?? undefined,
+      });
+    }
+    const configured = await deps.projectSandbox(userId, projectId);
+    if (configured) return ok(configured);
+    return err({
+      status: 409,
+      code: 'project-sandbox-not-configured',
+      message: 'This project has no sandbox configured. Choose one in the project settings.',
+    });
+  }
+
+  async function prepareRetry(
+    userId: string,
+    threadId: string,
+    payload: unknown,
+  ): Promise<Result<{ thread: unknown; started: Promise<void> }, SandboxThreadFailure>> {
+    const parsed = retrySandboxThreadSchema.safeParse(payload);
+    if (!parsed.success) {
+      return err({
+        status: 400,
+        code: 'invalid',
+        message: parsed.error.issues[0]?.message ?? 'Invalid message',
+      });
+    }
+    const retryable = checkRetryable(await deps.findOwnedThread(userId, threadId));
+    if (retryable.isErr()) return err(retryable.error);
+    const thread = retryable.value;
+    const project = await deps.findOwnedProject(userId, thread.projectId);
+    if (!project) return err({ status: 404, code: 'not-found', message: 'Project not found' });
+    const machine = await retryMachine(userId, threadId, thread.projectId);
+    if (machine.isErr()) return err(machine.error);
+
+    const launch = await deps.prepare({
+      userId,
+      threadId,
+      projectId: thread.projectId,
+      projectPath: project.path,
+      ...machine.value,
+    });
+    if (launch.isErr()) return err({ status: 409, ...launch.error });
+
+    await deps.markSettingUp(threadId);
+    metric('thread_sandboxes.threads_retried', 1);
+    const started = startInBackground(
+      userId,
+      threadId,
+      launch.value,
+      retryMessageBody(thread, parsed.data),
+    );
+    return ok({ thread: await deps.loadThread(threadId), started });
+  }
+
   return {
+    /**
+     * Provision a new sandbox for a thread whose setup failed and start its
+     * agent with the initial prompt plus the message the user just wrote.
+     * `started` settles like {@link create}'s.
+     */
+    async retry(
+      userId: string,
+      threadId: string,
+      payload: unknown,
+    ): Promise<Result<{ thread: unknown; started: Promise<void> }, SandboxThreadFailure>> {
+      if (retriesInFlight.has(threadId)) {
+        return err({
+          status: 409,
+          code: 'sandbox-retry-in-progress',
+          message: 'This sandbox is already being retried.',
+        });
+      }
+      retriesInFlight.add(threadId);
+      try {
+        return await prepareRetry(userId, threadId, payload);
+      } finally {
+        retriesInFlight.delete(threadId);
+      }
+    },
+
     /**
      * Validate, create the thread and start its sandbox. `started` settles when
      * the agent was started (or the thread was marked failed); callers do not
@@ -248,13 +419,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
       await deps.insertThread(newSandboxThreadRow(threadId, userId, input, now()));
       const body = firstMessageBody(input, payload);
 
-      const started = runInBackground(userId, threadId, launch.value, body).catch((error) => {
-        log.error('Sandbox thread launch crashed', {
-          namespace: 'thread-sandboxes',
-          threadId,
-          error: error instanceof Error ? error.message : String(error),
-        });
-      });
+      const started = startInBackground(userId, threadId, launch.value, body);
       return ok({ thread: await deps.loadThread(threadId), started });
     },
   };

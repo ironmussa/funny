@@ -1,7 +1,7 @@
 import type { GitStatusInfo } from '@funny/shared';
 
 import { gitApi } from '@/lib/api/git';
-import { isScratch } from '@/lib/thread-variant';
+import { isScratch, runsInSandbox, sandboxSetupFailed } from '@/lib/thread-variant';
 
 import type { DataLayer } from '../data-layer';
 import { unwrapResult } from '../query-client';
@@ -35,6 +35,7 @@ type Thread = {
   branch?: string | null;
   worktreePath?: string | null;
   baseBranch?: string | null;
+  runtime?: string | null;
 };
 
 const projectKey = (projectId: string) => ['git-status', 'project', projectId] as const;
@@ -107,8 +108,10 @@ export function fetchForThread(
   force = false,
   layer: DataLayer = getDataLayer(),
 ): Promise<void> {
-  // Scratch threads have no git working tree (the runner rejects with 400).
-  if (isScratch(readThreadRow(threadId, layer))) return Promise.resolve();
+  // Scratch threads have no git working tree (the runner rejects with 400),
+  // and a sandbox whose setup failed has no runner to answer.
+  const thread = readThreadRow(threadId, layer);
+  if (isScratch(thread) || sandboxSetupFailed(thread)) return Promise.resolve();
   const data = getGitStatusData(layer);
   const key = resolveBranchKey(threadId, layer) ?? `pending:${threadId}`;
   return request(layer, threadKey(key), force, async (signal, seq) => {
@@ -160,6 +163,9 @@ export function ensureStatusForThreads(
   const projects = new Set<string>();
   for (const thread of threads) {
     if (isScratch(thread as { isScratch?: boolean }) || !thread.projectId) continue;
+    // A project's bulk status never covers a sandbox thread (its checkout is
+    // on its own runner); asking per thread would wake a stopped sandbox.
+    if (runsInSandbox(thread)) continue;
     if (!statuses.getSynced(branchKey(thread))) projects.add(thread.projectId);
   }
   for (const projectId of projects) void fetchForProject(projectId, false, layer);

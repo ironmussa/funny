@@ -54,7 +54,7 @@ const resolve = (path: string, query: Record<string, string> = {}) =>
 beforeEach(async () => {
   presence = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
   __resetRunnerScopeCache();
-  for (const t of ['t-box', 't-other', 't-scratch']) uncacheThread(t);
+  for (const t of ['t-box', 't-other', 't-scratch', 't-failed-box']) uncacheThread(t);
   await bindTestDb();
   seedProject(testDb.db, { id: 'px', userId: 'alice', path: '/home/alice/x' });
   seedThread(testDb.db, { id: 't-box', projectId: 'px', userId: 'alice' });
@@ -107,6 +107,28 @@ describe('routing', () => {
     expect(await explainUnresolved('/api/threads/t-box/message', {}, 'alice')).toBe(
       'thread-sandbox-unavailable',
     );
+  });
+
+  test('a sandbox thread whose runner never registered never falls back to the general runner', async () => {
+    // Its setup failed before the sandbox runner connected: the project's
+    // runner holds a different checkout (the user's own working tree).
+    runner('r-general');
+    seedThread(testDb.db, {
+      id: 't-failed-box',
+      projectId: 'px',
+      userId: 'alice',
+      runtime: 'sandbox',
+      status: 'failed',
+    });
+    for (const path of [
+      '/api/threads/t-failed-box/message',
+      '/api/git/t-failed-box/status',
+      '/api/git/t-failed-box/diff/summary',
+    ]) {
+      expect(await resolve(path)).toBeNull();
+      expect(await resolve(path, { projectId: 'px' })).toBeNull();
+      expect(await explainUnresolved(path, {}, 'alice')).toBe('thread-sandbox-unavailable');
+    }
   });
 
   test('other threads, project routes and projectless work never reach the sandbox', async () => {

@@ -250,6 +250,26 @@ describe('git status data', () => {
 
       expect(mockApi.getGitStatus).not.toHaveBeenCalled();
     });
+
+    test('skips fetch for a sandbox thread whose setup failed (it has no runner)', async () => {
+      useThreadStore.setState(
+        withThreadIndex({
+          threadsById: {
+            box1: {
+              id: 'box1',
+              projectId: 'p1',
+              runtime: 'sandbox',
+              status: 'failed',
+              sessionId: null,
+            } as any,
+          },
+        } as any),
+      );
+
+      await fetchForThread('box1');
+
+      expect(mockApi.getGitStatus).not.toHaveBeenCalled();
+    });
   });
 
   // ── 4. updateFromWS ──────────────────────────────────────
@@ -577,6 +597,20 @@ describe('git status data', () => {
 
   // ── 8. ensureStatusForThreads ─────────────────────────────
   describe('ensureStatusForThreads', () => {
+    test('never covers a sandbox thread with its project bulk status', () => {
+      // The project runner's checkout is not the sandbox's: its bulk status
+      // must not be shown for the sandbox thread.
+      ensureStatusForThreads([{ id: 'box1', projectId: 'p1', mode: 'local', runtime: 'sandbox' }]);
+      expect(mockApi.getGitStatuses).not.toHaveBeenCalled();
+    });
+
+    test('a sandbox thread has its own status key, not the project one', () => {
+      expect(branchKey({ id: 'box1', projectId: 'p1', mode: 'local', runtime: 'sandbox' })).toBe(
+        'sb:box1',
+      );
+      expect(branchKey({ id: 't1', projectId: 'p1', mode: 'local' })).toBe('p1');
+    });
+
     test('issues one bulk per-project fetch when a branchKey is missing', async () => {
       // Worktree threads each get a unique branchKey, so per-thread fan-out
       // would flood the data channel. ensureStatusForThreads collapses to a

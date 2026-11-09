@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { D4CAnimation } from '@/components/D4CAnimation';
 import type { GitProgressStep } from '@/components/GitProgressModal';
 import { PromptInput } from '@/components/PromptInput';
+import type { SubmitFn } from '@/hooks/prompt-input-types';
 import { cn } from '@/lib/utils';
 
 import { UserMessageCard, type UserMessageCardProps } from './UserMessageCard';
@@ -26,11 +27,20 @@ export function ThreadPreparationView({
   projectId,
   metadata,
   steps = [],
+  onRetry,
+  retrying = false,
 }: {
   prompt?: string;
   projectId?: string;
   metadata?: PreparationMessageMetadata;
   steps?: GitProgressStep[];
+  /**
+   * Set when the preparation failed and can be retried: the prompt dock is
+   * enabled and submitting it retries (e.g. a sandbox whose setup failed).
+   */
+  onRetry?: SubmitFn;
+  /** True while the retry request is in flight. */
+  retrying?: boolean;
 }) {
   const { t } = useTranslation();
   // A failed step wins: it is what the user must see (with its error), not the
@@ -85,12 +95,16 @@ export function ThreadPreparationView({
 
         <div className="grow" aria-hidden="true" />
 
-        <fieldset disabled className="bg-background sticky bottom-0 z-30 min-w-0">
+        <fieldset disabled={!onRetry} className="bg-background sticky bottom-0 z-30 min-w-0">
           <PromptInput
-            onSubmit={ignoreSubmit}
-            loading
+            onSubmit={onRetry ?? ignoreSubmit}
+            loading={!onRetry || retrying}
             projectId={projectId}
-            placeholder={t('thread.nextPrompt')}
+            placeholder={
+              onRetry
+                ? t('thread.retrySandboxPrompt', 'Write a message to retry the sandbox…')
+                : t('thread.nextPrompt')
+            }
           />
         </fieldset>
       </div>

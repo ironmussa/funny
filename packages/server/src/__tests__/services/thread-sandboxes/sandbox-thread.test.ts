@@ -7,6 +7,7 @@ import type { SandboxLaunchRequest } from '../../../services/thread-sandboxes/sa
 import {
   createSandboxThreadLauncher,
   type NewSandboxThreadRow,
+  type RetryableSandboxThread,
 } from '../../../services/thread-sandboxes/sandbox-thread.js';
 import type { ProvisionError } from '../../../services/thread-sandboxes/thread-sandbox-service.js';
 import type { ThreadSandboxRow } from '../../../services/thread-sandboxes/thread-sandbox-store.js';
@@ -20,6 +21,12 @@ function setup(
     provisionError?: ProvisionError;
     messageFails?: boolean;
     projectSandbox?: { connectionId: string; sizeId: string } | null;
+    thread?: RetryableSandboxThread | null;
+    previousSandbox?: {
+      connectionId: string;
+      sizeId: string | null;
+      repoUrl: string | null;
+    } | null;
   } = {},
 ) {
   const inserted: NewSandboxThreadRow[] = [];
@@ -48,6 +55,12 @@ function setup(
       inserted.push(row);
     },
     loadThread: async (id) => ({ id, status: 'setting_up' }),
+    findOwnedThread: async (userId, threadId) =>
+      userId === 'alice' && threadId === 't-failed' ? (opts.thread ?? null) : null,
+    previousSandbox: async () => opts.previousSandbox ?? null,
+    markSettingUp: async (id) => {
+      events.push(`setting_up:${id}`);
+    },
     markReady: async (id) => {
       events.push(`ready:${id}`);
     },
@@ -226,5 +239,119 @@ describe('sandbox thread creation', () => {
         { phase: 'start', message: 'The agent could not be started: message failed (500)' },
       ],
     ]);
+  });
+});
+
+describe('retrying a sandbox thread whose setup failed', () => {
+  const failedThread: RetryableSandboxThread = {
+    projectId: 'p1',
+    runtime: 'sandbox',
+    status: 'failed',
+    sessionId: null,
+    initialPrompt: 'Fix the login bug',
+  };
+  const lastMachine = {
+    connectionId: 'conn-1',
+    sizeId: 'large',
+    repoUrl: 'https://github.com/acme/app.git',
+  };
+
+  test('provisions the same machine again and sends the initial prompt plus the new message', async () => {
+    const { launcher, prepared, messages, failed, events } = setup({
+      thread: failedThread,
+      previousSandbox: lastMachine,
+    });
+    const result = await launcher.retry('alice', 't-failed', {
+      content: 'try again please',
+      model: 'opus',
+    });
+    expectOkCreate(result);
+    await result._unsafeUnwrap().started;
+
+    expect(prepared).toEqual([
+      {
+        userId: 'alice',
+        threadId: 't-failed',
+        projectId: 'p1',
+        projectPath: '/home/alice/app',
+        connectionId: 'conn-1',
+        sizeId: 'large',
+        repoUrl: 'https://github.com/acme/app.git',
+      },
+    ]);
+    expect(messages[0].body).toEqual({
+      content: 'Fix the login bug\n\ntry again please',
+      model: 'opus',
+    });
+    expect(failed).toEqual([]);
+    expect(events).toEqual(['setting_up:t-failed', 'ready:t-failed', 'message:t-failed']);
+  });
+
+  test('re-sending the initial prompt does not duplicate it', async () => {
+    const { launcher, messages } = setup({ thread: failedThread, previousSandbox: lastMachine });
+    await (
+      await launcher.retry('alice', 't-failed', { content: 'Fix the login bug' })
+    )._unsafeUnwrap().started;
+    expect(messages[0].body.content).toBe('Fix the login bug');
+  });
+
+  test('without a previous sandbox row it uses the project sandbox', async () => {
+    const { launcher, prepared } = setup({
+      thread: failedThread,
+      projectSandbox: { connectionId: 'conn-instabox', sizeId: 'small' },
+    });
+    expectOkCreate(await launcher.retry('alice', 't-failed', { content: 'go' }));
+    expect(prepared[0]).toMatchObject({ connectionId: 'conn-instabox', sizeId: 'small' });
+  });
+
+  test('a failed retry marks the thread failed again', async () => {
+    const { launcher, failed } = setup({
+      thread: failedThread,
+      previousSandbox: lastMachine,
+      provisionError: { kind: 'sandbox', message: 'exec timed out', cause: 'unavailable' },
+    });
+    await (await launcher.retry('alice', 't-failed', { content: 'go' }))._unsafeUnwrap().started;
+    expect(failed[0]?.[0]).toBe('t-failed');
+  });
+
+  test('refuses threads that are not a failed, never-started sandbox', async () => {
+    for (const thread of [
+      { ...failedThread, status: 'completed' },
+      { ...failedThread, sessionId: 'sess-1' },
+      { ...failedThread, runtime: 'local' },
+    ]) {
+      const { launcher, prepared, events } = setup({ thread, previousSandbox: lastMachine });
+      const result = await launcher.retry('alice', 't-failed', { content: 'go' });
+      expect(result._unsafeUnwrapErr()).toMatchObject({
+        status: 409,
+        code: 'sandbox-not-retryable',
+      });
+      expect(prepared).toEqual([]);
+      expect(events).toEqual([]);
+    }
+  });
+
+  test("another user's thread is not found", async () => {
+    const { launcher, prepared } = setup({ thread: failedThread, previousSandbox: lastMachine });
+    const result = await launcher.retry('mallory', 't-failed', { content: 'go' });
+    expect(result._unsafeUnwrapErr().status).toBe(404);
+    expect(prepared).toEqual([]);
+  });
+
+  test('a refused launch leaves the thread failed', async () => {
+    const { launcher, events } = setup({
+      thread: failedThread,
+      previousSandbox: lastMachine,
+      refusal: { code: 'repo-url-unknown', message: 'no repo' },
+    });
+    const result = await launcher.retry('alice', 't-failed', { content: 'go' });
+    expect(result._unsafeUnwrapErr()).toMatchObject({ status: 409, code: 'repo-url-unknown' });
+    expect(events).toEqual([]);
+  });
+
+  test('an empty message is rejected', async () => {
+    const { launcher } = setup({ thread: failedThread, previousSandbox: lastMachine });
+    const result = await launcher.retry('alice', 't-failed', { content: '' });
+    expect(result._unsafeUnwrapErr()).toMatchObject({ status: 400, code: 'invalid' });
   });
 });

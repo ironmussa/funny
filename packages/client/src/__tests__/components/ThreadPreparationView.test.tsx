@@ -11,7 +11,15 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 vi.mock('@/components/PromptInput', () => ({
-  PromptInput: () => <button type="button">Send follow-up</button>,
+  PromptInput: (props: { loading?: boolean; onSubmit: (prompt: string, opts: object) => void }) => (
+    <button
+      type="button"
+      data-loading={String(Boolean(props.loading))}
+      onClick={() => props.onSubmit('try again', {})}
+    >
+      Send follow-up
+    </button>
+  ),
 }));
 
 describe('ThreadPreparationView', () => {
@@ -59,5 +67,29 @@ describe('ThreadPreparationView', () => {
     expect(status).toHaveTextContent('Trial accounts can run 2 concurrent sandboxes.');
     expect(status).not.toHaveTextContent('Starting agent');
     expect(screen.getByTestId('thread-preparation-failed')).toBeInTheDocument();
+  });
+
+  test('a retryable failure enables the prompt dock and submits through onRetry', () => {
+    const onRetry = vi.fn(async () => true);
+    renderWithProviders(
+      <ThreadPreparationView
+        prompt="Fix the bug"
+        steps={[{ id: 'machine', label: 'Creating sandbox', status: 'failed', error: 'timed out' }]}
+        onRetry={onRetry}
+      />,
+    );
+    const send = screen.getByRole('button', { name: 'Send follow-up' });
+    expect(send).not.toBeDisabled();
+    expect(send).toHaveAttribute('data-loading', 'false');
+    send.click();
+    expect(onRetry).toHaveBeenCalledWith('try again', {});
+  });
+
+  test('the prompt dock shows loading while the retry is in flight', () => {
+    renderWithProviders(<ThreadPreparationView prompt="Fix the bug" onRetry={vi.fn()} retrying />);
+    expect(screen.getByRole('button', { name: 'Send follow-up' })).toHaveAttribute(
+      'data-loading',
+      'true',
+    );
   });
 });

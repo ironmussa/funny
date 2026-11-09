@@ -48,7 +48,7 @@ import { ProjectSandboxSetting } from '@/components/general-settings-project/Pro
 
 beforeEach(() => {
   vi.clearAllMocks();
-  mocks.connections = [{ id: 'c1', provider: 'instabox', label: 'InstaBox' }];
+  mocks.connections = [{ id: 'c1', provider: 'instabox', label: 'funny-laptop' }];
   mocks.settings = null;
   mocks.save.mockReturnValue(okAsync(null));
   mocks.clear.mockReturnValue(okAsync(null));
@@ -82,7 +82,10 @@ describe('ProjectSandboxSetting', () => {
       enabledByDefault: true,
     };
     render(<ProjectSandboxSetting projectId="p1" ownerId="alice" />);
-    expect(screen.getByTestId('settings-project-sandbox-connection')).toHaveTextContent('InstaBox');
+    // The connection name and its provider, so two same-named connections differ.
+    expect(screen.getByTestId('settings-project-sandbox-connection')).toHaveTextContent(
+      'funny-laptop · InstaBox',
+    );
     expect(screen.getByTestId('settings-project-sandbox-size')).toHaveTextContent('large');
 
     fireEvent.click(screen.getByTestId('settings-project-sandbox-default'));

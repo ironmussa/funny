@@ -68,6 +68,8 @@ function ProjectSandboxRows({ projectId }: { projectId: string }) {
 
   const connection = connections.find((c) => c.id === settings?.connectionId);
   const sizes = providers.find((p) => p.id === connection?.provider)?.capabilities.sizes ?? [];
+  // Two connections can share a name: the provider tells them apart.
+  const providerName = (id: string) => providers.find((p) => p.id === id)?.displayName ?? id;
 
   const onConnectionChange = (value: string) => {
     if (value === NO_SANDBOX) {
@@ -104,7 +106,8 @@ function ProjectSandboxRows({ projectId }: { projectId: string }) {
                 value={c.id}
                 data-testid={`settings-project-sandbox-connection-${c.id}`}
               >
-                {c.label}
+                <span>{c.label}</span>
+                <span className="text-muted-foreground">{` · ${providerName(c.provider)}`}</span>
               </SelectItem>
             ))}
           </SelectContent>

@@ -1,4 +1,4 @@
-import { request } from './_core';
+import { request, requestInThread } from './_core';
 
 export type RankedFileSearchTarget = { path: string } | { threadId: string };
 
@@ -51,7 +51,7 @@ export const browseApi = {
     const params = new URLSearchParams({ path });
     if (query) params.set('query', query);
     if (limit) params.set('limit', String(limit));
-    return request<{
+    return requestInThread<{
       files: Array<{ path: string; type: 'file' | 'folder' } | string>;
       truncated: boolean;
     }>(`/browse/files?${params.toString()}`);
@@ -69,10 +69,12 @@ export const browseApi = {
       params.set('path', target.path);
     }
     if (limit) params.set('limit', String(limit));
-    return request<RankedFileSearchResponse>(`/search/files?${params.toString()}`, { signal });
+    return requestInThread<RankedFileSearchResponse>(`/search/files?${params.toString()}`, {
+      signal,
+    });
   },
   trackFileSelection: (target: RankedFileSearchTarget, query: string, relativePath: string) =>
-    request<{ ok: boolean }>('/search/files/selection', {
+    requestInThread<{ ok: boolean }>('/search/files/selection', {
       method: 'POST',
       body: JSON.stringify({ ...target, query, relativePath }),
     }),
@@ -80,7 +82,7 @@ export const browseApi = {
     const params = new URLSearchParams({ path });
     if (query) params.set('query', query);
     if (file) params.set('file', file);
-    return request<{
+    return requestInThread<{
       symbols: Array<{
         name: string;
         kind: string;
@@ -94,7 +96,7 @@ export const browseApi = {
     }>(`/browse/symbols?${params.toString()}`);
   },
   triggerSymbolIndex: (path: string) =>
-    request<{ ok: boolean }>('/browse/symbols/index', {
+    requestInThread<{ ok: boolean }>('/browse/symbols/index', {
       method: 'POST',
       body: JSON.stringify({ path }),
     }),
@@ -124,7 +126,7 @@ export const browseApi = {
     if (params.include) qs.set('include', params.include);
     if (params.exclude) qs.set('exclude', params.exclude);
     if (params.maxResults) qs.set('maxResults', String(params.maxResults));
-    return request<{
+    return requestInThread<{
       files: Array<{
         path: string;
         matches: Array<{

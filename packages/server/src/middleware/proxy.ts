@@ -30,6 +30,7 @@ import { audit } from '../lib/audit.js';
 import { log } from '../lib/logger.js';
 import { renderMcpOAuthCallbackPage } from '../lib/mcp-oauth-callback-page.js';
 import { neutralizeRunnerContent } from '../lib/runner-content-policy.js';
+import { threadContextQuery } from '../lib/thread-context.js';
 import type { ServerEnv } from '../lib/types.js';
 import {
   authorizedRunnerRequests,
@@ -133,6 +134,16 @@ function buildForwardedHeaders(c: Context<ServerEnv>, url: URL): Record<string, 
     forwardedHeaders['range'] = rangeHeader;
   }
   return forwardedHeaders;
+}
+
+/**
+ * The query the runner is resolved from. The client's thread context header
+ * names the thread a request is made for, so it runs where that thread runs
+ * (`extractThreadId`). It only steers routing: the runner still sees the
+ * original path and query.
+ */
+function routingQuery(c: Context<ServerEnv>, url: URL): Record<string, string> {
+  return { ...threadContextQuery(c), ...Object.fromEntries(url.searchParams.entries()) };
 }
 
 /** Read body for non-GET/HEAD requests. */
@@ -300,7 +311,7 @@ async function retryAfterSandboxWake(
   sent: ProxySendResult,
 ): Promise<ProxySendResult> {
   const waker = deps.sandboxWaker === undefined ? sandboxWaker() : deps.sandboxWaker;
-  const sandboxThreadId = extractThreadId(ctx.path);
+  const sandboxThreadId = extractThreadId(ctx.path, ctx.query);
   if (
     sent.isErr() &&
     sent.error.reason === 'thread-sandbox-unavailable' &&
@@ -334,7 +345,7 @@ async function proxyToRunnerImpl(c: Context<ServerEnv>, deps: ProxyTransport): P
   }
 
   const { access, presence, sink } = resolveTransport(c, deps);
-  const query = Object.fromEntries(url.searchParams.entries());
+  const query = routingQuery(c, url);
   const request: UnsignedRunnerRequest = {
     method: c.req.method,
     path: `${path}${url.search}`,

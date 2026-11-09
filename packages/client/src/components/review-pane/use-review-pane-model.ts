@@ -10,7 +10,7 @@ import { usePRDetail } from '@/data/pull-requests/hooks';
 import { useReviewState } from '@/hooks/use-review-state';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useThreadById } from '@/lib/thread-selectors';
-import { canLoadGitHistory } from '@/lib/thread-variant';
+import { canLoadGitHistory, canOpenOnHost, hasOwnCheckout } from '@/lib/thread-variant';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import {
@@ -138,11 +138,11 @@ function useViewerReadOnly(): boolean {
 function useReviewBranches(targetProjectId: string | null | undefined) {
   const isWorktree = useThreadSelector((t) => t?.mode === 'worktree');
   const baseBranch = useThreadSelector((t) => t?.baseBranch);
-  // Worktree threads track their own branch; local threads share the project's
-  // working directory, so their "current branch" is the project's branch.
+  // Worktree and sandbox threads track their own branch; local threads share
+  // the project's working directory, so their "current branch" is the project's.
   const threadBranch = useThreadSelector((t) => {
     if (!t) return undefined;
-    if (t.mode !== 'worktree') return undefined;
+    if (!hasOwnCheckout(t)) return undefined;
     return resolveThreadBranch(t);
   });
   const projectBranch = useProjectCurrentBranch(targetProjectId);
@@ -175,6 +175,7 @@ function deriveGitStatusFields(
 function useReviewPaneTarget() {
   const target = useReviewGitTarget();
   const viewerReadOnly = useViewerReadOnly();
+  const openOnHost = useThreadSelector((t) => canOpenOnHost(t));
   const branches = useReviewBranches(target.targetProjectId);
   const isAgentRunning = useThreadStatus() === 'running';
   const gitStatus = useReviewGitStatus(target.effectiveThreadId, target.projectModeId);
@@ -188,6 +189,7 @@ function useReviewPaneTarget() {
     ...branches,
     ...statusFields,
     viewerReadOnly,
+    openOnHost,
     isAgentRunning,
     gitStatus,
     prThreads,

@@ -58,7 +58,6 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useProjects } from '@/data/projects/hooks';
 import { showAgentNotification } from '@/hooks/use-notifications';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
@@ -67,6 +66,7 @@ import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
 import { jobsApi } from '@/lib/api/jobs';
 import { markMemoryPhase } from '@/lib/memory-phase';
+import { openScopeTerminal } from '@/lib/open-terminal-tab';
 import { watchSocketConnection } from '@/lib/realtime/watch-socket-connection';
 import { cn } from '@/lib/utils';
 import {
@@ -77,12 +77,7 @@ import {
 import { useProjectStore } from '@/stores/project-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { type TerminalShell, useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
-import {
-  SCRATCH_TERMINAL_SCOPE_ID,
-  useTerminalStore,
-  type TerminalTab,
-} from '@/stores/terminal-store';
-import { useThreadWorktreePath } from '@/stores/thread-context';
+import { tabSandboxThreadId, useTerminalStore, type TerminalTab } from '@/stores/terminal-store';
 
 /** Tauri PTY tab — uses xterm.js (lazy-loaded) */
 export function TauriTerminalTabContent({
@@ -309,6 +304,8 @@ export function WebTerminalTabContent({
         cols,
         ...(shell !== 'default' && { shell }),
         ...(scratchThreadId && { scratchThreadId }),
+        // A sandbox thread's terminal opens on its sandbox runner.
+        sandboxThreadId: tabSandboxThreadId(id),
       });
     };
     emitRestoreRef.current = () => {
@@ -1277,7 +1274,6 @@ export function TerminalPanel() {
     activeTabId,
     panelVisibleByProject,
     sessionsChecked,
-    addTab,
     removeTab,
     reorderTabs,
     renameTab,
@@ -1289,7 +1285,6 @@ export function TerminalPanel() {
       activeTabId: s.activeTabId,
       panelVisibleByProject: s.panelVisibleByProject,
       sessionsChecked: s.sessionsChecked,
-      addTab: s.addTab,
       removeTab: s.removeTab,
       reorderTabs: s.reorderTabs,
       renameTab: s.renameTab,
@@ -1297,12 +1292,11 @@ export function TerminalPanel() {
       togglePanel: s.togglePanel,
     })),
   );
-  const projects = useProjects();
-  const { scopeId: selectedProjectId, scratchThreadId } = useTerminalScope();
+  const terminalScope = useTerminalScope();
+  const selectedProjectId = terminalScope.scopeId;
   const panelVisible = selectedProjectId
     ? (panelVisibleByProject[selectedProjectId] ?? false)
     : false;
-  const activeThreadWorktreePath = useThreadWorktreePath();
   const availableShells = useSettingsStore((s) => s.availableShells);
   const fetchAvailableShells = useSettingsStore((s) => s.fetchAvailableShells);
 
@@ -1346,43 +1340,10 @@ export function TerminalPanel() {
 
   const handleNewTerminal = useCallback(
     (shell: TerminalShell) => {
-      if (!selectedProjectId) return;
-      const isScratchScope = selectedProjectId === SCRATCH_TERMINAL_SCOPE_ID;
-      const project = isScratchScope ? null : projects.find((p) => p.id === selectedProjectId);
-      // For scratch scope, cwd is a display-only placeholder — the runner
-      // derives the real path from `scratchThreadId` on the spawn payload.
-      const cwd = isScratchScope ? '~' : activeThreadWorktreePath || project?.path || 'C:\\';
-      const id = crypto.randomUUID();
-      const detected = availableShells.find((s) => s.id === shell);
-      const shellName = detected?.label ?? 'Terminal';
-      const sameShellCount = visibleTabs.filter((t) => (t.shell ?? 'default') === shell).length;
-      const label = `${shellName} ${sameShellCount + 1}`;
-      addTab({
-        id,
-        label,
-        cwd,
-        alive: true,
-        projectId: selectedProjectId,
-        type: isTauri ? undefined : 'pty',
-        shell,
-        createdAt: Date.now(),
-        scratchThreadId: isScratchScope ? (scratchThreadId ?? undefined) : undefined,
-      });
-      // Panel must be visible for the spawn effect to emit pty:spawn
-      // (see !panelVisible guard in XtermTerminal). Auto-expand if collapsed.
-      if (!panelVisible) togglePanel(selectedProjectId);
+      if (terminalScope.scopeId)
+        openScopeTerminal({ ...terminalScope, scopeId: terminalScope.scopeId }, shell);
     },
-    [
-      projects,
-      selectedProjectId,
-      scratchThreadId,
-      visibleTabs,
-      addTab,
-      activeThreadWorktreePath,
-      availableShells,
-      panelVisible,
-      togglePanel,
-    ],
+    [terminalScope],
   );
 
   const sendSignal = useCallback((ptyId: string, signal: string) => {

@@ -29,6 +29,7 @@ import { deriveRunnerForwardingKey, deriveRunnerMediaKey } from '@funny/shared/a
 import { Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
+import { threadContextQuery } from '../lib/thread-context.js';
 import type { ServerEnv } from '../lib/types.js';
 import { getRunnerPublicMediaUrl } from '../services/runner-manager.js';
 import { resolveRunner } from '../services/runner-resolver.js';
@@ -54,10 +55,15 @@ mediaRoutes.post('/sign', async (c) => {
     return c.json({ url: null });
   }
 
-  // Resolve the requesting user's runner. With a non-thread/non-project path the
-  // resolver falls through to the user's runner (strategy 4) — never another
+  // Resolve the requesting user's runner: the one the open thread runs on (its
+  // sandbox, for a sandbox thread), else the user's runner — never another
   // user's runner (the runner-isolation invariant holds).
-  const resolved = await resolveRunner(c.req.path, {}, userId, c.env?.runnerPresence);
+  const resolved = await resolveRunner(
+    c.req.path,
+    threadContextQuery(c),
+    userId,
+    c.env?.runnerPresence,
+  );
   if (!resolved) return c.json({ url: null });
 
   const publicMediaUrl = await getRunnerPublicMediaUrl(resolved.runnerId);

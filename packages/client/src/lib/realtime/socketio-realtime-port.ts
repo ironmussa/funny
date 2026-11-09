@@ -530,6 +530,7 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
             label: payload.value.label,
             shell: payload.value.shell,
             scratchThreadId: payload.value.scratchThreadId,
+            sandboxThreadId: payload.value.sandboxThreadId,
           });
           break;
         case 'write':

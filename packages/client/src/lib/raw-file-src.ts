@@ -1,3 +1,5 @@
+import { urlInThread } from '@/lib/api/_core';
+
 /**
  * Helpers for pointing the browser at a file on the runner's filesystem.
  *
@@ -18,9 +20,12 @@ export function isExternalUrl(src: string): boolean {
   return /^(https?:)?\/\//.test(src) || /^(data|blob):/.test(src);
 }
 
-/** Build the raw-bytes URL for an absolute filesystem `path` on the runner. */
+/**
+ * Build the raw-bytes URL for an absolute filesystem `path` on the runner —
+ * the open thread's runner (its sandbox, for a sandbox thread).
+ */
 export function toRawFileSrc(path: string): string {
-  return `/api/files/raw?path=${encodeURIComponent(path)}`;
+  return urlInThread(`/api/files/raw?path=${encodeURIComponent(path)}`);
 }
 
 /**

@@ -114,6 +114,7 @@ export function ChangesPanel() {
           handleOpenDirectory: ctx.handleOpenDirectory,
           basePath: ctx.basePath,
           readOnly: ctx.viewerReadOnly,
+          openOnHost: ctx.openOnHost,
         }}
         commitDraft={{
           commitEntry: ctx.commitEntry,

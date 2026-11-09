@@ -2,6 +2,7 @@ import type { Thread } from '@funny/shared';
 import { useShallow } from 'zustand/react/shallow';
 
 import { readThreadRow } from '@/data/threads/read';
+import { runsInSandbox } from '@/lib/thread-variant';
 import { useProjectStore } from '@/stores/project-store';
 import { SCRATCH_TERMINAL_SCOPE_ID } from '@/stores/terminal-store';
 import { useActiveThreadSelect, useThreadViewSelect } from '@/stores/thread-context';
@@ -23,10 +24,17 @@ import { useUIStore } from '@/stores/ui-store';
 export interface TerminalScope {
   scopeId: string | null;
   scratchThreadId: string | null;
+  /** Set when the thread runs in a sandbox: its terminals open on the sandbox runner. */
+  sandboxThreadId?: string;
   worktreePath: string | null;
 }
 
-type TerminalThread = Pick<Thread, 'id' | 'projectId' | 'isScratch' | 'worktreePath'>;
+type TerminalThread = Pick<Thread, 'id' | 'projectId' | 'isScratch' | 'worktreePath'> &
+  Partial<Pick<Thread, 'runtime'>>;
+
+function sandboxThreadIdOf(thread: TerminalThread | null): string | undefined {
+  return thread && runsInSandbox(thread) ? thread.id : undefined;
+}
 
 export function resolveTerminalScope({
   liveColumnsOpen,
@@ -56,6 +64,7 @@ export function resolveTerminalScope({
     return {
       scopeId: gridThread.projectId || null,
       scratchThreadId: null,
+      sandboxThreadId: sandboxThreadIdOf(gridThread),
       worktreePath: gridThread.worktreePath ?? null,
     };
   }
@@ -69,9 +78,11 @@ export function resolveTerminalScope({
   }
 
   const scopeId = selectedProjectId ?? activeThread?.projectId ?? null;
+  const threadInScope = activeThread?.projectId === scopeId ? activeThread : null;
   return {
     scopeId,
     scratchThreadId: null,
+    sandboxThreadId: sandboxThreadIdOf(threadInScope),
     worktreePath: activeThread?.projectId === scopeId ? (activeThread.worktreePath ?? null) : null,
   };
 }
@@ -83,6 +94,7 @@ function pickTerminalThread(thread: TerminalThread | null): TerminalThread | nul
     projectId: thread.projectId,
     isScratch: thread.isScratch,
     worktreePath: thread.worktreePath,
+    runtime: thread.runtime,
   };
 }
 

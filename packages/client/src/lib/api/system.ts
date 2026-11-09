@@ -1,7 +1,7 @@
 import type { ExternalClaudeSession, ExternalClaudeTranscript } from '@funny/shared';
 import type { AdvertisedProvider } from '@funny/shared/runner-protocol';
 
-import { request } from './_core';
+import { request, requestInThread } from './_core';
 
 export type { AdvertisedProvider };
 
@@ -217,13 +217,13 @@ export const systemApi = {
 
   // Files (internal editor)
   readFile: (path: string) =>
-    request<{ content: string }>(`/files/read?path=${encodeURIComponent(path)}`),
+    requestInThread<{ content: string }>(`/files/read?path=${encodeURIComponent(path)}`),
   getFileBlame: (path: string) =>
-    request<BlameResponse>(`/files/blame?path=${encodeURIComponent(path)}`),
+    requestInThread<BlameResponse>(`/files/blame?path=${encodeURIComponent(path)}`),
   getFileHistory: (path: string) =>
-    request<FileHistoryEntry[]>(`/files/history?path=${encodeURIComponent(path)}`),
+    requestInThread<FileHistoryEntry[]>(`/files/history?path=${encodeURIComponent(path)}`),
   writeFile: (path: string, content: string) =>
-    request<{ ok: boolean }>('/files/write', {
+    requestInThread<{ ok: boolean }>('/files/write', {
       method: 'POST',
       body: JSON.stringify({ path, content }),
     }),

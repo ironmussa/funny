@@ -85,31 +85,65 @@ export function resolveRouteTarget(
   path: string,
   query: Record<string, string>,
 ): Promise<RouteTarget> {
-  return resolveTarget(extractProjectId(path, query), extractThreadId(path));
+  return resolveTarget(path, query);
 }
 
-async function resolveTarget(
-  projectId: string | null,
-  threadId: string | null,
-): Promise<RouteTarget> {
+async function resolveTarget(path: string, query: Record<string, string>): Promise<RouteTarget> {
+  const projectId = extractProjectId(path, query);
+  const threadId = extractThreadId(path, query);
   // A sandbox thread is served by its sandbox runner only (thread-sandboxes).
-  if (threadId) return targetForThread(threadId, projectId);
+  if (threadId) return targetForThread(threadId, projectId, !isThreadRoute(path));
   if (projectId) return { kind: 'project', projectId };
   return { kind: 'projectless' };
 }
 
-async function targetForThread(threadId: string, projectId: string | null): Promise<RouteTarget> {
-  const runnerId = await sandboxRunnerIdForThread(threadId);
-  if (runnerId) return { kind: 'thread-sandbox', threadId, runnerId };
+type ThreadRow = { projectId: string | null; runtime: string | null };
+
+async function threadRow(threadId: string): Promise<ThreadRow | undefined> {
   const [row] = await db
     .select({ projectId: threads.projectId, runtime: threads.runtime })
     .from(threads)
     .where(eq(threads.id, threadId));
+  return row;
+}
+
+/**
+ * A context thread (from the client's thread context, not the route) only
+ * steers requests about its own project, or no project: a request naming
+ * another project goes to that project. Returns that other project, if any.
+ */
+async function otherProjectOfContext(
+  threadId: string,
+  projectId: string | null,
+  contextOnly: boolean,
+): Promise<string | null> {
+  if (!contextOnly || !projectId) return null;
+  return (await threadRow(threadId))?.projectId === projectId ? null : projectId;
+}
+
+/** A thread with no sandbox runner bound: its project, or nothing for a sandbox thread. */
+function targetWithoutSandboxRunner(
+  threadId: string,
+  projectId: string | null,
+  row: ThreadRow | undefined,
+): RouteTarget {
   // Without its runner a sandbox thread has nowhere to go: never the
   // project's runner, whose checkout is not the thread's.
   if (row?.runtime === 'sandbox') return { kind: 'thread-sandbox', threadId, runnerId: null };
   const owningProject = projectId ?? row?.projectId;
   return owningProject ? { kind: 'project', projectId: owningProject } : { kind: 'projectless' };
+}
+
+async function targetForThread(
+  threadId: string,
+  projectId: string | null,
+  contextOnly: boolean,
+): Promise<RouteTarget> {
+  const otherProject = await otherProjectOfContext(threadId, projectId, contextOnly);
+  if (otherProject) return { kind: 'project', projectId: otherProject };
+  const runnerId = await sandboxRunnerIdForThread(threadId);
+  if (runnerId) return { kind: 'thread-sandbox', threadId, runnerId };
+  return targetWithoutSandboxRunner(threadId, projectId, await threadRow(threadId));
 }
 
 /** Scope check for a route target — the same rule `runner-access` re-verifies. */
@@ -222,13 +256,16 @@ export async function resolveRunnerDetailed(
   userId: string,
   presence?: RunnerPresencePort,
 ): Promise<ResolveRunnerResult> {
-  const threadId = extractThreadId(path);
+  const target = await resolveTarget(path, query);
+  // The thread the request runs for, once the target confirmed it (a context
+  // thread naming another project does not).
+  const threadId =
+    target.kind === 'thread-sandbox' || isThreadRoute(path) ? extractThreadId(path, query) : null;
 
   // Thread cache (entries are dropped on any scope change; verify reachability)
   const cachedRunnerId = cachedThreadRunner(userId, threadId, presence);
   if (cachedRunnerId !== null) return { ok: true, runnerId: cachedRunnerId };
 
-  const target = await resolveTarget(extractProjectId(path, query), threadId);
   const remember = (runnerId: string) => {
     if (threadId) {
       threadRunnerCache.set(threadCacheKey(userId, threadId), {
@@ -296,7 +333,7 @@ export async function explainUnresolved(
   query: Record<string, string>,
   userId: string,
 ): Promise<RunnerResolutionFailure> {
-  const target = await resolveTarget(extractProjectId(path, query), extractThreadId(path));
+  const target = await resolveTarget(path, query);
   if (target.kind === 'thread-sandbox') return 'thread-sandbox-unavailable';
   if (target.kind === 'project' && (await pinnedRunnerIdsForProject(target.projectId, userId))) {
     return 'project-runner-offline';
@@ -378,7 +415,17 @@ function extractProjectId(path: string, query: Record<string, string>): string |
   return null;
 }
 
-export function extractThreadId(path: string): string | null {
+/**
+ * The thread a request is made for: from a thread route (`/api/threads/:id`,
+ * `/api/git/:threadId`) or, for any other route, from `?threadId=` (the
+ * client's thread context, see `THREAD_CONTEXT_HEADER`). A thread decides
+ * where the request runs — a sandbox thread on its own runner only.
+ */
+export function extractThreadId(path: string, query: Record<string, string> = {}): string | null {
+  return threadIdFromRoute(path) ?? (query.threadId || null);
+}
+
+function threadIdFromRoute(path: string): string | null {
   const threadMatch = path.match(/\/api\/threads\/([^/?]+)/);
   if (threadMatch) return threadMatch[1];
 
@@ -388,6 +435,10 @@ export function extractThreadId(path: string): string | null {
   }
 
   return null;
+}
+
+function isThreadRoute(path: string): boolean {
+  return threadIdFromRoute(path) !== null;
 }
 
 /**

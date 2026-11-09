@@ -1,6 +1,6 @@
 import type { AgentResourcesResult, PluginListResponse, ResourcePhase, Skill } from '@funny/shared';
 
-import { request } from './_core';
+import { request, requestInThread } from './_core';
 
 export const skillsApi = {
   // Skills
@@ -26,7 +26,7 @@ export const skillsApi = {
     if (opts.model) qs.set('model', opts.model);
     if (opts.phase) qs.set('phase', opts.phase);
     const q = qs.toString();
-    return request<AgentResourcesResult>(`/skills/resources${q ? `?${q}` : ''}`);
+    return requestInThread<AgentResourcesResult>(`/skills/resources${q ? `?${q}` : ''}`);
   },
   addSkill: (identifier: string) =>
     request<{ ok: boolean }>('/skills', { method: 'POST', body: JSON.stringify({ identifier }) }),

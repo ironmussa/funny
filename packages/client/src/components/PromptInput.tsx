@@ -110,6 +110,7 @@ export const PromptInput = memo(function PromptInput({
         runtime={state.runtime}
         onRuntimeChange={state.setRuntime}
         runtimeModes={state.runtimeModes}
+        sandboxToggle={state.sandboxToggle}
         selectedBranch={state.selectedBranch}
         followUpBranches={state.followUpBranches}
         followUpRemoteBranches={state.followUpRemoteBranches}

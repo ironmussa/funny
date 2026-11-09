@@ -1,6 +1,11 @@
 import { DYNAMIC_MODEL_PROVIDER_IDS } from '@funny/shared/provider-manifests';
 
-import { infraApi, type InfraConnection } from '@/lib/api/infra';
+import {
+  infraApi,
+  type InfraConnection,
+  type ProjectSandboxSettings,
+  type SandboxProviderInfo,
+} from '@/lib/api/infra';
 import {
   systemApi,
   type AcpModelEntry,
@@ -90,7 +95,42 @@ export const sandboxConnectionsQuery = {
 
 /** Refetch now (Settings > Sandboxes, after adding or removing a connection). */
 export function refreshSandboxConnections(layer: DataLayer = getDataLayer()): Promise<void> {
+  // A removed connection takes the project sandboxes that used it along.
+  void layer.queryClient.invalidateQueries({ queryKey: [PROJECT_SANDBOX_KEY] });
   return refetch(layer, sandboxConnectionsQuery);
+}
+
+/** Registered sandbox providers with their sizes. */
+export const sandboxProvidersQuery = {
+  queryKey: ['sandbox-providers'] as const,
+  queryFn: (): Promise<SandboxProviderInfo[]> =>
+    unwrapResult(infraApi.listSandboxProviders())
+      .then((r) => r.providers)
+      .catch(warnAndRethrow('sandbox providers')),
+};
+
+// ── Project sandboxes (change project-sandboxes) ────────────
+
+const PROJECT_SANDBOX_KEY = 'project-sandbox';
+
+/** The current user's sandbox for a project; `null` when none is configured. */
+export function projectSandboxQuery(projectId: string) {
+  return {
+    queryKey: [PROJECT_SANDBOX_KEY, projectId] as const,
+    queryFn: (): Promise<ProjectSandboxSettings | null> =>
+      unwrapResult(infraApi.getProjectSandbox(projectId))
+        .then((r) => r.settings)
+        .catch(warnAndRethrow('project sandbox')),
+  };
+}
+
+/** Store a confirmed project sandbox (or its removal) as the query's value. */
+export function setProjectSandbox(
+  projectId: string,
+  settings: ProjectSandboxSettings | null,
+  layer: DataLayer = getDataLayer(),
+): void {
+  layer.queryClient.setQueryData(projectSandboxQuery(projectId).queryKey, settings);
 }
 
 // ── Dynamic ACP model catalogs (pi, cursor, opencode) ───────

@@ -305,6 +305,18 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS project_sandbox_settings (
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      connection_id TEXT NOT NULL,
+      size_id TEXT NOT NULL,
+      enabled_by_default INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL,
+      PRIMARY KEY (project_id, user_id)
+    )
+  `);
+
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS runner_provision_tokens (
       id TEXT PRIMARY KEY,
       token_hash TEXT NOT NULL UNIQUE,

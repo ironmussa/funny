@@ -15,6 +15,7 @@ import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
+import { sandboxMachineRequestSchema } from './launch-request-schema.js';
 import { sandboxErrorEventData, type SandboxErrorEventData } from './sandbox-events.js';
 import type {
   PreparedSandboxLaunch,
@@ -40,13 +41,8 @@ const createSandboxThreadSchema = z
     model: z.string().min(1).max(128).optional(),
     permissionMode: z.string().min(1).max(64).optional(),
     effort: z.string().min(1).max(32).optional(),
-    sandbox: z
-      .object({
-        connectionId: z.string().min(1),
-        sizeId: z.string().min(1).max(32).optional(),
-        repoUrl: z.string().min(1).max(2048).optional(),
-      })
-      .strict(),
+    // Without a connection, the caller's project sandbox is used (project-sandboxes).
+    sandbox: sandboxMachineRequestSchema.partial({ connectionId: true }).optional(),
   })
   // The compose payload carries more fields; only the ones above are used here,
   // plus the message extras forwarded below.
@@ -87,6 +83,11 @@ export interface NewSandboxThreadRow {
 
 export interface SandboxThreadDeps {
   findOwnedProject(userId: string, projectId: string): Promise<{ path: string } | null>;
+  /** The caller's sandbox for the project (project-sandboxes), or null when none. */
+  projectSandbox(
+    userId: string,
+    projectId: string,
+  ): Promise<{ connectionId: string; sizeId: string } | null>;
   prepare(req: SandboxLaunchRequest): Promise<Result<PreparedSandboxLaunch, SandboxLaunchRefusal>>;
   insertThread(row: NewSandboxThreadRow): Promise<void>;
   loadThread(threadId: string): Promise<unknown>;
@@ -190,6 +191,30 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     await deps.markFailed(threadId, started.error);
   }
 
+  /**
+   * The connection and size to provision: the ones the request names, else the
+   * caller's project sandbox. The launch re-checks that the connection is theirs.
+   */
+  async function resolveMachine(
+    userId: string,
+    input: SandboxThreadInput,
+  ): Promise<Result<{ connectionId: string; sizeId?: string }, SandboxThreadFailure>> {
+    const requested = input.sandbox?.connectionId;
+    if (requested) return ok({ connectionId: requested, sizeId: input.sandbox?.sizeId });
+    const configured = await deps.projectSandbox(userId, input.projectId);
+    if (!configured) {
+      return err({
+        status: 409,
+        code: 'project-sandbox-not-configured',
+        message: 'This project has no sandbox configured. Choose one in the project settings.',
+      });
+    }
+    return ok({
+      connectionId: configured.connectionId,
+      sizeId: input.sandbox?.sizeId ?? configured.sizeId,
+    });
+  }
+
   return {
     /**
      * Validate, create the thread and start its sandbox. `started` settles when
@@ -206,15 +231,17 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
       const project = await deps.findOwnedProject(userId, input.projectId);
       if (!project) return err({ status: 404, code: 'not-found', message: 'Project not found' });
 
+      const machine = await resolveMachine(userId, input);
+      if (machine.isErr()) return err(machine.error);
+
       const threadId = deps.newId();
       const launch = await deps.prepare({
         userId,
         threadId,
         projectId: input.projectId,
         projectPath: project.path,
-        connectionId: input.sandbox.connectionId,
-        sizeId: input.sandbox.sizeId,
-        repoUrl: input.sandbox.repoUrl,
+        ...machine.value,
+        repoUrl: input.sandbox?.repoUrl,
       });
       if (launch.isErr()) return err({ status: 409, ...launch.error });
 

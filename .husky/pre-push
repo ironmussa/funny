@@ -2,9 +2,7 @@
 
 export PATH="$HOME/.bun/bin:$PATH"
 
-# Run tests before push (use workspace-scoped script, not bare bun test)
-bun run test
-
-# Verify Storybook stories compile without errors
-echo "Checking Storybook build..."
-(cd packages/client && bun run build-storybook) || { echo "Storybook build failed — fix story errors before pushing."; exit 1; }
+# Run only the test suites the pushed commits can affect. CI runs every suite
+# and builds Storybook. Git passes the pushed refs on stdin.
+# FUNNY_PREPUSH_ALL=1 runs every suite.
+bun run test:pre-push

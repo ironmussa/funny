@@ -38,6 +38,12 @@ vi.mock('../../services/ws-broker.js', () => ({
     }),
   },
 }));
+// Runner-installed provider extensions are loaded from DATA_DIR on connect;
+// keep the developer's ~/.funny/extensions out of the test.
+vi.mock('../../lib/data-dir.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/data-dir.js')>()),
+  DATA_DIR: '/nonexistent/funny-team-client-test',
+}));
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));

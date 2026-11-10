@@ -12,5 +12,8 @@
       "envVars": ["VITE_PORT", "CLIENT_PORT"]
     }
   ],
-  "postCreate": ["bun install"]
+  "postCreate": [
+    "bun install",
+    "cp -n /opt/funny/packages/native-git/*.node packages/native-git/ 2>/dev/null || true"
+  ]
 }

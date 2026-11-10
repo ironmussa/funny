@@ -84,7 +84,7 @@ export function createRunnerTemplateManager(build: RunnerBuild): RunnerTemplateM
       .buildTemplate({
         serverVersion: build.version,
         installScript: RUNNER_INSTALL_SCRIPT,
-        scriptEnv: runnerInstallEnv(build),
+        scriptEnv: runnerInstallEnv(build, { buildNative: true }),
       })
       .andTee(() =>
         metric('thread_sandboxes.template_build_ms', Date.now() - startedAt, {

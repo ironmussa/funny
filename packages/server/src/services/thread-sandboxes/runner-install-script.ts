@@ -44,6 +44,20 @@ git fetch -q --depth 1 origin "$FUNNY_COMMIT"
 git checkout -q --force --detach FETCH_HEAD
 bun install --frozen-lockfile >/tmp/funny-bun-install.log 2>&1 || bun install >/tmp/funny-bun-install.log 2>&1
 
+if [ "\${FUNNY_BUILD_NATIVE:-}" = "1" ]; then
+  if ! command -v cargo >/dev/null 2>&1 && [ ! -x "$HOME/.cargo/bin/cargo" ]; then
+    timeout 120 sh -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal" >/tmp/funny-rustup.log 2>&1 || true
+  fi
+  # Bounded so a slow compile never pushes the whole install past the
+  # provider's exec cap (InstaBox: 10 min), which would lose the template.
+  if PATH="$HOME/.cargo/bin:$PATH" timeout 360 bun run build:native >/tmp/funny-native-git.log 2>&1; then
+    # The build regenerates tracked bindings; keep the checkout at the commit.
+    git checkout -q -- packages/native-git/index.js packages/native-git/index.d.ts
+  else
+    echo "native-git build failed (blame unavailable), see /tmp/funny-native-git.log"
+  fi
+fi
+
 sudo tee /etc/systemd/system/${RUNNER_SERVICE} >/dev/null <<UNIT
 [Unit]
 Description=funny sandbox runner
@@ -70,9 +84,19 @@ echo "$FUNNY_COMMIT" > "${INSTALLED_COMMIT_FILE}"
 echo "funny runner $FUNNY_COMMIT installed"
 `;
 
-/** Environment the install script needs for `build`. */
-export function runnerInstallEnv(build: RunnerBuild): Record<string, string> {
-  return { FUNNY_REPO_URL: build.repoUrl, FUNNY_COMMIT: build.commit };
+/**
+ * Environment the install script needs for `build`. `buildNative` compiles
+ * native-git too: worth it once per template, too slow for an on-the-fly install.
+ */
+export function runnerInstallEnv(
+  build: RunnerBuild,
+  options: { buildNative?: boolean } = {},
+): Record<string, string> {
+  return {
+    FUNNY_REPO_URL: build.repoUrl,
+    FUNNY_COMMIT: build.commit,
+    ...(options.buildNative ? { FUNNY_BUILD_NATIVE: '1' } : {}),
+  };
 }
 
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;

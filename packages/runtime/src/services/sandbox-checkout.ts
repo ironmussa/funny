@@ -2,17 +2,24 @@
  * Materialize a project's repository inside a sandbox runner (change
  * thread-sandboxes). The checkout lives at the project's canonical path, so the
  * thread's cwd resolution, worktree creation and path-scope authorization work
- * exactly as on any other runner.
+ * exactly as on any other runner. A fresh clone then runs the project's
+ * `.funny.json` `postCreate` (funny's `bun install`), so the agent starts with
+ * its dependencies installed; the runner template's Bun cache makes it fast.
  */
 
 import { existsSync, readdirSync } from 'fs';
 import { dirname, isAbsolute, join, normalize } from 'path';
 
-import { gitWrite } from '@funny/core/git';
+import { executeShell, gitWrite } from '@funny/core/git';
+import { readProjectConfig } from '@funny/core/ports';
 import { badRequest, conflict, processError, type DomainError } from '@funny/shared/errors';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
+import { log } from '../lib/logger.js';
 import { redactGithubToken, withGithubToken } from '../utils/github-clone-url.js';
+
+/** Generous: a first `bun install` may build native modules. */
+const POST_CREATE_TIMEOUT_MS = 5 * 60_000;
 
 const REPO_URL = /^(https:\/\/[^\s@]+|git@[^\s:]+:[^\s]+)$/;
 
@@ -66,5 +73,27 @@ export function checkoutProjectIntoSandbox(
             (error) => processError(redactGithubToken(String(error)), 1),
           ).map(() => undefined),
     )
+    .andThen(() => ResultAsync.fromSafePromise(runSandboxPostCreate(path)))
     .map(() => ({ path, cloned: true }));
+}
+
+/**
+ * Run the checkout's `postCreate` commands in order. Best effort, like worktree
+ * setup: a failed command is logged and returned, never fails the checkout.
+ */
+export async function runSandboxPostCreate(path: string): Promise<string[]> {
+  const errors: string[] = [];
+  for (const cmd of readProjectConfig(path)?.postCreate ?? []) {
+    try {
+      await executeShell(cmd, { cwd: path, timeout: POST_CREATE_TIMEOUT_MS });
+    } catch (error) {
+      errors.push(`"${cmd}": ${String(error)}`);
+      log.warn('Sandbox postCreate command failed', {
+        namespace: 'thread-sandboxes',
+        cmd,
+        error: String(error),
+      });
+    }
+  }
+  return errors;
 }

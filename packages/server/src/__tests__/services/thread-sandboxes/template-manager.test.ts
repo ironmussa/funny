@@ -139,6 +139,8 @@ describe('runner install script', () => {
     const command = runnerInstallCommand(build);
     expect(command).toContain(`FUNNY_COMMIT='${SHA}'`);
     expect(command).toContain("FUNNY_REPO_URL='https://github.com/ironmussa/funny.git'");
+    // Compiling native-git takes minutes: only template builds do it.
+    expect(command).not.toContain("FUNNY_BUILD_NATIVE='1'");
   });
 
   test('the env command writes only safe values and restarts the runner', () => {
@@ -175,6 +177,7 @@ describe('runner template manager', () => {
     expect(provider.templateBuilds[0].scriptEnv).toEqual({
       FUNNY_REPO_URL: build.repoUrl,
       FUNNY_COMMIT: SHA,
+      FUNNY_BUILD_NATIVE: '1',
     });
     expect(manager.isBuilding('conn-1')).toBe(false);
   });

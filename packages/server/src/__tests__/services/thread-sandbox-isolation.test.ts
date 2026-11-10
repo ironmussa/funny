@@ -231,6 +231,25 @@ describe('runner → server data channel', () => {
     expect(foreignProject.ok).toBe(false);
   });
 
+  test('GitHub credentials never reach a sandbox runner, other user data does', async () => {
+    runner('r-gen');
+    const ask = (runnerId: string, data: Record<string, unknown>) =>
+      assertRunnerDataScope(runnerId, data).then((d) => d.ok);
+
+    expect(await ask('r-box', { type: 'data:get_github_token', projectId: 'px' })).toBe(false);
+    expect(await ask('r-box', { type: 'data:get_provider_key', provider: 'github' })).toBe(false);
+    expect(
+      await ask('r-box', { type: 'data:update_profile', payload: { githubToken: 'ghp_x' } }),
+    ).toBe(false);
+    // Other user-level data still flows to the sandbox.
+    expect(await ask('r-box', { type: 'data:get_provider_key', provider: 'anthropic' })).toBe(true);
+    expect(await ask('r-box', { type: 'data:update_profile', payload: { gitName: 'A' } })).toBe(
+      true,
+    );
+    // A normal runner of the same user keeps getting the token.
+    expect(await ask('r-gen', { type: 'data:get_github_token', projectId: 'px' })).toBe(true);
+  });
+
   test('projectless work and thread creation are refused', async () => {
     expect((await assertRunnerDataScope('r-box', { type: 'data:create_project' })).ok).toBe(false);
     const create = await assertRunnerDataScope('r-box', {

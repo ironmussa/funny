@@ -40,6 +40,8 @@ const ANTHROPIC_MODEL_ALIASES: Record<string, string> = {
   'opus-5.5': 'claude-opus-5-5',
   'fable-5': 'claude-fable-5',
   'fable-5.1': 'claude-fable-5-1',
+  'fable-5.2': 'claude-fable-5-2',
+  'mythos-5.2': 'claude-mythos-5-2',
   sonnet: 'claude-sonnet-4-5-20250929',
   haiku: 'claude-haiku-4-5-20251001',
 };
@@ -56,6 +58,8 @@ const OPENAI_MODEL_ALIASES: Record<string, string> = {
   'opus-5.5': 'claude-opus-5-5',
   'fable-5': 'claude-fable-5',
   'fable-5.1': 'claude-fable-5-1',
+  'fable-5.2': 'claude-fable-5-2',
+  'mythos-5.2': 'claude-mythos-5-2',
   sonnet: 'claude-sonnet-4-5-20250929',
   haiku: 'claude-haiku-4-5-20251001',
 };

@@ -40,6 +40,9 @@ import {
  */
 export type DataScopeRule = 'refs' | 'projectless' | 'user' | 'list';
 
+/** Types only a sandbox runner may send, and only about its own thread (`refs`). */
+const SANDBOX_ONLY_TYPES = new Set(['data:get_github_app_token']);
+
 export const DATA_SCOPE_RULES: Record<string, DataScopeRule> = {
   'data:insert_message': 'refs',
   'data:insert_tool_call': 'refs',
@@ -90,6 +93,8 @@ export const DATA_SCOPE_RULES: Record<string, DataScopeRule> = {
   'data:get_profile': 'user',
   'data:get_provider_key': 'user',
   'data:get_github_token': 'user',
+  // Only a sandbox runner, for its own thread (see `assertRunnerDataScope`).
+  'data:get_github_app_token': 'refs',
   'data:get_minimax_api_key': 'user',
   'data:update_profile': 'user',
   'data:get_builtin_providers': 'user',
@@ -345,6 +350,9 @@ export async function assertRunnerDataScope(
 
   const boundThread = await sandboxThreadOfRunner(runnerId);
   if (boundThread) return sandboxDataScope(boundThread, type, rule, data);
+  if (SANDBOX_ONLY_TYPES.has(type)) {
+    return { ok: false, reason: `${type} is for sandbox runners only` };
+  }
 
   const isScratchCreate =
     type === 'data:create_thread' && !str(data?.payload?.projectId) && !str(data?.projectId);

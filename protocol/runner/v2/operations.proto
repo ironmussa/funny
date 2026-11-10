@@ -148,6 +148,8 @@ message GetProviderKey { string provider = 1; }
 // project_id (optional, "" = none): when set and the runner may access the project,
 // the project's own GitHub token (project-runner-binding) wins over the user's.
 message GetGithubToken { string project_id = 1; }
+// sandbox-github-app-tokens: a repository-scoped GitHub App token for the runner's sandbox thread.
+message GetGithubAppToken { string thread_id = 1; }
 message GetMinimaxApiKey {}
 message UpdateProfile { google.protobuf.Struct updates = 1; }
 message ResolveAgentExecutionProfile { string project_id = 1; }
@@ -247,6 +249,7 @@ message OperationsRequest {
     CreatePermissionRule create_permission_rule = 82;
     FindPermissionRule find_permission_rule = 83;
     ListPermissionRules list_permission_rules = 84;
+    GetGithubAppToken get_github_app_token = 85;
   }
 }
 

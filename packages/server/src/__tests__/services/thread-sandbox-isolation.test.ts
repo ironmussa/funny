@@ -250,6 +250,17 @@ describe('runner → server data channel', () => {
     expect(await ask('r-gen', { type: 'data:get_github_token', projectId: 'px' })).toBe(true);
   });
 
+  test('GitHub App tokens: only the sandbox runner, only for its own thread', async () => {
+    runner('r-gen');
+    const ask = (runnerId: string, threadId: string) =>
+      assertRunnerDataScope(runnerId, { type: 'data:get_github_app_token', threadId }).then(
+        (d) => d.ok,
+      );
+    expect(await ask('r-box', 't-box')).toBe(true);
+    expect(await ask('r-box', 't-other')).toBe(false);
+    expect(await ask('r-gen', 't-box')).toBe(false);
+  });
+
   test('projectless work and thread creation are refused', async () => {
     expect((await assertRunnerDataScope('r-box', { type: 'data:create_project' })).ok).toBe(false);
     const create = await assertRunnerDataScope('r-box', {

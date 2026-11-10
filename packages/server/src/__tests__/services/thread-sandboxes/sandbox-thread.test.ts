@@ -25,6 +25,8 @@ function setup(
     thread?: RetryableSandboxThread | null;
     /** The thread already has a message, so saveFirstMessage saves nothing. */
     hasMessages?: boolean;
+    /** Images saved with the thread's first message. */
+    firstImages?: unknown[];
     previousSandbox?: {
       connectionId: string;
       sizeId: string | null;
@@ -68,6 +70,7 @@ function setup(
       recorded.push(input);
       return 'm-first';
     },
+    firstMessageImages: async (id) => (id === 't-failed' ? (opts.firstImages ?? null) : null),
     markSettingUp: async (id) => {
       events.push(`setting_up:${id}`);
     },
@@ -352,6 +355,26 @@ describe('retrying a sandbox thread whose setup failed', () => {
     await (await launcher.retry('alice', 't-failed', { content: 'hola' }))._unsafeUnwrap().started;
     expect(recorded).toEqual([]);
     expect(messages[0].body).toEqual({ content: 'hola', precedingPrompt: 'Fix the login bug' });
+  });
+
+  test("the agent also gets the initial prompt's images, which are not saved again", async () => {
+    const image = {
+      type: 'image',
+      source: { type: 'base64', media_type: 'image/png', data: 'AA==' },
+    };
+    const { launcher, messages } = setup({
+      thread: failedThread,
+      previousSandbox: lastMachine,
+      hasMessages: true,
+      firstImages: [image],
+    });
+    await (await launcher.retry('alice', 't-failed', { content: 'hola' }))._unsafeUnwrap().started;
+    // `images` stays the new message's own (none here): the runner saves only those.
+    expect(messages[0].body).toEqual({
+      content: 'hola',
+      precedingPrompt: 'Fix the login bug',
+      precedingImages: [image],
+    });
   });
 
   test('re-sending the initial prompt does not duplicate it', async () => {

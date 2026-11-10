@@ -133,6 +133,8 @@ export interface SandboxThreadDeps {
    * saved. Never throws.
    */
   saveFirstMessage(input: FirstMessage): Promise<string | null>;
+  /** The images of the thread's first user message, or null when it has none. */
+  firstMessageImages(threadId: string): Promise<unknown[] | null>;
   /** A retry started: `failed` → `setting_up`. */
   markSettingUp(threadId: string): Promise<void>;
   /** The sandbox is ready: `setting_up` → `pending`, so the agent can start. */
@@ -220,13 +222,20 @@ function unansweredInitialPrompt(
 
 /**
  * The retried first message: what the user wrote, with the never-answered
- * initial prompt ahead of it for the agent only (it is its own message).
+ * initial prompt and its images ahead of it for the agent only (it is its own
+ * message, already saved with them).
  */
 function retryMessageBody(
   input: z.infer<typeof retrySandboxThreadSchema>,
   initialPrompt: string | null,
+  initialImages: unknown[] | null,
 ): Record<string, unknown> {
-  return initialPrompt ? { ...input, precedingPrompt: initialPrompt } : { ...input };
+  if (!initialPrompt) return { ...input };
+  return {
+    ...input,
+    precedingPrompt: initialPrompt,
+    ...(initialImages?.length ? { precedingImages: initialImages } : {}),
+  };
 }
 
 /**
@@ -403,13 +412,14 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     if (launch.isErr()) return err({ status: 409, ...launch.error });
 
     const initialPrompt = await saveUnansweredInitialPrompt(userId, threadId, thread, parsed.data);
+    const initialImages = initialPrompt ? await deps.firstMessageImages(threadId) : null;
     await deps.markSettingUp(threadId);
     metric('thread_sandboxes.threads_retried', 1);
     const started = startInBackground(
       userId,
       threadId,
       launch.value,
-      retryMessageBody(parsed.data, initialPrompt),
+      retryMessageBody(parsed.data, initialPrompt, initialImages),
     );
     return ok({ thread: await deps.loadThread(threadId), started });
   }

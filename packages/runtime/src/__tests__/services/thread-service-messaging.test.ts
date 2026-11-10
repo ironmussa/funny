@@ -704,6 +704,41 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(vi.mocked(startAgent).mock.calls[0][1]).toBe('Fix the login bug\n\nhola');
   });
 
+  test("a retried sandbox thread: the agent sees the preceding prompt's images, only the new ones are saved", async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-retried',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'pending',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: null,
+      worktreePath: null,
+    });
+    const image = (data: string) => ({
+      type: 'image' as const,
+      source: { type: 'base64' as const, media_type: 'image/png' as const, data },
+    });
+
+    const result = await sendMessage({
+      threadId: 't-retried',
+      userId: 'u-1',
+      content: 'hola',
+      images: [image('new')],
+      precedingPrompt: 'Fix the login bug',
+      precedingImages: [image('initial')],
+    });
+
+    expect(result.isOk()).toBe(true);
+    // The initial images are already saved with the initial prompt's message.
+    expect(mocks.tm.insertMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ content: 'hola', images: JSON.stringify([image('new')]) }),
+    );
+    expect(vi.mocked(startAgent).mock.calls[0][5]).toEqual([image('initial'), image('new')]);
+  });
+
   describe('a message the server already saved (savedMessageId)', () => {
     const sandboxThread = {
       id: 't-sandbox',

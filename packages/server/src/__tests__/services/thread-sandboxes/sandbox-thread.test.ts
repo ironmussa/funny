@@ -7,6 +7,7 @@ import type { SandboxLaunchRequest } from '../../../services/thread-sandboxes/sa
 import {
   createSandboxThreadLauncher,
   type NewSandboxThreadRow,
+  type FirstMessage,
   type RetryableSandboxThread,
 } from '../../../services/thread-sandboxes/sandbox-thread.js';
 import type { ProvisionError } from '../../../services/thread-sandboxes/thread-sandbox-service.js';
@@ -22,6 +23,8 @@ function setup(
     messageFails?: boolean;
     projectSandbox?: { connectionId: string; sizeId: string } | null;
     thread?: RetryableSandboxThread | null;
+    /** The thread already has a message, so saveFirstMessage saves nothing. */
+    hasMessages?: boolean;
     previousSandbox?: {
       connectionId: string;
       sizeId: string | null;
@@ -34,6 +37,7 @@ function setup(
   const messages: Array<{ userId: string; threadId: string; body: Record<string, unknown> }> = [];
   const failed: Array<[string, SandboxErrorEventData]> = [];
   const events: string[] = [];
+  const recorded: FirstMessage[] = [];
   const launcher = createSandboxThreadLauncher({
     findOwnedProject: async (userId, projectId) =>
       opts.project !== undefined
@@ -58,6 +62,12 @@ function setup(
     findOwnedThread: async (userId, threadId) =>
       userId === 'alice' && threadId === 't-failed' ? (opts.thread ?? null) : null,
     previousSandbox: async () => opts.previousSandbox ?? null,
+    saveFirstMessage: async (input) => {
+      if (opts.hasMessages) return null;
+      events.push(`first-message:${input.threadId}`);
+      recorded.push(input);
+      return 'm-first';
+    },
     markSettingUp: async (id) => {
       events.push(`setting_up:${id}`);
     },
@@ -75,7 +85,7 @@ function setup(
     newId: () => 't-new',
     now: () => '2026-11-01T00:00:00.000Z',
   });
-  return { launcher, inserted, prepared, messages, failed, events };
+  return { launcher, inserted, prepared, messages, failed, events, recorded };
 }
 
 function expectOkCreate(result: { isOk(): boolean; isErr(): boolean } & object) {
@@ -128,7 +138,7 @@ describe('sandbox thread creation', () => {
   });
 
   test('creates a local setting_up thread, provisions, then sends the prompt to the sandbox', async () => {
-    const { launcher, inserted, prepared, messages, failed, events } = setup();
+    const { launcher, inserted, prepared, messages, failed, events, recorded } = setup();
     const result = await launcher.create('alice', payload);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().thread).toEqual({ id: 't-new', status: 'setting_up' });
@@ -167,12 +177,40 @@ describe('sandbox thread creation', () => {
           model: 'opus',
           permissionMode: 'autoEdit',
           images: payload.images,
+          // The runner reuses the message the server saved instead of saving it again.
+          savedMessageId: 'm-first',
         },
       },
     ]);
     expect(failed).toEqual([]);
     // The agent can only start from `pending`: the thread leaves setting_up first.
-    expect(events).toEqual(['ready:t-new', 'message:t-new']);
+    expect(events).toEqual(['first-message:t-new', 'ready:t-new', 'message:t-new']);
+  });
+
+  test('saves the first message with the thread, before the sandbox is up', async () => {
+    const { launcher, recorded } = setup({
+      provisionError: { kind: 'checkout', message: 'clone failed' },
+    });
+    await (await launcher.create('alice', payload))._unsafeUnwrap().started;
+    // The sandbox never came up, yet the prompt (and its images) is a message.
+    expect(recorded).toEqual([
+      {
+        userId: 'alice',
+        threadId: 't-new',
+        content: 'Fix the login bug',
+        timestamp: '2026-11-01T00:00:00.000Z',
+        images: payload.images,
+        model: 'opus',
+        permissionMode: 'autoEdit',
+        effort: undefined,
+      },
+    ]);
+  });
+
+  test('without a saved first message the runner saves it as before', async () => {
+    const { launcher, messages } = setup({ hasMessages: true });
+    await (await launcher.create('alice', payload))._unsafeUnwrap().started;
+    expect(messages[0].body.savedMessageId).toBeUndefined();
   });
 
   test('a refused launch creates nothing', async () => {
@@ -216,7 +254,7 @@ describe('sandbox thread creation', () => {
     });
     await (await launcher.create('alice', payload))._unsafeUnwrap().started;
     expect(messages).toEqual([]);
-    expect(events).toEqual([]);
+    expect(events).toEqual(['first-message:t-new']);
     expect(failed).toEqual([
       [
         't-new',
@@ -249,6 +287,7 @@ describe('retrying a sandbox thread whose setup failed', () => {
     status: 'failed',
     sessionId: null,
     initialPrompt: 'Fix the login bug',
+    createdAt: '2026-10-31T10:00:00.000Z',
   };
   const lastMachine = {
     connectionId: 'conn-1',
@@ -257,7 +296,7 @@ describe('retrying a sandbox thread whose setup failed', () => {
   };
 
   test('provisions the same machine again and sends the initial prompt plus the new message', async () => {
-    const { launcher, prepared, messages, failed, events } = setup({
+    const { launcher, prepared, messages, failed, events, recorded } = setup({
       thread: failedThread,
       previousSandbox: lastMachine,
     });
@@ -279,20 +318,52 @@ describe('retrying a sandbox thread whose setup failed', () => {
         repoUrl: 'https://github.com/acme/app.git',
       },
     ]);
+    // The agent sees both prompts, but only the new message is saved with it…
     expect(messages[0].body).toEqual({
-      content: 'Fix the login bug\n\ntry again please',
+      content: 'try again please',
+      precedingPrompt: 'Fix the login bug',
       model: 'opus',
     });
+    // …the initial prompt is its own message, dated when the thread was
+    // created, so it reads before the failure card and the new message after.
+    expect(recorded).toEqual([
+      {
+        userId: 'alice',
+        threadId: 't-failed',
+        content: 'Fix the login bug',
+        timestamp: '2026-10-31T10:00:00.000Z',
+      },
+    ]);
     expect(failed).toEqual([]);
-    expect(events).toEqual(['setting_up:t-failed', 'ready:t-failed', 'message:t-failed']);
+    expect(events).toEqual([
+      'first-message:t-failed',
+      'setting_up:t-failed',
+      'ready:t-failed',
+      'message:t-failed',
+    ]);
+  });
+
+  test('a thread whose first message was saved at creation does not get it again', async () => {
+    const { launcher, messages, recorded } = setup({
+      thread: failedThread,
+      previousSandbox: lastMachine,
+      hasMessages: true,
+    });
+    await (await launcher.retry('alice', 't-failed', { content: 'hola' }))._unsafeUnwrap().started;
+    expect(recorded).toEqual([]);
+    expect(messages[0].body).toEqual({ content: 'hola', precedingPrompt: 'Fix the login bug' });
   });
 
   test('re-sending the initial prompt does not duplicate it', async () => {
-    const { launcher, messages } = setup({ thread: failedThread, previousSandbox: lastMachine });
+    const { launcher, messages, recorded } = setup({
+      thread: failedThread,
+      previousSandbox: lastMachine,
+    });
     await (
       await launcher.retry('alice', 't-failed', { content: 'Fix the login bug' })
     )._unsafeUnwrap().started;
-    expect(messages[0].body.content).toBe('Fix the login bug');
+    expect(messages[0].body).toEqual({ content: 'Fix the login bug' });
+    expect(recorded).toEqual([]);
   });
 
   test('without a previous sandbox row it uses the project sandbox', async () => {

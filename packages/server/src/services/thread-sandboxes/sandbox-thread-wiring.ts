@@ -9,6 +9,7 @@ import { nanoid } from 'nanoid';
 import { db } from '../../db/index.js';
 import { repos } from '../../db/repos.js';
 import { projects } from '../../db/schema.js';
+import { log } from '../../lib/logger.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { createInfraConnectionService } from './infra-connections.js';
 import { createProjectSandboxSettingsService } from './project-sandbox-settings.js';
@@ -35,6 +36,7 @@ export function sandboxThreadLauncherFor(env: {
   const ports = { requests: env.runnerRequests, presence: env.runnerPresence };
   const calls = createSandboxRunnerCalls(ports);
   const threadRepo = repos.threads();
+  const messageRepo = repos.messages();
 
   return createSandboxThreadLauncher({
     findOwnedProject: async (userId, projectId) => {
@@ -62,6 +64,36 @@ export function sandboxThreadLauncherFor(env: {
       // A storage failure is a 500, never "no previous sandbox".
       if (row.isErr()) throw new Error(row.error);
       return row.value;
+    },
+    saveFirstMessage: async ({ userId, threadId, content, timestamp, images, ...settings }) => {
+      try {
+        const existing = await messageRepo.getThreadMessages({ threadId, limit: 1 });
+        if (existing.messages.length > 0) return null;
+        const messageId = await messageRepo.insertMessage({
+          threadId,
+          role: 'user',
+          content,
+          timestamp,
+          images: images?.length ? JSON.stringify(images) : null,
+          model: settings.model ?? null,
+          permissionMode: settings.permissionMode ?? null,
+          effort: settings.effort ?? null,
+        });
+        env.browserEvents?.toUser(userId, {
+          type: 'agent:message',
+          threadId,
+          data: { messageId, role: 'user', content, timestamp },
+        });
+        return messageId;
+      } catch (error) {
+        // Not fatal: without it the runner saves the message when the agent starts.
+        log.error('Failed to save the first message of a sandbox thread', {
+          namespace: 'thread-sandboxes',
+          threadId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return null;
+      }
     },
     markSettingUp: async (threadId) => {
       const thread = await threadRepo.getThread(threadId);

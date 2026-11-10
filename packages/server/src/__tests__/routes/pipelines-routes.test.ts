@@ -59,6 +59,64 @@ describe('Pipeline Routes (Integration)', () => {
     });
   });
 
+  describe('response shape (contract)', () => {
+    test('a pipeline has boolean flags and no null prompts', async () => {
+      seedPipeline(t.db as any, {
+        id: 'pipe-1',
+        projectId: 'p1',
+        userId: 'user-1',
+        enabled: 1,
+        precommitFixEnabled: 0,
+        testEnabled: 1,
+        testFixEnabled: 0,
+      });
+
+      const [pipeline] = await (
+        await t.requestAs('user-1').get('/api/pipelines/project/p1')
+      ).json();
+      expect(pipeline).toMatchObject({
+        enabled: true,
+        precommitFixEnabled: false,
+        testEnabled: true,
+        testFixEnabled: false,
+      });
+      expect(pipeline).not.toHaveProperty('reviewerPrompt');
+      expect(pipeline).not.toHaveProperty('testCommand');
+      expect(Object.values(pipeline)).not.toContain(null);
+    });
+
+    test('a run omits its null columns and keeps reviewerThreadId', async () => {
+      seedPipeline(t.db as any, { id: 'pipe-1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't-review', projectId: 'p1', userId: 'user-1' });
+      seedPipelineRun(t.db as any, {
+        id: 'run-1',
+        pipelineId: 'pipe-1',
+        threadId: 't1',
+        reviewerThreadId: 't-review',
+      });
+
+      const [run] = await (await t.requestAs('user-1').get('/api/pipelines/runs/thread/t1')).json();
+      expect(run).toMatchObject({ id: 'run-1', reviewerThreadId: 't-review' });
+      expect(run).not.toHaveProperty('verdict');
+      expect(Object.values(run)).not.toContain(null);
+    });
+  });
+
+  describe('POST /api/pipelines — project access', () => {
+    test('refuses a project the caller cannot see', async () => {
+      seedProject(t.db as any, { id: 'p-other', userId: 'user-2', path: '/tmp/p-other' });
+
+      const res = await t
+        .requestAs('user-1')
+        .post('/api/pipelines', { projectId: 'p-other', name: 'Sneaky' });
+      expect(res.status).toBe(404);
+      expect(
+        await (await t.requestAs('user-1').get('/api/pipelines/project/p-other')).json(),
+      ).toEqual([]);
+    });
+  });
+
   describe('GET /api/pipelines/project/:projectId', () => {
     test('lists pipelines for the owner within a project', async () => {
       seedPipeline(t.db as any, { id: 'pipe-1', projectId: 'p1', userId: 'user-1', name: 'One' });
@@ -92,7 +150,7 @@ describe('Pipeline Routes (Integration)', () => {
 
       const body = await res.json();
       expect(body.name).toBe('After');
-      expect(body.enabled).toBe(0);
+      expect(body.enabled).toBe(false);
       expect(body.maxIterations).toBe(3);
     });
 

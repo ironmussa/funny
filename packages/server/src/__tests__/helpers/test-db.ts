@@ -497,6 +497,7 @@ export function seedPipeline(
     enabled: overrides.enabled ?? 1,
     createdAt: overrides.createdAt ?? now,
     updatedAt: overrides.updatedAt ?? now,
+    ...overrides,
   };
   db.insert(schema.pipelines).values(pipeline).run();
   return pipeline;

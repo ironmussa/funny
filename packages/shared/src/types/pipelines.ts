@@ -58,6 +58,7 @@ export interface PipelineRun {
   commitSha?: string;
   verdict?: PipelineVerdict;
   findings?: string;
+  reviewerThreadId?: string;
   fixerThreadId?: string;
   precommitIteration?: number;
   hookName?: string;

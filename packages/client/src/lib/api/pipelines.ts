@@ -1,5 +1,10 @@
-import type { Pipeline, PipelineRun } from '@funny/shared';
+import {
+  pipelinesContract as contract,
+  type CreatePipelineRequest,
+  type UpdatePipelineRequest,
+} from '@funny/shared/contracts/pipelines';
 
+import { callEndpoint } from './_contract';
 import { request } from './_core';
 
 export const pipelinesApi = {
@@ -12,56 +17,11 @@ export const pipelinesApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  listPipelines: (projectId: string) => request<Pipeline[]>(`/pipelines/project/${projectId}`),
-  createPipeline: (data: {
-    projectId: string;
-    name: string;
-    reviewModel?: string;
-    fixModel?: string;
-    maxIterations?: number;
-    precommitFixEnabled?: boolean;
-    precommitFixModel?: string;
-    precommitFixMaxIterations?: number;
-    reviewerPrompt?: string;
-    correctorPrompt?: string;
-    precommitFixerPrompt?: string;
-    commitMessagePrompt?: string;
-    testEnabled?: boolean;
-    testCommand?: string;
-    testFixEnabled?: boolean;
-    testFixModel?: string;
-    testFixMaxIterations?: number;
-    testFixerPrompt?: string;
-  }) => request<Pipeline>('/pipelines', { method: 'POST', body: JSON.stringify(data) }),
-  updatePipeline: (
-    id: string,
-    data: Partial<{
-      name: string;
-      enabled: boolean;
-      reviewModel: string;
-      fixModel: string;
-      maxIterations: number;
-      precommitFixEnabled: boolean;
-      precommitFixModel: string;
-      precommitFixMaxIterations: number;
-      reviewerPrompt: string;
-      correctorPrompt: string;
-      precommitFixerPrompt: string;
-      commitMessagePrompt: string;
-      testEnabled: boolean;
-      testCommand: string;
-      testFixEnabled: boolean;
-      testFixModel: string;
-      testFixMaxIterations: number;
-      testFixerPrompt: string;
-    }>,
-  ) =>
-    request<{ ok: boolean }>(`/pipelines/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
-  deletePipeline: (id: string) =>
-    request<{ ok: boolean }>(`/pipelines/${id}`, { method: 'DELETE' }),
+  listPipelines: (projectId: string) => callEndpoint(contract.list, { params: { projectId } }),
+  createPipeline: (data: CreatePipelineRequest) => callEndpoint(contract.create, { body: data }),
+  updatePipeline: (id: string, data: UpdatePipelineRequest) =>
+    callEndpoint(contract.update, { params: { id }, body: data }),
+  deletePipeline: (id: string) => callEndpoint(contract.remove, { params: { id } }),
   listPipelineRuns: (threadId: string) =>
-    request<PipelineRun[]>(`/pipelines/runs/thread/${threadId}`),
+    callEndpoint(contract.runsForThread, { params: { threadId } }),
 };

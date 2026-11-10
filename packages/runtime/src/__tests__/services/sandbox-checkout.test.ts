@@ -1,10 +1,13 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { afterEach, describe, expect, test } from 'vitest';
 
-import { checkoutProjectIntoSandbox } from '../../services/sandbox-checkout.js';
+import {
+  checkoutProjectIntoSandbox,
+  runSandboxPostCreate,
+} from '../../services/sandbox-checkout.js';
 import { redactGithubToken, withGithubToken } from '../../utils/github-clone-url.js';
 
 const dirs: string[] = [];
@@ -27,6 +30,14 @@ describe('checkoutProjectIntoSandbox', () => {
     expect(result.isOk() && result.value).toEqual({ path, cloned: false });
   });
 
+  test('does not rerun postCreate on an existing checkout', async () => {
+    const path = tempDir();
+    mkdirSync(join(path, '.git'));
+    writeFileSync(join(path, '.funny.json'), JSON.stringify({ postCreate: ['touch ran'] }));
+    await checkoutProjectIntoSandbox({ path, repoUrl: REPO, token: null });
+    expect(existsSync(join(path, 'ran'))).toBe(false);
+  });
+
   test('refuses to clone over a non-empty directory that is not a checkout', async () => {
     const path = tempDir();
     writeFileSync(join(path, 'notes.txt'), 'hello');
@@ -45,6 +56,22 @@ describe('checkoutProjectIntoSandbox', () => {
       const result = await checkoutProjectIntoSandbox({ path: tempDir(), repoUrl, token: null });
       expect(result.isErr() && result.error.type).toBe('BAD_REQUEST');
     }
+  });
+});
+
+describe('runSandboxPostCreate', () => {
+  test('runs the postCreate commands in order inside the checkout', async () => {
+    const path = tempDir();
+    const postCreate = ['echo one > log', 'false', 'echo two >> log'];
+    writeFileSync(join(path, '.funny.json'), JSON.stringify({ postCreate }));
+    const errors = await runSandboxPostCreate(path);
+    expect(readFileSync(join(path, 'log'), 'utf8')).toBe('one\ntwo\n');
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain('"false"');
+  });
+
+  test('is a no-op without a .funny.json', async () => {
+    expect(await runSandboxPostCreate(tempDir())).toEqual([]);
   });
 });
 

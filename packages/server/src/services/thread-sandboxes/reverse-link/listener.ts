@@ -9,8 +9,10 @@
  * exactly like the main origin (HTTP routes + the runner gRPC carrier).
  */
 
+import { REVERSE_LINK_CALLER_ADDRESS } from '../../../lib/client-ip.js';
+
 const REVERSE_LINK_CALLER_IP = {
-  address: 'sandbox-reverse-link',
+  address: REVERSE_LINK_CALLER_ADDRESS,
   family: 'reverse-link',
   port: 0,
 } as const;
@@ -29,7 +31,7 @@ export function startReverseLinkListener(options: {
     req: Request,
     server: Bun.Server<any>,
     ip: ReverseLinkCallerIp,
-  ): Response | Promise<Response> | undefined;
+  ): Response | Promise<Response | undefined> | undefined;
 }): ReverseLinkListener {
   const server = Bun.serve<any>({
     ...(options.serve as object),

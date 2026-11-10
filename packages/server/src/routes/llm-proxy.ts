@@ -14,6 +14,7 @@ import type { ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
+import { createSlidingWindowLimiter } from '../middleware/rate-limit.js';
 import {
   ANTHROPIC_CREDENTIAL_KEY_ID,
   ANTHROPIC_UPSTREAM,
@@ -33,7 +34,11 @@ export interface LlmProxyDeps {
   credentialFor(userId: string, keyId: string): Promise<string | null>;
   fetch?: typeof fetch;
   upstream?: string;
+  /** Requests per sandbox (authenticated grant) per window. Default 600 per minute. */
+  perSandboxLimit?: { windowMs: number; max: number };
 }
+
+const DEFAULT_PER_SANDBOX_LIMIT = { windowMs: 60_000, max: 600 };
 
 /** Anthropic-shaped error body, so Claude Code shows the message to the user. */
 function anthropicError(status: number, type: string, message: string) {
@@ -122,6 +127,11 @@ export function createLlmProxyRoutes(deps: LlmProxyDeps) {
   const doFetch = deps.fetch ?? fetch;
   const upstream = deps.upstream ?? ANTHROPIC_UPSTREAM;
   const routes = new Hono();
+  // Keyed on the authenticated sandbox, so one sandbox cannot use up another's
+  // budget. (All reverse-link sandboxes share one caller address, so an IP
+  // bucket cannot tell them apart.)
+  const limit = deps.perSandboxLimit ?? DEFAULT_PER_SANDBOX_LIMIT;
+  const perSandbox = createSlidingWindowLimiter(limit);
 
   routes.all('/anthropic/*', async (c) => {
     const url = new URL(c.req.url);
@@ -132,6 +142,12 @@ export function createLlmProxyRoutes(deps: LlmProxyDeps) {
 
     const grant = await authenticateGrant(deps, c.req.raw.headers, outcome);
     if (grant instanceof Response) return grant;
+    if (perSandbox.hit(`thread:${grant.threadId}`)) {
+      outcome('rate-limited');
+      const res = anthropicError(429, 'rate_limit_error', 'Too many requests from this sandbox');
+      res.headers.set('retry-after', String(Math.ceil(limit.windowMs / 1000)));
+      return res;
+    }
     if (!isAllowedAnthropicPath(path)) {
       log.warn('LLM proxy refused path', { namespace: 'llm-proxy', path, method: c.req.method });
       outcome('forbidden');

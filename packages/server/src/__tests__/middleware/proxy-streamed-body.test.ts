@@ -13,7 +13,7 @@ const CHUNKS = [Uint8Array.from([0x89, 0x50, 0xff]), Uint8Array.from([0x00, 0xfe
 const seen: Array<{ path: string; streamBody?: boolean }> = [];
 
 const requests = {
-  isAvailable: () => true,
+  isAvailable: async () => true,
   request: async (_runnerId: string, request: { path: string; streamBody?: boolean }) => {
     seen.push({ path: request.path, streamBody: request.streamBody });
     return {

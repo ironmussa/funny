@@ -23,6 +23,12 @@ export interface GrpcWebSocketBridge {
 export type BridgeWebSocket = ByteWebSocket;
 
 export interface GrpcWebSocketBridgeOptions {
+  /**
+   * The runner's bearer token, sent as `Authorization` on every WebSocket
+   * upgrade so the server can authenticate the carrier before it opens a pipe
+   * to its gRPC listener (gRPC still authenticates every stream end-to-end).
+   */
+  bearerToken?: string;
   maxBufferedBytes?: number;
   createWebSocket?: (url: string) => BridgeWebSocket;
 }
@@ -42,6 +48,13 @@ interface BridgeConnection {
 
 const WS_OPEN = 1;
 
+/** Bun's WebSocket client accepts upgrade headers, which the DOM typings omit. */
+type BunWebSocketConstructor = new (
+  url: string,
+  options?: { headers?: Record<string, string> },
+) => BridgeWebSocket;
+const BunWebSocket = WebSocket as unknown as BunWebSocketConstructor;
+
 export function isWebSocketEndpoint(endpoint: string): boolean {
   return /^wss?:\/\//i.test(endpoint.trim());
 }
@@ -51,8 +64,11 @@ export function startGrpcWebSocketBridge(
   options: GrpcWebSocketBridgeOptions = {},
 ): GrpcWebSocketBridge {
   const maxBuffered = options.maxBufferedBytes ?? RUNNER_GRPC_WS_MAX_BUFFERED_BYTES;
+  const headers = options.bearerToken
+    ? { authorization: `Bearer ${options.bearerToken}` }
+    : undefined;
   const createWebSocket =
-    options.createWebSocket ?? ((target: string) => new WebSocket(target) as BridgeWebSocket);
+    options.createWebSocket ?? ((target: string) => new BunWebSocket(target, { headers }));
   const connections = new Set<BridgeConnection>();
 
   const shut = (socket: BridgeSocket, reason: string) => {

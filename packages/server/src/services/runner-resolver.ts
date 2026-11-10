@@ -30,10 +30,12 @@ import type { RunnerPresencePort } from './runner-ports.js';
 import {
   canRunnerAccessProject,
   canRunnerServeProjectless,
+  currentRunnerPolicyVersion,
   generalRunnerIdsForUser,
   onRunnerScopeChange,
   pinnedRunnerIdsForProject,
   sandboxRunnerIdForThread,
+  syncRunnerPolicyVersion,
 } from './runner-scope.js';
 import { getRunnerForThread } from './thread-registry.js';
 
@@ -47,7 +49,12 @@ export type RunnerResolutionFailure =
   | 'general-runner-offline'
   | 'thread-sandbox-unavailable';
 
-type CachedThreadRunner = ResolvedRunner & { threadId: string; userId: string };
+type CachedThreadRunner = ResolvedRunner & {
+  threadId: string;
+  userId: string;
+  /** Runner policy version the route was resolved at (see runner-scope.ts). */
+  policyVersion: number;
+};
 
 // In-memory cache scoped by userId + threadId. A thread id alone is not a
 // sufficient authorization boundary because cache hits bypass DB ownership
@@ -55,15 +62,20 @@ type CachedThreadRunner = ResolvedRunner & { threadId: string; userId: string };
 const threadRunnerCache = new Map<string, CachedThreadRunner>();
 
 // Any change to runner roles / project pins / grants can invalidate a cached
-// route — drop them all (cheap: the cache only saves one DB round-trip).
+// route — drop them all (cheap: the cache only saves one DB round-trip). Entries
+// are also tagged with the policy version, so a change made on another server
+// instance invalidates them on the next sync.
 onRunnerScopeChange(() => threadRunnerCache.clear());
 
 function threadCacheKey(userId: string, threadId: string): string {
   return `${userId}:${threadId}`;
 }
 
-function isReachable(presence: RunnerPresencePort | undefined, runnerId: string): boolean {
-  return !!presence?.isAvailable(runnerId);
+async function isReachable(
+  presence: RunnerPresencePort | undefined,
+  runnerId: string,
+): Promise<boolean> {
+  return presence ? await presence.isAvailable(runnerId) : false;
 }
 
 /**
@@ -177,15 +189,19 @@ type ResolveRunnerResult =
   | { ok: false; reason: RunnerResolutionFailure; projectId?: string };
 
 /** Cached runner of a thread if still reachable; an unreachable entry is dropped. */
-function cachedThreadRunner(
+async function cachedThreadRunner(
   userId: string,
   threadId: string | null | undefined,
   presence: RunnerPresencePort | undefined,
-): string | null {
+): Promise<string | null> {
   if (!threadId) return null;
   const cached = threadRunnerCache.get(threadCacheKey(userId, threadId));
   if (!cached) return null;
-  if (isReachable(presence, cached.runnerId)) return cached.runnerId;
+  if (cached.policyVersion !== currentRunnerPolicyVersion()) {
+    threadRunnerCache.delete(threadCacheKey(userId, threadId));
+    return null;
+  }
+  if (await isReachable(presence, cached.runnerId)) return cached.runnerId;
   threadRunnerCache.delete(threadCacheKey(userId, threadId));
   return null;
 }
@@ -215,7 +231,7 @@ async function firstScopedReachable(
   presence: RunnerPresencePort | undefined,
 ): Promise<string | null> {
   for (const runnerId of new Set(candidates)) {
-    if (!isReachable(presence, runnerId)) continue;
+    if (!(await isReachable(presence, runnerId))) continue;
     if (!(await isRunnerInRouteScope(runnerId, target))) continue;
     return runnerId;
   }
@@ -235,8 +251,9 @@ async function resolvePinnedProject(
 ): Promise<ResolveRunnerResult | undefined> {
   const pinned = await pinnedRunnerIdsForProject(projectId, userId);
   if (!pinned) return undefined;
-  const runnerId = pinned.find((id) => isReachable(presence, id));
-  if (runnerId) return remember(runnerId);
+  for (const id of pinned) {
+    if (await isReachable(presence, id)) return remember(id);
+  }
   log.warn('Project runner offline — not falling back', {
     namespace: 'proxy',
     userId,
@@ -256,6 +273,7 @@ export async function resolveRunnerDetailed(
   userId: string,
   presence?: RunnerPresencePort,
 ): Promise<ResolveRunnerResult> {
+  const policyVersion = await syncRunnerPolicyVersion();
   const target = await resolveTarget(path, query);
   // The thread the request runs for, once the target confirmed it (a context
   // thread naming another project does not).
@@ -263,7 +281,7 @@ export async function resolveRunnerDetailed(
     target.kind === 'thread-sandbox' || isThreadRoute(path) ? extractThreadId(path, query) : null;
 
   // Thread cache (entries are dropped on any scope change; verify reachability)
-  const cachedRunnerId = cachedThreadRunner(userId, threadId, presence);
+  const cachedRunnerId = await cachedThreadRunner(userId, threadId, presence);
   if (cachedRunnerId !== null) return { ok: true, runnerId: cachedRunnerId };
 
   const remember = (runnerId: string) => {
@@ -272,6 +290,7 @@ export async function resolveRunnerDetailed(
         runnerId,
         threadId,
         userId,
+        policyVersion,
       });
     }
     return { ok: true as const, runnerId };
@@ -279,7 +298,7 @@ export async function resolveRunnerDetailed(
 
   // Sandbox thread: its sandbox runner or nothing — the caller wakes it up.
   if (target.kind === 'thread-sandbox') {
-    if (target.runnerId && isReachable(presence, target.runnerId)) {
+    if (target.runnerId && (await isReachable(presence, target.runnerId))) {
       return remember(target.runnerId);
     }
     log.warn('Thread sandbox runner unavailable — not falling back', {
@@ -373,6 +392,8 @@ export function cacheThreadRunner(threadId: string, userId: string, runnerId: st
     threadId,
     userId,
     runnerId,
+    // Called right after the route was certified, which synced the version.
+    policyVersion: currentRunnerPolicyVersion(),
   });
 }
 

@@ -5,8 +5,8 @@
  * Supports both SQLite (default/local) and PostgreSQL (team/cloud) modes.
  */
 
-import { createHmac, randomBytes } from 'crypto';
-import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { randomBytes } from 'crypto';
+import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 import { getSchema } from '@funny/shared/db/schema';
@@ -18,11 +18,10 @@ import { createAccessControl } from 'better-auth/plugins/access';
 import { db, dbDialect } from '../db/index.js';
 import { audit } from './audit.js';
 import { resolveCorsOrigins } from './cors-origins.js';
-import { DATA_DIR } from './data-dir.js';
+import { ensureDataDir } from './data-dir.js';
 import { log } from './logger.js';
 import { validatePasswordStrength } from './password-policy.js';
-
-const SECRET_PATH = resolve(DATA_DIR, 'auth-secret');
+import { getAuthSecret } from './server-secrets.js';
 
 /**
  * Security M7 (decision needed): there is no graceful rotation flow for the
@@ -41,31 +40,16 @@ const SECRET_PATH = resolve(DATA_DIR, 'auth-secret');
  * so the implementation will require either a custom verifier hook or a
  * patch upstream. Tracked separately — do not regress this comment until a
  * design exists.
+ *
+ * The secret is resolved by `server-secrets.ts` (env `BETTER_AUTH_SECRET`,
+ * else `<data dir>/auth-secret`). Server-internal keys are derived from it
+ * (`deriveServerKey`), so rotating it also invalidates in-flight MCP OAuth
+ * states and the reverse runner link's per-sandbox secrets.
  */
-function getOrCreateSecret(): string {
-  // Prefer env var (essential for platforms like Railway where the filesystem is ephemeral)
-  if (process.env.BETTER_AUTH_SECRET) {
-    return process.env.BETTER_AUTH_SECRET;
-  }
 
-  if (existsSync(SECRET_PATH)) {
-    const secret = readFileSync(SECRET_PATH, 'utf-8').trim();
-    if (secret.length > 0) return secret;
-  }
-
-  const secret = randomBytes(64).toString('hex');
-  writeFileSync(SECRET_PATH, secret, { mode: 0o600 });
-  log.info('Generated new auth secret', { namespace: 'auth' });
-  return secret;
-}
-
-/**
- * A key for `purpose` derived from the auth secret: stable across restarts and
- * never the secret itself (e.g. the reverse runner link's per-sandbox secrets).
- */
-export function deriveServerKey(purpose: string): Buffer {
-  return createHmac('sha256', getOrCreateSecret()).update(`funny-key:${purpose}`).digest();
-}
+// Re-exported for existing callers (reverse runner link); defined with the
+// other server secrets.
+export { deriveServerKey } from './server-secrets.js';
 
 // ── Access Control ──────────────────────────────────────────────
 
@@ -175,7 +159,7 @@ export async function initBetterAuth(): Promise<void> {
     database: buildDatabaseConfig(),
     baseURL: process.env.BETTER_AUTH_BASE_URL || `http://localhost:${PORT}`,
     basePath: '/api/auth',
-    secret: getOrCreateSecret(),
+    secret: getAuthSecret(),
     trustedOrigins: corsOrigins,
     emailAndPassword: {
       enabled: true,
@@ -303,7 +287,7 @@ export async function initBetterAuth(): Promise<void> {
         // capture stderr and would persist the secret indefinitely. Instead
         // write it to a mode-0600 file that only the server user can read,
         // and print just the file path to stderr as a one-time setup hint.
-        const passwordPath = resolve(DATA_DIR, 'admin-password.txt');
+        const passwordPath = resolve(ensureDataDir(), 'admin-password.txt');
         const body =
           `Generated admin credentials for funny\n` +
           `Username: ${username}\n` +

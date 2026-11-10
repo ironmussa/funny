@@ -1,0 +1,26 @@
+{
+  // Phase 0 spike — never deployed; built with `wrangler deploy --dry-run`.
+  "name": "funny-spike-phase0",
+  "main": "src/worker.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "durable_objects": {
+    "bindings": [
+      { "name": "RUNNER", "class_name": "RunnerSessionDO" },
+      { "name": "USERHUB", "class_name": "UserHubDO" },
+    ],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["RunnerSessionDO", "UserHubDO"] }],
+  // Fake spike-only values (local runs only).
+  "vars": {
+    "RUNNER_TOKEN_SECRET": "runner-token-secret-spike",
+    "AUTH_SECRET": "spike-auth-secret-0123456789abcdef0123456789abcdef",
+  },
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "00000000000000000000000000000000",
+      // Local connection string: env CLOUDFLARE_HYPERDRIVE_LOCAL_CONNECTION_STRING_HYPERDRIVE (run-spike.mjs sets it).
+    },
+  ],
+}

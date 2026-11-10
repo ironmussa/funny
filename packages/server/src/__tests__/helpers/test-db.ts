@@ -360,6 +360,15 @@ export function createTestDb() {
     )
   `);
 
+  // Routing-policy version (runner-scope.ts); seeded like migration 092.
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS runner_policy_version (
+      id INTEGER PRIMARY KEY,
+      version INTEGER NOT NULL
+    )
+  `);
+  testDb.run(sql`INSERT INTO runner_policy_version (id, version) VALUES (1, 0)`);
+
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS project_members (
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

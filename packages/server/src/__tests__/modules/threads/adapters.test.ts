@@ -120,7 +120,7 @@ describe('remote creation adapter', () => {
   function transport(status = 201, body = '{"id":"t1"}') {
     const calls: Array<[string, RunnerRequest]> = [];
     const port: RunnerRequestPort = {
-      isAvailable: () => true,
+      isAvailable: async () => true,
       request: async (runnerId, request) => {
         calls.push([runnerId, request]);
         return { status, headers: {}, body };
@@ -298,7 +298,7 @@ describe('remote fork adapter', () => {
   function transport(status = 201, body = '{"id":"t-forked"}') {
     const calls: Array<[string, RunnerRequest]> = [];
     const port: RunnerRequestPort = {
-      isAvailable: () => true,
+      isAvailable: async () => true,
       request: async (runnerId, request) => {
         calls.push([runnerId, request]);
         return { status, headers: {}, body };

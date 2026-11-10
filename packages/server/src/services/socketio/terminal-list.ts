@@ -36,7 +36,7 @@ export async function withRoutedTerminalSessions(
       target,
       dependencies.presence,
       async (actor, runner, proof) =>
-        sink.isAvailable(runner) ? sink.listSessions(actor, runner, proof) : [],
+        (await sink.isAvailable(runner)) ? sink.listSessions(actor, runner, proof) : [],
     );
     for (const session of listed.unwrapOr([])) {
       if (seen.has(session.ptyId)) continue;

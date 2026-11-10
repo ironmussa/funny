@@ -125,7 +125,7 @@ function idleWindowMs(): number {
 }
 
 export function startSandboxLifecycle(deps: {
-  presence: { isAvailable(runnerId: string): boolean } | undefined;
+  presence: { isAvailable(runnerId: string): Promise<boolean> } | undefined;
   browserEvents?: { toUser(userId: string, event: Record<string, unknown>): void };
   /** The server's reverse-link listener; absent: no reverse links are dialed. */
   reverseLinkTarget?: { hostname: string; port: number };

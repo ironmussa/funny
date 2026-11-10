@@ -111,7 +111,7 @@ export function setupBrowserPtyHandlers(
           dependencies.presence,
           async (actor, runner, proof) => {
             if (
-              !terminal.isAvailable(runner) ||
+              !(await terminal.isAvailable(runner)) ||
               !TERMINAL_EVENTS.has(eventName as RunnerTerminalEvent['type'])
             ) {
               log.warn('PTY request has no active compatible gRPC terminal stream', {
@@ -125,7 +125,7 @@ export function setupBrowserPtyHandlers(
               return;
             }
             try {
-              terminal.dispatch(actor, runner, proof, {
+              await terminal.dispatch(actor, runner, proof, {
                 type: eventName,
                 data: payload,
               } as RunnerTerminalEvent);

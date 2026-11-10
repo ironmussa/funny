@@ -10,6 +10,8 @@
  */
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
+// The OAuth state key derives from the auth secret; never touch a real data dir.
+process.env.BETTER_AUTH_SECRET = 'test-auth-secret';
 
 import { beforeEach, describe, expect, test } from 'bun:test';
 

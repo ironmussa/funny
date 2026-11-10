@@ -25,13 +25,13 @@ const RUNNER_OWNER: Record<string, string> = { 'r-alice': 'alice', 'r-bob': 'bob
 function ports(online: string[]) {
   const sent: Array<{ runnerId: string; request: RunnerRequest }> = [];
   const presence: RunnerPresencePort = {
-    isAvailable: (id) => online.includes(id),
-    userHasAvailableRunner: (uid) => online.some((id) => RUNNER_OWNER[id] === uid),
-    userIdForRunner: (id) => RUNNER_OWNER[id] ?? null,
-    availableRunnerCount: () => online.length,
+    isAvailable: async (id) => online.includes(id),
+    userHasAvailableRunner: async (uid) => online.some((id) => RUNNER_OWNER[id] === uid),
+    userIdForRunner: async (id) => RUNNER_OWNER[id] ?? null,
+    availableRunnerCount: async () => online.length,
   } as RunnerPresencePort;
   const requests = {
-    isAvailable: (id: string) => online.includes(id),
+    isAvailable: async (id: string) => online.includes(id),
     request: async (runnerId: string, request: RunnerRequest) => {
       sent.push({ runnerId, request });
       return { status: 201, headers: {}, body: JSON.stringify({ id: 't-new', title: 'T' }) };

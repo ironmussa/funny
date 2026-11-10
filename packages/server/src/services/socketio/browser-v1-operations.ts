@@ -151,8 +151,8 @@ async function executePtyList(
       // The lookup may have taken a while; honour a cancel or deadline that
       // arrived meanwhile before touching the terminal port.
       if (signal.aborted) return { kind: 'aborted' };
-      if (!terminalSink.isAvailable(runner)) return { kind: 'unavailable' };
-      return { kind: 'ok', sessions: terminalSink.listSessions(actor, runner, proof) };
+      if (!(await terminalSink.isAvailable(runner))) return { kind: 'unavailable' };
+      return { kind: 'ok', sessions: await terminalSink.listSessions(actor, runner, proof) };
     },
   );
   if (listed.isErr()) {

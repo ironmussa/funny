@@ -2,7 +2,7 @@
  * Security L3 regression test.
  *
  * Asserts that the Hono `secureHeaders()` middleware — wired into both the
- * server (`src/index.ts`) and the runner (`packages/runtime/src/app.ts`) —
+ * server (`src/app.ts`) and the runner (`packages/runtime/src/app.ts`) —
  * emits `X-Content-Type-Options: nosniff` by default, and that the CSP
  * override we apply in the server does not disable that default.
  *
@@ -50,7 +50,7 @@ describe('static-file security headers (L3)', () => {
    * Security L-2: regression tests for the rest of the security-header
    * surface so a future override of `secureHeaders()` cannot silently drop
    * any of them. Each assertion mirrors what the production server applies
-   * (`packages/server/src/index.ts`) — when that config changes, this test
+   * (`packages/server/src/app.ts`) — when that config changes, this test
    * is the first thing that flags the diff.
    */
   describe('full secure-headers surface', () => {
@@ -119,7 +119,7 @@ describe('static-file security headers (L3)', () => {
 
 // Read the production policies so this regression covers both HTML entrypoints.
 describe('GitHub avatar image policy', () => {
-  for (const path of ['../index.ts', '../../../runtime/src/app/setup-middleware.ts']) {
+  for (const path of ['../app.ts', '../../../runtime/src/app/setup-middleware.ts']) {
     it(`allows GitHub avatars with a restricted image policy in ${path}`, async () => {
       const source = readFileSync(new URL(path, import.meta.url), 'utf8');
       const directive = source.match(/imgSrc: \[([^\]]+)\]/)?.[1];
@@ -138,7 +138,7 @@ describe('GitHub avatar image policy', () => {
 
 // Guard the actual entrypoint declarations, rather than only a copied policy.
 describe('Markdown WebAssembly security policy', () => {
-  for (const path of ['../index.ts', '../../../runtime/src/app/setup-middleware.ts']) {
+  for (const path of ['../app.ts', '../../../runtime/src/app/setup-middleware.ts']) {
     it(`enables isolated WASM without JavaScript eval in ${path}`, async () => {
       const source = readFileSync(new URL(path, import.meta.url), 'utf8');
       const directive = source.match(/scriptSrc: \[([^\]]+)\]/)?.[1];

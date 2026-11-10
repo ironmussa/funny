@@ -34,7 +34,7 @@ import type {
 export interface ThreadSandboxControlDeps {
   connections: Pick<InfraConnectionService, 'providerFor'>;
   sandboxRunnerIdForThread(threadId: string): Promise<string | null>;
-  presence: { isAvailable(runnerId: string): boolean } | undefined;
+  presence: { isAvailable(runnerId: string): Promise<boolean> } | undefined;
   store: ThreadSandboxStore;
   sleep?: (ms: number) => PromiseLike<void>;
   pollMs?: number;
@@ -204,8 +204,11 @@ export const waitForSandboxRunner = (
   fromResult((signal) =>
     pollUntil(
       () =>
-        ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(threadId)).map((runnerId) =>
-          runnerId && deps.presence?.isAvailable(runnerId) ? runnerId : null,
+        ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(threadId)).map(
+          async (runnerId) =>
+            runnerId && deps.presence && (await deps.presence.isAvailable(runnerId))
+              ? runnerId
+              : null,
         ),
       {
         what,
@@ -368,7 +371,11 @@ export function createThreadSandboxControl(deps: ThreadSandboxControlDeps) {
       ]);
       if (row.state === 'connecting') {
         const runnerId = yield* Effect.promise(() => deps.sandboxRunnerIdForThread(threadId));
-        if (runnerId && deps.presence?.isAvailable(runnerId)) {
+        const reachable =
+          runnerId && deps.presence
+            ? yield* Effect.promise(() => deps.presence!.isAvailable(runnerId))
+            : false;
+        if (runnerId && reachable) {
           return yield* ops.transition(threadId, 'READY', { runnerId, error: null });
         }
         yield* ops.transition(threadId, 'STOP');

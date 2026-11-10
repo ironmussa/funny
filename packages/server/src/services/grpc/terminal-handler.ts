@@ -47,7 +47,7 @@ function unsigned(value: unknown): bigint | null {
  * Bridges the existing browser PTY event shape to the runner-initiated gRPC
  * terminal stream. Input is written once and never retained for reconnect.
  */
-export class RunnerGrpcTerminalDispatcher implements RunnerTerminalPort {
+export class RunnerGrpcTerminalDispatcher {
   private readonly streams = new Map<string, ActiveTerminalStream>();
   private readonly terminals = new Map<string, TerminalState>();
   private readonly pendingResizes = new Map<
@@ -65,10 +65,6 @@ export class RunnerGrpcTerminalDispatcher implements RunnerTerminalPort {
   isConnected(runnerId: string): boolean {
     const stream = this.streams.get(runnerId);
     return !!stream && this.sessions.isActive(runnerId, stream.epoch);
-  }
-
-  isAvailable(runnerId: string): boolean {
-    return this.isConnected(runnerId);
   }
 
   register(runnerId: string, epoch: bigint, call: RunnerGrpcCall): () => void {
@@ -383,4 +379,25 @@ export function createTerminalHandler(
 export interface TerminalHandlerOptions {
   dispatcher?: RunnerGrpcTerminalDispatcher;
   relayToUser?: (userId: string, event: Record<string, unknown>) => void;
+}
+
+/**
+ * The terminal port over the gRPC dispatcher. Async so callers do not depend
+ * on the terminals living in this process; a dispatch on an unavailable runner
+ * rejects instead of throwing synchronously.
+ */
+export class GrpcRunnerTerminalAdapter implements RunnerTerminalPort {
+  constructor(private readonly dispatcher: RunnerGrpcTerminalDispatcher) {}
+
+  async isAvailable(runnerId: string): Promise<boolean> {
+    return this.dispatcher.isConnected(runnerId);
+  }
+
+  async dispatch(runnerId: string, userId: string, event: RunnerTerminalEvent): Promise<void> {
+    this.dispatcher.dispatch(runnerId, userId, event);
+  }
+
+  async listSessions(runnerId: string, userId: string): Promise<Array<Record<string, unknown>>> {
+    return this.dispatcher.listSessions(runnerId, userId);
+  }
 }

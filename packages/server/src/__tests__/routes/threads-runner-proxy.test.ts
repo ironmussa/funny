@@ -44,13 +44,13 @@ describe('Thread routes — runner proxy', () => {
   beforeAll(async () => {
     t = await createTestApp({
       runnerPresence: {
-        isAvailable: () => true,
-        userHasAvailableRunner: () => true,
-        userIdForRunner: () => 'user-1',
-        availableRunnerCount: () => 1,
+        isAvailable: async () => true,
+        userHasAvailableRunner: async () => true,
+        userIdForRunner: async () => 'user-1',
+        availableRunnerCount: async () => 1,
       },
       runnerRequests: {
-        isAvailable: () => true,
+        isAvailable: async () => true,
         request: (runnerId, request) => {
           effects.push('remote');
           return tunnelFetch(runnerId, request);

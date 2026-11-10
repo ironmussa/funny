@@ -641,6 +641,18 @@ export const projectRunnerGrants = sqliteTable(
   (t) => [primaryKey({ columns: [t.projectId, t.runnerId] })],
 );
 
+/**
+ * One row (id = 1) whose `version` increments on every change to runner
+ * routing policy (runner role, general runner, dedicated runner, grants,
+ * sandbox binding, runner deletion). Every server instance compares it with
+ * the version its routing caches were filled at and drops them when it moved,
+ * so a revocation applies on all instances at once (runner-scope.ts).
+ */
+export const runnerPolicyVersion = sqliteTable('runner_policy_version', {
+  id: integer('id').primaryKey(),
+  version: integer('version').notNull(),
+});
+
 export const runnerTasks = sqliteTable('runner_tasks', {
   id: text('id').primaryKey(),
   runnerId: text('runner_id')

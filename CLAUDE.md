@@ -63,7 +63,7 @@ bun run db:studio
 
 ### Server Architecture
 
-**Entry point:** `packages/server/src/index.ts` — Initializes auth, database, and starts `Bun.serve()` with WebSocket support. All agent/filesystem/git operations are proxied to remote runners connected via WebSocket tunnel.
+**Entry point:** `packages/server/src/index.ts` starts the Bun host (`src/hosts/bun/main.ts`): validates secrets, initializes the database and auth, starts Socket.IO, the runner transport and background jobs, and listens with `Bun.serve()`. The HTTP composition (middleware, routes, runner proxy) is host-independent in `src/app.ts` (`createServerApp`); host-specific assets (client bundle, extensions) are mounted by `hosts/bun/assets.ts`. Server secrets go through `src/lib/server-secrets.ts`. All agent/filesystem/git operations are proxied to remote runners connected over gRPC (see Deployment Architecture).
 
 **Database:** SQLite via `bun:sqlite` (Bun's native SQLite driver) + Drizzle ORM. DB file lives at `~/.funny/data.db`. Tables are auto-created on startup via `db/migrate.ts` (raw SQL, not Drizzle migrations). Schema in `db/schema.ts` defines: `projects`, `threads`, `messages`, `tool_calls`.
 
@@ -94,7 +94,8 @@ bun run db:studio
 - `/api/projects` — CRUD + branch listing
 - `/api/threads` — CRUD + start/stop agents + send follow-up messages
 - `/api/git/:threadId/*` — Diff, stage, unstage, revert, commit, push, create PR
-- `/ws` — WebSocket endpoint (multiplexed for all threads)
+- `/socket.io/` — Browser realtime endpoint (Socket.IO, multiplexed for all threads; `services/socketio/`)
+- `/api/runner-grpc/ws` — WebSocket carrier for the runner gRPC connection (`RUNNER_GRPC_WS_PATH`)
 - `/api/browse` — Filesystem browsing (drive roots, directory listing, repo name detection, git init)
 
 ### Client Architecture
@@ -113,7 +114,7 @@ bun run db:studio
 
 **Thread rows.** Every thread row lives once, in the threads collection (`data/threads/store.ts`). List membership and order per project, scratch and shared bucket are list metadata (`data/threads/list-meta.ts`), not copies of rows. Read rows with the hooks re-exported from [`lib/thread-selectors.ts`](packages/client/src/lib/thread-selectors.ts) (`useThreadById`, `useThreadsForProject`, `useScratchThreads`, `useSharedThreads`, `useThreadsByProject`). Read the open thread's changing fields (status, title, branch) through `stores/thread-view.ts` or the `stores/thread-context` hooks, not off the loaded payload, which is a load-time snapshot. Realtime row patches (status, `lastAssistantMessage`, cost, stage) go through `patchThreadRow` in `stores/thread-row-writes.ts`. `stores/thread-mutations.ts` only patches the loaded payload map (`threadDataById`) and its `activeThread` mirror.
 
-**Real-time updates:** `hooks/use-ws.ts` connects to `/ws` and dispatches WebSocket events to the store (agent:message, agent:status, agent:result, agent:tool_call).
+**Real-time updates:** `hooks/use-ws.ts` connects to the server with `socket.io-client` and dispatches realtime events to the store (agent:message, agent:status, agent:result, agent:tool_call).
 
 **UI components:** Built with shadcn/ui (Radix UI primitives + Tailwind). Components in `components/ui/` include Button, Select, Dialog, ScrollArea, Tooltip, and Collapsible.
 
@@ -170,9 +171,14 @@ The admin can create additional users from **Settings > Users** in the UI. Self-
 The server and runner are **always separate processes** — the runner is never embedded in the server.
 
 - **Server** (`packages/server`) — Handles authentication, serves the client UI, and owns the database. Proxies all agent/filesystem/git requests to runners. The server is the single entry point for all client requests.
-- **Runner** (`packages/runtime`) — Stateless process that executes agent work (spawning Claude CLI processes, managing git worktrees, PTY sessions). Runners connect to the server via WebSocket tunnel and can work behind NAT. The runner has **no database** — all data is proxied to the server via the WebSocket data channel.
+- **Runner** (`packages/runtime`) — Stateless process that executes agent work (spawning Claude CLI processes, managing git worktrees, PTY sessions). Runners dial out to the server over **gRPC** (`runner.v2` protocol; runtime `services/grpc-runner-client.ts`, server `services/grpc/`), so they can work behind NAT. The runner has **no database** — all data is proxied to the server via the gRPC data channel (`data:*` messages). Server → runner HTTP requests travel inside the same connection as gRPC `tunnel` frames.
 
-Data flow: `Client → Server → Runner (via WS tunnel or direct HTTP)`
+The gRPC connection has two carriers:
+
+- **Direct** — `RUNNER_GRPC_ENDPOINT` (e.g. a private network address such as `server.railway.internal:50051`).
+- **WebSocket carrier** (default when `RUNNER_GRPC_ENDPOINT` is unset) — the runner derives `wss://<TEAM_SERVER_URL host>/api/runner-grpc/ws` and pipes gRPC bytes through it (`runtime services/grpc-websocket-bridge.ts`, `server services/grpc/websocket-carrier.ts`). The carrier only moves bytes; the protocol and per-stream authentication stay in gRPC. It does authenticate the upgrade itself: the runner sends its token as `Authorization: Bearer`, and a bad token gets 401. Runners from before that check send no token; they get a separate pool (64 sockets, 4 per address, closed if silent for 10 s) so they cannot crowd out authenticated runners. Set `RUNNER_GRPC_WS_ALLOW_UNAUTHENTICATED=false` to refuse them once every runner is updated.
+
+Data flow: `Browser ⇄ Server` over Socket.IO; `Server ⇄ Runner` over gRPC (direct or WebSocket carrier).
 
 **Deploying to Railway (production):** the prod stack runs on Railway as two services (`funny-server`, `funny-runner`) plus Postgres. See [docs/guides/railway-deploy.md](docs/guides/railway-deploy.md) for the connect + deploy runbook — how to load the project token (`source` `.env.railway-token.local`, never `cat` it), `railway up --service …`, verifying builds, and the rule that a new Claude model needs **both** a server deploy (model registry) and a runner deploy (bundled Claude Code CLI version).
 
@@ -191,13 +197,15 @@ Each user can configure their own git identity and GitHub credentials from **Set
 - **Git Name / Email** — Used as `--author` on commits and merges
 - **GitHub Personal Access Token** — Used as `GH_TOKEN` for push and PR operations
 
-Tokens are encrypted at rest using **AES-256-GCM**. The encryption key is auto-generated on first use and stored at:
+Tokens are encrypted at rest using **AES-256-GCM** with a rotatable keyring (`packages/shared/src/lib/crypto.ts`). The keyring is auto-generated on first use and stored at:
 
 ```
-~/.funny/encryption.key
+~/.funny/encryption.keys.json   # plus the legacy ~/.funny/encryption.key, still read as keyId "legacy"
 ```
 
-> **Important:** If this file is deleted, any previously saved GitHub tokens become unrecoverable. Back it up if needed. The file is created with restricted permissions (`0600`).
+On the server, `FUNNY_ENCRYPTION_KEYS` (JSON: `{"active":"k1","keys":{"k1":"<hex-64>"}}`) replaces those files and is read-only — useful when the data dir is not persistent. It must contain every key that encrypted existing rows. The source is chosen in `packages/server/src/lib/server-secrets.ts`.
+
+> **Important:** If the keyring is lost, any previously saved GitHub tokens become unrecoverable. Back it up if needed. The files are created with restricted permissions (`0600`) and refused if readable by others.
 
 ### Auth Architecture
 
@@ -229,7 +237,7 @@ bunx tsc --noEmit
 
 **Runner-request isolation proofs (`runner-request-isolation`).** The two rules above are enforced at the SINK, as compile-time obligations (gdp-ts), in `packages/server/src/services/runner-access/`. Every server → runner request or terminal message goes through `AuthorizedRunnerRequests.send` / `AuthorizedRunnerTerminal.dispatch|listSessions`, which demand a `RunnerFor<A, R>` proof that runner `R` is owned by actor `A` and in scope for the target. The ONLY prover is `runner-for.ts` (`withRunnerFor(actor, target, presence, (actor, runner, proof) => …)`): it lets the resolver CHOOSE the runner, then independently re-verifies ownership (`runners.user_id`, or presence) and scope (`runner-scope`) and refuses + audits anything else. The sink SIGNS the forwarded identity itself from the certified actor (fresh nonce per send) and drops any identity header a caller supplied — callers never build `X-Forwarded-*` headers. Names and proofs cannot leave the callback, so a proof is bound to one actor, one runner, one operation. `userId` is REQUIRED in `findRunnerForProject` / `resolveRunner` / `resolveRunnerDetailed`; the single userless path is the unauthenticated MCP OAuth callback, which uses the weaker `OAuthCallbackRunner<R>` proof that only `sendOAuthCallback` accepts and that signs no identity. Its prover (`withOAuthCallbackRunner(state, …)`) routes ONLY to the runner a server-signed `state` is bound to — minted by the proxy with `mintOAuthCallbackState(actor, runner, RunnerFor proof)` when it forwards the owner's `POST /api/mcp/oauth/start` — and re-verifies that runner's owner and presence; there is no "any runner" fallback. The server renders the callback page itself, and the proxy neutralizes every runner response whose content type is not a passive one (JSON, text, media, PDF): HTML/JS/XML become `text/plain` + `attachment` + `CSP: sandbox`, SVG keeps its type but is sandboxed. System callers (scheduler `/dispatch` + `/cancel`, project-runner-settings stop-sessions) derive the actor from the THREAD or PROJECT OWNER in the DB, never from the request body; a mismatching `userId` is refused and audited. `scripts/fitness/check-runner-request-sinks.ts` (in `bun run lint`) fails on any raw `.request(` / `.dispatch(` / `.listSessions(` outside `services/runner-access/` and `services/grpc/`, on `sendDelegated` outside `middleware/proxy.ts`, and on `createRunnerAccess` (test-only DI) outside `services/runner-access/`; `bun run lint:proofs` and `bun run typecheck:proofs` (`type-tests/runner-isolation.ts`) guard forging, minting outside the prover, and proof/name escapes. Do NOT add a sink, widen the OAuth proof, or re-derive ownership/scope at a call site.
 
-**Project ↔ runner binding (`project-runner-binding`).** Inside one user's runners there is a second boundary: a runner has a role — `general` (serves projectless work: scratch, browse, add-local-project, and every project without an override) or `dedicated` (serves ONLY the projects pinned to it or explicitly granted). A project pinned to a dedicated runner (`project_runner_settings.dedicated_runner_id`) routes ONLY to that runner + explicit grants (`project_runner_grants`); if they are offline the request fails with `project-runner-offline` — never a fallback. `runner_project_assignments` is a LOCATION record that runners write themselves; it is never an authorization source. The rule lives in ONE place — `packages/server/src/services/runner-scope.ts` (`canRunnerAccessProject`, `canRunnerServeProjectless`) — and is enforced in three layers: routing (`runner-resolver.ts`, `runner-manager.findRunnerForProject`), the runner→server data channel (`data-scope.ts`, every `data:*` type MUST have a rule in `DATA_SCOPE_RULES`; unknown types are refused), and agent events (`grpc/events-handler.ts`). Never re-derive the rule at a call site.
+**Project ↔ runner binding (`project-runner-binding`).** Inside one user's runners there is a second boundary: a runner has a role — `general` (serves projectless work: scratch, browse, add-local-project, and every project without an override) or `dedicated` (serves ONLY the projects pinned to it or explicitly granted). A project pinned to a dedicated runner (`project_runner_settings.dedicated_runner_id`) routes ONLY to that runner + explicit grants (`project_runner_grants`); if they are offline the request fails with `project-runner-offline` — never a fallback. `runner_project_assignments` is a LOCATION record that runners write themselves; it is never an authorization source. The rule lives in ONE place — `packages/server/src/services/runner-scope.ts` (`canRunnerAccessProject`, `canRunnerServeProjectless`) — and is enforced in three layers: routing (`runner-resolver.ts`, `runner-manager.findRunnerForProject`), the runner→server data channel (`data-scope.ts`, every `data:*` type MUST have a rule in `DATA_SCOPE_RULES`; unknown types are refused), and agent events (`grpc/events-handler.ts`). Never re-derive the rule at a call site. Its caches are versioned: every scope write (role, general runner, dedicated runner, grants, sandbox binding, runner deletion) goes through the writers in `runner-scope.ts` / `runner-manager.ts`, which bump `runner_policy_version`; every read syncs that version first, so a revocation applies on all server instances at once. Never write `runners.role`, `project_runner_settings`, `project_runner_grants` or delete runners without going through them.
 
 **Thread execution location (`thread-context`).** A request made from a thread's view runs where that thread runs: a sandbox thread on its own sandbox runner (never a fallback to the local runner), any other thread on its project's runner. The rule lives in ONE place on each side. Server: `runner-resolver.ts` takes the thread from a thread route (`/api/threads/:id`, `/api/git/:threadId`) or from the client's thread context (`?threadId=`, or the `X-Funny-Thread-Id` header that `middleware/proxy.ts` folds into the routing query); a context thread only steers requests about its own project (or no project). Client: API functions about the open thread's workspace (files, search, symbols, skills, raw-file URLs) use `requestInThread` / `urlInThread` / `threadContextHeaders` from `lib/api/_core.ts`, whose open thread comes from `lib/thread-context-source.ts`. Terminals carry `sandboxThreadId` on spawn (`services/socketio/terminal-targets.ts`). Host-only affordances (open in editor / open directory) are gated by `canOpenOnHost(thread)` in `thread-variant.ts`. Do NOT pick a runner by project for thread-view data, or branch on `runtime === 'sandbox'` at a call site — add a predicate or route through the thread context instead.
 

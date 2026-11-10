@@ -444,8 +444,8 @@ describe('production TypeScript runner gRPC adapters', () => {
       expect(fixture.transport.client.isActive()).toBe(false);
       expect(replacement.client.isActive()).toBe(true);
       expect(replacement.client.sessionEpoch()).toBe(winningEpoch);
-      expect(fixture.endpoint.presence.availableRunnerCount()).toBe(1);
-      expect(fixture.endpoint.presence.userIdForRunner('runner-1')).toBe('user-1');
+      expect(await fixture.endpoint.presence.availableRunnerCount()).toBe(1);
+      expect(await fixture.endpoint.presence.userIdForRunner('runner-1')).toBe('user-1');
 
       await expect(
         fixture.endpoint.requests.request('runner-1', {
@@ -482,9 +482,9 @@ describe('production TypeScript runner gRPC adapters', () => {
     fixture = await createProductionGrpcFixture();
 
     expect(fixture.transport.client.sessionEpoch()).toBeTruthy();
-    expect(fixture.endpoint.presence.isAvailable('runner-1')).toBe(true);
-    expect(fixture.endpoint.requests.isAvailable('runner-1')).toBe(true);
-    expect(fixture.endpoint.terminals.isAvailable('runner-1')).toBe(true);
+    expect(await fixture.endpoint.presence.isAvailable('runner-1')).toBe(true);
+    expect(await fixture.endpoint.requests.isAvailable('runner-1')).toBe(true);
+    expect(await fixture.endpoint.terminals.isAvailable('runner-1')).toBe(true);
 
     await expect(
       fixture.transport.request('data:get_project', { projectId: 'project-1' }),

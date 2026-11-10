@@ -48,7 +48,7 @@ export function setupBrowserSessionHandlers(
         { kind: 'projectless' },
         dependencies.presence,
         async (actor, runner, proof) => {
-          if (!sink.isAvailable(runner)) {
+          if (!(await sink.isAvailable(runner))) {
             noRunner();
             return;
           }

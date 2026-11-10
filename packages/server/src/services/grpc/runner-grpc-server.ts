@@ -21,6 +21,7 @@ import { GrpcRunnerRequestAdapter } from './runner-request-adapter.js';
 import { RunnerGrpcSessionRegistry } from './session-registry.js';
 import {
   createTerminalHandler,
+  GrpcRunnerTerminalAdapter,
   RunnerGrpcTerminalDispatcher,
   type TerminalHandlerOptions,
 } from './terminal-handler.js';
@@ -382,7 +383,7 @@ export async function startRunnerGrpcEndpoint(
       onHeartbeat: (runnerId) => dependencies.markRunnerOnline?.(runnerId),
       onUnavailable: async (runnerId, _epoch, _reason, userId) => {
         log.info('Runner disconnected from gRPC', { namespace: 'runner-grpc', runnerId });
-        if (userId && !sessions.userHasAvailableRunner(userId)) {
+        if (userId && !sessions.userHasSession(userId)) {
           relayToUser(userId, { type: 'runner:status', status: 'offline', runnerId });
         }
         await expireThenMarkOffline(dependencies, runnerId);
@@ -463,7 +464,7 @@ export async function startRunnerGrpcEndpoint(
     host: config.host,
     port,
     requests: new GrpcRunnerRequestAdapter(tunnelDispatcher),
-    terminals: terminalDispatcher,
+    terminals: new GrpcRunnerTerminalAdapter(terminalDispatcher),
     presence: sessions,
     shutdown: (graceMs = 4_000) =>
       new Promise<void>((resolveShutdown) => {

@@ -26,7 +26,7 @@ describe('gRPC-only runner proxy', () => {
     const response = await appWith({
       ...resolver,
       requests: {
-        isAvailable: () => false,
+        isAvailable: async () => false,
         request: async () => {
           tunnelCalls += 1;
           throw new Error('must not dispatch');
@@ -43,7 +43,7 @@ describe('gRPC-only runner proxy', () => {
     const response = await appWith({
       ...resolver,
       requests: {
-        isAvailable: () => true,
+        isAvailable: async () => true,
         request: async () => {
           tunnelCalls += 1;
           throw new MockTunnelTimeoutError('runner-1', 30_000);
@@ -60,7 +60,7 @@ describe('gRPC-only runner proxy', () => {
     const app = appWith({
       ...resolver,
       requests: {
-        isAvailable: () => true,
+        isAvailable: async () => true,
         request: async (_runnerId, request) => {
           methods.push(request.method);
           return { status: 200, headers: { 'content-type': 'application/json' }, body: '{}' };

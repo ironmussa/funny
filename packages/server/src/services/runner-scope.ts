@@ -26,7 +26,7 @@
  * re-derive the rule at a call site.
  */
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { db } from '../db/index.js';
@@ -34,6 +34,7 @@ import {
   projectRunnerGrants,
   projectRunnerSettings,
   projects,
+  runnerPolicyVersion,
   runners,
   userProfiles,
 } from '../db/schema.js';
@@ -81,13 +82,31 @@ export function evaluateRunnerAccess(
 }
 
 // ── Cache ──────────────────────────────────────────────────
+//
+// Routing-policy caches are only valid at the policy version they were read
+// at. Every scope change bumps `runner_policy_version` in the DB; every read
+// first syncs that version (one primary-key lookup) and ignores entries from
+// an older one. So a revocation made on any server instance applies to every
+// instance on its next read — not after the TTL. The TTL stays as a backstop.
 
 const CACHE_TTL_MS = 30_000;
-const runnerCache = new Map<string, { value: RunnerScopeRecord | null; at: number }>();
-const policyCache = new Map<string, { value: ProjectRunnerPolicy | null; at: number }>();
 
-function fresh<T>(entry: { value: T; at: number } | undefined): entry is { value: T; at: number } {
-  return !!entry && Date.now() - entry.at < CACHE_TTL_MS;
+interface CacheEntry<T> {
+  value: T;
+  at: number;
+  /** Policy version at which `value` was read. */
+  version: number;
+}
+
+const runnerCache = new Map<string, CacheEntry<RunnerScopeRecord | null>>();
+const policyCache = new Map<string, CacheEntry<ProjectRunnerPolicy | null>>();
+const sandboxByThreadCache = new Map<string, CacheEntry<string | null>>();
+
+/** Highest policy version this instance has seen; -1 = not read yet. */
+let knownVersion = -1;
+
+function fresh<T>(entry: CacheEntry<T> | undefined): entry is CacheEntry<T> {
+  return !!entry && entry.version === knownVersion && Date.now() - entry.at < CACHE_TTL_MS;
 }
 
 type ScopeChangeListener = (change: { runnerId?: string; projectId?: string }) => void;
@@ -99,8 +118,7 @@ export function onRunnerScopeChange(listener: ScopeChangeListener): () => void {
   return () => listeners.delete(listener);
 }
 
-/** Drop cached scope data. Must run synchronously in the request that changed it. */
-function invalidateRunnerScope(change: { runnerId?: string; projectId?: string } = {}) {
+function clearLocal(change: { runnerId?: string; projectId?: string }) {
   if (change.runnerId) runnerCache.delete(change.runnerId);
   if (change.projectId) policyCache.delete(change.projectId);
   if (!change.runnerId && !change.projectId) {
@@ -120,11 +138,82 @@ function invalidateRunnerScope(change: { runnerId?: string; projectId?: string }
   }
 }
 
+/**
+ * Read the DB policy version and drop every cache entry from an older one.
+ * Returns the version to tag entries read after this call with. If the
+ * version cannot be read, returns a fresh sentinel so nothing is served from
+ * (or kept in) the cache — fail closed to the DB, never to a stale answer.
+ */
+export async function syncRunnerPolicyVersion(): Promise<number> {
+  let version: number;
+  try {
+    const [row] = await db
+      .select({ version: runnerPolicyVersion.version })
+      .from(runnerPolicyVersion)
+      .where(eq(runnerPolicyVersion.id, 1));
+    // A missing row (migration 092 seeds it) cannot prove the cache is
+    // current either: bumps would update nothing.
+    if (!row) throw new Error('runner_policy_version row is missing');
+    version = Number(row.version);
+  } catch (error) {
+    log.warn('Runner policy version unavailable — routing caches bypassed', {
+      namespace: 'runner-scope',
+      error: (error as Error).message,
+    });
+    clearLocal({});
+    knownVersion = -1;
+    return -2;
+  }
+  if (version > knownVersion) {
+    if (knownVersion !== -1) clearLocal({});
+    knownVersion = version;
+  }
+  return version;
+}
+
+/** The policy version the caches currently trust (for caches outside this module). */
+export function currentRunnerPolicyVersion(): number {
+  return knownVersion;
+}
+
+/**
+ * Record a scope change: drop this instance's cached entries now, and bump the
+ * DB version so every other instance drops theirs on its next read. Awaited by
+ * the request that made the change, after the change is written.
+ */
+async function invalidateRunnerScope(change: { runnerId?: string; projectId?: string } = {}) {
+  clearLocal(change);
+  try {
+    const [row] = await db
+      .update(runnerPolicyVersion)
+      .set({ version: sql`${runnerPolicyVersion.version} + 1` })
+      .where(eq(runnerPolicyVersion.id, 1))
+      .returning({ version: runnerPolicyVersion.version });
+    if (!row) throw new Error('runner_policy_version row is missing');
+    knownVersion = Math.max(knownVersion, Number(row.version));
+  } catch (error) {
+    // Other instances keep their caches until the TTL: make that loud.
+    log.error('Runner policy version bump failed — other instances may serve stale routing', {
+      namespace: 'runner-scope',
+      error: (error as Error).message,
+    });
+  }
+}
+
+/** Record that runners were deleted (their cached scope must not be served). */
+export async function runnersDeleted(runnerIds: string[]): Promise<void> {
+  if (runnerIds.length === 0) return;
+  for (const runnerId of runnerIds) clearLocal({ runnerId });
+  sandboxByThreadCache.clear();
+  await invalidateRunnerScope({});
+}
+
 /** Test helper. */
 export function __resetRunnerScopeCache() {
   runnerCache.clear();
   policyCache.clear();
   sandboxByThreadCache.clear();
+  knownVersion = -1;
 }
 
 // ── Reads ──────────────────────────────────────────────────
@@ -133,9 +222,8 @@ function parseRunnerRole(role: string): RunnerRole {
   return role === 'dedicated' || role === 'sandbox' ? role : 'general';
 }
 
-const sandboxByThreadCache = new Map<string, { value: string | null; at: number }>();
-
 async function getRunnerScopeRecord(runnerId: string): Promise<RunnerScopeRecord | null> {
+  const version = await syncRunnerPolicyVersion();
   const cached = runnerCache.get(runnerId);
   if (fresh(cached)) return cached.value;
   const [row] = await db
@@ -155,11 +243,12 @@ async function getRunnerScopeRecord(runnerId: string): Promise<RunnerScopeRecord
         threadId: row.role === 'sandbox' ? row.threadId : null,
       }
     : null;
-  runnerCache.set(runnerId, { value, at: Date.now() });
+  runnerCache.set(runnerId, { value, at: Date.now(), version });
   return value;
 }
 
 async function getProjectRunnerPolicy(projectId: string): Promise<ProjectRunnerPolicy | null> {
+  const version = await syncRunnerPolicyVersion();
   const cached = policyCache.get(projectId);
   if (fresh(cached)) return cached.value;
   const [project] = await db
@@ -183,7 +272,7 @@ async function getProjectRunnerPolicy(projectId: string): Promise<ProjectRunnerP
       grantedRunnerIds: grants.map((g) => g.runnerId),
     };
   }
-  policyCache.set(projectId, { value, at: Date.now() });
+  policyCache.set(projectId, { value, at: Date.now(), version });
   return value;
 }
 
@@ -208,6 +297,7 @@ export async function sandboxThreadOfRunner(runnerId: string): Promise<string | 
  * When set, it is the ONLY runner that may serve the thread.
  */
 export async function sandboxRunnerIdForThread(threadId: string): Promise<string | null> {
+  const version = await syncRunnerPolicyVersion();
   const cached = sandboxByThreadCache.get(threadId);
   if (fresh(cached)) return cached.value;
   const [row] = await db
@@ -215,7 +305,7 @@ export async function sandboxRunnerIdForThread(threadId: string): Promise<string
     .from(runners)
     .where(and(eq(runners.threadId, threadId), eq(runners.role, 'sandbox')));
   const value = row?.id ?? null;
-  sandboxByThreadCache.set(threadId, { value, at: Date.now() });
+  sandboxByThreadCache.set(threadId, { value, at: Date.now(), version });
   return value;
 }
 
@@ -298,14 +388,14 @@ async function getProjectGithubTokenCiphertext(projectId: string): Promise<strin
 
 export async function setRunnerRole(runnerId: string, role: RunnerRole): Promise<void> {
   await db.update(runners).set({ role }).where(eq(runners.id, runnerId));
-  invalidateRunnerScope({ runnerId });
+  await invalidateRunnerScope({ runnerId });
 }
 
 /** Make `runnerId` the sandbox runner of `threadId` (it then serves nothing else). */
 export async function bindSandboxRunner(runnerId: string, threadId: string): Promise<void> {
   await db.update(runners).set({ role: 'sandbox', threadId }).where(eq(runners.id, runnerId));
   sandboxByThreadCache.delete(threadId);
-  invalidateRunnerScope({ runnerId });
+  await invalidateRunnerScope({ runnerId });
 }
 
 /** Designate (or clear) the user's general runner. Runner must belong to the user. */
@@ -330,7 +420,7 @@ export async function setGeneralRunner(userId: string, runnerId: string | null):
       updatedAt: now,
     });
   }
-  invalidateRunnerScope();
+  await invalidateRunnerScope();
   return true;
 }
 
@@ -377,7 +467,7 @@ export async function setProjectDedicatedRunner(
   );
 
   await upsertSettings(projectId, { dedicatedRunnerId: runnerId });
-  invalidateRunnerScope({ projectId });
+  await invalidateRunnerScope({ projectId });
 
   const after = await getProjectRunnerPolicy(projectId);
   const revokedRunnerIds = after
@@ -405,7 +495,7 @@ export async function grantProjectRunner(
       createdAt: new Date().toISOString(),
     })
     .onConflictDoNothing();
-  invalidateRunnerScope({ projectId });
+  await invalidateRunnerScope({ projectId });
   return true;
 }
 
@@ -422,7 +512,7 @@ export async function revokeProjectRunner(
     .where(
       and(eq(projectRunnerGrants.projectId, projectId), eq(projectRunnerGrants.runnerId, runnerId)),
     );
-  invalidateRunnerScope({ projectId });
+  await invalidateRunnerScope({ projectId });
   return {
     ok: true,
     lostAccess: !(await canRunnerAccessProject(runnerId, projectId)),

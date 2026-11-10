@@ -99,12 +99,12 @@ export class GrpcRunnerRequestAdapter implements RunnerRequestPort {
     private readonly timeoutMs = DEFAULT_TIMEOUT_MS,
   ) {}
 
-  isAvailable(runnerId: string): boolean {
+  async isAvailable(runnerId: string): Promise<boolean> {
     return this.dispatcher.isConnected(runnerId);
   }
 
   async request(runnerId: string, request: RunnerRequest): Promise<RunnerResponse> {
-    if (!this.isAvailable(runnerId)) {
+    if (!this.dispatcher.isConnected(runnerId)) {
       throw new Error(`Runner ${runnerId} has no active gRPC tunnel`);
     }
     const deadlineAt = request.deadlineAt ?? Date.now() + this.timeoutMs;

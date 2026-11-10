@@ -3,16 +3,18 @@
  *
  * The actual implementation now lives in `@funny/shared/lib/crypto` and is
  * shared with the runtime (Security ME-11). This file just wires in the
- * server's DATA_DIR and structured logger and re-exports the public API
+ * server's keyring source and structured logger and re-exports the public API
  * so existing imports (`from '../lib/crypto.js'`) keep working.
  */
 import { createCrypto, type CryptoApi } from '@funny/shared/lib/crypto';
 
-import { DATA_DIR } from './data-dir.js';
 import { log } from './logger.js';
+import { serverKeyringSource } from './server-secrets.js';
 
+// The keyring source (data dir files, or FUNNY_ENCRYPTION_KEYS) is chosen by
+// server-secrets.ts and resolved on first use.
 const api: CryptoApi = createCrypto({
-  dataDir: DATA_DIR,
+  keyring: serverKeyringSource,
   log: {
     warn: (msg, meta) => log.warn(msg, meta),
     info: (msg, meta) => log.info(msg, meta),

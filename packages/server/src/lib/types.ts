@@ -19,6 +19,8 @@ export type ServerEnv = {
     runnerRequests?: import('../services/runner-ports.js').RunnerRequestPort;
     runnerPresence?: import('../services/runner-ports.js').RunnerPresencePort;
     browserEvents?: import('../services/runner-ports.js').BrowserEventSink;
+    /** TCP peer address of this request, supplied by the host (see lib/client-ip.ts). */
+    IP?: import('./client-ip.js').ClientAddress | null;
   };
   Variables: {
     userId: string;

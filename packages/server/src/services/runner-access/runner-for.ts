@@ -158,7 +158,9 @@ export function createRunnerAccess(deps: RunnerAccessDeps = {}): RunnerAccess {
         // The runner holding the checkout first, then the resolver's scoped
         // candidates (mirrors the legacy `resolveRunnerForProject`).
         const checkout = await selection.runnerForProject(target.projectId, actor.userId);
-        if (checkout && presence?.isAvailable(checkout)) return { ok: true, runnerId: checkout };
+        if (checkout && presence && (await presence.isAvailable(checkout))) {
+          return { ok: true, runnerId: checkout };
+        }
         return selection.resolveRequest(
           '/api/threads',
           { projectId: target.projectId },
@@ -233,7 +235,7 @@ export function createRunnerAccess(deps: RunnerAccessDeps = {}): RunnerAccess {
     presence: RunnerPresencePort | undefined,
   ): Promise<'ok' | 'ownership' | 'scope'> {
     const owner =
-      presence?.userIdForRunner?.(runnerId) ?? (await verification.runnerOwner(runnerId));
+      (await presence?.userIdForRunner?.(runnerId)) ?? (await verification.runnerOwner(runnerId));
     if (!owner || owner !== actor.userId) return 'ownership';
     return (await inScope(runnerId, target)) ? 'ok' : 'scope';
   }
@@ -302,11 +304,11 @@ export function createRunnerAccess(deps: RunnerAccessDeps = {}): RunnerAccess {
     const { userId, runnerId } = binding;
     const target: RunnerTarget = { kind: 'owned-runner', runnerId };
     const owner =
-      presence?.userIdForRunner?.(runnerId) ?? (await verification.runnerOwner(runnerId));
+      (await presence?.userIdForRunner?.(runnerId)) ?? (await verification.runnerOwner(runnerId));
     if (!owner || owner !== userId) {
       return err(refused(runnerActor({ userId }), runnerId, target, 'ownership'));
     }
-    if (presence && !presence.isAvailable(runnerId)) {
+    if (presence && !(await presence.isAvailable(runnerId))) {
       return err({ kind: 'runner-unavailable', reason: 'general-runner-offline' });
     }
     return ok(await name(resolvedRunnerId(runnerId), (r) => run(r, OAuthCallbackRunner.prove(r))));

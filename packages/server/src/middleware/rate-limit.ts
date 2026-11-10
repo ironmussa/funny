@@ -20,11 +20,29 @@ import {
   type SlidingWindowHits,
 } from '@funny/shared/lib/sliding-window-hits';
 import type { Context, Next } from 'hono';
-import { getConnInfo } from 'hono/bun';
 
+import { clientIp } from '../lib/client-ip.js';
 import { log } from '../lib/logger.js';
 
 const TRUST_PROXY = process.env.TRUST_PROXY === 'true';
+
+/** A sliding-window counter per key; `hit` records one request and says if it is over the limit. */
+export function createSlidingWindowLimiter(opts: { windowMs: number; max: number }): {
+  hit(key: string, now?: number): boolean;
+} {
+  const { windowMs, max } = opts;
+  const hits: SlidingWindowHits = new Map();
+  startSlidingWindowPrune(hits, windowMs);
+  return {
+    hit(key, now = Date.now()) {
+      const valid = (hits.get(key) ?? []).filter((t) => now - t < windowMs);
+      if (valid.length >= max) return true;
+      valid.push(now);
+      hits.set(key, valid);
+      return false;
+    },
+  };
+}
 
 export function rateLimit(opts: {
   windowMs: number;
@@ -34,42 +52,15 @@ export function rateLimit(opts: {
   /** Requests this limiter does not count (they have a limiter of their own). */
   skip?: (c: Context) => boolean;
 }) {
-  const { windowMs, max, perUser, skip } = opts;
-  const hits: SlidingWindowHits = new Map();
-  startSlidingWindowPrune(hits, windowMs);
-
-  function check(key: string, now: number): boolean {
-    const timestamps = hits.get(key) ?? [];
-    const valid = timestamps.filter((t) => now - t < windowMs);
-    if (valid.length >= max) return true; // rate limited
-    valid.push(now);
-    hits.set(key, valid);
-    return false;
-  }
-
-  function resolveIp(c: Context): string | null {
-    if (TRUST_PROXY) {
-      const xff = c.req.header('x-forwarded-for');
-      if (xff) {
-        const first = xff.split(',')[0]?.trim();
-        if (first) return first;
-      }
-    }
-    try {
-      const info = getConnInfo(c);
-      const addr = info.remote.address;
-      if (typeof addr === 'string' && addr.length > 0) return addr;
-    } catch {
-      // getConnInfo throws when the runtime adapter isn't Bun (e.g. in tests).
-    }
-    return null;
-  }
+  const { windowMs, perUser, skip } = opts;
+  const limiter = createSlidingWindowLimiter(opts);
+  const check = (key: string, now: number): boolean => limiter.hit(key, now);
 
   return async (c: Context, next: Next) => {
     if (skip?.(c)) return next();
     const now = Date.now();
     const userId = c.get('userId') as string | undefined;
-    const ip = resolveIp(c);
+    const ip = clientIp(c);
 
     // Authenticated: userId is the primary bucket so a single abusive IP
     // cannot exhaust the limit for every legitimate user.

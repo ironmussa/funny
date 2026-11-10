@@ -25,8 +25,12 @@ export interface RunnerResponse {
   bodyStream?: ReadableStream<Uint8Array>;
 }
 
+/*
+ * Availability and terminal calls are async so a port can answer from another
+ * process or a Durable Object (docs/plans/cloudflare-portability.md, Phase 2).
+ */
 export interface RunnerRequestPort {
-  isAvailable(runnerId: string): boolean;
+  isAvailable(runnerId: string): Promise<boolean>;
   request(runnerId: string, request: RunnerRequest): Promise<RunnerResponse>;
 }
 
@@ -52,16 +56,16 @@ export type RunnerTerminalEvent =
   | { type: 'pty:reconnect' | 'pty:restore'; data: Record<string, any> };
 
 export interface RunnerTerminalPort {
-  isAvailable(runnerId: string): boolean;
-  dispatch(runnerId: string, userId: string, event: RunnerTerminalEvent): void;
-  listSessions(runnerId: string, userId: string): Array<Record<string, unknown>>;
+  isAvailable(runnerId: string): Promise<boolean>;
+  dispatch(runnerId: string, userId: string, event: RunnerTerminalEvent): Promise<void>;
+  listSessions(runnerId: string, userId: string): Promise<Array<Record<string, unknown>>>;
 }
 
 export interface RunnerPresencePort {
-  isAvailable(runnerId: string): boolean;
-  userHasAvailableRunner(userId: string): boolean;
-  userIdForRunner(runnerId: string): string | null;
-  availableRunnerCount(): number;
+  isAvailable(runnerId: string): Promise<boolean>;
+  userHasAvailableRunner(userId: string): Promise<boolean>;
+  userIdForRunner(runnerId: string): Promise<string | null>;
+  availableRunnerCount(): Promise<number>;
 }
 
 export type BrowserPublicationScope =

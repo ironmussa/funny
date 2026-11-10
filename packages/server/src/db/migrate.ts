@@ -1868,6 +1868,23 @@ const migrations: Migration[] = [
       await ctx().addColumn('thread_sandboxes', 'runner_link', 'TEXT');
     },
   },
+  {
+    // Routing-policy version: bumped on every runner-scope change and checked
+    // before routing caches are used, so revocations reach every instance.
+    name: '092_runner_policy_version',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS runner_policy_version (
+          id INTEGER PRIMARY KEY,
+          version INTEGER NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        INSERT INTO runner_policy_version (id, version) VALUES (1, 0)
+        ON CONFLICT (id) DO NOTHING
+      `);
+    },
+  },
 ];
 
 /**

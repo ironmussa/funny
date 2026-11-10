@@ -1,0 +1,83 @@
+{
+  "runnerAuth": {
+    "wrongToken": 401,
+    "rightToken": 101,
+    "hello": {
+      "type": "hello",
+      "epoch": 1,
+      "hasBufferedAmount": false
+    }
+  },
+  "epoch": {
+    "first": 1,
+    "replacement": 2,
+    "oldSocketCloseCode": 4001,
+    "afterRestart": 3
+  },
+  "frameSizes": {
+    "runnerToDO": {
+      "65536": "ok",
+      "1048576": "ok",
+      "4194304": "ok",
+      "16777216": "ok",
+      "33554432": "ok",
+      "34603008": "no-ack"
+    },
+    "doToRunner": {
+      "65536": "ok (65536)",
+      "1048576": "ok (1048576)",
+      "4194304": "ok (4194304)",
+      "16777216": "ok (16777216)",
+      "33554432": "ok (33554432)",
+      "34603008": "ok (34603008)"
+    }
+  },
+  "heartbeatExpiry": {
+    "timeoutMs": 2000,
+    "closeFrameAfterMs": 2003,
+    "closeEventFired": false,
+    "closeCode": null,
+    "presenceAfter": {
+      "epoch": 1,
+      "online": false,
+      "sockets": 0
+    },
+    "clientReadyStateAfter": 2,
+    "sendAfterClose": "no ack"
+  },
+  "betterAuth": {
+    "signUpStatus": 200,
+    "signUpWallMs": 188,
+    "signInStatus": 200,
+    "signInWallMs": {
+      "p50": 93,
+      "max": 112
+    },
+    "wrongPasswordStatus": 401,
+    "gotSessionCookie": true
+  },
+  "browserFanout": {
+    "anonymousUpgrade": 401,
+    "authenticatedUpgrade": 101,
+    "delivered": 200,
+    "latencyMs": {
+      "p50": 3,
+      "p95": 5,
+      "max": 8
+    },
+    "otherUsersEventReachedThisBrowser": false,
+    "spoofedIdentityHeadersReachedThisBrowser": false,
+    "forgedTokenUpgrade": 401
+  },
+  "drizzleHyperdrive": {
+    "result": {
+      "seenInside": 1,
+      "rolledBack": true,
+      "visibleAfterRollback": 0
+    },
+    "wallMs": {
+      "p50": 9,
+      "max": 23
+    }
+  }
+}

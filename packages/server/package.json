@@ -19,6 +19,7 @@
   },
   "scripts": {
     "dev": "bun --watch src/index.ts",
+    "db:migrate": "bun src/hosts/bun/migrate-cli.ts",
     "build": "bun run build.ts",
     "start": "bun run dist/index.js",
     "test": "bun test --isolate",

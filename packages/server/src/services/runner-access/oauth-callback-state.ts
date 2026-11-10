@@ -14,9 +14,10 @@
  * Minting demands a `RunnerFor<A, R>` proof, so a state can only bind a runner
  * that was certified for that user. Verification is internal to the prover.
  *
- * The key is random per server process: a restart invalidates in-flight flows
- * (the user retries, and the runtime's pending state is in-memory anyway). The
- * server already assumes a single instance (see automation-scheduler).
+ * The key is derived from the server's auth secret (`deriveServerKey`), so a
+ * state stays valid across a server restart and on any instance that shares
+ * the secret. It was random per process before, which broke in-flight flows on
+ * restart and any callback that reached another instance.
  */
 
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
@@ -25,6 +26,7 @@ import { parseStoredJson } from '@funny/shared/json-validation';
 import type { Named } from '@gdp-ts/core';
 import { z } from 'zod';
 
+import { deriveServerKey } from '../../lib/server-secrets.js';
 import type { RunnerActor, RunnerId } from './runner-actor.js';
 import type { RunnerFor } from './runner-for.js';
 
@@ -34,7 +36,6 @@ export const OAUTH_STATE_HEADER = 'X-Funny-OAuth-State';
 /** Matches the runtime's pending-state TTL. */
 const STATE_TTL_MS = 10 * 60 * 1000;
 const VERSION = 'v1';
-const STATE_KEY = randomBytes(32);
 
 export interface OAuthCallbackBinding {
   readonly userId: string;
@@ -50,7 +51,9 @@ const statePayloadSchema = z.object({
 type StatePayload = z.infer<typeof statePayloadSchema>;
 
 function mac(body: string): Buffer {
-  return createHmac('sha256', STATE_KEY).update(`${VERSION}.${body}`).digest();
+  return createHmac('sha256', deriveServerKey('oauth-callback-state'))
+    .update(`${VERSION}.${body}`)
+    .digest();
 }
 
 /** Bind a new OAuth `state` to a runner certified for the actor. */

@@ -80,7 +80,7 @@ export async function stopProjectSessionsOnRunners(
       { kind: 'owned-runner', runnerId: t.runnerId },
       ports.presence,
       async (actor, runner, proof) => {
-        if (!sink.isAvailable(runner)) return;
+        if (!(await sink.isAvailable(runner))) return;
         try {
           await sink.send(actor, runner, proof, {
             method: 'POST',

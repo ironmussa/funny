@@ -63,6 +63,19 @@ class RemoteProjectIdentityClient {
         ?.token ?? null
     );
   }
+  /**
+   * The repository-scoped GitHub App token of this sandbox runner's thread
+   * (sandbox-github-app-tokens), or the server's reason for not issuing one.
+   */
+  getGithubAppToken(threadId: string): Promise<{
+    token?: string;
+    expiresAt?: string;
+    repo?: string;
+    error?: string;
+    message?: string;
+  } | null> {
+    return this.request('data:get_github_app_token', { threadId });
+  }
   getMinimaxApiKey(userId: string): Promise<string | null> {
     return this.getProviderKey(userId, 'minimax');
   }
@@ -142,6 +155,9 @@ export const remoteGetProviderKey = remoteProjectIdentityClient.getProviderKey.b
   remoteProjectIdentityClient,
 );
 export const remoteGetGithubToken = remoteProjectIdentityClient.getGithubToken.bind(
+  remoteProjectIdentityClient,
+);
+export const remoteGetGithubAppToken = remoteProjectIdentityClient.getGithubAppToken.bind(
   remoteProjectIdentityClient,
 );
 export const remoteUpdateProfile = remoteProjectIdentityClient.updateProfile.bind(

@@ -8,6 +8,8 @@ const mocks = vi.hoisted(() => ({
   requireProject: vi.fn(),
   resolveGithubToken: vi.fn(),
   checkout: vi.fn(),
+  isSandboxRunner: vi.fn(() => false),
+  prepareSandboxGithub: vi.fn(),
 }));
 
 vi.mock('../../utils/route-helpers.js', () => ({
@@ -19,6 +21,10 @@ vi.mock('../../routes/github/helpers.js', () => ({
 }));
 vi.mock('../../services/sandbox-checkout.js', () => ({
   checkoutProjectIntoSandbox: mocks.checkout,
+}));
+vi.mock('../../services/sandbox-runner.js', () => ({ isSandboxRunner: mocks.isSandboxRunner }));
+vi.mock('../../services/sandbox-github-auth.js', () => ({
+  prepareSandboxGithub: mocks.prepareSandboxGithub,
 }));
 
 const { sandboxCheckoutRoutes } = await import('../../routes/sandbox-checkout.js');
@@ -51,6 +57,21 @@ describe('POST /api/threads/:id/sandbox/checkout', () => {
     mocks.requireProject.mockResolvedValue(ok({ id: 'p-1', path: PROJECT_PATH }));
     mocks.resolveGithubToken.mockResolvedValue({ token: 'gh-token' });
     mocks.checkout.mockResolvedValue(ok({ path: PROJECT_PATH, cloned: true }));
+  });
+
+  test("on a sandbox runner it clones with the thread's App token, never the owner's PAT", async () => {
+    mocks.isSandboxRunner.mockReturnValue(true);
+    mocks.prepareSandboxGithub.mockResolvedValue({
+      token: 'ghs_app',
+      expiresAt: '2026-11-10T13:00:00Z',
+      repo: 'ironmussa/funny',
+    });
+    const res = await post({ path: PROJECT_PATH, repoUrl: REPO });
+    expect(res.status).toBe(200);
+    expect(mocks.prepareSandboxGithub).toHaveBeenCalledWith('t-1');
+    expect(mocks.resolveGithubToken).not.toHaveBeenCalled();
+    expect(mocks.checkout).toHaveBeenCalledWith(expect.objectContaining({ token: 'ghs_app' }));
+    mocks.isSandboxRunner.mockReturnValue(false);
   });
 
   test('rejects a body with unknown fields', async () => {

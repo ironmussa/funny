@@ -99,6 +99,21 @@ optional `project_id` on `GetGithubToken` — an additive protobuf field, so an
 old runner keeps working against a new server (it just gets the user's
 personal token instead of a project's own token until it is redeployed).
 
+### GitHub App for sandboxes
+
+Sandboxes get GitHub access only through the deployment's GitHub App (never
+the owner's PAT). This deployment's App is `funny-sandboxes-ironmussa`
+(App ID `5690396`, installed on `ironmussa`). Set on **funny-server**:
+
+- `GITHUB_APP_ID=5690396`
+- `GITHUB_APP_PRIVATE_KEY` = the App's `.pem` (paste it in the Railway UI; one
+  line with `\n` escapes works too). Never put it in git, the runner or the
+  template.
+
+Server variables win over an App connected in Preferences > GitHub App. To
+rotate the key, generate a new one in the App's settings on GitHub, update the
+variable, redeploy the server, then delete the old key on GitHub.
+
 ## Verify a deploy
 
 Watch build status until both reach `SUCCESS`:

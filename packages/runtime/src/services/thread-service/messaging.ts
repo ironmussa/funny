@@ -116,6 +116,8 @@ export interface SendMessageParams {
    * message, so only `content` is saved here.
    */
   precedingPrompt?: string;
+  /** The images of `precedingPrompt`: sent to the agent, already saved with it. */
+  precedingImages?: ImageAttachment[];
   /**
    * The id of this message, already saved by the server (a sandbox thread's
    * first message, saved when the thread was created). Reused instead of
@@ -256,7 +258,7 @@ async function sendMessageImpl(rawParams: SendMessageParams): Promise<SendMessag
     cwd,
     effectiveModel,
     effectivePermission,
-    params.images,
+    agentImages(params),
     params.disallowedTools,
     allowedToolsForRun,
     effectiveProvider,
@@ -466,6 +468,12 @@ function parseDraftImages(raw: unknown): ImageAttachment[] | undefined {
   return parsed.ok ? (parsed.value as ImageAttachment[]) : undefined;
 }
 
+/** The images the agent sees: the earlier prompt's (sandbox retry), then the message's. */
+function agentImages(params: SendMessageParams): ImageAttachment[] | undefined {
+  if (!params.precedingImages?.length) return params.images;
+  return [...params.precedingImages, ...(params.images ?? [])];
+}
+
 /** The agent sees a never-answered earlier prompt (sandbox retry) before the message. */
 function withPrecedingPrompt(params: SendMessageParams, content: string): string {
   return params.precedingPrompt ? `${params.precedingPrompt}\n\n${content}` : content;
@@ -599,7 +607,7 @@ async function enqueueFollowUp(
     provider: run.provider,
     model: run.model,
     permissionMode: run.permissionMode,
-    images: jsonOrUndefined(params.images),
+    images: jsonOrUndefined(agentImages(params)),
     allowedTools: jsonOrUndefined(params.allowedTools),
     disallowedTools: jsonOrUndefined(params.disallowedTools),
     fileReferences: jsonOrUndefined(params.fileReferences),

@@ -37,6 +37,17 @@ export function runsInSandbox(thread: { runtime?: string | null } | null | undef
  * session). It keeps showing its setup steps, and the next message the user
  * writes retries the sandbox instead of going to a runner.
  */
+/**
+ * A sandbox thread's agent holds a token for the thread's repository
+ * (sandbox-github-app-tokens), so a `steer` sharee can act on that repository
+ * through the agent. The share dialog warns about it.
+ */
+export function steerReachesRepository(
+  thread: { runtime?: string | null } | null | undefined,
+): boolean {
+  return runsInSandbox(thread);
+}
+
 export function sandboxSetupFailed(
   thread: { runtime?: string; status?: string; sessionId?: string | null } | null | undefined,
 ): boolean {

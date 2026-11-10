@@ -81,6 +81,36 @@ Each user configures their own git identity and GitHub credentials from **Settin
 
 Tokens are encrypted at rest with **AES-256-GCM**; the encryption key auto-generates on first use at `~/.funny/encryption.key` (mode `0600`). If that file is deleted, previously saved GitHub tokens become unrecoverable — back it up if you rely on it.
 
+## GitHub access in sandbox threads — the GitHub App
+
+Sandbox threads run on throwaway machines whose agent can read anything the
+sandbox holds, so the owner's PAT never goes there (the data channel refuses it
+to sandbox runners). Each funny deployment has its own **GitHub App**; for every
+sandbox thread the server mints an installation token restricted to that
+thread's repository, valid for one hour, with permissions capped by the owner's
+own access to the repository (read with the owner's PAT, server-side only). The
+sandbox runner writes it where `gh` reads it and points git at
+`gh auth git-credential`, so `git`, `gh` and any mix of them work unchanged; it
+renews the token every 45 minutes.
+
+Setup, once per deployment:
+
+1. **Preferences > GitHub App** (admin) → choose an organization or the personal
+   account → _Connect GitHub_. GitHub shows a pre-filled App (permissions:
+   contents, pull requests, issues, workflows read/write; Actions, checks,
+   commit statuses read; no webhook); confirm it and you are sent back. The
+   private key is stored encrypted; nobody copies it.
+2. _Install on repositories_ → **Only select repositories**.
+
+Alternatively set `GITHUB_APP_ID` and `GITHUB_APP_PRIVATE_KEY` (PEM; one-line
+`\n` escapes accepted) on the server; they take precedence. Without an App, or
+when it is not installed on the thread's repository, sandboxes get no GitHub
+access and the thread shows why. A steer sharee can act on the repository
+through the agent without the owner's approval; protect important branches with
+GitHub rulesets. Code: `packages/server/src/services/github-app/`,
+`packages/server/src/routes/github-app-settings.ts`,
+`packages/runtime/src/services/sandbox-github-auth.ts`.
+
 ## Trust boundaries — runners are not sandboxed
 
 A runner pointed at a remote `TEAM_SERVER_URL` effectively grants that server shell execution in the runner's `$HOME` — git operations, pre-commit hooks, agent CLI spawning, PTY shells, and access to saved GitHub tokens / provider keys. Only connect runners to central servers you trust, and prefer running each runner under a dedicated OS user, VM, or container. Runner-side required configuration:

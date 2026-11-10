@@ -8,6 +8,7 @@ import { designsApi } from './api/designs';
 import { extensionsApi } from './api/extensions';
 import { gitApi } from './api/git';
 import { githubApi } from './api/github';
+import { githubAppApi } from './api/github-app';
 import { infraApi } from './api/infra';
 import { mcpApi } from './api/mcp';
 import { pipelinesApi } from './api/pipelines';
@@ -46,6 +47,7 @@ export const api = {
   ...agentTemplatesApi, // Agent Templates (per-user, Deep Agent only)
   ...browseApi, // Browse (filesystem)
   ...githubApi, // GitHub (status, OAuth, repos, issues, PRs, comments)
+  ...githubAppApi, // The deployment's GitHub App for sandbox threads (admin)
   ...analyticsApi, // Analytics + Logs
   ...systemApi, // Setup + System + Files
   ...profileApi, // Profile

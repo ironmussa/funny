@@ -52,6 +52,10 @@ type AuditAction =
    *  runner — the single intentional exception to runner isolation
    *  (thread-sharing-steer). */
   | 'share.steer_delegation'
+  /** A sandbox thread got a repository-scoped GitHub App token (sandbox-github-app-tokens). */
+  | 'github.sandbox_token_issued'
+  /** A sandbox thread's GitHub App token request was refused. */
+  | 'github.sandbox_token_refused'
   /** ADMIN_PASSWORD env failed the password policy on first-run bootstrap. */
   | 'auth.weak_admin_password_rejected';
 

@@ -16,6 +16,8 @@ import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { checkoutProjectIntoSandbox } from '../services/sandbox-checkout.js';
+import { prepareSandboxGithub } from '../services/sandbox-github-auth.js';
+import { isSandboxRunner } from '../services/sandbox-runner.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { requireProject, requireThread } from '../utils/route-helpers.js';
@@ -60,7 +62,11 @@ sandboxCheckoutRoutes.post('/:id/sandbox/checkout', async (c) => {
   const target = await checkoutTarget(threadId, userId, c.get('organizationId'), parsed.value.path);
   if (target.isErr()) return resultToResponse(c, target);
 
-  const token = (await resolveGithubToken(userId))?.token ?? null;
+  // A sandbox never holds the owner's PAT: it clones with the thread's
+  // repository-scoped GitHub App token (sandbox-github-app-tokens).
+  const token = isSandboxRunner()
+    ? ((await prepareSandboxGithub(threadId))?.token ?? null)
+    : ((await resolveGithubToken(userId))?.token ?? null);
   const result = await checkoutProjectIntoSandbox({ ...parsed.value, token });
   if (result.isErr()) {
     log.warn('Sandbox checkout failed', {

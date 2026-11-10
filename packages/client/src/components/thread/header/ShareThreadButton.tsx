@@ -27,7 +27,7 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { threadsApi, type ShareLevel, type ThreadShareGrant } from '@/lib/api/threads';
 import { createClientLogger } from '@/lib/client-logger';
-import { getThreadRoute } from '@/lib/thread-variant';
+import { getThreadRoute, steerReachesRepository } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
@@ -224,6 +224,7 @@ export function ShareThreadButton({
             ))}
           </div>
           <p className="text-muted-foreground mt-1.5 text-[11px]">{LEVEL_HINT[level]}</p>
+          <SteerRepositoryWarning level={level} />
         </div>
 
         <div className="min-w-0 px-6 pt-4">
@@ -331,5 +332,17 @@ export function ShareThreadButton({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Shown when choosing Editor on a sandbox thread: its agent can act on the repository. */
+function SteerRepositoryWarning({ level }: { level: ShareLevel }) {
+  const applies = useThreadSelector((t) => steerReachesRepository(t));
+  if (level !== 'steer' || !applies) return null;
+  return (
+    <p className="text-status-warning mt-1.5 text-xs" data-testid="share-steer-repository-warning">
+      This thread runs in a sandbox with GitHub access to its repository. An editor can push, open
+      pull requests and comment there through the agent, without your approval.
+    </p>
   );
 }

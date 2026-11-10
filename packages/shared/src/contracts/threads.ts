@@ -7,7 +7,7 @@
 import { z } from 'zod';
 
 import type { PermissionMode, ThreadMode, ThreadStage, ThreadStatus } from '../primitives.js';
-import type { PaginatedThreadsResponse, ThreadWithMessages } from '../types.js';
+import type { PaginatedMessages, PaginatedThreadsResponse, ThreadWithMessages } from '../types.js';
 import type { Thread } from '../types/thread.js';
 import { endpointGroup } from './endpoint.js';
 
@@ -93,6 +93,36 @@ const archivedQuery = z.object({
   search: z.string().optional(),
   projectId: z.string().optional(),
 });
+
+const messagesQuery = z.object({
+  cursor: z.string().optional(),
+  limit: clampedInt(50, 1, 200),
+  // Anything but "after" has always meant "before".
+  direction: z
+    .unknown()
+    .optional()
+    .transform((value): 'before' | 'after' => (value === 'after' ? 'after' : 'before')),
+});
+
+const messageSearchQuery = z.object({
+  q: z.string().optional(),
+  limit: clampedInt(100, 1, 200),
+  caseSensitive: queryFlag,
+});
+
+const contentSearchQuery = z.object({
+  q: z.string().optional(),
+  projectId: z.string().optional(),
+  caseSensitive: queryFlag,
+});
+
+export interface MessageSearchResult {
+  messageId: string;
+  role: string;
+  content: string;
+  timestamp: string;
+  snippet: string;
+}
 
 const detailQuery = z.object({
   messageLimit: z.coerce.number().int().min(1).max(200).optional(),
@@ -182,5 +212,20 @@ export const threadsContract = {
     method: 'PATCH',
     path: '/:id/stage',
     body: lifecycleValueBody('stage', THREAD_STAGE_VALUES),
+  }),
+  messages: api.endpoint<PaginatedMessages>()({
+    method: 'GET',
+    path: '/:id/messages',
+    query: messagesQuery,
+  }),
+  searchMessages: api.endpoint<{ results: MessageSearchResult[] }>()({
+    method: 'GET',
+    path: '/:id/messages/search',
+    query: messageSearchQuery,
+  }),
+  searchContent: api.endpoint<{ threadIds: string[]; snippets: Record<string, string> }>()({
+    method: 'GET',
+    path: '/search/content',
+    query: contentSearchQuery,
   }),
 };

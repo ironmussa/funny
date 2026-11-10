@@ -20,6 +20,7 @@ import { db, dbAll } from '../db/index.js';
 import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
+import { toMessage, toOptionalMessage } from '../lib/message-response.js';
 import { authorizer } from '../lib/server-authorizer.js';
 import { startSpan } from '../lib/telemetry.js';
 import { toThread, toThreadDetail } from '../lib/thread-response.js';
@@ -285,44 +286,43 @@ serveEndpoint(threadRoutes, contract.get, async ({ userId, params, query }) => {
 });
 
 // GET /api/threads/:id/messages?cursor=<ISO>&limit=50&direction=before|after
-threadRoutes.get('/:id/messages', requireThreadView, async (c) => {
-  const id = c.req.param('id');
-
-  const cursor = c.req.query('cursor');
-  const limitParam = c.req.query('limit');
-  const limit = Math.min(200, Math.max(1, parseInt(limitParam || '50', 10)));
-  const direction = c.req.query('direction') === 'after' ? 'after' : 'before';
-
-  const result = await messageRepo.getThreadMessages({
-    threadId: id,
-    cursor: cursor || undefined,
-    limit,
-    direction,
-  });
-  return c.json(result);
-});
+serveEndpoint(
+  threadRoutes,
+  contract.messages,
+  async ({ params, query }) => {
+    const result = await messageRepo.getThreadMessages({
+      threadId: params.id,
+      cursor: query.cursor || undefined,
+      limit: query.limit,
+      direction: query.direction,
+    });
+    return reply({
+      ...result,
+      messages: result.messages.map(toMessage),
+      leadingUserMessage: toOptionalMessage(result.leadingUserMessage),
+    });
+  },
+  { middleware: [requireThreadView] },
+);
 
 // GET /api/threads/:id/messages/search?q=xxx&limit=100
-threadRoutes.get('/:id/messages/search', requireThreadView, async (c) => {
-  const id = c.req.param('id');
+serveEndpoint(
+  threadRoutes,
+  contract.searchMessages,
+  async ({ params, query }) => {
+    const q = query.q?.trim() ?? '';
+    if (!q) return reply({ results: [] });
 
-  const q = c.req.query('q') || '';
-  const limitParam = c.req.query('limit');
-  const limit = Math.min(200, Math.max(1, parseInt(limitParam || '100', 10)));
-  const caseSensitive = c.req.query('caseSensitive') === 'true';
-
-  if (!q.trim()) {
-    return c.json({ results: [] });
-  }
-
-  const results = await messageRepo.searchMessages({
-    threadId: id,
-    query: q.trim(),
-    limit,
-    caseSensitive,
-  });
-  return c.json({ results });
-});
+    const results = await messageRepo.searchMessages({
+      threadId: params.id,
+      query: q,
+      limit: query.limit,
+      caseSensitive: query.caseSensitive,
+    });
+    return reply({ results });
+  },
+  { middleware: [requireThreadView] },
+);
 
 // Join author display info (name/image) onto a set of comments so the client
 // can render avatars + names without a second round-trip. Mirrors the
@@ -995,14 +995,12 @@ threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
 });
 
 // GET /api/threads/search/content?q=xxx&projectId=xxx&caseSensitive=true
-threadRoutes.get('/search/content', async (c) => {
-  const userId = c.get('userId') as string;
-  const q = c.req.query('q') || '';
-  const projectId = c.req.query('projectId');
-  const caseSensitive = c.req.query('caseSensitive') === 'true';
+serveEndpoint(threadRoutes, contract.searchContent, async ({ userId, query }) => {
+  const q = query.q ?? '';
+  const { projectId, caseSensitive } = query;
 
   if (!q.trim()) {
-    return c.json({ threadIds: [], snippets: {} });
+    return reply({ threadIds: [], snippets: {} });
   }
 
   const { searchThreadIdsByContent } = await import('../services/search-repository.js');
@@ -1014,5 +1012,5 @@ threadRoutes.get('/search/content', async (c) => {
     snippets[id] = snippet;
   }
 
-  return c.json({ threadIds, snippets });
+  return reply({ threadIds, snippets });
 });

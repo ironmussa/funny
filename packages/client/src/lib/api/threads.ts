@@ -1,6 +1,5 @@
 import type {
   ImageAttachment,
-  PaginatedMessages,
   PermissionMode,
   QueuedMessage,
   Thread,
@@ -48,14 +47,14 @@ export const threadsApi = {
     }),
   listThreadsByDesign: (designId: string, limit = 100) =>
     callEndpoint(contract.list, { query: { designId, limit } }),
-  searchThreadContent: (query: string, projectId?: string, caseSensitive = false) => {
-    const params = new URLSearchParams({ q: query });
-    if (projectId) params.set('projectId', projectId);
-    if (caseSensitive) params.set('caseSensitive', 'true');
-    return request<{ threadIds: string[]; snippets: Record<string, string> }>(
-      `/threads/search/content?${params.toString()}`,
-    );
-  },
+  searchThreadContent: (query: string, projectId?: string, caseSensitive = false) =>
+    callEndpoint(contract.searchContent, {
+      query: {
+        q: query,
+        projectId: projectId || undefined,
+        caseSensitive: caseSensitive || undefined,
+      },
+    }),
   getThread: (
     id: string,
     messageLimit?: number,
@@ -79,23 +78,16 @@ export const threadsApi = {
     cursor: string,
     limit = 50,
     direction: 'before' | 'after' = 'before',
-  ) => {
-    const params = new URLSearchParams({ cursor, limit: String(limit), direction });
-    return request<PaginatedMessages>(`/threads/${threadId}/messages?${params.toString()}`);
-  },
-  searchThreadMessages: (threadId: string, query: string, limit = 100, caseSensitive = false) => {
-    const params = new URLSearchParams({ q: query, limit: String(limit) });
-    if (caseSensitive) params.set('caseSensitive', 'true');
-    return request<{
-      results: Array<{
-        messageId: string;
-        role: string;
-        content: string;
-        timestamp: string;
-        snippet: string;
-      }>;
-    }>(`/threads/${threadId}/messages/search?${params.toString()}`);
-  },
+  ) =>
+    callEndpoint(contract.messages, {
+      params: { id: threadId },
+      query: { cursor, limit, direction },
+    }),
+  searchThreadMessages: (threadId: string, query: string, limit = 100, caseSensitive = false) =>
+    callEndpoint(contract.searchMessages, {
+      params: { id: threadId },
+      query: { q: query, limit, caseSensitive: caseSensitive || undefined },
+    }),
   getThreadEvents: (threadId: string, signal?: AbortSignal) => {
     return request<{ events: Array<import('@funny/shared').ThreadEvent> }>(
       `/threads/${threadId}/events`,

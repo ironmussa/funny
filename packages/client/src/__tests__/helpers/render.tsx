@@ -1,4 +1,4 @@
-import { render, type RenderOptions, type RenderResult } from '@testing-library/react';
+import { act, render, type RenderOptions, type RenderResult } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { MemoryRouter, type InitialEntry } from 'react-router-dom';
 
@@ -34,4 +34,14 @@ export function renderWithProviders(
   }
 
   return render(ui, { wrapper: Wrapper, ...renderOptions });
+}
+
+/**
+ * Let work queued by the last render (mocked API calls resolving, query loads)
+ * land inside act. Mocked `okAsync` results resolve within one macrotask, so a
+ * test that only asserts on the first paint does not leave those updates to
+ * arrive after it returned ("not wrapped in act"). Real timers only.
+ */
+export async function flushAsyncUpdates(): Promise<void> {
+  await act(() => new Promise((resolve) => setTimeout(resolve, 0)));
 }

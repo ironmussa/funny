@@ -1,3 +1,5 @@
+import { cleanup } from '@testing-library/react';
+
 import { createDataLayer, type DataLayer } from '@/data/data-layer';
 import { replaceDataLayer } from '@/data/runtime';
 
@@ -18,8 +20,14 @@ export function installTestDataLayer(userId: string | null = 'user-1'): DataLaye
   return layer;
 }
 
-/** Dispose the current layer and install an anonymous one. */
+/**
+ * Dispose the current layer and install an anonymous one. Unmounts what the
+ * test rendered first: a file's `afterEach` runs before Testing Library's
+ * cleanup, and swapping the layer under mounted hooks re-renders every
+ * subscriber outside act.
+ */
 export function resetTestDataLayer(): void {
+  cleanup();
   replaceDataLayer(createDataLayer({ userId: null }));
 }
 

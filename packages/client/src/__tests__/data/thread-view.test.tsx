@@ -49,8 +49,9 @@ const inProvider =
 
 beforeEach(() => installTestDataLayer());
 afterEach(() => {
-  useThreadStore.setState({ selectedThreadId: null, activeThread: null, threadDataById: {} });
+  // Unmount first (resetTestDataLayer does): the hooks read this store.
   resetTestDataLayer();
+  useThreadStore.setState({ selectedThreadId: null, activeThread: null, threadDataById: {} });
 });
 
 describe('mergeThreadView', () => {

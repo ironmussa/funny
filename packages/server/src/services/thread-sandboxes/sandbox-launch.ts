@@ -38,6 +38,8 @@ export interface SandboxLaunchRequest {
   sizeId?: string;
   /** Repository to clone; defaults to the project's origin, then the last one used. */
   repoUrl?: string;
+  /** Branch to check out; the remote's default branch when absent or missing. */
+  branch?: string;
 }
 
 export interface SandboxLaunchPorts {
@@ -144,7 +146,7 @@ export async function prepareSandboxLaunch(
     presence: ports.presence,
     store: sqlThreadSandboxStore,
   });
-  const checkout = { path: req.projectPath, repoUrl };
+  const checkout = { path: req.projectPath, repoUrl, branch: req.branch };
   return ok({
     repoUrl,
     // Tracked so deleting the thread cancels the preparation (provision-registry).

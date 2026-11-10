@@ -50,6 +50,8 @@ const createSandboxThreadSchema = z
     model: z.string().min(1).max(128).optional(),
     permissionMode: z.string().min(1).max(64).optional(),
     effort: z.string().min(1).max(32).optional(),
+    // The branch the sandbox checks out (it keeps the remote's default when absent).
+    baseBranch: z.string().trim().min(1).max(255).optional(),
     // Without a connection, the caller's project sandbox is used (project-sandboxes).
     sandbox: sandboxMachineRequestSchema.partial({ connectionId: true }).optional(),
   })
@@ -95,6 +97,7 @@ export interface NewSandboxThreadRow {
   provider?: string;
   model?: string;
   permissionMode?: string;
+  baseBranch?: string;
   initialPrompt: string;
   source: 'web';
   createdAt: string;
@@ -108,6 +111,7 @@ export interface RetryableSandboxThread {
   status: string;
   sessionId?: string | null;
   initialPrompt?: string | null;
+  baseBranch?: string | null;
   createdAt?: string;
 }
 
@@ -189,6 +193,7 @@ function newSandboxThreadRow(
     provider: input.provider,
     model: input.model,
     permissionMode: input.permissionMode,
+    baseBranch: input.baseBranch,
     initialPrompt: input.prompt,
     source: 'web',
     createdAt,
@@ -398,6 +403,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
       threadId,
       projectId: thread.projectId,
       projectPath: project.path,
+      branch: thread.baseBranch ?? undefined,
       ...machine.value,
     });
     if (launch.isErr()) return err({ status: 409, ...launch.error });
@@ -464,6 +470,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
         threadId,
         projectId: input.projectId,
         projectPath: project.path,
+        branch: input.baseBranch,
         ...machine.value,
         repoUrl: input.sandbox?.repoUrl,
       });

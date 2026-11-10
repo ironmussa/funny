@@ -16,6 +16,7 @@ import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { checkoutProjectIntoSandbox } from '../services/sandbox-checkout.js';
+import * as tm from '../services/thread-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { requireProject, requireThread } from '../utils/route-helpers.js';
@@ -26,6 +27,7 @@ const checkoutSchema = z
   .object({
     path: z.string().min(1).max(4096),
     repoUrl: z.string().min(1).max(2048),
+    branch: z.string().min(1).max(255).optional(),
   })
   .strict();
 
@@ -69,6 +71,12 @@ sandboxCheckoutRoutes.post('/:id/sandbox/checkout', async (c) => {
       error: result.error.message,
     });
     return resultToResponse(c, result);
+  }
+  // The remote may not have the requested branch: record the one actually
+  // checked out, so the thread shows the branch its sandbox works on.
+  const { branch } = result.value;
+  if (branch && branch !== parsed.value.branch) {
+    await tm.updateThread(threadId, { baseBranch: branch });
   }
   return c.json(result.value);
 });

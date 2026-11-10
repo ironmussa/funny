@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   requireProject: vi.fn(),
   resolveGithubToken: vi.fn(),
   checkout: vi.fn(),
+  updateThread: vi.fn(),
 }));
 
 vi.mock('../../utils/route-helpers.js', () => ({
@@ -19,6 +20,9 @@ vi.mock('../../routes/github/helpers.js', () => ({
 }));
 vi.mock('../../services/sandbox-checkout.js', () => ({
   checkoutProjectIntoSandbox: mocks.checkout,
+}));
+vi.mock('../../services/thread-manager.js', () => ({
+  updateThread: mocks.updateThread,
 }));
 
 const { sandboxCheckoutRoutes } = await import('../../routes/sandbox-checkout.js');
@@ -50,7 +54,7 @@ describe('POST /api/threads/:id/sandbox/checkout', () => {
     mocks.requireThread.mockResolvedValue(ok({ id: 't-1', projectId: 'p-1' }));
     mocks.requireProject.mockResolvedValue(ok({ id: 'p-1', path: PROJECT_PATH }));
     mocks.resolveGithubToken.mockResolvedValue({ token: 'gh-token' });
-    mocks.checkout.mockResolvedValue(ok({ path: PROJECT_PATH, cloned: true }));
+    mocks.checkout.mockResolvedValue(ok({ path: PROJECT_PATH, cloned: true, branch: 'main' }));
   });
 
   test('rejects a body with unknown fields', async () => {
@@ -82,7 +86,7 @@ describe('POST /api/threads/:id/sandbox/checkout', () => {
   test('clones into the project path with the owner token', async () => {
     const res = await post({ path: PROJECT_PATH, repoUrl: REPO });
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ path: PROJECT_PATH, cloned: true });
+    expect(await res.json()).toEqual({ path: PROJECT_PATH, cloned: true, branch: 'main' });
     expect(mocks.requireThread).toHaveBeenCalledWith('t-1', 'user-1');
     expect(mocks.checkout).toHaveBeenCalledWith({
       path: PROJECT_PATH,
@@ -95,5 +99,23 @@ describe('POST /api/threads/:id/sandbox/checkout', () => {
     mocks.resolveGithubToken.mockResolvedValue(null);
     await post({ path: PROJECT_PATH, repoUrl: REPO });
     expect(mocks.checkout).toHaveBeenCalledWith(expect.objectContaining({ token: null }));
+  });
+
+  test('checks out the requested branch and leaves the thread as is when it was found', async () => {
+    mocks.checkout.mockResolvedValue(
+      ok({ path: PROJECT_PATH, cloned: true, branch: 'feature/login' }),
+    );
+    const res = await post({ path: PROJECT_PATH, repoUrl: REPO, branch: 'feature/login' });
+    expect(res.status).toBe(200);
+    expect(mocks.checkout).toHaveBeenCalledWith(
+      expect.objectContaining({ branch: 'feature/login' }),
+    );
+    expect(mocks.updateThread).not.toHaveBeenCalled();
+  });
+
+  test('records the branch actually checked out when the remote lacks the requested one', async () => {
+    const res = await post({ path: PROJECT_PATH, repoUrl: REPO, branch: 'local-only' });
+    expect(res.status).toBe(200);
+    expect(mocks.updateThread).toHaveBeenCalledWith('t-1', { baseBranch: 'main' });
   });
 });

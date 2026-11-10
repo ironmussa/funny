@@ -79,12 +79,14 @@ export function createSandboxRunnerCalls(ports: {
       threadId: string;
       path: string;
       repoUrl: string;
+      branch?: string;
     }): ResultAsync<void, string> {
       const path = `/api/threads/${encodeURIComponent(input.threadId)}/sandbox/checkout`;
+      const { path: checkoutPath, repoUrl, branch } = input;
       return postToThreadRunner(
         input.userId,
         path,
-        { path: input.path, repoUrl: input.repoUrl },
+        { path: checkoutPath, repoUrl, ...(branch ? { branch } : {}) },
         'checkout',
         Date.now() + CHECKOUT_TIMEOUT_MS,
       );

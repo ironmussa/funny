@@ -5,7 +5,7 @@
  * Agent operations (create+start, stop, send message) are proxied to the runner.
  */
 
-import type { CommentAuthor, ThreadComment, ThreadWithMessages } from '@funny/shared';
+import type { CommentAuthor, Thread, ThreadComment, ThreadWithMessages } from '@funny/shared';
 import {
   threadsContract as contract,
   type ThreadPatchRequest,
@@ -622,6 +622,29 @@ threadRoutes.post('/:id/workflow-event', requireThreadOwner, async (c) => {
 
 // ── Thread creation (proxied to runner, then registered locally) ─
 
+const createdThreadIdSchema = z.object({ id: z.string().min(1) });
+
+/**
+ * A created or forked thread, as the contract's `Thread`. The runner (or the
+ * sandbox launcher) replies with its own insert payload — flags as 0/1,
+ * template variables as JSON text — but it persisted the row through the data
+ * channel before replying, so the server answers from its own DB instead.
+ * If the row is somehow missing, the original payload goes out unchanged
+ * rather than failing a creation that succeeded.
+ */
+async function createdThreadResponse(c: Context<ServerEnv>, created: unknown, status: 201 | 202) {
+  const parsed = createdThreadIdSchema.safeParse(created);
+  const row = parsed.success ? await threadRepo.getThread(parsed.data.id) : undefined;
+  if (!row) {
+    log.warn('Created thread not found in the server DB; returning the runner payload', {
+      namespace: 'threads',
+      threadId: parsed.success ? parsed.data.id : undefined,
+    });
+    return c.json(created as Record<string, unknown>, status);
+  }
+  return c.json(toThread(row) satisfies Thread, status);
+}
+
 /**
  * Shared HTTP adapter for both creation endpoints. It parses the body, runs the
  * `modules/threads` creation use case, and maps its result to the existing
@@ -643,7 +666,7 @@ async function handleCreateThread(c: Context<ServerEnv>, intent: CreationIntent)
     intent,
     payload: parsed.value,
   });
-  if (result.isOk()) return c.json(result.value.thread as any, 201);
+  if (result.isOk()) return createdThreadResponse(c, result.value.thread, 201);
   return creationFailureResponse(c, intent, result.error);
 }
 
@@ -697,7 +720,7 @@ function sandboxLaunchResponse(
     const { message, code, status } = result.error;
     return c.json({ error: message, code, friendlyMessage: message }, status);
   }
-  return c.json(result.value.thread as any, okStatus);
+  return createdThreadResponse(c, result.value.thread, okStatus);
 }
 
 // POST /api/threads — Create a new thread
@@ -831,7 +854,7 @@ async function handleForkThread(c: Context<ServerEnv>, variant: ForkVariant) {
       const ownership = threadOwnedBy(actor, namedSource);
       if (!ownership) return c.json({ error: 'Thread not found' }, 404);
       const result = await forkThread({ actor, source: namedSource, ownership, variant, body });
-      if (result.isOk()) return c.json(result.value.thread as any, 201);
+      if (result.isOk()) return createdThreadResponse(c, result.value.thread, 201);
 
       const failure = result.error;
       switch (failure.kind) {

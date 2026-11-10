@@ -13,7 +13,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { timeAgo } from '@/lib/thread-utils';
 
 interface SandboxErrorData {
-  phase?: 'setup' | 'start' | 'wake';
+  phase?: 'setup' | 'start' | 'wake' | 'github';
   message?: string;
   hint?: string;
 }
@@ -22,6 +22,7 @@ const TITLES: Record<NonNullable<SandboxErrorData['phase']>, string> = {
   setup: 'The sandbox could not be prepared',
   start: 'The agent could not start in the sandbox',
   wake: 'The sandbox could not be resumed',
+  github: 'GitHub is not available in this sandbox',
 };
 
 function parseData(data: ThreadEvent['data']): SandboxErrorData {

@@ -74,4 +74,22 @@ describe('sandbox GitHub tokens', () => {
     const result = await service.issueFor('t-1');
     expect(result.isErr() && result.error.kind).toBe('not-installed');
   });
+
+  test('a refusal the user can fix is told to the thread once per reason; transient errors are not', async () => {
+    const told: string[] = [];
+    let kind: 'not-installed' | 'no-access' | 'github-error' = 'not-installed';
+    const service = createSandboxTokenService({
+      thread: async () => FACTS,
+      ownerToken: async () => 'ghp_alice',
+      issue: () => errAsync({ kind, message: kind }),
+      notify: (threadId, ownerId, error) => told.push(`${threadId}:${ownerId}:${error.kind}`),
+    });
+    await service.issueFor('t-1');
+    await service.issueFor('t-1');
+    kind = 'github-error';
+    await service.issueFor('t-1');
+    kind = 'no-access';
+    await service.issueFor('t-1');
+    expect(told).toEqual(['t-1:alice:not-installed', 't-1:alice:no-access']);
+  });
 });

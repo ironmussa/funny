@@ -16,7 +16,7 @@ import type { ProvisionError } from './thread-sandbox-service.js';
 const SANDBOX_ERROR_EVENT = 'sandbox:error';
 
 /** When the failure happened, from the user's point of view. */
-export type SandboxErrorPhase = 'setup' | 'start' | 'wake';
+export type SandboxErrorPhase = 'setup' | 'start' | 'wake' | 'github';
 
 export interface SandboxErrorEventData {
   phase: SandboxErrorPhase;

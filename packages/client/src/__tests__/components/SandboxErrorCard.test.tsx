@@ -21,6 +21,22 @@ const event = (data: Record<string, unknown>): ThreadEvent => ({
 });
 
 describe('SandboxErrorCard', () => {
+  test('explains why GitHub is not available and what to do', () => {
+    renderWithProviders(
+      <SandboxErrorCard
+        event={event({
+          phase: 'github',
+          kind: 'not-installed',
+          message: 'The GitHub App is not installed on acme/app',
+          hint: 'Install the GitHub App on this repository',
+        })}
+      />,
+    );
+    const card = screen.getByTestId('sandbox-error-card-ev-1');
+    expect(card).toHaveTextContent('GitHub is not available in this sandbox');
+    expect(card).toHaveTextContent('Install the GitHub App on this repository');
+  });
+
   test("shows what failed, the provider's message and what to do", () => {
     renderWithProviders(
       <SandboxErrorCard

@@ -17,6 +17,7 @@ import { requirePickerPath } from '../../utils/path-scope.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { validate, cloneRepoSchema } from '../../validation/schemas.js';
 import { githubApiFetch, resolveGithubToken } from './helpers.js';
+import { readPaging, readRepoSort } from './query.js';
 
 export const repoRoutes = new Hono<HonoEnv>();
 
@@ -30,10 +31,11 @@ repoRoutes.get('/repos', async (c) => {
   }
   const token = resolved.token;
 
-  const page = Number(c.req.query('page')) || 1;
-  const perPage = Math.min(Number(c.req.query('per_page')) || 30, 100);
+  const { page, perPage } = readPaging(c, 30);
   const search = c.req.query('search') || '';
-  const sort = c.req.query('sort') || 'updated';
+  const sortResult = readRepoSort(c);
+  if (sortResult.isErr()) return c.json({ error: sortResult.error.message }, 400);
+  const sort = sortResult.value;
 
   try {
     let repos: GitHubRepo[];

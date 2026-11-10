@@ -5,7 +5,11 @@
  * Agent operations (create+start, stop, send message) are proxied to the runner.
  */
 
-import type { CommentAuthor, ThreadComment } from '@funny/shared';
+import type { CommentAuthor, ThreadComment, ThreadWithMessages } from '@funny/shared';
+import {
+  threadsContract as contract,
+  type ThreadPatchRequest,
+} from '@funny/shared/contracts/threads';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
@@ -18,6 +22,7 @@ import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
 import { authorizer } from '../lib/server-authorizer.js';
 import { startSpan } from '../lib/telemetry.js';
+import { toThread, toThreadDetail } from '../lib/thread-response.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import { canSteerThread, createThreadAccessMiddleware } from '../middleware/thread-access.js';
@@ -47,53 +52,14 @@ import * as threadRegistry from '../services/thread-registry.js';
 import { destroyThreadSandbox } from '../services/thread-sandboxes/sandbox-lifecycle.js';
 import { sandboxThreadLauncherFor } from '../services/thread-sandboxes/sandbox-thread-wiring.js';
 import { retrySandboxThreadSchema } from '../services/thread-sandboxes/sandbox-thread.js';
-import { parseJsonBody, parseQuery } from '../validation/request.js';
-
-// Canonical thread-lifecycle enums — kept in sync with
-// @funny/shared/primitives (ThreadStatus / ThreadStage). Inlined as
-// arrays so the route can validate at the HTTP boundary without
-// pulling a runtime value from a types-only package.
-const THREAD_STATUS_VALUES = [
-  'setting_up',
-  'idle',
-  'pending',
-  'running',
-  'waiting',
-  'completed',
-  'failed',
-  'stopped',
-  'interrupted',
-] as const;
-
-const THREAD_STAGE_VALUES = [
-  'backlog',
-  'planning',
-  'in_progress',
-  'review',
-  'done',
-  'archived',
-] as const;
-
-const PERMISSION_MODE_VALUES = ['plan', 'auto', 'autoEdit', 'confirmEdit', 'ask'] as const;
+import { fail, reply, serveEndpoint } from '../validation/endpoint.js';
+import { parseJsonBody } from '../validation/request.js';
 
 const contentBodySchema = z
   .object({
     content: z.unknown().optional(),
   })
   .passthrough();
-
-const threadPatchBodySchema = z.record(z.string(), z.unknown());
-
-const threadValueBodySchema = z
-  .object({
-    value: z.unknown().optional(),
-    reason: z.unknown().optional(),
-  })
-  .passthrough();
-
-const threadPermissionModeBodySchema = z.object({
-  permissionMode: z.enum(PERMISSION_MODE_VALUES),
-});
 
 const threadWorkflowEventBodySchema = z
   .object({
@@ -110,12 +76,6 @@ const schedulerWorkflowEventBodySchema = z
     data: z.unknown().optional(),
   })
   .passthrough();
-
-const threadDetailQuerySchema = z.object({
-  messageLimit: z.coerce.number().int().min(1).max(200).optional(),
-  messageProgress: z.coerce.number().min(0).max(1).optional(),
-  messageAnchorId: z.string().min(1).optional(),
-});
 
 // ── Shared repository instances ──────────────────────────────────
 
@@ -150,20 +110,19 @@ export const threadRoutes = new Hono<ServerEnv>();
 
 // ── Data CRUD routes (handled natively) ──────────────────────────
 
+/**
+ * Scratch filter is opt-in. When listing by project, exclude scratch threads
+ * so they never leak into the project sidebar.
+ */
+function scratchFilter(onlyScratch: boolean, projectId: string | undefined) {
+  if (onlyScratch) return true;
+  return projectId ? ('exclude' as const) : undefined;
+}
+
 // GET /api/threads?projectId=xxx&includeArchived=true&limit=50&offset=0&isScratch=true
-threadRoutes.get('/', async (c) => {
-  const userId = c.get('userId') as string;
+serveEndpoint(threadRoutes, contract.list, async ({ userId, query }, c) => {
   const orgId = c.get('organizationId');
-  const projectId = c.req.query('projectId');
-  const designId = c.req.query('designId');
-  const includeArchived = c.req.query('includeArchived') === 'true';
-  // Scratch filter is opt-in. When listing by project, exclude scratch
-  // threads so they never leak into the project sidebar.
-  const isScratchParam = c.req.query('isScratch');
-  const isScratch: boolean | 'exclude' | undefined =
-    isScratchParam === 'true' ? true : projectId ? 'exclude' : undefined;
-  const limit = Math.min(200, Math.max(1, parseInt(c.req.query('limit') || '50', 10)));
-  const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10));
+  const { projectId, designId, includeArchived, limit, offset } = query;
 
   // Span on the native list path (mirrors GET /:id). Its start_time_ms reveals
   // WHEN the server began handling each sidebar list during app refresh — if the
@@ -184,7 +143,7 @@ threadRoutes.get('/', async (c) => {
       userId,
       includeArchived,
       organizationId: orgId,
-      isScratch,
+      isScratch: scratchFilter(query.isScratch, projectId),
       limit,
       offset,
     });
@@ -192,19 +151,20 @@ threadRoutes.get('/', async (c) => {
     span.attributes['thread.count'] = threads.length;
     span.attributes['thread.total'] = Number(total);
     span.end('ok');
-    return c.json({ threads, total, hasMore: offset + threads.length < total });
+    return reply({
+      threads: threads.map(toThread),
+      total,
+      hasMore: offset + threads.length < total,
+    });
   } catch (e) {
-    span.end('error', e instanceof Error ? e.message : String(e));
+    span.end('error', errorText(e));
     throw e;
   }
 });
 
 // GET /api/threads/scratch — list the current user's scratch threads
-threadRoutes.get('/scratch', async (c) => {
-  const userId = c.get('userId') as string;
-  const limit = Math.min(200, Math.max(1, parseInt(c.req.query('limit') || '50', 10)));
-  const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10));
-
+serveEndpoint(threadRoutes, contract.scratch, async ({ userId, query }) => {
+  const { limit, offset } = query;
   const { threads, total } = await threadRepo.listThreads({
     userId,
     isScratch: true,
@@ -213,56 +173,81 @@ threadRoutes.get('/scratch', async (c) => {
     offset,
   });
 
-  return c.json({ threads, total, hasMore: offset + threads.length < total });
+  return reply({
+    threads: threads.map(toThread),
+    total,
+    hasMore: offset + threads.length < total,
+  });
 });
 
 // GET /api/threads/archived?page=1&limit=100&search=xxx
-threadRoutes.get('/archived', async (c) => {
-  const userId = c.get('userId') as string;
-  const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
-  const limit = Math.min(1000, Math.max(1, parseInt(c.req.query('limit') || '100', 10)));
-  const search = c.req.query('search')?.trim() || '';
-  const projectId = c.req.query('projectId')?.trim() || undefined;
+serveEndpoint(threadRoutes, contract.archived, async ({ userId, query }) => {
+  const { page, limit } = query;
+  const search = query.search?.trim() || '';
+  const projectId = query.projectId?.trim() || undefined;
 
   const result = await threadRepo.listArchivedThreads({ page, limit, search, userId, projectId });
-  return c.json({ ...result, page, limit });
+  return reply({ threads: result.threads.map(toThread), total: result.total, page, limit });
 });
 
-// GET /api/threads/:id — get thread with messages
-threadRoutes.get('/:id', async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-  const parsedQuery = parseQuery(c, threadDetailQuerySchema);
-  if (parsedQuery.isErr()) return c.json({ error: parsedQuery.error.message }, 400);
-  const { messageLimit, messageProgress, messageAnchorId } = parsedQuery.value;
-
-  const span = startSpan('GET /api/threads/:id', {
-    attributes: {
-      'thread.id': id,
-      'thread.message_limit': messageLimit ?? null,
-      'thread.message_progress': messageProgress ?? null,
-      'thread.message_anchor_id': messageAnchorId ?? null,
-    },
+function childSpan(parent: ReturnType<typeof startSpan>, name: string, threadId: string) {
+  return startSpan(name, {
+    traceId: parent.traceId,
+    parentSpanId: parent.spanId,
+    attributes: { 'thread.id': threadId },
   });
+}
+
+function errorText(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
+function detailSpanAttributes(
+  id: string,
+  query: { messageLimit?: number; messageProgress?: number; messageAnchorId?: string },
+) {
+  return {
+    'thread.id': id,
+    'thread.message_limit': query.messageLimit ?? null,
+    'thread.message_progress': query.messageProgress ?? null,
+    'thread.message_anchor_id': query.messageAnchorId ?? null,
+  };
+}
+
+/**
+ * The live approval request, if any, and the approval capability. Only an
+ * active durable request can prove an ACP continuation still exists after a
+ * reload. In every other Codex state we conservatively expose the SDK-style
+ * unavailable capability so the client never reconstructs a fake approval
+ * card from historic tool output.
+ */
+function permissionFields(
+  provider: string,
+  pending: ThreadWithMessages['pendingPermissionRequest'] | null | undefined,
+): Pick<ThreadWithMessages, 'pendingPermissionRequest' | 'permissionApprovalCapability'> {
+  const request = pending ? { pendingPermissionRequest: pending } : {};
+  if (provider !== 'codex') return request;
+  return {
+    ...request,
+    permissionApprovalCapability: pending
+      ? { kind: 'structured', transport: 'codex-acp' }
+      : { kind: 'unavailable', reason: 'codex-sdk-no-interactive-approval' },
+  };
+}
+
+// GET /api/threads/:id — get thread with messages
+serveEndpoint(threadRoutes, contract.get, async ({ userId, params, query }) => {
+  const { id } = params;
+  const { messageLimit, messageProgress, messageAnchorId } = query;
+
+  const span = startSpan('GET /api/threads/:id', { attributes: detailSpanAttributes(id, query) });
   try {
     // Fetch thread+messages, queue count, and queue head in parallel.
     // Ownership is checked off the thread row inside the same query result,
     // so we avoid a separate getThread() round-trip.
-    const fetchSpan = startSpan('thread.fetch_with_messages', {
-      traceId: span.traceId,
-      parentSpanId: span.spanId,
-      attributes: { 'thread.id': id },
-    });
-    const queueCountSpan = startSpan('thread.queue_count', {
-      traceId: span.traceId,
-      parentSpanId: span.spanId,
-      attributes: { 'thread.id': id },
-    });
-    const queuePeekSpan = startSpan('thread.queue_peek', {
-      traceId: span.traceId,
-      parentSpanId: span.spanId,
-      attributes: { 'thread.id': id },
-    });
+    const fetchSpan = childSpan(span, 'thread.fetch_with_messages', id);
+    const queueCountSpan = childSpan(span, 'thread.queue_count', id);
+    const queuePeekSpan = childSpan(span, 'thread.queue_peek', id);
     const [result, queuedCount, queuedNext, pendingPermissionRequest] = await Promise.all([
       messageRepo
         .getThreadWithMessages(id, messageLimit, { messageProgress, messageAnchorId })
@@ -274,7 +259,7 @@ threadRoutes.get('/:id', async (c) => {
 
     if (!result || !(await authorizer.authorize(userId, 'thread', result.id, 'view'))) {
       span.end('ok');
-      return c.json({ error: 'Thread not found' }, 404);
+      return fail(404, 'Thread not found');
     }
 
     // Expose the VIEWER's own grant level so the client can gate level-specific
@@ -286,29 +271,15 @@ threadRoutes.get('/:id', async (c) => {
     span.attributes['thread.message_count'] = result.messages?.length ?? 0;
     span.attributes['thread.queued_count'] = queuedCount;
     span.end('ok');
-    return c.json({
-      ...result,
+    return reply({
+      ...toThreadDetail(result),
       queuedCount,
       queuedNextMessage: queuedNext?.content,
-      ...(pendingPermissionRequest ? { pendingPermissionRequest } : {}),
-      // Only an active durable request can prove an ACP continuation still
-      // exists after a reload. In every other Codex state we conservatively
-      // expose the SDK-style unavailable capability so the client never
-      // reconstructs a fake approval card from historic tool output.
-      ...(result.provider === 'codex'
-        ? {
-            permissionApprovalCapability: pendingPermissionRequest
-              ? { kind: 'structured' as const, transport: 'codex-acp' as const }
-              : {
-                  kind: 'unavailable' as const,
-                  reason: 'codex-sdk-no-interactive-approval' as const,
-                },
-          }
-        : {}),
+      ...permissionFields(result.provider, pendingPermissionRequest),
       viewerShareLevel,
     });
   } catch (e) {
-    span.end('error', e instanceof Error ? e.message : String(e));
+    span.end('error', errorText(e));
     throw e;
   }
 });
@@ -437,112 +408,106 @@ threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) =>
 // Thread sharing routes (`/:id/shares`, `/shared-with-me`) live in
 // routes/thread-shares.ts and are mounted alongside this router in index.ts.
 
-// PATCH /api/threads/:id — update thread data
-threadRoutes.patch('/:id', requireThreadOwner, async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-  const parsed = await parseJsonBody(c, threadPatchBodySchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const body = parsed.value;
-
-  const thread = c.get('thread');
-
-  // Security CR-4: `worktreePath` is intentionally NOT in the PATCH allow-
-  // list. It is set exclusively by the runtime's `createWorktree` flow and
-  // identifies a directory the runner trusts as a cwd for agent spawn,
-  // browse, ripgrep, and uploads. Letting clients overwrite it lets them
-  // pivot the runner to `/etc`, another user's HOME, etc., bypassing
-  // path-scope checks.
-  const allowedFields = [
-    'title',
-    'status',
-    'stage',
-    'archived',
-    'pinned',
-    'schedulerManaged',
-    'model',
-    'mode',
-    'branch',
-    'baseBranch',
-    'permissionMode',
-    'provider',
-  ];
-  const updates: Record<string, any> = {};
-  for (const key of allowedFields) {
-    if (body[key] !== undefined) {
-      updates[key] = body[key];
-    }
-  }
-
-  // PostgreSQL integer columns need boolean → integer conversion
-  if (typeof updates.pinned === 'boolean') updates.pinned = updates.pinned ? 1 : 0;
-  if (typeof updates.archived === 'boolean') updates.archived = updates.archived ? 1 : 0;
-  if (typeof updates.schedulerManaged === 'boolean') {
-    updates.schedulerManaged = updates.schedulerManaged ? 1 : 0;
-  }
-
-  if (Object.keys(updates).length > 0) {
-    await threadRepo.updateThread(id, updates);
-  }
-
-  // Kanban drag moves and archive/unarchive both flow through this route.
-  // Record the stage transition (movement trail / analytics) and broadcast a
-  // thread:stage-changed event so every tab's board updates live — the same
-  // contract the dedicated /:id/stage route (used by pipelines) already honors.
-  const fromStage = thread.stage ?? null;
-  const stageMoved = 'stage' in updates && updates.stage !== fromStage;
-  const archivedNow = 'archived' in updates && updates.archived === 1 && !thread.archived;
-  const unarchivedNow = 'archived' in updates && updates.archived === 0 && !!thread.archived;
-
-  let transitionFrom: string | null = fromStage;
-  let transitionTo: string | null = null;
-  if (archivedNow) {
-    transitionTo = 'archived';
-  } else if (unarchivedNow) {
-    transitionFrom = 'archived';
-    transitionTo = (updates.stage as string | undefined) ?? thread.stage ?? 'backlog';
-  } else if (stageMoved) {
-    transitionTo = updates.stage as string;
-  }
-
-  if (transitionTo !== null && transitionTo !== transitionFrom) {
-    await stageHistoryRepo.recordStageChange(id, transitionFrom, transitionTo);
-    c.env?.browserEvents?.toUser(userId, {
-      type: 'thread:stage-changed',
-      threadId: id,
-      data: { fromStage: transitionFrom, toStage: transitionTo, projectId: thread.projectId },
-    });
-    log.info('Thread stage transition recorded via PATCH', {
-      namespace: 'threads',
-      threadId: id,
-      fromStage: transitionFrom,
-      toStage: transitionTo,
-    });
-  }
-
+/** The thread as it is now, after a write; 404 if it was deleted meanwhile. */
+async function replyWithThread(id: string) {
   const updated = await threadRepo.getThread(id);
-  return c.json(updated);
-});
+  return updated ? reply(toThread(updated)) : fail(404, 'Thread not found');
+}
+
+const ownerOnly = { middleware: [requireThreadOwner] };
+
+/**
+ * The column writes for a PATCH body. Security CR-4: `worktreePath` is not in
+ * the contract's body schema (see `threadPatchBody`), so it never gets here.
+ */
+function threadPatchUpdates(body: ThreadPatchRequest): Record<string, unknown> {
+  const { archived, pinned, schedulerManaged, ...fields } = body;
+  const updates: Record<string, unknown> = Object.fromEntries(
+    Object.entries(fields).filter(([, value]) => value !== undefined),
+  );
+  // The flag columns are integers.
+  const flags = { archived, pinned, schedulerManaged };
+  for (const [column, value] of Object.entries(flags)) {
+    if (value !== undefined) updates[column] = value ? 1 : 0;
+  }
+  return updates;
+}
+
+type StageMove = { from: string | null; to: string };
+type StagedThread = { stage?: string | null; archived?: unknown };
+
+/** Archiving moves to `archived`; unarchiving moves back to the requested (or current) stage. */
+function archiveMove(thread: StagedThread, body: ThreadPatchRequest): StageMove | undefined {
+  if (body.archived === undefined || body.archived === !!thread.archived) return undefined;
+  return body.archived
+    ? { from: thread.stage ?? null, to: 'archived' }
+    : { from: 'archived', to: body.stage ?? thread.stage ?? 'backlog' };
+}
+
+/** The stage move a PATCH makes, if any. */
+function stageTransition(thread: StagedThread, body: ThreadPatchRequest): StageMove | null {
+  const move =
+    archiveMove(thread, body) ??
+    (body.stage === undefined ? undefined : { from: thread.stage ?? null, to: body.stage });
+  return move && move.to !== move.from ? move : null;
+}
+
+// PATCH /api/threads/:id — update thread data
+serveEndpoint(
+  threadRoutes,
+  contract.update,
+  async ({ userId, params, body }, c) => {
+    const { id } = params;
+    const thread = c.get('thread');
+
+    const updates = threadPatchUpdates(body);
+    if (Object.keys(updates).length > 0) {
+      await threadRepo.updateThread(id, updates);
+    }
+
+    // Kanban drag moves and archive/unarchive both flow through this route.
+    // Record the stage transition (movement trail / analytics) and broadcast a
+    // thread:stage-changed event so every tab's board updates live — the same
+    // contract the dedicated /:id/stage route (used by pipelines) already honors.
+    const transition = stageTransition(thread, body);
+    if (transition) {
+      const { from, to } = transition;
+      await stageHistoryRepo.recordStageChange(id, from, to);
+      c.env?.browserEvents?.toUser(userId, {
+        type: 'thread:stage-changed',
+        threadId: id,
+        data: { fromStage: from, toStage: to, projectId: thread.projectId },
+      });
+      log.info('Thread stage transition recorded via PATCH', {
+        namespace: 'threads',
+        threadId: id,
+        fromStage: from,
+        toStage: to,
+      });
+    }
+
+    return replyWithThread(id);
+  },
+  ownerOnly,
+);
 
 // Persist the composer selection independently of sending a prompt. A
 // currently-running agent keeps the policy with which it started; this value
 // applies when it next starts or resumes.
-threadRoutes.patch('/:id/permission-mode', requireThreadOwner, async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-  const parsed = await parseJsonBody(c, threadPermissionModeBodySchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-
-  await threadRepo.updateThread(id, { permissionMode: parsed.value.permissionMode });
-  c.env?.browserEvents?.toUser(userId, {
-    type: 'thread:updated',
-    threadId: id,
-    data: { permissionMode: parsed.value.permissionMode },
-  });
-
-  const updated = await threadRepo.getThread(id);
-  return c.json(updated);
-});
+serveEndpoint(
+  threadRoutes,
+  contract.setPermissionMode,
+  async ({ userId, params, body }, c) => {
+    await threadRepo.updateThread(params.id, { permissionMode: body.permissionMode });
+    c.env?.browserEvents?.toUser(userId, {
+      type: 'thread:updated',
+      threadId: params.id,
+      data: { permissionMode: body.permissionMode },
+    });
+    return replyWithThread(params.id);
+  },
+  ownerOnly,
+);
 
 // ── Lifecycle endpoints used by the YAML pipeline DSL ───────
 //
@@ -552,92 +517,58 @@ threadRoutes.patch('/:id/permission-mode', requireThreadOwner, async (c) => {
 // of relying on PATCH /:id — give us strict enum validation and a
 // single emission point for the WS event that the kanban UI listens
 // on.
-threadRoutes.patch('/:id/status', requireThreadOwner, async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-  const parsed = await parseJsonBody(c, threadValueBodySchema);
-  if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
-  const body = parsed.value;
+serveEndpoint(
+  threadRoutes,
+  contract.setStatus,
+  async ({ userId, params, body }, c) => {
+    const { id } = params;
+    const { value: status, reason } = body;
 
-  if (typeof body.value !== 'string') {
-    return c.json({ error: 'Missing required string field "value"' }, 400);
-  }
-  if (!(THREAD_STATUS_VALUES as readonly string[]).includes(body.value)) {
-    return c.json(
-      {
-        error: `Invalid status "${body.value}". Allowed: ${THREAD_STATUS_VALUES.join(', ')}`,
-      },
-      400,
-    );
-  }
-  const reason = typeof body.reason === 'string' ? body.reason : undefined;
-
-  await threadRepo.updateThread(id, { status: body.value });
-  c.env?.browserEvents?.toUser(userId, {
-    type: 'thread:updated',
-    threadId: id,
-    data: { status: body.value, reason },
-  });
-
-  log.info('Thread status patched', {
-    namespace: 'threads',
-    threadId: id,
-    status: body.value,
-    reason,
-  });
-
-  const updated = await threadRepo.getThread(id);
-  return c.json(updated);
-});
-
-threadRoutes.patch('/:id/stage', requireThreadOwner, async (c) => {
-  const id = c.req.param('id');
-  const userId = c.get('userId') as string;
-  const parsed = await parseJsonBody(c, threadValueBodySchema);
-  if (parsed.isErr()) return c.json({ error: 'Invalid JSON body' }, 400);
-  const body = parsed.value;
-
-  if (typeof body.value !== 'string') {
-    return c.json({ error: 'Missing required string field "value"' }, 400);
-  }
-  if (!(THREAD_STAGE_VALUES as readonly string[]).includes(body.value)) {
-    return c.json(
-      {
-        error: `Invalid stage "${body.value}". Allowed: ${THREAD_STAGE_VALUES.join(', ')}`,
-      },
-      400,
-    );
-  }
-  const reason = typeof body.reason === 'string' ? body.reason : undefined;
-
-  const thread = c.get('thread');
-  const fromStage = thread.stage;
-  await threadRepo.updateThread(id, { stage: body.value });
-  if (body.value !== fromStage) {
-    await stageHistoryRepo.recordStageChange(id, fromStage ?? null, body.value);
+    await threadRepo.updateThread(id, { status });
     c.env?.browserEvents?.toUser(userId, {
-      type: 'thread:stage-changed',
+      type: 'thread:updated',
       threadId: id,
-      data: {
-        fromStage,
-        toStage: body.value,
-        projectId: thread.projectId,
-        reason,
-      },
+      data: { status, reason },
     });
-  }
 
-  log.info('Thread stage patched', {
-    namespace: 'threads',
-    threadId: id,
-    fromStage,
-    toStage: body.value,
-    reason,
-  });
+    log.info('Thread status patched', { namespace: 'threads', threadId: id, status, reason });
 
-  const updated = await threadRepo.getThread(id);
-  return c.json(updated);
-});
+    return replyWithThread(id);
+  },
+  ownerOnly,
+);
+
+serveEndpoint(
+  threadRoutes,
+  contract.setStage,
+  async ({ userId, params, body }, c) => {
+    const { id } = params;
+    const { value: toStage, reason } = body;
+
+    const thread = c.get('thread');
+    const fromStage = thread.stage;
+    await threadRepo.updateThread(id, { stage: toStage });
+    if (toStage !== fromStage) {
+      await stageHistoryRepo.recordStageChange(id, fromStage ?? null, toStage);
+      c.env?.browserEvents?.toUser(userId, {
+        type: 'thread:stage-changed',
+        threadId: id,
+        data: { fromStage, toStage, projectId: thread.projectId, reason },
+      });
+    }
+
+    log.info('Thread stage patched', {
+      namespace: 'threads',
+      threadId: id,
+      fromStage,
+      toStage,
+      reason,
+    });
+
+    return replyWithThread(id);
+  },
+  ownerOnly,
+);
 
 // ── Workflow event fan-out (scheduler-bound) ─────────────
 //

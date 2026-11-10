@@ -1,12 +1,14 @@
 import type {
   ImageAttachment,
   PaginatedMessages,
-  PaginatedThreadsResponse,
+  PermissionMode,
   QueuedMessage,
   Thread,
-  ThreadWithMessages,
+  ThreadStage,
 } from '@funny/shared';
+import { threadsContract as contract } from '@funny/shared/contracts/threads';
 
+import { callEndpoint } from './_contract';
 import { request } from './_core';
 
 /** A per-thread share grant with the invited user's display fields. */
@@ -40,19 +42,12 @@ interface MessageOptions {
 }
 
 export const threadsApi = {
-  listThreads: (projectId?: string, includeArchived?: boolean, limit?: number, offset?: number) => {
-    const params = new URLSearchParams();
-    if (projectId) params.set('projectId', projectId);
-    if (includeArchived) params.set('includeArchived', 'true');
-    if (limit != null) params.set('limit', String(limit));
-    if (offset != null) params.set('offset', String(offset));
-    const qs = params.toString();
-    return request<PaginatedThreadsResponse>(`/threads${qs ? `?${qs}` : ''}`);
-  },
-  listThreadsByDesign: (designId: string, limit = 100) => {
-    const params = new URLSearchParams({ designId, limit: String(limit) });
-    return request<PaginatedThreadsResponse>(`/threads?${params.toString()}`);
-  },
+  listThreads: (projectId?: string, includeArchived?: boolean, limit?: number, offset?: number) =>
+    callEndpoint(contract.list, {
+      query: { projectId: projectId || undefined, includeArchived, limit, offset },
+    }),
+  listThreadsByDesign: (designId: string, limit = 100) =>
+    callEndpoint(contract.list, { query: { designId, limit } }),
   searchThreadContent: (query: string, projectId?: string, caseSensitive = false) => {
     const params = new URLSearchParams({ q: query });
     if (projectId) params.set('projectId', projectId);
@@ -66,18 +61,19 @@ export const threadsApi = {
     messageLimit?: number,
     signal?: AbortSignal,
     opts: { messageProgress?: number; messageAnchorId?: string } = {},
-  ) => {
-    const params = new URLSearchParams();
-    if (messageLimit) params.set('messageLimit', String(messageLimit));
-    if (opts.messageProgress !== undefined) {
-      params.set('messageProgress', String(opts.messageProgress));
-    }
-    if (opts.messageAnchorId) {
-      params.set('messageAnchorId', opts.messageAnchorId);
-    }
-    const qs = params.toString();
-    return request<ThreadWithMessages>(`/threads/${id}${qs ? `?${qs}` : ''}`, { signal });
-  },
+  ) =>
+    callEndpoint(
+      contract.get,
+      {
+        params: { id },
+        query: {
+          messageLimit: messageLimit || undefined,
+          messageProgress: opts.messageProgress,
+          messageAnchorId: opts.messageAnchorId || undefined,
+        },
+      },
+      { signal },
+    ),
   getThreadMessages: (
     threadId: string,
     cursor: string,
@@ -186,13 +182,8 @@ export const threadsApi = {
       }),
     }),
   /** List the current user's scratch threads. */
-  listScratchThreads: (limit?: number, offset?: number) => {
-    const params = new URLSearchParams();
-    if (limit != null) params.set('limit', String(limit));
-    if (offset != null) params.set('offset', String(offset));
-    const qs = params.toString();
-    return request<PaginatedThreadsResponse>(`/threads/scratch${qs ? `?${qs}` : ''}`);
-  },
+  listScratchThreads: (limit?: number, offset?: number) =>
+    callEndpoint(contract.scratch, { query: { limit, offset } }),
   sendMessage: (
     threadId: string,
     content: string,
@@ -232,10 +223,10 @@ export const threadsApi = {
     }),
   stopThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/stop`, { method: 'POST' }),
-  updateThreadPermissionMode: (threadId: string, permissionMode: string) =>
-    request<Thread>(`/threads/${threadId}/permission-mode`, {
-      method: 'PATCH',
-      body: JSON.stringify({ permissionMode }),
+  updateThreadPermissionMode: (threadId: string, permissionMode: PermissionMode) =>
+    callEndpoint(contract.setPermissionMode, {
+      params: { id: threadId },
+      body: { permissionMode },
     }),
   convertToWorktree: (threadId: string, baseBranch?: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/convert-to-worktree`, {
@@ -330,30 +321,15 @@ export const threadsApi = {
       method: 'DELETE',
     }),
   archiveThread: (threadId: string, archived: boolean) =>
-    request<Thread>(`/threads/${threadId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ archived }),
-    }),
+    callEndpoint(contract.update, { params: { id: threadId }, body: { archived } }),
   pinThread: (threadId: string, pinned: boolean) =>
-    request<Thread>(`/threads/${threadId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ pinned }),
-    }),
+    callEndpoint(contract.update, { params: { id: threadId }, body: { pinned } }),
   setSchedulerManaged: (threadId: string, schedulerManaged: boolean) =>
-    request<Thread>(`/threads/${threadId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ schedulerManaged }),
-    }),
+    callEndpoint(contract.update, { params: { id: threadId }, body: { schedulerManaged } }),
   renameThread: (threadId: string, title: string) =>
-    request<Thread>(`/threads/${threadId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ title }),
-    }),
-  updateThreadStage: (threadId: string, stage: string) =>
-    request<Thread>(`/threads/${threadId}`, {
-      method: 'PATCH',
-      body: JSON.stringify({ stage }),
-    }),
+    callEndpoint(contract.update, { params: { id: threadId }, body: { title } }),
+  updateThreadStage: (threadId: string, stage: ThreadStage) =>
+    callEndpoint(contract.update, { params: { id: threadId }, body: { stage } }),
 
   // Thread comments
   getThreadComments: (threadId: string) =>
@@ -405,15 +381,13 @@ export const threadsApi = {
     limit?: number;
     search?: string;
     projectId?: string;
-  }) => {
-    const p = new URLSearchParams();
-    if (params?.page) p.set('page', String(params.page));
-    if (params?.limit) p.set('limit', String(params.limit));
-    if (params?.search) p.set('search', params.search);
-    if (params?.projectId) p.set('projectId', params.projectId);
-    const qs = p.toString();
-    return request<{ threads: Thread[]; total: number; page: number; limit: number }>(
-      `/threads/archived${qs ? `?${qs}` : ''}`,
-    );
-  },
+  }) =>
+    callEndpoint(contract.archived, {
+      query: {
+        page: params?.page || undefined,
+        limit: params?.limit || undefined,
+        search: params?.search || undefined,
+        projectId: params?.projectId || undefined,
+      },
+    }),
 };

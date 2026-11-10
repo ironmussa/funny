@@ -34,8 +34,14 @@ export interface Endpoint<
   readonly response?: TResponse;
 }
 
-// oxlint-disable-next-line typescript/no-explicit-any -- matches every endpoint
-export type AnyEndpoint = Endpoint<HttpMethod, string, any, any, any>;
+/** Matches every endpoint: each part is covariant, so `unknown` / the widest schema covers it. */
+export type AnyEndpoint = Endpoint<
+  HttpMethod,
+  string,
+  AnySchema | undefined,
+  AnySchema | undefined,
+  unknown
+>;
 
 /** `'/:id/runs/:runId'` → `{ id: string; runId: string }`. */
 export type PathParams<TPath extends string> =

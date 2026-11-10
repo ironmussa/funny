@@ -16,26 +16,13 @@
 
 import { and, eq, inArray, lte } from 'drizzle-orm';
 
-import type { WatcherStatus } from '../types.js';
+import type { Watcher, WatcherStatus } from '../types.js';
 import type { RepoDeps } from './deps.js';
 
 export type WatcherRepositoryDeps = RepoDeps;
 
-export interface WatcherRow {
-  id: string;
-  threadId: string;
-  userId: string;
-  key: string;
-  label: string;
-  nextWakeAt: number;
-  lastDelayMs: number;
-  wakeCount: number;
-  maxWakes: number;
-  deadline: number | null;
-  status: WatcherStatus;
-  createdAt: string;
-  updatedAt: string;
-}
+/** A row is the shared `Watcher` type: the columns map one to one. */
+export type WatcherRow = Watcher;
 
 export interface WatcherPatch {
   nextWakeAt?: number;

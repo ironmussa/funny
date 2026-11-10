@@ -55,7 +55,7 @@ bun run db:studio
 
 ### Monorepo Structure (Bun workspaces)
 
-- **`packages/shared`** — Cross-package kernel. Hosts (a) types and error definitions (`src/types.ts`, `src/types/*.ts`, `src/errors.ts`, `src/models.ts`), (b) the shared DB layer used by `server` + `scheduler` (`src/db/schema.ts`, `src/db/schema.{sqlite,pg}.ts`, `src/db/adapters/{sqlite,pg}.ts`, `src/db/migrate.ts`, `src/db/connection.ts`), (c) factory-pattern repositories (`src/repositories/*.ts` — `createMessageRepository(db)`, `createThreadRepository(db)`, etc.) consumed by server + scheduler with a caller-supplied DB connection, (d) the runner↔server protocol (`src/runner-protocol.ts`), (e) auth signing helpers (`src/auth/forwarded-identity.ts`), and (f) the thread state machine (`src/thread-machine.ts`). `runtime` does NOT import the repositories — it proxies all persistence to the server via `RuntimeServiceProvider` (see Server Architecture). `client` only imports types from this package, never runtime code.
+- **`packages/shared`** — Cross-package kernel. Hosts (a) types and error definitions (`src/types.ts`, `src/types/*.ts`, `src/errors.ts`, `src/models.ts`), (b) the shared DB layer used by `server` + `scheduler` (`src/db/schema.ts`, `src/db/schema.{sqlite,pg}.ts`, `src/db/adapters/{sqlite,pg}.ts`, `src/db/migrate.ts`, `src/db/connection.ts`), (c) factory-pattern repositories (`src/repositories/*.ts` — `createMessageRepository(db)`, `createThreadRepository(db)`, etc.) consumed by server + scheduler with a caller-supplied DB connection, (d) the runner↔server protocol (`src/runner-protocol.ts`), (e) auth signing helpers (`src/auth/forwarded-identity.ts`), (f) the thread state machine (`src/thread-machine.ts`), and (g) HTTP contracts (`src/contracts/*.ts`, see Key Patterns). `runtime` does NOT import the repositories — it proxies all persistence to the server via `RuntimeServiceProvider` (see Server Architecture). `client` imports types and browser-safe modules (contracts, zod schemas, `async`) through subpath exports, never the DB layer or repositories.
 - **`packages/core`** — Pure logic shared across server and runtime. Contains git operations (`git/`), agent process management (`agents/`), and port allocation (`ports/`). No HTTP or database code.
 - **`packages/runtime`** — Hono HTTP routes and services for agent execution. Manages agent runners, PTY sessions, worktrees, pipelines, and WebSocket broadcasting. Acts as the "runner" in the server+runner architecture.
 - **`packages/server`** — Entry point for the application. Handles authentication (Better Auth), database (Drizzle + SQLite/PostgreSQL), user management, and proxies requests to remote runners. Owns all persistent state.
@@ -261,6 +261,16 @@ Prefer Effect for cancellation, retry waits, timeouts, bounded concurrency, and
 resource lifetimes, following `AGENTS.md`. Preserve `neverthrow` domain results and
 public service contracts; use explicit adapters at async boundaries. Simple pure
 functions and UI rendering do not need Effect wrappers.
+
+### HTTP contracts (`@funny/shared/contracts/*`)
+
+A route group with a contract declares each endpoint once in `packages/shared/src/contracts/<group>.ts`: method, path (relative to the router mount), zod schemas for query and body, and the response type (`endpointGroup('/automations').endpoint<Automation>()({ method: 'GET', path: '/:id' })`). Both sides use that object:
+
+- **Server:** register with `serveEndpoint(router, endpoint, handler)` from `packages/server/src/validation/endpoint.ts`. It takes the method and path from the endpoint, refuses 401 without a user, validates query and body (400 `{ error }`), and requires the handler to return `reply(body)` / `fail(status, error)` with the declared response type. Map DB rows to the contract type in the route (integers to booleans, `null` to absent); never return a raw drizzle row.
+- **Client:** call with `callEndpoint(endpoint, { params, query, body })` from `packages/client/src/lib/api/_contract.ts`. It goes through `request()`, so auth, telemetry and the circuit breaker still apply.
+- **Request types** come from the schemas (`z.input<typeof schema>`), not from a separate interface, so they cannot claim fields the server does not accept.
+
+`/api/automations` is the first group on contracts; the rest still use `request<T>(path)`, whose `T` is unchecked. Move a group over when you touch it. Hono RPC (`hono/client`) was rejected because importing the server's route types pulls Bun-only modules into the client typecheck.
 
 ### Error Handling with `neverthrow`
 

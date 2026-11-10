@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -64,11 +64,13 @@ describe('ThreadIdleStarter', () => {
   test('puts the manifest back and forwards staged uploads on send', async () => {
     renderStarter(MANIFEST);
 
-    await mocks.promptProps!.onSubmit('Review these now', {
-      model: 'sonnet',
-      mode: 'autoEdit',
-      stagedUploads: ['s-1'],
-    });
+    await act(() =>
+      mocks.promptProps!.onSubmit('Review these now', {
+        model: 'sonnet',
+        mode: 'autoEdit',
+        stagedUploads: ['s-1'],
+      }),
+    );
 
     await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
     const [threadId, content, opts] = mocks.sendMessage.mock.calls[0];

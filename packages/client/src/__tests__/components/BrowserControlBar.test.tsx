@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { BrowserControlBar } from '@/components/browser-panel/BrowserControlBar';
@@ -34,7 +34,7 @@ describe('BrowserControlBar', () => {
     fireEvent.click(toggle);
     expect(setAudioMuted).toHaveBeenCalledWith(false);
 
-    useBrowserPanelStore.setState({ audioMuted: false });
+    act(() => useBrowserPanelStore.setState({ audioMuted: false }));
     rerender(<BrowserControlBar />);
     fireEvent.click(screen.getByTestId('browser-panel-audio-toggle'));
     expect(setAudioMuted).toHaveBeenLastCalledWith(true);

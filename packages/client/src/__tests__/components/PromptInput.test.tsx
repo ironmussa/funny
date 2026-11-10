@@ -1,4 +1,4 @@
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen, fireEvent, waitFor, type RenderResult } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
@@ -12,13 +12,53 @@ import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { installTestDataLayer } from '../helpers/data-layer-harness';
-import { renderWithProviders } from '../helpers/render';
+import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
 vi.mock('@/lib/api/system', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api/system')>();
   return {
     ...actual,
-    systemApi: { ...actual.systemApi, providerSetupStatus: vi.fn(), installProviderTool: vi.fn() },
+    systemApi: {
+      ...actual.systemApi,
+      providerSetupStatus: vi.fn(),
+      installProviderTool: vi.fn(),
+      getProviders: vi.fn(() =>
+        okAsync({
+          providers: [],
+          activeBuiltins: null,
+          availableProviders: null,
+          hasRunner: false,
+        }),
+      ),
+      getAcpModels: vi.fn(() =>
+        okAsync({ ok: true, models: [], currentModelId: null, discoveredAt: 0 }),
+      ),
+      getOpenCodeModels: vi.fn(() =>
+        okAsync({ ok: true, models: [], currentModelId: null, discoveredAt: 0 }),
+      ),
+    },
+  };
+});
+
+// The model picker, sandbox toggle and branch context load these on mount.
+vi.mock('@/lib/api/infra', () => ({
+  infraApi: {
+    listInfraConnections: vi.fn(() => okAsync({ connections: [] })),
+    getProjectSandbox: vi.fn(() => okAsync({ settings: null })),
+  },
+}));
+vi.mock('@/lib/api/profile', () => ({
+  profileApi: { getProfile: vi.fn(() => okAsync({})), updateProfile: vi.fn(() => okAsync({})) },
+}));
+vi.mock('@/lib/api/projects', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/api/projects')>();
+  return {
+    projectsApi: {
+      ...actual.projectsApi,
+      listBranches: vi.fn(() =>
+        okAsync({ branches: [], remoteBranches: [], defaultBranch: 'main', currentBranch: 'main' }),
+      ),
+    },
   };
 });
 
@@ -159,6 +199,19 @@ vi.mock('@/components/prompt-editor/serialize', () => ({
 
 // ── Setup ───────────────────────────────────────────────────────
 
+/**
+ * Render and let the mount-time loads (branches, skills, slash sources) land
+ * inside act; without it they update PromptInput after a synchronous test has
+ * already returned.
+ */
+async function renderPrompt(
+  ...args: Parameters<typeof renderWithProviders>
+): Promise<RenderResult> {
+  const view = renderWithProviders(...args);
+  await flushAsyncUpdates();
+  return view;
+}
+
 beforeEach(() => {
   installTestDataLayer();
   vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
@@ -208,7 +261,7 @@ describe('PromptInput', () => {
       removeEventListener: vi.fn(),
       dispatchEvent: () => false,
     }));
-    const view = renderWithProviders(<PromptInput onSubmit={vi.fn()} />);
+    const view = await renderPrompt(<PromptInput onSubmit={vi.fn()} />);
     try {
       const editor = screen.getByRole('textbox');
       fireEvent.click(screen.getByTestId('prompt-mode-select'));
@@ -226,9 +279,9 @@ describe('PromptInput', () => {
     }
   });
 
-  test('reserves context bar height before and after new-thread context loads', () => {
+  test('reserves context bar height before and after new-thread context loads', async () => {
     const onSubmit = vi.fn();
-    const { rerender } = renderWithProviders(
+    const { rerender } = await renderPrompt(
       <PromptInput onSubmit={onSubmit} isNewThread newThreadContextBar={<span>Test</span>} />,
     );
 
@@ -252,7 +305,7 @@ describe('PromptInput', () => {
 
   test('Enter key triggers onSubmit with prompt text', async () => {
     const onSubmit = vi.fn();
-    renderWithProviders(<PromptInput onSubmit={onSubmit} />);
+    await renderPrompt(<PromptInput onSubmit={onSubmit} />);
 
     const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: 'Hello agent' } });
@@ -285,7 +338,7 @@ describe('PromptInput', () => {
       }),
     );
     const onSubmit = vi.fn();
-    renderWithProviders(<PromptInput onSubmit={onSubmit} isNewThread projectId="p1" />);
+    await renderPrompt(<PromptInput onSubmit={onSubmit} isNewThread projectId="p1" />);
 
     const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: 'Use the project defaults' } });
@@ -303,7 +356,7 @@ describe('PromptInput', () => {
     );
   });
 
-  test('navigates this thread’s sent-message history with the arrow keys', () => {
+  test('navigates this thread’s sent-message history with the arrow keys', async () => {
     useThreadStore.setState({
       threadDataById: {
         'thread-history': {
@@ -339,7 +392,7 @@ describe('PromptInput', () => {
       },
     } as any);
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-history' });
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-history' });
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
 
     fireEvent.keyDown(textarea, { key: 'ArrowUp' });
@@ -355,7 +408,7 @@ describe('PromptInput', () => {
     expect(textarea.value).toBe('');
   });
 
-  test('restores the draft after navigating back to the end of message history', () => {
+  test('restores the draft after navigating back to the end of message history', async () => {
     useThreadStore.setState({
       threadDataById: {
         'thread-history': {
@@ -377,7 +430,7 @@ describe('PromptInput', () => {
       },
     } as any);
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-history' });
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-history' });
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: 'unfinished draft' } });
 
@@ -410,7 +463,7 @@ describe('PromptInput', () => {
     );
     const onProviderChange = vi.fn();
 
-    renderWithProviders(
+    await renderPrompt(
       <PromptInput
         onSubmit={vi.fn()}
         isNewThread
@@ -465,7 +518,7 @@ describe('PromptInput', () => {
       },
     } as any);
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} isNewThread projectId="p-new" />, {
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} isNewThread projectId="p-new" />, {
       threadId: 'old-thread',
     });
 
@@ -485,9 +538,9 @@ describe('PromptInput', () => {
     );
   });
 
-  test('Shift+Enter does not trigger submit', () => {
+  test('Shift+Enter does not trigger submit', async () => {
     const onSubmit = vi.fn();
-    renderWithProviders(<PromptInput onSubmit={onSubmit} />);
+    await renderPrompt(<PromptInput onSubmit={onSubmit} />);
 
     const textarea = screen.getByRole('textbox');
     fireEvent.change(textarea, { target: { value: 'line1' } });
@@ -496,9 +549,9 @@ describe('PromptInput', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  test('empty prompt cannot be submitted', () => {
+  test('empty prompt cannot be submitted', async () => {
     const onSubmit = vi.fn();
-    renderWithProviders(<PromptInput onSubmit={onSubmit} />);
+    await renderPrompt(<PromptInput onSubmit={onSubmit} />);
 
     const textarea = screen.getByRole('textbox');
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
@@ -506,24 +559,24 @@ describe('PromptInput', () => {
     expect(onSubmit).not.toHaveBeenCalled();
   });
 
-  test('stop button shown when running=true, send button when not', () => {
+  test('stop button shown when running=true, send button when not', async () => {
     const onStop = vi.fn();
 
     // Running state with empty textarea — stop button visible
-    const { unmount } = renderWithProviders(
+    const { unmount } = await renderPrompt(
       <PromptInput onSubmit={vi.fn()} onStop={onStop} running={true} />,
     );
     expect(screen.getAllByLabelText('prompt.stopAgent').length).toBeGreaterThan(0);
     unmount();
 
     // Not running — send button visible (no stop button)
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} running={false} />);
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} running={false} />);
     expect(screen.queryByLabelText('prompt.stopAgent')).toBeNull();
   });
 
   test('submit clears the textarea', async () => {
     const onSubmit = vi.fn();
-    renderWithProviders(<PromptInput onSubmit={onSubmit} />);
+    await renderPrompt(<PromptInput onSubmit={onSubmit} />);
 
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: 'task' } });
@@ -535,7 +588,7 @@ describe('PromptInput', () => {
 
   test('submit preserves textarea when onSubmit returns false', async () => {
     const onSubmit = vi.fn().mockResolvedValue(false);
-    renderWithProviders(<PromptInput onSubmit={onSubmit} />);
+    await renderPrompt(<PromptInput onSubmit={onSubmit} />);
 
     const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: 'my task' } });
@@ -550,13 +603,13 @@ describe('PromptInput', () => {
     await waitFor(() => expect(textarea.value).toBe('my task'));
   });
 
-  test('textarea is disabled when loading=true', () => {
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} loading={true} />);
+  test('textarea is disabled when loading=true', async () => {
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} loading={true} />);
     expect(screen.getByRole('textbox')).toBeDisabled();
   });
 
-  test('uses a theme-aware contrasting border for attached image previews', () => {
-    renderWithProviders(
+  test('uses a theme-aware contrasting border for attached image previews', async () => {
+    await renderPrompt(
       <PromptInput
         onSubmit={vi.fn()}
         initialImages={[
@@ -599,7 +652,7 @@ describe('PromptInput', () => {
     );
 
     seedQueues({ 'thread-1': { count: 2 } });
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-1',
     });
 
@@ -617,7 +670,7 @@ describe('PromptInput', () => {
     );
 
     seedQueues({ 'thread-1': { count: 1 } });
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-1',
     });
 
@@ -649,7 +702,7 @@ describe('PromptInput', () => {
     );
 
     seedQueues({ 'thread-1': { count: 1 } });
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-1',
     });
 
@@ -697,7 +750,7 @@ describe('PromptInput', () => {
       );
     }
 
-    const { rerender } = renderWithProviders(<Host threadId="thread-a" />, {
+    const { rerender } = await renderPrompt(<Host threadId="thread-a" />, {
       threadId: 'thread-a',
     });
 
@@ -735,7 +788,7 @@ describe('PromptInput', () => {
       ]),
     );
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-a',
     });
 
@@ -749,7 +802,7 @@ describe('PromptInput', () => {
     vi.mocked(api.listQueue).mockReturnValueOnce(new Promise(() => {}) as any);
 
     seedQueues({ 'thread-a': { count: 1, next: 'mensaje pendiente despues del refresh' } });
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-a',
     });
 
@@ -777,7 +830,7 @@ describe('PromptInput', () => {
     });
     vi.mocked(api.listQueue).mockReturnValueOnce(new Promise(() => {}) as any);
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, {
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-a',
     });
 
@@ -834,7 +887,7 @@ describe('PromptInput', () => {
       },
     } as any);
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-alpha' });
+    await renderPrompt(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-alpha' });
 
     // Powerline shows Alpha (thread's project), never Beta (global selection).
     await waitFor(() => {
@@ -843,11 +896,11 @@ describe('PromptInput', () => {
     expect(screen.queryByText('Beta')).toBeNull();
   });
 
-  test('does not render a context percentage from Codex turn-aggregate usage', () => {
+  test('does not render a context percentage from Codex turn-aggregate usage', async () => {
     // Codex reports all input tokens consumed by a turn, including several
     // model requests made for tool calls. Old thread payloads can retain that
     // aggregate, but it is not the active context-window size.
-    renderWithProviders(
+    await renderPrompt(
       <PromptInput
         onSubmit={vi.fn()}
         threadOverride={{
@@ -862,8 +915,8 @@ describe('PromptInput', () => {
     expect(screen.queryByTestId('prompt-context-pct')).toBeNull();
   });
 
-  test('renders a context percentage for providers that report a window snapshot', () => {
-    renderWithProviders(
+  test('renders a context percentage for providers that report a window snapshot', async () => {
+    await renderPrompt(
       <PromptInput
         onSubmit={vi.fn()}
         threadOverride={{
@@ -890,7 +943,7 @@ test('keeps the draft and attachments while the provider needs authentication', 
     }),
   );
   const onSubmit = vi.fn();
-  renderWithProviders(
+  await renderPrompt(
     <PromptInput
       onSubmit={onSubmit}
       projectId="p1"
@@ -917,7 +970,7 @@ test('opens Pi setup before sending when the bundled SDK has no credentials', as
     okAsync({ provider: 'pi', state: 'bundled', auth: 'required', installable: true, login: 'pi' }),
   );
   const onSubmit = vi.fn();
-  renderWithProviders(
+  await renderPrompt(
     <PromptInput
       onSubmit={onSubmit}
       projectId="p1"

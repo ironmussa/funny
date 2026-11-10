@@ -4,6 +4,8 @@ import { describe, expect, test, vi } from 'vitest';
 import { PlanReviewDialog } from '@/components/tool-cards/PlanReviewDialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
+import { flushAsyncUpdates } from '../helpers/render';
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
     t: (_key: string, fallback?: string, options?: Record<string, unknown>) => {
@@ -46,7 +48,8 @@ const PLAN = `## Implementation Plan
 1. Wire the dialog actions
 2. Add regression tests`;
 
-function renderDialog({
+/** Render open, letting the lazy markdown view load inside act. */
+async function renderDialog({
   comments = [],
   onRespond = vi.fn(),
 }: {
@@ -68,12 +71,13 @@ function renderDialog({
       />
     </TooltipProvider>,
   );
+  await flushAsyncUpdates();
   return { onOpenChange, onRespond };
 }
 
 describe('PlanReviewDialog', () => {
-  test('accepts the current plan from the review dialog', () => {
-    const { onOpenChange, onRespond } = renderDialog();
+  test('accepts the current plan from the review dialog', async () => {
+    const { onOpenChange, onRespond } = await renderDialog();
 
     fireEvent.click(screen.getByTestId('plan-review-accept'));
 
@@ -82,7 +86,7 @@ describe('PlanReviewDialog', () => {
   });
 
   test('accepts edited plan text from edit mode', async () => {
-    const { onRespond } = renderDialog();
+    const { onRespond } = await renderDialog();
 
     fireEvent.click(screen.getByTestId('plan-review-toggle-edit'));
     const editor = await screen.findByTestId('mock-plan-editor');
@@ -96,8 +100,8 @@ describe('PlanReviewDialog', () => {
     );
   });
 
-  test('sends plan comments from the review dialog', () => {
-    const { onRespond } = renderDialog({
+  test('sends plan comments from the review dialog', async () => {
+    const { onRespond } = await renderDialog({
       comments: [
         {
           selectedText: 'Wire the dialog actions',

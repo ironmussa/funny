@@ -54,7 +54,7 @@ const resolve = (path: string, query: Record<string, string> = {}) =>
 beforeEach(async () => {
   presence = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 10_000 });
   __resetRunnerScopeCache();
-  for (const t of ['t-box', 't-other', 't-scratch']) uncacheThread(t);
+  for (const t of ['t-box', 't-other', 't-scratch', 't-failed-box']) uncacheThread(t);
   await bindTestDb();
   seedProject(testDb.db, { id: 'px', userId: 'alice', path: '/home/alice/x' });
   seedThread(testDb.db, { id: 't-box', projectId: 'px', userId: 'alice' });
@@ -109,12 +109,86 @@ describe('routing', () => {
     );
   });
 
+  test('a sandbox thread whose runner never registered never falls back to the general runner', async () => {
+    // Its setup failed before the sandbox runner connected: the project's
+    // runner holds a different checkout (the user's own working tree).
+    runner('r-general');
+    seedThread(testDb.db, {
+      id: 't-failed-box',
+      projectId: 'px',
+      userId: 'alice',
+      runtime: 'sandbox',
+      status: 'failed',
+    });
+    for (const path of [
+      '/api/threads/t-failed-box/message',
+      '/api/git/t-failed-box/status',
+      '/api/git/t-failed-box/diff/summary',
+    ]) {
+      expect(await resolve(path)).toBeNull();
+      expect(await resolve(path, { projectId: 'px' })).toBeNull();
+      expect(await explainUnresolved(path, {}, 'alice')).toBe('thread-sandbox-unavailable');
+    }
+  });
+
   test('other threads, project routes and projectless work never reach the sandbox', async () => {
     runner('r-box');
     await bindSandboxRunner('r-box', 't-box');
     expect(await resolve('/api/threads/t-other/message')).toBeNull();
     expect(await resolve('/api/projects/px/branches')).toBeNull();
     expect(await resolve('/api/browse/roots')).toBeNull();
+  });
+
+  test("a request made from a sandbox thread's view runs on its sandbox", async () => {
+    runner('r-general');
+    runner('r-box');
+    await bindSandboxRunner('r-box', 't-box');
+    const context = { threadId: 't-box' };
+    expect((await resolve('/api/files/read', context))?.runnerId).toBe('r-box');
+    expect((await resolve('/api/browse/files', context))?.runnerId).toBe('r-box');
+    expect(
+      (await resolve('/api/skills/resources', { ...context, projectId: 'px' }))?.runnerId,
+    ).toBe('r-box');
+    expect((await resolve('/api/git/project/px/remote-url', context))?.runnerId).toBe('r-box');
+    // Without the thread context the same requests stay on the project's runner.
+    expect((await resolve('/api/files/read'))?.runnerId).toBe('r-general');
+  });
+
+  test('a sandbox thread context never falls back to the local runner', async () => {
+    runner('r-general');
+    runner('r-box', false);
+    await bindSandboxRunner('r-box', 't-box');
+    expect(await resolve('/api/files/read', { threadId: 't-box' })).toBeNull();
+    expect(await explainUnresolved('/api/files/read', { threadId: 't-box' }, 'alice')).toBe(
+      'thread-sandbox-unavailable',
+    );
+  });
+
+  test('a sandbox thread context whose runner never registered never falls back', async () => {
+    runner('r-general');
+    seedThread(testDb.db, {
+      id: 't-failed-box',
+      projectId: 'px',
+      userId: 'alice',
+      runtime: 'sandbox',
+      status: 'failed',
+    });
+    expect(await resolve('/api/files/read', { threadId: 't-failed-box' })).toBeNull();
+    expect(await explainUnresolved('/api/files/read', { threadId: 't-failed-box' }, 'alice')).toBe(
+      'thread-sandbox-unavailable',
+    );
+  });
+
+  test('a thread context only steers requests about its own project', async () => {
+    runner('r-general');
+    runner('r-box');
+    await bindSandboxRunner('r-box', 't-box');
+    seedProject(testDb.db, { id: 'py', userId: 'alice', path: '/home/alice/y' });
+    expect((await resolve('/api/projects/py/branches', { threadId: 't-box' }))?.runnerId).toBe(
+      'r-general',
+    );
+    // A local thread's context keeps its project's runner.
+    expect((await resolve('/api/files/read', { threadId: 't-other' }))?.runnerId).toBe('r-general');
   });
 
   test('binding a sandbox evicts a thread route cached on the general runner', async () => {

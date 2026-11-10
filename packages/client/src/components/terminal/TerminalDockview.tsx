@@ -12,18 +12,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { useProjects } from '@/data/projects/hooks';
 import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { sendTerminalRealtime } from '@/hooks/use-ws';
+import { openScopeTerminal } from '@/lib/open-terminal-tab';
 import { useProjectStore } from '@/stores/project-store';
 import { type TerminalShell, useSettingsStore } from '@/stores/settings-store';
-import {
-  SCRATCH_TERMINAL_SCOPE_ID,
-  useTerminalStore,
-  type TerminalTab,
-} from '@/stores/terminal-store';
-import { useThreadWorktreePath } from '@/stores/thread-context';
+import { useTerminalStore, type TerminalTab } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { type BottomTabSpec } from '../DockviewLayout';
@@ -140,51 +135,18 @@ function NewTerminalButton() {
   const menu = useTooltipMenu();
   const availableShells = useSettingsStore((s) => s.availableShells);
   const fetchAvailableShells = useSettingsStore((s) => s.fetchAvailableShells);
-  const addTab = useTerminalStore((s) => s.addTab);
-  const togglePanel = useTerminalStore((s) => s.togglePanel);
-  const projects = useProjects();
-  const { scopeId: selectedProjectId, scratchThreadId } = useTerminalScope();
-  const activeThreadWorktreePath = useThreadWorktreePath();
+  const terminalScope = useTerminalScope();
+  const selectedProjectId = terminalScope.scopeId;
   const visibleTabs = useTerminalStore(
     useShallow((s) => s.tabs.filter((tab) => tab.projectId === selectedProjectId)),
   );
 
   const handleCreate = useCallback(
     (shell: TerminalShell) => {
-      if (!selectedProjectId) return;
-      const isScratchScope = selectedProjectId === SCRATCH_TERMINAL_SCOPE_ID;
-      const project = isScratchScope ? null : projects.find((p) => p.id === selectedProjectId);
-      const cwd = isScratchScope ? '~' : activeThreadWorktreePath || project?.path || 'C:\\';
-      const detected = availableShells.find((s) => s.id === shell);
-      const shellName = detected?.label ?? 'Terminal';
-      const sameShellCount = visibleTabs.filter((tab) => (tab.shell ?? 'default') === shell).length;
-      const label = `${shellName} ${sameShellCount + 1}`;
-      addTab({
-        id: crypto.randomUUID(),
-        label,
-        cwd,
-        alive: true,
-        projectId: selectedProjectId,
-        type: isTauri ? undefined : 'pty',
-        shell,
-        createdAt: Date.now(),
-        scratchThreadId: isScratchScope ? (scratchThreadId ?? undefined) : undefined,
-      });
-      const current = useTerminalStore.getState();
-      if (!current.panelVisibleByProject[selectedProjectId]) {
-        togglePanel(selectedProjectId);
-      }
+      if (terminalScope.scopeId)
+        openScopeTerminal({ ...terminalScope, scopeId: terminalScope.scopeId }, shell);
     },
-    [
-      selectedProjectId,
-      scratchThreadId,
-      projects,
-      activeThreadWorktreePath,
-      availableShells,
-      visibleTabs,
-      addTab,
-      togglePanel,
-    ],
+    [terminalScope],
   );
 
   // Compose the tooltip-menu's onOpenChange with a lazy shell-list load so we

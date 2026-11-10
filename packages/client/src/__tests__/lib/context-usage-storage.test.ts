@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, test } from 'vitest';
 
-import { emitContextUsage } from '@/lib/context-usage-events';
 import { loadContextUsage, saveContextUsage } from '@/lib/context-usage-storage';
 
 describe('context-usage-storage', () => {
@@ -40,19 +39,5 @@ describe('context-usage-storage', () => {
 
     expect(loadContextUsage('old')).toBeUndefined();
     expect(localStorage.getItem(key)).toBeNull();
-  });
-
-  test('persists usage when emitContextUsage fires', () => {
-    emitContextUsage('thread-2', {
-      cumulativeInputTokens: 50,
-      lastInputTokens: 10,
-      lastOutputTokens: 5,
-    });
-
-    expect(loadContextUsage('thread-2')).toEqual({
-      cumulativeInputTokens: 50,
-      lastInputTokens: 10,
-      lastOutputTokens: 5,
-    });
   });
 });

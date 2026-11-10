@@ -110,4 +110,12 @@ describe('GET /status bulk thread scope', () => {
     expect(await statusIds('/status?projectId=p1')).toEqual(['a', 'b', 'bg', 'wt']);
     expect(await statusIds('/status?projectId=p1&threadIds=a')).toEqual(['a']);
   });
+
+  test("a sandbox thread is left out: the project checkout is not the sandbox's", async () => {
+    mocks.listThreads.mockResolvedValue({
+      threads: [thread('a'), thread('box', { runtime: 'sandbox', branch: null })],
+    });
+    expect(await statusIds('/status?projectId=p1')).toEqual(['a']);
+    expect(await statusIds('/status?projectId=p1&threadIds=box')).toEqual([]);
+  });
 });

@@ -1,5 +1,7 @@
 import type { GitStatusInfo } from '@funny/shared';
 
+import { runsInSandbox } from '@/lib/thread-variant';
+
 /**
  * Pure git-status keys and comparisons, shared by the collections, the hooks
  * and the views. No state lives here.
@@ -25,7 +27,11 @@ export function branchKey(thread: {
   branch?: string | null;
   worktreePath?: string | null;
   baseBranch?: string | null;
+  runtime?: string | null;
 }): string {
+  // Sandbox threads: unique per thread — their checkout is on the sandbox
+  // runner, never the project directory the local threads share.
+  if (runsInSandbox(thread)) return `sb:${thread.id}`;
   // Worktree threads: always unique per thread — each worktree has its own
   // working directory so even threads on the same branch have independent state.
   // Use `mode` as the primary signal (worktreePath may be null if the worktree
@@ -49,6 +55,7 @@ export function statusBranchKeyForThread(
     branch?: string | null;
     worktreePath?: string | null;
     baseBranch?: string | null;
+    runtime?: string | null;
   },
   mapping: Record<string, string>,
 ): string {
@@ -64,6 +71,7 @@ export function gitStatusForThreadFromState(
     branch?: string | null;
     worktreePath?: string | null;
     baseBranch?: string | null;
+    runtime?: string | null;
   },
 ): GitStatusInfo | undefined {
   return state.statusByBranch[statusBranchKeyForThread(thread, state.threadToBranchKey)];

@@ -52,6 +52,21 @@ function makeCtx(overrides: Partial<HandlerServiceContext> = {}): HandlerService
 }
 
 describe('computeBranchKey', () => {
+  test('a sandbox thread never shares the project checkout key', () => {
+    expect(
+      computeBranchKey({ id: 't-box', projectId: 'p-1', mode: 'local', runtime: 'sandbox' }),
+    ).toBe('sb:t-box');
+    expect(
+      computeBranchKey({
+        id: 't-box',
+        projectId: 'p-1',
+        mode: 'local',
+        branch: 'main',
+        runtime: 'sandbox',
+      }),
+    ).toBe('sb:t-box');
+  });
+
   test('groups local threads on the same branch', () => {
     expect(
       computeBranchKey({

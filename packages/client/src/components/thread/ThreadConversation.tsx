@@ -9,6 +9,7 @@ import { MessageStream, type MessageStreamHandle } from '@/components/thread/Mes
 import { useThreadCheckpoints } from '@/components/thread/use-thread-checkpoints';
 import { useThreadHandlers } from '@/components/thread/use-thread-handlers';
 import { readProject } from '@/data/projects/read';
+import { useQueuedCount } from '@/data/queue/hooks';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
 import { sessionChangesFromEvents } from '@/lib/session-changes-from-events';
@@ -141,10 +142,10 @@ export function ThreadConversation({
     () => (gitCapable ? sessionChangesFromEvents(stableThreadEvents) : undefined),
     [gitCapable, stableThreadEvents],
   );
+  const uiQueuedCount = useQueuedCount(activeThread?.id);
 
   if (!activeThread) return null;
 
-  const uiQueuedCount = activeThread.queuedCount ?? 0;
   const isRunning = activeThread.status === 'running' || uiQueuedCount > 0;
   const currentProject = readProject(activeThread.projectId);
   const followUpMode = currentProject?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
@@ -241,8 +242,6 @@ export function ThreadConversation({
               loading={sending}
               running={isRunning && !isExternal}
               isQueueMode={isQueueMode}
-              queuedCount={activeThread.queuedCount ?? 0}
-              queuedNextMessage={activeThread.queuedNextMessage}
               setPromptRef={setPromptRef}
               placeholder={t('thread.nextPrompt')}
             />

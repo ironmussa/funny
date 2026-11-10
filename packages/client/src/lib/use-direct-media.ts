@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { threadContextHeaders } from '@/lib/api/_core';
 import { createClientLogger } from '@/lib/client-logger';
 import { isExternalUrl, resolveImageSrc } from '@/lib/raw-file-src';
 
@@ -72,22 +73,33 @@ export function __hasSignedMediaForTests(path: string): boolean {
   return signedCache.has(path);
 }
 
+/**
+ * The same path can name different files on different runners (a sandbox
+ * thread's checkout sits at the project's path): cache per open thread.
+ */
+function signedCacheKey(path: string, context: Record<string, string>): string {
+  const threadId = Object.values(context)[0];
+  return threadId ? `${threadId}\0${path}` : path;
+}
+
 async function signMedia(path: string): Promise<string | null> {
   if (directMediaDisabled) return null;
-  const cached = signedCache.get(path);
+  const context = threadContextHeaders();
+  const key = signedCacheKey(path, context);
+  const cached = signedCache.get(key);
   if (cached) {
     if (signedUrlIsFresh(cached)) {
-      signedCache.delete(path);
-      signedCache.set(path, cached);
+      signedCache.delete(key);
+      signedCache.set(key, cached);
       return cached;
     }
     // Expired or within the refresh skew — drop it and mint a fresh one below.
-    signedCache.delete(path);
+    signedCache.delete(key);
   }
   try {
     const res = await fetch('/api/media/sign', {
       method: 'POST',
-      headers: { 'content-type': 'application/json' },
+      headers: { 'content-type': 'application/json', ...context },
       credentials: 'include',
       body: JSON.stringify({ path }),
     });
@@ -98,7 +110,7 @@ async function signMedia(path: string): Promise<string | null> {
       directMediaDisabled = true;
       return null;
     }
-    signedCache.set(path, data.url);
+    signedCache.set(key, data.url);
     pruneSignedCache();
     return data.url;
   } catch (e) {
@@ -153,7 +165,7 @@ export function useResolvedMediaSrc(src?: string): ResolvedMedia {
     // to the proxied URL before the caller surfaces an error. A stale cache entry
     // is also evicted so the next sign mints a fresh one.
     if (src && !isExternalUrl(src) && proxied && resolved !== proxied) {
-      signedCache.delete(src);
+      signedCache.delete(signedCacheKey(src, threadContextHeaders()));
       setResolved(proxied);
       return true;
     }

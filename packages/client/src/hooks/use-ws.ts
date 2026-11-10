@@ -549,6 +549,7 @@ export type TerminalRealtimeCommand =
       label?: string;
       shell?: string;
       scratchThreadId?: string;
+      sandboxThreadId?: string;
     }
   | { case: 'write'; data: string }
   | { case: 'resize'; cols: number; rows: number }
@@ -580,6 +581,7 @@ export function sendTerminalRealtime(
           label: command.label,
           shell: command.shell,
           scratchThreadId: command.scratchThreadId,
+          sandboxThreadId: command.sandboxThreadId,
         },
       };
       break;

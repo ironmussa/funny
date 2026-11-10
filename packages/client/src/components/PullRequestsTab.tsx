@@ -20,6 +20,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { applyPRMetadata } from '@/data/git-status/actions';
+import { useProjectCurrentBranch } from '@/data/projects/hooks';
 import { usePRDetail } from '@/data/pull-requests/hooks';
 import { fetchPRDetail } from '@/data/pull-requests/queries';
 import { useGitHubProjectId } from '@/hooks/use-github-project-id';
@@ -27,7 +28,6 @@ import { usePagedGitHubList, type FetchGitHubListPage } from '@/hooks/use-paged-
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn, resolveThreadBranch } from '@/lib/utils';
-import { useProjectStore } from '@/stores/project-store';
 import {
   useThreadId,
   useThreadBranch,
@@ -358,9 +358,7 @@ function useCurrentBranch(projectId: string | null): string | undefined {
           worktreePath: activeThreadWorktreePath,
         })
       : undefined;
-  const projectBranch = useProjectStore((s) =>
-    projectId ? s.branchByProject[projectId] : undefined,
-  );
+  const projectBranch = useProjectCurrentBranch(projectId);
   return threadBranch || projectBranch;
 }
 

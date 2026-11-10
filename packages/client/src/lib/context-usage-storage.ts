@@ -1,5 +1,4 @@
 import { createClientLogger } from './client-logger';
-import { onContextUsage } from './context-usage-events';
 import type { ContextUsage } from './context-usage-types';
 
 const log = createClientLogger('context-usage-storage');
@@ -24,6 +23,7 @@ export function loadContextUsage(threadId: string): ContextUsage | undefined {
       cumulativeInputTokens: parsed.cumulativeInputTokens,
       lastInputTokens: parsed.lastInputTokens,
       lastOutputTokens: parsed.lastOutputTokens,
+      ...(parsed.breakdown ? { breakdown: parsed.breakdown } : {}),
     };
   } catch (err) {
     log.warn('load failed', { threadId, error: String(err) });
@@ -39,7 +39,3 @@ export function saveContextUsage(threadId: string, usage: ContextUsage): void {
     log.warn('save failed', { threadId, error: String(err) });
   }
 }
-
-// Persist on every WS context-usage event so wsHandlers doesn't need to import
-// this module directly (keeps the handler chain shallow).
-onContextUsage(saveContextUsage);

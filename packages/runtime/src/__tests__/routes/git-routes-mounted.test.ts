@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   isWorkflowActive: vi.fn(),
   getLog: vi.fn(),
   getGraphLog: vi.fn(),
+  listBranchRefs: vi.fn(),
   getPRForBranch: vi.fn(),
   getRebaseReflogEvents: vi.fn(),
   getUnpushedHashes: vi.fn(),
@@ -99,6 +100,7 @@ vi.mock('@funny/core/git', async (importOriginal) => {
     deriveGitSyncState: vi.fn(() => 'synced'),
     getLog: mocks.getLog,
     getGraphLog: mocks.getGraphLog,
+    listBranchRefs: mocks.listBranchRefs,
     getPRForBranch: mocks.getPRForBranch,
     getRebaseReflogEvents: mocks.getRebaseReflogEvents,
     getUnpushedHashes: mocks.getUnpushedHashes,
@@ -1222,6 +1224,7 @@ describe('gitRoutes (mounted)', () => {
       limit: 2,
       skip: 0,
       all: true,
+      excludeRefs: [],
     });
   });
 
@@ -1361,7 +1364,45 @@ describe('gitRoutes (mounted)', () => {
       limit: 51,
       skip: 0,
       all: false,
+      excludeRefs: [],
     });
+  });
+
+  test('GET /api/git/project/:projectId/graph-log?hideMerged=true leaves out branches whose PR is merged', async () => {
+    mocks.listBranchRefs.mockReturnValueOnce(
+      okAsync([
+        'refs/heads/main',
+        'refs/heads/feat/done',
+        'refs/remotes/origin/feat/done',
+        'refs/heads/feat/wip',
+        'refs/heads/feat/unknown',
+      ]),
+    );
+    vi.mocked(getCachedPR).mockImplementation((_cwd, branch) => {
+      if (branch === 'feat/done') {
+        return { prNumber: 7, prUrl: 'https://github.com/o/r/pull/7', prState: 'MERGED' };
+      }
+      if (branch === 'feat/wip') {
+        return { prNumber: 8, prUrl: 'https://github.com/o/r/pull/8', prState: 'OPEN' };
+      }
+      return undefined;
+    });
+    const app = makeApp();
+
+    await app.request('/api/git/project/p1/graph-log?hideMerged=true');
+    expect(mocks.getGraphLog).toHaveBeenCalledWith('/tmp/repo', {
+      limit: 51,
+      skip: 0,
+      all: true,
+      excludeRefs: ['refs/heads/feat/done', 'refs/remotes/origin/feat/done'],
+    });
+  });
+
+  test('GET /api/git/project/:projectId/graph-log does not list refs unless hideMerged is set', async () => {
+    const app = makeApp();
+
+    await app.request('/api/git/project/p1/graph-log');
+    expect(mocks.listBranchRefs).not.toHaveBeenCalled();
   });
 
   test('GET /api/git/project/:projectId/reflog-events returns rebase events', async () => {
@@ -1396,6 +1437,7 @@ describe('gitRoutes (mounted)', () => {
       limit: 51,
       skip: 0,
       all: true,
+      excludeRefs: [],
     });
   });
 

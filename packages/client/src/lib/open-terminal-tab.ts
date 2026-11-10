@@ -1,7 +1,9 @@
 import type { Job, Thread } from '@funny/shared';
 
 import { isTauri } from '@/components/terminal/xterm-utils';
-import { readProjects } from '@/data/projects/read';
+import { readProject, readProjects } from '@/data/projects/read';
+import type { TerminalScope } from '@/hooks/use-terminal-scope';
+import { runsInSandbox } from '@/lib/thread-variant';
 import { useProjectStore } from '@/stores/project-store';
 import { type TerminalShell, useSettingsStore } from '@/stores/settings-store';
 import {
@@ -25,6 +27,7 @@ function buildTab(args: {
   cwd: string;
   shell: TerminalShell;
   scratchThreadId?: string;
+  sandboxThreadId?: string;
   /** Command auto-run once the PTY shell is ready. */
   initialCommand?: string;
   /** Override the auto-generated "<shell> N" label. */
@@ -47,8 +50,38 @@ function buildTab(args: {
     shell: args.shell,
     createdAt: Date.now(),
     scratchThreadId: args.scratchThreadId,
+    sandboxThreadId: args.sandboxThreadId,
     initialCommand: args.initialCommand,
   };
+}
+
+/**
+ * Open a new terminal tab in a terminal scope (the panel's "+" and the dock's
+ * new-terminal button): in the scope thread's worktree or sandbox, the
+ * project, or the scratch dir. Opens the panel when it is hidden.
+ */
+export function openScopeTerminal(
+  scope: TerminalScope & { scopeId: string },
+  shell: TerminalShell,
+): void {
+  const isScratchScope = scope.scopeId === SCRATCH_TERMINAL_SCOPE_ID;
+  // For scratch scope, cwd is a display-only placeholder — the runner
+  // derives the real path from `scratchThreadId` on the spawn payload.
+  const cwd = isScratchScope
+    ? '~'
+    : scope.worktreePath || readProject(scope.scopeId)?.path || 'C:\\';
+  useTerminalStore.getState().addTab(
+    buildTab({
+      projectId: scope.scopeId,
+      cwd,
+      shell,
+      scratchThreadId: (isScratchScope && scope.scratchThreadId) || undefined,
+      sandboxThreadId: scope.sandboxThreadId,
+    }),
+  );
+  // The panel must be visible for the spawn effect to emit pty:spawn.
+  const current = useTerminalStore.getState();
+  if (!current.panelVisibleByProject[scope.scopeId]) current.togglePanel(scope.scopeId);
 }
 
 /**
@@ -91,7 +124,7 @@ export function openProjectTerminal({
 }
 
 interface OpenThreadTerminalArgs {
-  thread: Pick<Thread, 'id' | 'projectId' | 'isScratch' | 'worktreePath'>;
+  thread: Pick<Thread, 'id' | 'projectId' | 'isScratch' | 'worktreePath' | 'runtime'>;
   shell?: TerminalShell;
 }
 
@@ -119,7 +152,14 @@ export function openThreadTerminal({ thread, shell = 'default' }: OpenThreadTerm
   const projects = readProjects();
   const project = projects.find((p) => p.id === thread.projectId);
   const cwd = thread.worktreePath ?? project?.path ?? '~';
-  addTab(buildTab({ projectId: thread.projectId, cwd, shell }));
+  addTab(
+    buildTab({
+      projectId: thread.projectId,
+      cwd,
+      shell,
+      sandboxThreadId: runsInSandbox(thread) ? thread.id : undefined,
+    }),
+  );
 }
 
 /** Run provider login on the same runner that supplied the setup command. */

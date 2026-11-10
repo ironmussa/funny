@@ -35,6 +35,5 @@ export interface ThreadOverride {
   baseBranch?: string | null;
   worktreePath?: string | null;
   contextUsage?: { cumulativeInputTokens?: number } | null;
-  queuedCount?: number | null;
   projectId?: string | null;
 }

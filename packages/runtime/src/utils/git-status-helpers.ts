@@ -6,6 +6,7 @@ import { invalidateStatusCache, getCurrentBranch } from '@funny/core/git';
 
 import type { HandlerServiceContext } from '../services/handlers/types.js';
 import { getPRInfoCached } from '../services/pr-info-cache.js';
+import { runsInSandbox } from '../services/thread-context.js';
 
 /** Compute a stable cache key that groups threads sharing the same git working state. */
 export function computeBranchKey(thread: {
@@ -16,7 +17,11 @@ export function computeBranchKey(thread: {
   worktreePath?: string | null;
   baseBranch?: string | null;
   mergedAt?: string | null;
+  runtime?: string | null;
 }): string {
+  // Sandbox threads: unique per thread — their checkout is on the sandbox
+  // runner, never the project directory the local threads share.
+  if (runsInSandbox(thread)) return `sb:${thread.id}`;
   // Merged threads (worktree cleaned up, mergedAt set): unique per thread
   if (!thread.branch && !thread.worktreePath && thread.baseBranch && thread.mergedAt)
     return `tid:${thread.id}`;

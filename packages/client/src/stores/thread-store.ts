@@ -42,6 +42,8 @@ import { addReferencedEntries, stripReferencedContents } from '@funny/shared/att
 import { startTransition } from 'react';
 import { create } from 'zustand';
 
+import { restoreContextUsage } from '@/data/context-usage/store';
+import { seedQueueSummary } from '@/data/queue/store';
 import {
   archiveThread as archiveThreadRow,
   deleteThread as deleteThreadRow,
@@ -152,12 +154,6 @@ export interface CompactionEvent {
   timestamp: string;
 }
 
-export interface ContextUsage {
-  cumulativeInputTokens: number;
-  lastInputTokens: number;
-  lastOutputTokens: number;
-}
-
 export interface ThreadWithMessages extends Thread {
   messages: (import('@funny/shared').Message & { toolCalls?: any[] })[];
   threadEvents?: import('@funny/shared').ThreadEvent[];
@@ -178,7 +174,6 @@ export interface ThreadWithMessages extends Thread {
   totalMessages?: number;
   /** Number of messages before the loaded window. */
   windowStart?: number;
-  contextUsage?: ContextUsage;
   compactionEvents?: CompactionEvent[];
   /** Setup progress steps for threads in setting_up status */
   setupProgress?: import('@/components/GitProgressModal').GitProgressStep[];
@@ -186,10 +181,6 @@ export interface ThreadWithMessages extends Thread {
   lastUserMessage?: import('@funny/shared').Message & { toolCalls?: any[] };
   /** User message that owns the first loaded section when it sits before the loaded window. */
   leadingUserMessage?: import('@funny/shared').Message & { toolCalls?: any[] };
-  /** Number of messages currently queued for this thread */
-  queuedCount?: number;
-  /** Preview of the next queued message */
-  queuedNextMessage?: string;
 }
 
 // `ThreadState` lives in `./thread-state.ts` so peer modules can reference
@@ -222,9 +213,6 @@ function flushWSBuffer(threadId: string, store: ThreadState) {
         break;
       case 'result':
         store.handleWSResult(threadId, event.data);
-        break;
-      case 'context_usage':
-        store.handleWSContextUsage(threadId, event.data);
         break;
       case 'compact_boundary':
         store.handleWSCompactBoundary(threadId, event.data);
@@ -367,10 +355,6 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   threadDataById: {},
   activeThread: null,
   setupProgressByThread: {},
-  contextUsageByThread: {},
-  queuedCountByThread: {},
-  queuedMessagesByThread: {},
-  queuedNextMessageByThread: {},
 
   // Thread lists load through the data layer (`src/data/threads`): rows and
   // list membership land in the threads collection and its list metadata.
@@ -508,7 +492,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         attributes: { 'thread.from_cache': fromCache ? '1' : '0' },
       });
 
-      const thread = snapshot.thread;
+      // The queue summary lives in the data layer (`data/queue`), not in the payload.
+      const { queuedCount, queuedNextMessage, ...thread } = snapshot.thread;
 
       if (getSelectGeneration() !== gen) {
         clearWSBuffer(threadId);
@@ -538,16 +523,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const storedSetupProgress =
         thread.status === 'setting_up' ? get().setupProgressByThread[threadId] : undefined;
 
-      // Restore cached context usage so the ring survives thread switches and
-      // page reloads. Falls back to localStorage when the in-memory map is empty
-      // (e.g. fresh tab) so the ring re-appears before the next WS event fires.
-      const storedContextUsage = get().contextUsageByThread[threadId] ?? loadContextUsage(threadId);
+      // Restore context usage from localStorage when this session has none yet
+      // (e.g. fresh tab), so the ring re-appears before the next WS event fires.
+      restoreContextUsage(threadId, () => loadContextUsage(threadId));
 
-      // Restore cached/server queued state so the queue widget survives thread switches
-      const storedQueuedCount = get().queuedCountByThread[threadId];
-      const queuedCount = storedQueuedCount ?? thread.queuedCount ?? 0;
-      const queuedNextMessage =
-        get().queuedNextMessageByThread[threadId] ?? thread.queuedNextMessage ?? undefined;
+      seedQueueSummary(threadId, queuedCount ?? 0, queuedNextMessage);
 
       const hydrated: ThreadWithMessages = {
         ...thread,
@@ -562,9 +542,6 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         waitingReason,
         pendingPermission,
         setupProgress: storedSetupProgress,
-        contextUsage: storedContextUsage,
-        queuedCount,
-        queuedNextMessage,
         compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
       };
       // Hydrating the full thread payload mounts the heavy message list. When
@@ -577,27 +554,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // outside every loaded list gets its row from this detail.
       adoptThreadDetail(thread);
       const publishHydratedThread = () => {
-        set((state) => {
-          const queuePatch =
-            queuedCount > 0
-              ? {
-                  queuedCountByThread: {
-                    ...state.queuedCountByThread,
-                    [threadId]: queuedCount,
-                  },
-                  queuedNextMessageByThread: queuedNextMessage
-                    ? {
-                        ...state.queuedNextMessageByThread,
-                        [threadId]: queuedNextMessage,
-                      }
-                    : state.queuedNextMessageByThread,
-                }
-              : {};
-          return {
-            ...queuePatch,
-            ...mutations.setThreadData(state, threadId, hydrated),
-          };
-        });
+        set((state) => mutations.setThreadData(state, threadId, hydrated));
       };
       if (prevActive) startTransition(publishHydratedThread);
       else publishHydratedThread();
@@ -1141,7 +1098,6 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
             hasMore: thread.hasMore ?? current.hasMore,
             compactionEvents:
               persistedCompaction.length > 0 ? persistedCompaction : current.compactionEvents,
-            contextUsage: current.contextUsage,
             waitingReason: isServerWaiting
               ? (thread.waitingReason ?? current.waitingReason)
               : undefined,
@@ -1286,7 +1242,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   handleWSContextUsage: (threadId, data) => {
-    wsHandlers.handleWSContextUsage(get, set, threadId, data);
+    wsHandlers.handleWSContextUsage(threadId, data);
   },
 
   handleWSWorktreeSetup: (threadId, data) => {

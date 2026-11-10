@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { Toaster } from 'sonner';
 
 import '@/i18n/config';
-import { withProjects } from '@/data/projects/testing';
+import { seedProjectCurrentBranches, withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore, type ThreadWithMessages } from '@/stores/thread-store';
@@ -236,6 +236,7 @@ const PROJECT_ID = 'proj-1';
  * shows the full listing + Open/Closed/All filter — the screenshot case.
  */
 function seedProject(currentBranch = 'master') {
+  seedProjectCurrentBranches({ [PROJECT_ID]: currentBranch });
   useProjectStore.setState(
     withProjects({
       projects: [
@@ -253,7 +254,6 @@ function seedProject(currentBranch = 'master') {
       expandedProjects: new Set([PROJECT_ID]),
       selectedProjectId: PROJECT_ID,
       initialized: true,
-      branchByProject: { [PROJECT_ID]: currentBranch },
     }),
   );
   useThreadStore.setState({
@@ -415,7 +415,6 @@ export const NoProject: Story = {
         projects: [],
         selectedProjectId: null,
         initialized: true,
-        branchByProject: {},
       }),
     );
     useThreadStore.setState({

@@ -2,6 +2,7 @@ import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { installTestDataLayer } from '../helpers/data-layer-harness';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
@@ -34,6 +35,11 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
+// Provider keys come from the profile query, which calls profileApi directly.
+vi.mock('@/lib/api/profile', () => ({
+  profileApi: { getProfile: mocks.getProfile, updateProfile: mocks.updateProfile },
+}));
+
 vi.mock('@/stores/auth-store', () => ({
   useAuthStore: (sel: (s: unknown) => unknown) =>
     sel({ user: { role: mocks.isAdmin ? 'admin' : 'user' } }),
@@ -45,6 +51,7 @@ import { useSettingsStore } from '@/stores/settings-store';
 describe('PreferencesContent', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    installTestDataLayer();
     mocks.isAdmin = true;
     mocks.getProfile.mockReturnValue(okAsync({ providerKeys: { github: true } }));
     mocks.getSmtpSettings.mockReturnValue(

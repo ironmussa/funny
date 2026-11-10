@@ -1,4 +1,4 @@
-import { ExternalLink, GitPullRequest } from 'lucide-react';
+import { ExternalLink, GitMerge, GitPullRequest, GitPullRequestClosed } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -43,6 +43,13 @@ const STATE_CLASS = {
     'border-rose-300/70 bg-rose-50 text-rose-700 hover:border-rose-400 hover:text-rose-800 dark:border-rose-400/35 dark:bg-rose-400/15 dark:text-rose-200 dark:hover:border-rose-300/60 dark:hover:text-rose-100',
 } as const;
 
+/** The state's glyph, as GitHub shows it: a merged PR is not an open one in violet. */
+const STATE_ICON = {
+  OPEN: GitPullRequest,
+  MERGED: GitMerge,
+  CLOSED: GitPullRequestClosed,
+} as const;
+
 /**
  * Standardized PR number badge/link.
  * State is exposed in the tooltip and soft color so it reads consistently
@@ -82,9 +89,14 @@ export function PRBadge({
     !prUrl && 'cursor-default',
     className,
   );
+  const StateIcon = STATE_ICON[prState];
   const content = (
     <>
-      <GitPullRequest className={config.icon} aria-hidden="true" />
+      <StateIcon
+        className={config.icon}
+        aria-hidden="true"
+        data-testid={props['data-testid'] ? `${props['data-testid']}-icon-${prState}` : undefined}
+      />
       <span>#{prNumber}</span>
       {showExternalIcon ? <ExternalLink className={config.icon} aria-hidden="true" /> : null}
     </>

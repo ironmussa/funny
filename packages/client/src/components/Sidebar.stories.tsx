@@ -5,7 +5,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { SidebarProvider } from '@/components/ui/sidebar';
 import '@/i18n/config';
 import { seedGitStatus } from '@/data/git-status/testing';
-import { withProjects } from '@/data/projects/testing';
+import { seedProjectCurrentBranches, withProjects } from '@/data/projects/testing';
 import { seedProjectThreads, seedThreadIndex, withThreadIndex } from '@/data/threads/testing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -20,7 +20,6 @@ function seedSessionAndSelection(selectedThreadId: string | null) {
     selectedThreadId,
     activeThread: null,
     setupProgressByThread: {},
-    contextUsageByThread: {},
   });
   useAuthStore.setState({
     user: { id: 'user-1', username: 'admin', displayName: 'Admin User', role: 'admin' },
@@ -164,13 +163,13 @@ function seedDefault() {
     'proj-3': [],
   };
 
+  seedProjectCurrentBranches({ 'proj-1': 'master', 'proj-2': 'main' });
   useProjectStore.setState(
     withProjects({
       projects,
       expandedProjects: new Set(['proj-1', 'proj-2']),
       selectedProjectId: 'proj-1',
       initialized: true,
-      branchByProject: { 'proj-1': 'master', 'proj-2': 'main' },
     }),
   );
 
@@ -227,7 +226,6 @@ function seedEmpty() {
       expandedProjects: new Set<string>(),
       selectedProjectId: null,
       initialized: true,
-      branchByProject: {},
     }),
   );
   seedThreadIndex({ threadsById: {}, threadIdsByProject: {} });
@@ -293,13 +291,13 @@ export const Empty: Story = {
 export const SingleProjectNoActive: Story = {
   name: 'Single Project (No Active)',
   render: () => {
+    seedProjectCurrentBranches({ 'proj-1': 'master' });
     useProjectStore.setState(
       withProjects({
         projects: [makeProject({ id: 'proj-1', name: 'funny', color: '#3b82f6' })],
         expandedProjects: new Set(['proj-1']),
         selectedProjectId: 'proj-1',
         initialized: true,
-        branchByProject: { 'proj-1': 'master' },
       }),
     );
     const projThreads = [
@@ -325,7 +323,6 @@ export const SingleProjectNoActive: Story = {
         selectedThreadId: 't1',
         activeThread: null,
         setupProgressByThread: {},
-        contextUsageByThread: {},
       }),
     );
     useAuthStore.setState({

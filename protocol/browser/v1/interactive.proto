@@ -14,6 +14,9 @@ message TerminalSpawn {
   optional string project_id = 6;
   optional string label = 7;
   optional string scratch_thread_id = 8;
+  // A sandbox thread the terminal opens in: the server routes it to that
+  // thread's sandbox runner instead of the project's runner.
+  optional string sandbox_thread_id = 9;
 }
 
 message TerminalWrite {

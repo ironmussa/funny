@@ -18,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { CreateBranchDialog } from '@/components/CreateBranchDialog';
-import { OpenInEditorSubmenu } from '@/components/OpenInEditorSubmenu';
+import { HostOpenInEditorSubmenu } from '@/components/HostOnly';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -189,7 +189,7 @@ function MenuItems({
       </DropdownMenuItem>
       <DropdownMenuSeparator />
       {!isScratchThread && (
-        <OpenInEditorSubmenu testId="header-menu-open-editor" onPick={effectiveOpenInEditor} />
+        <HostOpenInEditorSubmenu testId="header-menu-open-editor" onPick={effectiveOpenInEditor} />
       )}
       {threadId && canConvertToWorktree && (
         <>

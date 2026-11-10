@@ -4,6 +4,7 @@ import { describe, test, expect } from 'vitest';
 import {
   canDeleteWhileBusy,
   runsInSandbox,
+  sandboxSetupFailed,
   canConvertToWorktree,
   canDoGitOps,
   canFetchGitStatus,
@@ -213,6 +214,15 @@ describe('getSidebarBucket', () => {
 });
 
 describe('sandbox threads (thread-sandboxes)', () => {
+  test('sandboxSetupFailed only for a failed sandbox thread that never started', () => {
+    const failed = { runtime: 'sandbox', status: 'failed', sessionId: null };
+    expect(sandboxSetupFailed(failed)).toBe(true);
+    expect(sandboxSetupFailed({ ...failed, sessionId: 'sess-1' })).toBe(false);
+    expect(sandboxSetupFailed({ ...failed, status: 'completed' })).toBe(false);
+    expect(sandboxSetupFailed({ ...failed, runtime: 'local' })).toBe(false);
+    expect(sandboxSetupFailed(null)).toBe(false);
+  });
+
   test('runsInSandbox only for the sandbox runtime', () => {
     expect(runsInSandbox({ runtime: 'sandbox' })).toBe(true);
     expect(runsInSandbox({ runtime: 'local' })).toBe(false);

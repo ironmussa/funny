@@ -37,6 +37,7 @@ import {
 import { observeBrowserV1 } from './browser-v1-observability.js';
 import { encodeSocketIoCarrier, encodeSocketIoStatus } from './browser-v1-wire.js';
 import { registerSocketHandlersWithSchema, registerSocketRpc } from './router.js';
+import { withRoutedTerminalSessions } from './terminal-list.js';
 import { closeThreadForSocket, openThreadForSocket } from './thread-presence.js';
 
 interface ActiveOperation {
@@ -178,7 +179,13 @@ async function executePtyList(
     );
   }
 
-  const terminals = listed.value.sessions.flatMap((session) => {
+  const sessions = await withRoutedTerminalSessions(listed.value.sessions, principalUserId, {
+    access,
+    terminals: dependencies.terminals,
+    presence: dependencies.presence,
+    onlyRunnerId: requestedRunnerId,
+  });
+  const terminals = sessions.flatMap((session) => {
     if (typeof session.ptyId !== 'string' || typeof session.cwd !== 'string') return [];
     return [
       {

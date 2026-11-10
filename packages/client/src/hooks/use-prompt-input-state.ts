@@ -21,8 +21,6 @@ interface UsePromptInputStateArgs {
   onProviderChange?: (provider: string) => void;
   loading: boolean;
   running: boolean;
-  queuedCountProp: number;
-  queuedNextMessageProp?: string;
   isNewThread: boolean;
   propProjectId?: string;
   initialPromptProp?: string;
@@ -88,13 +86,7 @@ export function usePromptInputState(args: UsePromptInputStateArgs) {
     model: model.currentModel,
   });
 
-  const queue = usePromptQueue({
-    effectiveThreadId,
-    threadIdRef,
-    threadOverride,
-    queuedCountProp: args.queuedCountProp,
-    queuedNextMessageProp: args.queuedNextMessageProp,
-  });
+  const queue = usePromptQueue({ effectiveThreadId, threadIdRef });
 
   const handlers = usePromptEditorSession({
     editorRef,
@@ -175,6 +167,7 @@ export function usePromptInputState(args: UsePromptInputStateArgs) {
     contextPct: active.contextPct,
     activeThreadContextTokens: active.activeThreadContextTokens,
     contextMaxTokens: active.contextMaxTokens,
+    contextBreakdown: active.activeThreadContextBreakdown,
     handleCompact: handlers.handleCompact,
 
     // Branch-switch dialog (rendered by parent)

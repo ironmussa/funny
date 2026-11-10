@@ -11,7 +11,6 @@ import {
   runnerAccess,
   runnerActor,
   type RunnerAccess,
-  type RunnerTarget,
 } from '../runner-access/index.js';
 import type {
   RunnerPresencePort,
@@ -21,6 +20,7 @@ import type {
 } from '../runner-ports.js';
 import { rateLimitMiddleware } from './middleware.js';
 import { registerSocketHandlersWithSchema } from './router.js';
+import { terminalRoute } from './terminal-targets.js';
 
 const TERMINAL_EVENTS = new Set<RunnerTerminalEvent['type']>([
   'pty:spawn',
@@ -104,12 +104,10 @@ export function setupBrowserPtyHandlers(
       }
 
       try {
-        const target: RunnerTarget = projectId
-          ? { kind: 'project-checkout', projectId }
-          : { kind: 'projectless' };
+        const route = terminalRoute(userId, { ...payload, type: eventName });
         const result = await access.withRunnerFor(
           runnerActor({ userId }),
-          target,
+          route.target,
           dependencies.presence,
           async (actor, runner, proof) => {
             if (
@@ -131,6 +129,7 @@ export function setupBrowserPtyHandlers(
                 type: eventName,
                 data: payload,
               } as RunnerTerminalEvent);
+              route.dispatched();
             } catch (error) {
               log.warn('gRPC PTY forward failed', {
                 namespace: 'socketio',

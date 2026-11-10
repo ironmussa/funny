@@ -53,6 +53,26 @@ export function sandboxThreadLauncherFor(env: {
     prepare: (req) => prepareSandboxLaunch(req, { connections, ...ports }),
     insertThread: (row) => threadRepo.createThread(row),
     loadThread: (threadId) => threadRepo.getThread(threadId),
+    findOwnedThread: async (userId, threadId) => {
+      const thread = await threadRepo.getThread(threadId);
+      return thread && thread.userId === userId ? thread : null;
+    },
+    previousSandbox: async (threadId) => {
+      const row = await sqlThreadSandboxStore.get(threadId);
+      // A storage failure is a 500, never "no previous sandbox".
+      if (row.isErr()) throw new Error(row.error);
+      return row.value;
+    },
+    markSettingUp: async (threadId) => {
+      const thread = await threadRepo.getThread(threadId);
+      if (!thread) return;
+      await threadRepo.updateThread(threadId, { status: 'setting_up' });
+      env.browserEvents?.toUser(thread.userId, {
+        type: 'thread:updated',
+        threadId,
+        data: { status: 'setting_up' },
+      });
+    },
     markReady: async (threadId) => {
       const thread = await threadRepo.getThread(threadId);
       if (!thread) return;

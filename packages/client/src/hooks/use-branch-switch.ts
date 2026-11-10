@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 
 import { SwitchBranchDialog } from '@/components/SwitchBranchDialog';
 import { fetchProjectStatus } from '@/data/git-status/actions';
+import { readProjectCurrentBranch } from '@/data/projects/branches';
 import { api } from '@/lib/api';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -29,8 +30,8 @@ export function useBranchSwitch() {
    */
   const ensureBranch = useCallback(
     async (projectId: string, targetBranch: string): Promise<boolean> => {
-      // Get current branch from the project store (eagerly fetched on expand)
-      const currentBranch = useProjectStore.getState().branchByProject[projectId];
+      // Current branch from the cached listing (eagerly fetched on expand)
+      const currentBranch = readProjectCurrentBranch(projectId);
 
       if (currentBranch && currentBranch === targetBranch) return true;
 

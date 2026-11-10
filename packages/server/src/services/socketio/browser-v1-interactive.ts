@@ -27,6 +27,7 @@ import type { BrowserPtyDependencies } from './browser-pty.js';
 import { observeBrowserV1 } from './browser-v1-observability.js';
 import { encodeSocketIoCarrier } from './browser-v1-wire.js';
 import { registerSocketHandlersWithSchema } from './router.js';
+import { terminalRoute } from './terminal-targets.js';
 
 export class BrowserV1AtMostOnceInputStore {
   private readonly ordinals = new Map<string, { ordinal: bigint; updatedAt: number }>();
@@ -162,6 +163,7 @@ function legacyTerminalEvent(terminal: TerminalMessage) {
           projectId: payload.value.projectId,
           label: payload.value.label,
           scratchThreadId: payload.value.scratchThreadId,
+          sandboxThreadId: payload.value.sandboxThreadId,
         },
       };
     case 'write':
@@ -335,13 +337,15 @@ export function setupBrowserV1Interactive(
         return;
       }
       const terminalSink = authorizedRunnerTerminal(dependencies.terminals);
+      const route = terminalRoute(principalUserId, { ...event.data, type: event.type });
       const dispatched = await access.withRunnerFor(
         actor,
-        targetFor(projectId),
+        route.target,
         dependencies.presence,
         async (a, runner, proof) => {
           if (!(await terminalSink.isAvailable(runner))) return false;
           await terminalSink.dispatch(a, runner, proof, event);
+          route.dispatched();
           return true;
         },
       );

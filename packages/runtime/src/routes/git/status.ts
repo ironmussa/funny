@@ -21,6 +21,7 @@ import { err } from 'neverthrow';
 import { startSpan } from '../../lib/telemetry.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import { resolveIdentity } from '../../services/git-service.js';
+import { runsInSandbox } from '../../services/thread-context.js';
 import * as tm from '../../services/thread-manager.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
@@ -440,7 +441,11 @@ async function computeBulkStatus(
     userId,
     isScratch: 'exclude',
   });
-  const groups = groupThreadsByMode(filterThreadScope(projectThreads, threadScope));
+  // A sandbox thread's checkout is on its sandbox runner, not in this project
+  // directory: reporting it here would show the project's changes as its own.
+  const groups = groupThreadsByMode(
+    filterThreadScope(projectThreads, threadScope).filter((t) => !runsInSandbox(t)),
+  );
   const { worktreeThreads, mergedThreads, localThreads } = groups;
 
   // Resolve GH_TOKEN for PR detection (runs once per request)

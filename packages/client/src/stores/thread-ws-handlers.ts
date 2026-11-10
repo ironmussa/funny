@@ -23,9 +23,12 @@ import type {
   PendingPermissionRequest,
   PermissionApprovalCapability,
   PermissionRecoveryReason,
+  WSContextUsageData,
 } from '@funny/shared';
 import { toast } from 'sonner';
 
+import { applyContextUsageEvent, resetContextUsage } from '@/data/context-usage/store';
+import { applyQueueSummary } from '@/data/queue/store';
 import {
   isThreadListed,
   listedProjectIds,
@@ -34,7 +37,7 @@ import {
 } from '@/data/threads/read';
 import i18n from '@/i18n/config';
 import { createClientLogger } from '@/lib/client-logger';
-import { emitContextUsage } from '@/lib/context-usage-events';
+import { saveContextUsage } from '@/lib/context-usage-storage';
 import { buildPath } from '@/lib/url';
 
 import { parseToolInput, useThreadActiveToolStore } from './thread-active-tool-store';
@@ -977,56 +980,24 @@ export function handleWSQueueUpdate(
     pendingDequeuedMessages.set(threadId, dequeuedMsg);
   }
 
-  set((state) => {
-    const updatedMap =
-      data.queuedCount > 0
-        ? { ...state.queuedCountByThread, [threadId]: data.queuedCount }
-        : (() => {
-            const { [threadId]: _, ...rest } = state.queuedCountByThread;
-            return rest;
-          })();
-    const updatedMessageMap =
-      data.queuedCount > 0 && data.nextMessage
-        ? { ...state.queuedNextMessageByThread, [threadId]: data.nextMessage }
-        : (() => {
-            const { [threadId]: _, ...rest } = state.queuedNextMessageByThread;
-            return rest;
-          })();
-    const cachedQueue = state.queuedMessagesByThread[threadId];
-    const shouldKeepCachedQueue =
-      data.queuedCount > 0 && (!data.nextMessage || cachedQueue?.[0]?.content === data.nextMessage);
-    const updatedQueueMap = shouldKeepCachedQueue
-      ? state.queuedMessagesByThread
-      : (() => {
-          const { [threadId]: _, ...rest } = state.queuedMessagesByThread;
-          return rest;
-        })();
-    return {
-      queuedCountByThread: updatedMap,
-      queuedMessagesByThread: updatedQueueMap,
-      queuedNextMessageByThread: updatedMessageMap,
-      ...mutations.applyThreadDataPatch(state, threadId, (t) => {
-        const nextThread = {
-          ...t,
-          queuedCount: data.queuedCount,
-          queuedNextMessage: data.nextMessage,
-        };
-        if (!dequeuedMsg) return nextThread;
-        if (dequeuedUserAlreadyShownInTurn(t.messages, dequeuedMsg.content)) {
-          pendingDequeuedMessages.delete(threadId);
-          return nextThread;
-        }
-        const insertionIndex = trailingAssistantScaffoldStart(t.messages);
-        if (insertionIndex < t.messages.length) {
-          pendingDequeuedMessages.delete(threadId);
-          const messages = t.messages.slice();
-          messages.splice(insertionIndex, 0, makeDequeuedUserMessage(threadId, dequeuedMsg));
-          return { ...nextThread, messages };
-        }
-        return nextThread;
-      }),
-    };
-  });
+  // The queue lives in the data layer for every thread, loaded or not.
+  applyQueueSummary(threadId, data.queuedCount, data.nextMessage);
+  if (!dequeuedMsg) return;
+
+  set((state) =>
+    mutations.applyThreadDataPatch(state, threadId, (t) => {
+      if (dequeuedUserAlreadyShownInTurn(t.messages, dequeuedMsg.content)) {
+        pendingDequeuedMessages.delete(threadId);
+        return t;
+      }
+      const insertionIndex = trailingAssistantScaffoldStart(t.messages);
+      if (insertionIndex >= t.messages.length) return t;
+      pendingDequeuedMessages.delete(threadId);
+      const messages = t.messages.slice();
+      messages.splice(insertionIndex, 0, makeDequeuedUserMessage(threadId, dequeuedMsg));
+      return { ...t, messages };
+    }),
+  );
 }
 
 // ── Compact boundary ────────────────────────────────────────────
@@ -1052,65 +1023,20 @@ export function handleWSCompactBoundary(
   // until the next agent turn emits a fresh context_usage event. Use the
   // SDK-reported post-compaction size when available so the ring reflects the
   // real reduced context instead of dropping to 0 (which hides the ring).
-  const post = data.postTokens ?? 0;
-  const resetUsage = {
-    cumulativeInputTokens: post,
-    lastInputTokens: post,
-    lastOutputTokens: 0,
-  };
-  emitContextUsage(threadId, resetUsage);
-  set((s) => ({
-    contextUsageByThread: { ...s.contextUsageByThread, [threadId]: resetUsage },
-    ...mutations.applyThreadDataPatch(s, threadId, (t) => ({
+  saveContextUsage(threadId, resetContextUsage(threadId, data.postTokens ?? 0));
+  set((s) =>
+    mutations.applyThreadDataPatch(s, threadId, (t) => ({
       ...t,
-      contextUsage: resetUsage,
       compactionEvents: [...(t.compactionEvents ?? []), data],
     })),
-  }));
+  );
 }
 
 // ── Context usage ───────────────────────────────────────────────
 
-export function handleWSContextUsage(
-  get: Get,
-  set: Set,
-  threadId: string,
-  data: {
-    inputTokens: number;
-    outputTokens: number;
-    cumulativeInputTokens: number;
-  },
-): void {
-  const usage = {
-    cumulativeInputTokens: data.cumulativeInputTokens,
-    lastInputTokens: data.inputTokens,
-    lastOutputTokens: data.outputTokens,
-  };
-
+export function handleWSContextUsage(threadId: string, data: WSContextUsageData): void {
   // Persist across page reloads — the runtime only keeps usage in memory.
-  // context-usage-storage subscribes to this event and writes to localStorage.
-  emitContextUsage(threadId, usage);
-
-  set((state) => {
-    const updates: Partial<ThreadState> = {
-      contextUsageByThread: {
-        ...state.contextUsageByThread,
-        [threadId]: usage,
-      },
-    };
-    if (!isHydrated(state, threadId)) {
-      if ((getUrlThreadId() ?? state.selectedThreadId) === threadId)
-        bufferWSEvent(threadId, 'context_usage', data);
-      return updates;
-    }
-    return {
-      ...updates,
-      ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
-        ...t,
-        contextUsage: usage,
-      })),
-    };
-  });
+  saveContextUsage(threadId, applyContextUsageEvent(threadId, data));
 }
 
 // ── Error ────────────────────────────────────────────────────────

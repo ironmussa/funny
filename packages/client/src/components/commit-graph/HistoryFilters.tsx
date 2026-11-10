@@ -3,11 +3,15 @@ import { useTranslation } from 'react-i18next';
 
 import { FilterMultiSelect, type MultiSelectOption } from '@/components/ui/filter-multi-select';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
+import type { GraphBranchScope } from '@/lib/api/git';
 import type { CommitSyncFilter } from '@/lib/git-history-search';
 
+/** The scope the graph opens with: merged branches hidden. */
+export const DEFAULT_GRAPH_BRANCH_SCOPE: GraphBranchScope = 'unmerged';
+
 export function HistoryFilters({
-  allBranches,
-  onToggleAllBranches,
+  branchScope,
+  onBranchScopeChange,
   syncFilter,
   onToggleSyncFilter,
   authors,
@@ -18,8 +22,8 @@ export function HistoryFilters({
   hasMoreAuthors,
   onLoadMoreAuthors,
 }: {
-  allBranches: boolean;
-  onToggleAllBranches: () => void;
+  branchScope: GraphBranchScope;
+  onBranchScopeChange: (scope: GraphBranchScope) => void;
   syncFilter: CommitSyncFilter;
   onToggleSyncFilter: (filter: Exclude<CommitSyncFilter, 'all'>) => void;
   authors: string[];
@@ -31,7 +35,8 @@ export function HistoryFilters({
   onLoadMoreAuthors?: () => void;
 }) {
   const { t } = useTranslation();
-  const scopeLabels = {
+  const scopeLabels: Record<GraphBranchScope, string> = {
+    unmerged: t('graph.unmergedBranches', 'Unmerged branches'),
     all: t('graph.allBranches', 'All branches'),
     current: t('graph.currentBranchScope', 'Current branch'),
   };
@@ -48,22 +53,24 @@ export function HistoryFilters({
   return (
     <div className="flex flex-wrap items-center gap-1.5" data-testid="history-filter-bar">
       <Select
-        value={allBranches ? 'all' : 'current'}
-        onValueChange={(value) => {
-          if ((value === 'all') !== allBranches) onToggleAllBranches();
-        }}
+        value={branchScope}
+        onValueChange={(value) => onBranchScopeChange(value as GraphBranchScope)}
       >
         <SelectTrigger size="xs" className="w-auto gap-1" data-testid="graph-toggle-all-branches">
           <GitBranch className="icon-xs opacity-70" />
-          <span>{allBranches ? scopeLabels.all : scopeLabels.current}</span>
+          <span>{scopeLabels[branchScope]}</span>
         </SelectTrigger>
         <SelectContent>
-          <SelectItem value="all" className="text-xs">
-            {scopeLabels.all}
-          </SelectItem>
-          <SelectItem value="current" className="text-xs">
-            {scopeLabels.current}
-          </SelectItem>
+          {(['unmerged', 'all', 'current'] as const).map((scope) => (
+            <SelectItem
+              key={scope}
+              value={scope}
+              className="text-xs"
+              data-testid={`graph-branch-scope-${scope}`}
+            >
+              {scopeLabels[scope]}
+            </SelectItem>
+          ))}
         </SelectContent>
       </Select>
       <Select value={syncFilter} onValueChange={(value) => setStatus(value as CommitSyncFilter)}>
@@ -110,13 +117,15 @@ export function HistoryFilters({
         }
         testId="graph-filter-author"
       />
-      {(authors.length > 0 || syncFilter !== 'all' || !allBranches) && (
+      {(authors.length > 0 ||
+        syncFilter !== 'all' ||
+        branchScope !== DEFAULT_GRAPH_BRANCH_SCOPE) && (
         <button
           type="button"
           onClick={() => {
             onAuthorsChange([]);
             setStatus('all');
-            if (!allBranches) onToggleAllBranches();
+            onBranchScopeChange(DEFAULT_GRAPH_BRANCH_SCOPE);
           }}
           className="text-muted-foreground hover:text-foreground inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs transition-colors"
           data-testid="graph-filter-clear"

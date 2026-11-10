@@ -7,7 +7,7 @@ import type { ToolPermission, UserProfile } from '@funny/shared';
 import { MODEL_REGISTRY } from '@funny/shared/models';
 import { create } from 'zustand';
 
-import { profileApi } from '@/lib/api/profile';
+import { updateProfile } from '@/data/profile/actions';
 import { systemApi } from '@/lib/api/system';
 import { clientComposition } from '@/platform/client-composition';
 import { applyWebFontSize } from '@/platform/web/font-size-effects';
@@ -222,7 +222,7 @@ interface SettingsState {
 
 /** Save a partial settings update to the server (fire-and-forget). */
 function syncToServer(data: Record<string, any>) {
-  profileApi.updateProfile(data).match(
+  updateProfile(data).match(
     () => {},
     () => {},
   );

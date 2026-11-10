@@ -28,8 +28,19 @@ export function isScratch(thread: ThreadLike): boolean {
  * runner, checkout and model credential live there, not on the project's
  * runner, so project-runner readiness checks do not apply to it.
  */
-export function runsInSandbox(thread: { runtime?: string } | null | undefined): boolean {
+export function runsInSandbox(thread: { runtime?: string | null } | null | undefined): boolean {
   return thread?.runtime === 'sandbox';
+}
+
+/**
+ * A sandbox thread whose setup failed before its agent ever started (no
+ * session). It keeps showing its setup steps, and the next message the user
+ * writes retries the sandbox instead of going to a runner.
+ */
+export function sandboxSetupFailed(
+  thread: { runtime?: string; status?: string; sessionId?: string | null } | null | undefined,
+): boolean {
+  return runsInSandbox(thread) && thread?.status === 'failed' && !thread.sessionId;
 }
 
 /**
@@ -39,6 +50,26 @@ export function runsInSandbox(thread: { runtime?: string } | null | undefined): 
  */
 export function canDeleteWhileBusy(thread: { runtime?: string } | null | undefined): boolean {
   return runsInSandbox(thread);
+}
+
+/**
+ * True when the thread works in a checkout of its own — a worktree, or its
+ * sandbox's clone — so its current branch is the thread's, never the local
+ * project checkout's.
+ */
+export function hasOwnCheckout(
+  thread: { mode?: string; runtime?: string } | null | undefined,
+): boolean {
+  return thread?.mode === 'worktree' || runsInSandbox(thread);
+}
+
+/**
+ * Whether "open in editor" / "open directory" make sense for the thread: they
+ * open the path on the user's own machine, where a sandbox thread's checkout
+ * does not live.
+ */
+export function canOpenOnHost(thread: { runtime?: string } | null | undefined): boolean {
+  return !runsInSandbox(thread);
 }
 
 // ── Capability predicates ────────────────────────────────────────

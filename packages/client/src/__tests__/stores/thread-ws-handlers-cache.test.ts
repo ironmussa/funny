@@ -12,6 +12,8 @@
 
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
+import { getContextUsageStore } from '@/data/context-usage/store';
+import { seedContextUsage } from '@/data/context-usage/testing';
 import { attachThreadIndex } from '@/data/threads/testing';
 
 const { mockInvalidate, mockBuffer } = vi.hoisted(() => ({
@@ -45,8 +47,6 @@ vi.mock('@/stores/thread-store-internals', () => ({
 }));
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
-
-vi.mock('@/lib/context-usage-events', () => ({ emitContextUsage: vi.fn() }));
 
 const {
   handleWSMessage,
@@ -91,10 +91,6 @@ function makeState(overrides: Record<string, unknown> = {}) {
     threadDataById: { [THREAD_ID]: activeThread },
     activeThread,
     setupProgressByThread: {},
-    contextUsageByThread: {},
-    queuedCountByThread: {},
-    queuedMessagesByThread: {},
-    queuedNextMessageByThread: {},
     loadThreadsForProject: vi.fn(),
     ...overrides,
   } as any;
@@ -427,12 +423,8 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
       lastInputTokens: 5_000,
       lastOutputTokens: 1_200,
     };
-    const state = makeState({
-      contextUsageByThread: { [THREAD_ID]: usageBefore },
-      threadDataById: {
-        [THREAD_ID]: { ...makeState().activeThread, contextUsage: usageBefore },
-      },
-    });
+    seedContextUsage({ [THREAD_ID]: usageBefore });
+    const state = makeState();
     const { get, set } = makeGetSet(state);
 
     handleWSCompactBoundary(get, set, THREAD_ID, {
@@ -441,8 +433,7 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
       timestamp: new Date().toISOString(),
     });
 
-    expect(state.contextUsageByThread[THREAD_ID].cumulativeInputTokens).toBe(0);
-    expect(state.threadDataById[THREAD_ID].contextUsage.cumulativeInputTokens).toBe(0);
+    expect(getContextUsageStore().read(THREAD_ID)?.cumulativeInputTokens).toBe(0);
     expect(state.threadDataById[THREAD_ID].compactionEvents).toHaveLength(1);
   });
 
@@ -452,12 +443,8 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
       lastInputTokens: 5_000,
       lastOutputTokens: 1_200,
     };
-    const state = makeState({
-      contextUsageByThread: { [THREAD_ID]: usageBefore },
-      threadDataById: {
-        [THREAD_ID]: { ...makeState().activeThread, contextUsage: usageBefore },
-      },
-    });
+    seedContextUsage({ [THREAD_ID]: usageBefore });
+    const state = makeState();
     const { get, set } = makeGetSet(state);
 
     handleWSCompactBoundary(get, set, THREAD_ID, {
@@ -469,8 +456,7 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
 
     // The ring should drop to the real post-compaction size, not freeze at the
     // pre-compaction value and not vanish to 0.
-    expect(state.contextUsageByThread[THREAD_ID].cumulativeInputTokens).toBe(32_000);
-    expect(state.threadDataById[THREAD_ID].contextUsage.cumulativeInputTokens).toBe(32_000);
+    expect(getContextUsageStore().read(THREAD_ID)?.cumulativeInputTokens).toBe(32_000);
   });
 
   test('handleWSMessage does NOT duplicate user msg already present in payload tail', () => {

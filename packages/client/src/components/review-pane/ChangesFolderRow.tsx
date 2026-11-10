@@ -26,6 +26,8 @@ interface ChangesFolderRowProps {
   fileSearch: string;
   basePath: string | undefined;
   readOnly?: boolean;
+  /** False for a sandbox thread: no file manager. */
+  openOnHost?: boolean;
   toggleFolder: (path: string) => void;
   handleOpenDirectory: (path: string, isFile: boolean) => void;
   handleDiscardFolder: (folderPath: string) => void;
@@ -41,6 +43,7 @@ export function ChangesFolderRow({
   fileSearch,
   basePath,
   readOnly,
+  openOnHost = true,
   toggleFolder,
   handleOpenDirectory,
   handleDiscardFolder,
@@ -86,7 +89,7 @@ export function ChangesFolderRow({
         <span className="invisible shrink-0 text-xs font-medium">M</span>
       </button>
       <RowActionsMenu onClosed={onMenuClosed} triggerTestId={`review-folder-menu-${row.path}`}>
-        {basePath && (
+        {basePath && openOnHost && (
           <DropdownMenuItem
             onClick={stopThen(() => void handleOpenDirectory(row.path, false))}
             data-testid={`review-folder-open-directory-${row.path}`}

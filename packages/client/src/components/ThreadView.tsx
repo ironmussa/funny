@@ -7,10 +7,12 @@ import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
 import { useProjects } from '@/data/projects/hooks';
+import { useQueuedCount } from '@/data/queue/hooks';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useSandboxRetry } from '@/hooks/use-sandbox-retry';
 import { useSandboxSetupSteps } from '@/hooks/use-sandbox-setup-steps';
-import { runsInSandbox } from '@/lib/thread-variant';
+import { sandboxSetupFailed } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -162,12 +164,15 @@ function PreparingThread({
 }) {
   const message = preparationMessage(activeThread);
   const sandboxSteps = useSandboxSetupSteps(activeThread);
+  const { retry, retrying } = useSandboxRetry(activeThread.id);
   return (
     <ThreadPreparationView
       prompt={message.content ?? activeThread.initialPrompt}
       projectId={activeThread.projectId}
       metadata={preparationMetadata(activeThread, message, pendingMetadata)}
       steps={sandboxSteps ?? activeThread.setupProgress ?? []}
+      onRetry={sandboxSetupFailed(activeThread) ? retry : undefined}
+      retrying={retrying}
     />
   );
 }
@@ -200,13 +205,12 @@ function ThreadBody({
   activeThread: LoadedThread;
   pendingMetadata?: PreparationMessageMetadata;
 }) {
-  // A sandbox that failed before its agent ever started (no session) keeps
-  // showing its setup steps, so the failed step and its error stay visible.
-  const sandboxSetupFailed =
-    runsInSandbox(activeThread) && activeThread.status === 'failed' && !activeThread.sessionId;
-  if (activeThread.status === 'setting_up' || sandboxSetupFailed)
+  const queuedCount = useQueuedCount(activeThread.id);
+  // A sandbox that failed before its agent ever started keeps showing its
+  // setup steps, so the failed step and its error stay visible.
+  if (activeThread.status === 'setting_up' || sandboxSetupFailed(activeThread))
     return <PreparingThread activeThread={activeThread} pendingMetadata={pendingMetadata} />;
-  if (activeThread.status === 'idle' && (activeThread.queuedCount ?? 0) === 0)
+  if (activeThread.status === 'idle' && queuedCount === 0)
     return <ThreadIdleStarter activeThread={activeThread} />;
   return <ThreadChatView activeThread={activeThread} />;
 }

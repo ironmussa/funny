@@ -5,15 +5,14 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { resolveBasePath } from '@/components/review-pane/resolve-base-path';
 import { fetchForThread, fetchProjectStatus, fetchForProject } from '@/data/git-status/actions';
 import { useGitStatusForThread, useProjectGitStatus } from '@/data/git-status/hooks';
-import { useProjects } from '@/data/projects/hooks';
+import { useProjectCurrentBranch, useProjects } from '@/data/projects/hooks';
 import { usePRDetail } from '@/data/pull-requests/hooks';
 import { useReviewState } from '@/hooks/use-review-state';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useThreadById } from '@/lib/thread-selectors';
-import { canLoadGitHistory } from '@/lib/thread-variant';
+import { canLoadGitHistory, canOpenOnHost, hasOwnCheckout } from '@/lib/thread-variant';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { useProjectStore } from '@/stores/project-store';
 import {
   useThreadProjectId,
   useThreadSelector,
@@ -139,16 +138,14 @@ function useViewerReadOnly(): boolean {
 function useReviewBranches(targetProjectId: string | null | undefined) {
   const isWorktree = useThreadSelector((t) => t?.mode === 'worktree');
   const baseBranch = useThreadSelector((t) => t?.baseBranch);
-  // Worktree threads track their own branch; local threads share the project's
-  // working directory, so their "current branch" is the project's branch.
+  // Worktree and sandbox threads track their own branch; local threads share
+  // the project's working directory, so their "current branch" is the project's.
   const threadBranch = useThreadSelector((t) => {
     if (!t) return undefined;
-    if (t.mode !== 'worktree') return undefined;
+    if (!hasOwnCheckout(t)) return undefined;
     return resolveThreadBranch(t);
   });
-  const projectBranch = useProjectStore((s) =>
-    targetProjectId ? s.branchByProject[targetProjectId] : undefined,
-  );
+  const projectBranch = useProjectCurrentBranch(targetProjectId);
   return { isWorktree, baseBranch, threadBranch, currentBranch: threadBranch || projectBranch };
 }
 
@@ -178,6 +175,7 @@ function deriveGitStatusFields(
 function useReviewPaneTarget() {
   const target = useReviewGitTarget();
   const viewerReadOnly = useViewerReadOnly();
+  const openOnHost = useThreadSelector((t) => canOpenOnHost(t));
   const branches = useReviewBranches(target.targetProjectId);
   const isAgentRunning = useThreadStatus() === 'running';
   const gitStatus = useReviewGitStatus(target.effectiveThreadId, target.projectModeId);
@@ -191,6 +189,7 @@ function useReviewPaneTarget() {
     ...branches,
     ...statusFields,
     viewerReadOnly,
+    openOnHost,
     isAgentRunning,
     gitStatus,
     prThreads,

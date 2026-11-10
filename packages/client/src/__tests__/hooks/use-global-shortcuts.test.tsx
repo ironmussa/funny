@@ -8,11 +8,13 @@ vi.mock('@/hooks/use-terminal-scope', () => ({
   getTerminalScope: vi.fn(() => ({
     scopeId: 'p1',
     scratchThreadId: null,
+
     worktreePath: null,
   })),
   useTerminalScope: vi.fn(() => ({
     scopeId: 'p1',
     scratchThreadId: null,
+
     worktreePath: null,
   })),
 }));
@@ -44,6 +46,7 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
     vi.mocked(getTerminalScope).mockReturnValue({
       scopeId: 'p1',
       scratchThreadId: null,
+
       worktreePath: null,
     });
   });
@@ -77,6 +80,7 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
     vi.mocked(getTerminalScope).mockReturnValue({
       scopeId: 'p1',
       scratchThreadId: null,
+
       worktreePath: '/worktrees/selected-split',
     });
 

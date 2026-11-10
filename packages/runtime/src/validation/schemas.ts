@@ -301,6 +301,8 @@ export const sendMessageSchema = z
     forceQueue: z.boolean().optional(),
     /** A never-answered earlier prompt the agent sees before `content` (sandbox retry). */
     precedingPrompt: z.string().min(1).max(500_000).optional(),
+    /** The images of that earlier prompt: the agent sees them, they are not saved again. */
+    precedingImages: z.array(imageAttachmentSchema).max(10).optional(),
     /** The id of this message when the server already saved it (sandbox thread's first message). */
     savedMessageId: z.string().min(1).max(64).optional(),
   })

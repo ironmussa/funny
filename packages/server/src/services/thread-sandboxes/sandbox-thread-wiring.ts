@@ -3,12 +3,14 @@
  * the DB, the provider connections, runner-access calls and browser events.
  */
 
-import { and, eq } from 'drizzle-orm';
+import { parseStoredJson } from '@funny/shared/json-validation';
+import { and, asc, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { repos } from '../../db/repos.js';
-import { projects } from '../../db/schema.js';
+import { messages, projects } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { createInfraConnectionService } from './infra-connections.js';
@@ -94,6 +96,18 @@ export function sandboxThreadLauncherFor(env: {
         });
         return null;
       }
+    },
+    firstMessageImages: async (threadId) => {
+      const [first] = await db
+        .select({ images: messages.images })
+        .from(messages)
+        .where(and(eq(messages.threadId, threadId), eq(messages.role, 'user')))
+        .orderBy(asc(messages.timestamp))
+        .limit(1);
+      if (!first?.images) return null;
+      // The runner validates each image; here it only has to be a list.
+      const parsed = parseStoredJson(z.array(z.unknown()), first.images, 'first message images');
+      return parsed.ok ? parsed.value : null;
     },
     markSettingUp: async (threadId) => {
       const thread = await threadRepo.getThread(threadId);

@@ -6,12 +6,17 @@
  * `setting_up`, mode `local` — the sandbox already isolates it), provisions the
  * sandbox in the background, and once the sandbox runner has the checkout it
  * marks the thread `pending` (as a ready worktree does) and sends the first
- * message there, which starts the agent. A failure marks the
- * thread `failed` and the prompt stays on the thread as its initial prompt.
+ * message there, which starts the agent. The server saves that first message
+ * itself when it creates the thread, so it is in the conversation even when the
+ * sandbox never comes up; the runner reuses it (`savedMessageId`) instead of
+ * saving it again. A failure marks the thread `failed`.
  *
  * A thread whose sandbox failed before its agent ever started can be retried:
  * the user's next message provisions a new sandbox for the same thread and
- * starts the agent with the initial prompt plus that message.
+ * starts the agent with the initial prompt plus that message. The two stay
+ * separate messages in the conversation: the initial prompt is dated when the
+ * thread was created, so it reads before the failure card and the new message
+ * after it.
  */
 
 import { err, ok, type Result, type ResultAsync } from 'neverthrow';
@@ -103,6 +108,7 @@ export interface RetryableSandboxThread {
   status: string;
   sessionId?: string | null;
   initialPrompt?: string | null;
+  createdAt?: string;
 }
 
 export interface SandboxThreadDeps {
@@ -121,6 +127,12 @@ export interface SandboxThreadDeps {
   previousSandbox(
     threadId: string,
   ): Promise<{ connectionId: string; sizeId: string | null; repoUrl: string | null } | null>;
+  /**
+   * Save the thread's first user message, dated `timestamp`, unless the thread
+   * already has a message. The saved message's id, or null when nothing was
+   * saved. Never throws.
+   */
+  saveFirstMessage(input: FirstMessage): Promise<string | null>;
   /** A retry started: `failed` → `setting_up`. */
   markSettingUp(threadId: string): Promise<void>;
   /** The sandbox is ready: `setting_up` → `pending`, so the agent can start. */
@@ -137,6 +149,17 @@ export interface SandboxThreadDeps {
 }
 
 type SandboxThreadInput = z.infer<typeof createSandboxThreadSchema>;
+
+export interface FirstMessage {
+  userId: string;
+  threadId: string;
+  content: string;
+  timestamp: string;
+  images?: unknown[];
+  model?: string;
+  permissionMode?: string;
+  effort?: string;
+}
 
 function parseSandboxThread(payload: unknown): Result<SandboxThreadInput, SandboxThreadFailure> {
   const parsed = createSandboxThreadSchema.safeParse(payload);
@@ -186,16 +209,24 @@ function firstMessageBody(input: SandboxThreadInput, payload: unknown): Record<s
   return body;
 }
 
-/** The retried first message: the never-answered initial prompt, then what the user wrote. */
-function retryMessageBody(
+/** The never-answered initial prompt, unless the user just re-sent it. */
+function unansweredInitialPrompt(
   thread: RetryableSandboxThread,
   input: z.infer<typeof retrySandboxThreadSchema>,
-): Record<string, unknown> {
+): string | null {
   const initial = thread.initialPrompt?.trim();
-  const written = input.content.trim();
-  const content =
-    !initial || initial === written ? input.content : `${initial}\n\n${input.content}`;
-  return { ...input, content };
+  return initial && initial !== input.content.trim() ? initial : null;
+}
+
+/**
+ * The retried first message: what the user wrote, with the never-answered
+ * initial prompt ahead of it for the agent only (it is its own message).
+ */
+function retryMessageBody(
+  input: z.infer<typeof retrySandboxThreadSchema>,
+  initialPrompt: string | null,
+): Record<string, unknown> {
+  return initialPrompt ? { ...input, precedingPrompt: initialPrompt } : { ...input };
 }
 
 /**
@@ -320,6 +351,27 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     });
   }
 
+  /**
+   * The never-answered initial prompt, saved as the first message of a thread
+   * created before the server saved first messages (it has none yet).
+   */
+  async function saveUnansweredInitialPrompt(
+    userId: string,
+    threadId: string,
+    thread: RetryableSandboxThread,
+    input: z.infer<typeof retrySandboxThreadSchema>,
+  ): Promise<string | null> {
+    const initialPrompt = unansweredInitialPrompt(thread, input);
+    if (!initialPrompt) return null;
+    await deps.saveFirstMessage({
+      userId,
+      threadId,
+      content: initialPrompt,
+      timestamp: thread.createdAt ?? now(),
+    });
+    return initialPrompt;
+  }
+
   async function prepareRetry(
     userId: string,
     threadId: string,
@@ -350,13 +402,14 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     });
     if (launch.isErr()) return err({ status: 409, ...launch.error });
 
+    const initialPrompt = await saveUnansweredInitialPrompt(userId, threadId, thread, parsed.data);
     await deps.markSettingUp(threadId);
     metric('thread_sandboxes.threads_retried', 1);
     const started = startInBackground(
       userId,
       threadId,
       launch.value,
-      retryMessageBody(thread, parsed.data),
+      retryMessageBody(parsed.data, initialPrompt),
     );
     return ok({ thread: await deps.loadThread(threadId), started });
   }
@@ -416,8 +469,20 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
       });
       if (launch.isErr()) return err({ status: 409, ...launch.error });
 
-      await deps.insertThread(newSandboxThreadRow(threadId, userId, input, now()));
+      const createdAt = now();
+      await deps.insertThread(newSandboxThreadRow(threadId, userId, input, createdAt));
       const body = firstMessageBody(input, payload);
+      const savedMessageId = await deps.saveFirstMessage({
+        userId,
+        threadId,
+        content: input.prompt,
+        timestamp: createdAt,
+        images: Array.isArray(body.images) ? body.images : undefined,
+        model: input.model,
+        permissionMode: input.permissionMode,
+        effort: input.effort,
+      });
+      if (savedMessageId) body.savedMessageId = savedMessageId;
 
       const started = startInBackground(userId, threadId, launch.value, body);
       return ok({ thread: await deps.loadThread(threadId), started });

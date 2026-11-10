@@ -674,6 +674,84 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(mocks.projects.getProject).not.toHaveBeenCalled();
     expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(1);
   });
+
+  test('a retried sandbox thread: the agent sees the preceding prompt, only the new message is saved', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-retried',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'pending',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: null,
+      worktreePath: null,
+    });
+
+    const result = await sendMessage({
+      threadId: 't-retried',
+      userId: 'u-1',
+      content: 'hola',
+      precedingPrompt: 'Fix the login bug',
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(1);
+    expect(mocks.tm.insertMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ role: 'user', content: 'hola' }),
+    );
+    expect(vi.mocked(startAgent).mock.calls[0][1]).toBe('Fix the login bug\n\nhola');
+  });
+
+  describe('a message the server already saved (savedMessageId)', () => {
+    const sandboxThread = {
+      id: 't-sandbox',
+      userId: 'u-1',
+      projectId: 'p-1',
+      status: 'pending',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: null,
+      worktreePath: null,
+    };
+
+    test('is reused instead of saved again', async () => {
+      mocks.tm.getThread.mockResolvedValue(sandboxThread);
+      const saved = { id: 'm-first', role: 'user', content: 'Fix the login bug', images: null };
+      mocks.tm.getThreadMessages.mockResolvedValue({ messages: [saved], hasMore: false });
+
+      const result = await sendMessage({
+        threadId: 't-sandbox',
+        userId: 'u-1',
+        content: 'Fix the login bug',
+        savedMessageId: 'm-first',
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mocks.tm.insertMessage).not.toHaveBeenCalled();
+      expect(mocks.tm.updateMessage).toHaveBeenCalledWith('m-first', expect.any(Object));
+    });
+
+    test("is ignored when it is not the thread's latest user message", async () => {
+      mocks.tm.getThread.mockResolvedValue(sandboxThread);
+      const latest = { id: 'm-other', role: 'user', content: 'something else', images: null };
+      mocks.tm.getThreadMessages.mockResolvedValue({ messages: [latest], hasMore: false });
+
+      const result = await sendMessage({
+        threadId: 't-sandbox',
+        userId: 'u-1',
+        content: 'Fix the login bug',
+        savedMessageId: 'm-first',
+      });
+
+      expect(result.isOk()).toBe(true);
+      expect(mocks.tm.updateMessage).not.toHaveBeenCalled();
+      expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(1);
+    });
+  });
 });
 
 describe('sendMessage — staged uploads', () => {

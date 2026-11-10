@@ -301,12 +301,28 @@ export function handleWSInit(get: Get, set: Set, threadId: string, data: AgentIn
 
 // ── Message ─────────────────────────────────────────────────────
 
-export function handleWSMessage(
-  get: Get,
-  set: Set,
-  threadId: string,
-  data: { messageId?: string; role: string; content: string; author?: string },
-): void {
+/** A message row for a live `agent:message`, dated now unless the event says otherwise. */
+function newWSMessage(threadId: string, data: WSMessageData) {
+  return {
+    id: data.messageId || crypto.randomUUID(),
+    threadId,
+    role: data.role as MessageRole,
+    content: data.content,
+    timestamp: data.timestamp ?? new Date().toISOString(),
+    ...(data.author ? { author: data.author } : {}),
+  };
+}
+
+interface WSMessageData {
+  messageId?: string;
+  role: string;
+  content: string;
+  author?: string;
+  /** Set when the message is dated earlier than now (a sandbox retry's initial prompt). */
+  timestamp?: string;
+}
+
+export function handleWSMessage(get: Get, set: Set, threadId: string, data: WSMessageData): void {
   const state = get();
   const hydrated = isHydrated(state, threadId);
 
@@ -375,14 +391,7 @@ export function handleWSMessage(
       const extraMessages =
         data.role === 'assistant' ? takeDequeuedUserMessages(threadId, t.messages) : [];
 
-      const newMsg = {
-        id: messageId || crypto.randomUUID(),
-        threadId,
-        role: data.role as MessageRole,
-        content: data.content,
-        timestamp: new Date().toISOString(),
-        ...(data.author ? { author: data.author } : {}),
-      };
+      const newMsg = newWSMessage(threadId, data);
 
       if (data.role === 'user') {
         const optimisticIdx = findTailUserMessageWithContent(t.messages, data.content);

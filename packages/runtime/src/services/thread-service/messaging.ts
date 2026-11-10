@@ -110,6 +110,18 @@ export interface SendMessageParams {
   stagedUploads?: string[];
   baseBranch?: string;
   forceQueue?: boolean;
+  /**
+   * An earlier prompt the agent never answered (a sandbox whose setup failed).
+   * The agent sees it before `content`; it is already persisted as its own
+   * message, so only `content` is saved here.
+   */
+  precedingPrompt?: string;
+  /**
+   * The id of this message, already saved by the server (a sandbox thread's
+   * first message, saved when the thread was created). Reused instead of
+   * inserting a duplicate when it is still the thread's latest user message.
+   */
+  savedMessageId?: string;
 }
 
 export interface SendMessageResult {
@@ -424,11 +436,25 @@ async function promoteIdleThread(
  * Promote an idle thread and carry its draft along: images attached to the
  * draft come with the first send unless it brings its own.
  */
+/**
+ * Whether `savedMessageId` names this thread's latest message, a user one, so
+ * it is reused (as a draft is) instead of saved again. Any other id — another
+ * thread's message, or one with later messages after it — is ignored.
+ */
+async function isSavedLatestUserMessage(params: SendMessageParams): Promise<boolean> {
+  if (!params.savedMessageId) return false;
+  const { messages } = await tm.getThreadMessages({ threadId: params.threadId, limit: 1 });
+  const latest = messages[0];
+  return latest?.id === params.savedMessageId && latest.role === 'user';
+}
+
 async function startIdleThreadIfNeeded(
   params: SendMessageParams,
   thread: SendThread,
 ): Promise<{ params: SendMessageParams; hasDraft: boolean }> {
-  const { hasDraft, draftImages } = await promoteIdleThread(params, thread);
+  const promoted = await promoteIdleThread(params, thread);
+  const { draftImages } = promoted;
+  const hasDraft = promoted.hasDraft || (await isSavedLatestUserMessage(params));
   if (params.images?.length || !draftImages?.length) return { params, hasDraft };
   return { params: { ...params, images: draftImages }, hasDraft };
 }
@@ -438,6 +464,11 @@ function parseDraftImages(raw: unknown): ImageAttachment[] | undefined {
   if (typeof raw !== 'string' || !raw) return undefined;
   const parsed = parseStoredJson(z.array(imageAttachmentSchema), raw, 'draft message images');
   return parsed.ok ? (parsed.value as ImageAttachment[]) : undefined;
+}
+
+/** The agent sees a never-answered earlier prompt (sandbox retry) before the message. */
+function withPrecedingPrompt(params: SendMessageParams, content: string): string {
+  return params.precedingPrompt ? `${params.precedingPrompt}\n\n${content}` : content;
 }
 
 /**
@@ -462,7 +493,7 @@ async function buildMessageContents(
   if (agentContent !== params.content) {
     augmentedContent = await augmentReferences(agentContent);
   }
-  return { augmentedContent, persistedContent };
+  return { augmentedContent: withPrecedingPrompt(params, augmentedContent), persistedContent };
 }
 
 /**

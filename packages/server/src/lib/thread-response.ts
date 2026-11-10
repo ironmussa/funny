@@ -26,6 +26,7 @@ import { z } from 'zod';
 
 import type { threads } from '../db/schema.js';
 import { log } from './logger.js';
+import { toMessage, toOptionalMessage } from './message-response.js';
 
 type ThreadRow = typeof threads.$inferSelect;
 
@@ -95,32 +96,35 @@ export function toThread(row: ListedThreadRow): Thread {
   };
 }
 
+type MessageRow = Parameters<typeof toMessage>[0];
+
 /** The message window and wait state `getThreadWithMessages` adds to the row. */
 type ThreadDetailRow = ThreadRow &
   Pick<
     ThreadWithMessages,
-    | 'messages'
     | 'hasMore'
     | 'hasMoreAfter'
     | 'total'
     | 'windowStart'
-    | 'lastUserMessage'
-    | 'leadingUserMessage'
     | 'initInfo'
     | 'waitingReason'
     | 'pendingPermission'
-  >;
+  > & {
+    messages: MessageRow[];
+    lastUserMessage?: MessageRow;
+    leadingUserMessage?: MessageRow;
+  };
 
 export function toThreadDetail(row: ThreadDetailRow): ThreadWithMessages {
   return {
     ...toThread(row),
-    messages: row.messages,
+    messages: row.messages.map(toMessage),
     hasMore: row.hasMore,
     hasMoreAfter: row.hasMoreAfter,
     total: row.total,
     windowStart: row.windowStart,
-    lastUserMessage: row.lastUserMessage,
-    leadingUserMessage: row.leadingUserMessage,
+    lastUserMessage: toOptionalMessage(row.lastUserMessage),
+    leadingUserMessage: toOptionalMessage(row.leadingUserMessage),
     initInfo: row.initInfo,
     waitingReason: row.waitingReason,
     pendingPermission: row.pendingPermission,

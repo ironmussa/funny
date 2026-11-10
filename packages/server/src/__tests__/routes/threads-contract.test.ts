@@ -12,7 +12,7 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 import { eq } from 'drizzle-orm';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedThread } from '../helpers/test-db.js';
+import { seedMessage, seedProject, seedThread } from '../helpers/test-db.js';
 
 /** Columns the server keeps to itself; the detail view exposes `initInfo` instead. */
 const INTERNAL_COLUMNS = ['initTools', 'initCwd', 'initSlashCommands', 'runnerId', 'mergedAt'];
@@ -176,6 +176,53 @@ describe('Thread routes follow the contract', () => {
 
       const res = await t.requestAs('user-1').patch('/api/threads/t1', { title: 123 });
       expect(res.status).toBe(404);
+    });
+  });
+
+  describe('messages', () => {
+    /** A message with every optional column null, and a legacy tool call with no input. */
+    function seedSparseMessage() {
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db as any, {
+        id: 'm1',
+        threadId: 't1',
+        role: 'assistant',
+        timestamp: '2026-11-01T00:00:00.000Z',
+      });
+      t.db
+        .insert(t.schema.toolCalls)
+        .values({ id: 'tc1', messageId: 'm1', name: 'Read', input: null })
+        .run();
+    }
+
+    function expectContractMessage(message: Record<string, unknown>) {
+      expect(message).toMatchObject({ id: 'm1', role: 'assistant' });
+      for (const key of ['model', 'permissionMode', 'effort', 'author', 'images']) {
+        expect(message).not.toHaveProperty(key);
+      }
+      const [toolCall] = message.toolCalls as Record<string, unknown>[];
+      // `input` is a string the client JSON.parses; a missing one reads as no arguments.
+      expect(toolCall).toEqual({ id: 'tc1', messageId: 'm1', name: 'Read', input: '{}' });
+    }
+
+    test('the detail view returns contract messages, not rows', async () => {
+      seedSparseMessage();
+      const body = await (await t.requestAs('user-1').get('/api/threads/t1')).json();
+      expectContractMessage(body.messages[0]);
+    });
+
+    test('the paginated message window returns contract messages', async () => {
+      seedSparseMessage();
+      const res = await t
+        .requestAs('user-1')
+        .get(
+          '/api/threads/t1/messages?cursor=2027-01-01T00:00:00.000Z&limit=lots&direction=sideways',
+        );
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      // An unparsable limit and an unknown direction keep their old defaults (50, "before").
+      expect(body.messages).toHaveLength(1);
+      expectContractMessage(body.messages[0]);
     });
   });
 });

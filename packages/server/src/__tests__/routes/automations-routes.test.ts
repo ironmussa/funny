@@ -121,7 +121,7 @@ describe('Automations Routes (Integration)', () => {
 
       const body = await res.json();
       expect(body.name).toBe('Renamed');
-      expect(body.enabled).toBe(0);
+      expect(body.enabled).toBe(false);
     });
 
     test('rejects a body that tries to reassign ownership (userId) — C1', async () => {
@@ -194,6 +194,54 @@ describe('Automations Routes (Integration)', () => {
 
       const ownerCheck = await t.requestAs('user-1').get('/api/automations/a1');
       expect(ownerCheck.status).toBe(200);
+    });
+  });
+
+  describe('response shape (contract)', () => {
+    test('an automation is the contract type, not the raw row', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1', enabled: 1 });
+
+      const body = await (await t.requestAs('user-1').get('/api/automations/a1')).json();
+      // `enabled` is a boolean, and null columns are absent rather than null.
+      expect(body.enabled).toBe(true);
+      expect(body).not.toHaveProperty('baseBranch');
+      expect(body).not.toHaveProperty('lastRunAt');
+      expect(Object.values(body)).not.toContain(null);
+    });
+
+    test('a run reports hasFindings as a boolean', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedAutomationRun(t.db as any, {
+        id: 'r1',
+        automationId: 'a1',
+        threadId: 't1',
+        status: 'completed',
+        hasFindings: 1,
+      });
+
+      const [run] = await (await t.requestAs('user-1').get('/api/automations/a1/runs')).json();
+      expect(run.hasFindings).toBe(true);
+      expect(run).not.toHaveProperty('summary');
+    });
+
+    test('an inbox item carries only the thread fields needed to list and open it', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Nightly' });
+      seedAutomationRun(t.db as any, {
+        id: 'r1',
+        automationId: 'a1',
+        threadId: 't1',
+        status: 'failed',
+      });
+
+      const [item] = await (await t.requestAs('user-1').get('/api/automations/inbox')).json();
+      expect(item.thread).toEqual({
+        id: 't1',
+        projectId: 'p1',
+        title: 'Nightly',
+        isScratch: false,
+      });
     });
   });
 
@@ -289,6 +337,18 @@ describe('Automations Routes (Integration)', () => {
     test('returns 400 when triageStatus is missing', async () => {
       const res = await t.requestAs('user-1').patch('/api/automations/runs/r1/triage', {});
       expect(res.status).toBe(400);
+    });
+
+    test('returns 400 for a triageStatus outside the contract', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedAutomationRun(t.db as any, { id: 'r1', automationId: 'a1', threadId: 't1' });
+
+      const res = await t
+        .requestAs('user-1')
+        .patch('/api/automations/runs/r1/triage', { triageStatus: 'archived' });
+      expect(res.status).toBe(400);
+      expect((await res.json()).error).toContain('pending, reviewed, dismissed');
     });
   });
 });

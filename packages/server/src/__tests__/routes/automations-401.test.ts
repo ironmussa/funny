@@ -50,6 +50,27 @@ describe('GET /api/automations — userId required (security ME-5)', () => {
     expect(res.status).toBe(401);
   });
 
+  test('every endpoint refuses 401 before validating or touching the DB', async () => {
+    const requests: [string, string][] = [
+      ['GET', '/api/automations/inbox'],
+      ['GET', '/api/automations/a1'],
+      ['POST', '/api/automations'],
+      ['PATCH', '/api/automations/a1'],
+      ['DELETE', '/api/automations/a1'],
+      ['POST', '/api/automations/a1/trigger'],
+      ['GET', '/api/automations/a1/runs'],
+      ['PATCH', '/api/automations/runs/r1/triage'],
+    ];
+    for (const [method, path] of requests) {
+      const res = await appWithUnauthed.app.request(path, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: method === 'GET' || method === 'DELETE' ? undefined : '{}',
+      });
+      expect({ method, path, status: res.status }).toEqual({ method, path, status: 401 });
+    }
+  });
+
   test('returns 200 when userId is set (regression: handler still works)', async () => {
     const res = await t.requestAs('user-1').get('/api/automations');
     expect(res.status).toBe(200);

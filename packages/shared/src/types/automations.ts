@@ -24,6 +24,7 @@ export interface Automation {
   enabled: boolean;
   maxRunHistory: number;
   lastRunAt?: string;
+  nextRunAt?: string;
   /** Whether this automation was created in the UI or synced from .funny.json */
   source?: AutomationSource;
   createdAt: string;
@@ -42,33 +43,14 @@ export interface AutomationRun {
   completedAt?: string;
 }
 
-export interface CreateAutomationRequest {
-  projectId: string;
-  name: string;
-  prompt: string;
-  schedule: AutomationSchedule;
-  provider?: AgentProvider;
-  model?: AgentModel;
-  mode?: ThreadMode;
-  permissionMode?: PermissionMode;
-  baseBranch?: string;
-}
+// Request bodies are the contract's input schemas, so they match what the server accepts.
+export type { CreateAutomationRequest, UpdateAutomationRequest } from '../contracts/automations.js';
 
-export interface UpdateAutomationRequest {
-  name?: string;
-  prompt?: string;
-  schedule?: AutomationSchedule;
-  provider?: AgentProvider;
-  model?: AgentModel;
-  mode?: ThreadMode;
-  permissionMode?: PermissionMode;
-  baseBranch?: string;
-  enabled?: boolean;
-  maxRunHistory?: number;
-}
+/** The thread fields an inbox item carries: enough to list it and open it. */
+export type InboxThread = Pick<Thread, 'id' | 'projectId' | 'title' | 'isScratch'>;
 
 export interface InboxItem {
   run: AutomationRun;
   automation: Automation;
-  thread: Thread;
+  thread: InboxThread;
 }

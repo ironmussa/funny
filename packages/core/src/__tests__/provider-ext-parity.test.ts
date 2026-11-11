@@ -20,7 +20,10 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { CursorACPProcess } from '../agents/cursor-acp.js';
 import { defaultProcessFactory } from '../agents/process-factory.js';
-import { clearRunnerManifestsForTests, loadProviderExtensions } from '../agents/provider-extensions.js';
+import {
+  clearRunnerManifestsForTests,
+  loadProviderExtensions,
+} from '../agents/provider-extensions.js';
 import type { CLIMessage } from '../agents/types.js';
 
 let dir: string;

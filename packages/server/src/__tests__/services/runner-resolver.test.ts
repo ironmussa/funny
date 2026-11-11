@@ -19,7 +19,6 @@ import {
   seedThread,
 } from '../helpers/test-db.js';
 
-
 let testDb: ReturnType<typeof createTestDb>;
 let presence: RunnerGrpcSessionRegistry;
 

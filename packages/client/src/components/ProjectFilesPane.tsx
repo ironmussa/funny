@@ -20,7 +20,6 @@ import { useThreadById } from '@/lib/thread-selectors';
 import { getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
-import { useProjectStore } from '@/stores/project-store';
 import { useThreadWorktreePath } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 

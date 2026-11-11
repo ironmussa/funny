@@ -10,7 +10,6 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { cn } from '@/lib/utils';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
-import { useProjectStore } from '@/stores/project-store';
 
 function timeAgo(ts: number, now: number): string {
   const seconds = Math.floor((now - ts) / 1000);

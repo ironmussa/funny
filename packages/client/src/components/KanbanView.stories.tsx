@@ -6,7 +6,6 @@ import '@/i18n/config';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { seedGitStatus } from '@/data/git-status/testing';
 import { seedProjects } from '@/data/projects/testing';
-import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useThreadStore } from '@/stores/thread-store';
 

@@ -327,7 +327,6 @@ describe('ProjectStore', () => {
 
       await useProjectStore.getState().renameProject('p1', 'New Name');
 
-      const state = useProjectStore.getState();
       expect(readProjects()).toHaveLength(1);
       expect(readProjects()[0].name).toBe('New Name');
     });
@@ -340,7 +339,6 @@ describe('ProjectStore', () => {
 
       await useProjectStore.getState().renameProject('p1', 'New Name');
 
-      const state = useProjectStore.getState();
       expect(readProjects()[0].name).toBe('Old Name');
     });
   });
@@ -354,7 +352,6 @@ describe('ProjectStore', () => {
 
       await useProjectStore.getState().updateProject('p1', { color: '#ff0000' });
 
-      const state = useProjectStore.getState();
       expect(readProjects()[0].color).toBe('#ff0000');
     });
   });
@@ -444,7 +441,6 @@ describe('ProjectStore', () => {
 
       await useProjectStore.getState().reorderProjects(['p3', 'p1', 'p2']);
 
-      const state = useProjectStore.getState();
       expect(readProjects().map((p) => p.id)).toEqual(['p3', 'p1', 'p2']);
     });
 
@@ -459,7 +455,6 @@ describe('ProjectStore', () => {
       await useProjectStore.getState().reorderProjects(['p3', 'p1', 'p2']);
 
       // Should revert to original order
-      const state = useProjectStore.getState();
       expect(readProjects().map((p) => p.id)).toEqual(['p1', 'p2', 'p3']);
     });
   });

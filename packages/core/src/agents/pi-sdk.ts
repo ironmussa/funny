@@ -163,7 +163,7 @@ export class PiSDKProcess extends BaseAgentProcess {
       this.session = null;
       await this.mcpBridge?.close();
       this.mcpBridge = null;
-      if (!this._exited) this.finalize();
+      if (!this.hasExited) this.finalize();
     }
   }
 

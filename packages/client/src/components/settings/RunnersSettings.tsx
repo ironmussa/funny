@@ -43,7 +43,6 @@ import { useProjects } from '@/data/projects/hooks';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useAppStore } from '@/stores/app-store';
 
 function statusColor(status: RunnerInfo['status']) {
   if (status === 'online') return 'text-green-500';

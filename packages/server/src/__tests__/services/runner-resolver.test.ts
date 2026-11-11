@@ -19,8 +19,6 @@ import {
   seedThread,
 } from '../helpers/test-db.js';
 
-const RUNNER_IDS = ['r-a', 'r-b', 'r-other'] as const;
-
 let testDb: ReturnType<typeof createTestDb>;
 let presence: RunnerGrpcSessionRegistry;
 

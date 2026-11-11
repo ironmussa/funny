@@ -14,7 +14,6 @@ import { api } from '@/lib/api';
 import type { ExternalClaudeTranscript } from '@/lib/api/system';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
-import { useProjectStore } from '@/stores/project-store';
 
 type LoadState =
   | { status: 'loading'; transcript: null }

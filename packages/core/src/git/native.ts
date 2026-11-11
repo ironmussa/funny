@@ -148,9 +148,9 @@ const heavyPool = createConcurrencyLimiter(8);
 // Lightweight ops (branch lookup, log) — higher concurrency since they're fast
 const lightPool = createConcurrencyLimiter(20);
 
-let _native: NativeGitModule | null = null;
-let _pooled: PooledNativeGitModule | null = null;
-let _attempted = false;
+let nativeModule: NativeGitModule | null = null;
+let pooledModule: PooledNativeGitModule | null = null;
+let loadAttempted = false;
 let nativeLoadError: string | null = null;
 
 /** Pooled wrapper that throttles native calls to avoid I/O saturation. */
@@ -232,20 +232,20 @@ function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
  */
 export function getNativeGit(): PooledNativeGitModule | null {
   if (process.env.FUNNY_DISABLE_NATIVE_GIT === '1') return null;
-  if (_attempted) return _pooled;
-  _attempted = true;
+  if (loadAttempted) return pooledModule;
+  loadAttempted = true;
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
-    _native = require('@funny/native-git') as NativeGitModule;
-    _pooled = createPooledModule(_native);
+    nativeModule = require('@funny/native-git') as NativeGitModule;
+    pooledModule = createPooledModule(nativeModule);
     // native git module loaded successfully
   } catch (error) {
-    _native = null;
-    _pooled = null;
+    nativeModule = null;
+    pooledModule = null;
     // native module not available, CLI fallback will be used
     nativeLoadError = error instanceof Error ? error.message : String(error);
   }
-  return _pooled;
+  return pooledModule;
 }
 
 export type NativeGitStatus =

@@ -18,7 +18,7 @@ import type { CLIMessage } from '../agents/types.js';
 // ── Mock process ────────────────────────────────────────────────
 
 class MockProcess extends EventEmitter implements IAgentProcess {
-  private _exited = false;
+  #exited = false;
   public started = false;
   public options: AgentProcessOptions;
 
@@ -40,11 +40,11 @@ class MockProcess extends EventEmitter implements IAgentProcess {
   }
 
   async kill(): Promise<void> {
-    this._exited = true;
+    this.#exited = true;
   }
 
   get exited(): boolean {
-    return this._exited;
+    return this.#exited;
   }
 
   simulateMessage(msg: CLIMessage): void {
@@ -52,7 +52,7 @@ class MockProcess extends EventEmitter implements IAgentProcess {
   }
 
   simulateExit(code: number | null = 0): void {
-    this._exited = true;
+    this.#exited = true;
     this.emit('exit', code);
   }
 

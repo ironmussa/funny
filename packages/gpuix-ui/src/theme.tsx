@@ -1,4 +1,4 @@
-import { oneDark, referenceDark, visualContract } from '@funny/ui-contracts/tokens';
+import { oneDark, visualContract } from '@funny/ui-contracts/tokens';
 import type { VisualContract, VisualThemeName } from '@funny/ui-contracts/tokens';
 import { createContext, use } from 'react';
 import type { ReactElement, ReactNode } from 'react';

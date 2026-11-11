@@ -18,7 +18,6 @@ import { useThreadsByProject } from '@/lib/thread-selectors';
 import { cleanThreadTitle } from '@/lib/thread-title';
 import { getDisplayThreadStatus, statusConfig } from '@/lib/thread-utils';
 import { cn, resolveThreadBranch } from '@/lib/utils';
-import { useProjectStore } from '@/stores/project-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 
 /** Return the most recent activity timestamp for a thread (completedAt > createdAt). */

@@ -370,6 +370,6 @@ export function removeProviderExtensionById(
 }
 
 /** Test/teardown helper: clear the runner-local manifest store. */
-export function _clearRunnerManifests(): void {
+export function clearRunnerManifestsForTests(): void {
   runnerManifests.clear();
 }

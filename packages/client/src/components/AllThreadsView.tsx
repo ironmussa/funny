@@ -18,7 +18,6 @@ import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { buildThreadPath } from '@/navigation/thread-paths';
-import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 

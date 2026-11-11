@@ -1,5 +1,7 @@
 import { describe, test, expect, vi } from 'vitest';
 
+import * as projectsRead from '@/data/projects/read';
+import { seedProjects } from '@/data/projects/testing';
 import { setSourceMembers } from '@/data/threads/list-meta';
 import * as threadsRead from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
@@ -21,6 +23,17 @@ function createMockStore<T extends Record<string, any>>(initialState: T) {
   };
 }
 
+function makeProject(p: { id: string; path: string }) {
+  return {
+    id: p.id,
+    name: p.id,
+    path: p.path,
+    userId: 'user-1',
+    sortOrder: 0,
+    createdAt: '2024-01-01T00:00:00Z',
+  };
+}
+
 // We need a fresh module for each test to reset the internal refs.
 async function freshBridge() {
   // Clear the cached module so we get fresh lazy refs
@@ -29,6 +42,7 @@ async function freshBridge() {
   // Reuse the already-loaded data layer instead of re-importing TanStack DB
   // on every reset: that import alone can exceed the test timeout in a full run.
   vi.doMock('@/data/threads/read', () => threadsRead);
+  vi.doMock('@/data/projects/read', () => projectsRead);
   return import(modulePath);
 }
 
@@ -56,6 +70,7 @@ describe('store-bridge', () => {
 
     test('getProjectPath returns undefined', async () => {
       const bridge = await freshBridge();
+      seedProjects([]);
       expect(bridge.getProjectPath('p1')).toBeUndefined();
     });
   });
@@ -146,15 +161,13 @@ describe('store-bridge', () => {
 
     test('getProjectPath returns correct path', async () => {
       const bridge = await freshBridge();
-
-      const projectStore = createMockStore({
-        projects: [
-          { id: 'p1', path: '/home/user/project-a' },
-          { id: 'p2', path: '/home/user/project-b' },
-        ],
-      });
-
-      bridge.registerProjectStore(projectStore as any);
+      // Regression: project rows moved to the data layer; reading them off the
+      // project store threw "Cannot read properties of undefined (reading 'find')".
+      seedProjects([
+        makeProject({ id: 'p1', path: '/home/user/project-a' }),
+        makeProject({ id: 'p2', path: '/home/user/project-b' }),
+      ]);
+      bridge.registerProjectStore(createMockStore({ selectedProjectId: null }) as any);
 
       expect(bridge.getProjectPath('p1')).toBe('/home/user/project-a');
       expect(bridge.getProjectPath('p2')).toBe('/home/user/project-b');
@@ -162,12 +175,7 @@ describe('store-bridge', () => {
 
     test('getProjectPath returns undefined for unknown project', async () => {
       const bridge = await freshBridge();
-
-      const projectStore = createMockStore({
-        projects: [{ id: 'p1', path: '/home/user/project-a' }],
-      });
-
-      bridge.registerProjectStore(projectStore as any);
+      seedProjects([makeProject({ id: 'p1', path: '/home/user/project-a' })]);
 
       expect(bridge.getProjectPath('unknown')).toBeUndefined();
     });

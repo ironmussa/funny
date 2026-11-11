@@ -173,6 +173,16 @@ describe('useGlobalShortcuts — shortcut table precedence and actions', () => {
     expect(mockNavigate).toHaveBeenLastCalledWith('/projects/p9/settings/general');
   });
 
+  test('a scratch thread (projectId "") falls back to the selected project', () => {
+    // The API sends `''` for a scratch thread's project; it must count as none.
+    useThreadStore.setState({ activeThread: thread('s1', '', { isScratch: true }) });
+    useProjectStore.setState({ selectedProjectId: 'p2' });
+    renderShortcuts();
+
+    press({ key: ',', ctrlKey: true });
+    expect(mockNavigate).toHaveBeenLastCalledWith('/projects/p2/settings/general');
+  });
+
   test('Alt+N starts a new thread only when a project is active', () => {
     renderShortcuts();
     const none = press({ key: 'n', altKey: true });

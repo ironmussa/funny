@@ -20,6 +20,11 @@ import {
   gitRefSchema,
   checkoutHashSchema,
   publishRepoSchema,
+  stashSchema,
+  runHookCommandSchema,
+  gitignoreSchema,
+  generateCommitMessageSchema,
+  hookTypeSchema,
 } from '../../validation/schemas.js';
 
 // ── Enum schemas ─────────────────────────────────────────────
@@ -683,5 +688,77 @@ describe('publishRepoSchema.org (security ME-4)', () => {
   test('org is optional — schema passes without it', () => {
     const result = publishRepoSchema.safeParse({ name: 'my-repo' });
     expect(result.success).toBe(true);
+  });
+});
+
+// ── Git request bodies that used to be read without a schema ──
+
+/** The parsed value `validate` returns for `data` (the test fails if it refuses it). */
+function parsedValue(schema: Parameters<typeof validate>[0], data: unknown): unknown {
+  return validate(schema, data).match(
+    (value) => value,
+    (error) => {
+      throw new Error(`expected ${JSON.stringify(data)} to validate: ${error.message}`);
+    },
+  );
+}
+
+/** The first error message `validate` would return for `data`. */
+function errorOf(schema: Parameters<typeof validate>[0], data: unknown): string | undefined {
+  const result = validate(schema, data);
+  return result.isErr() ? result.error.message : undefined;
+}
+
+describe('stashSchema', () => {
+  test('an absent or empty file list stashes everything', () => {
+    expect(parsedValue(stashSchema, {})).toEqual({});
+    expect(parsedValue(stashSchema, { files: [] })).toEqual({ files: [] });
+  });
+
+  test('refuses non-string and empty paths instead of passing them to git', () => {
+    expect(validate(stashSchema, { files: ['a.ts', 42] }).isErr()).toBe(true);
+    expect(errorOf(stashSchema, { files: [''] })).toBe('files must not contain empty paths');
+  });
+});
+
+describe('runHookCommandSchema', () => {
+  test('accepts a non-negative integer index', () => {
+    expect(parsedValue(runHookCommandSchema, { hookIndex: 0 })).toEqual({
+      hookIndex: 0,
+    });
+  });
+
+  test('refuses a missing, fractional or negative index with a 400 message', () => {
+    expect(errorOf(runHookCommandSchema, {})).toBe('hookIndex is required');
+    // Before, 1.5 passed `typeof === 'number'` and `hooks[1.5]` crashed with a 500.
+    expect(errorOf(runHookCommandSchema, { hookIndex: 1.5 })).toBe('hookIndex must be an integer');
+    expect(errorOf(runHookCommandSchema, { hookIndex: -1 })).toBe('hookIndex must not be negative');
+  });
+});
+
+describe('gitignoreSchema', () => {
+  test('takes one pattern or a list, dropping empty entries', () => {
+    expect(parsedValue(gitignoreSchema, { pattern: 'dist/' })).toEqual(['dist/']);
+    expect(parsedValue(gitignoreSchema, { patterns: ['a', '', 'b'] })).toEqual(['a', 'b']);
+  });
+
+  test('refuses a body with no usable pattern', () => {
+    expect(errorOf(gitignoreSchema, {})).toBe('pattern or patterns is required');
+    expect(errorOf(gitignoreSchema, { patterns: [''] })).toBe('pattern or patterns is required');
+    expect(validate(gitignoreSchema, { patterns: [1] }).isErr()).toBe(true);
+  });
+});
+
+describe('generateCommitMessageSchema', () => {
+  test('includeUnstaged is an optional boolean', () => {
+    expect(parsedValue(generateCommitMessageSchema, {})).toEqual({});
+    expect(validate(generateCommitMessageSchema, { includeUnstaged: 'yes' }).isErr()).toBe(true);
+  });
+});
+
+describe('hookTypeSchema', () => {
+  test('accepts the known hook types only', () => {
+    expect(hookTypeSchema.safeParse('pre-push').success).toBe(true);
+    expect(hookTypeSchema.safeParse('../../etc').success).toBe(false);
   });
 });

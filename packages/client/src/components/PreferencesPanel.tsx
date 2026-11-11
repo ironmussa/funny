@@ -37,6 +37,7 @@ export type GeneralPage =
   | 'models'
   | 'appearance'
   | 'github'
+  | 'github-app'
   | 'ai-keys'
   | 'speech'
   | 'email'
@@ -61,6 +62,7 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   { id: 'models', label: 'settings.models', icon: Sparkles },
   { id: 'appearance', label: 'settings.appearance', icon: Palette },
   { id: 'github', label: 'GitHub', icon: SiGithub },
+  { id: 'github-app', label: 'GitHub App', icon: SiGithub },
   { id: 'ai-keys', label: 'AI Providers', icon: Bot },
   { id: 'agent-profiles', label: 'settings.agentProfiles', icon: Bot },
   { id: 'speech', label: 'Speech', icon: Mic },
@@ -84,6 +86,7 @@ export const PREFERENCES_NAV_ITEMS: Array<{
  */
 export const ADMIN_ONLY_PREFERENCES: ReadonlySet<GeneralPage> = new Set([
   'email',
+  'github-app',
   'users',
   'organizations',
   'team-members',

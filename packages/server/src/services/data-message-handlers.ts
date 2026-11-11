@@ -536,11 +536,16 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
       };
     }
   },
-  'data:create_thread': async ({ ownerId, data }) => {
+  'data:create_thread': async ({ ownerId, runnerId, data }) => {
     const tRepo = repos.threads();
     // The thread is always owned by the runner's user (the ownership guard
     // already refuses a mismatching payload.userId).
-    await tRepo.createThread({ ...data.payload, userId: ownerId });
+    // It also runs on the runner that creates it, so that runner is recorded
+    // (never a payload value). Threads a runner creates on its own (spawned by
+    // an agent, ingested) get no later registration, and without `runnerId`
+    // the runner's restart recovery (`markAndListStaleThreads`) skipped them:
+    // they stayed `running` with no agent behind them.
+    await tRepo.createThread({ ...data.payload, userId: ownerId, runnerId });
     return { type: 'data:ack', success: true };
   },
   'data:delete_thread': async ({ data }) => {
@@ -632,6 +637,23 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
         typeof data.projectId === 'string' ? data.projectId : null,
       )) ?? (await getProviderKey(ownerId, 'github'));
     return { type: 'data:get_github_token_response', token: token ?? null };
+  },
+  'data:get_github_app_token': async ({ data }) => {
+    // Data scope already limited this to the sandbox runner of `data.threadId`.
+    const { sandboxTokenService } = await import('./github-app/sandbox-tokens.js');
+    const issued = await sandboxTokenService().issueFor(String(data.threadId));
+    return issued.isOk()
+      ? {
+          type: 'data:get_github_app_token_response',
+          token: issued.value.token,
+          expiresAt: issued.value.expiresAt,
+          repo: issued.value.repo,
+        }
+      : {
+          type: 'data:get_github_app_token_response',
+          error: issued.error.kind,
+          message: issued.error.message,
+        };
   },
   'data:get_minimax_api_key': async ({ ownerId }) => {
     const { getProviderKey } = await import('./profile-service.js');

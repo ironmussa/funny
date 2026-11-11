@@ -285,6 +285,8 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   app.route('/api/threads', shareRoutes);
   app.route('/api/threads', threadRoutes);
   app.route('/api/automations', automationRoutes);
+  const { githubAppSettingsRoutes } = await import('./routes/github-app-settings.js');
+  app.route('/api/settings/github-app', githubAppSettingsRoutes());
   app.route('/api/settings', settingsRoutes);
   app.route('/api/team-projects', teamProjectRoutes);
   app.route('/api/team-settings', teamSettingsRoutes);

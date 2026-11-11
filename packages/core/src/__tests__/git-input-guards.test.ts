@@ -12,7 +12,7 @@ import { getCommitBody, getCommitFileDiff, getCommitFiles, getLog } from '../git
 import { isSafeGitRefArg } from '../git/ref-guard.js';
 import { getCommittedBranchSummary } from '../git/status.js';
 
-const ROOT = resolve(tmpdir(), 'core-git-input-guards');
+const ROOT = resolve(tmpdir(), `core-git-input-guards-${process.pid}-${Date.now()}`);
 const CWD = join(ROOT, 'repo');
 const OUTSIDE = join(ROOT, 'outside.txt');
 

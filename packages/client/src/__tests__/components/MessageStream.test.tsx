@@ -1465,7 +1465,8 @@ describe('MessageStream viewer selection', () => {
   });
   afterEach(() => {
     vi.unstubAllGlobals();
-    useSettingsStore.getState().setThreadViewer('virtual');
+    // The stream is still mounted here (cleanup runs after this hook).
+    act(() => useSettingsStore.getState().setThreadViewer('virtual'));
   });
 
   test('renders the virtual list by default', () => {

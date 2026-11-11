@@ -18,7 +18,6 @@ import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildSendMessagePayload, type SendMessageOpts } from '@/lib/send-message-payload';
 import { buildWorkflowRunBody, parseWorkflowInvocation } from '@/lib/workflow-invocation';
-import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import type { ThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';

@@ -137,6 +137,8 @@ export interface SandboxThreadDeps {
    * saved. Never throws.
    */
   saveFirstMessage(input: FirstMessage): Promise<string | null>;
+  /** The images of the thread's first user message, or null when it has none. */
+  firstMessageImages(threadId: string): Promise<unknown[] | null>;
   /** A retry started: `failed` → `setting_up`. */
   markSettingUp(threadId: string): Promise<void>;
   /** The sandbox is ready: `setting_up` → `pending`, so the agent can start. */
@@ -225,13 +227,20 @@ function unansweredInitialPrompt(
 
 /**
  * The retried first message: what the user wrote, with the never-answered
- * initial prompt ahead of it for the agent only (it is its own message).
+ * initial prompt and its images ahead of it for the agent only (it is its own
+ * message, already saved with them).
  */
 function retryMessageBody(
   input: z.infer<typeof retrySandboxThreadSchema>,
   initialPrompt: string | null,
+  initialImages: unknown[] | null,
 ): Record<string, unknown> {
-  return initialPrompt ? { ...input, precedingPrompt: initialPrompt } : { ...input };
+  if (!initialPrompt) return { ...input };
+  return {
+    ...input,
+    precedingPrompt: initialPrompt,
+    ...(initialImages?.length ? { precedingImages: initialImages } : {}),
+  };
 }
 
 /**
@@ -377,6 +386,24 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     return initialPrompt;
   }
 
+  /** The failed thread to retry, its project and the machine to provision. */
+  async function retryTarget(userId: string, threadId: string) {
+    const retryable = checkRetryable(await deps.findOwnedThread(userId, threadId));
+    if (retryable.isErr()) return err(retryable.error);
+    const thread = retryable.value;
+    const project = await deps.findOwnedProject(userId, thread.projectId);
+    if (!project) {
+      return err<never, SandboxThreadFailure>({
+        status: 404,
+        code: 'not-found',
+        message: 'Project not found',
+      });
+    }
+    const machine = await retryMachine(userId, threadId, thread.projectId);
+    if (machine.isErr()) return err(machine.error);
+    return ok({ thread, project, machine: machine.value });
+  }
+
   async function prepareRetry(
     userId: string,
     threadId: string,
@@ -390,13 +417,9 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
         message: parsed.error.issues[0]?.message ?? 'Invalid message',
       });
     }
-    const retryable = checkRetryable(await deps.findOwnedThread(userId, threadId));
-    if (retryable.isErr()) return err(retryable.error);
-    const thread = retryable.value;
-    const project = await deps.findOwnedProject(userId, thread.projectId);
-    if (!project) return err({ status: 404, code: 'not-found', message: 'Project not found' });
-    const machine = await retryMachine(userId, threadId, thread.projectId);
-    if (machine.isErr()) return err(machine.error);
+    const target = await retryTarget(userId, threadId);
+    if (target.isErr()) return err(target.error);
+    const { thread, project, machine } = target.value;
 
     const launch = await deps.prepare({
       userId,
@@ -404,18 +427,19 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
       projectId: thread.projectId,
       projectPath: project.path,
       branch: thread.baseBranch ?? undefined,
-      ...machine.value,
+      ...machine,
     });
     if (launch.isErr()) return err({ status: 409, ...launch.error });
 
     const initialPrompt = await saveUnansweredInitialPrompt(userId, threadId, thread, parsed.data);
+    const initialImages = initialPrompt ? await deps.firstMessageImages(threadId) : null;
     await deps.markSettingUp(threadId);
     metric('thread_sandboxes.threads_retried', 1);
     const started = startInBackground(
       userId,
       threadId,
       launch.value,
-      retryMessageBody(parsed.data, initialPrompt),
+      retryMessageBody(parsed.data, initialPrompt, initialImages),
     );
     return ok({ thread: await deps.loadThread(threadId), started });
   }

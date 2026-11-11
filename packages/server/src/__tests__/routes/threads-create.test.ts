@@ -18,7 +18,7 @@ import * as runnerResolver from '../../services/runner-resolver.js';
 import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
 import * as threadRegistry from '../../services/thread-registry.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedRunner } from '../helpers/test-db.js';
+import { seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
 
 const tunnelFetch = mock(
   async (_runnerId: string, _request: RunnerRequest): Promise<RunnerResponse> => ({
@@ -115,6 +115,35 @@ describe('Thread creation — characterization', () => {
       expect(tunnelFetch.mock.calls[0][1].path).toBe('/api/threads');
       expect(tunnelFetch.mock.calls[0][1].method).toBe('POST');
       expect(effects).toEqual(['resolve', 'remote', 'register', 'cache']);
+    });
+
+    test('answers with the persisted row as the contract Thread, not the runner payload', async () => {
+      // The runner persists the thread through the data channel before it
+      // replies; here the row is seeded to stand in for that write.
+      seedThread(t.db as any, {
+        id: 't-new',
+        projectId: 'p1',
+        userId: 'user-1',
+        title: 'Stored title',
+        pinned: 1,
+        templateVariables: JSON.stringify({ ticket: 'ABC-1' }),
+      });
+
+      const res = await t.requestAs('user-1').post('/api/threads', {
+        projectId: 'p1',
+        title: 'Hello',
+        prompt: 'Hi',
+      });
+      expect(res.status).toBe(201);
+      const body = await res.json();
+      expect(body).toMatchObject({
+        id: 't-new',
+        title: 'Stored title',
+        pinned: true,
+        archived: false,
+        templateVariables: { ticket: 'ABC-1' },
+      });
+      expect(body).not.toHaveProperty('branch');
     });
 
     test('idle creation posts to /api/threads/idle with the same sequence', async () => {

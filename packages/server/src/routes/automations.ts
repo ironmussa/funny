@@ -6,11 +6,21 @@
  * manual triggers dispatch through it to the owner's runner.
  */
 
+import type {
+  AgentModel,
+  AgentProvider,
+  Automation,
+  AutomationRun,
+  AutomationSource,
+  InboxThread,
+  PermissionMode,
+  ThreadMode,
+} from '@funny/shared';
+import { automationsContract as contract } from '@funny/shared/contracts/automations';
 import { DEFAULT_MODEL, DEFAULT_THREAD_MODE, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
 import { eq, and, or, desc } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
-import { z } from 'zod';
 
 import { db } from '../db/index.js';
 import { automations, automationRuns, threads } from '../db/schema.js';
@@ -21,62 +31,85 @@ import {
   runAutomation,
   unscheduleAutomation,
 } from '../services/automation-scheduler.js';
-import { parseJsonBody } from '../validation/request.js';
+import { fail, reply, serveEndpoint, type ErrorStatus } from '../validation/endpoint.js';
 
 export const automationRoutes = new Hono<ServerEnv>();
 
-const createAutomationSchema = z.object({
-  projectId: z.string().min(1, 'Missing required fields: projectId, name, prompt, schedule'),
-  name: z.string().min(1, 'Missing required fields: projectId, name, prompt, schedule'),
-  prompt: z.string().min(1, 'Missing required fields: projectId, name, prompt, schedule'),
-  schedule: z.string().min(1, 'Missing required fields: projectId, name, prompt, schedule'),
-  model: z.string().optional(),
-  permissionMode: z.string().optional(),
-});
+// ── Rows → contract types ────────────────────────────────────────
+// The columns are plain text/integer; these are the one place they become the
+// contract's booleans, unions and optional fields.
 
-// Security C1: strict allow-list. Ownership (`userId`), identity (`id`) and
-// server-managed bookkeeping (`lastRunAt`, `nextRunAt`, `source`, timestamps)
-// are never writable from the request body — unknown keys are rejected.
-const updateAutomationSchema = z
-  .object({
-    projectId: z.string().min(1).optional(),
-    name: z.string().min(1).optional(),
-    prompt: z.string().min(1).optional(),
-    schedule: z.string().min(1).optional(),
-    provider: z.string().min(1).optional(),
-    model: z.string().min(1).optional(),
-    mode: z.string().min(1).optional(),
-    permissionMode: z.string().min(1).optional(),
-    enabled: z.boolean().optional(),
-    maxRunHistory: z.number().int().positive().optional(),
-    baseBranch: z.string().nullable().optional(),
-  })
-  .strict();
+type AutomationRow = typeof automations.$inferSelect;
+type AutomationRunRow = typeof automationRuns.$inferSelect;
+type ThreadRow = typeof threads.$inferSelect;
 
-const updateRunTriageSchema = z.object({
-  triageStatus: z.string().min(1, 'triageStatus is required'),
-});
+function toAutomation(row: AutomationRow): Automation {
+  return {
+    id: row.id,
+    projectId: row.projectId,
+    userId: row.userId,
+    name: row.name,
+    prompt: row.prompt,
+    schedule: row.schedule,
+    provider: row.provider as AgentProvider,
+    model: row.model as AgentModel,
+    mode: row.mode as ThreadMode,
+    permissionMode: row.permissionMode as PermissionMode,
+    baseBranch: row.baseBranch ?? undefined,
+    enabled: row.enabled === 1,
+    maxRunHistory: row.maxRunHistory,
+    lastRunAt: row.lastRunAt ?? undefined,
+    nextRunAt: row.nextRunAt ?? undefined,
+    source: row.source as AutomationSource,
+    createdAt: row.createdAt,
+    updatedAt: row.updatedAt,
+  };
+}
+
+function toAutomationRun(row: AutomationRunRow): AutomationRun {
+  return {
+    id: row.id,
+    automationId: row.automationId,
+    threadId: row.threadId,
+    status: row.status as AutomationRun['status'],
+    triageStatus: row.triageStatus as AutomationRun['triageStatus'],
+    hasFindings: row.hasFindings === null ? undefined : row.hasFindings === 1,
+    summary: row.summary ?? undefined,
+    startedAt: row.startedAt,
+    completedAt: row.completedAt ?? undefined,
+  };
+}
+
+function toInboxThread(row: ThreadRow): InboxThread {
+  return {
+    id: row.id,
+    projectId: row.projectId ?? '',
+    title: row.title,
+    isScratch: row.isScratch === 1,
+  };
+}
+
+async function readAutomation(id: string): Promise<Automation> {
+  const rows = await db.select().from(automations).where(eq(automations.id, id));
+  return toAutomation(rows[0]);
+}
 
 // ── Automation CRUD ──────────────────────────────────────────────
+// Every endpoint requires a user: `serveEndpoint` refuses 401 without one, so
+// the tenant filters below are never conditional (Security ME-5).
 
 // GET /api/automations/inbox?projectId=xxx&triageStatus=xxx — must be before /:id
-automationRoutes.get('/inbox', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-
-  const projectId = c.req.query('projectId');
-  const triageStatus = c.req.query('triageStatus');
-
+serveEndpoint(automationRoutes, contract.inbox, async ({ userId, query }) => {
   const conditions: ReturnType<typeof eq>[] = [
     or(eq(automationRuns.status, 'completed'), eq(automationRuns.status, 'failed')) as any,
     eq(automations.userId, userId),
   ];
 
-  if (triageStatus) {
-    conditions.push(eq(automationRuns.triageStatus, triageStatus));
+  if (query.triageStatus) {
+    conditions.push(eq(automationRuns.triageStatus, query.triageStatus));
   }
-  if (projectId) {
-    conditions.push(eq(automations.projectId, projectId));
+  if (query.projectId) {
+    conditions.push(eq(automations.projectId, query.projectId));
   }
 
   const items = await db
@@ -91,25 +124,20 @@ automationRoutes.get('/inbox', async (c) => {
     .where(and(...conditions))
     .orderBy(desc(automationRuns.completedAt));
 
-  return c.json(items);
+  return reply(
+    items.map((item) => ({
+      run: toAutomationRun(item.run),
+      automation: toAutomation(item.automation),
+      thread: toInboxThread(item.thread),
+    })),
+  );
 });
 
 // GET /api/automations?projectId=xxx
-automationRoutes.get('/', async (c) => {
-  // Security ME-5: previously `if (userId) filters.push(...)` made the
-  // tenant filter conditional. The auth middleware always populates userId,
-  // so this was effectively safe — but a future code path that reaches
-  // this handler with `isRunner=true, userId=undefined` (or any other
-  // bypass) would silently return EVERY user's automations. Match the
-  // shape of `/inbox` and `/:id`: explicit 401 when missing, hard filter
-  // otherwise.
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-  const projectId = c.req.query('projectId');
-
+serveEndpoint(automationRoutes, contract.list, async ({ userId, query }) => {
   const filters: ReturnType<typeof eq>[] = [eq(automations.userId, userId)];
-  if (projectId) {
-    filters.push(eq(automations.projectId, projectId));
+  if (query.projectId) {
+    filters.push(eq(automations.projectId, query.projectId));
   }
 
   const result = await db
@@ -118,7 +146,7 @@ automationRoutes.get('/', async (c) => {
     .where(and(...filters))
     .orderBy(desc(automations.createdAt));
 
-  return c.json(result);
+  return reply(result.map(toAutomation));
 });
 
 async function findOwnedAutomation(id: string, userId: string) {
@@ -154,26 +182,18 @@ function buildAutomationUpdates(
 }
 
 // GET /api/automations/:id
-automationRoutes.get('/:id', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-
-  const automation = await findOwnedAutomation(c.req.param('id'), userId);
-  if (!automation) return c.json({ error: 'Not found' }, 404);
-  return c.json(automation);
+serveEndpoint(automationRoutes, contract.get, async ({ userId, params }) => {
+  const automation = await findOwnedAutomation(params.id, userId);
+  if (!automation) return fail(404, 'Not found');
+  return reply(toAutomation(automation));
 });
 
 // POST /api/automations
-automationRoutes.post('/', async (c) => {
-  const parsed = await parseJsonBody(c, createAutomationSchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const body = parsed.value;
-  const userId = c.get('userId') as string;
-
+serveEndpoint(automationRoutes, contract.create, async ({ userId, body }) => {
   // The run will act on this project with the creator's identity — require
   // that they can see it (same 404 as a missing project).
   if (!(await authorizer.authorize(userId, 'project', body.projectId, 'view'))) {
-    return c.json({ error: 'Project not found' }, 404);
+    return fail(404, 'Project not found');
   }
 
   const id = nanoid();
@@ -197,109 +217,78 @@ automationRoutes.post('/', async (c) => {
   });
 
   await rescheduleAutomation(id);
-  const rows = await db.select().from(automations).where(eq(automations.id, id));
-  return c.json(rows[0], 201);
+  return reply(await readAutomation(id), 201);
 });
 
 // PATCH /api/automations/:id
-automationRoutes.patch('/:id', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+serveEndpoint(automationRoutes, contract.update, async ({ userId, params, body }) => {
+  const existing = await findOwnedAutomation(params.id, userId);
+  if (!existing) return fail(404, 'Not found');
 
-  const id = c.req.param('id');
-  const existing = await findOwnedAutomation(id, userId);
-  if (!existing) return c.json({ error: 'Not found' }, 404);
-
-  const parsed = await parseJsonBody(c, updateAutomationSchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const { enabled, ...fields } = parsed.value;
+  const { enabled, ...fields } = body;
 
   if (!(await canMoveToProject(userId, existing.projectId, fields.projectId))) {
-    return c.json({ error: 'Project not found' }, 404);
+    return fail(404, 'Project not found');
   }
 
   const updates = buildAutomationUpdates(fields, enabled);
 
   if (Object.keys(updates).length > 0) {
     updates.updatedAt = new Date().toISOString();
-    await db.update(automations).set(updates).where(eq(automations.id, id));
-    await rescheduleAutomation(id);
+    await db.update(automations).set(updates).where(eq(automations.id, params.id));
+    await rescheduleAutomation(params.id);
   }
 
-  const updated = await db.select().from(automations).where(eq(automations.id, id));
-  return c.json(updated[0]);
+  return reply(await readAutomation(params.id));
 });
 
 // DELETE /api/automations/:id
-automationRoutes.delete('/:id', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+serveEndpoint(automationRoutes, contract.remove, async ({ userId, params }) => {
+  if (!(await findOwnedAutomation(params.id, userId))) return fail(404, 'Not found');
 
-  const id = c.req.param('id');
-  if (!(await findOwnedAutomation(id, userId))) return c.json({ error: 'Not found' }, 404);
-
-  unscheduleAutomation(id);
-  await db.delete(automations).where(eq(automations.id, id));
-  return c.json({ ok: true });
+  unscheduleAutomation(params.id);
+  await db.delete(automations).where(eq(automations.id, params.id));
+  return reply({ ok: true });
 });
 
 // POST /api/automations/:id/trigger — run now on the owner's runner
-automationRoutes.post('/:id/trigger', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-
-  const automation = await findOwnedAutomation(c.req.param('id'), userId);
-  if (!automation) return c.json({ error: 'Not found' }, 404);
+serveEndpoint(automationRoutes, contract.trigger, async ({ userId, params }) => {
+  const automation = await findOwnedAutomation(params.id, userId);
+  if (!automation) return fail(404, 'Not found');
 
   const result = await runAutomation(automation);
-  if (result.isErr()) return c.json({ error: result.error.message }, result.error.status as any);
-  return c.json({ ok: true, ...result.value });
+  if (result.isErr()) return fail(result.error.status as ErrorStatus, result.error.message);
+  return reply({ ok: true, ...result.value });
 });
 
 // ── Runs ─────────────────────────────────────────────────────────
 
 // GET /api/automations/:id/runs
-automationRoutes.get('/:id/runs', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-
-  const id = c.req.param('id');
-  const owner = await db
-    .select({ id: automations.id })
-    .from(automations)
-    .where(and(eq(automations.id, id), eq(automations.userId, userId)));
-  if (!owner[0]) return c.json({ error: 'Not found' }, 404);
+serveEndpoint(automationRoutes, contract.runs, async ({ userId, params }) => {
+  if (!(await findOwnedAutomation(params.id, userId))) return fail(404, 'Not found');
 
   const runs = await db
     .select()
     .from(automationRuns)
-    .where(eq(automationRuns.automationId, id))
+    .where(eq(automationRuns.automationId, params.id))
     .orderBy(desc(automationRuns.startedAt));
 
-  return c.json(runs);
+  return reply(runs.map(toAutomationRun));
 });
 
 // PATCH /api/automations/runs/:runId/triage
-automationRoutes.patch('/runs/:runId/triage', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-
-  const runId = c.req.param('runId');
-  const parsed = await parseJsonBody(c, updateRunTriageSchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const body = parsed.value;
-
+serveEndpoint(automationRoutes, contract.triageRun, async ({ userId, params, body }) => {
   const owner = await db
     .select({ id: automationRuns.id })
     .from(automationRuns)
     .innerJoin(automations, eq(automationRuns.automationId, automations.id))
-    .where(and(eq(automationRuns.id, runId), eq(automations.userId, userId)));
-  if (!owner[0]) return c.json({ error: 'Not found' }, 404);
+    .where(and(eq(automationRuns.id, params.runId), eq(automations.userId, userId)));
+  if (!owner[0]) return fail(404, 'Not found');
 
   await db
     .update(automationRuns)
     .set({ triageStatus: body.triageStatus })
-    .where(eq(automationRuns.id, runId));
+    .where(eq(automationRuns.id, params.runId));
 
-  return c.json({ ok: true });
+  return reply({ ok: true });
 });

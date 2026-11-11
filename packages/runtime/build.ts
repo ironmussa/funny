@@ -25,8 +25,12 @@ await mkdir(DIST, { recursive: true });
 
 // Bundle server + all @funny/* workspace packages into a single file
 const result = await Bun.build({
-  entrypoints: [join(ROOT, 'src/index.ts')],
+  // run-cli is what a background `funny_run_checks` job runs, as its own process.
+  entrypoints: [join(ROOT, 'src/index.ts'), join(ROOT, 'src/services/checks/run-cli.ts')],
   outdir: DIST,
+  // Both entries at the top of dist/ (dist/index.js, dist/run-cli.js): the
+  // check tool finds run-cli.js next to the bundle, like pty-helper.mjs.
+  naming: { entry: '[name].[ext]' },
   target: 'bun',
   define: {
     __BUILD_INFO__: JSON.stringify(BUILD_INFO),
@@ -58,6 +62,13 @@ if (!result.success) {
 // Copy pty-helper.mjs to dist/ — it's spawned as a separate Node.js child process
 // and references import.meta.dir at runtime (which resolves to dist/)
 await cp(join(ROOT, 'src', 'services', 'pty-helper.mjs'), join(DIST, 'pty-helper.mjs'));
+
+// Copy the vitest progress reporter to dist/ — the check runner passes its path to
+// a project's own vitest (`--reporter=`), so it cannot be bundled either.
+await cp(
+  join(ROOT, 'src', 'services', 'checks', 'vitest-progress-reporter.mjs'),
+  join(DIST, 'vitest-progress-reporter.mjs'),
+);
 
 // Copy pty-daemon.ts to dist/ — pty-daemon-launcher starts it as a separate Bun
 // process, so it cannot be bundled into the main runtime entry.

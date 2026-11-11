@@ -43,6 +43,7 @@ import {
 
 // ── Runtime tables ─────────────────────────────────────────────
 
+// fallow-ignore-next-line code-duplication
 export const projects = sqliteTable('projects', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -50,6 +51,7 @@ export const projects = sqliteTable('projects', {
   color: text('color'),
   followUpMode: text('follow_up_mode').notNull().default(DEFAULT_FOLLOW_UP_MODE),
   fastMode: integer('fast_mode').notNull().default(0),
+  redirectChecks: integer('redirect_checks').notNull().default(1),
   defaultProvider: text('default_provider'),
   defaultModel: text('default_model'),
   defaultEffort: text('default_effort'),

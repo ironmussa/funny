@@ -43,6 +43,7 @@ import { recoverThreadContext } from './agent-startup/recover-context.js';
 import { buildSystemPrefix, projectInstructionsBlock } from './agent-startup/system-prefix.js';
 import type { AgentStateTracker } from './agent-state.js';
 import { captureGitCheckpoint } from './git-checkpoints.js';
+import { prepareAgentGithub } from './sandbox-github-auth.js';
 import type { IThreadManager, RuntimeThreadRecord } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 import { canDoGitOps, hasLazyCwd, resolveThreadCwd, tmpAssetsPathFor } from './thread-context.js';
@@ -65,9 +66,15 @@ interface StartContext {
 }
 
 /** Project-level run flags forwarded to the orchestrator. */
-function projectRunFlags(project: StartProject): { fastMode: boolean; steerable: boolean } {
+function projectRunFlags(project: StartProject): {
+  fastMode: boolean;
+  steerable: boolean;
+  redirectChecks: boolean;
+} {
   return {
     fastMode: project?.fastMode ?? false,
+    // On unless the project turned it off; scratch threads (no project) too.
+    redirectChecks: project?.redirectChecks ?? true,
     steerable: project?.followUpMode === 'steer',
   };
 }
@@ -260,6 +267,8 @@ export class AgentLifecycleManager {
     this.beginRunSpan(threadId, model, provider, permissionMode);
 
     // Resolve per-user API keys and git identity for agent subprocesses.
+    // git and gh in a sandbox use the thread's GitHub App token, renewed in place.
+    await prepareAgentGithub(threadId);
     const baseEnv = await buildAgentEnv({ threadId, userId, provider, assetsDir });
     const agentEnv = await this.applyAgentProfile(threadId, activeAgentProfile, baseEnv);
 

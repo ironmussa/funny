@@ -1,4 +1,4 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, describe, expect, test, vi } from 'vitest';
@@ -53,7 +53,8 @@ describe('useActiveThreadId', () => {
 describe('useThreadData / useActiveThreadData', () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    useThreadStore.setState({ threadDataById: {} } as any);
+    // The hook is still mounted here (cleanup runs after this hook).
+    act(() => useThreadStore.setState({ threadDataById: {} } as any));
   });
 
   test('useThreadData returns the cached payload by id', () => {

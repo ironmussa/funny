@@ -55,7 +55,7 @@ bun run db:studio
 
 ### Monorepo Structure (Bun workspaces)
 
-- **`packages/shared`** — Cross-package kernel. Hosts (a) types and error definitions (`src/types.ts`, `src/types/*.ts`, `src/errors.ts`, `src/models.ts`), (b) the shared DB layer used by `server` + `scheduler` (`src/db/schema.ts`, `src/db/schema.{sqlite,pg}.ts`, `src/db/adapters/{sqlite,pg}.ts`, `src/db/migrate.ts`, `src/db/connection.ts`), (c) factory-pattern repositories (`src/repositories/*.ts` — `createMessageRepository(db)`, `createThreadRepository(db)`, etc.) consumed by server + scheduler with a caller-supplied DB connection, (d) the runner↔server protocol (`src/runner-protocol.ts`), (e) auth signing helpers (`src/auth/forwarded-identity.ts`), and (f) the thread state machine (`src/thread-machine.ts`). `runtime` does NOT import the repositories — it proxies all persistence to the server via `RuntimeServiceProvider` (see Server Architecture). `client` only imports types from this package, never runtime code.
+- **`packages/shared`** — Cross-package kernel. Hosts (a) types and error definitions (`src/types.ts`, `src/types/*.ts`, `src/errors.ts`, `src/models.ts`), (b) the shared DB layer used by `server` + `scheduler` (`src/db/schema.ts`, `src/db/schema.{sqlite,pg}.ts`, `src/db/adapters/{sqlite,pg}.ts`, `src/db/migrate.ts`, `src/db/connection.ts`), (c) factory-pattern repositories (`src/repositories/*.ts` — `createMessageRepository(db)`, `createThreadRepository(db)`, etc.) consumed by server + scheduler with a caller-supplied DB connection, (d) the runner↔server protocol (`src/runner-protocol.ts`), (e) auth signing helpers (`src/auth/forwarded-identity.ts`), (f) the thread state machine (`src/thread-machine.ts`), and (g) HTTP contracts (`src/contracts/*.ts`, see Key Patterns). `runtime` does NOT import the repositories — it proxies all persistence to the server via `RuntimeServiceProvider` (see Server Architecture). `client` imports types and browser-safe modules (contracts, zod schemas, `async`) through subpath exports, never the DB layer or repositories.
 - **`packages/core`** — Pure logic shared across server and runtime. Contains git operations (`git/`), agent process management (`agents/`), and port allocation (`ports/`). No HTTP or database code.
 - **`packages/runtime`** — Hono HTTP routes and services for agent execution. Manages agent runners, PTY sessions, worktrees, pipelines, and WebSocket broadcasting. Acts as the "runner" in the server+runner architecture.
 - **`packages/server`** — Entry point for the application. Handles authentication (Better Auth), database (Drizzle + SQLite/PostgreSQL), user management, and proxies requests to remote runners. Owns all persistent state.
@@ -207,6 +207,14 @@ On the server, `FUNNY_ENCRYPTION_KEYS` (JSON: `{"active":"k1","keys":{"k1":"<hex
 
 > **Important:** If the keyring is lost, any previously saved GitHub tokens become unrecoverable. Back it up if needed. The files are created with restricted permissions (`0600`) and refused if readable by others.
 
+### GitHub access in sandbox threads (GitHub App)
+
+A sandbox never receives the owner's PAT: anything in a sandbox can be read by the agent, a steer sharee or a prompt injection. The data channel refuses GitHub secrets to sandbox runners (`touchesGithubSecret` in `server/services/data-scope.ts`). Instead the server holds the deployment's **GitHub App** and mints, per sandbox thread, an installation token restricted to the thread's repository, valid for an hour, with permissions capped by the owner's own access (checked with the owner's PAT on the server). See `server/services/github-app/` (`token-issuer.ts`, `sandbox-tokens.ts`) and `runtime/services/sandbox-github-auth.ts`, which writes it to gh's `hosts.yml`, points git at `gh auth git-credential` and renews it every 45 minutes. Only the thread's own sandbox runner can ask (`data:get_github_app_token`, `SANDBOX_ONLY_TYPES`).
+
+- **One App per deployment** (its key mints tokens for every installed repository, so it cannot be shared). An admin connects it in **Preferences > GitHub App** (GitHub's manifest flow; the key is stored encrypted in `instance_settings`) or sets `GITHUB_APP_ID` / `GITHUB_APP_PRIVATE_KEY`, which win. Install it on **selected repositories** only.
+- No App, not installed, or no owner access: no token, and the thread shows a `sandbox:error` card (phase `github`) saying what to do.
+- A steer sharee can act on the repository through a sandbox agent without the owner's approval (the share dialog says so). Protect important branches with GitHub rulesets.
+
 ### Auth Architecture
 
 - `packages/runtime/src/lib/auth.ts` — Better Auth instance (initialized by the server on startup)
@@ -253,6 +261,16 @@ Prefer Effect for cancellation, retry waits, timeouts, bounded concurrency, and
 resource lifetimes, following `AGENTS.md`. Preserve `neverthrow` domain results and
 public service contracts; use explicit adapters at async boundaries. Simple pure
 functions and UI rendering do not need Effect wrappers.
+
+### HTTP contracts (`@funny/shared/contracts/*`)
+
+A route group with a contract declares each endpoint once in `packages/shared/src/contracts/<group>.ts`: method, path (relative to the router mount), zod schemas for query and body, and the response type (`endpointGroup('/automations').endpoint<Automation>()({ method: 'GET', path: '/:id' })`). Both sides use that object:
+
+- **Server:** register with `serveEndpoint(router, endpoint, handler)` from `packages/server/src/validation/endpoint.ts`. It takes the method and path from the endpoint, refuses 401 without a user, runs `options.middleware` (e.g. `requireThreadOwner`, so a missing resource answers 404 before a bad body answers 400), validates query and body (400 `{ error }`), and requires the handler to return `reply(body)` / `fail(status, error)` with the declared response type. Map DB rows to the contract type in the route (integers to booleans, `null` to absent); never return a raw drizzle row.
+- **Client:** call with `callEndpoint(endpoint, { params, query, body })` from `packages/client/src/lib/api/_contract.ts`. It goes through `request()`, so auth, telemetry and the circuit breaker still apply.
+- **Request types** come from the schemas (`z.input<typeof schema>`), not from a separate interface, so they cannot claim fields the server does not accept.
+
+`/api/automations`, the pipeline CRUD and run history (`lib/pipeline-response.ts`), and the server-answered `/api/threads` routes (lists, detail, field updates; `lib/thread-response.ts` maps the rows) are on contracts. Thread creation and fork answer with the row the runner persisted, read back from the server DB (`createdThreadResponse` in `routes/threads.ts`); the other runner-proxied thread routes are not on contracts, since their responses come from the runner. The rest still use `request<T>(path)`, whose `T` is unchecked. Move a group over when you touch it. Hono RPC (`hono/client`) was rejected because importing the server's route types pulls Bun-only modules into the client typecheck.
 
 ### Error Handling with `neverthrow`
 

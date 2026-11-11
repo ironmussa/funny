@@ -10,7 +10,7 @@ import { replaceDataLayer } from '@/data/runtime';
 import { sortChecks } from '@/lib/ci-checks';
 
 import { mockT } from '../helpers/mock-i18n';
-import { renderWithProviders } from '../helpers/render';
+import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
 const githubPRDetail = vi.hoisted(() => vi.fn());
 
@@ -73,11 +73,12 @@ describe('CITab', () => {
     expect(githubPRDetail).not.toHaveBeenCalled();
   });
 
-  test('refresh forces a fetch', () => {
+  test('refresh forces a fetch', async () => {
     githubPRDetail.mockReturnValue(okAsync(DETAIL));
     renderWithProviders(<CITab projectId="project-1" prNumber={51} visible />);
 
     fireEvent.click(screen.getByTestId('ci-refresh'));
+    await flushAsyncUpdates();
 
     expect(githubPRDetail).toHaveBeenCalledWith('project-1', 51);
   });

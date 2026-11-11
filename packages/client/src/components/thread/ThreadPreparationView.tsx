@@ -15,6 +15,7 @@ export type PreparationMessageMetadata = Pick<
 >;
 
 const ignoreSubmit = async () => false;
+const NO_STEPS: GitProgressStep[] = [];
 
 /**
  * Conversation placeholder while the server creates the thread or prepares its
@@ -26,7 +27,7 @@ export function ThreadPreparationView({
   prompt,
   projectId,
   metadata,
-  steps = [],
+  steps = NO_STEPS,
   onRetry,
   retrying = false,
 }: {

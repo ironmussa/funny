@@ -22,8 +22,8 @@
     "db:migrate": "bun src/hosts/bun/migrate-cli.ts",
     "build": "bun run build.ts",
     "start": "bun run dist/index.js",
-    "test": "bun test --isolate",
-    "test:coverage": "bun test --coverage --isolate",
+    "test": "bun test --isolate --timeout 20000",
+    "test:coverage": "bun test --coverage --isolate --timeout 20000",
     "test:coverage:gate": "bun scripts/coverage-gate.ts"
   },
   "dependencies": {

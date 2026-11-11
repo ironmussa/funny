@@ -7,6 +7,7 @@ import { ADMIN_ONLY_PREFERENCES, type GeneralPage } from '@/components/Preferenc
 import { AgentExecutionProfilesSettings } from '@/components/settings/AgentExecutionProfilesSettings';
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
 import { ExtensionsSettings } from '@/components/settings/ExtensionsSettings';
+import { GithubAppSettings } from '@/components/settings/GithubAppSettings';
 import { OrganizationManagement } from '@/components/settings/OrganizationManagement';
 import { ProvidersSettings } from '@/components/settings/ProvidersSettings';
 import { RunnersSettings } from '@/components/settings/RunnersSettings';
@@ -50,6 +51,7 @@ const STANDALONE_PAGES: Partial<Record<GeneralPage, ComponentType>> = {
   'agent-profiles': AgentExecutionProfilesSettings,
   'agent-templates': AgentTemplateSettings,
   extensions: ExtensionsSettings,
+  'github-app': GithubAppSettings,
   providers: ProvidersSettings,
   system: SystemSettings,
 };

@@ -16,6 +16,8 @@ import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
 import { checkoutProjectIntoSandbox } from '../services/sandbox-checkout.js';
+import { prepareSandboxGithub } from '../services/sandbox-github-auth.js';
+import { isSandboxRunner } from '../services/sandbox-runner.js';
 import * as tm from '../services/thread-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
@@ -51,6 +53,29 @@ async function checkoutTarget(
     : err(forbidden('Checkout path must be the project path'));
 }
 
+/**
+ * The token to clone with. A sandbox never holds the owner's PAT: it clones
+ * with the thread's repository-scoped GitHub App token (sandbox-github-app-tokens).
+ */
+async function checkoutToken(threadId: string, userId: string): Promise<string | null> {
+  if (isSandboxRunner()) return (await prepareSandboxGithub(threadId))?.token ?? null;
+  return (await resolveGithubToken(userId))?.token ?? null;
+}
+
+/**
+ * The remote may not have the requested branch: record the one actually
+ * checked out, so the thread shows the branch its sandbox works on.
+ */
+async function recordCheckedOutBranch(
+  threadId: string,
+  requested: string | undefined,
+  checkedOut: string | null | undefined,
+): Promise<void> {
+  if (checkedOut && checkedOut !== requested) {
+    await tm.updateThread(threadId, { baseBranch: checkedOut });
+  }
+}
+
 export const sandboxCheckoutRoutes = new Hono<HonoEnv>();
 
 sandboxCheckoutRoutes.post('/:id/sandbox/checkout', async (c) => {
@@ -62,7 +87,7 @@ sandboxCheckoutRoutes.post('/:id/sandbox/checkout', async (c) => {
   const target = await checkoutTarget(threadId, userId, c.get('organizationId'), parsed.value.path);
   if (target.isErr()) return resultToResponse(c, target);
 
-  const token = (await resolveGithubToken(userId))?.token ?? null;
+  const token = await checkoutToken(threadId, userId);
   const result = await checkoutProjectIntoSandbox({ ...parsed.value, token });
   if (result.isErr()) {
     log.warn('Sandbox checkout failed', {
@@ -72,11 +97,6 @@ sandboxCheckoutRoutes.post('/:id/sandbox/checkout', async (c) => {
     });
     return resultToResponse(c, result);
   }
-  // The remote may not have the requested branch: record the one actually
-  // checked out, so the thread shows the branch its sandbox works on.
-  const { branch } = result.value;
-  if (branch && branch !== parsed.value.branch) {
-    await tm.updateThread(threadId, { baseBranch: branch });
-  }
+  await recordCheckedOutBranch(threadId, parsed.value.branch, result.value.branch);
   return c.json(result.value);
 });

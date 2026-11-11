@@ -20,7 +20,7 @@ import { setServices, resetServices } from '../../services/service-registry.js';
 // ── Mock helpers ────────────────────────────────────────────────
 
 class MockClaudeProcess extends EventEmitter implements IClaudeProcess {
-  private _exited = false;
+  #exited = false;
   started = false;
 
   start(): void {
@@ -42,11 +42,11 @@ class MockClaudeProcess extends EventEmitter implements IClaudeProcess {
     // asynchronously from the process's .exited Promise handler.
     // We intentionally do NOT emit 'exit' here — tests call simulateExit()
     // to model the delayed process exit.
-    this._exited = true;
+    this.#exited = true;
   }
 
   get exited(): boolean {
-    return this._exited;
+    return this.#exited;
   }
 
   /** Simulate the process emitting a message */
@@ -56,7 +56,7 @@ class MockClaudeProcess extends EventEmitter implements IClaudeProcess {
 
   /** Simulate the process exiting */
   simulateExit(code: number | null = 0): void {
-    this._exited = true;
+    this.#exited = true;
     this.emit('exit', code);
   }
 
@@ -70,18 +70,16 @@ function createMockThreadManager(): IThreadManager & {
   threads: Map<string, any>;
   messages: Map<string, any>;
   toolCalls: Map<string, any>;
-  _nextId: number;
 } {
   const threads = new Map<string, any>();
   const messages = new Map<string, any>();
   const toolCalls = new Map<string, any>();
-  let _nextId = 1;
+  let nextId = 1;
 
   return {
     threads,
     messages,
     toolCalls,
-    _nextId,
 
     getThread(id: string) {
       return threads.get(id);
@@ -91,7 +89,7 @@ function createMockThreadManager(): IThreadManager & {
       threads.set(id, { ...existing, id, ...updates });
     },
     insertMessage(data) {
-      const id = `msg-${_nextId++}`;
+      const id = `msg-${nextId++}`;
       messages.set(id, { id, ...data });
       return id;
     },
@@ -113,7 +111,7 @@ function createMockThreadManager(): IThreadManager & {
       return count;
     },
     insertToolCall(data) {
-      const id = `tc-${_nextId++}`;
+      const id = `tc-${nextId++}`;
       toolCalls.set(id, { id, ...data });
       return id;
     },

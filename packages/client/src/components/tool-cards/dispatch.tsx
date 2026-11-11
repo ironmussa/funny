@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { ToolCallGroup, type ToolCallItem } from '@/components/ToolCallGroup';
 
 import { AskQuestionCard } from './AskQuestionCard';
-import { BashCard } from './BashCard';
+import { BashCheckCard, CheckRunCard } from './check-cards';
 import { EditFileCard } from './EditFileCard';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { parseMcpToolName } from './mcp-tool';
@@ -62,7 +62,7 @@ const renderTask: CardRenderer = ({
 
 const CARD_RENDERERS: Record<string, CardRenderer> = {
   Bash: ({ parsed, output, author, hideLabel, displayTime }) => (
-    <BashCard
+    <BashCheckCard
       parsed={parsed}
       output={output}
       author={author}
@@ -106,6 +106,8 @@ const CARD_RENDERERS: Record<string, CardRenderer> = {
 export function dispatchToolCard(args: Args): ReactNode | null {
   const { name, parsed, output, onRespond, hideLabel, planText, displayTime } = args;
   const mcp = parseMcpToolName(name);
+  if (mcp?.server === 'funny' && mcp.tool === 'funny_run_checks')
+    return <CheckRunCard parsed={parsed} output={output} displayTime={displayTime} />;
   if (mcp)
     return (
       <McpToolCard

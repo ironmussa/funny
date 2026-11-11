@@ -164,7 +164,7 @@ async function runTrackedWrite(args: string[], options: ProcessOptions): Promise
   // or while it ran, is never reused afterwards by the read-side caches.
   gitWriteGeneration++;
   try {
-    return await _executeRaw('git', args, options);
+    return await executeRaw('git', args, options);
   } finally {
     gitWriteGeneration++;
   }
@@ -181,7 +181,7 @@ export async function gitRead(
   args: string[],
   options: ProcessOptions = {},
 ): Promise<ProcessResult> {
-  return readPool(() => _executeRaw('git', ['--no-optional-locks', ...args], options));
+  return readPool(() => executeRaw('git', ['--no-optional-locks', ...args], options));
 }
 
 /**
@@ -231,18 +231,18 @@ export async function execute(
   args: string[],
   options: ProcessOptions = {},
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
-  if (options.skipPool) return _executeRaw(command, args, options);
-  return processPool(() => _executeRaw(command, args, options));
+  if (options.skipPool) return executeRaw(command, args, options);
+  return processPool(() => executeRaw(command, args, options));
 }
 
-async function _executeRaw(
+async function executeRaw(
   command: string,
   args: string[],
   options: ProcessOptions,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   options.signal?.throwIfAborted();
-  if (hasBun) return _executeRawBun(command, args, options);
-  return _executeRawNode(command, args, options);
+  if (hasBun) return executeRawBun(command, args, options);
+  return executeRawNode(command, args, options);
 }
 
 /**
@@ -281,8 +281,31 @@ async function readStreamWithCap(
   }
 }
 
+/**
+ * A finished command's result. A non-zero exit throws ProcessExecutionError
+ * (with stderr, else stdout, as the reason) unless `options.reject` is false.
+ */
+function commandResult(
+  command: string,
+  args: string[],
+  options: ProcessOptions,
+  result: ProcessResult,
+): ProcessResult {
+  const { stdout, stderr, exitCode } = result;
+  if ((options.reject ?? true) && exitCode !== 0) {
+    throw new ProcessExecutionError(
+      stderr.trim() || stdout.trim() || `Command failed: ${command} ${args.join(' ')}`,
+      exitCode,
+      stdout,
+      stderr,
+      `${command} ${args.join(' ')}`,
+    );
+  }
+  return result;
+}
+
 /** Bun-optimized path using Bun.spawn */
-async function _executeRawBun(
+async function executeRawBun(
   command: string,
   args: string[],
   options: ProcessOptions,
@@ -330,19 +353,7 @@ async function _executeRawBun(
       },
     );
 
-    const shouldReject = options.reject ?? true;
-    if (shouldReject && exitCode !== 0) {
-      const reason = stderr.trim() || stdout.trim();
-      throw new ProcessExecutionError(
-        reason || `Command failed: ${command} ${args.join(' ')}`,
-        exitCode,
-        stdout,
-        stderr,
-        `${command} ${args.join(' ')}`,
-      );
-    }
-
-    return { stdout, stderr, exitCode };
+    return commandResult(command, args, options, { stdout, stderr, exitCode });
   } finally {
     // Also covers read failures and cancellation before the async body starts.
     if (proc.exitCode === null) proc.kill();
@@ -350,7 +361,7 @@ async function _executeRawBun(
 }
 
 /** Node.js fallback using child_process.spawn (used by vitest) */
-async function _executeRawNode(
+async function executeRawNode(
   command: string,
   args: string[],
   options: ProcessOptions,
@@ -463,19 +474,7 @@ export function executeSync(
     exitCode = result.status ?? 1;
   }
 
-  const shouldReject = options.reject ?? true;
-  if (shouldReject && exitCode !== 0) {
-    const reason = stderr.trim() || stdout.trim();
-    throw new ProcessExecutionError(
-      reason || `Command failed: ${command} ${args.join(' ')}`,
-      exitCode,
-      stdout,
-      stderr,
-      `${command} ${args.join(' ')}`,
-    );
-  }
-
-  return { stdout, stderr, exitCode };
+  return commandResult(command, args, options, { stdout, stderr, exitCode });
 }
 
 /**

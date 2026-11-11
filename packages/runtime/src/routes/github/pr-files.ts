@@ -12,6 +12,7 @@ import {
   requireAccessibleProject,
   resolveGithubToken,
 } from './helpers.js';
+import { positiveIntParam, readPaging } from './query.js';
 
 export const prFileRoutes = new Hono<HonoEnv>();
 
@@ -28,7 +29,7 @@ const prRevertFileBodySchema = z
 prFileRoutes.get('/pr-files', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
-  const prNumber = Number(c.req.query('prNumber'));
+  const prNumber = positiveIntParam(c, 'prNumber');
   const commitSha = c.req.query('commitSha') || undefined;
   if (!projectId || !prNumber) {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
@@ -114,7 +115,7 @@ prFileRoutes.get('/pr-files', async (c) => {
 prFileRoutes.get('/pr-commits', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
-  const prNumber = Number(c.req.query('prNumber'));
+  const prNumber = positiveIntParam(c, 'prNumber');
   if (!projectId || !prNumber) {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }
@@ -190,8 +191,7 @@ prFileRoutes.get('/commit-authors', async (c) => {
   const token = resolved?.token ?? null;
 
   const sha = c.req.query('sha') || undefined;
-  const perPage = Math.min(Number(c.req.query('per_page')) || 100, 100);
-  const page = Number(c.req.query('page')) || 1;
+  const { page, perPage } = readPaging(c, 100);
 
   const qs = new URLSearchParams({ per_page: String(perPage), page: String(page) });
   if (sha) qs.set('sha', sha);
@@ -226,7 +226,7 @@ prFileRoutes.get('/commit-authors', async (c) => {
 prFileRoutes.get('/pr-file-content', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
-  const prNumber = Number(c.req.query('prNumber'));
+  const prNumber = positiveIntParam(c, 'prNumber');
   const filePath = c.req.query('filePath');
   if (!projectId || !prNumber || !filePath) {
     return c.json({ error: 'projectId, prNumber, and filePath are required' }, 400);

@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { installTestDataLayer } from '../helpers/data-layer-harness';
 import { mockT } from '../helpers/mock-i18n';
-import { renderWithProviders } from '../helpers/render';
+import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
 const mocks = vi.hoisted(() => ({
   getProfile: vi.fn(),
@@ -67,8 +67,9 @@ describe('PreferencesContent', () => {
     useSettingsStore.setState({ fetchAvailableShells: vi.fn(async () => {}) });
   });
 
-  test('general page renders the editor, shell and notification rows', () => {
+  test('general page renders the editor, shell and notification rows', async () => {
     renderWithProviders(<PreferencesContent activePreferencesPage="general" />);
+    await flushAsyncUpdates();
     expect(screen.getByTestId('preferences-editor-select')).toBeInTheDocument();
     expect(screen.getByTestId('preferences-language-select')).toBeInTheDocument();
     expect(screen.getByTestId('preferences-shell-select')).toBeInTheDocument();
@@ -77,8 +78,9 @@ describe('PreferencesContent', () => {
     expect(useSettingsStore.getState().fetchAvailableShells).toHaveBeenCalled();
   });
 
-  test('appearance page renders every theme card', () => {
+  test('appearance page renders every theme card', async () => {
     renderWithProviders(<PreferencesContent activePreferencesPage="appearance" />);
+    await flushAsyncUpdates();
     expect(screen.getByTestId('preferences-theme-one-dark')).toBeInTheDocument();
     expect(screen.getByTestId('preferences-theme-monochrome-dark')).toBeInTheDocument();
     expect(screen.getByTestId('preferences-font-size-select')).toBeInTheDocument();
@@ -102,9 +104,10 @@ describe('PreferencesContent', () => {
     expect(screen.getByTestId('preferences-smtp-status')).toHaveTextContent('Configured');
   });
 
-  test('admin-only pages are refused for non-admins', () => {
+  test('admin-only pages are refused for non-admins', async () => {
     mocks.isAdmin = false;
     renderWithProviders(<PreferencesContent activePreferencesPage="email" />);
+    await flushAsyncUpdates();
     expect(screen.getByTestId('preferences-admin-only')).toBeInTheDocument();
     expect(screen.queryByTestId('preferences-smtp-host')).not.toBeInTheDocument();
   });

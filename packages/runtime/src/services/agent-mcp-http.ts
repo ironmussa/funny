@@ -114,13 +114,18 @@ function ensureListener(): ReturnType<typeof Bun.serve> {
   listener ??= Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    // Tools are bounded (browser actions ≤ 30 s) but a wait can take a while.
-    idleTimeout: 120,
-    fetch: (req) =>
-      handle(req).catch((err) => {
+    // Non-MCP paths only (MCP requests disable it below). Overridable for tests.
+    idleTimeout: Number(process.env.FUNNY_AGENT_MCP_IDLE_TIMEOUT_S) || 120,
+    fetch: (req, server) => {
+      // A tool call is silent until its tool returns, and some run long (a
+      // synchronous check ≤ 30 min), so no idle cutoff for MCP requests: each
+      // tool bounds itself, and the agent closing the request aborts it.
+      server.timeout(req, 0);
+      return handle(req).catch((err) => {
         log.warn('agent MCP request failed', { namespace: NS, error: String(err) });
         return new Response('Internal error', { status: 500 });
-      }),
+      });
+    },
   });
   return listener;
 }

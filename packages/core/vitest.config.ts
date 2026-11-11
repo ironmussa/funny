@@ -21,19 +21,25 @@ export default defineConfig({
       '@funny/shared/lib/child-env': path.join(shared, 'lib/child-env.ts'),
       '@funny/shared/async': path.join(shared, 'async.ts'),
       '@funny/shared/stale-while-revalidate': path.join(shared, 'stale-while-revalidate.ts'),
+      // The check redirect (agents/check-redirect.ts) reads @funny/shared/checks.
+      '@funny/shared/checks': path.join(shared, 'checks/index.ts'),
+      '@funny/shared/test-progress': path.join(shared, 'test-progress.ts'),
+      '@funny/shared/task-progress': path.join(shared, 'task-progress.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),
       '@funny/core/agents': path.resolve(__dirname, 'src/agents/index.ts'),
       '@funny/core/git': path.resolve(__dirname, 'src/git/index.ts'),
       '@funny/core/ports': path.resolve(__dirname, 'src/ports/index.ts'),
       '@funny/core': path.resolve(__dirname, 'src/index.ts'),
+      // Zod v4 ESM re-exports break Vite SSR transform; use CJS build instead (as runtime).
+      zod: path.resolve(__dirname, 'node_modules/zod/index.cjs'),
     },
   },
   test: {
     globals: true,
     include: ['src/__tests__/*.test.ts'],
     exclude: ['dist/**'],
-    // Git suites share process.env (FUNNY_DISABLE_NATIVE_GIT) and temp dirs —
-    // parallel file workers cause flaky cross-talk.
-    fileParallelism: false,
+    // Files run in parallel: each runs in its own forked process (own
+    // process.env, e.g. FUNNY_DISABLE_NATIVE_GIT) and its own temp dir, so the
+    // git suites do not share state. Sequential runs took ~8 min instead of ~20 s.
   },
 });

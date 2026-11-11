@@ -40,6 +40,9 @@ import {
  */
 export type DataScopeRule = 'refs' | 'projectless' | 'user' | 'list';
 
+/** Types only a sandbox runner may send, and only about its own thread (`refs`). */
+const SANDBOX_ONLY_TYPES = new Set(['data:get_github_app_token']);
+
 export const DATA_SCOPE_RULES: Record<string, DataScopeRule> = {
   'data:insert_message': 'refs',
   'data:insert_tool_call': 'refs',
@@ -90,6 +93,8 @@ export const DATA_SCOPE_RULES: Record<string, DataScopeRule> = {
   'data:get_profile': 'user',
   'data:get_provider_key': 'user',
   'data:get_github_token': 'user',
+  // Only a sandbox runner, for its own thread (see `assertRunnerDataScope`).
+  'data:get_github_app_token': 'refs',
   'data:get_minimax_api_key': 'user',
   'data:update_profile': 'user',
   'data:get_builtin_providers': 'user',
@@ -345,6 +350,9 @@ export async function assertRunnerDataScope(
 
   const boundThread = await sandboxThreadOfRunner(runnerId);
   if (boundThread) return sandboxDataScope(boundThread, type, rule, data);
+  if (SANDBOX_ONLY_TYPES.has(type)) {
+    return { ok: false, reason: `${type} is for sandbox runners only` };
+  }
 
   const isScratchCreate =
     type === 'data:create_thread' && !str(data?.payload?.projectId) && !str(data?.projectId);
@@ -379,6 +387,9 @@ async function sandboxDataScope(
   rule: DataScopeRule,
   data: any,
 ): Promise<DataScopeDecision> {
+  if (touchesGithubSecret(type, data)) {
+    return { ok: false, reason: `${type}: GitHub credentials never go to a sandbox runner` };
+  }
   if (rule === 'projectless') {
     return { ok: false, reason: `${type} is projectless work (sandbox runner)` };
   }
@@ -387,6 +398,19 @@ async function sandboxDataScope(
     return { ok: false, reason: 'sandbox runners cannot create threads' };
   }
   return sandboxRefsScope(boundThread, data);
+}
+
+/**
+ * The owner's GitHub token never reaches a sandbox (sandbox-git-credential-broker).
+ * The agent runs as the runner's OS user, so anything a sandbox runner receives
+ * is the agent's too and, through steer sharing, a sharee's. Sandbox git goes
+ * through the server's git broker instead. Overwriting the token is refused too.
+ */
+function touchesGithubSecret(type: string, data: any): boolean {
+  if (type === 'data:get_github_token') return true;
+  if (type === 'data:get_provider_key') return data?.provider === 'github';
+  if (type === 'data:update_profile') return data?.payload?.githubToken !== undefined;
+  return false;
 }
 
 /** `refs` check for a sandbox runner: every referenced thread/project is its own. */

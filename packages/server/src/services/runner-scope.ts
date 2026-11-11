@@ -556,6 +556,16 @@ export async function resolveProjectGithubToken(
   return ciphertext ? decrypt(ciphertext) : null;
 }
 
+/**
+ * The project's GitHub token, for the server's own use only (checking a sandbox
+ * thread owner's access to the repository, sandbox-github-app-tokens): it never
+ * leaves the server.
+ */
+export async function serverSideProjectGithubToken(projectId: string): Promise<string | null> {
+  const ciphertext = await getProjectGithubTokenCiphertext(projectId);
+  return ciphertext ? decrypt(ciphertext) : null;
+}
+
 /** Set (plaintext, encrypted at rest) or clear the project's GitHub token. */
 export async function setProjectGithubToken(projectId: string, token: string | null) {
   await setProjectGithubTokenCiphertext(projectId, token ? encrypt(token) : null);

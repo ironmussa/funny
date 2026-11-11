@@ -13,12 +13,7 @@ import type { SandboxEventType } from '@funny/shared/sandbox-machine';
 import { Cause, Effect, Exit, Option } from 'effect';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
-import {
-  isRetryableSandboxError,
-  type SandboxError,
-  type SandboxHandle,
-  type SandboxProvider,
-} from './contract.js';
+import { isRetryableSandboxError, type SandboxError, type SandboxHandle } from './contract.js';
 import { fromResult, runToResult } from './effect-bridge.js';
 import type { InfraConnectionService } from './infra-connections.js';
 import { pollUntil } from './poll.js';

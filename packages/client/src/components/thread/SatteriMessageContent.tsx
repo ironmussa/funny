@@ -63,7 +63,8 @@ function getActiveFileBasePath(): string | null {
   const { selectedProjectId } = appState;
   const projects = readProjects();
   const activeThread = readActiveThreadView(appState);
-  const projectId = activeThread?.projectId ?? selectedProjectId;
+  // A scratch thread's projectId is '' (no project): fall back like a missing one.
+  const projectId = activeThread?.projectId || selectedProjectId;
   const projectPath = projectId ? projects.find((project) => project.id === projectId)?.path : null;
   return activeThread?.worktreePath || projectPath || null;
 }

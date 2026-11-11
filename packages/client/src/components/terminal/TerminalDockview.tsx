@@ -1,7 +1,6 @@
 import { PanelBottomClose, PictureInPicture2, Plus } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useShallow } from 'zustand/react/shallow';
 
 import { isTauri } from '@/components/terminal/xterm-utils';
 import { Button } from '@/components/ui/button';
@@ -16,7 +15,6 @@ import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { sendTerminalRealtime } from '@/hooks/use-ws';
 import { openScopeTerminal } from '@/lib/open-terminal-tab';
-import { useProjectStore } from '@/stores/project-store';
 import { type TerminalShell, useSettingsStore } from '@/stores/settings-store';
 import { useTerminalStore, type TerminalTab } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -137,9 +135,6 @@ function NewTerminalButton() {
   const fetchAvailableShells = useSettingsStore((s) => s.fetchAvailableShells);
   const terminalScope = useTerminalScope();
   const selectedProjectId = terminalScope.scopeId;
-  const visibleTabs = useTerminalStore(
-    useShallow((s) => s.tabs.filter((tab) => tab.projectId === selectedProjectId)),
-  );
 
   const handleCreate = useCallback(
     (shell: TerminalShell) => {

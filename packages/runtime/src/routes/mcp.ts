@@ -32,7 +32,7 @@ import type { HonoEnv } from '../types/hono-env.js';
 import { resolveClaudeProfileRouteOptions } from '../utils/agent-profile-options.js';
 import { requireProjectPath } from '../utils/path-scope.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { parseJsonBody } from '../validation/request.js';
+import { parseJsonBody, parseQuery } from '../validation/request.js';
 import { addMcpServerSchema, agentProviderSchema, validate } from '../validation/schemas.js';
 
 const app = new Hono<HonoEnv>();
@@ -102,7 +102,10 @@ app.delete('/servers/:name', async (c) => {
   const projectPath = c.req.query('projectPath');
   const provider = c.req.query('provider') ?? 'claude';
   const projectId = c.req.query('projectId') || undefined;
-  const scope = c.req.query('scope') as 'project' | 'user' | undefined;
+  // Passed to the provider CLI as `--scope <value>`: only the two scopes it knows.
+  const scopeQuery = parseQuery(c, z.object({ scope: z.enum(['project', 'user']).optional() }));
+  if (scopeQuery.isErr()) return resultToResponse(c, scopeQuery);
+  const { scope } = scopeQuery.value;
 
   if (!projectPath)
     return resultToResponse(c, err(badRequest('projectPath query parameter required')));

@@ -7,7 +7,7 @@ import { PinnedPRCard } from '@/components/PinnedPRCard';
 
 import { mockT } from '../helpers/mock-i18n';
 import { MARKDOWN_PRELOAD_TIMEOUT_MS, preloadMarkdownPipeline } from '../helpers/preload-markdown';
-import { renderWithProviders } from '../helpers/render';
+import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
 const apiMock = vi.hoisted(() => ({
   githubPRThreads: vi.fn(),
@@ -83,7 +83,7 @@ describe('PinnedPRCard', () => {
     });
   });
 
-  test('falls back to the raw git author when the commit is not linked to GitHub', () => {
+  test('falls back to the raw git author when the commit is not linked to GitHub', async () => {
     renderWithProviders(
       <PinnedPRCard
         pr={makePR({
@@ -98,13 +98,15 @@ describe('PinnedPRCard', () => {
         projectId="project-1"
       />,
     );
+    await flushAsyncUpdates();
 
     expect(screen.getByText('Last commit by')).toBeInTheDocument();
     expect(screen.getByText('Unlinked Author')).toBeInTheDocument();
   });
 
-  test('shows the merge summary and diff link in the header', () => {
+  test('shows the merge summary and diff link in the header', async () => {
     renderWithProviders(<PinnedPRCard pr={makePR()} projectId="project-1" />);
+    await flushAsyncUpdates();
 
     const mergeLine = screen.getByTestId('pinned-pr-merge-line-51');
     expect(mergeLine).toHaveTextContent('argenisleon wants to merge 2 commits into');
@@ -167,13 +169,14 @@ describe('PinnedPRCard', () => {
     expect(container).not.toHaveTextContent('<!-- This is an auto-generated comment');
   });
 
-  test('does not render a redundant merged status badge', () => {
+  test('does not render a redundant merged status badge', async () => {
     renderWithProviders(
       <PinnedPRCard
         pr={makePR({ state: 'closed', merged_at: '2026-01-01T00:02:00.000Z' })}
         projectId="project-1"
       />,
     );
+    await flushAsyncUpdates();
 
     expect(screen.queryByTestId('pinned-pr-merged-badge-51')).not.toBeInTheDocument();
     expect(screen.queryByText('Merged')).not.toBeInTheDocument();

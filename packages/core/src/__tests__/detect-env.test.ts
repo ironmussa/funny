@@ -8,8 +8,8 @@ import { fileURLToPath } from 'url';
 
 import { detectEnv } from '../env/index.js';
 
-const __dir = dirname(fileURLToPath(import.meta.url));
-const TMP = resolve(__dir, '__tmp_detect_env_test__');
+const testDir = dirname(fileURLToPath(import.meta.url));
+const TMP = resolve(testDir, '__tmp_detect_env_test__');
 
 const IS_WINDOWS = process.platform === 'win32';
 const VENV_BIN = IS_WINDOWS ? 'Scripts' : 'bin';

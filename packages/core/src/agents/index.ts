@@ -50,7 +50,7 @@ export {
   getRunnerManifest,
   getAdvertisedProviders,
   getActiveProviderSpawnRefs,
-  _clearRunnerManifests,
+  clearRunnerManifestsForTests,
   type ProviderSpawnRef,
   type LoadedProviderExtension,
   type LoadProviderExtensionsResult,

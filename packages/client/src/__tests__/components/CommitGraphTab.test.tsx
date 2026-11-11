@@ -24,7 +24,7 @@ import {
   rebaseEventScopeLabel,
 } from '@/lib/rebase-events';
 
-import { renderWithProviders } from '../helpers/render';
+import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -214,6 +214,8 @@ describe('GraphRefChips', () => {
     fireEvent.click(screen.getByTestId('graph-branch-info-origin/feat/video'));
     await screen.findByTestId('graph-branch-detail-origin/feat/video');
     fireEvent.click(screen.getByTestId('graph-branch-copy-remote-origin/feat/video'));
+    // The copied state is set once the clipboard write resolves.
+    await flushAsyncUpdates();
 
     expect(writeText).toHaveBeenCalledWith('origin/feat/video');
     expect(screen.getByTestId('graph-branch-detail-origin/feat/video')).toBeInTheDocument();

@@ -82,7 +82,8 @@ function consume(e: KeyboardEvent): void {
 
 /** Project of the active thread, falling back to the selected project. */
 function activeProjectId(): string | null {
-  const activeThreadProjectId = useThreadStore.getState().activeThread?.projectId ?? null;
+  // A scratch thread's projectId is '' (no project): fall back like a missing one.
+  const activeThreadProjectId = useThreadStore.getState().activeThread?.projectId || null;
   return activeThreadProjectId ?? useProjectStore.getState().selectedProjectId;
 }
 
@@ -245,7 +246,7 @@ function activeOrSelectedThread(): { id: string; projectId: string } | null {
 
 function threadListPath(): string {
   const activeThread = activeOrSelectedThread();
-  const projectId = activeThread?.projectId ?? useProjectStore.getState().selectedProjectId;
+  const projectId = activeThread?.projectId || useProjectStore.getState().selectedProjectId;
   const params = new URLSearchParams();
   if (projectId) params.set('project', projectId);
   if (activeThread?.id && activeThread.projectId === projectId) {

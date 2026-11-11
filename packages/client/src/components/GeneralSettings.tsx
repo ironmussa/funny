@@ -16,6 +16,7 @@ import {
 } from '@/components/general-settings-project/project-section-rows';
 import { ProjectColorPicker } from '@/components/general-settings-project/ProjectColorPicker';
 import { ProjectPathSetting } from '@/components/general-settings-project/ProjectPathSetting';
+import { ProjectRedirectChecksSetting } from '@/components/general-settings-project/ProjectRedirectChecksSetting';
 import { ProjectSandboxSetting } from '@/components/general-settings-project/ProjectSandboxSetting';
 import {
   SegmentedControl,
@@ -174,6 +175,7 @@ export function GeneralSettings() {
                 ]}
               />
             </SettingRow>
+            <ProjectRedirectChecksSetting project={selectedProject} onSave={saveProject} />
             <SettingRow
               title={t('settings.projectDefaultModel', 'Default Model')}
               description={t(

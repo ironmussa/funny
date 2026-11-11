@@ -181,8 +181,10 @@ describe('Thread Routes (Integration)', () => {
         archived: true,
       });
       expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.archived).toBe(1);
+      // The column stays an integer; the response is the contract's boolean.
+      expect((await res.json()).archived).toBe(true);
+      const [row] = await t.db.select().from(t.schema.threads).where(eq(t.schema.threads.id, 't1'));
+      expect(row.archived).toBe(1);
     });
 
     test('pins a thread', async () => {
@@ -193,8 +195,7 @@ describe('Thread Routes (Integration)', () => {
         pinned: true,
       });
       expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.pinned).toBe(1);
+      expect((await res.json()).pinned).toBe(true);
     });
 
     test('updates stage', async () => {
@@ -1022,6 +1023,23 @@ describe('Thread Routes (Integration)', () => {
         toStage: 'archived',
         projectId: 'p1',
       });
+    });
+
+    test('unarchiving a thread whose stage is already "archived" emits no stage move', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, {
+        id: 't-stuck',
+        projectId: 'p1',
+        userId: 'user-1',
+        stage: 'archived',
+        archived: 1,
+      });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t-stuck', { archived: false });
+      expect(res.status).toBe(200);
+      // From "archived" to "archived" is not a move. (The repository keeps its
+      // own history row for the unarchive; this checks the route's event.)
+      expect(stageEvents()).toHaveLength(0);
     });
 
     test('unarchiving emits a transition back from "archived"', async () => {

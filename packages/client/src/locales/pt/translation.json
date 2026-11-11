@@ -636,6 +636,8 @@
     "fastModeDesc": "Usar o modo rápido do Claude (maior velocidade de saída, preço premium) por padrão para novos threads neste projeto",
     "fastModeOn": "Ativado",
     "fastModeOff": "Desativado",
+    "redirectChecks": "Executar checks com o funny",
+    "redirectChecksDesc": "Os agentes do Claude executam testes, typecheck e linters com a ferramenta de checks do funny em vez do Bash, para que o progresso apareça no thread. Vale para novos agentes do Claude neste projeto.",
     "terminalShell": "Shell do terminal",
     "terminalShellDesc": "Shell utilizado para o terminal integrado",
     "shellDefault": "Padrão (sistema)",
@@ -1531,5 +1533,9 @@
     "useProfileToken": "Usar meu token pessoal",
     "roleDedicated": "dedicado",
     "roleGeneral": "geral"
+  },
+  "checks": {
+    "run": "Executar checks: {{kind}}",
+    "starting": "Iniciando…"
   }
 }

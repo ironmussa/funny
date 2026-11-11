@@ -3,9 +3,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { createOutputParser, TEST_EVENT_PREFIX } from '../../packages/shared/src/checks';
 import { parseTestProgress } from '../../packages/shared/src/test-progress';
 import { discoverPackages, runTests } from '../run-tests';
-import { createOutputParser, ProgressFile, TEST_EVENT_PREFIX } from '../test-progress';
+import { ProgressFile } from '../test-progress';
 
 const feed = (lines: string[]) => {
   const parse = createOutputParser();
@@ -192,7 +193,7 @@ describe('runTests with a progress file', () => {
 
     expect(await runTests(discoverPackages(dir), dir, 1, path)).toBe(0);
     expect(readFileSync(args, 'utf8')).toMatch(
-      /^run --reporter=default --reporter=\S*vitest-progress-reporter\.ts --project unit/,
+      /^run --reporter=default --reporter=\S*vitest-progress-reporter\.mjs --project unit/,
     );
     expect(read(path).suites[0]).toMatchObject({ passed: 1, filesTotal: 2, filesDone: 1 });
   });

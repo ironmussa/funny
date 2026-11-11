@@ -15,6 +15,8 @@
     "./models": "./src/models.ts",
     "./test-progress": "./src/test-progress.ts",
     "./task-progress": "./src/task-progress.ts",
+    "./checks": "./src/checks/index.ts",
+    "./checks/progress-file": "./src/checks/progress-file.ts",
     "./attachments": "./src/attachments/index.ts",
     "./codex-commands": "./src/codex-commands.ts",
     "./provider-manifest": "./src/provider-manifest.ts",

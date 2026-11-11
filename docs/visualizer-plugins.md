@@ -17,6 +17,7 @@ A plugin can claim:
 
 - [Test progress](#test-progress)
 - [Task progress](#task-progress)
+- [Checks agents run (`funny_run_checks`)](#checks-agents-run-funny_run_checks)
 - [Security model](#security-model)
 - [Installing & managing plugins](#installing--managing-plugins)
 - [Creating a plugin](#creating-a-plugin)
@@ -115,6 +116,52 @@ per-project lines and the test runner's per-suite lines. The shape is
 `TaskProgress` in
 [`packages/shared/src/task-progress.ts`](../packages/shared/src/task-progress.ts),
 validated by `parseTaskProgress`.
+
+## Checks agents run (`funny_run_checks`)
+
+Agents do not need the fences or the env vars above: the `funny` MCP server
+gives every agent, whatever its provider, a `funny_run_checks` tool:
+
+```json
+{ "kind": "test", "scope": ["src/a.test.ts"], "filter": "parses dates" }
+```
+
+| Field        | Meaning                                                                                               |
+| ------------ | ----------------------------------------------------------------------------------------------------- |
+| `kind`       | `test`, `typecheck`, `lint`, `format` (rewrites files), `build` or `verify` (lint + typecheck + test) |
+| `scope`      | files, directories, packages or test patterns                                                         |
+| `filter`     | a test name (`-t` for vitest / jest / bun, `-k` for pytest, `-run` for go)                            |
+| `command`    | an exact command to run instead of the detected one; still followed when it is a check                |
+| `background` | run as a durable job and wake the agent with the summary when it ends                                 |
+
+funny picks the command in the thread's working directory: the project's own
+script for the kind (unless `scope` / `filter` need the tool itself), else the
+installed tool run with the lockfile's package manager (vitest, jest, bun test,
+playwright, tsc, oxlint, eslint, biome, oxfmt, prettier), else the language
+default (`pytest`, `ruff`, `mypy` through `uv run` / `poetry run`; `cargo`;
+`go`). In this repository `test` runs `bun run test` and the other kinds
+`bun run steps <kind>`. Each run writes a test-progress or task-progress file
+under the user's previewable-assets dir (`checks/<runId>.json`) and announces it
+with an `agent:check_run` event, keyed by the tool input (`checkInputKey` in
+`@funny/shared/checks`) so the thread can show the run while the call is still
+going. The agent gets a summary instead of the log: totals, up to 20 failures
+as `file:line message`, the output tail only when a failure reported none, and
+`progressPath`. A synchronous run is stopped after 30 minutes; longer runs need
+`background: true`.
+
+In the thread, a `funny_run_checks` call is its widget: it follows the run while
+the call is going and shows the final state (or, if the file is gone, the
+summary) afterwards. A check the agent ran through Bash instead, with any
+provider, gets the same widget built from its output when the output proves the
+result (a runner's final summary, an issue, an exit code); a truncated log
+stays a plain Bash card. For Claude, a Bash call that is only a check is
+redirected to the tool (Settings > General > "Run checks through funny", on by
+default).
+
+Code: the detection and parsers in
+[`packages/shared/src/checks/`](../packages/shared/src/checks/), the tool and
+runner in
+[`packages/runtime/src/services/checks/`](../packages/runtime/src/services/checks/).
 
 ---
 

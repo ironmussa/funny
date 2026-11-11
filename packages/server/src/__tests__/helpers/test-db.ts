@@ -25,6 +25,7 @@ export function createTestDb() {
       color TEXT,
       follow_up_mode TEXT NOT NULL DEFAULT 'interrupt',
       fast_mode INTEGER NOT NULL DEFAULT 0,
+      redirect_checks INTEGER NOT NULL DEFAULT 1,
       default_provider TEXT,
       default_model TEXT,
       default_effort TEXT,

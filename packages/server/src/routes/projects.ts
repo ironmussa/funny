@@ -53,6 +53,7 @@ const updateProjectBodySchema = z.object({
   defaultAgentTemplateId: z.string().nullable().optional(),
   closed: z.boolean().optional(),
   fastMode: z.boolean().optional(),
+  redirectChecks: z.boolean().optional(),
 });
 
 const reorderProjectsBodySchema = z.object({

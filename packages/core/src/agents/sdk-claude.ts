@@ -12,12 +12,34 @@ import { scrubSensitiveEnv } from '@funny/shared/lib/child-env';
 
 import { createDebugLogger } from '../debug.js';
 import { BaseAgentProcess } from './base-process.js';
+import { checkRedirectReason } from './check-redirect.js';
 import { toContextBreakdown } from './context-breakdown.js';
 import type { IAgentProcess } from './interfaces.js';
 import { resolveSDKCli } from './resolve-sdk-cli.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 const dlog = createDebugLogger('sdk');
+
+const SENSITIVE_PATH_TOOLS = new Set(['Bash', 'Edit', 'Write', 'NotebookEdit', 'Read']);
+const SENSITIVE_PATH_PATTERNS = [/(?:^|[^A-Za-z0-9_])\.claude(?:[/\s'"`]|$)/, /\.config\/claude/];
+
+/** The paths (or Bash command) a tool call touches. */
+function pathTargets(tool: string, ti: any): string[] {
+  if (!ti || typeof ti !== 'object') return [];
+  if (tool === 'Bash' && typeof ti.command === 'string') return [ti.command];
+  const out: string[] = [];
+  if (typeof ti.file_path === 'string') out.push(ti.file_path);
+  if (typeof ti.notebook_path === 'string') out.push(ti.notebook_path);
+  return out;
+}
+
+/** Whether a tool call touches Claude's own config (`.claude`, `.config/claude`). */
+function touchesSensitivePath(toolName: string, toolInput: unknown): boolean {
+  if (!SENSITIVE_PATH_TOOLS.has(toolName)) return false;
+  return pathTargets(toolName, toolInput).some((target) =>
+    SENSITIVE_PATH_PATTERNS.some((rx) => rx.test(target)),
+  );
+}
 
 /**
  * MCP servers whose tools must go through the thread's permission mode instead
@@ -582,6 +604,56 @@ export class SDKClaudeProcess extends BaseAgentProcess {
 
   // ── PreToolUse hook ─────────────────────────────────────────────
 
+  /**
+   * AskUserQuestion / ExitPlanMode: hold the hook until the process is killed.
+   * The message handler already sets the thread to "waiting" when it sees the
+   * tool_use block. When the user answers, AgentRunner kills this process and
+   * starts a new one with session resume.
+   */
+  private holdUntilResumed(toolName: string, input: any, signal: AbortSignal): Promise<any> {
+    dlog.info(`preToolUseHook PAUSING for ${toolName}`, {
+      toolName,
+      alreadyAborted: signal.aborted,
+      inputKeys: Object.keys(input),
+    });
+    return new Promise<any>((resolve) => {
+      const onAbort = () => {
+        dlog.info(`preToolUseHook RESUMED (abort signal) for ${toolName}`, { toolName });
+        resolve({
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'deny',
+            permissionDecisionReason: 'Session will resume with user input',
+          },
+        });
+      };
+      if (signal.aborted) {
+        onAbort();
+      } else {
+        signal.addEventListener('abort', onAbort, { once: true });
+      }
+    });
+  }
+
+  /** The deny that points a plain check command at funny_run_checks, or null. */
+  private checkRedirect(toolName: string, toolInput: unknown): object | null {
+    if (!this.options.redirectChecks || toolName !== 'Bash') return null;
+    const command = (toolInput as { command?: unknown } | undefined)?.command;
+    const reason = typeof command === 'string' ? checkRedirectReason(command) : null;
+    if (!reason) return null;
+    dlog.info('preToolUseHook REDIRECT check to funny_run_checks', {
+      cwd: this.options.cwd,
+      command: command as string,
+    });
+    return {
+      hookSpecificOutput: {
+        hookEventName: 'PreToolUse',
+        permissionDecision: 'deny',
+        permissionDecisionReason: reason,
+      },
+    };
+  }
+
   private async preToolUseHook(
     input: any,
     _toolUseID: string | undefined,
@@ -594,29 +666,13 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // when it sees the tool_use block. When the user answers, AgentRunner
     // kills this process and starts a new one with session resume.
     if (toolName === 'AskUserQuestion' || toolName === 'ExitPlanMode') {
-      dlog.info(`preToolUseHook PAUSING for ${toolName}`, {
-        toolName,
-        alreadyAborted: signal.aborted,
-        inputKeys: Object.keys(input),
-      });
-      return new Promise<any>((resolve) => {
-        const onAbort = () => {
-          dlog.info(`preToolUseHook RESUMED (abort signal) for ${toolName}`, { toolName });
-          resolve({
-            hookSpecificOutput: {
-              hookEventName: 'PreToolUse',
-              permissionDecision: 'deny',
-              permissionDecisionReason: 'Session will resume with user input',
-            },
-          });
-        };
-        if (signal.aborted) {
-          onAbort();
-        } else {
-          signal.addEventListener('abort', onAbort, { once: true });
-        }
-      });
+      return this.holdUntilResumed(toolName, input, signal);
     }
+
+    // A Bash call that is only a check goes through funny_run_checks instead,
+    // so the thread shows its progress (project setting, on by default).
+    const redirect = this.checkRedirect(toolName, input.tool_input);
+    if (redirect) return redirect;
 
     // File-editing tools in confirmEdit mode: pause until user approves.
     // Same pattern as AskUserQuestion — hold the hook, the message handler
@@ -643,24 +699,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
 
     // Sensitive-path detection — used by both the persisted-rule lookup
     // (for the bypass executor) and the regular sensitive-path guard below.
-    const SENSITIVE_PATH_TOOLS = new Set(['Bash', 'Edit', 'Write', 'NotebookEdit', 'Read']);
-    const SENSITIVE_PATH_PATTERNS = [
-      /(?:^|[^A-Za-z0-9_])\.claude(?:[/\s'"`]|$)/,
-      /\.config\/claude/,
-    ];
-    const collectPathTargets = (tool: string, ti: any): string[] => {
-      if (!ti || typeof ti !== 'object') return [];
-      if (tool === 'Bash' && typeof ti.command === 'string') return [ti.command];
-      const out: string[] = [];
-      if (typeof ti.file_path === 'string') out.push(ti.file_path);
-      if (typeof ti.notebook_path === 'string') out.push(ti.notebook_path);
-      return out;
-    };
-    const touchesSensitive =
-      SENSITIVE_PATH_TOOLS.has(toolName) &&
-      collectPathTargets(toolName, input.tool_input).some((t) =>
-        SENSITIVE_PATH_PATTERNS.some((rx) => rx.test(t)),
-      );
+    const touchesSensitive = touchesSensitivePath(toolName, input.tool_input);
 
     // Consult persisted "always allow / always deny" rules first. The
     // runtime injects this lookup; in tests / standalone runs it may be

@@ -164,6 +164,11 @@ export interface ClaudeProcessOptions {
   /** Enable Claude fast mode (higher output speed at premium pricing). Claude SDK only. */
   fastMode?: boolean;
   /**
+   * Deny a Bash call that is only a check (`npx vitest`, `tsc`, `bun run lint`)
+   * and point the agent at `mcp__funny__funny_run_checks`. Claude SDK only.
+   */
+  redirectChecks?: boolean;
+  /**
    * Run the Claude SDK process in persistent streaming-input mode so the live
    * turn can be steered (interrupted + redirected) or warm-continued without a
    * respawn. Set when the thread's followUpMode === 'steer'. Claude SDK only.

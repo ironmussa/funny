@@ -113,6 +113,16 @@ describe('project-repository', () => {
       expect(updated!.fastMode).toBe(1);
     });
 
+    test('redirect_checks defaults to 1 (on)', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      const row = testDb.db
+        .select()
+        .from(testDb.schema.projects)
+        .where(eq(testDb.schema.projects.id, 'p1'))
+        .get();
+      expect(row!.redirectChecks).toBe(1);
+    });
+
     test('delete a project', () => {
       seedProject(testDb.db, { id: 'p1' });
 

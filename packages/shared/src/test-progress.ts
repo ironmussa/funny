@@ -29,6 +29,17 @@ const slowEntrySchema = z.object({
   durationMs: z.number(),
 });
 
+/** A test that failed, with where and why when the runner printed it. */
+const failureSchema = z.object({
+  name: z.string(),
+  file: z.string().optional(),
+  line: z.number().int().optional(),
+  message: z.string().optional(),
+});
+
+/** Failures kept per suite; `failed` stays the exact count. */
+export const TEST_FAILURE_LIMIT = 50;
+
 /** Files and tests at least this slow are listed for monitoring. */
 export const SLOW_TEST_MS = 10_000;
 
@@ -51,6 +62,8 @@ const testProgressSuiteSchema = z.object({
   running: z.array(runningFileSchema).default([]),
   /** Slowest first. */
   slow: z.array(slowEntrySchema).default([]),
+  /** In the order they were reported, at most `TEST_FAILURE_LIMIT`. */
+  failures: z.array(failureSchema).default([]),
 });
 
 /** Run-level fields every live progress file has (`test-progress`, `task-progress`). */
@@ -74,6 +87,7 @@ export type TestProgress = z.infer<typeof testProgressSchema>;
 export type TestProgressSuite = z.infer<typeof testProgressSuiteSchema>;
 export type TestProgressSuiteStatus = z.infer<typeof suiteStatus>;
 export type TestProgressSlowEntry = z.infer<typeof slowEntrySchema>;
+export type TestFailure = z.infer<typeof failureSchema>;
 
 export function parseTestProgress(raw: string): JsonValidationResult<TestProgress> {
   return parseStoredJson(testProgressSchema, raw, 'test progress');

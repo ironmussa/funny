@@ -6,7 +6,7 @@
  * @domain depends: AgentWatcherManager
  *
  * The `funny` MCP server (`funny_watch`, `funny_spawn`, `funny_spawn_thread`,
- * `funny_search_threads`), served to every agent over loopback HTTP
+ * `funny_search_threads`, `funny_run_checks`), served to every agent over loopback HTTP
  * (`agent-mcp-http.ts`) whatever its provider.
  *
  * `funny_watch` is the SOLE creation path for a watcher (a deferred-wake
@@ -28,6 +28,7 @@ import type {
   AgentToolDefinition,
 } from './agent-mcp-http.js';
 import { createOrReschedule } from './agent-watcher-manager.js';
+import { CHECK_INSTRUCTIONS, checkToolDefinition } from './checks/check-tool.js';
 import { getThread } from './thread-manager.js';
 import { createAndStartThread } from './thread-service/create.js';
 
@@ -51,7 +52,8 @@ const WATCH_INSTRUCTIONS =
   "author, and/or time range. funny's chat renders fenced " +
   '```mermaid blocks as diagrams — use one when a diagram explains better ' +
   'than prose. Other diagram languages render only if the user installed a ' +
-  'visualizer for them.';
+  'visualizer for them. ' +
+  CHECK_INSTRUCTIONS;
 
 /** Args the model supplies to `funny_spawn_thread`. */
 export interface SpawnThreadArgs {
@@ -360,6 +362,7 @@ export function watchToolDefinitions(ctx: AgentToolContext): AgentToolDefinition
         };
       },
     },
+    checkToolDefinition(threadId, userId),
   ];
   return ctx.nativeBackgroundJobs ? tools.filter((tool) => tool.name !== 'funny_spawn') : tools;
 }

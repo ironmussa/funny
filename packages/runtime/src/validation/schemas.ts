@@ -193,6 +193,7 @@ export const updateProjectSchema = z
       .optional(),
     followUpMode: followUpModeSchema.optional(),
     fastMode: z.boolean().optional(),
+    redirectChecks: z.boolean().optional(),
     defaultProvider: agentProviderSchema.nullable().optional(),
     defaultModel: agentModelSchema.nullable().optional(),
     defaultMode: threadModeSchema.nullable().optional(),

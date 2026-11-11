@@ -1,5 +1,6 @@
 import type { TestProgress, TestProgressSuite } from '@funny/shared/test-progress';
 import { Loader2, Timer } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -162,7 +163,7 @@ function RunHeader({ progress, now, t }: { progress: TestProgress; now: number; 
   );
 }
 
-function TestProgressView({ progress }: { progress: TestProgress }) {
+export function TestProgressView({ progress }: { progress: TestProgress }) {
   const { t } = useTranslation();
   const now = useNow(progress.status === 'running');
   const summary = summarizeTestProgress(progress, now);
@@ -208,8 +209,16 @@ function TestProgressView({ progress }: { progress: TestProgress }) {
 }
 
 /** Follows the progress file at `path` and renders it. */
-export function TestProgressBlock({ path }: { path: string | null }) {
+export function TestProgressBlock({
+  path,
+  fallback,
+}: {
+  path: string | null;
+  /** Shown instead of the error when the file cannot be read (e.g. it was cleaned up). */
+  fallback?: ReactNode;
+}) {
   const state = useTestProgress(path);
   if (state.kind === 'ready') return <TestProgressView progress={state.progress} />;
+  if (state.kind === 'error' && fallback) return fallback;
   return <ProgressFileFallback kind={state.kind} path={path} testIdPrefix="test-progress" />;
 }

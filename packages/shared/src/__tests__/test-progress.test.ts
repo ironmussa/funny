@@ -22,6 +22,7 @@ describe('parseTestProgress', () => {
       skipped: 0,
       running: [],
       slow: [],
+      failures: [],
     });
   });
 

@@ -166,3 +166,19 @@ describe('funny_search_threads', () => {
     expect(res.content[0].text).toContain('No matching messages');
   });
 });
+
+describe('funny_run_checks registration', () => {
+  test('is on the funny server for every provider, and its instructions point agents at it', async () => {
+    const { FUNNY_MCP_SERVER } = await import('../../services/agent-watch-tool.js');
+    for (const nativeBackgroundJobs of [true, false]) {
+      const names = watchToolDefinitions({
+        threadId: PARENT_THREAD,
+        userId: USER,
+        nativeBackgroundJobs,
+      }).map((tool) => tool.name);
+      expect(names).toContain('funny_run_checks');
+    }
+    expect(FUNNY_MCP_SERVER.alwaysLoad).toBe(true);
+    expect(FUNNY_MCP_SERVER.instructions).toContain('mcp__funny__funny_run_checks instead of Bash');
+  });
+});

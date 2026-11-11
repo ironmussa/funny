@@ -266,11 +266,11 @@ functions and UI rendering do not need Effect wrappers.
 
 A route group with a contract declares each endpoint once in `packages/shared/src/contracts/<group>.ts`: method, path (relative to the router mount), zod schemas for query and body, and the response type (`endpointGroup('/automations').endpoint<Automation>()({ method: 'GET', path: '/:id' })`). Both sides use that object:
 
-- **Server:** register with `serveEndpoint(router, endpoint, handler)` from `packages/server/src/validation/endpoint.ts`. It takes the method and path from the endpoint, refuses 401 without a user, validates query and body (400 `{ error }`), and requires the handler to return `reply(body)` / `fail(status, error)` with the declared response type. Map DB rows to the contract type in the route (integers to booleans, `null` to absent); never return a raw drizzle row.
+- **Server:** register with `serveEndpoint(router, endpoint, handler)` from `packages/server/src/validation/endpoint.ts`. It takes the method and path from the endpoint, refuses 401 without a user, runs `options.middleware` (e.g. `requireThreadOwner`, so a missing resource answers 404 before a bad body answers 400), validates query and body (400 `{ error }`), and requires the handler to return `reply(body)` / `fail(status, error)` with the declared response type. Map DB rows to the contract type in the route (integers to booleans, `null` to absent); never return a raw drizzle row.
 - **Client:** call with `callEndpoint(endpoint, { params, query, body })` from `packages/client/src/lib/api/_contract.ts`. It goes through `request()`, so auth, telemetry and the circuit breaker still apply.
 - **Request types** come from the schemas (`z.input<typeof schema>`), not from a separate interface, so they cannot claim fields the server does not accept.
 
-`/api/automations` is the first group on contracts; the rest still use `request<T>(path)`, whose `T` is unchecked. Move a group over when you touch it. Hono RPC (`hono/client`) was rejected because importing the server's route types pulls Bun-only modules into the client typecheck.
+`/api/automations` and the server-answered `/api/threads` routes (lists, detail, field updates; `lib/thread-response.ts` maps the rows) are on contracts. Thread creation and fork answer with the row the runner persisted, read back from the server DB (`createdThreadResponse` in `routes/threads.ts`); the other runner-proxied thread routes are not on contracts, since their responses come from the runner. The rest still use `request<T>(path)`, whose `T` is unchecked. Move a group over when you touch it. Hono RPC (`hono/client`) was rejected because importing the server's route types pulls Bun-only modules into the client typecheck.
 
 ### Error Handling with `neverthrow`
 

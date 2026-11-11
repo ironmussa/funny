@@ -13,6 +13,7 @@
     },
     "./errors": "./src/errors.ts",
     "./models": "./src/models.ts",
+    "./test-progress": "./src/test-progress.ts",
     "./attachments": "./src/attachments/index.ts",
     "./codex-commands": "./src/codex-commands.ts",
     "./provider-manifest": "./src/provider-manifest.ts",

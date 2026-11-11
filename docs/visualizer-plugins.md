@@ -2,8 +2,9 @@
 
 Visualizer plugins extend how funny renders content — they turn a fenced code
 block or a file preview into a rich, interactive view. funny ships **Mermaid**
-(diagrams), **CSV** (tables), **video** (`.mp4`/`.webm`/`.mov`/`.mkv`) and
-**image** (`.png`/`.jpg`/`.gif`/`.webp`/`.svg`/…) as built-ins — video and image
+(diagrams), **CSV** (tables), [**test progress**](#test-progress) (a live
+widget for test runs), **video** (`.mp4`/`.webm`/`.mov`/`.mkv`) and **image**
+(`.png`/`.jpg`/`.gif`/`.webp`/`.svg`/…) as built-ins — video and image
 being the reference [binary visualizers](#binary-visualizers) — built on the
 exact same contract a third-party plugin uses, so anything a built-in does, your
 plugin can too. Heavier / more niche renderers (e.g. DBML) ship as installable
@@ -14,11 +15,68 @@ A plugin can claim:
 - **fenced code languages** — e.g. a ` ```csv ` block renders as a table, and
 - **file extensions** — e.g. opening a `.csv` file shows a table preview.
 
+- [Test progress](#test-progress)
 - [Security model](#security-model)
 - [Installing & managing plugins](#installing--managing-plugins)
 - [Creating a plugin](#creating-a-plugin)
 - [How it works under the hood](#how-it-works-under-the-hood)
 - [Troubleshooting](#troubleshooting)
+
+---
+
+## Test progress
+
+The built-in ` ```test-progress ` visualizer follows a test run while it
+happens: a progress bar over the suites, tests passed / failed / skipped, the
+elapsed time, and one row per suite with its time and the test it reported
+last. The fence names a JSON file the test runner rewrites as it goes:
+
+````md
+```test-progress
+{ "path": "/tmp/funny-<userId>/test-progress.json" }
+```
+````
+
+The block re-reads the file every second through the open thread's runner
+(`/api/files/read`, so the path must be inside the project or the agent's
+`FUNNY_ASSETS_DIR`) and stops once the run has finished.
+
+funny's own test runner (`scripts/run-tests.ts`, also behind the pre-push
+hook) writes it when `FUNNY_TEST_PROGRESS` names the file:
+
+```bash
+FUNNY_TEST_PROGRESS="$FUNNY_ASSETS_DIR/test-progress.json" bun run test
+```
+
+It understands vitest, `bun test` and `cargo test` output. Any other tool can
+write the same shape — `TestProgress` in
+[`packages/shared/src/test-progress.ts`](../packages/shared/src/test-progress.ts),
+validated by `parseTestProgress`:
+
+```json
+{
+  "version": 1,
+  "status": "running",
+  "startedAt": 1762740000000,
+  "updatedAt": 1762740012000,
+  "suites": [
+    {
+      "name": "@funny/client",
+      "status": "running",
+      "related": true,
+      "startedAt": 1762740001000,
+      "passed": 120,
+      "failed": 0,
+      "skipped": 2,
+      "current": "src/__tests__/lib/thread-utils.test.ts"
+    }
+  ]
+}
+```
+
+`status` is `running` | `passed` | `failed` for the run, plus `queued` for a
+suite; times are epoch milliseconds. Replace the file atomically (write, then
+rename) so a read never sees half of it.
 
 ---
 

@@ -3,7 +3,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { discoverPackages, planTests, runTests, selectAffectedPackages } from '../run-tests';
+import {
+  discoverPackages,
+  planTests,
+  runTests,
+  selectAffectedPackages,
+  workersPerSuite,
+} from '../run-tests';
 
 let root: string;
 
@@ -144,6 +150,18 @@ describe('planTests', () => {
   });
 });
 
+describe('workersPerSuite', () => {
+  test('splits the cores between the suites running at once', () => {
+    expect(workersPerSuite(4, 20)).toBe(5);
+    expect(workersPerSuite(3, 8)).toBe(2);
+    expect(workersPerSuite(4, 2)).toBe(1);
+  });
+
+  test('leaves a suite running alone to vitest', () => {
+    expect(workersPerSuite(1, 20)).toBeUndefined();
+  });
+});
+
 describe('runTests', () => {
   test('passes when every suite passes and fails when any suite fails', async () => {
     pkg('broken', '@x/broken', {}, 'exit 3');
@@ -168,6 +186,23 @@ describe('runTests', () => {
       peak = Math.max(peak, running);
     }
     expect(peak).toBe(2);
+  });
+
+  test('caps a vitest suite to its share of the cores when suites run side by side', async () => {
+    mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+    const log = join(root, 'vitest-args');
+    writeFileSync(
+      join(root, 'node_modules', '.bin', 'vitest'),
+      `#!/bin/sh\necho "$@" > '${log}'\n`,
+      {
+        mode: 0o755,
+      },
+    );
+    pkg('web', '@x/web', {}, 'vitest run --project unit');
+    const suites = discoverPackages(root).filter((p) => ['@x/web', '@x/shared'].includes(p.name));
+
+    expect(await runTests(suites, root, 2)).toBe(0);
+    expect(await Bun.file(log).text()).toMatch(/^run --maxWorkers=\d+ --project unit/);
   });
 
   test('a related run replaces `vitest run` with `vitest related` and passes the files', async () => {

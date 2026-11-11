@@ -1441,6 +1441,29 @@
     "connectingBrowser": "Connecting to browser...",
     "outputPlaceholder": "Test output will appear here..."
   },
+  "testProgress": {
+    "related": "related",
+    "suites": "{{done}}/{{total}} suites",
+    "passed": "{{count}} passed",
+    "failed": "{{count}} failed",
+    "skipped": "{{count}} skipped",
+    "runners": "{{count}} running (max {{max}})",
+    "runnersNoMax": "{{count}} running",
+    "files": "{{done}}/{{total}} files",
+    "more": "+{{count}} more",
+    "slowTitle": "Slow (10 s or more)",
+    "status": {
+      "queued": "Queued",
+      "running": "Running tests",
+      "passed": "Tests passed",
+      "failed": "Tests failed"
+    }
+  },
+  "progressFile": {
+    "loading": "Loading progress…",
+    "unreadable": "Could not read progress from {{path}}",
+    "invalidFence": "A progress block needs { \"path\": \"/absolute/path.json\" }"
+  },
   "errors": {
     "generic": {
       "NOT_FOUND": "The requested resource was not found.",

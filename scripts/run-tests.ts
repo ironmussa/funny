@@ -10,9 +10,12 @@
 // suite and those of the packages depending on it. CI still runs everything.
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
 
+import { pumpLines } from './progress-io';
 import { testSuiteEnv } from './test-env';
+import { createOutputParser, isEventLine, ProgressFile } from './test-progress';
 
 export interface TestPackage {
   name: string;
@@ -47,7 +50,7 @@ const ROOT = join(import.meta.dir, '..');
  * manifests and configs, shared protocol fixtures, and the test runner itself.
  */
 const GLOBAL_INPUT =
-  /^(package\.json|bun\.lockb?|bunfig\.toml|tsconfig[^/]*\.json|\.node-version|\.nvmrc|protocol\/.*|scripts\/(run-tests|test-env|pre-push|lockfile-changes)\.ts)$/;
+  /^(package\.json|bun\.lockb?|bunfig\.toml|tsconfig[^/]*\.json|\.node-version|\.nvmrc|protocol\/.*|scripts\/(run-tests|test-env|test-progress|pre-push|lockfile-changes)\.ts)$/;
 
 /**
  * Root dependency files. When the caller has worked out which external
@@ -201,15 +204,53 @@ export function selectAffectedPackages(
 
 const shellQuote = (arg: string) => `'${arg.replaceAll("'", `'\\''`)}'`;
 
-/** The command for a run: the package's `test` script, narrowed for `related`. */
-function testCommand(run: TestRun): string[] {
-  if (!run.related) return ['bun', 'run', 'test'];
-  const script = run.pkg.testScript!.replace(VITEST_RUN, 'vitest related --run --passWithNoTests');
-  return ['sh', '-c', [script, ...run.related.map(shellQuote)].join(' ')];
+const PROGRESS_REPORTER = join(import.meta.dir, 'vitest-progress-reporter.ts');
+
+interface CommandOptions {
+  /** Add the progress reporter to a vitest suite's default one. */
+  progress?: boolean;
+  /** Cap a vitest suite's workers (`--maxWorkers`). */
+  maxWorkers?: number;
+}
+
+/** vitest flags for `options`, or an empty string. */
+function vitestFlags({ progress, maxWorkers }: CommandOptions): string {
+  const flags = [
+    progress && `--reporter=default --reporter=${shellQuote(PROGRESS_REPORTER)}`,
+    maxWorkers && `--maxWorkers=${maxWorkers}`,
+  ];
+  return flags.filter(Boolean).join(' ');
+}
+
+/**
+ * The command for a run: the package's `test` script, narrowed for `related`,
+ * with the vitest flags `options` asks for added to a vitest suite.
+ */
+function testCommand(run: TestRun, options: CommandOptions = {}): string[] {
+  const script = run.pkg.testScript ?? '';
+  const flags = VITEST_RUN.test(script) ? vitestFlags(options) : '';
+  if (!run.related && !flags) return ['bun', 'run', 'test'];
+  let command = run.related
+    ? script.replace(VITEST_RUN, 'vitest related --run --passWithNoTests')
+    : script;
+  if (flags) command = command.replace(/\bvitest (run|related)\b/, (match) => `${match} ${flags}`);
+  return ['sh', '-c', [command, ...(run.related ?? []).map(shellQuote)].join(' ')];
 }
 
 /** Suites run at once; `FUNNY_TEST_CONCURRENCY` overrides it. */
 export const DEFAULT_CONCURRENCY = 4;
+
+/**
+ * Workers for each vitest suite when `concurrency` suites run at once: an equal
+ * share of the cores. Left to vitest (about one per core) a suite oversubscribes
+ * the machine next to the others, and every file then pays more for its jsdom
+ * environment and imports: on 20 cores, 60 client test files took 117 s with
+ * vitest's default and 94 s with 4 workers. Undefined (vitest's default) when
+ * suites run one at a time.
+ */
+export function workersPerSuite(concurrency: number, cores = availableParallelism()) {
+  return concurrency > 1 ? Math.max(1, Math.floor(cores / concurrency)) : undefined;
+}
 
 function concurrencyFrom(env: Record<string, string | undefined>): number {
   const value = Number(env.FUNNY_TEST_CONCURRENCY);
@@ -219,10 +260,22 @@ function concurrencyFrom(env: Record<string, string | undefined>): number {
 const label = (run: TestRun) => `${run.pkg.name}${run.related ? ' (related tests)' : ''}`;
 
 /**
- * Runs one suite. With `buffered`, its output is collected and printed in one
- * block when it ends, so suites running side by side do not interleave.
+ * Runs one suite, handing every output line to `onLine` (and, when `onLine` is
+ * given, adding the progress reporter to a vitest suite), with a vitest suite's
+ * workers capped at `maxWorkers`. With `buffered`, its
+ * output is collected and printed in one block when it ends, so suites running
+ * side by side do not interleave; otherwise it streams through. Reporter event
+ * lines are never printed.
  */
-async function runPackageTests(run: TestRun, root: string, buffered: boolean): Promise<TestResult> {
+async function runPackageTests(
+  run: TestRun,
+  root: string,
+  {
+    buffered,
+    onLine,
+    maxWorkers,
+  }: { buffered: boolean; onLine?: (line: string) => void; maxWorkers?: number },
+): Promise<TestResult> {
   const { pkg } = run;
   const start = performance.now();
   console.log(buffered ? `▶ ${label(run)}` : `\n=== ${label(run)} ===`);
@@ -230,24 +283,30 @@ async function runPackageTests(run: TestRun, root: string, buffered: boolean): P
   const env = testSuiteEnv(process.env);
   // `sh -c` does not get the bin dirs `bun run` adds to PATH.
   const bins = [join(root, pkg.dir, 'node_modules', '.bin'), join(root, 'node_modules', '.bin')];
-  const proc = Bun.spawn(testCommand(run), {
+  const proc = Bun.spawn(testCommand(run, { progress: Boolean(onLine), maxWorkers }), {
     cwd: join(root, pkg.dir),
     env: { ...env, PATH: [...bins, env.PATH].filter(Boolean).join(':') },
-    stdout: buffered ? 'pipe' : 'inherit',
-    stderr: buffered ? 'pipe' : 'inherit',
+    stdout: 'pipe',
+    stderr: 'pipe',
     stdin: buffered ? 'ignore' : 'inherit',
   });
-  const [output, code] = await Promise.all([
-    buffered
-      ? Promise.all([new Response(proc.stdout).text(), new Response(proc.stderr).text()])
-      : null,
+  let output = '';
+  const sink = (target: NodeJS.WriteStream) => (line: string) => {
+    onLine?.(line);
+    if (isEventLine(line)) return;
+    if (buffered) output += `${line}\n`;
+    else target.write(`${line}\n`);
+  };
+  const [code] = await Promise.all([
     proc.exited,
+    pumpLines(proc.stdout, sink(process.stdout)),
+    pumpLines(proc.stderr, sink(process.stderr)),
   ]);
   const durationMs = performance.now() - start;
 
-  if (output) {
+  if (buffered) {
     const seconds = (durationMs / 1000).toFixed(1);
-    console.log(`\n=== ${label(run)} ===\n${output[0]}${output[1]}`);
+    console.log(`\n=== ${label(run)} ===\n${output}`);
     console.log(`${code === 0 ? '✓' : '✗'} ${label(run)} ${seconds}s`);
   }
   return { ...pkg, related: Boolean(run.related), code, durationMs };
@@ -265,27 +324,44 @@ function printSummary(results: readonly TestResult[]): void {
 
 /**
  * Runs the suites, up to `concurrency` at once, and prints a summary in input
- * order; resolves to the exit code. A bare package runs its whole suite.
+ * order; resolves to the exit code. A bare package runs its whole suite. With
+ * `progressPath` (`FUNNY_TEST_PROGRESS`), live progress is written there for
+ * the client's `test-progress` visualizer.
  */
 export async function runTests(
   runs: readonly (TestPackage | TestRun)[],
   root = ROOT,
   concurrency = concurrencyFrom(process.env),
+  progressPath = process.env.FUNNY_TEST_PROGRESS,
 ): Promise<number> {
   const queue = runs.map((run) => ('pkg' in run ? run : { pkg: run, related: null }));
   const results: TestResult[] = new Array(queue.length);
   const buffered = concurrency > 1 && queue.length > 1;
+  const maxWorkers = workersPerSuite(Math.min(concurrency, queue.length));
+  const progress = progressPath
+    ? new ProgressFile(
+        progressPath,
+        queue.map((run) => ({ name: run.pkg.name, related: Boolean(run.related) })),
+        { concurrency },
+      )
+    : null;
   let next = 0;
   const worker = async () => {
     while (next < queue.length) {
       const index = next++;
-      results[index] = await runPackageTests(queue[index], root, buffered);
+      const parse = createOutputParser();
+      progress?.start(index);
+      const onLine = progress ? (line: string) => progress.report(index, parse(line)) : undefined;
+      const result = await runPackageTests(queue[index], root, { buffered, onLine, maxWorkers });
+      progress?.finish(index, result.code, result.durationMs);
+      results[index] = result;
     }
   };
   await Promise.all(Array.from({ length: Math.min(concurrency, queue.length) }, worker));
   printSummary(results);
 
   const failed = results.filter((result) => result.code !== 0);
+  progress?.close(failed.length);
   if (failed.length === 0) return 0;
   console.error(`\n${failed.length} package test suite(s) failed.`);
   return 1;

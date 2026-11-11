@@ -1434,6 +1434,29 @@
     "connectingBrowser": "Conectando al navegador...",
     "outputPlaceholder": "La salida de la prueba aparecerá aquí..."
   },
+  "testProgress": {
+    "related": "relacionadas",
+    "suites": "{{done}}/{{total}} suites",
+    "passed": "{{count}} pasaron",
+    "failed": "{{count}} fallaron",
+    "skipped": "{{count}} omitidas",
+    "runners": "{{count}} en ejecución (máx. {{max}})",
+    "runnersNoMax": "{{count}} en ejecución",
+    "files": "{{done}}/{{total}} archivos",
+    "more": "+{{count}} más",
+    "slowTitle": "Lentas (10 s o más)",
+    "status": {
+      "queued": "En cola",
+      "running": "Ejecutando pruebas",
+      "passed": "Pruebas superadas",
+      "failed": "Pruebas fallidas"
+    }
+  },
+  "progressFile": {
+    "loading": "Cargando el progreso…",
+    "unreadable": "No se pudo leer el progreso en {{path}}",
+    "invalidFence": "Un bloque de progreso necesita { \"path\": \"/ruta/absoluta.json\" }"
+  },
   "errors": {
     "generic": {
       "NOT_FOUND": "No se encontró el recurso solicitado.",

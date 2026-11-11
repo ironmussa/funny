@@ -427,6 +427,7 @@ export interface ProjectUpdateFields {
   color?: string | null;
   followUpMode?: string;
   fastMode?: boolean;
+  redirectChecks?: boolean;
   defaultProvider?: string | null;
   defaultModel?: string | null;
   defaultEffort?: string | null;
@@ -448,6 +449,11 @@ export interface Project {
   followUpMode?: FollowUpMode;
   /** Per-project default for Claude fast mode (speed). New threads inherit it. */
   fastMode?: boolean;
+  /**
+   * Claude agents are told to use `funny_run_checks` when they run a plain
+   * check (`npx vitest`, `tsc`, …) through Bash. Absent means on.
+   */
+  redirectChecks?: boolean;
   defaultProvider?: AgentProvider;
   defaultModel?: AgentModel;
   /** Per-project reasoning level used for new threads when the selected model supports it. */

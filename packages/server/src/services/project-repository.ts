@@ -15,10 +15,12 @@ import {
 } from '@funny/core/git/path-validation';
 import type { Project, FollowUpMode, ProjectUpdateFields } from '@funny/shared';
 import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
 import { eq, and, asc, inArray, notInArray, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { ok, err, type Result } from 'neverthrow';
+import { z } from 'zod';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
@@ -57,50 +59,44 @@ function validateProjectPath(rawPath: string, skipFsCheck: boolean): DomainError
   return containment.isErr() ? containment.error : null;
 }
 
+/** Optional project settings stored as-is; absent (null) means "not set". */
+const OPTIONAL_FIELDS = [
+  'color',
+  'defaultProvider',
+  'defaultModel',
+  'defaultEffort',
+  'defaultMode',
+  'defaultPermissionMode',
+  'defaultBranch',
+  'defaultAgentTemplateId',
+  'systemPrompt',
+  'launcherUrl',
+] as const;
+
+/** 0/1 columns carried only when on. */
+const ON_FLAGS = ['closed', 'fastMode'] as const;
+
+type FlagValue = number | boolean | null | undefined;
+
 function toProject(row: ProjectRow): Project {
-  const {
-    color,
-    followUpMode,
-    fastMode,
-    defaultProvider,
-    defaultModel,
-    defaultEffort,
-    defaultMode,
-    defaultPermissionMode,
-    defaultBranch,
-    defaultAgentTemplateId,
-    urls: urlsRaw,
-    systemPrompt,
-    launcherUrl,
-    closed,
-    ...rest
-  } = row as ProjectRow & {
-    closed?: number | boolean | null;
-    fastMode?: number | boolean | null;
-  };
-  return {
-    ...rest,
-    ...(closed ? { closed: true } : {}),
-    ...(fastMode ? { fastMode: true } : {}),
-    ...(color != null ? { color } : {}),
-    ...(followUpMode && followUpMode !== DEFAULT_FOLLOW_UP_MODE
-      ? { followUpMode: followUpMode as FollowUpMode }
-      : {}),
-    ...(defaultProvider != null
-      ? { defaultProvider: defaultProvider as Project['defaultProvider'] }
-      : {}),
-    ...(defaultModel != null ? { defaultModel: defaultModel as Project['defaultModel'] } : {}),
-    ...(defaultEffort != null ? { defaultEffort: defaultEffort as Project['defaultEffort'] } : {}),
-    ...(defaultMode != null ? { defaultMode: defaultMode as Project['defaultMode'] } : {}),
-    ...(defaultPermissionMode != null
-      ? { defaultPermissionMode: defaultPermissionMode as Project['defaultPermissionMode'] }
-      : {}),
-    ...(defaultBranch != null ? { defaultBranch } : {}),
-    ...(defaultAgentTemplateId != null ? { defaultAgentTemplateId } : {}),
-    ...(urlsRaw != null ? { urls: JSON.parse(urlsRaw) as string[] } : {}),
-    ...(systemPrompt != null ? { systemPrompt } : {}),
-    ...(launcherUrl != null ? { launcherUrl } : {}),
-  };
+  const source = row as ProjectRow & Record<string, unknown>;
+  const project: Record<string, unknown> = { ...source };
+  for (const field of [...OPTIONAL_FIELDS, ...ON_FLAGS, 'urls', 'followUpMode', 'redirectChecks']) {
+    delete project[field];
+  }
+  for (const field of OPTIONAL_FIELDS) if (source[field] != null) project[field] = source[field];
+  for (const flag of ON_FLAGS) if (source[flag]) project[flag] = true;
+  // On by default: only an explicit off is carried.
+  const redirectChecks = source.redirectChecks as FlagValue;
+  if (redirectChecks != null && !redirectChecks) project.redirectChecks = false;
+  if (source.followUpMode && source.followUpMode !== DEFAULT_FOLLOW_UP_MODE) {
+    project.followUpMode = source.followUpMode as FollowUpMode;
+  }
+  if (source.urls != null) {
+    const urls = parseStoredJson(z.array(z.string()), source.urls as string, 'project urls');
+    if (urls.ok) project.urls = urls.value;
+  }
+  return project as unknown as Project;
 }
 
 export async function listProjects(userId: string): Promise<Project[]> {
@@ -339,6 +335,29 @@ export async function createProject(
   return ok(project);
 }
 
+/** Settings a PATCH writes as given (`null` clears them). */
+const UPDATABLE_FIELDS = ['name', 'followUpMode', ...OPTIONAL_FIELDS] as const;
+
+/** Boolean settings stored as 0/1. */
+const UPDATABLE_FLAGS = [...ON_FLAGS, 'redirectChecks'] as const;
+
+/** The columns a PATCH changes: only the fields it names. */
+function projectUpdateData(
+  fields: ProjectUpdateFields,
+  resolvedPath: string | undefined,
+): Record<string, unknown> {
+  const updateData: Record<string, unknown> = {};
+  for (const field of UPDATABLE_FIELDS) {
+    if (fields[field] !== undefined) updateData[field] = fields[field];
+  }
+  for (const flag of UPDATABLE_FLAGS) {
+    if (fields[flag] !== undefined) updateData[flag] = fields[flag] ? 1 : 0;
+  }
+  if (resolvedPath !== undefined) updateData.path = resolvedPath;
+  if (fields.urls !== undefined) updateData.urls = fields.urls ? JSON.stringify(fields.urls) : null;
+  return updateData;
+}
+
 export async function updateProject(
   id: string,
   fields: ProjectUpdateFields,
@@ -388,25 +407,7 @@ export async function updateProject(
     }
   }
 
-  const updateData: Record<string, unknown> = {};
-  if (fields.name !== undefined) updateData.name = fields.name;
-  if (resolvedPath !== undefined) updateData.path = resolvedPath;
-  if (fields.color !== undefined) updateData.color = fields.color;
-  if (fields.followUpMode !== undefined) updateData.followUpMode = fields.followUpMode;
-  if (fields.defaultProvider !== undefined) updateData.defaultProvider = fields.defaultProvider;
-  if (fields.defaultModel !== undefined) updateData.defaultModel = fields.defaultModel;
-  if (fields.defaultEffort !== undefined) updateData.defaultEffort = fields.defaultEffort;
-  if (fields.defaultMode !== undefined) updateData.defaultMode = fields.defaultMode;
-  if (fields.defaultPermissionMode !== undefined)
-    updateData.defaultPermissionMode = fields.defaultPermissionMode;
-  if (fields.defaultBranch !== undefined) updateData.defaultBranch = fields.defaultBranch;
-  if (fields.urls !== undefined) updateData.urls = fields.urls ? JSON.stringify(fields.urls) : null;
-  if (fields.systemPrompt !== undefined) updateData.systemPrompt = fields.systemPrompt;
-  if (fields.launcherUrl !== undefined) updateData.launcherUrl = fields.launcherUrl;
-  if (fields.defaultAgentTemplateId !== undefined)
-    updateData.defaultAgentTemplateId = fields.defaultAgentTemplateId;
-  if (fields.closed !== undefined) updateData.closed = fields.closed ? 1 : 0;
-  if (fields.fastMode !== undefined) updateData.fastMode = fields.fastMode ? 1 : 0;
+  const updateData = projectUpdateData(fields, resolvedPath);
 
   await dbRun(db.update(schema.projects).set(updateData).where(eq(schema.projects.id, id)));
   return ok(toProject({ ...project, ...updateData } as ProjectRow));

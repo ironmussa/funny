@@ -995,6 +995,20 @@ describe('AgentLifecycleManager', () => {
 
       expect(call.fastMode).toBe(false);
     });
+
+    test('redirects raw check commands unless the project turned it off', async () => {
+      const byDefault = await startWithStatus(
+        'pending',
+        { id: 'thread-redirect-default' },
+        'claude',
+      );
+      expect(byDefault.redirectChecks).toBe(true);
+
+      const off = await startWithStatus('pending', { id: 'thread-redirect-off' }, 'claude', {
+        redirectChecks: false,
+      });
+      expect(off.redirectChecks).toBe(false);
+    });
   });
 
   describe('extractActiveAgents', () => {

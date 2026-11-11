@@ -1,4 +1,4 @@
-import { screen, waitFor } from '@testing-library/react';
+import { act, screen, waitFor } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ThreadView } from '@/components/ThreadView';
@@ -174,11 +174,13 @@ describe('ThreadView', () => {
       cost: 0,
       messages: [],
     } as any;
-    useThreadStore.setState({
-      selectedThreadId: 't1',
-      activeThread: thread,
-      threadDataById: { t1: thread },
-    });
+    act(() =>
+      useThreadStore.setState({
+        selectedThreadId: 't1',
+        activeThread: thread,
+        threadDataById: { t1: thread },
+      }),
+    );
 
     await waitFor(() => expect(onReady).toHaveBeenCalledTimes(1));
   });

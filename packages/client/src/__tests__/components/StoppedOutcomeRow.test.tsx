@@ -1,5 +1,5 @@
 import type { Thread, ThreadEvent } from '@funny/shared';
-import { screen, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { VirtualRowContent } from '@/components/thread/MemoizedMessageList.renderers';
@@ -60,19 +60,11 @@ afterEach(() => {
   resetTestDataLayer();
 });
 
+// The row itself always renders. Hiding the latest stop while the thread is
+// still stopped happens upstream in `buildGroupedRenderItems` (see
+// render-items.test.ts), whose status comes from the thread row via
+// `useThreadCore`, so a stale `running` payload cannot double the card.
 describe('StoppedOutcomeRow', () => {
-  test('a live stop leaves only the status tail card, even with a stale payload status', async () => {
-    // The payload was loaded while running; only the row learned about the stop.
-    getThreadsData().upsertFresh([thread('stopped')]);
-    useThreadStore.setState({
-      threadDataById: {
-        t1: { ...thread('running'), messages: [], threadEvents: [stopEvent] } as ThreadWithMessages,
-      },
-    });
-    renderStopRow();
-    await waitFor(() => expect(screen.queryByTestId('agent-result-card')).not.toBeInTheDocument());
-  });
-
   test('stays in the timeline once the thread runs again', async () => {
     getThreadsData().upsertFresh([thread('running')]);
     useThreadStore.setState({

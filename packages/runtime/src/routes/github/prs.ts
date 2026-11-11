@@ -23,6 +23,7 @@ import {
   resolveGithubProjectContext,
   resolveGithubToken,
 } from './helpers.js';
+import { positiveIntParam, readIssueState, readPaging } from './query.js';
 
 export const prRoutes = new Hono<HonoEnv>();
 
@@ -164,9 +165,10 @@ prRoutes.get('/prs', async (c) => {
     return c.json({ error: 'This project is not hosted on GitHub' }, 400);
   }
 
-  const state = c.req.query('state') || 'open';
-  const page = Number(c.req.query('page')) || 1;
-  const perPage = Math.min(Number(c.req.query('per_page')) || 30, 100);
+  const stateResult = readIssueState(c);
+  if (stateResult.isErr()) return c.json({ error: stateResult.error.message }, 400);
+  const state = stateResult.value;
+  const { page, perPage } = readPaging(c, 30);
   const { sort, direction } = resolveSort(c.req.query('sort'), 'pulls');
 
   try {
@@ -241,9 +243,10 @@ prRoutes.get('/prs-search', async (c) => {
     return c.json({ error: 'This project is not hosted on GitHub' }, 400);
   }
 
-  const state = c.req.query('state') || 'open';
-  const page = Number(c.req.query('page')) || 1;
-  const perPage = Math.min(Number(c.req.query('per_page')) || 30, 100);
+  const stateResult = readIssueState(c);
+  if (stateResult.isErr()) return c.json({ error: stateResult.error.message }, 400);
+  const state = stateResult.value;
+  const { page, perPage } = readPaging(c, 30);
   const { sort, direction } = resolveSort(c.req.query('sort'), 'search');
 
   const labels = listParam(c.req.query('labels'));
@@ -504,7 +507,7 @@ function buildPRDetail(
 prRoutes.get('/pr-detail', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
-  const prNumber = Number(c.req.query('prNumber'));
+  const prNumber = positiveIntParam(c, 'prNumber');
   if (!projectId || !prNumber) {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }

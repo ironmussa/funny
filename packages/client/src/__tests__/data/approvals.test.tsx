@@ -1,5 +1,5 @@
 import type { DomainError } from '@funny/shared/errors';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -43,7 +43,7 @@ describe('pipeline approvals', () => {
     applyApprovalResolved({ approvalId: 'missing', decision: 'approve' } as never);
     const { result } = renderHook(() => usePendingApprovals());
     await waitFor(() => expect(result.current.map((a) => a.approvalId)).toEqual(['a', 'b']));
-    applyApprovalResolved({ approvalId: 'a', decision: 'approve' } as never);
+    act(() => applyApprovalResolved({ approvalId: 'a', decision: 'approve' } as never));
     await waitFor(() => expect(result.current.map((a) => a.approvalId)).toEqual(['b']));
   });
 

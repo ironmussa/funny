@@ -8,6 +8,8 @@ import { replaceDataLayer } from '@/data/runtime';
 import { useThreadById } from '@/data/threads/hooks';
 import { seedProjectThreads } from '@/data/threads/testing';
 
+import { resetTestDataLayer } from '../helpers/data-layer-harness';
+
 function makeThread(id: string, title: string): Thread {
   return {
     id,
@@ -21,9 +23,7 @@ function makeThread(id: string, title: string): Thread {
 }
 
 describe('liveQueryKey', () => {
-  afterEach(() => {
-    replaceDataLayer(createDataLayer({ userId: null }));
-  });
+  afterEach(() => resetTestDataLayer());
 
   test('names each collection instance, not its Collection ID', () => {
     const a = { id: 'threads:u1:personal' };

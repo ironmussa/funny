@@ -614,6 +614,27 @@ describe('turn outcome timeline rows', () => {
       ),
     ).toEqual(['u1', 'a1', 'stop-1', 'a2']);
   });
+
+  // An empty row for the pending stop still took its estimated height plus the
+  // row gap in the virtual list, leaving blank space under the last message.
+  test('a still-stopped thread has no row for its latest stop (the status tail shows it)', () => {
+    const messages = [
+      { id: 'u1', role: 'user', content: 'Summarize', timestamp: '2026-10-31T05:22:00.000Z' },
+      { id: 'a1', role: 'assistant', content: 'Partial', timestamp: '2026-10-31T05:22:10.000Z' },
+      { id: 'u2', role: 'user', content: 'Again', timestamp: '2026-10-31T05:24:00.000Z' },
+    ];
+    const events = [
+      outcome('stop-1', 'stopped', '2026-10-31T05:22:22.000Z'),
+      outcome('stop-2', 'stopped', '2026-10-31T05:24:05.000Z'),
+    ];
+    const ids = (status?: string) =>
+      buildGroupedRenderItems(messages, events, undefined, status).map((item) =>
+        item.type === 'message' ? item.msg.id : item.type === 'thread-event' ? item.event.id : '',
+      );
+
+    expect(ids('stopped')).toEqual(['u1', 'a1', 'stop-1', 'u2']);
+    expect(ids('running')).toEqual(['u1', 'a1', 'stop-1', 'u2', 'stop-2']);
+  });
 });
 
 describe('sandbox error cards (thread-sandboxes)', () => {

@@ -10,7 +10,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { mockT } from '../helpers/mock-i18n';
-import { renderWithProviders } from '../helpers/render';
+import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
 const mockCreateThread = vi.fn().mockResolvedValue(true);
 const mockNavigate = vi.fn();
@@ -191,8 +191,9 @@ describe('NewThreadInput', () => {
     expect(screen.getByTestId('new-thread-scratch-prompt')).toBeInTheDocument();
   });
 
-  test('renders project context bar for normal compose', () => {
+  test('renders project context bar for normal compose', async () => {
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+    await flushAsyncUpdates();
 
     expect(screen.getByTestId('new-thread-context-bar')).toBeInTheDocument();
     expect(screen.getByTestId('mock-prompt-input')).toBeInTheDocument();
@@ -230,22 +231,25 @@ describe('NewThreadInput', () => {
     });
   });
 
-  test('shows issue context banner and allows dismiss', () => {
+  test('shows issue context banner and allows dismiss', async () => {
     useUIStore.setState({
       newThreadIssueContext: { title: 'Bug #42', prompt: 'Fix it' },
     } as any);
 
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+    await flushAsyncUpdates();
 
     expect(screen.getByTestId('issue-context-banner')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('issue-context-dismiss'));
+    await flushAsyncUpdates();
     expect(useUIStore.getState().newThreadIssueContext).toBeNull();
   });
 
-  test('uses compose prefill prompt once on mount', () => {
+  test('uses compose prefill prompt once on mount', async () => {
     useUIStore.setState({ composePrefillPrompt: 'Prefilled prompt' } as any);
 
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+    await flushAsyncUpdates();
 
     expect(screen.getByTestId('initial-prompt')).toHaveTextContent('Prefilled prompt');
     expect(useUIStore.getState().composePrefillPrompt).toBeNull();
@@ -390,8 +394,9 @@ describe('NewThreadInput', () => {
     expect(mockNavigate).not.toHaveBeenCalled();
   });
 
-  test('shows worktree branch preview when worktree mode is enabled', () => {
+  test('shows worktree branch preview when worktree mode is enabled', async () => {
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
+    await flushAsyncUpdates();
 
     fireEvent.click(screen.getByTestId('mock-worktree-toggle'));
     fireEvent.click(screen.getByTestId('mock-content-change'));

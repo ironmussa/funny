@@ -1,11 +1,14 @@
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import * as ph from '../../services/project-hooks-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireProject } from '../../utils/route-helpers.js';
+import { parseQuery } from '../../validation/request.js';
 import {
   createHookSchema,
+  hookTypeSchema,
   reorderHooksSchema,
   updateHookSchema,
   validate,
@@ -21,8 +24,9 @@ projectHooksRoutes.get('/:id/hooks', async (c) => {
   const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
-  const hookType = c.req.query('hookType') as import('@funny/shared').HookType | undefined;
-  const hooks = ph.listHooks(projectResult.value.path, hookType);
+  const query = parseQuery(c, z.object({ hookType: hookTypeSchema.optional() }));
+  if (query.isErr()) return resultToResponse(c, query);
+  const hooks = ph.listHooks(projectResult.value.path, query.value.hookType);
   return c.json(hooks);
 });
 

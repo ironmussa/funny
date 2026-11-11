@@ -61,7 +61,7 @@ describe('ThreadItem', () => {
     const row = screen.getByTestId('thread-item-scratch-1');
     expect(row).toHaveTextContent('grep -rn sandbox packages');
     expect(row).not.toHaveTextContent('Launching...');
-    useThreadActiveToolStore.getState().clear('scratch-1');
+    act(() => useThreadActiveToolStore.getState().clear('scratch-1'));
   });
 
   test('renders the pin control beside the thread selection button', () => {

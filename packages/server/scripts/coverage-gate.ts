@@ -15,7 +15,7 @@ import { fileURLToPath } from 'node:url';
 const MIN_LINE_COVERAGE = Number(process.env.SERVER_COVERAGE_MIN_LINES ?? 65);
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const result = spawnSync('bun', ['test', '--coverage', '--isolate'], {
+const result = spawnSync('bun', ['test', '--coverage', '--isolate', '--timeout', '20000'], {
   cwd: pkgRoot,
   encoding: 'utf8',
   stdio: ['ignore', 'pipe', 'pipe'],

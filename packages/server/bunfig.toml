@@ -11,6 +11,10 @@
 # boundaries use constructed port fakes; isolation remains useful for unrelated
 # third-party module stubs.
 # maxConcurrency stays at 1 for deterministic ordering.
+# The per-test and per-hook timeout is 20 s (`--timeout 20000` on the same
+# scripts): most suites build a test app in `beforeAll`, applying every
+# migration, which overran bun's 5 s default when the machine is loaded (e.g.
+# several suites running at once).
 maxConcurrency = 1
 coverageSkipTestFiles = true
 coveragePathIgnorePatterns = [

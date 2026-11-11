@@ -11,12 +11,25 @@ import { relative } from 'node:path';
 
 import type { Reporter, TestCase, TestModule, TestSpecification } from 'vitest/node';
 
-import { TEST_EVENT_PREFIX, type TestEvent } from './test-progress';
+import { TEST_EVENT_PREFIX, type TestEvent } from '../packages/shared/src/checks';
 
 const emit = (event: TestEvent) =>
   process.stdout.write(`${TEST_EVENT_PREFIX}${JSON.stringify(event)}\n`);
 
 const fileOf = (moduleId: string) => relative(process.cwd(), moduleId);
+
+/** A failed test's first error, and the line in its own file it was thrown from. */
+function firstError(
+  errors:
+    | ReadonlyArray<{ message?: string; stacks?: { file: string; line: number }[] }>
+    | undefined,
+  moduleId: string,
+): { message: string; line?: number } {
+  const error = errors?.[0];
+  const message = (error?.message ?? 'failed').split('\n')[0].slice(0, 300);
+  const line = error?.stacks?.find((frame) => frame.file === moduleId)?.line;
+  return line ? { message, line } : { message };
+}
 
 const STATES = { passed: 'passed', failed: 'failed', skipped: 'skipped', pending: 'skipped' };
 
@@ -32,12 +45,17 @@ export default class ProgressReporter implements Reporter {
   }
 
   onTestCaseResult(testCase: TestCase): void {
+    const result = testCase.result();
+    const file = fileOf(testCase.module.moduleId);
     emit({
       e: 'test',
-      file: fileOf(testCase.module.moduleId),
+      file,
       name: testCase.fullName,
-      state: STATES[testCase.result().state] ?? 'skipped',
+      state: STATES[result.state] ?? 'skipped',
       ms: testCase.diagnostic()?.duration ?? 0,
+      ...(result.state === 'failed'
+        ? { error: firstError(result.errors, testCase.module.moduleId) }
+        : {}),
     });
   }
 

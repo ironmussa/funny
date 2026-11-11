@@ -13,9 +13,10 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
 
+import { createOutputParser, isEventLine } from '../packages/shared/src/checks';
 import { collectOutput } from './progress-io';
 import { testSuiteEnv } from './test-env';
-import { createOutputParser, isEventLine, ProgressFile } from './test-progress';
+import { ProgressFile } from './test-progress';
 
 export interface TestPackage {
   name: string;

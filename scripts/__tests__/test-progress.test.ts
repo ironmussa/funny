@@ -3,9 +3,10 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { createOutputParser, TEST_EVENT_PREFIX } from '../../packages/shared/src/checks';
 import { parseTestProgress } from '../../packages/shared/src/test-progress';
 import { discoverPackages, runTests } from '../run-tests';
-import { createOutputParser, ProgressFile, TEST_EVENT_PREFIX } from '../test-progress';
+import { ProgressFile } from '../test-progress';
 
 const feed = (lines: string[]) => {
   const parse = createOutputParser();

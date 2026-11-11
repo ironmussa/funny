@@ -3,9 +3,9 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { createStepParser } from '../../packages/shared/src/checks';
 import { parseTaskProgress } from '../../packages/shared/src/task-progress';
 import { runTask } from '../run-steps';
-import { createStepParser } from '../step-output';
 import { stepsOf, taskFor } from '../task-steps';
 
 describe('task steps', () => {

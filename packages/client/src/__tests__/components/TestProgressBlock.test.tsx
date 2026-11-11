@@ -30,6 +30,7 @@ function progress(overrides: Partial<TestProgress> = {}): TestProgress {
         durationMs: 4_000,
         running: [],
         slow: [],
+        failures: [],
       },
       {
         name: '@funny/client',
@@ -42,6 +43,7 @@ function progress(overrides: Partial<TestProgress> = {}): TestProgress {
         current: 'src/__tests__/lib/thread-utils.test.ts',
         running: [],
         slow: [],
+        failures: [],
       },
       {
         name: '@funny/core',
@@ -52,6 +54,7 @@ function progress(overrides: Partial<TestProgress> = {}): TestProgress {
         skipped: 0,
         running: [],
         slow: [],
+        failures: [],
       },
     ],
     ...overrides,

@@ -50,6 +50,12 @@ and Git; `.gitignore` already excludes `.env.*` except `.env.example`.
 - Retry only operations whose retry policy is explicit and safe. Test cancellation
   during execution and backoff, exhausted retries, and concurrency limits.
 
+## Fast shell tools
+
+- Search file contents with your search tool or `rg`, not `grep -r`.
+- Find files by name with your file search tool or `fd`, not `find -name`.
+- Read or reshape JSON with `jq`, not `python3 -c`.
+
 ## Verification
 
 - Always run `bun run lint` and `bun run typecheck` before considering code changes complete.

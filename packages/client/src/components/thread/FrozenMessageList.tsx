@@ -1,21 +1,13 @@
 import { useCallback, useImperativeHandle, useMemo, useRef, memo, type CSSProperties } from 'react';
 
-import { makeProseFont } from '@/hooks/use-pretext';
-import { buildGroupedRenderItems } from '@/lib/render-items';
-import {
-  useSettingsStore,
-  PROSE_FONT_SIZE_PX,
-  PROSE_LINE_HEIGHT_PX,
-  CODE_LINE_HEIGHT_PX,
-} from '@/stores/settings-store';
-
 import { FrozenViewerContext } from './frozen-message-context';
-import { useContainerWidth, usePretextWarmup } from './MemoizedMessageList.hooks';
 import {
-  estimateVirtualRowHeight,
-  VIRTUAL_ROW_GAP_PX,
-  type FontConfig,
-} from './MemoizedMessageList.measurement';
+  useContainerWidth,
+  useGroupedRenderItems,
+  useListFontConfig,
+  usePretextWarmup,
+} from './MemoizedMessageList.hooks';
+import { estimateVirtualRowHeight, VIRTUAL_ROW_GAP_PX } from './MemoizedMessageList.measurement';
 import { UserMessageRenderer, VirtualRowContent } from './MemoizedMessageList.renderers';
 import type {
   MemoizedMessageListProps,
@@ -66,21 +58,15 @@ export const FrozenMessageList = memo(function FrozenMessageList({
   changeSummaryRunning,
   onSessionReverted,
 }: MemoizedMessageListProps) {
-  const globalFontSize = useSettingsStore((s) => s.fontSize);
-  const fontConfig = useMemo<FontConfig>(
-    () => ({
-      proseFont: makeProseFont(PROSE_FONT_SIZE_PX[globalFontSize]),
-      proseLineHeight: PROSE_LINE_HEIGHT_PX[globalFontSize],
-      codeLineHeight: CODE_LINE_HEIGHT_PX[globalFontSize],
-    }),
-    [globalFontSize],
-  );
+  const { fontConfig } = useListFontConfig();
 
   const isWaiting = threadStatus === 'waiting';
 
-  const groupedItems = useMemo(
-    () => buildGroupedRenderItems(messages, threadEvents, compactionEvents),
-    [messages, threadEvents, compactionEvents],
+  const groupedItems = useGroupedRenderItems(
+    messages,
+    threadEvents,
+    compactionEvents,
+    threadStatus,
   );
   const virtualRows = useMemo(
     () => buildVirtualRows(groupedItems, sessionChanges),

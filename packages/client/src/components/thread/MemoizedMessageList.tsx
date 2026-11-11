@@ -11,18 +11,13 @@ import {
   useImperativeHandle,
 } from 'react';
 
-import { makeProseFont } from '@/hooks/use-pretext';
-import { buildGroupedRenderItems, findNearestPrecedingUserMessageItem } from '@/lib/render-items';
+import { findNearestPrecedingUserMessageItem } from '@/lib/render-items';
 import { cn } from '@/lib/utils';
-import {
-  useSettingsStore,
-  PROSE_FONT_SIZE_PX,
-  PROSE_LINE_HEIGHT_PX,
-  CODE_LINE_HEIGHT_PX,
-} from '@/stores/settings-store';
 
 import {
   useContainerWidth,
+  useGroupedRenderItems,
+  useListFontConfig,
   useListScrollMargin,
   usePretextWarmup,
 } from './MemoizedMessageList.hooks';
@@ -38,7 +33,6 @@ import {
   shouldAdjustScrollPositionOnItemSizeChange,
   VIRTUAL_OVERSCAN,
   VIRTUAL_ROW_GAP_PX,
-  type FontConfig,
 } from './MemoizedMessageList.measurement';
 import { UserMessageRenderer, VirtualRowContent } from './MemoizedMessageList.renderers';
 import type {
@@ -54,6 +48,8 @@ import {
   getLeadingUserItem,
   getVirtualRowsSignature,
   shouldReserveLeadingStickySpace,
+  type MessageItem,
+  type VirtualRow,
 } from './MemoizedMessageList.virtualRows';
 export type {
   MemoizedMessageListHandle,
@@ -63,35 +59,51 @@ export type {
 
 const STICKY_SECTION_VISIBILITY_EPSILON_PX = 1;
 
+function isUserRow(
+  row: VirtualRow,
+): row is Extract<VirtualRow, { type: 'item' }> & { item: MessageItem } {
+  return row.type === 'item' && row.item.type === 'message' && row.item.msg.role === 'user';
+}
+
 /** Custom comparator for MemoizedMessageList — avoids re-renders when only
  *  unrelated activeThread properties changed (cost, contextUsage, etc.).
  *  NOTE: threadStatus IS included because tool cards like AskUserQuestion and
  *  ExitPlanMode conditionally render the "Respond" button based on whether the
  *  thread is in 'waiting' status. Without this, the button won't appear when
- *  agent:status arrives after the tool_call event. */
+ *  agent:status arrives after the tool_call event. 'stopped' matters too: the
+ *  thread's latest stop leaves the timeline while the thread stays stopped. */
+const COMPARED_PROPS = [
+  'ref',
+  'messages',
+  'leadingUserMessage',
+  'threadEvents',
+  'compactionEvents',
+  'threadId',
+  'sessionChanges',
+  'changeSummaryRunning',
+  'onSessionReverted',
+  'snapshotMap',
+  'onSend',
+  'onOpenLightbox',
+  'onToolRespond',
+  'onFork',
+  'onRewind',
+  'onForkAndRewind',
+  'forkingMessageId',
+  'rewindDisabled',
+  'rewindDisabledReason',
+  'scrollRef',
+] as const satisfies readonly (keyof MemoizedMessageListProps)[];
+
+/** The only thread statuses the list renders differently. */
+function listStatus(status: string | undefined): string {
+  return status === 'waiting' || status === 'stopped' ? status : 'other';
+}
+
 function messageListAreEqual(prev: MemoizedMessageListProps, next: MemoizedMessageListProps) {
   return (
-    prev.ref === next.ref &&
-    prev.messages === next.messages &&
-    prev.leadingUserMessage === next.leadingUserMessage &&
-    prev.threadEvents === next.threadEvents &&
-    prev.compactionEvents === next.compactionEvents &&
-    prev.threadId === next.threadId &&
-    prev.sessionChanges === next.sessionChanges &&
-    prev.changeSummaryRunning === next.changeSummaryRunning &&
-    prev.onSessionReverted === next.onSessionReverted &&
-    (prev.threadStatus === 'waiting') === (next.threadStatus === 'waiting') &&
-    prev.snapshotMap === next.snapshotMap &&
-    prev.onSend === next.onSend &&
-    prev.onOpenLightbox === next.onOpenLightbox &&
-    prev.onToolRespond === next.onToolRespond &&
-    prev.onFork === next.onFork &&
-    prev.onRewind === next.onRewind &&
-    prev.onForkAndRewind === next.onForkAndRewind &&
-    prev.forkingMessageId === next.forkingMessageId &&
-    prev.rewindDisabled === next.rewindDisabled &&
-    prev.rewindDisabledReason === next.rewindDisabledReason &&
-    prev.scrollRef === next.scrollRef
+    COMPARED_PROPS.every((key) => prev[key] === next[key]) &&
+    listStatus(prev.threadStatus) === listStatus(next.threadStatus)
   );
 }
 
@@ -165,21 +177,15 @@ export const MemoizedMessageList = memo(
     onSessionReverted,
   }: MemoizedMessageListProps) {
     // ── Font config: dynamic based on global font size setting ──
-    const globalFontSize = useSettingsStore((s) => s.fontSize);
-    const fontConfig = useMemo<FontConfig>(
-      () => ({
-        proseFont: makeProseFont(PROSE_FONT_SIZE_PX[globalFontSize]),
-        proseLineHeight: PROSE_LINE_HEIGHT_PX[globalFontSize],
-        codeLineHeight: CODE_LINE_HEIGHT_PX[globalFontSize],
-      }),
-      [globalFontSize],
-    );
+    const { fontSize: globalFontSize, fontConfig } = useListFontConfig();
 
     const isWaiting = threadStatus === 'waiting';
 
-    const groupedItems = useMemo(
-      () => buildGroupedRenderItems(messages, threadEvents, compactionEvents),
-      [messages, threadEvents, compactionEvents],
+    const groupedItems = useGroupedRenderItems(
+      messages,
+      threadEvents,
+      compactionEvents,
+      threadStatus,
     );
     const leadingUserItem = useMemo(
       () => getLeadingUserItem(leadingUserMessage, messages),
@@ -795,14 +801,15 @@ export const MemoizedMessageList = memo(
               data-index={virtualItem.index}
               data-virtual-row-key={row.key}
               data-row-offset={virtualItem.start - listScrollMargin + leadingStickySpacerHeight}
-              {...(row.type === 'item' &&
-              row.item.type === 'message' &&
-              row.item.msg.role === 'user'
-                ? { 'data-section-msg-id': row.item.msg.id }
-                : {})}
+              {...(isUserRow(row) ? { 'data-section-msg-id': row.item.msg.id } : {})}
               data-turn-section={getRowSectionId(row)}
               key={virtualItem.key}
-              className="absolute top-0 left-0 z-0 w-full"
+              className={cn(
+                'absolute top-0 left-0 z-0 w-full',
+                // A user card's hover footer hangs below its row; lift the row so
+                // the next one (e.g. a stop card pulled up by -mt-3) can't cover it.
+                isUserRow(row) && 'hover:z-10 focus-within:z-10 has-[[data-state=open]]:z-10',
+              )}
               style={{
                 transform: `translateY(${
                   virtualItem.start - listScrollMargin + leadingStickySpacerHeight

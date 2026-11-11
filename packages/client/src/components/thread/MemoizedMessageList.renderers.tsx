@@ -2,7 +2,6 @@ import type { ThreadEvent } from '@funny/shared';
 import { useContext, useMemo } from 'react';
 
 import { getItemKey, type RenderItem, type ToolItem } from '@/lib/render-items';
-import { useThreadById } from '@/lib/thread-selectors';
 import { turnOutcomesFromEvents } from '@/lib/turn-outcomes-from-events';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -253,20 +252,11 @@ export function UserMessageRenderer({
 }
 
 /**
- * Inline record of a stop, placed where it happened in the timeline. Hidden
- * only while it is the thread's latest outcome and the thread is still
- * stopped — the status tail's stopped card (with Continue) shows it then.
+ * Inline record of a stop, placed where it happened in the timeline. While the
+ * thread is still stopped, its latest stop has no row (see `render-items.ts`):
+ * the status tail's stopped card (with Continue) shows it then.
  */
 function StoppedOutcomeRow({ event }: { event: ThreadEvent }) {
-  // Status comes from the thread row: the payload's copy is a load-time
-  // snapshot and stays `running` after a live stop, which doubled the card.
-  const isStopped = useThreadById(event.threadId)?.status === 'stopped';
-  const isLatestOutcome = useThreadStore(
-    (s) =>
-      s.threadDataById[event.threadId]?.threadEvents?.findLast((e) => e.type === 'turn_outcome')
-        ?.id === event.id,
-  );
-  if (isStopped && isLatestOutcome) return null;
   let completedAt: string | undefined;
   try {
     completedAt = JSON.parse(event.data as string)?.completedAt;

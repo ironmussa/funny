@@ -1,12 +1,53 @@
-import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useState } from 'react';
+import type { ThreadEvent } from '@funny/shared';
+import { useCallback, useEffect, useEffectEvent, useLayoutEffect, useMemo, useState } from 'react';
 import type { RefObject } from 'react';
 
-import { ensurePretextLoaded, getCachedPrepared, prepareBatch } from '@/hooks/use-pretext';
+import {
+  ensurePretextLoaded,
+  getCachedPrepared,
+  makeProseFont,
+  prepareBatch,
+} from '@/hooks/use-pretext';
 import { analyzeMarkdown } from '@/lib/markdown-to-plaintext';
 import { parseReferencedFiles } from '@/lib/parse-referenced-files';
-import type { RenderItem } from '@/lib/render-items';
+import { buildGroupedRenderItems, type RenderItem } from '@/lib/render-items';
+import {
+  useSettingsStore,
+  PROSE_FONT_SIZE_PX,
+  PROSE_LINE_HEIGHT_PX,
+  CODE_LINE_HEIGHT_PX,
+  type FontSize,
+} from '@/stores/settings-store';
+import type { CompactionEvent } from '@/stores/thread-store';
 
 import type { FontConfig } from './MemoizedMessageList.measurement';
+
+/** The user's font size and the fonts a message list measures text with. */
+export function useListFontConfig(): { fontSize: FontSize; fontConfig: FontConfig } {
+  const fontSize = useSettingsStore((s) => s.fontSize);
+  const fontConfig = useMemo<FontConfig>(
+    () => ({
+      proseFont: makeProseFont(PROSE_FONT_SIZE_PX[fontSize]),
+      proseLineHeight: PROSE_LINE_HEIGHT_PX[fontSize],
+      codeLineHeight: CODE_LINE_HEIGHT_PX[fontSize],
+    }),
+    [fontSize],
+  );
+  return { fontSize, fontConfig };
+}
+
+/** The list's render items; the thread status decides whether its latest stop gets a row. */
+export function useGroupedRenderItems(
+  messages: any[],
+  threadEvents: ThreadEvent[] | undefined,
+  compactionEvents: CompactionEvent[] | undefined,
+  threadStatus: string | undefined,
+): RenderItem[] {
+  return useMemo(
+    () => buildGroupedRenderItems(messages, threadEvents, compactionEvents, threadStatus),
+    [messages, threadEvents, compactionEvents, threadStatus],
+  );
+}
 
 export function useListScrollMargin(
   scrollRef: RefObject<HTMLElement | null>,

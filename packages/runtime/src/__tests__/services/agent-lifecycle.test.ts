@@ -149,6 +149,23 @@ vi.mock('../../services/git-checkpoints.js', () => ({
   captureGitCheckpoint: (...args: unknown[]) => mocks.captureGitCheckpoint(...args),
 }));
 
+// startAgent loads these lazily (agent MCP servers, the browser bridge). Loading
+// the real modules costs ~2.5 s inside the first test that starts an agent, which
+// times out under load; no test here asserts on them.
+vi.mock('../../services/agent-watch-tool.js', () => ({ FUNNY_MCP_SERVER: { name: 'funny' } }));
+vi.mock('../../services/agent-mcp-http.js', () => ({
+  grantAgentMcpHttp: (server: { name: string }) => ({
+    type: 'http',
+    url: `http://mcp/${server.name}`,
+  }),
+}));
+vi.mock('../../services/browser-automation/browser-mcp-server.js', () => ({
+  BROWSER_MCP_SERVER: { name: 'funny-browser' },
+}));
+vi.mock('../../services/browser-automation/open-url-bridge.js', () => ({
+  browserOpenEnv: () => ({}),
+}));
+
 import { log } from '../../lib/logger.js';
 import { AgentLifecycleManager } from '../../services/agent-lifecycle.js';
 import { scratchPathFor } from '../../services/thread-context.js';

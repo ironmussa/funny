@@ -37,7 +37,7 @@ function stripOrgPrefix(pathname: string): [string | null, string] {
   if (segments.length === 0) return [null, '/'];
   const potentialSlug = segments[0] ?? '';
   if (STATIC_ROUTES.has(potentialSlug)) return [null, pathname];
-  return [potentialSlug, `/${segments.slice(1).join('/')}` || '/'];
+  return [potentialSlug, `/${segments.slice(1).join('/')}`];
 }
 
 function matchPath(pattern: string, pathname: string): Record<string, string> | null {

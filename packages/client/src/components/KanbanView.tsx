@@ -1,6 +1,6 @@
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element';
 import { draggable, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import type { Thread, ThreadStage, Project, GitStatusInfo } from '@funny/shared';
+import type { Thread, ThreadStage, GitStatusInfo } from '@funny/shared';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import {
   Trash2,

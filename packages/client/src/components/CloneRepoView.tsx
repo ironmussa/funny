@@ -125,6 +125,13 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
     return () => window.removeEventListener('clone:progress', handler);
   }, []);
 
+  const loadGhUser = async () => {
+    const result = await api.githubUser();
+    if (result.isOk()) {
+      setGhUser(result.value);
+    }
+  };
+
   const checkConnection = useCallback(async () => {
     const result = await api.githubStatus();
     if (result.isOk()) {
@@ -153,13 +160,6 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
       checkConnection();
     }
   }, [generalSettingsOpen, view, checkConnection]);
-
-  const loadGhUser = async () => {
-    const result = await api.githubUser();
-    if (result.isOk()) {
-      setGhUser(result.value);
-    }
-  };
 
   // Load repos with optional server-side search. `append` keeps existing
   // results when paginating; stale responses are dropped via fetchIdRef.

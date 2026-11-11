@@ -22,7 +22,6 @@ import {
 } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
-import { useProjectStore } from '@/stores/project-store';
 import { useReviewPaneStore } from '@/stores/review-pane-store';
 import {
   useCompactionEvents,

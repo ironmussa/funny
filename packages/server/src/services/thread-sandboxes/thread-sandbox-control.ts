@@ -17,7 +17,6 @@ import {
   isRetryableSandboxError,
   type SandboxError,
   type SandboxHandle,
-  type SandboxProvider,
 } from './contract.js';
 import { fromResult, runToResult } from './effect-bridge.js';
 import type { InfraConnectionService } from './infra-connections.js';

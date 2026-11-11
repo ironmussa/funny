@@ -1834,7 +1834,7 @@ async function loadSettingsData() {
     ) as HTMLSelectElement;
     providerSelect.innerHTML = '';
     const available = Object.entries(settingsProviderData!).filter(
-      ([_, info]) => (info as any).available,
+      ([, info]) => (info as any).available,
     );
 
     if (available.length === 0) {
@@ -1888,7 +1888,7 @@ function applyProjectDefaults(projectId: string) {
   if (!project || !settingsProviderData) return;
 
   const available = Object.entries(settingsProviderData).filter(
-    ([_, info]) => (info as any).available,
+    ([, info]) => (info as any).available,
   );
   if (available.length === 0) return;
 

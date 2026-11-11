@@ -299,7 +299,6 @@ function connect() {
             ? result.value.result.value.terminals
             : [];
         if (sessions.length > 0) {
-          const { useProjectStore } = await import('@/stores/project-store');
           const projects = readProjects();
           useTerminalStore.getState().restoreTabs(
             sessions as any,

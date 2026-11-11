@@ -16,7 +16,6 @@ import { useProjectById } from '@/data/projects/hooks';
 import { useAgentTemplate } from '@/data/templates/hooks';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
-import { useProjectStore } from '@/stores/project-store';
 import { useThreadId, useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';

@@ -4,7 +4,6 @@ import { isTauri } from '@/components/terminal/xterm-utils';
 import { readProject, readProjects } from '@/data/projects/read';
 import type { TerminalScope } from '@/hooks/use-terminal-scope';
 import { runsInSandbox } from '@/lib/thread-variant';
-import { useProjectStore } from '@/stores/project-store';
 import { type TerminalShell, useSettingsStore } from '@/stores/settings-store';
 import {
   SCRATCH_TERMINAL_SCOPE_ID,

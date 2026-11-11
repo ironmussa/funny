@@ -10,7 +10,6 @@ import { api } from '@/lib/api';
 import * as variant from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
-import { useProjectStore } from '@/stores/project-store';
 import { type Editor } from '@/stores/settings-store';
 import {
   getThreadById,
@@ -47,7 +46,6 @@ export function useMoreActionsMenu() {
   const pinThread = useThreadStore((s) => s.pinThread);
   const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
   const deleteScratchThread = useThreadStore((s) => s.deleteScratchThread);
-  const menuSelectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const project = useProjectById(threadProjectId);
   const projectBranch = useProjectCurrentBranch(threadProjectId);
   const timelineVisible = useUIStore((s) => s.timelineVisible);

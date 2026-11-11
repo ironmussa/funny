@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 
 import { useProjects } from '@/data/projects/hooks';
-import { useProjectStore } from '@/stores/project-store';
 import {
   useThreadProjectId,
   useThreadSelector,

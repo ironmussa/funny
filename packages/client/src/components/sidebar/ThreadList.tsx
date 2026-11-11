@@ -17,7 +17,6 @@ import { resolveThreadBranch } from '@/lib/utils';
 import { cn } from '@/lib/utils';
 import { goToThread } from '@/navigation/go-to-thread';
 import { buildThreadPath } from '@/navigation/thread-paths';
-import { useProjectStore } from '@/stores/project-store';
 
 import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';

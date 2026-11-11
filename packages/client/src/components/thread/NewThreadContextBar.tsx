@@ -12,7 +12,6 @@ import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { api } from '@/lib/api';
 import { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
-import { useProjectStore } from '@/stores/project-store';
 
 import { BranchPicker } from '../SearchablePicker';
 

@@ -3,7 +3,7 @@
  * Pure data operations only — scheduler hooks live in the runtime.
  */
 
-import { eq, and, or, desc } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';

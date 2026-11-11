@@ -21,7 +21,6 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createClientLogger } from '@/lib/client-logger';
 import { firstPlacedThreadId, resolveGridSelection } from '@/lib/grid-selection';
 import { GRID_CELLS_KEY, getGridCells, type GridCellAssignments } from '@/lib/grid-storage';
-import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';

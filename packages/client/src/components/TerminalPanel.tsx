@@ -74,7 +74,6 @@ import {
   terminalSpawnMachine,
   type TerminalRenderPhase,
 } from '@/machines/terminal-spawn-machine';
-import { useProjectStore } from '@/stores/project-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { type TerminalShell, useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 import { tabSandboxThreadId, useTerminalStore, type TerminalTab } from '@/stores/terminal-store';

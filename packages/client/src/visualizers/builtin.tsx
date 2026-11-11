@@ -15,6 +15,9 @@ const CsvTable = lazy(() => import('@/components/CsvTable').then((m) => ({ defau
 const TestProgressBlock = lazy(() =>
   import('@/components/TestProgressBlock').then((m) => ({ default: m.TestProgressBlock })),
 );
+const TaskProgressBlock = lazy(() =>
+  import('@/components/TaskProgressBlock').then((m) => ({ default: m.TaskProgressBlock })),
+);
 
 function VisualizerFallback() {
   return <div className="bg-muted/50 h-8 rounded" />;
@@ -45,6 +48,19 @@ function TestProgressVisualizer({ source }: VisualizerProps) {
   return (
     <Suspense fallback={<VisualizerFallback />}>
       <TestProgressBlock path={parseTestProgressFence(source)} />
+    </Suspense>
+  );
+}
+
+/**
+ * Live progress of a task made of steps (lint, typecheck, build, verify). The
+ * fence body names the progress file the same way as `test-progress`
+ * (`{ "path": "…" }`, see `@funny/shared/task-progress`).
+ */
+function TaskProgressVisualizer({ source }: VisualizerProps) {
+  return (
+    <Suspense fallback={<VisualizerFallback />}>
+      <TaskProgressBlock path={parseTestProgressFence(source)} />
     </Suspense>
   );
 }
@@ -124,6 +140,12 @@ export function registerBuiltinVisualizers(): void {
     version: '1.0.0',
     contributes: { fences: ['test-progress'] },
     Component: TestProgressVisualizer,
+  });
+  registerVisualizer({
+    id: '@funny/visualizer-task-progress',
+    version: '1.0.0',
+    contributes: { fences: ['task-progress'] },
+    Component: TaskProgressVisualizer,
   });
   // Binary visualizers (read `src`, not `source`). In the project file tree
   // these extensions hit the richer `MediaPreview` lightbox first; these entries

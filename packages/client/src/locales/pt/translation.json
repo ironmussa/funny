@@ -1423,6 +1423,21 @@
     "unreadable": "Não foi possível ler o progresso em {{path}}",
     "invalidFence": "Um bloco de progresso precisa de { \"path\": \"/caminho/absoluto.json\" }"
   },
+  "taskProgress": {
+    "steps": "{{done}}/{{total}} etapas",
+    "errors": "{{count}} erros",
+    "warnings": "{{count}} avisos",
+    "running": "{{count}} em execução (máx. {{max}})",
+    "units": "{{done}}/{{total}}",
+    "issues": "Problemas",
+    "moreIssues": "Mostrando os primeiros {{shown}} de {{total}}",
+    "output": "Última saída",
+    "status": {
+      "running": "Executando {{title}}",
+      "passed": "{{title}} sem erros",
+      "failed": "{{title}} com erros"
+    }
+  },
   "errors": {
     "generic": {
       "NOT_FOUND": "O recurso solicitado não foi encontrado.",

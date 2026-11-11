@@ -2,9 +2,9 @@
 
 Visualizer plugins extend how funny renders content — they turn a fenced code
 block or a file preview into a rich, interactive view. funny ships **Mermaid**
-(diagrams), **CSV** (tables), [**test progress**](#test-progress) (a live
-widget for test runs), **video** (`.mp4`/`.webm`/`.mov`/`.mkv`) and **image**
-(`.png`/`.jpg`/`.gif`/`.webp`/`.svg`/…) as built-ins — video and image
+(diagrams), **CSV** (tables), [**test progress**](#test-progress) and
+[**task progress**](#task-progress) (live widgets for test runs and for lint /
+typecheck / build), **video** (`.mp4`/`.webm`/`.mov`/`.mkv`) and **image** (`.png`/`.jpg`/`.gif`/`.webp`/`.svg`/…) as built-ins — video and image
 being the reference [binary visualizers](#binary-visualizers) — built on the
 exact same contract a third-party plugin uses, so anything a built-in does, your
 plugin can too. Heavier / more niche renderers (e.g. DBML) ship as installable
@@ -16,6 +16,7 @@ A plugin can claim:
 - **file extensions** — e.g. opening a `.csv` file shows a table preview.
 
 - [Test progress](#test-progress)
+- [Task progress](#task-progress)
 - [Security model](#security-model)
 - [Installing & managing plugins](#installing--managing-plugins)
 - [Creating a plugin](#creating-a-plugin)
@@ -77,6 +78,43 @@ validated by `parseTestProgress`:
 `status` is `running` | `passed` | `failed` for the run, plus `queued` for a
 suite; times are epoch milliseconds. Replace the file atomically (write, then
 rename) so a read never sees half of it.
+
+---
+
+## Task progress
+
+The built-in ` ```task-progress ` visualizer does the same for a task made of
+steps: a bar over the steps (a running step that reports sub-units, such as the
+typecheck projects, counts the share it has done), how many steps run at once,
+one row per step with its errors (red), warnings (amber) and time, the output
+tail of a step that failed without reporting an issue, and the first issues as
+`file:line — message`. The fence body is the same `{ "path": "…" }`.
+
+`scripts/run-steps.ts` (`bun run steps <task>`) runs these tasks, built from the
+root `package.json` scripts so they stay the single source of truth — each `&&`
+part of the script is one step:
+
+| Task        | Steps                                                                              |
+| ----------- | ---------------------------------------------------------------------------------- |
+| `lint`      | the parts of `bun run lint` (oxlint, the fitness checks, cargo clippy, proof lint) |
+| `typecheck` | the parts of `bun run typecheck`                                                   |
+| `build`     | the parts of `bun run build`, one at a time                                        |
+| `verify`    | `lint` + `typecheck` + the test runner: what to pass before pushing                |
+
+Independent steps run up to `FUNNY_TASK_CONCURRENCY` (default 4) at once, so
+`bun run steps lint` is also faster than the chained `bun run lint`. With
+`FUNNY_TASK_PROGRESS` set, progress goes to that file (and `verify` writes its
+test run next to it, with `.tests.json`, for a `test-progress` block):
+
+```bash
+FUNNY_TASK_PROGRESS="$FUNNY_ASSETS_DIR/verify.json" bun run steps verify
+```
+
+It reads oxlint, tsc and cargo issues, the typecheck baseline check's
+per-project lines and the test runner's per-suite lines. The shape is
+`TaskProgress` in
+[`packages/shared/src/task-progress.ts`](../packages/shared/src/task-progress.ts),
+validated by `parseTaskProgress`.
 
 ---
 

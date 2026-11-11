@@ -1464,6 +1464,21 @@
     "unreadable": "Could not read progress from {{path}}",
     "invalidFence": "A progress block needs { \"path\": \"/absolute/path.json\" }"
   },
+  "taskProgress": {
+    "steps": "{{done}}/{{total}} steps",
+    "errors": "{{count}} errors",
+    "warnings": "{{count}} warnings",
+    "running": "{{count}} running (max {{max}})",
+    "units": "{{done}}/{{total}}",
+    "issues": "Issues",
+    "moreIssues": "Showing the first {{shown}} of {{total}}",
+    "output": "Last output",
+    "status": {
+      "running": "Running {{title}}",
+      "passed": "{{title}} passed",
+      "failed": "{{title}} failed"
+    }
+  },
   "errors": {
     "generic": {
       "NOT_FOUND": "The requested resource was not found.",

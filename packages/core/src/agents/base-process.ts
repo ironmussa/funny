@@ -370,6 +370,42 @@ export abstract class BaseAgentProcess extends EventEmitter {
    * Emit a provider error as a tool_use + tool_result pair so it renders
    * as a collapsible tool card in the UI with full history.
    */
+  /** Reports the child's errors; a missing binary (ENOENT) gets `notFoundMessage()`. */
+  protected watchChildErrors(child: ChildProcess, notFoundMessage: () => string): void {
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      if (this.hasExited || this.isAborted) return;
+      this.emit('error', err.code === 'ENOENT' ? new Error(notFoundMessage()) : err);
+    });
+  }
+
+  /**
+   * Surfaces the child's stderr errors as tool call cards, so they appear in the
+   * thread with full history. ACP subprocesses write JSON-RPC and API errors
+   * (rate limits, auth failures, …) to stderr.
+   */
+  protected forwardStderrErrors(child: ChildProcess): void {
+    child.stderr?.on('data', (data: Buffer) => {
+      const raw = data.toString().trim();
+      if (!raw) return;
+      const errorText = this.parseStderrError(raw);
+      if (errorText) this.emitErrorToolCall(errorText);
+    });
+  }
+
+  /** Waits for the child to spawn; false (and the process counts as exited) if it failed. */
+  protected async waitForSpawn(child: ChildProcess): Promise<boolean> {
+    try {
+      await new Promise<void>((resolve, reject) => {
+        child.on('spawn', resolve);
+        child.on('error', reject);
+      });
+      return true;
+    } catch {
+      this.hasExited = true;
+      return false;
+    }
+  }
+
   protected emitErrorToolCall(errorText: string): void {
     const toolCallId = randomUUID();
     // tool_use (assistant)

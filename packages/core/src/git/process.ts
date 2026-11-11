@@ -281,6 +281,29 @@ async function readStreamWithCap(
   }
 }
 
+/**
+ * A finished command's result. A non-zero exit throws ProcessExecutionError
+ * (with stderr, else stdout, as the reason) unless `options.reject` is false.
+ */
+function commandResult(
+  command: string,
+  args: string[],
+  options: ProcessOptions,
+  result: ProcessResult,
+): ProcessResult {
+  const { stdout, stderr, exitCode } = result;
+  if ((options.reject ?? true) && exitCode !== 0) {
+    throw new ProcessExecutionError(
+      stderr.trim() || stdout.trim() || `Command failed: ${command} ${args.join(' ')}`,
+      exitCode,
+      stdout,
+      stderr,
+      `${command} ${args.join(' ')}`,
+    );
+  }
+  return result;
+}
+
 /** Bun-optimized path using Bun.spawn */
 async function executeRawBun(
   command: string,
@@ -330,19 +353,7 @@ async function executeRawBun(
       },
     );
 
-    const shouldReject = options.reject ?? true;
-    if (shouldReject && exitCode !== 0) {
-      const reason = stderr.trim() || stdout.trim();
-      throw new ProcessExecutionError(
-        reason || `Command failed: ${command} ${args.join(' ')}`,
-        exitCode,
-        stdout,
-        stderr,
-        `${command} ${args.join(' ')}`,
-      );
-    }
-
-    return { stdout, stderr, exitCode };
+    return commandResult(command, args, options, { stdout, stderr, exitCode });
   } finally {
     // Also covers read failures and cancellation before the async body starts.
     if (proc.exitCode === null) proc.kill();
@@ -463,19 +474,7 @@ export function executeSync(
     exitCode = result.status ?? 1;
   }
 
-  const shouldReject = options.reject ?? true;
-  if (shouldReject && exitCode !== 0) {
-    const reason = stderr.trim() || stdout.trim();
-    throw new ProcessExecutionError(
-      reason || `Command failed: ${command} ${args.join(' ')}`,
-      exitCode,
-      stdout,
-      stderr,
-      `${command} ${args.join(' ')}`,
-    );
-  }
-
-  return { stdout, stderr, exitCode };
+  return commandResult(command, args, options, { stdout, stderr, exitCode });
 }
 
 /**

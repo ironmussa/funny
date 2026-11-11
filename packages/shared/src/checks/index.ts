@@ -10,6 +10,7 @@ export {
   type CheckKind,
   type CheckTool,
 } from './classify.js';
+export { checkInputKey } from './input-key.js';
 export { createStepParser, type StepParser, type StepReport } from './step-output.js';
 export {
   createOutputParser,

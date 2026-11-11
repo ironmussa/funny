@@ -682,6 +682,17 @@ export interface WSToolOutputData {
   output: string;
 }
 
+/** A `funny_run_checks` run started: where its progress file is. */
+export interface WSCheckRunData {
+  runId: string;
+  kind: string;
+  /** Absolute path of the test-progress / task-progress file. */
+  path: string;
+  /** `checkInputKey` of the tool call's input. */
+  inputKey: string;
+  startedAt: number;
+}
+
 export interface WSStatusData {
   status: ThreadStatus;
   waitingReason?: WaitingReason;
@@ -962,6 +973,7 @@ export type WSEvent =
   | { type: 'agent:message'; threadId: string; data: WSMessageData }
   | { type: 'agent:tool_call'; threadId: string; data: WSToolCallData }
   | { type: 'agent:tool_output'; threadId: string; data: WSToolOutputData }
+  | { type: 'agent:check_run'; threadId: string; data: WSCheckRunData }
   | { type: 'agent:status'; threadId: string; data: WSStatusData }
   | { type: 'agent:result'; threadId: string; data: WSResultData }
   | { type: 'agent:error'; threadId: string; data: WSErrorData }

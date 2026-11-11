@@ -11,6 +11,9 @@
  * the command writes that file itself (funny's own runners). The file always
  * ends in `passed` or `failed`, including when the run is cancelled or times
  * out: the process group is signalled and the run finalised as failed.
+ *
+ * It logs nothing itself: the background job's process (`run-cli.ts`) prints
+ * only the summary, and callers log the result.
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -43,7 +46,6 @@ import {
   type TestProgress,
 } from '@funny/shared/test-progress';
 
-import { log } from '../../lib/logger.js';
 import type { CheckPlan, CheckStep } from './toolchain.js';
 
 /** The reporter `--reporter=` hands to a project's vitest; copied next to the bundle. */
@@ -352,7 +354,6 @@ export async function runCheck(plan: CheckPlan, options: RunCheckOptions): Promi
       exitCode: 130,
       tail: [stopped === 'timeout' ? `timed out after ${options.timeoutMs} ms` : 'cancelled'],
     };
-    log.info('check run stopped', { namespace: 'checks', kind: plan.kind, stopped, cwd: plan.cwd });
   }
   const failed = outcome.exitCode !== 0;
   const own = run.close(failed, now());

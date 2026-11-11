@@ -114,8 +114,9 @@ function ensureListener(): ReturnType<typeof Bun.serve> {
   listener ??= Bun.serve({
     hostname: '127.0.0.1',
     port: 0,
-    // Tools are bounded (browser actions ≤ 30 s) but a wait can take a while.
-    idleTimeout: 120,
+    // Tools are bounded (browser actions ≤ 30 s, a synchronous check ≤ 240 s),
+    // so allow Bun's maximum: a request is silent until its tool returns.
+    idleTimeout: 255,
     fetch: (req) =>
       handle(req).catch((err) => {
         log.warn('agent MCP request failed', { namespace: NS, error: String(err) });

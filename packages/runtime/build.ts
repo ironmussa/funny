@@ -25,8 +25,12 @@ await mkdir(DIST, { recursive: true });
 
 // Bundle server + all @funny/* workspace packages into a single file
 const result = await Bun.build({
-  entrypoints: [join(ROOT, 'src/index.ts')],
+  // run-cli is what a background `funny_run_checks` job runs, as its own process.
+  entrypoints: [join(ROOT, 'src/index.ts'), join(ROOT, 'src/services/checks/run-cli.ts')],
   outdir: DIST,
+  // Both entries at the top of dist/ (dist/index.js, dist/run-cli.js): the
+  // check tool finds run-cli.js next to the bundle, like pty-helper.mjs.
+  naming: { entry: '[name].[ext]' },
   target: 'bun',
   define: {
     __BUILD_INFO__: JSON.stringify(BUILD_INFO),

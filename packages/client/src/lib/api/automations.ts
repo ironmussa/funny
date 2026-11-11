@@ -1,37 +1,25 @@
 import type {
-  Automation,
-  AutomationRun,
   CreateAutomationRequest,
-  InboxItem,
+  RunTriageStatus,
   UpdateAutomationRequest,
 } from '@funny/shared';
+import { automationsContract as contract } from '@funny/shared/contracts/automations';
 
-import { request } from './_core';
+import { callEndpoint } from './_contract';
 
 export const automationsApi = {
-  listAutomations: (projectId?: string) =>
-    request<Automation[]>(`/automations${projectId ? `?projectId=${projectId}` : ''}`),
-  getAutomation: (id: string) => request<Automation>(`/automations/${id}`),
+  listAutomations: (projectId?: string) => callEndpoint(contract.list, { query: { projectId } }),
+  getAutomation: (id: string) => callEndpoint(contract.get, { params: { id } }),
   createAutomation: (data: CreateAutomationRequest) =>
-    request<Automation>('/automations', { method: 'POST', body: JSON.stringify(data) }),
+    callEndpoint(contract.create, { body: data }),
   updateAutomation: (id: string, data: UpdateAutomationRequest) =>
-    request<Automation>(`/automations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteAutomation: (id: string) =>
-    request<{ ok: boolean }>(`/automations/${id}`, { method: 'DELETE' }),
-  triggerAutomation: (id: string) =>
-    request<{ ok: boolean }>(`/automations/${id}/trigger`, { method: 'POST' }),
+    callEndpoint(contract.update, { params: { id }, body: data }),
+  deleteAutomation: (id: string) => callEndpoint(contract.remove, { params: { id } }),
+  triggerAutomation: (id: string) => callEndpoint(contract.trigger, { params: { id } }),
   listAutomationRuns: (automationId: string) =>
-    request<AutomationRun[]>(`/automations/${automationId}/runs`),
-  getAutomationInbox: (options?: { projectId?: string; triageStatus?: string }) => {
-    const params = new URLSearchParams();
-    if (options?.projectId) params.append('projectId', options.projectId);
-    if (options?.triageStatus) params.append('triageStatus', options.triageStatus);
-    const query = params.toString();
-    return request<InboxItem[]>(`/automations/inbox${query ? `?${query}` : ''}`);
-  },
-  triageRun: (runId: string, triageStatus: 'pending' | 'reviewed' | 'dismissed') =>
-    request<{ ok: boolean }>(`/automations/runs/${runId}/triage`, {
-      method: 'PATCH',
-      body: JSON.stringify({ triageStatus }),
-    }),
+    callEndpoint(contract.runs, { params: { id: automationId } }),
+  getAutomationInbox: (options?: { projectId?: string; triageStatus?: string }) =>
+    callEndpoint(contract.inbox, { query: options }),
+  triageRun: (runId: string, triageStatus: RunTriageStatus) =>
+    callEndpoint(contract.triageRun, { params: { runId }, body: { triageStatus } }),
 };

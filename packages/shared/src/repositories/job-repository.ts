@@ -16,26 +16,13 @@
 
 import { and, eq } from 'drizzle-orm';
 
-import type { JobStatus } from '../types.js';
+import type { Job, JobStatus } from '../types.js';
 import type { RepoDeps } from './deps.js';
 
 export type JobRepositoryDeps = RepoDeps;
 
-export interface JobRow {
-  id: string;
-  threadId: string;
-  userId: string;
-  command: string;
-  cwd: string | null;
-  label: string | null;
-  pid: number | null;
-  logPath: string;
-  exitPath: string;
-  status: JobStatus;
-  exitCode: number | null;
-  startedAt: string;
-  updatedAt: string;
-}
+/** A row is the shared `Job` type: the columns map one to one. */
+export type JobRow = Job;
 
 export interface JobPatch {
   pid?: number | null;

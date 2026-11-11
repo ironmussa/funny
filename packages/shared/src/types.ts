@@ -309,6 +309,7 @@ export type {
   CreateAutomationRequest,
   UpdateAutomationRequest,
   InboxItem,
+  InboxThread,
 } from './types/automations.js';
 
 export type { ThreadEventType, ThreadEvent, TurnOutcomeEventData } from './types/thread-events.js';

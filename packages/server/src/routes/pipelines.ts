@@ -7,14 +7,21 @@
 
 import { randomUUID } from 'crypto';
 
+import {
+  pipelinesContract as contract,
+  type UpdatePipelineRequest,
+} from '@funny/shared/contracts/pipelines';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
+import { toPipeline, toPipelineRun } from '../lib/pipeline-response.js';
+import { authorizer } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import { pipelineApprovalStore } from '../services/pipeline-approval-store.js';
 import * as pipelineRepo from '../services/pipeline-repository.js';
+import { fail, reply, serveEndpoint } from '../validation/endpoint.js';
 import { parseJsonBody } from '../validation/request.js';
 
 export const pipelineRoutes = new Hono<ServerEnv>();
@@ -123,45 +130,6 @@ const progressBodySchema = z.object({
   error: z.unknown().optional(),
   metadata: z.unknown().optional(),
 });
-
-const pipelinePromptFields = {
-  reviewerPrompt: z.string().optional(),
-  correctorPrompt: z.string().optional(),
-  precommitFixerPrompt: z.string().optional(),
-  commitMessagePrompt: z.string().optional(),
-  testFixerPrompt: z.string().optional(),
-};
-
-const pipelineSettingsFields = {
-  reviewModel: z.string().optional(),
-  fixModel: z.string().optional(),
-  maxIterations: z.number().optional(),
-  precommitFixEnabled: z.boolean().optional(),
-  precommitFixModel: z.string().optional(),
-  precommitFixMaxIterations: z.number().optional(),
-  testEnabled: z.boolean().optional(),
-  testCommand: z.string().optional(),
-  testFixEnabled: z.boolean().optional(),
-  testFixModel: z.string().optional(),
-  testFixMaxIterations: z.number().optional(),
-  ...pipelinePromptFields,
-};
-
-const createPipelineBodySchema = z
-  .object({
-    projectId: z.string().optional(),
-    name: z.string().optional(),
-    ...pipelineSettingsFields,
-  })
-  .passthrough();
-
-const updatePipelineBodySchema = z
-  .object({
-    name: z.string().optional(),
-    enabled: z.boolean().optional(),
-    ...pipelineSettingsFields,
-  })
-  .passthrough();
 
 // POST /api/pipelines/scheduler/approvals/request — long-poll
 pipelineRoutes.post('/scheduler/approvals/request', async (c) => {
@@ -329,119 +297,81 @@ pipelineRoutes.post('/scheduler/progress', async (c) => {
 });
 
 // GET /api/pipelines/project/:projectId
-pipelineRoutes.get('/project/:projectId', async (c) => {
-  const userId = c.get('userId') as string;
-  const { projectId } = c.req.param();
+serveEndpoint(pipelineRoutes, contract.list, async ({ userId, params }) => {
   // Security CR-5: scope to caller's pipelines so cross-tenant rows are
   // filtered server-side rather than relying on the project belonging to
   // the user (project ownership is enforced separately).
-  const rows = await pipelineRepo.getPipelinesByProject(projectId, userId);
-  return c.json(rows);
+  const rows = await pipelineRepo.getPipelinesByProject(params.projectId, userId);
+  return reply(rows.map(toPipeline));
 });
 
 // GET /api/pipelines/:id
-pipelineRoutes.get('/:id', async (c) => {
-  const userId = c.get('userId') as string;
-  const { id } = c.req.param();
-  const pipeline = await pipelineRepo.getPipelineById(id, userId);
-  if (!pipeline) return c.json({ error: 'Pipeline not found' }, 404);
-  return c.json(pipeline);
+serveEndpoint(pipelineRoutes, contract.get, async ({ userId, params }) => {
+  const pipeline = await pipelineRepo.getPipelineById(params.id, userId);
+  if (!pipeline) return fail(404, 'Pipeline not found');
+  return reply(toPipeline(pipeline));
 });
 
 // POST /api/pipelines
-pipelineRoutes.post('/', async (c) => {
-  const userId = c.get('userId') as string;
-  const parsed = await parseJsonBody(c, createPipelineBodySchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const body = parsed.value;
-
-  if (!body.projectId || !body.name) {
-    return c.json({ error: 'projectId and name are required' }, 400);
+serveEndpoint(pipelineRoutes, contract.create, async ({ userId, body }) => {
+  // The pipeline reviews this project's threads: require that the creator can
+  // see it (same 404 as a missing project), as automations do.
+  if (!(await authorizer.authorize(userId, 'project', body.projectId, 'view'))) {
+    return fail(404, 'Project not found');
   }
 
-  const id = await pipelineRepo.createPipeline({
-    projectId: body.projectId,
-    userId,
-    name: body.name,
-    reviewModel: body.reviewModel,
-    fixModel: body.fixModel,
-    maxIterations: body.maxIterations,
-    precommitFixEnabled: body.precommitFixEnabled,
-    precommitFixModel: body.precommitFixModel,
-    precommitFixMaxIterations: body.precommitFixMaxIterations,
-    reviewerPrompt: body.reviewerPrompt,
-    correctorPrompt: body.correctorPrompt,
-    precommitFixerPrompt: body.precommitFixerPrompt,
-    commitMessagePrompt: body.commitMessagePrompt,
-    testEnabled: body.testEnabled,
-    testCommand: body.testCommand,
-    testFixEnabled: body.testFixEnabled,
-    testFixModel: body.testFixModel,
-    testFixMaxIterations: body.testFixMaxIterations,
-    testFixerPrompt: body.testFixerPrompt,
-  });
-
+  const id = await pipelineRepo.createPipeline({ ...body, userId });
   const pipeline = await pipelineRepo.getPipelineById(id, userId);
-  return c.json(pipeline, 201);
+  if (!pipeline) return fail(500, 'Pipeline was not saved');
+  return reply(toPipeline(pipeline), 201);
 });
 
-// PATCH /api/pipelines/:id
-pipelineRoutes.patch('/:id', async (c) => {
-  const userId = c.get('userId') as string;
-  const { id } = c.req.param();
-  const parsed = await parseJsonBody(c, updatePipelineBodySchema);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const body = parsed.value;
-
-  const existing = await pipelineRepo.getPipelineById(id, userId);
-  if (!existing) return c.json({ error: 'Pipeline not found' }, 404);
-
+/** Column writes for a PATCH body: flags become integers, empty prompts become null. */
+function pipelineUpdates(body: UpdatePipelineRequest): Record<string, unknown> {
   const updates: Record<string, unknown> = {};
-  if (body.name !== undefined) updates.name = body.name;
-  if (body.enabled !== undefined) updates.enabled = body.enabled ? 1 : 0;
-  if (body.reviewModel !== undefined) updates.reviewModel = body.reviewModel;
-  if (body.fixModel !== undefined) updates.fixModel = body.fixModel;
-  if (body.maxIterations !== undefined) updates.maxIterations = body.maxIterations;
-  if (body.precommitFixEnabled !== undefined)
-    updates.precommitFixEnabled = body.precommitFixEnabled ? 1 : 0;
-  if (body.precommitFixModel !== undefined) updates.precommitFixModel = body.precommitFixModel;
-  if (body.precommitFixMaxIterations !== undefined)
-    updates.precommitFixMaxIterations = body.precommitFixMaxIterations;
-  if (body.reviewerPrompt !== undefined) updates.reviewerPrompt = body.reviewerPrompt || null;
-  if (body.correctorPrompt !== undefined) updates.correctorPrompt = body.correctorPrompt || null;
-  if (body.precommitFixerPrompt !== undefined)
-    updates.precommitFixerPrompt = body.precommitFixerPrompt || null;
-  if (body.commitMessagePrompt !== undefined)
-    updates.commitMessagePrompt = body.commitMessagePrompt || null;
-  if (body.testEnabled !== undefined) updates.testEnabled = body.testEnabled ? 1 : 0;
-  if (body.testCommand !== undefined) updates.testCommand = body.testCommand || null;
-  if (body.testFixEnabled !== undefined) updates.testFixEnabled = body.testFixEnabled ? 1 : 0;
-  if (body.testFixModel !== undefined) updates.testFixModel = body.testFixModel;
-  if (body.testFixMaxIterations !== undefined)
-    updates.testFixMaxIterations = body.testFixMaxIterations;
-  if (body.testFixerPrompt !== undefined) updates.testFixerPrompt = body.testFixerPrompt || null;
+  for (const [key, value] of Object.entries(body)) {
+    if (value === undefined) continue;
+    if (FLAG_COLUMNS.has(key)) updates[key] = value ? 1 : 0;
+    else if (NULLABLE_TEXT_COLUMNS.has(key)) updates[key] = value || null;
+    else updates[key] = value;
+  }
+  return updates;
+}
 
-  await pipelineRepo.updatePipeline(id, userId, updates);
-  return c.json(await pipelineRepo.getPipelineById(id, userId));
+const FLAG_COLUMNS = new Set(['enabled', 'precommitFixEnabled', 'testEnabled', 'testFixEnabled']);
+const NULLABLE_TEXT_COLUMNS = new Set([
+  'reviewerPrompt',
+  'correctorPrompt',
+  'precommitFixerPrompt',
+  'commitMessagePrompt',
+  'testCommand',
+  'testFixerPrompt',
+]);
+
+// PATCH /api/pipelines/:id
+serveEndpoint(pipelineRoutes, contract.update, async ({ userId, params, body }) => {
+  const existing = await pipelineRepo.getPipelineById(params.id, userId);
+  if (!existing) return fail(404, 'Pipeline not found');
+
+  await pipelineRepo.updatePipeline(params.id, userId, pipelineUpdates(body));
+  const updated = await pipelineRepo.getPipelineById(params.id, userId);
+  if (!updated) return fail(404, 'Pipeline not found');
+  return reply(toPipeline(updated));
 });
 
 // DELETE /api/pipelines/:id
-pipelineRoutes.delete('/:id', async (c) => {
-  const userId = c.get('userId') as string;
-  const { id } = c.req.param();
-  const existing = await pipelineRepo.getPipelineById(id, userId);
-  if (!existing) return c.json({ error: 'Pipeline not found' }, 404);
+serveEndpoint(pipelineRoutes, contract.remove, async ({ userId, params }) => {
+  const existing = await pipelineRepo.getPipelineById(params.id, userId);
+  if (!existing) return fail(404, 'Pipeline not found');
 
-  await pipelineRepo.deletePipeline(id, userId);
-  return c.json({ ok: true });
+  await pipelineRepo.deletePipeline(params.id, userId);
+  return reply({ ok: true });
 });
 
 // GET /api/pipelines/runs/thread/:threadId
-pipelineRoutes.get('/runs/thread/:threadId', async (c) => {
-  const userId = c.get('userId') as string;
-  const { threadId } = c.req.param();
+serveEndpoint(pipelineRoutes, contract.runsForThread, async ({ userId, params }) => {
   // Security CR-5: getRunsForThread verifies thread ownership internally and
   // returns [] for cross-tenant lookups.
-  const runs = await pipelineRepo.getRunsForThread(threadId, userId);
-  return c.json(runs);
+  const runs = await pipelineRepo.getRunsForThread(params.threadId, userId);
+  return reply(runs.map(toPipelineRun));
 });

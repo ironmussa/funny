@@ -15,7 +15,7 @@ import {
   type TestProgressSlowEntry,
   type TestProgressSuite,
 } from '../packages/shared/src/test-progress';
-import { ThrottledJsonFile, type ThrottleOptions } from './progress-io';
+import { openProgressFile, type ThrottledJsonFile, type ThrottleOptions } from './progress-io';
 
 /** Starts an event line from `vitest-progress-reporter.ts`; JSON follows. */
 export const TEST_EVENT_PREFIX = '##funny-test ';
@@ -190,6 +190,19 @@ interface ProgressFileOptions extends ThrottleOptions {
   concurrency?: number;
 }
 
+function queuedSuite({ name, related }: { name: string; related: boolean }): TestProgressSuite {
+  return {
+    name,
+    related,
+    status: 'queued',
+    passed: 0,
+    failed: 0,
+    skipped: 0,
+    running: [],
+    slow: [],
+  };
+}
+
 /** Rewrites the progress file as suites start, report and finish. */
 export class ProgressFile {
   private readonly file: ThrottledJsonFile<TestProgress>;
@@ -197,31 +210,13 @@ export class ProgressFile {
   constructor(
     path: string,
     suites: readonly { name: string; related: boolean }[],
-    { concurrency, intervalMs, now = Date.now }: ProgressFileOptions = {},
+    options: ProgressFileOptions = {},
   ) {
-    const startedAt = now();
-    const progress: TestProgress = {
-      version: TEST_PROGRESS_VERSION,
-      status: 'running',
-      startedAt,
-      updatedAt: startedAt,
-      ...(concurrency ? { concurrency } : {}),
-      suites: suites.map(({ name, related }) => ({
-        name,
-        related,
-        status: 'queued',
-        passed: 0,
-        failed: 0,
-        skipped: 0,
-        running: [],
-        slow: [],
-      })),
-    };
-    this.file = new ThrottledJsonFile(path, progress, (value, at) => (value.updatedAt = at), {
-      intervalMs,
-      now,
-    });
-    this.file.flush();
+    this.file = openProgressFile<TestProgress>(
+      path,
+      (head) => ({ version: TEST_PROGRESS_VERSION, ...head, suites: suites.map(queuedSuite) }),
+      options,
+    );
   }
 
   start(index: number): void {

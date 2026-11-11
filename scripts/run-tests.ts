@@ -13,7 +13,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { availableParallelism } from 'node:os';
 import { join } from 'node:path';
 
-import { pumpLines } from './progress-io';
+import { collectOutput } from './progress-io';
 import { testSuiteEnv } from './test-env';
 import { createOutputParser, isEventLine, ProgressFile } from './test-progress';
 
@@ -290,25 +290,13 @@ async function runPackageTests(
     stderr: 'pipe',
     stdin: buffered ? 'ignore' : 'inherit',
   });
-  let output = '';
-  const sink = (target: NodeJS.WriteStream) => (line: string) => {
-    onLine?.(line);
-    if (isEventLine(line)) return;
-    if (buffered) output += `${line}\n`;
-    else target.write(`${line}\n`);
-  };
-  const [code] = await Promise.all([
-    proc.exited,
-    pumpLines(proc.stdout, sink(process.stdout)),
-    pumpLines(proc.stderr, sink(process.stderr)),
-  ]);
-  const durationMs = performance.now() - start;
-
-  if (buffered) {
-    const seconds = (durationMs / 1000).toFixed(1);
-    console.log(`\n=== ${label(run)} ===\n${output}`);
-    console.log(`${code === 0 ? '✓' : '✗'} ${label(run)} ${seconds}s`);
-  }
+  const { code, durationMs } = await collectOutput(proc, {
+    title: label(run),
+    buffered,
+    start,
+    onLine,
+    hide: isEventLine,
+  });
   return { ...pkg, related: Boolean(run.related), code, durationMs };
 }
 

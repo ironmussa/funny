@@ -10,6 +10,7 @@
 import { z } from 'zod';
 
 import { parseStoredJson, type JsonValidationResult } from './json-validation.js';
+import { progressRunFields } from './test-progress.js';
 
 export const TASK_PROGRESS_VERSION = 1;
 
@@ -50,13 +51,7 @@ export const taskProgressSchema = z.object({
   version: z.literal(TASK_PROGRESS_VERSION),
   /** What is running, e.g. `lint`. */
   title: z.string(),
-  status: z.enum(['running', 'passed', 'failed']),
-  /** Epoch milliseconds. */
-  startedAt: z.number(),
-  updatedAt: z.number(),
-  finishedAt: z.number().optional(),
-  /** Steps the runner runs at once. */
-  concurrency: z.number().int().positive().optional(),
+  ...progressRunFields,
   steps: z.array(taskStepSchema),
   /** Errors first, at most `TASK_ISSUE_LIMIT`. */
   issues: z.array(taskIssueSchema).default([]),

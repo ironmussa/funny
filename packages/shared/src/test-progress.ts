@@ -53,15 +53,20 @@ const testProgressSuiteSchema = z.object({
   slow: z.array(slowEntrySchema).default([]),
 });
 
-export const testProgressSchema = z.object({
-  version: z.literal(TEST_PROGRESS_VERSION),
+/** Run-level fields every live progress file has (`test-progress`, `task-progress`). */
+export const progressRunFields = {
   status: z.enum(['running', 'passed', 'failed']),
   /** Epoch milliseconds. */
   startedAt: z.number(),
   updatedAt: z.number(),
   finishedAt: z.number().optional(),
-  /** Suites the runner runs at once. */
+  /** Suites (or steps) the runner runs at once. */
   concurrency: z.number().int().positive().optional(),
+};
+
+export const testProgressSchema = z.object({
+  version: z.literal(TEST_PROGRESS_VERSION),
+  ...progressRunFields,
   suites: z.array(testProgressSuiteSchema),
 });
 

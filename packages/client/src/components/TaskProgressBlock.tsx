@@ -28,9 +28,36 @@ function IssueCounts({ errors, warnings }: { errors: number; warnings: number })
   );
 }
 
+function stepElapsed(step: TaskStep, now: number): number | undefined {
+  if (step.durationMs !== undefined) return step.durationMs;
+  return step.startedAt !== undefined ? now - step.startedAt : undefined;
+}
+
+/** What a running step prints now, or the output tail of a failed one. */
+function StepDetail({ step, t }: { step: TaskStep; t: TFunction }) {
+  if (step.status === 'running' && step.current) {
+    return (
+      <span className="text-muted-foreground truncate pl-5 font-mono" title={step.current}>
+        {step.current}
+      </span>
+    );
+  }
+  if (step.status === 'failed' && step.tail.length > 0) {
+    return (
+      <pre
+        className="bg-muted/40 text-muted-foreground ml-5 overflow-x-auto rounded px-2 py-1 font-mono whitespace-pre-wrap"
+        data-testid={`task-progress-tail-${step.name}`}
+        aria-label={t('taskProgress.output')}
+      >
+        {step.tail.join('\n')}
+      </pre>
+    );
+  }
+  return null;
+}
+
 function StepRow({ step, now, t }: { step: TaskStep; now: number; t: TFunction }) {
-  const elapsed =
-    step.durationMs ?? (step.startedAt !== undefined ? now - step.startedAt : undefined);
+  const elapsed = stepElapsed(step, now);
   const showUnits = step.unitsTotal !== undefined && step.status === 'running';
   return (
     <li
@@ -53,20 +80,7 @@ function StepRow({ step, now, t }: { step: TaskStep; now: number; t: TFunction }
           {elapsed !== undefined && <span>{formatDuration(elapsed, t)}</span>}
         </span>
       </div>
-      {step.status === 'running' && step.current && (
-        <span className="text-muted-foreground truncate pl-5 font-mono" title={step.current}>
-          {step.current}
-        </span>
-      )}
-      {step.status === 'failed' && step.tail.length > 0 && (
-        <pre
-          className="bg-muted/40 text-muted-foreground ml-5 overflow-x-auto rounded px-2 py-1 font-mono whitespace-pre-wrap"
-          data-testid={`task-progress-tail-${step.name}`}
-          aria-label={t('taskProgress.output')}
-        >
-          {step.tail.join('\n')}
-        </pre>
-      )}
+      <StepDetail step={step} t={t} />
     </li>
   );
 }

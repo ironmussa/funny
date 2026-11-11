@@ -18,13 +18,22 @@ import {
   type TaskProgress,
   type TaskStep,
 } from '../packages/shared/src/task-progress';
-import { pumpLines, ThrottledJsonFile, type ThrottleOptions } from './progress-io';
+import {
+  collectOutput,
+  openProgressFile,
+  type ThrottledJsonFile,
+  type ThrottleOptions,
+} from './progress-io';
 import { createStepParser, type StepReport } from './step-output';
 import { TASK_NAMES, taskFor, type TaskDef, type TaskStepDef } from './task-steps';
 import { testSuiteEnv } from './test-env';
 
 const ROOT = join(import.meta.dir, '..');
 export const DEFAULT_STEP_CONCURRENCY = 4;
+
+function queuedStep({ id, name }: TaskStepDef): TaskStep {
+  return { id, name, status: 'queued', errors: 0, warnings: 0, tail: [] };
+}
 
 /** Keeps the progress file of a task run up to date. */
 export class TaskProgressFile {
@@ -35,31 +44,19 @@ export class TaskProgressFile {
   constructor(
     path: string,
     task: TaskDef,
-    { concurrency, intervalMs, now = Date.now }: ThrottleOptions & { concurrency?: number } = {},
+    options: ThrottleOptions & { concurrency?: number } = {},
   ) {
-    const startedAt = now();
-    const progress: TaskProgress = {
-      version: TASK_PROGRESS_VERSION,
-      title: task.name,
-      status: 'running',
-      startedAt,
-      updatedAt: startedAt,
-      ...(concurrency ? { concurrency } : {}),
-      steps: task.steps.map(({ id, name }) => ({
-        id,
-        name,
-        status: 'queued',
-        errors: 0,
-        warnings: 0,
-        tail: [],
-      })),
-      issues: [],
-    };
-    this.file = new ThrottledJsonFile(path, progress, (value, at) => (value.updatedAt = at), {
-      intervalMs,
-      now,
-    });
-    this.file.flush();
+    this.file = openProgressFile<TaskProgress>(
+      path,
+      (head) => ({
+        version: TASK_PROGRESS_VERSION,
+        title: task.name,
+        ...head,
+        steps: task.steps.map(queuedStep),
+        issues: [],
+      }),
+      options,
+    );
   }
 
   start(index: number): void {
@@ -128,22 +125,12 @@ async function runStep(
     stderr: 'pipe',
     stdin: 'ignore',
   });
-  let output = '';
-  const sink = (target: NodeJS.WriteStream) => (line: string) => {
-    onLine(line);
-    if (buffered) output += `${line}\n`;
-    else target.write(`${line}\n`);
-  };
-  const [code] = await Promise.all([
-    proc.exited,
-    pumpLines(proc.stdout, sink(process.stdout)),
-    pumpLines(proc.stderr, sink(process.stderr)),
-  ]);
-  const durationMs = performance.now() - start;
-  if (buffered) {
-    console.log(`\n=== ${step.name} ===\n${output}`);
-    console.log(`${code === 0 ? '✓' : '✗'} ${step.name} ${(durationMs / 1000).toFixed(1)}s`);
-  }
+  const { code, durationMs } = await collectOutput(proc, {
+    title: step.name,
+    buffered,
+    start,
+    onLine,
+  });
   return { step, code, durationMs };
 }
 

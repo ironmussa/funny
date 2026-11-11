@@ -91,26 +91,34 @@ export function createStepParser(step: string): StepParser {
     return [{ step, ...issue }];
   };
 
+  // Cargo prints an issue's location on the line right after it: `consumed`
+  // tells whether `line` was that location.
+  const flushCargo = (line: string): { issues: TaskIssue[]; consumed: boolean } => {
+    const pending = cargo;
+    cargo = null;
+    if (!pending) return { issues: [], consumed: false };
+    const at = CARGO_AT.exec(line);
+    if (!at) return { issues: record(pending), consumed: false };
+    const located = { ...pending, file: at[1], line: Number(at[2]), column: Number(at[3]) };
+    return { issues: record(located), consumed: true };
+  };
+
+  const readLine = (line: string): TaskIssue[] => {
+    if (progressLine(report, line)) return [];
+    const issue = lineIssue(line);
+    const head = !issue && !CARGO_SUMMARY.test(line) && CARGO_HEAD.exec(line);
+    if (head) cargo = { severity: head[1] as Issue['severity'], message: head[2] };
+    if (line.trim()) {
+      report.current = line.trim().slice(0, CURRENT_MAX);
+      report.tail = [...report.tail, report.current].slice(-TAIL_LINES);
+    }
+    return issue ? record(issue) : [];
+  };
+
   return (raw) => {
     const line = raw.replace(ANSI, '').trimEnd();
-    const issues: TaskIssue[] = [];
-    const at = cargo && CARGO_AT.exec(line);
-    if (cargo && !at) issues.push(...record(cargo)); // cargo prints the location right after
-    if (cargo && at) {
-      issues.push(...record({ ...cargo, file: at[1], line: Number(at[2]), column: Number(at[3]) }));
-    }
-    const wasLocation = Boolean(cargo && at);
-    cargo = null;
-    if (!wasLocation && !progressLine(report, line)) {
-      const issue = lineIssue(line);
-      const head = !issue && !CARGO_SUMMARY.test(line) && CARGO_HEAD.exec(line);
-      if (issue) issues.push(...record(issue));
-      else if (head) cargo = { severity: head[1] as Issue['severity'], message: head[2] };
-      if (line.trim()) {
-        report.current = line.trim().slice(0, CURRENT_MAX);
-        report.tail = [...report.tail, report.current].slice(-TAIL_LINES);
-      }
-    }
+    const { issues, consumed } = flushCargo(line);
+    if (!consumed) issues.push(...readLine(line));
     return { report: { ...report }, issues };
   };
 }

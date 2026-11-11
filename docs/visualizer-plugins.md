@@ -146,7 +146,7 @@ with an `agent:check_run` event, keyed by the tool input (`checkInputKey` in
 `@funny/shared/checks`) so the thread can show the run while the call is still
 going. The agent gets a summary instead of the log: totals, up to 20 failures
 as `file:line message`, the output tail only when a failure reported none, and
-`progressPath`. A synchronous run is stopped after 4 minutes; longer runs need
+`progressPath`. A synchronous run is stopped after 30 minutes; longer runs need
 `background: true`.
 
 In the thread, a `funny_run_checks` call is its widget: it follows the run while

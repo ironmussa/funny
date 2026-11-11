@@ -35,10 +35,11 @@ import { planCheck, type CheckPlan, type CheckRequest } from './toolchain.js';
 const NS = 'checks';
 
 /**
- * A synchronous run's budget. The `funny` MCP listener drops a request idle
- * for 255 s (Bun's maximum), so longer runs must be background jobs.
+ * A synchronous run's budget. The MCP listener has no idle cutoff for tool
+ * calls and funny raises Codex's MCP tool timeout to match (core
+ * `codex-mcp.ts`), so this is the only limit; longer runs go in the background.
  */
-const SYNC_TIMEOUT_MS = 240_000;
+const SYNC_TIMEOUT_MS = 30 * 60_000;
 
 const CHECK_KINDS = ['test', 'typecheck', 'lint', 'format', 'build', 'verify'] as const;
 
@@ -58,7 +59,7 @@ const description =
   'tool: vitest, jest, bun test, playwright, pytest, tsc, mypy, oxlint, ' +
   'eslint, ruff, prettier, oxfmt, cargo, go) and shows its progress live in ' +
   'the thread. `format` rewrites files (it runs the formatter in write ' +
-  'mode). `verify` runs lint + typecheck + test. Runs longer than 4 minutes ' +
+  'mode). `verify` runs lint + typecheck + test. Runs longer than 30 minutes ' +
   'are stopped unless `background: true`, which runs them as a durable job ' +
   'and wakes you with the summary when they finish.';
 

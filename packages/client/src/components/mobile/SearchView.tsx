@@ -8,7 +8,6 @@ import { VirtualThreadList } from '@/components/VirtualThreadList';
 import { useProjects } from '@/data/projects/hooks';
 import { useThreadContentSearch } from '@/hooks/use-thread-content-search';
 import { useThreadsForProject } from '@/lib/thread-selectors';
-import { useAppStore } from '@/stores/app-store';
 
 interface Props {
   projectId: string;

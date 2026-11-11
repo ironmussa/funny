@@ -27,5 +27,9 @@
     "@storybook/addon-onboarding",
     "@chromatic-com/storybook",
     "@funny/native-git-*"
+  ],
+  "entry": [
+    "packages/runtime/src/services/checks/vitest-progress-reporter.mjs",
+    "packages/runtime/src/services/checks/run-cli.ts"
   ]
 }

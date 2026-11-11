@@ -95,8 +95,22 @@ async function restart() {
 
 // Debounce: collect rapid changes into a single restart
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+/**
+ * Test files are never loaded by the running server. Restarting for them only
+ * kills the agents in progress (often the agent that just edited the test).
+ */
+function isTestFile(filename: string): boolean {
+  return /(^|[\\/])__tests__[\\/]|\.(test|spec)\.tsx?$/.test(filename);
+}
+
+/** A change without a file name (some platforms) restarts, to be safe. */
+function triggersRestart(filename: string | null): boolean {
+  if (!filename) return true;
+  return /\.tsx?$/.test(filename) && !isTestFile(filename);
+}
+
 function onFileChange(_event: string, filename: string | null) {
-  if (filename && !filename.endsWith('.ts') && !filename.endsWith('.tsx')) return;
+  if (!triggersRestart(filename)) return;
   if (debounceTimer) clearTimeout(debounceTimer);
   debounceTimer = setTimeout(() => void restart(), 300);
 }

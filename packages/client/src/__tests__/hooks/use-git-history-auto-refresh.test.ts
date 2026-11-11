@@ -94,7 +94,8 @@ describe('useGitHistoryAutoRefresh', () => {
     await flushDebounce();
     expect(refresh).not.toHaveBeenCalled();
 
-    rerender({ visible: true });
+    // The reload's follow-up state lands once refresh() resolves.
+    await act(async () => rerender({ visible: true }));
     expect(refresh).toHaveBeenCalledTimes(1);
   });
 

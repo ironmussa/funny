@@ -21,7 +21,13 @@ import * as tm from '../../services/thread-manager.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd, requireProject } from '../../utils/route-helpers.js';
-import { validate, commitSchema } from '../../validation/schemas.js';
+import {
+  validate,
+  commitSchema,
+  generateCommitMessageSchema,
+  gitignoreSchema,
+  runHookCommandSchema,
+} from '../../validation/schemas.js';
 import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 export const commitRoutes = new Hono<HonoEnv>();
@@ -64,12 +70,11 @@ commitRoutes.post('/project/:projectId/run-hook-command', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
-  const hookIndex = raw?.hookIndex;
-  if (typeof hookIndex !== 'number') {
-    return resultToResponse(c, err(badRequest('hookIndex is required')));
-  }
+  const parsed = validate(runHookCommandSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { hookIndex } = parsed.value;
   const hooks = listHooks(cwd, 'pre-commit').filter((h) => h.enabled);
-  if (hookIndex < 0 || hookIndex >= hooks.length) {
+  if (hookIndex >= hooks.length) {
     return resultToResponse(c, err(badRequest(`Invalid hookIndex: ${hookIndex}`)));
   }
   const hookResult = await runHookCommand(cwd, hooks[hookIndex].command);
@@ -86,8 +91,10 @@ commitRoutes.post('/project/:projectId/generate-commit-message', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
-  const body = await c.req.json().catch(() => ({}));
-  const includeUnstaged = body?.includeUnstaged === true;
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(generateCommitMessageSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const includeUnstaged = parsed.value.includeUnstaged === true;
 
   const diffResult = await getDiff(cwd);
   if (diffResult.isErr()) return resultToResponse(c, diffResult);
@@ -157,15 +164,9 @@ commitRoutes.post('/project/:projectId/gitignore', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
-  const patterns: string[] = Array.isArray(raw?.patterns)
-    ? raw.patterns.filter((p: unknown) => typeof p === 'string' && p)
-    : typeof raw?.pattern === 'string' && raw.pattern
-      ? [raw.pattern]
-      : [];
-  if (patterns.length === 0) {
-    return c.json({ error: 'pattern or patterns is required' }, 400);
-  }
-  for (const p of patterns) {
+  const parsed = validate(gitignoreSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  for (const p of parsed.value) {
     const result = addToGitignore(cwd, p);
     if (result.isErr()) return resultToResponse(c, result);
   }
@@ -212,10 +213,9 @@ commitRoutes.post('/:threadId/run-hook-command', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
-  const hookIndex = raw?.hookIndex;
-  if (typeof hookIndex !== 'number') {
-    return resultToResponse(c, err(badRequest('hookIndex is required')));
-  }
+  const parsed = validate(runHookCommandSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { hookIndex } = parsed.value;
   // Look up the project path for hook config (worktree cwd may differ from project root)
   const thread = await tm.getThread(threadId);
   const projectId = thread?.projectId;
@@ -225,7 +225,7 @@ commitRoutes.post('/:threadId/run-hook-command', async (c) => {
     if (project.isOk()) hookCwd = project.value.path;
   }
   const hooks = listHooks(hookCwd, 'pre-commit').filter((h) => h.enabled);
-  if (hookIndex < 0 || hookIndex >= hooks.length) {
+  if (hookIndex >= hooks.length) {
     return resultToResponse(c, err(badRequest(`Invalid hookIndex: ${hookIndex}`)));
   }
   // Run the hook command in the thread's working directory (not the project root)
@@ -246,8 +246,10 @@ commitRoutes.post('/:threadId/generate-commit-message', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
-  const body = await c.req.json().catch(() => ({}));
-  const includeUnstaged = body?.includeUnstaged === true;
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(generateCommitMessageSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const includeUnstaged = parsed.value.includeUnstaged === true;
 
   const diffResult = await getDiff(cwd);
   if (diffResult.isErr()) return resultToResponse(c, diffResult);
@@ -325,15 +327,9 @@ commitRoutes.post('/:threadId/gitignore', async (c) => {
   const cwd = cwdResult.value;
 
   const raw = await c.req.json().catch(() => ({}));
-  const patterns: string[] = Array.isArray(raw?.patterns)
-    ? raw.patterns.filter((p: unknown) => typeof p === 'string' && p)
-    : typeof raw?.pattern === 'string' && raw.pattern
-      ? [raw.pattern]
-      : [];
-  if (patterns.length === 0) {
-    return c.json({ error: 'pattern or patterns is required' }, 400);
-  }
-  for (const p of patterns) {
+  const parsed = validate(gitignoreSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  for (const p of parsed.value) {
     const result = addToGitignore(cwd, p);
     if (result.isErr()) return resultToResponse(c, result);
   }

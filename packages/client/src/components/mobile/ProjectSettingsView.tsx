@@ -20,7 +20,6 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useProjects } from '@/data/projects/hooks';
 import { parseRoute } from '@/hooks/route-parser';
-import { useAppStore } from '@/stores/app-store';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 

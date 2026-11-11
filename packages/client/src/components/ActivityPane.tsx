@@ -30,7 +30,6 @@ import type { TodoSnapshot } from '@/hooks/use-todo-panel';
 import { api } from '@/lib/api';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { cn } from '@/lib/utils';
-import { useProjectStore } from '@/stores/project-store';
 import {
   useThreadId,
   useThreadMessages,

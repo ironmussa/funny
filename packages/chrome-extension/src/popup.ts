@@ -87,7 +87,7 @@ async function loadProviderOptions() {
 
     providerSelect.innerHTML = '';
     const availableProviders = Object.entries(providerData!).filter(
-      ([_, info]) => (info as ProviderInfo).available,
+      ([, info]) => (info as ProviderInfo).available,
     );
 
     if (availableProviders.length === 0) {

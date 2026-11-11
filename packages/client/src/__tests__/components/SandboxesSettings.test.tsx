@@ -32,6 +32,8 @@ vi.mock('@/data/runner/queries', () => ({ refreshSandboxConnections: mocks.fetch
 
 import { SandboxesSettings } from '@/components/settings/SandboxesSettings';
 
+import { flushAsyncUpdates } from '../helpers/render';
+
 const provider = { id: 'boat', displayName: 'Boat', capabilities: { sizes: [] } };
 
 describe('SandboxesSettings', () => {
@@ -67,8 +69,10 @@ describe('SandboxesSettings', () => {
     await waitFor(() => expect(mocks.fetch).toHaveBeenCalledTimes(2));
   });
 
-  test('shows the empty state when there are no connections', () => {
+  test('shows the empty state when there are no connections', async () => {
     render(<SandboxesSettings />);
+    // The provider list loads on mount.
+    await flushAsyncUpdates();
     expect(screen.getByText('No sandbox providers connected yet.')).toBeInTheDocument();
     expect(mocks.fetch).toHaveBeenCalled();
   });

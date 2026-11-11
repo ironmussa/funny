@@ -37,6 +37,7 @@ import { metric, startSpan } from '@/lib/telemetry';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { clientComposition } from '@/platform/client-composition';
+import { useCheckRunsStore } from '@/stores/check-runs-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import * as threadMutations from '@/stores/thread-mutations';
@@ -666,6 +667,9 @@ const testEventHandler: WebEventHandler = (_threadId, data, type) => {
 const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
   'agent:message': handleAgentMessage,
   'agent:tool_output': handleAgentToolOutput,
+  'agent:check_run': (threadId, data) => {
+    useCheckRunsStore.getState().record(threadId, data);
+  },
   'agent:init': inTransition((store, threadId, data) => store.handleWSInit(threadId, data)),
   'agent:status': handleAgentStatus,
   'agent:result': handleAgentResult,
@@ -963,6 +967,7 @@ function handleRawMessage(e: MessageEvent) {
 const ALL_EVENT_TYPES = [
   'agent:message',
   'agent:tool_output',
+  'agent:check_run',
   'agent:init',
   'agent:status',
   'agent:result',

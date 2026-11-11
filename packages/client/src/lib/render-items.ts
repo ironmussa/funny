@@ -400,6 +400,19 @@ function isTimelineThreadEvent(e: ThreadEvent): boolean {
   );
 }
 
+/**
+ * While the thread is still stopped, its latest stop is shown by the status
+ * tail's stopped card (with Continue), so it gets no timeline row. Dropping it
+ * here (not rendering it empty) matters: an empty virtual row still takes its
+ * estimated height plus the row gap, leaving blank space under the last message.
+ */
+function withoutPendingStop(events: ThreadEvent[], threadStatus?: string): ThreadEvent[] {
+  if (threadStatus !== 'stopped') return events;
+  const latestOutcome = events.findLast((e) => e.type === 'turn_outcome');
+  if (!latestOutcome || !isStoppedOutcome(latestOutcome)) return events;
+  return events.filter((e) => e !== latestOutcome);
+}
+
 function isStoppedOutcome(e: ThreadEvent): boolean {
   if (e.type !== 'turn_outcome') return false;
   try {
@@ -472,6 +485,7 @@ export function buildGroupedRenderItems(
   messages: any[],
   threadEvents?: ThreadEvent[],
   compactionEvents?: CompactionEvent[],
+  threadStatus?: string,
 ): RenderItem[] {
   const relations = collectAgentRelations(messages);
   const flat = flattenMessages(messages, relations);
@@ -481,7 +495,7 @@ export function buildGroupedRenderItems(
   const hasEvents = threadEvents?.length || compactionEvents?.length;
   if (!hasEvents) return final;
 
-  const eventItems = buildThreadEventItems(threadEvents ?? []);
+  const eventItems = buildThreadEventItems(withoutPendingStop(threadEvents ?? [], threadStatus));
   const compactionItems: RenderItem[] = (compactionEvents ?? []).map((e) => ({
     type: 'compaction-event' as const,
     event: e,

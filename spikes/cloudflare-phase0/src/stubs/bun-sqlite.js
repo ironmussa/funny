@@ -1,7 +1,6 @@
 // Probe-only stand-in: the Workers host never opens SQLite (Postgres via Hyperdrive).
-export class Database {
-  constructor() {
-    throw new Error('bun:sqlite is not available on Workers');
-  }
+// A function, not a class, so `new Database()` throws without an empty class shell.
+export function Database() {
+  throw new Error('bun:sqlite is not available on Workers');
 }
 export default { Database };

@@ -221,46 +221,23 @@ export class GenericACPProcess extends BaseAgentProcess {
 
     this.childProcess = child;
 
-    child.on('error', (err: any) => {
-      if (!this._exited && !this.isAborted) {
-        if (err.code === 'ENOENT') {
-          this.emit(
-            'error',
-            new Error(
-              `'${this.manifest.spawn.command}' binary not found in PATH or failed to spawn. ` +
-                `Install ${this.manifest.label}, or set ${this.manifest.spawn.binEnvVars[0]} to a custom location.`,
-            ),
-          );
-        } else {
-          this.emit('error', err);
-        }
-      }
-    });
+    this.watchChildErrors(
+      child,
+      () =>
+        `'${this.manifest.spawn.command}' binary not found in PATH or failed to spawn. ` +
+        `Install ${this.manifest.label}, or set ${this.manifest.spawn.binEnvVars[0]} to a custom location.`,
+    );
 
     // If the child exits unexpectedly, wake the run loop so cleanup happens.
     child.on('exit', (code, signal) => {
-      if (!this.isAborted && !this._exited) {
+      if (!this.isAborted && !this.hasExited) {
         this.dlog.warn('acp child exited unexpectedly', { code, signal });
         this.abortController.abort();
       }
     });
 
-    child.stderr?.on('data', (data: Buffer) => {
-      const raw = data.toString().trim();
-      if (!raw) return;
-      const errorText = this.parseStderrError(raw);
-      if (errorText) this.emitErrorToolCall(errorText);
-    });
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        child.on('spawn', resolve);
-        child.on('error', reject);
-      });
-    } catch {
-      this._exited = true;
-      return;
-    }
+    this.forwardStderrErrors(child);
+    if (!(await this.waitForSpawn(child))) return;
 
     const outputStream = Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>;
     const inputStream = Readable.toWeb(child.stdout!) as unknown as ReadableStream<Uint8Array>;

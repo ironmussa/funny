@@ -536,11 +536,16 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
       };
     }
   },
-  'data:create_thread': async ({ ownerId, data }) => {
+  'data:create_thread': async ({ ownerId, runnerId, data }) => {
     const tRepo = repos.threads();
     // The thread is always owned by the runner's user (the ownership guard
     // already refuses a mismatching payload.userId).
-    await tRepo.createThread({ ...data.payload, userId: ownerId });
+    // It also runs on the runner that creates it, so that runner is recorded
+    // (never a payload value). Threads a runner creates on its own (spawned by
+    // an agent, ingested) get no later registration, and without `runnerId`
+    // the runner's restart recovery (`markAndListStaleThreads`) skipped them:
+    // they stayed `running` with no agent behind them.
+    await tRepo.createThread({ ...data.payload, userId: ownerId, runnerId });
     return { type: 'data:ack', success: true };
   },
   'data:delete_thread': async ({ data }) => {

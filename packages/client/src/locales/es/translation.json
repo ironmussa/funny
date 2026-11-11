@@ -646,6 +646,8 @@
     "fastModeDesc": "Usar el modo rápido de Claude (mayor velocidad de salida, precio premium) por defecto en los nuevos hilos de este proyecto",
     "fastModeOn": "Activado",
     "fastModeOff": "Desactivado",
+    "redirectChecks": "Ejecutar checks con funny",
+    "redirectChecksDesc": "Los agentes de Claude ejecutan tests, typecheck y linters con la herramienta de checks de funny en vez de Bash, para que su progreso se vea en el hilo. Aplica a los nuevos agentes de Claude en este proyecto.",
     "terminalShell": "Shell del terminal",
     "terminalShellDesc": "Shell utilizado para el terminal integrado",
     "shellDefault": "Predeterminado (sistema)",
@@ -1434,6 +1436,44 @@
     "connectingBrowser": "Conectando al navegador...",
     "outputPlaceholder": "La salida de la prueba aparecerá aquí..."
   },
+  "testProgress": {
+    "related": "relacionadas",
+    "suites": "{{done}}/{{total}} suites",
+    "passed": "{{count}} pasaron",
+    "failed": "{{count}} fallaron",
+    "skipped": "{{count}} omitidas",
+    "runners": "{{count}} en ejecución (máx. {{max}})",
+    "runnersNoMax": "{{count}} en ejecución",
+    "files": "{{done}}/{{total}} archivos",
+    "more": "+{{count}} más",
+    "slowTitle": "Lentas (10 s o más)",
+    "status": {
+      "queued": "En cola",
+      "running": "Ejecutando pruebas",
+      "passed": "Pruebas superadas",
+      "failed": "Pruebas fallidas"
+    }
+  },
+  "progressFile": {
+    "loading": "Cargando el progreso…",
+    "unreadable": "No se pudo leer el progreso en {{path}}",
+    "invalidFence": "Un bloque de progreso necesita { \"path\": \"/ruta/absoluta.json\" }"
+  },
+  "taskProgress": {
+    "steps": "{{done}}/{{total}} pasos",
+    "errors": "{{count}} errores",
+    "warnings": "{{count}} advertencias",
+    "running": "{{count}} en ejecución (máx. {{max}})",
+    "units": "{{done}}/{{total}}",
+    "issues": "Problemas",
+    "moreIssues": "Se muestran los primeros {{shown}} de {{total}}",
+    "output": "Última salida",
+    "status": {
+      "running": "Ejecutando {{title}}",
+      "passed": "{{title}} sin errores",
+      "failed": "{{title}} con errores"
+    }
+  },
   "errors": {
     "generic": {
       "NOT_FOUND": "No se encontró el recurso solicitado.",
@@ -1527,5 +1567,9 @@
     "useProfileToken": "Usar mi token personal",
     "roleDedicated": "dedicado",
     "roleGeneral": "general"
+  },
+  "checks": {
+    "run": "Ejecutar checks: {{kind}}",
+    "starting": "Iniciando…"
   }
 }

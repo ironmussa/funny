@@ -51,6 +51,8 @@ export interface StartAgentOptions {
   effort?: string;
   /** Enable Claude fast mode (higher output speed at premium pricing). Claude SDK only. */
   fastMode?: boolean;
+  /** Deny plain check commands in Bash, pointing at `funny_run_checks`. Claude SDK only. */
+  redirectChecks?: boolean;
   /**
    * Run the Claude process in persistent streaming-input mode so later prompts
    * can steer the live turn instead of respawning. Set when followUpMode ===
@@ -119,6 +121,7 @@ export interface ProcessOptionsSnapshot {
   permissionMode: string;
   effort?: string;
   fastMode: boolean;
+  redirectChecks: boolean;
   /** Stable JSON of mcpServers — '' when none. */
   mcpServersKey: string;
 }
@@ -136,6 +139,18 @@ export interface AdoptedAgentState {
   lastOptions?: ProcessOptionsSnapshot;
 }
 
+/** Stable JSON of mcpServers (keys sorted) — '' when none. */
+function mcpServersKeyOf(mcpServers: Record<string, any> | undefined): string {
+  if (!mcpServers) return '';
+  try {
+    const sorted: Record<string, any> = {};
+    for (const k of Object.keys(mcpServers).sort()) sorted[k] = mcpServers[k];
+    return JSON.stringify(sorted);
+  } catch {
+    return '__unstable__';
+  }
+}
+
 function snapshotProcessOptions(opts: {
   provider?: string;
   model?: string;
@@ -143,19 +158,9 @@ function snapshotProcessOptions(opts: {
   permissionMode?: string;
   effort?: string;
   fastMode?: boolean;
+  redirectChecks?: boolean;
   mcpServers?: Record<string, any>;
 }): ProcessOptionsSnapshot {
-  let mcpServersKey = '';
-  if (opts.mcpServers) {
-    try {
-      const sortedKeys = Object.keys(opts.mcpServers).sort();
-      const sorted: Record<string, any> = {};
-      for (const k of sortedKeys) sorted[k] = opts.mcpServers[k];
-      mcpServersKey = JSON.stringify(sorted);
-    } catch {
-      mcpServersKey = '__unstable__';
-    }
-  }
   return {
     provider: opts.provider ?? '',
     model: opts.model ?? '',
@@ -163,7 +168,8 @@ function snapshotProcessOptions(opts: {
     permissionMode: opts.permissionMode ?? '',
     effort: opts.effort,
     fastMode: opts.fastMode ?? false,
-    mcpServersKey,
+    redirectChecks: opts.redirectChecks ?? false,
+    mcpServersKey: mcpServersKeyOf(opts.mcpServers),
   };
 }
 
@@ -262,14 +268,10 @@ export class AgentOrchestrator extends EventEmitter {
     next: ProcessOptionsSnapshot,
   ): boolean {
     if (!prev) return false;
-    if (prev.provider !== next.provider) return false;
-    if (prev.model !== next.model) return false;
-    if (prev.cwd !== next.cwd) return false;
-    if (prev.permissionMode !== next.permissionMode) return false;
-    if (prev.effort !== next.effort) return false;
-    if (prev.fastMode !== next.fastMode) return false;
-    if (prev.mcpServersKey !== next.mcpServersKey) return false;
-    return true;
+    // Every field of the snapshot gates reuse.
+    return (Object.keys(next) as (keyof ProcessOptionsSnapshot)[]).every(
+      (key) => prev[key] === next[key],
+    );
   }
 
   // ── Public API ────────────────────────────────────────────────
@@ -293,6 +295,7 @@ export class AgentOrchestrator extends EventEmitter {
       env,
       effort,
       fastMode,
+      redirectChecks,
       steerable,
       builtinSkillsDisabled,
       customSkillPaths,
@@ -320,6 +323,7 @@ export class AgentOrchestrator extends EventEmitter {
       permissionMode,
       effort,
       fastMode,
+      redirectChecks,
       mcpServers,
     });
 
@@ -440,6 +444,7 @@ export class AgentOrchestrator extends EventEmitter {
       env,
       effort,
       fastMode,
+      redirectChecks,
       steerable,
       builtinSkillsDisabled,
       customSkillPaths,

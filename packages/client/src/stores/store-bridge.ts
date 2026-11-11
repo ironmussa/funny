@@ -8,6 +8,7 @@
 
 import type { StoreApi } from 'zustand';
 
+import { readProject } from '@/data/projects/read';
 import { isProjectListed, readThreadRow } from '@/data/threads/read';
 
 // ── Lazy references (set once per store creation) ────────────
@@ -94,10 +95,10 @@ export function selectProject(projectId: string): void {
   store.setState({ selectedProjectId: projectId });
 }
 
-/** Find a project by ID and return its path */
+/**
+ * Find a project by ID and return its path. Project rows live in the data
+ * layer's projects collection, not in the project store.
+ */
 export function getProjectPath(projectId: string): string | undefined {
-  const store = _projectStoreRef.current;
-  if (!store) return undefined;
-  const project = store.getState().projects.find((p: any) => p.id === projectId);
-  return project?.path;
+  return readProject(projectId)?.path;
 }

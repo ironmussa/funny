@@ -1885,6 +1885,14 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Per-project switch for redirecting Claude's raw check commands (`npx
+    // vitest`, `tsc`, …) to the funny_run_checks tool. On unless turned off.
+    name: '093_projects_redirect_checks',
+    async up() {
+      await ctx().addColumn('projects', 'redirect_checks', 'INTEGER NOT NULL', '1');
+    },
+  },
 ];
 
 /**

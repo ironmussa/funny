@@ -141,7 +141,7 @@ describe('sandbox thread creation', () => {
   });
 
   test('creates a local setting_up thread, provisions, then sends the prompt to the sandbox', async () => {
-    const { launcher, inserted, prepared, messages, failed, events, recorded } = setup();
+    const { launcher, inserted, prepared, messages, failed, events } = setup();
     const result = await launcher.create('alice', payload);
     expect(result.isOk()).toBe(true);
     expect(result._unsafeUnwrap().thread).toEqual({ id: 't-new', status: 'setting_up' });

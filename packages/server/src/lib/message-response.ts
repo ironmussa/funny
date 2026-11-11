@@ -35,7 +35,7 @@ function toToolCall(row: ToolCallRow): ToolCall {
     messageId: row.messageId,
     name: row.name,
     // Tool calls are always written with an input; a legacy row without one
-    // reads as "no arguments" so the client's JSON.parse(input) still works.
+    // reads as "no arguments" so the client still parses the input as an empty object.
     input: row.input ?? '{}',
     output: row.output ?? undefined,
     timestamp: row.timestamp ?? undefined,

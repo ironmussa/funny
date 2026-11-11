@@ -41,6 +41,68 @@ const existing = {
     'no-constant-condition': 'warn',
     'no-constant-binary-expression': 'warn',
     'react-hooks/exhaustive-deps': 'warn',
+    // Only names we do not choose are allowed; our own private members use `#x`
+    // or a plain name instead of a leading underscore.
+    'no-underscore-dangle': [
+      'warn',
+      {
+        allow: [
+          // neverthrow's test-only unwrappers.
+          '_unsafeUnwrap',
+          '_unsafeUnwrapErr',
+          // Node / Tauri host globals.
+          '__dirname',
+          '__filename',
+          '__TAURI_INTERNALS__',
+          // Framework internals the browser annotator reads to name components.
+          '__vue__',
+          '__vueParentComponent',
+          '__vue_app__',
+          '__VUE__',
+          '__name',
+          '__ngContext__',
+          '__svelte_meta',
+          '__NUXT__',
+          '__NEXT_DATA__',
+          '_reactRootContainer',
+          // xterm.js private internals patched in terminal/xterm-utils.ts.
+          '_core',
+          '_renderService',
+          '_isPaused',
+          '_handleIntersectionChange',
+          // MCP protocol metadata field.
+          '_meta',
+          // Build-time defines (Vite `define`, Bun `--define`).
+          '__BUILD_INFO__',
+          '__PREVIEW_MODE__',
+          // Deliberate globalThis / window keys. They must not collide with page
+          // or library names, and several are contracts: console APIs documented
+          // for users (__funnyLog, __funnyMemory), keys a restarted process reads
+          // back (__funnyActiveAgentSnapshot, __bunServer), the plugin import-map
+          // shims in client/public/vendor (__FUNNY_*), the page scripts injected
+          // by the runner browser and the extension, and e2e/benchmark probes.
+          '__funnyActiveAgents',
+          '__funnyActiveAgentSnapshot',
+          '__funnyIdleReaperSchedule',
+          '__funnyAudio',
+          '__funnyMemory',
+          '__funnyLog',
+          '__funnyAnnotatorActive',
+          '__funnyBridgeInjected',
+          '__funnyBridgeLoaded',
+          '__paletteOpenTs',
+          '__bunServer',
+          '__bunCleanup',
+          '__FUNNY_HOST__',
+          '__FUNNY_PLUGIN_SDK__',
+          '__FUNNY_REACT__',
+          '__FUNNY_REACT_DOM__',
+          '__FUNNY_REACT_JSX_RUNTIME__',
+          '__FUNNY_MARKDOWN_WASM_BENCHMARK__',
+          '__playwright_ws_instances',
+        ],
+      },
+    ],
     'oxc/no-map-spread': 'off',
     'import/no-unassigned-import': 'off',
     'import/no-named-as-default': 'off',
@@ -85,13 +147,33 @@ const existing = {
       },
     },
     {
-      files: ['packages/client/vendor/satteri-wasm32-wasi/wasi-worker.mjs'],
+      // evflow event models are declarative specs: one builder whose commands,
+      // events and slices reference each other as locals, so their length is
+      // the size of the modelled domain, not of a function to split.
+      files: ['packages/evflow/models/**/*.model.ts'],
+      rules: {
+        'max-lines': 'off',
+        'max-lines-per-function': 'off',
+      },
+    },
+    {
+      // Vendored napi-rs WASI glue (see its THIRD_PARTY.md): not ours to edit.
+      files: ['packages/client/vendor/satteri-wasm32-wasi/**'],
       rules: {
         'no-eval': 'off',
+        'no-underscore-dangle': 'off',
+        'no-unused-vars': 'off',
       },
     },
   ],
-  ignorePatterns: ['dist/', 'node_modules/', '.funny-worktrees/', 'src-tauri/'],
+  // packages/evflow/plugin/bundle.cjs is `bun build` output (evflow `build:plugin`).
+  ignorePatterns: [
+    'dist/',
+    'node_modules/',
+    '.funny-worktrees/',
+    'src-tauri/',
+    'packages/evflow/plugin/bundle.cjs',
+  ],
   settings: {
     react: {
       version: '19',

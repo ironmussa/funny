@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { toCodexMcpConfig } from '../agents/codex-mcp.js';
+import { FUNNY_TOOL_TIMEOUT_SEC, toCodexMcpConfig } from '../agents/codex-mcp.js';
 
 describe('toCodexMcpConfig', () => {
   test('passes HTTP servers on, with the bearer token in the env, not the config', () => {
@@ -42,5 +42,17 @@ describe('toCodexMcpConfig', () => {
       url: 'http://127.0.0.1:1/mcp',
       default_tools_approval_mode: 'approve',
     });
+  });
+});
+
+describe("funny's servers in Codex", () => {
+  test('get a tool timeout long enough for a synchronous check; other servers keep Codex’s', () => {
+    const config = toCodexMcpConfig({
+      funny: { type: 'http', url: 'http://127.0.0.1:41234/mcp/funny' },
+      docs: { type: 'http', url: 'https://docs.example/mcp/funny' },
+    });
+    expect(config.mcpServers.funny.tool_timeout_sec).toBe(FUNNY_TOOL_TIMEOUT_SEC);
+    expect(FUNNY_TOOL_TIMEOUT_SEC).toBeGreaterThan(30 * 60);
+    expect(config.mcpServers.docs.tool_timeout_sec).toBeUndefined();
   });
 });

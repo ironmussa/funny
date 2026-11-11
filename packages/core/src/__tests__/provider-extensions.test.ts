@@ -16,7 +16,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { defaultProcessFactory } from '../agents/process-factory.js';
 import {
-  _clearRunnerManifests,
+  clearRunnerManifestsForTests,
   getAdvertisedProviders,
   getRunnerManifest,
   installProviderExtensionFromPath,
@@ -60,12 +60,12 @@ const baseStartOpts = {
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'funny-provider-ext-'));
-  _clearRunnerManifests();
+  clearRunnerManifestsForTests();
 });
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
-  _clearRunnerManifests();
+  clearRunnerManifestsForTests();
 });
 
 describe('loadProviderExtensions', () => {

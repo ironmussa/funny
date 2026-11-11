@@ -40,7 +40,7 @@ export async function openDirectoryOnHost(
     process = spawnDirectoryOpener(command);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    throw new Error(`Could not start ${command[0]}: ${message}`);
+    throw new Error(`Could not start ${command[0]}: ${message}`, { cause: error });
   }
 
   const [exitCode, stderr] = await Promise.all([

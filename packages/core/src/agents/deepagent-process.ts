@@ -194,46 +194,15 @@ export class DeepAgentProcess extends BaseAgentProcess {
 
     this.childProcess = child;
 
-    // Handle process errors
-    child.on('error', (err: any) => {
-      if (!this._exited && !this.isAborted) {
-        if (err.code === 'ENOENT') {
-          this.emit(
-            'error',
-            new Error(
-              "'deepagents-acp' binary not found.\n" +
-                'Install it via: npm install -g deepagents-acp\n' +
-                'Or see https://github.com/langchain-ai/deepagents for details.',
-            ),
-          );
-        } else {
-          this.emit('error', err);
-        }
-      }
-    });
-
-    // Surface stderr errors as tool call cards so they appear in the thread
-    // with full history. ACP subprocesses write JSON-RPC errors and API errors
-    // to stderr — these are critical for the user (rate limits, auth failures, etc.).
-    child.stderr?.on('data', (data: Buffer) => {
-      const raw = data.toString().trim();
-      if (!raw) return;
-
-      const errorText = this.parseStderrError(raw);
-      if (errorText) {
-        this.emitErrorToolCall(errorText);
-      }
-    });
-
-    try {
-      await new Promise<void>((resolve, reject) => {
-        child.on('spawn', resolve);
-        child.on('error', reject);
-      });
-    } catch {
-      this._exited = true;
-      return;
-    }
+    this.watchChildErrors(
+      child,
+      () =>
+        "'deepagents-acp' binary not found.\n" +
+        'Install it via: npm install -g deepagents-acp\n' +
+        'Or see https://github.com/langchain-ai/deepagents for details.',
+    );
+    this.forwardStderrErrors(child);
+    if (!(await this.waitForSpawn(child))) return;
 
     // Convert Node streams to Web streams for ACP SDK
     const outputStream = Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>;

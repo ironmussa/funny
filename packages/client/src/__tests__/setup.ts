@@ -27,6 +27,12 @@ if (typeof globalThis.ResizeObserver === 'undefined') {
   } as unknown as typeof globalThis.ResizeObserver;
 }
 
+// jsdom has no canvas: its getContext() logs "Not implemented" and returns
+// null. Callers (VirtualDiff's width measurement, pretext warmup, Mermaid
+// export) already handle a null context, so return it without the error.
+HTMLCanvasElement.prototype.getContext = (() =>
+  null) as typeof HTMLCanvasElement.prototype.getContext;
+
 // Mock window.matchMedia (used by settings-store, main.tsx)
 Object.defineProperty(window, 'matchMedia', {
   writable: true,

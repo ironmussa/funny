@@ -56,7 +56,7 @@ function memoryStore(): ThreadSandboxStore & { rows: Map<string, ThreadSandboxRo
 }
 
 interface Setup {
-  checkouts: Array<{ threadId: string; path: string; repoUrl: string }>;
+  checkouts: Array<{ threadId: string; path: string; repoUrl: string; branch?: string }>;
   provider: FakeSandboxProvider;
   store: ReturnType<typeof memoryStore>;
   service: ReturnType<typeof createThreadSandboxService>;
@@ -97,8 +97,8 @@ function setup(
     sandboxRunnerIdForThread: async () =>
       opts.runnerConnects === false ? null : started() ? 'r-box' : null,
     presence: { isAvailable: async (id) => id === 'r-box' },
-    requestCheckout: ({ threadId, path, repoUrl }) => {
-      checkouts.push({ threadId, path, repoUrl });
+    requestCheckout: ({ threadId, path, repoUrl, branch }) => {
+      checkouts.push({ threadId, path, repoUrl, ...(branch ? { branch } : {}) });
       return opts.checkoutFails ? errAsync('clone failed') : okAsync(undefined);
     },
     store,
@@ -198,7 +198,11 @@ describe('thread sandbox provisioning', () => {
 
   test('materializes the project at its path on the sandbox runner once it is connected', async () => {
     const { provider, service, checkouts } = setup({ templates: [build.version] });
-    const checkout = { path: '/data/projects/acme', repoUrl: 'https://github.com/acme/app.git' };
+    const checkout = {
+      path: '/data/projects/acme',
+      repoUrl: 'https://github.com/acme/app.git',
+      branch: 'feature/login',
+    };
     const row = expectOk(await service.provision({ ...input, checkout }));
     expect(row.state).toBe('running');
     expect(checkouts).toEqual([{ threadId: 't-1', ...checkout }]);

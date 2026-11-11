@@ -123,10 +123,15 @@ export function sandboxThreadLauncherFor(env: {
       const thread = await threadRepo.getThread(threadId);
       if (!thread) return;
       await threadRepo.updateThread(threadId, { status: 'pending' });
+      // The checkout may have recorded a different branch (the requested one
+      // was not on the remote): send it with the status.
       env.browserEvents?.toUser(thread.userId, {
         type: 'thread:updated',
         threadId,
-        data: { status: 'pending' },
+        data: {
+          status: 'pending',
+          ...(thread.baseBranch ? { baseBranch: thread.baseBranch } : {}),
+        },
       });
     },
     markFailed: async (threadId, failure) => {

@@ -27,7 +27,8 @@ describe('checkoutProjectIntoSandbox', () => {
     const path = tempDir();
     mkdirSync(join(path, '.git'));
     const result = await checkoutProjectIntoSandbox({ path, repoUrl: REPO, token: null });
-    expect(result.isOk() && result.value).toEqual({ path, cloned: false });
+    // An empty `.git` is not a readable repository, so its branch is unknown.
+    expect(result.isOk() && result.value).toEqual({ path, cloned: false, branch: null });
   });
 
   test('does not rerun postCreate on an existing checkout', async () => {
@@ -54,6 +55,20 @@ describe('checkoutProjectIntoSandbox', () => {
     expect(relative.isErr() && relative.error.type).toBe('BAD_REQUEST');
     for (const repoUrl of ['file:///etc', 'https://evil.example/x y', '--upload-pack=sh']) {
       const result = await checkoutProjectIntoSandbox({ path: tempDir(), repoUrl, token: null });
+      expect(result.isErr() && result.error.type).toBe('BAD_REQUEST');
+    }
+  });
+});
+
+describe('checkoutProjectIntoSandbox branch', () => {
+  test('rejects branch names that could be read as options or revisions', async () => {
+    for (const branch of ['--upload-pack=sh', '-b', 'a b', 'main~1', 'x:y']) {
+      const result = await checkoutProjectIntoSandbox({
+        path: tempDir(),
+        repoUrl: REPO,
+        token: null,
+        branch,
+      });
       expect(result.isErr() && result.error.type).toBe('BAD_REQUEST');
     }
   });

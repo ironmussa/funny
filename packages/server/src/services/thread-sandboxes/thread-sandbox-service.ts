@@ -84,6 +84,7 @@ export interface ThreadSandboxDeps extends ThreadSandboxControlDeps {
     threadId: string;
     path: string;
     repoUrl: string;
+    branch?: string;
   }): ResultAsync<void, string>;
   readyTimeoutMs?: number;
 }
@@ -94,7 +95,7 @@ export interface ProvisionInput {
   connectionId: string;
   sizeId?: string;
   /** The project to materialize at its canonical path once the runner is up. */
-  checkout?: { path: string; repoUrl: string };
+  checkout?: { path: string; repoUrl: string; branch?: string };
   /** Aborting it (the thread was deleted) interrupts the preparation. */
   signal?: AbortSignal;
 }
@@ -188,6 +189,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
           threadId: input.threadId,
           path: checkout.path,
           repoUrl: checkout.repoUrl,
+          branch: checkout.branch,
         }).mapErr((message): ProvisionError => ({ kind: 'checkout', message })),
       );
     });

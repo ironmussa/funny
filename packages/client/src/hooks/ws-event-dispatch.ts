@@ -543,7 +543,14 @@ function handleThreadStageChanged(threadId: string, data: any): void {
 }
 
 function hasLocationChange(data: any): boolean {
-  return !!(data.branch || data.worktreePath || data.containerUrl || data.mergedAt || data.mode);
+  return !!(
+    data.branch ||
+    data.baseBranch ||
+    data.worktreePath ||
+    data.containerUrl ||
+    data.mergedAt ||
+    data.mode
+  );
 }
 
 function patchPermissionMode(threadId: string, permissionMode: any): void {

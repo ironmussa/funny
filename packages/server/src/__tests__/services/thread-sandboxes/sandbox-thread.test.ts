@@ -190,6 +190,14 @@ describe('sandbox thread creation', () => {
     expect(events).toEqual(['first-message:t-new', 'ready:t-new', 'message:t-new']);
   });
 
+  test('records the chosen base branch on the thread and checks it out in the sandbox', async () => {
+    const { launcher, inserted, prepared } = setup();
+    expectOkCreate(await launcher.create('alice', { ...payload, baseBranch: 'feature/login' }));
+    // On the row from the start, so the first message already shows the branch.
+    expect(inserted[0]).toMatchObject({ baseBranch: 'feature/login' });
+    expect(prepared[0]).toMatchObject({ branch: 'feature/login' });
+  });
+
   test('saves the first message with the thread, before the sandbox is up', async () => {
     const { launcher, recorded } = setup({
       provisionError: { kind: 'checkout', message: 'clone failed' },
@@ -387,6 +395,15 @@ describe('retrying a sandbox thread whose setup failed', () => {
     )._unsafeUnwrap().started;
     expect(messages[0].body).toEqual({ content: 'Fix the login bug' });
     expect(recorded).toEqual([]);
+  });
+
+  test("a retry checks out the thread's base branch again", async () => {
+    const { launcher, prepared } = setup({
+      thread: { ...failedThread, baseBranch: 'feature/login' },
+      previousSandbox: lastMachine,
+    });
+    expectOkCreate(await launcher.retry('alice', 't-failed', { content: 'go' }));
+    expect(prepared[0]).toMatchObject({ branch: 'feature/login' });
   });
 
   test('without a previous sandbox row it uses the project sandbox', async () => {

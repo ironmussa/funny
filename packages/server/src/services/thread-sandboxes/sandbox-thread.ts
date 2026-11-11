@@ -50,6 +50,8 @@ const createSandboxThreadSchema = z
     model: z.string().min(1).max(128).optional(),
     permissionMode: z.string().min(1).max(64).optional(),
     effort: z.string().min(1).max(32).optional(),
+    // The branch the sandbox checks out (it keeps the remote's default when absent).
+    baseBranch: z.string().trim().min(1).max(255).optional(),
     // Without a connection, the caller's project sandbox is used (project-sandboxes).
     sandbox: sandboxMachineRequestSchema.partial({ connectionId: true }).optional(),
   })
@@ -95,6 +97,7 @@ export interface NewSandboxThreadRow {
   provider?: string;
   model?: string;
   permissionMode?: string;
+  baseBranch?: string;
   initialPrompt: string;
   source: 'web';
   createdAt: string;
@@ -108,6 +111,7 @@ export interface RetryableSandboxThread {
   status: string;
   sessionId?: string | null;
   initialPrompt?: string | null;
+  baseBranch?: string | null;
   createdAt?: string;
 }
 
@@ -191,6 +195,7 @@ function newSandboxThreadRow(
     provider: input.provider,
     model: input.model,
     permissionMode: input.permissionMode,
+    baseBranch: input.baseBranch,
     initialPrompt: input.prompt,
     source: 'web',
     createdAt,
@@ -381,6 +386,24 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     return initialPrompt;
   }
 
+  /** The failed thread to retry, its project and the machine to provision. */
+  async function retryTarget(userId: string, threadId: string) {
+    const retryable = checkRetryable(await deps.findOwnedThread(userId, threadId));
+    if (retryable.isErr()) return err(retryable.error);
+    const thread = retryable.value;
+    const project = await deps.findOwnedProject(userId, thread.projectId);
+    if (!project) {
+      return err<never, SandboxThreadFailure>({
+        status: 404,
+        code: 'not-found',
+        message: 'Project not found',
+      });
+    }
+    const machine = await retryMachine(userId, threadId, thread.projectId);
+    if (machine.isErr()) return err(machine.error);
+    return ok({ thread, project, machine: machine.value });
+  }
+
   async function prepareRetry(
     userId: string,
     threadId: string,
@@ -394,20 +417,17 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
         message: parsed.error.issues[0]?.message ?? 'Invalid message',
       });
     }
-    const retryable = checkRetryable(await deps.findOwnedThread(userId, threadId));
-    if (retryable.isErr()) return err(retryable.error);
-    const thread = retryable.value;
-    const project = await deps.findOwnedProject(userId, thread.projectId);
-    if (!project) return err({ status: 404, code: 'not-found', message: 'Project not found' });
-    const machine = await retryMachine(userId, threadId, thread.projectId);
-    if (machine.isErr()) return err(machine.error);
+    const target = await retryTarget(userId, threadId);
+    if (target.isErr()) return err(target.error);
+    const { thread, project, machine } = target.value;
 
     const launch = await deps.prepare({
       userId,
       threadId,
       projectId: thread.projectId,
       projectPath: project.path,
-      ...machine.value,
+      branch: thread.baseBranch ?? undefined,
+      ...machine,
     });
     if (launch.isErr()) return err({ status: 409, ...launch.error });
 
@@ -474,6 +494,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
         threadId,
         projectId: input.projectId,
         projectPath: project.path,
+        branch: input.baseBranch,
         ...machine.value,
         repoUrl: input.sandbox?.repoUrl,
       });

@@ -10,6 +10,7 @@ import {
   requireAccessibleProject,
   resolveGithubToken,
 } from './helpers.js';
+import { readIssueState, readPaging } from './query.js';
 
 export const issueRoutes = new Hono<HonoEnv>();
 
@@ -38,9 +39,10 @@ issueRoutes.get('/issues', async (c) => {
     return c.json({ error: 'This project is not hosted on GitHub' }, 400);
   }
 
-  const state = c.req.query('state') || 'open';
-  const page = Number(c.req.query('page')) || 1;
-  const perPage = Math.min(Number(c.req.query('per_page')) || 30, 100);
+  const stateResult = readIssueState(c);
+  if (stateResult.isErr()) return c.json({ error: stateResult.error.message }, 400);
+  const state = stateResult.value;
+  const { page, perPage } = readPaging(c, 30);
 
   try {
     const resolved = await resolveGithubToken(userId);
@@ -102,9 +104,10 @@ issueRoutes.get('/issues-enriched', async (c) => {
     return c.json({ error: 'This project is not hosted on GitHub' }, 400);
   }
 
-  const state = c.req.query('state') || 'open';
-  const page = Number(c.req.query('page')) || 1;
-  const perPage = Math.min(Number(c.req.query('per_page')) || 30, 100);
+  const stateResult = readIssueState(c);
+  if (stateResult.isErr()) return c.json({ error: stateResult.error.message }, 400);
+  const state = stateResult.value;
+  const { page, perPage } = readPaging(c, 30);
 
   try {
     const resolved = await resolveGithubToken(userId);

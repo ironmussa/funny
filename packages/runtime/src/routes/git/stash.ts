@@ -15,7 +15,7 @@ import {
   stashFileDiff,
 } from '@funny/core/git';
 import { badRequest } from '@funny/shared/errors';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { err } from 'neverthrow';
 
 import { requestSpan } from '../../middleware/tracing.js';
@@ -24,13 +24,27 @@ import {
   stashSelectedFiles as gitServiceStashFiles,
   popStash as gitServicePopStash,
   dropStash as gitServiceDropStash,
+  validateFilePaths,
 } from '../../services/git-service.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThreadCwd } from '../../utils/route-helpers.js';
+import { stashSchema, validate } from '../../validation/schemas.js';
 import { _gitStatusCache, invalidateGitStatusCache, requireProjectCwd } from './helpers.js';
 
 export const stashRoutes = new Hono<HonoEnv>();
+
+/**
+ * The files to stash (empty = everything). Each path must stay inside `cwd`,
+ * as for staging (`validateFilePaths`).
+ */
+async function readStashFiles(c: Context<HonoEnv>, cwd: string) {
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(stashSchema, raw);
+  if (parsed.isErr()) return err(parsed.error);
+  const files = parsed.value.files ?? [];
+  return validateFilePaths(cwd, files).map(() => files);
+}
 
 // GET /api/git/project/:projectId/stash/list
 stashRoutes.get('/project/:projectId/stash/list', async (c) => {
@@ -91,10 +105,12 @@ stashRoutes.post('/project/:projectId/stash', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const body = await c.req.json().catch(() => ({}));
-  const files = Array.isArray(body.files) ? body.files : [];
+  const files = await readStashFiles(c, cwdResult.value);
+  if (files.isErr()) return resultToResponse(c, files);
   const result =
-    files.length > 0 ? await stashFiles(cwdResult.value, files) : await stash(cwdResult.value);
+    files.value.length > 0
+      ? await stashFiles(cwdResult.value, files.value)
+      : await stash(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
@@ -137,11 +153,11 @@ stashRoutes.post('/:threadId/stash', async (c) => {
   const cwdResult = await requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  const body = await c.req.json().catch(() => ({}));
-  const files = Array.isArray(body.files) ? body.files : [];
+  const files = await readStashFiles(c, cwdResult.value);
+  if (files.isErr()) return resultToResponse(c, files);
   const result =
-    files.length > 0
-      ? await gitServiceStashFiles(threadId, userId, cwdResult.value, files)
+    files.value.length > 0
+      ? await gitServiceStashFiles(threadId, userId, cwdResult.value, files.value)
       : await gitServiceStash(threadId, userId, cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);

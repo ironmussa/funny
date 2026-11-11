@@ -5,7 +5,6 @@ import type {
   PRConversation,
   PRIssueComment,
   PRReview,
-  PRCommentKind,
 } from '@funny/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -22,6 +21,7 @@ import {
   resolveGithubProjectContext,
   resolveGithubToken,
 } from './helpers.js';
+import { positiveIntParam, prCommentKindParam } from './query.js';
 
 export const prThreadRoutes = new Hono<HonoEnv>();
 
@@ -86,7 +86,7 @@ const prPatchCommentBodySchema = z
 prThreadRoutes.get('/pr-threads', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
-  const prNumber = Number(c.req.query('prNumber'));
+  const prNumber = positiveIntParam(c, 'prNumber');
   if (!projectId || !prNumber) {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }
@@ -229,7 +229,7 @@ prThreadRoutes.get('/pr-threads', async (c) => {
 prThreadRoutes.get('/pr-conversation', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
-  const prNumber = Number(c.req.query('prNumber'));
+  const prNumber = positiveIntParam(c, 'prNumber');
   if (!projectId || !prNumber) {
     return c.json({ error: 'projectId and prNumber are required' }, 400);
   }
@@ -494,8 +494,8 @@ prThreadRoutes.patch('/pr-comment', async (c) => {
 prThreadRoutes.delete('/pr-comment', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
-  const kind = c.req.query('kind') as PRCommentKind | undefined;
-  const commentId = Number(c.req.query('commentId'));
+  const kind = prCommentKindParam(c);
+  const commentId = positiveIntParam(c, 'commentId');
   if (!projectId || !kind || !commentId) {
     return c.json({ error: 'projectId, kind and commentId are required' }, 400);
   }

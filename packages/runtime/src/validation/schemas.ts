@@ -360,6 +360,32 @@ export const commitSchema = z.object({
   noVerify: z.boolean().default(false),
 });
 
+/** `files` empty or absent stashes everything. */
+export const stashSchema = z.object({
+  files: z.array(z.string().min(1, 'files must not contain empty paths')).optional(),
+});
+
+/** Index into the project's enabled pre-commit hooks; the upper bound is checked against them. */
+export const runHookCommandSchema = z.object({
+  hookIndex: z
+    .number({ error: 'hookIndex is required' })
+    .int('hookIndex must be an integer')
+    .min(0, 'hookIndex must not be negative'),
+});
+
+export const generateCommitMessageSchema = z.object({
+  includeUnstaged: z.boolean().optional(),
+});
+
+/** One `pattern` or a list of `patterns` to append to .gitignore. */
+export const gitignoreSchema = z
+  .object({
+    pattern: z.string().optional(),
+    patterns: z.array(z.string()).optional(),
+  })
+  .transform(({ pattern, patterns }) => (patterns ?? (pattern ? [pattern] : [])).filter(Boolean))
+  .refine((patterns) => patterns.length > 0, 'pattern or patterns is required');
+
 export const createPRSchema = z.object({
   title: z.string().min(1, 'title is required').max(500),
   body: z.string().max(100_000),
@@ -377,7 +403,7 @@ export const createCommandSchema = z.object({
   portEnvVar: z.string().optional(),
 });
 
-const hookTypeSchema = z.enum([
+export const hookTypeSchema = z.enum([
   'pre-commit',
   'commit-msg',
   'pre-push',

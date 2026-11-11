@@ -3,7 +3,13 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { discoverPackages, runTests, selectAffectedPackages } from '../run-tests';
+import {
+  discoverPackages,
+  planTests,
+  runTests,
+  selectAffectedPackages,
+  workersPerSuite,
+} from '../run-tests';
 
 let root: string;
 
@@ -65,6 +71,97 @@ describe('selectAffectedPackages', () => {
   });
 });
 
+describe('selectAffectedPackages with changed dependencies', () => {
+  const select = (files: string[], changedDeps: Set<string> | null) =>
+    selectAffectedPackages(files, discoverPackages(root), changedDeps).map((p) => p.name);
+
+  test('a lockfile change selects the packages declaring a changed dependency', () => {
+    expect(select(['bun.lock', 'package.json'], new Set(['hono']))).toEqual(['@x/server']);
+  });
+
+  test('a lockfile change touching no declared dependency selects nothing', () => {
+    expect(select(['bun.lock'], new Set(['left-pad']))).toEqual([]);
+  });
+
+  test('an unattributable lockfile change selects every package with tests', () => {
+    expect(select(['bun.lock'], null)).toHaveLength(5);
+  });
+
+  test('other global inputs stay global', () => {
+    expect(select(['bunfig.toml'], new Set())).toHaveLength(5);
+  });
+});
+
+describe('planTests', () => {
+  beforeEach(() => {
+    pkg('web', '@x/web', { '@x/shared': 'workspace:*', react: '^19' }, 'vitest run --project unit');
+    pkg('api', '@x/api', { '@x/core': 'workspace:*' }, 'bun --bun vitest run');
+    for (const file of ['shared/src/a.ts', 'core/src/b.ts', 'web/src/c.tsx']) {
+      mkdirSync(join(root, 'packages', file, '..'), { recursive: true });
+      writeFileSync(join(root, 'packages', file), '');
+    }
+  });
+
+  const plan = (files: string[], changedDeps?: Set<string> | null) =>
+    Object.fromEntries(
+      planTests(files, discoverPackages(root), changedDeps, root).map((run) => [
+        run.pkg.name,
+        run.related?.map((path) => path.slice(root.length + 1)) ?? 'whole',
+      ]),
+    );
+
+  test('a vitest suite selected by source changes runs only the related tests', () => {
+    expect(plan(['packages/shared/src/a.ts', 'packages/core/src/b.ts'])).toMatchObject({
+      '@x/web': ['packages/shared/src/a.ts', 'packages/core/src/b.ts'],
+      '@x/api': ['packages/shared/src/a.ts', 'packages/core/src/b.ts'],
+      '@x/shared': 'whole',
+    });
+  });
+
+  test('deleted files are not passed to vitest related', () => {
+    expect(plan(['packages/web/src/gone.tsx', 'packages/web/src/c.tsx'])['@x/web']).toEqual([
+      'packages/web/src/c.tsx',
+    ]);
+  });
+
+  test('a config, manifest or setup change runs the suite whole', () => {
+    for (const file of [
+      'packages/web/vitest.config.ts',
+      'packages/web/package.json',
+      'packages/web/src/__tests__/setup.ts',
+    ]) {
+      expect(plan([file])['@x/web']).toBe('whole');
+    }
+  });
+
+  test('a suite input upstream runs the dependents whole too', () => {
+    expect(plan(['packages/core/package.json'])['@x/api']).toBe('whole');
+  });
+
+  test('a changed dependency runs its users and their dependents whole', () => {
+    expect(plan(['bun.lock'], new Set(['react']))).toEqual({ '@x/web': 'whole' });
+    expect(plan(['bun.lock'], new Set(['hono']))).toEqual({ '@x/server': 'whole' });
+  });
+
+  test('a global input runs every suite whole', () => {
+    const runs = plan(['bunfig.toml']);
+    expect(Object.values(runs).every((scope) => scope === 'whole')).toBe(true);
+    expect(Object.keys(runs)).toHaveLength(7);
+  });
+});
+
+describe('workersPerSuite', () => {
+  test('splits the cores between the suites running at once', () => {
+    expect(workersPerSuite(4, 20)).toBe(5);
+    expect(workersPerSuite(3, 8)).toBe(2);
+    expect(workersPerSuite(4, 2)).toBe(1);
+  });
+
+  test('leaves a suite running alone to vitest', () => {
+    expect(workersPerSuite(1, 20)).toBeUndefined();
+  });
+});
+
 describe('runTests', () => {
   test('passes when every suite passes and fails when any suite fails', async () => {
     pkg('broken', '@x/broken', {}, 'exit 3');
@@ -73,5 +170,59 @@ describe('runTests', () => {
 
     expect(await runTests(byName('@x/shared'), root)).toBe(0);
     expect(await runTests([...byName('@x/broken'), ...byName('@x/shared')], root)).toBe(1);
+  });
+
+  test('runs up to `concurrency` suites at once', async () => {
+    const log = join(root, 'events');
+    const script = `echo s >> '${log}'; sleep 0.3; echo e >> '${log}'`;
+    for (const name of ['a', 'b', 'c', 'd', 'e']) pkg(`p-${name}`, `@p/${name}`, {}, script);
+    const suites = discoverPackages(root).filter((p) => p.name.startsWith('@p/'));
+
+    expect(await runTests(suites, root, 2)).toBe(0);
+    let running = 0;
+    let peak = 0;
+    for (const event of (await Bun.file(log).text()).trim().split('\n')) {
+      running += event === 's' ? 1 : -1;
+      peak = Math.max(peak, running);
+    }
+    expect(peak).toBe(2);
+  });
+
+  test('caps a vitest suite to its share of the cores when suites run side by side', async () => {
+    mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+    const log = join(root, 'vitest-args');
+    writeFileSync(
+      join(root, 'node_modules', '.bin', 'vitest'),
+      `#!/bin/sh\necho "$@" > '${log}'\n`,
+      {
+        mode: 0o755,
+      },
+    );
+    pkg('web', '@x/web', {}, 'vitest run --project unit');
+    const suites = discoverPackages(root).filter((p) => ['@x/web', '@x/shared'].includes(p.name));
+
+    expect(await runTests(suites, root, 2)).toBe(0);
+    expect(await Bun.file(log).text()).toMatch(/^run --maxWorkers=\d+ --project unit/);
+  });
+
+  test('a related run replaces `vitest run` with `vitest related` and passes the files', async () => {
+    // A fake `vitest` on PATH records its arguments.
+    mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
+    const log = join(root, 'vitest-args');
+    writeFileSync(
+      join(root, 'node_modules', '.bin', 'vitest'),
+      `#!/bin/sh\necho "$@" > '${log}'\n`,
+      {
+        mode: 0o755,
+      },
+    );
+    pkg('web', '@x/web', {}, 'vitest run --project unit');
+    const web = discoverPackages(root).find((p) => p.name === '@x/web')!;
+
+    const code = await runTests([{ pkg: web, related: ["/repo/it's here.ts"] }], root);
+    expect(code).toBe(0);
+    expect(await Bun.file(log).text()).toBe(
+      "related --run --passWithNoTests --project unit /repo/it's here.ts\n",
+    );
   });
 });

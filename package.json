@@ -68,6 +68,7 @@
     "capture:visual-parity": "bun run --cwd packages/client-gpuix capture:parity",
     "test:renderer-benchmark": "bun test packages/client-benchmark packages/client-gpuix-benchmark packages/client/src/__tests__/benchmarks scripts/renderer-benchmark/__tests__ && bun run --cwd packages/client-gpuix-benchmark build",
     "test": "bun scripts/run-tests.ts",
+    "steps": "bun scripts/run-steps.ts",
     "test:pre-push": "bun scripts/pre-push.ts",
     "prepare": "husky",
     "security:check": "npm run security:secrets && npm run security:audit",

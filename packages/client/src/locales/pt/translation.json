@@ -1400,6 +1400,44 @@
     "connectingBrowser": "Conectando ao navegador...",
     "outputPlaceholder": "A saída do teste aparecerá aqui..."
   },
+  "testProgress": {
+    "related": "relacionados",
+    "suites": "{{done}}/{{total}} suítes",
+    "passed": "{{count}} passaram",
+    "failed": "{{count}} falharam",
+    "skipped": "{{count}} ignorados",
+    "runners": "{{count}} em execução (máx. {{max}})",
+    "runnersNoMax": "{{count}} em execução",
+    "files": "{{done}}/{{total}} arquivos",
+    "more": "+{{count}} mais",
+    "slowTitle": "Lentos (10 s ou mais)",
+    "status": {
+      "queued": "Na fila",
+      "running": "Executando testes",
+      "passed": "Testes aprovados",
+      "failed": "Testes com falha"
+    }
+  },
+  "progressFile": {
+    "loading": "Carregando o progresso…",
+    "unreadable": "Não foi possível ler o progresso em {{path}}",
+    "invalidFence": "Um bloco de progresso precisa de { \"path\": \"/caminho/absoluto.json\" }"
+  },
+  "taskProgress": {
+    "steps": "{{done}}/{{total}} etapas",
+    "errors": "{{count}} erros",
+    "warnings": "{{count}} avisos",
+    "running": "{{count}} em execução (máx. {{max}})",
+    "units": "{{done}}/{{total}}",
+    "issues": "Problemas",
+    "moreIssues": "Mostrando os primeiros {{shown}} de {{total}}",
+    "output": "Última saída",
+    "status": {
+      "running": "Executando {{title}}",
+      "passed": "{{title}} sem erros",
+      "failed": "{{title}} com erros"
+    }
+  },
   "errors": {
     "generic": {
       "NOT_FOUND": "O recurso solicitado não foi encontrado.",

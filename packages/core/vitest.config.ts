@@ -32,8 +32,8 @@ export default defineConfig({
     globals: true,
     include: ['src/__tests__/*.test.ts'],
     exclude: ['dist/**'],
-    // Git suites share process.env (FUNNY_DISABLE_NATIVE_GIT) and temp dirs —
-    // parallel file workers cause flaky cross-talk.
-    fileParallelism: false,
+    // Files run in parallel: each runs in its own forked process (own
+    // process.env, e.g. FUNNY_DISABLE_NATIVE_GIT) and its own temp dir, so the
+    // git suites do not share state. Sequential runs took ~8 min instead of ~20 s.
   },
 });

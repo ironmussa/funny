@@ -797,6 +797,51 @@ describe('data-handler handleDataMessageWithAck', () => {
     expect(row?.userId).toBe('user-1');
   });
 
+  test('a thread the runner creates is resumed after that runner restarts', async () => {
+    // Regression: threads created by the runner itself (spawned by an agent,
+    // ingested) had no runner_id, so the restart recovery skipped them and
+    // they stayed `running` with no agent process.
+    const now = new Date().toISOString();
+    await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:create_thread',
+      payload: {
+        id: 't-spawned',
+        projectId: 'p1',
+        userId: 'user-1',
+        // A payload value must not choose the runner.
+        runnerId: 'runner-other',
+        title: 'Spawned by an agent',
+        mode: 'local',
+        provider: 'claude',
+        permissionMode: 'autoEdit',
+        status: 'running',
+        model: 'sonnet',
+        source: 'agent-spawn',
+        createdAt: now,
+        updatedAt: now,
+      },
+    });
+
+    const created = await db
+      .select()
+      .from(schema.threads)
+      .where(eq(schema.threads.id, 't-spawned'))
+      .get();
+    expect(created?.runnerId).toBe('runner-1');
+
+    const res = await handleDataMessageWithAck('runner-1', 'user-1', {
+      type: 'data:mark_and_list_stale_threads',
+    });
+    expect(res.threads.map((t: { id: string }) => t.id)).toEqual(['t-spawned']);
+
+    const after = await db
+      .select()
+      .from(schema.threads)
+      .where(eq(schema.threads.id, 't-spawned'))
+      .get();
+    expect(after?.status).toBe('interrupted');
+  });
+
   test('delete_thread removes thread owned by runner user', async () => {
     seedThread(db as any, {
       id: 't-del',

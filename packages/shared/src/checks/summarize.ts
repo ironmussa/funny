@@ -12,7 +12,7 @@ import {
 } from '../task-progress.js';
 import { TEST_PROGRESS_VERSION, type TestProgress } from '../test-progress.js';
 import type { CheckCommand } from './classify.js';
-import { createStepParser } from './step-output.js';
+import { createStepParser, type StepReport } from './step-output.js';
 import { createOutputParser, suiteFields } from './test-output.js';
 
 export type CheckOutputSummary =
@@ -39,6 +39,89 @@ interface SummarizeOptions {
   at?: number;
 }
 
+const exitFailed = (exitCode?: number) => exitCode !== undefined && exitCode !== 0;
+
+const runHead = (at: number) => ({ startedAt: at, updatedAt: at, finishedAt: at });
+
+/** A test run: proven only by a runner's final summary. */
+function summarizeTests(
+  check: CheckCommand,
+  lines: string[],
+  { exitCode, at }: Required<Pick<SummarizeOptions, 'at'>> & SummarizeOptions,
+): CheckOutputSummary | null {
+  const parse = createOutputParser(() => at);
+  let counts = parse('');
+  for (const line of lines) counts = parse(line);
+  if (!counts.summarized) return null;
+  const status: 'failed' | 'passed' =
+    counts.failed > 0 || exitFailed(exitCode) ? 'failed' : 'passed';
+  const suite = {
+    name: checkLabel(check),
+    related: false,
+    status,
+    ...suiteFields(counts),
+    running: [],
+  };
+  return {
+    kind: 'test',
+    progress: { version: TEST_PROGRESS_VERSION, status, ...runHead(at), suites: [suite] },
+  };
+}
+
+/** Every line through the step parser, plus the blank lines a held issue waits for. */
+function readSteps(name: string, lines: string[]): { report: StepReport; issues: TaskIssue[] } {
+  const parse = createStepParser(name);
+  const issues: TaskIssue[] = [];
+  let report = parse('').report;
+  // A held cargo / ruff / oxlint issue waits up to three lines for its location.
+  for (const line of [...lines, '', '', '']) {
+    const step = parse(line);
+    report = step.report;
+    issues.push(...step.issues);
+  }
+  return { report, issues };
+}
+
+/** Any other kind: proven by an issue, an exit code or the tool's "nothing found". */
+function summarizeTask(
+  check: CheckCommand,
+  lines: string[],
+  { exitCode, at }: Required<Pick<SummarizeOptions, 'at'>> & SummarizeOptions,
+): CheckOutputSummary | null {
+  const name = checkLabel(check);
+  const { report, issues } = readSteps(name, lines);
+  if (issues.length === 0 && exitCode === undefined && !report.clean) return null;
+  const failed = report.errors > 0 || exitFailed(exitCode);
+  const status: 'failed' | 'passed' = failed ? 'failed' : 'passed';
+  const { errors, warnings, unitsDone, unitsTotal, current, tail } = report;
+  const step = {
+    id: name,
+    name,
+    status,
+    errors,
+    warnings,
+    unitsDone,
+    unitsTotal,
+    current,
+    tail: failed && errors === 0 ? tail : [],
+  };
+  const errorsFirst = [
+    ...issues.filter((i) => i.severity === 'error'),
+    ...issues.filter((i) => i.severity !== 'error'),
+  ];
+  return {
+    kind: 'task',
+    progress: {
+      version: TASK_PROGRESS_VERSION,
+      title: name,
+      status,
+      ...runHead(at),
+      steps: [step],
+      issues: errorsFirst.slice(0, TASK_ISSUE_LIMIT),
+    },
+  };
+}
+
 /** The widget progress for a finished check's output, or null when it proves nothing. */
 export function summarizeCheckOutput(
   check: CheckCommand,
@@ -46,74 +129,8 @@ export function summarizeCheckOutput(
   { exitCode, at = Date.now() }: SummarizeOptions = {},
 ): CheckOutputSummary | null {
   const lines = output.split('\n');
-  const head = { startedAt: at, updatedAt: at, finishedAt: at };
-  if (check.kind === 'test') {
-    const parse = createOutputParser(() => at);
-    let counts = parse('');
-    for (const line of lines) counts = parse(line);
-    if (!counts.summarized) return null;
-    const failed = counts.failed > 0 || (exitCode !== undefined && exitCode !== 0);
-    const status = failed ? 'failed' : 'passed';
-    return {
-      kind: 'test',
-      progress: {
-        version: TEST_PROGRESS_VERSION,
-        status,
-        ...head,
-        suites: [
-          {
-            name: checkLabel(check),
-            related: false,
-            status,
-            ...suiteFields(counts),
-            running: [],
-          },
-        ],
-      },
-    };
-  }
-
-  const name = checkLabel(check);
-  const parse = createStepParser(name);
-  const issues: TaskIssue[] = [];
-  let report = parse('').report;
-  for (const line of lines) {
-    const step = parse(line);
-    report = step.report;
-    issues.push(...step.issues);
-  }
-  // A held cargo / ruff / oxlint issue waits up to three lines for its location.
-  for (let i = 0; i < 3; i++) {
-    const step = parse('');
-    report = step.report;
-    issues.push(...step.issues);
-  }
-  if (issues.length === 0 && exitCode === undefined && !report.clean) return null;
-
-  const failed = report.errors > 0 || (exitCode !== undefined && exitCode !== 0);
-  const status = failed ? 'failed' : 'passed';
-  const { errors, warnings, unitsDone, unitsTotal, current, tail } = report;
-  const counts = { errors, warnings, unitsDone, unitsTotal, current };
-  return {
-    kind: 'task',
-    progress: {
-      version: TASK_PROGRESS_VERSION,
-      title: name,
-      status,
-      ...head,
-      steps: [
-        {
-          id: name,
-          name,
-          status,
-          ...counts,
-          tail: failed && report.errors === 0 ? tail : [],
-        },
-      ],
-      issues: [
-        ...issues.filter((i) => i.severity === 'error'),
-        ...issues.filter((i) => i.severity !== 'error'),
-      ].slice(0, TASK_ISSUE_LIMIT),
-    },
-  };
+  const options = { exitCode, at };
+  return check.kind === 'test'
+    ? summarizeTests(check, lines, options)
+    : summarizeTask(check, lines, options);
 }

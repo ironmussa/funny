@@ -28,5 +28,5 @@
     "@chromatic-com/storybook",
     "@funny/native-git-*"
   ],
-  "entry": ["scripts/vitest-progress-reporter.ts"]
+  "entry": ["packages/runtime/src/services/checks/vitest-progress-reporter.mjs"]
 }

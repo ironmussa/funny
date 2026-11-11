@@ -168,124 +168,153 @@ function check(
   return { kind, tool, scope: positionals(args, VALUED, skip), ...(filter ? { filter } : {}) };
 }
 
+/** Words to drop before the tool: `npx`, `pnpm exec`, `uv run`, pnpm / yarn's `<pm> <bin>`. */
+function runnerWords(argv: string[]): number {
+  const skip = RUNNERS[`${argv[0]} ${argv[1] ?? ''}`] ?? RUNNERS[argv[0]];
+  if (skip) return skip;
+  if (argv[0] !== 'pnpm' && argv[0] !== 'yarn') return 0;
+  return argv[1] === 'dlx' ? 2 : 1;
+}
+
 /** The tool and its arguments, after any package runner. */
 function toolOf(argv: string[]): { name: string; args: string[] } | null {
-  let rest = argv;
-  const first = rest[0]?.replace(/^(?:\.\/)?node_modules\/\.bin\//, '');
-  if (!first) return null;
-  rest = [first, ...rest.slice(1)];
-  const two = `${rest[0]} ${rest[1] ?? ''}`;
-  const skip = RUNNERS[two] ?? RUNNERS[rest[0]];
-  if (skip) rest = rest.slice(skip);
-  // pnpm and yarn run a package's binaries directly: `pnpm vitest run`.
-  else if (rest[0] === 'pnpm' || rest[0] === 'yarn') rest = rest.slice(rest[1] === 'dlx' ? 2 : 1);
+  if (!argv[0]) return null;
+  const bare = [argv[0].replace(/^(?:\.\/)?node_modules\/\.bin\//, ''), ...argv.slice(1)];
+  let rest = bare.slice(runnerWords(bare));
   // npx flags (`npx -y vitest`) come before the tool.
   while (rest[0]?.startsWith('-')) rest = rest.slice(1);
   return rest[0] ? { name: rest[0], args: rest.slice(1) } : null;
 }
 
+type Found = Omit<CheckCommand, 'plain' | 'cwd'>;
+
+/** A tool's check from its arguments, or null when this invocation is not one. */
+type ToolRule = (args: string[]) => Found | null;
+
+const always =
+  (kind: CheckKind, tool: CheckTool, skip?: string[]): ToolRule =>
+  (args) =>
+    check(kind, tool, args, skip);
+
+/** A rule that applies unless one of `flags` (or subcommands) is present. */
+const unless =
+  (words: string[], rule: ToolRule): ToolRule =>
+  (args) =>
+    args.some((arg) => words.includes(arg)) ? null : rule(args);
+
+/** A rule keyed by the first argument (`cargo test`, `go vet`, `biome lint`). */
+const bySubcommand =
+  (tool: CheckTool, kinds: Record<string, CheckKind>): ToolRule =>
+  ([sub, ...rest]) => {
+    const kind = sub ? kinds[sub] : undefined;
+    return kind ? check(kind, tool, sub === 'nextest' ? rest.slice(1) : rest) : null;
+  };
+
+/** `ruff check`, `ruff format`, or the old `ruff <path>`; `ruff --version` is not a check. */
+const ruff: ToolRule = (args) => {
+  const [sub] = args;
+  if (sub === 'format') return check('format', 'ruff', args.slice(1));
+  if (sub === 'check') return check('lint', 'ruff', args.slice(1));
+  return sub && !sub.startsWith('-') && /[./]/.test(sub) ? check('lint', 'ruff', args) : null;
+};
+
+/** prettier only formats (or checks) with `--write` / `--check`. */
+const prettier: ToolRule = (args) =>
+  args.some((arg) => ['--check', '-c', '--write', '-w'].includes(arg))
+    ? check('format', 'prettier', args)
+    : null;
+
+const TOOL_RULES: Record<string, ToolRule> = {
+  vitest: (args) =>
+    ['watch', 'dev', 'bench'].includes(args[0] ?? '')
+      ? null
+      : check('test', 'vitest', args, ['run', 'related']),
+  jest: always('test', 'jest'),
+  playwright: ([sub, ...rest]) => (sub === 'test' ? check('test', 'playwright', rest) : null),
+  pytest: always('test', 'pytest'),
+  'py.test': always('test', 'pytest'),
+  tsc: unless(['--watch', '-w'], always('typecheck', 'tsc')),
+  'vue-tsc': unless(['--watch', '-w'], always('typecheck', 'tsc')),
+  mypy: always('typecheck', 'mypy'),
+  pyright: always('typecheck', 'pyright'),
+  oxlint: always('lint', 'oxlint'),
+  eslint: always('lint', 'eslint'),
+  ruff,
+  biome: bySubcommand('biome', { lint: 'lint', check: 'lint', ci: 'lint', format: 'format' }),
+  oxfmt: always('format', 'oxfmt'),
+  prettier,
+  cargo: bySubcommand('cargo', {
+    test: 'test',
+    nextest: 'test',
+    clippy: 'lint',
+    check: 'typecheck',
+    fmt: 'format',
+    build: 'build',
+  }),
+  go: bySubcommand('go', { test: 'test', vet: 'lint', build: 'build' }),
+};
+
 /** A tool invocation as a check, or null. */
-function toolCheck(name: string, args: string[]): Omit<CheckCommand, 'plain' | 'cwd'> | null {
-  const sub = args[0];
-  switch (name) {
-    case 'vitest':
-      return sub === 'watch' || sub === 'dev' || sub === 'bench'
-        ? null
-        : check('test', 'vitest', args, ['run', 'related']);
-    case 'jest':
-      return check('test', 'jest', args);
-    case 'playwright':
-      return sub === 'test' ? check('test', 'playwright', args.slice(1)) : null;
-    case 'pytest':
-    case 'py.test':
-      return check('test', 'pytest', args);
-    case 'tsc':
-    case 'vue-tsc':
-      return args.includes('--watch') || args.includes('-w')
-        ? null
-        : check('typecheck', 'tsc', args);
-    case 'mypy':
-      return check('typecheck', 'mypy', args);
-    case 'pyright':
-      return check('typecheck', 'pyright', args);
-    case 'oxlint':
-      return check('lint', 'oxlint', args);
-    case 'eslint':
-      return check('lint', 'eslint', args);
-    case 'ruff':
-      if (sub === 'format') return check('format', 'ruff', args.slice(1));
-      // `ruff check`, or the old `ruff <path>` form; `ruff --version` is not a check.
-      return sub === 'check' || (sub && !sub.startsWith('-') && /[./]/.test(sub))
-        ? check('lint', 'ruff', sub === 'check' ? args.slice(1) : args)
-        : null;
-    case 'biome':
-      if (sub === 'format') return check('format', 'biome', args.slice(1));
-      return sub === 'lint' || sub === 'check' || sub === 'ci'
-        ? check('lint', 'biome', args.slice(1))
-        : null;
-    case 'oxfmt':
-      return check('format', 'oxfmt', args);
-    case 'prettier':
-      return args.includes('--check') ||
-        args.includes('-c') ||
-        args.includes('--write') ||
-        args.includes('-w')
-        ? check('format', 'prettier', args)
-        : null;
-    case 'cargo': {
-      const cargoKind: Record<string, CheckKind> = {
-        test: 'test',
-        nextest: 'test',
-        clippy: 'lint',
-        check: 'typecheck',
-        fmt: 'format',
-        build: 'build',
-      };
-      const kind = sub ? cargoKind[sub] : undefined;
-      return kind ? check(kind, 'cargo', args.slice(sub === 'nextest' ? 2 : 1)) : null;
-    }
-    case 'go': {
-      const goKind: Record<string, CheckKind> = { test: 'test', vet: 'lint', build: 'build' };
-      const kind = sub ? goKind[sub] : undefined;
-      return kind ? check(kind, 'go', args.slice(1)) : null;
-    }
-    default:
-      return null;
-  }
+function toolCheck(name: string, args: string[]): Found | null {
+  return Object.hasOwn(TOOL_RULES, name) ? TOOL_RULES[name](args) : null;
+}
+
+/** Package-manager flags that take a value and come before the script. */
+const PM_FLAGS = /^(--cwd|--filter|-F|-C|--dir|--prefix|-w|--workspace)$/;
+
+const skipPmFlags = (args: string[]) => {
+  let rest = args;
+  while (rest[0] && PM_FLAGS.test(rest[0])) rest = rest.slice(2);
+  return rest;
+};
+
+/**
+ * The script a package-manager command runs, with its arguments: `<pm> run x`,
+ * `npm test`, or pnpm / yarn's `<pm> x`. Null for anything else (`bun x` runs
+ * a file, `npm x` is not a script).
+ */
+function scriptArgs(pm: string, args: string[]): string[] | null {
+  if (args[0] === 'run' || args[0] === 'run-script') return skipPmFlags(args.slice(1));
+  if (pm === 'npm' && (args[0] === 'test' || args[0] === 't')) return ['test', ...args.slice(1)];
+  return pm === 'bun' || pm === 'npm' ? null : args;
+}
+
+/** funny's own task runner: `bun run steps lint`. */
+function stepsCheck(task: string | undefined): Found | null {
+  const kind = task ? scriptKind(task) : null;
+  return kind ? { kind, tool: 'script', script: `steps ${task}`, scope: [] } : null;
 }
 
 /** A package.json script run as a check, or null. */
-function scriptCheck(argv: string[]): Omit<CheckCommand, 'plain' | 'cwd'> | null {
+function scriptCheck(argv: string[]): Found | null {
   const [pm, ...rest] = argv;
   if (!PACKAGE_MANAGERS.has(pm)) return null;
-  let args = rest;
-  // `--cwd x`, `--filter x`, `-C x`, `--prefix x` before the script.
-  while (args[0] && /^(--cwd|--filter|-F|-C|--dir|--prefix|-w|--workspace)$/.test(args[0]))
-    args = args.slice(2);
+  const args = skipPmFlags(rest);
   if (pm === 'bun' && args[0] === 'test') return check('test', 'bun-test', args.slice(1));
-  if (args[0] === 'run' || args[0] === 'run-script') args = args.slice(1);
-  else if (pm === 'npm' && (args[0] === 'test' || args[0] === 't'))
-    args = ['test', ...args.slice(1)];
-  else if (pm === 'bun' || pm === 'npm') return null;
-  while (args[0] && /^(--cwd|--filter|-F|-C|--dir|--prefix)$/.test(args[0])) args = args.slice(2);
-  const name = args[0];
-  if (!name) return null;
+  const script = scriptArgs(pm, args);
+  if (!script?.[0]) return null;
   // `pnpm vitest` / `yarn tsc` run the binary, not a script of that name.
-  if (pm !== 'npm' && pm !== 'bun' && rest[0] === name && toolCheck(name, args.slice(1)))
-    return null;
-  // funny's own task runner: `bun run steps lint`.
-  if (name === 'steps') {
-    const task = args[1] ? scriptKind(args[1]) : null;
-    return task ? { kind: task, tool: 'script', script: `steps ${args[1]}`, scope: [] } : null;
-  }
+  if (script === args && toolCheck(script[0], script.slice(1))) return null;
+  return namedScriptCheck(script[0], script.slice(1));
+}
+
+/** `<name> <args>` as a script check: funny's `steps <task>`, or a check-named script. */
+function namedScriptCheck(name: string, rest: string[]): Found | null {
+  if (name === 'steps') return stepsCheck(rest[0]);
   const kind = scriptKind(name);
   if (!kind) return null;
-  const extra = args.slice(1).filter((arg) => arg !== '--');
-  return { ...check(kind, 'script', extra), script: name };
+  return {
+    ...check(
+      kind,
+      'script',
+      rest.filter((arg) => arg !== '--'),
+    ),
+    script: name,
+  };
 }
 
 /** A single shell command (no chaining) as a check, or null. */
-function segmentCheck(text: string): Omit<CheckCommand, 'plain' | 'cwd'> | null {
+function segmentCheck(text: string): Found | null {
   const argv = words(text);
   const script = scriptCheck(argv);
   if (script) return script;

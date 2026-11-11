@@ -59,6 +59,13 @@ if (!result.success) {
 // and references import.meta.dir at runtime (which resolves to dist/)
 await cp(join(ROOT, 'src', 'services', 'pty-helper.mjs'), join(DIST, 'pty-helper.mjs'));
 
+// Copy the vitest progress reporter to dist/ — the check runner passes its path to
+// a project's own vitest (`--reporter=`), so it cannot be bundled either.
+await cp(
+  join(ROOT, 'src', 'services', 'checks', 'vitest-progress-reporter.mjs'),
+  join(DIST, 'vitest-progress-reporter.mjs'),
+);
+
 // Copy pty-daemon.ts to dist/ — pty-daemon-launcher starts it as a separate Bun
 // process, so it cannot be bundled into the main runtime entry.
 await cp(join(ROOT, 'src', 'services', 'pty-daemon.ts'), join(DIST, 'pty-daemon.ts'));

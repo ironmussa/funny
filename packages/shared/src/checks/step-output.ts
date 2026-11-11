@@ -182,18 +182,29 @@ export function createStepParser(step: string): StepParser {
     });
   };
 
+  /** The issues a line reports itself, or starts (held until its location). */
+  const issuesOf = (line: string): TaskIssue[] => {
+    const issue = lineIssue(line);
+    if (issue) return record(issue);
+    const fromStylish = stylish(line);
+    if (fromStylish) return fromStylish;
+    const head = headIssue(line);
+    if (head) headed = { issue: head, linesLeft: 3 };
+    return [];
+  };
+
+  const remember = (line: string) => {
+    const text = line.trim();
+    if (CLEAN.test(text)) report.clean = true;
+    if (!text) return;
+    report.current = text.slice(0, CURRENT_MAX);
+    report.tail = [...report.tail, report.current].slice(-TAIL_LINES);
+  };
+
   const readLine = (line: string): TaskIssue[] => {
     if (progressLine(report, line)) return [];
-    if (CLEAN.test(line.trim())) report.clean = true;
-    const issue = lineIssue(line);
-    const fromStylish = issue ? null : stylish(line);
-    const head = !issue && !fromStylish && headIssue(line);
-    if (head) headed = { issue: head, linesLeft: 3 };
-    if (line.trim()) {
-      report.current = line.trim().slice(0, CURRENT_MAX);
-      report.tail = [...report.tail, report.current].slice(-TAIL_LINES);
-    }
-    return issue ? record(issue) : (fromStylish ?? []);
+    remember(line);
+    return issuesOf(line);
   };
 
   return (raw) => {

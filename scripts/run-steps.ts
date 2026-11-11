@@ -13,18 +13,18 @@ import { join } from 'node:path';
 
 import { createStepParser, type StepReport } from '../packages/shared/src/checks';
 import {
+  openProgressFile,
+  type ThrottledJsonFile,
+  type ThrottleOptions,
+} from '../packages/shared/src/checks/progress-file';
+import {
   TASK_ISSUE_LIMIT,
   TASK_PROGRESS_VERSION,
   type TaskIssue,
   type TaskProgress,
   type TaskStep,
 } from '../packages/shared/src/task-progress';
-import {
-  collectOutput,
-  openProgressFile,
-  type ThrottledJsonFile,
-  type ThrottleOptions,
-} from './progress-io';
+import { collectOutput } from './progress-io';
 import { TASK_NAMES, taskFor, type TaskDef, type TaskStepDef } from './task-steps';
 import { testSuiteEnv } from './test-env';
 

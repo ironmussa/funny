@@ -205,7 +205,11 @@ export function selectAffectedPackages(
 
 const shellQuote = (arg: string) => `'${arg.replaceAll("'", `'\\''`)}'`;
 
-const PROGRESS_REPORTER = join(import.meta.dir, 'vitest-progress-reporter.ts');
+/** The runtime's check runner uses the same reporter. */
+const PROGRESS_REPORTER = join(
+  import.meta.dir,
+  '../packages/runtime/src/services/checks/vitest-progress-reporter.mjs',
+);
 
 interface CommandOptions {
   /** Add the progress reporter to a vitest suite's default one. */

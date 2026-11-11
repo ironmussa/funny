@@ -193,7 +193,7 @@ describe('runTests with a progress file', () => {
 
     expect(await runTests(discoverPackages(dir), dir, 1, path)).toBe(0);
     expect(readFileSync(args, 'utf8')).toMatch(
-      /^run --reporter=default --reporter=\S*vitest-progress-reporter\.ts --project unit/,
+      /^run --reporter=default --reporter=\S*vitest-progress-reporter\.mjs --project unit/,
     );
     expect(read(path).suites[0]).toMatchObject({ passed: 1, filesTotal: 2, filesDone: 1 });
   });

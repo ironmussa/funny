@@ -76,6 +76,13 @@ const FRAME = /(?:\(|❯\s+|at\s+)((?:[A-Za-z]:)?[^\s():]+\.\w+):(\d+):\d+\)?\s*
 /** Separators and blank-ish lines that are never a failure's message. */
 const NOISE = /^[\s⎯─━=\-_*>]*$|^\s*\d+\s*\||^\s*\|/;
 
+/** Gives a failure the frame's location, unless it has one or the frame is another file's. */
+function placeAt(failure: TestFailure, frame: RegExpExecArray): void {
+  if (failure.line !== undefined) return;
+  if (failure.file && failure.file !== frame[1]) return;
+  Object.assign(failure, { file: frame[1], line: Number(frame[2]) });
+}
+
 interface Pending {
   failure: TestFailure;
   linesLeft: number;
@@ -119,27 +126,31 @@ class Counter {
     this.pending = awaitDetail ? { failure: target, linesLeft: DETAIL_LINES } : null;
   }
 
-  /** Fills the pending failure's message and location from the lines after it. */
+  /** Reads a line no runner format claimed: error details for the failures. */
   detail(line: string): void {
     const frame = FRAME.exec(line);
+    this.noteError(line, frame);
+    if (this.pending) this.fillPending(this.pending, line, frame);
+  }
+
+  /** bun prints a failure's error and stack before its `(fail)` line. */
+  private noteError(line: string, frame: RegExpExecArray | null): void {
     // The first frame is the test's own line; later ones are its callers.
     if (frame && !this.lastError.file) {
       this.lastError = { ...this.lastError, file: frame[1], line: Number(frame[2]) };
     }
     const error = /^error: (.+)$/.exec(line.trim());
     if (error) this.lastError = { message: error[1].slice(0, MESSAGE_MAX) };
+  }
 
-    const pending = this.pending;
-    if (!pending) return;
-    if (--pending.linesLeft <= 0) this.pending = null;
+  /** The pending failure's message (first meaningful line) and location (first frame). */
+  private fillPending(pending: Pending, line: string, frame: RegExpExecArray | null): void {
     const { failure } = pending;
-    if (frame && failure.line === undefined && (!failure.file || failure.file === frame[1])) {
-      failure.file = frame[1];
-      failure.line = Number(frame[2]);
-    } else if (!frame && !failure.message && !NOISE.test(line)) {
+    if (frame) placeAt(failure, frame);
+    else if (!failure.message && !NOISE.test(line))
       failure.message = line.trim().slice(0, MESSAGE_MAX);
-    }
-    if (failure.message && failure.line !== undefined) this.pending = null;
+    const done = failure.message && failure.line !== undefined;
+    if (done || --pending.linesLeft <= 0) this.pending = null;
   }
 
   /** bun's `(fail) name`: the error printed just before it belongs to it. */
@@ -167,6 +178,68 @@ function stripEmpty(failure: TestFailure): Partial<TestFailure> {
 const count = (text: string, word: string) =>
   Number(new RegExp(`(\\d+) ${word}`).exec(text)?.[1] ?? 0);
 
+/** One line format: a pattern and what a matching line means. */
+type LineRule = [RegExp, (c: Counter, m: RegExpExecArray) => void];
+
+/** The first rule whose pattern matches handles the line; true when one did. */
+function readWith(rules: LineRule[]): (c: Counter, line: string) => boolean {
+  return (c, line) => {
+    for (const [pattern, handle] of rules) {
+      const m = pattern.exec(line);
+      if (m) {
+        handle(c, m);
+        return true;
+      }
+    }
+    return false;
+  };
+}
+
+/** Totals from a `12 passed | 1 failed | 2 skipped` style summary. */
+function summaryTotals(
+  c: Counter,
+  text: string,
+  extra: { passed?: string[]; failed?: string[]; skipped?: string[] } = {},
+): void {
+  const sum = (words: string[]) => words.reduce((n, word) => n + count(text, word), 0);
+  c.totals(
+    sum(['passed', ...(extra.passed ?? [])]),
+    sum(['failed', ...(extra.failed ?? [])]),
+    sum(['skipped', 'todo', ...(extra.skipped ?? [])]),
+  );
+}
+
+const STATE_OF: Record<string, 'passed' | 'failed' | 'skipped'> = {
+  '✓': 'passed',
+  ok: 'passed',
+  '✘': 'failed',
+  x: 'failed',
+  '-': 'skipped',
+  '.': 'passed',
+  X: 'passed',
+  F: 'failed',
+  E: 'failed',
+  s: 'skipped',
+  PASSED: 'passed',
+  XPASS: 'passed',
+  FAILED: 'failed',
+  ERROR: 'failed',
+  SKIPPED: 'skipped',
+  XFAIL: 'skipped',
+  pass: 'passed',
+  fail: 'failed',
+  skip: 'skipped',
+  todo: 'skipped',
+  PASS: 'passed',
+  FAIL: 'failed',
+  SKIP: 'skipped',
+};
+
+const stateOf = (mark: string) => STATE_OF[mark] ?? 'skipped';
+
+const withMessage = (message: string | undefined) =>
+  message ? { message: message.slice(0, MESSAGE_MAX) } : {};
+
 /**
  * vitest's default reporter prints one line per finished file:
  *   ` ✓ |unit| src/a.test.ts (5 tests) 120ms`
@@ -175,234 +248,185 @@ const count = (text: string, word: string) =>
  * `Tests  12 passed | 1 failed (13)`, which replaces the sum. With reporter
  * events the file lines are skipped: the events already counted those tests.
  */
-function vitestLine(c: Counter, line: string): boolean {
-  const file = /^\s*[✓×❯↓]\s+(?:\|[^|]+\|\s+)?(\S+)\s+\((\d+) tests?([^)]*)\)/.exec(line);
-  if (file) {
-    if (c.fromEvents) return true;
-    const failed = count(file[3], 'failed');
-    const skipped = count(file[3], 'skipped');
-    c.counts.passed += Number(file[2]) - failed - skipped;
-    c.counts.failed += failed;
-    c.counts.skipped += skipped;
-    c.counts.current = file[1];
-    return true;
-  }
-  const heading = /^\s*FAIL\s+(?:\|[^|]+\|\s+)?(\S+)\s+>\s+(.+)$/.exec(line);
-  if (heading) {
-    c.fail({ name: heading[2].trim(), file: heading[1] }, true);
-    return true;
-  }
-  const summary = /^\s*Tests\s+(.+)\(\d+\)\s*$/.exec(line);
-  if (!summary) return false;
-  c.totals(
-    count(summary[1], 'passed'),
-    count(summary[1], 'failed'),
-    count(summary[1], 'skipped') + count(summary[1], 'todo'),
-  );
-  return true;
-}
+const vitestLine = readWith([
+  [
+    /^\s*[✓×❯↓]\s+(?:\|[^|]+\|\s+)?(\S+)\s+\((\d+) tests?([^)]*)\)/,
+    (c, m) => {
+      if (c.fromEvents) return;
+      const failed = count(m[3], 'failed');
+      const skipped = count(m[3], 'skipped');
+      c.counts.passed += Number(m[2]) - failed - skipped;
+      c.counts.failed += failed;
+      c.counts.skipped += skipped;
+      c.counts.current = m[1];
+    },
+  ],
+  [
+    /^\s*FAIL\s+(?:\|[^|]+\|\s+)?(\S+)\s+>\s+(.+)$/,
+    (c, m) => c.fail({ name: m[2].trim(), file: m[1] }, true),
+  ],
+  [/^\s*Tests\s+(.+)\(\d+\)\s*$/, (c, m) => summaryTotals(c, m[1])],
+]);
 
 /**
  * bun test prints `(pass) name [1ms]`, `(fail) …`, `(skip) …` / `(todo) …`
  * (a failure after its error and stack), and always a summary: ` 535 pass`,
  * ` 0 fail`, ` 2 skip`, ` 1 todo`, one per line, which replaces the sum.
  */
-function bunLine(c: Counter, line: string): boolean {
-  const summary = /^\s*(\d+) (pass|fail|skip|todo)$/.exec(line);
-  if (summary) {
-    const n = Number(summary[1]);
-    if (summary[2] === 'pass') c.counts.passed = n;
-    else if (summary[2] === 'fail') c.counts.failed = n;
-    else c.counts.skipped = summary[2] === 'skip' ? n : c.counts.skipped + n;
-    c.counts.summarized = true;
-    return true;
-  }
-  const test = /^\((pass|fail|skip|todo)\) (.+?)(?: \[[\d.]+m?s\])?$/.exec(line);
-  if (!test) return false;
-  if (test[1] === 'fail') {
-    c.bump('failed', test[2]);
-    c.failFromLastError(test[2]);
-  } else {
-    c.bump(test[1] === 'pass' ? 'passed' : 'skipped', test[2]);
-    c.resetLastError();
-  }
-  return true;
-}
+const bunLine = readWith([
+  [
+    /^\s*(\d+) (pass|fail|skip|todo)$/,
+    (c, m) => {
+      const n = Number(m[1]);
+      if (m[2] === 'pass') c.counts.passed = n;
+      else if (m[2] === 'fail') c.counts.failed = n;
+      else c.counts.skipped = m[2] === 'skip' ? n : c.counts.skipped + n;
+      c.counts.summarized = true;
+    },
+  ],
+  [
+    /^\((pass|fail|skip|todo)\) (.+?)(?: \[[\d.]+m?s\])?$/,
+    (c, m) => {
+      c.bump(stateOf(m[1]), m[2]);
+      if (m[1] === 'fail') c.failFromLastError(m[2]);
+      else c.resetLastError();
+    },
+  ],
+]);
 
 /**
  * jest prints `PASS src/a.test.ts` / `FAIL …` per file, a `● suite › name`
  * heading per failure, and `Tests:  1 failed, 2 skipped, 10 passed, 13 total`.
  */
-function jestLine(c: Counter, line: string): boolean {
-  const file = /^\s*(PASS|FAIL)\s+(\S+\.\w+)(?:\s+\([\d.]+ m?s\))?$/.exec(line);
-  if (file) {
-    c.counts.current = file[2];
-    return true;
-  }
-  const heading = /^\s*● (.+ › .+|[^:]+)$/.exec(line);
-  if (heading && !/^Test suite failed to run$/.test(heading[1])) {
-    c.fail({ name: heading[1].trim() }, true);
-    return true;
-  }
-  const summary = /^Tests:\s+(.+) total$/.exec(line.trim());
-  if (!summary) return false;
-  c.totals(
-    count(summary[1], 'passed'),
-    count(summary[1], 'failed'),
-    count(summary[1], 'skipped') + count(summary[1], 'todo'),
-  );
-  return true;
-}
+const jestLine = readWith([
+  [/^\s*(?:PASS|FAIL)\s+(\S+\.\w+)(?:\s+\([\d.]+ m?s\))?$/, (c, m) => (c.counts.current = m[1])],
+  [/^\s*● Test suite failed to run$/, () => {}],
+  [/^\s*● (.+ › .+|[^:]+)$/, (c, m) => c.fail({ name: m[1].trim() }, true)],
+  [/^\s*Tests:\s+(.+) total$/, (c, m) => summaryTotals(c, m[1])],
+]);
 
 /**
  * playwright's list reporter: `  ✓  1 [chromium] › a.spec.ts:3:1 › title (1.2s)`
  * (`✘` failed, `-` skipped), a `1) [chromium] › a.spec.ts:3:5 › title ───`
  * heading per failure, and summary lines `3 passed (5.1s)`, `1 failed`, ….
  */
-function playwrightLine(c: Counter, line: string): boolean {
-  const test = /^\s*([✓✘-]|ok|x)\s+\d+\s+(.*›.+?)(?:\s+\([\d.]+m?s\))?$/.exec(line);
-  if (test) {
-    const state =
-      test[1] === '✓' || test[1] === 'ok' ? 'passed' : test[1] === '-' ? 'skipped' : 'failed';
-    c.bump(state, test[2].trim());
-    return true;
-  }
-  const heading = /^\s*\d+\) (?:\[[^\]]+\] › )?(\S+?):(\d+):\d+ › (.+?)\s*[─]*$/.exec(line);
-  if (heading) {
-    c.fail({ name: heading[3], file: heading[1], line: Number(heading[2]) }, true);
-    return true;
-  }
-  const summary = /^\s*(\d+) (passed|failed|skipped|flaky|did not run)(?: \(.+\))?$/.exec(line);
-  if (!summary) return false;
-  const n = Number(summary[1]);
-  if (summary[2] === 'passed' || summary[2] === 'flaky') c.counts.passed = n;
-  else if (summary[2] === 'failed') c.counts.failed = n;
-  else c.counts.skipped = n;
-  c.counts.summarized = true;
-  return true;
-}
+const playwrightLine = readWith([
+  [
+    /^\s*([✓✘-]|ok|x)\s+\d+\s+(.*›.+?)(?:\s+\([\d.]+m?s\))?$/,
+    (c, m) => c.bump(stateOf(m[1]), m[2].trim()),
+  ],
+  [
+    /^\s*\d+\) (?:\[[^\]]+\] › )?(\S+?):(\d+):\d+ › (.+?)\s*[─]*$/,
+    (c, m) => c.fail({ name: m[3], file: m[1], line: Number(m[2]) }, true),
+  ],
+  [
+    /^\s*(\d+) (passed|failed|skipped|flaky|did not run)(?: \(.+\))?$/,
+    (c, m) => {
+      const field = m[2] === 'flaky' ? 'passed' : m[2] === 'did not run' ? 'skipped' : m[2];
+      c.counts[field as 'passed' | 'failed' | 'skipped'] = Number(m[1]);
+      c.counts.summarized = true;
+    },
+  ],
+]);
+
+/** The latest failure whose location is still unknown (pytest's traceback order). */
+const openFailure = (c: Counter) =>
+  [...c.counts.failures].reverse().find((f) => f.line === undefined);
 
 /**
  * pytest: progress lines `tests/test_a.py ..F.s  [ 40%]`, verbose lines
- * `tests/test_a.py::test_x PASSED`, short-summary `FAILED path::name - msg`,
- * and the final `==== 2 failed, 10 passed, 1 skipped in 1.23s ====`.
+ * `tests/test_a.py::test_x PASSED`, a traceback per failure (`____ Class.test
+ * ____`, `E  message` lines, `tests/test_a.py:61: AssertionError`), short-
+ * summary `FAILED path::name - msg`, and `==== 2 failed, 10 passed in 1.23s ====`.
  */
-function pytestLine(c: Counter, line: string): boolean {
-  const dots = /^(\S+\.py) ([.FsExX]+)\s*(?:\[\s*\d+%\])?$/.exec(line);
-  if (dots) {
-    for (const ch of dots[2])
-      c.bump(ch === '.' || ch === 'X' ? 'passed' : ch === 'F' || ch === 'E' ? 'failed' : 'skipped');
-    c.counts.current = dots[1];
-    return true;
-  }
-  const verbose = /^(\S+\.py)::(\S+) (PASSED|FAILED|SKIPPED|ERROR|XFAIL|XPASS)\b/.exec(line);
-  if (verbose) {
-    const state =
-      verbose[3] === 'PASSED' || verbose[3] === 'XPASS'
-        ? 'passed'
-        : verbose[3] === 'FAILED' || verbose[3] === 'ERROR'
-          ? 'failed'
-          : 'skipped';
-    c.bump(state, `${verbose[1]}::${verbose[2]}`);
-    return true;
-  }
-  const failed = /^(?:FAILED|ERROR) (\S+\.py)::(\S+)(?: - (.+))?$/.exec(line);
-  if (failed) {
-    c.fail(
-      {
-        name: failed[2],
-        file: failed[1],
-        ...(failed[3] ? { message: failed[3].slice(0, MESSAGE_MAX) } : {}),
-      },
-      false,
-    );
-    return true;
-  }
-  // The traceback of each failure: `____ Class.test_name ____`, `E  message`
-  // lines, and `tests/test_a.py:61: AssertionError` where it was raised.
-  const header = /^_{3,} (\S+) _{3,}$/.exec(line);
-  if (header) {
-    c.fail({ name: header[1].replace(/\./g, '::') }, false);
-    return true;
-  }
-  const open = () => [...c.counts.failures].reverse().find((f) => f.line === undefined);
-  const raised = /^E\s+(\S.*)$/.exec(line);
-  if (raised) {
-    const failure = open();
-    if (failure && !failure.message) failure.message = raised[1].slice(0, MESSAGE_MAX);
-    return true;
-  }
-  const location = /^(\S+\.py):(\d+): \w+/.exec(line);
-  if (location) {
-    const failure = open();
-    if (failure && (!failure.file || failure.file === location[1])) {
-      Object.assign(failure, { file: location[1], line: Number(location[2]) });
-    }
-  }
-  const summary =
-    /^=+ (.*\b(?:passed|failed|skipped|error|errors|no tests ran)\b.*) in [\d.]+s(?: \([^)]*\))? =+$/.exec(
-      line,
-    );
-  if (!summary) return Boolean(location);
-  c.totals(
-    count(summary[1], 'passed') + count(summary[1], 'xpassed'),
-    count(summary[1], 'failed') + count(summary[1], 'errors?'),
-    count(summary[1], 'skipped') + count(summary[1], 'xfailed'),
-  );
-  return true;
-}
+const pytestLine = readWith([
+  [
+    /^(\S+\.py) ([.FsExX]+)\s*(?:\[\s*\d+%\])?$/,
+    (c, m) => {
+      for (const ch of m[2]) c.bump(ch === 'x' ? 'skipped' : stateOf(ch));
+      c.counts.current = m[1];
+    },
+  ],
+  [
+    /^(\S+\.py)::(\S+) (PASSED|FAILED|SKIPPED|ERROR|XFAIL|XPASS)\b/,
+    (c, m) => c.bump(stateOf(m[3]), `${m[1]}::${m[2]}`),
+  ],
+  [
+    /^(?:FAILED|ERROR) (\S+\.py)::(\S+)(?: - (.+))?$/,
+    (c, m) => c.fail({ name: m[2], file: m[1], ...withMessage(m[3]) }, false),
+  ],
+  [/^_{3,} (\S+) _{3,}$/, (c, m) => c.fail({ name: m[1].replace(/\./g, '::') }, false)],
+  [
+    /^E\s+(\S.*)$/,
+    (c, m) => {
+      const failure = openFailure(c);
+      if (failure && !failure.message) failure.message = m[1].slice(0, MESSAGE_MAX);
+    },
+  ],
+  [
+    /^(\S+\.py):(\d+): \w+/,
+    (c, m) => {
+      const failure = openFailure(c);
+      if (failure && (!failure.file || failure.file === m[1])) {
+        Object.assign(failure, { file: m[1], line: Number(m[2]) });
+      }
+    },
+  ],
+  [
+    /^=+ (.*\b(?:passed|failed|skipped|error|errors|no tests ran)\b.*) in [\d.]+s(?: \([^)]*\))? =+$/,
+    (c, m) =>
+      summaryTotals(c, m[1], { passed: ['xpassed'], failed: ['errors?'], skipped: ['xfailed'] }),
+  ],
+]);
 
 /**
  * cargo test prints `test path::name ... ok` / `FAILED` / `ignored`, per
  * binary `test result: ok. 5 passed; 0 failed; 1 ignored; …`, and for a
  * failure `thread 'path::name' panicked at src/lib.rs:10:5:` then the message.
  */
-function cargoLine(c: Counter, line: string): boolean {
-  if (line.startsWith('test result:')) {
-    c.counts.summarized = true;
-    return true;
-  }
-  const test = /^test (\S+) \.\.\. (ok|FAILED|ignored)/.exec(line);
-  if (test) {
-    c.bump(test[2] === 'ok' ? 'passed' : test[2] === 'FAILED' ? 'failed' : 'skipped', test[1]);
-    if (test[2] === 'FAILED') c.fail({ name: test[1] }, false);
-    return true;
-  }
-  const panic = /^thread '([^']+)' panicked at (\S+?):(\d+):\d+:?$/.exec(line);
-  if (!panic) return false;
-  c.fail({ name: panic[1], file: panic[2], line: Number(panic[3]) }, true);
-  return true;
-}
+const cargoLine = readWith([
+  [/^test result:/, (c) => (c.counts.summarized = true)],
+  [
+    /^test (\S+) \.\.\. (ok|FAILED|ignored)/,
+    (c, m) => {
+      c.bump(m[2] === 'ok' ? 'passed' : m[2] === 'FAILED' ? 'failed' : 'skipped', m[1]);
+      if (m[2] === 'FAILED') c.fail({ name: m[1] }, false);
+    },
+  ],
+  [
+    /^thread '([^']+)' panicked at (\S+?):(\d+):\d+:?$/,
+    (c, m) => c.fail({ name: m[1], file: m[2], line: Number(m[3]) }, true),
+  ],
+]);
 
 /**
  * go test -v: `--- PASS: TestX (0.00s)` / `--- FAIL:` / `--- SKIP:`, the
  * failure's `    a_test.go:12: message` right after, and `ok  pkg 0.1s` /
  * `FAIL\tpkg 0.1s` per package.
  */
-function goLine(c: Counter, line: string): boolean {
-  const test = /^\s*--- (PASS|FAIL|SKIP): (\S+)/.exec(line);
-  if (test) {
-    c.bump(test[1] === 'PASS' ? 'passed' : test[1] === 'FAIL' ? 'failed' : 'skipped', test[2]);
-    if (test[1] === 'FAIL') c.fail({ name: test[2] }, false);
-    return true;
-  }
-  const at = /^\s+(\S+_test\.go):(\d+): (.+)$/.exec(line);
-  if (at) {
-    const open = [...c.counts.failures].reverse().find((f) => !f.file);
-    if (open)
-      Object.assign(open, {
-        file: at[1],
-        line: Number(at[2]),
-        message: at[3].slice(0, MESSAGE_MAX),
-      });
-    return true;
-  }
-  const pkg = /^(ok|FAIL)\s+(\S+)\s+(?:[\d.]+s|\(cached\))/.exec(line);
-  if (!pkg) return false;
-  c.counts.current = pkg[2];
-  c.counts.summarized = true;
-  return true;
-}
+const goLine = readWith([
+  [
+    /^\s*--- (PASS|FAIL|SKIP): (\S+)/,
+    (c, m) => {
+      c.bump(stateOf(m[1]), m[2]);
+      if (m[1] === 'FAIL') c.fail({ name: m[2] }, false);
+    },
+  ],
+  [
+    /^\s+(\S+_test\.go):(\d+): (.+)$/,
+    (c, m) => {
+      const open = [...c.counts.failures].reverse().find((f) => !f.file);
+      if (open) Object.assign(open, { file: m[1], line: Number(m[2]), ...withMessage(m[3]) });
+    },
+  ],
+  [
+    /^(?:ok|FAIL)\s+(\S+)\s+(?:[\d.]+s|\(cached\))/,
+    (c, m) => {
+      c.counts.current = m[1];
+      c.counts.summarized = true;
+    },
+  ],
+]);
 
 const STATE_FIELD = { passed: 'passed', failed: 'failed', skipped: 'skipped' } as const;
 

@@ -7,6 +7,8 @@ import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettin
 import { seedTemplates } from '@/data/templates/testing';
 import { useAuthStore } from '@/stores/auth-store';
 
+import { flushAsyncUpdates } from '../helpers/render';
+
 const actions = vi.hoisted(() => ({ duplicateTemplate: vi.fn() }));
 vi.mock('@/data/templates/actions', async (importOriginal) => ({
   ...(await importOriginal<object>()),
@@ -39,7 +41,7 @@ describe('AgentTemplateSettings accessibility', () => {
     seedTemplates([template]);
   });
 
-  test('exposes separate named actions without nesting interactive controls', () => {
+  test('exposes separate named actions without nesting interactive controls', async () => {
     render(<AgentTemplateSettings />);
 
     const card = screen.getByTestId('agent-template-card-template-1');
@@ -51,8 +53,12 @@ describe('AgentTemplateSettings accessibility', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Duplicate Review assistant' }));
 
+    // The click does not reach the card's Edit action...
     expect(duplicateTemplate).toHaveBeenCalledWith(template.id);
     expect(screen.queryByText('Edit Template')).not.toBeInTheDocument();
+    // ...the editor opens only once the duplicate exists, on the copy.
+    await flushAsyncUpdates();
+    expect(screen.getByText('Edit Template')).toBeInTheDocument();
   });
 
   test('associates editor labels with their controls', () => {

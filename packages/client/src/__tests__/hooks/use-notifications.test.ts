@@ -65,8 +65,12 @@ describe('use-notifications', () => {
 
     expect(result).toEqual({ ok: true });
     expect(instances[0].title).toBe('funny — feat');
+    // jsdom does not implement window.focus().
+    const focus = vi.spyOn(window, 'focus').mockImplementation(() => {});
     instances[0].onclick?.();
+    expect(focus).toHaveBeenCalled();
     expect(onClick).toHaveBeenCalled();
+    focus.mockRestore();
   });
 
   test('showAgentNotification skips when tab is visible and not forced', async () => {

@@ -1,4 +1,4 @@
-import { fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { ModelSelect } from '@/components/PromptInputUI';
@@ -67,11 +67,11 @@ test('model menu scrolls within available height and effort selection escapes it
   );
   // Models live under their provider's submenu.
   const provider = screen.getByTestId('prompt-provider-option-codex');
-  provider.focus();
+  act(() => provider.focus());
   fireEvent.keyDown(provider, { key: 'ArrowRight' });
   const model = await screen.findByTestId('prompt-model-option-codex:gpt-5.5');
   expect(menu).not.toContainElement(model);
-  model.focus();
+  act(() => model.focus());
   fireEvent.keyDown(model, { key: 'ArrowRight' });
   const effort = await screen.findByTestId('prompt-effort-option-codex:gpt-5.5-high');
   expect(menu).not.toContainElement(effort);

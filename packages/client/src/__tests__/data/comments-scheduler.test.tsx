@@ -1,6 +1,6 @@
 import type { ThreadComment } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -48,9 +48,11 @@ describe('comments', () => {
     expect(result.current.comments).toBeNull();
     await waitFor(() => expect(result.current.comments?.map((c) => c.id)).toEqual(['a', 'b']));
 
-    applyCommentAdded(comment('c', '2026-01-03'));
-    applyCommentAdded(comment('c', '2026-01-03'));
-    applyCommentAdded(comment('other', '2026-01-04', 't2'));
+    act(() => {
+      applyCommentAdded(comment('c', '2026-01-03'));
+      applyCommentAdded(comment('c', '2026-01-03'));
+      applyCommentAdded(comment('other', '2026-01-04', 't2'));
+    });
     await waitFor(() => expect(result.current.comments?.map((c) => c.id)).toEqual(['a', 'b', 'c']));
   });
 
@@ -80,7 +82,7 @@ describe('scheduler queue', () => {
     );
     const { result } = renderHook(() => useSchedulerQueue());
     await waitFor(() => expect(result.current.runs).toHaveLength(1));
-    applyRunClaimed('t2', { userId: 'u1' });
+    act(() => applyRunClaimed('t2', { userId: 'u1' }));
     await waitFor(() => expect(result.current.runs.map((r) => r.threadId)).toEqual(['t2', 't1']));
   });
 

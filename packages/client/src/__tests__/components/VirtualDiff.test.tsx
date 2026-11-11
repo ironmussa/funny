@@ -3,6 +3,8 @@ import { describe, expect, test } from 'vitest';
 
 import { VirtualDiff } from '@/components/VirtualDiff';
 
+import { flushAsyncUpdates } from '../helpers/render';
+
 const SIMPLE_DIFF = `diff --git a/src/example.ts b/src/example.ts
 --- a/src/example.ts
 +++ b/src/example.ts
@@ -12,8 +14,10 @@ const SIMPLE_DIFF = `diff --git a/src/example.ts b/src/example.ts
 `;
 
 describe('VirtualDiff', () => {
-  test('keeps visible scrollbars without global scroll masks', () => {
+  test('keeps visible scrollbars without global scroll masks', async () => {
     render(<VirtualDiff unifiedDiff={SIMPLE_DIFF} viewMode="split" />);
+    // Syntax highlighting loads on mount.
+    await flushAsyncUpdates();
 
     expect(screen.getByTestId('diff-scroll-area')).toHaveClass(
       'scroll-fade-none',

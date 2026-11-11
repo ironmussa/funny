@@ -82,8 +82,12 @@ describe('cancelling', () => {
   test('a job cancel shows at once and stays cancelled until the runner event', async () => {
     const { result } = renderHook(() => useJobsById());
     api.cancelJob.mockReturnValue(okAsync({ ok: true }));
-    const pending = cancelJob('j1');
-    await waitFor(() => expect(result.current.j1?.status).toBe('cancelled'));
+    let pending!: ReturnType<typeof cancelJob>;
+    act(() => {
+      pending = cancelJob('j1');
+    });
+    // The optimistic write shows before the request settles.
+    expect(result.current.j1?.status).toBe('cancelled');
     await act(async () => {
       await pending;
     });

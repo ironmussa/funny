@@ -8,7 +8,7 @@ import { withProjects } from '@/data/projects/testing';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';
 
-import { renderWithProviders } from '../helpers/render';
+import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
 const context = vi.hoisted(() => ({
   remoteCheckProjectId: 'p2' as string | null,
@@ -78,11 +78,13 @@ describe('Worktrees sidebar', () => {
     expect(api.listWorktrees).not.toHaveBeenCalled();
   });
 
-  test('uses a full-height centered loading state', () => {
+  test('uses a full-height centered loading state', async () => {
     vi.mocked(api.listWorktrees).mockReturnValue(
       ResultAsync.fromSafePromise(new Promise<never>(() => {})),
     );
     renderWithProviders(<WorktreesPanel />);
+    // Branches load alongside the (never-ending) worktree list.
+    await flushAsyncUpdates();
     expect(screen.getByTestId('worktree-settings-loading')).toHaveClass(
       'flex-1',
       'flex-col',

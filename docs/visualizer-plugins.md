@@ -149,6 +149,15 @@ as `file:line message`, the output tail only when a failure reported none, and
 `progressPath`. A synchronous run is stopped after 4 minutes; longer runs need
 `background: true`.
 
+In the thread, a `funny_run_checks` call is its widget: it follows the run while
+the call is going and shows the final state (or, if the file is gone, the
+summary) afterwards. A check the agent ran through Bash instead, with any
+provider, gets the same widget built from its output when the output proves the
+result (a runner's final summary, an issue, an exit code); a truncated log
+stays a plain Bash card. For Claude, a Bash call that is only a check is
+redirected to the tool (Settings > General > "Run checks through funny", on by
+default).
+
 Code: the detection and parsers in
 [`packages/shared/src/checks/`](../packages/shared/src/checks/), the tool and
 runner in

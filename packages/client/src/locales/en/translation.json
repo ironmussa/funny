@@ -1574,5 +1574,9 @@
     "useProfileToken": "Use my personal token",
     "roleDedicated": "dedicated",
     "roleGeneral": "general"
+  },
+  "checks": {
+    "run": "Run checks: {{kind}}",
+    "starting": "Starting…"
   }
 }

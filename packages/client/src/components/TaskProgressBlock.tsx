@@ -1,5 +1,6 @@
 import type { TaskIssue, TaskProgress, TaskStep } from '@funny/shared/task-progress';
 import { AlertTriangle, XCircle } from 'lucide-react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -127,7 +128,7 @@ function IssueList({ issues, total, t }: { issues: TaskIssue[]; total: number; t
   );
 }
 
-function TaskProgressView({ progress }: { progress: TaskProgress }) {
+export function TaskProgressView({ progress }: { progress: TaskProgress }) {
   const { t } = useTranslation();
   const running = progress.status === 'running';
   const now = useNow(running);
@@ -193,8 +194,16 @@ function TaskProgressView({ progress }: { progress: TaskProgress }) {
 }
 
 /** Follows the task progress file at `path` and renders it. */
-export function TaskProgressBlock({ path }: { path: string | null }) {
+export function TaskProgressBlock({
+  path,
+  fallback,
+}: {
+  path: string | null;
+  /** Shown instead of the error when the file cannot be read (e.g. it was cleaned up). */
+  fallback?: ReactNode;
+}) {
   const state = useTaskProgress(path);
   if (state.kind === 'ready') return <TaskProgressView progress={state.progress} />;
+  if (state.kind === 'error' && fallback) return fallback;
   return <ProgressFileFallback kind={state.kind} path={path} testIdPrefix="task-progress" />;
 }

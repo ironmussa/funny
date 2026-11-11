@@ -28,7 +28,9 @@ describe('parseTestProgress', () => {
   test('rejects another version, an unknown status and invalid JSON', () => {
     const run = { status: 'running', startedAt: 1, updatedAt: 2, suites: [] };
     expect(parseTestProgress(JSON.stringify({ ...run, version: 2 })).ok).toBe(false);
-    expect(parseTestProgress(JSON.stringify({ ...run, version: 1, status: 'done' })).ok).toBe(false);
+    expect(parseTestProgress(JSON.stringify({ ...run, version: 1, status: 'done' })).ok).toBe(
+      false,
+    );
     expect(parseTestProgress('{').ok).toBe(false);
   });
 });

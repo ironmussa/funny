@@ -5,7 +5,7 @@ import { spawn, type ChildProcess } from 'child_process';
  * Extracts the common lifecycle boilerplate shared by SDKClaudeProcess,
  * CodexSDKProcess, and GeminiACPProcess:
  *
- *   - AbortController + _exited flag
+ *   - AbortController + hasExited flag
  *   - start() → runProcess() error wrapper
  *   - kill() with abort
  *   - Helper methods for emitting CLIMessage (init, result, error)
@@ -99,7 +99,7 @@ export function killProcessTree(child: ChildProcess, graceMs = 3000): void {
 
 export abstract class BaseAgentProcess extends EventEmitter {
   protected abortController = new AbortController();
-  protected _exited = false;
+  protected hasExited = false;
 
   /** Promise representing the currently running turn, or null when idle. */
   private currentTurn: Promise<void> | null = null;
@@ -114,14 +114,14 @@ export abstract class BaseAgentProcess extends EventEmitter {
 
   start(): void {
     this.runProcess().catch((err) => {
-      if (!this._exited) {
+      if (!this.hasExited) {
         try {
           this.emit('error', err instanceof Error ? err : new Error(String(err)));
         } finally {
           // A provider can fail before it creates its underlying session/thread.
           // Mark it exited so the orchestrator cannot reuse a half-initialized
           // process for a follow-up prompt.
-          if (!this._exited) this.finalize(1);
+          if (!this.hasExited) this.finalize(1);
         }
       }
     });
@@ -132,7 +132,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
   }
 
   get exited(): boolean {
-    return this._exited;
+    return this.hasExited;
   }
 
   // ── Protected helpers ───────────────────────────────────────────
@@ -208,7 +208,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
    * Subclasses must implement `runOnePrompt(prompt)` for the per-turn work.
    */
   protected async enqueuePrompt(prompt: string, images?: unknown[]): Promise<void> {
-    if (this._exited || this.isAborted) {
+    if (this.hasExited || this.isAborted) {
       throw new Error('Agent process has exited');
     }
     if (this.currentTurn) {
@@ -230,7 +230,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
   }
 
   private drainQueue(): void {
-    if (this._exited || this.isAborted) return;
+    if (this.hasExited || this.isAborted) return;
     if (this.currentTurn) return;
     const next = this.promptQueue.shift();
     if (!next) return;
@@ -500,7 +500,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
    * Call this in the `finally` block of `runProcess()`.
    */
   protected finalize(exitCode: number | null = this.isAborted ? null : 0): void {
-    this._exited = true;
+    this.hasExited = true;
     this.emit('exit', exitCode);
   }
 }

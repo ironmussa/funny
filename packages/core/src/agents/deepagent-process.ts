@@ -196,7 +196,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
 
     // Handle process errors
     child.on('error', (err: any) => {
-      if (!this._exited && !this.isAborted) {
+      if (!this.hasExited && !this.isAborted) {
         if (err.code === 'ENOENT') {
           this.emit(
             'error',
@@ -231,7 +231,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
         child.on('error', reject);
       });
     } catch {
-      this._exited = true;
+      this.hasExited = true;
       return;
     }
 

@@ -10,8 +10,8 @@ import { fileURLToPath } from 'url';
 
 import { readProjectConfig } from '../ports/config-reader.js';
 
-const __dir = dirname(fileURLToPath(import.meta.url));
-const TMP = resolve(__dir, '__tmp_config_test__');
+const testDir = dirname(fileURLToPath(import.meta.url));
+const TMP = resolve(testDir, '__tmp_config_test__');
 
 describe('config-reader', () => {
   beforeEach(() => {

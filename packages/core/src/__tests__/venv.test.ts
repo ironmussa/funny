@@ -8,8 +8,8 @@ import { fileURLToPath } from 'url';
 
 import { resolvePyVenv } from '../env/venv.js';
 
-const __dir = dirname(fileURLToPath(import.meta.url));
-const TMP = resolve(__dir, '__tmp_venv_test__');
+const testDir = dirname(fileURLToPath(import.meta.url));
+const TMP = resolve(testDir, '__tmp_venv_test__');
 
 const IS_WINDOWS = process.platform === 'win32';
 const BIN_DIR = IS_WINDOWS ? 'Scripts' : 'bin';

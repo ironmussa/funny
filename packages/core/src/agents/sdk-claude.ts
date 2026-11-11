@@ -145,7 +145,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
    * interrupt — use this for non-steer follow-ups in steerable threads.
    */
   private async steerableSendPrompt(prompt: string, images?: unknown[]): Promise<void> {
-    if (!this.activeQuery || this.isAborted || this._exited) {
+    if (!this.activeQuery || this.isAborted || this.hasExited) {
       throw new Error('claude-live-unavailable: no live session to continue');
     }
     this.pushInput(prompt, images);
@@ -156,7 +156,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
    * the same streaming session so the model redirects without a respawn.
    */
   private async steerableSteerPrompt(prompt: string, images?: unknown[]): Promise<void> {
-    if (!this.activeQuery || this.isAborted || this._exited) {
+    if (!this.activeQuery || this.isAborted || this.hasExited) {
       throw new Error('claude-live-unavailable: no live session to steer');
     }
     // Cancel the in-flight turn FIRST. The interrupted turn still yields a

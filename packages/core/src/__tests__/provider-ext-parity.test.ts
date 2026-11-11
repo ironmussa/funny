@@ -20,7 +20,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { CursorACPProcess } from '../agents/cursor-acp.js';
 import { defaultProcessFactory } from '../agents/process-factory.js';
-import { _clearRunnerManifests, loadProviderExtensions } from '../agents/provider-extensions.js';
+import { clearRunnerManifestsForTests, loadProviderExtensions } from '../agents/provider-extensions.js';
 import type { CLIMessage } from '../agents/types.js';
 
 let dir: string;
@@ -45,12 +45,12 @@ function translate(proc: unknown, update: unknown): void {
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'funny-ext-parity-'));
-  _clearRunnerManifests();
+  clearRunnerManifestsForTests();
 });
 
 afterEach(() => {
   rmSync(dir, { recursive: true, force: true });
-  _clearRunnerManifests();
+  clearRunnerManifestsForTests();
 });
 
 describe('cursor-as-external provider parity (§5)', () => {

@@ -8,8 +8,8 @@ import { fileURLToPath } from 'url';
 
 import { resolveNodeVersion } from '../env/nvmrc.js';
 
-const __dir = dirname(fileURLToPath(import.meta.url));
-const TMP = resolve(__dir, '__tmp_nvmrc_test__');
+const testDir = dirname(fileURLToPath(import.meta.url));
+const TMP = resolve(testDir, '__tmp_nvmrc_test__');
 
 const IS_WINDOWS = process.platform === 'win32';
 const NODE_BIN = IS_WINDOWS ? 'node.exe' : 'node';

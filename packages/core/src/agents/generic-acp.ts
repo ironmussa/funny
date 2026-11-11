@@ -222,7 +222,7 @@ export class GenericACPProcess extends BaseAgentProcess {
     this.childProcess = child;
 
     child.on('error', (err: any) => {
-      if (!this._exited && !this.isAborted) {
+      if (!this.hasExited && !this.isAborted) {
         if (err.code === 'ENOENT') {
           this.emit(
             'error',
@@ -239,7 +239,7 @@ export class GenericACPProcess extends BaseAgentProcess {
 
     // If the child exits unexpectedly, wake the run loop so cleanup happens.
     child.on('exit', (code, signal) => {
-      if (!this.isAborted && !this._exited) {
+      if (!this.isAborted && !this.hasExited) {
         this.dlog.warn('acp child exited unexpectedly', { code, signal });
         this.abortController.abort();
       }
@@ -258,7 +258,7 @@ export class GenericACPProcess extends BaseAgentProcess {
         child.on('error', reject);
       });
     } catch {
-      this._exited = true;
+      this.hasExited = true;
       return;
     }
 

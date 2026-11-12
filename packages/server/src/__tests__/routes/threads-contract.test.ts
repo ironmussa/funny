@@ -1,5 +1,5 @@
 /**
- * `/api/threads` responses follow the shared contract
+ * The `threads` tRPC procedures answer the shared contract types
  * (`@funny/shared/contracts/threads`), not the raw `threads` row: booleans
  * instead of 0/1, `''` for a scratch thread's project, optional fields absent
  * instead of null, and server-internal columns left out.
@@ -13,12 +13,15 @@ import { eq } from 'drizzle-orm';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedMessage, seedProject, seedThread } from '../helpers/test-db.js';
+import { threadProcedures } from '../helpers/thread-procedures.js';
 
 /** Columns the server keeps to itself; the detail view exposes `initInfo` instead. */
 const INTERNAL_COLUMNS = ['initTools', 'initCwd', 'initSlashCommands', 'runnerId', 'mergedAt'];
 
 describe('Thread routes follow the contract', () => {
   let t: TestApp;
+
+  const threads = (userId = 'user-1') => threadProcedures(t, userId);
 
   beforeAll(async () => {
     t = await createTestApp();
@@ -40,9 +43,9 @@ describe('Thread routes follow the contract', () => {
         mergedAt: '2026-11-01T00:00:00.000Z',
       });
 
-      const res = await t.requestAs('user-1').get('/api/threads?projectId=p1');
+      const res = await threads().query('list', { projectId: 'p1' });
       expect(res.status).toBe(200);
-      const [thread] = (await res.json()).threads;
+      const [thread] = res.data.threads;
 
       expect(thread).toMatchObject({
         id: 't1',
@@ -72,8 +75,8 @@ describe('Thread routes follow the contract', () => {
     test('a scratch thread has an empty projectId, not null', async () => {
       seedThread(t.db as any, { id: 's1', projectId: null, userId: 'user-1', isScratch: 1 });
 
-      const res = await t.requestAs('user-1').get('/api/threads/scratch');
-      const [thread] = (await res.json()).threads;
+      const res = await threads().query('scratch');
+      const [thread] = res.data.threads;
       expect(thread).toMatchObject({ id: 's1', projectId: '', isScratch: true });
     });
 
@@ -85,8 +88,8 @@ describe('Thread routes follow the contract', () => {
         templateVariables: JSON.stringify({ ticket: 'ABC-1' }),
       });
 
-      const res = await t.requestAs('user-1').get('/api/threads/t1');
-      expect((await res.json()).templateVariables).toEqual({ ticket: 'ABC-1' });
+      const res = await threads().query('get', { id: 't1' });
+      expect(res.data.templateVariables).toEqual({ ticket: 'ABC-1' });
     });
 
     test('the detail view keeps its message window and initInfo, without the raw init columns', async () => {
@@ -100,9 +103,9 @@ describe('Thread routes follow the contract', () => {
         initSlashCommands: JSON.stringify(['/review']),
       });
 
-      const res = await t.requestAs('user-1').get('/api/threads/t1');
+      const res = await threads().query('get', { id: 't1' });
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = res.data;
 
       expect(body.archived).toBe(true);
       expect(body.messages).toEqual([]);
@@ -118,11 +121,7 @@ describe('Thread routes follow the contract', () => {
     test('an archived listing maps its threads too', async () => {
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', archived: 1 });
 
-      // Served only over tRPC (`threads.archived`); the REST route was removed.
-      const res = await t.app.request(`/api/trpc/threads.archived`, {
-        headers: { 'X-Test-User-Id': 'user-1' },
-      });
-      const body = (await res.json()).result.data;
+      const body = (await threads().query('archived')).data;
       expect(body).toMatchObject({ total: 1, page: 1, limit: 100 });
       expect(body.threads[0].archived).toBe(true);
     });
@@ -132,21 +131,21 @@ describe('Thread routes follow the contract', () => {
     test('clamps an out-of-range limit instead of refusing it', async () => {
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').get('/api/threads?projectId=p1&limit=5000&offset=-3');
+      const res = await threads().query('list', { projectId: 'p1', limit: '5000', offset: '-3' });
       expect(res.status).toBe(200);
-      expect((await res.json()).threads).toHaveLength(1);
+      expect(res.data.threads).toHaveLength(1);
     });
 
     test('falls back to the default page size for an unparsable limit', async () => {
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').get('/api/threads?projectId=p1&limit=lots');
+      const res = await threads().query('list', { projectId: 'p1', limit: 'lots' });
       expect(res.status).toBe(200);
-      expect((await res.json()).threads).toHaveLength(1);
+      expect(res.data.threads).toHaveLength(1);
     });
   });
 
-  describe('PATCH /api/threads/:id body', () => {
+  describe('update input', () => {
     test('refuses a value of the wrong type instead of writing it', async () => {
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Original' });
 
@@ -156,7 +155,7 @@ describe('Thread routes follow the contract', () => {
         { status: 'not-a-status' },
         { mode: 'elsewhere' },
       ]) {
-        const res = await t.requestAs('user-1').patch('/api/threads/t1', body);
+        const res = await threads().mutate('update', { id: 't1', data: body });
         expect({ body, status: res.status }).toEqual({ body, status: 400 });
       }
 
@@ -167,17 +166,18 @@ describe('Thread routes follow the contract', () => {
     test('still ignores keys outside the allow-list', async () => {
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t
-        .requestAs('user-1')
-        .patch('/api/threads/t1', { title: 'Renamed', userId: 'user-2', cost: 99 });
+      const res = await threads().mutate('update', {
+        id: 't1',
+        data: { title: 'Renamed', userId: 'user-2', cost: 99 },
+      });
       expect(res.status).toBe(200);
-      expect(await res.json()).toMatchObject({ title: 'Renamed', userId: 'user-1', cost: 0 });
+      expect(res.data).toMatchObject({ title: 'Renamed', userId: 'user-1', cost: 0 });
     });
 
     test('answers 404 for someone else’s thread before looking at the body', async () => {
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1', { title: 123 });
+      const res = await threads().mutate('update', { id: 't1', data: { title: 123 } });
       expect(res.status).toBe(404);
     });
   });
@@ -210,19 +210,20 @@ describe('Thread routes follow the contract', () => {
 
     test('the detail view returns contract messages, not rows', async () => {
       seedSparseMessage();
-      const body = await (await t.requestAs('user-1').get('/api/threads/t1')).json();
+      const body = (await threads().query('get', { id: 't1' })).data;
       expectContractMessage(body.messages[0]);
     });
 
     test('the paginated message window returns contract messages', async () => {
       seedSparseMessage();
-      const res = await t
-        .requestAs('user-1')
-        .get(
-          '/api/threads/t1/messages?cursor=2027-01-01T00:00:00.000Z&limit=lots&direction=sideways',
-        );
+      const res = await threads().query('messages', {
+        id: 't1',
+        cursor: '2027-01-01T00:00:00.000Z',
+        limit: 'lots',
+        direction: 'sideways',
+      });
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = res.data;
       // An unparsable limit and an unknown direction keep their old defaults (50, "before").
       expect(body.messages).toHaveLength(1);
       expectContractMessage(body.messages[0]);

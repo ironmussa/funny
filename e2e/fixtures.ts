@@ -104,35 +104,34 @@ class ApiHelper {
     });
   }
 
-  async archiveThread(id: string): Promise<void> {
-    await this.request.patch(`${this.baseURL}/api/threads/${id}`, {
+  /** Thread field updates have no REST route: the `threads.update` tRPC mutation. */
+  private async updateThread(id: string, data: Record<string, unknown>): Promise<void> {
+    await this.request.post(`${this.baseURL}/api/trpc/threads.update`, {
       headers: this.headers(),
-      data: { archived: true },
+      data: { id, data },
     });
+  }
+
+  async archiveThread(id: string): Promise<void> {
+    await this.updateThread(id, { archived: true });
   }
 
   async pinThread(id: string, pinned: boolean): Promise<void> {
-    await this.request.patch(`${this.baseURL}/api/threads/${id}`, {
-      headers: this.headers(),
-      data: { pinned },
-    });
+    await this.updateThread(id, { pinned });
   }
 
   async updateThreadStage(id: string, stage: string): Promise<void> {
-    await this.request.patch(`${this.baseURL}/api/threads/${id}`, {
-      headers: this.headers(),
-      data: { stage },
-    });
+    await this.updateThread(id, { stage });
   }
 
   async getThreads(projectId?: string): Promise<Thread[]> {
-    const url = projectId
-      ? `${this.baseURL}/api/threads?projectId=${projectId}`
-      : `${this.baseURL}/api/threads`;
-    const res = await this.request.get(url, { headers: this.headers() });
-    // GET /api/threads is paginated: { threads, total, hasMore }.
-    const body = (await res.json()) as { threads: Thread[] };
-    return body.threads;
+    // The `threads.list` tRPC query; paginated: { threads, total, hasMore }.
+    const input = encodeURIComponent(JSON.stringify(projectId ? { projectId } : {}));
+    const res = await this.request.get(`${this.baseURL}/api/trpc/threads.list?input=${input}`, {
+      headers: this.headers(),
+    });
+    const body = (await res.json()) as { result: { data: { threads: Thread[] } } };
+    return body.result.data.threads;
   }
 
   async getBranches(

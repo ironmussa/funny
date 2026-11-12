@@ -7,9 +7,7 @@
 import { z } from 'zod';
 
 import type { PermissionMode, ThreadMode, ThreadStage, ThreadStatus } from '../primitives.js';
-import type { PaginatedMessages, PaginatedThreadsResponse, ThreadWithMessages } from '../types.js';
 import type { Thread } from '../types/thread.js';
-import { endpointGroup } from './endpoint.js';
 
 /**
  * Every value of the union `U`, as a tuple: an extra value or a missing one is
@@ -181,51 +179,27 @@ export interface ArchivedThreadsResponse {
   limit: number;
 }
 
-const api = endpointGroup('/threads');
-
-export const threadsContract = {
-  // Static segments are declared before `/:id` so they are not read as ids.
-  list: api.endpoint<PaginatedThreadsResponse>()({ method: 'GET', path: '/', query: listQuery }),
-  scratch: api.endpoint<PaginatedThreadsResponse>()({
-    method: 'GET',
-    path: '/scratch',
-    query: scratchQuery,
-  }),
-  archived: api.endpoint<ArchivedThreadsResponse>()({
-    method: 'GET',
-    path: '/archived',
-    query: archivedQuery,
-  }),
-  get: api.endpoint<ThreadWithMessages>()({ method: 'GET', path: '/:id', query: detailQuery }),
-  update: api.endpoint<Thread>()({ method: 'PATCH', path: '/:id', body: threadPatchBody }),
-  setPermissionMode: api.endpoint<Thread>()({
-    method: 'PATCH',
-    path: '/:id/permission-mode',
-    body: permissionModeBody,
-  }),
-  setStatus: api.endpoint<Thread>()({
-    method: 'PATCH',
-    path: '/:id/status',
-    body: lifecycleValueBody('status', THREAD_STATUS_VALUES),
-  }),
-  setStage: api.endpoint<Thread>()({
-    method: 'PATCH',
-    path: '/:id/stage',
-    body: lifecycleValueBody('stage', THREAD_STAGE_VALUES),
-  }),
-  messages: api.endpoint<PaginatedMessages>()({
-    method: 'GET',
-    path: '/:id/messages',
-    query: messagesQuery,
-  }),
-  searchMessages: api.endpoint<{ results: MessageSearchResult[] }>()({
-    method: 'GET',
-    path: '/:id/messages/search',
-    query: messageSearchQuery,
-  }),
-  searchContent: api.endpoint<{ threadIds: string[]; snippets: Record<string, string> }>()({
-    method: 'GET',
-    path: '/search/content',
-    query: contentSearchQuery,
-  }),
+/**
+ * The query of each thread read, served over tRPC (`@funny/api` `threads`
+ * router) and over REST for the callers outside the web client.
+ */
+export const threadQueries = {
+  list: listQuery,
+  scratch: scratchQuery,
+  archived: archivedQuery,
+  get: detailQuery,
+  messages: messagesQuery,
+  searchMessages: messageSearchQuery,
+  searchContent: contentSearchQuery,
 };
+
+/** The body of each thread field update. */
+export const threadBodies = {
+  update: threadPatchBody,
+  setPermissionMode: permissionModeBody,
+  setStatus: lifecycleValueBody('status', THREAD_STATUS_VALUES),
+  setStage: lifecycleValueBody('stage', THREAD_STAGE_VALUES),
+};
+
+/** The validated query of one thread read. */
+export type ThreadQuery<K extends keyof typeof threadQueries> = z.output<(typeof threadQueries)[K]>;

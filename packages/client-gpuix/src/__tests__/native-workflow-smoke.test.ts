@@ -93,22 +93,31 @@ describe('native primary workflow smoke', () => {
           body = signedIn ? { user: { id: 'u1', username: 'ada', name: 'Ada' } } : null;
         else if (path === '/api/profile') body = { setupCompleted: true };
         else if (path === '/api/projects') body = [{ id: 'p1', name: 'Project' }];
-        else if (path === '/api/threads')
+        else if (path === '/api/trpc/threads.list')
           body = {
-            threads: [{ id: 't1', projectId: 'p1', title: 'Thread', status: 'idle' }],
-            total: 1,
+            result: {
+              data: {
+                threads: [{ id: 't1', projectId: 'p1', title: 'Thread', status: 'idle' }],
+                total: 1,
+              },
+            },
           };
-        else if (path === '/api/threads/scratch') body = { threads: [], total: 0 };
+        else if (path === '/api/trpc/threads.scratch')
+          body = { result: { data: { threads: [], total: 0 } } };
         else if (path === '/api/threads/shared-with-me') body = { threads: [] };
-        else if (path === '/api/threads/t1')
+        else if (path === '/api/trpc/threads.get')
           body = {
-            id: 't1',
-            projectId: 'p1',
-            title: 'Thread',
-            status: 'idle',
-            messages,
-            hasMore: false,
-            total: 500,
+            result: {
+              data: {
+                id: 't1',
+                projectId: 'p1',
+                title: 'Thread',
+                status: 'idle',
+                messages,
+                hasMore: false,
+                total: 500,
+              },
+            },
           };
         return {
           status: 200,

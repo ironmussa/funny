@@ -1,20 +1,14 @@
 import type { ApiFailure, PortResult } from '@funny/api';
 import type { Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
-import { fail, type ErrorStatus, type Reply } from '../validation/endpoint.js';
+type ErrorStatus = Exclude<ContentfulStatusCode, 200 | 201>;
 
 /**
- * A port result as a `serveEndpoint` reply, for the REST routes of a group that
- * is also served over tRPC: the same value, or the same status and message.
+ * A port result as a REST answer, for a route kept for a consumer outside the
+ * web client: the same value the tRPC procedure returns, or the same status
+ * with `{ error, code? }`.
  */
-export async function answer<T>(result: PortResult<T>, status: 200 | 201 = 200): Promise<Reply<T>> {
-  return (await result).match(
-    (value): Reply<T> => ({ status, body: value }),
-    (error: ApiFailure) => fail(error.status as ErrorStatus, error.message),
-  );
-}
-
-/** The same, for a plain Hono route (one without a contract): `{ error, code? }` on failure. */
 export async function answerJson<T>(
   c: Context,
   result: PortResult<T>,

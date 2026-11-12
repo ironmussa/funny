@@ -1,7 +1,7 @@
 /**
- * Integration tests for thread routes (server-owned operations only).
- *
- * Tests data CRUD, comments, queue, and search. Does NOT test
+ * Integration tests for the server-owned thread operations: the `threads`
+ * tRPC procedures (lists, detail, messages, search, field updates) and the
+ * REST routes that remain (delete, comments, queue, events). Does NOT test
  * runner-proxied operations (POST /, POST /idle, POST /:id/message, etc.).
  */
 
@@ -26,6 +26,7 @@ import {
   seedTeamProject,
   seedToolCall,
 } from '../helpers/test-db.js';
+import { threadProcedures } from '../helpers/thread-procedures.js';
 
 const browserEvents: BrowserEventSink = {
   publish: () => {},
@@ -40,6 +41,10 @@ const browserEvents: BrowserEventSink = {
 describe('Thread Routes (Integration)', () => {
   let t: TestApp;
 
+  /** The `threads` tRPC procedures: lists, detail, messages and field updates have no REST route. */
+  const threads = (userId: string, extras?: { orgId?: string }) =>
+    threadProcedures(t, userId, extras);
+
   beforeAll(async () => {
     t = await createTestApp({ browserEvents });
   });
@@ -50,9 +55,9 @@ describe('Thread Routes (Integration)', () => {
     threadViewerCalls.length = 0;
   });
 
-  // ── GET /api/threads ───────────────────────────────────
+  // ── threads.list ──────────────────────────────
 
-  describe('GET /api/threads', () => {
+  describe('threads.list', () => {
     test('returns threads filtered by projectId', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedProject(t.db as any, { id: 'p2', userId: 'user-1', path: '/b' });
@@ -69,7 +74,7 @@ describe('Thread Routes (Integration)', () => {
         userId: 'user-1',
       });
 
-      const res = await t.requestAs('user-1').get('/api/threads?projectId=p1');
+      const res = await threads('user-1').query('list', { projectId: 'p1' });
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.threads).toHaveLength(1);
@@ -81,7 +86,7 @@ describe('Thread Routes (Integration)', () => {
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Mine' });
       seedThread(t.db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
 
-      const res = await t.requestAs('user-1').get('/api/threads?projectId=p1');
+      const res = await threads('user-1').query('list', { projectId: 'p1' });
       const body = await res.json();
       expect(body.threads).toHaveLength(1);
       expect(body.threads[0].title).toBe('Mine');
@@ -112,7 +117,7 @@ describe('Thread Routes (Integration)', () => {
         })
         .run();
 
-      const res = await t.requestAs('user-1', 'user', { orgId: 'org-1' }).get('/api/threads');
+      const res = await threads('user-1', { orgId: 'org-1' }).query('list');
       expect(res.status).toBe(200);
       const body = await res.json();
       const ids = body.threads.map((th: { id: string }) => th.id).sort();
@@ -121,9 +126,9 @@ describe('Thread Routes (Integration)', () => {
     });
   });
 
-  // ── GET /api/threads/:id ───────────────────────────────
+  // ── threads.get ──────────────────────────────
 
-  describe('GET /api/threads/:id', () => {
+  describe('threads.get', () => {
     test('returns thread with messages', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, {
@@ -139,7 +144,7 @@ describe('Thread Routes (Integration)', () => {
         content: 'Hello',
       });
 
-      const res = await t.requestAs('user-1').get('/api/threads/t1');
+      const res = await threads('user-1').query('get', { id: 't1' });
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.title).toBe('Test Thread');
@@ -148,14 +153,14 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns 404 for non-existent thread', async () => {
-      const res = await t.requestAs('user-1').get('/api/threads/nonexistent');
+      const res = await threads('user-1').query('get', { id: 'nonexistent' });
       expect(res.status).toBe(404);
     });
   });
 
-  // ── PATCH /api/threads/:id ─────────────────────────────
+  // ── threads.update ──────────────────────────────
 
-  describe('PATCH /api/threads/:id', () => {
+  describe('threads.update', () => {
     test('updates thread title', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, {
@@ -165,8 +170,11 @@ describe('Thread Routes (Integration)', () => {
         userId: 'user-1',
       });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1', {
-        title: 'New Title',
+      const res = await threads('user-1').mutate('update', {
+        id: 't1',
+        data: {
+          title: 'New Title',
+        },
       });
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -177,8 +185,11 @@ describe('Thread Routes (Integration)', () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1', {
-        archived: true,
+      const res = await threads('user-1').mutate('update', {
+        id: 't1',
+        data: {
+          archived: true,
+        },
       });
       expect(res.status).toBe(200);
       // The column stays an integer; the response is the contract's boolean.
@@ -191,8 +202,11 @@ describe('Thread Routes (Integration)', () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1', {
-        pinned: true,
+      const res = await threads('user-1').mutate('update', {
+        id: 't1',
+        data: {
+          pinned: true,
+        },
       });
       expect(res.status).toBe(200);
       expect((await res.json()).pinned).toBe(true);
@@ -202,8 +216,11 @@ describe('Thread Routes (Integration)', () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1', {
-        stage: 'in_progress',
+      const res = await threads('user-1').mutate('update', {
+        id: 't1',
+        data: {
+          stage: 'in_progress',
+        },
       });
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -211,8 +228,11 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns 404 for non-existent thread', async () => {
-      const res = await t.requestAs('user-1').patch('/api/threads/nonexistent', {
-        title: 'X',
+      const res = await threads('user-1').mutate('update', {
+        id: 'nonexistent',
+        data: {
+          title: 'X',
+        },
       });
       expect(res.status).toBe(404);
     });
@@ -226,10 +246,13 @@ describe('Thread Routes (Integration)', () => {
         title: 'Original',
       });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1', {
-        id: 'hacked-id',
-        projectId: 'hacked-project',
-        userId: 'hacked-user',
+      const res = await threads('user-1').mutate('update', {
+        id: 't1',
+        data: {
+          id: 'hacked-id',
+          projectId: 'hacked-project',
+          userId: 'hacked-user',
+        },
       });
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -252,8 +275,11 @@ describe('Thread Routes (Integration)', () => {
 
       // Attacker tries to PATCH the cwd to /etc — the field is not in the
       // allow-list so the update must NOT apply.
-      const res = await t.requestAs('user-1').patch('/api/threads/t1', {
-        worktreePath: '/etc',
+      const res = await threads('user-1').mutate('update', {
+        id: 't1',
+        data: {
+          worktreePath: '/etc',
+        },
       });
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -261,9 +287,9 @@ describe('Thread Routes (Integration)', () => {
     });
   });
 
-  // ── PATCH /api/threads/:id/permission-mode ────────────
+  // ── threads.setPermissionMode ──────────────────────────────
 
-  describe('PATCH /api/threads/:id/permission-mode', () => {
+  describe('threads.setPermissionMode', () => {
     test('persists the mode and relays the update to the owner', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, {
@@ -273,13 +299,14 @@ describe('Thread Routes (Integration)', () => {
         permissionMode: 'ask',
       });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1/permission-mode', {
+      const res = await threads('user-1').mutate('setPermissionMode', {
+        id: 't1',
         permissionMode: 'plan',
       });
 
       expect(res.status).toBe(200);
       expect((await res.json()).permissionMode).toBe('plan');
-      const reloaded = await t.requestAs('user-1').get('/api/threads/t1');
+      const reloaded = await threads('user-1').query('get', { id: 't1' });
       expect((await reloaded.json()).permissionMode).toBe('plan');
       expect(relayCalls).toContainEqual({
         userId: 'user-1',
@@ -295,7 +322,8 @@ describe('Thread Routes (Integration)', () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1/permission-mode', {
+      const res = await threads('user-1').mutate('setPermissionMode', {
+        id: 't1',
         permissionMode: 'unsafe',
       });
 
@@ -303,14 +331,15 @@ describe('Thread Routes (Integration)', () => {
     });
   });
 
-  // ── PATCH /api/threads/:id/status ──────────────────────
+  // ── threads.setStatus ──────────────────────────────
 
-  describe('PATCH /api/threads/:id/status', () => {
+  describe('threads.setStatus', () => {
     test('updates a valid status value', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1/status', {
+      const res = await threads('user-1').mutate('setStatus', {
+        id: 't1',
         value: 'running',
         reason: 'scheduler-dispatch',
       });
@@ -323,9 +352,7 @@ describe('Thread Routes (Integration)', () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1/status', {
-        value: 'not-a-status',
-      });
+      const res = await threads('user-1').mutate('setStatus', { id: 't1', value: 'not-a-status' });
       expect(res.status).toBe(400);
       const body = await res.json();
       expect(body.error).toMatch(/Invalid status/);
@@ -335,9 +362,7 @@ describe('Thread Routes (Integration)', () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1/status', {
-        reason: 'no value',
-      });
+      const res = await threads('user-1').mutate('setStatus', { id: 't1', reason: 'no value' });
       expect(res.status).toBe(400);
     });
 
@@ -345,21 +370,20 @@ describe('Thread Routes (Integration)', () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1/status', {
-        value: 'running',
-      });
+      const res = await threads('user-1').mutate('setStatus', { id: 't1', value: 'running' });
       expect(res.status).toBe(404);
     });
   });
 
-  // ── PATCH /api/threads/:id/stage ───────────────────────
+  // ── threads.setStage ──────────────────────────────
 
-  describe('PATCH /api/threads/:id/stage', () => {
+  describe('threads.setStage', () => {
     test('updates a valid stage value', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1/stage', {
+      const res = await threads('user-1').mutate('setStage', {
+        id: 't1',
         value: 'review',
         reason: 'agent-completed',
       });
@@ -372,16 +396,15 @@ describe('Thread Routes (Integration)', () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t1/stage', {
-        value: 'shipped',
-      });
+      const res = await threads('user-1').mutate('setStage', { id: 't1', value: 'shipped' });
       expect(res.status).toBe(400);
       const body = await res.json();
       expect(body.error).toMatch(/Invalid stage/);
     });
 
     test('returns 404 for non-existent thread', async () => {
-      const res = await t.requestAs('user-1').patch('/api/threads/missing/stage', {
+      const res = await threads('user-1').mutate('setStage', {
+        id: 'missing',
         value: 'in_progress',
       });
       expect(res.status).toBe(404);
@@ -401,7 +424,7 @@ describe('Thread Routes (Integration)', () => {
       expect(body.ok).toBe(true);
 
       // Verify thread is gone
-      const getRes = await t.requestAs('user-1').get('/api/threads/t1');
+      const getRes = await threads('user-1').query('get', { id: 't1' });
       expect(getRes.status).toBe(404);
     });
   });
@@ -646,9 +669,9 @@ describe('Thread Routes (Integration)', () => {
 
   // ── Search ─────────────────────────────────────────────
 
-  describe('GET /api/threads/search/content', () => {
+  describe('threads.searchContent', () => {
     test('returns empty when query is blank', async () => {
-      const res = await t.requestAs('user-1').get('/api/threads/search/content?q=');
+      const res = await threads('user-1').query('searchContent', { q: '' });
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.threadIds).toEqual([]);
@@ -664,9 +687,10 @@ describe('Thread Routes (Integration)', () => {
         content: 'The quick brown fox jumps over the lazy dog',
       });
 
-      const res = await t
-        .requestAs('user-1')
-        .get('/api/threads/search/content?q=brown+fox&projectId=p1');
+      const res = await threads('user-1').query('searchContent', {
+        q: 'brown fox',
+        projectId: 'p1',
+      });
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.threadIds).toContain('t1');
@@ -683,9 +707,7 @@ describe('Thread Routes (Integration)', () => {
         content: 'La niña tomó café después del almuerzo',
       });
 
-      const res = await t
-        .requestAs('user-1')
-        .get('/api/threads/search/content?q=nina&projectId=p1');
+      const res = await threads('user-1').query('searchContent', { q: 'nina', projectId: 'p1' });
 
       expect(res.status).toBe(200);
       const body = await res.json();
@@ -702,13 +724,13 @@ describe('Thread Routes (Integration)', () => {
         content: 'secret brown fox content',
       });
 
-      const res = await t.requestAs('user-1').get('/api/threads/search/content?q=brown+fox');
+      const res = await threads('user-1').query('searchContent', { q: 'brown fox' });
       expect(res.status).toBe(200);
       expect((await res.json()).threadIds).toEqual([]);
     });
   });
 
-  describe('GET /api/threads/scratch', () => {
+  describe('threads.scratch', () => {
     test('returns only the caller scratch threads', async () => {
       seedThread(t.db as any, {
         id: 's1',
@@ -725,7 +747,7 @@ describe('Thread Routes (Integration)', () => {
         title: 'Their scratch',
       });
 
-      const res = await t.requestAs('user-1').get('/api/threads/scratch');
+      const res = await threads('user-1').query('scratch');
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.threads).toHaveLength(1);
@@ -770,14 +792,14 @@ describe('Thread Routes (Integration)', () => {
     });
   });
 
-  describe('GET /api/threads/:id/messages', () => {
+  describe('threads.messages', () => {
     test('returns paginated messages for the owner', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
       seedMessage(t.db as any, { id: 'm1', threadId: 't1', content: 'One' });
       seedMessage(t.db as any, { id: 'm2', threadId: 't1', content: 'Two' });
 
-      const res = await t.requestAs('user-1').get('/api/threads/t1/messages');
+      const res = await threads('user-1').query('messages', { id: 't1' });
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.messages).toHaveLength(2);
@@ -787,12 +809,12 @@ describe('Thread Routes (Integration)', () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
 
-      const res = await t.requestAs('user-1').get('/api/threads/t1/messages');
+      const res = await threads('user-1').query('messages', { id: 't1' });
       expect(res.status).toBe(404);
     });
   });
 
-  describe('GET /api/threads/:id/messages/search', () => {
+  describe('threads.searchMessages', () => {
     test('searches within a thread', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
@@ -802,7 +824,7 @@ describe('Thread Routes (Integration)', () => {
         content: 'findme needle',
       });
 
-      const res = await t.requestAs('user-1').get('/api/threads/t1/messages/search?q=findme');
+      const res = await threads('user-1').query('searchMessages', { id: 't1', q: 'findme' });
       expect(res.status).toBe(200);
       expect((await res.json()).results).toHaveLength(1);
     });
@@ -811,7 +833,7 @@ describe('Thread Routes (Integration)', () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
-      const res = await t.requestAs('user-1').get('/api/threads/t1/messages/search?q=');
+      const res = await threads('user-1').query('searchMessages', { id: 't1', q: '' });
       expect(res.status).toBe(200);
       expect(await res.json()).toEqual({ results: [] });
     });
@@ -953,9 +975,10 @@ describe('Thread Routes (Integration)', () => {
         stage: 'backlog',
       });
 
-      const res = await t
-        .requestAs('user-1')
-        .patch('/api/threads/t-history/stage', { value: 'in_progress' });
+      const res = await threads('user-1').mutate('setStage', {
+        id: 't-history',
+        value: 'in_progress',
+      });
       expect(res.status).toBe(200);
 
       const rows = await t.db
@@ -985,9 +1008,10 @@ describe('Thread Routes (Integration)', () => {
         stage: 'backlog',
       });
 
-      const res = await t
-        .requestAs('user-1')
-        .patch('/api/threads/t-move', { stage: 'in_progress' });
+      const res = await threads('user-1').mutate('update', {
+        id: 't-move',
+        data: { stage: 'in_progress' },
+      });
       expect(res.status).toBe(200);
 
       const rows = await t.db
@@ -1018,7 +1042,10 @@ describe('Thread Routes (Integration)', () => {
         archived: 0,
       });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t-arch', { archived: true });
+      const res = await threads('user-1').mutate('update', {
+        id: 't-arch',
+        data: { archived: true },
+      });
       expect(res.status).toBe(200);
 
       const rows = await t.db
@@ -1046,7 +1073,10 @@ describe('Thread Routes (Integration)', () => {
         archived: 1,
       });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t-stuck', { archived: false });
+      const res = await threads('user-1').mutate('update', {
+        id: 't-stuck',
+        data: { archived: false },
+      });
       expect(res.status).toBe(200);
       // From "archived" to "archived" is not a move. (The repository keeps its
       // own history row for the unarchive; this checks the route's event.)
@@ -1063,7 +1093,10 @@ describe('Thread Routes (Integration)', () => {
         archived: 1,
       });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t-unarch', { archived: false });
+      const res = await threads('user-1').mutate('update', {
+        id: 't-unarch',
+        data: { archived: false },
+      });
       expect(res.status).toBe(200);
 
       const events = stageEvents();
@@ -1084,7 +1117,10 @@ describe('Thread Routes (Integration)', () => {
         stage: 'backlog',
       });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t-same', { stage: 'backlog' });
+      const res = await threads('user-1').mutate('update', {
+        id: 't-same',
+        data: { stage: 'backlog' },
+      });
       expect(res.status).toBe(200);
 
       const rows = await t.db
@@ -1104,7 +1140,10 @@ describe('Thread Routes (Integration)', () => {
         stage: 'backlog',
       });
 
-      const res = await t.requestAs('user-1').patch('/api/threads/t-title', { title: 'Renamed' });
+      const res = await threads('user-1').mutate('update', {
+        id: 't-title',
+        data: { title: 'Renamed' },
+      });
       expect(res.status).toBe(200);
       expect(stageEvents()).toHaveLength(0);
     });

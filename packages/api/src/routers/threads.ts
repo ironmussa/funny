@@ -1,4 +1,4 @@
-import { threadsContract as contract, threadPatchBody } from '@funny/shared/contracts/threads';
+import { threadBodies, threadQueries, threadPatchBody } from '@funny/shared/contracts/threads';
 import { z } from 'zod';
 
 import { unwrap } from '../failure.js';
@@ -11,7 +11,7 @@ const listInput = <T extends z.ZodType>(schema: T) => schema.prefault({} as z.in
 
 export const threadsRouter = router({
   list: protectedProcedure
-    .input(listInput(contract.list.query))
+    .input(listInput(threadQueries.list))
     .query(async ({ ctx, input }) =>
       unwrap(
         await ctx.ports.threads.list(
@@ -21,30 +21,30 @@ export const threadsRouter = router({
       ),
     ),
   scratch: protectedProcedure
-    .input(listInput(contract.scratch.query))
+    .input(listInput(threadQueries.scratch))
     .query(async ({ ctx, input }) => unwrap(await ctx.ports.threads.scratch(ctx.userId, input))),
   archived: protectedProcedure
-    .input(listInput(contract.archived.query))
+    .input(listInput(threadQueries.archived))
     .query(async ({ ctx, input }) => unwrap(await ctx.ports.threads.archived(ctx.userId, input))),
   searchContent: protectedProcedure
-    .input(contract.searchContent.query)
+    .input(threadQueries.searchContent)
     .query(async ({ ctx, input }) =>
       unwrap(await ctx.ports.threads.searchContent(ctx.userId, input)),
     ),
   // Authorizes `view` on the row it reads (one query on the hot path), not through
   // threadProcedure.
   get: protectedProcedure
-    .input(contract.get.query.extend({ id }))
+    .input(threadQueries.get.extend({ id }))
     .query(async ({ ctx, input: { id: threadId, ...query } }) =>
       unwrap(await ctx.ports.threads.get(ctx.userId, threadId, query)),
     ),
   messages: threadProcedure('view')
-    .input(contract.messages.query.extend({ id }))
+    .input(threadQueries.messages.extend({ id }))
     .query(async ({ ctx, input: { id: threadId, ...query } }) =>
       unwrap(await ctx.ports.threads.messages(threadId, query)),
     ),
   searchMessages: threadProcedure('view')
-    .input(contract.searchMessages.query.extend({ id }))
+    .input(threadQueries.searchMessages.extend({ id }))
     .query(async ({ ctx, input: { id: threadId, ...query } }) =>
       unwrap(await ctx.ports.threads.searchMessages(threadId, query)),
     ),
@@ -54,21 +54,21 @@ export const threadsRouter = router({
       unwrap(await ctx.ports.threads.update(ctx.userId, ctx.thread, input.data)),
     ),
   setPermissionMode: threadProcedure('owner')
-    .input(contract.setPermissionMode.body.extend({ id }))
+    .input(threadBodies.setPermissionMode.extend({ id }))
     .mutation(async ({ ctx, input }) =>
       unwrap(
         await ctx.ports.threads.setPermissionMode(ctx.userId, ctx.thread.id, input.permissionMode),
       ),
     ),
   setStatus: threadProcedure('owner')
-    .input(contract.setStatus.body.extend({ id }))
+    .input(threadBodies.setStatus.extend({ id }))
     .mutation(async ({ ctx, input }) =>
       unwrap(
         await ctx.ports.threads.setStatus(ctx.userId, ctx.thread.id, input.value, input.reason),
       ),
     ),
   setStage: threadProcedure('owner')
-    .input(contract.setStage.body.extend({ id }))
+    .input(threadBodies.setStage.extend({ id }))
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.threads.setStage(ctx.userId, ctx.thread, input.value, input.reason)),
     ),

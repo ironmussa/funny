@@ -1,8 +1,8 @@
 /**
  * The `threads` tRPC procedures (openspec adopt-trpc-browser-api, task 4.2):
  * the server-answered reads and field updates, their authorization (owner,
- * sharee, stranger), 404-before-400, realtime events, and parity with the REST
- * routes, which serve the same port while both paths coexist.
+ * sharee, stranger), 404-before-400, realtime events, and the REST paths they
+ * replaced, which answer 404.
  */
 import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
@@ -158,31 +158,39 @@ describe('threads tRPC procedures', () => {
     });
   });
 
-  describe('parity with REST', () => {
-    test('reads return the same data on both paths', async () => {
-      const rest = t.requestAs('user-1');
-      const pairs: Array<[string, string, unknown]> = [
-        ['/api/threads?projectId=p1', 'list', { projectId: 'p1' }],
-        ['/api/threads/scratch', 'scratch', undefined],
-        ['/api/threads/t1', 'get', { id: 't1' }],
-        ['/api/threads/t1/messages?limit=10', 'messages', { id: 't1', limit: 10 }],
-        ['/api/threads/t1/messages/search?q=hello', 'searchMessages', { id: 't1', q: 'hello' }],
-        ['/api/threads/search/content?q=hello', 'searchContent', { q: 'hello' }],
-      ];
-      for (const [restPath, procedure, input] of pairs) {
-        const restRes = await rest.get(restPath);
-        const trpcRes = await query('user-1', procedure, input);
-        expect(trpcRes.status).toBe(restRes.status);
-        expect(trpcRes.body.result.data).toEqual(await restRes.json());
-      }
+  describe('retired REST paths', () => {
+    // These were REST routes before the procedures. They must answer 404 on the
+    // server: left unrouted they would reach the runner proxy catch-all.
+    test.each([
+      ['GET', '/api/threads?projectId=p1'],
+      ['GET', '/api/threads/scratch'],
+      ['GET', '/api/threads/archived'],
+      ['GET', '/api/threads/search/content?q=hello'],
+      ['GET', '/api/threads/t1'],
+      ['GET', '/api/threads/t1/messages?limit=10'],
+      ['GET', '/api/threads/t1/messages/search?q=hello'],
+      ['PATCH', '/api/threads/t1'],
+      ['PATCH', '/api/threads/t1/permission-mode'],
+      ['PATCH', '/api/threads/t1/status'],
+      ['PATCH', '/api/threads/t1/stage'],
+    ])('%s %s answers 404', async (method, path) => {
+      const res = await t.app.request(path, {
+        method,
+        headers: headersFor('user-1'),
+        ...(method === 'PATCH' ? { body: JSON.stringify({ pinned: true, value: 'running' }) } : {}),
+      });
+      expect(res.status).toBe(404);
+      expect(await res.json()).toEqual({ error: 'Not found' });
     });
 
-    test('a write answers the same thread on both paths', async () => {
-      const restRes = await t.requestAs('user-1').patch('/api/threads/t1', { pinned: true });
-      const trpcRes = await mutate('user-1', 'update', { id: 't1', data: { pinned: true } });
-      // The second write moves updatedAt; everything else is the same thread.
-      const restThread = await restRes.json();
-      expect(trpcRes.body.result.data).toEqual({ ...restThread, updatedAt: expect.any(String) });
+    test('a retired write changes nothing', async () => {
+      await t.app.request('/api/threads/t1', {
+        method: 'PATCH',
+        headers: headersFor('user-1'),
+        body: JSON.stringify({ pinned: true }),
+      });
+      const detail = await query('user-1', 'get', { id: 't1' });
+      expect(detail.body.result.data.pinned).toBe(false);
     });
   });
 });

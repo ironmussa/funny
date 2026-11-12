@@ -51,7 +51,6 @@ import type {
   UpdateAutomationRequest,
 } from '@funny/shared/contracts/automations';
 import type { CreateDesignBody } from '@funny/shared/contracts/designs';
-import type { QueryOf } from '@funny/shared/contracts/endpoint';
 import type {
   CreatePipelineRequest,
   UpdatePipelineRequest,
@@ -74,7 +73,7 @@ import type {
   ArchivedThreadsResponse,
   MessageSearchResult,
   ThreadPatchRequest,
-  threadsContract,
+  ThreadQuery,
 } from '@funny/shared/contracts/threads';
 import type {
   EnrollmentInfo,
@@ -114,8 +113,6 @@ export interface PipelinesPort {
   /** Empty for a thread the caller does not own. */
   runsForThread(userId: string, threadId: string): PortResult<PipelineRun[]>;
 }
-
-type ThreadQuery<K extends keyof typeof threadsContract> = QueryOf<(typeof threadsContract)[K]>;
 
 /** Who is calling: the user and the organization the session is acting in. */
 export interface ApiCaller {

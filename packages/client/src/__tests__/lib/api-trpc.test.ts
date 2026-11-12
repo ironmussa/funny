@@ -11,6 +11,7 @@ const { threadsApi } = await import('@/lib/api/threads');
 const { profileApi } = await import('@/lib/api/profile');
 const { teamApi } = await import('@/lib/api/team');
 const { projectRunnersApi } = await import('@/lib/api/project-runners');
+const { personalTokensApi } = await import('@/lib/api/personal-tokens');
 const { trpc, trpcCall } = await import('@/lib/api/_trpc');
 const { useCircuitBreakerStore } = await import('@/stores/circuit-breaker-store');
 
@@ -261,5 +262,49 @@ describe('tRPC procedure calls (runners)', () => {
 
     expect(result._unsafeUnwrapErr()).toEqual({ type: 'NOT_FOUND', message: 'Project not found' });
     expect(lastCall()[0]).toContain('/api/trpc/projectRunners.settings?input=');
+  });
+});
+
+describe('tRPC procedure calls (personal tokens)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+  });
+
+  test('list is the personalTokens.list query', async () => {
+    mockFetch.mockResolvedValueOnce(json({ result: { data: [{ id: 'k1' }] } }));
+
+    const result = await personalTokensApi.listPersonalTokens();
+
+    expect(result._unsafeUnwrap()).toEqual([{ id: 'k1' }]);
+    const [url, init] = lastCall();
+    expect(url).toMatch(/\/api\/trpc\/personalTokens\.list$/);
+    expect(init.method).toBe('GET');
+  });
+
+  test('create and revoke are mutations carrying their input', async () => {
+    mockFetch.mockResolvedValueOnce(
+      json({ result: { data: { token: 'funny_pat_x', info: { id: 'k1' } } } }),
+    );
+    const created = await personalTokensApi.createPersonalToken({ name: 'CI', days: 30 });
+    expect(created._unsafeUnwrap().token).toBe('funny_pat_x');
+    let [url, init] = lastCall();
+    expect(url).toMatch(/\/api\/trpc\/personalTokens\.create$/);
+    expect(init.method).toBe('POST');
+    expect(JSON.parse(init.body as string)).toEqual({ name: 'CI', days: 30 });
+
+    mockFetch.mockResolvedValueOnce(json({ result: { data: { ok: true } } }));
+    await personalTokensApi.revokePersonalToken('k1');
+    [url, init] = lastCall();
+    expect(url).toMatch(/\/api\/trpc\/personalTokens\.revoke$/);
+    expect(JSON.parse(init.body as string)).toEqual({ id: 'k1' });
+  });
+
+  test("revoking someone else's token answers NOT_FOUND", async () => {
+    mockFetch.mockResolvedValueOnce(trpcError(404, 'NOT_FOUND', 'Token not found'));
+
+    const result = await personalTokensApi.revokePersonalToken('k9');
+
+    expect(result._unsafeUnwrapErr()).toEqual({ type: 'NOT_FOUND', message: 'Token not found' });
   });
 });

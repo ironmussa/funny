@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { ADMIN_ONLY_PREFERENCES, type GeneralPage } from '@/components/PreferencesPanel';
 import { AgentExecutionProfilesSettings } from '@/components/settings/AgentExecutionProfilesSettings';
 import { AgentTemplateSettings } from '@/components/settings/AgentTemplateSettings';
+import { ApiTokensSettings } from '@/components/settings/ApiTokensSettings';
 import { ExtensionsSettings } from '@/components/settings/ExtensionsSettings';
 import { GithubAppSettings } from '@/components/settings/GithubAppSettings';
 import { OrganizationManagement } from '@/components/settings/OrganizationManagement';
@@ -52,6 +53,7 @@ const STANDALONE_PAGES: Partial<Record<GeneralPage, ComponentType>> = {
   'agent-templates': AgentTemplateSettings,
   extensions: ExtensionsSettings,
   'github-app': GithubAppSettings,
+  'api-tokens': ApiTokensSettings,
   providers: ProvidersSettings,
   system: SystemSettings,
 };

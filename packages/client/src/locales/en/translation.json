@@ -658,7 +658,8 @@
     "saved": "Settings saved",
     "projectSaved": "Project settings saved",
     "agentResources": "Agent Resources",
-    "agentProfiles": "Agent Profiles"
+    "agentProfiles": "Agent Profiles",
+    "apiTokens": "API tokens"
   },
   "skills": {
     "showingFor": "Showing skills for:",
@@ -1580,5 +1581,31 @@
   "checks": {
     "run": "Run checks: {{kind}}",
     "starting": "Starting…"
+  },
+  "apiTokens": {
+    "title": "API tokens",
+    "description": "Personal tokens authenticate scripts and tools against the public REST API (/api/v1) as you. They cannot sign in to the web app.",
+    "namePlaceholder": "Token name, e.g. CI deploy",
+    "expiresInDays_one": "Expires in {{count}} day",
+    "expiresInDays_other": "Expires in {{count}} days",
+    "create": "Create token",
+    "shownOnce": "Copy this token now. It will not be shown again; if you lose it, revoke it and create a new one.",
+    "copy": "Copy token",
+    "dismiss": "Done",
+    "empty": "You have no API tokens yet.",
+    "dates": "Created {{created}} · Expires {{expires}}",
+    "lastUsed": "Last used {{date}}",
+    "neverUsed": "Never used",
+    "revoke": "Revoke",
+    "revokeTitle": "Revoke API token?",
+    "revokeDescription": "Anything using \"{{name}}\" will stop working immediately. This cannot be undone.",
+    "revoked": "Token revoked",
+    "loadFailed": "Could not load your API tokens",
+    "createFailed": "Could not create the token",
+    "revokeFailed": "Could not revoke the token",
+    "state": {
+      "revoked": "Revoked",
+      "expired": "Expired"
+    }
   }
 }

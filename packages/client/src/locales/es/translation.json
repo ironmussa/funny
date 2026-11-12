@@ -656,7 +656,8 @@
     "saved": "Configuración guardada",
     "projectSaved": "Configuración del proyecto guardada",
     "agentResources": "Recursos del agente",
-    "agentProfiles": "Perfiles de agente"
+    "agentProfiles": "Perfiles de agente",
+    "apiTokens": "Tokens de API"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",
@@ -1573,5 +1574,31 @@
   "checks": {
     "run": "Ejecutar checks: {{kind}}",
     "starting": "Iniciando…"
+  },
+  "apiTokens": {
+    "title": "Tokens de API",
+    "description": "Los tokens personales autentican scripts y herramientas en la API REST pública (/api/v1) en tu nombre. No sirven para iniciar sesión en la aplicación web.",
+    "namePlaceholder": "Nombre del token, p. ej. despliegue CI",
+    "expiresInDays_one": "Caduca en {{count}} día",
+    "expiresInDays_other": "Caduca en {{count}} días",
+    "create": "Crear token",
+    "shownOnce": "Copia este token ahora. No se volverá a mostrar; si lo pierdes, revócalo y crea uno nuevo.",
+    "copy": "Copiar token",
+    "dismiss": "Listo",
+    "empty": "Todavía no tienes tokens de API.",
+    "dates": "Creado {{created}} · Caduca {{expires}}",
+    "lastUsed": "Último uso {{date}}",
+    "neverUsed": "Nunca usado",
+    "revoke": "Revocar",
+    "revokeTitle": "¿Revocar el token de API?",
+    "revokeDescription": "Todo lo que use \"{{name}}\" dejará de funcionar de inmediato. No se puede deshacer.",
+    "revoked": "Token revocado",
+    "loadFailed": "No se pudieron cargar tus tokens de API",
+    "createFailed": "No se pudo crear el token",
+    "revokeFailed": "No se pudo revocar el token",
+    "state": {
+      "revoked": "Revocado",
+      "expired": "Caducado"
+    }
   }
 }

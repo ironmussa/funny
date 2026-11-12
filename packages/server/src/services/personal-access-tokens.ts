@@ -7,6 +7,12 @@
 
 import { createHash, randomBytes } from 'node:crypto';
 
+import {
+  DEFAULT_TOKEN_DAYS,
+  MAX_TOKEN_DAYS,
+  type CreatedPersonalToken,
+  type PersonalAccessTokenInfo,
+} from '@funny/shared/contracts/personal-tokens';
 import { and, desc, eq, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { ResultAsync } from 'neverthrow';
@@ -19,20 +25,8 @@ const TOKEN_PREFIX = 'funny_pat_';
 /** Characters of the token kept in clear, to tell tokens apart in the list. */
 const SHOWN_PREFIX_LENGTH = TOKEN_PREFIX.length + 6;
 const DAY_MS = 24 * 60 * 60 * 1000;
-const DEFAULT_TOKEN_DAYS = 90;
-const MAX_TOKEN_DAYS = 365;
 /** `last_used_at` is written at most this often per token. */
 const LAST_USED_RESOLUTION_MS = 60 * 1000;
-
-export interface PersonalAccessTokenInfo {
-  id: string;
-  name: string;
-  prefix: string;
-  createdAt: string;
-  expiresAt: string;
-  lastUsedAt?: string;
-  revokedAt?: string;
-}
 
 type TokenRow = typeof personalAccessTokens.$inferSelect;
 
@@ -56,7 +50,7 @@ export function createPersonalAccessToken(
   name: string,
   days: number = DEFAULT_TOKEN_DAYS,
   now: Date = new Date(),
-): ResultAsync<{ token: string; info: PersonalAccessTokenInfo }, string> {
+): ResultAsync<CreatedPersonalToken, string> {
   const token = `${TOKEN_PREFIX}${randomBytes(32).toString('base64url')}`;
   const row: TokenRow = {
     id: nanoid(),
@@ -69,18 +63,17 @@ export function createPersonalAccessToken(
     lastUsedAt: null,
     revokedAt: null,
   };
-  return ResultAsync.fromPromise(
-    db.insert(personalAccessTokens).values(row),
-    storageError,
-  ).map(() => {
-    audit({
-      action: 'pat.created',
-      actorId: userId,
-      detail: `Personal API token "${name}" created`,
-      meta: { tokenId: row.id, expiresAt: row.expiresAt },
-    });
-    return { token, info: toInfo(row) };
-  });
+  return ResultAsync.fromPromise(db.insert(personalAccessTokens).values(row), storageError).map(
+    () => {
+      audit({
+        action: 'pat.created',
+        actorId: userId,
+        detail: `Personal API token "${name}" created`,
+        meta: { tokenId: row.id, expiresAt: row.expiresAt },
+      });
+      return { token, info: toInfo(row) };
+    },
+  );
 }
 
 /** The user's tokens, newest first (never their plaintext or hash). */

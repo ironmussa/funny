@@ -16,6 +16,7 @@ import { jobsRouter, watchersRouter } from './routers/background.js';
 import { designsRouter } from './routers/designs.js';
 import { githubAppRouter } from './routers/github-app.js';
 import { analyticsRouter, pushRouter } from './routers/insights.js';
+import { personalTokensRouter } from './routers/personal-tokens.js';
 import { pipelinesRouter } from './routers/pipelines.js';
 import { profileRouter } from './routers/profile.js';
 import { projectsRouter } from './routers/projects.js';
@@ -40,6 +41,7 @@ export const appRouter = router({
   runners: runnersRouter,
   projectRunners: projectRunnersRouter,
   githubApp: githubAppRouter,
+  personalTokens: personalTokensRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -64,6 +66,7 @@ export type {
   DesignsPort,
   GithubAppPort,
   JobsPort,
+  PersonalTokensPort,
   PipelinesPort,
   ProfilePort,
   ProjectCommand,

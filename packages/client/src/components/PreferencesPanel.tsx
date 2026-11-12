@@ -5,6 +5,7 @@ import {
   Boxes,
   Building2,
   Cpu,
+  KeyRound,
   Mail,
   Mic,
   Palette,
@@ -38,6 +39,7 @@ export type GeneralPage =
   | 'appearance'
   | 'github'
   | 'github-app'
+  | 'api-tokens'
   | 'ai-keys'
   | 'speech'
   | 'email'
@@ -63,6 +65,7 @@ export const PREFERENCES_NAV_ITEMS: Array<{
   { id: 'appearance', label: 'settings.appearance', icon: Palette },
   { id: 'github', label: 'GitHub', icon: SiGithub },
   { id: 'github-app', label: 'GitHub App', icon: SiGithub },
+  { id: 'api-tokens', label: 'settings.apiTokens', icon: KeyRound },
   { id: 'ai-keys', label: 'AI Providers', icon: Bot },
   { id: 'agent-profiles', label: 'settings.agentProfiles', icon: Bot },
   { id: 'speech', label: 'Speech', icon: Mic },

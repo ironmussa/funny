@@ -58,6 +58,11 @@ import type {
   StartGithubAppManifestBody,
 } from '@funny/shared/contracts/github-app';
 import type {
+  CreatedPersonalToken,
+  CreatePersonalTokenBody,
+  PersonalAccessTokenInfo,
+} from '@funny/shared/contracts/personal-tokens';
+import type {
   CreatePipelineRequest,
   UpdatePipelineRequest,
 } from '@funny/shared/contracts/pipelines';
@@ -312,6 +317,18 @@ export interface GithubAppPort {
   disconnect(): PortResult<Ok>;
 }
 
+/**
+ * The caller's personal API tokens (public-rest-api-v1). Every method acts on
+ * the caller's own tokens only; the plaintext is returned once, by `create`.
+ */
+export interface PersonalTokensPort {
+  /** Newest first, revoked and expired included; never the plaintext. */
+  list(userId: string): PortResult<PersonalAccessTokenInfo[]>;
+  create(userId: string, data: CreatePersonalTokenBody): PortResult<CreatedPersonalToken>;
+  /** 404 when the token is not the caller's or is already revoked. */
+  revoke(userId: string, id: string): PortResult<Ok>;
+}
+
 /** The caller of a runner operation: an instance admin reaches every runner. */
 export interface RunnerCaller {
   userId: string;
@@ -401,6 +418,7 @@ export interface ApiPorts {
   projects: ProjectsPort;
   runners: RunnersPort;
   githubApp: GithubAppPort;
+  personalTokens: PersonalTokensPort;
   projectRunners: ProjectRunnersPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;

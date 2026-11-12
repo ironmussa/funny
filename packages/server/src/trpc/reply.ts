@@ -14,7 +14,7 @@ export async function answer<T>(result: PortResult<T>, status: 200 | 201 = 200):
   );
 }
 
-/** The same, for a plain Hono route (one without a contract): `{ error }` on failure. */
+/** The same, for a plain Hono route (one without a contract): `{ error, code? }` on failure. */
 export async function answerJson<T>(
   c: Context,
   result: PortResult<T>,
@@ -22,6 +22,12 @@ export async function answerJson<T>(
 ): Promise<Response> {
   return (await result).match(
     (value) => c.json(value as object, status),
-    (error: ApiFailure) => c.json({ error: error.message }, error.status as ErrorStatus),
+    (error: ApiFailure) =>
+      c.json(
+        error.code === undefined
+          ? { error: error.message }
+          : { error: error.message, code: error.code },
+        error.status as ErrorStatus,
+      ),
   );
 }

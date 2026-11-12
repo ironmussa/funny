@@ -17,6 +17,8 @@ export interface ApiFailure {
   message: string;
   /** Text written for the user; replaces the client's generic per-type text. */
   friendlyMessage?: string;
+  /** Machine-readable reason the REST route also answers (`{ error, code }`). */
+  code?: string;
 }
 
 export const failure = (status: number, message: string, friendlyMessage?: string): ApiFailure =>

@@ -8,9 +8,11 @@
 import { failure, type AgentTemplatesPort } from '@funny/api';
 import { BUILTIN_AGENT_TEMPLATES, type AgentTemplate } from '@funny/shared';
 import type { UpdateAgentTemplateBody } from '@funny/shared/contracts/agent-templates';
+import { parseStoredJson } from '@funny/shared/json-validation';
 import { desc, eq, or, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { err, ok } from 'neverthrow';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { agentTemplates, threads } from '../../db/schema.js';
@@ -29,13 +31,11 @@ function toJson(value: unknown): string | null {
   return JSON.stringify(value);
 }
 
+/** A JSON column's value; absent when it is null or not valid JSON. */
 function fromJson<T>(raw: string | null): T | undefined {
   if (raw == null) return undefined;
-  try {
-    return (JSON.parse(raw) ?? undefined) as T | undefined;
-  } catch {
-    return undefined;
-  }
+  const parsed = parseStoredJson(z.unknown(), raw, 'agent template column');
+  return parsed.ok ? ((parsed.value ?? undefined) as T | undefined) : undefined;
 }
 
 /** `null` columns become absent fields; the JSON columns are parsed. */

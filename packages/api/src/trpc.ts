@@ -92,7 +92,7 @@ const projectIdInput = z.object({ projectId: z.string().min(1) });
  * caller's `capability` BEFORE the input is validated, with the REST
  * `requireProjectAccess` decision: 404 without a role, 403 without the capability.
  */
-export function projectProcedure(capability: Capability) {
+export function projectProcedure(capability: Capability, forbidden?: string) {
   return protectedProcedure.use(async ({ ctx, getRawInput, next }) => {
     const parsed = projectIdInput.safeParse(await getRawInput());
     if (!parsed.success) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
@@ -100,6 +100,7 @@ export function projectProcedure(capability: Capability) {
       capability,
       parsed.data.projectId,
       ctx.userId,
+      forbidden,
     );
     if (refused) throw toTrpcError(refused);
     return next();

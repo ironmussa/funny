@@ -64,6 +64,9 @@ const MIGRATED_GROUPS: Array<{
   { path: '/designs' },
   { path: '/analytics' },
   { path: '/push' },
+  // `projects` has no entry: its server-answered routes moved, but creation and
+  // the runner's routes (`/projects/:id/branches`, `/hooks`, `/config`, …) share
+  // the same paths and stay REST, so no path or contract rule can tell them apart.
 ];
 
 const IMPORT_SPECIFIER =
@@ -117,7 +120,7 @@ const MIGRATED_RULES = MIGRATED_GROUPS.flatMap(({ path, contract, restOnly = [],
         {
           label: `REST call to migrated group ${path}`,
           pattern: new RegExp(
-            `\\b(?:request|requestInThread)\\s*(?:<[^(]*>)?\\s*\\(\\s*[\`'"]${escape(path)}${exact ? '(?:[?\`\'"]|$)' : `${restOnlyLookahead(restOnly)}(?:[/?\`'"]|$)`}`,
+            `\\b(?:request|requestInThread)\\s*(?:<[^(]*>)?\\s*\\(\\s*[\`'"]${escape(path)}${exact ? '(?:[?`\'"]|$)' : `${restOnlyLookahead(restOnly)}(?:[/?\`'"]|$)`}`,
           ),
         },
       ]),

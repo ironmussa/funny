@@ -22,8 +22,10 @@ import type {
   PaginatedThreadsResponse,
   PermissionMode,
   PipelineRun,
+  Project,
   ProjectAgentProfileBindingResponse,
   RunTriageStatus,
+  StartupCommand,
   Thread,
   ThreadStage,
   ThreadStatus,
@@ -55,6 +57,13 @@ import type {
   UpdatePipelineRequest,
 } from '@funny/shared/contracts/pipelines';
 import type { ProfileResponse } from '@funny/shared/contracts/profile';
+import type {
+  ListProjectsQuery,
+  ProjectCommandBody,
+  ProjectMemberEntry,
+  ResolveProjectResponse,
+  UpdateProjectBody,
+} from '@funny/shared/contracts/projects';
 import type { PushSubscriptionBody } from '@funny/shared/contracts/push';
 import type { SmtpSettingsRequest, SmtpSettingsResponse } from '@funny/shared/contracts/settings';
 import type {
@@ -240,6 +249,39 @@ export interface PushPort {
   test(userId: string, endpoint: string): PortResult<Ok>;
 }
 
+/** A startup command row: the shared type plus the preview port it may declare. */
+export type ProjectCommand = StartupCommand & { port?: number; portEnvVar?: string };
+
+/**
+ * The project operations the server answers itself. Creation and the
+ * filesystem / git operations are the runner's and stay REST. Every method that
+ * takes a `projectId` runs after `projectProcedure` checked the caller's access.
+ */
+export interface ProjectsPort {
+  /** Own + shared projects, or one organization's (403 for a non-member). */
+  list(caller: ApiCaller, query: ListProjectsQuery): PortResult<Project[]>;
+  /** The caller's project whose URL patterns match `url`. */
+  resolve(userId: string, url: string): PortResult<ResolveProjectResponse>;
+  /** Owner-only fields (path, system prompt, permission mode) answer 403 for anyone else. */
+  update(userId: string, projectId: string, data: UpdateProjectBody): PortResult<Project>;
+  remove(projectId: string): PortResult<Ok>;
+  reorder(userId: string, projectIds: string[]): PortResult<Ok>;
+  members(projectId: string): PortResult<{ members: ProjectMemberEntry[] }>;
+  addMember(
+    projectId: string,
+    userId: string,
+    role: string | undefined,
+  ): PortResult<Omit<ProjectMemberEntry, 'user'>>;
+  /** Admins remove anyone; a member may remove themselves (403 otherwise). */
+  removeMember(actorId: string, projectId: string, userId: string): PortResult<Ok>;
+  /** The caller's own working directory for a shared project (absolute, 400 otherwise). */
+  setLocalPath(userId: string, projectId: string, localPath: string): PortResult<Ok>;
+  commands(projectId: string): PortResult<ProjectCommand[]>;
+  createCommand(projectId: string, data: ProjectCommandBody): PortResult<ProjectCommand>;
+  updateCommand(projectId: string, commandId: string, data: ProjectCommandBody): PortResult<Ok>;
+  deleteCommand(projectId: string, commandId: string): PortResult<Ok>;
+}
+
 /** The server's authorization decisions that are not about one thread. */
 export interface AuthzPort {
   /**
@@ -250,6 +292,8 @@ export interface AuthzPort {
     capability: Capability,
     projectId: string,
     userId: string,
+    /** The 403 message; `Access denied` by default. */
+    forbidden?: string,
   ): Promise<ApiFailure | null>;
   /** Records a refused admin-only call, as the REST `requireAdmin` audits it. */
   adminRefused(userId: string, path: string, role: string | null): void;
@@ -267,6 +311,7 @@ export interface ApiPorts {
   designs: DesignsPort;
   analytics: AnalyticsPort;
   push: PushPort;
+  projects: ProjectsPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;
 }

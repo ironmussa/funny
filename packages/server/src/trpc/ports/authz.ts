@@ -10,8 +10,14 @@ import { projectRole } from '../../lib/server-authorizer.js';
 import { decideProjectAccess } from '../../middleware/project-access.js';
 
 export const authzPort: AuthzPort = {
-  async projectAccess(capability, projectId, userId) {
-    const refused = await decideProjectAccess(projectRole, capability, projectId, userId);
+  async projectAccess(capability, projectId, userId, forbidden) {
+    const refused = await decideProjectAccess(
+      projectRole,
+      capability,
+      projectId,
+      userId,
+      forbidden,
+    );
     return refused && failure(refused.status, refused.message);
   },
 

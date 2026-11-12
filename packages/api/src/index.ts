@@ -17,6 +17,7 @@ import { designsRouter } from './routers/designs.js';
 import { analyticsRouter, pushRouter } from './routers/insights.js';
 import { pipelinesRouter } from './routers/pipelines.js';
 import { profileRouter } from './routers/profile.js';
+import { projectsRouter } from './routers/projects.js';
 import { settingsRouter } from './routers/settings.js';
 import { threadsRouter } from './routers/threads.js';
 import { router } from './trpc.js';
@@ -33,6 +34,7 @@ export const appRouter = router({
   designs: designsRouter,
   analytics: analyticsRouter,
   push: pushRouter,
+  projects: projectsRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -58,6 +60,8 @@ export type {
   JobsPort,
   PipelinesPort,
   ProfilePort,
+  ProjectCommand,
+  ProjectsPort,
   PortResult,
   PushPort,
   SettingsPort,

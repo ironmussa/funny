@@ -32,14 +32,14 @@ describe('API Client', () => {
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ error: 'Could not determine remote URL for this project' }, 400),
       );
-      const result = await api.listProjects();
+      const result = await api.listBranches('p1');
       expect(result.isErr()).toBe(true);
       expect(logError).toHaveBeenCalledWith(
         'API request failed',
         expect.objectContaining({
           kind: 'http',
           method: 'GET',
-          path: '/projects',
+          path: '/projects/p1/branches',
           status: 400,
           error: 'Could not determine remote URL for this project',
           durationMs: expect.any(Number),
@@ -52,18 +52,19 @@ describe('API Client', () => {
   });
 
   describe('Projects', () => {
-    test('listProjects calls GET /api/projects', async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse([{ id: 'p1', name: 'Test' }]));
-
-      const result = await api.listProjects();
-      expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toEqual([{ id: 'p1', name: 'Test' }]);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/projects'),
-        expect.objectContaining({
-          headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
-        }),
+    test('listProjects is the projects.list tRPC query; null means personal', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ result: { data: [{ id: 'p1', name: 'Test' }] } }),
       );
+
+      const result = await api.listProjects(null, 'te');
+      expect(result._unsafeUnwrap()).toEqual([{ id: 'p1', name: 'Test' }]);
+      const [url] = mockFetch.mock.calls.at(-1)!;
+      expect(url).toContain('/api/trpc/projects.list?input=');
+      expect(JSON.parse(decodeURIComponent(url.split('?input=')[1]))).toEqual({
+        personal: true,
+        q: 'te',
+      });
     });
 
     test('createProject calls POST /api/projects', async () => {
@@ -78,15 +79,15 @@ describe('API Client', () => {
       );
     });
 
-    test('deleteProject calls DELETE /api/projects/:id', async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ ok: true }));
+    test('deleteProject is the projects.remove tRPC mutation', async () => {
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: { data: { ok: true } } }));
 
       const result = await api.deleteProject('p1');
       expect(result.isOk()).toBe(true);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/projects/p1'),
-        expect.objectContaining({ method: 'DELETE' }),
-      );
+      const [url, init] = mockFetch.mock.calls.at(-1)!;
+      expect(url).toMatch(/\/api\/trpc\/projects\.remove$/);
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body as string)).toEqual({ projectId: 'p1' });
     });
 
     test('listBranches calls GET /api/projects/:id/branches', async () => {

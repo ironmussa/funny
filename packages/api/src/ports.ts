@@ -10,10 +10,12 @@
 
 import type {
   AgentExecutionProfileResponse,
+  AgentTemplate,
   Automation,
   AutomationRun,
   CreateAgentExecutionProfileRequest,
   InboxItem,
+  Job,
   Pipeline,
   PaginatedMessages,
   PaginatedThreadsResponse,
@@ -28,8 +30,13 @@ import type {
   UpdateAgentExecutionProfileRequest,
   UpdateProfileRequest,
   UserProfile,
+  Watcher,
 } from '@funny/shared';
 import type { Capability } from '@funny/shared/auth/roles';
+import type {
+  AgentTemplateBody,
+  UpdateAgentTemplateBody,
+} from '@funny/shared/contracts/agent-templates';
 import type {
   CreateAutomationRequest,
   UpdateAutomationRequest,
@@ -168,6 +175,35 @@ export interface SettingsPort {
   testSmtp(): PortResult<Ok & { sentTo: string }>;
 }
 
+export interface AgentTemplatesPort {
+  /** The caller's own templates and every shared one, newest first. */
+  list(userId: string): PortResult<AgentTemplate[]>;
+  /** Thread count per template, over the caller's threads. */
+  usageStats(userId: string): PortResult<Record<string, number>>;
+  /** A built-in, own or shared template; anyone else's private one looks absent (404). */
+  get(userId: string, id: string): PortResult<AgentTemplate>;
+  create(userId: string, data: AgentTemplateBody): PortResult<AgentTemplate>;
+  /** Runs after `authorizeWrite`. */
+  update(userId: string, id: string, data: UpdateAgentTemplateBody): PortResult<AgentTemplate>;
+  /** Runs after `authorizeWrite`. */
+  remove(userId: string, id: string): PortResult<Ok>;
+  /** A private copy of a built-in, own or shared template. */
+  duplicate(userId: string, id: string): PortResult<AgentTemplate>;
+  /** Only the owner writes: 404 when missing, 403 when someone else's. */
+  authorizeWrite(userId: string, id: string): Promise<ApiFailure | null>;
+}
+
+export interface WatchersPort {
+  list(userId: string): PortResult<Watcher[]>;
+  /** Stops a live watcher of the caller (404 otherwise); terminal ones stay as they are. */
+  cancel(userId: string, id: string): PortResult<Watcher>;
+}
+
+export interface JobsPort {
+  /** Cancel and log reads stay REST: the runner owns the process and the logfile. */
+  list(userId: string): PortResult<Job[]>;
+}
+
 /** The server's authorization decisions that are not about one thread. */
 export interface AuthzPort {
   /**
@@ -189,6 +225,9 @@ export interface ApiPorts {
   threads: ThreadsPort;
   profile: ProfilePort;
   settings: SettingsPort;
+  agentTemplates: AgentTemplatesPort;
+  watchers: WatchersPort;
+  jobs: JobsPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;
 }

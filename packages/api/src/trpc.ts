@@ -7,7 +7,7 @@ import type { Capability } from '@funny/shared/auth/roles';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { ApiFailureCause, toTrpcError } from './failure.js';
+import { ApiFailureCause, toTrpcError, type ApiFailure } from './failure.js';
 import type { ApiPorts, ThreadAccessLevel } from './ports.js';
 
 export interface ApiContext {
@@ -101,6 +101,25 @@ export function projectProcedure(capability: Capability) {
       parsed.data.projectId,
       ctx.userId,
     );
+    if (refused) throw toTrpcError(refused);
+    return next();
+  });
+}
+
+const resourceIdInput = z.object({ id: z.string().min(1) });
+
+/**
+ * A procedure on one resource, whose input carries its `id`. `authorize` runs
+ * BEFORE the input is validated, so a missing or someone else's resource
+ * answers 404 / 403 before a bad payload answers 400, as the REST routes do.
+ */
+export function resourceProcedure(
+  authorize: (ports: ApiPorts, userId: string, id: string) => Promise<ApiFailure | null>,
+) {
+  return protectedProcedure.use(async ({ ctx, getRawInput, next }) => {
+    const parsed = resourceIdInput.safeParse(await getRawInput());
+    if (!parsed.success) throw new TRPCError({ code: 'NOT_FOUND', message: 'Not found' });
+    const refused = await authorize(ctx.ports, ctx.userId, parsed.data.id);
     if (refused) throw toTrpcError(refused);
     return next();
   });

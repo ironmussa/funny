@@ -11,8 +11,10 @@ import type { Context, Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
+import { agentTemplatesPort } from './ports/agent-templates.js';
 import { authzPort } from './ports/authz.js';
 import { automationsPort } from './ports/automations.js';
+import { jobsPort, watchersPort } from './ports/background.js';
 import { pipelinesPort } from './ports/pipelines.js';
 import { profilePort } from './ports/profile.js';
 import { settingsPort } from './ports/settings.js';
@@ -27,6 +29,9 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
     threads: createThreadsPort(c.env?.browserEvents),
     profile: profilePort,
     settings: settingsPort,
+    agentTemplates: agentTemplatesPort,
+    watchers: watchersPort,
+    jobs: jobsPort,
     threadAccess: threadAccessPort,
     authz: authzPort,
   };

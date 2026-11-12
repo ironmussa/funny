@@ -10,7 +10,9 @@
  * (`scripts/fitness/check-trpc-api.ts`).
  */
 
+import { agentTemplatesRouter } from './routers/agent-templates.js';
 import { automationsRouter } from './routers/automations.js';
+import { jobsRouter, watchersRouter } from './routers/background.js';
 import { pipelinesRouter } from './routers/pipelines.js';
 import { profileRouter } from './routers/profile.js';
 import { settingsRouter } from './routers/settings.js';
@@ -23,6 +25,9 @@ export const appRouter = router({
   threads: threadsRouter,
   profile: profileRouter,
   settings: settingsRouter,
+  agentTemplates: agentTemplatesRouter,
+  watchers: watchersRouter,
+  jobs: jobsRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -38,10 +43,12 @@ export {
 } from './failure.js';
 export type { ApiFailure } from './failure.js';
 export type {
+  AgentTemplatesPort,
   ApiCaller,
   ApiPorts,
   AuthzPort,
   AutomationsPort,
+  JobsPort,
   PipelinesPort,
   ProfilePort,
   PortResult,
@@ -49,5 +56,6 @@ export type {
   ThreadAccessLevel,
   ThreadAccessPort,
   ThreadsPort,
+  WatchersPort,
 } from './ports.js';
 export type { ApiContext } from './trpc.js';

@@ -1,24 +1,17 @@
-import type {
-  AgentTemplate,
-  CreateAgentTemplateRequest,
-  UpdateAgentTemplateRequest,
-} from '@funny/shared';
+import type { CreateAgentTemplateRequest, UpdateAgentTemplateRequest } from '@funny/shared';
 
-import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
+
+const procedures = trpc.agentTemplates;
 
 export const agentTemplatesApi = {
-  listAgentTemplates: () => request<AgentTemplate[]>('/agent-templates'),
-  getAgentTemplate: (id: string) => request<AgentTemplate>(`/agent-templates/${id}`),
+  listAgentTemplates: () => trpcCall(() => procedures.list.query()),
+  getAgentTemplate: (id: string) => trpcCall(() => procedures.get.query({ id })),
   createAgentTemplate: (data: CreateAgentTemplateRequest) =>
-    request<AgentTemplate>('/agent-templates', { method: 'POST', body: JSON.stringify(data) }),
+    trpcCall(() => procedures.create.mutate(data)),
   updateAgentTemplate: (id: string, data: UpdateAgentTemplateRequest) =>
-    request<AgentTemplate>(`/agent-templates/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
-  deleteAgentTemplate: (id: string) =>
-    request<{ ok: boolean }>(`/agent-templates/${id}`, { method: 'DELETE' }),
-  duplicateAgentTemplate: (id: string) =>
-    request<AgentTemplate>(`/agent-templates/${id}/duplicate`, { method: 'POST' }),
-  getAgentTemplateUsageStats: () => request<Record<string, number>>('/agent-templates/stats/usage'),
+    trpcCall(() => procedures.update.mutate({ id, data })),
+  deleteAgentTemplate: (id: string) => trpcCall(() => procedures.remove.mutate({ id })),
+  duplicateAgentTemplate: (id: string) => trpcCall(() => procedures.duplicate.mutate({ id })),
+  getAgentTemplateUsageStats: () => trpcCall(() => procedures.usageStats.query()),
 };

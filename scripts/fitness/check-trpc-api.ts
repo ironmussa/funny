@@ -44,12 +44,23 @@ const SHARED_ALLOWED = [
  * checked only by its contract: most `/threads` routes go to the runner and stay
  * REST, so only its contract endpoints moved.
  */
-const MIGRATED_GROUPS: Array<{ path?: string; contract?: string; restOnly?: string[] }> = [
+const MIGRATED_GROUPS: Array<{
+  path?: string;
+  contract?: string;
+  restOnly?: string[];
+  /** Only the path itself moved, not its sub-paths. */
+  exact?: boolean;
+}> = [
   { path: '/automations', contract: 'automationsContract' },
   { path: '/pipelines', contract: 'pipelinesContract', restOnly: ['/approvals'] },
   { contract: 'threadsContract' },
   { path: '/profile' },
   { path: '/settings', restOnly: ['/github-app'] },
+  { path: '/agent-templates' },
+  { path: '/watchers' },
+  // Only the list moved: job cancel and log reads (`/jobs/:id/…`) are proxied to
+  // the runner that owns the process.
+  { path: '/jobs', exact: true },
 ];
 
 const IMPORT_SPECIFIER =
@@ -96,14 +107,14 @@ const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const restOnlyLookahead = (restOnly: string[]) =>
   restOnly.length === 0 ? '' : `(?!(?:${restOnly.map(escape).join('|')})(?:[/?\`'"]|$))`;
 
-const MIGRATED_RULES = MIGRATED_GROUPS.flatMap(({ path, contract, restOnly = [] }) => [
+const MIGRATED_RULES = MIGRATED_GROUPS.flatMap(({ path, contract, restOnly = [], exact }) => [
   ...(path === undefined
     ? []
     : [
         {
           label: `REST call to migrated group ${path}`,
           pattern: new RegExp(
-            `\\b(?:request|requestInThread)\\s*(?:<[^(]*>)?\\s*\\(\\s*[\`'"]${escape(path)}${restOnlyLookahead(restOnly)}(?:[/?\`'"]|$)`,
+            `\\b(?:request|requestInThread)\\s*(?:<[^(]*>)?\\s*\\(\\s*[\`'"]${escape(path)}${exact ? '(?:[?\`\'"]|$)' : `${restOnlyLookahead(restOnly)}(?:[/?\`'"]|$)`}`,
           ),
         },
       ]),

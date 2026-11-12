@@ -29,7 +29,12 @@ afterAll(() => {
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedProjectMember, seedTeamProject } from '../helpers/test-db.js';
+import {
+  seedOrgMember,
+  seedProject,
+  seedProjectMember,
+  seedTeamProject,
+} from '../helpers/test-db.js';
 
 describe('Team Projects Routes (Integration)', () => {
   let t: TestApp;
@@ -54,6 +59,7 @@ describe('Team Projects Routes (Integration)', () => {
     });
 
     test('returns projects linked to the active org with isTeamProject flag', async () => {
+      seedOrgMember(t.db as any, { organizationId: orgId, userId });
       seedProject(t.db as any, { id: 'p1', userId, name: 'Alpha', path: '/alpha' });
       seedProject(t.db as any, { id: 'p2', userId, name: 'Beta', path: '/beta' });
       seedTeamProject(t.db as any, { teamId: orgId, projectId: 'p1' });
@@ -66,6 +72,38 @@ describe('Team Projects Routes (Integration)', () => {
       expect(body[0].id).toBe('p1');
       expect(body[0].name).toBe('Alpha');
       expect(body[0].isTeamProject).toBe(true);
+    });
+
+    // Regression (#180): the active org on the session is not proof of
+    // membership — a member removed from the org keeps it until they switch.
+    test('refuses a caller who is not a member of the active org', async () => {
+      seedOrgMember(t.db as any, { organizationId: orgId, userId: 'someone-else' });
+      seedProject(t.db as any, { id: 'p1', userId: 'someone-else', name: 'Alpha', path: '/alpha' });
+      seedTeamProject(t.db as any, { teamId: orgId, projectId: 'p1' });
+
+      const res = await t.requestAs(userId, 'user', { orgId }).get('/api/team-projects');
+
+      expect(res.status).toBe(403);
+      expect(JSON.stringify(await res.json())).not.toContain('/alpha');
+    });
+
+    test('answers mapped projects, not raw database rows', async () => {
+      seedOrgMember(t.db as any, { organizationId: orgId, userId });
+      seedProject(t.db as any, {
+        id: 'p1',
+        userId,
+        name: 'Alpha',
+        path: '/alpha',
+        urls: JSON.stringify(['https://alpha.example']),
+      });
+      seedTeamProject(t.db as any, { teamId: orgId, projectId: 'p1' });
+
+      const res = await t.requestAs(userId, 'user', { orgId }).get('/api/team-projects');
+
+      expect(res.status).toBe(200);
+      const [project] = await res.json();
+      expect(project.urls).toEqual(['https://alpha.example']);
+      expect(project.role).toBe('owner');
     });
   });
 
@@ -98,6 +136,7 @@ describe('Team Projects Routes (Integration)', () => {
     });
 
     test('associates a project with the org', async () => {
+      seedOrgMember(t.db as any, { organizationId: orgId, userId });
       seedProject(t.db as any, { id: 'p1', userId, path: '/alpha' });
 
       const res = await t
@@ -111,6 +150,7 @@ describe('Team Projects Routes (Integration)', () => {
     });
 
     test('returns 403 when linking a project the caller does not own (C3)', async () => {
+      seedOrgMember(t.db as any, { organizationId: orgId, userId });
       seedProject(t.db as any, { id: 'victim-p', userId: 'victim', path: '/victim' });
 
       const res = await t
@@ -167,6 +207,7 @@ describe('Team Projects Routes (Integration)', () => {
     });
 
     test('removes the org association', async () => {
+      seedOrgMember(t.db as any, { organizationId: orgId, userId });
       seedProject(t.db as any, { id: 'p1', userId, path: '/alpha' });
       seedTeamProject(t.db as any, { teamId: orgId, projectId: 'p1' });
 

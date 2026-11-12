@@ -43,6 +43,19 @@ const requestLink: TRPCLink<AppRouter> =
             });
       void call.match(
         (response) => {
+          // A body without `result` (a proxy page, a REST answer) must fail the
+          // call: throwing here would leave it pending forever.
+          if (!response || typeof response !== 'object' || !('result' in response)) {
+            observer.error(
+              TRPCClientError.from(
+                new RequestFailure({
+                  type: 'INTERNAL',
+                  message: `Malformed response from ${op.path}`,
+                }),
+              ),
+            );
+            return;
+          }
           observer.next({ result: { type: 'data', data: response.result.data } });
           observer.complete();
         },

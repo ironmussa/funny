@@ -5,10 +5,11 @@ import type {
   Thread,
   ThreadStage,
 } from '@funny/shared';
-import { threadsContract as contract } from '@funny/shared/contracts/threads';
 
-import { callEndpoint } from './_contract';
 import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
+
+const procedures = trpc.threads;
 
 /** A per-thread share grant with the invited user's display fields. */
 /**
@@ -42,52 +43,51 @@ interface MessageOptions {
 
 export const threadsApi = {
   listThreads: (projectId?: string, includeArchived?: boolean, limit?: number, offset?: number) =>
-    callEndpoint(contract.list, {
-      query: { projectId: projectId || undefined, includeArchived, limit, offset },
-    }),
+    trpcCall(() =>
+      procedures.list.query({ projectId: projectId || undefined, includeArchived, limit, offset }),
+    ),
   listThreadsByDesign: (designId: string, limit = 100) =>
-    callEndpoint(contract.list, { query: { designId, limit } }),
+    trpcCall(() => procedures.list.query({ designId, limit })),
   searchThreadContent: (query: string, projectId?: string, caseSensitive = false) =>
-    callEndpoint(contract.searchContent, {
-      query: {
+    trpcCall(() =>
+      procedures.searchContent.query({
         q: query,
         projectId: projectId || undefined,
         caseSensitive: caseSensitive || undefined,
-      },
-    }),
+      }),
+    ),
   getThread: (
     id: string,
     messageLimit?: number,
     signal?: AbortSignal,
     opts: { messageProgress?: number; messageAnchorId?: string } = {},
   ) =>
-    callEndpoint(
-      contract.get,
-      {
-        params: { id },
-        query: {
+    trpcCall(() =>
+      procedures.get.query(
+        {
+          id,
           messageLimit: messageLimit || undefined,
           messageProgress: opts.messageProgress,
           messageAnchorId: opts.messageAnchorId || undefined,
         },
-      },
-      { signal },
+        { signal },
+      ),
     ),
   getThreadMessages: (
     threadId: string,
     cursor: string,
     limit = 50,
     direction: 'before' | 'after' = 'before',
-  ) =>
-    callEndpoint(contract.messages, {
-      params: { id: threadId },
-      query: { cursor, limit, direction },
-    }),
+  ) => trpcCall(() => procedures.messages.query({ id: threadId, cursor, limit, direction })),
   searchThreadMessages: (threadId: string, query: string, limit = 100, caseSensitive = false) =>
-    callEndpoint(contract.searchMessages, {
-      params: { id: threadId },
-      query: { q: query, limit, caseSensitive: caseSensitive || undefined },
-    }),
+    trpcCall(() =>
+      procedures.searchMessages.query({
+        id: threadId,
+        q: query,
+        limit,
+        caseSensitive: caseSensitive || undefined,
+      }),
+    ),
   getThreadEvents: (threadId: string, signal?: AbortSignal) => {
     return request<{ events: Array<import('@funny/shared').ThreadEvent> }>(
       `/threads/${threadId}/events`,
@@ -175,7 +175,7 @@ export const threadsApi = {
     }),
   /** List the current user's scratch threads. */
   listScratchThreads: (limit?: number, offset?: number) =>
-    callEndpoint(contract.scratch, { query: { limit, offset } }),
+    trpcCall(() => procedures.scratch.query({ limit, offset })),
   sendMessage: (
     threadId: string,
     content: string,
@@ -216,10 +216,7 @@ export const threadsApi = {
   stopThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/stop`, { method: 'POST' }),
   updateThreadPermissionMode: (threadId: string, permissionMode: PermissionMode) =>
-    callEndpoint(contract.setPermissionMode, {
-      params: { id: threadId },
-      body: { permissionMode },
-    }),
+    trpcCall(() => procedures.setPermissionMode.mutate({ id: threadId, permissionMode })),
   convertToWorktree: (threadId: string, baseBranch?: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/convert-to-worktree`, {
       method: 'POST',
@@ -313,15 +310,15 @@ export const threadsApi = {
       method: 'DELETE',
     }),
   archiveThread: (threadId: string, archived: boolean) =>
-    callEndpoint(contract.update, { params: { id: threadId }, body: { archived } }),
+    trpcCall(() => procedures.update.mutate({ id: threadId, data: { archived } })),
   pinThread: (threadId: string, pinned: boolean) =>
-    callEndpoint(contract.update, { params: { id: threadId }, body: { pinned } }),
+    trpcCall(() => procedures.update.mutate({ id: threadId, data: { pinned } })),
   setSchedulerManaged: (threadId: string, schedulerManaged: boolean) =>
-    callEndpoint(contract.update, { params: { id: threadId }, body: { schedulerManaged } }),
+    trpcCall(() => procedures.update.mutate({ id: threadId, data: { schedulerManaged } })),
   renameThread: (threadId: string, title: string) =>
-    callEndpoint(contract.update, { params: { id: threadId }, body: { title } }),
+    trpcCall(() => procedures.update.mutate({ id: threadId, data: { title } })),
   updateThreadStage: (threadId: string, stage: ThreadStage) =>
-    callEndpoint(contract.update, { params: { id: threadId }, body: { stage } }),
+    trpcCall(() => procedures.update.mutate({ id: threadId, data: { stage } })),
 
   // Thread comments
   getThreadComments: (threadId: string) =>
@@ -374,12 +371,12 @@ export const threadsApi = {
     search?: string;
     projectId?: string;
   }) =>
-    callEndpoint(contract.archived, {
-      query: {
+    trpcCall(() =>
+      procedures.archived.query({
         page: params?.page || undefined,
         limit: params?.limit || undefined,
         search: params?.search || undefined,
         projectId: params?.projectId || undefined,
-      },
-    }),
+      }),
+    ),
 };

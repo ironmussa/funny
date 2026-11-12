@@ -12,11 +12,13 @@
 
 import { automationsRouter } from './routers/automations.js';
 import { pipelinesRouter } from './routers/pipelines.js';
+import { threadsRouter } from './routers/threads.js';
 import { router } from './trpc.js';
 
 export const appRouter = router({
   automations: automationsRouter,
   pipelines: pipelinesRouter,
+  threads: threadsRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -32,11 +34,13 @@ export {
 } from './failure.js';
 export type { ApiFailure } from './failure.js';
 export type {
+  ApiCaller,
   ApiPorts,
   AutomationsPort,
   PipelinesPort,
   PortResult,
   ThreadAccessLevel,
   ThreadAccessPort,
+  ThreadsPort,
 } from './ports.js';
 export type { ApiContext } from './trpc.js';

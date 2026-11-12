@@ -7,6 +7,7 @@ delete (window as any).__TAURI_INTERNALS__;
 
 const { automationsApi } = await import('@/lib/api/automations');
 const { pipelinesApi } = await import('@/lib/api/pipelines');
+const { threadsApi } = await import('@/lib/api/threads');
 const { trpc, trpcCall } = await import('@/lib/api/_trpc');
 const { useCircuitBreakerStore } = await import('@/stores/circuit-breaker-store');
 
@@ -80,6 +81,17 @@ describe('tRPC procedure calls (automations)', () => {
     });
   });
 
+  test('a body that is not a tRPC answer fails the call instead of hanging', async () => {
+    mockFetch.mockResolvedValueOnce(json([{ id: 'a1' }]));
+
+    const result = await automationsApi.listAutomations();
+
+    expect(result._unsafeUnwrapErr()).toEqual({
+      type: 'INTERNAL',
+      message: 'Malformed response from automations.list',
+    });
+  });
+
   test('an open circuit fails fast without a request', async () => {
     useCircuitBreakerStore.setState({ state: 'open' });
 
@@ -148,5 +160,47 @@ describe('tRPC procedure calls (pipelines)', () => {
     const [url, init] = lastCall();
     expect(url).toMatch(/\/api\/pipelines\/approvals\/ap%2F1\/respond$/);
     expect(init.method).toBe('POST');
+  });
+});
+
+describe('tRPC procedure calls (threads)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+  });
+
+  test('getThread is a tRPC query carrying the id and the message window', async () => {
+    mockFetch.mockResolvedValueOnce(json({ result: { data: { id: 't1', messages: [] } } }));
+    const controller = new AbortController();
+
+    const result = await threadsApi.getThread('t1', 30, controller.signal, { messageProgress: 1 });
+
+    expect(result._unsafeUnwrap()).toEqual({ id: 't1', messages: [] });
+    const [url, init] = lastCall();
+    expect(url).toContain('/api/trpc/threads.get?input=');
+    expect(JSON.parse(decodeURIComponent(url.split('?input=')[1]))).toEqual({
+      id: 't1',
+      messageLimit: 30,
+      messageProgress: 1,
+    });
+    expect(init.signal).toBeDefined();
+  });
+
+  test('archiveThread is an update mutation with the field in data', async () => {
+    mockFetch.mockResolvedValueOnce(json({ result: { data: { id: 't1', archived: true } } }));
+
+    await threadsApi.archiveThread('t1', true);
+
+    const [url, init] = lastCall();
+    expect(url).toMatch(/\/api\/trpc\/threads\.update$/);
+    expect(JSON.parse(init.body as string)).toEqual({ id: 't1', data: { archived: true } });
+  });
+
+  test('agent operations stay REST: stopThread posts to the runner-proxied route', async () => {
+    mockFetch.mockResolvedValueOnce(json({ ok: true }));
+
+    await threadsApi.stopThread('t1');
+
+    expect(lastCall()[0]).toMatch(/\/api\/threads\/t1\/stop$/);
   });
 });

@@ -41,6 +41,8 @@ describe('fitness:trpc-api — web client', () => {
     'request(`/pipelines/approvals/${id}/respond`, { method: "POST" })',
     "request('/pipelines/approvals/pending')",
     "// request('/automations')",
+    'request(`/threads/${threadId}/stop`, { method: "POST" })',
+    'request(`/threads/${threadId}`, { method: "DELETE" })',
   ])('allows %s', (source) => {
     expect(findClientViolations('x.ts', source)).toEqual([]);
   });
@@ -60,6 +62,7 @@ describe('fitness:trpc-api — web client', () => {
     "request('/pipelines/project/p1')",
     'request(`/pipelines/${id}`, { method: "PATCH" })',
     'callEndpoint(pipelinesContract.get)',
+    'callEndpoint(threadsContract.list)',
   ])('rejects REST use of a migrated group: %s', (source) => {
     expect(findClientViolations('x.ts', source)).toHaveLength(1);
   });

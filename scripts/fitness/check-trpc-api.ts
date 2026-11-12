@@ -39,11 +39,14 @@ const SHARED_ALLOWED = [
 /**
  * Route groups whose web-client calls go through tRPC: REST path prefix, contract
  * export, and the sub-paths that stay REST (`restOnly`, e.g. pipeline approval
- * gates, which the server may proxy to a runner).
+ * gates, which the server may proxy to a runner). A group without `path` is
+ * checked only by its contract: most `/threads` routes go to the runner and stay
+ * REST, so only its contract endpoints moved.
  */
-const MIGRATED_GROUPS: Array<{ path: string; contract: string; restOnly?: string[] }> = [
+const MIGRATED_GROUPS: Array<{ path?: string; contract: string; restOnly?: string[] }> = [
   { path: '/automations', contract: 'automationsContract' },
   { path: '/pipelines', contract: 'pipelinesContract', restOnly: ['/approvals'] },
+  { contract: 'threadsContract' },
 ];
 
 const IMPORT_SPECIFIER =
@@ -91,13 +94,17 @@ const restOnlyLookahead = (restOnly: string[]) =>
   restOnly.length === 0 ? '' : `(?!(?:${restOnly.map(escape).join('|')})(?:[/?\`'"]|$))`;
 
 const MIGRATED_RULES = MIGRATED_GROUPS.flatMap(({ path, contract, restOnly = [] }) => [
-  {
-    label: `REST call to migrated group ${path}`,
-    pattern: new RegExp(
-      `\\b(?:request|requestInThread)\\s*(?:<[^(]*>)?\\s*\\(\\s*[\`'"]${escape(path)}${restOnlyLookahead(restOnly)}(?:[/?\`'"]|$)`,
-    ),
-  },
-  { label: `contract of migrated group ${path}`, pattern: new RegExp(`\\b${contract}\\b`) },
+  ...(path === undefined
+    ? []
+    : [
+        {
+          label: `REST call to migrated group ${path}`,
+          pattern: new RegExp(
+            `\\b(?:request|requestInThread)\\s*(?:<[^(]*>)?\\s*\\(\\s*[\`'"]${escape(path)}${restOnlyLookahead(restOnly)}(?:[/?\`'"]|$)`,
+          ),
+        },
+      ]),
+  { label: `contract ${contract} of a migrated group`, pattern: new RegExp(`\\b${contract}\\b`) },
 ]);
 
 /** A statement that loads the `@funny/api` entry at runtime (anything but `import type … from`). */

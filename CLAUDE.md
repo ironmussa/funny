@@ -270,7 +270,16 @@ A route group with a contract declares each endpoint once in `packages/shared/sr
 - **Client:** call with `callEndpoint(endpoint, { params, query, body })` from `packages/client/src/lib/api/_contract.ts`. It goes through `request()`, so auth, telemetry and the circuit breaker still apply.
 - **Request types** come from the schemas (`z.input<typeof schema>`), not from a separate interface, so they cannot claim fields the server does not accept.
 
-`/api/automations`, the pipeline CRUD and run history (`lib/pipeline-response.ts`), and the server-answered `/api/threads` routes (lists, detail, field updates; `lib/thread-response.ts` maps the rows) are on contracts. Thread creation and fork answer with the row the runner persisted, read back from the server DB (`createdThreadResponse` in `routes/threads.ts`); the other runner-proxied thread routes are not on contracts, since their responses come from the runner. The rest still use `request<T>(path)`, whose `T` is unchecked. Move a group over when you touch it. Hono RPC (`hono/client`) was rejected because importing the server's route types pulls Bun-only modules into the client typecheck.
+The pipeline CRUD and run history (`lib/pipeline-response.ts`), and the server-answered `/api/threads` routes (lists, detail, field updates; `lib/thread-response.ts` maps the rows) are on contracts. Thread creation and fork answer with the row the runner persisted, read back from the server DB (`createdThreadResponse` in `routes/threads.ts`); the other runner-proxied thread routes are not on contracts, since their responses come from the runner. The rest still use `request<T>(path)`, whose `T` is unchecked. Move a group over when you touch it. Hono RPC (`hono/client`) was rejected because importing the server's route types pulls Bun-only modules into the client typecheck.
+
+### tRPC for server-answered groups (`@funny/api`)
+
+Openspec change `adopt-trpc-browser-api` moves server-answered groups from contracts to tRPC, one group at a time. `automations` is the pilot and is migrated.
+
+- **Router:** `packages/api` (`@funny/api`) holds `appRouter` / `type AppRouter`. Procedures call `ctx.ports.<group>` (the `ApiPorts` interface). The server implements the ports in `packages/server/src/trpc/ports/`, and that is where DB rows are mapped to contract types. `@funny/api` may import only `@trpc/server`, `zod`, `neverthrow` and browser-safe `@funny/shared` entries; `fitness:trpc-api` fails on anything else. This is what keeps server code out of the client typecheck, the problem that sank Hono RPC.
+- **Server:** `mountTrpc(app)` (`trpc/mount.ts`) serves `/api/trpc/*` after the session middleware and before the runner proxy. Use `protectedProcedure` (401 without a user). A port fails with `failure(status, message)`, the status the REST route answers, and the procedure ends with `unwrap(await port.x(...))`. The group's REST routes stay for other consumers (sdk, extension, gpuix) and delegate to the same port.
+- **Client:** call `trpcCall(() => trpc.<group>.<proc>.query(input))` from `lib/api/_trpc.ts`. It goes through `request()`, so auth, telemetry and the circuit breaker apply, and it returns `ResultAsync<T, DomainError>`. Once a group migrates, add it to `MIGRATED_GROUPS` in `scripts/fitness/check-trpc-api.ts`. After that, a REST call or contract use for that group from the client fails lint.
+- **Out of scope:** runner-answered routes stay on REST and the proxy, and gRPC and Socket.IO do not change.
 
 ### Error Handling with `neverthrow`
 

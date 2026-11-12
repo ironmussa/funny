@@ -187,4 +187,31 @@ describe('API client', () => {
     expect(fixture.circuit.failures).toBe(0);
     expect(fixture.failures).toEqual([]);
   });
+
+  test('reads a tRPC error body like a REST one', async () => {
+    const fixture = createDependencies(async () =>
+      response(404, {
+        error: {
+          message: 'Not found',
+          code: -32004,
+          friendlyMessage: 'That automation is gone',
+          data: { code: 'NOT_FOUND', httpStatus: 404, path: 'automations.get' },
+        },
+      }),
+    );
+    await expect(fixture.client.request('/trpc/automations.get')).rejects.toEqual({
+      type: 'NOT_FOUND',
+      message: 'Not found',
+      friendlyMessage: 'That automation is gone',
+    });
+  });
+
+  test('keeps a REST error object that is not a tRPC error as JSON', async () => {
+    const fixture = createDependencies(async () =>
+      response(400, { error: { message: 'x', field: 'name' } }),
+    );
+    await expect(fixture.client.request('/things')).rejects.toMatchObject({
+      message: JSON.stringify({ message: 'x', field: 'name' }),
+    });
+  });
 });

@@ -309,6 +309,11 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   const { providerRoutes } = await import('./routes/providers.js');
   app.route('/api/providers', providerRoutes);
 
+  // tRPC procedures for server-answered groups (openspec adopt-trpc-browser-api).
+  // Before the proxy catch-all: `/api/trpc` is never forwarded to a runner.
+  const { mountTrpc } = await import('./trpc/mount.js');
+  mountTrpc(app);
+
   // Setup status — proxy to runner
   // NOTE: `/api/setup/status` is intentionally NOT handled here. Claude CLI
   // availability is a per-user-runner property, so this request falls through to

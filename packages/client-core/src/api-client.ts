@@ -84,6 +84,27 @@ function parseBody(text: string): Record<string, unknown> {
   }
 }
 
+/**
+ * A tRPC procedure answers `{ error: { message, friendlyMessage?, data: { httpStatus } } }`
+ * where a REST route answers `{ error: string, friendlyMessage? }`; read both the same way.
+ */
+function flattenTrpcError(body: Record<string, unknown>): Record<string, unknown> {
+  const error = body.error as
+    | { message?: unknown; friendlyMessage?: unknown; data?: { httpStatus?: unknown } }
+    | undefined;
+  if (
+    !error ||
+    typeof error !== 'object' ||
+    typeof error.message !== 'string' ||
+    typeof error.data?.httpStatus !== 'number'
+  ) {
+    return body;
+  }
+  return typeof error.friendlyMessage === 'string'
+    ? { error: error.message, friendlyMessage: error.friendlyMessage }
+    : { error: error.message };
+}
+
 function httpErrorMessage(body: Record<string, unknown>, status: number): string {
   const rawError = body.error;
   if (typeof rawError === 'string' && rawError.length > 0) return rawError;
@@ -219,7 +240,7 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
           recordFailure(startedAt);
         }
         const responseText = await response.text().catch(() => '');
-        const body = parseBody(responseText);
+        const body = flattenTrpcError(parseBody(responseText));
         const message = httpErrorMessage(body, response.status);
         reportFailure('http', response.status, message);
         throw httpError(body, response.status, message);

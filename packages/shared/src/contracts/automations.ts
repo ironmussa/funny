@@ -43,11 +43,11 @@ export const runTriageStatus = z.enum(['pending', 'reviewed', 'dismissed'], {
   error: 'triageStatus must be one of: pending, reviewed, dismissed',
 });
 
-const triageRunBody = z.object({ triageStatus: runTriageStatus });
+export const triageRunBody = z.object({ triageStatus: runTriageStatus });
 
-const listQuery = z.object({ projectId: z.string().optional() });
+export const listAutomationsQuery = z.object({ projectId: z.string().optional() });
 
-const inboxQuery = z.object({
+export const automationInboxQuery = z.object({
   projectId: z.string().optional(),
   triageStatus: z.string().optional(),
 });
@@ -61,8 +61,12 @@ const api = endpointGroup('/automations');
 
 export const automationsContract = {
   // Declared before `get` so `/inbox` is not read as an automation id.
-  inbox: api.endpoint<InboxItem[]>()({ method: 'GET', path: '/inbox', query: inboxQuery }),
-  list: api.endpoint<Automation[]>()({ method: 'GET', path: '/', query: listQuery }),
+  inbox: api.endpoint<InboxItem[]>()({
+    method: 'GET',
+    path: '/inbox',
+    query: automationInboxQuery,
+  }),
+  list: api.endpoint<Automation[]>()({ method: 'GET', path: '/', query: listAutomationsQuery }),
   get: api.endpoint<Automation>()({ method: 'GET', path: '/:id' }),
   create: api.endpoint<Automation>()({ method: 'POST', path: '/', body: createAutomationBody }),
   update: api.endpoint<Automation>()({

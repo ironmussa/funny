@@ -36,8 +36,15 @@ const SHARED_ALLOWED = [
   /^@funny\/shared\/types\/[\w-]+$/,
 ];
 
-/** Route groups whose web-client calls go through tRPC: REST path prefix and contract export. */
-const MIGRATED_GROUPS = [{ path: '/automations', contract: 'automationsContract' }];
+/**
+ * Route groups whose web-client calls go through tRPC: REST path prefix, contract
+ * export, and the sub-paths that stay REST (`restOnly`, e.g. pipeline approval
+ * gates, which the server may proxy to a runner).
+ */
+const MIGRATED_GROUPS: Array<{ path: string; contract: string; restOnly?: string[] }> = [
+  { path: '/automations', contract: 'automationsContract' },
+  { path: '/pipelines', contract: 'pipelinesContract', restOnly: ['/approvals'] },
+];
 
 const IMPORT_SPECIFIER =
   /(?:^|[\s;])(?:import|export)\b[^'"]*?\bfrom\s*['"]([^'"]+)['"]|\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)|^\s*import\s*['"]([^'"]+)['"]/;
@@ -79,11 +86,15 @@ export function findApiViolations(rel: string, source: string): string[] {
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-const MIGRATED_RULES = MIGRATED_GROUPS.flatMap(({ path, contract }) => [
+/** Excludes the group's REST-only sub-paths from the "REST call" rule. */
+const restOnlyLookahead = (restOnly: string[]) =>
+  restOnly.length === 0 ? '' : `(?!(?:${restOnly.map(escape).join('|')})(?:[/?\`'"]|$))`;
+
+const MIGRATED_RULES = MIGRATED_GROUPS.flatMap(({ path, contract, restOnly = [] }) => [
   {
     label: `REST call to migrated group ${path}`,
     pattern: new RegExp(
-      `\\b(?:request|requestInThread)\\s*(?:<[^(]*>)?\\s*\\(\\s*[\`'"]${escape(path)}(?:[/?\`'"]|$)`,
+      `\\b(?:request|requestInThread)\\s*(?:<[^(]*>)?\\s*\\(\\s*[\`'"]${escape(path)}${restOnlyLookahead(restOnly)}(?:[/?\`'"]|$)`,
     ),
   },
   { label: `contract of migrated group ${path}`, pattern: new RegExp(`\\b${contract}\\b`) },
@@ -154,7 +165,8 @@ function runSelfTest(): void {
     { source: "request('/automations?projectId=p1')", violates: true },
     { source: 'callEndpoint(automationsContract.list)', violates: true },
     { source: "request('/automations-legacy')", violates: false },
-    { source: "request('/pipelines')", violates: false },
+    { source: "request('/pipelines')", violates: true },
+    { source: "request('/pipelines/approvals/pending')", violates: false },
     { source: 'trpcCall(() => trpc.automations.list.query())', violates: false },
     { source: "// request('/automations')", violates: false },
     { source: "import type { AppRouter } from '@funny/api';", violates: false },

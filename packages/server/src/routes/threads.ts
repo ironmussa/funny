@@ -26,7 +26,11 @@ import { startSpan } from '../lib/telemetry.js';
 import { toThread, toThreadDetail } from '../lib/thread-response.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
-import { canSteerThread, createThreadAccessMiddleware } from '../middleware/thread-access.js';
+import {
+  canSteerThread,
+  createThreadAccess,
+  threadAccessMiddlewareFrom,
+} from '../middleware/thread-access.js';
 import {
   composeCreateThread,
   composeForkThread,
@@ -96,7 +100,8 @@ const pendingPermissionRepo = repos.pendingPermissions();
 // `requireThreadOwner` is also exported so the git-route gate in index.ts can
 // reuse the same owner check (git ops must stay owner-only — a sharee never
 // reaches another user's runner; see thread-sharing design).
-const threadAccess = createThreadAccessMiddleware(
+/** Shared with the tRPC thread procedures (`trpc/ports/thread-access.ts`). */
+export const threadAccessPolicy = createThreadAccess(
   (id) => threadRepo.getThread(id),
   // View: effective role with thread→project→org inheritance (unified-rbac).
   (thread, userId) => authorizer.authorize(userId, 'thread', thread.id, 'view'),
@@ -104,6 +109,7 @@ const threadAccess = createThreadAccessMiddleware(
   // cross runner isolation, so this stays `canSteerThread` (unchanged behavior).
   (thread, userId) => canSteerThread(thread, userId, shareRepo.getShareLevel),
 );
+const threadAccess = threadAccessMiddlewareFrom(threadAccessPolicy);
 const { requireThreadView } = threadAccess;
 export const { requireThreadOwner, requireThreadSteer } = threadAccess;
 

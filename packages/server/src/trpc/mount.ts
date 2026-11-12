@@ -12,9 +12,13 @@ import type { Hono } from 'hono';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { automationsPort } from './ports/automations.js';
+import { pipelinesPort } from './ports/pipelines.js';
+import { threadAccessPort } from './ports/thread-access.js';
 
 const serverPorts: ApiPorts = {
   automations: automationsPort,
+  pipelines: pipelinesPort,
+  threadAccess: threadAccessPort,
 };
 
 const ENDPOINT = `/api${TRPC_PATH}`;

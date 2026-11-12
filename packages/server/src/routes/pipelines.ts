@@ -7,21 +7,17 @@
 
 import { randomUUID } from 'crypto';
 
-import {
-  pipelinesContract as contract,
-  type UpdatePipelineRequest,
-} from '@funny/shared/contracts/pipelines';
+import { pipelinesContract as contract } from '@funny/shared/contracts/pipelines';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
 import { log } from '../lib/logger.js';
-import { toPipeline, toPipelineRun } from '../lib/pipeline-response.js';
-import { authorizer } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import { pipelineApprovalStore } from '../services/pipeline-approval-store.js';
-import * as pipelineRepo from '../services/pipeline-repository.js';
-import { fail, reply, serveEndpoint } from '../validation/endpoint.js';
+import { pipelinesPort as port } from '../trpc/ports/pipelines.js';
+import { answer } from '../trpc/reply.js';
+import { serveEndpoint } from '../validation/endpoint.js';
 import { parseJsonBody } from '../validation/request.js';
 
 export const pipelineRoutes = new Hono<ServerEnv>();
@@ -296,82 +292,37 @@ pipelineRoutes.post('/scheduler/progress', async (c) => {
   return c.json({ ok: true });
 });
 
+// ── CRUD and run history ──────────────────────────────────────
+// The logic lives in `trpc/ports/pipelines.ts`, shared with the `pipelines`
+// tRPC procedures (openspec adopt-trpc-browser-api); these routes stay for REST
+// consumers outside the web client.
+
 // GET /api/pipelines/project/:projectId
-serveEndpoint(pipelineRoutes, contract.list, async ({ userId, params }) => {
-  // Security CR-5: scope to caller's pipelines so cross-tenant rows are
-  // filtered server-side rather than relying on the project belonging to
-  // the user (project ownership is enforced separately).
-  const rows = await pipelineRepo.getPipelinesByProject(params.projectId, userId);
-  return reply(rows.map(toPipeline));
-});
+serveEndpoint(pipelineRoutes, contract.list, ({ userId, params }) =>
+  answer(port.list(userId, params.projectId)),
+);
 
 // GET /api/pipelines/:id
-serveEndpoint(pipelineRoutes, contract.get, async ({ userId, params }) => {
-  const pipeline = await pipelineRepo.getPipelineById(params.id, userId);
-  if (!pipeline) return fail(404, 'Pipeline not found');
-  return reply(toPipeline(pipeline));
-});
+serveEndpoint(pipelineRoutes, contract.get, ({ userId, params }) =>
+  answer(port.get(userId, params.id)),
+);
 
 // POST /api/pipelines
-serveEndpoint(pipelineRoutes, contract.create, async ({ userId, body }) => {
-  // The pipeline reviews this project's threads: require that the creator can
-  // see it (same 404 as a missing project), as automations do.
-  if (!(await authorizer.authorize(userId, 'project', body.projectId, 'view'))) {
-    return fail(404, 'Project not found');
-  }
-
-  const id = await pipelineRepo.createPipeline({ ...body, userId });
-  const pipeline = await pipelineRepo.getPipelineById(id, userId);
-  if (!pipeline) return fail(500, 'Pipeline was not saved');
-  return reply(toPipeline(pipeline), 201);
-});
-
-/** Column writes for a PATCH body: flags become integers, empty prompts become null. */
-function pipelineUpdates(body: UpdatePipelineRequest): Record<string, unknown> {
-  const updates: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(body)) {
-    if (value === undefined) continue;
-    if (FLAG_COLUMNS.has(key)) updates[key] = value ? 1 : 0;
-    else if (NULLABLE_TEXT_COLUMNS.has(key)) updates[key] = value || null;
-    else updates[key] = value;
-  }
-  return updates;
-}
-
-const FLAG_COLUMNS = new Set(['enabled', 'precommitFixEnabled', 'testEnabled', 'testFixEnabled']);
-const NULLABLE_TEXT_COLUMNS = new Set([
-  'reviewerPrompt',
-  'correctorPrompt',
-  'precommitFixerPrompt',
-  'commitMessagePrompt',
-  'testCommand',
-  'testFixerPrompt',
-]);
+serveEndpoint(pipelineRoutes, contract.create, ({ userId, body }) =>
+  answer(port.create(userId, body), 201),
+);
 
 // PATCH /api/pipelines/:id
-serveEndpoint(pipelineRoutes, contract.update, async ({ userId, params, body }) => {
-  const existing = await pipelineRepo.getPipelineById(params.id, userId);
-  if (!existing) return fail(404, 'Pipeline not found');
-
-  await pipelineRepo.updatePipeline(params.id, userId, pipelineUpdates(body));
-  const updated = await pipelineRepo.getPipelineById(params.id, userId);
-  if (!updated) return fail(404, 'Pipeline not found');
-  return reply(toPipeline(updated));
-});
+serveEndpoint(pipelineRoutes, contract.update, ({ userId, params, body }) =>
+  answer(port.update(userId, params.id, body)),
+);
 
 // DELETE /api/pipelines/:id
-serveEndpoint(pipelineRoutes, contract.remove, async ({ userId, params }) => {
-  const existing = await pipelineRepo.getPipelineById(params.id, userId);
-  if (!existing) return fail(404, 'Pipeline not found');
-
-  await pipelineRepo.deletePipeline(params.id, userId);
-  return reply({ ok: true });
-});
+serveEndpoint(pipelineRoutes, contract.remove, ({ userId, params }) =>
+  answer(port.remove(userId, params.id)),
+);
 
 // GET /api/pipelines/runs/thread/:threadId
-serveEndpoint(pipelineRoutes, contract.runsForThread, async ({ userId, params }) => {
-  // Security CR-5: getRunsForThread verifies thread ownership internally and
-  // returns [] for cross-tenant lookups.
-  const runs = await pipelineRepo.getRunsForThread(params.threadId, userId);
-  return reply(runs.map(toPipelineRun));
-});
+serveEndpoint(pipelineRoutes, contract.runsForThread, ({ userId, params }) =>
+  answer(port.runsForThread(userId, params.threadId)),
+);

@@ -8,11 +8,23 @@
  * answers, so both paths behave the same while they coexist.
  */
 
-import type { Automation, AutomationRun, InboxItem, RunTriageStatus } from '@funny/shared';
+import type {
+  Automation,
+  AutomationRun,
+  InboxItem,
+  Pipeline,
+  PipelineRun,
+  RunTriageStatus,
+  Thread,
+} from '@funny/shared';
 import type {
   CreateAutomationRequest,
   UpdateAutomationRequest,
 } from '@funny/shared/contracts/automations';
+import type {
+  CreatePipelineRequest,
+  UpdatePipelineRequest,
+} from '@funny/shared/contracts/pipelines';
 import type { Result } from 'neverthrow';
 
 import type { ApiFailure } from './failure.js';
@@ -36,6 +48,29 @@ export interface AutomationsPort {
   triageRun(userId: string, runId: string, triageStatus: RunTriageStatus): PortResult<Ok>;
 }
 
+export interface PipelinesPort {
+  list(userId: string, projectId: string): PortResult<Pipeline[]>;
+  get(userId: string, id: string): PortResult<Pipeline>;
+  create(userId: string, data: CreatePipelineRequest): PortResult<Pipeline>;
+  update(userId: string, id: string, data: UpdatePipelineRequest): PortResult<Pipeline>;
+  remove(userId: string, id: string): PortResult<Ok>;
+  /** Empty for a thread the caller does not own. */
+  runsForThread(userId: string, threadId: string): PortResult<PipelineRun[]>;
+}
+
+export type ThreadAccessLevel = 'view' | 'owner' | 'steer';
+
+/**
+ * The server's per-thread access decision (`middleware/thread-access.ts`), the
+ * same one its REST routes use. `null` means "404 Thread not found", both for a
+ * missing thread and for one the caller may not access (existence-hiding).
+ */
+export interface ThreadAccessPort {
+  authorize(level: ThreadAccessLevel, threadId: string, userId: string): Promise<Thread | null>;
+}
+
 export interface ApiPorts {
   automations: AutomationsPort;
+  pipelines: PipelinesPort;
+  threadAccess: ThreadAccessPort;
 }

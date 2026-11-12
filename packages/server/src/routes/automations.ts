@@ -6,22 +6,15 @@
  * routes stay for REST consumers outside the web client while the two coexist.
  */
 
-import type { ApiFailure, PortResult } from '@funny/api';
 import { automationsContract as contract } from '@funny/shared/contracts/automations';
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../lib/types.js';
 import { automationsPort as port } from '../trpc/ports/automations.js';
-import { fail, serveEndpoint, type ErrorStatus, type Reply } from '../validation/endpoint.js';
+import { answer } from '../trpc/reply.js';
+import { serveEndpoint } from '../validation/endpoint.js';
 
 export const automationRoutes = new Hono<ServerEnv>();
-
-async function answer<T>(result: PortResult<T>, status: 200 | 201 = 200): Promise<Reply<T>> {
-  return (await result).match(
-    (value): Reply<T> => ({ status, body: value }),
-    (error: ApiFailure) => fail(error.status as ErrorStatus, error.message),
-  );
-}
 
 // Every endpoint requires a user: `serveEndpoint` refuses 401 without one.
 

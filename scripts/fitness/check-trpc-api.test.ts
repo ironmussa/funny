@@ -37,7 +37,9 @@ describe('fitness:trpc-api — web client', () => {
     "import { TRPC_PATH } from '@funny/api/path';",
     'trpcCall(() => trpc.automations.list.query())',
     "request('/automations-legacy')",
-    "request('/pipelines')",
+    "request('/pipelines-x')",
+    'request(`/pipelines/approvals/${id}/respond`, { method: "POST" })',
+    "request('/pipelines/approvals/pending')",
     "// request('/automations')",
   ])('allows %s', (source) => {
     expect(findClientViolations('x.ts', source)).toEqual([]);
@@ -55,6 +57,9 @@ describe('fitness:trpc-api — web client', () => {
     'request(`/automations/${id}/runs`)',
     "requestInThread('/automations?projectId=p1')",
     'callEndpoint(automationsContract.list)',
+    "request('/pipelines/project/p1')",
+    'request(`/pipelines/${id}`, { method: "PATCH" })',
+    'callEndpoint(pipelinesContract.get)',
   ])('rejects REST use of a migrated group: %s', (source) => {
     expect(findClientViolations('x.ts', source)).toHaveLength(1);
   });

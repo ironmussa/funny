@@ -4,9 +4,10 @@
  */
 
 import { initTRPC, TRPCError } from '@trpc/server';
+import { z } from 'zod';
 
 import { ApiFailureCause } from './failure.js';
-import type { ApiPorts } from './ports.js';
+import type { ApiPorts, ThreadAccessLevel } from './ports.js';
 
 export interface ApiContext {
   /** The session's user; `null` when the request has none. */
@@ -52,3 +53,22 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   if (!ctx.userId) throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Unauthorized' });
   return next({ ctx: { ...ctx, userId: ctx.userId } });
 });
+
+const threadIdInput = z.object({ id: z.string().min(1) });
+
+/**
+ * A procedure on one thread, whose input carries the thread `id`. Resolves and
+ * authorizes the thread at `level` BEFORE the input is validated, so an
+ * inaccessible or missing thread answers 404 before a bad payload answers 400
+ * (the REST `requireThread*` middlewares' order). The handler reads `ctx.thread`.
+ */
+export function threadProcedure(level: ThreadAccessLevel) {
+  return protectedProcedure.use(async ({ ctx, getRawInput, next }) => {
+    const parsed = threadIdInput.safeParse(await getRawInput());
+    const thread = parsed.success
+      ? await ctx.ports.threadAccess.authorize(level, parsed.data.id, ctx.userId)
+      : null;
+    if (!thread) throw new TRPCError({ code: 'NOT_FOUND', message: 'Thread not found' });
+    return next({ ctx: { ...ctx, thread } });
+  });
+}

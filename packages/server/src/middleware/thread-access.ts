@@ -82,37 +82,75 @@ export interface ThreadAccessMiddleware {
 /** Decides view/steer access for a loaded thread + requesting user. */
 export type ThreadAuthorize = (thread: Thread, userId: string) => boolean | Promise<boolean>;
 
+export type ThreadAccessLevel = 'view' | 'owner' | 'steer';
+
 /**
- * Build the access middlewares around a thread loader and two authorize
+ * The access decision without any HTTP framework: load the thread and check
+ * the caller's access at one level. `null` means "answer 404 Thread not found",
+ * both for a missing thread and for one the caller may not access
+ * (existence-hiding). The Hono middlewares below and the tRPC thread procedures
+ * (`@funny/api`, `trpc/ports/thread-access.ts`) both decide through this.
+ */
+export interface ThreadAccess {
+  authorize(level: ThreadAccessLevel, threadId: string, userId: string): Promise<Thread | null>;
+}
+
+/**
+ * Build the access decision around a thread loader and two authorize
  * predicates. `routes/threads.ts` wires these with the unified authorizer
  * (unified-rbac-grants Phase 4b): `authorizeView` admits the owner OR anyone
  * whose EFFECTIVE role (with thread→project→org inheritance) can view;
  * `authorizeSteer` admits the owner OR an EXPLICIT thread steer grant ONLY
  * (inheritance must NOT cross runner isolation — see the authorizer's
- * `canCrossToOwnerRunner`). `requireThreadOwner` is always the thread creator.
+ * `canCrossToOwnerRunner`). `owner` is always the thread creator.
  * Tests pass fakes.
  */
-export function createThreadAccessMiddleware(
+export function createThreadAccess(
   loadThread: ThreadLoader,
   authorizeView: ThreadAuthorize,
   authorizeSteer: ThreadAuthorize,
-): ThreadAccessMiddleware {
-  function make(authorize: ThreadAuthorize): MiddlewareHandler<ServerEnv> {
+): ThreadAccess {
+  const predicates: Record<ThreadAccessLevel, ThreadAuthorize> = {
+    view: authorizeView,
+    owner: isThreadOwner,
+    steer: authorizeSteer,
+  };
+  return {
+    async authorize(level, threadId, userId) {
+      const thread = threadId ? await loadThread(threadId) : null;
+      if (!thread || !(await predicates[level](thread, userId))) return null;
+      return thread;
+    },
+  };
+}
+
+/** The Hono middlewares for an access decision: 404 unless authorized, else `c.set('thread')`. */
+export function threadAccessMiddlewareFrom(access: ThreadAccess): ThreadAccessMiddleware {
+  function make(level: ThreadAccessLevel): MiddlewareHandler<ServerEnv> {
     return async (c, next) => {
-      const id = c.req.param('id');
-      const userId = c.get('userId') as string;
-      const thread = id ? await loadThread(id) : null;
-      if (!thread || !(await authorize(thread, userId))) {
-        return c.json({ error: 'Thread not found' }, 404);
-      }
+      const thread = await access.authorize(
+        level,
+        c.req.param('id') ?? '',
+        c.get('userId') as string,
+      );
+      if (!thread) return c.json({ error: 'Thread not found' }, 404);
       c.set('thread', thread);
       return next();
     };
   }
 
   return {
-    requireThreadView: make(authorizeView),
-    requireThreadOwner: make(isThreadOwner),
-    requireThreadSteer: make(authorizeSteer),
+    requireThreadView: make('view'),
+    requireThreadOwner: make('owner'),
+    requireThreadSteer: make('steer'),
   };
+}
+
+/** `createThreadAccess` + `threadAccessMiddlewareFrom` in one step. */
+export function createThreadAccessMiddleware(
+  loadThread: ThreadLoader,
+  authorizeView: ThreadAuthorize,
+  authorizeSteer: ThreadAuthorize,
+): ThreadAccessMiddleware {
+  return threadAccessMiddlewareFrom(createThreadAccess(loadThread, authorizeView, authorizeSteer));
 }

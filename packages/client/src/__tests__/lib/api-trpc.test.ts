@@ -6,6 +6,7 @@ vi.stubGlobal('fetch', mockFetch);
 delete (window as any).__TAURI_INTERNALS__;
 
 const { automationsApi } = await import('@/lib/api/automations');
+const { pipelinesApi } = await import('@/lib/api/pipelines');
 const { trpc, trpcCall } = await import('@/lib/api/_trpc');
 const { useCircuitBreakerStore } = await import('@/stores/circuit-breaker-store');
 
@@ -119,5 +120,33 @@ describe('tRPC procedure calls (automations)', () => {
 
     expect(result._unsafeUnwrapErr()).toEqual({ type: 'INTERNAL', message: 'Request aborted' });
     expect(useCircuitBreakerStore.getState().failureCount).toBe(0);
+  });
+});
+
+describe('tRPC procedure calls (pipelines)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+  });
+
+  test('listPipelines is a tRPC query', async () => {
+    mockFetch.mockResolvedValueOnce(json({ result: { data: [{ id: 'pl1' }] } }));
+
+    const result = await pipelinesApi.listPipelines('p1');
+
+    expect(result._unsafeUnwrap()).toEqual([{ id: 'pl1' }]);
+    const [url] = lastCall();
+    expect(url).toContain('/api/trpc/pipelines.list?input=');
+    expect(decodeURIComponent(url.split('?input=')[1])).toBe('{"projectId":"p1"}');
+  });
+
+  test('answering an approval gate stays REST (the server may proxy it to a runner)', async () => {
+    mockFetch.mockResolvedValueOnce(json({ ok: true }));
+
+    await pipelinesApi.respondToApproval('ap/1', { decision: 'approve' });
+
+    const [url, init] = lastCall();
+    expect(url).toMatch(/\/api\/pipelines\/approvals\/ap%2F1\/respond$/);
+    expect(init.method).toBe('POST');
   });
 });

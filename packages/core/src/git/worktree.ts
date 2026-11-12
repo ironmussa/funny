@@ -387,7 +387,7 @@ function assertWorktreeInProjectBase(
   const isWorktreeDir = dirname(realTarget) === realBase && realTarget !== realBase;
   if (!isWorktreeDir) {
     return badRequest(
-      `worktreePath is outside the project's worktree base (project: ${projectPath})`,
+      `worktreePath is not one of the project's worktree directories (project: ${projectPath})`,
     );
   }
   return null;
@@ -472,8 +472,9 @@ export function pruneStaleWorktreeSafeDirectories(): ResultAsync<number, DomainE
 /**
  * Public helper for callers (route layer, thread resolvers) that need to
  * confirm a path is one of a project's worktree directories (a direct child
- * of its worktree base) before consuming it as a cwd or destructive target. Returns null if valid, a DomainError
- * otherwise. Uses realpath so symlinks cannot escape.
+ * of its worktree base) before consuming it as a cwd or destructive target.
+ * Returns null if valid, a DomainError otherwise. Uses realpath so symlinks
+ * cannot escape.
  */
 export function checkWorktreePathInProject(
   projectPath: string,

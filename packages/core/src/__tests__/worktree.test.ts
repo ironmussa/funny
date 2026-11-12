@@ -219,10 +219,22 @@ describe('worktree operations', () => {
       }
     });
 
+    test('checkWorktreePathInProject accepts only a worktree directory, not the base or deeper', async () => {
+      const created = await createWorktree(repoPath, 'only-direct');
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+      const nested = resolve(created.value, 'src');
+      mkdirSync(nested, { recursive: true });
+
+      expect(checkWorktreePathInProject(repoPath, created.value)).toBeNull();
+      expect(checkWorktreePathInProject(repoPath, resolve(created.value, '..'))).not.toBeNull();
+      expect(checkWorktreePathInProject(repoPath, nested)).not.toBeNull();
+    });
+
     test('checkWorktreePathInProject rejects /etc', () => {
       const err = checkWorktreePathInProject(repoPath, '/etc');
       expect(err).not.toBeNull();
-      expect(err?.message).toMatch(/outside the project's worktree base/i);
+      expect(err?.message).toMatch(/not one of the project's worktree directories/i);
     });
 
     test('checkWorktreePathInProject rejects leading-dash', () => {
@@ -241,7 +253,7 @@ describe('worktree operations', () => {
       const result = await removeWorktree(repoPath, '/etc');
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(result.error.message).toMatch(/outside the project's worktree base/i);
+        expect(result.error.message).toMatch(/not one of the project's worktree directories/i);
       }
       // Sanity: /etc still exists.
       expect(existsSync('/etc')).toBe(true);

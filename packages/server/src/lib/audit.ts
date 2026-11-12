@@ -19,6 +19,8 @@ type AuditAction =
   | 'pat.created'
   | 'pat.revoked'
   | 'pat.rejected'
+  /** A personal API token started a thread (`POST /api/v1/threads`). */
+  | 'pat.thread_created'
   | 'runner.register'
   | 'runner.register_sandbox'
   | 'infra.connection_added'

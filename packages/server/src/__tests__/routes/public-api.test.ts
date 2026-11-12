@@ -65,7 +65,12 @@ describe('public REST API v1', () => {
     const { status, body } = await get('/openapi.json');
     expect(status).toBe(200);
     expect(body.openapi).toMatch(/^3\./);
-    expect(Object.keys(body.paths).sort()).toEqual(['/projects', '/projects/resolve']);
+    expect(Object.keys(body.paths).sort()).toEqual([
+      '/models',
+      '/projects',
+      '/projects/resolve',
+      '/threads',
+    ]);
     expect(body.components.securitySchemes.bearerAuth).toEqual({ type: 'http', scheme: 'bearer' });
     expect(body.paths['/projects'].get.security).toEqual([{ bearerAuth: [] }]);
   });

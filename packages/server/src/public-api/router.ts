@@ -7,6 +7,9 @@
 import { unwrap } from '@funny/api';
 import type { Project } from '@funny/shared';
 import {
+  createThreadInput,
+  createThreadOutput,
+  publicModelList,
   publicProjectList,
   resolveProjectInput,
   resolveProjectOutput,
@@ -15,6 +18,7 @@ import {
 import { z } from 'zod';
 
 import { createProjectsPort } from '../trpc/ports/projects.js';
+import { createPublicThread, listPublicModels } from './threads.js';
 import { router, tokenProcedure } from './trpc.js';
 
 /** A token is personal: its caller acts without an active organization. */
@@ -69,5 +73,37 @@ export const publicV1Router = router({
         source: resolved.source,
       };
     }),
-});
 
+  createThread: tokenProcedure
+    .meta({
+      openapi: {
+        method: 'POST',
+        path: '/threads',
+        protect: true,
+        tags: ['threads'],
+        summary: 'Create and start a thread',
+        description:
+          'Creates a thread in one of your projects and starts its agent on your runner. Answers 502 when your runner is not connected; it never runs on anyone else’s runner. Permission modes that act without asking are not accepted.',
+      },
+    })
+    .input(createThreadInput)
+    .output(createThreadOutput)
+    .mutation(async ({ ctx, input }) => ({
+      thread: unwrap(await createPublicThread(ctx.userId, ctx.runners, input)),
+    })),
+
+  listModels: tokenProcedure
+    .meta({
+      openapi: {
+        method: 'GET',
+        path: '/models',
+        protect: true,
+        tags: ['models'],
+        summary: 'List providers and models',
+        description: 'The providers and models a thread can be created with, and their defaults.',
+      },
+    })
+    .input(z.object({}))
+    .output(publicModelList)
+    .query(() => listPublicModels()),
+});

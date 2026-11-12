@@ -7,6 +7,7 @@
  * and every request under it is answered here, never by the runner proxy.
  */
 
+import { PUBLIC_BODY_MAX_BYTES } from '@funny/shared/contracts/public-v1';
 import type { Context, Hono } from 'hono';
 import { createOpenApiFetchHandler, generateOpenApiDocument } from 'trpc-to-openapi';
 
@@ -60,7 +61,12 @@ export function mountPublicApi(
       endpoint: ENDPOINT,
       router: publicV1Router,
       req: c.req.raw,
-      createContext: async (): Promise<PublicApiContext> => ({ userId }),
+      // The library's default (100 KB) is below a maximal prompt; images raise it.
+      maxBodySize: PUBLIC_BODY_MAX_BYTES,
+      createContext: async (): Promise<PublicApiContext> => ({
+        userId,
+        runners: { requests: c.env?.runnerRequests, presence: c.env?.runnerPresence },
+      }),
       onError: ({ error, path }) => {
         if (error.code !== 'INTERNAL_SERVER_ERROR') return;
         log.error('Public API request failed', { namespace: 'public-api', path });

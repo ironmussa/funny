@@ -10,10 +10,16 @@ import { initTRPC, TRPCError } from '@trpc/server';
 import type { OpenApiMeta } from 'trpc-to-openapi';
 
 import { log } from '../lib/logger.js';
+import type { RunnerPresencePort, RunnerRequestPort } from '../services/runner-ports.js';
 
 /** Who is calling: set from a valid personal API token, `null` without one. */
 export interface PublicApiContext {
   userId: string | null;
+  /**
+   * The request's runner transport and presence (the host's bindings, as for
+   * `POST /api/threads`). Only the certified creation path uses them.
+   */
+  runners: { requests?: RunnerRequestPort; presence?: RunnerPresencePort };
 }
 
 const t = initTRPC.meta<OpenApiMeta>().context<PublicApiContext>().create({ isDev: false });

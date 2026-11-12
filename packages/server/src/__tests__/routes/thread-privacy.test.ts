@@ -12,6 +12,7 @@ import { sql } from 'drizzle-orm';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedThread } from '../helpers/test-db.js';
+import { threadProcedures } from '../helpers/thread-procedures.js';
 
 const OWNER = 'owner-1';
 const MEMBER = 'mem-2'; // project member, no explicit thread share
@@ -49,22 +50,22 @@ describe('thread privacy (no inheritance)', () => {
   });
 
   test('a project member/admin canNOT read a thread without an explicit share', async () => {
-    expect((await t.requestAs(MEMBER).get('/api/threads/t1')).status).toBe(404);
-    expect((await t.requestAs(MEMBER).get('/api/threads/t1/messages')).status).toBe(404);
+    expect((await threadProcedures(t, MEMBER).query('get', { id: 't1' })).status).toBe(404);
+    expect((await threadProcedures(t, MEMBER).query('messages', { id: 't1' })).status).toBe(404);
   });
 
   test('an org admin canNOT read the org project’s threads', async () => {
-    expect((await t.requestAs(ORG_ADMIN).get('/api/threads/t1')).status).toBe(404);
+    expect((await threadProcedures(t, ORG_ADMIN).query('get', { id: 't1' })).status).toBe(404);
   });
 
   test('the owner reads their own thread', async () => {
-    expect((await t.requestAs(OWNER).get('/api/threads/t1')).status).toBe(200);
+    expect((await threadProcedures(t, OWNER).query('get', { id: 't1' })).status).toBe(200);
   });
 
   test('an explicit share is the only non-owner path in', async () => {
     // Share t1 with MEMBER as viewer → now they can read it.
     const res = await t.requestAs(OWNER).post('/api/threads/t1/shares', { userId: MEMBER });
     expect(res.status).toBe(201);
-    expect((await t.requestAs(MEMBER).get('/api/threads/t1')).status).toBe(200);
+    expect((await threadProcedures(t, MEMBER).query('get', { id: 't1' })).status).toBe(200);
   });
 });

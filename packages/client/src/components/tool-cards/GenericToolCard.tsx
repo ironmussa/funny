@@ -1,16 +1,17 @@
 import { Check, ChevronRight, ListTodo, Wrench } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MessageContent } from '@/components/thread/MessageContent';
 import { TodoList } from '@/components/tool-cards/TodoList';
 import { getEditorLabel, openFileInEditor, toEditorUri } from '@/components/tool-cards/utils';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { createAnsiConverter, stripAnsi } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
 import { useSettingsStore, type Editor } from '@/stores/settings-store';
 
+import { codeFieldLanguage } from './code-input';
+import { HighlightedCode } from './HighlightedCode';
 import { ToolContentArea } from './MobileContentPreview';
 
 interface Props {
@@ -170,7 +171,7 @@ export function GenericToolCard({
                           {value}
                         </a>
                       ) : (
-                        <ToolValue value={value} />
+                        <ToolValue value={value} language={codeFieldLanguage(name, key, parsed)} />
                       )}
                     </div>
                   </div>
@@ -224,50 +225,24 @@ function formatToolValue(value: unknown): string {
   }
 }
 
-export function ToolValue({ value }: { value: unknown }) {
+/**
+ * One tool input value: JSON highlighted for objects, `language` highlighted
+ * for code strings, and ANSI colors for any other string.
+ */
+export function ToolValue({ value, language }: { value: unknown; language?: string | null }) {
   const isJson = typeof value !== 'string';
   const text = useMemo(() => formatToolValue(value), [value]);
+  const codeLanguage = isJson ? 'json' : (language ?? null);
   const ansiConverter = useMemo(
     () => createAnsiConverter({ fg: '#a1a1aa', bg: 'transparent', newline: false }),
     [],
   );
   const html = useMemo(
-    () => (isJson ? null : ansiConverter.toHtml(text)),
-    [ansiConverter, isJson, text],
+    () => (codeLanguage ? null : ansiConverter.toHtml(text)),
+    [ansiConverter, codeLanguage, text],
   );
-  const [highlighted, setHighlighted] = useState<{ text: string; html: string } | null>(null);
 
-  useEffect(() => {
-    if (!isJson) return;
-
-    let cancelled = false;
-    ensureHighlight(text, 'json').then((ok) => {
-      if (cancelled || !ok) return;
-      setHighlighted({ text, html: highlightCode(text, 'json') });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [isJson, text]);
-
-  if (isJson && highlighted?.text === text) {
-    return (
-      <pre className="code-viewer hljs text-foreground/80 m-0 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
-        <code
-          className="hljs language-json"
-          dangerouslySetInnerHTML={{ __html: highlighted.html }}
-        />
-      </pre>
-    );
-  }
-
-  if (isJson) {
-    return (
-      <pre className="text-foreground/80 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
-        {text}
-      </pre>
-    );
-  }
+  if (codeLanguage) return <HighlightedCode code={text} language={codeLanguage} />;
 
   return (
     <pre

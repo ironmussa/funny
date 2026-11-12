@@ -1,9 +1,9 @@
 import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
+import { getCodeInput } from '@/components/tool-cards/code-input';
 import {
   browserRecordingPath,
-  getMcpCodeInput,
   getMcpSummary,
   mcpResultPreview,
   mcpToolTitle,
@@ -92,13 +92,13 @@ describe('mcp-tool helpers', () => {
   test('summary prefers the title; code input takes its language from the tool', () => {
     const parsed = { code: 'nodeRepl.write(1)', title: 'Resolve the Cloudflare panel' };
     expect(getMcpSummary(parsed)).toEqual({ key: 'title', text: 'Resolve the Cloudflare panel' });
-    expect(getMcpCodeInput(parsed, 'js')).toEqual({
+    expect(getCodeInput(parsed, 'js')).toEqual({
       key: 'code',
       code: 'nodeRepl.write(1)',
       language: 'javascript',
     });
-    expect(getMcpCodeInput({ sql: 'select 1' }, 'run')?.language).toBe('sql');
-    expect(getMcpCodeInput({ title: 'x' }, 'js')).toBeNull();
+    expect(getCodeInput({ sql: 'select 1' }, 'run')?.language).toBe('sql');
+    expect(getCodeInput({ title: 'x' }, 'js')).toBeNull();
   });
 
   test('parses the MCP envelope into parts, duration and error flag', () => {

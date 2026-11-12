@@ -1,6 +1,6 @@
 import { threadBrowserSessionId } from '@funny/shared';
 import { CircleAlert, ChevronRight, Globe, Plug } from 'lucide-react';
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { MediaPreview } from '@/components/MediaPreview';
@@ -8,17 +8,17 @@ import { MessageContent } from '@/components/thread/MessageContent';
 import { Button } from '@/components/ui/button';
 import { CopyButton } from '@/components/ui/copy-button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
 import { toRawFileSrc } from '@/lib/raw-file-src';
 import { cn } from '@/lib/utils';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { getUrlThreadId } from '@/stores/thread-store';
 
+import { getCodeInput } from './code-input';
 import { ToolValue } from './GenericToolCard';
+import { HighlightedCode } from './HighlightedCode';
 import {
   browserRecordingPath,
   formatDurationMs,
-  getMcpCodeInput,
   getMcpSummary,
   isBrowserTool,
   mcpResultPreview,
@@ -67,7 +67,7 @@ export function McpToolCard({ mcp, parsed, output, hideLabel, displayTime }: Pro
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const summary = useMemo(() => getMcpSummary(parsed, mcp), [parsed, mcp]);
-  const codeInput = useMemo(() => getMcpCodeInput(parsed, mcp.tool), [parsed, mcp.tool]);
+  const codeInput = useMemo(() => getCodeInput(parsed, mcp.tool), [parsed, mcp.tool]);
   const result = useMemo(() => parseMcpResult(output), [output]);
   const otherInputs = useMemo(
     () => otherMcpInputs(parsed, [codeInput?.key, summary?.key]),
@@ -137,7 +137,7 @@ function McpToolCardBody({
   isError,
 }: {
   mcp: McpToolName;
-  codeInput: ReturnType<typeof getMcpCodeInput>;
+  codeInput: ReturnType<typeof getCodeInput>;
   otherInputs: [string, unknown][];
   output?: string;
   result: McpResult | null;
@@ -156,7 +156,7 @@ function McpToolCardBody({
         <BrowserRecordingPreview mcp={mcp} resultText={resultText} isError={isError} />
         {codeInput && (
           <Section label={codeInput.key}>
-            <CodeBlock code={codeInput.code} language={codeInput.language} />
+            <HighlightedCode code={codeInput.code} language={codeInput.language} />
           </Section>
         )}
         {otherInputs.length > 0 && <McpInputList label={t('tools.input')} inputs={otherInputs} />}
@@ -401,38 +401,6 @@ function ResultPart({ part, isError }: { part: McpResultPart; isError: boolean }
       )}
     >
       {part.text}
-    </pre>
-  );
-}
-
-function CodeBlock({ code, language }: { code: string; language: string | null }) {
-  const [highlighted, setHighlighted] = useState<{ code: string; html: string } | null>(null);
-
-  useEffect(() => {
-    if (!language) return;
-    let cancelled = false;
-    ensureHighlight(code, language).then((ok) => {
-      if (cancelled || !ok) return;
-      setHighlighted({ code, html: highlightCode(code, language) });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [code, language]);
-
-  if (language && highlighted?.code === code) {
-    return (
-      <pre className="code-viewer hljs text-foreground m-0 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
-        <code
-          className={`hljs language-${language}`}
-          dangerouslySetInnerHTML={{ __html: highlighted.html }}
-        />
-      </pre>
-    );
-  }
-  return (
-    <pre className="text-foreground/80 m-0 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
-      {code}
     </pre>
   );
 }

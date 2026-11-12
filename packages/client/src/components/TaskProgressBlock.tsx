@@ -138,10 +138,10 @@ export function TaskProgressView({ progress }: { progress: TaskProgress }) {
     <div
       data-testid="task-progress"
       data-status={progress.status}
-      className="bg-card text-card-foreground flex flex-col gap-2 rounded-md border p-3 text-sm"
+      className="bg-card text-card-foreground flex flex-col gap-2 rounded-md border p-3 text-xs"
     >
       <div className="flex items-center gap-2">
-        <StatusIcon status={progress.status} className="size-4" />
+        <StatusIcon status={progress.status} />
         <span className="font-medium">
           {t(`taskProgress.status.${progress.status}`, { title: progress.title })}
         </span>

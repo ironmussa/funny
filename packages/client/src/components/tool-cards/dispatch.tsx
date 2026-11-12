@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { ToolCallGroup, type ToolCallItem } from '@/components/ToolCallGroup';
 
 import { AskQuestionCard } from './AskQuestionCard';
-import { BashCheckCard, CheckRunCard } from './check-cards';
+import { BashCard } from './BashCard';
+import { CheckRunCard } from './check-cards';
 import { EditFileCard } from './EditFileCard';
 import { ExitPlanModeCard } from './ExitPlanModeCard';
 import { parseMcpToolName } from './mcp-tool';
@@ -62,7 +63,7 @@ const renderTask: CardRenderer = ({
 
 const CARD_RENDERERS: Record<string, CardRenderer> = {
   Bash: ({ parsed, output, author, hideLabel, displayTime }) => (
-    <BashCheckCard
+    <BashCard
       parsed={parsed}
       output={output}
       author={author}

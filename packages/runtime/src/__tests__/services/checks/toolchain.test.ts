@@ -75,6 +75,17 @@ describe('planCheck', () => {
     ).toEqual(["npx vitest run src/a.test.ts -t 'parses dates'"]);
   });
 
+  test('scope globs reach the shell unquoted; other unsafe text stays quoted', () => {
+    const dir = project({ 'package.json': {}, 'bun.lock': '' });
+    expect(
+      commands(dir, {
+        kind: 'test',
+        scope: ['src/__tests__/routes/*trpc*.test.ts', 'my dir/a.test.ts'],
+        filter: 'adds*',
+      }),
+    ).toEqual(["bun test src/__tests__/routes/*trpc*.test.ts 'my dir/a.test.ts' -t 'adds*'"]);
+  });
+
   test('a test script that is plain vitest still gets the reporter', () => {
     const dir = project({
       'package.json': { scripts: { test: 'vitest run' }, devDependencies: { vitest: '4' } },

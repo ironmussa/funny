@@ -11,17 +11,28 @@ describe('checkRedirectReason', () => {
     expect(reason).toContain('"command":"npx vitest run src/a.test.ts -t \\"parses dates\\""');
   });
 
-  test('a leading cd becomes the scope base', () => {
-    expect(checkRedirectReason('cd packages/client && npx vitest run src/a.test.ts')).toContain(
-      '"scope":["packages/client/src/a.test.ts"]',
+  test('after a cd, the exact command is the call (the package may use another tool)', () => {
+    const reason = checkRedirectReason('cd packages/client && npx vitest run src/a.test.ts')!;
+    expect(reason).toContain(
+      '{"kind":"test","command":"cd packages/client && npx vitest run src/a.test.ts"}',
     );
-    expect(checkRedirectReason('cd packages/client && bun run typecheck')).toContain(
-      '{"kind":"typecheck","scope":["packages/client"]}',
+    expect(reason).not.toContain('"scope"');
+  });
+
+  test('a check that only trims its output is redirected without the readers', () => {
+    const reason = checkRedirectReason(
+      'cd packages/server && bun test src/a.test.ts 2>&1 | tail -20',
+    )!;
+    expect(reason).toContain('"command":"cd packages/server && bun test src/a.test.ts 2>&1"');
+    expect(reason).toContain('No need to trim');
+    expect(checkRedirectReason('npx vitest run src/a.test.ts | tail')).toContain(
+      '{"kind":"test","scope":["src/a.test.ts"]}',
     );
   });
 
   test.each([
-    'bunx tsc --noEmit 2>&1 | rg "error TS"',
+    'bun test $(find src -name "*.test.ts") 2>&1 | grep pass',
+    'npx vitest run | tee out.log',
     'bun run lint && bun run typecheck',
     'npx vitest run > /tmp/out.log',
     'git status',
@@ -54,7 +65,7 @@ describe('SDKClaudeProcess PreToolUse redirect', () => {
 
   test('never touches other tools or compound commands', async () => {
     for (const [tool, command] of [
-      ['Bash', 'npx vitest run 2>&1 | tail -20'],
+      ['Bash', 'npx vitest run 2>&1 | tee out.log'],
       ['Read', 'npx vitest run'],
     ]) {
       const result = await hook(true, tool, command);

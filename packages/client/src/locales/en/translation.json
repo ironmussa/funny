@@ -1462,7 +1462,13 @@
       "running": "Running tests",
       "passed": "Tests passed",
       "failed": "Tests failed"
-    }
+    },
+    "failuresTitle": "Failures",
+    "moreFailures": "Showing the first {{shown}} of {{total}}",
+    "ranTitle": "Tests run",
+    "ranSummary": "{{tests}} tests in {{files}} files",
+    "showMore": "Show {{count}} more ({{hidden}} hidden)",
+    "noFiles": "The output does not name the tests that ran."
   },
   "progressFile": {
     "loading": "Loading progress…",
@@ -1580,7 +1586,9 @@
   },
   "checks": {
     "run": "Run checks: {{kind}}",
-    "starting": "Starting…"
+    "starting": "Starting…",
+    "filter": "filter: {{filter}}",
+    "cwd": "Ran in {{cwd}}"
   },
   "apiTokens": {
     "title": "API tokens",

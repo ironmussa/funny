@@ -94,6 +94,33 @@ interface StepOutcome {
   tail: string[];
 }
 
+/**
+ * Variables that tell a test runner an agent is reading its output. bun test
+ * then prints only the failures, and vitest (through std-env's agent check)
+ * drops its per-file lines, so the widget could not list the tests that ran.
+ * The agent never reads this output (it gets the summary), so they go. Only
+ * pure markers: nothing an agent's sandbox relies on.
+ */
+const AGENT_MARKERS = [
+  'AGENT',
+  'AI_AGENT',
+  'CLAUDECODE',
+  'CLAUDE_CODE',
+  'GEMINI_CLI',
+  'OPENCODE',
+  'CURSOR_AGENT',
+  'AUGMENT_AGENT',
+];
+
+/** The env a check step runs with: CI, no colors, no agent markers. */
+export function checkEnv(
+  env: Record<string, string | undefined>,
+): Record<string, string | undefined> {
+  const child = buildChildEnv({ ...env, CI: env.CI ?? '1', FORCE_COLOR: '0' });
+  for (const name of AGENT_MARKERS) delete child[name];
+  return child;
+}
+
 /** Kills the process group (the shell and everything it started). */
 function killGroup(child: ChildProcess, signal: NodeJS.Signals): void {
   if (child.pid === undefined || child.exitCode !== null) return;
@@ -116,7 +143,7 @@ async function runStep(
   const shell = process.platform === 'win32' ? ['cmd', '/c'] : ['bash', '-c'];
   const child = spawn(shell[0], [shell[1], command], {
     cwd,
-    env: buildChildEnv({ ...env, CI: env.CI ?? '1', FORCE_COLOR: '0' }),
+    env: checkEnv(env),
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: process.platform !== 'win32',
   });
@@ -178,6 +205,7 @@ class RunProgress {
               running: [],
               slow: [],
               failures: [],
+              files: [],
             })),
           }
         : null;

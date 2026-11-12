@@ -37,6 +37,36 @@ const failureSchema = z.object({
   message: z.string().optional(),
 });
 
+const testStateSchema = z.enum(['passed', 'failed', 'skipped']);
+
+/** A test the runner reported by name. */
+const testResultSchema = z.object({
+  name: z.string(),
+  state: testStateSchema,
+  durationMs: z.number().optional(),
+});
+
+/**
+ * A test file (or package / binary) and what it ran. `name` is empty for tests
+ * the runner reported without a file. `status` alone, without counts, when the
+ * runner only says whether the file passed (jest without `--verbose`).
+ */
+const testFileSchema = z.object({
+  name: z.string(),
+  status: z.enum(['passed', 'failed']).optional(),
+  passed: z.number().int().nonnegative().default(0),
+  failed: z.number().int().nonnegative().default(0),
+  skipped: z.number().int().nonnegative().default(0),
+  durationMs: z.number().optional(),
+  /** In the order they were reported; empty when the runner names no tests. */
+  tests: z.array(testResultSchema).default([]),
+});
+
+/** Files kept per suite. */
+export const TEST_FILE_LIMIT = 1_000;
+/** Tests kept by name per suite (across its files); the counts stay exact. */
+export const TEST_NAME_LIMIT = 3_000;
+
 /** Failures kept per suite; `failed` stays the exact count. */
 export const TEST_FAILURE_LIMIT = 50;
 
@@ -64,6 +94,8 @@ const testProgressSuiteSchema = z.object({
   slow: z.array(slowEntrySchema).default([]),
   /** In the order they were reported, at most `TEST_FAILURE_LIMIT`. */
   failures: z.array(failureSchema).default([]),
+  /** The files the suite ran, in the order they were reported, at most `TEST_FILE_LIMIT`. */
+  files: z.array(testFileSchema).default([]),
 });
 
 /** Run-level fields every live progress file has (`test-progress`, `task-progress`). */
@@ -88,6 +120,8 @@ export type TestProgressSuite = z.infer<typeof testProgressSuiteSchema>;
 export type TestProgressSuiteStatus = z.infer<typeof suiteStatus>;
 export type TestProgressSlowEntry = z.infer<typeof slowEntrySchema>;
 export type TestFailure = z.infer<typeof failureSchema>;
+export type TestFileResult = z.infer<typeof testFileSchema>;
+export type TestResult = z.infer<typeof testResultSchema>;
 
 export function parseTestProgress(raw: string): JsonValidationResult<TestProgress> {
   return parseStoredJson(testProgressSchema, raw, 'test progress');

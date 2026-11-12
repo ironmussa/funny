@@ -2,7 +2,6 @@ import { CheckCircle2, Circle, Loader2, XCircle } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { LoadingState } from '@/components/ui/loading-state';
 import { cn } from '@/lib/utils';
 
 // Pieces shared by the live progress widgets (test-progress, task-progress).
@@ -58,6 +57,16 @@ export function runElapsed(
   return end - run.startedAt;
 }
 
+/** A spinner and label at the size of the tool cards (`LoadingState` is pane-sized). */
+export function ProgressLoading({ label, testId }: { label: string; testId: string }) {
+  return (
+    <div className="text-muted-foreground flex items-center gap-2 text-xs" data-testid={testId}>
+      <Loader2 className="text-muted-foreground/70 size-3.5 shrink-0 animate-spin" aria-hidden />
+      {label}
+    </div>
+  );
+}
+
 /** What a progress block shows before its first snapshot, or when it has none. */
 export function ProgressFileFallback({
   kind,
@@ -70,19 +79,12 @@ export function ProgressFileFallback({
 }) {
   const { t } = useTranslation();
   if (kind === 'loading') {
-    return (
-      <LoadingState
-        layout="inline"
-        fill={false}
-        label={t('progressFile.loading')}
-        testId={`${testIdPrefix}-loading`}
-      />
-    );
+    return <ProgressLoading label={t('progressFile.loading')} testId={`${testIdPrefix}-loading`} />;
   }
   return (
     <div
       data-testid={`${testIdPrefix}-error`}
-      className="text-muted-foreground rounded-md border border-dashed p-3 text-sm"
+      className="text-muted-foreground rounded-md border border-dashed p-3 text-xs"
     >
       {path ? t('progressFile.unreadable', { path }) : t('progressFile.invalidFence')}
     </div>

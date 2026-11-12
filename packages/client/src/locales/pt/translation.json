@@ -1421,7 +1421,13 @@
       "running": "Executando testes",
       "passed": "Testes aprovados",
       "failed": "Testes com falha"
-    }
+    },
+    "failuresTitle": "Falhas",
+    "moreFailures": "Mostrando as primeiras {{shown}} de {{total}}",
+    "ranTitle": "Testes executados",
+    "ranSummary": "{{tests}} testes em {{files}} arquivos",
+    "showMore": "Ver mais {{count}} ({{hidden}} ocultos)",
+    "noFiles": "A saída não nomeia os testes executados."
   },
   "progressFile": {
     "loading": "Carregando o progresso…",
@@ -1539,7 +1545,9 @@
   },
   "checks": {
     "run": "Executar checks: {{kind}}",
-    "starting": "Iniciando…"
+    "starting": "Iniciando…",
+    "filter": "filtro: {{filter}}",
+    "cwd": "Executado em {{cwd}}"
   },
   "apiTokens": {
     "title": "Tokens de API",

@@ -35,6 +35,7 @@ function queuedSuite({ name, related }: { name: string; related: boolean }): Tes
     running: [],
     slow: [],
     failures: [],
+    files: [],
   };
 }
 

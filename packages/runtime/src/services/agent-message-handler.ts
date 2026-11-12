@@ -25,6 +25,7 @@ import { z } from 'zod';
 import { log } from '../lib/logger.js';
 import { computeBranchKey } from '../utils/git-status-helpers.js';
 import type { AgentStateTracker } from './agent-state.js';
+import { recordBashCheck } from './checks/bash-check-metric.js';
 import { flushPendingMessageUpdates } from './remote-thread-data-client.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
@@ -631,6 +632,7 @@ export class AgentMessageHandler {
           ...(await this.threadCtx(threadId)),
           tool: block.name,
         });
+        recordBashCheck(threadId, block.name, block.input);
         log.debug('tool_use input', {
           namespace: 'agent',
           threadId,

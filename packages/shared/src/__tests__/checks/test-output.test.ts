@@ -215,3 +215,152 @@ describe('createOutputParser failures', () => {
     ).toBe(false);
   });
 });
+
+describe('createOutputParser files', () => {
+  test('bun test: the tests under each file header, with their durations', () => {
+    const counts = feed(
+      [
+        'src/a.test.ts:',
+        '(pass) a > adds [0.20ms]',
+        '(skip) a > later',
+        '',
+        'src/b.test.ts:',
+        'error: expect(received).toBe(expected)',
+        '      at <anonymous> (/home/u/src/b.test.ts:9:3)',
+        '(fail) b > breaks [1.50ms]',
+        '',
+        ' 1 pass',
+        ' 1 skip',
+        ' 1 fail',
+      ].join('\n'),
+    );
+    expect(counts.files).toEqual([
+      {
+        name: 'src/a.test.ts',
+        passed: 1,
+        failed: 0,
+        skipped: 1,
+        tests: [
+          { name: 'a > adds', state: 'passed', durationMs: 0.2 },
+          { name: 'a > later', state: 'skipped' },
+        ],
+      },
+      {
+        name: 'src/b.test.ts',
+        passed: 0,
+        failed: 1,
+        skipped: 0,
+        tests: [{ name: 'b > breaks', state: 'failed', durationMs: 1.5 }],
+      },
+    ]);
+  });
+
+  test('vitest: per-file counts from the default reporter, tests from its events', () => {
+    const lines = feed(
+      ' ✓ src/a.test.ts (5 tests | 1 skipped) 120ms\n ❯ src/b.test.ts (2 tests | 1 failed) 1.2s',
+    );
+    expect(lines.files).toEqual([
+      {
+        name: 'src/a.test.ts',
+        status: 'passed',
+        passed: 4,
+        failed: 0,
+        skipped: 1,
+        durationMs: 120,
+        tests: [],
+      },
+      {
+        name: 'src/b.test.ts',
+        status: 'failed',
+        passed: 1,
+        failed: 1,
+        skipped: 0,
+        durationMs: 1200,
+        tests: [],
+      },
+    ]);
+
+    const event = (body: object) => `${TEST_EVENT_PREFIX}${JSON.stringify(body)}`;
+    const events = feed(
+      [
+        event({ e: 'file', file: 'src/a.test.ts' }),
+        event({ e: 'test', file: 'src/a.test.ts', name: 'a > adds', state: 'passed', ms: 3 }),
+        event({ e: 'file-end', file: 'src/a.test.ts', ms: 40 }),
+        // The default reporter's line for the same file is not counted twice.
+        ' ✓ src/a.test.ts (1 test) 40ms',
+      ].join('\n'),
+    );
+    expect(events.files).toEqual([
+      {
+        name: 'src/a.test.ts',
+        passed: 1,
+        failed: 0,
+        skipped: 0,
+        durationMs: 40,
+        tests: [{ name: 'a > adds', state: 'passed', durationMs: 3 }],
+      },
+    ]);
+  });
+
+  test('playwright, pytest, jest and go name their files or packages', () => {
+    const playwright = feed('  ✓  1 [chromium] › e2e/tags.spec.ts:21:7 › Tags › adds a tag (3.8s)');
+    expect(playwright.files).toMatchObject([
+      {
+        name: 'e2e/tags.spec.ts',
+        passed: 1,
+        tests: [{ name: 'Tags › adds a tag', state: 'passed' }],
+      },
+    ]);
+
+    const pytest = feed('tests/test_a.py ..F  [ 60%]\ntests/test_b.py::test_x PASSED');
+    expect(pytest.files).toMatchObject([
+      { name: 'tests/test_a.py', passed: 2, failed: 1, tests: [] },
+      { name: 'tests/test_b.py', passed: 1, tests: [{ name: 'test_x', state: 'passed' }] },
+    ]);
+
+    const jest = feed('PASS src/a.test.ts (1.2 s)\nFAIL src/b.test.ts');
+    expect(jest.files).toMatchObject([
+      { name: 'src/a.test.ts', status: 'passed' },
+      { name: 'src/b.test.ts', status: 'failed' },
+    ]);
+
+    const go = feed('--- PASS: TestA (0.00s)\nok  \tgithub.com/x/q\t0.01s');
+    expect(go.files).toMatchObject([
+      { name: 'github.com/x/q', status: 'passed', passed: 1, tests: [{ name: 'TestA' }] },
+    ]);
+  });
+});
+
+describe('createOutputParser chained runs', () => {
+  test('each runner summary adds to the runs before it, instead of replacing them', () => {
+    const counts = feed(
+      [
+        'bun test v1.4.4',
+        ' 83 pass',
+        ' 0 fail',
+        'Ran 83 tests across 4 files. [38.00ms]',
+        ' RUN  v4.1.12 /repo/packages/core',
+        ' ✓ src/a.test.ts (12 tests) 6ms',
+        '      Tests  12 passed (12)',
+      ].join('\n'),
+    );
+    expect(counts).toMatchObject({ passed: 95, failed: 0, summarized: true });
+  });
+
+  test('two bun runs, with their tests listed', () => {
+    const counts = feed(
+      [
+        '(pass) a > one',
+        '(fail) a > two',
+        ' 1 pass',
+        ' 1 fail',
+        '(pass) b > one',
+        '(skip) b > later',
+        ' 1 pass',
+        ' 0 fail',
+        ' 1 skip',
+      ].join('\n'),
+    );
+    expect(counts).toMatchObject({ passed: 2, failed: 1, skipped: 1 });
+  });
+});

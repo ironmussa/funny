@@ -1,13 +1,15 @@
 // Recognises a shell command as a check (tests, type check, lint, format,
-// build) and which tool runs it, from the command text alone. Shared by the
-// runtime (which tool to instrument, whether to redirect a raw Bash call to
-// `funny_run_checks`) and the client (whether a Bash card shows a check
-// result).
+// build) and which tool runs it, from the command text alone. Used by the
+// runtime (which tool to instrument) and by Claude's PreToolUse hook (whether
+// to redirect a raw Bash call to `funny_run_checks`).
 //
 // `plain` marks a command that is only the check: optionally `cd <dir> &&`
 // and env assignments first, `2>&1` at most, nothing piped or chained. Only a
 // plain command is safe to redirect: anything else may depend on the shell
-// around the check.
+// around the check. The exception is `simplified`: a check whose extra shell
+// only shapes what the agent reads or lists files, so dropping it changes
+// nothing that runs: output piped through readers (`| tail -20`, `| grep -E
+// …`) and file lists from `$(ls <globs>)`, which the shell expands the same.
 
 export type CheckKind = 'test' | 'typecheck' | 'lint' | 'format' | 'build' | 'verify';
 
@@ -35,6 +37,11 @@ export interface CheckCommand {
   kind: CheckKind;
   tool: CheckTool;
   plain: boolean;
+  /**
+   * A check that is plain once its extra shell is dropped (`x 2>&1 | tail
+   * -20`, `bun test $(ls src/*.test.ts)`): `checkCommand` is that plain form.
+   */
+  simplified?: { checkCommand: string };
   /** The directory of a leading `cd <dir> &&`. */
   cwd?: string;
   /** Files, directories or packages named on the command line. */
@@ -322,6 +329,49 @@ function segmentCheck(text: string): Found | null {
   return tool ? toolCheck(tool.name, tool.args) : null;
 }
 
+/** Commands that only read what they are piped: dropping them changes no side effect. */
+const OUTPUT_READER = /^(?:head|tail|grep|egrep|fgrep|rg|wc|sort|uniq|cut|cat|less|more)(?:\s|$)/;
+
+/** What a pipe scan steps over whole: quoted text, `(…)` (one level nested), `||`; or a `|`. */
+const PIPE_TOKEN = /'[^']*'|"[^"]*"|\((?:[^()]|\([^()]*\))*\)|\|\||\|/g;
+
+/** A command's pipeline stages: `|` outside quotes and `$(…)`, never `||`. */
+function pipeStages(command: string): string[] {
+  const stages: string[] = [];
+  let start = 0;
+  for (const token of command.matchAll(PIPE_TOKEN)) {
+    if (token[0] !== '|') continue;
+    stages.push(command.slice(start, token.index));
+    start = token.index + 1;
+  }
+  return [...stages, command.slice(start)];
+}
+
+/** `check | reader | reader` → `check`, when everything after it only reads its output; else unchanged. */
+function dropReaders(command: string): string {
+  const [check, ...readers] = pipeStages(command);
+  if (readers.length === 0) return command;
+  if (!readers.every((part) => OUTPUT_READER.test(part.trim()))) return command;
+  // Unquoted shell syntax in a reader (`tail > f`, `grep x; rm y`) may do more than read.
+  const unquoted = (part: string) => part.replace(/'[^']*'|"[^"]*"/g, '');
+  if (readers.some((part) => /;|&&|\|\||\$\(|`|>|<|\n/.test(unquoted(part)))) return command;
+  return check.trim();
+}
+
+/** `$(ls <paths>)` → `<paths>`: listing files the shell would expand the same way. */
+const unwrapLs = (command: string) =>
+  command.replace(/\$\(\s*ls(?:\s+-[1d]+)*((?:\s+[\w@%+=:,./*?-]+)+)\s*\)/g, (_, paths: string) =>
+    paths.trim(),
+  );
+
+/** The check a command runs once readers and `$(ls …)` are dropped, when that is plain. */
+function simplifiedCheck(command: string): CheckCommand | null {
+  const checkCommand = unwrapLs(dropReaders(command));
+  if (checkCommand === command) return null;
+  const found = classifyCheckCommand(checkCommand);
+  return found?.plain ? { ...found, plain: false, simplified: { checkCommand } } : null;
+}
+
 /**
  * The check a shell command runs, or null when it runs none. For a compound
  * command (`a && b`, `x | tail`), the first check in it, with `plain: false`.
@@ -334,6 +384,8 @@ export function classifyCheckCommand(command: string): CheckCommand | null {
     const found = segmentCheck(withoutStderr);
     return found ? { ...found, plain: true, ...at } : null;
   }
+  const simplified = simplifiedCheck(command);
+  if (simplified) return simplified;
   for (const part of command.split(/\n|&&|\|\||;|\|/)) {
     const inner = stripPrefix(part)
       .rest.replace(/\s+2>&1(?=\s|$)/g, '')

@@ -98,6 +98,41 @@ describe('classifyCheckCommand', () => {
     });
   });
 
+  test('$(ls <globs>) is unwrapped to the globs', () => {
+    expect(
+      classifyCheckCommand(
+        'cd pkg && bun test $(ls src/routes/*trpc*.test.ts src/x.test.ts) 2>&1 | grep -E "pass|fail"',
+      ),
+    ).toMatchObject({
+      kind: 'test',
+      tool: 'bun-test',
+      scope: ['src/routes/*trpc*.test.ts', 'src/x.test.ts'],
+      simplified: {
+        checkCommand: 'cd pkg && bun test src/routes/*trpc*.test.ts src/x.test.ts 2>&1',
+      },
+    });
+    expect(classifyCheckCommand('bun test $(ls src | grep a)')?.simplified).toBeUndefined();
+  });
+
+  test('a check piped only through output readers is simplified to the check alone', () => {
+    expect(classifyCheckCommand('cd x && npx vitest run 2>&1 | tail -40')?.simplified).toEqual({
+      checkCommand: 'cd x && npx vitest run 2>&1',
+    });
+    expect(
+      classifyCheckCommand('bunx tsc --noEmit 2>&1 | rg "error TS" | head')?.simplified,
+    ).toEqual({
+      checkCommand: 'bunx tsc --noEmit 2>&1',
+    });
+    for (const command of [
+      'npx vitest run | tee out.log',
+      'npx vitest run | tail -5 > out.log',
+      'bun test $(find src -name "*.test.ts") | tail',
+      'bun run lint && bun run typecheck | tail',
+    ]) {
+      expect(classifyCheckCommand(command)?.simplified).toBeUndefined();
+    }
+  });
+
   test.each([
     'git status',
     'rg "vitest" packages',

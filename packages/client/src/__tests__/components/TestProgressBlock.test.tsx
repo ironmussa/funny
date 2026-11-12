@@ -31,6 +31,7 @@ function progress(overrides: Partial<TestProgress> = {}): TestProgress {
         running: [],
         slow: [],
         failures: [],
+        files: [],
       },
       {
         name: '@funny/client',
@@ -44,6 +45,7 @@ function progress(overrides: Partial<TestProgress> = {}): TestProgress {
         running: [],
         slow: [],
         failures: [],
+        files: [],
       },
       {
         name: '@funny/core',
@@ -55,6 +57,7 @@ function progress(overrides: Partial<TestProgress> = {}): TestProgress {
         running: [],
         slow: [],
         failures: [],
+        files: [],
       },
     ],
     ...overrides,
@@ -124,6 +127,145 @@ describe('TestProgressBlock', () => {
     );
     // The file running for 2 s is not slow yet.
     expect(slow.querySelectorAll('li')).toHaveLength(2);
+  });
+
+  test('lists the failed tests with where and why, tagged by suite when several failed', async () => {
+    const base = progress({ status: 'failed', finishedAt: 9_000 });
+    base.suites[0] = {
+      ...base.suites[0],
+      failed: 1,
+      failures: [{ name: 'parses config', message: 'Expected 2, received 0' }],
+    };
+    base.suites[1] = {
+      ...base.suites[1],
+      status: 'failed',
+      failed: 20,
+      failures: Array.from({ length: 20 }, (_, i) => ({
+        name: `renders row ${i}`,
+        file: 'src/__tests__/rows.test.tsx',
+        line: 10 + i,
+      })),
+    };
+    apiMock.readFile.mockResolvedValue(respond(base));
+    renderWithProviders(<TestProgressBlock path={PATH} />);
+    await flush();
+
+    const first = screen.getByTestId('test-progress-failure-0');
+    expect(first).toHaveTextContent('parses config');
+    expect(first).toHaveTextContent('Expected 2, received 0');
+    expect(first).toHaveTextContent('@funny/shared');
+    expect(screen.getByTestId('test-progress-failure-1')).toHaveTextContent(
+      'src/__tests__/rows.test.tsx:10',
+    );
+    const list = screen.getByTestId('test-progress-failures');
+    expect(list.querySelectorAll('li')).toHaveLength(15);
+    expect(list).toHaveTextContent('15');
+    expect(list).toHaveTextContent('21');
+  });
+
+  test('folds the files that ran, failed first, each expanding to its tests', async () => {
+    const base = progress({ status: 'failed', finishedAt: 9_000 });
+    base.suites = [
+      {
+        ...base.suites[0],
+        files: [
+          {
+            name: 'src/a.test.ts',
+            passed: 2,
+            failed: 0,
+            skipped: 0,
+            tests: [
+              { name: 'a > adds', state: 'passed' },
+              { name: 'a > slow one', state: 'passed', durationMs: 2_500 },
+            ],
+          },
+          {
+            name: 'src/b.test.ts',
+            passed: 0,
+            failed: 1,
+            skipped: 0,
+            tests: [{ name: 'b > breaks', state: 'failed' }],
+          },
+        ],
+      },
+    ];
+    apiMock.readFile.mockResolvedValue(respond(base));
+    renderWithProviders(<TestProgressBlock path={PATH} />);
+    await flush();
+
+    const toggle = screen.getByTestId('test-progress-files-toggle');
+    expect(toggle).toHaveTextContent('3');
+    expect(screen.queryByTestId('test-progress-file-src/a.test.ts')).not.toBeInTheDocument();
+
+    await act(async () => toggle.click());
+    const rows = screen.getAllByTestId(/^test-progress-file-src\//);
+    expect(rows.map((row) => row.dataset.testid)).toEqual([
+      'test-progress-file-src/b.test.ts',
+      'test-progress-file-src/a.test.ts',
+    ]);
+    expect(screen.queryByText('a > adds')).not.toBeInTheDocument();
+
+    await act(async () => screen.getByTestId('test-progress-file-toggle-src/a.test.ts').click());
+    expect(screen.getByText('a > adds')).toBeInTheDocument();
+    expect(screen.getByText('a > slow one')).toBeInTheDocument();
+  });
+
+  test('renders a file’s tests 100 at a time', async () => {
+    const base = progress({ status: 'passed', finishedAt: 9_000 });
+    base.suites = [
+      {
+        ...base.suites[0],
+        files: [
+          {
+            name: 'src/big.test.ts',
+            passed: 250,
+            failed: 0,
+            skipped: 0,
+            tests: Array.from({ length: 250 }, (_, i) => ({
+              name: `case ${i}`,
+              state: 'passed' as const,
+            })),
+          },
+        ],
+      },
+    ];
+    apiMock.readFile.mockResolvedValue(respond(base));
+    renderWithProviders(<TestProgressBlock path={PATH} />);
+    await flush();
+    await act(async () => screen.getByTestId('test-progress-files-toggle').click());
+    await act(async () => screen.getByTestId('test-progress-file-toggle-src/big.test.ts').click());
+
+    const rows = () =>
+      screen.getByTestId('test-progress-file-src/big.test.ts').querySelectorAll('li');
+    const more = 'test-progress-tests-more-src/big.test.ts';
+    expect(rows()).toHaveLength(100);
+    await act(async () => screen.getByTestId(more).click());
+    expect(rows()).toHaveLength(200);
+    expect(screen.getByTestId(more)).toHaveTextContent('50');
+    await act(async () => screen.getByTestId(more).click());
+    expect(rows()).toHaveLength(250);
+    expect(screen.queryByTestId(more)).not.toBeInTheDocument();
+  });
+
+  test('says when a finished run’s output named no tests, not while it runs', async () => {
+    apiMock.readFile.mockResolvedValue(respond(progress()));
+    const { unmount } = renderWithProviders(<TestProgressBlock path={PATH} />);
+    await flush();
+    expect(screen.queryByTestId('test-progress-no-files')).not.toBeInTheDocument();
+    unmount();
+
+    apiMock.readFile.mockResolvedValue(respond(progress({ status: 'passed', finishedAt: 9_000 })));
+    renderWithProviders(<TestProgressBlock path={PATH} />);
+    await flush();
+    expect(screen.getByTestId('test-progress-no-files')).toBeInTheDocument();
+    expect(screen.queryByTestId('test-progress-files-toggle')).not.toBeInTheDocument();
+  });
+
+  test('shows no failure list when nothing failed', async () => {
+    apiMock.readFile.mockResolvedValue(respond(progress()));
+    renderWithProviders(<TestProgressBlock path={PATH} />);
+    await flush();
+    expect(screen.queryByTestId('test-progress-failures')).not.toBeInTheDocument();
   });
 
   test('polls while running and stops once the run finishes', async () => {

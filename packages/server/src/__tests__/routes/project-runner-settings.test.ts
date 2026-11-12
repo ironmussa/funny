@@ -13,7 +13,7 @@ import {
 } from '@funny/shared/auth/forwarded-identity';
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
-import { stopProjectSessionsOnRunners } from '../../routes/project-runner-settings.js';
+import { stopProjectSessionsOnRunners } from '../../trpc/ports/project-runners.js';
 import { __resetRunnerScopeCache, canRunnerAccessProject } from '../../services/runner-scope.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedRunner, seedThread } from '../helpers/test-db.js';

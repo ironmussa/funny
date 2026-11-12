@@ -10,6 +10,7 @@ const { pipelinesApi } = await import('@/lib/api/pipelines');
 const { threadsApi } = await import('@/lib/api/threads');
 const { profileApi } = await import('@/lib/api/profile');
 const { teamApi } = await import('@/lib/api/team');
+const { projectRunnersApi } = await import('@/lib/api/project-runners');
 const { trpc, trpcCall } = await import('@/lib/api/_trpc');
 const { useCircuitBreakerStore } = await import('@/stores/circuit-breaker-store');
 
@@ -234,5 +235,31 @@ describe('tRPC procedure calls (profile and settings)', () => {
       type: 'FORBIDDEN',
       message: 'Forbidden: admin required',
     });
+  });
+});
+
+describe('tRPC procedure calls (runners)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+  });
+
+  test('deleteRunner is the runners.remove mutation', async () => {
+    mockFetch.mockResolvedValueOnce(json({ result: { data: { ok: true } } }));
+
+    await teamApi.deleteRunner('r1');
+
+    const [url, init] = lastCall();
+    expect(url).toMatch(/\/api\/trpc\/runners\.remove$/);
+    expect(JSON.parse(init.body as string)).toEqual({ runnerId: 'r1' });
+  });
+
+  test("someone else's project's runner settings answer NOT_FOUND", async () => {
+    mockFetch.mockResolvedValueOnce(trpcError(404, 'NOT_FOUND', 'Project not found'));
+
+    const result = await projectRunnersApi.getProjectRunnerSettings('p1');
+
+    expect(result._unsafeUnwrapErr()).toEqual({ type: 'NOT_FOUND', message: 'Project not found' });
+    expect(lastCall()[0]).toContain('/api/trpc/projectRunners.settings?input=');
   });
 });

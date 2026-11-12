@@ -77,6 +77,7 @@ describe('fitness:trpc-api — web client', () => {
     'request(`/designs/${id}`)',
     'request<any>(`/analytics/overview?${qs}`)',
     "request('/push/config')",
+    'request(`/runners/${runnerId}`, { method: "DELETE" })',
   ])('rejects REST use of a migrated group: %s', (source) => {
     expect(findClientViolations('x.ts', source)).toHaveLength(1);
   });

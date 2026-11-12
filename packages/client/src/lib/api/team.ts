@@ -93,26 +93,16 @@ export const teamApi = {
     }>('/invite-links/register', { method: 'POST', body: JSON.stringify(data) }),
 
   // Runners (tied to profile/team membership)
-  getMyRunners: () =>
-    request<{ runners: import('@funny/shared/runner-protocol').RunnerInfo[] }>('/runners'),
-  deleteRunner: (runnerId: string) =>
-    request<{ ok: boolean }>(`/runners/${runnerId}`, { method: 'DELETE' }),
+  getMyRunners: () => trpcCall(() => trpc.runners.list.query()),
+  deleteRunner: (runnerId: string) => trpcCall(() => trpc.runners.remove.mutate({ runnerId })),
   assignRunnerProject: (runnerId: string, projectId: string, localPath: string) =>
-    request<import('@funny/shared/runner-protocol').RunnerProjectAssignment>(
-      `/runners/${runnerId}/projects`,
-      { method: 'POST', body: JSON.stringify({ projectId, localPath }) },
-    ),
+    trpcCall(() => trpc.runners.assignProject.mutate({ runnerId, projectId, localPath })),
   unassignRunnerProject: (runnerId: string, projectId: string) =>
-    request<{ ok: boolean }>(`/runners/${runnerId}/projects/${projectId}`, { method: 'DELETE' }),
+    trpcCall(() => trpc.runners.unassignProject.mutate({ runnerId, projectId })),
 
   // Device-link runner enrollment
   getRunnerEnrollment: (userCode: string) =>
-    request<import('@funny/shared/runner-protocol').EnrollmentInfo>(
-      `/runners/enroll/${encodeURIComponent(userCode)}`,
-    ),
+    trpcCall(() => trpc.runners.enrollment.query({ userCode })),
   approveRunnerEnrollment: (userCode: string) =>
-    request<{ ok: boolean; runnerId: string }>('/runners/enroll/approve', {
-      method: 'POST',
-      body: JSON.stringify({ userCode }),
-    }),
+    trpcCall(() => trpc.runners.approveEnrollment.mutate({ userCode })),
 };

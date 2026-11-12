@@ -65,6 +65,10 @@ import type {
   UpdateProjectBody,
 } from '@funny/shared/contracts/projects';
 import type { PushSubscriptionBody } from '@funny/shared/contracts/push';
+import type {
+  AssignRunnerProjectBody,
+  UpdateProjectRunnerSettingsBody,
+} from '@funny/shared/contracts/runners';
 import type { SmtpSettingsRequest, SmtpSettingsResponse } from '@funny/shared/contracts/settings';
 import type {
   ArchivedThreadsResponse,
@@ -72,6 +76,12 @@ import type {
   ThreadPatchRequest,
   threadsContract,
 } from '@funny/shared/contracts/threads';
+import type {
+  EnrollmentInfo,
+  ProjectRunnerSettingsResponse,
+  RunnerInfo,
+  RunnerProjectAssignment,
+} from '@funny/shared/runner-protocol';
 import type { Result } from 'neverthrow';
 
 import type { ApiFailure } from './failure.js';
@@ -282,6 +292,68 @@ export interface ProjectsPort {
   deleteCommand(projectId: string, commandId: string): PortResult<Ok>;
 }
 
+/** The caller of a runner operation: an instance admin reaches every runner. */
+export interface RunnerCaller {
+  userId: string;
+  role: string | null;
+}
+
+/**
+ * The runner operations a user calls and the server answers itself. What a
+ * runner calls with its own credential (register, enrollment start / poll,
+ * heartbeat, tasks) stays REST. Someone else's runner answers 404, never 403,
+ * so its existence is not disclosed.
+ */
+export interface RunnersPort {
+  /** Every runner for an admin, the caller's own for anyone else. */
+  list(caller: RunnerCaller): PortResult<{ runners: RunnerInfo[] }>;
+  remove(caller: RunnerCaller, runnerId: string): PortResult<Ok>;
+  /** Where the runner keeps each project (a location record, not an authorization source). */
+  assignments(
+    caller: RunnerCaller,
+    runnerId: string,
+  ): PortResult<{ assignments: RunnerProjectAssignment[] }>;
+  assignProject(
+    caller: RunnerCaller,
+    runnerId: string,
+    data: AssignRunnerProjectBody,
+  ): PortResult<RunnerProjectAssignment>;
+  unassignProject(caller: RunnerCaller, runnerId: string, projectId: string): PortResult<Ok>;
+  /** A pending enrollment, for the confirm dialog (404 when unknown or expired). */
+  enrollment(userCode: string): PortResult<EnrollmentInfo>;
+  /** Binds a pending enrollment to the caller; `code` carries the refusal reason. */
+  approveEnrollment(userId: string, userCode: string): PortResult<{ ok: true; runnerId: string }>;
+}
+
+/**
+ * Which of the owner's runners serve one project (project-runner-binding).
+ * Only the project OWNER may read or change it (404 for anyone else); a runner
+ * that loses access has the project's running agents stopped.
+ */
+export interface ProjectRunnersPort {
+  settings(userId: string, projectId: string): PortResult<ProjectRunnerSettingsResponse>;
+  update(
+    userId: string,
+    projectId: string,
+    data: UpdateProjectRunnerSettingsBody,
+  ): PortResult<ProjectRunnerSettingsResponse>;
+  grant(
+    userId: string,
+    projectId: string,
+    runnerId: string,
+  ): PortResult<ProjectRunnerSettingsResponse>;
+  revoke(
+    userId: string,
+    projectId: string,
+    runnerId: string,
+  ): PortResult<ProjectRunnerSettingsResponse>;
+  /** The user's general runner; `null` clears it. */
+  setGeneralRunner(
+    userId: string,
+    runnerId: string | null,
+  ): PortResult<{ generalRunnerId: string | null }>;
+}
+
 /** The server's authorization decisions that are not about one thread. */
 export interface AuthzPort {
   /**
@@ -312,6 +384,8 @@ export interface ApiPorts {
   analytics: AnalyticsPort;
   push: PushPort;
   projects: ProjectsPort;
+  runners: RunnersPort;
+  projectRunners: ProjectRunnersPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;
 }

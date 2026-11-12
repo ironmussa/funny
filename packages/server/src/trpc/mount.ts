@@ -19,12 +19,17 @@ import { designsPort } from './ports/designs.js';
 import { analyticsPort, pushPort } from './ports/insights.js';
 import { pipelinesPort } from './ports/pipelines.js';
 import { profilePort } from './ports/profile.js';
+import { createProjectRunnersPort } from './ports/project-runners.js';
 import { createProjectsPort } from './ports/projects.js';
+import { runnersPort } from './ports/runners.js';
 import { settingsPort } from './ports/settings.js';
 import { threadAccessPort } from './ports/thread-access.js';
 import { createThreadsPort } from './ports/threads.js';
 
-/** The server's ports for one request: writes broadcast through the request's event sink. */
+/**
+ * The server's ports for one request: writes broadcast through the request's
+ * event sink, and project runner changes stop agents through its runner ports.
+ */
 function serverPorts(c: Context<ServerEnv>): ApiPorts {
   return {
     automations: automationsPort,
@@ -39,6 +44,11 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
     analytics: analyticsPort,
     push: pushPort,
     projects: createProjectsPort(c.get('organizationName')),
+    runners: runnersPort,
+    projectRunners: createProjectRunnersPort({
+      requests: c.env?.runnerRequests,
+      presence: c.env?.runnerPresence,
+    }),
     threadAccess: threadAccessPort,
     authz: authzPort,
   };

@@ -35,6 +35,8 @@ const SHARED_ALLOWED = [
   /^@funny\/shared\/auth\/roles$/,
   /^@funny\/shared\/contracts\/[\w-]+$/,
   /^@funny\/shared\/types\/[\w-]+$/,
+  // Types of the runner protocol only (it imports nothing but `./types.js`).
+  /^@funny\/shared\/runner-protocol$/,
 ];
 
 /**
@@ -64,9 +66,13 @@ const MIGRATED_GROUPS: Array<{
   { path: '/designs' },
   { path: '/analytics' },
   { path: '/push' },
-  // `projects` has no entry: its server-answered routes moved, but creation and
-  // the runner's routes (`/projects/:id/branches`, `/hooks`, `/config`, …) share
-  // the same paths and stay REST, so no path or contract rule can tell them apart.
+  // What a runner calls with its own credential (register, enrollment start /
+  // poll, heartbeat, tasks) stays REST, but the web client calls none of it.
+  { path: '/runners' },
+  // `projects` (and the project runner settings under it) has no entry: its
+  // server-answered routes moved, but creation and the runner's routes
+  // (`/projects/:id/branches`, `/hooks`, `/config`, …) share the same paths and
+  // stay REST, so no path or contract rule can tell them apart.
 ];
 
 const IMPORT_SPECIFIER =
@@ -180,6 +186,7 @@ function runSelfTest(): void {
     { source: "import type { Automation } from '@funny/shared';", violates: false },
     { source: "import { x } from '@funny/shared/contracts/automations';", violates: false },
     { source: "import type { DomainError } from '@funny/shared/errors';", violates: false },
+    { source: "import type { RunnerInfo } from '@funny/shared/runner-protocol';", violates: false },
     { source: "import { db } from '@funny/server/db';", violates: true },
     { source: "import { schema } from '@funny/shared/db/schema';", violates: true },
     {

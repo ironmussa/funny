@@ -1,13 +1,9 @@
 /**
- * `/api/pipelines` contract for the pipeline CRUD and run history the server
- * answers from its own DB. The approval gates and the scheduler callbacks are
- * not covered here.
+ * Pipeline CRUD input schemas: the `pipelines` tRPC procedures validate with
+ * them, and the client's request types come from them.
  */
 
 import { z } from 'zod';
-
-import type { Pipeline, PipelineRun } from '../types/pipelines.js';
-import { endpointGroup } from './endpoint.js';
 
 const promptFields = {
   reviewerPrompt: z.string().optional(),
@@ -49,14 +45,3 @@ export const updatePipelineBody = z.object({
 
 export type CreatePipelineRequest = z.input<typeof createPipelineBody>;
 export type UpdatePipelineRequest = z.input<typeof updatePipelineBody>;
-
-const api = endpointGroup('/pipelines');
-
-export const pipelinesContract = {
-  list: api.endpoint<Pipeline[]>()({ method: 'GET', path: '/project/:projectId' }),
-  get: api.endpoint<Pipeline>()({ method: 'GET', path: '/:id' }),
-  create: api.endpoint<Pipeline>()({ method: 'POST', path: '/', body: createPipelineBody }),
-  update: api.endpoint<Pipeline>()({ method: 'PATCH', path: '/:id', body: updatePipelineBody }),
-  remove: api.endpoint<{ ok: true }>()({ method: 'DELETE', path: '/:id' }),
-  runsForThread: api.endpoint<PipelineRun[]>()({ method: 'GET', path: '/runs/thread/:threadId' }),
-};

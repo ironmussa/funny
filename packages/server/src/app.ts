@@ -253,7 +253,7 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   const { threadRoutes, requireThreadOwner, requireThreadSteer } =
     await import('./routes/threads.js');
   const { shareRoutes } = await import('./routes/thread-shares.js');
-  const { automationRoutes } = await import('./routes/automations.js');
+  const { removedAutomationRoutes } = await import('./routes/removed-rest.js');
   const { settingsRoutes } = await import('./routes/settings.js');
   const { teamProjectRoutes } = await import('./routes/team-projects.js');
   const { teamSettingsRoutes } = await import('./routes/team-settings.js');
@@ -284,7 +284,8 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   // `/:id/shares` are matched before the generic `/:id` pattern.
   app.route('/api/threads', shareRoutes);
   app.route('/api/threads', threadRoutes);
-  app.route('/api/automations', automationRoutes);
+  // tRPC only now; answered 404 here so the path never reaches a runner.
+  app.route('/api/automations', removedAutomationRoutes);
   const { githubAppSettingsRoutes } = await import('./routes/github-app-settings.js');
   app.route('/api/settings/github-app', githubAppSettingsRoutes());
   app.route('/api/settings', settingsRoutes);

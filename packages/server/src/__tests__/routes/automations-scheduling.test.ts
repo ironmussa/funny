@@ -1,5 +1,5 @@
 /**
- * /api/automations writes keep the server scheduler in sync, and manual
+ * `automations` tRPC writes keep the server scheduler in sync, and manual
  * triggers dispatch to the owner's runner through it.
  */
 import { describe, test, expect, beforeAll, beforeEach, afterEach } from 'bun:test';
@@ -17,8 +17,22 @@ import type { StartThreadInput } from '../../services/runner-thread-launcher.js'
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedAutomation, seedProject, seedThread } from '../helpers/test-db.js';
 
-describe('automation routes ↔ scheduler', () => {
+describe('automation procedures ↔ scheduler', () => {
   let t: TestApp;
+
+  const call = async (userId: string, procedure: string, input: unknown, method = 'POST') => {
+    const encoded = encodeURIComponent(JSON.stringify(input));
+    const res = await t.app.request(
+      `/api/trpc/automations.${procedure}${method === 'GET' ? `?input=${encoded}` : ''}`,
+      {
+        method,
+        headers: { 'X-Test-User-Id': userId, 'Content-Type': 'application/json' },
+        body: method === 'GET' ? undefined : JSON.stringify(input),
+      },
+    );
+    const body = (await res.json()) as any;
+    return { status: res.status, data: body.result?.data };
+  };
   let launches: StartThreadInput[];
   let runnerOnline: boolean;
 
@@ -52,28 +66,28 @@ describe('automation routes ↔ scheduler', () => {
   afterEach(() => stopAutomationScheduler());
 
   test('creating an automation schedules it; disabling and deleting unschedule it', async () => {
-    const res = await t.requestAs('user-1').post('/api/automations', {
+    const res = await call('user-1', 'create', {
       projectId: 'p1',
       name: 'Nightly',
       prompt: 'look',
       schedule: '0 9 * * *',
     });
-    expect(res.status).toBe(201);
-    const { id } = await res.json();
+    expect(res.status).toBe(200);
+    const { id } = res.data;
     expect(scheduledAutomationCount()).toBe(1);
 
-    await t.requestAs('user-1').patch(`/api/automations/${id}`, { enabled: false });
+    await call('user-1', 'update', { id, data: { enabled: false } });
     expect(scheduledAutomationCount()).toBe(0);
 
-    await t.requestAs('user-1').patch(`/api/automations/${id}`, { enabled: true });
+    await call('user-1', 'update', { id, data: { enabled: true } });
     expect(scheduledAutomationCount()).toBe(1);
 
-    await t.requestAs('user-1').delete(`/api/automations/${id}`);
+    await call('user-1', 'remove', { id });
     expect(scheduledAutomationCount()).toBe(0);
   });
 
   test('creating an automation on a project the caller cannot see → 404', async () => {
-    const res = await t.requestAs('user-1').post('/api/automations', {
+    const res = await call('user-1', 'create', {
       projectId: 'p2',
       name: 'Snoop',
       prompt: 'look',
@@ -87,17 +101,17 @@ describe('automation routes ↔ scheduler', () => {
   test("the owner's manual trigger starts a run on their runner", async () => {
     seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1', enabled: 0 });
 
-    const res = await t.requestAs('user-1').post('/api/automations/a1/trigger', {});
+    const res = await call('user-1', 'trigger', { id: 'a1' });
 
     expect(res.status).toBe(200);
-    expect(await res.json()).toMatchObject({ ok: true, threadId: 't-1' });
+    expect(res.data).toMatchObject({ ok: true, threadId: 't-1' });
     expect(launches.map((l) => l.userId)).toEqual(['user-1']);
   });
 
   test('another user triggering it → 404 and no dispatch', async () => {
     seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
 
-    const res = await t.requestAs('user-2').post('/api/automations/a1/trigger', {});
+    const res = await call('user-2', 'trigger', { id: 'a1' });
 
     expect(res.status).toBe(404);
     expect(launches).toEqual([]);
@@ -107,10 +121,10 @@ describe('automation routes ↔ scheduler', () => {
     seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
     runnerOnline = false;
 
-    const res = await t.requestAs('user-1').post('/api/automations/a1/trigger', {});
+    const res = await call('user-1', 'trigger', { id: 'a1' });
 
     expect(res.status).toBe(502);
-    const runs = await (await t.requestAs('user-1').get('/api/automations/a1/runs')).json();
+    const runs = (await call('user-1', 'runs', { id: 'a1' }, 'GET')).data;
     expect(runs).toHaveLength(1);
     expect(runs[0].status).toBe('failed');
   });

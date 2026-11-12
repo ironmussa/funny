@@ -1,13 +1,11 @@
 /**
- * Pipeline CRUD routes for the central server.
- *
- * All pipeline data operations are handled natively using the server's DB.
- * Pipeline execution (review/fix runs) remains on the runner.
+ * Pipeline REST routes for the central server: the approval gates (which the
+ * server may proxy to a runner) and the scheduler callbacks. Pipeline CRUD and
+ * run history are served by the `pipelines` tRPC procedures.
  */
 
 import { randomUUID } from 'crypto';
 
-import { pipelinesContract as contract } from '@funny/shared/contracts/pipelines';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -15,17 +13,12 @@ import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import { pipelineApprovalStore } from '../services/pipeline-approval-store.js';
-import { pipelinesPort as port } from '../trpc/ports/pipelines.js';
-import { answer } from '../trpc/reply.js';
-import { serveEndpoint } from '../validation/endpoint.js';
 import { parseJsonBody } from '../validation/request.js';
+import { refuseRemovedRoute } from './removed-rest.js';
 
 export const pipelineRoutes = new Hono<ServerEnv>();
 
 // ── Approval gates ────────────────────────────────────────────
-//
-// These MUST be declared before the `:id` routes below so that the literal
-// `approvals` segment is matched as a path, not as an `:id` parameter.
 //
 // `respond` is dual-tracked: server store first (scheduler-originated),
 // then proxied to the runner (in-process pipeline-adapter).
@@ -292,37 +285,8 @@ pipelineRoutes.post('/scheduler/progress', async (c) => {
   return c.json({ ok: true });
 });
 
-// ── CRUD and run history ──────────────────────────────────────
-// The logic lives in `trpc/ports/pipelines.ts`, shared with the `pipelines`
-// tRPC procedures (openspec adopt-trpc-browser-api); these routes stay for REST
-// consumers outside the web client.
-
-// GET /api/pipelines/project/:projectId
-serveEndpoint(pipelineRoutes, contract.list, ({ userId, params }) =>
-  answer(port.list(userId, params.projectId)),
-);
-
-// GET /api/pipelines/:id
-serveEndpoint(pipelineRoutes, contract.get, ({ userId, params }) =>
-  answer(port.get(userId, params.id)),
-);
-
-// POST /api/pipelines
-serveEndpoint(pipelineRoutes, contract.create, ({ userId, body }) =>
-  answer(port.create(userId, body), 201),
-);
-
-// PATCH /api/pipelines/:id
-serveEndpoint(pipelineRoutes, contract.update, ({ userId, params, body }) =>
-  answer(port.update(userId, params.id, body)),
-);
-
-// DELETE /api/pipelines/:id
-serveEndpoint(pipelineRoutes, contract.remove, ({ userId, params }) =>
-  answer(port.remove(userId, params.id)),
-);
-
-// GET /api/pipelines/runs/thread/:threadId
-serveEndpoint(pipelineRoutes, contract.runsForThread, ({ userId, params }) =>
-  answer(port.runsForThread(userId, params.threadId)),
-);
+// ── Everything else ───────────────────────────────────────
+// Pipeline CRUD and run history moved to the `pipelines` tRPC procedures
+// (openspec adopt-trpc-browser-api). Any other path answers 404 here instead of
+// falling through to the runner proxy.
+pipelineRoutes.all('*', refuseRemovedRoute);

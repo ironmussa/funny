@@ -116,7 +116,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { teamProjectRoutes } = await import('../../routes/team-projects.js');
   const { analyticsRoutes } = await import('../../routes/analytics.js');
   const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('../../routes/invite-links.js');
-  const { automationRoutes } = await import('../../routes/automations.js');
+  const { removedAutomationRoutes } = await import('../../routes/removed-rest.js');
   const { pipelineRoutes } = await import('../../routes/pipelines.js');
   const { schedulerSystemRoutes } = await import('../../routes/scheduler-system.js');
   const { userRoutes } = await import('../../routes/users.js');
@@ -135,7 +135,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   app.route('/api/team-settings', teamSettingsRoutes);
   app.route('/api/team-projects', teamProjectRoutes);
   app.route('/api/analytics', analyticsRoutes);
-  app.route('/api/automations', automationRoutes);
+  app.route('/api/automations', removedAutomationRoutes);
   const { mountTrpc } = await import('../../trpc/mount.js');
   mountTrpc(app);
   app.route('/api/pipelines', pipelineRoutes);

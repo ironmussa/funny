@@ -1,7 +1,7 @@
 /**
  * The `automations` tRPC procedures (openspec change adopt-trpc-browser-api):
- * mount, auth and CSRF behavior, tenant isolation, and parity with the REST
- * routes, which serve the same port while both paths coexist.
+ * mount, auth and CSRF behavior, tenant isolation and validation, and the
+ * removed REST routes, which must answer 404 instead of reaching a runner.
  */
 import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
@@ -191,40 +191,129 @@ describe('automations tRPC procedures', () => {
     });
   });
 
-  describe('parity with REST', () => {
-    test('reads return the same data on both paths', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1', name: 'One' });
-      seedAutomation(t.db as any, { id: 'a2', projectId: 'p1', userId: 'user-1', name: 'Two' });
+  describe('ported from the removed REST route tests', () => {
+    test('list filters by projectId', async () => {
+      seedProject(t.db as any, { id: 'p1b', userId: 'user-1', path: '/tmp/p1b' });
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db as any, { id: 'a2', projectId: 'p1b', userId: 'user-1' });
+      const res = await query('user-1', 'list', { projectId: 'p1' });
+      expect(res.body.result.data.map((a: any) => a.id)).toEqual(['a1']);
+    });
+
+    test('update rejects server-managed fields (id, nextRunAt, source) — C1', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      for (const data of [{ id: 'a-new' }, { nextRunAt: '2000-01-01' }, { source: 'api' }]) {
+        expect((await mutate('user-1', 'update', { id: 'a1', data })).status).toBe(400);
+      }
+      expect((await query('user-1', 'get', { id: 'a1' })).status).toBe(200);
+      expect((await query('user-2', 'get', { id: 'a1' })).status).toBe(404);
+    });
+
+    test('update refuses moving to a project the caller cannot access — C1', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      const res = await mutate('user-1', 'update', { id: 'a1', data: { projectId: 'p2' } });
+      expect(res.status).toBe(404);
+      expect((await query('user-1', 'get', { id: 'a1' })).body.result.data.projectId).toBe('p1');
+    });
+
+    test('update allows moving to another project the caller owns', async () => {
+      seedProject(t.db as any, { id: 'p1b', userId: 'user-1', path: '/tmp/p1b' });
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      const res = await mutate('user-1', 'update', { id: 'a1', data: { projectId: 'p1b' } });
+      expect(res.body.result.data.projectId).toBe('p1b');
+    });
+
+    test('a cross-tenant update or remove leaves the row untouched', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1', name: 'Mine' });
+      await mutate('user-2', 'update', { id: 'a1', data: { name: 'Hijacked' } });
+      await mutate('user-2', 'remove', { id: 'a1' });
+      expect((await query('user-1', 'get', { id: 'a1' })).body.result.data.name).toBe('Mine');
+    });
+
+    test('triageRun rejects a status outside the enum', async () => {
+      const missing = await mutate('user-1', 'triageRun', { runId: 'r1' });
+      expect(missing.status).toBe(400);
+      const res = await mutate('user-1', 'triageRun', { runId: 'r1', triageStatus: 'archived' });
+      expect(res.status).toBe(400);
+      expect(res.body.error.message).toContain('pending, reviewed, dismissed');
+    });
+
+    test('inbox returns only the caller’s finished runs, with filters', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db as any, { id: 'a2', projectId: 'p2', userId: 'user-2' });
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't2', projectId: 'p2', userId: 'user-2' });
+      const run = { status: 'completed', triageStatus: 'pending' };
+      seedAutomationRun(t.db as any, { id: 'r1', automationId: 'a1', threadId: 't1', ...run });
+      seedAutomationRun(t.db as any, { id: 'r2', automationId: 'a2', threadId: 't2', ...run });
+      seedAutomationRun(t.db as any, {
+        id: 'r3',
+        automationId: 'a1',
+        threadId: 't1',
+        status: 'running',
+        triageStatus: 'pending',
+      });
+
+      const res = await query('user-1', 'inbox', { projectId: 'p1', triageStatus: 'pending' });
+      expect(res.body.result.data.map((item: any) => item.run.id)).toEqual(['r1']);
+      expect((await query('user-2', 'runs', { id: 'a1' })).status).toBe(404);
+    });
+
+    test('responses are the contract types, not raw rows', async () => {
+      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1', enabled: 1 });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Nightly' });
       seedAutomationRun(t.db as any, {
         id: 'r1',
         automationId: 'a1',
         threadId: 't1',
-        status: 'completed',
+        status: 'failed',
+        hasFindings: 1,
       });
 
-      const rest = t.requestAs('user-1');
-      const pairs: Array<[string, string, unknown]> = [
-        ['/api/automations', 'list', undefined],
-        ['/api/automations?projectId=p1', 'list', { projectId: 'p1' }],
-        ['/api/automations/a1', 'get', { id: 'a1' }],
-        ['/api/automations/a1/runs', 'runs', { id: 'a1' }],
-        ['/api/automations/inbox', 'inbox', undefined],
-      ];
-      for (const [restPath, procedure, input] of pairs) {
-        const restRes = await rest.get(restPath);
-        const trpcRes = await query('user-1', procedure, input);
-        expect(trpcRes.status).toBe(restRes.status);
-        expect(trpcRes.body.result.data).toEqual(await restRes.json());
-      }
-    });
+      const automation = (await query('user-1', 'get', { id: 'a1' })).body.result.data;
+      expect(automation.enabled).toBe(true);
+      expect(automation).not.toHaveProperty('baseBranch');
+      expect(Object.values(automation)).not.toContain(null);
 
-    test('failures carry the same status and message on both paths', async () => {
+      const [run] = (await query('user-1', 'runs', { id: 'a1' })).body.result.data;
+      expect(run.hasFindings).toBe(true);
+      expect(run).not.toHaveProperty('summary');
+
+      const [item] = (await query('user-1', 'inbox')).body.result.data;
+      expect(item.thread).toEqual({
+        id: 't1',
+        projectId: 'p1',
+        title: 'Nightly',
+        isScratch: false,
+      });
+    });
+  });
+
+  describe('removed REST routes', () => {
+    test('every former /api/automations route answers 404 without reaching a runner', async () => {
       seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
-      const restRes = await t.requestAs('user-2').get('/api/automations/a1');
-      const trpcRes = await query('user-2', 'get', { id: 'a1' });
-      expect(trpcRes.status).toBe(restRes.status);
-      expect(trpcRes.body.error.message).toBe(((await restRes.json()) as any).error);
+      const requests: Array<[string, string]> = [
+        ['GET', '/api/automations'],
+        ['GET', '/api/automations/inbox'],
+        ['GET', '/api/automations/a1'],
+        ['POST', '/api/automations'],
+        ['PATCH', '/api/automations/a1'],
+        ['DELETE', '/api/automations/a1'],
+        ['POST', '/api/automations/a1/trigger'],
+        ['GET', '/api/automations/a1/runs'],
+        ['PATCH', '/api/automations/runs/r1/triage'],
+      ];
+      for (const [method, path] of requests) {
+        const res = await t.app.request(path, {
+          method,
+          headers: headersFor('user-1'),
+          body: method === 'GET' || method === 'DELETE' ? undefined : '{}',
+        });
+        expect({ method, path, status: res.status }).toEqual({ method, path, status: 404 });
+      }
+      expect(proxied).toEqual([]);
+      // The automation is still there: the refused DELETE did nothing.
+      expect((await query('user-1', 'get', { id: 'a1' })).status).toBe(200);
     });
   });
 });

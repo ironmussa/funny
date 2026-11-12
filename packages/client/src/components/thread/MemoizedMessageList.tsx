@@ -762,12 +762,15 @@ export const MemoizedMessageList = memo(
             <div
               ref={stickySectionContentRef}
               data-testid="sticky-section-content"
-              className="relative z-50 pt-1 pb-3 will-change-transform md:pt-3"
+              className="relative z-50 will-change-transform"
             >
+              {/* Opaque, padding included: rows scroll under the docked copy, and
+                  its hover footer would otherwise sit on top of them. */}
               <div
                 data-testid="sticky-section-card"
                 data-docked={isStickyDocked ? 'true' : 'false'}
                 className={cn(
+                  'bg-background pt-1 pb-3 md:pt-3',
                   'transition-[opacity,transform] duration-200 ease-out',
                   isStickyDocked
                     ? 'pointer-events-auto translate-y-0 opacity-100'

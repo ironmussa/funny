@@ -12,15 +12,19 @@ import { createOpenApiFetchHandler, generateOpenApiDocument } from 'trpc-to-open
 
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
+import { createSlidingWindowLimiter } from '../middleware/rate-limit.js';
+import { verifyPersonalAccessToken } from '../services/personal-access-tokens.js';
 import { publicV1Router } from './router.js';
+import type { PublicApiContext } from './trpc.js';
 
 const ENDPOINT = '/api/v1';
 
 /** The token's owner, or `null` when the request carries no valid token. */
 export type AuthenticateToken = (c: Context<ServerEnv>) => Promise<string | null>;
 
-/** Until personal API tokens exist, nobody is authenticated. */
-const noTokens: AuthenticateToken = async () => null;
+/** The owner of the request's personal API token (`Authorization: Bearer funny_pat_…`). */
+const personalAccessToken: AuthenticateToken = (c) =>
+  verifyPersonalAccessToken(c.req.header('authorization'));
 
 let document: ReturnType<typeof generateOpenApiDocument> | null = null;
 
@@ -36,18 +40,31 @@ function openApiDocument() {
   return document;
 }
 
-export function mountPublicApi(app: Hono<ServerEnv>, authenticate: AuthenticateToken = noTokens) {
+/** Requests one token owner may make per minute (on top of the per-IP limit in app.ts). */
+const PER_TOKEN_PER_MINUTE = 120;
+
+export function mountPublicApi(
+  app: Hono<ServerEnv>,
+  authenticate: AuthenticateToken = personalAccessToken,
+  { perTokenPerMinute = PER_TOKEN_PER_MINUTE }: { perTokenPerMinute?: number } = {},
+) {
+  const perToken = createSlidingWindowLimiter({ windowMs: 60_000, max: perTokenPerMinute });
   app.get(`${ENDPOINT}/openapi.json`, (c) => c.json(openApiDocument()));
-  app.all(`${ENDPOINT}/*`, (c) =>
-    createOpenApiFetchHandler({
+  app.all(`${ENDPOINT}/*`, async (c) => {
+    const userId = await authenticate(c);
+    if (userId && perToken.hit(`pat:${userId}`)) {
+      c.header('Retry-After', '60');
+      return c.json({ message: 'Too many requests', code: 'TOO_MANY_REQUESTS' }, 429);
+    }
+    return createOpenApiFetchHandler({
       endpoint: ENDPOINT,
       router: publicV1Router,
       req: c.req.raw,
-      createContext: async () => ({ userId: await authenticate(c) }),
+      createContext: async (): Promise<PublicApiContext> => ({ userId }),
       onError: ({ error, path }) => {
         if (error.code !== 'INTERNAL_SERVER_ERROR') return;
         log.error('Public API request failed', { namespace: 'public-api', path });
       },
-    }),
-  );
+    });
+  });
 }

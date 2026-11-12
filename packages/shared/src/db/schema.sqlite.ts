@@ -860,6 +860,27 @@ export const runnerProvisionTokens = sqliteTable('runner_provision_tokens', {
   runnerId: text('runner_id'),
 });
 
+/**
+ * Personal API tokens (openspec public-rest-api-v1): a user's credential for
+ * the public REST API `/api/v1`, and nothing else. Only the SHA-256 hash of the
+ * token is stored; `prefix` is its first characters, to tell tokens apart in
+ * the list. A token stops working once `revoked_at` is set or `expires_at` is
+ * past.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const personalAccessTokens = sqliteTable('personal_access_tokens', {
+  id: text('id').primaryKey(),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  prefix: text('prefix').notNull(),
+  tokenHash: text('token_hash').notNull().unique(),
+  createdAt: text('created_at').notNull(),
+  expiresAt: text('expires_at').notNull(),
+  lastUsedAt: text('last_used_at'),
+  revokedAt: text('revoked_at'),
+});
+
 export const runnerOperationIdempotency = sqliteTable(
   'runner_operation_idempotency',
   {

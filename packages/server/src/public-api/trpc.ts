@@ -12,7 +12,7 @@ import type { OpenApiMeta } from 'trpc-to-openapi';
 import { log } from '../lib/logger.js';
 
 /** Who is calling: set from a valid personal API token, `null` without one. */
-interface PublicApiContext {
+export interface PublicApiContext {
   userId: string | null;
 }
 

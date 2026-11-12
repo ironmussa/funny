@@ -1893,6 +1893,29 @@ const migrations: Migration[] = [
       await ctx().addColumn('projects', 'redirect_checks', 'INTEGER NOT NULL', '1');
     },
   },
+  {
+    // public-rest-api-v1: personal API tokens for /api/v1 (hash only).
+    name: '094_personal_access_tokens',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS personal_access_tokens (
+          id TEXT PRIMARY KEY,
+          user_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          prefix TEXT NOT NULL,
+          token_hash TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          last_used_at TEXT,
+          revoked_at TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_personal_access_tokens_user
+        ON personal_access_tokens (user_id)
+      `);
+    },
+  },
 ];
 
 /**

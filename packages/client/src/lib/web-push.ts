@@ -1,11 +1,13 @@
-import { request } from './api/_core';
+import type { PushSubscriptionBody } from '@funny/shared/contracts/push';
+import type { DomainError } from '@funny/shared/errors';
+import type { ResultAsync } from 'neverthrow';
+
+import { trpc, trpcCall } from './api/_trpc';
 import { getNotificationWorker } from './notification-worker';
 
-async function pushRequest<T>(path: string, method = 'GET', body?: unknown): Promise<T> {
-  const result = await request<T>(`/push/${path}`, {
-    method,
-    ...(body ? { body: JSON.stringify(body) } : {}),
-  });
+/** Push calls throw on failure: the settings UI reports the message. */
+async function unwrapPush<T>(call: ResultAsync<T, DomainError>): Promise<T> {
+  const result = await call;
   if (result.isErr()) throw new Error(result.error.message);
   return result.value;
 }
@@ -22,7 +24,7 @@ export async function hasPushSubscription(): Promise<boolean> {
 
 export async function enableWebPush(): Promise<void> {
   if (!supportsWebPush()) throw new Error('Web Push is unavailable in this browser');
-  const { publicKey } = await pushRequest<{ publicKey: string | null }>('config');
+  const { publicKey } = await unwrapPush(trpcCall(() => trpc.push.config.query()));
   if (!publicKey) throw new Error('Web Push is not configured on the server');
   const registration = await getNotificationWorker();
   let subscription = await registration.pushManager.getSubscription();
@@ -36,7 +38,9 @@ export async function enableWebPush(): Promise<void> {
     });
   }
   try {
-    await pushRequest('subscription', 'PUT', subscription.toJSON());
+    await unwrapPush(
+      trpcCall(() => trpc.push.subscribe.mutate(subscription.toJSON() as PushSubscriptionBody)),
+    );
   } catch (error) {
     if (!existing) await subscription.unsubscribe();
     throw error;
@@ -48,7 +52,9 @@ export async function disableWebPush(): Promise<void> {
   const registration = await navigator.serviceWorker.getRegistration('/');
   const subscription = await registration?.pushManager.getSubscription();
   if (!subscription) return;
-  await pushRequest('subscription', 'DELETE', { endpoint: subscription.endpoint });
+  await unwrapPush(
+    trpcCall(() => trpc.push.unsubscribe.mutate({ endpoint: subscription.endpoint })),
+  );
   await subscription.unsubscribe();
 }
 
@@ -57,5 +63,5 @@ export async function testWebPush(): Promise<void> {
   const registration = await getNotificationWorker();
   const subscription = await registration.pushManager.getSubscription();
   if (!subscription) throw new Error('Push subscription unavailable');
-  await pushRequest('test', 'POST', { endpoint: subscription.endpoint });
+  await unwrapPush(trpcCall(() => trpc.push.test.mutate({ endpoint: subscription.endpoint })));
 }

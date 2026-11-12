@@ -187,4 +187,44 @@ describe('API client', () => {
     expect(fixture.circuit.failures).toBe(0);
     expect(fixture.failures).toEqual([]);
   });
+
+  test('reads a tRPC error body like a REST one', async () => {
+    const fixture = createDependencies(async () =>
+      response(404, {
+        error: {
+          message: 'Not found',
+          code: -32004,
+          friendlyMessage: 'That automation is gone',
+          data: { code: 'NOT_FOUND', httpStatus: 404, path: 'automations.get' },
+        },
+      }),
+    );
+    await expect(fixture.client.request('/trpc/automations.get')).rejects.toEqual({
+      type: 'NOT_FOUND',
+      message: 'Not found',
+      friendlyMessage: 'That automation is gone',
+    });
+  });
+
+  test('keeps a REST error object that is not a tRPC error as JSON', async () => {
+    const fixture = createDependencies(async () =>
+      response(400, { error: { message: 'x', field: 'name' } }),
+    );
+    await expect(fixture.client.request('/things')).rejects.toMatchObject({
+      message: JSON.stringify({ message: 'x', field: 'name' }),
+    });
+  });
+
+  test('a 401 on the session probe does not trigger onUnauthorized, over REST or tRPC', async () => {
+    const fixture = createDependencies(async () => response(401, { error: 'Unauthorized' }));
+    await expect(fixture.client.request('/profile')).rejects.toBeDefined();
+    await expect(fixture.client.request('/trpc/profile.get')).rejects.toBeDefined();
+    expect(fixture.unauthorized).toEqual([]);
+
+    await expect(
+      fixture.client.request('/trpc/profile.update', { method: 'POST' }),
+    ).rejects.toBeDefined();
+    await expect(fixture.client.request('/trpc/threads.list?input=%7B%7D')).rejects.toBeDefined();
+    expect(fixture.unauthorized).toEqual(['/trpc/profile.update', '/trpc/threads.list']);
+  });
 });

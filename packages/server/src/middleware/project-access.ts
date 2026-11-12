@@ -29,17 +29,41 @@ export interface ProjectAccessOptions {
   forbidden?: string;
 }
 
+/** Why a project request is refused, or `null` when the caller holds the capability. */
+export type ProjectAccessRefusal = { status: 404 | 403; message: string } | null;
+
+/**
+ * The access decision without any HTTP framework. The middleware below and the
+ * tRPC `projectProcedure` (`@funny/api`, `trpc/ports/authz.ts`) both decide
+ * through this.
+ */
+export async function decideProjectAccess(
+  getRole: ProjectRoleResolver,
+  capability: Capability,
+  projectId: string | undefined,
+  userId: string,
+  forbidden = 'Access denied',
+): Promise<ProjectAccessRefusal> {
+  const role = projectId ? await getRole(userId, projectId) : null;
+  if (!role) return { status: 404, message: 'Project not found' };
+  if (!roleCan(role, capability)) return { status: 403, message: forbidden };
+  return null;
+}
+
 export function createProjectAccessMiddleware(getRole: ProjectRoleResolver) {
   return function requireProjectAccess(
     capability: Capability,
     { param = 'id', forbidden = 'Access denied' }: ProjectAccessOptions = {},
   ): MiddlewareHandler<ServerEnv> {
     return async (c, next) => {
-      const projectId = c.req.param(param);
-      const userId = c.get('userId') as string;
-      const role = projectId ? await getRole(userId, projectId) : null;
-      if (!role) return c.json({ error: 'Project not found' }, 404);
-      if (!roleCan(role, capability)) return c.json({ error: forbidden }, 403);
+      const refused = await decideProjectAccess(
+        getRole,
+        capability,
+        c.req.param(param),
+        c.get('userId') as string,
+        forbidden,
+      );
+      if (refused) return c.json({ error: refused.message }, refused.status);
       return next();
     };
   };

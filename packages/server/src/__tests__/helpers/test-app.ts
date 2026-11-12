@@ -136,6 +136,8 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   app.route('/api/team-projects', teamProjectRoutes);
   app.route('/api/analytics', analyticsRoutes);
   app.route('/api/automations', automationRoutes);
+  const { mountTrpc } = await import('../../trpc/mount.js');
+  mountTrpc(app);
   app.route('/api/pipelines', pipelineRoutes);
   app.route('/api/invite-links', inviteLinkPublicRoutes);
   app.route('/api/invite-links', inviteLinkRoutes);

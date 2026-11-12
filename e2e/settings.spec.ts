@@ -170,9 +170,11 @@ test.describe('9. General Settings Dialog (Modal)', () => {
     await waitForSidebar(page);
     await page.getByTestId('sidebar-settings').click();
 
-    // Intercept profile save
+    // Intercept the profile save (the `profile.update` tRPC mutation)
     const savePromise = page.waitForResponse(
-      (res) => res.url().includes('/api/profile') && res.request().method() === 'PUT',
+      (res) =>
+        new URL(res.url()).pathname === '/api/trpc/profile.update' &&
+        res.request().method() === 'POST',
     );
 
     await page.getByTestId('settings-dialog-save').click();

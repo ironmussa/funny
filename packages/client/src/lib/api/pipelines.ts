@@ -1,14 +1,15 @@
-import {
-  pipelinesContract as contract,
-  type CreatePipelineRequest,
-  type UpdatePipelineRequest,
+import type {
+  CreatePipelineRequest,
+  UpdatePipelineRequest,
 } from '@funny/shared/contracts/pipelines';
 
-import { callEndpoint } from './_contract';
 import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
+
+const procedures = trpc.pipelines;
 
 export const pipelinesApi = {
-  /** Answer a pipeline approval gate (human-in-the-loop). */
+  /** Answer a pipeline approval gate (human-in-the-loop). Stays REST: it may be proxied to the runner. */
   respondToApproval: (
     approvalId: string,
     body: { decision: 'approve' | 'reject'; text?: string },
@@ -17,11 +18,11 @@ export const pipelinesApi = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
-  listPipelines: (projectId: string) => callEndpoint(contract.list, { params: { projectId } }),
-  createPipeline: (data: CreatePipelineRequest) => callEndpoint(contract.create, { body: data }),
+  listPipelines: (projectId: string) => trpcCall(() => procedures.list.query({ projectId })),
+  createPipeline: (data: CreatePipelineRequest) => trpcCall(() => procedures.create.mutate(data)),
   updatePipeline: (id: string, data: UpdatePipelineRequest) =>
-    callEndpoint(contract.update, { params: { id }, body: data }),
-  deletePipeline: (id: string) => callEndpoint(contract.remove, { params: { id } }),
+    trpcCall(() => procedures.update.mutate({ id, data })),
+  deletePipeline: (id: string) => trpcCall(() => procedures.remove.mutate({ id })),
   listPipelineRuns: (threadId: string) =>
-    callEndpoint(contract.runsForThread, { params: { threadId } }),
+    trpcCall(() => procedures.runsForThread.query({ threadId })),
 };

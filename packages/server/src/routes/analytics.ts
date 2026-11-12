@@ -4,56 +4,31 @@
  * @domain type: adapter
  * @domain layer: infrastructure
  * @domain depends: AnalyticsService
+ *
+ * The logic lives in `trpc/ports/insights.ts`, shared with the `analytics` tRPC
+ * procedures (openspec adopt-trpc-browser-api).
  */
 
+import { analyticsOverviewQuery, analyticsTimelineQuery } from '@funny/shared/contracts/analytics';
 import { Hono } from 'hono';
-import { z } from 'zod';
 
 import type { ServerEnv } from '../lib/types.js';
-import { getOverview, getTimeline } from '../services/analytics-service.js';
+import { analyticsPort as port } from '../trpc/ports/insights.js';
+import { answerJson } from '../trpc/reply.js';
 import { parseQuery } from '../validation/request.js';
 
 export const analyticsRoutes = new Hono<ServerEnv>();
 
-const overviewQuerySchema = z.object({
-  projectId: z.string().optional(),
-  timeRange: z.string().optional(),
-  tz: z.coerce.number().default(0),
-});
-
-const timelineQuerySchema = overviewQuerySchema.extend({
-  groupBy: z.string().default('day'),
-});
-
 // GET /api/analytics/overview?projectId=xxx&timeRange=month&tz=300
 analyticsRoutes.get('/overview', async (c) => {
-  const userId = c.get('userId') as string;
-  const parsed = parseQuery(c, overviewQuerySchema);
+  const parsed = parseQuery(c, analyticsOverviewQuery);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const query = parsed.value;
-
-  const result = await getOverview({
-    userId,
-    projectId: query.projectId,
-    timeRange: query.timeRange,
-    offsetMinutes: query.tz || 0,
-  });
-  return c.json(result);
+  return answerJson(c, port.overview(c.get('userId') as string, parsed.value));
 });
 
 // GET /api/analytics/timeline?projectId=xxx&timeRange=month&groupBy=week&tz=300
 analyticsRoutes.get('/timeline', async (c) => {
-  const userId = c.get('userId') as string;
-  const parsed = parseQuery(c, timelineQuerySchema);
+  const parsed = parseQuery(c, analyticsTimelineQuery);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const query = parsed.value;
-
-  const result = await getTimeline({
-    userId,
-    projectId: query.projectId,
-    timeRange: query.timeRange,
-    groupBy: query.groupBy,
-    offsetMinutes: query.tz || 0,
-  });
-  return c.json(result);
+  return answerJson(c, port.timeline(c.get('userId') as string, parsed.value));
 });

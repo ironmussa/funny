@@ -7,205 +7,63 @@
  *   DELETE /api/projects/:id/runner-grants/:runnerId    — revoke it
  *   PUT    /api/projects/general-runner                 — designate the user's general runner
  *
- * Only the project OWNER may change which runner serves the project. Any runner
- * that loses access has its running agents for the project stopped; its files
- * stay on disk.
+ * They delegate to the project-runners port, which the `projectRunners` tRPC
+ * router serves too: only the project OWNER may change which runner serves the
+ * project, and a runner that loses access has its running agents for the
+ * project stopped.
  */
 
-import { and, eq, inArray } from 'drizzle-orm';
-import { Hono } from 'hono';
-import { z } from 'zod';
+import {
+  setGeneralRunnerBody,
+  updateProjectRunnerSettingsBody,
+} from '@funny/shared/contracts/runners';
+import { Hono, type Context } from 'hono';
 
-import { db } from '../db/index.js';
-import { threads } from '../db/schema.js';
-import { audit } from '../lib/audit.js';
-import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
-import * as projectRepo from '../services/project-repository.js';
-import {
-  authorizedRunnerRequests,
-  runnerActor,
-  withRunnerFor,
-} from '../services/runner-access/index.js';
-import { listRunnersByUser } from '../services/runner-manager.js';
-import type { RunnerPresencePort, RunnerRequestPort } from '../services/runner-ports.js';
-import {
-  getGeneralRunnerId,
-  getProjectRunnerSettings,
-  grantProjectRunner,
-  revokeProjectRunner,
-  setGeneralRunner,
-  setProjectDedicatedRunner,
-  setProjectGithubToken,
-} from '../services/runner-scope.js';
+import { createProjectRunnersPort } from '../trpc/ports/project-runners.js';
+import { answerJson } from '../trpc/reply.js';
 import { parseJsonBody } from '../validation/request.js';
 
 export const projectRunnerSettingsRoutes = new Hono<ServerEnv>();
 
-const ACTIVE_STATUSES = ['running', 'waiting', 'pending'];
-
-/**
- * Stop the project's active agents on runners that just lost access.
- *
- * The identity signed into each stop is the PROJECT OWNER's, read from the
- * project row (never from the request). Each runner is certified for
- * ownership only (`owned-runner`): it has just lost project scope, so a
- * project-scoped certification would refuse the very cleanup we need. A
- * runner that is not the owner's is skipped and audited by `runner-access`.
- */
-export async function stopProjectSessionsOnRunners(
-  ports: { requests?: RunnerRequestPort; presence?: RunnerPresencePort },
-  projectId: string,
-  runnerIds: string[],
-): Promise<void> {
-  if (!ports.requests || runnerIds.length === 0) return;
-  const project = await projectRepo.getProject(projectId);
-  if (!project) return;
-  const owner = runnerActor({ userId: project.userId });
-  const sink = authorizedRunnerRequests(ports.requests);
-  const active = await db
-    .select({ id: threads.id, runnerId: threads.runnerId })
-    .from(threads)
-    .where(
-      and(
-        eq(threads.projectId, projectId),
-        inArray(threads.runnerId, runnerIds),
-        inArray(threads.status, ACTIVE_STATUSES),
-      ),
-    );
-  for (const t of active) {
-    if (!t.runnerId) continue;
-    const result = await withRunnerFor(
-      owner,
-      { kind: 'owned-runner', runnerId: t.runnerId },
-      ports.presence,
-      async (actor, runner, proof) => {
-        if (!(await sink.isAvailable(runner))) return;
-        try {
-          await sink.send(actor, runner, proof, {
-            method: 'POST',
-            path: `/api/threads/${t.id}/stop`,
-            headers: { 'Content-Type': 'application/json' },
-            body: null,
-          });
-        } catch (e) {
-          log.warn('Failed to stop thread on revoked runner', {
-            namespace: 'project-runner-settings',
-            projectId,
-            runnerId: runner.value,
-            threadId: t.id,
-            error: (e as Error).message,
-          });
-        }
-      },
-    );
-    if (result.isErr()) {
-      log.warn('Skipped stopping thread on a runner the project owner does not own', {
-        namespace: 'project-runner-settings',
-        projectId,
-        runnerId: t.runnerId,
-        threadId: t.id,
-      });
-    }
-  }
-}
-
-async function requireOwnedProject(projectId: string, userId: string) {
-  const project = await projectRepo.getProject(projectId);
-  return project && project.userId === userId ? project : null;
-}
+const portFor = (c: Context<ServerEnv>) =>
+  createProjectRunnersPort({ requests: c.env?.runnerRequests, presence: c.env?.runnerPresence });
 
 projectRunnerSettingsRoutes.put('/general-runner', async (c) => {
-  const userId = c.get('userId') as string;
-  const parsed = await parseJsonBody(c, z.object({ runnerId: z.string().min(1).nullable() }));
+  const parsed = await parseJsonBody(c, setGeneralRunnerBody);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const ok = await setGeneralRunner(userId, parsed.value.runnerId);
-  if (!ok) return c.json({ error: 'Runner not found' }, 404);
-  return c.json({ generalRunnerId: parsed.value.runnerId });
+  return answerJson(
+    c,
+    portFor(c).setGeneralRunner(c.get('userId') as string, parsed.value.runnerId),
+  );
 });
 
-projectRunnerSettingsRoutes.get('/:id/runner-settings', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.param('id');
-  if (!(await requireOwnedProject(projectId, userId))) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-  const settings = await getProjectRunnerSettings(projectId);
-  return c.json({
-    ...settings,
-    generalRunnerId: await getGeneralRunnerId(userId),
-    runners: await listRunnersByUser(userId),
-  });
-});
-
-const updateSchema = z.object({
-  dedicatedRunnerId: z.string().min(1).nullable().optional(),
-  /** Plaintext token to store (encrypted); `null` clears it; omitted = unchanged. */
-  githubToken: z.string().min(1).max(512).nullable().optional(),
-});
+projectRunnerSettingsRoutes.get('/:id/runner-settings', (c) =>
+  answerJson(c, portFor(c).settings(c.get('userId') as string, c.req.param('id'))),
+);
 
 projectRunnerSettingsRoutes.put('/:id/runner-settings', async (c) => {
+  const port = portFor(c);
   const userId = c.get('userId') as string;
   const projectId = c.req.param('id');
-  if (!(await requireOwnedProject(projectId, userId))) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-  const parsed = await parseJsonBody(c, updateSchema);
+  // A stranger's project answers 404 before a bad body answers 400.
+  const current = await port.settings(userId, projectId);
+  if (current.isErr()) return answerJson(c, Promise.resolve(current));
+  const parsed = await parseJsonBody(c, updateProjectRunnerSettingsBody);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const body = parsed.value;
-
-  if (body.dedicatedRunnerId !== undefined) {
-    const result = await setProjectDedicatedRunner(projectId, userId, body.dedicatedRunnerId);
-    if (!result.ok) return c.json({ error: 'Runner not found' }, 404);
-    audit({
-      action: 'project.runner_binding_changed',
-      actorId: userId,
-      detail: `project ${projectId} dedicated runner → ${body.dedicatedRunnerId ?? 'general'}`,
-      meta: {
-        projectId,
-        dedicatedRunnerId: body.dedicatedRunnerId,
-        revoked: result.revokedRunnerIds,
-      },
-    });
-    await stopProjectSessionsOnRunners(
-      { requests: c.env?.runnerRequests, presence: c.env?.runnerPresence },
-      projectId,
-      result.revokedRunnerIds,
-    );
-  }
-  if (body.githubToken !== undefined) {
-    await setProjectGithubToken(projectId, body.githubToken);
-  }
-  return c.json(await getProjectRunnerSettings(projectId));
+  return answerJson(c, port.update(userId, projectId, parsed.value));
 });
 
-projectRunnerSettingsRoutes.post('/:id/runner-grants/:runnerId', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.param('id');
-  if (!(await requireOwnedProject(projectId, userId))) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-  if (!(await grantProjectRunner(projectId, userId, c.req.param('runnerId')))) {
-    return c.json({ error: 'Runner not found' }, 404);
-  }
-  return c.json(await getProjectRunnerSettings(projectId));
-});
+projectRunnerSettingsRoutes.post('/:id/runner-grants/:runnerId', (c) =>
+  answerJson(
+    c,
+    portFor(c).grant(c.get('userId') as string, c.req.param('id'), c.req.param('runnerId')),
+  ),
+);
 
-projectRunnerSettingsRoutes.delete('/:id/runner-grants/:runnerId', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.param('id');
-  const runnerId = c.req.param('runnerId');
-  if (!(await requireOwnedProject(projectId, userId))) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-  const result = await revokeProjectRunner(projectId, userId, runnerId);
-  if (!result.ok) return c.json({ error: 'Project not found' }, 404);
-  if (result.lostAccess) {
-    await stopProjectSessionsOnRunners(
-      { requests: c.env?.runnerRequests, presence: c.env?.runnerPresence },
-      projectId,
-      [runnerId],
-    );
-  }
-  return c.json(await getProjectRunnerSettings(projectId));
-});
+projectRunnerSettingsRoutes.delete('/:id/runner-grants/:runnerId', (c) =>
+  answerJson(
+    c,
+    portFor(c).revoke(c.get('userId') as string, c.req.param('id'), c.req.param('runnerId')),
+  ),
+);

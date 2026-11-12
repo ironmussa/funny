@@ -3,7 +3,8 @@ import {
   type FontSizePreference,
   type ThreadViewerPreference,
 } from '@funny/client-core/stores/preferences';
-import type { ToolPermission, UserProfile } from '@funny/shared';
+import type { ToolPermission } from '@funny/shared';
+import type { ProfileResponse } from '@funny/shared/contracts/profile';
 import { MODEL_REGISTRY } from '@funny/shared/models';
 import { create } from 'zustand';
 
@@ -205,7 +206,7 @@ interface SettingsState {
   /** Experimental thread viewer engine (client-only, localStorage-backed). */
   threadViewer: ThreadViewer;
   _initialized: boolean;
-  initializeFromProfile: (profile: UserProfile) => void;
+  initializeFromProfile: (profile: ProfileResponse) => void;
   setDefaultEditor: (editor: Editor) => void;
   setUseInternalEditor: (use: boolean) => void;
   setTerminalShell: (shell: TerminalShell) => void;

@@ -3,23 +3,24 @@ import type {
   RunTriageStatus,
   UpdateAutomationRequest,
 } from '@funny/shared';
-import { automationsContract as contract } from '@funny/shared/contracts/automations';
 
-import { callEndpoint } from './_contract';
+import { trpc, trpcCall } from './_trpc';
+
+const procedures = trpc.automations;
 
 export const automationsApi = {
-  listAutomations: (projectId?: string) => callEndpoint(contract.list, { query: { projectId } }),
-  getAutomation: (id: string) => callEndpoint(contract.get, { params: { id } }),
+  listAutomations: (projectId?: string) => trpcCall(() => procedures.list.query({ projectId })),
+  getAutomation: (id: string) => trpcCall(() => procedures.get.query({ id })),
   createAutomation: (data: CreateAutomationRequest) =>
-    callEndpoint(contract.create, { body: data }),
+    trpcCall(() => procedures.create.mutate(data)),
   updateAutomation: (id: string, data: UpdateAutomationRequest) =>
-    callEndpoint(contract.update, { params: { id }, body: data }),
-  deleteAutomation: (id: string) => callEndpoint(contract.remove, { params: { id } }),
-  triggerAutomation: (id: string) => callEndpoint(contract.trigger, { params: { id } }),
+    trpcCall(() => procedures.update.mutate({ id, data })),
+  deleteAutomation: (id: string) => trpcCall(() => procedures.remove.mutate({ id })),
+  triggerAutomation: (id: string) => trpcCall(() => procedures.trigger.mutate({ id })),
   listAutomationRuns: (automationId: string) =>
-    callEndpoint(contract.runs, { params: { id: automationId } }),
+    trpcCall(() => procedures.runs.query({ id: automationId })),
   getAutomationInbox: (options?: { projectId?: string; triageStatus?: string }) =>
-    callEndpoint(contract.inbox, { query: options }),
+    trpcCall(() => procedures.inbox.query(options)),
   triageRun: (runId: string, triageStatus: RunTriageStatus) =>
-    callEndpoint(contract.triageRun, { params: { runId }, body: { triageStatus } }),
+    trpcCall(() => procedures.triageRun.mutate({ runId, triageStatus })),
 };

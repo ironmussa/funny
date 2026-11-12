@@ -2,14 +2,13 @@
  * Runner management routes for the central server.
  */
 
+import { approveEnrollmentBody, assignRunnerProjectBody } from '@funny/shared/contracts/runners';
 import type {
   RunnerRegisterRequest,
   RunnerHeartbeatRequest,
   RunnerTaskResultRequest,
-  AssignProjectRequest,
   EnrollStartRequest,
   EnrollPollRequest,
-  EnrollApproveRequest,
   EnrollPollResponse,
 } from '@funny/shared/runner-protocol';
 import { Hono, type Context } from 'hono';
@@ -24,6 +23,9 @@ import {
   recordProvisionedRunner,
   type ProvisionGrant,
 } from '../services/runner-provision-tokens.js';
+import { runnersPort } from '../trpc/ports/runners.js';
+import { answerJson } from '../trpc/reply.js';
+import { parseJsonBody } from '../validation/request.js';
 
 export const runnerRoutes = new Hono<ServerEnv>();
 
@@ -172,42 +174,21 @@ runnerRoutes.post('/enroll/poll', async (c) => {
 runnerRoutes.get('/enroll/:userCode', async (c) => {
   const userId = c.get('userId') as string | undefined;
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-  const info = await enroll.getByUserCode(c.req.param('userCode'));
-  if (!info) return c.json({ error: 'Unknown or expired code' }, 404);
-  return c.json(info);
+  return answerJson(c, runnersPort.enrollment(c.req.param('userCode')));
 });
 
 // Authenticated: approve a pending enrollment, binding it to this user.
 runnerRoutes.post('/enroll/approve', async (c) => {
   const userId = c.get('userId') as string | undefined;
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-
-  let body: EnrollApproveRequest;
-  try {
-    body = await c.req.json<EnrollApproveRequest>();
-  } catch {
-    return c.json({ error: 'Invalid JSON body' }, 400);
-  }
-  if (!body?.userCode) return c.json({ error: 'Missing userCode' }, 400);
-
-  const result = await enroll.approve(body.userCode, userId);
-  if (!result.ok) {
-    const status = result.reason === 'already_approved' ? 409 : 404;
-    audit({
-      action: 'runner.enroll_rejected',
-      actorId: userId,
-      detail: `Runner enrollment approval failed: ${result.reason}`,
-      meta: { reason: result.reason },
-    });
-    return c.json({ error: `Enrollment ${result.reason}`, reason: result.reason }, status);
-  }
-  audit({
-    action: 'runner.enroll_approved',
-    actorId: userId,
-    detail: 'Runner enrollment approved',
-    meta: { runnerId: result.runnerId },
-  });
-  return c.json({ ok: true, runnerId: result.runnerId });
+  const parsed = await parseJsonBody(c, approveEnrollmentBody);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  const result = await runnersPort.approveEnrollment(userId, parsed.value.userCode);
+  // `reason` is the refusal's name (`not_found`, `expired`, `already_approved`, `locked`).
+  return result.match(
+    (value) => c.json(value),
+    (e) => c.json({ error: e.message, reason: e.code }, e.status as 404 | 409),
+  );
 });
 
 // ── Heartbeat ───────────────────────────────────────────
@@ -258,27 +239,16 @@ runnerRoutes.post('/tasks/result', async (c) => {
 
 runnerRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string | undefined;
-  const isRunner = c.get('isRunner') as boolean | undefined;
-  const userRole = c.get('userRole') as string | undefined;
 
   // Runner-authenticated callers see only THEMSELVES — a runner credential
   // must never enumerate other tenants' runners (audit H2).
-  if (isRunner) {
+  if (c.get('isRunner')) {
     const ownRunnerId = runnerSelfId(c);
     const own = ownRunnerId ? await rm.getRunner(ownRunnerId) : null;
     return c.json({ runners: own ? [own] : [] });
   }
-
-  if (userRole === 'admin') {
-    return c.json({ runners: await rm.listRunners() });
-  }
-
-  // Regular users see only their own runners
-  if (userId) {
-    return c.json({ runners: await rm.listRunnersByUser(userId) });
-  }
-
-  return c.json({ runners: [] });
+  if (!userId) return c.json({ runners: [] });
+  return answerJson(c, runnersPort.list(userCaller(c, userId)));
 });
 
 runnerRoutes.get('/:runnerId', async (c) => {
@@ -314,34 +284,9 @@ runnerRoutes.get('/:runnerId', async (c) => {
 });
 
 runnerRoutes.delete('/:runnerId', async (c) => {
-  const runnerId = c.req.param('runnerId');
   const userId = c.get('userId') as string | undefined;
-  const userRole = c.get('userRole') as string | undefined;
-
-  if (userRole === 'admin') {
-    await rm.removeRunner(runnerId);
-    audit({
-      action: 'runner.remove',
-      actorId: userId ?? null,
-      detail: `Admin removed runner`,
-      meta: { runnerId },
-    });
-    return c.json({ ok: true });
-  }
-
-  if (userId) {
-    const removed = await rm.removeRunnerForUser(runnerId, userId);
-    if (!removed) return c.json({ error: 'Runner not found or not owned by you' }, 404);
-    audit({
-      action: 'runner.remove',
-      actorId: userId,
-      detail: `User removed own runner`,
-      meta: { runnerId },
-    });
-    return c.json({ ok: true });
-  }
-
-  return c.json({ error: 'Unauthorized' }, 401);
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+  return answerJson(c, runnersPort.remove(userCaller(c, userId), c.req.param('runnerId')));
 });
 
 // ── Project Assignment ──────────────────────────────────
@@ -371,18 +316,29 @@ function isRunnerSelf(c: Context<ServerEnv>, runnerId: string): boolean {
   return ok;
 }
 
+/** The user caller of a runner operation (an instance admin reaches every runner). */
+function userCaller(c: Context<ServerEnv>, userId: string) {
+  return { userId, role: (c.get('userRole') as string | undefined) ?? null };
+}
+
 /**
- * Return true when the caller is the runner's owner, an admin, or the runner
- * itself (bearer-token identity). Callers that fail this check should 404
- * (not 403) so we don't leak a runner's existence to other tenants — matches
- * the `GET /:runnerId` behaviour.
+ * Runs a runner-scoped operation: a runner credential only on its OWN record
+ * (404 otherwise, audited), a user through `runnersPort`, which checks the
+ * owner (or admin) and answers 404 for anyone else.
  */
-async function authorizeRunnerAccess(runnerId: string, c: Context<ServerEnv>): Promise<boolean> {
+async function onRunner(
+  c: Context<ServerEnv>,
+  runnerId: string,
+  asRunner: () => Promise<Response>,
+  asUser: (userId: string) => Promise<Response>,
+): Promise<Response> {
+  if (c.get('isRunner')) {
+    if (!(await rm.getRunner(runnerId)) || !isRunnerSelf(c, runnerId)) {
+      return c.json({ error: 'Runner not found' }, 404);
+    }
+    return asRunner();
+  }
   const userId = c.get('userId') as string | undefined;
-  const isRunner = c.get('isRunner') as boolean | undefined;
-  const userRole = c.get('userRole') as string | undefined;
-  if (isRunner) return isRunnerSelf(c, runnerId);
-  if (userRole === 'admin') return true;
   if (!userId) {
     audit({
       action: 'authz.cross_tenant_refused',
@@ -390,59 +346,42 @@ async function authorizeRunnerAccess(runnerId: string, c: Context<ServerEnv>): P
       detail: 'Runner access refused — no userId on request',
       meta: { runnerId, path: c.req.path, method: c.req.method },
     });
-    return false;
+    return c.json({ error: 'Runner not found' }, 404);
   }
-  const ownerId = await rm.getRunnerUserId(runnerId);
-  const isOwner = ownerId === userId;
-  if (!isOwner) {
-    audit({
-      action: 'authz.cross_tenant_refused',
-      actorId: userId,
-      detail: 'Runner access refused — non-owner',
-      meta: { runnerId, ownerId: ownerId ?? null, path: c.req.path, method: c.req.method },
-    });
-  }
-  return isOwner;
+  return asUser(userId);
 }
 
 runnerRoutes.post('/:runnerId/projects', async (c) => {
   const runnerId = c.req.param('runnerId');
-  const body = await c.req.json<AssignProjectRequest>();
-
-  if (!body.projectId || !body.localPath) {
-    return c.json({ error: 'Missing required fields: projectId, localPath' }, 400);
-  }
-
-  const runner = await rm.getRunner(runnerId);
-  if (!runner || !(await authorizeRunnerAccess(runnerId, c))) {
-    return c.json({ error: 'Runner not found' }, 404);
-  }
-
-  const assignment = await rm.assignProject(runnerId, body);
-  return c.json(assignment, 201);
+  const parsed = await parseJsonBody(c, assignRunnerProjectBody);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  return onRunner(
+    c,
+    runnerId,
+    async () => c.json(await rm.assignProject(runnerId, parsed.value), 201),
+    (userId) =>
+      answerJson(c, runnersPort.assignProject(userCaller(c, userId), runnerId, parsed.value), 201),
+  );
 });
 
 runnerRoutes.get('/:runnerId/projects', async (c) => {
   const runnerId = c.req.param('runnerId');
-
-  const runner = await rm.getRunner(runnerId);
-  if (!runner || !(await authorizeRunnerAccess(runnerId, c))) {
-    return c.json({ error: 'Runner not found' }, 404);
-  }
-
-  const assignments = await rm.listAssignments(runnerId);
-  return c.json({ assignments });
+  const listAssignments = async () => c.json({ assignments: await rm.listAssignments(runnerId) });
+  return onRunner(c, runnerId, listAssignments, (userId) =>
+    answerJson(c, runnersPort.assignments(userCaller(c, userId), runnerId)),
+  );
 });
-
 runnerRoutes.delete('/:runnerId/projects/:projectId', async (c) => {
   const runnerId = c.req.param('runnerId');
   const projectId = c.req.param('projectId');
-
-  const runner = await rm.getRunner(runnerId);
-  if (!runner || !(await authorizeRunnerAccess(runnerId, c))) {
-    return c.json({ error: 'Runner not found' }, 404);
-  }
-
-  await rm.unassignProject(runnerId, { projectId });
-  return c.json({ ok: true });
+  return onRunner(
+    c,
+    runnerId,
+    async () => {
+      await rm.unassignProject(runnerId, { projectId });
+      return c.json({ ok: true });
+    },
+    (userId) =>
+      answerJson(c, runnersPort.unassignProject(userCaller(c, userId), runnerId, projectId)),
+  );
 });

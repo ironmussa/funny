@@ -1,4 +1,5 @@
 import { test, expect, waitForSidebar, seedProject } from './fixtures';
+import { trpcProcedure } from './mock-helpers';
 
 test.describe('18. Edge Cases & UX', () => {
   test('18.1 Empty project shows empty state', async ({ api, authedPage: page, tempRepo }) => {
@@ -41,8 +42,8 @@ test.describe('18. Edge Cases & UX', () => {
   });
 
   test('18.7 Loading states — sidebar shows skeletons during load', async ({ page }) => {
-    // Slow down the projects API to catch loading state
-    await page.route('**/api/projects', async (route) => {
+    // Slow down the project list to catch loading state
+    await page.route(trpcProcedure('projects.list'), async (route) => {
       await new Promise((r) => setTimeout(r, 1500));
       await route.continue();
     });

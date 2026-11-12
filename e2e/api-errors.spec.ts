@@ -1,4 +1,5 @@
 import { test, expect, seedProject } from './fixtures';
+import { fulfillTrpcError, trpcProcedure } from './mock-helpers';
 
 test.describe('D. API Error Handling', () => {
   test('D.1 500 on project create shows error, no crash', async ({ authedPage: page }) => {
@@ -48,8 +49,8 @@ test.describe('D. API Error Handling', () => {
   });
 
   test('D.3 Network timeout on projects shows loading state', async ({ authedPage: page }) => {
-    // Intercept projects with a very slow response
-    await page.route('**/api/projects', async (route) => {
+    // Intercept the project list with a very slow response
+    await page.route(trpcProcedure('projects.list'), async (route) => {
       if (route.request().method() === 'GET') {
         await new Promise((r) => setTimeout(r, 5000));
         await route.continue();
@@ -70,18 +71,17 @@ test.describe('D. API Error Handling', () => {
   });
 
   test('D.4 401 on API call handles gracefully', async ({ authedPage: page }) => {
-    // Intercept threads API with 401
-    await page.route('**/api/threads**', async (route) => {
-      if (route.request().method() === 'GET') {
-        await route.fulfill({
-          status: 401,
-          contentType: 'application/json',
-          body: JSON.stringify({ error: 'Unauthorized' }),
-        });
-      } else {
-        await route.continue();
-      }
-    });
+    // Intercept the thread reads with 401
+    await page.route(
+      trpcProcedure((name) => name.startsWith('threads.')),
+      async (route) => {
+        if (route.request().method() === 'GET') {
+          await fulfillTrpcError(route, 401, 'Unauthorized');
+        } else {
+          await route.continue();
+        }
+      },
+    );
 
     await page.goto('/list');
     await page.waitForLoadState('networkidle');
@@ -96,7 +96,7 @@ test.describe('D. API Error Handling', () => {
 
   test('D.5 Malformed API response does not crash app', async ({ authedPage: page }) => {
     // Return invalid JSON
-    await page.route('**/api/projects', async (route) => {
+    await page.route(trpcProcedure('projects.list'), async (route) => {
       if (route.request().method() === 'GET') {
         await route.fulfill({
           status: 200,

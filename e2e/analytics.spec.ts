@@ -1,5 +1,10 @@
 import { test, expect, waitForSidebar, seedProject } from './fixtures';
-import { mockAnalyticsOverview, mockAnalyticsTimeline } from './mock-helpers';
+import {
+  mockAnalyticsOverview,
+  mockAnalyticsTimeline,
+  trpcInput,
+  trpcProcedure,
+} from './mock-helpers';
 
 test.describe('16. Analytics View', () => {
   let projectId: string;
@@ -18,18 +23,18 @@ test.describe('16. Analytics View', () => {
     const timeline = mockAnalyticsTimeline();
 
     // Mock the analytics API endpoints
-    await page.route('**/api/analytics/overview**', async (route) => {
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(overview),
+        body: JSON.stringify({ result: { data: overview } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(timeline),
+        body: JSON.stringify({ result: { data: timeline } }),
       });
     });
 
@@ -52,18 +57,18 @@ test.describe('16. Analytics View', () => {
     });
     const timeline = mockAnalyticsTimeline();
 
-    await page.route('**/api/analytics/overview**', async (route) => {
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(overview),
+        body: JSON.stringify({ result: { data: overview } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(timeline),
+        body: JSON.stringify({ result: { data: timeline } }),
       });
     });
 
@@ -79,18 +84,18 @@ test.describe('16. Analytics View', () => {
     const overview = mockAnalyticsOverview({ totalCost: 1.2345 });
     const timeline = mockAnalyticsTimeline();
 
-    await page.route('**/api/analytics/overview**', async (route) => {
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(overview),
+        body: JSON.stringify({ result: { data: overview } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(timeline),
+        body: JSON.stringify({ result: { data: timeline } }),
       });
     });
 
@@ -107,18 +112,18 @@ test.describe('16. Analytics View', () => {
     const overview = mockAnalyticsOverview({ totalCost: 0 });
     const timeline = mockAnalyticsTimeline();
 
-    await page.route('**/api/analytics/overview**', async (route) => {
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(overview),
+        body: JSON.stringify({ result: { data: overview } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(timeline),
+        body: JSON.stringify({ result: { data: timeline } }),
       });
     });
 
@@ -142,18 +147,18 @@ test.describe('16. Analytics View', () => {
     });
     const timeline = mockAnalyticsTimeline();
 
-    await page.route('**/api/analytics/overview**', async (route) => {
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(overview),
+        body: JSON.stringify({ result: { data: overview } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(timeline),
+        body: JSON.stringify({ result: { data: timeline } }),
       });
     });
 
@@ -167,18 +172,18 @@ test.describe('16. Analytics View', () => {
     const overview = mockAnalyticsOverview();
     const timeline = mockAnalyticsTimeline();
 
-    await page.route('**/api/analytics/overview**', async (route) => {
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(overview),
+        body: JSON.stringify({ result: { data: overview } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(timeline),
+        body: JSON.stringify({ result: { data: timeline } }),
       });
     });
 
@@ -193,20 +198,19 @@ test.describe('16. Analytics View', () => {
     const timeline = mockAnalyticsTimeline();
 
     let lastTimeRange = '';
-    await page.route('**/api/analytics/overview**', async (route) => {
-      const url = new URL(route.request().url());
-      lastTimeRange = url.searchParams.get('timeRange') || '';
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
+      lastTimeRange = trpcInput(route.request())?.timeRange || '';
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(overview),
+        body: JSON.stringify({ result: { data: overview } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(timeline),
+        body: JSON.stringify({ result: { data: timeline } }),
       });
     });
 
@@ -226,20 +230,19 @@ test.describe('16. Analytics View', () => {
     const timeline = mockAnalyticsTimeline();
 
     let lastGroupBy = '';
-    await page.route('**/api/analytics/overview**', async (route) => {
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(overview),
+        body: JSON.stringify({ result: { data: overview } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
-      const url = new URL(route.request().url());
-      lastGroupBy = url.searchParams.get('groupBy') || '';
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
+      lastGroupBy = trpcInput(route.request())?.groupBy || '';
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(timeline),
+        body: JSON.stringify({ result: { data: timeline } }),
       });
     });
 
@@ -258,20 +261,19 @@ test.describe('16. Analytics View', () => {
     const timeline = mockAnalyticsTimeline();
 
     let lastProjectId = '';
-    await page.route('**/api/analytics/overview**', async (route) => {
-      const url = new URL(route.request().url());
-      lastProjectId = url.searchParams.get('projectId') || '__all__';
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
+      lastProjectId = trpcInput(route.request())?.projectId || '__all__';
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(overview),
+        body: JSON.stringify({ result: { data: overview } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(timeline),
+        body: JSON.stringify({ result: { data: timeline } }),
       });
     });
 
@@ -294,18 +296,18 @@ test.describe('16. Analytics View', () => {
 
   test('16.10 No data message when overview is empty', async ({ authedPage: page }) => {
     // Return null/error for overview
-    await page.route('**/api/analytics/overview**', async (route) => {
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(null),
+        body: JSON.stringify({ result: { data: null } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(null),
+        body: JSON.stringify({ result: { data: null } }),
       });
     });
 
@@ -330,20 +332,20 @@ test.describe('16. Analytics View', () => {
 
   test('16.12 Loading spinner shows while fetching', async ({ authedPage: page }) => {
     // Delay the response
-    await page.route('**/api/analytics/overview**', async (route) => {
+    await page.route(trpcProcedure('analytics.overview'), async (route) => {
       await new Promise((r) => setTimeout(r, 2000));
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(mockAnalyticsOverview()),
+        body: JSON.stringify({ result: { data: mockAnalyticsOverview() } }),
       });
     });
-    await page.route('**/api/analytics/timeline**', async (route) => {
+    await page.route(trpcProcedure('analytics.timeline'), async (route) => {
       await new Promise((r) => setTimeout(r, 2000));
       await route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(mockAnalyticsTimeline()),
+        body: JSON.stringify({ result: { data: mockAnalyticsTimeline() } }),
       });
     });
 

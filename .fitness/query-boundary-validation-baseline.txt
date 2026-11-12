@@ -40,7 +40,6 @@ packages/runtime/src/routes/projects/hooks-routes.ts	#1	const hookType = c.req.q
 packages/server/src/routes/orchestrator-system.ts	#1	const nowParam = c.req.query('now');	query parameter coerced to number without parseQuery
 packages/server/src/routes/orchestrator-system.ts	#1	const sinceParam = c.req.query('since');	query parameter coerced to number without parseQuery
 packages/server/src/routes/orchestrator-system.ts	#1	const timeoutParam = c.req.query('timeoutMs');	query parameter coerced to number without parseQuery
-packages/server/src/routes/projects.ts	#1	const isPersonal = c.req.query('personal') === 'true';	query parameter coerced to boolean without parseQuery
 packages/server/src/routes/threads.ts	#1	const caseSensitive = c.req.query('caseSensitive') === 'true';	query parameter coerced to boolean without parseQuery
 packages/server/src/routes/threads.ts	#1	const includeArchived = c.req.query('includeArchived') === 'true';	query parameter coerced to boolean without parseQuery
 packages/server/src/routes/threads.ts	#1	const isScratchParam = c.req.query('isScratch');	query parameter coerced to boolean without parseQuery

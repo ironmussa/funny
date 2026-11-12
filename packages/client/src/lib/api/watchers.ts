@@ -1,8 +1,6 @@
-import type { Watcher } from '@funny/shared';
-
-import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
 
 export const watchersApi = {
-  listWatchers: () => request<Watcher[]>('/watchers'),
-  cancelWatcher: (id: string) => request<Watcher>(`/watchers/${id}/cancel`, { method: 'POST' }),
+  listWatchers: () => trpcCall(() => trpc.watchers.list.query()),
+  cancelWatcher: (id: string) => trpcCall(() => trpc.watchers.cancel.mutate({ id })),
 };

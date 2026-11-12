@@ -1,23 +1,17 @@
-import type { Design, DesignFidelity, DesignType } from '@funny/shared';
+import type { CreateDesignRequest } from '@funny/shared/contracts/designs';
 
 import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
 
-interface CreateDesignInput {
-  name: string;
-  type: DesignType;
-  fidelity?: DesignFidelity | null;
-  speakerNotes?: boolean;
-}
+const procedures = trpc.designs;
 
 export const designsApi = {
-  listDesigns: (projectId: string) => request<Design[]>(`/projects/${projectId}/designs`),
-  createDesign: (projectId: string, input: CreateDesignInput) =>
-    request<Design>(`/projects/${projectId}/designs`, {
-      method: 'POST',
-      body: JSON.stringify(input),
-    }),
-  getDesign: (id: string) => request<Design>(`/designs/${id}`),
-  deleteDesign: (id: string) => request<{ ok: boolean }>(`/designs/${id}`, { method: 'DELETE' }),
+  listDesigns: (projectId: string) => trpcCall(() => procedures.list.query({ projectId })),
+  createDesign: (projectId: string, input: CreateDesignRequest) =>
+    trpcCall(() => procedures.create.mutate({ projectId, ...input })),
+  getDesign: (id: string) => trpcCall(() => procedures.get.query({ id })),
+  deleteDesign: (id: string) => trpcCall(() => procedures.remove.mutate({ id })),
+  // The design folder on disk is the runner's: these stay REST, proxied to it.
   createDesignDirectory: (projectId: string, designId: string) =>
     request<{ ok: boolean; path: string }>(`/projects/${projectId}/designs/directory`, {
       method: 'POST',

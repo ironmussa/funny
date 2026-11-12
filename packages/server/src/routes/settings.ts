@@ -1,8 +1,11 @@
 /**
- * Settings routes for the central server.
+ * Settings REST routes for the central server.
  *
  * SMTP is instance-level and requires admin role. Agent execution profiles are
- * user-scoped settings and use the authenticated user id.
+ * user-scoped settings and use the authenticated user id. The logic lives in
+ * `trpc/ports/settings.ts`, shared with the `settings` tRPC procedures (openspec
+ * adopt-trpc-browser-api); these routes stay for REST consumers outside the web
+ * client.
  */
 
 import {
@@ -10,90 +13,49 @@ import {
   updateAgentExecutionProfileSchema,
   updateProjectAgentProfileBindingSchema,
 } from '@funny/shared';
-import { eq } from 'drizzle-orm';
-import { Hono } from 'hono';
+import type { SmtpSettingsRequest } from '@funny/shared/contracts/settings';
+import { Hono, type Context } from 'hono';
 
-import { db } from '../db/index.js';
-import { instanceSettings } from '../db/schema.js';
-import { encrypt, decrypt } from '../lib/crypto.js';
 import { requireProjectAccess } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
 import { requireAdmin } from '../middleware/auth.js';
-import * as agentProfileRepo from '../services/agent-execution-profile-repository.js';
+import { settingsPort as port } from '../trpc/ports/settings.js';
+import { answerJson } from '../trpc/reply.js';
 import { parseJsonBody } from '../validation/request.js';
 
 export const settingsRoutes = new Hono<ServerEnv>();
 
-// ── Instance settings helpers ────────────────────────────────────
-
-async function getSetting(key: string): Promise<string | null> {
-  const rows = await db
-    .select({ value: instanceSettings.value })
-    .from(instanceSettings)
-    .where(eq(instanceSettings.key, key));
-  return rows[0]?.value ?? null;
-}
-
-async function setSetting(key: string, value: string): Promise<void> {
-  const now = new Date().toISOString();
-  const existing = await getSetting(key);
-  if (existing !== null) {
-    await db
-      .update(instanceSettings)
-      .set({ value, updatedAt: now })
-      .where(eq(instanceSettings.key, key));
-  } else {
-    await db.insert(instanceSettings).values({ key, value, updatedAt: now });
-  }
-}
+const userIdOf = (c: Context<ServerEnv>) => c.get('userId') as string;
 
 // ── Agent execution profiles ────────────────────────────────────
 
 // GET /api/settings/agent-profiles — list current user's execution profiles
-settingsRoutes.get('/agent-profiles', async (c) => {
-  const userId = c.get('userId') as string;
-  return c.json({ profiles: await agentProfileRepo.listProfiles(userId) });
-});
+settingsRoutes.get('/agent-profiles', (c) => answerJson(c, port.listAgentProfiles(userIdOf(c))));
 
 // POST /api/settings/agent-profiles — create current user's execution profile
 settingsRoutes.post('/agent-profiles', async (c) => {
-  const userId = c.get('userId') as string;
   const parsed = await parseJsonBody(c, createAgentExecutionProfileSchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-
-  const profile = await agentProfileRepo.createProfile(userId, parsed.value);
-  return c.json(profile, 201);
+  return answerJson(c, port.createAgentProfile(userIdOf(c), parsed.value), 201);
 });
 
 // PATCH /api/settings/agent-profiles/:id — update current user's execution profile
 settingsRoutes.patch('/agent-profiles/:id', async (c) => {
-  const userId = c.get('userId') as string;
   const parsed = await parseJsonBody(c, updateAgentExecutionProfileSchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-
-  const profile = await agentProfileRepo.updateProfile(c.req.param('id'), userId, parsed.value);
-  if (!profile) return c.json({ error: 'Agent execution profile not found' }, 404);
-  return c.json(profile);
+  return answerJson(c, port.updateAgentProfile(userIdOf(c), c.req.param('id'), parsed.value));
 });
 
 // DELETE /api/settings/agent-profiles/:id — delete current user's execution profile
-settingsRoutes.delete('/agent-profiles/:id', async (c) => {
-  const userId = c.get('userId') as string;
-  const deleted = await agentProfileRepo.deleteProfile(c.req.param('id'), userId);
-  if (!deleted) return c.json({ error: 'Agent execution profile not found' }, 404);
-  return c.json({ ok: true });
-});
+settingsRoutes.delete('/agent-profiles/:id', (c) =>
+  answerJson(c, port.deleteAgentProfile(userIdOf(c), c.req.param('id'))),
+);
 
 // GET /api/settings/agent-profiles/projects/:projectId — read current user's project binding
 settingsRoutes.get(
   '/agent-profiles/projects/:projectId',
   requireProjectAccess('view', { param: 'projectId' }),
-  async (c) => {
-    const userId = c.get('userId') as string;
-    const projectId = c.req.param('projectId');
-
-    return c.json(await agentProfileRepo.getProjectBinding(projectId, userId));
-  },
+  (c) => answerJson(c, port.getProjectBinding(userIdOf(c), c.req.param('projectId'))),
 );
 
 // PUT /api/settings/agent-profiles/projects/:projectId — set/clear current user's binding
@@ -101,114 +63,24 @@ settingsRoutes.put(
   '/agent-profiles/projects/:projectId',
   requireProjectAccess('view', { param: 'projectId' }),
   async (c) => {
-    const userId = c.get('userId') as string;
-    const projectId = c.req.param('projectId');
-
     const parsed = await parseJsonBody(c, updateProjectAgentProfileBindingSchema);
     if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-
-    const binding = await agentProfileRepo.setProjectBinding(
-      projectId,
-      userId,
-      parsed.value.profileId,
+    return answerJson(
+      c,
+      port.setProjectBinding(userIdOf(c), c.req.param('projectId'), parsed.value.profileId),
     );
-    if (!binding) return c.json({ error: 'Agent execution profile not found' }, 404);
-    return c.json(binding);
   },
 );
 
 // ── SMTP settings ────────────────────────────────────────────────
 
 // GET /api/settings/smtp — get SMTP settings (never exposes password)
-settingsRoutes.get('/smtp', requireAdmin, async (c) => {
-  const [host, port, user, from, pass] = await Promise.all([
-    getSetting('smtp_host'),
-    getSetting('smtp_port'),
-    getSetting('smtp_user'),
-    getSetting('smtp_from'),
-    getSetting('smtp_pass'),
-  ]);
-
-  return c.json({
-    host: host || process.env.SMTP_HOST || '',
-    port: port || process.env.SMTP_PORT || '587',
-    user: user || process.env.SMTP_USER || '',
-    from: from || process.env.SMTP_FROM || '',
-    hasPassword: !!pass || !!process.env.SMTP_PASS,
-    source: host ? 'database' : process.env.SMTP_HOST ? 'environment' : 'none',
-    configured: !!(host || process.env.SMTP_HOST),
-  });
-});
+settingsRoutes.get('/smtp', requireAdmin, (c) => answerJson(c, port.getSmtp()));
 
 // PUT /api/settings/smtp — save SMTP config
-settingsRoutes.put('/smtp', requireAdmin, async (c) => {
-  const body = await c.req.json<{
-    host: string;
-    port: string;
-    user: string;
-    pass?: string;
-    from: string;
-  }>();
-
-  await Promise.all([
-    setSetting('smtp_host', body.host),
-    setSetting('smtp_port', body.port || '587'),
-    setSetting('smtp_user', body.user),
-    setSetting('smtp_from', body.from),
-    ...(body.pass !== undefined && body.pass !== ''
-      ? [setSetting('smtp_pass', encrypt(body.pass))]
-      : []),
-  ]);
-
-  return c.json({ ok: true });
-});
+settingsRoutes.put('/smtp', requireAdmin, async (c) =>
+  answerJson(c, port.saveSmtp(await c.req.json<SmtpSettingsRequest>())),
+);
 
 // POST /api/settings/smtp/test — send a test email using stored SMTP settings
-settingsRoutes.post('/smtp/test', requireAdmin, async (c) => {
-  const [host, port, user, from, pass] = await Promise.all([
-    getSetting('smtp_host'),
-    getSetting('smtp_port'),
-    getSetting('smtp_user'),
-    getSetting('smtp_from'),
-    getSetting('smtp_pass'),
-  ]);
-
-  const smtpHost = host || process.env.SMTP_HOST;
-  const smtpFrom = from || process.env.SMTP_FROM;
-  if (!smtpHost || !smtpFrom) {
-    return c.json({ error: 'SMTP not configured' }, 400);
-  }
-
-  // Decrypt stored password; fall back to raw value for backwards compatibility
-  // with passwords saved before encryption was added.
-  const decryptedPass = pass ? (decrypt(pass) ?? pass) : '';
-
-  try {
-    const nodemailer = await import('nodemailer');
-    const transport = nodemailer.createTransport({
-      host: smtpHost,
-      port: Number(port || process.env.SMTP_PORT || '587'),
-      secure: Number(port || process.env.SMTP_PORT || '587') === 465,
-      disableFileAccess: true,
-      disableUrlAccess: true,
-      auth: {
-        user: user || process.env.SMTP_USER || '',
-        pass: decryptedPass || process.env.SMTP_PASS || '',
-      },
-    });
-
-    await transport.sendMail({
-      from: smtpFrom,
-      to: smtpFrom,
-      subject: 'Funny SMTP Test',
-      text: 'This is a test email from Funny to verify your SMTP settings are working correctly.',
-      disableFileAccess: true,
-      disableUrlAccess: true,
-    });
-
-    return c.json({ ok: true, sentTo: smtpFrom });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return c.json({ error: message }, 502);
-  }
-});
+settingsRoutes.post('/smtp/test', requireAdmin, (c) => answerJson(c, port.testSmtp()));

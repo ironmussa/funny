@@ -7,6 +7,7 @@ import {
   mockPaginatedThreadResponse,
   mockThreadWithMessages,
   setupWSIntercept,
+  trpcInput,
 } from './mock-helpers';
 
 const THREAD_VIEWER_STORAGE_KEY = 'funny_thread_viewer';
@@ -181,9 +182,9 @@ test.describe('J.14 Long thread history (500 messages)', () => {
     page.on('pageerror', (error) => errors.push(error.message));
     page.on('request', (request) => {
       const url = new URL(request.url());
-      if (url.pathname === `/api/threads/${historyThread.id}/messages`) {
-        paginationDirections.add(url.searchParams.get('direction') ?? 'before');
-      }
+      if (url.pathname !== '/api/trpc/threads.messages') return;
+      const input = trpcInput<{ id: string; direction?: string }>(request);
+      if (input?.id === historyThread.id) paginationDirections.add(input.direction ?? 'before');
     });
 
     // The socket event injector must wrap the client connection before the

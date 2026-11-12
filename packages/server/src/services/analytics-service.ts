@@ -8,6 +8,7 @@
  * Query logic for overview and timeline analytics.
  */
 
+import type { AnalyticsOverview, AnalyticsTimeline } from '@funny/shared/contracts/analytics';
 import { eq, and, gte, lt, sql } from 'drizzle-orm';
 
 import { db, dbAll, dbGet, dbDialect, schema } from '../db/index.js';
@@ -134,7 +135,7 @@ export interface OverviewParams {
   offsetMinutes?: number;
 }
 
-export async function getOverview(params: OverviewParams) {
+export async function getOverview(params: OverviewParams): Promise<AnalyticsOverview> {
   const { userId, projectId, timeRange, offsetMinutes = 0 } = params;
   const range = getDateRange(timeRange, offsetMinutes);
   const filters = baseFiltersFor({ projectId, userId });
@@ -290,7 +291,7 @@ async function stageTransitionsByDate(
   );
 }
 
-export async function getTimeline(params: TimelineParams) {
+export async function getTimeline(params: TimelineParams): Promise<AnalyticsTimeline> {
   const { userId, projectId, timeRange, groupBy: gb = 'day', offsetMinutes = 0 } = params;
   const groupBy = gb as GroupBy;
   const tzMod = tzOffsetToModifier(offsetMinutes);

@@ -4,42 +4,45 @@ import type {
   Project,
   ProjectHook,
   ProjectUpdateFields,
-  StartupCommand,
   WeaveStatus,
 } from '@funny/shared';
+import type { ProjectMemberEntry, UpdateProjectBody } from '@funny/shared/contracts/projects';
 
 import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
+
+export type { ProjectMemberEntry };
+
+const procedures = trpc.projects;
 
 /** Fields a project PATCH accepts. */
 export type UpdateProjectInput = ProjectUpdateFields;
 
 export const projectsApi = {
   // Projects
-  listProjects: (orgId?: string | null, search?: string, signal?: AbortSignal) => {
-    const params = new URLSearchParams();
-    if (orgId) {
-      params.append('orgId', orgId);
-    } else if (orgId === null) {
-      params.append('personal', 'true');
-    }
-    if (search !== undefined) params.set('q', search);
-    const qs = params.toString();
-    return request<Project[]>(`/projects${qs ? `?${qs}` : ''}`, { signal });
-  },
+  listProjects: (orgId?: string | null, search?: string, signal?: AbortSignal) =>
+    trpcCall(() =>
+      procedures.list.query(
+        {
+          ...(orgId ? { orgId } : orgId === null ? { personal: true } : {}),
+          ...(search !== undefined ? { q: search } : {}),
+        },
+        { signal },
+      ),
+    ),
   createProject: (name: string, path: string) =>
     request<Project>('/projects', { method: 'POST', body: JSON.stringify({ name, path }) }),
   renameProject: (id: string, name: string) =>
-    request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
+    trpcCall(() => procedures.update.mutate({ projectId: id, data: { name } })),
   updateProject: (id: string, data: UpdateProjectInput) =>
-    request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
-  deleteProject: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
+    // `defaultEffort` is a plain string in the UI's effort pickers; the
+    // procedure's schema checks it is a real level (400 otherwise).
+    trpcCall(() => procedures.update.mutate({ projectId: id, data: data as UpdateProjectBody })),
+  deleteProject: (id: string) => trpcCall(() => procedures.remove.mutate({ projectId: id })),
   reorderProjects: (projectIds: string[]) =>
-    request<void>('/projects/reorder', { method: 'PUT', body: JSON.stringify({ projectIds }) }),
+    trpcCall(() => procedures.reorder.mutate({ projectIds })).map(() => undefined),
   setProjectLocalPath: (projectId: string, localPath: string) =>
-    request<{ ok: boolean }>(`/projects/${projectId}/local-path`, {
-      method: 'POST',
-      body: JSON.stringify({ localPath }),
-    }),
+    trpcCall(() => procedures.setLocalPath.mutate({ projectId, localPath })),
   listBranches: (projectId: string, signal?: AbortSignal) =>
     request<{
       branches: string[];
@@ -73,19 +76,15 @@ export const projectsApi = {
     ),
 
   // Startup Commands
-  listCommands: (projectId: string) => request<StartupCommand[]>(`/projects/${projectId}/commands`),
+  listCommands: (projectId: string) => trpcCall(() => procedures.commands.query({ projectId })),
   addCommand: (projectId: string, label: string, command: string) =>
-    request<StartupCommand>(`/projects/${projectId}/commands`, {
-      method: 'POST',
-      body: JSON.stringify({ label, command }),
-    }),
+    trpcCall(() => procedures.createCommand.mutate({ projectId, label, command })),
   updateCommand: (projectId: string, cmdId: string, label: string, command: string) =>
-    request<{ ok: boolean }>(`/projects/${projectId}/commands/${cmdId}`, {
-      method: 'PUT',
-      body: JSON.stringify({ label, command }),
-    }),
+    trpcCall(() =>
+      procedures.updateCommand.mutate({ projectId, commandId: cmdId, data: { label, command } }),
+    ),
   deleteCommand: (projectId: string, cmdId: string) =>
-    request<{ ok: boolean }>(`/projects/${projectId}/commands/${cmdId}`, { method: 'DELETE' }),
+    trpcCall(() => procedures.deleteCommand.mutate({ projectId, commandId: cmdId })),
   runCommand: (projectId: string, cmdId: string, threadId?: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/commands/${cmdId}/start`, {
       method: 'POST',
@@ -148,14 +147,11 @@ export const projectsApi = {
 
   // Project Collaborators (project_members)
   listProjectMembers: (projectId: string) =>
-    request<{ members: ProjectMemberEntry[] }>(`/projects/${projectId}/members`),
+    trpcCall(() => procedures.members.query({ projectId })),
   addProjectMember: (projectId: string, userId: string, role: ProjectMemberRole = 'member') =>
-    request<ProjectMemberEntry>(`/projects/${projectId}/members`, {
-      method: 'POST',
-      body: JSON.stringify({ userId, role }),
-    }),
+    trpcCall(() => procedures.addMember.mutate({ projectId, userId, role })),
   removeProjectMember: (projectId: string, userId: string) =>
-    request<{ ok: boolean }>(`/projects/${projectId}/members/${userId}`, { method: 'DELETE' }),
+    trpcCall(() => procedures.removeMember.mutate({ projectId, userId })),
 
   // User lookup (for adding collaborators)
   searchUsers: (q: string) =>
@@ -165,15 +161,6 @@ export const projectsApi = {
 /** Project-assignable roles (unified-rbac-grants). `viewer` reads, `member`
  *  contributes, `admin` manages. `owner` is the creator and is not assignable. */
 export type ProjectMemberRole = 'viewer' | 'member' | 'admin';
-
-export interface ProjectMemberEntry {
-  projectId: string;
-  userId: string;
-  role: string;
-  localPath: string | null;
-  joinedAt: string;
-  user: { name: string; username: string | null; email: string } | null;
-}
 
 export interface UserSearchResult {
   id: string;

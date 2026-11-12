@@ -1,0 +1,391 @@
+/**
+ * What the procedures need from the server. The server implements these on
+ * top of its repositories and services (`packages/server/src/trpc/ports/`);
+ * this package only sees the shapes, so `AppRouter` never drags server
+ * modules into a client's typecheck.
+ *
+ * Each method answers for one user and fails with the status its REST route
+ * answers, so both paths behave the same while they coexist.
+ */
+
+import type {
+  AgentExecutionProfileResponse,
+  AgentTemplate,
+  Automation,
+  AutomationRun,
+  Design,
+  CreateAgentExecutionProfileRequest,
+  InboxItem,
+  Job,
+  Pipeline,
+  PaginatedMessages,
+  PaginatedThreadsResponse,
+  PermissionMode,
+  PipelineRun,
+  Project,
+  ProjectAgentProfileBindingResponse,
+  RunTriageStatus,
+  StartupCommand,
+  Thread,
+  ThreadStage,
+  ThreadStatus,
+  ThreadWithMessages,
+  UpdateAgentExecutionProfileRequest,
+  UpdateProfileRequest,
+  UserProfile,
+  Watcher,
+} from '@funny/shared';
+import type { Capability } from '@funny/shared/auth/roles';
+import type {
+  AgentTemplateBody,
+  UpdateAgentTemplateBody,
+} from '@funny/shared/contracts/agent-templates';
+import type {
+  AnalyticsOverview,
+  AnalyticsOverviewQuery,
+  AnalyticsTimeline,
+  AnalyticsTimelineQuery,
+} from '@funny/shared/contracts/analytics';
+import type {
+  CreateAutomationRequest,
+  UpdateAutomationRequest,
+} from '@funny/shared/contracts/automations';
+import type { CreateDesignBody } from '@funny/shared/contracts/designs';
+import type { QueryOf } from '@funny/shared/contracts/endpoint';
+import type {
+  CreatePipelineRequest,
+  UpdatePipelineRequest,
+} from '@funny/shared/contracts/pipelines';
+import type { ProfileResponse } from '@funny/shared/contracts/profile';
+import type {
+  ListProjectsQuery,
+  ProjectCommandBody,
+  ProjectMemberEntry,
+  ResolveProjectResponse,
+  UpdateProjectBody,
+} from '@funny/shared/contracts/projects';
+import type { PushSubscriptionBody } from '@funny/shared/contracts/push';
+import type {
+  AssignRunnerProjectBody,
+  UpdateProjectRunnerSettingsBody,
+} from '@funny/shared/contracts/runners';
+import type { SmtpSettingsRequest, SmtpSettingsResponse } from '@funny/shared/contracts/settings';
+import type {
+  ArchivedThreadsResponse,
+  MessageSearchResult,
+  ThreadPatchRequest,
+  threadsContract,
+} from '@funny/shared/contracts/threads';
+import type {
+  EnrollmentInfo,
+  ProjectRunnerSettingsResponse,
+  RunnerInfo,
+  RunnerProjectAssignment,
+} from '@funny/shared/runner-protocol';
+import type { Result } from 'neverthrow';
+
+import type { ApiFailure } from './failure.js';
+
+export type PortResult<T> = Promise<Result<T, ApiFailure>>;
+
+type Ok = { ok: true };
+
+export interface AutomationsPort {
+  inbox(
+    userId: string,
+    query: { projectId?: string; triageStatus?: string },
+  ): PortResult<InboxItem[]>;
+  list(userId: string, query: { projectId?: string }): PortResult<Automation[]>;
+  get(userId: string, id: string): PortResult<Automation>;
+  create(userId: string, data: CreateAutomationRequest): PortResult<Automation>;
+  update(userId: string, id: string, data: UpdateAutomationRequest): PortResult<Automation>;
+  remove(userId: string, id: string): PortResult<Ok>;
+  trigger(userId: string, id: string): PortResult<Ok & { runId: string; threadId: string }>;
+  runs(userId: string, id: string): PortResult<AutomationRun[]>;
+  triageRun(userId: string, runId: string, triageStatus: RunTriageStatus): PortResult<Ok>;
+}
+
+export interface PipelinesPort {
+  list(userId: string, projectId: string): PortResult<Pipeline[]>;
+  get(userId: string, id: string): PortResult<Pipeline>;
+  create(userId: string, data: CreatePipelineRequest): PortResult<Pipeline>;
+  update(userId: string, id: string, data: UpdatePipelineRequest): PortResult<Pipeline>;
+  remove(userId: string, id: string): PortResult<Ok>;
+  /** Empty for a thread the caller does not own. */
+  runsForThread(userId: string, threadId: string): PortResult<PipelineRun[]>;
+}
+
+type ThreadQuery<K extends keyof typeof threadsContract> = QueryOf<(typeof threadsContract)[K]>;
+
+/** Who is calling: the user and the organization the session is acting in. */
+export interface ApiCaller {
+  userId: string;
+  organizationId: string | null;
+}
+
+/**
+ * The `/api/threads` operations the server answers from its own DB. Writes
+ * take the thread `threadProcedure` already loaded and authorized; reads of one
+ * thread's messages run after a `view` check.
+ */
+export interface ThreadsPort {
+  list(caller: ApiCaller, query: ThreadQuery<'list'>): PortResult<PaginatedThreadsResponse>;
+  scratch(userId: string, query: ThreadQuery<'scratch'>): PortResult<PaginatedThreadsResponse>;
+  archived(userId: string, query: ThreadQuery<'archived'>): PortResult<ArchivedThreadsResponse>;
+  /** Authorizes `view` itself, on the row it reads (hot path: one query). */
+  get(userId: string, id: string, query: ThreadQuery<'get'>): PortResult<ThreadWithMessages>;
+  messages(threadId: string, query: ThreadQuery<'messages'>): PortResult<PaginatedMessages>;
+  searchMessages(
+    threadId: string,
+    query: ThreadQuery<'searchMessages'>,
+  ): PortResult<{ results: MessageSearchResult[] }>;
+  searchContent(
+    userId: string,
+    query: ThreadQuery<'searchContent'>,
+  ): PortResult<{ threadIds: string[]; snippets: Record<string, string> }>;
+  update(userId: string, thread: Thread, data: ThreadPatchRequest): PortResult<Thread>;
+  setPermissionMode(userId: string, threadId: string, mode: PermissionMode): PortResult<Thread>;
+  setStatus(
+    userId: string,
+    threadId: string,
+    value: ThreadStatus,
+    reason?: string,
+  ): PortResult<Thread>;
+  setStage(userId: string, thread: Thread, value: ThreadStage, reason?: string): PortResult<Thread>;
+}
+
+export type ThreadAccessLevel = 'view' | 'owner' | 'steer';
+
+/**
+ * The server's per-thread access decision (`middleware/thread-access.ts`), the
+ * same one its REST routes use. `null` means "404 Thread not found", both for a
+ * missing thread and for one the caller may not access (existence-hiding).
+ */
+export interface ThreadAccessPort {
+  authorize(level: ThreadAccessLevel, threadId: string, userId: string): Promise<Thread | null>;
+}
+
+export interface ProfilePort {
+  get(userId: string): PortResult<ProfileResponse>;
+  update(userId: string, data: UpdateProfileRequest): PortResult<UserProfile>;
+  /** A short-lived AssemblyAI streaming token; the API key stays on the server. */
+  transcribeToken(userId: string): PortResult<{ token: string }>;
+  setupCompleted(userId: string): PortResult<{ setupCompleted: boolean }>;
+  runnerInviteToken(userId: string): PortResult<{ token: string }>;
+  rotateRunnerInviteToken(userId: string): PortResult<{ token: string }>;
+}
+
+export interface SettingsPort {
+  listAgentProfiles(userId: string): PortResult<{ profiles: AgentExecutionProfileResponse[] }>;
+  createAgentProfile(
+    userId: string,
+    data: CreateAgentExecutionProfileRequest,
+  ): PortResult<AgentExecutionProfileResponse>;
+  updateAgentProfile(
+    userId: string,
+    id: string,
+    data: UpdateAgentExecutionProfileRequest,
+  ): PortResult<AgentExecutionProfileResponse>;
+  deleteAgentProfile(userId: string, id: string): PortResult<Ok>;
+  /** The caller's binding on a project `projectProcedure('view')` already authorized. */
+  getProjectBinding(
+    userId: string,
+    projectId: string,
+  ): PortResult<ProjectAgentProfileBindingResponse>;
+  setProjectBinding(
+    userId: string,
+    projectId: string,
+    profileId: string | null,
+  ): PortResult<ProjectAgentProfileBindingResponse>;
+  /** Instance-level, admin only (`adminProcedure`). */
+  getSmtp(): PortResult<SmtpSettingsResponse>;
+  saveSmtp(data: SmtpSettingsRequest): PortResult<Ok>;
+  testSmtp(): PortResult<Ok & { sentTo: string }>;
+}
+
+export interface AgentTemplatesPort {
+  /** The caller's own templates and every shared one, newest first. */
+  list(userId: string): PortResult<AgentTemplate[]>;
+  /** Thread count per template, over the caller's threads. */
+  usageStats(userId: string): PortResult<Record<string, number>>;
+  /** A built-in, own or shared template; anyone else's private one looks absent (404). */
+  get(userId: string, id: string): PortResult<AgentTemplate>;
+  create(userId: string, data: AgentTemplateBody): PortResult<AgentTemplate>;
+  /** Runs after `authorizeWrite`. */
+  update(userId: string, id: string, data: UpdateAgentTemplateBody): PortResult<AgentTemplate>;
+  /** Runs after `authorizeWrite`. */
+  remove(userId: string, id: string): PortResult<Ok>;
+  /** A private copy of a built-in, own or shared template. */
+  duplicate(userId: string, id: string): PortResult<AgentTemplate>;
+  /** Only the owner writes: 404 when missing, 403 when someone else's. */
+  authorizeWrite(userId: string, id: string): Promise<ApiFailure | null>;
+}
+
+export interface WatchersPort {
+  list(userId: string): PortResult<Watcher[]>;
+  /** Stops a live watcher of the caller (404 otherwise); terminal ones stay as they are. */
+  cancel(userId: string, id: string): PortResult<Watcher>;
+}
+
+export interface JobsPort {
+  /** Cancel and log reads stay REST: the runner owns the process and the logfile. */
+  list(userId: string): PortResult<Job[]>;
+}
+
+export interface DesignsPort {
+  /** The caller's designs in a project `projectProcedure('view')` already authorized. */
+  list(userId: string, projectId: string): PortResult<Design[]>;
+  create(userId: string, projectId: string, data: CreateDesignBody): PortResult<Design>;
+  /** Runs after `authorizeAccess`. */
+  get(userId: string, id: string): PortResult<Design>;
+  /** Runs after `authorizeAccess`; the folder on disk is the runner's to clean up. */
+  remove(userId: string, id: string): PortResult<Ok>;
+  /** Only the owner: 404 when missing, 403 when someone else's. */
+  authorizeAccess(userId: string, id: string): Promise<ApiFailure | null>;
+}
+
+export interface AnalyticsPort {
+  overview(userId: string, query: AnalyticsOverviewQuery): PortResult<AnalyticsOverview>;
+  timeline(userId: string, query: AnalyticsTimelineQuery): PortResult<AnalyticsTimeline>;
+}
+
+export interface PushPort {
+  /** The VAPID public key, or `null` when Web Push is not configured. */
+  config(): PortResult<{ publicKey: string | null }>;
+  /** 503 when Web Push is not configured. */
+  subscribe(userId: string, subscription: PushSubscriptionBody): PortResult<Ok>;
+  unsubscribe(userId: string, endpoint: string): PortResult<Ok>;
+  /** Sends a test notification to one of the caller's subscriptions (503 when it fails). */
+  test(userId: string, endpoint: string): PortResult<Ok>;
+}
+
+/** A startup command row: the shared type plus the preview port it may declare. */
+export type ProjectCommand = StartupCommand & { port?: number; portEnvVar?: string };
+
+/**
+ * The project operations the server answers itself. Creation and the
+ * filesystem / git operations are the runner's and stay REST. Every method that
+ * takes a `projectId` runs after `projectProcedure` checked the caller's access.
+ */
+export interface ProjectsPort {
+  /** Own + shared projects, or one organization's (403 for a non-member). */
+  list(caller: ApiCaller, query: ListProjectsQuery): PortResult<Project[]>;
+  /** The caller's project whose URL patterns match `url`. */
+  resolve(userId: string, url: string): PortResult<ResolveProjectResponse>;
+  /** Owner-only fields (path, system prompt, permission mode) answer 403 for anyone else. */
+  update(userId: string, projectId: string, data: UpdateProjectBody): PortResult<Project>;
+  remove(projectId: string): PortResult<Ok>;
+  reorder(userId: string, projectIds: string[]): PortResult<Ok>;
+  members(projectId: string): PortResult<{ members: ProjectMemberEntry[] }>;
+  addMember(
+    projectId: string,
+    userId: string,
+    role: string | undefined,
+  ): PortResult<Omit<ProjectMemberEntry, 'user'>>;
+  /** Admins remove anyone; a member may remove themselves (403 otherwise). */
+  removeMember(actorId: string, projectId: string, userId: string): PortResult<Ok>;
+  /** The caller's own working directory for a shared project (absolute, 400 otherwise). */
+  setLocalPath(userId: string, projectId: string, localPath: string): PortResult<Ok>;
+  commands(projectId: string): PortResult<ProjectCommand[]>;
+  createCommand(projectId: string, data: ProjectCommandBody): PortResult<ProjectCommand>;
+  updateCommand(projectId: string, commandId: string, data: ProjectCommandBody): PortResult<Ok>;
+  deleteCommand(projectId: string, commandId: string): PortResult<Ok>;
+}
+
+/** The caller of a runner operation: an instance admin reaches every runner. */
+export interface RunnerCaller {
+  userId: string;
+  role: string | null;
+}
+
+/**
+ * The runner operations a user calls and the server answers itself. What a
+ * runner calls with its own credential (register, enrollment start / poll,
+ * heartbeat, tasks) stays REST. Someone else's runner answers 404, never 403,
+ * so its existence is not disclosed.
+ */
+export interface RunnersPort {
+  /** Every runner for an admin, the caller's own for anyone else. */
+  list(caller: RunnerCaller): PortResult<{ runners: RunnerInfo[] }>;
+  remove(caller: RunnerCaller, runnerId: string): PortResult<Ok>;
+  /** Where the runner keeps each project (a location record, not an authorization source). */
+  assignments(
+    caller: RunnerCaller,
+    runnerId: string,
+  ): PortResult<{ assignments: RunnerProjectAssignment[] }>;
+  assignProject(
+    caller: RunnerCaller,
+    runnerId: string,
+    data: AssignRunnerProjectBody,
+  ): PortResult<RunnerProjectAssignment>;
+  unassignProject(caller: RunnerCaller, runnerId: string, projectId: string): PortResult<Ok>;
+  /** A pending enrollment, for the confirm dialog (404 when unknown or expired). */
+  enrollment(userCode: string): PortResult<EnrollmentInfo>;
+  /** Binds a pending enrollment to the caller; `code` carries the refusal reason. */
+  approveEnrollment(userId: string, userCode: string): PortResult<{ ok: true; runnerId: string }>;
+}
+
+/**
+ * Which of the owner's runners serve one project (project-runner-binding).
+ * Only the project OWNER may read or change it (404 for anyone else); a runner
+ * that loses access has the project's running agents stopped.
+ */
+export interface ProjectRunnersPort {
+  settings(userId: string, projectId: string): PortResult<ProjectRunnerSettingsResponse>;
+  update(
+    userId: string,
+    projectId: string,
+    data: UpdateProjectRunnerSettingsBody,
+  ): PortResult<ProjectRunnerSettingsResponse>;
+  grant(
+    userId: string,
+    projectId: string,
+    runnerId: string,
+  ): PortResult<ProjectRunnerSettingsResponse>;
+  revoke(
+    userId: string,
+    projectId: string,
+    runnerId: string,
+  ): PortResult<ProjectRunnerSettingsResponse>;
+  /** The user's general runner; `null` clears it. */
+  setGeneralRunner(
+    userId: string,
+    runnerId: string | null,
+  ): PortResult<{ generalRunnerId: string | null }>;
+}
+
+/** The server's authorization decisions that are not about one thread. */
+export interface AuthzPort {
+  /**
+   * The project decision of the REST `requireProjectAccess`: `null` when the
+   * caller holds `capability`, else 404 (no role: the project looks absent) or 403.
+   */
+  projectAccess(
+    capability: Capability,
+    projectId: string,
+    userId: string,
+    /** The 403 message; `Access denied` by default. */
+    forbidden?: string,
+  ): Promise<ApiFailure | null>;
+  /** Records a refused admin-only call, as the REST `requireAdmin` audits it. */
+  adminRefused(userId: string, path: string, role: string | null): void;
+}
+
+export interface ApiPorts {
+  automations: AutomationsPort;
+  pipelines: PipelinesPort;
+  threads: ThreadsPort;
+  profile: ProfilePort;
+  settings: SettingsPort;
+  agentTemplates: AgentTemplatesPort;
+  watchers: WatchersPort;
+  jobs: JobsPort;
+  designs: DesignsPort;
+  analytics: AnalyticsPort;
+  push: PushPort;
+  projects: ProjectsPort;
+  runners: RunnersPort;
+  projectRunners: ProjectRunnersPort;
+  threadAccess: ThreadAccessPort;
+  authz: AuthzPort;
+}

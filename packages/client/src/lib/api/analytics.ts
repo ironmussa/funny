@@ -1,24 +1,24 @@
 import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
+
+/** Minutes behind UTC, as the server buckets dates in the browser's time zone. */
+const tz = () => new Date().getTimezoneOffset();
 
 export const analyticsApi = {
   // Analytics
-  analyticsOverview: (projectId?: string, timeRange?: string) => {
-    const params = new URLSearchParams();
-    if (projectId) params.set('projectId', projectId);
-    if (timeRange) params.set('timeRange', timeRange);
-    params.set('tz', String(new Date().getTimezoneOffset()));
-    const qs = params.toString();
-    return request<any>(`/analytics/overview${qs ? `?${qs}` : ''}`);
-  },
-  analyticsTimeline: (projectId?: string, timeRange?: string, groupBy?: string) => {
-    const params = new URLSearchParams();
-    if (projectId) params.set('projectId', projectId);
-    if (timeRange) params.set('timeRange', timeRange);
-    if (groupBy) params.set('groupBy', groupBy);
-    params.set('tz', String(new Date().getTimezoneOffset()));
-    const qs = params.toString();
-    return request<any>(`/analytics/timeline${qs ? `?${qs}` : ''}`);
-  },
+  analyticsOverview: (projectId?: string, timeRange?: string) =>
+    trpcCall(() =>
+      trpc.analytics.overview.query({ projectId: projectId || undefined, timeRange, tz: tz() }),
+    ),
+  analyticsTimeline: (projectId?: string, timeRange?: string, groupBy?: string) =>
+    trpcCall(() =>
+      trpc.analytics.timeline.query({
+        projectId: projectId || undefined,
+        timeRange,
+        groupBy,
+        tz: tz(),
+      }),
+    ),
 
   // Logs (observability)
   sendLogs: (

@@ -46,6 +46,8 @@ bun run format:check     # oxfmt --check .
 
 `bun run lint` also runs four baseline-diff "boundary validation" fitness checks (unvalidated HTTP/JSON/query/socket boundaries), each with matching `:refresh` and `:self-test` variants: `fitness:boundary-validation`, `fitness:query-validation`, `fitness:socket-validation`, `fitness:json-validation` (`scripts/fitness/check-*-boundary-validation.ts`).
 
+It also runs `fitness:trpc-api` (`scripts/fitness/check-trpc-api.ts`, tested by `check-trpc-api.test.ts`) for the browser API over tRPC: `packages/api` (`@funny/api`) may import only `@trpc/server`, `zod`, `neverthrow` and browser-safe `@funny/shared` entries; the web client may import the `@funny/api` entry only with `import type` (`TRPC_PATH` comes from `@funny/api/path`, because a value import would run `initTRPC` in the browser); and it may not call a migrated group over REST (`MIGRATED_GROUPS`, with REST-only sub-paths in `restOnly`). A server-answered group is added as a router in `packages/api/src/routers/`, a port in `packages/server/src/trpc/ports/` shared with its REST routes, and a client module calling `trpcCall(() => trpc.<group>.<proc>.query(...))` (see CLAUDE.md, "tRPC for server-answered groups").
+
 It also runs `fitness:runner-transport`, which prevents presentation handlers from importing concrete gRPC code, prevents a global transport locator or a second presence registry, and blocks new runtime consumers of the old monolithic `team-client` facade. The permitted direction is presentation → runner ports → gRPC adapters.
 
 Separately, `bun run fitness` runs the architecture-shape guardrails described in `scripts/fitness/README.md` and enforced against `ARCHITECTURE_EVAL.md`-style rules:

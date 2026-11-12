@@ -1,36 +1,25 @@
 import type {
-  AgentExecutionProfileResponse,
   CreateAgentExecutionProfileRequest,
-  ProjectAgentProfileBindingResponse,
   UpdateAgentExecutionProfileRequest,
   UpdateProjectAgentProfileBindingRequest,
 } from '@funny/shared';
 
-import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
+
+const procedures = trpc.settings;
 
 export const agentExecutionProfilesApi = {
-  listAgentExecutionProfiles: () =>
-    request<{ profiles: AgentExecutionProfileResponse[] }>('/settings/agent-profiles'),
+  listAgentExecutionProfiles: () => trpcCall(() => procedures.listAgentProfiles.query()),
   createAgentExecutionProfile: (data: CreateAgentExecutionProfileRequest) =>
-    request<AgentExecutionProfileResponse>('/settings/agent-profiles', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    }),
+    trpcCall(() => procedures.createAgentProfile.mutate(data)),
   updateAgentExecutionProfile: (id: string, data: UpdateAgentExecutionProfileRequest) =>
-    request<AgentExecutionProfileResponse>(`/settings/agent-profiles/${id}`, {
-      method: 'PATCH',
-      body: JSON.stringify(data),
-    }),
+    trpcCall(() => procedures.updateAgentProfile.mutate({ id, data })),
   deleteAgentExecutionProfile: (id: string) =>
-    request<{ ok: boolean }>(`/settings/agent-profiles/${id}`, { method: 'DELETE' }),
+    trpcCall(() => procedures.deleteAgentProfile.mutate({ id })),
   getProjectAgentProfileBinding: (projectId: string) =>
-    request<ProjectAgentProfileBindingResponse>(`/settings/agent-profiles/projects/${projectId}`),
+    trpcCall(() => procedures.getProjectBinding.query({ projectId })),
   updateProjectAgentProfileBinding: (
     projectId: string,
     data: UpdateProjectAgentProfileBindingRequest,
-  ) =>
-    request<ProjectAgentProfileBindingResponse>(`/settings/agent-profiles/projects/${projectId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+  ) => trpcCall(() => procedures.setProjectBinding.mutate({ projectId, ...data })),
 };

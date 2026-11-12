@@ -5,11 +5,8 @@
  * Agent operations (create+start, stop, send message) are proxied to the runner.
  */
 
-import type { CommentAuthor, Thread, ThreadComment, ThreadWithMessages } from '@funny/shared';
-import {
-  threadsContract as contract,
-  type ThreadPatchRequest,
-} from '@funny/shared/contracts/threads';
+import type { CommentAuthor, Thread, ThreadComment } from '@funny/shared';
+import { threadsContract as contract } from '@funny/shared/contracts/threads';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
@@ -20,13 +17,16 @@ import { db, dbAll } from '../db/index.js';
 import { repos } from '../db/repos.js';
 import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
-import { toMessage, toOptionalMessage } from '../lib/message-response.js';
 import { authorizer } from '../lib/server-authorizer.js';
 import { startSpan } from '../lib/telemetry.js';
-import { toThread, toThreadDetail } from '../lib/thread-response.js';
+import { toThread } from '../lib/thread-response.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
-import { canSteerThread, createThreadAccessMiddleware } from '../middleware/thread-access.js';
+import {
+  canSteerThread,
+  createThreadAccess,
+  threadAccessMiddlewareFrom,
+} from '../middleware/thread-access.js';
 import {
   composeCreateThread,
   composeForkThread,
@@ -53,7 +53,9 @@ import * as threadRegistry from '../services/thread-registry.js';
 import { destroyThreadSandbox } from '../services/thread-sandboxes/sandbox-lifecycle.js';
 import { sandboxThreadLauncherFor } from '../services/thread-sandboxes/sandbox-thread-wiring.js';
 import { retrySandboxThreadSchema } from '../services/thread-sandboxes/sandbox-thread.js';
-import { fail, reply, serveEndpoint } from '../validation/endpoint.js';
+import { createThreadsPort } from '../trpc/ports/threads.js';
+import { answer } from '../trpc/reply.js';
+import { serveEndpoint } from '../validation/endpoint.js';
 import { parseJsonBody } from '../validation/request.js';
 
 const contentBodySchema = z
@@ -81,12 +83,9 @@ const schedulerWorkflowEventBodySchema = z
 // ── Shared repository instances ──────────────────────────────────
 
 const commentRepo = repos.comments();
-const stageHistoryRepo = repos.stageHistory();
 const threadRepo = repos.threads();
-const messageRepo = repos.messages();
 const toolCallRepo = repos.toolCalls();
 const shareRepo = repos.threadShares();
-const pendingPermissionRepo = repos.pendingPermissions();
 
 // Centralized per-thread authorization (see middleware/thread-access.ts).
 // `requireThreadView` guards read routes (owner OR active share grant);
@@ -96,7 +95,8 @@ const pendingPermissionRepo = repos.pendingPermissions();
 // `requireThreadOwner` is also exported so the git-route gate in index.ts can
 // reuse the same owner check (git ops must stay owner-only — a sharee never
 // reaches another user's runner; see thread-sharing design).
-const threadAccess = createThreadAccessMiddleware(
+/** Shared with the tRPC thread procedures (`trpc/ports/thread-access.ts`). */
+export const threadAccessPolicy = createThreadAccess(
   (id) => threadRepo.getThread(id),
   // View: effective role with thread→project→org inheritance (unified-rbac).
   (thread, userId) => authorizer.authorize(userId, 'thread', thread.id, 'view'),
@@ -104,6 +104,7 @@ const threadAccess = createThreadAccessMiddleware(
   // cross runner isolation, so this stays `canSteerThread` (unchanged behavior).
   (thread, userId) => canSteerThread(thread, userId, shareRepo.getShareLevel),
 );
+const threadAccess = threadAccessMiddlewareFrom(threadAccessPolicy);
 const { requireThreadView } = threadAccess;
 export const { requireThreadOwner, requireThreadSteer } = threadAccess;
 
@@ -111,197 +112,37 @@ export const threadRoutes = new Hono<ServerEnv>();
 
 // ── Data CRUD routes (handled natively) ──────────────────────────
 
-/**
- * Scratch filter is opt-in. When listing by project, exclude scratch threads
- * so they never leak into the project sidebar.
- */
-function scratchFilter(onlyScratch: boolean, projectId: string | undefined) {
-  if (onlyScratch) return true;
-  return projectId ? ('exclude' as const) : undefined;
-}
+// ── Server-answered reads and field updates ────────────────────
+// The logic lives in `trpc/ports/threads.ts`, shared with the `threads` tRPC
+// procedures (openspec adopt-trpc-browser-api); these routes stay for REST
+// consumers outside the web client and for the scheduler (status / stage).
+const threadsPort = (c: Context<ServerEnv>) => createThreadsPort(c.env?.browserEvents);
 
 // GET /api/threads?projectId=xxx&includeArchived=true&limit=50&offset=0&isScratch=true
-serveEndpoint(threadRoutes, contract.list, async ({ userId, query }, c) => {
-  const orgId = c.get('organizationId');
-  const { projectId, designId, includeArchived, limit, offset } = query;
-
-  // Span on the native list path (mirrors GET /:id). Its start_time_ms reveals
-  // WHEN the server began handling each sidebar list during app refresh — if the
-  // ~28 per-project lists start spread across the load window the bottleneck is
-  // upstream (browser per-origin socket queue / proxy); if they start clustered
-  // but the span durations stack, it's server-side DB serialization.
-  const span = startSpan('GET /api/threads', {
-    attributes: {
-      'thread.project_id': projectId ?? null,
-      'thread.limit': limit,
-      'thread.offset': offset,
-    },
-  });
-  try {
-    const { threads, total } = await threadRepo.listThreads({
-      projectId: projectId || undefined,
-      designId: designId || undefined,
-      userId,
-      includeArchived,
-      organizationId: orgId,
-      isScratch: scratchFilter(query.isScratch, projectId),
-      limit,
-      offset,
-    });
-
-    span.attributes['thread.count'] = threads.length;
-    span.attributes['thread.total'] = Number(total);
-    span.end('ok');
-    return reply({
-      threads: threads.map(toThread),
-      total,
-      hasMore: offset + threads.length < total,
-    });
-  } catch (e) {
-    span.end('error', errorText(e));
-    throw e;
-  }
-});
+serveEndpoint(threadRoutes, contract.list, ({ userId, query }, c) =>
+  answer(threadsPort(c).list({ userId, organizationId: c.get('organizationId') }, query)),
+);
 
 // GET /api/threads/scratch — list the current user's scratch threads
-serveEndpoint(threadRoutes, contract.scratch, async ({ userId, query }) => {
-  const { limit, offset } = query;
-  const { threads, total } = await threadRepo.listThreads({
-    userId,
-    isScratch: true,
-    includeArchived: false,
-    limit,
-    offset,
-  });
-
-  return reply({
-    threads: threads.map(toThread),
-    total,
-    hasMore: offset + threads.length < total,
-  });
-});
+serveEndpoint(threadRoutes, contract.scratch, ({ userId, query }, c) =>
+  answer(threadsPort(c).scratch(userId, query)),
+);
 
 // GET /api/threads/archived?page=1&limit=100&search=xxx
-serveEndpoint(threadRoutes, contract.archived, async ({ userId, query }) => {
-  const { page, limit } = query;
-  const search = query.search?.trim() || '';
-  const projectId = query.projectId?.trim() || undefined;
-
-  const result = await threadRepo.listArchivedThreads({ page, limit, search, userId, projectId });
-  return reply({ threads: result.threads.map(toThread), total: result.total, page, limit });
-});
-
-function childSpan(parent: ReturnType<typeof startSpan>, name: string, threadId: string) {
-  return startSpan(name, {
-    traceId: parent.traceId,
-    parentSpanId: parent.spanId,
-    attributes: { 'thread.id': threadId },
-  });
-}
-
-function errorText(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
-
-function detailSpanAttributes(
-  id: string,
-  query: { messageLimit?: number; messageProgress?: number; messageAnchorId?: string },
-) {
-  return {
-    'thread.id': id,
-    'thread.message_limit': query.messageLimit ?? null,
-    'thread.message_progress': query.messageProgress ?? null,
-    'thread.message_anchor_id': query.messageAnchorId ?? null,
-  };
-}
-
-/**
- * The live approval request, if any, and the approval capability. Only an
- * active durable request can prove an ACP continuation still exists after a
- * reload. In every other Codex state we conservatively expose the SDK-style
- * unavailable capability so the client never reconstructs a fake approval
- * card from historic tool output.
- */
-function permissionFields(
-  provider: string,
-  pending: ThreadWithMessages['pendingPermissionRequest'] | null | undefined,
-): Pick<ThreadWithMessages, 'pendingPermissionRequest' | 'permissionApprovalCapability'> {
-  const request = pending ? { pendingPermissionRequest: pending } : {};
-  if (provider !== 'codex') return request;
-  return {
-    ...request,
-    permissionApprovalCapability: pending
-      ? { kind: 'structured', transport: 'codex-acp' }
-      : { kind: 'unavailable', reason: 'codex-sdk-no-interactive-approval' },
-  };
-}
+serveEndpoint(threadRoutes, contract.archived, ({ userId, query }, c) =>
+  answer(threadsPort(c).archived(userId, query)),
+);
 
 // GET /api/threads/:id — get thread with messages
-serveEndpoint(threadRoutes, contract.get, async ({ userId, params, query }) => {
-  const { id } = params;
-  const { messageLimit, messageProgress, messageAnchorId } = query;
-
-  const span = startSpan('GET /api/threads/:id', { attributes: detailSpanAttributes(id, query) });
-  try {
-    // Fetch thread+messages, queue count, and queue head in parallel.
-    // Ownership is checked off the thread row inside the same query result,
-    // so we avoid a separate getThread() round-trip.
-    const fetchSpan = childSpan(span, 'thread.fetch_with_messages', id);
-    const queueCountSpan = childSpan(span, 'thread.queue_count', id);
-    const queuePeekSpan = childSpan(span, 'thread.queue_peek', id);
-    const [result, queuedCount, queuedNext, pendingPermissionRequest] = await Promise.all([
-      messageRepo
-        .getThreadWithMessages(id, messageLimit, { messageProgress, messageAnchorId })
-        .finally(() => fetchSpan.end('ok')),
-      messageQueueRepo.queueCount(id).finally(() => queueCountSpan.end('ok')),
-      messageQueueRepo.peek(id).finally(() => queuePeekSpan.end('ok')),
-      pendingPermissionRepo.getActive(id),
-    ]);
-
-    if (!result || !(await authorizer.authorize(userId, 'thread', result.id, 'view'))) {
-      span.end('ok');
-      return fail(404, 'Thread not found');
-    }
-
-    // Expose the VIEWER's own grant level so the client can gate level-specific
-    // affordances (comment box, PromptInput, git read panel). The owner gets
-    // `null` (not a sharee); a sharee gets 'view' | 'comment' | 'steer'.
-    const viewerShareLevel =
-      result.userId === userId ? null : await shareRepo.getShareLevel(id, userId);
-
-    span.attributes['thread.message_count'] = result.messages?.length ?? 0;
-    span.attributes['thread.queued_count'] = queuedCount;
-    span.end('ok');
-    return reply({
-      ...toThreadDetail(result),
-      queuedCount,
-      queuedNextMessage: queuedNext?.content,
-      ...permissionFields(result.provider, pendingPermissionRequest),
-      viewerShareLevel,
-    });
-  } catch (e) {
-    span.end('error', errorText(e));
-    throw e;
-  }
-});
+serveEndpoint(threadRoutes, contract.get, ({ userId, params, query }, c) =>
+  answer(threadsPort(c).get(userId, params.id, query)),
+);
 
 // GET /api/threads/:id/messages?cursor=<ISO>&limit=50&direction=before|after
 serveEndpoint(
   threadRoutes,
   contract.messages,
-  async ({ params, query }) => {
-    const result = await messageRepo.getThreadMessages({
-      threadId: params.id,
-      cursor: query.cursor || undefined,
-      limit: query.limit,
-      direction: query.direction,
-    });
-    return reply({
-      ...result,
-      messages: result.messages.map(toMessage),
-      leadingUserMessage: toOptionalMessage(result.leadingUserMessage),
-    });
-  },
+  ({ params, query }, c) => answer(threadsPort(c).messages(params.id, query)),
   { middleware: [requireThreadView] },
 );
 
@@ -309,18 +150,7 @@ serveEndpoint(
 serveEndpoint(
   threadRoutes,
   contract.searchMessages,
-  async ({ params, query }) => {
-    const q = query.q?.trim() ?? '';
-    if (!q) return reply({ results: [] });
-
-    const results = await messageRepo.searchMessages({
-      threadId: params.id,
-      query: q,
-      limit: query.limit,
-      caseSensitive: query.caseSensitive,
-    });
-    return reply({ results });
-  },
+  ({ params, query }, c) => answer(threadsPort(c).searchMessages(params.id, query)),
   { middleware: [requireThreadView] },
 );
 
@@ -408,165 +238,43 @@ threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) =>
 // Thread sharing routes (`/:id/shares`, `/shared-with-me`) live in
 // routes/thread-shares.ts and are mounted alongside this router in index.ts.
 
-/** The thread as it is now, after a write; 404 if it was deleted meanwhile. */
-async function replyWithThread(id: string) {
-  const updated = await threadRepo.getThread(id);
-  return updated ? reply(toThread(updated)) : fail(404, 'Thread not found');
-}
-
 const ownerOnly = { middleware: [requireThreadOwner] };
-
-/**
- * The column writes for a PATCH body. Security CR-4: `worktreePath` is not in
- * the contract's body schema (see `threadPatchBody`), so it never gets here.
- */
-function threadPatchUpdates(body: ThreadPatchRequest): Record<string, unknown> {
-  const { archived, pinned, schedulerManaged, ...fields } = body;
-  const updates: Record<string, unknown> = Object.fromEntries(
-    Object.entries(fields).filter(([, value]) => value !== undefined),
-  );
-  // The flag columns are integers.
-  const flags = { archived, pinned, schedulerManaged };
-  for (const [column, value] of Object.entries(flags)) {
-    if (value !== undefined) updates[column] = value ? 1 : 0;
-  }
-  return updates;
-}
-
-type StageMove = { from: string | null; to: string };
-type StagedThread = { stage?: string | null; archived?: unknown };
-
-/** Archiving moves to `archived`; unarchiving moves back to the requested (or current) stage. */
-function archiveMove(thread: StagedThread, body: ThreadPatchRequest): StageMove | undefined {
-  if (body.archived === undefined || body.archived === !!thread.archived) return undefined;
-  return body.archived
-    ? { from: thread.stage ?? null, to: 'archived' }
-    : { from: 'archived', to: body.stage ?? thread.stage ?? 'backlog' };
-}
-
-/** The stage move a PATCH makes, if any. */
-function stageTransition(thread: StagedThread, body: ThreadPatchRequest): StageMove | null {
-  const move =
-    archiveMove(thread, body) ??
-    (body.stage === undefined ? undefined : { from: thread.stage ?? null, to: body.stage });
-  return move && move.to !== move.from ? move : null;
-}
 
 // PATCH /api/threads/:id — update thread data
 serveEndpoint(
   threadRoutes,
   contract.update,
-  async ({ userId, params, body }, c) => {
-    const { id } = params;
-    const thread = c.get('thread');
-
-    const updates = threadPatchUpdates(body);
-    if (Object.keys(updates).length > 0) {
-      await threadRepo.updateThread(id, updates);
-    }
-
-    // Kanban drag moves and archive/unarchive both flow through this route.
-    // Record the stage transition (movement trail / analytics) and broadcast a
-    // thread:stage-changed event so every tab's board updates live — the same
-    // contract the dedicated /:id/stage route (used by pipelines) already honors.
-    const transition = stageTransition(thread, body);
-    if (transition) {
-      const { from, to } = transition;
-      await stageHistoryRepo.recordStageChange(id, from, to);
-      c.env?.browserEvents?.toUser(userId, {
-        type: 'thread:stage-changed',
-        threadId: id,
-        data: { fromStage: from, toStage: to, projectId: thread.projectId },
-      });
-      log.info('Thread stage transition recorded via PATCH', {
-        namespace: 'threads',
-        threadId: id,
-        fromStage: from,
-        toStage: to,
-      });
-    }
-
-    return replyWithThread(id);
-  },
+  ({ userId, body }, c) => answer(threadsPort(c).update(userId, c.get('thread'), body)),
   ownerOnly,
 );
 
-// Persist the composer selection independently of sending a prompt. A
-// currently-running agent keeps the policy with which it started; this value
-// applies when it next starts or resumes.
+// PATCH /api/threads/:id/permission-mode
 serveEndpoint(
   threadRoutes,
   contract.setPermissionMode,
-  async ({ userId, params, body }, c) => {
-    await threadRepo.updateThread(params.id, { permissionMode: body.permissionMode });
-    c.env?.browserEvents?.toUser(userId, {
-      type: 'thread:updated',
-      threadId: params.id,
-      data: { permissionMode: body.permissionMode },
-    });
-    return replyWithThread(params.id);
-  },
+  ({ userId, params, body }, c) =>
+    answer(threadsPort(c).setPermissionMode(userId, params.id, body.permissionMode)),
   ownerOnly,
 );
 
 // ── Lifecycle endpoints used by the YAML pipeline DSL ───────
 //
-// `set_status` / `set_stage` actions in `.funny/workflows/*.yaml`
-// post to these routes (when the pipeline runs server-side, e.g. in
-// the scheduler's tunnel adapter). Dedicated endpoints — instead
-// of relying on PATCH /:id — give us strict enum validation and a
-// single emission point for the WS event that the kanban UI listens
-// on.
+// `set_status` / `set_stage` actions in `.funny/workflows/*.yaml` post to these
+// routes (when the pipeline runs server-side, e.g. in the scheduler's tunnel
+// adapter).
 serveEndpoint(
   threadRoutes,
   contract.setStatus,
-  async ({ userId, params, body }, c) => {
-    const { id } = params;
-    const { value: status, reason } = body;
-
-    await threadRepo.updateThread(id, { status });
-    c.env?.browserEvents?.toUser(userId, {
-      type: 'thread:updated',
-      threadId: id,
-      data: { status, reason },
-    });
-
-    log.info('Thread status patched', { namespace: 'threads', threadId: id, status, reason });
-
-    return replyWithThread(id);
-  },
+  ({ userId, params, body }, c) =>
+    answer(threadsPort(c).setStatus(userId, params.id, body.value, body.reason)),
   ownerOnly,
 );
 
 serveEndpoint(
   threadRoutes,
   contract.setStage,
-  async ({ userId, params, body }, c) => {
-    const { id } = params;
-    const { value: toStage, reason } = body;
-
-    const thread = c.get('thread');
-    const fromStage = thread.stage;
-    await threadRepo.updateThread(id, { stage: toStage });
-    if (toStage !== fromStage) {
-      await stageHistoryRepo.recordStageChange(id, fromStage ?? null, toStage);
-      c.env?.browserEvents?.toUser(userId, {
-        type: 'thread:stage-changed',
-        threadId: id,
-        data: { fromStage, toStage, projectId: thread.projectId, reason },
-      });
-    }
-
-    log.info('Thread stage patched', {
-      namespace: 'threads',
-      threadId: id,
-      fromStage,
-      toStage,
-      reason,
-    });
-
-    return replyWithThread(id);
-  },
+  ({ userId, body }, c) =>
+    answer(threadsPort(c).setStage(userId, c.get('thread'), body.value, body.reason)),
   ownerOnly,
 );
 
@@ -1018,22 +726,6 @@ threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
 });
 
 // GET /api/threads/search/content?q=xxx&projectId=xxx&caseSensitive=true
-serveEndpoint(threadRoutes, contract.searchContent, async ({ userId, query }) => {
-  const q = query.q ?? '';
-  const { projectId, caseSensitive } = query;
-
-  if (!q.trim()) {
-    return reply({ threadIds: [], snippets: {} });
-  }
-
-  const { searchThreadIdsByContent } = await import('../services/search-repository.js');
-  const results = await searchThreadIdsByContent({ query: q, projectId, userId, caseSensitive });
-
-  const threadIds = Array.from(results.keys());
-  const snippets: Record<string, string> = {};
-  for (const [id, snippet] of results) {
-    snippets[id] = snippet;
-  }
-
-  return reply({ threadIds, snippets });
-});
+serveEndpoint(threadRoutes, contract.searchContent, ({ userId, query }, c) =>
+  answer(threadsPort(c).searchContent(userId, query)),
+);

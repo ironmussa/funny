@@ -1,29 +1,18 @@
-import type {
-  ProjectRunnerSettingsResponse,
-  UpdateProjectRunnerSettingsRequest,
-} from '@funny/shared/runner-protocol';
+import type { UpdateProjectRunnerSettingsRequest } from '@funny/shared/runner-protocol';
 
-import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
+
+const procedures = trpc.projectRunners;
 
 export const projectRunnersApi = {
   getProjectRunnerSettings: (projectId: string) =>
-    request<ProjectRunnerSettingsResponse>(`/projects/${projectId}/runner-settings`),
+    trpcCall(() => procedures.settings.query({ projectId })),
   updateProjectRunnerSettings: (projectId: string, data: UpdateProjectRunnerSettingsRequest) =>
-    request<ProjectRunnerSettingsResponse>(`/projects/${projectId}/runner-settings`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
+    trpcCall(() => procedures.update.mutate({ projectId, data })),
   grantProjectRunner: (projectId: string, runnerId: string) =>
-    request<ProjectRunnerSettingsResponse>(`/projects/${projectId}/runner-grants/${runnerId}`, {
-      method: 'POST',
-    }),
+    trpcCall(() => procedures.grant.mutate({ projectId, runnerId })),
   revokeProjectRunner: (projectId: string, runnerId: string) =>
-    request<ProjectRunnerSettingsResponse>(`/projects/${projectId}/runner-grants/${runnerId}`, {
-      method: 'DELETE',
-    }),
+    trpcCall(() => procedures.revoke.mutate({ projectId, runnerId })),
   setGeneralRunner: (runnerId: string | null) =>
-    request<{ generalRunnerId: string | null }>('/projects/general-runner', {
-      method: 'PUT',
-      body: JSON.stringify({ runnerId }),
-    }),
+    trpcCall(() => procedures.setGeneralRunner.mutate({ runnerId })),
 };

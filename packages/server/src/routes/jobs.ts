@@ -7,28 +7,21 @@
  * user's runner (server-direct DB write alone wouldn't kill the process).
  */
 
-import { desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 
-import { db } from '../db/index.js';
-import { jobs } from '../db/schema.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
+import { jobsPort as port } from '../trpc/ports/background.js';
+import { answerJson } from '../trpc/reply.js';
 
 export const jobRoutes = new Hono<ServerEnv>();
 
-// GET /api/jobs — the current user's jobs (newest first)
+// GET /api/jobs — the current user's jobs (newest first); shared with the
+// `jobs` tRPC router (trpc/ports/background.ts).
 jobRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string | undefined;
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-
-  const rows = await db
-    .select()
-    .from(jobs)
-    .where(eq(jobs.userId, userId))
-    .orderBy(desc(jobs.startedAt));
-
-  return c.json(rows);
+  return answerJson(c, port.list(userId));
 });
 
 // GET /api/jobs/:id/log — proxied to the user's runner, which owns the local

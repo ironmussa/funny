@@ -200,20 +200,22 @@ async function prepareApplication(state: HarnessState, options: Options): Promis
   );
   state.threadId = String(thread.id);
   const fixture = longThread(state.threadId, state.projectId);
-  await state.page.route(`**/api/threads/${state.threadId}**`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
-    const url = new URL(route.request().url());
-    if (url.pathname === `/api/threads/${state.threadId}`) {
+  // The thread detail is the `threads.get` tRPC query; its events stay REST.
+  await state.page.route(
+    (url) => url.pathname === '/api/trpc/threads.get',
+    async (route) => {
+      const raw = new URL(route.request().url()).searchParams.get('input');
+      if (!raw || JSON.parse(raw).id !== state.threadId) return route.fallback();
       return route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(fixture),
+        body: JSON.stringify({ result: { data: fixture } }),
       });
-    }
-    if (url.pathname === `/api/threads/${state.threadId}/events`) {
-      return route.fulfill({ status: 200, contentType: 'application/json', body: '{"events":[]}' });
-    }
-    return route.continue();
+    },
+  );
+  await state.page.route(`**/api/threads/${state.threadId}/events**`, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    return route.fulfill({ status: 200, contentType: 'application/json', body: '{"events":[]}' });
   });
 
   await state.page.goto(options.baseUrl, { waitUntil: 'domcontentloaded' });

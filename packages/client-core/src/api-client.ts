@@ -68,6 +68,15 @@ export interface ApiClient {
   request<T>(path: string, init?: ApiRequestInit): Promise<T>;
 }
 
+/**
+ * The profile read is how the client probes its session at startup: its 401
+ * means "signed out", not "session expired", so it must not trigger the
+ * unauthorized handler. REST and tRPC spell it differently.
+ */
+function isSessionProbe(pathname: string): boolean {
+  return pathname === '/profile' || pathname === '/trpc/profile.get';
+}
+
 function isGitDiffReadRequest(method: string, path: string): boolean {
   if (method !== 'GET') return false;
   const pathname = path.split('?')[0];
@@ -82,6 +91,27 @@ function parseBody(text: string): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+/**
+ * A tRPC procedure answers `{ error: { message, friendlyMessage?, data: { httpStatus } } }`
+ * where a REST route answers `{ error: string, friendlyMessage? }`; read both the same way.
+ */
+function flattenTrpcError(body: Record<string, unknown>): Record<string, unknown> {
+  const error = body.error as
+    | { message?: unknown; friendlyMessage?: unknown; data?: { httpStatus?: unknown } }
+    | undefined;
+  if (
+    !error ||
+    typeof error !== 'object' ||
+    typeof error.message !== 'string' ||
+    typeof error.data?.httpStatus !== 'number'
+  ) {
+    return body;
+  }
+  return typeof error.friendlyMessage === 'string'
+    ? { error: error.message, friendlyMessage: error.friendlyMessage }
+    : { error: error.message };
 }
 
 function httpErrorMessage(body: Record<string, unknown>, status: number): string {
@@ -207,7 +237,7 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
       if (!response.ok) {
         span.end('ERROR');
         const pathNoQuery = path.split('?')[0];
-        if (response.status === 401 && !(method === 'GET' && pathNoQuery === '/profile')) {
+        if (response.status === 401 && !(method === 'GET' && isSessionProbe(pathNoQuery))) {
           dependencies.onUnauthorized(pathNoQuery);
         }
         if (
@@ -219,7 +249,7 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
           recordFailure(startedAt);
         }
         const responseText = await response.text().catch(() => '');
-        const body = parseBody(responseText);
+        const body = flattenTrpcError(parseBody(responseText));
         const message = httpErrorMessage(body, response.status);
         reportFailure('http', response.status, message);
         throw httpError(body, response.status, message);

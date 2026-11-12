@@ -32,14 +32,14 @@ describe('API Client', () => {
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ error: 'Could not determine remote URL for this project' }, 400),
       );
-      const result = await api.listProjects();
+      const result = await api.listBranches('p1');
       expect(result.isErr()).toBe(true);
       expect(logError).toHaveBeenCalledWith(
         'API request failed',
         expect.objectContaining({
           kind: 'http',
           method: 'GET',
-          path: '/projects',
+          path: '/projects/p1/branches',
           status: 400,
           error: 'Could not determine remote URL for this project',
           durationMs: expect.any(Number),
@@ -52,18 +52,19 @@ describe('API Client', () => {
   });
 
   describe('Projects', () => {
-    test('listProjects calls GET /api/projects', async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse([{ id: 'p1', name: 'Test' }]));
-
-      const result = await api.listProjects();
-      expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toEqual([{ id: 'p1', name: 'Test' }]);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/projects'),
-        expect.objectContaining({
-          headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
-        }),
+    test('listProjects is the projects.list tRPC query; null means personal', async () => {
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ result: { data: [{ id: 'p1', name: 'Test' }] } }),
       );
+
+      const result = await api.listProjects(null, 'te');
+      expect(result._unsafeUnwrap()).toEqual([{ id: 'p1', name: 'Test' }]);
+      const [url] = mockFetch.mock.calls.at(-1)!;
+      expect(url).toContain('/api/trpc/projects.list?input=');
+      expect(JSON.parse(decodeURIComponent(url.split('?input=')[1]))).toEqual({
+        personal: true,
+        q: 'te',
+      });
     });
 
     test('createProject calls POST /api/projects', async () => {
@@ -78,15 +79,15 @@ describe('API Client', () => {
       );
     });
 
-    test('deleteProject calls DELETE /api/projects/:id', async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ ok: true }));
+    test('deleteProject is the projects.remove tRPC mutation', async () => {
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: { data: { ok: true } } }));
 
       const result = await api.deleteProject('p1');
       expect(result.isOk()).toBe(true);
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/projects/p1'),
-        expect.objectContaining({ method: 'DELETE' }),
-      );
+      const [url, init] = mockFetch.mock.calls.at(-1)!;
+      expect(url).toMatch(/\/api\/trpc\/projects\.remove$/);
+      expect(init.method).toBe('POST');
+      expect(JSON.parse(init.body as string)).toEqual({ projectId: 'p1' });
     });
 
     test('listBranches calls GET /api/projects/:id/branches', async () => {
@@ -137,29 +138,29 @@ describe('API Client', () => {
   });
 
   describe('Threads', () => {
+    // The server-answered thread reads and updates go over tRPC
+    // (`/api/trpc/threads.*`, see api-trpc.test.ts); agent operations stay REST.
+    const trpcInput = (url: string) => JSON.parse(decodeURIComponent(url.split('?input=')[1]));
+
     test('listThreads without projectId', async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse([]));
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: { data: { threads: [] } } }));
 
       await api.listThreads();
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/threads'),
-        expect.anything(),
-      );
+      const [url] = mockFetch.mock.calls.at(-1)!;
+      expect(url).toContain('/api/trpc/threads.list?input=');
+      expect(trpcInput(url)).toEqual({});
     });
 
     test('listThreads with projectId', async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse([]));
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: { data: { threads: [] } } }));
 
       await api.listThreads('p1');
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/threads?projectId=p1'),
-        expect.anything(),
-      );
+      expect(trpcInput(mockFetch.mock.calls.at(-1)![0])).toEqual({ projectId: 'p1' });
     });
 
-    test('getThread calls GET /api/threads/:id', async () => {
+    test('getThread reads threads.get', async () => {
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ id: 't1', title: 'Thread', messages: [] }),
+        mockJsonResponse({ result: { data: { id: 't1', title: 'Thread', messages: [] } } }),
       );
 
       const result = await api.getThread('t1');
@@ -169,7 +170,7 @@ describe('API Client', () => {
 
     test('getThread includes scroll window hints', async () => {
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ id: 't1', title: 'Thread', messages: [] }),
+        mockJsonResponse({ result: { data: { id: 't1', title: 'Thread', messages: [] } } }),
       );
 
       await api.getThread('t1', 50, undefined, {
@@ -177,12 +178,12 @@ describe('API Client', () => {
         messageAnchorId: 'm7',
       });
 
-      expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining(
-          '/threads/t1?messageLimit=50&messageProgress=0.25&messageAnchorId=m7',
-        ),
-        expect.anything(),
-      );
+      expect(trpcInput(mockFetch.mock.calls.at(-1)![0])).toEqual({
+        id: 't1',
+        messageLimit: 50,
+        messageProgress: 0.25,
+        messageAnchorId: 'm7',
+      });
     });
 
     test('createThread calls POST /api/threads', async () => {
@@ -231,13 +232,13 @@ describe('API Client', () => {
       );
     });
 
-    test('archiveThread calls PATCH /api/threads/:id', async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ archived: 1 }));
+    test('archiveThread is the threads.update mutation', async () => {
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ result: { data: { archived: true } } }));
 
       await api.archiveThread('t1', true);
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringContaining('/threads/t1'),
-        expect.objectContaining({ method: 'PATCH' }),
+        expect.stringMatching(/\/api\/trpc\/threads\.update$/),
+        expect.objectContaining({ method: 'POST', body: '{"id":"t1","data":{"archived":true}}' }),
       );
     });
   });

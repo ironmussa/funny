@@ -1470,6 +1470,10 @@
   },
   "taskProgress": {
     "steps": "{{done}}/{{total}} pasos",
+    "files": "{{count}} archivos",
+    "lines": "{{formatted}} líneas",
+    "rules": "{{count}} reglas",
+    "noIssues": "Sin problemas",
     "errors": "{{count}} errores",
     "warnings": "{{count}} advertencias",
     "running": "{{count}} en ejecución (máx. {{max}})",

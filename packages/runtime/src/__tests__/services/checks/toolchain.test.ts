@@ -171,6 +171,7 @@ describe('planCheck', () => {
     const plan = planned(dir, { kind: 'verify' });
     expect(plan.progress).toBe('task');
     expect(plan.steps.map((step) => step.tool)).toEqual(['oxlint', 'tsc', 'vitest']);
+    expect(plan.tscDiagnostics).toBe(true);
   });
 
   test('an exact command is planned as given and classified', () => {
@@ -182,6 +183,12 @@ describe('planCheck', () => {
       vitest: true,
       steps: [{ command: 'bunx vitest run --project client', tool: 'vitest' }],
     });
+    expect(planned(dir, { kind: 'typecheck', command: 'bunx tsc --noEmit -p .' })).toMatchObject({
+      tscDiagnostics: true,
+    });
+    expect(
+      planned(dir, { kind: 'typecheck', command: 'bunx tsc --noEmit && echo ok' }).tscDiagnostics,
+    ).toBeUndefined();
     expect(planned(dir, { kind: 'build', command: 'make all' })).toMatchObject({
       kind: 'build',
       steps: [{ tool: 'unknown' }],

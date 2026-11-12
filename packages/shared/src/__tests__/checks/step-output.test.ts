@@ -145,4 +145,39 @@ describe('createStepParser formats', () => {
   ])('"%s" marks the step clean', (line) => {
     expect(feed(line).report.clean).toBe(true);
   });
+
+  test('oxlint: files and rules from its summary', () => {
+    const { report } = feed(
+      'Found 0 warnings and 0 errors.\nFinished in 26ms on 812 files with 96 rules using 20 threads.',
+    );
+    expect(report).toMatchObject({ files: 812, rules: 96, clean: true });
+  });
+
+  test('tsc --diagnostics: files and lines, without making them the current line', () => {
+    const { report, issues } = feed(
+      [
+        'Files:              1238',
+        'Lines of Library:  40000',
+        'Lines of TypeScript: 2000',
+        'Memory used:     488215K',
+        'Check time:       0.336s',
+      ].join('\n'),
+    );
+    expect(report).toMatchObject({ files: 1238, lines: 42000, errors: 0 });
+    expect(report.current).toBeUndefined();
+    expect(issues).toEqual([]);
+  });
+
+  test('tsc -b --diagnostics: the projects add up', () => {
+    const { report } = feed('Files: 10\nLines: 100\nFiles: 5\nLines: 50');
+    expect(report).toMatchObject({ files: 15, lines: 150 });
+  });
+
+  test.each([
+    ['Success: no issues found in 42 source files', 42],
+    ['Found 3 errors in 2 files (checked 42 source files)', 42],
+    ['Checked 12 files in 3ms. No fixes applied.', 12],
+  ])('"%s" gives the files checked', (line, files) => {
+    expect(feed(line).report.files).toBe(files);
+  });
 });

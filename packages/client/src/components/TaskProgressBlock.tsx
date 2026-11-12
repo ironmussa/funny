@@ -34,6 +34,31 @@ function stepElapsed(step: TaskStep, now: number): number | undefined {
   return step.startedAt !== undefined ? now - step.startedAt : undefined;
 }
 
+const compact = new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 });
+
+/** What the tool said it checked (files, lines, rules), and "no issues" once it passed clean. */
+function StepStats({ step, t }: { step: TaskStep; t: TFunction }) {
+  const parts = [
+    step.files !== undefined && t('taskProgress.files', { count: step.files }),
+    step.lines !== undefined &&
+      t('taskProgress.lines', { count: step.lines, formatted: compact.format(step.lines) }),
+    step.rules !== undefined && t('taskProgress.rules', { count: step.rules }),
+  ].filter((part): part is string => Boolean(part));
+  const clean = step.status === 'passed' && step.errors === 0 && step.warnings === 0;
+  if (!parts.length && !clean) return null;
+  return (
+    <span
+      className="text-muted-foreground flex flex-wrap gap-x-2 pl-5 tabular-nums"
+      data-testid={`task-progress-stats-${step.name}`}
+    >
+      {parts.map((part) => (
+        <span key={part}>{part}</span>
+      ))}
+      {clean && <span className={TONE.passed}>{t('taskProgress.noIssues')}</span>}
+    </span>
+  );
+}
+
 /** What a running step prints now, or the output tail of a failed one. */
 function StepDetail({ step, t }: { step: TaskStep; t: TFunction }) {
   if (step.status === 'running' && step.current) {
@@ -81,6 +106,7 @@ function StepRow({ step, now, t }: { step: TaskStep; now: number; t: TFunction }
           {elapsed !== undefined && <span>{formatDuration(elapsed, t)}</span>}
         </span>
       </div>
+      <StepStats step={step} t={t} />
       <StepDetail step={step} t={t} />
     </li>
   );
@@ -128,7 +154,7 @@ function IssueList({ issues, total, t }: { issues: TaskIssue[]; total: number; t
   );
 }
 
-export function TaskProgressView({ progress }: { progress: TaskProgress }) {
+function TaskProgressView({ progress }: { progress: TaskProgress }) {
   const { t } = useTranslation();
   const running = progress.status === 'running';
   const now = useNow(running);

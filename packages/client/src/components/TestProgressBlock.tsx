@@ -228,7 +228,7 @@ function RunHeader({ progress, now, t }: { progress: TestProgress; now: number; 
   );
 }
 
-export function TestProgressView({ progress }: { progress: TestProgress }) {
+function TestProgressView({ progress }: { progress: TestProgress }) {
   const { t } = useTranslation();
   const now = useNow(progress.status === 'running');
   const summary = summarizeTestProgress(progress, now);

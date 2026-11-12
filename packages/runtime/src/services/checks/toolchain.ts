@@ -59,6 +59,8 @@ export interface CheckPlan {
   progressEnv?: 'FUNNY_TEST_PROGRESS' | 'FUNNY_TASK_PROGRESS';
   /** Added for vitest steps, so the runner can pass its reporter. */
   vitest?: boolean;
+  /** Added for plain tsc steps, so the runner can ask for `--diagnostics` (files and lines checked). */
+  tscDiagnostics?: boolean;
   /** Notes for the agent, e.g. a filter the tool cannot apply. */
   notes: string[];
 }
@@ -370,6 +372,13 @@ function toolStep(
   return { name: candidate.tool, command: candidate.command(run).trim(), tool: candidate.tool };
 }
 
+/** What the runner adds to a tool it runs directly: vitest's reporter, tsc's diagnostics. */
+function toolExtra(tool: CheckStep['tool']): Partial<CheckPlan> {
+  if (tool === 'vitest') return { vitest: true };
+  if (tool === 'tsc') return { tscDiagnostics: true };
+  return {};
+}
+
 /** A plan that runs one tool directly. */
 function toolPlan(
   project: Project,
@@ -379,7 +388,7 @@ function toolPlan(
 ): CheckPlan | null {
   const step = toolStep(project, kind, scope, filter);
   if (!step) return null;
-  return plan(project, kind, [step], step.tool === 'vitest' ? { vitest: true } : {});
+  return plan(project, kind, [step], toolExtra(step.tool));
 }
 
 /** What was looked for, for the "nothing detected" error. */
@@ -472,6 +481,7 @@ function verifyPlan(project: Project, request: CheckRequest): CheckPlan | null {
     {
       notes: parts.flatMap((part) => part.notes),
       ...(parts.some((part) => part.vitest) ? { vitest: true } : {}),
+      ...(parts.some((part) => part.tscDiagnostics) ? { tscDiagnostics: true } : {}),
     },
   );
 }
@@ -488,12 +498,7 @@ function commandPlan(project: Project, request: CheckRequest, command: string): 
     });
   }
   const step: CheckStep = { name: check.script ?? check.tool, command, tool: check.tool };
-  return plan(
-    project,
-    check.kind,
-    [step],
-    check.tool === 'vitest' && check.plain ? { vitest: true } : {},
-  );
+  return plan(project, check.kind, [step], check.plain ? toolExtra(check.tool) : {});
 }
 
 /** The plan for `request` in `cwd`, or why none was found. */

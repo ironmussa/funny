@@ -1477,6 +1477,10 @@
   },
   "taskProgress": {
     "steps": "{{done}}/{{total}} steps",
+    "files": "{{count}} files",
+    "lines": "{{formatted}} lines",
+    "rules": "{{count}} rules",
+    "noIssues": "No issues",
     "errors": "{{count}} errors",
     "warnings": "{{count}} warnings",
     "running": "{{count}} running (max {{max}})",

@@ -11,6 +11,7 @@ import {
   checkEnv,
   runCheck,
   VITEST_REPORTER,
+  withTscDiagnostics,
   withVitestReporter,
 } from '../../../services/checks/runner.js';
 import { summarizeCheckRun } from '../../../services/checks/summary.js';
@@ -243,5 +244,16 @@ describe('checkEnv', () => {
         else process.env[name] = value;
       }
     }
+  });
+});
+
+describe('withTscDiagnostics', () => {
+  test('asks tsc for its diagnostics once', () => {
+    expect(withTscDiagnostics('bunx tsc --noEmit -p .')).toBe(
+      'bunx tsc --noEmit -p . --diagnostics',
+    );
+    expect(withTscDiagnostics('tsc --noEmit --extendedDiagnostics')).toBe(
+      'tsc --noEmit --extendedDiagnostics',
+    );
   });
 });

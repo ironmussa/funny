@@ -99,6 +99,53 @@ describe('TaskProgressBlock', () => {
     expect(issues).toHaveTextContent('src/b.ts:9');
   });
 
+  test('shows what a step checked, and "no issues" once it passed clean', async () => {
+    apiMock.readFile.mockResolvedValue(
+      respond(
+        progress({
+          status: 'passed',
+          finishedAt: 9_000,
+          steps: [
+            {
+              id: 'bunx tsc --noEmit --diagnostics',
+              name: 'tsc',
+              status: 'passed',
+              durationMs: 6_000,
+              errors: 0,
+              warnings: 0,
+              files: 1238,
+              lines: 498_796,
+              tail: [],
+            },
+            {
+              id: 'bunx oxlint',
+              name: 'oxlint',
+              status: 'passed',
+              durationMs: 1_000,
+              errors: 0,
+              warnings: 2,
+              files: 812,
+              rules: 96,
+              tail: [],
+            },
+          ],
+          issues: [],
+        }),
+      ),
+    );
+    renderWithProviders(<TaskProgressBlock path={PATH} />);
+    await flush();
+
+    const tsc = screen.getByTestId('task-progress-stats-tsc');
+    expect(tsc).toHaveTextContent('1238 files');
+    expect(tsc).toHaveTextContent('lines');
+    expect(tsc).toHaveTextContent('No issues');
+    const oxlint = screen.getByTestId('task-progress-stats-oxlint');
+    expect(oxlint).toHaveTextContent('812 files');
+    expect(oxlint).toHaveTextContent('96 rules');
+    expect(oxlint).not.toHaveTextContent('No issues');
+  });
+
   test('polls while running and stops once the task finishes', async () => {
     apiMock.readFile
       .mockResolvedValueOnce(respond(progress()))

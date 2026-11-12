@@ -1436,6 +1436,10 @@
   },
   "taskProgress": {
     "steps": "{{done}}/{{total}} etapas",
+    "files": "{{count}} arquivos",
+    "lines": "{{formatted}} linhas",
+    "rules": "{{count}} regras",
+    "noIssues": "Sem problemas",
     "errors": "{{count}} erros",
     "warnings": "{{count}} avisos",
     "running": "{{count}} em execução (máx. {{max}})",

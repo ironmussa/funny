@@ -251,8 +251,17 @@ class RunProgress {
     return (line) => {
       if (this.closed) return;
       const { report, issues } = parse(line);
-      const { errors, warnings, unitsDone, unitsTotal, current } = report;
-      Object.assign(step, { errors, warnings, unitsDone, unitsTotal, current });
+      const { errors, warnings, unitsDone, unitsTotal, current, files, lines, rules } = report;
+      Object.assign(step, {
+        errors,
+        warnings,
+        unitsDone,
+        unitsTotal,
+        current,
+        files,
+        lines,
+        rules,
+      });
       if (issues.length) {
         task.issues = [...task.issues, ...issues]
           .sort((a, b) => Number(b.severity === 'error') - Number(a.severity === 'error'))
@@ -315,7 +324,13 @@ function finalizeOwnProgress(found: CheckProgress, path: string, at: number): vo
   renameSync(tmp, path);
 }
 
+/** tsc with `--diagnostics`, so the widget can say how many files and lines it checked. */
+export function withTscDiagnostics(command: string): string {
+  return /\s--(extendedD|d)iagnostics\b/.test(command) ? command : `${command} --diagnostics`;
+}
+
 function stepCommand(plan: CheckPlan, step: CheckStep): string {
+  if (plan.tscDiagnostics && step.tool === 'tsc') return withTscDiagnostics(step.command);
   return plan.vitest && (step.tool === 'vitest' || step.tool === 'script')
     ? withVitestReporter(step.command)
     : step.command;

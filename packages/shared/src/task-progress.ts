@@ -32,6 +32,10 @@ const taskStepSchema = z.object({
   /** Sub-units (e.g. typecheck projects) finished and in total, when reported. */
   unitsDone: z.number().int().nonnegative().optional(),
   unitsTotal: z.number().int().nonnegative().optional(),
+  /** What the tool said it checked (oxlint, `tsc --diagnostics`, mypy, biome). */
+  files: z.number().int().nonnegative().optional(),
+  lines: z.number().int().nonnegative().optional(),
+  rules: z.number().int().nonnegative().optional(),
   /** What the step reported last (a project, a file, a check). */
   current: z.string().optional(),
   /** Last output lines of a failed step that reported no issue of its own. */

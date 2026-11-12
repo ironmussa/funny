@@ -27,6 +27,10 @@ export interface StepReport {
   unitsDone?: number;
   unitsTotal?: number;
   current?: string;
+  /** What the tool said it checked: files, lines of code, lint rules. */
+  files?: number;
+  lines?: number;
+  rules?: number;
   tail: string[];
   /** The tool said it found nothing (`All checks passed!`, `Found 0 warnings…`). */
   clean?: boolean;
@@ -58,6 +62,14 @@ const CLEAN =
 /** cargo's own summaries, not issues. */
 const CARGO_SUMMARY =
   /^(error: (could not compile|aborting due to)|warning: .+ generated \d+ warnings?)/;
+/** oxlint's `Finished in 26ms on 812 files with 96 rules using 20 threads.` */
+const OXLINT_DONE = /^Finished in \S+ on (\d+) files? with (\d+) rules/;
+/** `tsc --diagnostics`: `Files: 1238`, `Lines: 498796` (or `Lines of Library: …`), timings. */
+const TSC_FILES = /^Files:\s+(\d+)$/;
+const TSC_LINES = /^Lines(?: of \w+)?:\s+(\d+)$/;
+const TSC_DIAGNOSTIC = /^[A-Z][\w/ ]+:\s+[\d.]+[sK]?$/;
+/** mypy's `… no issues found in 42 source files` / `(checked 42 source files)`; biome's `Checked 12 files in 3ms.` */
+const CHECKED_FILES = /(?:found in|\(checked|^Checked) (\d+) (?:source )?files?\b/;
 const PROJECTS = /^Running bun check against (\d+) projects/;
 const PROJECT_DONE = /^\s+(\S+)… \d+ error\(s\)$/;
 const SUITE_START = /^▶ (.+)$/;
@@ -129,6 +141,36 @@ function progressLine(report: StepReport, line: string): boolean {
   const start = SUITE_START.exec(line);
   if (start) report.current = start[1];
   return Boolean(start);
+}
+
+/**
+ * What the tool says it checked. True when the line is only that (tsc's
+ * diagnostics), so it is not remembered as the step's current line.
+ */
+function statsLine(report: StepReport, line: string): boolean {
+  const oxlint = OXLINT_DONE.exec(line);
+  if (oxlint) {
+    report.files = Number(oxlint[1]);
+    report.rules = Number(oxlint[2]);
+    return false;
+  }
+  const checked = CHECKED_FILES.exec(line);
+  if (checked) {
+    report.files = Number(checked[1]);
+    return false;
+  }
+  // `tsc -b --diagnostics` prints one block per project: they add up.
+  const files = TSC_FILES.exec(line);
+  if (files) {
+    report.files = (report.files ?? 0) + Number(files[1]);
+    return true;
+  }
+  const lines = TSC_LINES.exec(line);
+  if (lines) {
+    report.lines = (report.lines ?? 0) + Number(lines[1]);
+    return true;
+  }
+  return report.files !== undefined && TSC_DIAGNOSTIC.test(line);
 }
 
 export function createStepParser(step: string): StepParser {
@@ -203,6 +245,7 @@ export function createStepParser(step: string): StepParser {
 
   const readLine = (line: string): TaskIssue[] => {
     if (progressLine(report, line)) return [];
+    if (statsLine(report, line.trim())) return [];
     remember(line);
     return issuesOf(line);
   };

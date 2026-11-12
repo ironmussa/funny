@@ -45,12 +45,22 @@ function testLines(result: CheckRunResult): { lines: string[]; issues: number } 
   return { lines, issues: failures.length };
 }
 
+/** ` (812 files, 96 rules)`: what the tool said it checked, when it said. */
+function checked(step: { files?: number; lines?: number; rules?: number }): string {
+  const parts = [
+    step.files !== undefined && `${step.files} files`,
+    step.lines !== undefined && `${step.lines} lines`,
+    step.rules !== undefined && `${step.rules} rules`,
+  ].filter(Boolean);
+  return parts.length ? ` (${parts.join(', ')})` : '';
+}
+
 function taskLines(result: CheckRunResult): { lines: string[]; issues: number } {
   if (result.progress.kind !== 'task') return { lines: [], issues: 0 };
   const { steps, issues } = result.progress.progress;
   const lines = steps.map(
     (step) =>
-      `${step.status === 'passed' ? '✓' : step.status === 'failed' ? '✗' : '·'} ${step.name}: ${step.errors} errors, ${step.warnings} warnings`,
+      `${step.status === 'passed' ? '✓' : step.status === 'failed' ? '✗' : '·'} ${step.name}: ${step.errors} errors, ${step.warnings} warnings${checked(step)}`,
   );
   for (const issue of issues.slice(0, ISSUE_LIMIT)) {
     const where = at(issue.file, issue.line, issue.column);

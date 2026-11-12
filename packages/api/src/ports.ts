@@ -13,6 +13,7 @@ import type {
   AgentTemplate,
   Automation,
   AutomationRun,
+  Design,
   CreateAgentExecutionProfileRequest,
   InboxItem,
   Job,
@@ -38,15 +39,23 @@ import type {
   UpdateAgentTemplateBody,
 } from '@funny/shared/contracts/agent-templates';
 import type {
+  AnalyticsOverview,
+  AnalyticsOverviewQuery,
+  AnalyticsTimeline,
+  AnalyticsTimelineQuery,
+} from '@funny/shared/contracts/analytics';
+import type {
   CreateAutomationRequest,
   UpdateAutomationRequest,
 } from '@funny/shared/contracts/automations';
+import type { CreateDesignBody } from '@funny/shared/contracts/designs';
 import type { QueryOf } from '@funny/shared/contracts/endpoint';
 import type {
   CreatePipelineRequest,
   UpdatePipelineRequest,
 } from '@funny/shared/contracts/pipelines';
 import type { ProfileResponse } from '@funny/shared/contracts/profile';
+import type { PushSubscriptionBody } from '@funny/shared/contracts/push';
 import type { SmtpSettingsRequest, SmtpSettingsResponse } from '@funny/shared/contracts/settings';
 import type {
   ArchivedThreadsResponse,
@@ -204,6 +213,33 @@ export interface JobsPort {
   list(userId: string): PortResult<Job[]>;
 }
 
+export interface DesignsPort {
+  /** The caller's designs in a project `projectProcedure('view')` already authorized. */
+  list(userId: string, projectId: string): PortResult<Design[]>;
+  create(userId: string, projectId: string, data: CreateDesignBody): PortResult<Design>;
+  /** Runs after `authorizeAccess`. */
+  get(userId: string, id: string): PortResult<Design>;
+  /** Runs after `authorizeAccess`; the folder on disk is the runner's to clean up. */
+  remove(userId: string, id: string): PortResult<Ok>;
+  /** Only the owner: 404 when missing, 403 when someone else's. */
+  authorizeAccess(userId: string, id: string): Promise<ApiFailure | null>;
+}
+
+export interface AnalyticsPort {
+  overview(userId: string, query: AnalyticsOverviewQuery): PortResult<AnalyticsOverview>;
+  timeline(userId: string, query: AnalyticsTimelineQuery): PortResult<AnalyticsTimeline>;
+}
+
+export interface PushPort {
+  /** The VAPID public key, or `null` when Web Push is not configured. */
+  config(): PortResult<{ publicKey: string | null }>;
+  /** 503 when Web Push is not configured. */
+  subscribe(userId: string, subscription: PushSubscriptionBody): PortResult<Ok>;
+  unsubscribe(userId: string, endpoint: string): PortResult<Ok>;
+  /** Sends a test notification to one of the caller's subscriptions (503 when it fails). */
+  test(userId: string, endpoint: string): PortResult<Ok>;
+}
+
 /** The server's authorization decisions that are not about one thread. */
 export interface AuthzPort {
   /**
@@ -228,6 +264,9 @@ export interface ApiPorts {
   agentTemplates: AgentTemplatesPort;
   watchers: WatchersPort;
   jobs: JobsPort;
+  designs: DesignsPort;
+  analytics: AnalyticsPort;
+  push: PushPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;
 }

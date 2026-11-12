@@ -74,6 +74,9 @@ describe('fitness:trpc-api — web client', () => {
     "request<Job[]>('/jobs')",
     'request(`/watchers/${id}/cancel`, { method: "POST" })',
     "request('/agent-templates/stats/usage')",
+    'request(`/designs/${id}`)',
+    'request<any>(`/analytics/overview?${qs}`)',
+    "request('/push/config')",
   ])('rejects REST use of a migrated group: %s', (source) => {
     expect(findClientViolations('x.ts', source)).toHaveLength(1);
   });

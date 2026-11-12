@@ -1,3 +1,4 @@
+import { errAsync, okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ request: vi.fn(), getWorker: vi.fn() }));
@@ -24,12 +25,19 @@ beforeEach(() => {
   manager.subscribe.mockResolvedValue(subscription);
   manager.getSubscription.mockResolvedValue(null);
   mocks.getWorker.mockResolvedValue(registration);
-  mocks.request.mockImplementation(async (path) => ({
-    isErr: () => false,
-    value: path.endsWith('/config') ? { publicKey: 'AQID' } : { ok: true },
-  }));
+  mocks.request.mockImplementation((path: string) =>
+    trpcOk(path.startsWith('/trpc/push.config') ? { publicKey: 'AQID' } : { ok: true }),
+  );
 });
 afterEach(() => vi.unstubAllGlobals());
+
+// The push calls go through tRPC (`/trpc/push.*`), whose link sends them with `request`.
+const trpcOk = (data: unknown) => okAsync({ result: { data } });
+const failed = (message: string) => errAsync({ type: 'INTERNAL', message });
+const mutation = (procedure: string, input: unknown) => [
+  `/trpc/push.${procedure}`,
+  expect.objectContaining({ method: 'POST', body: JSON.stringify(input) }),
+];
 describe('browser push subscription lifecycle', () => {
   test('creates and saves a subscription with the application server key', async () => {
     await enableWebPush();
@@ -37,36 +45,32 @@ describe('browser push subscription lifecycle', () => {
       userVisibleOnly: true,
       applicationServerKey: new Uint8Array([1, 2, 3]),
     });
-    expect(mocks.request).toHaveBeenLastCalledWith('/push/subscription', {
-      method: 'PUT',
-      body: JSON.stringify(subscription.toJSON()),
-    });
+    expect(mocks.request).toHaveBeenLastCalledWith(...mutation('subscribe', subscription.toJSON()));
   });
   test('rolls back a new browser subscription if server registration fails', async () => {
     mocks.request
-      .mockResolvedValueOnce({ isErr: () => false, value: { publicKey: 'AQID' } })
-      .mockResolvedValueOnce({ isErr: () => true, error: { message: 'Offline' } });
+      .mockReturnValueOnce(trpcOk({ publicKey: 'AQID' }))
+      .mockReturnValueOnce(failed('Offline'));
     await expect(enableWebPush()).rejects.toThrow('Offline');
     expect(subscription.unsubscribe).toHaveBeenCalled();
   });
   test('does not subscribe if VAPID is unconfigured', async () => {
-    mocks.request.mockResolvedValue({ isErr: () => false, value: { publicKey: null } });
+    mocks.request.mockReturnValue(trpcOk({ publicKey: null }));
     await expect(enableWebPush()).rejects.toThrow('not configured');
     expect(manager.subscribe).not.toHaveBeenCalled();
   });
   test('keeps subscription on failed removal so disabling can be retried', async () => {
     manager.getSubscription.mockResolvedValue(subscription);
-    mocks.request.mockResolvedValue({ isErr: () => true, error: { message: 'Offline' } });
+    mocks.request.mockReturnValue(failed('Offline'));
     await expect(disableWebPush()).rejects.toThrow('Offline');
     expect(subscription.unsubscribe).not.toHaveBeenCalled();
   });
   test('removes the subscription from the server and browser', async () => {
     manager.getSubscription.mockResolvedValue(subscription);
     await disableWebPush();
-    expect(mocks.request).toHaveBeenCalledWith('/push/subscription', {
-      method: 'DELETE',
-      body: JSON.stringify({ endpoint: subscription.endpoint }),
-    });
+    expect(mocks.request).toHaveBeenCalledWith(
+      ...mutation('unsubscribe', { endpoint: subscription.endpoint }),
+    );
     expect(subscription.unsubscribe).toHaveBeenCalled();
   });
   test('reuses the subscription and tests via the server', async () => {
@@ -74,9 +78,8 @@ describe('browser push subscription lifecycle', () => {
     expect(await hasPushSubscription()).toBe(true);
     await testWebPush();
     expect(manager.subscribe).not.toHaveBeenCalled();
-    expect(mocks.request).toHaveBeenLastCalledWith('/push/test', {
-      method: 'POST',
-      body: JSON.stringify({ endpoint: subscription.endpoint }),
-    });
+    expect(mocks.request).toHaveBeenLastCalledWith(
+      ...mutation('test', { endpoint: subscription.endpoint }),
+    );
   });
 });

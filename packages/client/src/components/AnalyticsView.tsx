@@ -1,3 +1,4 @@
+import type { AnalyticsOverview, AnalyticsTimeline } from '@funny/shared/contracts/analytics';
 import {
   BarChart3,
   Plus,
@@ -35,27 +36,8 @@ const TimelineChart = lazy(() =>
 
 const ChartFallback = () => <LoadingState label="Loading…" />;
 
-interface OverviewData {
-  currentStageDistribution: Record<string, number>;
-  createdCount: number;
-  completedCount: number;
-  movedToPlanningCount: number;
-  movedToReviewCount: number;
-  movedToDoneCount: number;
-  movedToArchivedCount: number;
-  totalCost: number;
-  timeRange: { start: string; end: string };
-}
-
-interface TimelineData {
-  createdByDate: Array<{ date: string; count: number }>;
-  completedByDate: Array<{ date: string; count: number }>;
-  movedToPlanningByDate: Array<{ date: string; count: number }>;
-  movedToReviewByDate: Array<{ date: string; count: number }>;
-  movedToDoneByDate: Array<{ date: string; count: number }>;
-  movedToArchivedByDate: Array<{ date: string; count: number }>;
-  timeRange: { start: string; end: string };
-}
+type OverviewData = AnalyticsOverview;
+type TimelineData = AnalyticsTimeline;
 
 export function AnalyticsView() {
   const { t } = useTranslation();

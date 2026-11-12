@@ -13,6 +13,8 @@
 import { agentTemplatesRouter } from './routers/agent-templates.js';
 import { automationsRouter } from './routers/automations.js';
 import { jobsRouter, watchersRouter } from './routers/background.js';
+import { designsRouter } from './routers/designs.js';
+import { analyticsRouter, pushRouter } from './routers/insights.js';
 import { pipelinesRouter } from './routers/pipelines.js';
 import { profileRouter } from './routers/profile.js';
 import { settingsRouter } from './routers/settings.js';
@@ -28,6 +30,9 @@ export const appRouter = router({
   agentTemplates: agentTemplatesRouter,
   watchers: watchersRouter,
   jobs: jobsRouter,
+  designs: designsRouter,
+  analytics: analyticsRouter,
+  push: pushRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -44,14 +49,17 @@ export {
 export type { ApiFailure } from './failure.js';
 export type {
   AgentTemplatesPort,
+  AnalyticsPort,
   ApiCaller,
   ApiPorts,
   AuthzPort,
   AutomationsPort,
+  DesignsPort,
   JobsPort,
   PipelinesPort,
   ProfilePort,
   PortResult,
+  PushPort,
   SettingsPort,
   ThreadAccessLevel,
   ThreadAccessPort,

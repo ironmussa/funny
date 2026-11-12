@@ -15,6 +15,8 @@ import { agentTemplatesPort } from './ports/agent-templates.js';
 import { authzPort } from './ports/authz.js';
 import { automationsPort } from './ports/automations.js';
 import { jobsPort, watchersPort } from './ports/background.js';
+import { designsPort } from './ports/designs.js';
+import { analyticsPort, pushPort } from './ports/insights.js';
 import { pipelinesPort } from './ports/pipelines.js';
 import { profilePort } from './ports/profile.js';
 import { settingsPort } from './ports/settings.js';
@@ -32,6 +34,9 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
     agentTemplates: agentTemplatesPort,
     watchers: watchersPort,
     jobs: jobsPort,
+    designs: designsPort,
+    analytics: analyticsPort,
+    push: pushPort,
     threadAccess: threadAccessPort,
     authz: authzPort,
   };

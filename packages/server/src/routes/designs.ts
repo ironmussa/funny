@@ -1,108 +1,60 @@
 /**
  * Design routes for the central server.
  *
- * DB CRUD (list, get, create, delete) is handled here.
- * Folder creation on disk is done by the runtime, then persisted here.
+ * DB CRUD (list, get, create, delete) is handled here; folder creation on disk
+ * is done by the runtime. The logic lives in `trpc/ports/designs.ts`, shared
+ * with the `designs` tRPC procedures (openspec adopt-trpc-browser-api).
  *
  * Two route groups are exported:
  * - designProjectRoutes: mounted under /api/projects (list/create designs under a project)
  * - designRoutes: mounted under /api/designs (operations by design ID)
  */
 
-import type { DesignFidelity, DesignType } from '@funny/shared';
-import { Hono } from 'hono';
-import { nanoid } from 'nanoid';
+import { createDesignBody } from '@funny/shared/contracts/designs';
+import { Hono, type Context } from 'hono';
 
-import { repos } from '../db/repos.js';
 import { requireProjectAccess } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
+import { designsPort as port } from '../trpc/ports/designs.js';
+import { answerJson } from '../trpc/reply.js';
+import { parseJsonBody } from '../validation/request.js';
 
-const designRepo = repos.designs();
-
-const VALID_TYPES: DesignType[] = ['prototype', 'slides', 'template', 'other'];
-const VALID_FIDELITIES: DesignFidelity[] = ['wireframe', 'high'];
+const userIdOf = (c: Context<ServerEnv>) => c.get('userId') as string;
 
 // ── Routes nested under /api/projects/:id/designs ───────────────
 
 export const designProjectRoutes = new Hono<ServerEnv>();
 
 // GET /api/projects/:id/designs — list designs for a project
-designProjectRoutes.get('/:id/designs', requireProjectAccess('view'), async (c) => {
-  const projectId = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const designs = await designRepo.listDesigns(projectId, userId);
-  return c.json(designs);
-});
+designProjectRoutes.get('/:id/designs', requireProjectAccess('view'), (c) =>
+  answerJson(c, port.list(userIdOf(c), c.req.param('id'))),
+);
 
 // POST /api/projects/:id/designs — create a new design row
 designProjectRoutes.post('/:id/designs', requireProjectAccess('view'), async (c) => {
-  const projectId = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const body = await c.req.json<{
-    name: string;
-    type: DesignType;
-    fidelity?: DesignFidelity | null;
-    speakerNotes?: boolean;
-  }>();
-
-  const name = (body.name ?? '').trim();
-  if (!name) return c.json({ error: 'name is required' }, 400);
-  if (name.length > 200) return c.json({ error: 'name must be ≤ 200 chars' }, 400);
-
-  if (!VALID_TYPES.includes(body.type)) {
-    return c.json({ error: `type must be one of: ${VALID_TYPES.join(', ')}` }, 400);
-  }
-  if (body.fidelity != null && !VALID_FIDELITIES.includes(body.fidelity)) {
-    return c.json({ error: `fidelity must be one of: ${VALID_FIDELITIES.join(', ')}` }, 400);
-  }
-
-  const id = nanoid();
-  const folderPath = `designs/${id}`;
-  const design = await designRepo.createDesign({
-    id,
-    projectId,
-    userId,
-    name,
-    type: body.type,
-    fidelity: body.fidelity ?? null,
-    speakerNotes: !!body.speakerNotes,
-    folderPath,
-  });
-
-  return c.json(design, 201);
+  const parsed = await parseJsonBody(c, createDesignBody);
+  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+  return answerJson(c, port.create(userIdOf(c), c.req.param('id'), parsed.value), 201);
 });
 
 // ── Routes at /api/designs/:id ──────────────────────────────────
 
 export const designRoutes = new Hono<ServerEnv>();
 
+/** The design's owner only: 404 when missing, 403 when someone else's. */
+async function refusal(c: Context<ServerEnv>, id: string) {
+  const refused = await port.authorizeAccess(userIdOf(c), id);
+  return refused && c.json({ error: refused.message }, refused.status as 403 | 404);
+}
+
 // GET /api/designs/:id — get design details
 designRoutes.get('/:id', async (c) => {
-  const designId = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const design = await designRepo.getDesign(designId);
-  if (!design) return c.json({ error: 'Design not found' }, 404);
-  if (design.userId !== userId) {
-    return c.json({ error: 'Access denied' }, 403);
-  }
-
-  return c.json(design);
+  const id = c.req.param('id');
+  return (await refusal(c, id)) ?? answerJson(c, port.get(userIdOf(c), id));
 });
 
 // DELETE /api/designs/:id — delete a design row (folder cleanup is best-effort and runtime-side)
 designRoutes.delete('/:id', async (c) => {
-  const designId = c.req.param('id');
-  const userId = c.get('userId') as string;
-
-  const design = await designRepo.getDesign(designId);
-  if (!design) return c.json({ error: 'Design not found' }, 404);
-  if (design.userId !== userId) {
-    return c.json({ error: 'Access denied' }, 403);
-  }
-
-  await designRepo.deleteDesign(designId);
-  return c.json({ ok: true });
+  const id = c.req.param('id');
+  return (await refusal(c, id)) ?? answerJson(c, port.remove(userIdOf(c), id));
 });

@@ -61,6 +61,9 @@ const MIGRATED_GROUPS: Array<{
   // Only the list moved: job cancel and log reads (`/jobs/:id/…`) are proxied to
   // the runner that owns the process.
   { path: '/jobs', exact: true },
+  { path: '/designs' },
+  { path: '/analytics' },
+  { path: '/push' },
 ];
 
 const IMPORT_SPECIFIER =

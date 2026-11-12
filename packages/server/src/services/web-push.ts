@@ -1,37 +1,12 @@
+import { isPushEndpoint, type PushSubscriptionBody } from '@funny/shared/contracts/push';
 import { and, eq } from 'drizzle-orm';
 import webpush from 'web-push';
-import { z } from 'zod';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import { pushSubscriptions, threads } from '../db/schema.js';
 
-// Restrict outbound requests to browser push providers; never accept arbitrary URLs.
-export function isPushEndpoint(value: string): boolean {
-  try {
-    const url = new URL(value);
-    return (
-      url.protocol === 'https:' &&
-      !url.username &&
-      !url.password &&
-      !url.port &&
-      (url.hostname === 'fcm.googleapis.com' ||
-        url.hostname === 'updates.push.services.mozilla.com' ||
-        url.hostname.endsWith('.push.services.mozilla.com') ||
-        url.hostname === 'web.push.apple.com' ||
-        url.hostname.endsWith('.notify.windows.com'))
-    );
-  } catch {
-    return false;
-  }
-}
-
-export const subscriptionSchema = z.object({
-  endpoint: z.string().max(4096).refine(isPushEndpoint),
-  keys: z.object({
-    p256dh: z.string().regex(/^[A-Za-z0-9_-]{87}$/),
-    auth: z.string().regex(/^[A-Za-z0-9_-]{22}$/),
-  }),
-});
+// The endpoint check is shared with the tRPC inputs (`@funny/shared/contracts/push`).
+export { isPushEndpoint };
 
 export function pushConfig() {
   const publicKey = process.env.WEB_PUSH_PUBLIC_KEY;
@@ -40,7 +15,7 @@ export function pushConfig() {
   return publicKey && privateKey && subject ? { publicKey, privateKey, subject } : null;
 }
 
-export async function saveSubscription(userId: string, input: z.infer<typeof subscriptionSchema>) {
+export async function saveSubscription(userId: string, input: PushSubscriptionBody) {
   await dbRun(
     db
       .insert(pushSubscriptions)

@@ -9,7 +9,7 @@ process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 mockCoreGitRepoChecks();
 
-import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
+import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject } from '../helpers/test-db.js';
@@ -117,6 +117,22 @@ describe('designs, analytics and push over tRPC', () => {
   });
 
   describe('push', () => {
+    // A local `.env` with Web Push keys (loaded by Bun when tests start from
+    // the repo root) must not make the "not configured" case pass or fail.
+    const PUSH_ENV = ['WEB_PUSH_PUBLIC_KEY', 'WEB_PUSH_PRIVATE_KEY', 'WEB_PUSH_SUBJECT'] as const;
+    const savedEnv = new Map(PUSH_ENV.map((key) => [key, process.env[key]]));
+
+    beforeAll(() => {
+      for (const key of PUSH_ENV) delete process.env[key];
+    });
+
+    afterAll(() => {
+      for (const [key, value] of savedEnv) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
+    });
+
     const subscription = {
       endpoint: 'https://fcm.googleapis.com/fcm/send/abc',
       keys: { p256dh: 'a'.repeat(87), auth: 'b'.repeat(22) },

@@ -10,7 +10,7 @@
  * forwards them to the runner.
  *
  * The REST routes that only the web client used were removed. Their paths are
- * refused explicitly (`refuseRemovedRoute`), never left to fall through: the
+ * refused explicitly (`refuseRetiredRoute`), never left to fall through: the
  * runner answers some of them itself (startup command CRUD), and a request
  * that reached a runner would skip the server's `requireProjectAccess` check.
  */
@@ -29,6 +29,7 @@ import { findAnyRunnerForUser } from '../services/runner-manager.js';
 import { createProjectsPort } from '../trpc/ports/projects.js';
 import { answerJson } from '../trpc/reply.js';
 import { parseJsonBody, parseQuery, queryBoolean } from '../validation/request.js';
+import { refuseRetiredRoute } from './retired-rest.js';
 
 export const projectRoutes = new Hono<ServerEnv>();
 
@@ -131,8 +132,6 @@ projectRoutes.delete('/:id', requireProjectAccess('delete'), (c) =>
 // runner proxy; the runtime answers startup command CRUD itself, so a member's
 // request would reach the owner's runner without `requireProjectAccess`.
 
-const refuseRemovedRoute = (c: Context<ServerEnv>) => c.json({ error: 'Not found' }, 404);
-
 /** Method + path of every removed route, relative to `/api/projects`. */
 export const REMOVED_PROJECT_ROUTES = [
   ['PATCH', '/:id'],
@@ -153,5 +152,5 @@ export const REMOVED_PROJECT_ROUTES = [
 ] as const;
 
 for (const [method, path] of REMOVED_PROJECT_ROUTES) {
-  projectRoutes.on(method, path, refuseRemovedRoute);
+  projectRoutes.on(method, path, refuseRetiredRoute);
 }

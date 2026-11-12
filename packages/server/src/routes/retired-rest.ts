@@ -20,6 +20,7 @@ import type { Context, Hono } from 'hono';
 import type { ServerEnv } from '../lib/types.js';
 
 const RETIRED_PREFIXES = [
+  '/api/automations',
   '/api/settings',
   '/api/agent-templates',
   '/api/watchers',
@@ -28,7 +29,9 @@ const RETIRED_PREFIXES = [
   '/api/push',
 ] as const;
 
-const notFound = (c: Context<ServerEnv>) => c.json({ error: 'Not found' }, 404);
+/** The answer of every retired REST path (also used by routes that retire some of their sub-paths). */
+export const refuseRetiredRoute = (c: Context<ServerEnv>) => c.json({ error: 'Not found' }, 404);
+const notFound = refuseRetiredRoute;
 
 /**
  * Mount AFTER every server route that shares these prefixes (the GitHub App

@@ -14,7 +14,7 @@ import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import { pipelineApprovalStore } from '../services/pipeline-approval-store.js';
 import { parseJsonBody } from '../validation/request.js';
-import { refuseRemovedRoute } from './removed-rest.js';
+import { refuseRetiredRoute } from './retired-rest.js';
 
 export const pipelineRoutes = new Hono<ServerEnv>();
 
@@ -289,4 +289,4 @@ pipelineRoutes.post('/scheduler/progress', async (c) => {
 // Pipeline CRUD and run history moved to the `pipelines` tRPC procedures
 // (openspec adopt-trpc-browser-api). Any other path answers 404 here instead of
 // falling through to the runner proxy.
-pipelineRoutes.all('*', refuseRemovedRoute);
+pipelineRoutes.all('*', refuseRetiredRoute);

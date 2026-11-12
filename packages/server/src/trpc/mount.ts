@@ -16,6 +16,7 @@ import { authzPort } from './ports/authz.js';
 import { automationsPort } from './ports/automations.js';
 import { jobsPort, watchersPort } from './ports/background.js';
 import { designsPort } from './ports/designs.js';
+import { createGithubAppPort, defaultGithubAppDeps } from './ports/github-app.js';
 import { analyticsPort, pushPort } from './ports/insights.js';
 import { pipelinesPort } from './ports/pipelines.js';
 import { profilePort } from './ports/profile.js';
@@ -45,6 +46,7 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
     push: pushPort,
     projects: createProjectsPort(c.get('organizationName')),
     runners: runnersPort,
+    githubApp: createGithubAppPort(defaultGithubAppDeps(), c.req.header('origin')),
     projectRunners: createProjectRunnersPort({
       requests: c.env?.runnerRequests,
       presence: c.env?.runnerPresence,

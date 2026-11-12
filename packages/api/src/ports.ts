@@ -52,6 +52,12 @@ import type {
 } from '@funny/shared/contracts/automations';
 import type { CreateDesignBody } from '@funny/shared/contracts/designs';
 import type {
+  GithubAppAccounts,
+  GithubAppManifestStart,
+  GithubAppStatus,
+  StartGithubAppManifestBody,
+} from '@funny/shared/contracts/github-app';
+import type {
   CreatePipelineRequest,
   UpdatePipelineRequest,
 } from '@funny/shared/contracts/pipelines';
@@ -289,6 +295,23 @@ export interface ProjectsPort {
   deleteCommand(projectId: string, commandId: string): PortResult<Ok>;
 }
 
+/**
+ * The deployment's GitHub App (sandbox-github-app-tokens), admin only. Built
+ * per request: the manifest flow returns the admin to the request's origin.
+ */
+export interface GithubAppPort {
+  /** Whether an App is connected, and from where; never the key. */
+  status(): PortResult<GithubAppStatus>;
+  /** The admin's personal account and the organizations they administer. */
+  accounts(userId: string): PortResult<GithubAppAccounts>;
+  /** 409 when the App comes from server variables, 400 without a usable Origin. */
+  startManifest(
+    userId: string,
+    data: StartGithubAppManifestBody,
+  ): PortResult<GithubAppManifestStart>;
+  disconnect(): PortResult<Ok>;
+}
+
 /** The caller of a runner operation: an instance admin reaches every runner. */
 export interface RunnerCaller {
   userId: string;
@@ -377,6 +400,7 @@ export interface ApiPorts {
   push: PushPort;
   projects: ProjectsPort;
   runners: RunnersPort;
+  githubApp: GithubAppPort;
   projectRunners: ProjectRunnersPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;

@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   getGithubAppStatus: vi.fn(),
+  getGithubAppAccounts: vi.fn(),
   startGithubAppManifest: vi.fn(),
   disconnectGithubApp: vi.fn(),
 }));
@@ -18,11 +19,20 @@ describe('GithubAppSettings', () => {
     vi.clearAllMocks();
   });
 
-  test('not connected: offers to connect an organization App', async () => {
+  test('not connected: connects the listed personal account with one click', async () => {
     mocks.getGithubAppStatus.mockReturnValue(okAsync({ configured: false, source: 'none' }));
+    mocks.getGithubAppAccounts.mockReturnValue(
+      okAsync({
+        hasToken: true,
+        accounts: [
+          { login: 'octo', type: 'user' },
+          { login: 'acme', type: 'org' },
+        ],
+      }),
+    );
     mocks.startGithubAppManifest.mockReturnValue(
       okAsync({
-        action: 'https://github.com/organizations/acme/settings/apps/new?state=s',
+        action: 'https://github.com/settings/apps/new?state=s',
         manifest: '{}',
         state: 's',
       }),
@@ -31,15 +41,27 @@ describe('GithubAppSettings', () => {
     render(<GithubAppSettings />);
 
     const connect = await screen.findByTestId('github-app-connect');
-    expect(connect).toBeDisabled();
-    fireEvent.change(screen.getByTestId('github-app-org'), { target: { value: 'acme' } });
+    expect(screen.getByTestId('github-app-target')).toHaveTextContent('octo (personal account)');
+    expect(screen.queryByTestId('github-app-org')).toBeNull();
+    expect(screen.queryByTestId('github-app-token-hint')).toBeNull();
+    expect(connect).toBeEnabled();
     fireEvent.click(connect);
 
     await waitFor(() => expect(submit).toHaveBeenCalled());
-    expect(mocks.startGithubAppManifest).toHaveBeenCalledWith({ target: 'org', org: 'acme' });
-    const form = document.querySelector('form[action^="https://github.com/organizations/acme"]');
+    expect(mocks.startGithubAppManifest).toHaveBeenCalledWith({ target: 'user' });
+    const form = document.querySelector('form[action^="https://github.com/settings/apps/new"]');
     expect(form?.querySelector('input[name="manifest"]')).not.toBeNull();
     submit.mockRestore();
+  });
+
+  test('not connected without a GitHub token: suggests saving one', async () => {
+    mocks.getGithubAppStatus.mockReturnValue(okAsync({ configured: false, source: 'none' }));
+    mocks.getGithubAppAccounts.mockReturnValue(okAsync({ hasToken: false, accounts: [] }));
+    render(<GithubAppSettings />);
+
+    expect(await screen.findByTestId('github-app-token-hint')).toBeInTheDocument();
+    expect(screen.getByTestId('github-app-target')).toHaveTextContent('Personal account');
+    expect(screen.getByTestId('github-app-connect')).toBeEnabled();
   });
 
   test('connected from the database: install link and Disconnect', async () => {

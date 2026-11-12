@@ -13,34 +13,61 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { api } from '@/lib/api';
-import type { GithubAppStatus } from '@/lib/api/github-app';
+import type { GithubAppAccount, GithubAppStatus } from '@/lib/api/github-app';
+
+/** The connect form's choice: the personal account, an organization, or one typed by hand. */
+type Choice = 'user' | `org:${string}` | 'other';
+
+/** What the manifest flow is started for: the personal account or an organization. */
+function manifestTarget(choice: Choice, org: string) {
+  if (choice === 'user') return { target: 'user' as const };
+  return { target: 'org' as const, org: choice === 'other' ? org.trim() : choice.slice(4) };
+}
 
 /**
- * The deployment's GitHub App (sandbox-github-app-tokens). Sandboxes get
- * short-lived tokens for one repository from it, never the owner's PAT. The
- * admin connects it with GitHub's manifest flow: funny posts a pre-filled App
- * to GitHub, GitHub creates it and sends the admin back here.
+ * The App's status and, while none is connected, the accounts the admin can
+ * create it under. Reports the outcome GitHub sent the admin back with.
  */
-export function GithubAppSettings() {
+function useGithubAppState() {
   const [status, setStatus] = useState<GithubAppStatus | null>(null);
-  const [target, setTarget] = useState<'user' | 'org'>('org');
-  const [org, setOrg] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [manifest, setManifest] = useState<{ action: string; manifest: string } | null>(null);
-  const formRef = useRef<HTMLFormElement>(null);
+  const [accounts, setAccounts] = useState<GithubAppAccount[] | null>(null);
+  const [hasToken, setHasToken] = useState(false);
 
   const load = useCallback(async () => {
     const result = await api.getGithubAppStatus();
-    setStatus(result.isOk() ? result.value : { configured: false, source: 'none' });
+    const next = result.isOk() ? result.value : { configured: false, source: 'none' as const };
+    setStatus(next);
+    if (next.configured) return;
+    const listed = await api.getGithubAppAccounts();
+    setAccounts(listed.isOk() ? listed.value.accounts : []);
+    setHasToken(listed.isOk() && listed.value.hasToken);
   }, []);
 
   useEffect(() => {
     void load();
     const outcome = new URLSearchParams(window.location.search).get('githubApp');
-    if (outcome === 'connected')
-      toast.success('GitHub App connected. Now install it on repositories.');
+    if (outcome === 'installed') toast.success('GitHub App connected and installed.');
     if (outcome === 'error') toast.error('GitHub did not create the App. Try again.');
   }, [load]);
+
+  return { status, accounts, hasToken, reload: load };
+}
+
+/**
+ * The deployment's GitHub App (sandbox-github-app-tokens). Sandboxes get
+ * short-lived tokens for one repository from it, never the owner's PAT. The
+ * admin connects it with GitHub's manifest flow: funny posts a pre-filled App
+ * to GitHub, GitHub creates it and sends the admin on to install it, then back
+ * here. With a GitHub token in their profile the admin picks the account from
+ * a list instead of typing an organization name.
+ */
+export function GithubAppSettings() {
+  const { status, accounts, hasToken, reload } = useGithubAppState();
+  const [choice, setChoice] = useState<Choice>('user');
+  const [org, setOrg] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [manifest, setManifest] = useState<{ action: string; manifest: string } | null>(null);
+  const formRef = useRef<HTMLFormElement>(null);
 
   // GitHub expects the manifest as a form POST; submit once it is rendered.
   useEffect(() => {
@@ -49,9 +76,7 @@ export function GithubAppSettings() {
 
   const connect = async () => {
     setBusy(true);
-    const result = await api.startGithubAppManifest(
-      target === 'org' ? { target, org: org.trim() } : { target },
-    );
+    const result = await api.startGithubAppManifest(manifestTarget(choice, org));
     if (result.isErr()) {
       setBusy(false);
       toast.error('Could not start the GitHub App setup');
@@ -69,10 +94,10 @@ export function GithubAppSettings() {
       return;
     }
     toast.success('GitHub App disconnected. Delete it on GitHub too.');
-    void load();
+    void reload();
   };
 
-  if (!status) return <LoadingState />;
+  if (!status || (!status.configured && !accounts)) return <LoadingState />;
 
   return (
     <div className="space-y-4" data-testid="github-app-settings">
@@ -89,10 +114,12 @@ export function GithubAppSettings() {
       ) : (
         <ConnectForm
           error={status.error}
-          target={target}
+          accounts={accounts ?? []}
+          hasToken={hasToken}
+          choice={choice}
           org={org}
           busy={busy}
-          onTarget={setTarget}
+          onChoice={setChoice}
           onOrg={setOrg}
           onConnect={connect}
         />
@@ -163,21 +190,27 @@ function ConnectedApp({
 
 function ConnectForm({
   error,
-  target,
+  accounts,
+  hasToken,
+  choice,
   org,
   busy,
-  onTarget,
+  onChoice,
   onOrg,
   onConnect,
 }: {
   error?: string;
-  target: 'user' | 'org';
+  accounts: GithubAppAccount[];
+  hasToken: boolean;
+  choice: Choice;
   org: string;
   busy: boolean;
-  onTarget: (target: 'user' | 'org') => void;
+  onChoice: (choice: Choice) => void;
   onOrg: (org: string) => void;
   onConnect: () => void;
 }) {
+  const personal = accounts.find((a) => a.type === 'user');
+  const orgs = accounts.filter((a) => a.type === 'org');
   return (
     <div
       className="border-border/50 space-y-3 rounded-lg border p-4"
@@ -188,23 +221,38 @@ function ConnectForm({
           {error}
         </p>
       )}
-      <p className="text-muted-foreground text-xs">
-        GitHub will show a pre-filled App to create. You can change its name there.
-      </p>
+      <ol className="text-muted-foreground list-inside list-decimal space-y-0.5 text-xs">
+        <li>Choose where to create the App. GitHub shows it pre-filled; you can rename it.</li>
+        <li>GitHub then asks which repositories to install it on. Pick only the ones you need.</li>
+        <li>You come back here, done.</li>
+      </ol>
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={target} onValueChange={(v) => onTarget(v as 'user' | 'org')}>
-          <SelectTrigger className="w-48" data-testid="github-app-target">
+        <Select value={choice} onValueChange={(v) => onChoice(v as Choice)}>
+          <SelectTrigger className="w-64" data-testid="github-app-target">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="org">Organization</SelectItem>
-            <SelectItem value="user">Personal account</SelectItem>
+            <SelectItem value="user" data-testid="github-app-target-user">
+              {personal ? `${personal.login} (personal account)` : 'Personal account'}
+            </SelectItem>
+            {orgs.map((a) => (
+              <SelectItem
+                key={a.login}
+                value={`org:${a.login}`}
+                data-testid={`github-app-target-org-${a.login}`}
+              >
+                {a.login}
+              </SelectItem>
+            ))}
+            <SelectItem value="other" data-testid="github-app-target-other">
+              {orgs.length > 0 ? 'Another organization…' : 'An organization…'}
+            </SelectItem>
           </SelectContent>
         </Select>
-        {target === 'org' && (
+        {choice === 'other' && (
           <Input
             className="w-56"
-            placeholder="organization"
+            placeholder="Organization name, as in github.com/<name>"
             value={org}
             onChange={(e) => onOrg(e.target.value)}
             data-testid="github-app-org"
@@ -213,12 +261,17 @@ function ConnectForm({
         <Button
           size="sm"
           onClick={onConnect}
-          disabled={busy || (target === 'org' && !org.trim())}
+          disabled={busy || (choice === 'other' && !org.trim())}
           data-testid="github-app-connect"
         >
           Connect GitHub
         </Button>
       </div>
+      {!hasToken && (
+        <p className="text-muted-foreground text-xs" data-testid="github-app-token-hint">
+          Save a GitHub token in Settings &gt; Profile to pick your organizations from this list.
+        </p>
+      )}
     </div>
   );
 }

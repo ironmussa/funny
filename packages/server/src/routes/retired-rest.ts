@@ -8,9 +8,10 @@
  * page). Refusing them here keeps the decision on the server: a retired path
  * answers 404 and never reaches a runner.
  *
- * Paths that stay proxied on purpose are NOT listed: `/api/settings/github-app`
- * (mounted earlier, still REST), `/api/jobs/:id/log` and `/api/jobs/:id/cancel`
- * (the runner owns the process), and the design folder routes
+ * Paths that stay proxied on purpose are NOT listed: GitHub's App manifest
+ * callback `/api/settings/github-app/callback` (mounted earlier, still REST),
+ * `/api/jobs/:id/log` and `/api/jobs/:id/cancel` (the runner owns the
+ * process), and the design folder routes
  * `/api/projects/:id/designs/directory` and
  * `/api/projects/:id/designs/:designId/directory` (the runner owns the folder).
  */

@@ -1107,6 +1107,10 @@ export interface StartupCommand {
   projectId: string;
   label: string;
   command: string;
+  /** Port the command serves on, for the preview. */
+  port?: number;
+  /** Env var the port is passed in. */
+  portEnvVar?: string;
   sortOrder: number;
   createdAt: string;
 }

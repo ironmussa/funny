@@ -9,8 +9,8 @@ import type { UpdatePipelineRequest } from '@funny/shared/contracts/pipelines';
 import { err, ok } from 'neverthrow';
 
 import { toPipeline, toPipelineRun } from '../../lib/pipeline-response.js';
-import { authorizer } from '../../lib/server-authorizer.js';
 import * as pipelineRepo from '../../services/pipeline-repository.js';
+import { requireVisibleProject } from './project-gate.js';
 
 /** Column writes for a PATCH body: flags become integers, empty prompts become null. */
 function pipelineUpdates(body: UpdatePipelineRequest): Record<string, unknown> {
@@ -51,11 +51,9 @@ export const pipelinesPort: PipelinesPort = {
   },
 
   async create(userId, data) {
-    // The pipeline reviews this project's threads: require that the creator can
-    // see it (same 404 as a missing project), as automations do.
-    if (!(await authorizer.authorize(userId, 'project', data.projectId, 'view'))) {
-      return err(failure(404, 'Project not found'));
-    }
+    // The pipeline reviews this project's threads.
+    const visible = await requireVisibleProject(userId, data.projectId);
+    if (visible.isErr()) return err(visible.error);
     const id = await pipelineRepo.createPipeline({ ...data, userId });
     const pipeline = await pipelineRepo.getPipelineById(id, userId);
     return pipeline ? ok(toPipeline(pipeline)) : err(failure(500, 'Pipeline was not saved'));

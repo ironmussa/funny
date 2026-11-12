@@ -8,6 +8,8 @@ delete (window as any).__TAURI_INTERNALS__;
 const { automationsApi } = await import('@/lib/api/automations');
 const { pipelinesApi } = await import('@/lib/api/pipelines');
 const { threadsApi } = await import('@/lib/api/threads');
+const { profileApi } = await import('@/lib/api/profile');
+const { teamApi } = await import('@/lib/api/team');
 const { trpc, trpcCall } = await import('@/lib/api/_trpc');
 const { useCircuitBreakerStore } = await import('@/stores/circuit-breaker-store');
 
@@ -202,5 +204,35 @@ describe('tRPC procedure calls (threads)', () => {
     await threadsApi.stopThread('t1');
 
     expect(lastCall()[0]).toMatch(/\/api\/threads\/t1\/stop$/);
+  });
+});
+
+describe('tRPC procedure calls (profile and settings)', () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+    useCircuitBreakerStore.setState({ state: 'closed', failureCount: 0, _cooldownTimer: null });
+  });
+
+  test('getProfile is the profile.get query; completeSetup is an update mutation', async () => {
+    mockFetch.mockResolvedValueOnce(json({ result: { data: { userId: 'u1' } } }));
+    await profileApi.getProfile();
+    expect(lastCall()[0]).toMatch(/\/api\/trpc\/profile\.get$/);
+
+    mockFetch.mockResolvedValueOnce(json({ result: { data: { setupCompleted: true } } }));
+    await profileApi.completeSetup();
+    const [url, init] = lastCall();
+    expect(url).toMatch(/\/api\/trpc\/profile\.update$/);
+    expect(JSON.parse(init.body as string)).toEqual({ setupCompleted: true });
+  });
+
+  test('a non-admin reading SMTP gets the 403 as a FORBIDDEN DomainError', async () => {
+    mockFetch.mockResolvedValueOnce(trpcError(403, 'FORBIDDEN', 'Forbidden: admin required'));
+
+    const result = await teamApi.getSmtpSettings();
+
+    expect(result._unsafeUnwrapErr()).toEqual({
+      type: 'FORBIDDEN',
+      message: 'Forbidden: admin required',
+    });
   });
 });

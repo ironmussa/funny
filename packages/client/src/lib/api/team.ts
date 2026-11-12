@@ -1,4 +1,7 @@
+import type { SmtpSettingsRequest } from '@funny/shared/contracts/settings';
+
 import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
 
 export const teamApi = {
   getTeamSettings: () =>
@@ -26,29 +29,10 @@ export const teamApi = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
-  getSmtpSettings: () =>
-    request<{
-      host: string;
-      port: string;
-      user: string;
-      from: string;
-      hasPassword: boolean;
-      source: 'database' | 'environment' | 'none';
-      configured: boolean;
-    }>('/settings/smtp'),
-  updateSmtpSettings: (data: {
-    host: string;
-    port: string;
-    user: string;
-    pass?: string;
-    from: string;
-  }) =>
-    request<{ ok: boolean }>('/settings/smtp', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-  testSmtpSettings: () =>
-    request<{ ok: boolean; sentTo: string }>('/settings/smtp/test', { method: 'POST' }),
+  getSmtpSettings: () => trpcCall(() => trpc.settings.getSmtp.query()),
+  updateSmtpSettings: (data: SmtpSettingsRequest) =>
+    trpcCall(() => trpc.settings.saveSmtp.mutate(data)),
+  testSmtpSettings: () => trpcCall(() => trpc.settings.testSmtp.mutate()),
 
   listTeamProjects: () => request<import('@funny/shared').Project[]>('/team-projects'),
   addTeamProject: (projectId: string) =>

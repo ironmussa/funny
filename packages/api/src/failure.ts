@@ -73,7 +73,7 @@ export class ApiFailureCause extends Error {
   }
 }
 
-function toTrpcError(f: ApiFailure): TRPCError {
+export function toTrpcError(f: ApiFailure): TRPCError {
   return new TRPCError({
     code: codeForStatus(f.status),
     message: f.message,

@@ -25,7 +25,10 @@ import { and, eq } from 'drizzle-orm';
 
 import { db, dbAll, schema } from '../db/index.js';
 import { repos } from '../db/repos.js';
-import { createProjectAccessMiddleware } from '../middleware/project-access.js';
+import {
+  createProjectAccessMiddleware,
+  type ProjectRoleResolver,
+} from '../middleware/project-access.js';
 
 const grants = repos.grants();
 
@@ -103,7 +106,9 @@ export const authorizer = createAuthorizer({
   },
 });
 
+/** A user's effective role on a project, for the REST guard and the tRPC `projectProcedure`. */
+export const projectRole: ProjectRoleResolver = (userId, projectId) =>
+  authorizer.effectiveRole(userId, 'project', projectId);
+
 /** Route guard for project-scoped routes — see `middleware/project-access.ts`. */
-export const requireProjectAccess = createProjectAccessMiddleware((userId, projectId) =>
-  authorizer.effectiveRole(userId, 'project', projectId),
-);
+export const requireProjectAccess = createProjectAccessMiddleware(projectRole);

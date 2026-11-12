@@ -68,6 +68,7 @@ async function call(
     createContext: () => ({
       userId: init.userId === undefined ? 'u1' : init.userId,
       organizationId: null,
+      userRole: 'user',
       ports,
     }),
   });

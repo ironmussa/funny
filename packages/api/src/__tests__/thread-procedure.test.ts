@@ -39,7 +39,7 @@ function setup() {
         headers: { 'content-type': 'application/json' },
         body: method === 'POST' ? JSON.stringify(input) : undefined,
       }),
-      createContext: () => ({ userId, organizationId: null, ports }),
+      createContext: () => ({ userId, userRole: 'user', organizationId: null, ports }),
     });
     return { status: res.status, body: (await res.json()) as any };
   };

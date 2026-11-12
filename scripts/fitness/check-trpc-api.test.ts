@@ -43,6 +43,8 @@ describe('fitness:trpc-api — web client', () => {
     "// request('/automations')",
     'request(`/threads/${threadId}/stop`, { method: "POST" })',
     'request(`/threads/${threadId}`, { method: "DELETE" })',
+    "request('/settings/github-app')",
+    "request('/profiles')",
   ])('allows %s', (source) => {
     expect(findClientViolations('x.ts', source)).toEqual([]);
   });
@@ -63,6 +65,10 @@ describe('fitness:trpc-api — web client', () => {
     'request(`/pipelines/${id}`, { method: "PATCH" })',
     'callEndpoint(pipelinesContract.get)',
     'callEndpoint(threadsContract.list)',
+    "request<UserProfile>('/profile')",
+    "request('/profile/runner-invite-token/rotate', { method: 'POST' })",
+    'request(`/settings/agent-profiles/${id}`)',
+    "request('/settings/smtp')",
   ])('rejects REST use of a migrated group: %s', (source) => {
     expect(findClientViolations('x.ts', source)).toHaveLength(1);
   });

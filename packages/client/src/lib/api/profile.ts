@@ -1,22 +1,15 @@
-import type { UpdateProfileRequest, UserProfile } from '@funny/shared';
+import type { UpdateProfileRequest } from '@funny/shared';
 
-import { request } from './_core';
+import { trpc, trpcCall } from './_trpc';
+
+const procedures = trpc.profile;
 
 export const profileApi = {
-  getProfile: () => request<UserProfile>('/profile'),
-  updateProfile: (data: UpdateProfileRequest) =>
-    request<UserProfile>('/profile', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-  getTranscribeToken: () => request<{ token: string }>('/profile/transcribe-token'),
-  isSetupCompleted: () => request<{ setupCompleted: boolean }>('/profile/setup-completed'),
-  getRunnerInviteToken: () => request<{ token: string }>('/profile/runner-invite-token'),
-  rotateRunnerInviteToken: () =>
-    request<{ token: string }>('/profile/runner-invite-token/rotate', { method: 'POST' }),
-  completeSetup: () =>
-    request<UserProfile>('/profile', {
-      method: 'PUT',
-      body: JSON.stringify({ setupCompleted: true }),
-    }),
+  getProfile: () => trpcCall(() => procedures.get.query()),
+  updateProfile: (data: UpdateProfileRequest) => trpcCall(() => procedures.update.mutate(data)),
+  getTranscribeToken: () => trpcCall(() => procedures.transcribeToken.query()),
+  isSetupCompleted: () => trpcCall(() => procedures.setupCompleted.query()),
+  getRunnerInviteToken: () => trpcCall(() => procedures.runnerInviteToken.query()),
+  rotateRunnerInviteToken: () => trpcCall(() => procedures.rotateRunnerInviteToken.mutate()),
+  completeSetup: () => trpcCall(() => procedures.update.mutate({ setupCompleted: true })),
 };

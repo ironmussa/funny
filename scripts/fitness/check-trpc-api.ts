@@ -32,6 +32,7 @@ const SHARED_ALLOWED = [
   /^@funny\/shared$/,
   /^@funny\/shared\/errors$/,
   /^@funny\/shared\/models$/,
+  /^@funny\/shared\/auth\/roles$/,
   /^@funny\/shared\/contracts\/[\w-]+$/,
   /^@funny\/shared\/types\/[\w-]+$/,
 ];
@@ -43,10 +44,12 @@ const SHARED_ALLOWED = [
  * checked only by its contract: most `/threads` routes go to the runner and stay
  * REST, so only its contract endpoints moved.
  */
-const MIGRATED_GROUPS: Array<{ path?: string; contract: string; restOnly?: string[] }> = [
+const MIGRATED_GROUPS: Array<{ path?: string; contract?: string; restOnly?: string[] }> = [
   { path: '/automations', contract: 'automationsContract' },
   { path: '/pipelines', contract: 'pipelinesContract', restOnly: ['/approvals'] },
   { contract: 'threadsContract' },
+  { path: '/profile' },
+  { path: '/settings', restOnly: ['/github-app'] },
 ];
 
 const IMPORT_SPECIFIER =
@@ -104,7 +107,14 @@ const MIGRATED_RULES = MIGRATED_GROUPS.flatMap(({ path, contract, restOnly = [] 
           ),
         },
       ]),
-  { label: `contract ${contract} of a migrated group`, pattern: new RegExp(`\\b${contract}\\b`) },
+  ...(contract === undefined
+    ? []
+    : [
+        {
+          label: `contract ${contract} of a migrated group`,
+          pattern: new RegExp(`\\b${contract}\\b`),
+        },
+      ]),
 ]);
 
 /** A statement that loads the `@funny/api` entry at runtime (anything but `import type … from`). */

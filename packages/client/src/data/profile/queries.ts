@@ -1,4 +1,4 @@
-import type { UserProfile } from '@funny/shared';
+import type { ProfileResponse } from '@funny/shared/contracts/profile';
 
 import { profileApi } from '@/lib/api/profile';
 
@@ -19,14 +19,14 @@ const profileKey = ['profile'] as const;
 export function profileQuery() {
   return {
     queryKey: profileKey,
-    queryFn: (): Promise<UserProfile> => unwrapResult(profileApi.getProfile()),
+    queryFn: (): Promise<ProfileResponse> => unwrapResult(profileApi.getProfile()),
     staleTime: Infinity,
     gcTime: Infinity,
   };
 }
 
 /** The cached profile, fetching it when there is none. Rejects when the request fails. */
-export function loadProfile(layer: DataLayer = getDataLayer()): Promise<UserProfile> {
+export function loadProfile(layer: DataLayer = getDataLayer()): Promise<ProfileResponse> {
   return layer.queryClient.fetchQuery(profileQuery());
 }
 
@@ -36,7 +36,7 @@ export async function refreshProfile(layer: DataLayer = getDataLayer()): Promise
 }
 
 /** Record the profile a write returned (the server's confirmed state). */
-export function writeProfile(profile: UserProfile, layer: DataLayer = getDataLayer()): void {
+export function writeProfile(profile: ProfileResponse, layer: DataLayer = getDataLayer()): void {
   if (layer.disposed) return;
-  layer.queryClient.setQueryData<UserProfile>(profileKey, profile);
+  layer.queryClient.setQueryData<ProfileResponse>(profileKey, profile);
 }

@@ -214,4 +214,17 @@ describe('API client', () => {
       message: JSON.stringify({ message: 'x', field: 'name' }),
     });
   });
+
+  test('a 401 on the session probe does not trigger onUnauthorized, over REST or tRPC', async () => {
+    const fixture = createDependencies(async () => response(401, { error: 'Unauthorized' }));
+    await expect(fixture.client.request('/profile')).rejects.toBeDefined();
+    await expect(fixture.client.request('/trpc/profile.get')).rejects.toBeDefined();
+    expect(fixture.unauthorized).toEqual([]);
+
+    await expect(
+      fixture.client.request('/trpc/profile.update', { method: 'POST' }),
+    ).rejects.toBeDefined();
+    await expect(fixture.client.request('/trpc/threads.list?input=%7B%7D')).rejects.toBeDefined();
+    expect(fixture.unauthorized).toEqual(['/trpc/profile.update', '/trpc/threads.list']);
+  });
 });

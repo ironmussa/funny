@@ -9,8 +9,7 @@ import { z } from 'zod';
 
 import { unwrap } from '../failure.js';
 import { protectedProcedure, router } from '../trpc.js';
-
-const byId = z.object({ id: z.string().min(1) });
+import { byId, idMutation } from './by-id.js';
 
 export const automationsRouter = router({
   inbox: protectedProcedure
@@ -36,16 +35,8 @@ export const automationsRouter = router({
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.automations.update(ctx.userId, input.id, input.data)),
     ),
-  remove: protectedProcedure
-    .input(byId)
-    .mutation(async ({ ctx, input }) =>
-      unwrap(await ctx.ports.automations.remove(ctx.userId, input.id)),
-    ),
-  trigger: protectedProcedure
-    .input(byId)
-    .mutation(async ({ ctx, input }) =>
-      unwrap(await ctx.ports.automations.trigger(ctx.userId, input.id)),
-    ),
+  remove: idMutation((ports, userId, id) => ports.automations.remove(userId, id)),
+  trigger: idMutation((ports, userId, id) => ports.automations.trigger(userId, id)),
   runs: protectedProcedure
     .input(byId)
     .query(async ({ ctx, input }) =>

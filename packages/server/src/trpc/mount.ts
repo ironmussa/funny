@@ -11,8 +11,11 @@ import type { Context, Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
+import { authzPort } from './ports/authz.js';
 import { automationsPort } from './ports/automations.js';
 import { pipelinesPort } from './ports/pipelines.js';
+import { profilePort } from './ports/profile.js';
+import { settingsPort } from './ports/settings.js';
 import { threadAccessPort } from './ports/thread-access.js';
 import { createThreadsPort } from './ports/threads.js';
 
@@ -22,7 +25,10 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
     automations: automationsPort,
     pipelines: pipelinesPort,
     threads: createThreadsPort(c.env?.browserEvents),
+    profile: profilePort,
+    settings: settingsPort,
     threadAccess: threadAccessPort,
+    authz: authzPort,
   };
 }
 
@@ -39,6 +45,7 @@ export function mountTrpc(
       router: appRouter,
       createContext: () => ({
         userId: c.get('userId') || null,
+        userRole: c.get('userId') ? (c.get('userRole') ?? null) : null,
         organizationId: c.get('organizationId') ?? null,
         ports: portsFor(c),
       }),

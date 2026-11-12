@@ -68,6 +68,15 @@ export interface ApiClient {
   request<T>(path: string, init?: ApiRequestInit): Promise<T>;
 }
 
+/**
+ * The profile read is how the client probes its session at startup: its 401
+ * means "signed out", not "session expired", so it must not trigger the
+ * unauthorized handler. REST and tRPC spell it differently.
+ */
+function isSessionProbe(pathname: string): boolean {
+  return pathname === '/profile' || pathname === '/trpc/profile.get';
+}
+
 function isGitDiffReadRequest(method: string, path: string): boolean {
   if (method !== 'GET') return false;
   const pathname = path.split('?')[0];
@@ -228,7 +237,7 @@ export function createApiClient(dependencies: ApiClientDependencies): ApiClient 
       if (!response.ok) {
         span.end('ERROR');
         const pathNoQuery = path.split('?')[0];
-        if (response.status === 401 && !(method === 'GET' && pathNoQuery === '/profile')) {
+        if (response.status === 401 && !(method === 'GET' && isSessionProbe(pathNoQuery))) {
           dependencies.onUnauthorized(pathNoQuery);
         }
         if (

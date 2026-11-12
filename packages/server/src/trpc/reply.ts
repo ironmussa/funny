@@ -1,4 +1,5 @@
 import type { ApiFailure, PortResult } from '@funny/api';
+import type { Context } from 'hono';
 
 import { fail, type ErrorStatus, type Reply } from '../validation/endpoint.js';
 
@@ -10,5 +11,17 @@ export async function answer<T>(result: PortResult<T>, status: 200 | 201 = 200):
   return (await result).match(
     (value): Reply<T> => ({ status, body: value }),
     (error: ApiFailure) => fail(error.status as ErrorStatus, error.message),
+  );
+}
+
+/** The same, for a plain Hono route (one without a contract): `{ error }` on failure. */
+export async function answerJson<T>(
+  c: Context,
+  result: PortResult<T>,
+  status: 200 | 201 = 200,
+): Promise<Response> {
+  return (await result).match(
+    (value) => c.json(value as object, status),
+    (error: ApiFailure) => c.json({ error: error.message }, error.status as ErrorStatus),
   );
 }

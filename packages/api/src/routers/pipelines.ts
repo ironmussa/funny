@@ -3,8 +3,7 @@ import { z } from 'zod';
 
 import { unwrap } from '../failure.js';
 import { protectedProcedure, router } from '../trpc.js';
-
-const byId = z.object({ id: z.string().min(1) });
+import { byId, idMutation } from './by-id.js';
 
 export const pipelinesRouter = router({
   list: protectedProcedure
@@ -25,11 +24,7 @@ export const pipelinesRouter = router({
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.pipelines.update(ctx.userId, input.id, input.data)),
     ),
-  remove: protectedProcedure
-    .input(byId)
-    .mutation(async ({ ctx, input }) =>
-      unwrap(await ctx.ports.pipelines.remove(ctx.userId, input.id)),
-    ),
+  remove: idMutation((ports, userId, id) => ports.pipelines.remove(userId, id)),
   runsForThread: protectedProcedure
     .input(z.object({ threadId: z.string().min(1) }))
     .query(async ({ ctx, input }) =>

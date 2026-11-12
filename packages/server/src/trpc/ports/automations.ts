@@ -32,6 +32,7 @@ import {
   runAutomation,
   unscheduleAutomation,
 } from '../../services/automation-scheduler.js';
+import { requireVisibleProject } from './project-gate.js';
 
 // ── Rows → contract types ────────────────────────────────────────
 // The columns are plain text/integer; these are the one place they become the
@@ -175,11 +176,8 @@ export const automationsPort: AutomationsPort = {
   },
 
   async create(userId, data) {
-    // The run will act on this project with the creator's identity — require
-    // that they can see it (same 404 as a missing project).
-    if (!(await authorizer.authorize(userId, 'project', data.projectId, 'view'))) {
-      return err(failure(404, 'Project not found'));
-    }
+    const visible = await requireVisibleProject(userId, data.projectId);
+    if (visible.isErr()) return err(visible.error);
 
     const id = nanoid();
     const now = new Date().toISOString();

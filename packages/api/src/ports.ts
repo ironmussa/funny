@@ -9,20 +9,27 @@
  */
 
 import type {
+  AgentExecutionProfileResponse,
   Automation,
   AutomationRun,
+  CreateAgentExecutionProfileRequest,
   InboxItem,
   Pipeline,
   PaginatedMessages,
   PaginatedThreadsResponse,
   PermissionMode,
   PipelineRun,
+  ProjectAgentProfileBindingResponse,
   RunTriageStatus,
   Thread,
   ThreadStage,
   ThreadStatus,
   ThreadWithMessages,
+  UpdateAgentExecutionProfileRequest,
+  UpdateProfileRequest,
+  UserProfile,
 } from '@funny/shared';
+import type { Capability } from '@funny/shared/auth/roles';
 import type {
   CreateAutomationRequest,
   UpdateAutomationRequest,
@@ -32,6 +39,8 @@ import type {
   CreatePipelineRequest,
   UpdatePipelineRequest,
 } from '@funny/shared/contracts/pipelines';
+import type { ProfileResponse } from '@funny/shared/contracts/profile';
+import type { SmtpSettingsRequest, SmtpSettingsResponse } from '@funny/shared/contracts/settings';
 import type {
   ArchivedThreadsResponse,
   MessageSearchResult,
@@ -121,9 +130,65 @@ export interface ThreadAccessPort {
   authorize(level: ThreadAccessLevel, threadId: string, userId: string): Promise<Thread | null>;
 }
 
+export interface ProfilePort {
+  get(userId: string): PortResult<ProfileResponse>;
+  update(userId: string, data: UpdateProfileRequest): PortResult<UserProfile>;
+  /** A short-lived AssemblyAI streaming token; the API key stays on the server. */
+  transcribeToken(userId: string): PortResult<{ token: string }>;
+  setupCompleted(userId: string): PortResult<{ setupCompleted: boolean }>;
+  runnerInviteToken(userId: string): PortResult<{ token: string }>;
+  rotateRunnerInviteToken(userId: string): PortResult<{ token: string }>;
+}
+
+export interface SettingsPort {
+  listAgentProfiles(userId: string): PortResult<{ profiles: AgentExecutionProfileResponse[] }>;
+  createAgentProfile(
+    userId: string,
+    data: CreateAgentExecutionProfileRequest,
+  ): PortResult<AgentExecutionProfileResponse>;
+  updateAgentProfile(
+    userId: string,
+    id: string,
+    data: UpdateAgentExecutionProfileRequest,
+  ): PortResult<AgentExecutionProfileResponse>;
+  deleteAgentProfile(userId: string, id: string): PortResult<Ok>;
+  /** The caller's binding on a project `projectProcedure('view')` already authorized. */
+  getProjectBinding(
+    userId: string,
+    projectId: string,
+  ): PortResult<ProjectAgentProfileBindingResponse>;
+  setProjectBinding(
+    userId: string,
+    projectId: string,
+    profileId: string | null,
+  ): PortResult<ProjectAgentProfileBindingResponse>;
+  /** Instance-level, admin only (`adminProcedure`). */
+  getSmtp(): PortResult<SmtpSettingsResponse>;
+  saveSmtp(data: SmtpSettingsRequest): PortResult<Ok>;
+  testSmtp(): PortResult<Ok & { sentTo: string }>;
+}
+
+/** The server's authorization decisions that are not about one thread. */
+export interface AuthzPort {
+  /**
+   * The project decision of the REST `requireProjectAccess`: `null` when the
+   * caller holds `capability`, else 404 (no role: the project looks absent) or 403.
+   */
+  projectAccess(
+    capability: Capability,
+    projectId: string,
+    userId: string,
+  ): Promise<ApiFailure | null>;
+  /** Records a refused admin-only call, as the REST `requireAdmin` audits it. */
+  adminRefused(userId: string, path: string, role: string | null): void;
+}
+
 export interface ApiPorts {
   automations: AutomationsPort;
   pipelines: PipelinesPort;
   threads: ThreadsPort;
+  profile: ProfilePort;
+  settings: SettingsPort;
   threadAccess: ThreadAccessPort;
+  authz: AuthzPort;
 }

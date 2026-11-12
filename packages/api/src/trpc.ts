@@ -3,15 +3,18 @@
  * formatter, and the public / protected procedure builders.
  */
 
+import type { Capability } from '@funny/shared/auth/roles';
 import { initTRPC, TRPCError } from '@trpc/server';
 import { z } from 'zod';
 
-import { ApiFailureCause } from './failure.js';
+import { ApiFailureCause, toTrpcError } from './failure.js';
 import type { ApiPorts, ThreadAccessLevel } from './ports.js';
 
 export interface ApiContext {
   /** The session's user; `null` when the request has none. */
   userId: string | null;
+  /** The session user's instance role (`admin` / `user`); `null` without a user. */
+  userRole: string | null;
   organizationId: string | null;
   ports: ApiPorts;
 }
@@ -70,5 +73,35 @@ export function threadProcedure(level: ThreadAccessLevel) {
       : null;
     if (!thread) throw new TRPCError({ code: 'NOT_FOUND', message: 'Thread not found' });
     return next({ ctx: { ...ctx, thread } });
+  });
+}
+
+/** Admin-only: 403 `Forbidden: admin required` for anyone else, audited like REST `requireAdmin`. */
+export const adminProcedure = protectedProcedure.use(({ ctx, path, next }) => {
+  if (ctx.userRole !== 'admin') {
+    ctx.ports.authz.adminRefused(ctx.userId, path, ctx.userRole);
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'Forbidden: admin required' });
+  }
+  return next();
+});
+
+const projectIdInput = z.object({ projectId: z.string().min(1) });
+
+/**
+ * A procedure on one project, whose input carries `projectId`. Checks the
+ * caller's `capability` BEFORE the input is validated, with the REST
+ * `requireProjectAccess` decision: 404 without a role, 403 without the capability.
+ */
+export function projectProcedure(capability: Capability) {
+  return protectedProcedure.use(async ({ ctx, getRawInput, next }) => {
+    const parsed = projectIdInput.safeParse(await getRawInput());
+    if (!parsed.success) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' });
+    const refused = await ctx.ports.authz.projectAccess(
+      capability,
+      parsed.data.projectId,
+      ctx.userId,
+    );
+    if (refused) throw toTrpcError(refused);
+    return next();
   });
 }

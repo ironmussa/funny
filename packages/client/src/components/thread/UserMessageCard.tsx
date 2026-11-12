@@ -426,7 +426,6 @@ export function UserMessageCard({
                   <img
                     src={img.src}
                     alt={img.alt}
-                    loading="lazy"
                     className="block max-h-10 min-h-10 max-w-24 min-w-10 object-cover"
                   />
                 </button>

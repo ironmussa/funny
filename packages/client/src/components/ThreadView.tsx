@@ -194,6 +194,7 @@ function preparationMetadata(
     permissionMode: message.permissionMode ?? activeThread.permissionMode,
     effort: message.effort ?? pendingMetadata?.effort,
     timestamp: message.timestamp ?? activeThread.createdAt,
+    images: message.images ?? pendingMetadata?.images,
   };
 }
 

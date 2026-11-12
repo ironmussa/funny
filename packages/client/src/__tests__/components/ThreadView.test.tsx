@@ -229,6 +229,31 @@ describe('ThreadView', () => {
     expect(screen.getByText('prompt.plan')).toBeInTheDocument();
   });
 
+  test('shows the user message images while the worktree is setting up', () => {
+    useAppStore.setState({
+      selectedThreadId: 't1',
+      activeThread: {
+        id: 't1',
+        projectId: 'p1',
+        status: 'setting_up',
+        initialPrompt: 'What is in this screenshot?',
+        createdAt: new Date().toISOString(),
+        messages: [],
+        lastUserMessage: {
+          content: 'What is in this screenshot?',
+          images: [
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } },
+          ],
+        },
+      } as any,
+    });
+    renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
+    expect(screen.getByRole('img', { name: 'Attachment 1' })).toHaveAttribute(
+      'src',
+      'data:image/png;base64,AAAA',
+    );
+  });
+
   test('shows empty state when no thread or project selected', () => {
     useAppStore.setState({ selectedProjectId: null });
     renderWithProviders(<ThreadView />);

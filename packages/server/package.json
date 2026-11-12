@@ -50,10 +50,12 @@
     "nodemailer": "^10.1.4",
     "pg": "^8.20.0",
     "socket.io": "4.8.4",
+    "trpc-to-openapi": "3.5.0",
     "web-push": "^3.6.7",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
-    "zod": "^4.6.6"
+    "zod": "^4.6.6",
+    "zod-openapi": "^5.4.4"
   },
   "devDependencies": {
     "@types/bun": "^1.4.0",

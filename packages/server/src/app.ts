@@ -203,6 +203,12 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('./routes/invite-links.js');
   app.route('/api/invite-links', inviteLinkPublicRoutes);
 
+  // Public REST API v1 (openspec public-rest-api-v1): authenticated by a
+  // personal API token, never by a session, so it is mounted before auth.
+  app.use('/api/v1/*', rateLimit({ windowMs: 60_000, max: 120 }));
+  const { mountPublicApi } = await import('./public-api/mount.js');
+  mountPublicApi(app);
+
   // LLM credential proxy for sandbox agents (thread-sandboxes): authenticated by
   // the sandbox's proxy token, not a session, so it is mounted before auth.
   const { llmProxyRoutes } = await import('./routes/llm-proxy.js');

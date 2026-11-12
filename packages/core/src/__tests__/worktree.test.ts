@@ -247,6 +247,34 @@ describe('worktree operations', () => {
       expect(existsSync('/etc')).toBe(true);
     });
 
+    // Issue #178: the base itself passed containment, `git worktree remove`
+    // refused it, and the fallback `rm -rf` deleted every worktree.
+    test('removeWorktree refuses the worktree base itself — every worktree survives', async () => {
+      const created = await createWorktree(repoPath, 'survivor');
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+      const base = resolve(created.value, '..');
+
+      const result = await removeWorktree(repoPath, base);
+
+      expect(result.isErr()).toBe(true);
+      expect(existsSync(resolve(created.value, 'README.md'))).toBe(true);
+    });
+
+    test('removeWorktree refuses a directory inside a worktree', async () => {
+      const created = await createWorktree(repoPath, 'host');
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+      const nested = resolve(created.value, 'src');
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(resolve(nested, 'work.ts'), 'uncommitted work');
+
+      const result = await removeWorktree(repoPath, nested);
+
+      expect(result.isErr()).toBe(true);
+      expect(existsSync(resolve(nested, 'work.ts'))).toBe(true);
+    });
+
     test('removeWorktree refuses an unrelated dir even if it exists', async () => {
       // Create a sibling dir of the project; removeWorktree must refuse it.
       const sibling = resolve(repoPath, '..', 'sibling-victim');

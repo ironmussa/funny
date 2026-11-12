@@ -299,6 +299,11 @@ describe('resolveModelLabel', () => {
     expect(resolveModelLabel('claude-fable-5-1[1m]', t)).toContain('thread.model.fable51');
   });
 
+  test('resolves Fable 5.2 and Mythos 5.2 SDK model IDs to their translation keys', () => {
+    expect(resolveModelLabel('claude-fable-5-2', t)).toContain('thread.model.fable52');
+    expect(resolveModelLabel('claude-mythos-5-2', t)).toContain('thread.model.mythos52');
+  });
+
   test('maps known model IDs to translation keys', () => {
     expect(resolveModelLabel('claude-sonnet-4-6', t)).toContain('thread.model.sonnet46');
     expect(resolveModelLabel('claude-haiku-4-5-20251001', t)).toContain('thread.model.haiku');

@@ -8,7 +8,13 @@ import {
   waitForSidebar,
   seedProject,
 } from './fixtures';
-import { mockMessage, mockThreadResponse, mockThreadWithMessages } from './mock-helpers';
+import {
+  fulfillTrpc,
+  mockMessage,
+  mockThreadResponse,
+  mockThreadWithMessages,
+  trpcProcedure,
+} from './mock-helpers';
 
 const THREAD_VIEWER_STORAGE_KEY = 'funny_thread_viewer';
 const PROFILE_TURNS = 108;
@@ -662,13 +668,9 @@ test.describe('J. Performance', () => {
           body: JSON.stringify({ mode: 'team' }),
         });
       });
-      await page.route('**/api/runners', async (route) => {
+      await page.route(trpcProcedure('runners.list'), async (route) => {
         await new Promise((resolve) => setTimeout(resolve, 750));
-        await route.fulfill({
-          status: 200,
-          contentType: 'application/json',
-          body: JSON.stringify({ runners: [] }),
-        });
+        await fulfillTrpc(route, { runners: [] });
       });
       await installStartupWebVitalsObserver(page);
       await page.goto('/', { waitUntil: 'domcontentloaded' });

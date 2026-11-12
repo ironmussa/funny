@@ -1,4 +1,4 @@
-import type { Page } from '@playwright/test';
+import type { Page, Request, Route } from '@playwright/test';
 
 /* ------------------------------------------------------------------ */
 /*  Mock data factories                                                */
@@ -393,39 +393,78 @@ export async function setupWSIntercept(page: Page) {
 /*  API route mocking helpers                                          */
 /* ------------------------------------------------------------------ */
 
-/** Mock the GET /api/threads/:id response with custom data */
+/*
+ * The server-answered groups (threads reads, projects, profile, analytics,
+ * runners, …) are tRPC procedures at `/api/trpc/<group>.<procedure>`: a query
+ * carries its input as `?input=<json>`, a mutation as the JSON body, and the
+ * answer is `{ result: { data } }`. Mock those, not the old REST paths, which
+ * the web client no longer calls.
+ */
+
+/**
+ * Matches requests to tRPC procedures: one name, or a predicate on the name.
+ * Several mocks can share a procedure (one per thread): a handler that does not
+ * own the call must `route.fallback()` to the next one, not `route.continue()`.
+ */
+export function trpcProcedure(procedure: string | ((name: string) => boolean)) {
+  const matches = typeof procedure === 'string' ? (name: string) => name === procedure : procedure;
+  return (url: URL) =>
+    url.pathname.startsWith('/api/trpc/') && matches(url.pathname.slice('/api/trpc/'.length));
+}
+
+/** The input of a tRPC call: the `input` query param of a query, the JSON body of a mutation. */
+export function trpcInput<T = Record<string, any>>(request: Request): T | undefined {
+  const raw =
+    request.method() === 'GET'
+      ? new URL(request.url()).searchParams.get('input')
+      : request.postData();
+  return raw ? (JSON.parse(raw) as T) : undefined;
+}
+
+/** Answers a tRPC call with `data`. */
+export function fulfillTrpc(route: Route, data: unknown) {
+  return route.fulfill({
+    status: 200,
+    contentType: 'application/json',
+    body: JSON.stringify({ result: { data } }),
+  });
+}
+
+/** Answers a tRPC call with an error, in the shape the server's error formatter sends. */
+export function fulfillTrpcError(route: Route, status: number, message: string) {
+  return route.fulfill({
+    status,
+    contentType: 'application/json',
+    body: JSON.stringify({ error: { message, code: -32600, data: { httpStatus: status } } }),
+  });
+}
+
+/** The thread event timeline is still REST (`GET /api/threads/:id/events`). */
+async function mockThreadEvents(page: Page, threadId: string, events: unknown) {
+  await page.route(`**/api/threads/${threadId}/events**`, async (route) => {
+    if (route.request().method() !== 'GET') return route.continue();
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ events }),
+    });
+  });
+}
+
+/** Mock the `threads.get` answer for one thread with custom data */
 export async function mockThreadResponse(
   page: Page,
   threadId: string,
   data: ReturnType<typeof mockThreadWithMessages>,
 ) {
-  await page.route(`**/api/threads/${threadId}**`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
-
-    const pathname = new URL(route.request().url()).pathname;
-    if (pathname === `/api/threads/${threadId}`) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(data),
-      });
-      return;
-    }
-
-    // Thread loading fetches the message payload and the event timeline in
-    // parallel. Keep the route contracts distinct so mock-driven E2E tests
-    // exercise the same loading path as the real client.
-    if (pathname === `/api/threads/${threadId}/events`) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ events: data.threadEvents }),
-      });
-      return;
-    }
-
-    await route.continue();
+  await page.route(trpcProcedure('threads.get'), async (route) => {
+    if (trpcInput(route.request())?.id !== threadId) return route.fallback();
+    await fulfillTrpc(route, data);
   });
+  // Thread loading fetches the message payload and the event timeline in
+  // parallel. Keep both mocked so E2E tests exercise the same loading path as
+  // the real client.
+  await mockThreadEvents(page, threadId, data.threadEvents);
 }
 
 /**
@@ -458,71 +497,53 @@ export async function mockPaginatedThreadResponse(
     };
   };
 
-  await page.route(`**/api/threads/${threadId}**`, async (route) => {
-    if (route.request().method() !== 'GET') return route.continue();
-
-    const url = new URL(route.request().url());
-    const { pathname, searchParams } = url;
-    if (pathname === `/api/threads/${threadId}`) {
-      const anchorId = searchParams.get('messageAnchorId');
-      const anchorIndex = anchorId
-        ? allMessages.findIndex((message) => message.id === anchorId)
-        : -1;
-      const start =
-        anchorIndex >= 0
-          ? Math.max(0, anchorIndex - Math.floor(initialWindowSize / 2))
-          : initialWindowStart;
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(windowAt(start, initialWindowSize)),
-      });
-      return;
-    }
-
-    if (pathname === `/api/threads/${threadId}/events`) {
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ events: data.threadEvents }),
-      });
-      return;
-    }
-
-    if (pathname === `/api/threads/${threadId}/messages`) {
-      const cursor = searchParams.get('cursor');
-      const cursorIndex = cursor
-        ? allMessages.findIndex((message) => message.timestamp === cursor)
-        : -1;
-      const limit = Math.max(1, Number.parseInt(searchParams.get('limit') ?? '50', 10) || 50);
-      const direction = searchParams.get('direction') === 'after' ? 'after' : 'before';
-      const start =
-        direction === 'after'
-          ? Math.min(allMessages.length, cursorIndex + 1)
-          : Math.max(0, cursorIndex - limit);
-      const end =
-        direction === 'after'
-          ? Math.min(allMessages.length, start + limit)
-          : Math.max(start, cursorIndex);
-      const messages = cursorIndex < 0 ? [] : allMessages.slice(start, end);
-
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          messages,
-          hasMore: start > 0,
-          hasMoreAfter: end < allMessages.length,
-          total: allMessages.length,
-          windowStart: start,
-          leadingUserMessage: undefined,
-        }),
-      });
-      return;
-    }
-
-    await route.continue();
+  await page.route(trpcProcedure('threads.get'), async (route) => {
+    const input = trpcInput<{ id: string; messageAnchorId?: string }>(route.request());
+    if (input?.id !== threadId) return route.fallback();
+    const anchorIndex = input.messageAnchorId
+      ? allMessages.findIndex((message) => message.id === input.messageAnchorId)
+      : -1;
+    const start =
+      anchorIndex >= 0
+        ? Math.max(0, anchorIndex - Math.floor(initialWindowSize / 2))
+        : initialWindowStart;
+    await fulfillTrpc(route, windowAt(start, initialWindowSize));
   });
+
+  await page.route(trpcProcedure('threads.messages'), async (route) => {
+    const input = trpcInput<{
+      id: string;
+      cursor?: string;
+      limit?: number;
+      direction?: 'before' | 'after';
+    }>(route.request());
+    if (input?.id !== threadId) return route.fallback();
+    const cursorIndex = input.cursor
+      ? allMessages.findIndex((message) => message.timestamp === input.cursor)
+      : -1;
+    const limit = Math.max(1, input.limit ?? 50);
+    const direction = input.direction === 'after' ? 'after' : 'before';
+    const start =
+      direction === 'after'
+        ? Math.min(allMessages.length, cursorIndex + 1)
+        : Math.max(0, cursorIndex - limit);
+    const end =
+      direction === 'after'
+        ? Math.min(allMessages.length, start + limit)
+        : Math.max(start, cursorIndex);
+    const messages = cursorIndex < 0 ? [] : allMessages.slice(start, end);
+
+    await fulfillTrpc(route, {
+      messages,
+      hasMore: start > 0,
+      hasMoreAfter: end < allMessages.length,
+      total: allMessages.length,
+      windowStart: start,
+      leadingUserMessage: undefined,
+    });
+  });
+
+  await mockThreadEvents(page, threadId, data.threadEvents);
 }
 
 /** Mock the analytics overview response */

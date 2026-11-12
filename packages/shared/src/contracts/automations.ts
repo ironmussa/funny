@@ -1,13 +1,9 @@
 /**
- * `/api/automations` contract: the input schemas the server validates with and
- * the response types it must return. The client calls these endpoints, so the
- * request and response types on both sides come from this file.
+ * Automation input schemas: the `automations` tRPC procedures validate with
+ * them, and the client's request types come from them.
  */
 
 import { z } from 'zod';
-
-import type { Automation, AutomationRun, InboxItem } from '../types/automations.js';
-import { endpointGroup } from './endpoint.js';
 
 const required = 'Missing required fields: projectId, name, prompt, schedule';
 
@@ -54,35 +50,3 @@ export const automationInboxQuery = z.object({
 
 export type CreateAutomationRequest = z.input<typeof createAutomationBody>;
 export type UpdateAutomationRequest = z.input<typeof updateAutomationBody>;
-
-type Ok = { ok: true };
-
-const api = endpointGroup('/automations');
-
-export const automationsContract = {
-  // Declared before `get` so `/inbox` is not read as an automation id.
-  inbox: api.endpoint<InboxItem[]>()({
-    method: 'GET',
-    path: '/inbox',
-    query: automationInboxQuery,
-  }),
-  list: api.endpoint<Automation[]>()({ method: 'GET', path: '/', query: listAutomationsQuery }),
-  get: api.endpoint<Automation>()({ method: 'GET', path: '/:id' }),
-  create: api.endpoint<Automation>()({ method: 'POST', path: '/', body: createAutomationBody }),
-  update: api.endpoint<Automation>()({
-    method: 'PATCH',
-    path: '/:id',
-    body: updateAutomationBody,
-  }),
-  remove: api.endpoint<Ok>()({ method: 'DELETE', path: '/:id' }),
-  trigger: api.endpoint<Ok & { runId: string; threadId: string }>()({
-    method: 'POST',
-    path: '/:id/trigger',
-  }),
-  runs: api.endpoint<AutomationRun[]>()({ method: 'GET', path: '/:id/runs' }),
-  triageRun: api.endpoint<Ok>()({
-    method: 'PATCH',
-    path: '/runs/:runId/triage',
-    body: triageRunBody,
-  }),
-};

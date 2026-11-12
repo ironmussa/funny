@@ -1,5 +1,5 @@
-import type { TestProgress, TestProgressSuite } from '@funny/shared/test-progress';
-import { Loader2, Timer } from 'lucide-react';
+import type { TestFailure, TestProgress, TestProgressSuite } from '@funny/shared/test-progress';
+import { Loader2, Timer, XCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +12,7 @@ import {
   useNow,
   type TFunction,
 } from '@/components/progress/progress-parts';
+import { TestFileList } from '@/components/progress/TestFileList';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useTestProgress } from '@/hooks/use-test-progress';
@@ -22,6 +23,8 @@ type T = TFunction;
 
 /** Running files listed under a suite before the rest collapse into "+N more". */
 const RUNNING_FILES_SHOWN = 3;
+/** Failures listed before the rest collapse into "showing the first N". */
+const FAILURES_SHOWN = 15;
 
 /** Passed / failed / skipped counts, each only when non-zero. */
 function Counts({ passed, failed, skipped }: { passed: number; failed: number; skipped: number }) {
@@ -138,13 +141,75 @@ function SlowList({ items, t }: { items: SlowItem[]; t: T }) {
   );
 }
 
+function failureLocation(failure: TestFailure): string | undefined {
+  if (!failure.file) return undefined;
+  return failure.line ? `${failure.file}:${failure.line}` : failure.file;
+}
+
+/** The failed tests, by name, with where and why; tagged with their suite when several failed. */
+function FailureList({ suites, total, t }: { suites: TestProgressSuite[]; total: number; t: T }) {
+  const failed = suites.filter((suite) => suite.failures.length > 0);
+  const showSuite = failed.length > 1;
+  const shown = failed
+    .flatMap((suite) => suite.failures.map((failure) => ({ suite: suite.name, failure })))
+    .slice(0, FAILURES_SHOWN);
+  return (
+    <div className="flex flex-col gap-1" data-testid="test-progress-failures">
+      <span className="text-muted-foreground font-medium">{t('testProgress.failuresTitle')}</span>
+      <ul className="flex flex-col gap-1">
+        {shown.map(({ suite, failure }, index) => {
+          const location = failureLocation(failure);
+          return (
+            <li
+              key={`${suite}:${index}`}
+              className="flex min-w-0 items-start gap-2"
+              data-testid={`test-progress-failure-${index}`}
+            >
+              <XCircle className={cn('mt-0.5 size-3.5 shrink-0', TONE.failed)} aria-hidden />
+              <div className="flex min-w-0 flex-1 flex-col">
+                <div className="flex min-w-0 items-baseline gap-2">
+                  <span className="truncate font-mono" title={failure.name}>
+                    {failure.name}
+                  </span>
+                  {showSuite && <span className="text-muted-foreground shrink-0">{suite}</span>}
+                  {location && (
+                    <span
+                      className="text-muted-foreground ml-auto shrink-0 truncate font-mono"
+                      title={location}
+                    >
+                      {location}
+                    </span>
+                  )}
+                </div>
+                {failure.message && (
+                  <span
+                    className="text-muted-foreground line-clamp-3 font-mono break-words whitespace-pre-wrap"
+                    title={failure.message}
+                  >
+                    {failure.message}
+                  </span>
+                )}
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+      {total > shown.length && (
+        <span className="text-muted-foreground">
+          {t('testProgress.moreFailures', { shown: shown.length, total })}
+        </span>
+      )}
+    </div>
+  );
+}
+
 function RunHeader({ progress, now, t }: { progress: TestProgress; now: number; t: T }) {
   const running = progress.status === 'running';
   const elapsed = runElapsed(progress, now);
   const active = progress.suites.filter((suite) => suite.status === 'running').length;
   return (
     <div className="flex items-center gap-2">
-      <StatusIcon status={progress.status} className="size-4" />
+      <StatusIcon status={progress.status} />
       <span className="font-medium">{t(`testProgress.status.${progress.status}`)}</span>
       {running && (
         <span className="text-muted-foreground tabular-nums" data-testid="test-progress-runners">
@@ -163,7 +228,7 @@ function RunHeader({ progress, now, t }: { progress: TestProgress; now: number; 
   );
 }
 
-export function TestProgressView({ progress }: { progress: TestProgress }) {
+function TestProgressView({ progress }: { progress: TestProgress }) {
   const { t } = useTranslation();
   const now = useNow(progress.status === 'running');
   const summary = summarizeTestProgress(progress, now);
@@ -172,7 +237,7 @@ export function TestProgressView({ progress }: { progress: TestProgress }) {
     <div
       data-testid="test-progress"
       data-status={progress.status}
-      className="bg-card text-card-foreground flex flex-col gap-2 rounded-md border p-3 text-sm"
+      className="bg-card text-card-foreground flex flex-col gap-2 rounded-md border p-3 text-xs"
     >
       <RunHeader progress={progress} now={now} t={t} />
       <Progress value={summary.percent} className="h-1.5" data-testid="test-progress-bar" />
@@ -199,11 +264,27 @@ export function TestProgressView({ progress }: { progress: TestProgress }) {
 
       {summary.slow.length > 0 && <SlowList items={summary.slow} t={t} />}
 
+      {progress.suites.some((suite) => suite.failures.length > 0) && (
+        <FailureList suites={progress.suites} total={summary.failed} t={t} />
+      )}
+
       <ul className="divide-border/60 divide-y">
         {progress.suites.map((suite) => (
           <SuiteRow key={suite.name} suite={suite} now={now} t={t} />
         ))}
       </ul>
+
+      {progress.suites.some((suite) => suite.files.length > 0) ? (
+        <TestFileList suites={progress.suites} />
+      ) : (
+        // A finished run whose output named no files (filtered, or a runner
+        // that prints only totals): say so instead of leaving the list out.
+        progress.status !== 'running' && (
+          <span className="text-muted-foreground" data-testid="test-progress-no-files">
+            {t('testProgress.noFiles')}
+          </span>
+        )
+      )}
     </div>
   );
 }

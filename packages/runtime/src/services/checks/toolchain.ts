@@ -59,6 +59,8 @@ export interface CheckPlan {
   progressEnv?: 'FUNNY_TEST_PROGRESS' | 'FUNNY_TASK_PROGRESS';
   /** Added for vitest steps, so the runner can pass its reporter. */
   vitest?: boolean;
+  /** Added for plain tsc steps, so the runner can ask for `--diagnostics` (files and lines checked). */
+  tscDiagnostics?: boolean;
   /** Notes for the agent, e.g. a filter the tool cannot apply. */
   notes: string[];
 }
@@ -157,8 +159,19 @@ const args = (list: (string | undefined | false)[]) =>
     .map(quote)
     .join(' ');
 
+/**
+ * Files or directories the check runs on. A glob (`src/*.test.ts`) stays
+ * unquoted so the shell expands it, as it would in the agent's own Bash call;
+ * anything else unsafe is quoted like any argument.
+ */
+const pathArg = (arg: string) => (/^[\w@%+=:,./*?-]+$/.test(arg) ? arg : quote(arg));
+const paths = (list: string[]) => list.map(pathArg).join(' ');
+
+/** Parts joined by spaces, skipping empty ones (no scope, no filter). */
+const spaced = (...parts: string[]) => parts.filter(Boolean).join(' ');
+
 const runScript = (pm: PackageManager, script: string, extra: string[] = []) =>
-  [pm === 'npm' ? 'npm run' : `${pm} run`, quote(script), extra.length ? `-- ${args(extra)}` : '']
+  [pm === 'npm' ? 'npm run' : `${pm} run`, quote(script), extra.length ? `-- ${paths(extra)}` : '']
     .filter(Boolean)
     .join(' ');
 
@@ -253,14 +266,14 @@ const named = (flag: string, filter?: string) => (filter ? [flag, filter] : []);
 const binOnTargets = (tool: CheckTool, pkg: string, command: string): Candidate => ({
   tool,
   has: dep(pkg),
-  command: (r) => `${r.bin} ${command} ${args(r.targets)}`,
+  command: (r) => `${r.bin} ${command} ${paths(r.targets)}`,
 });
 
 /** A Python tool the project configures, run on the scope (or `.`). */
 const pythonOnTargets = (tool: CheckTool, command: string): Candidate => ({
   tool,
   has: pythonWith(tool),
-  command: (r) => `${r.py}${command} ${args(r.targets)}`,
+  command: (r) => `${r.py}${command} ${paths(r.targets)}`,
 });
 
 const fixed = (tool: CheckTool, has: Candidate['has'], command: string): Candidate => ({
@@ -275,28 +288,28 @@ const CANDIDATES: Partial<Record<CheckKind, Candidate[]>> = {
     {
       tool: 'vitest',
       has: dep('vitest'),
-      command: (r) => `${r.bin} vitest run ${args([...r.scope, ...named('-t', r.filter)])}`,
+      command: (r) => `${r.bin} vitest run ${spaced(paths(r.scope), args(named('-t', r.filter)))}`,
     },
     {
       tool: 'jest',
       has: dep('jest'),
-      command: (r) => `${r.bin} jest ${args([...r.scope, ...named('-t', r.filter)])}`,
+      command: (r) => `${r.bin} jest ${spaced(paths(r.scope), args(named('-t', r.filter)))}`,
     },
     {
       tool: 'playwright',
       has: dep('@playwright/test'),
       command: (r) =>
-        `${r.bin} playwright test ${args([...r.scope, ...named('--grep', r.filter)])}`,
+        `${r.bin} playwright test ${spaced(paths(r.scope), args(named('--grep', r.filter)))}`,
     },
     {
       tool: 'bun-test',
       has: (project) => Boolean(project.pkg) && project.pm === 'bun',
-      command: (r) => `bun test ${args([...r.scope, ...named('-t', r.filter)])}`,
+      command: (r) => `bun test ${spaced(paths(r.scope), args(named('-t', r.filter)))}`,
     },
     {
       tool: 'pytest',
       has: (project) => project.python !== null,
-      command: (r) => `${r.py}pytest ${args([...r.scope, ...named('-k', r.filter)])}`,
+      command: (r) => `${r.py}pytest ${spaced(paths(r.scope), args(named('-k', r.filter)))}`,
     },
     {
       tool: 'cargo',
@@ -307,7 +320,7 @@ const CANDIDATES: Partial<Record<CheckKind, Candidate[]>> = {
       tool: 'go',
       has: hasGo,
       command: (r) =>
-        `go test ${args([...(r.scope.length ? r.scope : ['./...']), ...named('-run', r.filter)])}`,
+        `go test ${spaced(paths(r.scope.length ? r.scope : ['./...']), args(named('-run', r.filter)))}`,
     },
   ],
   typecheck: [
@@ -322,7 +335,7 @@ const CANDIDATES: Partial<Record<CheckKind, Candidate[]>> = {
     fixed('go', hasGo, 'go vet ./...'),
   ],
   lint: [
-    { tool: 'oxlint', has: dep('oxlint'), command: (r) => `${r.bin} oxlint ${args(r.scope)}` },
+    { tool: 'oxlint', has: dep('oxlint'), command: (r) => `${r.bin} oxlint ${paths(r.scope)}` },
     binOnTargets('eslint', 'eslint', 'eslint'),
     binOnTargets('biome', '@biomejs/biome', 'biome lint'),
     pythonOnTargets('ruff', 'ruff check'),
@@ -359,6 +372,13 @@ function toolStep(
   return { name: candidate.tool, command: candidate.command(run).trim(), tool: candidate.tool };
 }
 
+/** What the runner adds to a tool it runs directly: vitest's reporter, tsc's diagnostics. */
+function toolExtra(tool: CheckStep['tool']): Partial<CheckPlan> {
+  if (tool === 'vitest') return { vitest: true };
+  if (tool === 'tsc') return { tscDiagnostics: true };
+  return {};
+}
+
 /** A plan that runs one tool directly. */
 function toolPlan(
   project: Project,
@@ -368,7 +388,7 @@ function toolPlan(
 ): CheckPlan | null {
   const step = toolStep(project, kind, scope, filter);
   if (!step) return null;
-  return plan(project, kind, [step], step.tool === 'vitest' ? { vitest: true } : {});
+  return plan(project, kind, [step], toolExtra(step.tool));
 }
 
 /** What was looked for, for the "nothing detected" error. */
@@ -461,6 +481,7 @@ function verifyPlan(project: Project, request: CheckRequest): CheckPlan | null {
     {
       notes: parts.flatMap((part) => part.notes),
       ...(parts.some((part) => part.vitest) ? { vitest: true } : {}),
+      ...(parts.some((part) => part.tscDiagnostics) ? { tscDiagnostics: true } : {}),
     },
   );
 }
@@ -477,12 +498,7 @@ function commandPlan(project: Project, request: CheckRequest, command: string): 
     });
   }
   const step: CheckStep = { name: check.script ?? check.tool, command, tool: check.tool };
-  return plan(
-    project,
-    check.kind,
-    [step],
-    check.tool === 'vitest' && check.plain ? { vitest: true } : {},
-  );
+  return plan(project, check.kind, [step], check.plain ? toolExtra(check.tool) : {});
 }
 
 /** The plan for `request` in `cwd`, or why none was found. */

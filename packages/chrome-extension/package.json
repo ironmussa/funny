@@ -6,7 +6,8 @@
   "scripts": {
     "build": "bun run build.ts",
     "watch": "bun run build.ts --watch",
-    "package": "bun run build.ts && bun run package.ts"
+    "package": "bun run build.ts && bun run package.ts",
+    "test": "bun test"
   },
   "dependencies": {
     "@funny/shared": "workspace:*"

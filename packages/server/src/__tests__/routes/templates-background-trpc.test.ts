@@ -1,8 +1,8 @@
 /**
  * The `agentTemplates`, `watchers` and `jobs` tRPC procedures (openspec
  * adopt-trpc-browser-api, task 5.4): read and write access, 404 / 403 before
- * validation, null columns as absent fields, and parity with the REST routes,
- * which serve the same ports while both paths coexist.
+ * validation, and null columns as absent fields. The REST routes are gone (task
+ * 6.1); the tRPC procedures are the only server path to these rows.
  */
 import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
@@ -44,12 +44,6 @@ describe('agent templates, watchers and jobs over tRPC', () => {
 
   beforeAll(async () => {
     t = await createTestApp();
-    const { agentTemplateRoutes } = await import('../../routes/agent-templates.js');
-    const { watcherRoutes } = await import('../../routes/watchers.js');
-    const { jobRoutes } = await import('../../routes/jobs.js');
-    t.app.route('/api/agent-templates', agentTemplateRoutes);
-    t.app.route('/api/watchers', watcherRoutes);
-    t.app.route('/api/jobs', jobRoutes);
   });
 
   beforeEach(() => {
@@ -119,6 +113,12 @@ describe('agent templates, watchers and jobs over tRPC', () => {
       expect(
         (await mutate('intruder', 'agentTemplates.duplicate', { id: 'tpl-private' })).status,
       ).toBe(404);
+      // Nothing was copied from the private template.
+      const list = await query('intruder', 'agentTemplates.list');
+      expect(list.body.result.data.map((x: any) => x.name).sort()).toEqual([
+        'Shared',
+        'Shared (copy)',
+      ]);
     });
 
     test('only the owner writes: 404 / 403 come before the body is validated', async () => {
@@ -215,36 +215,5 @@ describe('agent templates, watchers and jobs over tRPC', () => {
       ]);
       expect((await query('intruder', 'jobs.list')).body.result.data).toEqual([]);
     });
-  });
-
-  test('reads return the same data on REST and tRPC', async () => {
-    (t.db as any).insert(t.schema.watchers).values(watcher0()).run();
-    const rest = t.requestAs('owner');
-    const pairs: Array<[string, string, unknown]> = [
-      ['/api/agent-templates', 'agentTemplates.list', undefined],
-      ['/api/agent-templates/tpl-shared', 'agentTemplates.get', { id: 'tpl-shared' }],
-      ['/api/agent-templates/stats/usage', 'agentTemplates.usageStats', undefined],
-      ['/api/watchers', 'watchers.list', undefined],
-      ['/api/jobs', 'jobs.list', undefined],
-    ];
-    for (const [restPath, procedure, input] of pairs) {
-      const restRes = await rest.get(restPath);
-      const trpcRes = await query('owner', procedure, input);
-      expect(trpcRes.status).toBe(restRes.status);
-      expect(trpcRes.body.result.data).toEqual(await restRes.json());
-    }
-
-    function watcher0() {
-      return {
-        id: 'w0',
-        threadId: 't1',
-        userId: 'owner',
-        key: 'k',
-        label: 'l',
-        nextWakeAt: 1,
-        createdAt: now,
-        updatedAt: now,
-      };
-    }
   });
 });

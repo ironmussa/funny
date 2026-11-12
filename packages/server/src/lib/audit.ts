@@ -16,6 +16,11 @@ type AuditAction =
   | 'user.password_change'
   | 'token.create'
   | 'token.revoke'
+  | 'pat.created'
+  | 'pat.revoked'
+  | 'pat.rejected'
+  /** A personal API token started a thread (`POST /api/v1/threads`). */
+  | 'pat.thread_created'
   | 'runner.register'
   | 'runner.register_sandbox'
   | 'infra.connection_added'

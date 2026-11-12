@@ -1,25 +1,22 @@
 /**
- * Project + membership routes for the central server.
+ * Project routes the central server still answers over REST.
  *
- * The operations the server answers itself (list, resolve, update, delete,
- * reorder, members, local path, startup command CRUD) delegate to the projects
- * port, which the `projects` tRPC router serves too. Creation is proxied to the
- * user's runner when one is connected. Filesystem/git operations (branches,
- * checkout-preflight, hooks, weave) and command execution (start/stop/status)
- * fall through to the catch-all proxy in index.ts which forwards them to the
- * runner.
+ * The web client reads and writes projects over the `projects` and
+ * `projectRunners` tRPC routers (openspec adopt-trpc-browser-api). What stays
+ * here has callers outside the web client (list, resolve, delete) or is
+ * runner-proxied (create). Filesystem/git operations (branches,
+ * checkout-preflight, hooks, config, weave) and command execution
+ * (start/stop/status/metrics) fall through to the catch-all proxy, which
+ * forwards them to the runner.
+ *
+ * The REST routes that only the web client used were removed. Their paths are
+ * refused explicitly (`refuseRetiredRoute`), never left to fall through: the
+ * runner answers some of them itself (startup command CRUD), and a request
+ * that reached a runner would skip the server's `requireProjectAccess` check.
  */
 
 import { validateProjectPathLexical } from '@funny/core/git/path-validation';
-import {
-  addProjectMemberBody,
-  listProjectsQuery,
-  projectCommandBody,
-  projectLocalPathBody,
-  reorderProjectsBody,
-  type ProjectCommandBody,
-  updateProjectBody,
-} from '@funny/shared/contracts/projects';
+import { listProjectsQuery } from '@funny/shared/contracts/projects';
 import type { Context } from 'hono';
 import { Hono } from 'hono';
 import { z } from 'zod';
@@ -32,6 +29,7 @@ import { findAnyRunnerForUser } from '../services/runner-manager.js';
 import { createProjectsPort } from '../trpc/ports/projects.js';
 import { answerJson } from '../trpc/reply.js';
 import { parseJsonBody, parseQuery, queryBoolean } from '../validation/request.js';
+import { refuseRetiredRoute } from './retired-rest.js';
 
 export const projectRoutes = new Hono<ServerEnv>();
 
@@ -48,6 +46,7 @@ const portFor = (c: Context<ServerEnv>) => createProjectsPort(c.get('organizatio
 // ── Project CRUD ─────────────────────────────────────────
 
 /** GET /api/projects — list projects for the current user */
+// Kept on REST: called by the Chrome extension (packages/chrome-extension), client-gpuix, the e2e fixtures and docs/guides/ingest-api.md.
 projectRoutes.get('/', async (c) => {
   const query = parseQuery(c, listProjectsQueryString);
   if (query.isErr()) return c.json({ error: query.error.message }, 400);
@@ -61,6 +60,7 @@ projectRoutes.get('/', async (c) => {
 });
 
 /** GET /api/projects/resolve — find project by URL pattern */
+// Kept on REST: called by the Chrome extension (packages/chrome-extension).
 projectRoutes.get('/resolve', async (c) => {
   const url = c.req.query('url');
   if (!url) {
@@ -70,6 +70,7 @@ projectRoutes.get('/resolve', async (c) => {
 });
 
 /** POST /api/projects — create a new project */
+// Kept on REST: proxied to the user's runner when one is connected, so it is not on tRPC.
 projectRoutes.post('/', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
@@ -118,110 +119,38 @@ projectRoutes.post('/', async (c) => {
   return c.json(result.value, 201);
 });
 
-/** PATCH /api/projects/:id — update a project */
-projectRoutes.patch('/:id', requireProjectAccess('manage'), async (c) => {
-  const parsed = await parseJsonBody(c, updateProjectBody);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  return answerJson(
-    c,
-    portFor(c).update(c.get('userId') as string, c.req.param('id'), parsed.value),
-  );
-});
-
 /** DELETE /api/projects/:id — delete a project (owner only) */
+// Kept on REST: called by the e2e fixtures and the soak script.
 projectRoutes.delete('/:id', requireProjectAccess('delete'), (c) =>
   answerJson(c, portFor(c).remove(c.req.param('id'))),
 );
 
-/** PUT /api/projects/reorder — reorder projects */
-projectRoutes.put('/reorder', async (c) => {
-  const parsed = await parseJsonBody(c, reorderProjectsBody);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  return answerJson(c, portFor(c).reorder(c.get('userId') as string, parsed.value.projectIds));
-});
-
-// ── Membership ───────────────────────────────────────────
-
-/** List members of a project */
-projectRoutes.get('/:id/members', requireProjectAccess('view'), (c) =>
-  answerJson(c, portFor(c).members(c.req.param('id'))),
-);
-
-/** Add a member to a project */
-projectRoutes.post(
-  '/:id/members',
-  requireProjectAccess('manage', { forbidden: 'Only project admins can add members' }),
-  async (c) => {
-    const parsed = await parseJsonBody(c, addProjectMemberBody);
-    if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-    const { userId, role } = parsed.value;
-    return answerJson(c, portFor(c).addMember(c.req.param('id'), userId, role), 201);
-  },
-);
-
-/** Remove a member from a project (admins remove anyone, members themselves) */
-projectRoutes.delete('/:id/members/:userId', requireProjectAccess('view'), (c) =>
-  answerJson(
-    c,
-    portFor(c).removeMember(c.get('userId') as string, c.req.param('id'), c.req.param('userId')),
-  ),
-);
-
-/** Set local working directory for a shared project (with validation + upsert) */
-projectRoutes.post('/:id/local-path', requireProjectAccess('view'), async (c) => {
-  const parsed = await parseJsonBody(c, projectLocalPathBody);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  return answerJson(
-    c,
-    portFor(c).setLocalPath(c.get('userId') as string, c.req.param('id'), parsed.value.localPath),
-  );
-});
-
-// ── Startup Commands CRUD (DB-backed, handled by server) ──
+// ── Removed routes: refused, never proxied ───────────────
 //
-const COMMANDS_FORBIDDEN = 'Only project admins can edit startup commands';
+// These answered the web client, which now uses the `projects` / `projectRunners`
+// tRPC procedures. Without a server route the request would fall through to the
+// runner proxy; the runtime answers startup command CRUD itself, so a member's
+// request would reach the owner's runner without `requireProjectAccess`.
 
-// Security CR-6: reads need view access to the parent project, mutations need
-// `manage`. Mutations also scope the command-id lookup to the parent projectId
-// so a guessed id from another project cannot be modified or deleted.
+/** Method + path of every removed route, relative to `/api/projects`. */
+export const REMOVED_PROJECT_ROUTES = [
+  ['PATCH', '/:id'],
+  ['PUT', '/reorder'],
+  ['GET', '/:id/members'],
+  ['POST', '/:id/members'],
+  ['DELETE', '/:id/members/:userId'],
+  ['POST', '/:id/local-path'],
+  ['GET', '/:id/commands'],
+  ['POST', '/:id/commands'],
+  ['PUT', '/:id/commands/:cmdId'],
+  ['DELETE', '/:id/commands/:cmdId'],
+  ['GET', '/:id/runner-settings'],
+  ['PUT', '/:id/runner-settings'],
+  ['POST', '/:id/runner-grants/:runnerId'],
+  ['DELETE', '/:id/runner-grants/:runnerId'],
+  ['PUT', '/general-runner'],
+] as const;
 
-/** GET /api/projects/:id/commands — list commands for a project */
-projectRoutes.get('/:id/commands', requireProjectAccess('view'), (c) =>
-  answerJson(c, portFor(c).commands(c.req.param('id'))),
-);
-
-const editCommands = requireProjectAccess('manage', { forbidden: COMMANDS_FORBIDDEN });
-
-/** A command write: the validated body, or 400. */
-const withCommandBody =
-  <P extends string>(
-    handle: (c: Context<ServerEnv, P>, body: ProjectCommandBody) => Promise<Response>,
-  ) =>
-  async (c: Context<ServerEnv, P>) => {
-    const parsed = await parseJsonBody(c, projectCommandBody);
-    if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-    return handle(c, parsed.value);
-  };
-
-/** POST /api/projects/:id/commands — create a new command (project admins only) */
-projectRoutes.post(
-  '/:id/commands',
-  editCommands,
-  withCommandBody((c, body) =>
-    answerJson(c, portFor(c).createCommand(c.req.param('id'), body), 201),
-  ),
-);
-
-/** PUT /api/projects/:id/commands/:cmdId — update a command (project admins only) */
-projectRoutes.put(
-  '/:id/commands/:cmdId',
-  editCommands,
-  withCommandBody((c, body) =>
-    answerJson(c, portFor(c).updateCommand(c.req.param('id'), c.req.param('cmdId'), body)),
-  ),
-);
-
-/** DELETE /api/projects/:id/commands/:cmdId — delete a command (project admins only) */
-projectRoutes.delete('/:id/commands/:cmdId', editCommands, (c) =>
-  answerJson(c, portFor(c).deleteCommand(c.req.param('id'), c.req.param('cmdId'))),
-);
+for (const [method, path] of REMOVED_PROJECT_ROUTES) {
+  projectRoutes.on(method, path, refuseRetiredRoute);
+}

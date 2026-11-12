@@ -614,6 +614,38 @@
   gap: 10px;
 }
 
+.settings-token-state {
+  flex: 1;
+  font-size: 12px;
+  color: #22c55e;
+  padding: 7px 0;
+}
+.settings-token-missing {
+  color: #dc2626;
+}
+.settings-link-btn {
+  background: #2a2a2a;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  color: #ccc;
+  font-size: 12px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+.settings-link-btn:hover {
+  background: #333;
+  color: white;
+}
+.settings-grant-btn {
+  margin-top: 6px;
+  width: 100%;
+}
+.settings-hint {
+  font-size: 11px;
+  color: #666;
+  margin-top: 4px;
+}
+
 .settings-status {
   font-size: 11px;
   color: #666;

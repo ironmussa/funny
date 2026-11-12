@@ -38,6 +38,9 @@ const message = (id: string) => ({
   timestamp: '2026-08-23T00:00:00Z',
 });
 
+/** The body of a successful tRPC query. */
+const trpcData = (data: unknown) => ({ result: { data } });
+
 function setup(statusForThread = 200) {
   const directory = mkdtempSync(join(tmpdir(), 'funny-thread-data-'));
   directories.push(directory);
@@ -52,10 +55,10 @@ function setup(statusForThread = 200) {
       let body: unknown = {};
       let status = 200;
       if (path === '/api/projects') body = [project];
-      else if (path.startsWith('/api/threads?projectId='))
-        body = { threads: [thread], total: 1, hasMore: false };
-      else if (path.startsWith('/api/threads/scratch'))
-        body = { threads: [], total: 0, hasMore: false };
+      else if (path.startsWith('/api/trpc/threads.list?'))
+        body = trpcData({ threads: [thread], total: 1, hasMore: false });
+      else if (path.startsWith('/api/trpc/threads.scratch?'))
+        body = trpcData({ threads: [], total: 0, hasMore: false });
       else if (path === '/api/threads/shared-with-me') body = { threads: [] };
       else if (path.startsWith('/api/git/status'))
         body = {
@@ -76,20 +79,20 @@ function setup(statusForThread = 200) {
         };
       else if (path.startsWith('/api/browse/files?'))
         body = { files: ['src/app.ts', 'README.md'], truncated: false };
-      else if (path.startsWith('/api/threads/t1/messages'))
-        body = { messages: [message('m0')], hasMore: false };
-      else if (path.startsWith('/api/threads/t1')) {
+      else if (path.startsWith('/api/trpc/threads.messages?'))
+        body = trpcData({ messages: [message('m0')], hasMore: false });
+      else if (path.startsWith('/api/trpc/threads.get?')) {
         status = statusForThread;
         body =
           status === 200
-            ? {
+            ? trpcData({
                 ...thread,
                 messages: [message('m1'), message('m2')],
                 hasMore: true,
                 total: 3,
                 windowStart: 1,
-              }
-            : { error: 'Forbidden' };
+              })
+            : { error: { message: 'Forbidden', data: { httpStatus: status } } };
       }
       return {
         status,

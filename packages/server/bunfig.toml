@@ -18,9 +18,6 @@
 maxConcurrency = 1
 coverageSkipTestFiles = true
 coveragePathIgnorePatterns = [
-  # UI-only routes — no server logic worth gating yet.
-  "src/routes/designs.ts",
-  "src/routes/agent-templates.ts",
   # Pipeline CRUD is partially covered (IDOR + happy path); scheduler
   # approval/progress paths need heavy mocking — excluded until that suite lands.
   "src/routes/pipelines.ts",

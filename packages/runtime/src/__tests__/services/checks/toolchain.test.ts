@@ -75,6 +75,17 @@ describe('planCheck', () => {
     ).toEqual(["npx vitest run src/a.test.ts -t 'parses dates'"]);
   });
 
+  test('scope globs reach the shell unquoted; other unsafe text stays quoted', () => {
+    const dir = project({ 'package.json': {}, 'bun.lock': '' });
+    expect(
+      commands(dir, {
+        kind: 'test',
+        scope: ['src/__tests__/routes/*trpc*.test.ts', 'my dir/a.test.ts'],
+        filter: 'adds*',
+      }),
+    ).toEqual(["bun test src/__tests__/routes/*trpc*.test.ts 'my dir/a.test.ts' -t 'adds*'"]);
+  });
+
   test('a test script that is plain vitest still gets the reporter', () => {
     const dir = project({
       'package.json': { scripts: { test: 'vitest run' }, devDependencies: { vitest: '4' } },
@@ -160,6 +171,7 @@ describe('planCheck', () => {
     const plan = planned(dir, { kind: 'verify' });
     expect(plan.progress).toBe('task');
     expect(plan.steps.map((step) => step.tool)).toEqual(['oxlint', 'tsc', 'vitest']);
+    expect(plan.tscDiagnostics).toBe(true);
   });
 
   test('an exact command is planned as given and classified', () => {
@@ -171,6 +183,12 @@ describe('planCheck', () => {
       vitest: true,
       steps: [{ command: 'bunx vitest run --project client', tool: 'vitest' }],
     });
+    expect(planned(dir, { kind: 'typecheck', command: 'bunx tsc --noEmit -p .' })).toMatchObject({
+      tscDiagnostics: true,
+    });
+    expect(
+      planned(dir, { kind: 'typecheck', command: 'bunx tsc --noEmit && echo ok' }).tscDiagnostics,
+    ).toBeUndefined();
     expect(planned(dir, { kind: 'build', command: 'make all' })).toMatchObject({
       kind: 'build',
       steps: [{ tool: 'unknown' }],

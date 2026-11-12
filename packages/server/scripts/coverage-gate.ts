@@ -5,7 +5,6 @@
  * so CI uses this script to gate on the "All files" line column instead.
  *
  * Files excluded from coverage (see bunfig.toml):
- *   - src/routes/designs.ts, agent-templates.ts
  *   - src/routes/pipelines.ts (scheduler approval/progress pending)
  */
 import { spawnSync } from 'node:child_process';

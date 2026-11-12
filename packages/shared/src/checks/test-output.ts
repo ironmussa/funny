@@ -14,10 +14,15 @@ import { parseStoredJson } from '../json-validation.js';
 import {
   SLOW_TEST_MS,
   TEST_FAILURE_LIMIT,
+  TEST_FILE_LIMIT,
+  TEST_NAME_LIMIT,
   type TestFailure,
+  type TestFileResult,
   type TestProgressSlowEntry,
 } from '../test-progress.js';
 import { cleanLine } from './text.js';
+
+type TestState = 'passed' | 'failed' | 'skipped';
 
 /** Starts an event line from funny's vitest progress reporter; JSON follows. */
 export const TEST_EVENT_PREFIX = '##funny-test ';
@@ -57,6 +62,7 @@ export interface SuiteCounts {
   running: { file: string; startedAt: number }[];
   slow: TestProgressSlowEntry[];
   failures: TestFailure[];
+  files: TestFileResult[];
   /** A runner printed its final summary. */
   summarized: boolean;
 }
@@ -96,21 +102,105 @@ class Counter {
     running: [],
     slow: [],
     failures: [],
+    files: [],
     summarized: false,
   };
+  /** The file (or package) the runner is reporting tests for now. */
+  private file: string | undefined;
+  /** Tests listed by name so far, across files (`TEST_NAME_LIMIT`). */
+  private named = 0;
   /** A failure whose heading was printed, waiting for its message / location. */
   private pending: Pending | null = null;
   /** bun prints a failure's error before its `(fail)` line. */
   private lastError: { message?: string; file?: string; line?: number } = {};
   fromEvents = false;
+  /**
+   * Counts of the runs that already printed their summary: one command may
+   * chain several (`bun test && vitest run`), and each summary is its own run's.
+   */
+  private base = { passed: 0, failed: 0, skipped: 0 };
+  /** A summary was printed and no test of a next run has been counted since. */
+  private closed = false;
 
-  bump(state: 'passed' | 'failed' | 'skipped', current?: string): void {
-    this.counts[state]++;
+  /** Counts tests reported one by one; the first after a summary starts a new run. */
+  add(state: TestState, n = 1): void {
+    if (this.closed) {
+      const { passed, failed, skipped } = this.counts;
+      this.base = { passed, failed, skipped };
+      this.closed = false;
+    }
+    this.counts[state] += n;
+  }
+
+  /** A runner's summary: its run's totals, on top of the runs before it. */
+  summary(totals: Partial<Record<TestState, number>>): void {
+    for (const [state, n] of Object.entries(totals) as [TestState, number][]) {
+      this.counts[state] = this.base[state] + n;
+    }
+    this.counts.summarized = true;
+    this.closed = true;
+  }
+
+  bump(state: TestState, current?: string): void {
+    this.add(state);
     if (current) this.counts.current = current;
   }
 
+  /** The entry for a file, added on first sight (empty name: tests without a file). */
+  private fileEntry(name: string): TestFileResult | undefined {
+    const files = this.counts.files;
+    const found = files.find((f) => f.name === name);
+    if (found || files.length >= TEST_FILE_LIMIT) return found;
+    const entry: TestFileResult = { name, passed: 0, failed: 0, skipped: 0, tests: [] };
+    this.counts.files = [...files, entry];
+    return entry;
+  }
+
+  /** The runner started reporting a file's tests. */
+  enterFile(name: string): void {
+    this.file = name;
+    this.fileEntry(name);
+  }
+
+  /**
+   * One test: counted, and listed under its file (`file`, else the current
+   * one) by name when the runner printed it.
+   */
+  test(
+    state: TestState,
+    name: string | undefined,
+    at: { file?: string; current?: string; durationMs?: number } = {},
+  ): void {
+    this.bump(state, at.current);
+    const entry = this.fileEntry(at.file ?? this.file ?? '');
+    if (!entry) return;
+    entry[state]++;
+    if (name === undefined || this.named >= TEST_NAME_LIMIT) return;
+    entry.tests.push({ name, state, ...stripEmpty({ durationMs: at.durationMs }) });
+    this.named++;
+  }
+
+  /** A file's own counts, when the runner prints them per file (vitest's default reporter). */
+  fileTotals(name: string, totals: Pick<TestFileResult, 'passed' | 'failed' | 'skipped'>): void {
+    const entry = this.fileEntry(name);
+    if (entry) Object.assign(entry, totals);
+  }
+
+  /** A file finished: its outcome and duration, when the runner prints them. */
+  fileDone(name: string, done: Pick<TestFileResult, 'status' | 'durationMs'>): void {
+    const entry = this.fileEntry(name);
+    if (entry) Object.assign(entry, stripEmpty(done));
+  }
+
+  /** go test names the package after its tests: they move under it. */
+  namePackage(name: string, status: 'passed' | 'failed'): void {
+    const anonymous = this.counts.files.find((f) => f.name === '');
+    if (anonymous) Object.assign(anonymous, { name, status });
+    else this.fileDone(name, { status });
+  }
+
   totals(passed: number, failed: number, skipped: number): void {
-    Object.assign(this.counts, { passed, failed, skipped, summarized: true });
+    this.summary({ passed, failed, skipped });
   }
 
   /** Records a failure, merged with an earlier one of the same test. */
@@ -171,8 +261,8 @@ class Counter {
   }
 }
 
-function stripEmpty(failure: TestFailure): Partial<TestFailure> {
-  return Object.fromEntries(Object.entries(failure).filter(([, v]) => v !== undefined));
+function stripEmpty<T extends object>(value: T): Partial<T> {
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== undefined)) as Partial<T>;
 }
 
 const count = (text: string, word: string) =>
@@ -209,7 +299,7 @@ function summaryTotals(
   );
 }
 
-const STATE_OF: Record<string, 'passed' | 'failed' | 'skipped'> = {
+const STATE_OF: Record<string, TestState> = {
   '✓': 'passed',
   ok: 'passed',
   '✘': 'failed',
@@ -250,15 +340,21 @@ const withMessage = (message: string | undefined) =>
  */
 const vitestLine = readWith([
   [
-    /^\s*[✓×❯↓]\s+(?:\|[^|]+\|\s+)?(\S+)\s+\((\d+) tests?([^)]*)\)/,
+    /^\s*[✓×❯↓]\s+(?:\|[^|]+\|\s+)?(\S+)\s+\((\d+) tests?([^)]*)\)(?:\s+([\d.]+)(ms|s)\b)?/,
     (c, m) => {
       if (c.fromEvents) return;
       const failed = count(m[3], 'failed');
       const skipped = count(m[3], 'skipped');
-      c.counts.passed += Number(m[2]) - failed - skipped;
-      c.counts.failed += failed;
-      c.counts.skipped += skipped;
+      const passed = Number(m[2]) - failed - skipped;
+      c.add('passed', passed);
+      c.add('failed', failed);
+      c.add('skipped', skipped);
       c.counts.current = m[1];
+      c.fileTotals(m[1], { passed, failed, skipped });
+      c.fileDone(m[1], {
+        status: failed > 0 ? 'failed' : 'passed',
+        durationMs: m[4] ? Number(m[4]) * (m[5] === 's' ? 1000 : 1) : undefined,
+      });
     },
   ],
   [
@@ -274,20 +370,26 @@ const vitestLine = readWith([
  * ` 0 fail`, ` 2 skip`, ` 1 todo`, one per line, which replaces the sum.
  */
 const bunLine = readWith([
+  // The file whose tests follow (printed once passing tests are listed).
+  [/^(\S+[._-](?:test|spec)\.[cm]?[jt]sx?):$/, (c, m) => c.enterFile(m[1])],
   [
     /^\s*(\d+) (pass|fail|skip|todo)$/,
     (c, m) => {
       const n = Number(m[1]);
-      if (m[2] === 'pass') c.counts.passed = n;
-      else if (m[2] === 'fail') c.counts.failed = n;
-      else c.counts.skipped = m[2] === 'skip' ? n : c.counts.skipped + n;
-      c.counts.summarized = true;
+      if (m[2] === 'pass') c.summary({ passed: n });
+      else if (m[2] === 'fail') c.summary({ failed: n });
+      else if (m[2] === 'skip') c.summary({ skipped: n });
+      // `todo` comes after `skip`, and counts as skipped too.
+      else c.counts.skipped += n;
     },
   ],
   [
-    /^\((pass|fail|skip|todo)\) (.+?)(?: \[[\d.]+m?s\])?$/,
+    /^\((pass|fail|skip|todo)\) (.+?)(?: \[([\d.]+)(ms|s)\])?$/,
     (c, m) => {
-      c.bump(stateOf(m[1]), m[2]);
+      c.test(stateOf(m[1]), m[2], {
+        current: m[2],
+        durationMs: m[3] ? Number(m[3]) * (m[4] === 's' ? 1000 : 1) : undefined,
+      });
       if (m[1] === 'fail') c.failFromLastError(m[2]);
       else c.resetLastError();
     },
@@ -299,7 +401,13 @@ const bunLine = readWith([
  * heading per failure, and `Tests:  1 failed, 2 skipped, 10 passed, 13 total`.
  */
 const jestLine = readWith([
-  [/^\s*(?:PASS|FAIL)\s+(\S+\.\w+)(?:\s+\([\d.]+ m?s\))?$/, (c, m) => (c.counts.current = m[1])],
+  [
+    /^\s*(PASS|FAIL)\s+(\S+\.\w+)(?:\s+\([\d.]+ m?s\))?$/,
+    (c, m) => {
+      c.counts.current = m[2];
+      c.fileDone(m[2], { status: m[1] === 'PASS' ? 'passed' : 'failed' });
+    },
+  ],
   [/^\s*● Test suite failed to run$/, () => {}],
   [/^\s*● (.+ › .+|[^:]+)$/, (c, m) => c.fail({ name: m[1].trim() }, true)],
   [/^\s*Tests:\s+(.+) total$/, (c, m) => summaryTotals(c, m[1])],
@@ -313,7 +421,11 @@ const jestLine = readWith([
 const playwrightLine = readWith([
   [
     /^\s*([✓✘-]|ok|x)\s+\d+\s+(.*›.+?)(?:\s+\([\d.]+m?s\))?$/,
-    (c, m) => c.bump(stateOf(m[1]), m[2].trim()),
+    (c, m) => {
+      const title = m[2].trim();
+      const at = /^(?:\[[^\]]+\] › )?([^\s:]+):\d+:\d+ › (.+)$/.exec(title);
+      c.test(stateOf(m[1]), at?.[2] ?? title, { file: at?.[1], current: title });
+    },
   ],
   [
     /^\s*\d+\) (?:\[[^\]]+\] › )?(\S+?):(\d+):\d+ › (.+?)\s*[─]*$/,
@@ -323,8 +435,7 @@ const playwrightLine = readWith([
     /^\s*(\d+) (passed|failed|skipped|flaky|did not run)(?: \(.+\))?$/,
     (c, m) => {
       const field = m[2] === 'flaky' ? 'passed' : m[2] === 'did not run' ? 'skipped' : m[2];
-      c.counts[field as 'passed' | 'failed' | 'skipped'] = Number(m[1]);
-      c.counts.summarized = true;
+      c.summary({ [field as TestState]: Number(m[1]) });
     },
   ],
 ]);
@@ -343,13 +454,14 @@ const pytestLine = readWith([
   [
     /^(\S+\.py) ([.FsExX]+)\s*(?:\[\s*\d+%\])?$/,
     (c, m) => {
-      for (const ch of m[2]) c.bump(ch === 'x' ? 'skipped' : stateOf(ch));
+      for (const ch of m[2])
+        c.test(ch === 'x' ? 'skipped' : stateOf(ch), undefined, { file: m[1] });
       c.counts.current = m[1];
     },
   ],
   [
     /^(\S+\.py)::(\S+) (PASSED|FAILED|SKIPPED|ERROR|XFAIL|XPASS)\b/,
-    (c, m) => c.bump(stateOf(m[3]), `${m[1]}::${m[2]}`),
+    (c, m) => c.test(stateOf(m[3]), m[2], { file: m[1], current: `${m[1]}::${m[2]}` }),
   ],
   [
     /^(?:FAILED|ERROR) (\S+\.py)::(\S+)(?: - (.+))?$/,
@@ -389,7 +501,8 @@ const cargoLine = readWith([
   [
     /^test (\S+) \.\.\. (ok|FAILED|ignored)/,
     (c, m) => {
-      c.bump(m[2] === 'ok' ? 'passed' : m[2] === 'FAILED' ? 'failed' : 'skipped', m[1]);
+      const state = m[2] === 'ok' ? 'passed' : m[2] === 'FAILED' ? 'failed' : 'skipped';
+      c.test(state, m[1], { current: m[1] });
       if (m[2] === 'FAILED') c.fail({ name: m[1] }, false);
     },
   ],
@@ -408,7 +521,7 @@ const goLine = readWith([
   [
     /^\s*--- (PASS|FAIL|SKIP): (\S+)/,
     (c, m) => {
-      c.bump(stateOf(m[1]), m[2]);
+      c.test(stateOf(m[1]), m[2], { current: m[2] });
       if (m[1] === 'FAIL') c.fail({ name: m[2] }, false);
     },
   ],
@@ -420,15 +533,14 @@ const goLine = readWith([
     },
   ],
   [
-    /^(?:ok|FAIL)\s+(\S+)\s+(?:[\d.]+s|\(cached\))/,
+    /^(ok|FAIL)\s+(\S+)\s+(?:[\d.]+s|\(cached\))/,
     (c, m) => {
-      c.counts.current = m[1];
+      c.counts.current = m[2];
+      c.namePackage(m[2], m[1] === 'ok' ? 'passed' : 'failed');
       c.counts.summarized = true;
     },
   ],
 ]);
-
-const STATE_FIELD = { passed: 'passed', failed: 'failed', skipped: 'skipped' } as const;
 
 function applyEvent(c: Counter, event: TestEvent, now: number): void {
   const counts = c.counts;
@@ -442,7 +554,7 @@ function applyEvent(c: Counter, event: TestEvent, now: number): void {
       counts.current = event.file;
       return;
     case 'test':
-      counts[STATE_FIELD[event.state]]++;
+      c.test(event.state, event.name, { file: event.file, durationMs: event.ms });
       if (event.state === 'failed') {
         const { message, line } = event.error ?? {};
         c.fail(
@@ -459,6 +571,7 @@ function applyEvent(c: Counter, event: TestEvent, now: number): void {
     case 'file-end':
       counts.running = counts.running.filter((run) => run.file !== event.file);
       counts.filesDone = (counts.filesDone ?? 0) + 1;
+      c.fileDone(event.file, { durationMs: event.ms });
       c.slow({ kind: 'file', name: event.file, durationMs: event.ms });
   }
 }

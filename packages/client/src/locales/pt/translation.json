@@ -646,7 +646,8 @@
     "saved": "Configurações salvas",
     "projectSaved": "Configurações do projeto salvas",
     "agentResources": "Recursos do agente",
-    "agentProfiles": "Perfis de agente"
+    "agentProfiles": "Perfis de agente",
+    "apiTokens": "Tokens de API"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",
@@ -1420,7 +1421,13 @@
       "running": "Executando testes",
       "passed": "Testes aprovados",
       "failed": "Testes com falha"
-    }
+    },
+    "failuresTitle": "Falhas",
+    "moreFailures": "Mostrando as primeiras {{shown}} de {{total}}",
+    "ranTitle": "Testes executados",
+    "ranSummary": "{{tests}} testes em {{files}} arquivos",
+    "showMore": "Ver mais {{count}} ({{hidden}} ocultos)",
+    "noFiles": "A saída não nomeia os testes executados."
   },
   "progressFile": {
     "loading": "Carregando o progresso…",
@@ -1429,6 +1436,10 @@
   },
   "taskProgress": {
     "steps": "{{done}}/{{total}} etapas",
+    "files": "{{count}} arquivos",
+    "lines": "{{formatted}} linhas",
+    "rules": "{{count}} regras",
+    "noIssues": "Sem problemas",
     "errors": "{{count}} erros",
     "warnings": "{{count}} avisos",
     "running": "{{count}} em execução (máx. {{max}})",
@@ -1538,6 +1549,34 @@
   },
   "checks": {
     "run": "Executar checks: {{kind}}",
-    "starting": "Iniciando…"
+    "starting": "Iniciando…",
+    "filter": "filtro: {{filter}}",
+    "cwd": "Executado em {{cwd}}"
+  },
+  "apiTokens": {
+    "title": "Tokens de API",
+    "description": "Os tokens pessoais autenticam scripts e ferramentas na API REST pública (/api/v1) em seu nome. Eles não servem para entrar no aplicativo web.",
+    "namePlaceholder": "Nome do token, ex. deploy de CI",
+    "expiresInDays_one": "Expira em {{count}} dia",
+    "expiresInDays_other": "Expira em {{count}} dias",
+    "create": "Criar token",
+    "shownOnce": "Copie este token agora. Ele não será mostrado novamente; se você o perder, revogue-o e crie um novo.",
+    "copy": "Copiar token",
+    "dismiss": "Concluído",
+    "empty": "Você ainda não tem tokens de API.",
+    "dates": "Criado {{created}} · Expira {{expires}}",
+    "lastUsed": "Último uso {{date}}",
+    "neverUsed": "Nunca usado",
+    "revoke": "Revogar",
+    "revokeTitle": "Revogar o token de API?",
+    "revokeDescription": "Tudo o que usa \"{{name}}\" deixará de funcionar imediatamente. Isso não pode ser desfeito.",
+    "revoked": "Token revogado",
+    "loadFailed": "Não foi possível carregar seus tokens de API",
+    "createFailed": "Não foi possível criar o token",
+    "revokeFailed": "Não foi possível revogar o token",
+    "state": {
+      "revoked": "Revogado",
+      "expired": "Expirado"
+    }
   }
 }

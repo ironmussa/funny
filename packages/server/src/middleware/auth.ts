@@ -456,11 +456,28 @@ async function resolveOrgName(
 }
 
 /**
+ * A personal API token works on the public REST API (`/api/v1`, mounted before
+ * this middleware) and nowhere else: anywhere else it is refused, never
+ * treated as a session (openspec public-rest-api-v1).
+ */
+function personalTokenOutsidePublicApiStep(c: Context<ServerEnv>, path: string): AuthStepResult {
+  if (!/^Bearer\s+funny_pat_/i.test(c.req.header('authorization') ?? '')) return null;
+  audit({
+    action: 'pat.rejected',
+    actorId: null,
+    detail: 'Personal API token used outside /api/v1',
+    meta: { reason: 'outside-public-api', path, method: c.req.method },
+  });
+  return c.json({ error: 'Personal API tokens only work on /api/v1' }, 401);
+}
+
+/**
  * Ordered authentication steps. The FIRST step that applies decides the
  * request; the session step always applies, so it must stay last.
  */
 const AUTH_STEPS: readonly AuthStep[] = [
   publicPathStep,
+  personalTokenOutsidePublicApiStep,
   provisionTokenStep,
   inviteTokenStep,
   runnerBearerStep,

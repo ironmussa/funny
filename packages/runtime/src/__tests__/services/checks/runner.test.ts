@@ -7,7 +7,13 @@ import { parseTaskProgress } from '@funny/shared/task-progress';
 import { parseTestProgress } from '@funny/shared/test-progress';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
-import { runCheck, VITEST_REPORTER, withVitestReporter } from '../../../services/checks/runner.js';
+import {
+  checkEnv,
+  runCheck,
+  VITEST_REPORTER,
+  withTscDiagnostics,
+  withVitestReporter,
+} from '../../../services/checks/runner.js';
 import { summarizeCheckRun } from '../../../services/checks/summary.js';
 import type { CheckPlan } from '../../../services/checks/toolchain.js';
 
@@ -213,5 +219,41 @@ describe('withVitestReporter', () => {
     expect(existsSync(VITEST_REPORTER)).toBe(true);
     const reporter = await import(VITEST_REPORTER);
     expect(reporter.TEST_EVENT_PREFIX).toBe(TEST_EVENT_PREFIX);
+  });
+});
+
+describe('checkEnv', () => {
+  test('drops the agent markers that make bun and vitest hide the tests that ran', () => {
+    const saved = {
+      CLAUDECODE: process.env.CLAUDECODE,
+      AGENT: process.env.AGENT,
+      AI_AGENT: process.env.AI_AGENT,
+    };
+    process.env.CLAUDECODE = '1';
+    process.env.AGENT = '1';
+    process.env.AI_AGENT = 'claude';
+    try {
+      const env = checkEnv({ EXTRA: 'x' });
+      expect(env.CLAUDECODE).toBeUndefined();
+      expect(env.AGENT).toBeUndefined();
+      expect(env.AI_AGENT).toBeUndefined();
+      expect(env).toMatchObject({ EXTRA: 'x', CI: '1', FORCE_COLOR: '0' });
+    } finally {
+      for (const [name, value] of Object.entries(saved)) {
+        if (value === undefined) delete process.env[name];
+        else process.env[name] = value;
+      }
+    }
+  });
+});
+
+describe('withTscDiagnostics', () => {
+  test('asks tsc for its diagnostics once', () => {
+    expect(withTscDiagnostics('bunx tsc --noEmit -p .')).toBe(
+      'bunx tsc --noEmit -p . --diagnostics',
+    );
+    expect(withTscDiagnostics('tsc --noEmit --extendedDiagnostics')).toBe(
+      'tsc --noEmit --extendedDiagnostics',
+    );
   });
 });

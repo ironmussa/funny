@@ -2,6 +2,7 @@ export * from './types.js';
 export * from './interfaces.js';
 export { BaseAgentProcess, type ResultSubtype } from './base-process.js';
 export { SDKClaudeProcess } from './sdk-claude.js';
+export { CHECK_TOOL, checkRedirectReason } from './check-redirect.js';
 export { CodexSDKProcess } from './codex-sdk.js';
 export { GeminiACPProcess } from './gemini-acp.js';
 export { CursorACPProcess } from './cursor-acp.js';

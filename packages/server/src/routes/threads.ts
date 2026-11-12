@@ -1,12 +1,13 @@
 /**
  * Thread routes for the central server.
  *
- * Data CRUD (list, get, update, delete) is handled natively using the server's DB.
+ * Comments, deletion and the scheduler's workflow events are handled natively
+ * using the server's DB; lists, detail, messages and field updates are tRPC
+ * procedures (their REST paths answer 404).
  * Agent operations (create+start, stop, send message) are proxied to the runner.
  */
 
 import type { CommentAuthor, Thread, ThreadComment } from '@funny/shared';
-import { threadsContract as contract } from '@funny/shared/contracts/threads';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
@@ -53,10 +54,8 @@ import * as threadRegistry from '../services/thread-registry.js';
 import { destroyThreadSandbox } from '../services/thread-sandboxes/sandbox-lifecycle.js';
 import { sandboxThreadLauncherFor } from '../services/thread-sandboxes/sandbox-thread-wiring.js';
 import { retrySandboxThreadSchema } from '../services/thread-sandboxes/sandbox-thread.js';
-import { createThreadsPort } from '../trpc/ports/threads.js';
-import { answer } from '../trpc/reply.js';
-import { serveEndpoint } from '../validation/endpoint.js';
 import { parseJsonBody } from '../validation/request.js';
+import { refuseRetiredRoute } from './retired-rest.js';
 
 const contentBodySchema = z
   .object({
@@ -112,47 +111,30 @@ export const threadRoutes = new Hono<ServerEnv>();
 
 // ── Data CRUD routes (handled natively) ──────────────────────────
 
-// ── Server-answered reads and field updates ────────────────────
-// The logic lives in `trpc/ports/threads.ts`, shared with the `threads` tRPC
-// procedures (openspec adopt-trpc-browser-api); these routes stay for REST
-// consumers outside the web client and for the scheduler (status / stage).
-const threadsPort = (c: Context<ServerEnv>) => createThreadsPort(c.env?.browserEvents);
+// ── Server-answered reads and field updates: tRPC only ─────────
+// Lists, detail, messages, search and field updates are the `threads` tRPC
+// procedures (`trpc/ports/threads.ts`, `/api/trpc/threads.*`), for every
+// consumer (openspec adopt-trpc-browser-api). Their REST paths are refused
+// here, never left to fall through: the runner proxy would forward them to the
+// user's runner, which does not own the rows.
+// Static segments come before `/:id` so they are not read as ids.
+const REMOVED_THREAD_ROUTES = [
+  ['GET', '/'],
+  ['GET', '/scratch'],
+  ['GET', '/archived'],
+  ['GET', '/search/content'],
+  ['GET', '/:id'],
+  ['GET', '/:id/messages'],
+  ['GET', '/:id/messages/search'],
+  ['PATCH', '/:id'],
+  ['PATCH', '/:id/permission-mode'],
+  ['PATCH', '/:id/status'],
+  ['PATCH', '/:id/stage'],
+] as const;
 
-// GET /api/threads?projectId=xxx&includeArchived=true&limit=50&offset=0&isScratch=true
-serveEndpoint(threadRoutes, contract.list, ({ userId, query }, c) =>
-  answer(threadsPort(c).list({ userId, organizationId: c.get('organizationId') }, query)),
-);
-
-// GET /api/threads/scratch — list the current user's scratch threads
-serveEndpoint(threadRoutes, contract.scratch, ({ userId, query }, c) =>
-  answer(threadsPort(c).scratch(userId, query)),
-);
-
-// GET /api/threads/archived?page=1&limit=100&search=xxx
-serveEndpoint(threadRoutes, contract.archived, ({ userId, query }, c) =>
-  answer(threadsPort(c).archived(userId, query)),
-);
-
-// GET /api/threads/:id — get thread with messages
-serveEndpoint(threadRoutes, contract.get, ({ userId, params, query }, c) =>
-  answer(threadsPort(c).get(userId, params.id, query)),
-);
-
-// GET /api/threads/:id/messages?cursor=<ISO>&limit=50&direction=before|after
-serveEndpoint(
-  threadRoutes,
-  contract.messages,
-  ({ params, query }, c) => answer(threadsPort(c).messages(params.id, query)),
-  { middleware: [requireThreadView] },
-);
-
-// GET /api/threads/:id/messages/search?q=xxx&limit=100
-serveEndpoint(
-  threadRoutes,
-  contract.searchMessages,
-  ({ params, query }, c) => answer(threadsPort(c).searchMessages(params.id, query)),
-  { middleware: [requireThreadView] },
-);
+for (const [method, path] of REMOVED_THREAD_ROUTES) {
+  threadRoutes.on(method, path, refuseRetiredRoute);
+}
 
 // Join author display info (name/image) onto a set of comments so the client
 // can render avatars + names without a second round-trip. Mirrors the
@@ -237,46 +219,6 @@ threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) =>
 
 // Thread sharing routes (`/:id/shares`, `/shared-with-me`) live in
 // routes/thread-shares.ts and are mounted alongside this router in index.ts.
-
-const ownerOnly = { middleware: [requireThreadOwner] };
-
-// PATCH /api/threads/:id — update thread data
-serveEndpoint(
-  threadRoutes,
-  contract.update,
-  ({ userId, body }, c) => answer(threadsPort(c).update(userId, c.get('thread'), body)),
-  ownerOnly,
-);
-
-// PATCH /api/threads/:id/permission-mode
-serveEndpoint(
-  threadRoutes,
-  contract.setPermissionMode,
-  ({ userId, params, body }, c) =>
-    answer(threadsPort(c).setPermissionMode(userId, params.id, body.permissionMode)),
-  ownerOnly,
-);
-
-// ── Lifecycle endpoints used by the YAML pipeline DSL ───────
-//
-// `set_status` / `set_stage` actions in `.funny/workflows/*.yaml` post to these
-// routes (when the pipeline runs server-side, e.g. in the scheduler's tunnel
-// adapter).
-serveEndpoint(
-  threadRoutes,
-  contract.setStatus,
-  ({ userId, params, body }, c) =>
-    answer(threadsPort(c).setStatus(userId, params.id, body.value, body.reason)),
-  ownerOnly,
-);
-
-serveEndpoint(
-  threadRoutes,
-  contract.setStage,
-  ({ userId, body }, c) =>
-    answer(threadsPort(c).setStage(userId, c.get('thread'), body.value, body.reason)),
-  ownerOnly,
-);
 
 // ── Workflow event fan-out (scheduler-bound) ─────────────
 //
@@ -724,8 +666,3 @@ threadRoutes.delete('/:id', requireThreadOwner, async (c) => {
 
   return c.json({ ok: true });
 });
-
-// GET /api/threads/search/content?q=xxx&projectId=xxx&caseSensitive=true
-serveEndpoint(threadRoutes, contract.searchContent, ({ userId, query }, c) =>
-  answer(threadsPort(c).searchContent(userId, query)),
-);

@@ -57,7 +57,8 @@ const MIGRATED_GROUPS: Array<{
   { path: '/pipelines', contract: 'pipelinesContract', restOnly: ['/approvals'] },
   { contract: 'threadsContract' },
   { path: '/profile' },
-  { path: '/settings', restOnly: ['/github-app'] },
+  // GitHub's App manifest callback stays REST, but only GitHub's redirect reaches it.
+  { path: '/settings' },
   { path: '/agent-templates' },
   { path: '/watchers' },
   // Only the list moved: job cancel and log reads (`/jobs/:id/…`) are proxied to

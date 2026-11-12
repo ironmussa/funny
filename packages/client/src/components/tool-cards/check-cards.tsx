@@ -1,35 +1,28 @@
 /**
- * Cards for the checks an agent runs (tests, type check, lint, format, build):
- *
- * - `CheckRunCard` — a `funny_run_checks` call. While it runs, the runner's
- *   `agent:check_run` announcement (matched by `checkInputKey(input)`) names
- *   the progress file, so the widget follows it live; once it returns, the
- *   result carries `progressPath`. If the file is gone, the summary shows.
- * - `BashCheckCard` — a plain Bash call: when its command is a check and its
- *   output proves the result (`summarizeCheckOutput`), the same widget shows
- *   that result above the normal Bash card; otherwise just the Bash card.
+ * The card for a `funny_run_checks` call (tests, type check, lint, format,
+ * build). While it runs, the runner's `agent:check_run` announcement (matched
+ * by `checkInputKey(input)`) names the progress file, so the widget follows it
+ * live; once it returns, the result carries `progressPath`. If the file is
+ * gone, the summary shows. A check the agent runs through Bash stays a plain
+ * Bash card: only funny's own runs get the widget.
  */
-import {
-  checkInputKey,
-  classifyCheckCommand,
-  splitExitCode,
-  summarizeCheckOutput,
-} from '@funny/shared/checks';
+import { checkInputKey } from '@funny/shared/checks';
 import { ChevronRight, ListChecks } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { TaskProgressBlock, TaskProgressView } from '@/components/TaskProgressBlock';
-import { TestProgressBlock, TestProgressView } from '@/components/TestProgressBlock';
-import { LoadingState } from '@/components/ui/loading-state';
+import { ProgressLoading } from '@/components/progress/progress-parts';
+import { TaskProgressBlock } from '@/components/TaskProgressBlock';
+import { TestProgressBlock } from '@/components/TestProgressBlock';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { useCheckRun } from '@/stores/check-runs-store';
 import { useThreadId } from '@/stores/thread-context';
 
-import { BashCard } from './BashCard';
 import { parseMcpResult } from './mcp-tool';
 
 const PROGRESS_PATH = /^progressPath: (\S+)$/m;
+const COMMAND_LINE = /^\$ (.+?) {2}\(in (.+)\)$/m;
 const KINDS = new Set(['test', 'typecheck', 'lint', 'format', 'build', 'verify']);
 
 /** The text of a tool result (the MCP envelope's text parts, or the raw output). */
@@ -40,13 +33,88 @@ function resultText(output: string | undefined): string {
   return result.parts.map((part) => (part.kind === 'text' ? part.text : '')).join('\n');
 }
 
-/** What the result says: its progress file and the kind it ran (`test FAILED …`). */
-function readCheckResult(text: string): { path: string | null; kind: string | null } {
-  const kind = /^(\w+) (?:PASSED|FAILED|TIMED OUT|CANCELLED)\b/.exec(text)?.[1] ?? null;
+interface CheckResult {
+  path: string | null;
+  kind: string | null;
+  command: string | null;
+  cwd: string | null;
+}
+
+const RESULT_KIND = /^(\w+) (?:PASSED|FAILED|TIMED OUT|CANCELLED)\b/;
+
+/** Group `index` of the first match of `pattern` in `text`, or null. */
+const capture = (pattern: RegExp, text: string, index = 1): string | null =>
+  pattern.exec(text)?.[index] ?? null;
+
+/** What the result says: its progress file, the kind it ran (`test FAILED …`) and the command (`$ … (in cwd)`). */
+function readCheckResult(text: string): CheckResult {
+  const kind = capture(RESULT_KIND, text);
   return {
-    path: PROGRESS_PATH.exec(text)?.[1] ?? null,
+    path: capture(PROGRESS_PATH, text),
     kind: kind && KINDS.has(kind) ? kind : null,
+    command: capture(COMMAND_LINE, text, 1),
+    cwd: capture(COMMAND_LINE, text, 2),
   };
+}
+
+const stringList = (value: unknown): string[] =>
+  Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+
+/**
+ * What the run covers: the command it ran once the result names it (it already
+ * includes the scope and filter), else what the call asked for (a custom
+ * command, or its scope and test-name filter) while it is still running.
+ */
+function CheckRunDetails({
+  parsed,
+  command,
+  cwd,
+}: {
+  parsed: Record<string, unknown>;
+  command: string | null;
+  cwd: string | null;
+}) {
+  const { t } = useTranslation();
+  const requested = typeof parsed.command === 'string' ? parsed.command : null;
+  const scope = stringList(parsed.scope);
+  const filter = typeof parsed.filter === 'string' ? parsed.filter : null;
+  const shown = command ?? requested;
+
+  if (shown) {
+    return (
+      <div
+        className="text-muted-foreground px-3 pb-1.5 font-mono text-xs break-all"
+        title={cwd ? t('checks.cwd', { cwd }) : undefined}
+        data-testid="check-run-command"
+      >
+        <span className="text-muted-foreground/60 select-none">$ </span>
+        {shown}
+      </div>
+    );
+  }
+  if (scope.length === 0 && !filter) return null;
+  return (
+    <div
+      className="flex flex-wrap items-center gap-1 px-3 pb-1.5 text-xs"
+      data-testid="check-run-scope"
+    >
+      {scope.map((item) => (
+        <Badge
+          key={item}
+          variant="outline"
+          className="max-w-full truncate px-1.5 py-0 font-mono font-normal"
+          title={item}
+        >
+          {item}
+        </Badge>
+      ))}
+      {filter && (
+        <Badge variant="secondary" className="px-1.5 py-0 font-mono font-normal">
+          {t('checks.filter', { filter })}
+        </Badge>
+      )}
+    </div>
+  );
 }
 
 function CheckHeader({
@@ -91,7 +159,7 @@ function SummaryText({ text, testId }: { text: string; testId: string }) {
   return (
     <pre
       data-testid={testId}
-      className="text-muted-foreground overflow-x-auto px-3 py-2 font-mono text-[length:var(--code-font-size)] whitespace-pre-wrap"
+      className="text-muted-foreground overflow-x-auto px-3 py-2 font-mono text-xs whitespace-pre-wrap"
     >
       {text}
     </pre>
@@ -108,6 +176,8 @@ function useCheckRunSource(parsed: Record<string, unknown>, output: string | und
   const requested = typeof parsed.kind === 'string' ? parsed.kind : 'test';
   return {
     text,
+    command: result.command,
+    cwd: result.cwd,
     path: result.path ?? announced?.path ?? null,
     kind: result.kind ?? announced?.kind ?? requested,
   };
@@ -119,16 +189,7 @@ function CheckRunBody({ path, kind, text }: { path: string | null; kind: string;
   const summary = text ? <SummaryText text={text} testId="check-run-summary" /> : null;
   if (path && kind === 'test') return <TestProgressBlock path={path} fallback={summary} />;
   if (path) return <TaskProgressBlock path={path} fallback={summary} />;
-  return (
-    summary ?? (
-      <LoadingState
-        layout="inline"
-        fill={false}
-        label={t('checks.starting')}
-        testId="check-run-starting"
-      />
-    )
-  );
+  return summary ?? <ProgressLoading label={t('checks.starting')} testId="check-run-starting" />;
 }
 
 /** A `funny_run_checks` call: its live widget, then its result. */
@@ -143,7 +204,7 @@ export function CheckRunCard({
 }) {
   const { t } = useTranslation();
   const [showSummary, setShowSummary] = useState(false);
-  const { path, kind, text } = useCheckRunSource(parsed, output);
+  const { path, kind, text, command, cwd } = useCheckRunSource(parsed, output);
   const canExpand = Boolean(path && text);
 
   return (
@@ -158,44 +219,11 @@ export function CheckRunCard({
         onToggle={canExpand ? () => setShowSummary(!showSummary) : undefined}
         testId="check-run-toggle"
       />
+      <CheckRunDetails parsed={parsed} command={command} cwd={cwd} />
       <div className="border-border/40 border-t p-2">
         <CheckRunBody path={path} kind={kind} text={text} />
       </div>
       {canExpand && showSummary && <SummaryText text={text} testId="check-run-result-text" />}
-    </div>
-  );
-}
-
-interface BashProps {
-  parsed: Record<string, unknown>;
-  output?: string;
-  author?: string;
-  hideLabel?: boolean;
-  displayTime: string | null;
-}
-
-/** A Bash call: the check widget for a recognised check with a provable result, then the Bash card. */
-export function BashCheckCard(props: BashProps) {
-  const { parsed, output } = props;
-  const summary = useMemo(() => {
-    const command = typeof parsed.command === 'string' ? parsed.command : null;
-    const check = command && output ? classifyCheckCommand(command) : null;
-    if (!check || !output) return null;
-    const { exitCode, output: body } = splitExitCode(output);
-    return summarizeCheckOutput(check, body, { exitCode, at: 0 });
-  }, [parsed.command, output]);
-
-  if (!summary) return <BashCard {...props} />;
-  return (
-    <div className="flex flex-col gap-1.5" data-testid="check-result-card">
-      <BashCard {...props} />
-      <div className="border-border rounded-lg border p-2">
-        {summary.kind === 'test' ? (
-          <TestProgressView progress={summary.progress} />
-        ) : (
-          <TaskProgressView progress={summary.progress} />
-        )}
-      </div>
     </div>
   );
 }

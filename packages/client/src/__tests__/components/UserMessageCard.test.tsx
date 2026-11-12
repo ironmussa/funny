@@ -226,6 +226,8 @@ describe('UserMessageCard', () => {
     expect(footer).toContainElement(actionsButton);
     expect(footer).toContainElement(timestamp);
     expect(footer.className).toContain('justify-end');
+    // The footer reserves its own height so it never covers the next item (e.g. a tool card).
+    expect(footer.className).not.toContain('absolute');
     expect(screen.getByTestId('msg-actions-layout')).not.toContainElement(footer);
     expect(screen.getByTestId('msg-actions-layout').className).not.toContain(
       'grid-cols-[minmax(0,1fr)_auto]',

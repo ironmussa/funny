@@ -395,6 +395,8 @@ describe('MemoizedMessageList virtualization', () => {
     expect(card.className).toContain('transition-[opacity,transform]');
     await waitFor(() => expect(getByTestId('sticky-section-card').dataset.docked).toBe('true'));
     expect(getByTestId('sticky-section-card').className).toContain('opacity-100');
+    // Rows scroll under the docked copy; it must mask them (footer included).
+    expect(getByTestId('sticky-section-card')).toHaveClass('bg-background', 'pb-3');
   });
 
   test('shows sticky context for the first visible section when a later user row is visible', async () => {
@@ -951,8 +953,8 @@ describe('MemoizedMessageList virtualization', () => {
 
     await waitFor(() => expect(viewport.querySelector('[data-item-key="u1"]')).toBeTruthy());
 
-    // Includes only bottom row padding; the list gap separates turns above.
-    expect(virtualizerMockState.lastOptions.estimateSize(0)).toBe(118);
+    // Includes bottom row padding and the hover footer; the list gap separates turns above.
+    expect(virtualizerMockState.lastOptions.estimateSize(0)).toBe(146);
     expect(viewport.querySelector('[data-user-msg="u1"]')).not.toHaveClass('pt-3');
   });
 

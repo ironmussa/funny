@@ -37,9 +37,10 @@ export class NativeThreadDataService {
     this.options.navigation.getState().replaceProjects(projects);
     await Promise.all([
       ...projects.map(async (project) => {
-        const page = await this.request<PaginatedThreadsResponse>(
-          `/threads?projectId=${encodeURIComponent(project.id)}&limit=100`,
-        );
+        const page = await this.query<PaginatedThreadsResponse>('threads.list', {
+          projectId: project.id,
+          limit: 100,
+        });
         this.options.navigation
           .getState()
           .replaceProjectThreads(project.id, page.threads, page.total);
@@ -51,7 +52,7 @@ export class NativeThreadDataService {
   }
 
   async loadScratchThreads(): Promise<void> {
-    const page = await this.request<PaginatedThreadsResponse>('/threads/scratch?limit=100');
+    const page = await this.query<PaginatedThreadsResponse>('threads.scratch', { limit: 100 });
     this.options.navigation.getState().replaceScratchThreads(page.threads, page.total);
   }
 
@@ -85,9 +86,10 @@ export class NativeThreadDataService {
     this.options.workspace.getState().selectThread(threadId);
     this.options.workspace.getState().setLoading(threadId, true);
     try {
-      const thread = await this.request<ThreadWithMessages>(
-        `/threads/${encodeURIComponent(threadId)}?messageLimit=100`,
-      );
+      const thread = await this.query<ThreadWithMessages>('threads.get', {
+        id: threadId,
+        messageLimit: 100,
+      });
       this.options.navigation.getState().patchThread(threadId, thread);
       this.options.workspace.getState().replaceInitialPage(threadId, {
         messages: thread.messages,
@@ -122,9 +124,12 @@ export class NativeThreadDataService {
     if (!cursor || !data.hasMore || data.loading) return false;
     this.options.workspace.getState().setLoading(threadId, true);
     try {
-      const page = await this.request<PaginatedMessages>(
-        `/threads/${encodeURIComponent(threadId)}/messages?cursor=${encodeURIComponent(cursor)}&limit=50&direction=before`,
-      );
+      const page = await this.query<PaginatedMessages>('threads.messages', {
+        id: threadId,
+        cursor,
+        limit: 50,
+        direction: 'before',
+      });
       this.options.workspace.getState().prependOlderPage(threadId, page);
       return true;
     } catch (error) {
@@ -160,6 +165,17 @@ export class NativeThreadDataService {
     if (error instanceof NativeApiError && error.status === 401) this.options.auth.rejectSession();
     if (error instanceof NativeApiError && error.status === 403) return 'Access denied';
     return error instanceof Error ? error.message : String(error);
+  }
+
+  /**
+   * A query of the server's tRPC API (`/api/trpc/<procedure>`): thread lists,
+   * detail and messages have no REST route. Unbatched, plain JSON.
+   */
+  private async query<T>(procedure: string, input: Record<string, unknown>): Promise<T> {
+    const response = await this.request<{ result: { data: T } }>(
+      `/trpc/${procedure}?input=${encodeURIComponent(JSON.stringify(input))}`,
+    );
+    return response.result.data;
   }
 
   private request<T>(path: string): Promise<T> {

@@ -11,6 +11,7 @@ import { githubApi } from './api/github';
 import { githubAppApi } from './api/github-app';
 import { infraApi } from './api/infra';
 import { mcpApi } from './api/mcp';
+import { personalTokensApi } from './api/personal-tokens';
 import { pipelinesApi } from './api/pipelines';
 import { profileApi } from './api/profile';
 import { projectRunnersApi } from './api/project-runners';
@@ -51,6 +52,7 @@ export const api = {
   ...analyticsApi, // Analytics + Logs
   ...systemApi, // Setup + System + Files
   ...profileApi, // Profile
+  ...personalTokensApi, // Personal API tokens for the public REST API
   ...teamApi, // Team / Organization / Invites / Runners
   ...testsApi, // Test Runner
   ...designsApi, // Designs

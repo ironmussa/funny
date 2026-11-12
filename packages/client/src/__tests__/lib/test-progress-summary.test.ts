@@ -13,6 +13,7 @@ function suite(fields: Partial<TestProgressSuite> & { name: string }): TestProgr
     running: [],
     slow: [],
     failures: [],
+    files: [],
     ...fields,
   };
 }

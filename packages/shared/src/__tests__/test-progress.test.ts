@@ -23,6 +23,7 @@ describe('parseTestProgress', () => {
       running: [],
       slow: [],
       failures: [],
+      files: [],
     });
   });
 

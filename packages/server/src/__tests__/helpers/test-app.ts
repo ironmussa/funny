@@ -104,38 +104,31 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
 
   // 5. Mount real route modules
   const { projectRoutes } = await import('../../routes/projects.js');
-  const { projectRunnerSettingsRoutes } = await import('../../routes/project-runner-settings.js');
   const { runnerRoutes } = await import('../../routes/runners.js');
   const { threadRoutes } = await import('../../routes/threads.js');
   const { shareRoutes } = await import('../../routes/thread-shares.js');
-  const { settingsRoutes } = await import('../../routes/settings.js');
-  const { designProjectRoutes } = await import('../../routes/designs.js');
   const { profileRoutes } = await import('../../routes/profile.js');
   const { schedulerRoutes } = await import('../../routes/scheduler.js');
   const { teamSettingsRoutes } = await import('../../routes/team-settings.js');
   const { teamProjectRoutes } = await import('../../routes/team-projects.js');
-  const { analyticsRoutes } = await import('../../routes/analytics.js');
   const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('../../routes/invite-links.js');
-  const { automationRoutes } = await import('../../routes/automations.js');
+  const { refuseRetiredRestRoutes } = await import('../../routes/retired-rest.js');
   const { pipelineRoutes } = await import('../../routes/pipelines.js');
   const { schedulerSystemRoutes } = await import('../../routes/scheduler-system.js');
   const { userRoutes } = await import('../../routes/users.js');
 
-  app.route('/api/projects', projectRunnerSettingsRoutes);
   app.route('/api/projects', projectRoutes);
-  app.route('/api/projects', designProjectRoutes);
   app.route('/api/users', userRoutes);
   app.route('/api/runners', runnerRoutes);
   app.route('/api/threads', shareRoutes);
   app.route('/api/threads', threadRoutes);
-  app.route('/api/settings', settingsRoutes);
   app.route('/api/profile', profileRoutes);
   app.route('/api/scheduler', schedulerRoutes);
   app.route('/api/scheduler/system', schedulerSystemRoutes);
   app.route('/api/team-settings', teamSettingsRoutes);
   app.route('/api/team-projects', teamProjectRoutes);
-  app.route('/api/analytics', analyticsRoutes);
-  app.route('/api/automations', automationRoutes);
+  // Retired REST groups answer 404 here, as in app.ts, instead of reaching a runner.
+  refuseRetiredRestRoutes(app);
   const { mountTrpc } = await import('../../trpc/mount.js');
   mountTrpc(app);
   app.route('/api/pipelines', pipelineRoutes);

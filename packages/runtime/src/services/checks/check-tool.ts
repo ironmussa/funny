@@ -49,7 +49,10 @@ export const CHECK_INSTRUCTIONS =
   "`bun run lint`): it picks the project's command, shows live progress in the " +
   'thread, and returns a short summary (failures as file:line) instead of the ' +
   'full log. Pass `command` for a custom invocation, and `background: true` ' +
-  'for runs that may take more than a few minutes.';
+  'for runs that may take more than a few minutes. Do not trim the output ' +
+  'yourself (`| tail`, `| grep`, `$(ls …)` for globs: pass globs in `scope`), ' +
+  'and do not fall back to Bash for a check: a Bash run shows the user only ' +
+  'raw output, without the live progress and the list of tests.';
 
 const description =
   "Run the project's tests, type check, lint, format or build, and get a " +

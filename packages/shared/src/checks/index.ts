@@ -21,9 +21,3 @@ export {
   type SuiteCounts,
   type TestEvent,
 } from './test-output.js';
-export {
-  checkLabel,
-  splitExitCode,
-  summarizeCheckOutput,
-  type CheckOutputSummary,
-} from './summarize.js';

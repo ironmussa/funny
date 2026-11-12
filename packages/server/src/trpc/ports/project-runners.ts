@@ -1,7 +1,6 @@
 /**
  * Which of the owner's runners serve one project (project-runner-binding), for
- * both the REST routes (routes/project-runner-settings.ts) and the
- * `projectRunners` tRPC router. Only the project OWNER may read or change it
+ * the `projectRunners` tRPC router. Only the project OWNER may read or change it
  * (404 for anyone else). Every write goes through the runner-scope writers,
  * and a runner that loses access has the project's running agents stopped;
  * its files stay on disk.

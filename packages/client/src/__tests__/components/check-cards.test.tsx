@@ -3,7 +3,8 @@ import { screen, waitFor } from '@testing-library/react';
 import { ok, err } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { BashCheckCard, CheckRunCard } from '@/components/tool-cards/check-cards';
+import { CheckRunCard } from '@/components/tool-cards/check-cards';
+import { dispatchToolCard } from '@/components/tool-cards/dispatch';
 import { useCheckRunsStore } from '@/stores/check-runs-store';
 
 import { renderWithProviders } from '../helpers/render';
@@ -86,6 +87,34 @@ describe('CheckRunCard', () => {
     expect(summary.textContent).toContain('error src/a.ts:3:5 nope');
   });
 
+  test('a finished call shows the command it ran', () => {
+    apiMock.readFile.mockResolvedValue(ok({ content: testRun('failed') }));
+    renderRun(
+      { kind: 'test', scope: ['src/a.test.ts'] },
+      envelope(
+        `test FAILED (exit 1, 2.0s)\n$ bun test src/a.test.ts  (in /repo)\nprogressPath: ${PATH}`,
+      ),
+    );
+    const command = screen.getByTestId('check-run-command');
+    expect(command.textContent).toBe('$ bun test src/a.test.ts');
+    expect(command.getAttribute('title')).toContain('/repo');
+    expect(screen.queryByTestId('check-run-scope')).toBeNull();
+  });
+
+  test('a running call shows the scope and filter it asked for', () => {
+    renderRun({ kind: 'test', scope: ['src/a.test.ts', 'src/b.test.ts'], filter: 'breaks' });
+    const scope = screen.getByTestId('check-run-scope');
+    expect(scope.textContent).toContain('src/a.test.ts');
+    expect(scope.textContent).toContain('src/b.test.ts');
+    expect(scope.textContent).toContain('breaks');
+  });
+
+  test('a call without scope, filter or command shows no details', () => {
+    renderRun({ kind: 'lint' });
+    expect(screen.queryByTestId('check-run-scope')).toBeNull();
+    expect(screen.queryByTestId('check-run-command')).toBeNull();
+  });
+
   test('a call that could not run shows its message', () => {
     renderRun(
       { kind: 'lint' },
@@ -97,32 +126,26 @@ describe('CheckRunCard', () => {
   });
 });
 
-describe('BashCheckCard', () => {
-  const renderBash = (command: string, output: string) =>
-    renderWithProviders(<BashCheckCard parsed={{ command }} output={output} displayTime={null} />);
-
-  test('vitest through Bash shows its totals and failures', () => {
-    renderBash(
-      'npx vitest run',
-      'Exit code 1\n ❯ src/a.test.ts (3 tests | 1 failed)\n FAIL  src/a.test.ts > a > breaks\nError: nope\n      Tests  1 failed | 2 passed (3)',
+describe('dispatchToolCard for checks', () => {
+  const card = (name: string, parsed: Record<string, unknown>, output?: string) =>
+    renderWithProviders(
+      <>
+        {dispatchToolCard({ name, parsed, output, displayTime: null, renderToolCall: () => null })}
+      </>,
     );
-    expect(screen.getByTestId('check-result-card')).toBeTruthy();
-    expect(screen.getByTestId('test-progress')).toBeTruthy();
+
+  test('a test run through Bash stays a plain Bash card, without the widget', () => {
+    card(
+      'Bash',
+      { command: 'npx vitest run' },
+      ' ❯ src/a.test.ts (3 tests | 1 failed)\n      Tests  1 failed | 2 passed (3)',
+    );
+    expect(screen.queryByTestId('test-progress')).toBeNull();
+    expect(screen.queryByTestId('check-run-card')).toBeNull();
   });
 
-  test('tsc errors through Bash show as a task run', () => {
-    renderBash(
-      'bunx tsc --noEmit',
-      'Exit code 2\nsrc/a.ts(3,5): error TS2322: Type number is not assignable.',
-    );
-    expect(screen.getByTestId('task-progress')).toBeTruthy();
-  });
-
-  test.each([
-    ['a truncated test log', 'npx vitest run 2>&1 | head -3', ' ✓ src/a.test.ts (5 tests) 120ms'],
-    ['a command that is not a check', 'ls -la', 'total 0'],
-  ])('%s stays a plain Bash card', (_case, command, output) => {
-    renderBash(command, output);
-    expect(screen.queryByTestId('check-result-card')).toBeNull();
+  test('a funny_run_checks call gets the check card', () => {
+    card('mcp__funny__funny_run_checks', { kind: 'test' });
+    expect(screen.getByTestId('check-run-card')).toBeTruthy();
   });
 });

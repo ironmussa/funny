@@ -51,7 +51,17 @@ import type {
   UpdateAutomationRequest,
 } from '@funny/shared/contracts/automations';
 import type { CreateDesignBody } from '@funny/shared/contracts/designs';
-import type { QueryOf } from '@funny/shared/contracts/endpoint';
+import type {
+  GithubAppAccounts,
+  GithubAppManifestStart,
+  GithubAppStatus,
+  StartGithubAppManifestBody,
+} from '@funny/shared/contracts/github-app';
+import type {
+  CreatedPersonalToken,
+  CreatePersonalTokenBody,
+  PersonalAccessTokenInfo,
+} from '@funny/shared/contracts/personal-tokens';
 import type {
   CreatePipelineRequest,
   UpdatePipelineRequest,
@@ -74,7 +84,7 @@ import type {
   ArchivedThreadsResponse,
   MessageSearchResult,
   ThreadPatchRequest,
-  threadsContract,
+  ThreadQuery,
 } from '@funny/shared/contracts/threads';
 import type {
   EnrollmentInfo,
@@ -114,8 +124,6 @@ export interface PipelinesPort {
   /** Empty for a thread the caller does not own. */
   runsForThread(userId: string, threadId: string): PortResult<PipelineRun[]>;
 }
-
-type ThreadQuery<K extends keyof typeof threadsContract> = QueryOf<(typeof threadsContract)[K]>;
 
 /** Who is calling: the user and the organization the session is acting in. */
 export interface ApiCaller {
@@ -292,6 +300,35 @@ export interface ProjectsPort {
   deleteCommand(projectId: string, commandId: string): PortResult<Ok>;
 }
 
+/**
+ * The deployment's GitHub App (sandbox-github-app-tokens), admin only. Built
+ * per request: the manifest flow returns the admin to the request's origin.
+ */
+export interface GithubAppPort {
+  /** Whether an App is connected, and from where; never the key. */
+  status(): PortResult<GithubAppStatus>;
+  /** The admin's personal account and the organizations they administer. */
+  accounts(userId: string): PortResult<GithubAppAccounts>;
+  /** 409 when the App comes from server variables, 400 without a usable Origin. */
+  startManifest(
+    userId: string,
+    data: StartGithubAppManifestBody,
+  ): PortResult<GithubAppManifestStart>;
+  disconnect(): PortResult<Ok>;
+}
+
+/**
+ * The caller's personal API tokens (public-rest-api-v1). Every method acts on
+ * the caller's own tokens only; the plaintext is returned once, by `create`.
+ */
+export interface PersonalTokensPort {
+  /** Newest first, revoked and expired included; never the plaintext. */
+  list(userId: string): PortResult<PersonalAccessTokenInfo[]>;
+  create(userId: string, data: CreatePersonalTokenBody): PortResult<CreatedPersonalToken>;
+  /** 404 when the token is not the caller's or is already revoked. */
+  revoke(userId: string, id: string): PortResult<Ok>;
+}
+
 /** The caller of a runner operation: an instance admin reaches every runner. */
 export interface RunnerCaller {
   userId: string;
@@ -308,11 +345,6 @@ export interface RunnersPort {
   /** Every runner for an admin, the caller's own for anyone else. */
   list(caller: RunnerCaller): PortResult<{ runners: RunnerInfo[] }>;
   remove(caller: RunnerCaller, runnerId: string): PortResult<Ok>;
-  /** Where the runner keeps each project (a location record, not an authorization source). */
-  assignments(
-    caller: RunnerCaller,
-    runnerId: string,
-  ): PortResult<{ assignments: RunnerProjectAssignment[] }>;
   assignProject(
     caller: RunnerCaller,
     runnerId: string,
@@ -385,6 +417,8 @@ export interface ApiPorts {
   push: PushPort;
   projects: ProjectsPort;
   runners: RunnersPort;
+  githubApp: GithubAppPort;
+  personalTokens: PersonalTokensPort;
   projectRunners: ProjectRunnersPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;

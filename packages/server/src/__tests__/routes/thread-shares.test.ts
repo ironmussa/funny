@@ -14,6 +14,7 @@ import { sql } from 'drizzle-orm';
 import { FakeBrowserEventSink } from '../helpers/runner-port-fakes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedProjectMember, seedThread } from '../helpers/test-db.js';
+import { threadProcedures } from '../helpers/thread-procedures.js';
 
 const OWNER = 'owner-1';
 const ANA = 'ana-2'; // member of the thread's project (p1)
@@ -155,7 +156,7 @@ describe('Thread sharing (Integration)', () => {
     await t
       .requestAs(OWNER, 'user', { orgId: ORG })
       .post('/api/threads/t1/shares', { userId: ANA });
-    expect((await t.requestAs(ANA).get('/api/threads/t1')).status).toBe(200);
+    expect((await threadProcedures(t, ANA).query('get', { id: 't1' })).status).toBe(200);
 
     const del = await t
       .requestAs(OWNER, 'user', { orgId: ORG })
@@ -168,7 +169,7 @@ describe('Thread sharing (Integration)', () => {
       },
     });
 
-    expect((await t.requestAs(ANA).get('/api/threads/t1')).status).toBe(404);
+    expect((await threadProcedures(t, ANA).query('get', { id: 't1' })).status).toBe(404);
   });
 
   // ── End-to-end effect of a grant ───────────────────────
@@ -179,8 +180,8 @@ describe('Thread sharing (Integration)', () => {
       .post('/api/threads/t1/shares', { userId: ANA, level: 'comment' });
 
     // Read: detail + messages + events
-    expect((await t.requestAs(ANA).get('/api/threads/t1')).status).toBe(200);
-    expect((await t.requestAs(ANA).get('/api/threads/t1/messages')).status).toBe(200);
+    expect((await threadProcedures(t, ANA).query('get', { id: 't1' })).status).toBe(200);
+    expect((await threadProcedures(t, ANA).query('messages', { id: 't1' })).status).toBe(200);
     expect((await t.requestAs(ANA).get('/api/threads/t1/events')).status).toBe(200);
 
     // Comment: allowed at commenter level
@@ -188,7 +189,10 @@ describe('Thread sharing (Integration)', () => {
     expect(comment.status).toBe(201);
 
     // Mutation: forbidden (owner-only) — indistinguishable 404
-    expect((await t.requestAs(ANA).patch('/api/threads/t1', { title: 'hijack' })).status).toBe(404);
+    expect(
+      (await threadProcedures(t, ANA).mutate('update', { id: 't1', data: { title: 'hijack' } }))
+        .status,
+    ).toBe(404);
     expect((await t.requestAs(ANA).delete('/api/threads/t1')).status).toBe(404);
   });
 
@@ -198,13 +202,13 @@ describe('Thread sharing (Integration)', () => {
       .requestAs(OWNER, 'user', { orgId: ORG })
       .post('/api/threads/t1/shares', { userId: ANA });
 
-    expect((await t.requestAs(ANA).get('/api/threads/t1')).status).toBe(200);
+    expect((await threadProcedures(t, ANA).query('get', { id: 't1' })).status).toBe(200);
     const comment = await t.requestAs(ANA).post('/api/threads/t1/comments', { content: 'nope' });
     expect(comment.status).toBe(403);
   });
 
   test('a stranger (no grant) cannot read the thread (404)', async () => {
-    expect((await t.requestAs(BOB).get('/api/threads/t1')).status).toBe(404);
+    expect((await threadProcedures(t, BOB).query('get', { id: 't1' })).status).toBe(404);
   });
 
   // ── GET /shared-with-me ────────────────────────────────

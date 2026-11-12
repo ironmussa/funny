@@ -24,16 +24,10 @@ function useTestConnection() {
   });
 }
 useTestConnection();
-const { pushRoutes } = await import('../../routes/push.js');
+const { pushSubscriptionBody } = await import('@funny/shared/contracts/push');
+const { pushPort } = await import('../../trpc/ports/insights.js');
 const { isPushEndpoint, saveSubscription, sendPush, removeSubscription, pushAgentResult } =
   await import('../../services/web-push.js');
-const { Hono } = await import('hono');
-const app = new Hono<any>();
-app.use('*', async (c, next) => {
-  c.set('userId', 'alice');
-  await next();
-});
-app.route('/push', pushRoutes);
 const input = {
   endpoint: 'https://fcm.googleapis.com/fcm/send/device',
   keys: { p256dh: 'a'.repeat(87), auth: 'a'.repeat(22) },
@@ -71,12 +65,11 @@ describe('Web Push', () => {
       'https://user@web.push.apple.com/x',
     ])
       expect(isPushEndpoint(url)).toBe(false);
-    const response = await app.request('/push/subscription', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...input, endpoint: 'https://localhost/x' }),
-    });
-    expect(response.status).toBe(400);
+    // The `push.subscribe` input schema refuses a non-push endpoint before the port runs.
+    expect(
+      pushSubscriptionBody.safeParse({ ...input, endpoint: 'https://localhost/x' }).success,
+    ).toBe(false);
+    expect(pushSubscriptionBody.safeParse(input).success).toBe(true);
   });
   test('sends only to the authenticated user and prevents another user deleting it', async () => {
     const send = spyOn(webpush, 'sendNotification').mockResolvedValue({
@@ -102,12 +95,10 @@ describe('Web Push', () => {
   });
   test('reports unavailable configuration instead of pretending to subscribe', async () => {
     delete process.env.WEB_PUSH_PRIVATE_KEY;
-    const response = await app.request('/push/subscription', {
-      method: 'PUT',
-      body: JSON.stringify(input),
-    });
-    expect(response.status).toBe(503);
-    expect(await (await app.request('/push/config')).json()).toEqual({ publicKey: null });
+    const subscribed = await pushPort.subscribe('alice', input);
+    expect(subscribed.isErr() && subscribed.error.status).toBe(503);
+    expect(sqlite.query('SELECT * FROM push_subscriptions').all()).toHaveLength(0);
+    expect((await pushPort.config())._unsafeUnwrap()).toEqual({ publicKey: null });
   });
 });
 

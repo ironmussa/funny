@@ -114,6 +114,29 @@
         cursor: pointer;
       }
 
+      .token-row {
+        display: flex;
+        gap: 6px;
+      }
+      .token-row input {
+        flex: 1;
+      }
+      .token-toggle {
+        width: auto;
+        padding: 0 10px;
+        border: 1px solid #333;
+        border-radius: 8px;
+        background: #1a1a1a;
+        color: #ccc;
+        font-size: 12px;
+        cursor: pointer;
+      }
+      .field-hint {
+        font-size: 11px;
+        color: #666;
+        margin-top: 4px;
+      }
+
       /* Buttons */
       .btn {
         display: flex;
@@ -282,7 +305,7 @@
     </div>
 
     <!-- Activate button -->
-    <div class="section">
+    <div class="section" id="activateSection">
       <button class="btn btn-primary" id="activateBtn">
         <svg
           width="16"
@@ -318,6 +341,20 @@
         <input type="text" id="serverUrl" placeholder="http://localhost:3001" />
       </div>
       <div class="field">
+        <label>API token</label>
+        <div class="token-row">
+          <input
+            type="password"
+            id="apiToken"
+            placeholder="funny_pat_…"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <button type="button" class="token-toggle" id="apiTokenToggle">Show</button>
+        </div>
+        <div class="field-hint">Create one in funny: Settings &gt; API tokens</div>
+      </div>
+      <div class="field">
         <label>Project</label>
         <select id="projectSelect">
           <option value="">Loading projects...</option>
@@ -326,7 +363,7 @@
       <div class="field">
         <label>Provider</label>
         <select id="providerSelect">
-          <!-- Populated dynamically from GET /api/setup/status -->
+          <!-- Populated dynamically from GET /api/v1/models -->
           <option value="">Loading...</option>
         </select>
       </div>
@@ -345,7 +382,7 @@
           </select>
         </div>
       </div>
-      <button class="btn btn-secondary" id="testConnectionBtn">Test Connection</button>
+      <button class="btn btn-secondary" id="testConnectionBtn">Save &amp; test connection</button>
     </div>
 
     <!-- Status bar -->

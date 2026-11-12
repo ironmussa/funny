@@ -23,6 +23,8 @@ const USER_MESSAGE_COLLAPSED_TEXT_PX = 48;
 const USER_MESSAGE_EXPAND_BUTTON_PX = 20;
 const USER_MESSAGE_ATTACHMENT_ROW_PX = 48;
 const USER_MESSAGE_FILE_CHIP_ROW_PX = 28;
+// Hover footer (model, mode, time, actions) below the card; it always reserves its height.
+const USER_MESSAGE_FOOTER_PX = 28;
 const USER_MESSAGE_MIN_ESTIMATE_PX = 100;
 
 export interface FontConfig {
@@ -81,6 +83,7 @@ function estimateUserMessageHeight(msg: any, containerWidth: number, fonts?: Fon
     USER_MESSAGE_MIN_ESTIMATE_PX,
     USER_MESSAGE_ROW_PADDING_PX +
       USER_MESSAGE_CARD_VERTICAL_CHROME_PX +
+      USER_MESSAGE_FOOTER_PX +
       imageHeight +
       fileChipHeight +
       textHeight +

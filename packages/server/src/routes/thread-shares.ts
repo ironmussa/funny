@@ -65,6 +65,7 @@ function publishShareEvent(
 // caller. Backs the "Shared with me" nav bucket. Returns only the caller's own
 // grants, so no per-thread access check is needed. MUST be registered before
 // `/:id` (handled by mounting shareRoutes ahead of threadRoutes in index.ts).
+// Kept on REST: called by client-gpuix.
 shareRoutes.get('/shared-with-me', async (c) => {
   const userId = c.get('userId') as string;
   const threads = await shareRepo.listThreadsSharedWithUser(userId);

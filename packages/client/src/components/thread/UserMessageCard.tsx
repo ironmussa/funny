@@ -455,7 +455,7 @@ export function UserMessageCard({
         <div
           data-testid="user-message-footer"
           className={cn(
-            'text-muted-foreground absolute top-full right-0 z-10 flex max-w-full min-w-0 flex-wrap items-center justify-end gap-1 rounded-md border border-border bg-background px-1 py-0.5 shadow-sm',
+            'text-muted-foreground mt-1 ml-auto flex w-fit max-w-full min-w-0 flex-wrap items-center justify-end gap-1 rounded-md border border-border bg-background px-1 py-0.5 shadow-sm',
             'pointer-events-none opacity-0 transition-opacity',
             'group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100',
           )}

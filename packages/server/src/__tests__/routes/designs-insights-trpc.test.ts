@@ -1,7 +1,7 @@
 /**
  * The `designs`, `analytics` and `push` tRPC procedures (openspec
- * adopt-trpc-browser-api, task 5.5): project and owner gates, validation, and
- * parity with the REST routes, which serve the same ports while both coexist.
+ * adopt-trpc-browser-api, task 5.5): project and owner gates and validation.
+ * The REST routes are gone (task 6.1).
  */
 import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
@@ -39,12 +39,6 @@ describe('designs, analytics and push over tRPC', () => {
 
   beforeAll(async () => {
     t = await createTestApp();
-    const { designRoutes } = await import('../../routes/designs.js');
-    const { analyticsRoutes } = await import('../../routes/analytics.js');
-    const { pushRoutes } = await import('../../routes/push.js');
-    t.app.route('/api/designs', designRoutes);
-    t.app.route('/api/analytics-rest', analyticsRoutes);
-    t.app.route('/api/push', pushRoutes);
   });
 
   beforeEach(() => {
@@ -101,9 +95,8 @@ describe('designs, analytics and push over tRPC', () => {
       expect((await mutate('intruder', 'designs.remove', { id })).status).toBe(403);
       expect((await query('owner', 'designs.get', { id: 'missing' })).status).toBe(404);
 
-      const rest = await t.requestAs('owner').get(`/api/designs/${id}`);
       const trpc = await query('owner', 'designs.get', { id });
-      expect(trpc.body.result.data).toEqual(await rest.json());
+      expect(trpc.body.result.data).toMatchObject({ id, name: 'Proto', type: 'prototype' });
 
       expect((await mutate('owner', 'designs.remove', { id })).body.result.data).toEqual({
         ok: true,
@@ -113,17 +106,13 @@ describe('designs, analytics and push over tRPC', () => {
   });
 
   describe('analytics', () => {
-    test('overview and timeline answer the REST shape, without input', async () => {
+    test('overview and timeline answer without input', async () => {
       const overview = await query('owner', 'analytics.overview');
       expect(overview.status).toBe(200);
       expect(overview.body.result.data).toMatchObject({ createdCount: 0, totalCost: 0 });
 
       const timeline = await query('owner', 'analytics.timeline', { groupBy: 'week', tz: 0 });
       expect(timeline.body.result.data.groupBy).toBe('week');
-
-      const rest = await t.requestAs('owner').get('/api/analytics-rest/timeline?groupBy=week&tz=0');
-      const restBody = (await rest.json()) as any;
-      expect(Object.keys(timeline.body.result.data).sort()).toEqual(Object.keys(restBody).sort());
     });
   });
 
@@ -146,11 +135,6 @@ describe('designs, analytics and push over tRPC', () => {
         endpoint: 'https://evil.example/collect',
       });
       expect(res.status).toBe(400);
-    });
-
-    test('config matches REST', async () => {
-      const rest = await t.requestAs('owner').get('/api/push/config');
-      expect((await query('owner', 'push.config')).body.result.data).toEqual(await rest.json());
     });
   });
 });

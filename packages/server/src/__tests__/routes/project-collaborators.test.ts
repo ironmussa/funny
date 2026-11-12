@@ -27,6 +27,15 @@ import {
 describe('project collaborators', () => {
   let t: TestApp;
 
+  /** Status of a tRPC query made as `userId`. */
+  const trpcStatus = async (userId: string, path: string, input: unknown) => {
+    const qs = `?input=${encodeURIComponent(JSON.stringify(input))}`;
+    const res = await t.app.request(`/api/trpc/${path}${qs}`, {
+      headers: { 'X-Test-User-Id': userId },
+    });
+    return res.status;
+  };
+
   beforeAll(async () => {
     t = await createTestApp();
   });
@@ -250,12 +259,13 @@ describe('project collaborators', () => {
 
     test('an org member can read the project’s commands and designs', async () => {
       expect((await t.requestAs('carla').get('/api/projects/p1/commands')).status).toBe(200);
-      expect((await t.requestAs('carla').get('/api/projects/p1/designs')).status).toBe(200);
+      expect(await trpcStatus('carla', 'designs.list', { projectId: 'p1' })).toBe(200);
     });
 
     test('an org member can read their agent-profile binding for the project', async () => {
-      const res = await t.requestAs('carla').get('/api/settings/agent-profiles/projects/p1');
-      expect(res.status).toBe(200);
+      expect(await trpcStatus('carla', 'settings.getProjectBinding', { projectId: 'p1' })).toBe(
+        200,
+      );
     });
 
     test('an org member cannot change the project or its commands → 403', async () => {

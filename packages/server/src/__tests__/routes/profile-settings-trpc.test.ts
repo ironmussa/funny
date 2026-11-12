@@ -1,8 +1,8 @@
 /**
  * The `profile` and `settings` tRPC procedures (openspec adopt-trpc-browser-api,
  * task 5.1): per-user scoping, validation, the admin gate on SMTP, the project
- * gate on agent-profile bindings, and parity with the REST routes, which serve
- * the same ports while both paths coexist.
+ * gate on agent-profile bindings, and parity with the REST profile routes,
+ * which serve the same port. The REST settings routes are gone (task 6.1).
  */
 
 import { afterAll, mock } from 'bun:test';
@@ -16,15 +16,19 @@ process.env.RUNNER_AUTH_SECRET = 'test-secret';
 mockCoreGitRepoChecks();
 
 const sendMailCalls: Array<Record<string, unknown>> = [];
+const createTransportCalls: Array<Record<string, unknown>> = [];
 
 // mock.module is process-global; put the real module back once this file finishes.
 const realNodemailer = snapshotModule(realNodemailerModule);
 mock.module('nodemailer', () => ({
-  createTransport: () => ({
-    sendMail: async (opts: Record<string, unknown>) => {
-      sendMailCalls.push(opts);
-    },
-  }),
+  createTransport: (opts: Record<string, unknown>) => {
+    createTransportCalls.push(opts);
+    return {
+      sendMail: async (opts: Record<string, unknown>) => {
+        sendMailCalls.push(opts);
+      },
+    };
+  },
 }));
 afterAll(() => {
   mock.module('nodemailer', () => realNodemailer);
@@ -76,6 +80,7 @@ describe('profile and settings tRPC procedures', () => {
   beforeEach(() => {
     t.cleanup();
     sendMailCalls.length = 0;
+    createTransportCalls.length = 0;
   });
 
   describe('profile', () => {
@@ -187,6 +192,31 @@ describe('profile and settings tRPC procedures', () => {
       });
       expect(set.status).toBe(200);
       expect(set.body.result.data.profile.name).toBe('Client');
+      expect(
+        (await query('user-1', 'settings.getProjectBinding', { projectId: 'p1' })).body.result.data
+          .profile.name,
+      ).toBe('Client');
+
+      const cleared = await mutate('user-1', 'settings.setProjectBinding', {
+        projectId: 'p1',
+        profileId: null,
+      });
+      expect(cleared.status).toBe(200);
+      expect(cleared.body.result.data.profile).toBeNull();
+    });
+
+    test('binding another user’s profile to your project answers 404', async () => {
+      seedProject(t.db as any, { id: 'p2', userId: 'user-1', path: '/tmp/p2' });
+      const foreign = await mutate(
+        'user-2',
+        'settings.createAgentProfile',
+        claudeProfile('Other', '/home/u2/.claude'),
+      );
+      const res = await mutate('user-1', 'settings.setProjectBinding', {
+        projectId: 'p2',
+        profileId: foreign.body.result.data.id,
+      });
+      expect(res.status).toBe(404);
     });
   });
 
@@ -217,20 +247,45 @@ describe('profile and settings tRPC procedures', () => {
       const sent = await mutate('admin-1', 'settings.testSmtp', undefined, 'admin');
       expect(sent.body.result.data).toEqual({ ok: true, sentTo: 'a@x.test' });
       expect(sendMailCalls).toHaveLength(1);
+      expect(sendMailCalls[0]?.subject).toBe('Funny SMTP Test');
+      // Nodemailer must never read local files or fetch URLs named in a message.
+      expect(createTransportCalls[0]?.disableFileAccess).toBe(true);
+      expect(createTransportCalls[0]?.disableUrlAccess).toBe(true);
+      expect(sendMailCalls[0]?.disableFileAccess).toBe(true);
+      expect(sendMailCalls[0]?.disableUrlAccess).toBe(true);
+    });
+
+    test('defaults before anything is saved; testing then answers 400', async () => {
+      const read = await query('admin-1', 'settings.getSmtp', undefined, 'admin');
+      expect(read.body.result.data).toMatchObject({
+        source: 'none',
+        configured: false,
+        hasPassword: false,
+      });
+      const sent = await mutate('admin-1', 'settings.testSmtp', undefined, 'admin');
+      expect(sent.status).toBe(400);
+      expect(sent.body.error.message).toBe('SMTP not configured');
+      expect(sendMailCalls).toEqual([]);
+    });
+
+    test('saving without a password keeps the stored one', async () => {
+      await mutate('admin-1', 'settings.saveSmtp', smtp, 'admin');
+      const { pass: _pass, ...withoutPassword } = smtp;
+      await mutate('admin-1', 'settings.saveSmtp', { ...withoutPassword, host: 'smtp.y' }, 'admin');
+      const read = await query('admin-1', 'settings.getSmtp', undefined, 'admin');
+      expect(read.body.result.data).toMatchObject({ host: 'smtp.y', hasPassword: true });
     });
   });
 
-  describe('parity with REST', () => {
+  describe('parity with the REST profile routes', () => {
     test('reads return the same data on both paths', async () => {
       await mutate('user-1', 'profile.update', { gitName: 'Ada' });
-      await mutate('user-1', 'settings.createAgentProfile', claudeProfile('W', '/home/u1/.c'));
 
       const rest = t.requestAs('user-1');
       const pairs: Array<[string, string]> = [
         ['/api/profile', 'profile.get'],
         ['/api/profile/setup-completed', 'profile.setupCompleted'],
         ['/api/profile/runner-invite-token', 'profile.runnerInviteToken'],
-        ['/api/settings/agent-profiles', 'settings.listAgentProfiles'],
       ];
       for (const [restPath, procedure] of pairs) {
         const restRes = await rest.get(restPath);
@@ -238,10 +293,6 @@ describe('profile and settings tRPC procedures', () => {
         expect(trpcRes.status).toBe(restRes.status);
         expect(trpcRes.body.result.data).toEqual(await restRes.json());
       }
-
-      const adminRest = await t.requestAs('admin-1', 'admin').get('/api/settings/smtp');
-      const adminTrpc = await query('admin-1', 'settings.getSmtp', undefined, 'admin');
-      expect(adminTrpc.body.result.data).toEqual(await adminRest.json());
     });
 
     test('failures carry the same status and message on both paths', async () => {
@@ -249,11 +300,6 @@ describe('profile and settings tRPC procedures', () => {
       const trpc = await query('user-1', 'profile.transcribeToken');
       expect(trpc.status).toBe(rest.status);
       expect(trpc.body.error.message).toBe(((await rest.json()) as any).error);
-
-      const restAdmin = await t.requestAs('user-1').get('/api/settings/smtp');
-      const trpcAdmin = await query('user-1', 'settings.getSmtp');
-      expect(trpcAdmin.status).toBe(restAdmin.status);
-      expect(trpcAdmin.body.error.message).toBe(((await restAdmin.json()) as any).error);
     });
   });
 });

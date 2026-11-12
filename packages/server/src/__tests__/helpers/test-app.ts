@@ -108,13 +108,10 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { runnerRoutes } = await import('../../routes/runners.js');
   const { threadRoutes } = await import('../../routes/threads.js');
   const { shareRoutes } = await import('../../routes/thread-shares.js');
-  const { settingsRoutes } = await import('../../routes/settings.js');
-  const { designProjectRoutes } = await import('../../routes/designs.js');
   const { profileRoutes } = await import('../../routes/profile.js');
   const { schedulerRoutes } = await import('../../routes/scheduler.js');
   const { teamSettingsRoutes } = await import('../../routes/team-settings.js');
   const { teamProjectRoutes } = await import('../../routes/team-projects.js');
-  const { analyticsRoutes } = await import('../../routes/analytics.js');
   const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('../../routes/invite-links.js');
   const { removedAutomationRoutes } = await import('../../routes/removed-rest.js');
   const { pipelineRoutes } = await import('../../routes/pipelines.js');
@@ -123,18 +120,15 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
 
   app.route('/api/projects', projectRunnerSettingsRoutes);
   app.route('/api/projects', projectRoutes);
-  app.route('/api/projects', designProjectRoutes);
   app.route('/api/users', userRoutes);
   app.route('/api/runners', runnerRoutes);
   app.route('/api/threads', shareRoutes);
   app.route('/api/threads', threadRoutes);
-  app.route('/api/settings', settingsRoutes);
   app.route('/api/profile', profileRoutes);
   app.route('/api/scheduler', schedulerRoutes);
   app.route('/api/scheduler/system', schedulerSystemRoutes);
   app.route('/api/team-settings', teamSettingsRoutes);
   app.route('/api/team-projects', teamProjectRoutes);
-  app.route('/api/analytics', analyticsRoutes);
   app.route('/api/automations', removedAutomationRoutes);
   const { mountTrpc } = await import('../../trpc/mount.js');
   mountTrpc(app);

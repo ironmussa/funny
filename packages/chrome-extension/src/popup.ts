@@ -2,18 +2,22 @@ import { sleep as effectSleep } from '@funny/shared/async';
 /**
  * Funny UI Annotator - Popup Script
  *
+ * Also the extension's options page (`options_ui`): opened in a tab, it only
+ * shows the connection settings. It is where a remote server's host
+ * permission is requested (`chrome.permissions.request` needs an extension
+ * page and a user gesture; the in-page settings panel can only link here).
+ *
  * Providers and models are fetched dynamically from the Funny server
- * via GET /api/setup/status — nothing is hardcoded.
+ * via GET /api/v1/models — nothing is hardcoded.
  */
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 
-interface ProviderInfo {
-  available: boolean;
-  label?: string;
-  defaultModel?: string;
-  models?: string[];
-  modelsWithLabels?: Array<{ value: string; label: string }>;
-}
+import {
+  hasProjectDefaults,
+  hostPermissionFor,
+  normalizeServerUrl,
+  type ProviderInfo,
+} from './api';
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement | null;
 
@@ -22,6 +26,8 @@ const connectionDot = $('#connectionDot')!;
 const activateBtn = $('#activateBtn')!;
 const annotationList = $('#annotationList')!;
 const serverUrlInput = $('#serverUrl') as HTMLInputElement;
+const apiTokenInput = $('#apiToken') as HTMLInputElement;
+const apiTokenToggle = $('#apiTokenToggle')!;
 const projectSelect = $('#projectSelect') as HTMLSelectElement;
 const providerSelect = $('#providerSelect') as HTMLSelectElement;
 const modelSelect = $('#modelSelect') as HTMLSelectElement;
@@ -50,6 +56,14 @@ let projectsData: Array<{
 document.addEventListener('DOMContentLoaded', async () => {
   const config = await sendMessage({ type: 'GET_CONFIG' });
   serverUrlInput.value = config.serverUrl || 'http://localhost:3001';
+  apiTokenInput.value = config.apiToken || '';
+
+  // Opened as the options page (in a tab): there is no page to annotate.
+  const inTab = await chrome.tabs.getCurrent();
+  if (inTab) {
+    $('#activateSection')?.style.setProperty('display', 'none');
+    $('#annotationsSection')?.style.setProperty('display', 'none');
+  }
 
   try {
     const state = await sendToActiveTab({ type: 'GET_STATE' });
@@ -64,11 +78,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   await Promise.all([loadProviderOptions(), loadProjects(config.projectId)]);
 
-  if (config.projectId && providerData) {
-    applyProjectDefaults(config.projectId);
-  } else {
-    applyFromConfig(config);
-  }
+  applyFromConfig(config);
+  applyProjectDefaults(config.projectId);
   saveCurrentConfig();
 
   await testConnection(false);
@@ -80,7 +91,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadProviderOptions() {
   try {
-    const result = await sendMessage({ type: 'FETCH_SETUP_STATUS' });
+    const result = await sendMessage({ type: 'FETCH_MODELS' });
     if (!result.success) throw new Error(result.error);
 
     providerData = result.providers || {};
@@ -135,8 +146,7 @@ function populateModels(provider: string, selectedModel?: string) {
   }
 
   const info = providerData[provider];
-  const models =
-    info.modelsWithLabels || info.models?.map((m: string) => ({ value: m, label: m })) || [];
+  const models = info.modelsWithLabels || [];
 
   const effectiveModel =
     selectedModel && models.some((m: any) => m.value === selectedModel)
@@ -179,9 +189,34 @@ activateBtn.addEventListener('click', async () => {
   }
 });
 
-testConnectionBtn.addEventListener('click', () => testConnection(true));
+// A user gesture: the only place a remote server's host permission can be requested.
+testConnectionBtn.addEventListener('click', () => {
+  // Request first, before any await, so the click still counts as the gesture.
+  const pattern = hostPermissionFor(serverUrlInput.value);
+  if (!pattern) {
+    void testConnection(true);
+    return;
+  }
+  chrome.permissions.request({ origins: [pattern] }).then(
+    (granted) => {
+      if (granted) {
+        void testConnection(true);
+      } else {
+        setStatus(`Permission to reach ${pattern.replace(/\/\*$/, '')} was denied`, 'error');
+      }
+    },
+    (err: Error) => setStatus(`Could not request permission: ${err.message}`, 'error'),
+  );
+});
+
+apiTokenToggle.addEventListener('click', () => {
+  const show = apiTokenInput.type === 'password';
+  apiTokenInput.type = show ? 'text' : 'password';
+  apiTokenToggle.textContent = show ? 'Hide' : 'Show';
+});
 
 serverUrlInput.addEventListener('change', () => saveCurrentConfig());
+apiTokenInput.addEventListener('change', () => saveCurrentConfig());
 projectSelect.addEventListener('change', () => {
   applyProjectDefaults(projectSelect.value);
   saveCurrentConfig();
@@ -267,7 +302,8 @@ function applyProjectDefaults(projectId: string) {
   if (!projectId || !providerData) return;
 
   const project = projectsData.find((p) => p.id === projectId);
-  if (!project) return;
+  // The public API's projects carry no defaults: keep the saved choices.
+  if (!hasProjectDefaults(project)) return;
 
   const effectiveProvider = project.defaultProvider || 'claude';
   if (providerData[effectiveProvider]?.available) {
@@ -281,14 +317,18 @@ function applyProjectDefaults(projectId: string) {
 }
 
 async function testConnection(showFeedback: boolean) {
-  const serverUrl = serverUrlInput.value.trim();
+  const serverUrl = normalizeServerUrl(serverUrlInput.value);
   if (!serverUrl) return;
 
   if (showFeedback) {
     setStatus('Connecting...', '');
   }
 
-  const result = await sendMessage({ type: 'TEST_CONNECTION', serverUrl });
+  const result = await sendMessage({
+    type: 'TEST_CONNECTION',
+    serverUrl,
+    apiToken: apiTokenInput.value.trim(),
+  });
 
   if (result.success) {
     connectionDot.className = 'connection-dot connected';
@@ -297,16 +337,18 @@ async function testConnection(showFeedback: boolean) {
     await saveCurrentConfig();
     const config = await sendMessage({ type: 'GET_CONFIG' });
     await Promise.all([loadProviderOptions(), loadProjects(config.projectId)]);
-    if (config.projectId && providerData) {
-      applyProjectDefaults(config.projectId);
-    } else {
-      applyFromConfig(config);
-    }
+    applyFromConfig(config);
+    applyProjectDefaults(config.projectId);
     saveCurrentConfig();
   } else {
     connectionDot.className = 'connection-dot error';
     connectionDot.title = 'Connection failed';
-    setStatus(`Connection failed: ${result.error}`, 'error');
+    setStatus(
+      result.reason === 'bad-token' || result.reason === 'no-token'
+        ? result.error
+        : `Connection failed: ${result.error}`,
+      'error',
+    );
   }
 }
 
@@ -314,7 +356,8 @@ async function saveCurrentConfig() {
   await sendMessage({
     type: 'SAVE_CONFIG',
     config: {
-      serverUrl: serverUrlInput.value.trim(),
+      serverUrl: normalizeServerUrl(serverUrlInput.value),
+      apiToken: apiTokenInput.value.trim(),
       projectId: projectSelect.value,
       provider: providerSelect.value,
       model: modelSelect.value,

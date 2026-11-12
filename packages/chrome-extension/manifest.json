@@ -5,6 +5,11 @@
   "description": "Select and annotate UI elements, send them to Funny for AI-powered analysis and fixes.",
   "permissions": ["activeTab", "storage", "notifications", "scripting"],
   "host_permissions": ["http://localhost:3001/*", "http://127.0.0.1:3001/*"],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "options_ui": {
+    "page": "popup.html",
+    "open_in_tab": true
+  },
   "background": {
     "service_worker": "background.js"
   },

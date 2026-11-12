@@ -1,12 +1,31 @@
 import { sleep as effectSleep } from '@funny/shared/async';
+
+import {
+  ApiError,
+  IMAGE_MAX_BYTES,
+  apiErrorFromResponse,
+  buildApiRequest,
+  buildCreateThreadBody,
+  connectionFailure,
+  hostPermissionFor,
+  isOversizedImage,
+  normalizeServerUrl,
+  resolveConnection,
+  toProviderMap,
+  unreachableError,
+  type AnnotationData,
+  type ApiConnection,
+  type PublicModelList,
+} from './api';
 /**
  * Funny UI Annotator - Background Service Worker
  *
- * Handles:
- * - Authentication with Funny server (bearer token via /api/bootstrap)
- * - Creating threads via POST /api/threads
- * - Fetching providers/models via GET /api/setup/status
- * - Fetching projects via GET /api/projects
+ * Talks to funny's public REST API v1 (`/api/v1`) with a personal API token
+ * (`Authorization: Bearer funny_pat_…`, created in funny under
+ * Settings > API tokens):
+ * - Creating threads via POST /api/v1/threads
+ * - Fetching providers/models via GET /api/v1/models
+ * - Fetching projects via GET /api/v1/projects (and /projects/resolve)
  * - Capturing screenshots via chrome.tabs API
  */
 
@@ -16,19 +35,23 @@ import { sleep as effectSleep } from '@funny/shared/async';
 
 interface ExtensionConfig {
   serverUrl: string;
+  /** Personal API token (`funny_pat_…`). */
+  apiToken: string;
   projectId: string;
   provider: string;
   model: string;
+  /** Only `ask` / `confirmEdit` / `plan` are sent; anything else lets the server default to `ask`. */
   permissionMode: string;
   mode: string;
 }
 
 const DEFAULT_CONFIG: ExtensionConfig = {
   serverUrl: 'http://localhost:3001',
+  apiToken: '',
   projectId: '',
   provider: '',
   model: '',
-  permissionMode: 'autoEdit',
+  permissionMode: 'ask',
   mode: 'worktree',
 };
 
@@ -38,201 +61,188 @@ const DEFAULT_CONFIG: ExtensionConfig = {
 
 async function getConfig(): Promise<ExtensionConfig> {
   const result = await chrome.storage.local.get('funnyConfig');
-  return { ...DEFAULT_CONFIG, ...result.funnyConfig };
+  return { ...DEFAULT_CONFIG, ...(result.funnyConfig as Partial<ExtensionConfig> | undefined) };
 }
 
+/** Merges into the stored config, so a partial save keeps the other fields (the token among them). */
 async function saveConfig(config: Partial<ExtensionConfig>): Promise<void> {
-  await chrome.storage.local.set({ funnyConfig: { ...DEFAULT_CONFIG, ...config } });
+  const current = await getConfig();
+  const next = { ...current, ...config };
+  next.serverUrl = normalizeServerUrl(next.serverUrl || DEFAULT_CONFIG.serverUrl);
+  next.apiToken = (next.apiToken || '').trim();
+  await chrome.storage.local.set({ funnyConfig: next });
 }
 
+// The token used to come from GET /api/bootstrap and was cached as `funnyToken`.
+chrome.runtime.onInstalled.addListener(() => {
+  void chrome.storage.local.remove('funnyToken');
+});
+
 // ---------------------------------------------------------------------------
-// Auth token
+// Authenticated fetch helper (public API v1)
 // ---------------------------------------------------------------------------
 
-async function getAuthToken(serverUrl: string): Promise<string> {
-  const cached = await chrome.storage.local.get('funnyToken');
-  if (cached.funnyToken) return cached.funnyToken;
-
-  const res = await fetch(`${serverUrl}/api/bootstrap`);
-  if (!res.ok) throw new Error(`Bootstrap failed: ${res.status}`);
-  const data = await res.json();
-  const token = data.token ?? '';
-  if (token) {
-    await chrome.storage.local.set({ funnyToken: token });
-  }
-  return token;
+/** Whether the extension may fetch the server's origin (localhost is in `host_permissions`). */
+async function hasHostPermission(serverUrl: string): Promise<boolean> {
+  const pattern = hostPermissionFor(serverUrl);
+  if (!pattern) return true;
+  return chrome.permissions.contains({ origins: [pattern] });
 }
 
-// ---------------------------------------------------------------------------
-// Authenticated fetch helper
-// ---------------------------------------------------------------------------
-
-async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
-  const config = await getConfig();
-  const token = await getAuthToken(config.serverUrl);
-  const url = `${config.serverUrl}${path}`;
-
-  const headers: Record<string, string> = {
-    ...((options.headers as Record<string, string>) || {}),
-  };
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-  if (options.body && typeof options.body === 'string') {
-    headers['Content-Type'] = 'application/json';
+async function apiFetchWith(
+  connection: ApiConnection,
+  path: string,
+  init: { method?: string; body?: unknown } = {},
+): Promise<any> {
+  const request = buildApiRequest(connection, path, init);
+  if (!(await hasHostPermission(connection.serverUrl))) {
+    throw new ApiError(
+      `Allow the extension to reach ${normalizeServerUrl(connection.serverUrl)}: open the extension options and click "Save & test connection"`,
+      'permission',
+    );
   }
 
-  const res = await fetch(url, { ...options, headers });
+  let res: Response;
+  try {
+    res = await fetch(request.url, request.init);
+  } catch {
+    throw unreachableError(connection.serverUrl);
+  }
   if (!res.ok) {
     const text = await res.text().catch(() => '');
-    throw new Error(`API ${options.method || 'GET'} ${path} failed (${res.status}): ${text}`);
+    throw apiErrorFromResponse(res.status, text);
   }
   return res.json();
 }
 
-// ---------------------------------------------------------------------------
-// Annotation data shape from content script
-// ---------------------------------------------------------------------------
-
-interface AnnotationData {
-  markdown: string;
-  screenshot?: string;
-  annotations?: Array<{ prompt?: string }>;
-  title?: string;
-  url?: string;
+async function apiFetch(path: string, init: { method?: string; body?: unknown } = {}) {
+  const config = await getConfig();
+  return apiFetchWith(config, path, init);
 }
 
 // ---------------------------------------------------------------------------
 // Create thread via API
 // ---------------------------------------------------------------------------
 
+/**
+ * A screenshot the API accepts: PNG captures over 5 MB (large hi-DPI screens)
+ * are re-encoded as JPEG.
+ */
+async function fitScreenshot(dataUrl: string | undefined): Promise<string | undefined> {
+  if (!dataUrl || !isOversizedImage(dataUrl)) return dataUrl;
+  // On failure, send it as is: the server explains the size limit.
+  return reencodeAsJpeg(dataUrl).catch(() => dataUrl);
+}
+
+async function reencodeAsJpeg(dataUrl: string): Promise<string> {
+  const bitmap = await createImageBitmap(await (await fetch(dataUrl)).blob());
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+  canvas.getContext('2d')!.drawImage(bitmap, 0, 0);
+  for (const quality of [0.85, 0.7, 0.5]) {
+    const blob = await canvas.convertToBlob({ type: 'image/jpeg', quality });
+    if (blob.size <= IMAGE_MAX_BYTES) return blobToDataUrl(blob);
+  }
+  return dataUrl;
+}
+
+async function blobToDataUrl(blob: Blob): Promise<string> {
+  const bytes = new Uint8Array(await blob.arrayBuffer());
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return `data:${blob.type};base64,${btoa(binary)}`;
+}
+
 async function createThreadFromAnnotations(config: ExtensionConfig, data: AnnotationData) {
-  if (!config.projectId) {
-    throw new Error('No project selected. Open settings in the toolbar and select a project.');
-  }
-
-  const prompt = data.markdown;
-
-  const images: Array<{
-    type: string;
-    source: { type: string; media_type: string; data: string };
-  }> = [];
-  if (data.screenshot) {
-    const base64Data = data.screenshot.replace(/^data:image\/\w+;base64,/, '');
-    images.push({
-      type: 'image',
-      source: { type: 'base64', media_type: 'image/png', data: base64Data },
-    });
-  }
-
-  const firstPrompt = data.annotations?.[0]?.prompt || '';
-  const pageTitle = data.title || data.url || '';
-  const threadTitle = firstPrompt
-    ? `${firstPrompt.slice(0, 70)} — ${pageTitle}`.slice(0, 100)
-    : `UI Review: ${pageTitle}`.slice(0, 100);
-
-  return apiFetch('/api/threads', {
-    method: 'POST',
-    body: JSON.stringify({
-      projectId: config.projectId,
-      prompt,
-      title: threadTitle,
-      mode: config.mode,
-      provider: config.provider || undefined,
-      model: config.model || undefined,
-      permissionMode: config.permissionMode,
-      source: 'chrome_extension',
-      images: images.length > 0 ? images : undefined,
-    }),
-  });
+  const body = buildCreateThreadBody(config, data, await fitScreenshot(data.screenshot));
+  const result = await apiFetch('/threads', { method: 'POST', body });
+  return result.thread as { id: string; projectId: string };
 }
 
 // ---------------------------------------------------------------------------
 // Message handlers
 // ---------------------------------------------------------------------------
 
+type MessageHandler = (msg: any, sender: chrome.runtime.MessageSender) => Promise<unknown>;
+
+/** Answers `{ success: true, ...data }`, or `{ success: false, error }` when the call fails. */
+function answer(call: () => Promise<object>): Promise<object> {
+  return call().then(
+    (data) => ({ success: true, ...data }),
+    (err: Error) => ({ success: false, error: err.message }),
+  );
+}
+
+const handlers: Record<string, MessageHandler> = {
+  SEND_TO_FUNNY: (msg) =>
+    answer(async () => {
+      const thread = await handleSendToFunny(msg.data);
+      return { threadId: thread.id, projectId: thread.projectId };
+    }),
+  CAPTURE_SCREENSHOT: () =>
+    new Promise((resolve) => {
+      chrome.tabs.captureVisibleTab(null as any, { format: 'png' }, (dataUrl) => {
+        resolve({ screenshot: dataUrl });
+      });
+    }),
+  GET_CONFIG: (_msg, sender) => getConfig().then((config) => configForSender(config, sender)),
+  SAVE_CONFIG: (msg, sender) =>
+    saveConfig(configFromSender(msg.config ?? {}, sender)).then(() => ({ success: true })),
+  FETCH_PROJECTS: () => answer(async () => ({ projects: await handleFetchProjects() })),
+  RESOLVE_PROJECT: (msg) => answer(() => handleResolveProject(msg.url)),
+  FETCH_MODELS: () => answer(async () => ({ providers: await handleFetchModels() })),
+  TEST_CONNECTION: (msg) => handleTestConnection(msg.serverUrl, msg.apiToken),
+  OPEN_OPTIONS: () => chrome.runtime.openOptionsPage().then(() => ({ success: true })),
+  INJECT_PAGE_BRIDGE: (_msg, sender) => injectPageBridge(sender.tab?.id),
+  GET_FULL_CONFIG: (_msg, sender) =>
+    handleGetFullConfig().then(
+      (data) => ({ ...data, config: configForSender(data.config, sender) }),
+      (err: Error) => ({ success: false, error: err.message }),
+    ),
+};
+
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.type === 'SEND_TO_FUNNY') {
-    handleSendToFunny(msg.data)
-      .then((result: any) => sendResponse({ success: true, threadId: result.id }))
-      .catch((err: Error) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (msg.type === 'CAPTURE_SCREENSHOT') {
-    chrome.tabs.captureVisibleTab(null as any, { format: 'png' }, (dataUrl) => {
-      sendResponse({ screenshot: dataUrl });
-    });
-    return true;
-  }
-
-  if (msg.type === 'GET_CONFIG') {
-    getConfig().then((config) => sendResponse(config));
-    return true;
-  }
-
-  if (msg.type === 'SAVE_CONFIG') {
-    saveConfig(msg.config).then(() => sendResponse({ success: true }));
-    return true;
-  }
-
-  if (msg.type === 'FETCH_PROJECTS') {
-    handleFetchProjects()
-      .then((projects) => sendResponse({ success: true, projects }))
-      .catch((err: Error) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (msg.type === 'RESOLVE_PROJECT') {
-    handleResolveProject(msg.url)
-      .then((data) => sendResponse({ success: true, ...data }))
-      .catch((err: Error) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (msg.type === 'FETCH_SETUP_STATUS') {
-    handleFetchSetupStatus()
-      .then((data) => sendResponse({ success: true, ...data }))
-      .catch((err: Error) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (msg.type === 'TEST_CONNECTION') {
-    handleTestConnection(msg.serverUrl)
-      .then((result) => sendResponse(result))
-      .catch((err: Error) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
-
-  if (msg.type === 'INJECT_PAGE_BRIDGE') {
-    const tabId = sender.tab?.id;
-    if (!tabId) {
-      sendResponse({ success: false });
-      return true;
-    }
-    chrome.scripting
-      .executeScript({
-        target: { tabId },
-        files: ['page-bridge.js'],
-        world: 'MAIN' as any,
-      })
-      .then(() => sendResponse({ success: true }))
-      .catch(() => sendResponse({ success: false }));
-    return true;
-  }
-
-  if (msg.type === 'CLEAR_TOKEN') {
-    chrome.storage.local.remove('funnyToken').then(() => sendResponse({ success: true }));
-    return true;
-  }
-
-  if (msg.type === 'GET_FULL_CONFIG') {
-    handleGetFullConfig()
-      .then((data) => sendResponse(data))
-      .catch((err: Error) => sendResponse({ success: false, error: err.message }));
-    return true;
-  }
+  if (!Object.hasOwn(handlers, msg?.type)) return;
+  handlers[msg.type](msg, sender).then(sendResponse);
+  return true;
 });
+
+/** Whether a message comes from one of the extension's own pages (popup / options). */
+function fromExtensionPage(sender: chrome.runtime.MessageSender): boolean {
+  return Boolean(sender.url?.startsWith(chrome.runtime.getURL('')));
+}
+
+/**
+ * The config as a sender may see it. Content scripts render into the page's
+ * DOM (an open shadow root), so they never get the token, only whether one is set.
+ */
+function configForSender(config: ExtensionConfig, sender: chrome.runtime.MessageSender) {
+  if (fromExtensionPage(sender)) return config;
+  const { apiToken, ...rest } = config;
+  return { ...rest, hasApiToken: Boolean(apiToken) };
+}
+
+/** What a sender may save: the token only from the extension's own pages. */
+function configFromSender(
+  config: Partial<ExtensionConfig> & { hasApiToken?: boolean },
+  sender: chrome.runtime.MessageSender,
+): Partial<ExtensionConfig> {
+  const { hasApiToken: _hasApiToken, ...rest } = config;
+  if (fromExtensionPage(sender)) return rest;
+  const { apiToken: _apiToken, ...withoutToken } = rest;
+  return withoutToken;
+}
+
+async function injectPageBridge(tabId: number | undefined) {
+  if (!tabId) return { success: false };
+  return chrome.scripting
+    .executeScript({ target: { tabId }, files: ['page-bridge.js'], world: 'MAIN' as any })
+    .then(
+      () => ({ success: true }),
+      () => ({ success: false }),
+    );
+}
 
 async function handleSendToFunny(data: AnnotationData) {
   const config = await getConfig();
@@ -240,48 +250,50 @@ async function handleSendToFunny(data: AnnotationData) {
 }
 
 async function handleFetchProjects(): Promise<any[]> {
-  const data = await apiFetch('/api/projects');
-  return data.projects || data;
+  const data = await apiFetch('/projects');
+  return data.projects ?? [];
 }
 
 async function handleResolveProject(url: string): Promise<{ project: any; source: string }> {
-  return apiFetch(`/api/projects/resolve?url=${encodeURIComponent(url)}`);
+  return apiFetch(`/projects/resolve?url=${encodeURIComponent(url)}`);
 }
 
-async function handleFetchSetupStatus(): Promise<any> {
-  return apiFetch('/api/setup/status');
+async function handleFetchModels() {
+  return toProviderMap((await apiFetch('/models')) as PublicModelList);
 }
 
-async function handleTestConnection(serverUrl?: string) {
-  try {
-    await chrome.storage.local.remove('funnyToken');
-    const url = serverUrl || DEFAULT_CONFIG.serverUrl;
-    const token = await getAuthToken(url);
-    return { success: true, token: token ? 'obtained' : 'missing' };
-  } catch (err: any) {
-    return { success: false, error: err.message };
-  }
+/**
+ * Checks the entered server URL and token with `GET /api/v1/projects`. The
+ * in-page panel sends no token (it never holds it), so the saved one is tested.
+ */
+async function handleTestConnection(serverUrl?: string, apiToken?: string) {
+  const connection = resolveConnection(await getConfig(), serverUrl, apiToken);
+  return apiFetchWith(connection, '/projects').then(() => ({ success: true }), connectionFailure);
 }
 
 async function handleGetFullConfig() {
   const config = await getConfig();
-  const result: any = { success: true, config };
-
-  try {
-    const [projectsData, setupData] = await Promise.all([
-      apiFetch('/api/projects').catch(() => ({ projects: [] })),
-      apiFetch('/api/setup/status').catch(() => ({ providers: {} })),
-    ]);
-    result.projects = projectsData.projects || projectsData;
-    result.providers = setupData.providers || {};
-    result.connected = true;
-  } catch {
-    result.projects = [];
-    result.providers = {};
-    result.connected = false;
-  }
-
-  return result;
+  const state = await Promise.all([
+    apiFetch('/projects'),
+    apiFetch('/models').catch(() => null),
+  ]).then(
+    ([projectsData, modelsData]) => ({
+      connected: true,
+      projects: projectsData.projects ?? [],
+      providers: toProviderMap(modelsData as PublicModelList | null),
+    }),
+    (err: unknown) => {
+      const failure = connectionFailure(err);
+      return {
+        connected: false,
+        projects: [],
+        providers: {},
+        connectionError: failure.error,
+        connectionReason: failure.reason,
+      };
+    },
+  );
+  return { success: true, config, ...state };
 }
 
 // ---------------------------------------------------------------------------

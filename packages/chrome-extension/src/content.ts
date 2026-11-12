@@ -20,6 +20,8 @@ import {
 } from '@funny/shared/dom/extract';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 
+import { hasProjectDefaults, isPermissionError, threadUrl } from './api';
+
 // ---------------------------------------------------------------------------
 // Interfaces
 // ---------------------------------------------------------------------------
@@ -1633,6 +1635,20 @@ function createSettingsPanel(): HTMLDivElement {
           </button>
         </div>
         <div class="settings-status"></div>
+        <button type="button" class="settings-link-btn settings-grant-btn" style="display: none">
+          Open extension options to allow this server
+        </button>
+      </div>
+      <div class="settings-field">
+        <label>API token</label>
+        <div class="settings-url-row">
+          <span class="settings-token-state">Not set</span>
+          <button type="button" class="settings-link-btn settings-token-btn">Set token</button>
+        </div>
+        <div class="settings-hint">
+          Create one in funny: Settings &gt; API tokens. It is entered in the extension's
+          options page, never on this page.
+        </div>
       </div>
       <div class="settings-field">
         <label>Project</label>
@@ -1675,6 +1691,17 @@ function createSettingsPanel(): HTMLDivElement {
   panel.querySelector('.settings-connect-btn')!.addEventListener('click', (e) => {
     e.stopPropagation();
     testSettingsConnection();
+  });
+
+  // The token and a remote server's host permission are set in the options
+  // page: an extension page, out of reach of this page's scripts, and the only
+  // place `chrome.permissions.request` can run.
+  panel.querySelectorAll('.settings-token-btn, .settings-grant-btn').forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      saveSettings();
+      safeSendMessage({ type: 'OPEN_OPTIONS' });
+    });
   });
 
   // Auto-save on change
@@ -1802,6 +1829,7 @@ async function loadSettingsData() {
     // Populate server URL
     const serverInput = settingsPanel.querySelector('[data-key="serverUrl"]') as HTMLInputElement;
     serverInput.value = config.serverUrl || 'http://localhost:3001';
+    updateTokenState(Boolean(config.hasApiToken));
 
     // Populate projects
     settingsProjectsData = data.projects || [];
@@ -1874,18 +1902,33 @@ async function loadSettingsData() {
       dot.className = 'settings-dot settings-dot-err';
       dot.title = 'Not connected';
       connectBtn.className = 'settings-connect-btn settings-connect-btn-err';
-      statusEl.textContent = 'Not connected — click arrow to connect';
+      statusEl.textContent = data.connectionError;
       statusEl.className = 'settings-status settings-status-error';
     }
+    showGrantButton(data.connectionReason === 'permission');
   } catch {
     statusEl.textContent = 'Error loading settings';
     statusEl.className = 'settings-status settings-status-error';
   }
 }
 
+function updateTokenState(hasToken: boolean) {
+  const state = settingsPanel.querySelector('.settings-token-state') as HTMLSpanElement;
+  const btn = settingsPanel.querySelector('.settings-token-btn') as HTMLButtonElement;
+  state.textContent = hasToken ? 'Saved' : 'Not set';
+  state.classList.toggle('settings-token-missing', !hasToken);
+  btn.textContent = hasToken ? 'Change token' : 'Set token';
+}
+
+function showGrantButton(show: boolean) {
+  const btn = settingsPanel.querySelector('.settings-grant-btn') as HTMLButtonElement;
+  btn.style.display = show ? 'block' : 'none';
+}
+
 function applyProjectDefaults(projectId: string) {
   const project = settingsProjectsData.find((p) => p.id === projectId);
-  if (!project || !settingsProviderData) return;
+  // The public API's projects carry no defaults: keep the saved choices.
+  if (!hasProjectDefaults(project) || !settingsProviderData) return;
 
   const available = Object.entries(settingsProviderData).filter(
     ([, info]) => (info as any).available,
@@ -1971,6 +2014,7 @@ async function testSettingsConnection() {
       connectBtn.className = 'settings-connect-btn settings-connect-btn-ok';
       statusEl.textContent = 'Connected';
       statusEl.className = 'settings-status settings-status-ok';
+      showGrantButton(false);
       // Reload all data with new URL
       saveSettings();
       loadSettingsData();
@@ -1979,6 +2023,9 @@ async function testSettingsConnection() {
       connectBtn.className = 'settings-connect-btn settings-connect-btn-err';
       statusEl.textContent = result?.error || 'Connection failed';
       statusEl.className = 'settings-status settings-status-error';
+      // Keep the entered URL so the options page opens with it.
+      saveSettings();
+      showGrantButton(isPermissionError(result));
     }
   } catch {
     connectBtn.className = 'settings-connect-btn settings-connect-btn-err';
@@ -2095,7 +2142,10 @@ function loadHistoryData() {
       if (entry.threadId && entry.serverUrl) {
         item.title = 'Open thread in Funny';
         item.addEventListener('click', () => {
-          window.open(`${entry.serverUrl}?thread=${entry.threadId}`, '_blank');
+          window.open(
+            threadUrl(entry.serverUrl, { id: entry.threadId, projectId: entry.projectId }),
+            '_blank',
+          );
         });
       }
 
@@ -2275,7 +2325,7 @@ async function sendToFunny() {
 
         if (response?.success) {
           // Save to history before clearing
-          saveToHistory(serialized, response.threadId);
+          saveToHistory(serialized, response.threadId, response.projectId);
 
           // Clear all annotations and drawings
           annotations = [];
@@ -2302,13 +2352,14 @@ async function sendToFunny() {
 // ---------------------------------------------------------------------------
 // Annotation history
 // ---------------------------------------------------------------------------
-function saveToHistory(serializedAnnotations: any[], threadId?: string) {
+function saveToHistory(serializedAnnotations: any[], threadId?: string, projectId?: string) {
   const entry: any = {
     id: `hist_${Date.now()}`,
     timestamp: Date.now(),
     url: window.location.href,
     title: document.title,
     threadId: threadId || null,
+    projectId: projectId || null,
     annotationCount: serializedAnnotations.length,
     annotations: serializedAnnotations,
   };

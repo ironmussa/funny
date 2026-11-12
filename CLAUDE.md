@@ -280,6 +280,15 @@ Openspec change `adopt-trpc-browser-api` moves server-answered groups from contr
 - **Client:** call `trpcCall(() => trpc.<group>.<proc>.query(input))` from `lib/api/_trpc.ts`. It goes through `request()`, so auth, telemetry and the circuit breaker apply, and it returns `ResultAsync<T, DomainError>`. The session probe (`profile.get`, like REST `GET /profile`) is exempt from the 401 → `onUnauthorized` handler in `client-core/src/api-client.ts` (`isSessionProbe`). Once a group migrates, add it to `MIGRATED_GROUPS` in `scripts/fitness/check-trpc-api.ts`, with any sub-paths that stay REST in `restOnly` (or `exact: true` when only the bare path moved). After that, a REST call or contract use for that group from the client fails lint.
 - **Out of scope:** runner-answered routes stay on REST and the proxy, and gRPC and Socket.IO do not change.
 
+### Public REST API v1 (`/api/v1`)
+
+Openspec change `public-rest-api-v1`: a versioned REST API for clients outside the web app (the Chrome extension, scripts), guide in [docs/guides/public-api.md](docs/guides/public-api.md). `trpc-to-openapi` serves it from the `publicV1Router` in `packages/server/src/public-api/` (its own tRPC instance typed with `OpenApiMeta`, not `@funny/api`, whose isolation rule forbids the library's node modules) with the document at `GET /api/v1/openapi.json`.
+
+- **Every procedure declares `meta.openapi` and an `.output()` schema** in `@funny/shared/contracts/public-v1.ts`; output parsing strips undeclared fields, so a response never carries more than the published contract (a project's path on disk never leaves). A test walks every procedure to keep it so. Procedures call the same ports as the web client.
+- **Authentication is a personal API token only** (`Authorization: Bearer funny_pat_…`, `services/personal-access-tokens.ts`: SHA-256 hash stored, expiry, revocation, `pat.*` audit records, created in Settings > API tokens via the `personalTokens` tRPC group). `/api/v1` is mounted before the session middleware and never reads a session; anywhere else a token gets 401 from its own step in `middleware/auth.ts`. 120 requests a minute per token owner, plus a per-IP limit.
+- **`POST /api/v1/threads`** creates and starts a thread through `startThreadOnRunner` (the same use case as `POST /api/threads` and automations), on the caller's runner via `withRunnerFor` and the certified sink: 404 for a project the caller cannot see, 403 without `steer`, 502 when their runner is offline — never another user's runner. It refuses permission modes that approve tool calls unattended (`autoEdit`, `auto`, `bypassPermissions`).
+- **Adding an endpoint is a public-contract decision:** add the schema to `contracts/public-v1.ts`, the procedure to `public-api/router.ts`, and document it in the guide.
+
 ### Error Handling with `neverthrow`
 
 Scoped mandate — the policy is narrow on purpose so it can actually be enforced:

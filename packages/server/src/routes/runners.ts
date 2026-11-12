@@ -1,8 +1,15 @@
 /**
- * Runner management routes for the central server.
+ * Runner routes for the central server: what a runner calls with its own
+ * credential (register, enrollment start / poll, heartbeat, tasks, its own
+ * record and project assignments).
+ *
+ * The user-facing operations (list, remove, project assignment, enrollment
+ * lookup and approval) are served by the `runners` tRPC router. A user calling
+ * their old REST paths is refused here (`refuseUser`: 401 without a session,
+ * 404 otherwise), never left to fall through to the runner proxy.
  */
 
-import { approveEnrollmentBody, assignRunnerProjectBody } from '@funny/shared/contracts/runners';
+import { assignRunnerProjectBody } from '@funny/shared/contracts/runners';
 import type {
   RunnerRegisterRequest,
   RunnerHeartbeatRequest,
@@ -23,8 +30,6 @@ import {
   recordProvisionedRunner,
   type ProvisionGrant,
 } from '../services/runner-provision-tokens.js';
-import { runnersPort } from '../trpc/ports/runners.js';
-import { answerJson } from '../trpc/reply.js';
 import { parseJsonBody } from '../validation/request.js';
 
 export const runnerRoutes = new Hono<ServerEnv>();
@@ -84,6 +89,7 @@ function errorStack(err: any): string {
   return err?.stack?.split('\n').slice(0, 5).join(' | ') || '';
 }
 
+// Kept on REST: called by the runner at startup (packages/runtime).
 runnerRoutes.post('/register', async (c) => {
   try {
     const body = await c.req.json<RunnerRegisterRequest>();
@@ -123,9 +129,10 @@ runnerRoutes.post('/register', async (c) => {
 
 // ── Device-Link Enrollment ──────────────────────────────
 // start + poll are PUBLIC (a runner has no credentials yet); they are added to
-// the public-path allowlist in middleware/auth.ts. approve + the metadata
-// lookup run under the normal session auth.
+// the public-path allowlist in middleware/auth.ts. The user's metadata lookup
+// and approval are on tRPC (`runners.enrollment` / `runners.approveEnrollment`).
 
+// Kept on REST: called by a runner without credentials (packages/runtime device-link enrollment).
 runnerRoutes.post('/enroll/start', async (c) => {
   let body: EnrollStartRequest;
   try {
@@ -144,6 +151,7 @@ runnerRoutes.post('/enroll/start', async (c) => {
   return c.json(result, 201);
 });
 
+// Kept on REST: called by a runner without credentials (packages/runtime device-link enrollment).
 runnerRoutes.post('/enroll/poll', async (c) => {
   let body: EnrollPollRequest;
   try {
@@ -170,29 +178,13 @@ runnerRoutes.post('/enroll/poll', async (c) => {
   } satisfies EnrollPollResponse);
 });
 
-// Authenticated: fetch a pending enrollment's metadata for the confirm dialog.
-runnerRoutes.get('/enroll/:userCode', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-  return answerJson(c, runnersPort.enrollment(c.req.param('userCode')));
-});
-
-// Authenticated: approve a pending enrollment, binding it to this user.
-runnerRoutes.post('/enroll/approve', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-  const parsed = await parseJsonBody(c, approveEnrollmentBody);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const result = await runnersPort.approveEnrollment(userId, parsed.value.userCode);
-  // `reason` is the refusal's name (`not_found`, `expired`, `already_approved`, `locked`).
-  return result.match(
-    (value) => c.json(value),
-    (e) => c.json({ error: e.message, reason: e.code }, e.status as 404 | 409),
-  );
-});
+// Removed (now `runners.enrollment` / `runners.approveEnrollment` on tRPC): refused.
+runnerRoutes.get('/enroll/:userCode', (c) => refuseUser(c));
+runnerRoutes.post('/enroll/approve', (c) => refuseUser(c));
 
 // ── Heartbeat ───────────────────────────────────────────
 
+// Kept on REST: called by the runner with its own credential (packages/runtime).
 runnerRoutes.post('/heartbeat', async (c) => {
   const runnerId = c.get('runnerId') as string | undefined;
   if (!runnerId) return c.json({ error: 'Unauthorized: runner token required' }, 401);
@@ -216,6 +208,7 @@ runnerRoutes.post('/heartbeat', async (c) => {
 
 // ── Task Polling ────────────────────────────────────────
 
+// Kept on REST: called by the runner with its own credential (packages/runtime).
 runnerRoutes.get('/tasks', async (c) => {
   const runnerId = c.get('runnerId') as string | undefined;
   if (!runnerId) return c.json({ error: 'Unauthorized: runner token required' }, 401);
@@ -226,6 +219,7 @@ runnerRoutes.get('/tasks', async (c) => {
 
 // ── Task Result ─────────────────────────────────────────
 
+// Kept on REST: called by the runner with its own credential (packages/runtime).
 runnerRoutes.post('/tasks/result', async (c) => {
   // Bound to the calling runner: a runner can only complete its OWN tasks.
   const self = runnerSelfId(c);
@@ -237,20 +231,16 @@ runnerRoutes.post('/tasks/result', async (c) => {
 
 // ── Runner Listing ──────────────────────────────────────
 
+// Kept on REST for a runner credential, which sees only ITSELF: it must never
+// enumerate other tenants' runners (audit H2). Users list over `runners.list`.
 runnerRoutes.get('/', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-
-  // Runner-authenticated callers see only THEMSELVES — a runner credential
-  // must never enumerate other tenants' runners (audit H2).
-  if (c.get('isRunner')) {
-    const ownRunnerId = runnerSelfId(c);
-    const own = ownRunnerId ? await rm.getRunner(ownRunnerId) : null;
-    return c.json({ runners: own ? [own] : [] });
-  }
-  if (!userId) return c.json({ runners: [] });
-  return answerJson(c, runnersPort.list(userCaller(c, userId)));
+  if (!c.get('isRunner')) return refuseUser(c);
+  const ownRunnerId = runnerSelfId(c);
+  const own = ownRunnerId ? await rm.getRunner(ownRunnerId) : null;
+  return c.json({ runners: own ? [own] : [] });
 });
 
+// Kept on REST: a runner reads its own record (the owner or an admin may read it too).
 runnerRoutes.get('/:runnerId', async (c) => {
   const runnerId = c.req.param('runnerId');
   const userId = c.get('userId') as string | undefined;
@@ -283,11 +273,8 @@ runnerRoutes.get('/:runnerId', async (c) => {
   return c.json(runner);
 });
 
-runnerRoutes.delete('/:runnerId', async (c) => {
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-  return answerJson(c, runnersPort.remove(userCaller(c, userId), c.req.param('runnerId')));
-});
+// Removed (now `runners.remove` on tRPC): refused.
+runnerRoutes.delete('/:runnerId', (c) => refuseUser(c));
 
 // ── Project Assignment ──────────────────────────────────
 
@@ -316,72 +303,56 @@ function isRunnerSelf(c: Context<ServerEnv>, runnerId: string): boolean {
   return ok;
 }
 
-/** The user caller of a runner operation (an instance admin reaches every runner). */
-function userCaller(c: Context<ServerEnv>, userId: string) {
-  return { userId, role: (c.get('userRole') as string | undefined) ?? null };
+/**
+ * A user calling a removed REST route (now on the `runners` tRPC router): 401
+ * without a session, 404 otherwise. Answered here so the request never falls
+ * through to the runner proxy.
+ */
+function refuseUser(c: Context<ServerEnv>): Response {
+  if (!c.get('userId')) return c.json({ error: 'Unauthorized' }, 401);
+  return c.json({ error: 'Not found' }, 404);
 }
 
 /**
- * Runs a runner-scoped operation: a runner credential only on its OWN record
- * (404 otherwise, audited), a user through `runnersPort`, which checks the
- * owner (or admin) and answers 404 for anyone else.
+ * Runs an operation on a runner's own project assignments: only a runner
+ * credential on its OWN record (404 otherwise, audited). A user is refused
+ * (`refuseUser`); users manage assignments over the `runners` tRPC router.
  */
-async function onRunner(
+async function onOwnRunner(
   c: Context<ServerEnv>,
   runnerId: string,
   asRunner: () => Promise<Response>,
-  asUser: (userId: string) => Promise<Response>,
 ): Promise<Response> {
-  if (c.get('isRunner')) {
-    if (!(await rm.getRunner(runnerId)) || !isRunnerSelf(c, runnerId)) {
-      return c.json({ error: 'Runner not found' }, 404);
-    }
-    return asRunner();
-  }
-  const userId = c.get('userId') as string | undefined;
-  if (!userId) {
-    audit({
-      action: 'authz.cross_tenant_refused',
-      actorId: null,
-      detail: 'Runner access refused — no userId on request',
-      meta: { runnerId, path: c.req.path, method: c.req.method },
-    });
+  if (!c.get('isRunner')) return refuseUser(c);
+  if (!(await rm.getRunner(runnerId)) || !isRunnerSelf(c, runnerId)) {
     return c.json({ error: 'Runner not found' }, 404);
   }
-  return asUser(userId);
+  return asRunner();
 }
 
+// Kept on REST for a runner credential on its own record: the runner writes and
+// reads its project LOCATION records (packages/runtime). Users go through tRPC.
 runnerRoutes.post('/:runnerId/projects', async (c) => {
   const runnerId = c.req.param('runnerId');
-  const parsed = await parseJsonBody(c, assignRunnerProjectBody);
-  if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  return onRunner(
-    c,
-    runnerId,
-    async () => c.json(await rm.assignProject(runnerId, parsed.value), 201),
-    (userId) =>
-      answerJson(c, runnersPort.assignProject(userCaller(c, userId), runnerId, parsed.value), 201),
-  );
+  return onOwnRunner(c, runnerId, async () => {
+    const parsed = await parseJsonBody(c, assignRunnerProjectBody);
+    if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
+    return c.json(await rm.assignProject(runnerId, parsed.value), 201);
+  });
 });
 
 runnerRoutes.get('/:runnerId/projects', async (c) => {
   const runnerId = c.req.param('runnerId');
-  const listAssignments = async () => c.json({ assignments: await rm.listAssignments(runnerId) });
-  return onRunner(c, runnerId, listAssignments, (userId) =>
-    answerJson(c, runnersPort.assignments(userCaller(c, userId), runnerId)),
+  return onOwnRunner(c, runnerId, async () =>
+    c.json({ assignments: await rm.listAssignments(runnerId) }),
   );
 });
+
 runnerRoutes.delete('/:runnerId/projects/:projectId', async (c) => {
   const runnerId = c.req.param('runnerId');
   const projectId = c.req.param('projectId');
-  return onRunner(
-    c,
-    runnerId,
-    async () => {
-      await rm.unassignProject(runnerId, { projectId });
-      return c.json({ ok: true });
-    },
-    (userId) =>
-      answerJson(c, runnersPort.unassignProject(userCaller(c, userId), runnerId, projectId)),
-  );
+  return onOwnRunner(c, runnerId, async () => {
+    await rm.unassignProject(runnerId, { projectId });
+    return c.json({ ok: true });
+  });
 });

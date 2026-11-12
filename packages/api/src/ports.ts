@@ -308,11 +308,6 @@ export interface RunnersPort {
   /** Every runner for an admin, the caller's own for anyone else. */
   list(caller: RunnerCaller): PortResult<{ runners: RunnerInfo[] }>;
   remove(caller: RunnerCaller, runnerId: string): PortResult<Ok>;
-  /** Where the runner keeps each project (a location record, not an authorization source). */
-  assignments(
-    caller: RunnerCaller,
-    runnerId: string,
-  ): PortResult<{ assignments: RunnerProjectAssignment[] }>;
   assignProject(
     caller: RunnerCaller,
     runnerId: string,

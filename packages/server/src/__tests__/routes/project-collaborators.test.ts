@@ -11,7 +11,10 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
  *   3. A collaborator was denied the project's sub-resources (commands/hooks/…)
  *      because access control ignored project_members — GET /:id/commands.
  *
- * Each test fails against the pre-fix code and passes with it.
+ * Each test fails against the pre-fix code and passes with it. The member,
+ * local-path, update and startup-command operations are served by the
+ * `projects` tRPC procedures (their REST routes were removed); the listing is
+ * still checked over REST, which keeps `GET /api/projects`.
  */
 import { user } from '@funny/shared/db/schema-sqlite';
 import { sql } from 'drizzle-orm';
@@ -45,65 +48,80 @@ describe('project collaborators', () => {
     seedProject(t.db as any, { id: 'p1', userId: 'owner', path: '/tmp/p1' });
   });
 
+  const headersFor = (userId: string) => ({
+    'X-Test-User-Id': userId,
+    'Content-Type': 'application/json',
+  });
+
+  /** A `projects.<procedure>` query; resolves to the response (status + JSON body). */
+  const query = async (userId: string, procedure: string, input: unknown) => {
+    const qs = `?input=${encodeURIComponent(JSON.stringify(input))}`;
+    return t.app.request(`/api/trpc/projects.${procedure}${qs}`, { headers: headersFor(userId) });
+  };
+
+  /** A `projects.<procedure>` mutation. */
+  const mutate = async (userId: string, procedure: string, input: unknown) =>
+    t.app.request(`/api/trpc/projects.${procedure}`, {
+      method: 'POST',
+      headers: headersFor(userId),
+      body: JSON.stringify(input),
+    });
+
+  const addMember = (as: string, body: { userId: string; role?: string }) =>
+    mutate(as, 'addMember', { projectId: 'p1', ...body });
+  const listCommands = (as: string) => query(as, 'commands', { projectId: 'p1' });
+  const createCommand = (as: string) =>
+    mutate(as, 'createCommand', { projectId: 'p1', label: 'dev', command: 'bun dev' });
+  const setLocalPath = (as: string, localPath: string) =>
+    mutate(as, 'setLocalPath', { projectId: 'p1', localPath });
+
   describe('Bug 1 — owner can add the first member', () => {
-    test('owner (no member row) adds the first collaborator → 201', async () => {
-      const res = await t.requestAs('owner').post('/api/projects/p1/members', { userId: 'alice' });
-      expect(res.status).toBe(201);
+    test('owner (no member row) adds the first collaborator → 200', async () => {
+      const res = await addMember('owner', { userId: 'alice' });
+      expect(res.status).toBe(200);
 
       const pm = await import('../../services/project-manager.js');
       expect(await pm.isProjectMember('p1', 'alice')).toBe(true);
     });
 
     test('a user without access cannot add members, and cannot tell the project exists → 404', async () => {
-      const res = await t
-        .requestAs('stranger')
-        .post('/api/projects/p1/members', { userId: 'alice' });
+      const res = await addMember('stranger', { userId: 'alice' });
       expect(res.status).toBe(404);
     });
 
     test('a plain member cannot add members → 403', async () => {
       seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'member' });
-      const res = await t.requestAs('bob').post('/api/projects/p1/members', { userId: 'alice' });
+      const res = await addMember('bob', { userId: 'alice' });
       expect(res.status).toBe(403);
     });
 
-    test('an existing admin member (not owner) can add members → 201', async () => {
+    test('an existing admin member (not owner) can add members → 200', async () => {
       seedProjectMember(t.db as any, { projectId: 'p1', userId: 'admin-user', role: 'admin' });
-      const res = await t
-        .requestAs('admin-user')
-        .post('/api/projects/p1/members', { userId: 'alice' });
-      expect(res.status).toBe(201);
+      const res = await addMember('admin-user', { userId: 'alice' });
+      expect(res.status).toBe(200);
     });
   });
 
   describe('role assignment (unified-rbac-grants)', () => {
-    test('owner adds a collaborator with an explicit valid role → 201', async () => {
-      const res = await t
-        .requestAs('owner')
-        .post('/api/projects/p1/members', { userId: 'alice', role: 'viewer' });
-      expect(res.status).toBe(201);
+    test('owner adds a collaborator with an explicit valid role → 200', async () => {
+      const res = await addMember('owner', { userId: 'alice', role: 'viewer' });
+      expect(res.status).toBe(200);
       const pm = await import('../../services/project-manager.js');
       const members = await pm.listMembers('p1');
       expect(members.find((m) => m.userId === 'alice')?.role).toBe('viewer');
     });
 
     test('an invalid role is rejected → 400, no member written', async () => {
-      const res = await t
-        .requestAs('owner')
-        .post('/api/projects/p1/members', { userId: 'alice', role: 'superuser' });
+      const res = await addMember('owner', { userId: 'alice', role: 'superuser' });
       expect(res.status).toBe(400);
-      expect((await res.json()).code).toBe('invalid-project-role');
+      expect((await res.json()).error.message).toBe('Invalid role: superuser');
       const pm = await import('../../services/project-manager.js');
       expect(await pm.isProjectMember('p1', 'alice')).toBe(false);
     });
 
     test('re-adding upserts the role (admin → viewer)', async () => {
-      await t
-        .requestAs('owner')
-        .post('/api/projects/p1/members', { userId: 'alice', role: 'admin' });
-      await t
-        .requestAs('owner')
-        .post('/api/projects/p1/members', { userId: 'alice', role: 'viewer' });
+      await addMember('owner', { userId: 'alice', role: 'admin' });
+      await addMember('owner', { userId: 'alice', role: 'viewer' });
       const pm = await import('../../services/project-manager.js');
       const members = await pm.listMembers('p1');
       expect(members.filter((m) => m.userId === 'alice')).toHaveLength(1);
@@ -157,12 +175,12 @@ describe('project collaborators', () => {
   describe('Bug 3 — collaborator can access sub-resources', () => {
     test('a member can list project commands → 200', async () => {
       seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
-      const res = await t.requestAs('alice').get('/api/projects/p1/commands');
+      const res = await listCommands('alice');
       expect(res.status).toBe(200);
     });
 
     test('a stranger is denied project commands → 404', async () => {
-      const res = await t.requestAs('stranger').get('/api/projects/p1/commands');
+      const res = await listCommands('stranger');
       expect(res.status).toBe(404);
     });
   });
@@ -171,28 +189,22 @@ describe('project collaborators', () => {
     test('a plain member can READ commands but cannot create one → 403', async () => {
       seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
 
-      const read = await t.requestAs('alice').get('/api/projects/p1/commands');
+      const read = await listCommands('alice');
       expect(read.status).toBe(200);
 
-      const write = await t
-        .requestAs('alice')
-        .post('/api/projects/p1/commands', { label: 'dev', command: 'bun dev' });
+      const write = await createCommand('alice');
       expect(write.status).toBe(403);
     });
 
-    test('the owner can create a command → 201', async () => {
-      const res = await t
-        .requestAs('owner')
-        .post('/api/projects/p1/commands', { label: 'dev', command: 'bun dev' });
-      expect(res.status).toBe(201);
+    test('the owner can create a command → 200', async () => {
+      const res = await createCommand('owner');
+      expect(res.status).toBe(200);
     });
 
-    test('an admin member can create a command → 201', async () => {
+    test('an admin member can create a command → 200', async () => {
       seedProjectMember(t.db as any, { projectId: 'p1', userId: 'admin-user', role: 'admin' });
-      const res = await t
-        .requestAs('admin-user')
-        .post('/api/projects/p1/commands', { label: 'dev', command: 'bun dev' });
-      expect(res.status).toBe(201);
+      const res = await createCommand('admin-user');
+      expect(res.status).toBe(200);
     });
   });
 
@@ -218,9 +230,7 @@ describe('project collaborators', () => {
 
       // The path lives on the member's runner, not this server — the route must
       // not fs-check it (that always failed in team mode).
-      const res = await t
-        .requestAs('alice')
-        .post('/api/projects/p1/local-path', { localPath: '/home/alice/work/backend-v2' });
+      const res = await setLocalPath('alice', '/home/alice/work/backend-v2');
       expect(res.status).toBe(200);
 
       const pm = await import('../../services/project-manager.js');
@@ -229,9 +239,7 @@ describe('project collaborators', () => {
 
     test('rejects a non-absolute path → 400', async () => {
       seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
-      const res = await t
-        .requestAs('alice')
-        .post('/api/projects/p1/local-path', { localPath: 'relative/path' });
+      const res = await setLocalPath('alice', 'relative/path');
       expect(res.status).toBe(400);
     });
   });
@@ -241,9 +249,7 @@ describe('project collaborators', () => {
     // the route had no access check — so any user could make themselves a
     // collaborator of any project by posting a local path for it.
     test('a user without access gets 404 and no member row is created', async () => {
-      const res = await t
-        .requestAs('stranger')
-        .post('/api/projects/p1/local-path', { localPath: '/home/stranger/p1' });
+      const res = await setLocalPath('stranger', '/home/stranger/p1');
       expect(res.status).toBe(404);
 
       const pm = await import('../../services/project-manager.js');
@@ -258,7 +264,7 @@ describe('project collaborators', () => {
     });
 
     test('an org member can read the project’s commands and designs', async () => {
-      expect((await t.requestAs('carla').get('/api/projects/p1/commands')).status).toBe(200);
+      expect((await listCommands('carla')).status).toBe(200);
       expect(await trpcStatus('carla', 'designs.list', { projectId: 'p1' })).toBe(200);
     });
 
@@ -269,35 +275,28 @@ describe('project collaborators', () => {
     });
 
     test('an org member cannot change the project or its commands → 403', async () => {
-      expect((await t.requestAs('carla').patch('/api/projects/p1', { name: 'x' })).status).toBe(
-        403,
-      );
-      const res = await t
-        .requestAs('carla')
-        .post('/api/projects/p1/commands', { label: 'dev', command: 'bun dev' });
+      const update = await mutate('carla', 'update', { projectId: 'p1', data: { name: 'x' } });
+      expect(update.status).toBe(403);
+      const res = await createCommand('carla');
       expect(res.status).toBe(403);
     });
 
     test('setting a local path keeps the org member at viewer — no escalation (C3)', async () => {
       seedOrgMember(t.db as any, { organizationId: 'org-1', userId: 'olga', role: 'member' });
 
-      const res = await t
-        .requestAs('olga')
-        .post('/api/projects/p1/local-path', { localPath: '/home/olga/p1' });
+      const res = await setLocalPath('olga', '/home/olga/p1');
       expect(res.status).toBe(200);
 
       const { authorizer } = await import('../../lib/server-authorizer.js');
       expect(await authorizer.effectiveRole('olga', 'project', 'p1')).toBe('viewer');
       // Still cannot do anything that needs more than read access.
-      const cmd = await t
-        .requestAs('olga')
-        .post('/api/projects/p1/commands', { label: 'dev', command: 'bun dev' });
+      const cmd = await createCommand('olga');
       expect(cmd.status).toBe(403);
     });
 
     test('a member of another org gets 404', async () => {
       seedOrgMember(t.db as any, { organizationId: 'org-2', userId: 'daniel' });
-      expect((await t.requestAs('daniel').get('/api/projects/p1/commands')).status).toBe(404);
+      expect((await listCommands('daniel')).status).toBe(404);
     });
   });
 
@@ -323,7 +322,7 @@ describe('project collaborators', () => {
     });
   });
 
-  describe('GET /api/projects/:id/members — enriched with user display fields', () => {
+  describe('projects.members — enriched with user display fields', () => {
     test('members carry their user name/username for the Collaborators UI', async () => {
       const now = new Date().toISOString();
       (t.db as any)
@@ -342,9 +341,9 @@ describe('project collaborators', () => {
         .run();
       seedProjectMember(t.db as any, { projectId: 'p1', userId: 'u-carol', role: 'member' });
 
-      const res = await t.requestAs('owner').get('/api/projects/p1/members');
+      const res = await query('owner', 'members', { projectId: 'p1' });
       expect(res.status).toBe(200);
-      const { members } = (await res.json()) as { members: any[] };
+      const { members } = (await res.json()).result.data as { members: any[] };
       const carol = members.find((m) => m.userId === 'u-carol');
       expect(carol?.user?.username).toBe('carol');
       expect(carol?.user?.name).toBe('Carol Danvers');

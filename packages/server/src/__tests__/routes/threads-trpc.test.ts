@@ -164,7 +164,6 @@ describe('threads tRPC procedures', () => {
       const pairs: Array<[string, string, unknown]> = [
         ['/api/threads?projectId=p1', 'list', { projectId: 'p1' }],
         ['/api/threads/scratch', 'scratch', undefined],
-        ['/api/threads/archived', 'archived', undefined],
         ['/api/threads/t1', 'get', { id: 't1' }],
         ['/api/threads/t1/messages?limit=10', 'messages', { id: 't1', limit: 10 }],
         ['/api/threads/t1/messages/search?q=hello', 'searchMessages', { id: 't1', q: 'hello' }],

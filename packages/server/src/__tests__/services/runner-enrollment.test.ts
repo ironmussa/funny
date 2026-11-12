@@ -27,6 +27,24 @@ import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 
+/**
+ * The user side of enrollment (lookup, approval, listing) is served by the
+ * `runners` tRPC procedures; the runner side (start, poll) stays REST.
+ */
+const trpc = (t: TestApp, userId: string, procedure: string, input?: unknown, mutation = false) =>
+  t.app.request(
+    mutation
+      ? `/api/trpc/runners.${procedure}`
+      : `/api/trpc/runners.${procedure}${
+          input === undefined ? '' : `?input=${encodeURIComponent(JSON.stringify(input))}`
+        }`,
+    {
+      method: mutation ? 'POST' : 'GET',
+      headers: { 'X-Test-User-Id': userId, 'Content-Type': 'application/json' },
+      body: mutation ? JSON.stringify(input) : undefined,
+    },
+  );
+
 describe('Runner Enrollment (device-link)', () => {
   let t: TestApp;
   let enroll: typeof import('../../services/runner-enrollment-service.js');
@@ -81,8 +99,8 @@ describe('Runner Enrollment (device-link)', () => {
       expect(result.ok).toBe(true);
 
       // The runner is now owned by the approver.
-      const runners = await t.requestAs('user-approver').get('/api/runners');
-      const body = await runners.json();
+      const runners = await trpc(t, 'user-approver', 'list');
+      const body = (await runners.json()).result.data;
       expect(body.runners).toHaveLength(1);
       expect(body.runners[0].hostname).toBe('box.local');
 
@@ -195,12 +213,12 @@ describe('Runner Enrollment (device-link)', () => {
       expect((await pendingPoll.json()).status).toBe('pending');
 
       // Metadata lookup (authenticated).
-      const meta = await t.requestAs('user-1').get(`/api/runners/enroll/${userCode}`);
+      const meta = await trpc(t, 'user-1', 'enrollment', { userCode });
       expect(meta.status).toBe(200);
-      expect((await meta.json()).hostname).toBe('box.local');
+      expect((await meta.json()).result.data.hostname).toBe('box.local');
 
       // Approve (authenticated).
-      const approve = await t.requestAs('user-1').post('/api/runners/enroll/approve', { userCode });
+      const approve = await trpc(t, 'user-1', 'approveEnrollment', { userCode }, true);
       expect(approve.status).toBe(200);
 
       // Poll now delivers credentials.
@@ -224,18 +242,18 @@ describe('Runner Enrollment (device-link)', () => {
       expect(res.status).toBe(404);
     });
 
-    test('GET /enroll/:userCode → 404 for unknown code', async () => {
-      const res = await t.requestAs('user-1').get('/api/runners/enroll/ZZZZ-ZZZZ');
+    test('runners.enrollment → 404 for unknown code', async () => {
+      const res = await trpc(t, 'user-1', 'enrollment', { userCode: 'ZZZZ-ZZZZ' });
       expect(res.status).toBe(404);
     });
 
-    test('POST /enroll/approve → 409 when already approved', async () => {
+    test('runners.approveEnrollment → 409 when already approved', async () => {
       const start = await t
         .requestAs('anon')
         .post('/api/runners/enroll/start', { hostname: 'box.local', os: 'linux' });
       const { userCode } = await start.json();
-      await t.requestAs('user-1').post('/api/runners/enroll/approve', { userCode });
-      const again = await t.requestAs('user-1').post('/api/runners/enroll/approve', { userCode });
+      await trpc(t, 'user-1', 'approveEnrollment', { userCode }, true);
+      const again = await trpc(t, 'user-1', 'approveEnrollment', { userCode }, true);
       expect(again.status).toBe(409);
     });
   });

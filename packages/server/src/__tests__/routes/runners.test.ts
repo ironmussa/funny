@@ -1,8 +1,11 @@
 /**
  * Integration tests for runner routes.
  *
- * Tests registration, listing, deletion, and project assignment
- * against an in-memory SQLite database with real route handlers.
+ * Tests what a runner calls with its own credential (registration, its own
+ * listing and record, its project assignments, heartbeat, tasks) against an
+ * in-memory SQLite database with real route handlers. The user-facing runner
+ * operations are on the `runners` tRPC router (runners-trpc.test.ts); a user
+ * calling their old REST paths is refused here.
  */
 
 // Set env before module imports
@@ -29,6 +32,13 @@ describe('Runner Routes (Integration)', () => {
   beforeEach(() => {
     t.cleanup();
   });
+
+  /** A runner-authenticated DELETE (`requestAsRunner` has only get / post). */
+  const deleteAsRunner = (runnerId: string, path: string) =>
+    t.app.request(path, {
+      method: 'DELETE',
+      headers: { 'X-Test-Is-Runner': 'true', 'X-Test-Runner-Id': runnerId },
+    });
 
   // ── POST /api/runners/register ─────────────────────────
 
@@ -98,25 +108,16 @@ describe('Runner Routes (Integration)', () => {
   // ── GET /api/runners ───────────────────────────────────
 
   describe('GET /api/runners', () => {
-    test('admin sees all runners', async () => {
+    test('a user (even an admin) is refused: users list over tRPC', async () => {
       seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
-      seedRunner(t.db as any, { id: 'r2', userId: 'user-2', name: 'R2', token: 'tok-2' });
 
-      const res = await t.requestAs('admin-user', 'admin').get('/api/runners');
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.runners).toHaveLength(2);
-    });
-
-    test('regular user sees only their own runners', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
-      seedRunner(t.db as any, { id: 'r2', userId: 'user-2', name: 'R2', token: 'tok-2' });
-
-      const res = await t.requestAs('user-1').get('/api/runners');
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.runners).toHaveLength(1);
-      expect(body.runners[0].name).toBe('R1');
+      for (const res of [
+        await t.requestAs('admin-user', 'admin').get('/api/runners'),
+        await t.requestAs('user-1').get('/api/runners'),
+      ]) {
+        expect(res.status).toBe(404);
+        expect(await res.json()).toEqual({ error: 'Not found' });
+      }
     });
   });
 
@@ -148,42 +149,23 @@ describe('Runner Routes (Integration)', () => {
   // ── DELETE /api/runners/:runnerId ──────────────────────
 
   describe('DELETE /api/runners/:runnerId', () => {
-    test('admin can delete any runner', async () => {
+    test('is refused for every user and the runner stays (removal is on tRPC)', async () => {
       seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
 
-      const res = await t.requestAs('admin-user', 'admin').delete('/api/runners/r1');
-      expect(res.status).toBe(200);
-      const body = await res.json();
-      expect(body.ok).toBe(true);
-
-      // Verify runner is gone
-      const getRes = await t.requestAs('admin-user', 'admin').get('/api/runners/r1');
-      expect(getRes.status).toBe(404);
-    });
-
-    test('user can delete their own runner', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
-
-      const res = await t.requestAs('user-1').delete('/api/runners/r1');
-      expect(res.status).toBe(200);
-    });
-
-    test("user cannot delete another user's runner", async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
-
-      const res = await t.requestAs('user-2').delete('/api/runners/r1');
-      expect(res.status).toBe(404);
+      expect((await t.requestAs('user-1').delete('/api/runners/r1')).status).toBe(404);
+      expect((await t.requestAs('admin-user', 'admin').delete('/api/runners/r1')).status).toBe(404);
+      expect((await t.requestAs('user-1').get('/api/runners/r1')).status).toBe(200);
     });
   });
 
-  // ── POST /api/runners/:runnerId/projects ───────────────
+  // ── /api/runners/:runnerId/projects (the runner's own LOCATION records) ──
 
   describe('POST /api/runners/:runnerId/projects', () => {
-    test('assigns a project to a runner (201)', async () => {
+    test('the runner assigns a project to itself (201)', async () => {
       seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
 
-      const res = await t.requestAs('user-1').post('/api/runners/r1/projects', {
+      const res = await t.requestAsRunner('r1').post('/api/runners/r1/projects', {
         projectId: 'p1',
         localPath: '/home/user/project',
       });
@@ -197,14 +179,14 @@ describe('Runner Routes (Integration)', () => {
     test('returns 400 when required fields are missing', async () => {
       seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
 
-      const res = await t.requestAs('user-1').post('/api/runners/r1/projects', {
+      const res = await t.requestAsRunner('r1').post('/api/runners/r1/projects', {
         projectId: 'p1',
       });
       expect(res.status).toBe(400);
     });
 
     test('returns 404 when runner does not exist', async () => {
-      const res = await t.requestAs('user-1').post('/api/runners/nonexistent/projects', {
+      const res = await t.requestAsRunner('nonexistent').post('/api/runners/nonexistent/projects', {
         projectId: 'p1',
         localPath: '/home/user/project',
       });
@@ -212,10 +194,8 @@ describe('Runner Routes (Integration)', () => {
     });
   });
 
-  // ── GET /api/runners/:runnerId/projects ────────────────
-
   describe('GET /api/runners/:runnerId/projects', () => {
-    test('lists project assignments', async () => {
+    test('the runner lists its own project assignments', async () => {
       seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedRunnerProjectAssignment(t.db as any, {
@@ -224,7 +204,7 @@ describe('Runner Routes (Integration)', () => {
         localPath: '/home/user/project',
       });
 
-      const res = await t.requestAs('user-1').get('/api/runners/r1/projects');
+      const res = await t.requestAsRunner('r1').get('/api/runners/r1/projects');
       expect(res.status).toBe(200);
       const body = await res.json();
       expect(body.assignments).toHaveLength(1);
@@ -232,15 +212,13 @@ describe('Runner Routes (Integration)', () => {
     });
 
     test('returns 404 when runner does not exist', async () => {
-      const res = await t.requestAs('user-1').get('/api/runners/nonexistent/projects');
+      const res = await t.requestAsRunner('nonexistent').get('/api/runners/nonexistent/projects');
       expect(res.status).toBe(404);
     });
   });
 
-  // ── DELETE /api/runners/:runnerId/projects/:projectId ──
-
   describe('DELETE /api/runners/:runnerId/projects/:projectId', () => {
-    test('unassigns project from runner', async () => {
+    test('the runner unassigns a project from itself', async () => {
       seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedRunnerProjectAssignment(t.db as any, {
@@ -249,13 +227,36 @@ describe('Runner Routes (Integration)', () => {
         localPath: '/a',
       });
 
-      const res = await t.requestAs('user-1').delete('/api/runners/r1/projects/p1');
+      const res = await deleteAsRunner('r1', '/api/runners/r1/projects/p1');
       expect(res.status).toBe(200);
 
       // Verify assignment is removed
-      const listRes = await t.requestAs('user-1').get('/api/runners/r1/projects');
+      const listRes = await t.requestAsRunner('r1').get('/api/runners/r1/projects');
       const body = await listRes.json();
       expect(body.assignments).toHaveLength(0);
+    });
+  });
+
+  describe('/api/runners/:runnerId/projects — users are refused (assignment is on tRPC)', () => {
+    test('even the owner gets 404 and nothing is written', async () => {
+      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedRunnerProjectAssignment(t.db as any, {
+        runnerId: 'r1',
+        projectId: 'p1',
+        localPath: '/a',
+      });
+
+      const owner = t.requestAs('user-1');
+      expect(
+        (await owner.post('/api/runners/r1/projects', { projectId: 'p1', localPath: '/x' })).status,
+      ).toBe(404);
+      expect((await owner.get('/api/runners/r1/projects')).status).toBe(404);
+      expect((await owner.delete('/api/runners/r1/projects/p1')).status).toBe(404);
+      expect((await t.requestAs('user-2').get('/api/runners/r1/projects')).status).toBe(404);
+
+      const own = await t.requestAsRunner('r1').get('/api/runners/r1/projects');
+      expect((await own.json()).assignments.map((a: any) => a.localPath)).toEqual(['/a']);
     });
   });
 
@@ -336,26 +337,6 @@ describe('Runner Routes (Integration)', () => {
     });
   });
 
-  describe('Runner project assignment — tenant isolation', () => {
-    test('user-2 cannot assign a project to user-1 runner (404)', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
-      seedProject(t.db as any, { id: 'p2', userId: 'user-2', path: '/b' });
-
-      const res = await t.requestAs('user-2').post('/api/runners/r1/projects', {
-        projectId: 'p2',
-        localPath: '/home/user-2/project',
-      });
-      expect(res.status).toBe(404);
-    });
-
-    test('user-2 cannot list assignments on user-1 runner (404)', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
-
-      const res = await t.requestAs('user-2').get('/api/runners/r1/projects');
-      expect(res.status).toBe(404);
-    });
-  });
-
   describe('Runner-authenticated callers are scoped to their own runner (H2)', () => {
     const seedTwoRunners = () => {
       seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1', name: 'R1' });
@@ -405,13 +386,10 @@ describe('Runner Routes (Integration)', () => {
       });
       expect(add.status).toBe(404);
 
-      const del = await t.app.request('/api/runners/r1/projects/p1', {
-        method: 'DELETE',
-        headers: { 'X-Test-Is-Runner': 'true', 'X-Test-Runner-Id': 'r2' },
-      });
+      const del = await deleteAsRunner('r2', '/api/runners/r1/projects/p1');
       expect(del.status).toBe(404);
 
-      const own = await t.requestAs('user-1').get('/api/runners/r1/projects');
+      const own = await t.requestAsRunner('r1').get('/api/runners/r1/projects');
       const body = await own.json();
       expect(body.assignments).toHaveLength(1);
       expect(body.assignments[0].localPath).toBe('/a');

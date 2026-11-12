@@ -1,6 +1,5 @@
 /**
- * The runner operations a user calls, for both `/api/runners` (REST) and the
- * `runners` tRPC router. A user reaches only their own runners (an instance
+ * The runner operations a user calls, for the `runners` tRPC router. A user reaches only their own runners (an instance
  * admin reaches every runner); anyone else's answers 404 and is audited, so its
  * existence is not disclosed. What a runner calls with its own credential
  * (register, enrollment start / poll, heartbeat, tasks, its own record) stays
@@ -54,13 +53,6 @@ export const runnersPort: RunnersPort = {
       meta: { runnerId },
     });
     return ok({ ok: true as const });
-  },
-
-  async assignments(caller, runnerId) {
-    if (!(await rm.getRunner(runnerId)) || !(await canAccessRunner(caller, runnerId, 'list'))) {
-      return runnerNotFound();
-    }
-    return ok({ assignments: await rm.listAssignments(runnerId) });
   },
 
   async assignProject(caller, runnerId, data) {

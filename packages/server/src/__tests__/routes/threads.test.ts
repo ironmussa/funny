@@ -733,7 +733,8 @@ describe('Thread Routes (Integration)', () => {
     });
   });
 
-  describe('GET /api/threads/archived', () => {
+  // The archived listing is served only over tRPC (`threads.archived`).
+  describe('threads.archived', () => {
     test('lists archived threads for the caller', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
       seedThread(t.db as any, {
@@ -751,9 +752,19 @@ describe('Thread Routes (Integration)', () => {
         archived: 0,
       });
 
-      const res = await t.requestAs('user-1').get('/api/threads/archived');
+      seedThread(t.db as any, {
+        id: 't3',
+        projectId: 'p1',
+        userId: 'user-2',
+        title: 'Someone else',
+        archived: 1,
+      });
+
+      const res = await t.app.request(`/api/trpc/threads.archived`, {
+        headers: { 'X-Test-User-Id': 'user-1' },
+      });
       expect(res.status).toBe(200);
-      const body = await res.json();
+      const body = (await res.json()).result.data;
       expect(body.threads).toHaveLength(1);
       expect(body.threads[0].id).toBe('t1');
     });

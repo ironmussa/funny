@@ -118,8 +118,11 @@ describe('Thread routes follow the contract', () => {
     test('an archived listing maps its threads too', async () => {
       seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', archived: 1 });
 
-      const res = await t.requestAs('user-1').get('/api/threads/archived');
-      const body = await res.json();
+      // Served only over tRPC (`threads.archived`); the REST route was removed.
+      const res = await t.app.request(`/api/trpc/threads.archived`, {
+        headers: { 'X-Test-User-Id': 'user-1' },
+      });
+      const body = (await res.json()).result.data;
       expect(body).toMatchObject({ total: 1, page: 1, limit: 100 });
       expect(body.threads[0].archived).toBe(true);
     });

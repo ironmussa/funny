@@ -4,6 +4,8 @@
  * projects (404 for anyone else's), an admin every runner, enrollment approval
  * binds the runner to the caller, and a project runner change made over tRPC
  * stops the agents of the runner that lost access, signed as the project owner.
+ * The project runner settings cases come from the removed REST routes
+ * (`/api/projects/:id/runner-settings`, `/runner-grants`, `/general-runner`).
  */
 import { mockCoreGitRepoChecks } from '../helpers/module-mocks.js';
 
@@ -13,7 +15,16 @@ mockCoreGitRepoChecks();
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import {
+  NONCE_HEADER,
+  SIGNATURE_HEADER,
+  TIMESTAMP_HEADER,
+  verifyForwardedIdentity,
+} from '@funny/shared/auth/forwarded-identity';
+import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
+
 import { __resetRunnerScopeCache, canRunnerAccessProject } from '../../services/runner-scope.js';
+import { stopProjectSessionsOnRunners } from '../../trpc/ports/project-runners.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
 
@@ -59,6 +70,22 @@ describe('runners over tRPC', () => {
     });
   });
 
+  /**
+   * True when the request carries a valid signed forwarded identity for
+   * `userId`, keyed with the TARGET runner's derived key (security H1).
+   */
+  const signedFor = (
+    userId: string,
+    sentReq: { runnerId: string; headers: Record<string, string> },
+  ) =>
+    verifyForwardedIdentity(
+      { userId, role: 'user', orgId: null, orgName: null },
+      deriveRunnerForwardingKey('test-secret', sentReq.runnerId),
+      sentReq.headers[SIGNATURE_HEADER],
+      sentReq.headers[TIMESTAMP_HEADER],
+      sentReq.headers[NONCE_HEADER],
+    );
+
   beforeEach(() => {
     t.cleanup();
     __resetRunnerScopeCache();
@@ -76,14 +103,12 @@ describe('runners over tRPC', () => {
   });
 
   describe('runners', () => {
-    test('a user lists their own runners, an admin every runner, like REST', async () => {
+    test('a user lists their own runners, an admin every runner', async () => {
       const own = await query('alice', 'runners.list');
       expect(own.body.result.data.runners.map((r: any) => r.runnerId).sort()).toEqual([
         'laptop',
         'rx',
       ]);
-      const rest = await t.requestAs('alice').get('/api/runners');
-      expect(own.body.result.data).toEqual(await rest.json());
 
       const all = await query('root', 'runners.list', undefined, 'admin');
       expect(all.body.result.data.runners).toHaveLength(3);
@@ -196,10 +221,59 @@ describe('runners over tRPC', () => {
         ['laptop', '/api/threads/running-on-laptop/stop'],
       ]);
       expect(sent[0]!.headers['X-Forwarded-User']).toBe('alice');
+      // Signed as the project owner with the revoked runner's own key.
+      expect(signedFor('alice', sent[0]!)).toBe(true);
 
       const settings = await query('alice', 'projectRunners.settings', { projectId: 'px' });
-      const rest = await t.requestAs('alice').get('/api/projects/px/runner-settings');
-      expect(settings.body.result.data).toEqual(await rest.json());
+      expect(settings.body.result.data.dedicatedRunnerId).toBe('rx');
+      expect(settings.body.result.data.runners.map((r: any) => r.runnerId).sort()).toEqual([
+        'laptop',
+        'rx',
+      ]);
+    });
+
+    test('stop-sessions skips a runner the project owner does not own', async () => {
+      seedThread(t.db as any, {
+        id: 'on-bobs-runner',
+        projectId: 'px',
+        userId: 'alice',
+        status: 'running',
+        runnerId: 'bob-r',
+      });
+      seedThread(t.db as any, {
+        id: 'on-laptop',
+        projectId: 'px',
+        userId: 'alice',
+        status: 'running',
+        runnerId: 'laptop',
+      });
+      const requests = {
+        isAvailable: () => true,
+        request: async (
+          runnerId: string,
+          req: { path: string; headers: Record<string, string> },
+        ) => {
+          sent.push({ runnerId, path: req.path, headers: req.headers });
+          return { status: 200, headers: {}, body: '{}' };
+        },
+      } as any;
+      await stopProjectSessionsOnRunners({ requests }, 'px', ['bob-r', 'laptop']);
+      expect(sent.map((s) => [s.runnerId, s.path])).toEqual([
+        ['laptop', '/api/threads/on-laptop/stop'],
+      ]);
+      expect(signedFor('alice', sent[0]!)).toBe(true);
+    });
+
+    test('the project GitHub token is stored but never returned', async () => {
+      const res = await mutate('alice', 'projectRunners.update', {
+        projectId: 'px',
+        data: { githubToken: 'ghp_secret' },
+      });
+      expect(res.status).toBe(200);
+      expect(res.body.result.data.hasGithubToken).toBe(true);
+      expect(JSON.stringify(res.body)).not.toContain('ghp_secret');
+      const settings = await query('alice', 'projectRunners.settings', { projectId: 'px' });
+      expect(JSON.stringify(settings.body)).not.toContain('ghp_secret');
     });
 
     test("pinning or granting someone else's runner is 404", async () => {

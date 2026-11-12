@@ -119,26 +119,28 @@ export const threadRoutes = new Hono<ServerEnv>();
 const threadsPort = (c: Context<ServerEnv>) => createThreadsPort(c.env?.browserEvents);
 
 // GET /api/threads?projectId=xxx&includeArchived=true&limit=50&offset=0&isScratch=true
+// Kept on REST: called by client-gpuix and the e2e fixtures.
 serveEndpoint(threadRoutes, contract.list, ({ userId, query }, c) =>
   answer(threadsPort(c).list({ userId, organizationId: c.get('organizationId') }, query)),
 );
 
 // GET /api/threads/scratch — list the current user's scratch threads
+// Kept on REST: called by client-gpuix and the e2e fixtures.
 serveEndpoint(threadRoutes, contract.scratch, ({ userId, query }, c) =>
   answer(threadsPort(c).scratch(userId, query)),
 );
 
-// GET /api/threads/archived?page=1&limit=100&search=xxx
-serveEndpoint(threadRoutes, contract.archived, ({ userId, query }, c) =>
-  answer(threadsPort(c).archived(userId, query)),
-);
+// GET /api/threads/archived is served only over tRPC (`threads.archived`). The
+// REST path now reaches `GET /:id` below, which answers 404 for the unknown id.
 
 // GET /api/threads/:id — get thread with messages
+// Kept on REST: called by client-gpuix and the e2e fixtures.
 serveEndpoint(threadRoutes, contract.get, ({ userId, params, query }, c) =>
   answer(threadsPort(c).get(userId, params.id, query)),
 );
 
 // GET /api/threads/:id/messages?cursor=<ISO>&limit=50&direction=before|after
+// Kept on REST: called by client-gpuix and the e2e fixtures.
 serveEndpoint(
   threadRoutes,
   contract.messages,
@@ -241,6 +243,7 @@ threadRoutes.delete('/:id/comments/:commentId', requireThreadOwner, async (c) =>
 const ownerOnly = { middleware: [requireThreadOwner] };
 
 // PATCH /api/threads/:id — update thread data
+// Kept on REST: called by the e2e fixtures.
 serveEndpoint(
   threadRoutes,
   contract.update,

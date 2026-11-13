@@ -44,16 +44,39 @@ export interface AutomationJob {
 /** `onTick` settles when the run is recorded, and never rejects. */
 export type CreateJob = (pattern: string, onTick: () => Promise<void>) => AutomationJob;
 
+/** A repeating stale-run sweep — an interval in production, a fake in tests. */
+export interface SweepTimer {
+  stop(): void;
+}
+
+/** `onSweep` never rejects. */
+export type StartSweep = (onSweep: () => Promise<void>) => SweepTimer;
+
 export interface AutomationSchedulerDeps {
   ports: RunnerPorts;
   createJob?: CreateJob;
+  startSweep?: StartSweep;
   /** Launcher override for tests. */
   launch?: typeof startThreadOnRunner;
   now?: () => Date;
 }
 
-/** A run still `running` after this long gets marked failed on startup. */
+/** A run still `running` after this long gets marked failed (startup and every sweep). */
 export const STALE_RUN_MS = 24 * 60 * 60 * 1000;
+
+/** How often the stale-run sweep runs while the server is up. */
+const STALE_RUN_SWEEP_MS = 60 * 60 * 1000;
+
+/**
+ * The production sweep. A run whose runner died never reports a terminal
+ * status, so without it the run would stay `running` until the next restart
+ * (#198). `unref` keeps the timer from holding the process open.
+ */
+const startIntervalSweep: StartSweep = (onSweep) => {
+  const timer = setInterval(() => void onSweep(), STALE_RUN_SWEEP_MS);
+  timer.unref?.();
+  return { stop: () => clearInterval(timer) };
+};
 
 /**
  * The production job. Croner awaits the tick's promise, and `protect` skips an
@@ -66,6 +89,7 @@ export const createCronJob: CreateJob = (pattern, onTick) =>
 
 const jobs = new Map<string, AutomationJob>();
 let deps: AutomationSchedulerDeps | null = null;
+let sweep: SweepTimer | null = null;
 
 const now = () => (deps?.now ?? (() => new Date()))();
 
@@ -75,6 +99,7 @@ export async function startAutomationScheduler(d: AutomationSchedulerDeps): Prom
   stopAutomationScheduler();
   deps = d;
   await failStaleRuns();
+  sweep = (d.startSweep ?? startIntervalSweep)(sweepStaleRuns);
   const enabled = (await automationRepo.listAutomations()).filter((a) => a.enabled);
   for (const automation of enabled) await schedule(automation);
   log.info('Automation scheduler started', { namespace: 'automation', jobs: jobs.size });
@@ -83,6 +108,8 @@ export async function startAutomationScheduler(d: AutomationSchedulerDeps): Prom
 export function stopAutomationScheduler(): void {
   for (const job of jobs.values()) job.stop();
   jobs.clear();
+  sweep?.stop();
+  sweep = null;
   deps = null;
 }
 
@@ -138,10 +165,19 @@ async function recordNextRun(id: string): Promise<void> {
  * croner does not catch what the tick rejects with (#185).
  */
 function tick(id: string): Promise<void> {
-  return fire(id).catch((error: unknown) => {
-    log.error('Automation tick failed', {
+  return logFailure(fire(id), 'Automation tick failed', { automationId: id });
+}
+
+/** Settle `work`, logging a rejection instead of passing it on to a timer. */
+function logFailure(
+  work: Promise<void>,
+  message: string,
+  fields: Record<string, unknown> = {},
+): Promise<void> {
+  return work.catch((error: unknown) => {
+    log.error(message, {
       namespace: 'automation',
-      automationId: id,
+      ...fields,
       error: error instanceof Error ? error.message : String(error),
     });
   });
@@ -166,7 +202,7 @@ async function fire(id: string): Promise<void> {
  * Whether a scheduled tick would overlap the previous run: one still
  * `running` (its thread has not reported a terminal status). A run older than
  * `STALE_RUN_MS` does not count, so one lost completion cannot stop the
- * automation for good; startup marks those failed. Manual runs skip this.
+ * automation for good; the stale-run sweep marks those failed. Manual runs skip this.
  */
 async function hasRunInProgress(automationId: string): Promise<boolean> {
   const since = new Date(now().getTime() - STALE_RUN_MS).toISOString();
@@ -309,13 +345,26 @@ async function recordFailedDispatch(
   });
 }
 
+/** One periodic sweep. A failure is logged, never thrown into the timer. */
+function sweepStaleRuns(): Promise<void> {
+  return logFailure(failStaleRuns(), 'Stale automation run sweep failed');
+}
+
+const STALE_RUN_SUMMARY = 'No completion was reported for this run';
+
 /** Runs whose thread never reported a terminal status don't stay `running` forever. */
 async function failStaleRuns(): Promise<void> {
   const cutoff = new Date(now().getTime() - STALE_RUN_MS).toISOString();
-  const stale = await dbAll(
+  const stale = (await dbAll(
     db
-      .select({ id: schema.automationRuns.id })
+      .select({
+        id: schema.automationRuns.id,
+        threadId: schema.automationRuns.threadId,
+        automationId: schema.automationRuns.automationId,
+        userId: schema.automations.userId,
+      })
       .from(schema.automationRuns)
+      .innerJoin(schema.automations, eq(schema.automations.id, schema.automationRuns.automationId))
       .where(
         and(
           eq(schema.automationRuns.status, 'running'),
@@ -323,19 +372,35 @@ async function failStaleRuns(): Promise<void> {
         ),
       )
       .orderBy(asc(schema.automationRuns.startedAt)),
-  );
-  for (const { id } of stale as { id: string }[]) {
-    await automationRepo.updateRun(id, {
-      status: 'failed',
-      hasFindings: 0,
-      summary: 'No completion was reported for this run',
-      completedAt: now().toISOString(),
+  )) as { id: string; threadId: string; automationId: string; userId: string }[];
+  let failed = 0;
+  for (const run of stale) {
+    // Only a run still `running`: a completion that landed after the select wins.
+    const updated = await db
+      .update(schema.automationRuns)
+      .set({
+        status: 'failed',
+        hasFindings: 0,
+        summary: STALE_RUN_SUMMARY,
+        completedAt: now().toISOString(),
+      })
+      .where(and(eq(schema.automationRuns.id, run.id), eq(schema.automationRuns.status, 'running')))
+      .returning({ id: schema.automationRuns.id });
+    if (updated.length === 0) continue;
+    failed++;
+    // The sweep also runs while browsers are open, so tell the owner's.
+    relayToUser(run.userId, {
+      type: 'automation:run_completed',
+      threadId: run.threadId,
+      data: {
+        automationId: run.automationId,
+        runId: run.id,
+        hasFindings: false,
+        summary: STALE_RUN_SUMMARY,
+      },
     });
   }
-  if (stale.length) {
-    log.warn('Marked stale automation runs as failed', {
-      namespace: 'automation',
-      count: stale.length,
-    });
+  if (failed) {
+    log.warn('Marked stale automation runs as failed', { namespace: 'automation', count: failed });
   }
 }

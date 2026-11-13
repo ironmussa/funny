@@ -20,6 +20,7 @@ import {
   unscheduleAutomation,
   type AutomationJob,
 } from '../../services/automation-scheduler.js';
+import * as browserEvents from '../../services/browser-events.js';
 import type { StartThreadInput } from '../../services/runner-thread-launcher.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedAutomation, seedAutomationRun, seedProject, seedThread } from '../helpers/test-db.js';
@@ -423,6 +424,68 @@ describe('automation scheduler', () => {
 
       const byId = Object.fromEntries(runs().map((r: any) => [r.id, r.status]));
       expect(byId).toEqual({ 'r-old': 'failed', 'r-fresh': 'running' });
+    });
+
+    test('runs that go stale while the server is up are failed by the periodic sweep (#198)', async () => {
+      seedAutomation(t.db as any, { id: 'a', projectId: 'p1', userId: 'alice' });
+      seedThread(t.db as any, { id: 'lost', projectId: 'p1' });
+      let sweep: (() => Promise<void>) | null = null;
+      let sweepStopped = false;
+      let clock = new Date('2030-01-01T00:00:00.000Z');
+
+      await startAutomationScheduler({
+        ports,
+        createJob: fakeCron().createJob,
+        launch: fakeLauncher().launch,
+        now: () => clock,
+        startSweep: (onSweep) => {
+          sweep = onSweep;
+          return {
+            stop: () => {
+              sweepStopped = true;
+            },
+          };
+        },
+      });
+
+      // The run starts after startup's sweep, and its runner never reports back.
+      (t.db as any)
+        .insert(schema.automationRuns)
+        .values({
+          id: 'r-lost',
+          automationId: 'a',
+          threadId: 'lost',
+          status: 'running',
+          startedAt: clock.toISOString(),
+        })
+        .run();
+
+      const relayed = spyOn(browserEvents, 'relayToUser');
+      await sweep!();
+      expect(runs()[0].status).toBe('running');
+
+      clock = new Date(clock.getTime() + STALE_RUN_MS + 60_000);
+      await sweep!();
+      expect(runs()[0]).toMatchObject({
+        status: 'failed',
+        summary: 'No completion was reported for this run',
+      });
+      // An open browser learns the run finished without a reload.
+      expect(relayed).toHaveBeenCalledTimes(1);
+      expect(relayed.mock.calls[0][0]).toBe('alice');
+      expect(relayed.mock.calls[0][1]).toMatchObject({
+        type: 'automation:run_completed',
+        threadId: 'lost',
+        data: { automationId: 'a', runId: 'r-lost', hasFindings: false },
+      });
+
+      // A run already failed is left alone (and not announced twice).
+      await sweep!();
+      expect(relayed).toHaveBeenCalledTimes(1);
+      relayed.mockRestore();
+
+      stopAutomationScheduler();
+      expect(sweepStopped).toBe(true);
     });
   });
 });

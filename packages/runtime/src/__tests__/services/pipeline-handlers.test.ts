@@ -4,7 +4,7 @@
  * Tests that pipeline handlers are correctly registered in the
  * handler-registry and respond to the expected events.
  */
-import { describe, test, expect, vi } from 'vitest';
+import { beforeEach, describe, test, expect, vi } from 'vitest';
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -58,7 +58,9 @@ vi.mock('../../services/git-workflow-service.js', () => ({
   isWorkflowActive: vi.fn(() => false),
 }));
 
+import { isWorkflowActive } from '../../services/git-workflow-service.js';
 import { pipelineTriggerHandler } from '../../services/handlers/pipeline-trigger-handler.js';
+import { getPipelineForProject, startPipelineRun } from '../../services/pipeline-manager.js';
 
 // ── Tests ────────────────────────────────────────────────────
 
@@ -85,5 +87,44 @@ describe('pipelineTriggerHandler', () => {
         {} as any,
       ),
     ).resolves.toBeUndefined();
+  });
+});
+
+// A commit made inside a commit workflow (commit node, review-fix commit-fix,
+// test-fixer) is not marked on the event: the handler relies on
+// isWorkflowActive alone to avoid a second review beside the embedded one.
+describe('pipelineTriggerHandler workflow guard', () => {
+  const event = {
+    threadId: 't-1',
+    userId: 'u-1',
+    projectId: 'proj-1',
+    message: 'feat: x',
+    cwd: '/tmp',
+    commitSha: 'abc123',
+  };
+
+  beforeEach(() => {
+    vi.mocked(startPipelineRun).mockClear();
+    vi.mocked(getPipelineForProject).mockResolvedValue({ id: 'pipe-1' } as any);
+    vi.mocked(isWorkflowActive).mockReturnValue(false);
+  });
+
+  test('starts a pipeline run when no workflow is active', async () => {
+    await pipelineTriggerHandler.action(event, {} as any);
+    expect(startPipelineRun).toHaveBeenCalledWith(
+      expect.objectContaining({ threadId: 't-1', projectId: 'proj-1', commitSha: 'abc123' }),
+    );
+  });
+
+  test('skips when a workflow is active for the thread', async () => {
+    vi.mocked(isWorkflowActive).mockImplementation((id) => id === 't-1');
+    await pipelineTriggerHandler.action(event, {} as any);
+    expect(startPipelineRun).not.toHaveBeenCalled();
+  });
+
+  test('skips when a workflow is active for the project', async () => {
+    vi.mocked(isWorkflowActive).mockImplementation((id) => id === 'proj-1');
+    await pipelineTriggerHandler.action(event, {} as any);
+    expect(startPipelineRun).not.toHaveBeenCalled();
   });
 });

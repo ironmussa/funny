@@ -41,7 +41,6 @@ import {
   resolveIdentity,
 } from './git-service.js';
 import { pipelineApprovalStore } from './pipeline-approval-store.js';
-import { threadEventBus } from './thread-event-bus.js';
 import * as tm from './thread-manager.js';
 import { createAndStartThread } from './thread-service/create.js';
 import { emitThreadUpdated } from './thread-service/helpers.js';
@@ -190,12 +189,6 @@ export class RuntimeActionProvider implements ActionProvider {
   async gitCommit(opts: GitCommitOpts): Promise<ActionResult> {
     const { threadId, userId, workflowId } = this.opts;
 
-    // Mark as pipeline commit to prevent re-triggering review
-    const patchListener = (event: { isPipelineCommit?: boolean }) => {
-      event.isPipelineCommit = true;
-    };
-    threadEventBus.on('git:committed', patchListener as any);
-
     try {
       if (threadId) {
         const result = await gitServiceCommit(
@@ -246,8 +239,6 @@ export class RuntimeActionProvider implements ActionProvider {
         ok: false,
         error: err instanceof Error ? err.message : String(err),
       };
-    } finally {
-      threadEventBus.removeListener('git:committed', patchListener as any);
     }
   }
 

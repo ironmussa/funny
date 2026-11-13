@@ -5,7 +5,7 @@ import { resolve, isAbsolute, join } from 'path';
 import type { GitHubRepo, WSCloneProgressData } from '@funny/shared';
 import { retryAsync } from '@funny/shared/async';
 import { badRequest, conflict, processError } from '@funny/shared/errors';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { err } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
@@ -20,6 +20,15 @@ import { githubApiFetch, resolveGithubToken } from './helpers.js';
 import { readPaging, readRepoSort } from './query.js';
 
 export const repoRoutes = new Hono<HonoEnv>();
+
+/**
+ * Security (#179): the clone goes into `join(parentDir, name)`, so the name
+ * (given, or taken from the URL) must be one path segment: no separator on
+ * either platform, not `.` or `..`, no NUL.
+ */
+function isSingleDirName(name: string): boolean {
+  return name !== '.' && name !== '..' && !/[/\\\0]/.test(name);
+}
 
 // ── GET /repos — list repos with optional search ───────────
 
@@ -97,16 +106,18 @@ repoRoutes.get('/repos', async (c) => {
   }
 });
 
-// ── POST /clone — clone a repo and create project ──────────
-
-repoRoutes.post('/clone', async (c) => {
-  const userId = c.get('userId') as string;
-  const raw = await c.req.json();
-  const parsed = validate(cloneRepoSchema, raw);
-  if (parsed.isErr()) return resultToResponse(c, parsed);
-
-  const { cloneUrl, destinationPath, name } = parsed.value;
-
+/**
+ * Where a clone goes: `destinationPath` joined with the repository name (given,
+ * or taken from the URL). Answers the error response when the destination is
+ * not an existing directory in picker scope, the name is not a single path
+ * segment, or the clone directory is out of scope or already exists.
+ */
+async function resolveCloneTarget(
+  c: Context<HonoEnv>,
+  cloneUrl: string,
+  destinationPath: string,
+  name: string | undefined,
+): Promise<Response | { repoName: string; clonePath: string }> {
   // Validate destination
   if (!isAbsolute(destinationPath)) {
     return resultToResponse(c, err(badRequest('Destination path must be absolute')));
@@ -134,11 +145,36 @@ repoRoutes.post('/clone', async (c) => {
       .pop()
       ?.replace(/\.git$/, '') ||
     'repo';
+  if (!isSingleDirName(repoName)) {
+    return resultToResponse(c, err(badRequest(`Invalid repository name: ${repoName}`)));
+  }
   const clonePath = join(parentDir, repoName);
+
+  // The name can still pick a blocked directory under an allowed parent
+  // (`$HOME` + `.kube`), so the clone path itself must be in picker scope.
+  const clonePathDenied = await requirePickerPath(clonePath);
+  if (clonePathDenied) return clonePathDenied;
 
   if (existsSync(clonePath)) {
     return resultToResponse(c, err(badRequest(`Directory already exists: ${clonePath}`)));
   }
+
+  return { repoName, clonePath };
+}
+
+// ── POST /clone — clone a repo and create project ──────────
+
+repoRoutes.post('/clone', async (c) => {
+  const userId = c.get('userId') as string;
+  const raw = await c.req.json();
+  const parsed = validate(cloneRepoSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const { cloneUrl, destinationPath, name } = parsed.value;
+
+  const target = await resolveCloneTarget(c, cloneUrl, destinationPath, name);
+  if (target instanceof Response) return target;
+  const { repoName, clonePath } = target;
 
   // Check for duplicate project name before cloning
   if (await getServices().projects.projectNameExists(repoName, userId)) {

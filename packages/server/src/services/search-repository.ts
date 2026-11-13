@@ -3,7 +3,11 @@
  * Supports FTS5 (SQLite), tsvector (PostgreSQL), and LIKE fallback.
  */
 
-import { findTextSearchMatches, includesSearchText } from '@funny/shared/lib/text-search';
+import {
+  findTextSearchMatches,
+  includesSearchText,
+  normalizeSearchText,
+} from '@funny/shared/lib/text-search';
 import { eq, and, desc } from 'drizzle-orm';
 import { sql, type SQL } from 'drizzle-orm';
 
@@ -14,6 +18,108 @@ function escapeLike(value: string): string {
   // paired with an `ESCAPE '\'` clause on the LIKE, otherwise the backslash is
   // taken literally and `apply_patch` would never match.
   return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
+}
+
+const isAsciiChar = (ch: string) => ch.charCodeAt(0) < 0x80;
+const hasAscii = (text: string) => Array.from(text).some(isAsciiChar);
+const isAscii = (text: string) => Array.from(text).every(isAsciiChar);
+
+/**
+ * Bracket-class body (no brackets) of every non-ASCII character that
+ * `normalizeSearchText` folds onto ASCII or erases: precomposed letters
+ * (`ñ` → `n`), `≠` → `=`, and every combining mark (`\p{M}`), which is
+ * stripped and so can sit inside an ASCII word. Derived from the folding
+ * itself so it cannot drift from it; built once, on the first search (~150 ms).
+ */
+let foldsToAsciiClass: string | undefined;
+function foldsToAscii(): string {
+  if (foldsToAsciiClass !== undefined) return foldsToAsciiClass;
+  const ranges: [number, number][] = [];
+  for (let cp = 0x80; cp <= 0x10ffff; cp++) {
+    if (cp >= 0xd800 && cp <= 0xdfff) continue; // surrogates are not characters
+    const folded = normalizeSearchText(String.fromCodePoint(cp));
+    if (folded !== '' && !hasAscii(folded)) continue;
+    const last = ranges.at(-1);
+    if (last && last[1] === cp - 1) last[1] = cp;
+    else ranges.push([cp, cp]);
+  }
+  foldsToAsciiClass = ranges
+    .map(([from, to]) =>
+      from === to
+        ? String.fromCodePoint(from)
+        : `${String.fromCodePoint(from)}-${String.fromCodePoint(to)}`,
+    )
+    .join('');
+  return foldsToAsciiClass;
+}
+
+/** `content` holds at least one character of the bracket class `[body]`. */
+function contentHasCharIn(body: string): SQL {
+  const content = schema.messages.content;
+  return dbDialect === 'pg'
+    ? sql`${content} ~ ${`[${body}]`}`
+    : sql`${content} glob ${`*[${body}]*`}`;
+}
+
+/**
+ * SQL pre-filter for a case- and diacritic-insensitive content search
+ * (issue #191). SQL has no portable Unicode-folding collation, so the exact
+ * comparison stays in JS (`includesSearchText`); this narrows the rows to a
+ * superset of the matches so the database, not the server, discards the rest.
+ *
+ * - The folded query is ASCII (the common case, including `niña` → `nina`):
+ *   in a message without any character of {@link foldsToAscii}, folding
+ *   only lowercases the ASCII runs, so `lower(content) LIKE` decides; a
+ *   message with such a character is left to the JS check.
+ * - Otherwise a match needs at least one non-ASCII character. (NUL is
+ *   excluded from the class because SQL text parameters cannot carry it.)
+ */
+export function contentPrefilter(query: string): SQL {
+  const folded = normalizeSearchText(query.trim());
+  if (!folded) return sql`1 = 1`;
+  if (!isAscii(folded)) return contentHasCharIn('^\u0001-\u007F');
+  const pattern = `%${escapeLike(folded)}%`;
+  return sql`(lower(${schema.messages.content}) like ${pattern} escape '\\' or ${contentHasCharIn(foldsToAscii())})`;
+}
+
+/** Content filter for either search mode; a superset of the JS-checked matches. */
+function contentFilter(query: string, caseSensitive: boolean): SQL {
+  return caseSensitive
+    ? sql`${schema.messages.content} like ${`%${escapeLike(query)}%`} escape '\\'`
+    : contentPrefilter(query);
+}
+
+/** Rows fetched per round trip by the JS-filtered scans below. */
+const SCAN_PAGE_SIZE = 500;
+
+interface MessageCursor {
+  timestamp: string;
+  id: string;
+}
+
+/**
+ * Reads messages in pages of {@link SCAN_PAGE_SIZE}, ordered by
+ * `(timestamp, id)`, so the JS filter can stop early and memory stays bounded.
+ * Keyset paging (not OFFSET): a message inserted mid-scan never shifts a page,
+ * so no row is read twice or skipped, and each page costs the same.
+ * `page(after)` must return rows after the cursor in the given `order`.
+ */
+async function* scanMessages<T extends MessageCursor>(
+  page: (after: SQL | undefined) => Promise<T[]>,
+  order: 'asc' | 'desc',
+): AsyncGenerator<T> {
+  const { timestamp, id } = schema.messages;
+  let after: SQL | undefined;
+  while (true) {
+    const rows = await page(after);
+    yield* rows;
+    if (rows.length < SCAN_PAGE_SIZE) return;
+    const last = rows[rows.length - 1]!;
+    after =
+      order === 'desc'
+        ? sql`(${timestamp} < ${last.timestamp} or (${timestamp} = ${last.timestamp} and ${id} < ${last.id}))`
+        : sql`(${timestamp} > ${last.timestamp} or (${timestamp} = ${last.timestamp} and ${id} > ${last.id}))`;
+  }
 }
 
 function escapeFts5Query(value: string): string {
@@ -114,9 +220,7 @@ export async function searchThreadMessages(opts: {
 
   const filters: SQL[] = [eq(schema.threads.userId, userId)];
   if (projectId) filters.push(eq(schema.threads.projectId, projectId));
-  if (query && caseSensitive) {
-    filters.push(sql`${schema.messages.content} like ${`%${escapeLike(query)}%`} escape '\\'`);
-  }
+  if (query) filters.push(contentFilter(query, caseSensitive));
   if (author) {
     filters.push(sql`${schema.messages.author} like ${`%${escapeLike(author)}%`} escape '\\'`);
   }
@@ -125,26 +229,32 @@ export async function searchThreadMessages(opts: {
 
   const cap = Math.max(1, Math.min(500, Math.trunc(limit) || 50));
 
-  const rows = await dbAll(
-    db
-      .select({
-        threadId: schema.messages.threadId,
-        threadTitle: schema.threads.title,
-        messageId: schema.messages.id,
-        role: schema.messages.role,
-        author: schema.messages.author,
-        timestamp: schema.messages.timestamp,
-        content: schema.messages.content,
-      })
-      .from(schema.messages)
-      .innerJoin(schema.threads, eq(schema.messages.threadId, schema.threads.id))
-      .where(and(...filters))
-      .orderBy(desc(schema.messages.timestamp)),
-    // Accent-insensitive comparison happens below, before the final cap.
+  // The SQL filters are a superset of the matches (the exact Unicode-aware
+  // comparison happens below), so read newest first in pages and stop at the cap.
+  const rows = scanMessages(
+    (after) =>
+      dbAll(
+        db
+          .select({
+            threadId: schema.messages.threadId,
+            threadTitle: schema.threads.title,
+            id: schema.messages.id,
+            role: schema.messages.role,
+            author: schema.messages.author,
+            timestamp: schema.messages.timestamp,
+            content: schema.messages.content,
+          })
+          .from(schema.messages)
+          .innerJoin(schema.threads, eq(schema.messages.threadId, schema.threads.id))
+          .where(and(...filters, after))
+          .orderBy(desc(schema.messages.timestamp), desc(schema.messages.id))
+          .limit(SCAN_PAGE_SIZE),
+      ),
+    'desc',
   );
 
   const results: ThreadMessageMatch[] = [];
-  for (const row of rows) {
+  for await (const row of rows) {
     let snippet: string;
     if (query) {
       if (!includesSearchText(row.content, query, caseSensitive)) continue;
@@ -161,7 +271,7 @@ export async function searchThreadMessages(opts: {
     results.push({
       threadId: row.threadId,
       threadTitle: row.threadTitle,
-      messageId: row.messageId,
+      messageId: row.id,
       role: row.role,
       author: row.author,
       timestamp: row.timestamp,
@@ -259,31 +369,34 @@ async function searchViaLike(
   caseSensitive: boolean,
 ): Promise<Map<string, string>> {
   const trimmed = query.trim();
-  const safeQuery = escapeLike(trimmed);
 
-  // SQL has no portable Unicode-diacritic-insensitive collation. For
-  // case-insensitive search, scope by user/project in SQL and apply the
-  // normalized comparison below. Case-sensitive search retains the narrower
-  // literal LIKE pre-filter.
-  const filters: SQL[] = caseSensitive
-    ? [sql`${schema.messages.content} like ${`%${safeQuery}%`} escape '\\'`]
-    : [];
-
-  filters.push(eq(schema.threads.userId, userId));
+  const filters: SQL[] = [contentFilter(trimmed, caseSensitive), eq(schema.threads.userId, userId)];
   if (projectId) {
     filters.push(eq(schema.threads.projectId, projectId));
   }
 
-  const rows = await dbAll(
-    db
-      .select({ threadId: schema.messages.threadId, content: schema.messages.content })
-      .from(schema.messages)
-      .innerJoin(schema.threads, eq(schema.messages.threadId, schema.threads.id))
-      .where(and(...filters)),
+  // Oldest first, so each thread's snippet comes from its earliest match.
+  const rows = scanMessages(
+    (after) =>
+      dbAll(
+        db
+          .select({
+            threadId: schema.messages.threadId,
+            id: schema.messages.id,
+            timestamp: schema.messages.timestamp,
+            content: schema.messages.content,
+          })
+          .from(schema.messages)
+          .innerJoin(schema.threads, eq(schema.messages.threadId, schema.threads.id))
+          .where(and(...filters, after))
+          .orderBy(schema.messages.timestamp, schema.messages.id)
+          .limit(SCAN_PAGE_SIZE),
+      ),
+    'asc',
   );
 
   const result = new Map<string, string>();
-  for (const row of rows) {
+  for await (const row of rows) {
     if (result.has(row.threadId)) continue;
     if (!includesSearchText(row.content, trimmed, caseSensitive)) continue;
     const match = findTextSearchMatches(row.content, trimmed, caseSensitive)[0]!;

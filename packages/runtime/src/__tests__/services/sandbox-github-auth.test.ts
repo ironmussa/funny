@@ -3,10 +3,12 @@ import { mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { GITHUB_APP_TOKEN_REUSE_MARGIN_MS } from '@funny/shared/github-app-token';
 import { afterEach, describe, expect, test } from 'vitest';
 
 import {
   createSandboxGithubAuth,
+  renewalDelay,
   type GithubAppTokenReply,
 } from '../../services/sandbox-github-auth.js';
 
@@ -20,10 +22,42 @@ const tempHome = () => {
   return dir;
 };
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-const reply = (n: number): GithubAppTokenReply => ({
+const reply = (n: number, expiresAt = '2026-11-10T13:00:00Z'): GithubAppTokenReply => ({
   token: `ghs_${n}`,
-  expiresAt: '2026-11-10T13:00:00Z',
+  expiresAt,
   repo: 'acme/app',
+});
+const inMs = (ms: number) => new Date(Date.now() + ms).toISOString();
+const MIN = 60_000;
+
+describe('renewalDelay', () => {
+  const now = Date.parse('2026-11-10T12:00:00Z');
+  const expiringIn = (ms: number) => new Date(now + ms).toISOString();
+
+  test('renews 5 minutes before the token expires', () => {
+    expect(renewalDelay(expiringIn(60 * MIN), now)).toBe(55 * MIN);
+  });
+
+  // #184: the server hands back its cached token until shortly before expiry.
+  // A renewal asked earlier than that got the same token and the sandbox ran
+  // on an expired one; it must ask once the server will mint a new token.
+  test('asks only when the server no longer reuses the token, and before it expires', () => {
+    for (const lifetime of [60 * MIN, 30 * MIN, 12 * MIN]) {
+      const left = lifetime - renewalDelay(expiringIn(lifetime), now);
+      expect(left).toBeLessThan(GITHUB_APP_TOKEN_REUSE_MARGIN_MS);
+      expect(left).toBeGreaterThan(0);
+    }
+  });
+
+  test('waits at least 30 seconds when the token is about to expire', () => {
+    expect(renewalDelay(expiringIn(2 * MIN), now)).toBe(30_000);
+  });
+
+  test('retries in 45 minutes without a valid token', () => {
+    expect(renewalDelay(null, now)).toBe(45 * MIN);
+    expect(renewalDelay(expiringIn(-MIN), now)).toBe(45 * MIN);
+    expect(renewalDelay('not a date', now)).toBe(45 * MIN);
+  });
 });
 
 describe('sandbox GitHub auth', () => {
@@ -88,17 +122,20 @@ describe('sandbox GitHub auth', () => {
     expect(() => statSync(join(home, '.config', 'gh', 'hosts.yml'))).toThrow();
   });
 
-  test('renews the token on schedule until stopped', async () => {
+  const fast = { renewBeforeExpiryMs: 30, minDelayMs: 5 };
+
+  test('renews each token shortly before it expires, until stopped', async () => {
     let n = 0;
     const home = tempHome();
     const auth = createSandboxGithubAuth({
       homeDir: home,
       configureGit: async () => (await import('neverthrow')).ok(undefined),
-      fetchToken: async () => reply(++n),
-      refreshEveryMs: 20,
+      // Every token lives 50 ms, so it is renewed about every 20 ms.
+      fetchToken: async () => reply(++n, inMs(50)),
+      ...fast,
     });
-    auth.startRefresh('t-1');
-    await sleep(110);
+    auth.startRefresh('t-1', inMs(50));
+    await sleep(200);
     await auth.stop();
     const renewals = n;
     expect(renewals).toBeGreaterThanOrEqual(3);
@@ -109,7 +146,20 @@ describe('sandbox GitHub auth', () => {
     expect(n).toBe(renewals);
   });
 
-  test('retries a failed renewal with backoff, gives up after the retries, and keeps the schedule', async () => {
+  test('does not renew a token that is far from expiring', async () => {
+    let n = 0;
+    const auth = createSandboxGithubAuth({
+      homeDir: tempHome(),
+      fetchToken: async () => reply(++n, inMs(60 * MIN)),
+      ...fast,
+    });
+    auth.startRefresh('t-1', inMs(60 * MIN));
+    await sleep(60);
+    await auth.stop();
+    expect(n).toBe(0);
+  });
+
+  test('after a failed renewal, renews again before the held token expires', async () => {
     let calls = 0;
     const auth = createSandboxGithubAuth({
       homeDir: tempHome(),
@@ -117,10 +167,31 @@ describe('sandbox GitHub auth', () => {
         calls++;
         throw new Error('server unreachable');
       },
-      refreshEveryMs: 10,
+      // Still valid for an hour, but already inside the renewal window: the
+      // floor, not the 45-minute failure wait, sets the next round.
+      renewBeforeExpiryMs: 2 * 60 * MIN,
+      minDelayMs: 5,
       retryBaseMs: 1,
     });
-    auth.startRefresh('t-1');
+    auth.startRefresh('t-1', inMs(60 * MIN));
+    await sleep(200);
+    await auth.stop();
+    // More than one round of a first try plus five retries.
+    expect(calls).toBeGreaterThan(6);
+  });
+
+  test('retries a failed renewal with backoff and keeps trying without a token', async () => {
+    let calls = 0;
+    const auth = createSandboxGithubAuth({
+      homeDir: tempHome(),
+      fetchToken: async () => {
+        calls++;
+        throw new Error('server unreachable');
+      },
+      retryAfterFailureMs: 10,
+      retryBaseMs: 1,
+    });
+    auth.startRefresh('t-1', null);
     await sleep(150);
     await auth.stop();
     // At least one full round: the first try plus five retries.
@@ -135,10 +206,10 @@ describe('sandbox GitHub auth', () => {
         calls++;
         throw new Error('server unreachable');
       },
-      refreshEveryMs: 1,
+      retryAfterFailureMs: 1,
       retryBaseMs: 200,
     });
-    auth.startRefresh('t-1');
+    auth.startRefresh('t-1', null);
     await sleep(50);
     await auth.stop();
     const atStop = calls;

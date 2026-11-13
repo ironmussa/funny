@@ -17,6 +17,7 @@
 
 import { createHash } from 'node:crypto';
 
+import { GITHUB_APP_TOKEN_REUSE_MARGIN_MS } from '@funny/shared/github-app-token';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import type { GithubAppConfig } from './app-config.js';
@@ -69,8 +70,8 @@ export interface TokenIssuerDeps {
 }
 
 const CACHE_MS = 10 * 60 * 1000;
-/** A cached token is reused until this long before it expires. */
-const REUSE_MARGIN_MS = 10 * 60 * 1000;
+/** A cached token is reused until this long before it expires (the runner renews inside it). */
+const REUSE_MARGIN_MS = GITHUB_APP_TOKEN_REUSE_MARGIN_MS;
 
 const fail = (kind: IssueErrorKind, message: string): IssueError => ({ kind, message });
 const sha256 = (value: string) => createHash('sha256').update(value).digest('hex');

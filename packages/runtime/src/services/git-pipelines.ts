@@ -312,19 +312,8 @@ async function commitNode(ctx: GitPipelineContext): Promise<GitPipelineContext> 
   // Skip built-in hooks since we already ran them individually
   const noVerify = ctx.hooks.length > 0;
 
-  // If review-fix will run after this commit, mark the git:committed event
-  // so the pipeline-trigger-handler doesn't start a separate review pipeline.
-  const willReview = ctx.pipelineEnabled && !!ctx.threadId && !!ctx.projectId;
-  const patchListener = willReview
-    ? (event: { isPipelineCommit?: boolean }) => {
-        event.isPipelineCommit = true;
-      }
-    : null;
-
-  if (patchListener) {
-    threadEventBus.on('git:committed', patchListener as any);
-  }
-
+  // While this workflow is active the pipeline-trigger-handler skips the
+  // commit's git:committed event (isWorkflowActive), so no second review starts.
   try {
     if (ctx.threadId) {
       const result = await gitServiceCommit(
@@ -354,10 +343,6 @@ async function commitNode(ctx: GitPipelineContext): Promise<GitPipelineContext> 
     const errorMsg = e.stderr || e.message || 'Commit failed';
     ctx.setStep('commit', { status: 'failed', error: errorMsg });
     throw new Error(errorMsg, { cause: e });
-  } finally {
-    if (patchListener) {
-      threadEventBus.removeListener('git:committed', patchListener as any);
-    }
   }
 
   // Capture commit SHA for review
@@ -611,41 +596,31 @@ async function commitFixNode(ctx: GitPipelineContext): Promise<GitPipelineContex
 
   const { commitChanges } = await import('./git-service.js');
 
-  // Mark git:committed as a pipeline commit so trigger handler skips it
-  const patchListener = (event: { isPipelineCommit?: boolean }) => {
-    event.isPipelineCommit = true;
-  };
-  threadEventBus.on('git:committed', patchListener as any);
-
-  try {
-    const result = await commitChanges(
-      ctx.threadId,
-      ctx.userId,
-      targetCwd,
-      commitMessage,
-      false,
-      true,
-      ctx.workflowId,
-    );
-    if (result.isErr()) {
-      const e = result.error;
-      throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
-    }
-
-    return {
-      ...ctx,
-      commitSha: result.value.sha || ctx.commitSha,
-      reviewerThreadId: null,
-      correctorThreadId: null,
-      patchDiff: null,
-      verdict: null,
-      findings: null,
-      noChanges: false,
-      iteration: ctx.iteration + 1,
-    };
-  } finally {
-    threadEventBus.removeListener('git:committed', patchListener as any);
+  const result = await commitChanges(
+    ctx.threadId,
+    ctx.userId,
+    targetCwd,
+    commitMessage,
+    false,
+    true,
+    ctx.workflowId,
+  );
+  if (result.isErr()) {
+    const e = result.error;
+    throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
   }
+
+  return {
+    ...ctx,
+    commitSha: result.value.sha || ctx.commitSha,
+    reviewerThreadId: null,
+    correctorThreadId: null,
+    patchDiff: null,
+    verdict: null,
+    findings: null,
+    noChanges: false,
+    iteration: ctx.iteration + 1,
+  };
 }
 
 /** The review-fix sub-pipeline — used as a composable unit. */
@@ -763,29 +738,19 @@ async function testFixerNode(ctx: GitPipelineContext): Promise<GitPipelineContex
   if (hasChanges) {
     const commitMessage = `fix: address test failures (iteration ${ctx.testIteration})`;
 
-    // Mark as pipeline commit to prevent re-triggering review
-    const patchListener = (event: { isPipelineCommit?: boolean }) => {
-      event.isPipelineCommit = true;
-    };
-    threadEventBus.on('git:committed', patchListener as any);
-
-    try {
-      const { commitChanges } = await import('./git-service.js');
-      const commitResult = await commitChanges(
-        ctx.threadId,
-        ctx.userId,
-        targetCwd,
-        commitMessage,
-        false,
-        true,
-        ctx.workflowId,
-      );
-      if (commitResult.isErr()) {
-        const e = commitResult.error;
-        throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
-      }
-    } finally {
-      threadEventBus.removeListener('git:committed', patchListener as any);
+    const { commitChanges } = await import('./git-service.js');
+    const commitResult = await commitChanges(
+      ctx.threadId,
+      ctx.userId,
+      targetCwd,
+      commitMessage,
+      false,
+      true,
+      ctx.workflowId,
+    );
+    if (commitResult.isErr()) {
+      const e = commitResult.error;
+      throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
     }
   }
 

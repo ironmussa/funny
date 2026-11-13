@@ -26,9 +26,8 @@ export const pipelineTriggerHandler: EventHandler<'git:committed'> = {
 
     // Skip if a commit workflow is already running for this thread/project —
     // the workflow's embedded review-fix sub-pipeline handles the review.
-    // This replaces the racy isPipelineCommit event-mutation mechanism:
-    // the old approach relied on a listener registered *after* this handler,
-    // so isPipelineCommit was always undefined when read here.
+    // Workflow commits are not marked on the event, so this guard is the only
+    // thing that keeps them from starting a second review.
     if (isPipelineCommit || isWorkflowActive(threadId) || isWorkflowActive(projectId)) {
       log.info('Pipeline trigger: skipping — workflow active or pipeline commit', {
         namespace: 'pipeline',

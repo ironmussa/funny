@@ -55,9 +55,7 @@ function SuiteActivity({ suite, now, t }: { suite: TestProgressSuite; now: numbe
       )}
       {suite.running.slice(0, RUNNING_FILES_SHOWN).map((run) => (
         <div key={run.file} className="text-muted-foreground flex min-w-0 gap-2 font-mono">
-          <span className="truncate" title={run.file}>
-            {run.file}
-          </span>
+          <StartTruncatedPath path={run.file} />
           <span className="ml-auto shrink-0 tabular-nums">
             {formatDuration(now - run.startedAt, t)}
           </span>
@@ -141,6 +139,22 @@ function SlowList({ items, t }: { items: SlowItem[]; t: T }) {
   );
 }
 
+/**
+ * A file path that keeps its end (the file name) visible and puts the ellipsis on the left.
+ * Same RTL trick as the diff dialogs; `<bdi>` keeps the leading `/` and a `:line` suffix in place.
+ */
+function StartTruncatedPath({ path, className }: { path: string; className?: string }) {
+  return (
+    <span
+      className={cn('min-w-0 overflow-hidden text-ellipsis whitespace-nowrap', className)}
+      style={{ direction: 'rtl', textAlign: 'left' }}
+      title={path}
+    >
+      <bdi dir="ltr">{path}</bdi>
+    </span>
+  );
+}
+
 function failureLocation(failure: TestFailure): string | undefined {
   if (!failure.file) return undefined;
   return failure.line ? `${failure.file}:${failure.line}` : failure.file;
@@ -173,12 +187,10 @@ function FailureList({ suites, total, t }: { suites: TestProgressSuite[]; total:
                   </span>
                   {showSuite && <span className="text-muted-foreground shrink-0">{suite}</span>}
                   {location && (
-                    <span
-                      className="text-muted-foreground ml-auto shrink-0 truncate font-mono"
-                      title={location}
-                    >
-                      {location}
-                    </span>
+                    <StartTruncatedPath
+                      path={location}
+                      className="text-muted-foreground ml-auto font-mono"
+                    />
                   )}
                 </div>
                 {failure.message && (

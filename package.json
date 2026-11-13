@@ -128,7 +128,7 @@
     "fitness:trpc-api": "bun scripts/fitness/check-trpc-api.ts --self-test"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^1.2.1",
+    "@agentclientprotocol/sdk": "^2.5.0",
     "@anthropic-ai/claude-agent-sdk": "^0.3.322",
     "@langchain/google-genai": "^2.1.31",
     "@langchain/openai": "^1.4.7",

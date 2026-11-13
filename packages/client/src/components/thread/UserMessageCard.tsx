@@ -22,7 +22,6 @@ import { useTranslation } from 'react-i18next';
 
 import { LinearIssueBadge } from '@/components/LinearIssueBadge';
 import { PRBadge } from '@/components/PRBadge';
-import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { CommandLineChip, FileChip, SkillChip } from '@/components/ui/chip';
 import {
@@ -455,14 +454,15 @@ export function UserMessageCard({
         <div
           data-testid="user-message-footer"
           className={cn(
-            'text-muted-foreground mt-1 ml-auto flex w-fit max-w-full min-w-0 flex-wrap items-center justify-end gap-1 rounded-md border border-border bg-background px-1 py-0.5 shadow-sm',
+            // Plain text like the end-of-run line (AgentResultCard): no border, background or shadow.
+            'text-muted-foreground mt-1 ml-auto flex w-fit max-w-full min-w-0 flex-wrap items-center justify-end gap-x-3 gap-y-1 px-1 text-xs',
             'pointer-events-none opacity-0 transition-opacity',
             'group-hover:pointer-events-auto group-hover:opacity-100 focus-within:pointer-events-auto focus-within:opacity-100 has-[[data-state=open]]:pointer-events-auto has-[[data-state=open]]:opacity-100',
           )}
         >
           <UserMessageMetadata model={model} permissionMode={permissionMode} effort={effort} />
           {timestamp && (
-            <span className="thread-timestamp text-muted-foreground mr-1">
+            <span className="thread-timestamp text-muted-foreground">
               {timeAgo(timestamp, t, now)}
             </span>
           )}
@@ -598,24 +598,19 @@ function UserMessageMetadata({
   effort,
 }: Pick<UserMessageCardProps, 'model' | 'permissionMode' | 'effort'>) {
   const { t } = useTranslation();
-  const badgeClassName = 'text-muted-foreground h-4 px-1.5 py-0 text-[10px] font-medium';
+  const effortLabel = effort
+    ? (EFFORT_LEVELS.find((e) => e.value === effort)?.label ?? effort)
+    : null;
   return (
     <>
       {model && (
-        <Badge variant="outline" className={badgeClassName}>
+        <span data-testid="user-message-model">
           {resolveModelLabel(model, t)}
-          {effort && (
-            <>
-              {' · '}
-              {EFFORT_LEVELS.find((e) => e.value === effort)?.label ?? effort}
-            </>
-          )}
-        </Badge>
+          {effortLabel && ` · ${effortLabel}`}
+        </span>
       )}
       {permissionMode && (
-        <Badge variant="outline" className={badgeClassName}>
-          {t(`prompt.${permissionMode}`)}
-        </Badge>
+        <span data-testid="user-message-permission-mode">{t(`prompt.${permissionMode}`)}</span>
       )}
     </>
   );

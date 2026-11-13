@@ -46,19 +46,47 @@ async function fetchOnce<T>(layer: DataLayer, queryKey: unknown[], run: () => Pr
   }
 }
 
+/** Largest `limit` the server accepts for a project list (`contracts/threads`). */
+const PROJECT_REFRESH_MAX = 200;
+
 /**
- * Replace a project's first page. Archived rows already in the list survive
- * a reload that omits them (a non-archived reload, or a refresh right after
- * a card was archived), so the Kanban "Archived" column keeps its cards.
- * Consumers that hide archived threads filter them out.
+ * How many rows a refresh of a project's list asks for: every page already
+ * loaded, up to the server's cap. A refresh runs on every `agent:result`,
+ * focus and reconnect, so asking for page 1 only would collapse the pages
+ * loaded on scroll (#186). Archived rows kept by an earlier reload are not
+ * part of the non-archived range, so they do not count.
  */
-function applyProjectFirstPage(data: ThreadsData, projectId: string, page: Page, seq: number) {
+function projectRefreshLimit(data: ThreadsData, projectId: string): number {
+  const listed = data.meta.getState().members[projectSource(projectId)] ?? [];
+  const active = listed.filter((id) => !data.collection.get(id)?.archived).length;
+  const pages = Math.max(1, Math.ceil(active / PROJECT_PAGE_SIZE));
+  return Math.min(PROJECT_REFRESH_MAX, pages * PROJECT_PAGE_SIZE);
+}
+
+/**
+ * Replace the refreshed range of a project's list (the first `limit` rows),
+ * in server order. A row the response omits is dropped, except:
+ *
+ * - rows listed past `limit` (more pages than one refresh can ask for)
+ *   are kept after the range: the refresh does not revalidate them.
+ * - archived rows: a non-archived reload, or a refresh right after a card
+ *   was archived, omits them, and the Kanban "Archived" column keeps its
+ *   cards. Consumers that hide archived threads filter them out.
+ */
+function applyProjectFirstPage(
+  data: ThreadsData,
+  projectId: string,
+  page: Page,
+  seq: number,
+  limit: number,
+) {
   data.upsertFromServer(page.threads, seq);
   const source = projectSource(projectId);
   const newIds = uniqueIds(page.threads);
   const incoming = new Set(newIds);
-  const preserved = (data.meta.getState().members[source] ?? []).filter(
-    (id) => !incoming.has(id) && data.collection.get(id)?.archived,
+  const existing = data.meta.getState().members[source] ?? [];
+  const preserved = existing.filter(
+    (id, index) => !incoming.has(id) && (index >= limit || data.collection.get(id)?.archived),
   );
   setSourceMembers(
     data.meta,
@@ -79,8 +107,9 @@ export async function loadProjectThreads(
   const data = getThreadsData(layer);
   await fetchOnce(layer, ['threads', 'project', projectId, { includeArchived }], async () => {
     const seq = data.beginRequest();
-    const page = await unwrapResult(api.listThreads(projectId, includeArchived, PROJECT_PAGE_SIZE));
-    applyProjectFirstPage(data, projectId, page, seq);
+    const limit = projectRefreshLimit(data, projectId);
+    const page = await unwrapResult(api.listThreads(projectId, includeArchived, limit));
+    applyProjectFirstPage(data, projectId, page, seq, limit);
     return null;
   }).catch(() => undefined);
 }

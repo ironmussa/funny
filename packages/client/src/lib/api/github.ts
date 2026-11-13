@@ -8,12 +8,14 @@ interface GitHubListParams {
   page?: number;
   per_page?: number;
   sort?: string;
+  /** GraphQL page cursor from the previous page (issues), instead of `page`. */
+  cursor?: string;
 }
 
 /** Query string shared by the project-scoped, paginated GitHub list endpoints. */
 function githubListQuery(projectId: string, params?: GitHubListParams): URLSearchParams {
   const p = new URLSearchParams({ projectId });
-  for (const key of ['state', 'sha', 'page', 'per_page', 'sort'] as const) {
+  for (const key of ['state', 'sha', 'page', 'per_page', 'sort', 'cursor'] as const) {
     const value = params?.[key];
     if (value) p.set(key, String(value));
   }
@@ -70,13 +72,15 @@ export const githubApi = {
 
   githubIssuesEnriched: (
     projectId: string,
-    params?: { state?: string; page?: number; per_page?: number },
+    params?: { state?: string; page?: number; per_page?: number; cursor?: string },
     signal?: AbortSignal,
   ) => {
     const p = githubListQuery(projectId, params);
     return request<{
       issues: import('@funny/shared').EnrichedGitHubIssue[];
       hasMore: boolean;
+      /** Pass back as `cursor` to load the next page. */
+      nextCursor?: string | null;
       owner: string;
       repo: string;
     }>(`/github/issues-enriched?${p.toString()}`, { signal });
@@ -89,6 +93,7 @@ export const githubApi = {
       page?: number;
       per_page?: number;
       sort?: import('@funny/shared').PRSortKey;
+      cursor?: string;
     },
     signal?: AbortSignal,
   ) => {
@@ -96,6 +101,8 @@ export const githubApi = {
     return request<{
       prs: import('@funny/shared').GitHubPR[];
       hasMore: boolean;
+      /** Pass back as `cursor` to load the next page. */
+      nextCursor?: string | null;
       owner: string;
       repo: string;
     }>(`/github/prs?${p.toString()}`, { signal });

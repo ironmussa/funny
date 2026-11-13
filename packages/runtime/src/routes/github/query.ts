@@ -48,6 +48,18 @@ export function readIssueState(c: Context): Result<'open' | 'closed' | 'all', Do
   return parseQuery(c, stateQuery).map((q) => q.state);
 }
 
+const cursorQuery = z.object({
+  cursor: z
+    .string()
+    .regex(/^[A-Za-z0-9+/=_-]{1,200}$/, { error: 'cursor is not a valid page cursor' })
+    .optional(),
+});
+
+/** The opaque GraphQL page cursor a previous page returned, or `null` for page 1. */
+export function readCursor(c: Context): Result<string | null, DomainError> {
+  return parseQuery(c, cursorQuery).map((q) => q.cursor ?? null);
+}
+
 /** Sort orders `GET /user/repos` accepts; the repo search accepts `updated` too. */
 const repoSortQuery = z.object({
   sort: z

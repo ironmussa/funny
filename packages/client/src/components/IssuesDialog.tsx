@@ -52,9 +52,9 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
   const [state, setState] = useState<'open' | 'closed'>('open');
 
   const fetchPage = useMemo<FetchGitHubListPage<EnrichedGitHubIssue>>(
-    () => (page, signal) =>
+    () => (page, signal, cursor) =>
       api
-        .githubIssuesEnriched(projectId, { state, page, per_page: 30 }, signal)
+        .githubIssuesEnriched(projectId, { state, page, per_page: 30, cursor }, signal)
         .map((data) => ({ ...data, items: data.issues })),
     [projectId, state],
   );

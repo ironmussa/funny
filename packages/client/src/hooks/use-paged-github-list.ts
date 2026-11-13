@@ -6,11 +6,15 @@ export interface GitHubListPage<T> {
   hasMore: boolean;
   owner: string;
   repo: string;
+  /** Cursor-paged lists (GraphQL) return the cursor of the next page. */
+  nextCursor?: string | null;
 }
 
 export type FetchGitHubListPage<T> = (
   page: number,
   signal: AbortSignal,
+  /** The previous page's `nextCursor`; `undefined` for page 1. */
+  cursor?: string,
 ) => ResultAsync<GitHubListPage<T>, { message: string }>;
 
 /**
@@ -18,8 +22,14 @@ export type FetchGitHubListPage<T> = (
  *
  * `fetchPage` is the query: a new identity resets the list and refetches page 1,
  * so callers memoize it on their filters. `null` means there is nothing to load.
+ * A list that pages by cursor returns `nextCursor`, and "load more" passes it
+ * back; page-numbered lists ignore it.
  * Starting a request aborts the previous one, and hiding the tab or unmounting
  * aborts whatever is still in flight, so stale pages never land.
+ *
+ * Showing the tab again keeps the rows it already has while page 1 reloads
+ * (stale-while-revalidate), so returning to the tab is instant. Rows are only
+ * cleared when the query itself changes (other project or filter).
  */
 export function usePagedGitHubList<T>({
   visible,
@@ -37,6 +47,9 @@ export function usePagedGitHubList<T>({
   const [hasMore, setHasMore] = useState(false);
   const [repoInfo, setRepoInfo] = useState<{ owner: string; repo: string } | null>(null);
 
+  const nextCursor = useRef<string | undefined>(undefined);
+  /** The query the current rows came from. */
+  const itemsQuery = useRef<FetchGitHubListPage<T> | null>(null);
   const pendingRequest = useRef<AbortController | null>(null);
   useEffect(() => () => pendingRequest.current?.abort(), [visible]);
 
@@ -50,10 +63,13 @@ export function usePagedGitHubList<T>({
       setLoading(true);
       setError(null);
 
-      const result = await fetchPage(pageNum, controller.signal);
+      const cursor = append ? nextCursor.current : undefined;
+      const result = await fetchPage(pageNum, controller.signal, cursor);
       if (controller.signal.aborted) return;
       if (result.isOk()) {
         const data = result.value;
+        nextCursor.current = data.nextCursor ?? undefined;
+        itemsQuery.current = fetchPage;
         setItems((prev) => (append ? [...prev, ...data.items] : data.items));
         setHasMore(data.hasMore);
         setRepoInfo({ owner: data.owner, repo: data.repo });
@@ -67,7 +83,11 @@ export function usePagedGitHubList<T>({
 
   useEffect(() => {
     if (!visible || !fetchPage) return;
-    setItems([]);
+    if (itemsQuery.current !== fetchPage) {
+      itemsQuery.current = null;
+      setItems([]);
+      setHasMore(false);
+    }
     void load(1, false);
   }, [visible, fetchPage, load]);
 

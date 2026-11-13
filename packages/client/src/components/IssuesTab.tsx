@@ -65,9 +65,9 @@ function IssuesContent({ visible }: IssuesTabProps) {
 
   const fetchPage = useMemo<FetchGitHubListPage<EnrichedGitHubIssue> | null>(() => {
     if (!projectId) return null;
-    return (page, signal) =>
+    return (page, signal, cursor) =>
       api
-        .githubIssuesEnriched(projectId, { state, page, per_page: 30 }, signal)
+        .githubIssuesEnriched(projectId, { state, page, per_page: 30, cursor }, signal)
         .map((data) => ({ ...data, items: data.issues }))
         .mapErr((error) => {
           if (!signal.aborted) {

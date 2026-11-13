@@ -121,6 +121,25 @@ describe('useCommitProgressStore', () => {
       expect(useCommitProgressStore.getState().activeCommits['t1']).toBeUndefined();
       expect(useCommitProgressStore.getState().activeCommits['t2']).toBeDefined();
     });
+
+    test('removes the entry when the workflowId matches', () => {
+      const steps = [{ id: 's1', label: 'Step', status: 'completed' as const }];
+      useCommitProgressStore.getState().startCommit('t1', 'Commit', steps, 'commit', 'wf-1');
+
+      useCommitProgressStore.getState().finishCommit('t1', 'wf-1');
+
+      expect(useCommitProgressStore.getState().activeCommits['t1']).toBeUndefined();
+    });
+
+    test('keeps a restarted workflow when finishing the previous one', () => {
+      const steps = [{ id: 's1', label: 'Step', status: 'pending' as const }];
+      useCommitProgressStore.getState().startCommit('t1', 'First', steps, 'commit', 'wf-1');
+      useCommitProgressStore.getState().startCommit('t1', 'Second', steps, 'commit', 'wf-2');
+
+      useCommitProgressStore.getState().finishCommit('t1', 'wf-1');
+
+      expect(useCommitProgressStore.getState().activeCommits['t1']?.workflowId).toBe('wf-2');
+    });
   });
 
   describe('concurrent commits', () => {

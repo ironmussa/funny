@@ -32,7 +32,11 @@ interface CommitProgressState {
   updateStep: (id: string, stepId: string, update: Partial<GitProgressStep>) => void;
   /** Replace all steps at once (used by server-side workflow progress via WS) */
   replaceSteps: (id: string, steps: GitProgressStep[]) => void;
-  finishCommit: (id: string) => void;
+  /**
+   * Remove the entry. With a `workflowId`, only when the entry is still that
+   * workflow: a delayed close must not drop a workflow restarted in between.
+   */
+  finishCommit: (id: string, workflowId?: string) => void;
   /** Show a failed workflow in the error modal */
   setFailedWorkflow: (entry: FailedWorkflowEntry) => void;
   /** Dismiss the failed workflow modal */
@@ -75,8 +79,11 @@ export const useCommitProgressStore = create<CommitProgressState>((set) => ({
       };
     }),
 
-  finishCommit: (id) =>
+  finishCommit: (id, workflowId) =>
     set((state) => {
+      const entry = state.activeCommits[id];
+      if (!entry) return state;
+      if (workflowId && entry.workflowId && entry.workflowId !== workflowId) return state;
       const { [id]: _, ...rest } = state.activeCommits;
       return { activeCommits: rest };
     }),

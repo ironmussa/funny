@@ -458,6 +458,7 @@ export function seedProject(
     path: overrides.path ?? '/tmp/test-repo',
     userId: overrides.userId ?? 'user-1',
     organizationId: overrides.organizationId ?? null,
+    urls: overrides.urls ?? null,
     sortOrder: overrides.sortOrder ?? 0,
     createdAt: overrides.createdAt ?? new Date().toISOString(),
   };

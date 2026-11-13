@@ -14,25 +14,23 @@ import { audit } from '../lib/audit.js';
 import { authorizer } from '../lib/server-authorizer.js';
 import type { ServerEnv } from '../lib/types.js';
 import { requirePermission } from '../middleware/auth.js';
+import { createProjectsPort } from '../trpc/ports/projects.js';
+import { answerJson } from '../trpc/reply.js';
 
 export const teamProjectRoutes = new Hono<ServerEnv>();
 
-// GET /api/team-projects — list full Project objects associated with the active org
+// GET /api/team-projects — the active org's projects, answered by the same port
+// as `projects.list` with that org: 403 unless the caller is still a member
+// (the session's active org outlives a removal), and rows mapped to `Project`.
+// Kept on REST with no web client caller (`listTeamProjects` in the client's
+// lib/api/team.ts is unused); retire it once nothing outside the app needs it.
 teamProjectRoutes.get('/', async (c) => {
-  const orgId = c.get('organizationId');
-  if (!orgId) return c.json([], 200);
+  const organizationId = c.get('organizationId');
+  if (!organizationId) return c.json([], 200);
 
-  // Inline pm.listProjectsByOrg replacement
-  const items = await db
-    .select({
-      project: schema.projects,
-    })
-    .from(schema.teamProjects)
-    .innerJoin(schema.projects, eq(schema.teamProjects.projectId, schema.projects.id))
-    .where(eq(schema.teamProjects.teamId, orgId));
-
-  const projects = items.map((i) => i.project);
-  return c.json(projects.map((p) => ({ ...p, isTeamProject: true })));
+  const userId = c.get('userId') as string;
+  const port = createProjectsPort(c.get('organizationName'));
+  return answerJson(c, port.list({ userId, organizationId }, {}));
 });
 
 // POST /api/team-projects — associate a project with the active org

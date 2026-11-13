@@ -10,8 +10,12 @@ import { sleep as effectSleep } from '@funny/shared/async';
  * via `subscribe(threadId, handler)` and get woken when a matching event
  * arrives.
  *
- * The HTTP layer guarantees monotonic seq numbers; the stream remembers
- * the highest seq it has consumed so reconnects pick up cleanly.
+ * The HTTP layer guarantees monotonic seq numbers within one server
+ * epoch; the stream remembers the highest seq it has consumed, and the
+ * epoch it belongs to, so reconnects pick up cleanly. Seqs restart when
+ * the server restarts: the stream sends its epoch with every poll, the
+ * server answers a stale one from seq 0, and the stream resets its cursor
+ * when the epoch in the answer changes.
  *
  * On transient fetch failures the loop backs off (default 1s) and retries
  * — losing up to `capacity` events on the server side is recoverable
@@ -40,6 +44,13 @@ export interface HttpEventStreamOptions {
 
 const NS = 'http-event-stream';
 
+interface EventPoll {
+  events: EventStreamEvent[];
+  nextSeq: number;
+  /** Absent from servers older than the epoch fix. */
+  epoch?: string;
+}
+
 type Handler = (event: EventStreamEvent) => void;
 
 const NOOP_LOG: DispatcherLogger = {
@@ -55,6 +66,8 @@ export class HttpEventStream {
   private readonly log: DispatcherLogger;
 
   private cursor = 0;
+  /** Server epoch `cursor` belongs to; unknown until the first answer. */
+  private epoch: string | undefined;
   private running = false;
   private abortCtrl: AbortController | null = null;
   private loopPromise: Promise<void> | null = null;
@@ -113,18 +126,7 @@ export class HttpEventStream {
   private async loop(): Promise<void> {
     while (this.running) {
       try {
-        const result = await this.client.request<{
-          events: EventStreamEvent[];
-          nextSeq: number;
-        }>('GET', '/events', {
-          query: { since: this.cursor, timeoutMs: this.timeoutMs },
-          signal: this.abortCtrl!.signal,
-        });
-        for (const event of result.events) {
-          this.dispatch(event);
-          if (event.seq > this.cursor) this.cursor = event.seq;
-        }
-        if (result.nextSeq > this.cursor) this.cursor = result.nextSeq;
+        this.consume(await this.poll());
       } catch (err) {
         if (!this.running) break;
         const message = err instanceof Error ? err.message : String(err);
@@ -140,6 +142,38 @@ export class HttpEventStream {
       // even when the fetch above resolves synchronously.
       await effectSleep(0, this.abortCtrl!.signal);
     }
+  }
+
+  private poll(): Promise<EventPoll> {
+    return this.client.request<EventPoll>('GET', '/events', {
+      query: { since: this.cursor, timeoutMs: this.timeoutMs, epoch: this.epoch },
+      signal: this.abortCtrl!.signal,
+    });
+  }
+
+  private consume(result: EventPoll): void {
+    if (result.epoch !== undefined) this.adoptEpoch(result.epoch);
+    for (const event of result.events) {
+      this.dispatch(event);
+      if (event.seq > this.cursor) this.cursor = event.seq;
+    }
+    if (result.nextSeq > this.cursor) this.cursor = result.nextSeq;
+  }
+
+  /**
+   * A new epoch means the server restarted and answered from its own start,
+   * so seqs below the old cursor are new events, not replays.
+   */
+  private adoptEpoch(epoch: string): void {
+    if (epoch === this.epoch) return;
+    if (this.epoch !== undefined) {
+      this.log.info('Server event sequence restarted — resetting cursor', {
+        namespace: NS,
+        previousCursor: this.cursor,
+      });
+    }
+    this.cursor = 0;
+    this.epoch = epoch;
   }
 
   private dispatch(event: EventStreamEvent): void {

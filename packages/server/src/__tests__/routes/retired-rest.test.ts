@@ -42,6 +42,10 @@ describe('retired REST routes', () => {
     ['GET', '/api/push/config'],
     ['PUT', '/api/push/subscription'],
     ['GET', '/api/jobs'],
+    // Removed route (#196), see retired-rest.ts.
+    ['GET', '/api/team-settings'],
+    ['PUT', '/api/team-settings/api-key'],
+    ['PUT', '/api/team-settings/defaults'],
   ])('%s %s answers 404 and never reaches a runner', async (method, path) => {
     const { app, proxied } = buildApp();
     const res = await app.request(path, { method });

@@ -109,7 +109,6 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const { shareRoutes } = await import('../../routes/thread-shares.js');
   const { profileRoutes } = await import('../../routes/profile.js');
   const { schedulerRoutes } = await import('../../routes/scheduler.js');
-  const { teamSettingsRoutes } = await import('../../routes/team-settings.js');
   const { teamProjectRoutes } = await import('../../routes/team-projects.js');
   const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('../../routes/invite-links.js');
   const { refuseRetiredRestRoutes } = await import('../../routes/retired-rest.js');
@@ -125,7 +124,6 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   app.route('/api/profile', profileRoutes);
   app.route('/api/scheduler', schedulerRoutes);
   app.route('/api/scheduler/system', schedulerSystemRoutes);
-  app.route('/api/team-settings', teamSettingsRoutes);
   app.route('/api/team-projects', teamProjectRoutes);
   // Retired REST groups answer 404 here, as in app.ts, instead of reaching a runner.
   refuseRetiredRestRoutes(app);

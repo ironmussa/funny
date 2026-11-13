@@ -4,31 +4,6 @@ import { request } from './_core';
 import { trpc, trpcCall } from './_trpc';
 
 export const teamApi = {
-  getTeamSettings: () =>
-    request<{
-      id: string;
-      name: string;
-      slug: string;
-      logo: string | null;
-      hasApiKey: boolean;
-      defaultModel: string | null;
-      defaultMode: string | null;
-      defaultPermissionMode: string | null;
-    }>('/team-settings'),
-  updateTeamApiKey: (apiKey: string | null) =>
-    request<{ ok: boolean; hasApiKey: boolean }>('/team-settings/api-key', {
-      method: 'PUT',
-      body: JSON.stringify({ apiKey }),
-    }),
-  updateTeamDefaults: (data: {
-    defaultModel?: string | null;
-    defaultMode?: string | null;
-    defaultPermissionMode?: string | null;
-  }) =>
-    request<{ ok: boolean }>('/team-settings/defaults', {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
   getSmtpSettings: () => trpcCall(() => trpc.settings.getSmtp.query()),
   updateSmtpSettings: (data: SmtpSettingsRequest) =>
     trpcCall(() => trpc.settings.saveSmtp.mutate(data)),

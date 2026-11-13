@@ -38,10 +38,6 @@ export interface Organization {
   slug: string;
   logo?: string | null;
   metadata?: string | null;
-  anthropicApiKey?: string | null; // Encrypted at rest
-  defaultModel?: string | null;
-  defaultMode?: string | null;
-  defaultPermissionMode?: string | null;
   createdAt: string;
 }
 

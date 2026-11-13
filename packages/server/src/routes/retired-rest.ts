@@ -1,6 +1,6 @@
 /**
  * Server-answered REST groups the web client now reaches over tRPC only
- * (openspec adopt-trpc-browser-api, task 6.1).
+ * (openspec adopt-trpc-browser-api, task 6.1), plus removed server routes.
  *
  * Without a server route these paths would fall through to the runner proxy
  * catch-all and be forwarded to the user's runner, which does not own the rows
@@ -28,6 +28,9 @@ const RETIRED_PREFIXES = [
   '/api/designs',
   '/api/analytics',
   '/api/push',
+  // Removed outright (#196): the org had no columns for its fields and Better
+  // Auth refused `updateOrganization` for every role. Per-user keys live in the profile.
+  '/api/team-settings',
 ] as const;
 
 /** The answer of every retired REST path (also used by routes that retire some of their sub-paths). */

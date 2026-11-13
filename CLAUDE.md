@@ -416,3 +416,17 @@ Consult it when searching for context about how this codebase works.
 
 @AGENTS.md
 <!-- fallow:agent-install v1 claude-import:end -->
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues of `ironmussa/funny`, managed with the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+The five default triage labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `GLOSSARY.md` and `docs/adr/` at the repo root, alongside `openspec/` for per-change designs. See `docs/agents/domain.md`.

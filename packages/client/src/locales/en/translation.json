@@ -429,7 +429,6 @@
       "noOpenPRs": "No open pull requests",
       "noClosedPRs": "No closed pull requests",
       "noPRs": "No pull requests",
-      "loadMore": "Load more",
       "openOnGithub": "Open on GitHub",
       "merge": "Merge",
       "merged": "Merged",
@@ -1264,7 +1263,6 @@
     "addThread": "Add thread",
     "searchProject": "Search project...",
     "titlePlaceholder": "Thread title...",
-    "loadMore": "Load {{count}} more",
     "backToBoard": "Back to Kanban",
     "viewOnBoard": "View on Board"
   },
@@ -1411,7 +1409,6 @@
     "open": "Open",
     "closed": "Closed",
     "noIssues": "No issues found",
-    "loadMore": "Load more",
     "viewOnGithub": "View on GitHub",
     "notGithub": "This project is not hosted on GitHub",
     "error": "Failed to load issues",

@@ -1,10 +1,11 @@
 import type { GitHubPR, PRFilterOptions } from '@funny/shared';
-import { ExternalLink, GitBranch, GitPullRequest, Loader2, RefreshCw } from 'lucide-react';
+import { ExternalLink, GitBranch, GitPullRequest, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { GitHubProjectGate } from '@/components/GitHubProjectGate';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
 import { PRCompactIdentity } from '@/components/pull-requests/PRCompactIdentity';
 import {
@@ -318,21 +319,13 @@ function PullRequestsContent({
             </div>
           </>
         ) : null}
-        {hasMore ? (
-          <div className="flex justify-center py-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onLoadMore}
-              disabled={loading}
-              className="gap-1.5 text-xs"
-              data-testid="prs-load-more"
-            >
-              {loading ? <Loader2 className="icon-xs animate-spin" /> : null}
-              {t('review.pullRequests.loadMore', 'Load more')}
-            </Button>
-          </div>
-        ) : null}
+        <LoadMoreSentinel
+          hasMore={hasMore}
+          loading={loading}
+          itemCount={currentBranchPRs.length + otherPRs.length}
+          onLoadMore={onLoadMore}
+          testId="prs-load-more"
+        />
       </div>
     </ScrollArea>
   );

@@ -1,18 +1,11 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
-import {
-  CircleCheck,
-  CircleDot,
-  ExternalLink,
-  Loader2,
-  MessageSquare,
-  Plus,
-  RefreshCw,
-} from 'lucide-react';
+import { CircleCheck, CircleDot, ExternalLink, MessageSquare, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 import { IssueBadges } from '@/components/IssueBadges';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -264,21 +257,13 @@ function IssuesBody({
         ))}
       </div>
 
-      {hasMore && (
-        <div className="border-sidebar-border flex justify-center border-t py-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={onLoadMore}
-            disabled={loading}
-            className="text-xs"
-            data-testid="issues-load-more"
-          >
-            {loading ? <Loader2 className="icon-xs mr-1 animate-spin" /> : null}
-            {t('issues.loadMore', 'Load more')}
-          </Button>
-        </div>
-      )}
+      <LoadMoreSentinel
+        hasMore={hasMore}
+        loading={loading}
+        itemCount={issues.length}
+        onLoadMore={onLoadMore}
+        testId="issues-load-more"
+      />
     </ScrollArea>
   );
 }

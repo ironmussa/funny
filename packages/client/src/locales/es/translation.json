@@ -427,7 +427,6 @@
       "noOpenPRs": "No hay pull requests abiertos",
       "noClosedPRs": "No hay pull requests cerrados",
       "noPRs": "No hay pull requests",
-      "loadMore": "Cargar más",
       "openOnGithub": "Abrir en GitHub",
       "merge": "Merge",
       "merged": "Mergeado",
@@ -1257,7 +1256,6 @@
     "addThread": "Agregar hilo",
     "searchProject": "Buscar proyecto...",
     "titlePlaceholder": "Título del hilo...",
-    "loadMore": "Cargar {{count}} más",
     "backToBoard": "Volver al Kanban",
     "viewOnBoard": "Ver en el Tablero"
   },
@@ -1404,7 +1402,6 @@
     "open": "Abiertos",
     "closed": "Cerrados",
     "noIssues": "No se encontraron issues",
-    "loadMore": "Cargar más",
     "viewOnGithub": "Ver en GitHub",
     "notGithub": "Este proyecto no está alojado en GitHub",
     "error": "Error al cargar issues",

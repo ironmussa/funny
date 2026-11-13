@@ -105,6 +105,95 @@ describe('loaders', () => {
     expect(data().meta.getState().totals['project:p1']).toBe(3);
   });
 
+  /** Threads `t<from>` … `t<from + count - 1>`, in that order. */
+  const threadRange = (from: number, count: number) =>
+    Array.from({ length: count }, (_, i) => thread(`t${from + i}`));
+
+  /** List `count` rows of p1 through page 1 plus load-more pages of 50. */
+  async function listRows(count: number) {
+    mockApi.listThreads.mockReturnValueOnce(
+      okAsync({ threads: threadRange(0, Math.min(50, count)), total: count }),
+    );
+    await loadProjectThreads('p1');
+    for (let offset = 50; offset < count; offset += 50) {
+      mockApi.listThreads.mockReturnValueOnce(
+        okAsync({ threads: threadRange(offset, Math.min(50, count - offset)), total: count }),
+      );
+      await loadMoreProjectThreads('p1');
+    }
+    expect(members('project:p1')).toHaveLength(count);
+  }
+
+  test('a refresh refetches every loaded page instead of collapsing to page 1 (#186)', async () => {
+    await listRows(70);
+
+    // t60 got activity and moves to the top; the rest shift down by one.
+    mockApi.listThreads.mockReturnValueOnce(
+      okAsync({
+        threads: [thread('t60'), ...threadRange(0, 60), ...threadRange(61, 9)],
+        total: 70,
+      }),
+    );
+    await loadProjectThreads('p1');
+
+    expect(mockApi.listThreads).toHaveBeenLastCalledWith('p1', false, 100);
+    const listed = members('project:p1') ?? [];
+    expect(listed).toHaveLength(70);
+    expect(listed.slice(0, 2)).toEqual(['t60', 't0']);
+    expect(listed.at(-1)).toBe('t69');
+  });
+
+  test('a refresh drops a row deleted elsewhere from a multi-page list', async () => {
+    await listRows(70);
+    mockApi.listThreads.mockReturnValueOnce(
+      okAsync({ threads: [...threadRange(0, 55), ...threadRange(56, 14)], total: 69 }),
+    );
+    await loadProjectThreads('p1');
+
+    const listed = members('project:p1') ?? [];
+    expect(listed).not.toContain('t55');
+    // Listed rows match the total, so "has more" and the next offset stay right.
+    expect(listed).toHaveLength(69);
+    expect(data().meta.getState().totals['project:p1']).toBe(69);
+  });
+
+  test('a refresh with only page 1 loaded drops rows it no longer lists', async () => {
+    mockApi.listThreads.mockReturnValueOnce(
+      okAsync({ threads: [thread('t1'), thread('t2')], total: 2 }),
+    );
+    await loadProjectThreads('p1');
+    mockApi.listThreads.mockReturnValueOnce(okAsync({ threads: [thread('t1')], total: 1 }));
+    await loadProjectThreads('p1');
+    expect(mockApi.listThreads).toHaveBeenLastCalledWith('p1', false, 50);
+    expect(members('project:p1')).toEqual(['t1']);
+  });
+
+  test('kept archived rows do not widen the refreshed range', async () => {
+    mockApi.listThreads.mockReturnValueOnce(
+      okAsync({
+        threads: [...threadRange(0, 50), thread('a1', { archived: true })],
+        total: 51,
+      }),
+    );
+    await loadProjectThreads('p1', true);
+    mockApi.listThreads.mockReturnValueOnce(okAsync({ threads: threadRange(1, 49), total: 49 }));
+    await loadProjectThreads('p1');
+
+    expect(mockApi.listThreads).toHaveBeenLastCalledWith('p1', false, 50);
+    expect(members('project:p1')).not.toContain('t0');
+    expect(members('project:p1')).toContain('a1');
+  });
+
+  test('rows past the largest refresh the server allows are kept', async () => {
+    await listRows(250);
+    mockApi.listThreads.mockReturnValueOnce(okAsync({ threads: threadRange(0, 200), total: 250 }));
+    await loadProjectThreads('p1');
+
+    expect(mockApi.listThreads).toHaveBeenLastCalledWith('p1', false, 200);
+    expect(members('project:p1')).toHaveLength(250);
+    expect(members('project:p1')?.at(-1)).toBe('t249');
+  });
+
   test('archived rows survive a non-archived reload that omits them', async () => {
     mockApi.listThreads.mockReturnValueOnce(
       okAsync({ threads: [thread('t1'), thread('a1', { archived: true })], total: 2 }),

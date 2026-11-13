@@ -8,7 +8,7 @@ import {
   checkoutProjectIntoSandbox,
   runSandboxPostCreate,
 } from '../../services/sandbox-checkout.js';
-import { redactGithubToken, withGithubToken } from '../../utils/github-clone-url.js';
+import { redactGithubToken } from '../../utils/github-clone-url.js';
 
 const dirs: string[] = [];
 afterEach(() => {
@@ -91,14 +91,10 @@ describe('runSandboxPostCreate', () => {
 });
 
 describe('GitHub clone URL credentials', () => {
-  test('injects the token only into github.com https URLs and redacts it', () => {
+  test('redacts a token embedded in a URL from git output', () => {
     const token = 'ghp_secret';
-    const url = withGithubToken(REPO, token);
-    expect(url).toBe(`https://x-access-token:${token}@github.com/ironmussa/funny.git`);
-    expect(withGithubToken('https://gitlab.com/a/b.git', token)).toBe('https://gitlab.com/a/b.git');
-    expect(withGithubToken(REPO, null)).toBe(REPO);
-    expect(redactGithubToken(`fatal: could not read ${url}`)).toBe(
-      'fatal: could not read https://x-access-token:***@github.com/ironmussa/funny.git',
-    );
+    expect(
+      redactGithubToken(`fatal: could not read https://x-access-token:${token}@github.com/a/b.git`),
+    ).toBe('fatal: could not read https://x-access-token:***@github.com/a/b.git');
   });
 });

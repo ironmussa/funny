@@ -1,15 +1,10 @@
 /**
- * Per-operation GitHub credentials for `git clone` URLs. The token is only
- * ever placed in the URL handed to git and redacted from anything echoed back.
+ * Redaction for git output that may echo a credential-bearing URL (for example
+ * a user-supplied `https://x-access-token:…@github.com/…`). funny itself never
+ * puts the token in a URL: see `cloneAuthEnv` in `@funny/core/git`.
  */
 
-/** `https://github.com/...` with the token injected; other URLs are returned unchanged. */
-export function withGithubToken(cloneUrl: string, token: string | null | undefined): string {
-  if (!token || !cloneUrl.startsWith('https://github.com/')) return cloneUrl;
-  return cloneUrl.replace('https://github.com/', `https://x-access-token:${token}@github.com/`);
-}
-
-/** Remove an injected token from git output before logging or returning it. */
+/** Remove an embedded token from git output before logging or returning it. */
 export function redactGithubToken(text: string): string {
   return text.replace(/x-access-token:[^@]+@/g, 'x-access-token:***@');
 }

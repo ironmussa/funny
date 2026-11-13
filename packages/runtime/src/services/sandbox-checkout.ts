@@ -10,16 +10,18 @@
 import { existsSync, readdirSync } from 'fs';
 import { dirname, isAbsolute, join, normalize } from 'path';
 
-import { executeShell, gitRead, gitWrite } from '@funny/core/git';
+import { cloneAuthEnv, executeShell, gitRead, gitWrite } from '@funny/core/git';
 import { readProjectConfig } from '@funny/core/ports';
 import { badRequest, conflict, processError, type DomainError } from '@funny/shared/errors';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
-import { redactGithubToken, withGithubToken } from '../utils/github-clone-url.js';
+import { redactGithubToken } from '../utils/github-clone-url.js';
 
 /** Generous: a first `bun install` may build native modules. */
 const POST_CREATE_TIMEOUT_MS = 5 * 60_000;
+/** A clone of a large repository outlives gitWrite's 30 s default. */
+const CLONE_TIMEOUT_MS = 10 * 60_000;
 
 const REPO_URL = /^(https:\/\/[^\s@]+|git@[^\s:]+:[^\s]+)$/;
 
@@ -52,11 +54,20 @@ function isMissingRemoteBranch(stderr: string): boolean {
 }
 
 /** `git clone`, on `branch` when the remote has it, else on its default branch. */
-async function cloneRepository(url: string, path: string, branch: string | undefined) {
+async function cloneRepository(
+  url: string,
+  path: string,
+  branch: string | undefined,
+  token: string | null,
+) {
   const cwd = dirname(path);
+  // The token goes in git's environment, never in the URL (argv, .git/config).
+  const env = cloneAuthEnv(url, token);
   if (branch) {
     const result = await gitWrite(['clone', '--quiet', '--branch', branch, url, path], {
       cwd,
+      env,
+      timeout: CLONE_TIMEOUT_MS,
       reject: false,
     });
     if (result.exitCode === 0 || !isMissingRemoteBranch(result.stderr)) return result;
@@ -65,7 +76,12 @@ async function cloneRepository(url: string, path: string, branch: string | undef
       branch,
     });
   }
-  return gitWrite(['clone', '--quiet', url, path], { cwd, reject: false });
+  return gitWrite(['clone', '--quiet', url, path], {
+    cwd,
+    env,
+    timeout: CLONE_TIMEOUT_MS,
+    reject: false,
+  });
 }
 
 /** The checkout's current branch, or null. */
@@ -100,9 +116,9 @@ export function checkoutProjectIntoSandbox(
     return errAsync(conflict(`${path} exists and is not a git checkout`));
   }
 
-  const url = withGithubToken(input.repoUrl, input.token);
-  const clone = ResultAsync.fromPromise(cloneRepository(url, path, input.branch), (error) =>
-    processError(redactGithubToken(String(error)), 1),
+  const clone = ResultAsync.fromPromise(
+    cloneRepository(input.repoUrl, path, input.branch, input.token),
+    (error) => processError(redactGithubToken(String(error)), 1),
   ).andThen((result) =>
     result.exitCode === 0
       ? okAsync(undefined)
@@ -116,17 +132,6 @@ export function checkoutProjectIntoSandbox(
   );
 
   return clone
-    .andThen(() =>
-      // Never leave the token in .git/config for later processes and agents.
-      url === input.repoUrl
-        ? okAsync(undefined)
-        : ResultAsync.fromPromise(
-            gitWrite(['-C', path, 'remote', 'set-url', 'origin', input.repoUrl], {
-              reject: false,
-            }),
-            (error) => processError(redactGithubToken(String(error)), 1),
-          ).map(() => undefined),
-    )
     .andThen(() => ResultAsync.fromSafePromise(runSandboxPostCreate(path)))
     .andThen(() => ResultAsync.fromSafePromise(currentBranch(path)))
     .map((branch) => ({ path, cloned: true, branch }));

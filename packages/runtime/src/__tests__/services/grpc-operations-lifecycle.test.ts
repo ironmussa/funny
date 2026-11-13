@@ -7,6 +7,7 @@ vi.mock('../../services/grpc-operation-outbox.js', () => ({
     pending = vi.fn(() => []);
     markAttempt = vi.fn();
     confirm = vi.fn();
+    discard = vi.fn();
     close = vi.fn();
   },
 }));
@@ -113,33 +114,29 @@ describe('GrpcOperationsAdapter request lifecycle', () => {
     expect(outbox.close).toHaveBeenCalledOnce();
   });
 
-  test('keeps timed-out mutations available for replay and confirms late outcomes', async () => {
+  test('discards timed-out mutations so a reconnect never replays them', async () => {
     const result = expect(
       adapter.request('data:update_thread', {
         threadId: 't1',
         updates: { status: 'completed' },
       }),
     ).rejects.toThrow('Data request timed out');
-    const original = send.mock.calls[0][1];
-    const key = original.metadata.idempotencyKey;
+    const key = send.mock.calls[0][1].metadata.idempotencyKey;
     await vi.advanceTimersByTimeAsync(15_000);
     await result;
-    expect(outbox.confirm).not.toHaveBeenCalled();
-    vi.mocked(outbox.pending).mockReturnValue([
-      {
-        idempotencyKey: key,
-        operationKind: 'updateThread',
-        payload: original.updateThread,
-        createdAt: new Date().toISOString(),
-        attemptCount: 1,
-        lastAttemptAt: null,
-      },
-    ]);
+    expect(outbox.discard).toHaveBeenCalledWith(key);
     adapter.activated();
-    expect(send).toHaveBeenCalledTimes(2);
-    expect(send.mock.calls[1][1].metadata.idempotencyKey).toBe(key);
+    expect(send).toHaveBeenCalledTimes(1);
     expect(vi.getTimerCount()).toBe(0);
-    adapter.receive({ correlationId: original.metadata.correlationId, success: {} });
-    expect(outbox.confirm).toHaveBeenCalledWith(key);
+  });
+
+  test('shutdown leaves pending mutations in the outbox for the next process', async () => {
+    const result = expect(
+      adapter.request('data:update_thread', { threadId: 't1', updates: {} }),
+    ).rejects.toThrow('transport shut down');
+    adapter.shutdown();
+    await result;
+    expect(outbox.discard).not.toHaveBeenCalled();
+    expect(outbox.close).toHaveBeenCalledOnce();
   });
 });

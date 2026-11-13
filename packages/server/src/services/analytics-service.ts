@@ -30,35 +30,54 @@ export function tzOffsetToModifier(offsetMinutes: number): string {
   return `${sign}${h}:${m}`;
 }
 
-/** Returns a SQL expression that buckets a date column by the requested granularity. */
-function dateBucket(column: any, groupBy: GroupBy, tzMod: string) {
+/**
+ * Returns a SQL expression that buckets a date column by the requested
+ * granularity, in the caller's local time (`offsetMinutes` is a browser
+ * getTimezoneOffset() value).
+ *
+ * Group and order by the selected alias (`bucketAlias`), never by this
+ * expression again: it carries a bound parameter, and Postgres treats a second
+ * copy (a different `$n`) as a different expression and rejects the query.
+ */
+function dateBucket(column: any, groupBy: GroupBy, offsetMinutes: number) {
   if (dbDialect === 'pg') {
-    // PostgreSQL: use AT TIME ZONE + to_char / date_trunc
+    // Columns hold ISO-8601 UTC strings. Read them as instants, take the UTC
+    // wall time and shift it by the caller's offset. (`AT TIME ZONE '+05:00'`
+    // would use POSIX rules, where '+05:00' means five hours WEST of UTC.)
+    const local = sql`(((${column})::timestamptz AT TIME ZONE 'UTC') + make_interval(mins => ${-Math.round(offsetMinutes)}::int))`;
     switch (groupBy) {
       case 'week':
-        return sql`to_char(date_trunc('week', (${column})::timestamp AT TIME ZONE ${tzMod}), 'IYYY-"W"IW')`;
+        return sql<string>`to_char(${local}, 'IYYY-"W"IW')`;
       case 'month':
-        return sql`to_char((${column})::timestamp AT TIME ZONE ${tzMod}, 'YYYY-MM')`;
+        return sql<string>`to_char(${local}, 'YYYY-MM')`;
       case 'year':
-        return sql`to_char((${column})::timestamp AT TIME ZONE ${tzMod}, 'YYYY')`;
+        return sql<string>`to_char(${local}, 'YYYY')`;
       case 'day':
       default:
-        return sql`((${column})::timestamp AT TIME ZONE ${tzMod})::date`;
+        return sql<string>`to_char(${local}, 'YYYY-MM-DD')`;
     }
   }
 
   // SQLite: use strftime / datetime modifiers
+  const tzMod = tzOffsetToModifier(offsetMinutes);
   switch (groupBy) {
     case 'week':
-      return sql`strftime('%Y-W%W', datetime(${column}, ${tzMod}))`;
+      return sql<string>`strftime('%Y-W%W', datetime(${column}, ${tzMod}))`;
     case 'month':
-      return sql`strftime('%Y-%m', datetime(${column}, ${tzMod}))`;
+      return sql<string>`strftime('%Y-%m', datetime(${column}, ${tzMod}))`;
     case 'year':
-      return sql`strftime('%Y', datetime(${column}, ${tzMod}))`;
+      return sql<string>`strftime('%Y', datetime(${column}, ${tzMod}))`;
     case 'day':
     default:
-      return sql`DATE(${column}, ${tzMod})`;
+      return sql<string>`DATE(${column}, ${tzMod})`;
   }
+}
+
+const bucketAlias = sql`${sql.identifier('date')}`;
+
+/** COUNT that answers a number on both dialects (Postgres returns bigint as a string). */
+function countOf(expr = sql`*`) {
+  return sql<number>`COUNT(${expr})`.mapWith(Number);
 }
 
 export function getDateRange(
@@ -111,7 +130,7 @@ async function countTransitionsTo(
 ) {
   const result = await dbGet(
     db
-      .select({ count: sql<number>`COUNT(DISTINCT ${schema.stageHistory.threadId})` })
+      .select({ count: countOf(sql`DISTINCT ${schema.stageHistory.threadId}`) })
       .from(schema.stageHistory)
       .innerJoin(schema.threads, eq(schema.stageHistory.threadId, schema.threads.id))
       .where(
@@ -157,7 +176,7 @@ export async function getOverview(params: OverviewParams): Promise<AnalyticsOver
       (db as any)
         .select({
           stage: schema.threads.stage,
-          count: sql<number>`COUNT(*)`,
+          count: countOf(),
         })
         .from(schema.threads)
         .where(
@@ -172,7 +191,7 @@ export async function getOverview(params: OverviewParams): Promise<AnalyticsOver
     ),
     dbGet(
       db
-        .select({ count: sql<number>`COUNT(*)` })
+        .select({ count: countOf() })
         .from(schema.threads)
         .where(
           and(
@@ -186,7 +205,7 @@ export async function getOverview(params: OverviewParams): Promise<AnalyticsOver
     // Threads created in time range
     dbGet(
       db
-        .select({ count: sql<number>`COUNT(*)` })
+        .select({ count: countOf() })
         .from(schema.threads)
         .where(
           and(
@@ -199,7 +218,7 @@ export async function getOverview(params: OverviewParams): Promise<AnalyticsOver
     // Threads completed in time range
     dbGet(
       db
-        .select({ count: sql<number>`COUNT(*)` })
+        .select({ count: countOf() })
         .from(schema.threads)
         .where(
           and(
@@ -212,7 +231,7 @@ export async function getOverview(params: OverviewParams): Promise<AnalyticsOver
     ),
     dbGet(
       db
-        .select({ total: sql<number>`COALESCE(SUM(${schema.threads.cost}), 0)` })
+        .select({ total: sql<number>`COALESCE(SUM(${schema.threads.cost}), 0)`.mapWith(Number) })
         .from(schema.threads)
         .where(
           and(
@@ -267,14 +286,14 @@ async function stageTransitionsByDate(
   baseFilters: ReturnType<typeof eq>[],
   range: { start: string; end: string },
   groupBy: GroupBy,
-  tzMod: string,
+  offsetMinutes: number,
 ) {
-  const bucket = dateBucket(schema.stageHistory.changedAt, groupBy, tzMod);
+  const bucket = dateBucket(schema.stageHistory.changedAt, groupBy, offsetMinutes);
   return dbAll(
     db
       .select({
         date: bucket.as('date'),
-        count: sql<number>`COUNT(DISTINCT ${schema.stageHistory.threadId})`,
+        count: countOf(sql`DISTINCT ${schema.stageHistory.threadId}`),
       })
       .from(schema.stageHistory)
       .innerJoin(schema.threads, eq(schema.stageHistory.threadId, schema.threads.id))
@@ -286,21 +305,20 @@ async function stageTransitionsByDate(
           lt(schema.stageHistory.changedAt, range.end),
         ),
       )
-      .groupBy(bucket)
-      .orderBy(bucket),
+      .groupBy(bucketAlias)
+      .orderBy(bucketAlias),
   );
 }
 
 export async function getTimeline(params: TimelineParams): Promise<AnalyticsTimeline> {
   const { userId, projectId, timeRange, groupBy: gb = 'day', offsetMinutes = 0 } = params;
   const groupBy = gb as GroupBy;
-  const tzMod = tzOffsetToModifier(offsetMinutes);
   const range = getDateRange(timeRange, offsetMinutes);
   const filters = baseFiltersFor({ projectId, userId });
 
   // Run all independent timeline queries in parallel
-  const createdBucket = dateBucket(schema.threads.createdAt, groupBy, tzMod);
-  const completedBucket = dateBucket(schema.threads.completedAt, groupBy, tzMod);
+  const createdBucket = dateBucket(schema.threads.createdAt, groupBy, offsetMinutes);
+  const completedBucket = dateBucket(schema.threads.completedAt, groupBy, offsetMinutes);
 
   const [
     createdByDate,
@@ -312,7 +330,7 @@ export async function getTimeline(params: TimelineParams): Promise<AnalyticsTime
   ] = await Promise.all([
     dbAll(
       db
-        .select({ date: createdBucket.as('date'), count: sql<number>`COUNT(*)` })
+        .select({ date: createdBucket.as('date'), count: countOf() })
         .from(schema.threads)
         .where(
           and(
@@ -321,12 +339,12 @@ export async function getTimeline(params: TimelineParams): Promise<AnalyticsTime
             lt(schema.threads.createdAt, range.end),
           ),
         )
-        .groupBy(createdBucket)
-        .orderBy(createdBucket),
+        .groupBy(bucketAlias)
+        .orderBy(bucketAlias),
     ),
     dbAll(
       db
-        .select({ date: completedBucket.as('date'), count: sql<number>`COUNT(*)` })
+        .select({ date: completedBucket.as('date'), count: countOf() })
         .from(schema.threads)
         .where(
           and(
@@ -336,13 +354,13 @@ export async function getTimeline(params: TimelineParams): Promise<AnalyticsTime
             lt(schema.threads.completedAt, range.end),
           ),
         )
-        .groupBy(completedBucket)
-        .orderBy(completedBucket),
+        .groupBy(bucketAlias)
+        .orderBy(bucketAlias),
     ),
-    stageTransitionsByDate('planning', filters, range, groupBy, tzMod),
-    stageTransitionsByDate('review', filters, range, groupBy, tzMod),
-    stageTransitionsByDate('done', filters, range, groupBy, tzMod),
-    stageTransitionsByDate('archived', filters, range, groupBy, tzMod),
+    stageTransitionsByDate('planning', filters, range, groupBy, offsetMinutes),
+    stageTransitionsByDate('review', filters, range, groupBy, offsetMinutes),
+    stageTransitionsByDate('done', filters, range, groupBy, offsetMinutes),
+    stageTransitionsByDate('archived', filters, range, groupBy, offsetMinutes),
   ]);
 
   return {

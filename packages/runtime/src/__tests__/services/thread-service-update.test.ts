@@ -33,6 +33,7 @@ const mocks = vi.hoisted(() => ({
   wsBroker: { emit: vi.fn(), emitToUser: vi.fn() },
   stopContainer: vi.fn(() => ({ match: (_ok: () => void) => _ok() })),
   invalidateSearch: vi.fn(() => ({ match: (_ok: () => void) => _ok() })),
+  killPtysUnderPath: vi.fn(() => 0),
 }));
 
 vi.mock('../../lib/logger.js', () => ({
@@ -91,6 +92,10 @@ vi.mock('../../services/thread-service/staged-uploads.js', () => ({
 
 vi.mock('../../utils/file-mentions.js', () => ({
   hydrateReferencedFiles: mocks.hydrateReferencedFiles,
+}));
+
+vi.mock('../../services/pty-manager.js', () => ({
+  killPtysUnderPath: mocks.killPtysUnderPath,
 }));
 
 vi.mock('../../services/project-search-registry.js', () => ({
@@ -226,6 +231,26 @@ describe('deleteThread', () => {
     );
   });
 
+  test('kills PTY sessions running in the scratch directory', async () => {
+    mocks.tm.getThread.mockResolvedValue({ ...baseThread, isScratch: 1, projectId: '' });
+
+    const result = await deleteThread('t-1');
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.killPtysUnderPath).toHaveBeenCalledWith(
+      expect.stringMatching(/[\\/]\.funny[\\/]scratch[\\/]u-1[\\/]t-1$/),
+    );
+  });
+
+  test('leaves PTY sessions alone for local-mode threads (shared project dir)', async () => {
+    mocks.tm.getThread.mockResolvedValue(baseThread);
+
+    const result = await deleteThread('t-1');
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.killPtysUnderPath).not.toHaveBeenCalled();
+  });
+
   test('stops running agent before delete', async () => {
     mocks.tm.getThread.mockResolvedValue(baseThread);
     mocks.isAgentRunning.mockReturnValue(true);
@@ -255,6 +280,25 @@ describe('deleteThread', () => {
     );
     expect(mocks.removeWorktree).toHaveBeenCalledWith('/repo', '/repo/.worktrees/t-1');
     expect(mocks.removeBranch).toHaveBeenCalledWith('/repo', 'my-app/feature-t-1');
+  });
+
+  test('kills PTY sessions in the worktree before removing it', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      ...baseThread,
+      mode: 'worktree',
+      worktreePath: '/repo/.worktrees/t-1',
+      branch: 'my-app/feature-t-1',
+    });
+    mocks.removeWorktree.mockReturnValue({ match: (_ok: () => void) => _ok() });
+    mocks.removeBranch.mockReturnValue({ match: (_ok: () => void) => _ok() });
+
+    const result = await deleteThread('t-1');
+
+    expect(result.isOk()).toBe(true);
+    expect(mocks.killPtysUnderPath).toHaveBeenCalledWith('/repo/.worktrees/t-1');
+    expect(mocks.killPtysUnderPath.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.removeWorktree.mock.invocationCallOrder[0]!,
+    );
   });
 });
 
@@ -287,6 +331,10 @@ describe('updateThread — archive worktree cleanup', () => {
     );
     expect(mocks.removeWorktree).toHaveBeenCalledWith('/repo', '/repo/.worktrees/t-1');
     expect(mocks.removeBranch).toHaveBeenCalledWith('/repo', 'my-app/feature-t-1');
+    expect(mocks.killPtysUnderPath).toHaveBeenCalledWith('/repo/.worktrees/t-1');
+    expect(mocks.killPtysUnderPath.mock.invocationCallOrder[0]).toBeLessThan(
+      mocks.removeWorktree.mock.invocationCallOrder[0]!,
+    );
     expect(mocks.messageQueue.clearQueue).toHaveBeenCalledWith('t-1');
     expect(mocks.cleanupThreadState).toHaveBeenCalledWith('t-1');
     expect(mocks.tm.updateThread).toHaveBeenCalledWith(

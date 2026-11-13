@@ -22,6 +22,7 @@ import { sql } from 'drizzle-orm';
 import { db, getConnection } from '../db/index.js';
 import { log } from '../lib/logger.js';
 import { metric, recordHistogram } from '../lib/telemetry.js';
+import { isPathWithin } from '../utils/path-scope.js';
 import type { PtyBackend } from './pty-backend.js';
 import { validateShellId } from './shell-detector.js';
 import { wsBroker } from './ws-broker.js';
@@ -652,6 +653,39 @@ export function killPty(id: string): void {
   if (backend.persistent) {
     removePtySession(id);
   }
+}
+
+/**
+ * Kill every PTY session whose working directory is `dir` or lies inside it.
+ * Called before a thread's worktree or scratch directory is removed, so its
+ * shells do not outlive the directory they run in. Each owner gets `pty:exit`
+ * so their terminal tab closes: `killPty` forgets the session before the
+ * backend reports the exit, so `onExit` cannot tell them. Returns how many
+ * sessions were killed.
+ */
+export function killPtysUnderPath(dir: string): number {
+  const doomed = [...activeSessions.entries()].filter(
+    ([, meta]) => !!meta.cwd && isPathWithin(meta.cwd, dir),
+  );
+  for (const [ptyId, meta] of doomed) {
+    killPty(ptyId);
+    if (meta.userId) {
+      wsBroker.emitToUser(meta.userId, {
+        type: 'pty:exit' as const,
+        threadId: '',
+        // No real exit code: the runner killed the shell itself.
+        data: { ptyId, exitCode: -1 },
+      });
+    }
+  }
+  if (doomed.length > 0) {
+    log.info('Killed PTY sessions under removed directory', {
+      namespace: 'pty-manager',
+      dir,
+      count: doomed.length,
+    });
+  }
+  return doomed.length;
 }
 
 function killAllPtys(): void {

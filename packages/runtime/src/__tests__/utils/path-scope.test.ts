@@ -36,7 +36,7 @@ vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: { listProjects: mockListProjects } }),
 }));
 
-import { requirePickerPath, requireProjectPath } from '../../utils/path-scope.js';
+import { isPathWithin, requirePickerPath, requireProjectPath } from '../../utils/path-scope.js';
 
 beforeAll(() => {
   mkdirSync(FAKE_HOME, { recursive: true });
@@ -117,5 +117,22 @@ describe('requireProjectPath — symlink escape (security HI-2)', () => {
     const res = await requireProjectPath(resolve(FAKE_HOME, 'other-project'), 'user-1');
     expect(res).not.toBeNull();
     expect(res?.status).toBe(403);
+  });
+});
+
+describe('isPathWithin', () => {
+  test('matches the scope itself and its descendants', () => {
+    expect(isPathWithin('/repo/.worktrees/t-1', '/repo/.worktrees/t-1')).toBe(true);
+    expect(isPathWithin('/repo/.worktrees/t-1/src', '/repo/.worktrees/t-1')).toBe(true);
+  });
+
+  test('does not match a sibling that shares the prefix', () => {
+    expect(isPathWithin('/repo/.worktrees/t-10', '/repo/.worktrees/t-1')).toBe(false);
+    expect(isPathWithin('/repo', '/repo/.worktrees/t-1')).toBe(false);
+  });
+
+  test('normalizes both paths first', () => {
+    expect(isPathWithin('/repo/.worktrees/t-1/src/../', '/repo/.worktrees/t-1/')).toBe(true);
+    expect(isPathWithin('/repo/.worktrees/t-1/../t-2', '/repo/.worktrees/t-1')).toBe(false);
   });
 });

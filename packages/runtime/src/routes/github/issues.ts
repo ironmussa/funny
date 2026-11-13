@@ -1,5 +1,5 @@
 import { getRemoteUrl, listBranches } from '@funny/core/git';
-import type { GitHubPR, EnrichedGitHubIssue } from '@funny/shared';
+import type { GitHubPR } from '@funny/shared';
 import { Hono } from 'hono';
 
 import type { HonoEnv } from '../../types/hono-env.js';
@@ -10,6 +10,7 @@ import {
   requireAccessibleProject,
   resolveGithubToken,
 } from './helpers.js';
+import { linkIssues } from './issue-links.js';
 import { readIssueState, readPaging } from './query.js';
 
 export const issueRoutes = new Hono<HonoEnv>();
@@ -113,62 +114,36 @@ issueRoutes.get('/issues-enriched', async (c) => {
     const resolved = await resolveGithubToken(userId);
     const token = resolved?.token ?? null;
 
-    // Fetch issues, local branches, and open PRs in parallel
-    const [issuesData, branchesResult, prsData] = await Promise.all([
+    // Open PRs, plus the most recently updated closed ones so a merged PR
+    // still shows on its issue.
+    const fetchPRs = async (prState: 'open' | 'closed'): Promise<GitHubPR[]> => {
+      if (!token) return [];
+      const res = await githubApiFetch(
+        `/repos/${parsed.owner}/${parsed.repo}/pulls?state=${prState}&sort=updated&direction=desc&per_page=100`,
+        token,
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return Array.isArray(data) ? (data as GitHubPR[]) : [];
+    };
+
+    const [issuesData, branchesResult, openPRs, closedPRs] = await Promise.all([
       // Issues (via Search API so PRs never crowd out issues)
       fetchRepoIssues(parsed.owner, parsed.repo, { state, page, perPage, token }),
-      // Local branches
       listBranches(project.path),
-      // Open PRs (for linking)
-      (async () => {
-        if (!token) return [] as GitHubPR[];
-        const res = await githubApiFetch(
-          `/repos/${parsed.owner}/${parsed.repo}/pulls?state=open&per_page=100`,
-          token,
-        );
-        return res.ok ? ((await res.json()) as GitHubPR[]) : ([] as GitHubPR[]);
-      })(),
+      fetchPRs('open'),
+      fetchPRs('closed'),
     ]);
 
     if (!issuesData) {
       return c.json({ error: 'Failed to fetch issues' }, 502);
     }
 
-    const branches = branchesResult.isOk() ? branchesResult.value : [];
-    const prs = Array.isArray(prsData) ? prsData : [];
-
-    // Build lookup: issue number → branch name (match issue number in branch names)
-    const branchByIssue = new Map<number, string>();
-    for (const branch of branches) {
-      // Match patterns like "issue-42-fix-bug", "42-fix-bug", "fix/42-description"
-      const match = branch.match(/(?:^|[/-])(\d+)(?:[/-]|$)/);
-      if (match) {
-        const issueNum = parseInt(match[1], 10);
-        // Only match if the issue number is plausible (exists in current page)
-        if (!branchByIssue.has(issueNum)) branchByIssue.set(issueNum, branch);
-      }
-    }
-
-    // Build lookup: branch → PR
-    const prByBranch = new Map<string, { number: number; url: string; state: string }>();
-    for (const pr of prs) {
-      prByBranch.set(pr.head.ref, {
-        number: pr.number,
-        url: pr.html_url,
-        state: pr.state,
-      });
-    }
-
-    // Enrich issues
-    const enrichedIssues: EnrichedGitHubIssue[] = issuesData.issues.map((issue) => {
-      const linkedBranch = branchByIssue.get(issue.number) ?? null;
-      const linkedPR = linkedBranch ? (prByBranch.get(linkedBranch) ?? null) : null;
-      return {
-        ...issue,
-        linkedBranch,
-        linkedPR,
-        suggestedBranchName: suggestBranchName(issue.number, issue.title),
-      };
+    const enrichedIssues = linkIssues(issuesData.issues, {
+      branches: branchesResult.isOk() ? branchesResult.value : [],
+      pullRequests: [...openPRs, ...closedPRs],
+      repo: `${parsed.owner}/${parsed.repo}`,
+      suggestBranchName: (issue) => suggestBranchName(issue.number, issue.title),
     });
 
     return c.json({

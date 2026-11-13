@@ -886,26 +886,45 @@ function maybeNotifyAgentResult(threadId: string, data: any): void {
   }
 }
 
+/** Delay before a completed workflow's progress entry is closed, keyed by thread. */
+const COMPLETED_WORKFLOW_CLOSE_MS = 1500;
+const pendingWorkflowCloses = new Map<string, ReturnType<typeof setTimeout>>();
+
+function cancelPendingWorkflowClose(threadId: string) {
+  const timer = pendingWorkflowCloses.get(threadId);
+  if (timer === undefined) return;
+  clearTimeout(timer);
+  pendingWorkflowCloses.delete(threadId);
+}
+
 function handleGitWorkflowProgress(threadId: string, data: any) {
   import('@/stores/commit-progress-store').then(({ useCommitProgressStore }) => {
     const store = useCommitProgressStore.getState();
     const { status: wfStatus, title, action, steps, workflowId } = data;
 
     if (wfStatus === 'started') {
+      // A restart within the close delay must not be closed by the previous run's timer.
+      cancelPendingWorkflowClose(threadId);
       store.startCommit(threadId, title, steps, action, workflowId);
     } else if (wfStatus === 'step_update') {
       store.replaceSteps(threadId, steps);
     } else if (wfStatus === 'completed') {
       store.replaceSteps(threadId, steps);
-      setTimeout(() => store.finishCommit(threadId), 1500);
+      cancelPendingWorkflowClose(threadId);
+      const timer = setTimeout(() => {
+        pendingWorkflowCloses.delete(threadId);
+        store.finishCommit(threadId, workflowId);
+      }, COMPLETED_WORKFLOW_CLOSE_MS);
+      pendingWorkflowCloses.set(threadId, timer);
     } else if (wfStatus === 'failed') {
+      cancelPendingWorkflowClose(threadId);
       store.replaceSteps(threadId, steps);
       store.setFailedWorkflow({
         title: title || 'Git operation failed',
         steps: steps ?? [],
         action: action ?? '',
       });
-      store.finishCommit(threadId);
+      store.finishCommit(threadId, workflowId);
     }
   });
 

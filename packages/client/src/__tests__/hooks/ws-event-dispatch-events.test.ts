@@ -620,7 +620,27 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     });
 
     vi.advanceTimersByTime(1500);
-    expect(mockFinishCommit).toHaveBeenCalledWith('t1');
+    expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined);
+    vi.useRealTimers();
+  });
+
+  test('git:workflow_progress restart cancels the previous workflow close timer', async () => {
+    vi.useFakeTimers();
+    const handler = captureHandlers()['git:workflow_progress'];
+    handler({
+      threadId: 't1',
+      data: { status: 'completed', action: 'commit', workflowId: 'wf-1', steps: [] },
+    });
+    await vi.waitFor(() => expect(mockReplaceSteps).toHaveBeenCalled());
+
+    handler({
+      threadId: 't1',
+      data: { status: 'started', title: 'Again', action: 'commit', workflowId: 'wf-2', steps: [] },
+    });
+    await vi.waitFor(() => expect(mockStartCommit).toHaveBeenCalled());
+
+    vi.advanceTimersByTime(1500);
+    expect(mockFinishCommit).not.toHaveBeenCalled();
     vi.useRealTimers();
   });
 
@@ -639,7 +659,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       expect(mockSetFailedWorkflow).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'Push failed', action: 'push' }),
       );
-      expect(mockFinishCommit).toHaveBeenCalledWith('t1');
+      expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined);
     });
   });
 

@@ -47,4 +47,4 @@ Related runtime services: `git-pipelines.ts`, `pipeline-adapter.ts`, `git-workfl
 
 ## Optional durable-workflow infra (not part of the above)
 
-`docker/docker-compose.hatchet.yml` spins up a self-hosted Hatchet stack (Postgres, RabbitMQ, hatchet-engine, hatchet-dashboard on `:8080`). Hatchet is referenced only inside `packages/agent` (the standalone issue-to-PR service, gated by `HATCHET_CLIENT_TOKEN`) for its own durable/batch workflow mode — it is **not** used by `packages/scheduler`, `packages/workflows`, or the in-app pipeline above. Don't assume Hatchet needs to be running for normal thread automation.
+`docker/docker-compose.hatchet.yml` spins up a self-hosted Hatchet stack (Postgres, RabbitMQ, hatchet-engine, hatchet-dashboard on `:8080`). No package uses Hatchet today — not `packages/scheduler`, `packages/workflows`, or the in-app pipeline above. Don't assume Hatchet needs to be running for normal thread automation.

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 
-import type { PipelineEvent } from '../core/types.js';
-import { EventBus } from '../infrastructure/event-bus.js';
+import { EventBus } from '../adapters/event-bus.js';
+import type { PipelineEvent } from '../domain/events.js';
 
 const TEST_DIR = join(import.meta.dir, '..', '..', '.test-tmp-event-bus');
 

@@ -11,8 +11,8 @@ import { join } from 'path';
 
 import EventEmitter from 'eventemitter3';
 
-import type { PipelineEvent, PipelineEventType } from '../core/types.js';
-import { logger } from './logger.js';
+import type { PipelineEvent } from '../domain/events.js';
+import { logger } from '../infrastructure/logger.js';
 
 const DEFAULT_EVENTS_PATH = join(
   process.env.HOME ?? process.env.USERPROFILE ?? '.',
@@ -51,32 +51,6 @@ export class EventBus extends EventEmitter<EventBusEvents> {
     }
 
     this.emit('event', event);
-  }
-
-  /**
-   * Subscribe to a specific event type. Returns an unsubscribe function.
-   */
-  onEventType(eventType: PipelineEventType, handler: (event: PipelineEvent) => void): () => void {
-    const wrappedHandler = (event: PipelineEvent) => {
-      if (event.event_type === eventType) handler(event);
-    };
-    this.on('event', wrappedHandler);
-    return () => this.off('event', wrappedHandler);
-  }
-
-  /**
-   * Subscribe to multiple event types with a single handler. Returns an unsubscribe function.
-   */
-  onEventTypes(
-    eventTypes: PipelineEventType[],
-    handler: (event: PipelineEvent) => void,
-  ): () => void {
-    const typeSet = new Set(eventTypes);
-    const wrappedHandler = (event: PipelineEvent) => {
-      if (typeSet.has(event.event_type)) handler(event);
-    };
-    this.on('event', wrappedHandler);
-    return () => this.off('event', wrappedHandler);
   }
 
   /**

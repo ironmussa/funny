@@ -1,5 +1,5 @@
 /**
- * Domain types for the Agent Service.
+ * Events the orchestrator publishes on its event bus.
  */
 
 // ── Events ──────────────────────────────────────────────────────

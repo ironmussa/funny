@@ -1,8 +1,9 @@
 /**
  * Generic finite state machine with typed transitions.
+ *
+ * Pure domain: no I/O. Callers that want to log a rejected transition check the
+ * result of `tryTransition`.
  */
-
-import { logger } from '../infrastructure/logger.js';
 
 // ── StateMachine class ──────────────────────────────────────────
 
@@ -51,16 +52,10 @@ export class StateMachine<TState extends string> {
   }
 
   /**
-   * Attempt a transition. Returns false (and logs a warning) if invalid.
+   * Attempt a transition. Returns false, leaving the state unchanged, if invalid.
    */
   tryTransition(to: TState): boolean {
-    if (!this.canTransition(to)) {
-      logger.warn(
-        { label: this.label, from: this.current, to },
-        'Invalid state transition rejected',
-      );
-      return false;
-    }
+    if (!this.canTransition(to)) return false;
     this.current = to;
     return true;
   }

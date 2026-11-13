@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 
-import { StateMachine, TransitionError } from '../core/state-machine.js';
+import { StateMachine, TransitionError } from '../domain/state-machine.js';
 
 // ── StateMachine generic tests ──────────────────────────────────
 

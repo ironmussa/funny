@@ -44,14 +44,14 @@
     "packages/agent": {
       "name": "@funny/orchestrator",
       "version": "0.1.0",
+      "bin": {
+        "funny-orchestrator": "./src/bin/orchestrator.ts",
+        "funny-orchestrator-step": "./src/bin/step.ts",
+      },
       "dependencies": {
         "@funny/core": "workspace:*",
-        "@funny/sdk": "workspace:*",
         "@funny/shared": "workspace:*",
-        "@hono/zod-validator": "^0.8.0",
         "eventemitter3": "^5.0.1",
-        "hono": "^4.13.18",
-        "nanoid": "^5.0.9",
         "pino": "^10.3.1",
         "yaml": "^2.6.1",
         "zod": "^4.6.6",
@@ -1024,8 +1024,6 @@
     "@hapi/bourne": ["@hapi/bourne@3.0.0", "", {}, "sha512-Waj1cwPXJDucOib4a3bAISsKJVb15MKi9IvmTI/7ssVEm6sywXGjVJDhl6/umt1pK1ZS7PacXU3A1PmFKHEZ2w=="],
 
     "@hono/node-server": ["@hono/node-server@2.1.8", "", { "peerDependencies": { "hono": "^4 || ^5.0.0-0" } }, "sha512-jdf7FHh6A1lzjpHHQUgxsg2GeER2vMetnAOfeActzcoli6jamlK+NAwL6Dsr5Fl3BS3tYUQzCdtZjU8Qxv7bEA=="],
-
-    "@hono/zod-validator": ["@hono/zod-validator@0.8.0", "", { "peerDependencies": { "hono": ">=4.10.0", "zod": "^3.25.0 || ^4.0.0" } }, "sha512-5uS4S1/LKtZQYvD4BtpPUFkOv8d1wNxHHrChm26buMiEYc1FrHWvDUaKVBwkiVtvSExHSpLGDvcnpI2Copyj9w=="],
 
     "@humanfs/core": ["@humanfs/core@0.19.2", "", { "dependencies": { "@humanfs/types": "^0.15.0" } }, "sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA=="],
 

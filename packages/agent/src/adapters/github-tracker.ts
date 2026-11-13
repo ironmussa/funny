@@ -15,7 +15,7 @@ import type {
   IssueFilter,
   IssueComment,
   IssueLabel,
-} from './tracker.js';
+} from '../ports/tracker.js';
 
 // ── GitHubTracker ───────────────────────────────────────────────
 
@@ -26,20 +26,6 @@ export class GitHubTracker implements Tracker {
     private repo: string,
     private cwd: string,
   ) {}
-
-  /** Auto-detect repo from git remote */
-  static async fromCwd(cwd: string): Promise<GitHubTracker> {
-    const { stdout } = await execute(
-      'gh',
-      ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'],
-      { cwd, reject: false },
-    );
-    const repo = stdout.trim();
-    if (!repo) {
-      throw new Error('Could not detect GitHub repo from current directory');
-    }
-    return new GitHubTracker(repo, cwd);
-  }
 
   async fetchIssues(filter: IssueFilter): Promise<Issue[]> {
     const args = [

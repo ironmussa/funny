@@ -120,41 +120,75 @@ function orgApi() {
   return auth.api as any;
 }
 
-async function addUserToOrg(
-  userId: string,
-  email: string,
-  orgId: string,
-  role: string,
-  headers: Headers,
-) {
-  // Use Better Auth's invitation flow: create invitation + accept it
-  await orgApi().inviteMember({
-    body: { email, role, organizationId: orgId },
-    headers,
-  });
+/**
+ * Add the user to the organization with the link's role.
+ *
+ * A server-side `addMember` call: the user being added holds no role in the
+ * org yet, so Better Auth's invitation flow (invite + accept with the user's
+ * own session) is refused for lack of `invitation:create` (issue #189). The
+ * invite link itself is the authorization, checked by the caller.
+ */
+async function addUserToOrg(userId: string, orgId: string, role: string): Promise<void> {
+  await orgApi().addMember({ body: { userId, role, organizationId: orgId } });
+}
 
-  // Find and accept the pending invitation
-  const pendingInvitations = await orgApi().listInvitations({
-    headers,
-    query: { organizationId: orgId },
-  });
+function setCookiesOf(headers: Headers): string[] {
+  return headers.getSetCookie?.() ?? (headers as any).raw?.()?.['set-cookie'] ?? [];
+}
 
-  const invitation = (pendingInvitations as any[])?.find(
-    (inv: any) => inv.email === email && inv.organizationId === orgId && inv.status === 'pending',
-  );
+function appendSetCookies(c: Context, cookies: string[]): void {
+  for (const cookie of cookies) c.header('Set-Cookie', cookie, { append: true });
+}
 
-  if (invitation) {
-    await orgApi().acceptInvitation({
+/** Request headers carrying the session that a sign-in response just set. */
+function sessionHeadersFrom(signInHeaders: Headers): Headers {
+  const cookie = setCookiesOf(signInHeaders)
+    .map((c) => c.split(';')[0])
+    .join('; ');
+  return new Headers({ cookie });
+}
+
+/**
+ * Best-effort: make the org the active one of the session in `headers`, and
+ * return the Set-Cookie values to forward (the refreshed session cache). The
+ * membership already exists, so a failure only costs the user an org switch.
+ */
+async function setActiveOrg(orgId: string, headers: Headers): Promise<string[]> {
+  let failure: Record<string, unknown>;
+  try {
+    const res: Response = await orgApi().setActiveOrganization({
       headers,
-      body: { invitationId: invitation.id },
+      body: { organizationId: orgId },
+      asResponse: true,
+    });
+    if (res.ok) return setCookiesOf(res.headers);
+    failure = { status: res.status };
+  } catch (err: any) {
+    failure = { error: err?.message ?? String(err) };
+  }
+  log.warn('Failed to set the active organization after joining via invite', {
+    namespace: 'invite',
+    orgId,
+    ...failure,
+  });
+  return [];
+}
+
+/**
+ * Undo an invite registration whose org join failed: delete the account just
+ * created (so the username can be used again) and release the reserved slot.
+ */
+async function rollBackRegistration(userId: string, linkId: string): Promise<void> {
+  try {
+    await (await auth.$context).internalAdapter.deleteUser(userId);
+  } catch (err: any) {
+    log.error('Failed to delete the account of a failed invite registration', {
+      namespace: 'invite',
+      userId,
+      error: err?.message ?? String(err),
     });
   }
-
-  // Set the user's active organization
-  await orgApi().setActiveOrganization({
-    headers,
-    body: { organizationId: orgId },
-  });
+  await releaseInviteSlot(linkId);
 }
 
 // ── Public routes (before auth middleware) ────────────────
@@ -222,9 +256,9 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
     return c.json({ error: 'This invite link has reached its maximum uses' }, 410);
   }
 
-  // Tracks whether the reserved slot has been consumed by a real user record.
-  // If creation throws before the user exists we release the slot; if it throws
-  // afterwards (sign-in / org-join) the user is real and the slot stays used.
+  // Tracks whether the reserved slot has been consumed by a real member.
+  // Until the user has joined the org, any failure releases the slot (and the
+  // account, once created); afterwards (sign-in) the user is real and stays.
   let slotConsumed = false;
 
   try {
@@ -245,32 +279,33 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
       await releaseInviteSlot(link.id);
       return c.json({ error: 'Failed to create account' }, 500);
     }
+
+    // 2. Add the user to the org. Without the membership the registration is
+    // useless, so a failure undoes it instead of answering 200 (issue #189).
+    try {
+      await addUserToOrg(user.id, link.organizationId, link.role);
+    } catch (orgErr: any) {
+      log.error('Failed to add user to org during invite registration', {
+        namespace: 'invite',
+        orgId: link.organizationId,
+        linkId: link.id,
+        error: orgErr?.message ?? String(orgErr),
+      });
+      await rollBackRegistration(user.id, link.id);
+      return c.json({ error: 'Failed to join the organization' }, 500);
+    }
     slotConsumed = true;
 
-    // 2. Sign the user in — returns Set-Cookie headers
+    // 3. Sign the user in — returns Set-Cookie headers
     const signInResponse = await orgApi().signInUsername({
       body: { username: body.username, password: body.password },
       headers: c.req.raw.headers,
       asResponse: true,
     });
-
-    // 3. Add user to the org
-    try {
-      await addUserToOrg(
-        user.id,
-        user.email,
-        link.organizationId,
-        link.role,
-        signInResponse.headers,
-      );
-    } catch (orgErr: any) {
-      log.warn('Failed to add user to org during invite registration', {
-        namespace: 'invite',
-        error: orgErr?.message,
-      });
-    }
-
-    // Slot was already reserved atomically before user creation (see H10).
+    const activeOrgCookies = await setActiveOrg(
+      link.organizationId,
+      sessionHeadersFrom(signInResponse.headers),
+    );
 
     audit({
       action: 'user.create',
@@ -294,11 +329,8 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
 
     // 5. Forward the sign-in response (contains session cookies)
     const responseHeaders = new Headers({ 'Content-Type': 'application/json' });
-    const cookies =
-      signInResponse.headers.getSetCookie?.() ??
-      (signInResponse.headers as any).raw?.()?.['set-cookie'] ??
-      [];
-    for (const cookie of cookies) {
+    // The active-org cookies come last so they replace the sign-in's session cache.
+    for (const cookie of [...setCookiesOf(signInResponse.headers), ...activeOrgCookies]) {
       responseHeaders.append('Set-Cookie', cookie);
     }
 
@@ -502,7 +534,8 @@ inviteLinkRoutes.post('/accept', async (c) => {
       return c.json({ error: 'User not found' }, 404);
     }
 
-    await addUserToOrg(userId, user.email, link.organizationId, link.role, c.req.raw.headers);
+    await addUserToOrg(userId, link.organizationId, link.role);
+    appendSetCookies(c, await setActiveOrg(link.organizationId, c.req.raw.headers));
 
     // Slot was already reserved atomically above (see H10).
 

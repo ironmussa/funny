@@ -10,7 +10,7 @@ export const authMockState = {
   permissionCheckThrows: false,
   createUserShouldFail: false,
   createUserShouldThrow: false,
-  inviteMemberError: null as string | null,
+  addMemberError: null as string | null,
   orgs: {
     'org-acme': { id: 'org-acme', name: 'Acme Corp' },
     'org-1': { id: 'org-1', name: 'Acme Team' },
@@ -22,7 +22,7 @@ export function resetAuthMockUsers(): void {
   authMockState.users = {};
   authMockState.createUserShouldFail = false;
   authMockState.createUserShouldThrow = false;
-  authMockState.inviteMemberError = null;
+  authMockState.addMemberError = null;
 }
 
 export function createAuthApiMock(
@@ -63,14 +63,12 @@ export function createAuthApiMock(
         getSetCookie: () => ['funny.session=test-session; Path=/; HttpOnly'],
       },
     }),
-    inviteMember: async () => {
-      if (authMockState.inviteMemberError) {
-        throw new Error(authMockState.inviteMemberError);
+    addMember: async () => {
+      if (authMockState.addMemberError) {
+        throw new Error(authMockState.addMemberError);
       }
     },
-    listInvitations: async () => [],
-    acceptInvitation: async () => {},
-    setActiveOrganization: async () => {},
+    setActiveOrganization: async () => new Response('{}'),
     listUsers: async () => ({ users: Object.values(authMockState.users) }),
     ...extra,
   };

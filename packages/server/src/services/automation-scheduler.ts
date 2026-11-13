@@ -41,7 +41,8 @@ export interface AutomationJob {
   nextRun(): Date | null;
 }
 
-export type CreateJob = (pattern: string, onTick: () => void) => AutomationJob;
+/** `onTick` settles when the run is recorded, and never rejects. */
+export type CreateJob = (pattern: string, onTick: () => Promise<void>) => AutomationJob;
 
 export interface AutomationSchedulerDeps {
   ports: RunnerPorts;
@@ -54,7 +55,13 @@ export interface AutomationSchedulerDeps {
 /** A run still `running` after this long gets marked failed on startup. */
 export const STALE_RUN_MS = 24 * 60 * 60 * 1000;
 
-const defaultCreateJob: CreateJob = (pattern, onTick) =>
+/**
+ * The production job. Croner awaits the tick's promise, and `protect` skips an
+ * occurrence while the previous one is still pending, so a slow dispatch is
+ * never overlapped by the next. (The agent run itself finishes later, in
+ * `automation-runs.ts`.)
+ */
+export const createCronJob: CreateJob = (pattern, onTick) =>
   new Cron(pattern, { protect: true }, onTick);
 
 const jobs = new Map<string, AutomationJob>();
@@ -106,9 +113,7 @@ async function schedule(automation: Automation): Promise<void> {
   if (!deps) return;
   let job: AutomationJob;
   try {
-    job = (deps.createJob ?? defaultCreateJob)(automation.schedule, () => {
-      void fire(automation.id);
-    });
+    job = (deps.createJob ?? createCronJob)(automation.schedule, () => tick(automation.id));
   } catch (e) {
     log.warn('Invalid automation schedule — not scheduled', {
       namespace: 'automation',
@@ -125,6 +130,21 @@ async function schedule(automation: Automation): Promise<void> {
 async function recordNextRun(id: string): Promise<void> {
   const next = jobs.get(id)?.nextRun();
   await automationRepo.updateAutomationRow(id, { nextRunAt: next ? next.toISOString() : null });
+}
+
+/**
+ * One occurrence. Returning the promise is what lets croner's `protect` skip
+ * the next occurrence while this one runs; a failure is logged here because
+ * croner does not catch what the tick rejects with (#185).
+ */
+function tick(id: string): Promise<void> {
+  return fire(id).catch((error: unknown) => {
+    log.error('Automation tick failed', {
+      namespace: 'automation',
+      automationId: id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
 }
 
 async function fire(id: string): Promise<void> {

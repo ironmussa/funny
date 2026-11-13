@@ -2,14 +2,16 @@
  * Server automation scheduler: scheduling lifecycle (fake cron) and run
  * bookkeeping (fake launcher, real test DB).
  */
-import { describe, test, expect, beforeAll, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, beforeAll, beforeEach, afterEach, spyOn } from 'bun:test';
 
 import { eq } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 
 import * as schema from '../../db/schema.js';
+import { log } from '../../lib/logger.js';
 import {
   STALE_RUN_MS,
+  createCronJob,
   rescheduleAutomation,
   runAutomation,
   scheduledAutomationCount,
@@ -26,8 +28,8 @@ const NEXT = new Date('2030-01-01T09:00:00.000Z');
 
 /** Fake cron: records jobs by pattern and lets the test fire them. */
 function fakeCron() {
-  const live = new Map<string, { onTick: () => void; stopped: boolean }>();
-  const createJob = (pattern: string, onTick: () => void): AutomationJob => {
+  const live = new Map<string, { onTick: () => Promise<void>; stopped: boolean }>();
+  const createJob = (pattern: string, onTick: () => Promise<void>): AutomationJob => {
     if (pattern === 'not a cron') throw new Error('invalid pattern');
     const entry = { onTick, stopped: false };
     live.set(pattern, entry);
@@ -129,6 +131,76 @@ describe('automation scheduler', () => {
 
       expect(launcher.calls).toHaveLength(1);
       expect(launcher.calls[0].userId).toBe('alice');
+    });
+
+    // #185: croner's `protect` only skips a tick while the previous one's
+    // promise is pending; `void fire(id)` made every tick look finished at once.
+    test('a tick settles only once its run is recorded, so protect can skip overlaps', async () => {
+      seedAutomation(t.db as any, {
+        id: 'on',
+        projectId: 'p1',
+        userId: 'alice',
+        schedule: '0 9 * * *',
+      });
+      const cron = fakeCron();
+      let release!: () => void;
+      const gate = new Promise<void>((resolve) => (release = resolve));
+      const inner = fakeLauncher('ok', register);
+      const launch = async (input: StartThreadInput) => {
+        await gate;
+        return inner.launch(input);
+      };
+      await startAutomationScheduler({ ports, createJob: cron.createJob, launch: launch as any });
+
+      let settled = false;
+      const tick = cron.live.get('0 9 * * *')!.onTick();
+      expect(tick).toBeInstanceOf(Promise);
+      void tick.then(() => (settled = true));
+      await Bun.sleep(20);
+      expect(settled).toBe(false);
+
+      release();
+      await tick;
+      expect(runs()).toHaveLength(1);
+    });
+
+    test('a failing tick is logged and never becomes an unhandled rejection', async () => {
+      seedAutomation(t.db as any, { id: 'on', projectId: 'p1', schedule: '0 9 * * *' });
+      const cron = fakeCron();
+      const launch = async () => {
+        throw new Error('db down');
+      };
+      await startAutomationScheduler({ ports, createJob: cron.createJob, launch: launch as any });
+
+      const logged = spyOn(log, 'error');
+      try {
+        const tick = cron.live.get('0 9 * * *')!.onTick();
+        expect(tick).toBeInstanceOf(Promise);
+        await expect(tick).resolves.toBeUndefined();
+        expect(logged).toHaveBeenCalledWith(
+          'Automation tick failed',
+          expect.objectContaining({ automationId: 'on', error: 'db down' }),
+        );
+      } finally {
+        logged.mockRestore();
+      }
+    });
+
+    test('croner treats the job as busy until the tick settles', async () => {
+      let release!: () => void;
+      const job = createCronJob(
+        '0 9 * * *',
+        () => new Promise<void>((resolve) => (release = resolve)),
+      ) as AutomationJob & { trigger(): Promise<void>; isBusy(): boolean };
+      try {
+        const run = job.trigger();
+        expect(job.isBusy()).toBe(true);
+        release();
+        await run;
+        expect(job.isBusy()).toBe(false);
+      } finally {
+        job.stop();
+      }
     });
 
     test('a tick for an automation disabled since scheduling does nothing', async () => {

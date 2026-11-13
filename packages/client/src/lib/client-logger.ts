@@ -6,6 +6,10 @@ import {
 } from '@abbacchio/browser-transport';
 import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
 
+import {
+  LOG_LEVEL_STORAGE_KEY as GLOBAL_KEY,
+  LOG_NAMESPACE_STORAGE_PREFIX as NS_PREFIX,
+} from './log-level-keys';
 import { otlpEnabled, otlpEndpoint } from './otlp-config';
 
 // ── Log levels ──────────────────────────────────────────────────
@@ -34,9 +38,6 @@ import { otlpEnabled, otlpEndpoint } from './otlp-config';
 
 type LevelName = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 const VALID_LEVELS: readonly LevelName[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
-
-const GLOBAL_KEY = 'funny:log-level';
-const NS_PREFIX = 'funny:log-ns:';
 
 function readStored(key: string): LevelName | undefined {
   try {

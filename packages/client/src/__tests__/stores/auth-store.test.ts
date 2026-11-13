@@ -26,12 +26,22 @@ vi.mock('@/lib/api/auth-events', () => ({
   onUnauthorized: vi.fn(),
 }));
 
+const mockReload = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/logout-cleanup', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logout-cleanup')>()),
+  reloadAfterLogout: mockReload,
+}));
+
+const mockDropPush = vi.hoisted(() => vi.fn());
+vi.mock('@/lib/web-push', () => ({ dropWebPushSubscription: mockDropPush }));
+
 import { setActiveOrgSlug } from '@/lib/url-state';
 import { useAuthStore } from '@/stores/auth-store';
 
 describe('auth-store', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockDropPush.mockResolvedValue(undefined);
     useAuthStore.setState({
       user: null,
       isAuthenticated: false,
@@ -43,6 +53,7 @@ describe('auth-store', () => {
   });
 
   afterEach(() => {
+    localStorage.clear();
     useAuthStore.setState({
       user: null,
       isAuthenticated: false,
@@ -176,6 +187,61 @@ describe('auth-store', () => {
     expect(state.user).toBeNull();
     expect(state.activeOrgId).toBeNull();
     expect(setActiveOrgSlug).toHaveBeenCalledWith(null);
+  });
+
+  test("logout leaves none of the previous user's data behind", async () => {
+    localStorage.clear();
+    localStorage.setItem('funny-terminal-store', '{"state":{"tabs":[{"threadId":"t1"}]}}');
+    localStorage.setItem('funny_last_route', '/projects/p1/threads/t1');
+    localStorage.setItem('theme', 'dark');
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: { id: 'u1', username: 'x', displayName: 'X', role: 'user' },
+      isLoading: false,
+    });
+    mockAuth.signOut.mockResolvedValue(undefined);
+
+    await useAuthStore.getState().logout();
+
+    expect(localStorage.getItem('funny-terminal-store')).toBeNull();
+    expect(localStorage.getItem('funny_last_route')).toBeNull();
+    expect(localStorage.getItem('theme')).toBe('dark');
+    // The reload drops every in-memory store (threads, drafts, terminals).
+    expect(mockReload).toHaveBeenCalledTimes(1);
+    // ...and this browser stops receiving their push notifications, before
+    // the session (which the server unsubscribe needs) is gone.
+    expect(mockDropPush).toHaveBeenCalledTimes(1);
+    expect(mockDropPush.mock.invocationCallOrder[0]).toBeLessThan(
+      mockAuth.signOut.mock.invocationCallOrder[0],
+    );
+  });
+
+  test('logout still clears and reloads when the push unsubscribe fails', async () => {
+    localStorage.setItem('funny_last_route', '/projects/p1/threads/t1');
+    useAuthStore.setState({
+      isAuthenticated: true,
+      user: { id: 'u1', username: 'x', displayName: 'X', role: 'user' },
+      isLoading: false,
+    });
+    mockDropPush.mockRejectedValue(new Error('offline'));
+    mockAuth.signOut.mockResolvedValue(undefined);
+
+    await useAuthStore.getState().logout();
+
+    expect(localStorage.getItem('funny_last_route')).toBeNull();
+    expect(mockReload).toHaveBeenCalledTimes(1);
+  });
+
+  test('logout without a signed-in user does not reload (no 401 reload loop)', async () => {
+    localStorage.setItem('funny_last_route', '/');
+    useAuthStore.setState({ isAuthenticated: false, user: null, isLoading: false });
+    mockAuth.signOut.mockResolvedValue(undefined);
+
+    await useAuthStore.getState().logout();
+
+    expect(mockReload).not.toHaveBeenCalled();
+    expect(mockDropPush).not.toHaveBeenCalled();
+    expect(localStorage.getItem('funny_last_route')).toBe('/');
   });
 
   test('setActiveOrg updates slug helper', () => {

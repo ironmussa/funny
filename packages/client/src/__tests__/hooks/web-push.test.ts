@@ -4,7 +4,13 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({ request: vi.fn(), getWorker: vi.fn() }));
 vi.mock('@/lib/api/_core', () => ({ request: mocks.request }));
 vi.mock('@/lib/notification-worker', () => ({ getNotificationWorker: mocks.getWorker }));
-import { disableWebPush, enableWebPush, hasPushSubscription, testWebPush } from '@/lib/web-push';
+import {
+  disableWebPush,
+  dropWebPushSubscription,
+  enableWebPush,
+  hasPushSubscription,
+  testWebPush,
+} from '@/lib/web-push';
 
 const subscription = {
   endpoint: 'https://fcm.googleapis.com/device',
@@ -81,5 +87,14 @@ describe('browser push subscription lifecycle', () => {
     expect(mocks.request).toHaveBeenLastCalledWith(
       ...mutation('test', { endpoint: subscription.endpoint }),
     );
+  });
+  test('logout drops the browser subscription even when the server removal fails', async () => {
+    manager.getSubscription.mockResolvedValue(subscription);
+    mocks.request.mockReturnValue(failed('Unauthorized'));
+    await dropWebPushSubscription();
+    expect(mocks.request).toHaveBeenCalledWith(
+      ...mutation('unsubscribe', { endpoint: subscription.endpoint }),
+    );
+    expect(subscription.unsubscribe).toHaveBeenCalled();
   });
 });

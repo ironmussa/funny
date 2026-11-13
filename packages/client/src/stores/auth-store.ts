@@ -6,7 +6,9 @@ import { activeOrganizationIdFromSession } from '@/lib/active-organization';
 import { onUnauthorized } from '@/lib/api/auth-events';
 import { authClient } from '@/lib/auth-client';
 import { createClientLogger } from '@/lib/client-logger';
+import { clearUserClientState, reloadAfterLogout } from '@/lib/logout-cleanup';
 import { setActiveOrgSlug } from '@/lib/url-state';
+import { dropWebPushSubscription } from '@/lib/web-push';
 
 const log = createClientLogger('auth-store');
 
@@ -29,7 +31,7 @@ interface AuthState {
   setActiveOrg: (id: string | null, name: string | null, slug?: string | null) => void;
 }
 
-export const useAuthStore = create<AuthState>((set, _get) => ({
+export const useAuthStore = create<AuthState>((set, get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
@@ -134,6 +136,12 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
   },
 
   logout: async () => {
+    // Only a real sign-out clears and reloads: a 401 on the login page also
+    // ends here, and reloading then would loop.
+    const { user, isAuthenticated } = get();
+    const wasSignedIn = user !== null || isAuthenticated;
+    // Before signing out: the server side of the unsubscribe needs the session.
+    if (wasSignedIn) await dropWebPushSubscription().catch(() => {});
     try {
       await authClient.signOut();
     } catch {
@@ -147,6 +155,16 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
       activeOrgSlug: null,
     });
     setActiveOrgSlug(null);
+    if (!wasSignedIn) return;
+    // The next user of this tab must not see the previous user's state (#183).
+    try {
+      clearUserClientState(localStorage);
+    } catch (err) {
+      log.error('could not clear stored state on logout', {
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+    reloadAfterLogout();
   },
 
   setActiveOrg: (id, name, slug) => {

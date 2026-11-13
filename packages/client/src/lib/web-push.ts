@@ -65,3 +65,17 @@ export async function testWebPush(): Promise<void> {
   if (!subscription) throw new Error('Push subscription unavailable');
   await unwrapPush(trpcCall(() => trpc.push.test.mutate({ endpoint: subscription.endpoint })));
 }
+
+/**
+ * Logout: stop this browser receiving the signed-out user's notifications.
+ * The server record goes first (it needs the session, which may already be
+ * gone after a 401); the browser subscription is dropped either way.
+ */
+export async function dropWebPushSubscription(): Promise<void> {
+  if (!supportsWebPush()) return;
+  const registration = await navigator.serviceWorker.getRegistration('/');
+  const subscription = await registration?.pushManager.getSubscription();
+  if (!subscription) return;
+  await trpcCall(() => trpc.push.unsubscribe.mutate({ endpoint: subscription.endpoint }));
+  await subscription.unsubscribe();
+}

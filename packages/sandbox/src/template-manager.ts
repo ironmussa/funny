@@ -12,9 +12,8 @@
 
 import { errAsync, okAsync, ResultAsync, type Result } from 'neverthrow';
 
-import { log } from '../../lib/logger.js';
-import { metric } from '../../lib/telemetry.js';
 import type { SandboxError, SandboxProvider, TemplateRef } from './contract.js';
+import { resolveObservability, type SandboxObservability } from './observability.js';
 import type { RunnerBuild } from './runner-build.js';
 import { RUNNER_INSTALL_SCRIPT, runnerInstallEnv } from './runner-install-script.js';
 
@@ -34,7 +33,11 @@ export interface RunnerTemplateManager {
 const TEMPLATES_UNAVAILABLE = new Set<SandboxError['kind']>(['unsupported', 'quota']);
 const UNAVAILABLE_TTL_MS = 60 * 60 * 1000;
 
-export function createRunnerTemplateManager(build: RunnerBuild): RunnerTemplateManager {
+export function createRunnerTemplateManager(
+  build: RunnerBuild,
+  observability?: SandboxObservability,
+): RunnerTemplateManager {
+  const { log, metric } = resolveObservability(observability);
   const inFlight = new Map<string, Promise<Result<TemplateRef, SandboxError>>>();
 
   const current = (provider: SandboxProvider) =>

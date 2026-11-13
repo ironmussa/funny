@@ -14,6 +14,7 @@
  *   GET    /api/infra/threads/:threadId/sandbox — its lifecycle state
  */
 
+import { productionSandboxProviders, type SandboxProviderRegistry } from '@funny/sandbox';
 import { and, eq } from 'drizzle-orm';
 import { Hono, type Context } from 'hono';
 import { z } from 'zod';
@@ -32,8 +33,6 @@ import {
   createProjectSandboxSettingsService,
   type ProjectSandboxError,
 } from '../services/thread-sandboxes/project-sandbox-settings.js';
-import { productionSandboxProviders } from '../services/thread-sandboxes/provider-catalog.js';
-import type { SandboxProviderRegistry } from '../services/thread-sandboxes/registry.js';
 import { prepareSandboxLaunch } from '../services/thread-sandboxes/sandbox-launch.js';
 import { sqlThreadSandboxStore } from '../services/thread-sandboxes/thread-sandbox-store.js';
 

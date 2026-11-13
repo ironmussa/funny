@@ -3,21 +3,17 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createFakeSandboxProvider } from '../../../services/thread-sandboxes/providers/fake/fake-provider.js';
-import {
-  resolveRunnerBuild,
-  resolveServerRunnerBuild,
-  sameRepository,
-} from '../../../services/thread-sandboxes/runner-build.js';
+import { createFakeSandboxProvider } from '../providers/fake/fake-provider.js';
+import { resolveRunnerBuild, resolveServerRunnerBuild, sameRepository } from '../runner-build.js';
 import {
   INSTALLED_COMMIT_FILE,
   RUNNER_INSTALL_SCRIPT,
   runnerInstallCommand,
   SANDBOX_ENV_FILE,
   startRunnerCommand,
-} from '../../../services/thread-sandboxes/runner-install-script.js';
-import { createRunnerTemplateManager } from '../../../services/thread-sandboxes/template-manager.js';
-import { expectOk } from './provider-contract.js';
+} from '../runner-install-script.js';
+import { createRunnerTemplateManager } from '../template-manager.js';
+import { expectOk } from '../testing/provider-contract.js';
 
 const SHA = 'a'.repeat(40);
 const build = expectOk(resolveRunnerBuild({ FUNNY_BUILD_COMMIT: SHA }));
@@ -215,5 +211,30 @@ describe('runner template manager', () => {
     const second = await manager.ensure('conn-trial', provider);
     expect(second.isErr() && second.error.kind).toBe('unsupported');
     expect(provider.templateBuilds).toHaveLength(0);
+  });
+
+  test('reports through the logger and metric sink it is given', async () => {
+    const logs: Array<{ level: string; message: string }> = [];
+    const metrics: Array<{ name: string; attributes?: Record<string, string> }> = [];
+    const manager = createRunnerTemplateManager(build, {
+      log: {
+        info: (message) => logs.push({ level: 'info', message }),
+        warn: (message) => logs.push({ level: 'warn', message }),
+      },
+      metric: (name, _value, options) => metrics.push({ name, attributes: options?.attributes }),
+    });
+    expectOk(await manager.ensure('conn-1', freshProvider()));
+    expect(logs).toEqual([{ level: 'info', message: 'Building runner template' }]);
+    expect(metrics).toEqual([
+      { name: 'thread_sandboxes.template_build_ms', attributes: { provider: 'fake' } },
+    ]);
+
+    const trial = freshProvider();
+    trial.failNext({ kind: 'unsupported', message: 'trial plan' });
+    await manager.ensure('conn-trial', trial);
+    expect(logs.at(-1)).toEqual({
+      level: 'warn',
+      message: 'Runner templates unavailable for this provider account',
+    });
   });
 });

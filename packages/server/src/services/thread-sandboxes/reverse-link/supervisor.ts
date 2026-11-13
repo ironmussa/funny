@@ -8,11 +8,11 @@
  * pass; nothing in the lifecycle code has to know the link exists.
  */
 
+import type { SandboxIngress, SandboxProvider } from '@funny/sandbox';
 import { REVERSE_LINK_INGRESS_PORT } from '@funny/shared/reverse-link';
 import type { ResultAsync } from 'neverthrow';
 
 import { log } from '../../../lib/logger.js';
-import type { SandboxIngress, SandboxProvider } from '../contract.js';
 import type { ReverseLinkDialer } from './dialer.js';
 
 /** States in which the sandbox runner is started and needs the server. */

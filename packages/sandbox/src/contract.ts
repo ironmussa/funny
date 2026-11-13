@@ -7,10 +7,10 @@
  * Provider-neutral contract for per-thread sandboxes (change `thread-sandboxes`).
  *
  * A sandbox provider (Boat, E2B, Fly Machines, …) hosts ONE funny runner for
- * ONE thread. Everything outside `providers/` — lifecycle, routing, backup,
- * client — depends only on this file: provider differences are expressed as
- * declared `SandboxCapabilities` and normalized `SandboxError` kinds, never by
- * branching on the provider id.
+ * ONE owner (a thread, for the server). Everything outside `providers/` —
+ * lifecycle, routing, backup, client — depends only on this file: provider
+ * differences are expressed as declared `SandboxCapabilities` and normalized
+ * `SandboxError` kinds, never by branching on the provider id.
  */
 
 import type { ResultAsync } from 'neverthrow';
@@ -77,14 +77,18 @@ export function isRetryableSandboxError(e: SandboxError): boolean {
 }
 
 export interface CreateSandboxRequest {
-  threadId: string;
+  /**
+   * Who the sandbox is for, used to name or label it at the provider. The
+   * server passes the thread id; another host (the issue factory) its own key.
+   */
+  ownerKey: string;
   sizeId: string;
   /** Runner template; omitted = the provider's base image (runner installed on the fly). */
   template?: TemplateRef;
   /** Enrollment bootstrap only (server URL, provisioning token, …). Never git or agent secrets. */
   env: Record<string, string>;
   lifetimeMs?: number;
-  /** Same key + same request returns the same sandbox (`threadId:generation`). */
+  /** Same key + same request returns the same sandbox (the server uses `threadId:generation`). */
   idempotencyKey: string;
 }
 

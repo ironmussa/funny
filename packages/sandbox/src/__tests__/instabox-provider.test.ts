@@ -1,12 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { SandboxError } from '../../../services/thread-sandboxes/contract.js';
+import type { SandboxError } from '../contract.js';
 import {
   createInstaboxProvider,
   instaboxTemplateName,
-} from '../../../services/thread-sandboxes/providers/instabox/instabox-provider.js';
+} from '../providers/instabox/instabox-provider.js';
+import { expectOk, runSandboxProviderContract } from '../testing/provider-contract.js';
 import { createInstaboxApiFake, KNOWN_TEMPLATE_SNAPSHOT_ID } from './instabox-api-fake.js';
-import { expectOk, runSandboxProviderContract } from './provider-contract.js';
 
 const BASE = { apiBaseUrl: 'https://instabox.test' };
 
@@ -41,7 +41,7 @@ describe('instabox adapter specifics', () => {
     expect(template.ref).toBe(KNOWN_TEMPLATE_SNAPSHOT_ID);
     expectOk(
       await provider.create({
-        threadId: 't1',
+        ownerKey: 't1',
         sizeId: 'small',
         template,
         env: { TEAM_SERVER_URL: 'https://funny.test' },
@@ -68,7 +68,7 @@ describe('instabox adapter specifics', () => {
   test('a running machine that is not ready yet is still provisioning', async () => {
     const provider = providerWith('ibk_test_key');
     const handle = expectOk(
-      await provider.create({ threadId: 't1', sizeId: 'default', env: {}, idempotencyKey: 'k' }),
+      await provider.create({ ownerKey: 't1', sizeId: 'default', env: {}, idempotencyKey: 'k' }),
     );
     provider.api.machines.get(handle.sandboxId)!.ready = false;
     expect(expectOk(await provider.status(handle)).state).toBe('provisioning');
@@ -77,7 +77,7 @@ describe('instabox adapter specifics', () => {
   test('stopping a paused machine succeeds without calling stop', async () => {
     const provider = providerWith('ibk_test_key');
     const handle = expectOk(
-      await provider.create({ threadId: 't1', sizeId: 'default', env: {}, idempotencyKey: 'k' }),
+      await provider.create({ ownerKey: 't1', sizeId: 'default', env: {}, idempotencyKey: 'k' }),
     );
     provider.api.machines.get(handle.sandboxId)!.state = 'suspended';
     expectOk(await provider.stop(handle));
@@ -89,7 +89,7 @@ describe('instabox adapter specifics', () => {
   test('destroy confirms with the machine id', async () => {
     const provider = providerWith('ibk_test_key');
     const handle = expectOk(
-      await provider.create({ threadId: 't1', sizeId: 'default', env: {}, idempotencyKey: 'k' }),
+      await provider.create({ ownerKey: 't1', sizeId: 'default', env: {}, idempotencyKey: 'k' }),
     );
     expectOk(await provider.destroy(handle));
     const del = provider.api.requests.find((r) => r.method === 'DELETE');
@@ -152,7 +152,7 @@ describe('instabox adapter specifics', () => {
   test('exec runs a shell command and reports its exit code', async () => {
     const provider = providerWith('ibk_test_key');
     const handle = expectOk(
-      await provider.create({ threadId: 't1', sizeId: 'default', env: {}, idempotencyKey: 'k' }),
+      await provider.create({ ownerKey: 't1', sizeId: 'default', env: {}, idempotencyKey: 'k' }),
     );
     const result = expectOk(await provider.exec(handle, 'echo hi', { timeoutMs: 30_000 }));
     expect(result).toEqual({ exitCode: 0, stdout: 'ok', stderr: '' });
@@ -274,7 +274,7 @@ describe('instabox adapter specifics', () => {
   test('exposePort publishes a private port and returns its fresh token as a bearer header', async () => {
     const provider = providerWith('ibk_test_key');
     const handle = expectOk(
-      await provider.create({ threadId: 't1', sizeId: 'default', env: {}, idempotencyKey: 't1:0' }),
+      await provider.create({ ownerKey: 't1', sizeId: 'default', env: {}, idempotencyKey: 't1:0' }),
     );
     const first = expectOk(await provider.exposePort!(handle, 7810));
     expect(first.url).toBe(`https://7810-${handle.sandboxId.slice(2)}.instabox.test`);

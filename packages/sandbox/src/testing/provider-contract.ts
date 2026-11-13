@@ -7,11 +7,7 @@ import { describe, expect, test } from 'bun:test';
 
 import type { Result } from 'neverthrow';
 
-import {
-  resolveSandboxSize,
-  type SandboxHandle,
-  type SandboxProvider,
-} from '../../../services/thread-sandboxes/contract.js';
+import { resolveSandboxSize, type SandboxHandle, type SandboxProvider } from '../contract.js';
 
 /** Unwraps an ok Result in tests; fails the test with the error otherwise. */
 export function expectOk<T, E>(result: Result<T, E>): T {
@@ -37,7 +33,7 @@ export function runSandboxProviderContract(name: string, h: ProviderContractHarn
       const template = expectOk(await provider.resolveTemplate(h.knownVersion));
       return expectOk(
         await provider.create({
-          threadId: 'thread-1',
+          ownerKey: 'thread-1',
           sizeId: resolveSandboxSize(caps)!.id,
           template,
           env: { TEAM_SERVER_URL: 'https://funny.example' },

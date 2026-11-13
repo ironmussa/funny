@@ -490,6 +490,19 @@
         "playwright": "^1.61.0",
       },
     },
+    "packages/sandbox": {
+      "name": "@funny/sandbox",
+      "version": "0.1.0",
+      "dependencies": {
+        "@funny/core": "workspace:*",
+        "@funny/shared": "workspace:*",
+        "neverthrow": "^8.2.0",
+        "zod": "^4.6.6",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.4.0",
+      },
+    },
     "packages/scheduler": {
       "name": "@funny/thread-scheduler",
       "version": "0.1.0",
@@ -529,6 +542,7 @@
         "@bufbuild/protobuf": "2.14.0",
         "@funny/api": "workspace:*",
         "@funny/core": "workspace:*",
+        "@funny/sandbox": "workspace:*",
         "@funny/shared": "workspace:*",
         "@funny/thread-scheduler": "workspace:*",
         "@gdp-ts/core": "0.1.0",
@@ -986,6 +1000,8 @@
     "@funny/reviewbot": ["@funny/reviewbot@workspace:packages/reviewbot"],
 
     "@funny/runner-grpc-harness": ["@funny/runner-grpc-harness@workspace:packages/runner-grpc-harness"],
+
+    "@funny/sandbox": ["@funny/sandbox@workspace:packages/sandbox"],
 
     "@funny/sdk": ["@funny/sdk@workspace:packages/sdk"],
 

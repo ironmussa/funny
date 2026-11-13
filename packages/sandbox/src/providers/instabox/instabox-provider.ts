@@ -357,7 +357,7 @@ export function createInstaboxProvider(
             : {}),
           // One-shot safety stop: the disk is kept and a start brings it back.
           ...(req.lifetimeMs ? { archiveSeconds: deadlineSeconds(req.lifetimeMs) } : {}),
-          metadata: { 'funny-thread': req.threadId },
+          metadata: { 'funny-thread': req.ownerKey },
         },
       }).andThen(machineHandle);
     },

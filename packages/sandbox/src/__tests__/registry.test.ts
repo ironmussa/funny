@@ -1,13 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import {
-  fitsEnvLimits,
-  isRetryableSandboxError,
-  resolveSandboxSize,
-} from '../../../services/thread-sandboxes/contract.js';
-import { fakeSandboxProviderEntry } from '../../../services/thread-sandboxes/providers/fake/fake-provider.js';
-import { createSandboxProviderRegistry } from '../../../services/thread-sandboxes/registry.js';
-import { expectOk } from './provider-contract.js';
+import { fitsEnvLimits, isRetryableSandboxError, resolveSandboxSize } from '../contract.js';
+import { fakeSandboxProviderEntry } from '../providers/fake/fake-provider.js';
+import { createSandboxProviderRegistry } from '../registry.js';
+import { expectOk } from '../testing/provider-contract.js';
 
 describe('sandbox provider registry', () => {
   test('lists registered providers without exposing factories', () => {

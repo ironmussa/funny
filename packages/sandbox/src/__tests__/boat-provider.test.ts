@@ -1,12 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { SandboxError } from '../../../services/thread-sandboxes/contract.js';
-import {
-  boatTemplateName,
-  createBoatProvider,
-} from '../../../services/thread-sandboxes/providers/boat/boat-provider.js';
+import type { SandboxError } from '../contract.js';
+import { boatTemplateName, createBoatProvider } from '../providers/boat/boat-provider.js';
+import { expectOk, runSandboxProviderContract } from '../testing/provider-contract.js';
 import { createBoatApiFake } from './boat-api-fake.js';
-import { expectOk, runSandboxProviderContract } from './provider-contract.js';
 
 const BASE = { apiBaseUrl: 'https://boat.test/api/v1' };
 
@@ -37,7 +34,7 @@ describe('boat adapter specifics', () => {
     expect(template.ref).toBe(boatTemplateName('0.0.0-test'));
     expectOk(
       await provider.create({
-        threadId: 't1',
+        ownerKey: 't1',
         sizeId: 'small',
         template,
         env: { TEAM_SERVER_URL: 'https://funny.test' },
@@ -62,7 +59,7 @@ describe('boat adapter specifics', () => {
     const template = expectOk(await provider.resolveTemplate('0.0.0-test'));
     const handle = expectOk(
       await provider.create({
-        threadId: 't1',
+        ownerKey: 't1',
         sizeId: 'default',
         template,
         env: {},
@@ -127,7 +124,7 @@ describe('boat adapter specifics', () => {
     const template = expectOk(await provider.resolveTemplate('0.0.0-test'));
     const handle = expectOk(
       await provider.create({
-        threadId: 't1',
+        ownerKey: 't1',
         sizeId: 'default',
         template,
         env: {},
@@ -142,7 +139,7 @@ describe('boat adapter specifics', () => {
   test('exec runs a command and reports its exit code', async () => {
     const provider = providerWith('boat_test_key');
     const handle = expectOk(
-      await provider.create({ threadId: 't1', sizeId: 'small', env: {}, idempotencyKey: 'k' }),
+      await provider.create({ ownerKey: 't1', sizeId: 'small', env: {}, idempotencyKey: 'k' }),
     );
     const result = expectOk(await provider.exec(handle, 'echo hi', { timeoutMs: 30_000 }));
     expect(result).toEqual({ exitCode: 0, stdout: 'ok', stderr: '' });
@@ -207,7 +204,7 @@ describe('boat adapter specifics', () => {
   test('exposePort publishes a token-gated URL for the port', async () => {
     const provider = providerWith('boat_test_key');
     const handle = expectOk(
-      await provider.create({ threadId: 't1', sizeId: 'default', env: {}, idempotencyKey: 't1:0' }),
+      await provider.create({ ownerKey: 't1', sizeId: 'default', env: {}, idempotencyKey: 't1:0' }),
     );
     const ingress = expectOk(await provider.exposePort!(handle, 7810));
     expect(ingress.url).toBe(

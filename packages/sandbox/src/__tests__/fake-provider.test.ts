@@ -4,8 +4,8 @@ import {
   createFakeSandboxProvider,
   type FakeProviderOptions,
   type FakeSandboxProvider,
-} from '../../../services/thread-sandboxes/providers/fake/fake-provider.js';
-import { runSandboxProviderContract } from './provider-contract.js';
+} from '../providers/fake/fake-provider.js';
+import { runSandboxProviderContract } from '../testing/provider-contract.js';
 
 function harness(opts: FakeProviderOptions) {
   return {

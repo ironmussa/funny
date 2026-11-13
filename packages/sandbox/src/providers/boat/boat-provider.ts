@@ -229,7 +229,7 @@ export function createBoatProvider(
           type: req.sizeId,
           ...(req.template ? { from: req.template.ref } : {}),
           env: req.env,
-          name: `funny-${req.threadId}`,
+          name: `funny-${req.ownerKey}`,
           ttlSeconds: ttlSeconds(req.lifetimeMs) ?? null,
         },
       }).andThen((body) => {

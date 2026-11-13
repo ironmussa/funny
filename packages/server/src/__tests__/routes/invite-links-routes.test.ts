@@ -385,7 +385,7 @@ describe('Invite Links Routes (Integration)', () => {
         email: 'member@test.com',
         name: 'Member User',
       };
-      authMockState.inviteMemberError = 'User is already a member';
+      authMockState.addMemberError = 'User is already a member';
       seedInviteLink(t.db as any, { token: 'already-member', organizationId: orgId });
 
       const res = await t

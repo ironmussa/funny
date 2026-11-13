@@ -94,8 +94,8 @@ const RESULT_LABEL_AT = {
 const RESULT_STYLE = {
   completed: {
     Icon: CheckCircle2,
-    card: 'border-status-success/20 bg-status-success/5',
-    text: 'text-status-success/80',
+    card: '',
+    text: 'text-muted-foreground',
   },
   stopped: {
     Icon: XCircle,
@@ -145,8 +145,9 @@ export function AgentResultCard({
       {...(revealOnHover ? { 'data-turn-end-for': revealForSection } : {})}
       data-testid="agent-result-card"
       className={cn(
-        'rounded-lg border px-3 py-1.5 text-xs flex flex-col gap-2',
-        style.card,
+        'text-xs flex flex-col gap-2',
+        // A finished run is plain text; failed and stopped runs keep the card to stand out.
+        isSuccess ? 'px-1 py-1' : cn('rounded-lg border px-3 py-1.5', style.card),
         revealOnHover &&
           'opacity-0 transition-opacity duration-150 focus-within:opacity-100 data-[hovered]:opacity-100 [@media(hover:none)]:opacity-100',
       )}

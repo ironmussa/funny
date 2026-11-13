@@ -100,4 +100,50 @@ describe('SchedulerEventBuffer', () => {
     expect(r2.events).toHaveLength(1);
     expect(r3.events).toHaveLength(1);
   });
+
+  test('each buffer has its own epoch, returned with every poll', async () => {
+    const a = createSchedulerEventBuffer();
+    const b = createSchedulerEventBuffer();
+    expect(a.epoch).not.toBe(b.epoch);
+    expect(a.getSince(0).epoch).toBe(a.epoch);
+    expect((await a.waitForEvents(0, 0)).epoch).toBe(a.epoch);
+  });
+
+  test('a cursor from another epoch reads from the start (server restarted)', async () => {
+    // Before the restart the consumer had reached seq 500.
+    const restarted = createSchedulerEventBuffer();
+    restarted.publish({ kind: 'agent_terminal', threadId: 't1', payload: {} });
+    restarted.publish({ kind: 'agent_terminal', threadId: 't2', payload: {} });
+
+    const result = await restarted.waitForEvents(500, 0, 'old-epoch');
+    expect(result.events.map((e) => e.seq)).toEqual([1, 2]);
+    expect(result.epoch).toBe(restarted.epoch);
+  });
+
+  test('a long-poll from another epoch wakes on the first publish', async () => {
+    const restarted = createSchedulerEventBuffer();
+    const pending = restarted.waitForEvents(500, 5_000, 'old-epoch');
+    setTimeout(
+      () => restarted.publish({ kind: 'agent_terminal', threadId: 't1', payload: {} }),
+      10,
+    );
+    const result = await pending;
+    expect(result.events.map((e) => e.seq)).toEqual([1]);
+  });
+
+  test('without an epoch the since filter is unchanged (older consumers do not replay)', () => {
+    // An older consumer never lowers its cursor; answering it from 0 would
+    // return the same events on every poll.
+    const restarted = createSchedulerEventBuffer();
+    restarted.publish({ kind: 'agent_terminal', threadId: 't1', payload: {} });
+    expect(restarted.getSince(500).events).toHaveLength(0);
+  });
+
+  test('the current epoch keeps the normal since filter', () => {
+    const buf = createSchedulerEventBuffer();
+    buf.publish({ kind: 'agent_terminal', threadId: 't1', payload: {} });
+    buf.publish({ kind: 'agent_terminal', threadId: 't2', payload: {} });
+    expect(buf.getSince(1, buf.epoch).events.map((e) => e.seq)).toEqual([2]);
+    expect(buf.getSince(2, buf.epoch).events).toHaveLength(0);
+  });
 });

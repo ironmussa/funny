@@ -16,6 +16,17 @@
  * past `capacity` events it must restart its sync from `nextSeq` and
  * accept that it will not see the dropped events (the brain reconciles
  * full DB state on every tick anyway, so this is recoverable).
+ *
+ * Sequence numbers live in memory and restart at 1 when the server
+ * restarts. Each buffer therefore carries a random `epoch`, returned with
+ * every poll. A consumer sends back the epoch its cursor belongs to; when
+ * it is not this buffer's epoch the cursor is meaningless here, so the
+ * buffer reads from the start instead of hiding every event until the new
+ * counter overtakes the old cursor. A request without an epoch keeps the
+ * plain `since` filter: older consumers never lower their cursor, so
+ * answering them from 0 would replay the same events on every poll.
+ *
+ * Assumes one server instance: each instance has its own buffer and epoch.
  */
 
 export type SchedulerEventKind = 'agent_terminal' | 'thread_stage';
@@ -36,23 +47,30 @@ export interface PublishInput {
   payload: Record<string, unknown>;
 }
 
+export interface SchedulerEventPoll {
+  events: SchedulerEvent[];
+  /** Highest seq issued so far (the cursor to send next). */
+  nextSeq: number;
+  /** Identifies this buffer's sequence; changes when the server restarts. */
+  epoch: string;
+}
+
 export interface SchedulerEventBuffer {
+  /** Random id of this buffer's sequence, fixed for its lifetime. */
+  readonly epoch: string;
   publish(input: PublishInput): SchedulerEvent;
-  /** Returns events with `seq > since`, plus the highest seq currently held. */
-  getSince(since: number): { events: SchedulerEvent[]; nextSeq: number };
+  /**
+   * Returns events with `seq > since`, plus the highest seq issued. `epoch`
+   * is the epoch `since` came from; a different one reads from the start.
+   */
+  getSince(since: number, epoch?: string): SchedulerEventPoll;
   /**
    * Long-poll: resolves immediately if events with `seq > since` exist,
    * otherwise waits up to `timeoutMs` for the next `publish`. Always
    * returns the latest `nextSeq` so the caller can advance its cursor
    * even when nothing new arrived.
    */
-  waitForEvents(
-    since: number,
-    timeoutMs: number,
-  ): Promise<{
-    events: SchedulerEvent[];
-    nextSeq: number;
-  }>;
+  waitForEvents(since: number, timeoutMs: number, epoch?: string): Promise<SchedulerEventPoll>;
 }
 
 const DEFAULT_CAPACITY = 1024;
@@ -62,6 +80,7 @@ export function createSchedulerEventBuffer(
 ): SchedulerEventBuffer {
   const capacity = opts.capacity ?? DEFAULT_CAPACITY;
   const now = opts.now ?? (() => Date.now());
+  const epoch = crypto.randomUUID();
 
   const events: SchedulerEvent[] = [];
   let nextSeq = 1;
@@ -73,12 +92,19 @@ export function createSchedulerEventBuffer(
     }
   }
 
-  function snapshot(since: number) {
+  /** The cursor to filter by: 0 when `since` belongs to another sequence. */
+  function effectiveSince(since: number, sinceEpoch: string | undefined): number {
+    return sinceEpoch !== undefined && sinceEpoch !== epoch ? 0 : since;
+  }
+
+  function snapshot(since: number): SchedulerEventPoll {
     const out = events.filter((e) => e.seq > since);
-    return { events: out, nextSeq: nextSeq - 1 };
+    return { events: out, nextSeq: nextSeq - 1, epoch };
   }
 
   return {
+    epoch,
+
     publish(input) {
       const event: SchedulerEvent = {
         seq: nextSeq++,
@@ -95,11 +121,13 @@ export function createSchedulerEventBuffer(
       return event;
     },
 
-    getSince(since) {
-      return snapshot(since);
+    getSince(since, sinceEpoch) {
+      return snapshot(effectiveSince(since, sinceEpoch));
     },
 
-    waitForEvents(since, timeoutMs) {
+    waitForEvents(requestedSince, timeoutMs, sinceEpoch) {
+      // Resolved once: events published while waiting are all newer.
+      const since = effectiveSince(requestedSince, sinceEpoch);
       const initial = snapshot(since);
       if (initial.events.length > 0 || timeoutMs <= 0) {
         return Promise.resolve(initial);

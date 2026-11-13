@@ -53,6 +53,8 @@ const dueRetriesQuerySchema = z.object({
 const eventsQuerySchema = z.object({
   since: z.coerce.number().default(0),
   timeoutMs: z.coerce.number().default(25_000),
+  /** Epoch `since` came from; a different one (server restarted) reads from 0. */
+  epoch: z.string().max(64).optional(),
 });
 
 // ── Auth gate ────────────────────────────────────────────────
@@ -519,7 +521,7 @@ schedulerSystemRoutes.post('/emit', async (c) => {
 schedulerSystemRoutes.get('/events', async (c) => {
   const parsed = parseQuery(c, eventsQuerySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
-  const { since, timeoutMs } = parsed.value;
+  const { since, timeoutMs, epoch } = parsed.value;
 
   if (!Number.isFinite(since) || since < 0) return c.json({ error: 'Invalid since' }, 400);
   if (!Number.isFinite(timeoutMs) || timeoutMs < 0 || timeoutMs > 60_000) {
@@ -527,6 +529,6 @@ schedulerSystemRoutes.get('/events', async (c) => {
   }
 
   const buffer = getSchedulerEventBuffer();
-  const result = await buffer.waitForEvents(since, timeoutMs);
+  const result = await buffer.waitForEvents(since, timeoutMs, epoch);
   return c.json(result);
 });

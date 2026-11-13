@@ -63,6 +63,7 @@ import { schedulerSystemRoutes } from '../../routes/scheduler-system.js';
 import type { BrowserEventSink } from '../../services/runner-ports.js';
 import { uncacheThread } from '../../services/runner-resolver.js';
 import { __resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
+import { getSchedulerEventBuffer } from '../../services/scheduler-event-buffer.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedSchedulerRun,
@@ -323,6 +324,36 @@ describe('Scheduler System Routes (Integration)', () => {
         body: JSON.stringify({ userId: 'user-1' }),
       });
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('GET /api/scheduler/system/events', () => {
+    test('answers a cursor from a previous server epoch from the start', async () => {
+      const buffer = getSchedulerEventBuffer();
+      buffer.publish({ kind: 'agent_terminal', threadId: 'thread-epoch', payload: {} });
+      const { nextSeq } = buffer.getSince(0);
+
+      // Same epoch: the cursor is honoured, nothing newer.
+      const current = await app.request(
+        `/api/scheduler/system/events?since=${nextSeq}&timeoutMs=0&epoch=${buffer.epoch}`,
+        { headers: schedulerHeaders() },
+      );
+      expect(current.status).toBe(200);
+      const currentBody = await current.json();
+      expect(currentBody.events).toHaveLength(0);
+      expect(currentBody.epoch).toBe(buffer.epoch);
+
+      // Stale epoch (the server restarted): every held event comes back.
+      const stale = await app.request(
+        `/api/scheduler/system/events?since=${nextSeq}&timeoutMs=0&epoch=previous-boot`,
+        { headers: schedulerHeaders() },
+      );
+      expect(stale.status).toBe(200);
+      const staleBody = await stale.json();
+      expect(staleBody.events.map((e: { threadId: string }) => e.threadId)).toContain(
+        'thread-epoch',
+      );
+      expect(staleBody.epoch).toBe(buffer.epoch);
     });
   });
 

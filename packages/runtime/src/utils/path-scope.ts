@@ -89,6 +89,14 @@ function isUnder(normalizedTarget: string, scope: string): boolean {
   return normalizedTarget === normScope || normalizedTarget.startsWith(normScope + sep);
 }
 
+/**
+ * True if `target` is `scope` or lies inside it. Resolves both paths first, so
+ * callers may pass raw (non-normalized) paths. Sibling prefixes never match.
+ */
+export function isPathWithin(target: string, scope: string): boolean {
+  return isUnder(normalize(resolve(target)), scope);
+}
+
 function deny(status: number, error: string): Response {
   return new Response(JSON.stringify({ error }), {
     status,

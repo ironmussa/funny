@@ -33,6 +33,7 @@ import {
 import { stopCommandsByCwd } from '../command-runner.js';
 import { stopContainer } from '../podman-service.js';
 import { projectSearchRegistry } from '../project-search-registry.js';
+import { killPtysUnderPath } from '../pty-manager.js';
 import type { IProjectRepository } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
 import { scratchPathFor } from '../thread-context.js';
@@ -101,6 +102,7 @@ async function updateThreadImpl(params: UpdateThreadParams) {
     const archivePath = archivePathResult.isOk() ? archivePathResult.value : undefined;
     if (archivePath) {
       await stopCommandsByCwd(thread.worktreePath).catch(() => {});
+      killPtysUnderPath(thread.worktreePath);
       await projectSearchRegistry.invalidate(thread.worktreePath).match(
         () => undefined,
         (e) =>
@@ -405,6 +407,7 @@ async function deleteThreadImpl(threadId: string): Promise<void> {
   // Only remove worktree/branch for worktree-mode threads
   if (thread.worktreePath && thread.mode === 'worktree' && thread.provider !== 'external') {
     await stopCommandsByCwd(thread.worktreePath).catch(() => {});
+    killPtysUnderPath(thread.worktreePath);
     await projectSearchRegistry.invalidate(thread.worktreePath).match(
       () => undefined,
       (e) =>
@@ -437,6 +440,7 @@ async function deleteThreadImpl(threadId: string): Promise<void> {
   // Remove it on delete. Tolerate missing dir (never spawned an agent).
   if (thread.isScratch) {
     const scratchPath = scratchPathFor(thread.userId, threadId);
+    killPtysUnderPath(scratchPath);
     try {
       await projectSearchRegistry.invalidate(scratchPath).match(
         () => undefined,

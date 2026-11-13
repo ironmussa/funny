@@ -1,7 +1,7 @@
-import { exec } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
 
-const execAsync = promisify(exec);
+import { killProcessTree } from '@funny/core/agents';
+import { buildChildEnv } from '@funny/shared/lib/child-env';
 
 const SHELL_ESCAPE_TIMEOUT_MS = 120_000;
 const SHELL_ESCAPE_MAX_BUFFER_BYTES = 1024 * 1024 * 8;
@@ -24,40 +24,83 @@ export function extractShellEscapeCommand(content: string): string | null {
   return trimmedStart.slice(1).trim();
 }
 
-export async function executeShellEscape(command: string, cwd: string): Promise<ShellEscapeResult> {
+/**
+ * Run a `!cmd` shell escape in `cwd`.
+ *
+ * The shell leads its own process group (`detached` on POSIX), so a timeout
+ * kills everything the command started, not just the shell (#190). It gets
+ * {@link buildChildEnv}, never the runner's own secrets.
+ */
+export function executeShellEscape(
+  command: string,
+  cwd: string,
+  options: { timeoutMs?: number } = {},
+): Promise<ShellEscapeResult> {
+  const timeoutMs = options.timeoutMs ?? SHELL_ESCAPE_TIMEOUT_MS;
   const shell =
     process.env.SHELL || (process.platform === 'win32' ? process.env.ComSpec : undefined);
 
-  try {
-    const { stdout, stderr } = await execAsync(command, {
+  return new Promise((resolve) => {
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let bytes = 0;
+    let timedOut = false;
+    let overflowed = false;
+    let spawnError: Error | undefined;
+
+    const child = spawn(command, {
       cwd,
-      shell,
-      timeout: SHELL_ESCAPE_TIMEOUT_MS,
-      maxBuffer: SHELL_ESCAPE_MAX_BUFFER_BYTES,
+      shell: shell ?? true,
+      env: buildChildEnv(),
+      detached: process.platform !== 'win32',
       windowsHide: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
     });
-    return normalizeShellResult({ command, stdout, stderr, exitCode: 0 });
-  } catch (err) {
-    const e = err as Error & {
-      stdout?: string | Buffer;
-      stderr?: string | Buffer;
-      code?: number | string | null;
-      signal?: NodeJS.Signals | null;
-      killed?: boolean;
+
+    const collect = (into: Buffer[]) => (chunk: Buffer) => {
+      bytes += chunk.length;
+      if (bytes > SHELL_ESCAPE_MAX_BUFFER_BYTES) {
+        if (!overflowed) {
+          overflowed = true;
+          killProcessTree(child);
+        }
+        return;
+      }
+      into.push(chunk);
     };
-    const exitCode = typeof e.code === 'number' ? e.code : null;
-    const stdout = bufferToString(e.stdout);
-    const stderr = bufferToString(e.stderr);
-    return normalizeShellResult({
-      command,
-      stdout,
-      stderr,
-      exitCode,
-      signal: e.signal ?? null,
-      timedOut: e.killed === true && e.signal === 'SIGTERM',
-      errorMessage: e.message,
+    child.stdout?.on('data', collect(stdout));
+    child.stderr?.on('data', collect(stderr));
+
+    const timer = setTimeout(() => {
+      timedOut = true;
+      killProcessTree(child);
+    }, timeoutMs);
+
+    child.on('error', (err) => {
+      spawnError = err;
     });
-  }
+    child.on('close', (code, signal) => {
+      clearTimeout(timer);
+      const errorMessage =
+        spawnError?.message ??
+        (overflowed
+          ? 'stdout maxBuffer length exceeded'
+          : code === 0 && !timedOut
+            ? undefined
+            : `Command failed: ${command}`);
+      resolve(
+        normalizeShellResult({
+          command,
+          stdout: Buffer.concat(stdout).toString('utf8'),
+          stderr: Buffer.concat(stderr).toString('utf8'),
+          exitCode: spawnError ? null : code,
+          signal: signal ?? null,
+          timedOut,
+          errorMessage,
+        }),
+      );
+    });
+  });
 }
 
 export function formatShellEscapeOutput(result: ShellEscapeResult): string {
@@ -121,9 +164,4 @@ function truncateCombinedOutput(
     stderr: nextStderr,
     truncated: nextStdout.length < stdout.length || nextStderr.length < stderr.length,
   };
-}
-
-function bufferToString(value: string | Buffer | undefined): string {
-  if (!value) return '';
-  return Buffer.isBuffer(value) ? value.toString('utf8') : value;
 }

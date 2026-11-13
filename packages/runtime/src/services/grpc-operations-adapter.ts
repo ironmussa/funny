@@ -384,6 +384,7 @@ function isRunnerOperationEventType(value: string): value is RunnerOperationEven
 export class GrpcOperationsAdapter {
   private readonly pending = new Map<string, PendingOperation>();
   private readonly deliveryKeys = new Map<string, string>();
+  private shuttingDown = false;
 
   constructor(
     private readonly sender: GrpcOperationSender,
@@ -411,6 +412,7 @@ export class GrpcOperationsAdapter {
     return waitFor((resolve, reject) => {
       const cleanup = () => {
         this.pending.delete(correlationId);
+        this.deliveryKeys.delete(correlationId);
         clearTimeout(item.timer);
       };
       const item: PendingOperation = {
@@ -423,6 +425,10 @@ export class GrpcOperationsAdapter {
         },
         reject: (error) => {
           cleanup();
+          // The waiting caller owns the outcome: once it is told the write failed,
+          // the outbox must not replay it later as a ghost write (#193). Only a
+          // shutdown leaves the row, so the next process can finish the write.
+          if (idempotencyKey && !this.shuttingDown) this.outbox.discard(idempotencyKey);
           reject(error);
         },
         // This deadline is reset after delivery; unref keeps it from owning process lifetime.
@@ -482,6 +488,7 @@ export class GrpcOperationsAdapter {
   }
 
   shutdown(): void {
+    this.shuttingDown = true;
     for (const item of this.pending.values()) {
       item.reject(new Error('gRPC runner transport shut down'));
     }

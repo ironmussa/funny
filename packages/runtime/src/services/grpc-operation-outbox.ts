@@ -172,6 +172,11 @@ export class GrpcOperationOutbox {
     );
   }
 
+  /** Drops a mutation whose caller gave up, so it is never replayed. */
+  discard(idempotencyKey: string): boolean {
+    return this.confirm(idempotencyKey);
+  }
+
   get(idempotencyKey: string): GrpcOutboxOperation | null {
     const row = this.database
       .query<OutboxRow, [string]>('SELECT * FROM grpc_operation_outbox WHERE idempotency_key = ?')

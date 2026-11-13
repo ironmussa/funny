@@ -162,3 +162,5 @@ export {
   publishRepo,
   type PublishRepoOptions,
 } from './github.js';
+
+export { cloneAuthEnv, cloneRepository, type CloneOptions } from './clone.js';

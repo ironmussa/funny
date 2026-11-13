@@ -101,6 +101,11 @@ export interface ProcessOptions {
    * Set to 0 to disable the cap (use with care — large diffs can OOM).
    */
   maxOutputBytes?: number;
+  /**
+   * Receives stderr as it arrives (decoded text), for progress a caller shows
+   * live (`git clone --progress`). The full stderr is still in the result.
+   */
+  onStderr?: (chunk: string) => void;
 }
 
 /** 50MB default — protects against huge `git diff` outputs OOMing the runner. */
@@ -254,25 +259,29 @@ async function readStreamWithCap(
   stream: ReadableStream<Uint8Array>,
   maxBytes: number,
   onOverflow: () => void,
+  onText: (text: string) => void = () => {},
 ): Promise<string> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
   let total = 0;
   let out = '';
+  const append = (text: string) => {
+    out += text;
+    if (text) onText(text);
+  };
   try {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      if (value) {
-        total += value.byteLength;
-        if (total > maxBytes) {
-          onOverflow();
-          throw new ProcessOutputTooLargeError('stream', maxBytes);
-        }
-        out += decoder.decode(value, { stream: true });
+      if (!value) continue;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        onOverflow();
+        throw new ProcessOutputTooLargeError('stream', maxBytes);
       }
+      append(decoder.decode(value, { stream: true }));
     }
-    out += decoder.decode();
+    append(decoder.decode());
     return out;
   } finally {
     try {
@@ -324,11 +333,10 @@ async function executeRawBun(
     // Read streams BEFORE awaiting exit to avoid race condition.
     // In Bun, once proc.exited resolves the ReadableStreams may already be
     // closed/drained, causing read failures and ECONNRESET on the HTTP side.
-    const readCapped =
-      maxBytes > 0
-        ? (stream: ReadableStream<Uint8Array>) =>
-            readStreamWithCap(stream, maxBytes, () => proc.kill())
-        : (stream: ReadableStream<Uint8Array>) => new Response(stream).text();
+    // A cap of 0 disables it.
+    const cap = maxBytes > 0 ? maxBytes : Number.POSITIVE_INFINITY;
+    const readCapped = (stream: ReadableStream<Uint8Array>, onText?: (text: string) => void) =>
+      readStreamWithCap(stream, cap, () => proc.kill(), onText);
 
     const [stdout, stderr, exitCode] = await runAsync(
       async (signal) => {
@@ -338,7 +346,7 @@ async function executeRawBun(
         try {
           return await Promise.all([
             readCapped(proc.stdout as ReadableStream<Uint8Array>),
-            readCapped(proc.stderr as ReadableStream<Uint8Array>),
+            readCapped(proc.stderr as ReadableStream<Uint8Array>, options.onStderr),
             proc.exited,
           ]);
         } finally {
@@ -399,7 +407,14 @@ async function executeRawNode(
         }
       };
       proc.stdout.on('data', (chunk: Buffer) => onChunk(chunk, stdoutChunks));
-      proc.stderr.on('data', (chunk: Buffer) => onChunk(chunk, stderrChunks));
+      const stderrDecoder = new TextDecoder();
+      proc.stderr.on('data', (chunk: Buffer) => {
+        onChunk(chunk, stderrChunks);
+        if (!overflowed && options.onStderr) {
+          const text = stderrDecoder.decode(chunk, { stream: true });
+          if (text) options.onStderr(text);
+        }
+      });
 
       proc.on('close', (code) => {
         if (overflowed) return;

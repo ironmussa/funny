@@ -2,6 +2,7 @@ import { existsSync } from 'fs';
 import { rm } from 'fs/promises';
 import { resolve, isAbsolute, join } from 'path';
 
+import { cloneRepository } from '@funny/core/git';
 import type { GitHubRepo, WSCloneProgressData } from '@funny/shared';
 import { retryAsync } from '@funny/shared/async';
 import { badRequest, conflict, processError } from '@funny/shared/errors';
@@ -12,7 +13,7 @@ import { log } from '../../lib/logger.js';
 import { getServices } from '../../services/service-registry.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
-import { redactGithubToken, withGithubToken } from '../../utils/github-clone-url.js';
+import { redactGithubToken } from '../../utils/github-clone-url.js';
 import { requirePickerPath } from '../../utils/path-scope.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { validate, cloneRepoSchema } from '../../validation/schemas.js';
@@ -148,10 +149,10 @@ repoRoutes.post('/clone', async (c) => {
     );
   }
 
-  // Inject token into clone URL for private repo access
+  // The token travels in git's environment, scoped to https://github.com/,
+  // never in the clone URL (argv, `.git/config`).
   const resolved = await resolveGithubToken(userId);
   const token = resolved?.token ?? null;
-  const authenticatedUrl = withGithubToken(cloneUrl, token);
 
   // Clone ID for WebSocket progress events
   const cloneId = `clone:${Date.now()}`;
@@ -164,79 +165,29 @@ repoRoutes.post('/clone', async (c) => {
     });
   };
 
-  try {
-    emitProgress({ phase: 'Starting clone...', percent: 0 });
-
-    const proc = Bun.spawn(['git', 'clone', '--progress', authenticatedUrl, clonePath], {
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
-
-    // Git clone progress goes to stderr
-    const decoder = new TextDecoder();
-    let stderrBuffer = '';
-
-    const readStderr = async () => {
-      if (!proc.stderr) return;
-      for await (const chunk of proc.stderr) {
-        stderrBuffer += decoder.decode(chunk, { stream: true });
-        // Git progress uses \r for in-place updates
-        const lines = stderrBuffer.split(/[\r\n]+/);
-        stderrBuffer = lines.pop() || '';
-        for (const line of lines) {
-          const trimmed = line.trim();
-          if (!trimmed) continue;
-          // Sanitize — never leak the token
-          const safeLine = redactGithubToken(trimmed);
-          // Parse percentage from git output like "Receiving objects:  45% (123/456)"
-          const pctMatch = safeLine.match(/(\d+)%/);
-          emitProgress({
-            phase: safeLine,
-            percent: pctMatch ? Number.parseInt(pctMatch[1], 10) : undefined,
-          });
-        }
-      }
-    };
-
-    await Promise.all([readStderr(), proc.exited]);
-
-    if (proc.exitCode !== 0) {
-      // Read any remaining stdout for error context
-      const stdoutText = await new Response(proc.stdout).text();
-      const errorMsg = redactGithubToken(stderrBuffer + stdoutText);
-      emitProgress({ phase: 'Clone failed', percent: 0, error: errorMsg });
-      return resultToResponse(
-        c,
-        err(processError(`Clone failed: ${errorMsg}`, proc.exitCode ?? 1, errorMsg)),
-      );
-    }
-
-    // Security: when a token was injected into the clone URL, git persists the
-    // full `https://x-access-token:<token>@github.com/...` URL in
-    // <repo>/.git/config under [remote "origin"]. Reset the remote to the
-    // clean URL so the PAT is not left on disk for every later process/agent
-    // that reads the repo's git config.
-    if (authenticatedUrl !== cloneUrl) {
-      const reset = Bun.spawn(['git', '-C', clonePath, 'remote', 'set-url', 'origin', cloneUrl], {
-        stdout: 'pipe',
-        stderr: 'pipe',
+  emitProgress({ phase: 'Starting clone...', percent: 0 });
+  const cloned = await cloneRepository(cloneUrl, clonePath, {
+    githubToken: token,
+    onProgress: (rawLine) => {
+      // funny never puts the token in the URL, but a pasted URL may carry one.
+      const line = redactGithubToken(rawLine);
+      // Parse percentage from git output like "Receiving objects:  45% (123/456)"
+      const pctMatch = line.match(/(\d+)%/);
+      emitProgress({
+        phase: line,
+        percent: pctMatch ? Number.parseInt(pctMatch[1], 10) : undefined,
       });
-      await reset.exited;
-      if (reset.exitCode !== 0) {
-        log.warn('Failed to strip credential from cloned repo remote', {
-          namespace: 'github',
-          clonePath,
-        });
-      }
-    }
-
-    emitProgress({ phase: 'Clone complete', percent: 100 });
-  } catch (error: any) {
-    // Sanitize error message — never leak the token
-    const safeMsg = redactGithubToken(error.message || String(error));
-    emitProgress({ phase: 'Clone failed', percent: 0, error: safeMsg });
-    return resultToResponse(c, err(processError(`Clone failed: ${safeMsg}`, 1, safeMsg)));
+    },
+  });
+  if (cloned.isErr()) {
+    const failure = cloned.error;
+    const isProcess = failure.type === 'PROCESS_ERROR';
+    const detail = redactGithubToken((isProcess && failure.stderr?.trim()) || failure.message);
+    const exitCode = (isProcess && failure.exitCode) || 1;
+    emitProgress({ phase: 'Clone failed', percent: 0, error: detail });
+    return resultToResponse(c, err(processError(`Clone failed: ${detail}`, exitCode, detail)));
   }
+  emitProgress({ phase: 'Clone complete', percent: 100 });
 
   // Create the project. The data channel to the server (Socket.IO) can be
   // transiently saturated or in the middle of a reconnect right after a slow

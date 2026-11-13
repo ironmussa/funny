@@ -4,7 +4,7 @@ import { join } from 'path';
 
 import { internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
-import { err, ok } from 'neverthrow';
+import { err, ok, okAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
@@ -22,6 +22,12 @@ const mocks = vi.hoisted(() => ({
   warn: vi.fn(),
   error: vi.fn(),
   emitToUser: vi.fn(),
+  cloneRepository: vi.fn(),
+}));
+
+vi.mock('@funny/core/git', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@funny/core/git')>()),
+  cloneRepository: mocks.cloneRepository,
 }));
 
 vi.mock('../../services/service-registry.js', () => ({
@@ -101,15 +107,8 @@ describe('POST /clone createProject retry', () => {
     mocks.error.mockClear();
     mocks.emitToUser.mockClear();
     // Successful `git clone` without touching the network or the filesystem.
-    vi.spyOn(Bun, 'spawn').mockImplementation(
-      () =>
-        ({
-          stdout: null,
-          stderr: null,
-          exited: Promise.resolve(0),
-          exitCode: 0,
-        }) as unknown as ReturnType<typeof Bun.spawn>,
-    );
+    mocks.cloneRepository.mockReset();
+    mocks.cloneRepository.mockReturnValue(okAsync(undefined));
     vi.useFakeTimers();
   });
 

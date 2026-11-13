@@ -7,17 +7,14 @@
  * @domain depends: MessageQueue, AgentRunner
  *
  * Drains the message queue when an agent completes, fails, or is stopped.
- * If the project uses queue mode and there's a queued message, it auto-starts
- * the agent with the next message in the queue.
+ * If there's a queued message, it auto-starts the agent with the next one, in
+ * the thread's working directory (project, worktree or scratch directory).
  */
 
-import {
-  DEFAULT_MODEL,
-  DEFAULT_PROVIDER,
-  DEFAULT_PERMISSION_MODE,
-  DEFAULT_FOLLOW_UP_MODE,
-} from '@funny/shared/models';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
+import { Result } from 'neverthrow';
 
+import { resolveThreadCwd } from '../thread-context.js';
 import type { AgentCompletedEvent } from '../thread-event-bus.js';
 import type { EventHandler } from './types.js';
 
@@ -31,19 +28,37 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
     const thread = await ctx.getThread(threadId);
     if (!thread) return;
 
-    const project = await ctx.getProject(thread.projectId);
-    if (!project) return;
-    const mode = project?.followUpMode ?? DEFAULT_FOLLOW_UP_MODE;
-    // Only 'queue' mode parks follow-ups in the queue; interrupt/steer send
-    // immediately (or redirect the live turn), so there's nothing to drain.
-    if (mode !== 'queue') return;
+    // Drain whatever was queued, whatever the project's follow-up mode: a
+    // non-queue project still queues a send that forced it (`forceQueue`) or
+    // that would have cut a heavy-thinking turn, and a scratch thread has no
+    // project at all (#194). An empty queue makes this a no-op.
+    const project = thread.projectId ? await ctx.getProject(thread.projectId) : null;
+    const cwdResult = Result.fromThrowable(
+      () =>
+        resolveThreadCwd(
+          {
+            id: thread.id,
+            userId: thread.userId,
+            isScratch: !!thread.isScratch,
+            mode: thread.mode === 'worktree' ? 'worktree' : 'local',
+            worktreePath: thread.worktreePath ?? undefined,
+          },
+          project ?? null,
+        ),
+      // scratchPathFor throws on a malformed id; treat it like any other miss.
+      (e) => ({ message: e instanceof Error ? e.message : String(e) }),
+    )().andThen((r) => r);
+    if (cwdResult.isErr()) {
+      // Leave the queue intact: the message is not lost, only not sent yet.
+      ctx.log(`Not draining queue for thread ${threadId}: ${cwdResult.error.message}`);
+      return;
+    }
+    const cwd = cwdResult.value;
 
     const next = await ctx.dequeueMessage(threadId);
     if (!next) return;
 
     ctx.log(`Auto-sending queued message for thread ${threadId} (messageId: ${next.id})`);
-
-    const effectiveCwd = thread.worktreePath ?? project.path;
 
     try {
       // skipMessageInsert: false — when sendMessage decided to queue, it
@@ -55,7 +70,7 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
       await ctx.startAgent(
         threadId,
         next.content,
-        effectiveCwd,
+        cwd,
         next.model || thread.model || DEFAULT_MODEL,
         next.permissionMode || thread.permissionMode || DEFAULT_PERMISSION_MODE,
         next.images ? JSON.parse(next.images) : undefined,

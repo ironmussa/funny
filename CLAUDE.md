@@ -79,7 +79,7 @@ bun run db:studio
 - `project-manager.ts` — CRUD for projects. Validates that the path is a git repo before creating.
 - `runner-manager.ts` — Manages remote runner instances (registration, heartbeat, project assignments).
 - `project-repository.ts`, `thread-event-repository.ts`, etc. — Database repositories for persistent state.
-- `automation-scheduler.ts` — Owns the automation cron; each run starts a read-only thread on the automation owner's runner via `runner-thread-launcher.ts` (`startThreadOnRunner`, which delegates to the `modules/threads` creation use case — the same code as `POST /api/threads`). Runs complete in `automation-runs.ts` from the persisted terminal thread status. Assumes a single server instance.
+- `automation-scheduler.ts` — Owns the automation cron; each run starts a read-only thread on the automation owner's runner via `runner-thread-launcher.ts` (`startThreadOnRunner`, which delegates to the `modules/threads` creation use case — the same code as `POST /api/threads`). Runs complete in `automation-runs.ts` from the persisted terminal thread status. A scheduled tick is skipped while the automation's previous run is still `running` (for under `STALE_RUN_MS`, a day); manual runs are not. Assumes a single server instance.
 
 **Core modules (`packages/core/src/`):**
 

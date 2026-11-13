@@ -22,7 +22,7 @@ import {
 } from '../../services/automation-scheduler.js';
 import type { StartThreadInput } from '../../services/runner-thread-launcher.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedAutomation, seedProject, seedThread } from '../helpers/test-db.js';
+import { seedAutomation, seedAutomationRun, seedProject, seedThread } from '../helpers/test-db.js';
 
 const NEXT = new Date('2030-01-01T09:00:00.000Z');
 
@@ -201,6 +201,77 @@ describe('automation scheduler', () => {
       } finally {
         job.stop();
       }
+    });
+
+    describe('a tick while the previous run is still going', () => {
+      const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
+      const start = async () => {
+        seedAutomation(t.db as any, {
+          id: 'on',
+          projectId: 'p1',
+          userId: 'alice',
+          schedule: '0 9 * * *',
+        });
+        const cron = fakeCron();
+        const launcher = fakeLauncher('ok', register);
+        await startAutomationScheduler({
+          ports,
+          createJob: cron.createJob,
+          launch: launcher.launch,
+        });
+        return { tick: () => cron.live.get('0 9 * * *')!.onTick(), launcher };
+      };
+      const previousRun = (status: string, startedAt: string) => {
+        seedThread(t.db as any, { id: 'prev', projectId: 'p1', userId: 'alice' });
+        seedAutomationRun(t.db as any, {
+          id: 'r-prev',
+          automationId: 'on',
+          threadId: 'prev',
+          status,
+          startedAt,
+          completedAt: status === 'running' ? null : startedAt,
+        });
+      };
+
+      test('is skipped, and the next occurrence is still recorded', async () => {
+        const { tick, launcher } = await start();
+        previousRun('running', ago(60_000));
+        (t.db as any).update(schema.automations).set({ nextRunAt: null }).run();
+
+        await tick();
+
+        expect(launcher.calls).toEqual([]);
+        expect(runs()).toHaveLength(1);
+        expect(automation('on').nextRunAt).toBe(NEXT.toISOString());
+      });
+
+      test('runs when the previous run has finished', async () => {
+        const { tick, launcher } = await start();
+        previousRun('completed', ago(60_000));
+
+        await tick();
+
+        expect(launcher.calls).toHaveLength(1);
+      });
+
+      test('runs when the previous run is stale (no completion for over a day)', async () => {
+        const { tick, launcher } = await start();
+        previousRun('running', ago(STALE_RUN_MS + 60_000));
+
+        await tick();
+
+        expect(launcher.calls).toHaveLength(1);
+      });
+
+      test('does not stop a manual run', async () => {
+        const { launcher } = await start();
+        previousRun('running', ago(60_000));
+
+        const started = await runAutomation(automation('on'));
+
+        expect(started.isOk()).toBe(true);
+        expect(launcher.calls).toHaveLength(1);
+      });
     });
 
     test('a tick for an automation disabled since scheduling does nothing', async () => {

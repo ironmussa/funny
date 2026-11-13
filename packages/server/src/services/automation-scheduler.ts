@@ -18,7 +18,7 @@
 
 import { AUTOMATION_DISALLOWED_TOOLS } from '@funny/shared/models';
 import { Cron } from 'croner';
-import { and, asc, eq, lt } from 'drizzle-orm';
+import { and, asc, eq, gte, lt } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -151,8 +151,39 @@ async function fire(id: string): Promise<void> {
   // Re-read so an edit that raced the tick (prompt, model, disable) is honored.
   const automation = await automationRepo.getAutomation(id);
   if (!automation?.enabled) return;
-  await runAutomation(automation);
+  if (await hasRunInProgress(id)) {
+    log.info('Automation tick skipped: the previous run is still running', {
+      namespace: 'automation',
+      automationId: id,
+    });
+  } else {
+    await runAutomation(automation);
+  }
   await recordNextRun(id);
+}
+
+/**
+ * Whether a scheduled tick would overlap the previous run: one still
+ * `running` (its thread has not reported a terminal status). A run older than
+ * `STALE_RUN_MS` does not count, so one lost completion cannot stop the
+ * automation for good; startup marks those failed. Manual runs skip this.
+ */
+async function hasRunInProgress(automationId: string): Promise<boolean> {
+  const since = new Date(now().getTime() - STALE_RUN_MS).toISOString();
+  const active = await dbAll(
+    db
+      .select({ id: schema.automationRuns.id })
+      .from(schema.automationRuns)
+      .where(
+        and(
+          eq(schema.automationRuns.automationId, automationId),
+          eq(schema.automationRuns.status, 'running'),
+          gte(schema.automationRuns.startedAt, since),
+        ),
+      )
+      .limit(1),
+  );
+  return active.length > 0;
 }
 
 // ── Dispatch ─────────────────────────────────────────────────────

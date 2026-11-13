@@ -19,7 +19,7 @@
     "@funny/shared": "workspace:*",
     "@hono/zod-validator": "^0.8.0",
     "eventemitter3": "^5.0.1",
-    "hono": "^4.13.13",
+    "hono": "^4.13.18",
     "nanoid": "^5.0.9",
     "pino": "^10.3.1",
     "yaml": "^2.6.1",

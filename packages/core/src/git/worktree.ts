@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, realpathSync } from 'fs';
 import { mkdir, rm, stat } from 'fs/promises';
-import { resolve, dirname, basename, normalize, join, sep } from 'path';
+import { resolve, dirname, basename, normalize, join } from 'path';
 
 import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
@@ -381,10 +381,13 @@ function assertWorktreeInProjectBase(
     // resolve so a missing dir doesn't bypass the check.
     realTarget = resolve(worktreePath);
   }
-  const within = realTarget === realBase || realTarget.startsWith(realBase + sep);
-  if (!within) {
+  // A worktree is always a direct child of the base (`createWorktree` strips
+  // slashes from its directory name). The base itself or anything deeper
+  // would make the `rm -rf` fallback delete other worktrees (issue #178).
+  const isWorktreeDir = dirname(realTarget) === realBase && realTarget !== realBase;
+  if (!isWorktreeDir) {
     return badRequest(
-      `worktreePath is outside the project's worktree base (project: ${projectPath})`,
+      `worktreePath is not one of the project's worktree directories (project: ${projectPath})`,
     );
   }
   return null;
@@ -468,9 +471,10 @@ export function pruneStaleWorktreeSafeDirectories(): ResultAsync<number, DomainE
 
 /**
  * Public helper for callers (route layer, thread resolvers) that need to
- * confirm a worktree path is within a given project's base before consuming
- * it as a cwd or destructive target. Returns null if valid, a DomainError
- * otherwise. Uses realpath so symlinks cannot escape.
+ * confirm a path is one of a project's worktree directories (a direct child
+ * of its worktree base) before consuming it as a cwd or destructive target.
+ * Returns null if valid, a DomainError otherwise. Uses realpath so symlinks
+ * cannot escape.
  */
 export function checkWorktreePathInProject(
   projectPath: string,

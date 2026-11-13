@@ -152,7 +152,7 @@ describe('Worktree Routes', () => {
     mockRemoveWorktree.mockReturnValue(
       err({
         type: 'BAD_REQUEST',
-        message: "worktreePath is outside the project's worktree base",
+        message: "worktreePath is not one of the project's worktree directories",
       }) as any,
     );
     const res = await app.request('/worktrees', {
@@ -175,7 +175,7 @@ describe('Worktree Routes', () => {
   test('GET /worktrees/status rejects worktreePath outside project base', async () => {
     mockCheckWorktreePathInProject.mockReturnValue({
       type: 'BAD_REQUEST',
-      message: "worktreePath is outside the project's worktree base",
+      message: "worktreePath is not one of the project's worktree directories",
     });
     const res = await app.request('/worktrees/status?projectId=p1&worktreePath=/etc');
     expect(res.status).toBe(400);

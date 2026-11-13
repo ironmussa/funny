@@ -219,10 +219,22 @@ describe('worktree operations', () => {
       }
     });
 
+    test('checkWorktreePathInProject accepts only a worktree directory, not the base or deeper', async () => {
+      const created = await createWorktree(repoPath, 'only-direct');
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+      const nested = resolve(created.value, 'src');
+      mkdirSync(nested, { recursive: true });
+
+      expect(checkWorktreePathInProject(repoPath, created.value)).toBeNull();
+      expect(checkWorktreePathInProject(repoPath, resolve(created.value, '..'))).not.toBeNull();
+      expect(checkWorktreePathInProject(repoPath, nested)).not.toBeNull();
+    });
+
     test('checkWorktreePathInProject rejects /etc', () => {
       const err = checkWorktreePathInProject(repoPath, '/etc');
       expect(err).not.toBeNull();
-      expect(err?.message).toMatch(/outside the project's worktree base/i);
+      expect(err?.message).toMatch(/not one of the project's worktree directories/i);
     });
 
     test('checkWorktreePathInProject rejects leading-dash', () => {
@@ -241,10 +253,38 @@ describe('worktree operations', () => {
       const result = await removeWorktree(repoPath, '/etc');
       expect(result.isErr()).toBe(true);
       if (result.isErr()) {
-        expect(result.error.message).toMatch(/outside the project's worktree base/i);
+        expect(result.error.message).toMatch(/not one of the project's worktree directories/i);
       }
       // Sanity: /etc still exists.
       expect(existsSync('/etc')).toBe(true);
+    });
+
+    // Issue #178: the base itself passed containment, `git worktree remove`
+    // refused it, and the fallback `rm -rf` deleted every worktree.
+    test('removeWorktree refuses the worktree base itself — every worktree survives', async () => {
+      const created = await createWorktree(repoPath, 'survivor');
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+      const base = resolve(created.value, '..');
+
+      const result = await removeWorktree(repoPath, base);
+
+      expect(result.isErr()).toBe(true);
+      expect(existsSync(resolve(created.value, 'README.md'))).toBe(true);
+    });
+
+    test('removeWorktree refuses a directory inside a worktree', async () => {
+      const created = await createWorktree(repoPath, 'host');
+      expect(created.isOk()).toBe(true);
+      if (!created.isOk()) return;
+      const nested = resolve(created.value, 'src');
+      mkdirSync(nested, { recursive: true });
+      writeFileSync(resolve(nested, 'work.ts'), 'uncommitted work');
+
+      const result = await removeWorktree(repoPath, nested);
+
+      expect(result.isErr()).toBe(true);
+      expect(existsSync(resolve(nested, 'work.ts'))).toBe(true);
     });
 
     test('removeWorktree refuses an unrelated dir even if it exists', async () => {

@@ -18,7 +18,7 @@
 
 import { AUTOMATION_DISALLOWED_TOOLS } from '@funny/shared/models';
 import { Cron } from 'croner';
-import { and, asc, eq, lt } from 'drizzle-orm';
+import { and, asc, eq, gte, lt } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -41,7 +41,8 @@ export interface AutomationJob {
   nextRun(): Date | null;
 }
 
-export type CreateJob = (pattern: string, onTick: () => void) => AutomationJob;
+/** `onTick` settles when the run is recorded, and never rejects. */
+export type CreateJob = (pattern: string, onTick: () => Promise<void>) => AutomationJob;
 
 export interface AutomationSchedulerDeps {
   ports: RunnerPorts;
@@ -54,7 +55,13 @@ export interface AutomationSchedulerDeps {
 /** A run still `running` after this long gets marked failed on startup. */
 export const STALE_RUN_MS = 24 * 60 * 60 * 1000;
 
-const defaultCreateJob: CreateJob = (pattern, onTick) =>
+/**
+ * The production job. Croner awaits the tick's promise, and `protect` skips an
+ * occurrence while the previous one is still pending, so a slow dispatch is
+ * never overlapped by the next. (The agent run itself finishes later, in
+ * `automation-runs.ts`.)
+ */
+export const createCronJob: CreateJob = (pattern, onTick) =>
   new Cron(pattern, { protect: true }, onTick);
 
 const jobs = new Map<string, AutomationJob>();
@@ -106,9 +113,7 @@ async function schedule(automation: Automation): Promise<void> {
   if (!deps) return;
   let job: AutomationJob;
   try {
-    job = (deps.createJob ?? defaultCreateJob)(automation.schedule, () => {
-      void fire(automation.id);
-    });
+    job = (deps.createJob ?? createCronJob)(automation.schedule, () => tick(automation.id));
   } catch (e) {
     log.warn('Invalid automation schedule — not scheduled', {
       namespace: 'automation',
@@ -127,12 +132,58 @@ async function recordNextRun(id: string): Promise<void> {
   await automationRepo.updateAutomationRow(id, { nextRunAt: next ? next.toISOString() : null });
 }
 
+/**
+ * One occurrence. Returning the promise is what lets croner's `protect` skip
+ * the next occurrence while this one runs; a failure is logged here because
+ * croner does not catch what the tick rejects with (#185).
+ */
+function tick(id: string): Promise<void> {
+  return fire(id).catch((error: unknown) => {
+    log.error('Automation tick failed', {
+      namespace: 'automation',
+      automationId: id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+  });
+}
+
 async function fire(id: string): Promise<void> {
   // Re-read so an edit that raced the tick (prompt, model, disable) is honored.
   const automation = await automationRepo.getAutomation(id);
   if (!automation?.enabled) return;
-  await runAutomation(automation);
+  if (await hasRunInProgress(id)) {
+    log.info('Automation tick skipped: the previous run is still running', {
+      namespace: 'automation',
+      automationId: id,
+    });
+  } else {
+    await runAutomation(automation);
+  }
   await recordNextRun(id);
+}
+
+/**
+ * Whether a scheduled tick would overlap the previous run: one still
+ * `running` (its thread has not reported a terminal status). A run older than
+ * `STALE_RUN_MS` does not count, so one lost completion cannot stop the
+ * automation for good; startup marks those failed. Manual runs skip this.
+ */
+async function hasRunInProgress(automationId: string): Promise<boolean> {
+  const since = new Date(now().getTime() - STALE_RUN_MS).toISOString();
+  const active = await dbAll(
+    db
+      .select({ id: schema.automationRuns.id })
+      .from(schema.automationRuns)
+      .where(
+        and(
+          eq(schema.automationRuns.automationId, automationId),
+          eq(schema.automationRuns.status, 'running'),
+          gte(schema.automationRuns.startedAt, since),
+        ),
+      )
+      .limit(1),
+  );
+  return active.length > 0;
 }
 
 // ── Dispatch ─────────────────────────────────────────────────────

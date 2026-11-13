@@ -16,9 +16,9 @@
  */
 
 import { SchedulerPipelineDispatcher } from '@funny/thread-scheduler';
+import type { YamlPipelineContext } from '@funny/workflows/compiler';
 
 import { log } from '../lib/logger.js';
-import type { YamlPipelineContext } from '../pipelines/yaml-compiler.js';
 import {
   RuntimeActionProviderFactory,
   YamlContextBuilder,

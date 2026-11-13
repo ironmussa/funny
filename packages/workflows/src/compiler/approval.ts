@@ -23,7 +23,7 @@
 
 import { node, type GuardFn, type PipelineNode } from '@funny/pipelines';
 
-import type { PipelineContext } from './types.js';
+import type { PipelineContext } from './action-provider.js';
 
 // ── Errors ───────────────────────────────────────────────────
 

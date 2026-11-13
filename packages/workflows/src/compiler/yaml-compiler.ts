@@ -35,10 +35,10 @@ import {
   type TemplateScope,
 } from '@funny/pipelines';
 import type { AgentDefinition } from '@funny/shared';
-import type { ParsedNode, ParsedWorkflow } from '@funny/workflows';
 
+import type { ParsedNode, ParsedWorkflow } from '../schema.js';
+import type { PipelineContext } from './action-provider.js';
 import { approvalNode } from './approval.js';
-import type { PipelineContext } from './types.js';
 
 // ── Compile-time errors ─────────────────────────────────────
 

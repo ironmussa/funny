@@ -1,5 +1,5 @@
 /**
- * Domain-specific pipeline types for the Funny runtime.
+ * Action provider contract for compiled workflows.
  *
  * Defines the ActionProvider contract (with agent, git, and command
  * actions) and all related option types. These are domain concepts

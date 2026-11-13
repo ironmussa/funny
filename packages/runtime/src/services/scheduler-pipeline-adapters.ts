@@ -36,11 +36,11 @@ import type {
   PipelineLoader,
   PipelineLoaderScope,
 } from '@funny/thread-scheduler';
+import type { ActionProvider } from '@funny/workflows/compiler';
+import type { YamlPipelineContext } from '@funny/workflows/compiler';
 import { Result, ok, err } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
-import type { ActionProvider } from '../pipelines/types.js';
-import type { YamlPipelineContext } from '../pipelines/yaml-compiler.js';
 import { loadPipelines } from '../pipelines/yaml-loader.js';
 import { resolveBuiltinAgentByName } from './agent-registry.js';
 import { RuntimeActionProvider, RuntimeProgressReporter } from './pipeline-adapter.js';

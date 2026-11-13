@@ -11,14 +11,13 @@
  */
 
 import { runPipeline, definePipeline, nullReporter, node } from '@funny/pipelines';
-import { describe, test, expect, vi } from 'vitest';
-
 import {
   approvalNode,
   ApprovalRejectedError,
   type ApprovalCapturedOutputs,
-} from '../../pipelines/approval.js';
-import type { ActionProvider, ApprovalDecision, PipelineContext } from '../../pipelines/types.js';
+} from '@funny/workflows/compiler';
+import type { ActionProvider, ApprovalDecision, PipelineContext } from '@funny/workflows/compiler';
+import { describe, test, expect, vi } from 'vitest';
 
 // ── Helpers ──────────────────────────────────────────────────
 

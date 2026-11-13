@@ -607,6 +607,8 @@
       "name": "@funny/workflows",
       "version": "0.1.0",
       "dependencies": {
+        "@funny/pipelines": "workspace:*",
+        "@funny/shared": "workspace:*",
         "yaml": "^2.8.3",
         "zod": "^4.6.6",
       },

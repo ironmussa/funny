@@ -36,7 +36,7 @@ Related runtime services: `git-pipelines.ts`, `pipeline-adapter.ts`, `git-workfl
 
 ## 2. Workflows and scheduled automation
 
-- **`packages/workflows` (`@funny/workflows`)** defines YAML-based workflow catalogs (graph builder + Zod schema + serialize/parse). Consumed by `packages/runtime/src/pipelines/yaml-compiler.ts` / `yaml-loader.ts`, surfaced in the UI at `packages/client/src/components/WorkflowsSettings.tsx`, and used by `packages/scheduler/src/dispatcher.ts`.
+- **`packages/workflows` (`@funny/workflows`)** defines YAML-based workflow catalogs (graph builder + Zod schema + serialize/parse). Its `@funny/workflows/compiler` subpath compiles a workflow into a `@funny/pipelines` definition against an `ActionProvider`; consumed by `packages/runtime/src/pipelines/yaml-loader.ts`, surfaced in the UI at `packages/client/src/components/WorkflowsSettings.tsx`, and used by `packages/scheduler/src/dispatcher.ts`.
 - **Automations** (user-defined prompt + cron schedule, `automations` / `automation_runs` tables) are run by the **server**, not the runner:
   - `packages/server/src/services/automation-scheduler.ts` keeps one croner job per enabled automation. The automation routes reschedule on create/update/delete. There is no catch-up after downtime.
   - On each tick, or on `POST /api/automations/:id/trigger`, it starts a read-only `source: 'automation'` thread on the **owner's** runner via `startThreadOnRunner` (`services/runner-thread-launcher.ts`), which delegates to the `modules/threads` creation use case that interactive threads use. Runner isolation and the project ↔ runner binding therefore apply unchanged.

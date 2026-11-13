@@ -13,10 +13,9 @@
 
 import { runPipeline, type ProgressReporter, type StepProgressData } from '@funny/pipelines';
 import { parseWorkflowYaml } from '@funny/workflows';
+import type { ActionProvider } from '@funny/workflows/compiler';
+import { compileYamlPipeline, type YamlPipelineContext } from '@funny/workflows/compiler';
 import { describe, expect, test, vi } from 'vitest';
-
-import type { ActionProvider } from '../../pipelines/types.js';
-import { compileYamlPipeline, type YamlPipelineContext } from '../../pipelines/yaml-compiler.js';
 
 const SCHEDULER_THREAD_YAML = `
 name: scheduler-thread-smoke

@@ -421,7 +421,6 @@
       "noOpenPRs": "Nenhum pull request aberto",
       "noClosedPRs": "Nenhum pull request fechado",
       "noPRs": "Nenhum pull request",
-      "loadMore": "Carregar mais",
       "openOnGithub": "Abrir no GitHub",
       "merge": "Merge",
       "merged": "Mesclado",
@@ -1223,7 +1222,6 @@
     "addThread": "Adicionar thread",
     "searchProject": "Buscar projeto...",
     "titlePlaceholder": "Título da thread...",
-    "loadMore": "Carregar mais {{count}}",
     "backToBoard": "Voltar ao Kanban",
     "viewOnBoard": "Ver no Quadro"
   },
@@ -1370,7 +1368,6 @@
     "open": "Abertos",
     "closed": "Fechados",
     "noIssues": "Nenhuma issue encontrada",
-    "loadMore": "Carregar mais",
     "viewOnGithub": "Ver no GitHub",
     "notGithub": "Este projeto não está hospedado no GitHub",
     "error": "Erro ao carregar issues",

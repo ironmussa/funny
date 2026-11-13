@@ -2,9 +2,9 @@ import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-sc
 import { dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { GitStatusInfo, Project, Thread, ThreadStage } from '@funny/shared';
 import { type ComponentProps, type ComponentType, memo, useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
 
 import { KanbanColumnSurface } from '@/components/kanban/KanbanColumnHeader';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
 import { KanbanCard } from './KanbanCard';
 
@@ -41,7 +41,6 @@ export const KanbanColumn = memo(function KanbanColumn({
   highlightThreadId,
   statusByThread,
 }: Props) {
-  const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
@@ -107,20 +106,18 @@ export const KanbanColumn = memo(function KanbanColumn({
             gitStatus={statusByThread[thread.id]}
           />
         ))}
-        {hasMore && (
-          <button
-            data-testid={`kanban-load-more-${stage}`}
-            onClick={() =>
-              setPagination((prev) => ({
-                key: paginationKey,
-                visibleCount: (prev.key === paginationKey ? prev.visibleCount : 20) + 20,
-              }))
-            }
-            className="text-muted-foreground hover:bg-accent hover:text-foreground w-full rounded-md py-2 text-xs transition-colors"
-          >
-            {t('kanban.loadMore', { count: Math.min(20, threads.length - visibleCount) })}
-          </button>
-        )}
+        <LoadMoreSentinel
+          hasMore={hasMore}
+          itemCount={visibleThreads.length}
+          onLoadMore={() =>
+            setPagination((prev) => ({
+              key: paginationKey,
+              visibleCount: (prev.key === paginationKey ? prev.visibleCount : 20) + 20,
+            }))
+          }
+          testId={`kanban-load-more-${stage}`}
+          className="py-0"
+        />
       </>
     </KanbanColumnSurface>
   );

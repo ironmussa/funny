@@ -280,7 +280,7 @@
 - [x] 11.2 Kanban card pin — `kanban-card-pin-{id}` fija thread
 - [x] 11.3 Kanban card delete — `kanban-card-delete-{id}` con `kanban-delete-confirm`/`kanban-delete-cancel`
 - [x] 11.4 Add thread from kanban — `kanban-add-thread` inicia nuevo thread
-- [ ] 11.5 Load more — `kanban-load-more-{stage}` carga mas cards
+- [ ] 11.5 Load more — al hacer scroll al final, `kanban-load-more-{stage}` carga mas cards
 - [ ] 11.6 Drag-and-drop — Arrastrar card entre columnas actualiza stage
 - [ ] 11.7 Hover states — Tarjetas muestran sombra o borde interactivo on hover
 - [ ] 11.8 Navigate from board — Click en la card navega hacia la vista de Thread

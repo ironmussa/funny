@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -394,16 +395,12 @@ function WatchersDialog({
               onOpened={() => onOpenChange(false)}
             />
           )}
-          {filtered.length > visibleCount && (
-            <Button
-              variant="ghost"
-              className="my-3 w-full"
-              data-testid="watchers-load-more"
-              onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
-            >
-              Load more ({filtered.length - visibleCount})
-            </Button>
-          )}
+          <LoadMoreSentinel
+            hasMore={filtered.length > visibleCount}
+            itemCount={Math.min(visibleCount, filtered.length)}
+            onLoadMore={() => setVisibleCount((count) => count + PAGE_SIZE)}
+            testId="watchers-load-more"
+          />
         </ScrollArea>
       </DialogContent>
     </Dialog>

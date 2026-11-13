@@ -1,6 +1,6 @@
 import type { Thread } from '@funny/shared';
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { KanbanColumn } from '@/components/kanban/KanbanColumn';
 
@@ -35,12 +35,35 @@ const baseProps = {
   statusByThread: {},
 };
 
+/** Observers the load-more sentinel created; `scrollToEnd` reports it in view. */
+let intersectionCallbacks: Array<(entries: Array<{ isIntersecting: boolean }>) => void> = [];
+function scrollToEnd() {
+  act(() => {
+    for (const callback of intersectionCallbacks) callback([{ isIntersecting: true }]);
+  });
+}
+
 describe('KanbanColumn pagination', () => {
+  beforeEach(() => {
+    intersectionCallbacks = [];
+    vi.stubGlobal(
+      'IntersectionObserver',
+      class {
+        constructor(callback: (entries: Array<{ isIntersecting: boolean }>) => void) {
+          intersectionCallbacks.push(callback);
+        }
+        observe() {}
+        disconnect() {}
+      },
+    );
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
   test('resets pagination for a new search and expands to a highlighted thread', () => {
     const view = render(<KanbanColumn {...baseProps} />);
     expect(screen.getAllByTestId('kanban-test-card')).toHaveLength(20);
 
-    fireEvent.click(screen.getByTestId('kanban-load-more-backlog'));
+    scrollToEnd();
     expect(screen.getAllByTestId('kanban-test-card')).toHaveLength(40);
 
     view.rerender(<KanbanColumn {...baseProps} search="new query" />);

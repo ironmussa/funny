@@ -1,9 +1,10 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
-import { CircleDot, CircleCheck, MessageSquare, Loader2, ExternalLink, Plus } from 'lucide-react';
+import { CircleDot, CircleCheck, MessageSquare, ExternalLink, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { IssueBadges } from '@/components/IssueBadges';
+import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -207,24 +208,13 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                 </div>
               ))}
 
-              {hasMore && (
-                <div className="flex justify-center py-2">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      loadMore();
-                    }}
-                    disabled={loading}
-                    className="text-xs"
-                    data-testid="issues-load-more"
-                  >
-                    {loading ? <Loader2 className="icon-xs mr-1 animate-spin" /> : null}
-                    {t('issues.loadMore')}
-                  </Button>
-                </div>
-              )}
+              <LoadMoreSentinel
+                hasMore={hasMore}
+                loading={loading}
+                itemCount={issues.length}
+                onLoadMore={loadMore}
+                testId="issues-load-more"
+              />
             </div>
           )}
         </ScrollArea>

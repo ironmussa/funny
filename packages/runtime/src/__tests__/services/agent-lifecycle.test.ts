@@ -642,6 +642,27 @@ describe('AgentLifecycleManager', () => {
     });
   });
 
+  describe('startAgent — logging', () => {
+    test('never logs the prompt body (it can inline attached file contents)', async () => {
+      seedProjectThread();
+      const manager = createManager();
+      const secret = 'SECRET-FILE-CONTENTS-' + 'x'.repeat(200);
+
+      await manager.startAgent('thread-1', `look at this\n${secret}`, '/tmp/repo');
+
+      const calls = vi.mocked(log.info).mock.calls as unknown as [
+        string,
+        Record<string, unknown>,
+      ][];
+      const call = calls.find(([message]) => message === 'startAgent called');
+      expect(call).toBeDefined();
+      const meta = call![1];
+      expect(JSON.stringify(meta)).not.toContain('SECRET-FILE-CONTENTS');
+      expect(meta).not.toHaveProperty('promptFull');
+      expect(meta.promptLength).toBe(`look at this\n${secret}`.length);
+    });
+  });
+
   describe('startAgent — message and project prompt', () => {
     test('skips user message insert when skipMessageInsert is true', async () => {
       seedProjectThread();

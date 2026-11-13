@@ -379,7 +379,8 @@ function logCreateAndStart(params: CreateAndStartThreadParams, threadId: string)
     mode: params.mode ?? 'local',
     model: params.model ?? 'default',
     provider: params.provider ?? 'default',
-    promptPreview: params.prompt.slice(0, 120),
+    // Only the length: the prompt can start with client-inlined file contents (#182).
+    promptLength: params.prompt.length,
   });
 }
 
@@ -956,7 +957,8 @@ async function createAndStartScratchThread(rawParams: CreateAndStartThreadParams
     namespace: 'scratch-threads',
     threadId,
     userId: params.userId,
-    promptPreview: params.prompt.slice(0, 120),
+    // Only the length: the prompt can start with client-inlined file contents (#182).
+    promptLength: params.prompt.length,
   });
 
   const thread = {

@@ -191,8 +191,9 @@ export class AgentLifecycleManager {
       provider,
       hasImages: !!images?.length,
       skipMessageInsert: !!skipMessageInsert,
-      promptPreview: prompt.slice(0, 100),
-      promptFull: prompt,
+      // Only the length: `prompt` is the agent-ready prompt, with the contents
+      // of referenced files inlined, and logs reach telemetry (#182).
+      promptLength: prompt.length,
     });
 
     // Clear stale DB-mapping state from previous runs

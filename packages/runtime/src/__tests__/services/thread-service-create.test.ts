@@ -121,6 +121,7 @@ import { ok, err, okAsync, errAsync } from 'neverthrow';
 // Released on success; the create/send flows await it.
 mocks.releaseStagedUploads.mockImplementation(() => okAsync(undefined));
 
+import { log } from '../../lib/logger.js';
 import { createIdleThread, createAndStartThread } from '../../services/thread-service/create.js';
 import { wsBroker } from '../../services/ws-broker.js';
 
@@ -351,6 +352,28 @@ describe('createAndStartThread', () => {
       undefined,
       undefined,
     );
+  });
+
+  test.each([
+    { name: 'project', projectId: 'p-1', isScratch: false },
+    { name: 'scratch', projectId: null, isScratch: true },
+  ])('never logs the prompt text for a $name thread (#182)', async ({ projectId, isScratch }) => {
+    // A client-inlined `<referenced-files>` block sits at the front of the
+    // prompt, so even a short preview would carry file contents.
+    const prompt = '<referenced-files>\n<file path="secret.env">\nAPI_KEY=SECRET-VALUE\n';
+
+    const result = await createAndStartThread({
+      projectId,
+      userId: 'u-1',
+      mode: 'local',
+      prompt,
+      isScratch,
+    });
+
+    expect(result.isOk()).toBe(true);
+    const metas = vi.mocked(log.info).mock.calls.map((call) => JSON.stringify(call));
+    expect(metas.length).toBeGreaterThan(0);
+    for (const meta of metas) expect(meta).not.toContain('SECRET-VALUE');
   });
 
   test('executes initial ! commands locally without starting the agent', async () => {

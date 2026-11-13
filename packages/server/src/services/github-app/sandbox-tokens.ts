@@ -65,7 +65,8 @@ const GITHUB_ACCESS_HINTS: Partial<Record<IssueError['kind'], string>> = {
 const refused = (kind: IssueError['kind'], message: string): IssueError => ({ kind, message });
 
 export function createSandboxTokenService(deps: SandboxTokenDeps) {
-  // The runner asks again every 45 minutes: one card per thread and reason.
+  // The runner keeps asking (before each expiry, or every 45 minutes without a
+  // token): one card per thread and reason.
   const notified = new Set<string>();
   const tell = (threadId: string, ownerId: string, error: IssueError) => {
     const key = `${threadId}:${error.kind}`;

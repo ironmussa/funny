@@ -63,7 +63,8 @@
     "./lib/text-search": "./src/lib/text-search.ts",
     "./lib/sliding-window-hits": "./src/lib/sliding-window-hits.ts",
     "./async": "./src/async.ts",
-    "./stale-while-revalidate": "./src/stale-while-revalidate.ts"
+    "./stale-while-revalidate": "./src/stale-while-revalidate.ts",
+    "./github-app-token": "./src/github-app-token.ts"
   },
   "scripts": {
     "test": "bun test"

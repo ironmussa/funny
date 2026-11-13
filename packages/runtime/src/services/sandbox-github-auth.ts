@@ -8,8 +8,9 @@
  * GitHub App token restricted to the thread's repository, valid for an hour;
  * this service writes it where `gh` reads it (`hosts.yml`) and points git's
  * credential helper at `gh auth git-credential`, so every `git` and `gh`
- * invocation uses the current token. A refresh loop renews it before it expires
- * without restarting the agent. The owner's PAT is never involved.
+ * invocation uses the current token. A refresh loop renews it shortly before it
+ * expires (scheduled from its `expiresAt`) without restarting the agent. The
+ * owner's PAT is never involved.
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -17,6 +18,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { execute } from '@funny/core/git';
+import { GITHUB_APP_TOKEN_RENEW_BEFORE_EXPIRY_MS } from '@funny/shared/github-app-token';
 import { Effect, Fiber, Schedule } from 'effect';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
 
@@ -44,13 +46,39 @@ export interface SandboxGithubAuthDeps {
   homeDir?: string;
   /** Point git's GitHub credential helper at gh (global config). */
   configureGit?: () => Promise<Result<void, string>>;
-  refreshEveryMs?: number;
+  renewBeforeExpiryMs?: number;
+  minDelayMs?: number;
+  retryAfterFailureMs?: number;
   retryBaseMs?: number;
 }
 
-const REFRESH_EVERY_MS = 45 * 60 * 1000;
+/** Shorter than the server's reuse margin, so the server mints a new token (#184). */
+const RENEW_BEFORE_EXPIRY_MS = GITHUB_APP_TOKEN_RENEW_BEFORE_EXPIRY_MS;
+/** Floor between renewals, so a token near (or past) its renewal time cannot spin the loop. */
+const MIN_DELAY_MS = 30_000;
+/**
+ * With no valid token (the server refused, or the last one expired): try again
+ * this often. Most refusals last (App not installed, no access) and each one is
+ * audited on the server, so this stays slow.
+ */
+const RETRY_AFTER_FAILURE_MS = 45 * 60 * 1000;
 const RETRY_BASE_MS = 5_000;
 const RETRY_TIMES = 5;
+
+/** How long to wait before renewing a token that expires at `expiresAt` (null: none held). */
+export function renewalDelay(
+  expiresAt: string | null,
+  nowMs: number,
+  {
+    renewBeforeExpiryMs = RENEW_BEFORE_EXPIRY_MS,
+    minDelayMs = MIN_DELAY_MS,
+    retryAfterFailureMs = RETRY_AFTER_FAILURE_MS,
+  }: Pick<SandboxGithubAuthDeps, 'renewBeforeExpiryMs' | 'minDelayMs' | 'retryAfterFailureMs'> = {},
+): number {
+  const expiry = expiresAt ? Date.parse(expiresAt) : Number.NaN;
+  if (!Number.isFinite(expiry) || expiry <= nowMs) return retryAfterFailureMs;
+  return Math.max(minDelayMs, expiry - renewBeforeExpiryMs - nowMs);
+}
 
 /**
  * gh's hosts file with the App token for github.com, in gh's multi-account
@@ -118,7 +146,6 @@ function asToken(reply: GithubAppTokenReply | null): Result<GithubAppToken, stri
 export function createSandboxGithubAuth(deps: SandboxGithubAuthDeps) {
   const homeDir = deps.homeDir ?? homedir();
   const configureGit = deps.configureGit ?? (() => configureGitWithGh(homeDir));
-  const refreshEveryMs = deps.refreshEveryMs ?? REFRESH_EVERY_MS;
   const retryBaseMs = deps.retryBaseMs ?? RETRY_BASE_MS;
   let gitConfigured = false;
   let refresh: { threadId: string; fiber: Fiber.Fiber<unknown, unknown> } | null = null;
@@ -139,41 +166,51 @@ export function createSandboxGithubAuth(deps: SandboxGithubAuthDeps) {
       });
   }
 
-  /** One renewal, retried with exponential backoff before giving up until the next round. */
+  /**
+   * One renewal, retried with exponential backoff before giving up until the
+   * next round. Yields the new token's expiry, or null when it failed.
+   */
   const renewal = (threadId: string) =>
     Effect.retry(
       Effect.tryPromise({
-        try: async () => {
+        try: async (): Promise<string | null> => {
           const result = await ensure(threadId);
           if (result.isErr()) throw new Error(result.error);
+          return result.value.expiresAt;
         },
         catch: (error) => error,
       }),
       { schedule: Schedule.exponential(retryBaseMs), times: RETRY_TIMES },
     ).pipe(
       Effect.catchCause((cause) =>
-        Effect.sync(() =>
+        Effect.sync((): string | null => {
           log.warn('Could not renew the sandbox GitHub token', {
             namespace: 'sandbox-github',
             threadId,
             error: String(cause),
-          }),
-        ),
+          });
+          return null;
+        }),
       ),
+    );
+
+  /** Sleep until the held token is due, renew it, repeat. A failed renewal keeps the old expiry. */
+  const refreshLoop = (threadId: string, expiresAt: string | null): Effect.Effect<never> =>
+    Effect.suspend(() => Effect.sleep(renewalDelay(expiresAt, Date.now(), deps))).pipe(
+      Effect.andThen(renewal(threadId)),
+      Effect.flatMap((renewed) => refreshLoop(threadId, renewed ?? expiresAt)),
     );
 
   return {
     ensure,
-    /** Keep the thread's token fresh until `stop` (idempotent per thread). */
-    startRefresh(threadId: string): void {
+    /**
+     * Keep the thread's token fresh until `stop` (idempotent per thread).
+     * `expiresAt` is the expiry of the token just installed (null: none).
+     */
+    startRefresh(threadId: string, expiresAt: string | null): void {
       if (refresh?.threadId === threadId) return;
       if (refresh) Effect.runFork(Fiber.interrupt(refresh.fiber));
-      const fiber = Effect.runFork(
-        Effect.repeat(
-          Effect.sleep(refreshEveryMs).pipe(Effect.andThen(renewal(threadId))),
-          Schedule.forever,
-        ),
-      );
+      const fiber = Effect.runFork(refreshLoop(threadId, expiresAt));
       refresh = { threadId, fiber };
     },
     async stop(): Promise<void> {
@@ -205,7 +242,7 @@ function sandboxGithubAuth() {
 export async function prepareSandboxGithub(threadId: string): Promise<GithubAppToken | null> {
   const auth = sandboxGithubAuth();
   const token = await auth.ensure(threadId);
-  auth.startRefresh(threadId);
+  auth.startRefresh(threadId, token.isOk() ? token.value.expiresAt : null);
   if (token.isErr()) {
     log.warn('No GitHub access for this sandbox thread', {
       namespace: 'sandbox-github',

@@ -441,11 +441,12 @@ function prPageFetcher(
   filters: PRFilterState,
 ): FetchGitHubListPage<GitHubPR> {
   const searchMode = hasActivePRFilters(filters);
-  return (page, signal) => {
+  return (page, signal, cursor) => {
     const params = { state, page, per_page: 30, sort: filters.sort };
+    // The list pages by GraphQL cursor; the search endpoint by page number.
     const request = searchMode
       ? api.githubPRsSearch(projectId, { ...params, ...filters }, signal)
-      : api.githubPRs(projectId, params, signal);
+      : api.githubPRs(projectId, { ...params, cursor }, signal);
     return request
       .map((data) => ({ ...data, items: data.prs }))
       .mapErr((error) => {

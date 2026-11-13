@@ -1,15 +1,5 @@
 import { getRemoteUrl } from '@funny/core/git';
-import type {
-  GitHubPR,
-  GitHubUserRef,
-  PRCommit,
-  PRDetail,
-  PRFilterOptions,
-  PRSortKey,
-  CICheck,
-  ReviewDecision,
-  MergeableState,
-} from '@funny/shared';
+import type { GitHubPR, GitHubUserRef, PRCommit, PRFilterOptions, PRSortKey } from '@funny/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
 
@@ -23,7 +13,10 @@ import {
   resolveGithubProjectContext,
   resolveGithubToken,
 } from './helpers.js';
-import { positiveIntParam, readIssueState, readPaging } from './query.js';
+import { readGithubListContext } from './list-context.js';
+import { fetchPRDetail } from './pr-detail-graphql.js';
+import { fetchPullRequests } from './prs-graphql.js';
+import { positiveIntParam } from './query.js';
 
 export const prRoutes = new Hono<HonoEnv>();
 
@@ -143,71 +136,58 @@ export async function addLastCommitToPRs(
 
 // ── GET /prs — list GitHub pull requests for a project ──────
 
+const anonymousFetch = (path: string): Promise<Response> =>
+  fetch(`${GITHUB_API}${path}`, {
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    },
+  });
+
+/** Without a token GraphQL is unavailable: the anonymous REST list, last commit per PR. */
+async function anonymousPRList(
+  owner: string,
+  repo: string,
+  query: { state: string; page: number; perPage: number; sort: string; direction: string },
+): Promise<{ prs: GitHubPR[]; hasMore: boolean } | { status: number }> {
+  const res = await anonymousFetch(
+    `/repos/${owner}/${repo}/pulls?state=${query.state}&page=${query.page}&per_page=${query.perPage}&sort=${query.sort}&direction=${query.direction}`,
+  );
+  if (!res.ok) return { status: res.status };
+  const prs = await addLastCommitToPRs(
+    (await res.json()) as GitHubPR[],
+    owner,
+    repo,
+    anonymousFetch,
+  );
+  return { prs, hasMore: (res.headers.get('Link') || '').includes('rel="next"') };
+}
+
 prRoutes.get('/prs', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.query('projectId');
-  if (!projectId) {
-    return c.json({ error: 'projectId is required' }, 400);
-  }
-
-  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
-  if (!project) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-
-  const remoteResult = await getRemoteUrl(project.path);
-  if (remoteResult.isErr() || !remoteResult.value) {
-    return c.json({ error: 'Could not determine remote URL for this project' }, 400);
-  }
-
-  const parsed = parseGithubOwnerRepo(remoteResult.value);
-  if (!parsed) {
-    return c.json({ error: 'This project is not hosted on GitHub' }, 400);
-  }
-
-  const stateResult = readIssueState(c);
-  if (stateResult.isErr()) return c.json({ error: stateResult.error.message }, 400);
-  const state = stateResult.value;
-  const { page, perPage } = readPaging(c, 30);
+  const list = await readGithubListContext(c);
+  if (!list.ok) return list.response;
+  const { userId, owner, repo, state, page, perPage, cursor } = list.ctx;
   const { sort, direction } = resolveSort(c.req.query('sort'), 'pulls');
 
   try {
-    const apiPath = `/repos/${parsed.owner}/${parsed.repo}/pulls?state=${state}&page=${page}&per_page=${perPage}&sort=${sort}&direction=${direction}`;
     const resolved = await resolveGithubToken(userId);
-    const token = resolved?.token ?? null;
-
-    let res: Response;
-    if (token) {
-      res = await githubApiFetch(apiPath, token);
-    } else {
-      res = await fetch(`${GITHUB_API}${apiPath}`, {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
+    // With a token, one GraphQL request brings the page with each PR's last
+    // commit (see prs-graphql.ts).
+    if (resolved) {
+      const result = await fetchPullRequests(owner, repo, {
+        state,
+        sort,
+        direction,
+        perPage,
+        cursor,
+        token: resolved.token,
       });
+      return c.json({ ...result, owner, repo });
     }
 
-    if (!res.ok) {
-      const _body = await res.text();
-      return c.json({ error: `GitHub API error: ${res.status}` }, 502);
-    }
-
-    const prs = (await res.json()) as GitHubPR[];
-    const fetchPath = (path: string): Promise<Response> =>
-      token
-        ? githubApiFetch(path, token)
-        : fetch(`${GITHUB_API}${path}`, {
-            headers: {
-              Accept: 'application/vnd.github+json',
-              'X-GitHub-Api-Version': '2022-11-28',
-            },
-          });
-    const prsWithLastCommit = await addLastCommitToPRs(prs, parsed.owner, parsed.repo, fetchPath);
-    const linkHeader = res.headers.get('Link') || '';
-    const hasMore = linkHeader.includes('rel="next"');
-
-    return c.json({ prs: prsWithLastCommit, hasMore, owner: parsed.owner, repo: parsed.repo });
+    const result = await anonymousPRList(owner, repo, { state, page, perPage, sort, direction });
+    if ('status' in result) return c.json({ error: `GitHub API error: ${result.status}` }, 502);
+    return c.json({ ...result, owner, repo });
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }
@@ -222,31 +202,10 @@ prRoutes.get('/prs', async (c) => {
 // the endpoint is subject to GitHub's stricter search rate limit.
 
 prRoutes.get('/prs-search', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.query('projectId');
-  if (!projectId) {
-    return c.json({ error: 'projectId is required' }, 400);
-  }
-
-  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
-  if (!project) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-
-  const remoteResult = await getRemoteUrl(project.path);
-  if (remoteResult.isErr() || !remoteResult.value) {
-    return c.json({ error: 'Could not determine remote URL for this project' }, 400);
-  }
-
-  const parsed = parseGithubOwnerRepo(remoteResult.value);
-  if (!parsed) {
-    return c.json({ error: 'This project is not hosted on GitHub' }, 400);
-  }
-
-  const stateResult = readIssueState(c);
-  if (stateResult.isErr()) return c.json({ error: stateResult.error.message }, 400);
-  const state = stateResult.value;
-  const { page, perPage } = readPaging(c, 30);
+  const list = await readGithubListContext(c);
+  if (!list.ok) return list.response;
+  const { userId, state, page, perPage } = list.ctx;
+  const parsed = { owner: list.ctx.owner, repo: list.ctx.repo };
   const { sort, direction } = resolveSort(c.req.query('sort'), 'search');
 
   const labels = listParam(c.req.query('labels'));
@@ -271,17 +230,7 @@ prRoutes.get('/prs-search', async (c) => {
     const resolved = await resolveGithubToken(userId);
     const token = resolved?.token ?? null;
 
-    let res: Response;
-    if (token) {
-      res = await githubApiFetch(apiPath, token);
-    } else {
-      res = await fetch(`${GITHUB_API}${apiPath}`, {
-        headers: {
-          Accept: 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
-      });
-    }
+    const res = token ? await githubApiFetch(apiPath, token) : await anonymousFetch(apiPath);
 
     if (!res.ok) {
       return c.json({ error: `GitHub API error: ${res.status}` }, 502);
@@ -364,146 +313,6 @@ prRoutes.get('/pr-filter-options', async (c) => {
 
 // ── GET /pr-detail — rich PR data with CI checks and review decision ──────
 
-interface PRDetailTarget {
-  owner: string;
-  repo: string;
-  token: string;
-}
-
-/** Collapse reviews to the latest decisive state per author, then rank them. */
-function deriveReviewDecision(reviews: any[]): ReviewDecision {
-  const latestByAuthor = new Map<string, string>();
-  for (const r of reviews) {
-    if (r.state === 'APPROVED' || r.state === 'CHANGES_REQUESTED') {
-      latestByAuthor.set(r.user?.login ?? '', r.state);
-    }
-  }
-  const states = [...latestByAuthor.values()];
-  if (states.includes('CHANGES_REQUESTED')) return 'CHANGES_REQUESTED';
-  if (states.includes('APPROVED')) return 'APPROVED';
-  return reviews.length > 0 ? 'REVIEW_REQUIRED' : null;
-}
-
-async function readReviewDecision(reviewsRes: Response): Promise<ReviewDecision> {
-  if (!reviewsRes.ok) return null;
-  return deriveReviewDecision((await reviewsRes.json()) as any[]);
-}
-
-function mapCheckRun(cr: any): CICheck {
-  return {
-    id: cr.id,
-    name: cr.name,
-    status: cr.status,
-    conclusion: cr.conclusion,
-    html_url: cr.html_url ?? null,
-    started_at: cr.started_at ?? null,
-    completed_at: cr.completed_at ?? null,
-    app_name: cr.app?.name ?? null,
-  };
-}
-
-const PASSING_CONCLUSIONS = new Set(['success', 'neutral', 'skipped']);
-
-function tallyChecks(checks: CICheck[]): {
-  passed: number;
-  failed: number;
-  pending: number;
-} {
-  const tally = { passed: 0, failed: 0, pending: 0 };
-  for (const ck of checks) {
-    if (ck.status !== 'completed') tally.pending++;
-    else if (PASSING_CONCLUSIONS.has(ck.conclusion as string)) tally.passed++;
-    else tally.failed++;
-  }
-  return tally;
-}
-
-function mapMergeableState(mergeable: unknown): MergeableState {
-  if (mergeable === true) return 'mergeable';
-  if (mergeable === false) return 'conflicting';
-  return 'unknown';
-}
-
-/**
- * Fetch check runs + commit metadata for the PR's actual head SHA. Without a
- * head SHA (or when the per-SHA checks fail), fall back to the HEAD check runs
- * fetched up front.
- */
-async function readHeadCommitData(
-  target: PRDetailTarget,
-  headSha: string | undefined,
-  fallbackChecksRes: Response,
-): Promise<{ checksData: any; lastCommit: PRCommit | null }> {
-  const { owner, repo, token } = target;
-  let checksData: any = null;
-  let lastCommit: PRCommit | null = null;
-  if (headSha) {
-    const [realChecksRes, commitRes] = await Promise.all([
-      githubApiFetch(`/repos/${owner}/${repo}/commits/${headSha}/check-runs?per_page=100`, token),
-      githubApiFetch(`/repos/${owner}/${repo}/commits/${headSha}`, token),
-    ]);
-    if (realChecksRes.ok) checksData = await realChecksRes.json();
-    if (commitRes.ok) lastCommit = mapCommitToPRCommit(await commitRes.json());
-  }
-  if (!checksData && fallbackChecksRes.ok) {
-    checksData = await fallbackChecksRes.json();
-  }
-  return { checksData, lastCommit };
-}
-
-function mapPRDetailHeader(prData: any) {
-  return {
-    number: prData.number,
-    title: prData.title ?? '',
-    body: prData.body ?? '',
-    state: prData.state ?? 'open',
-    draft: prData.draft ?? false,
-    merged: prData.merged ?? false,
-  };
-}
-
-function mapPRDetailStats(prData: any) {
-  return {
-    html_url: prData.html_url ?? '',
-    additions: prData.additions ?? 0,
-    deletions: prData.deletions ?? 0,
-    changed_files: prData.changed_files ?? 0,
-    commits: prData.commits ?? 0,
-  };
-}
-
-function mapPRDetailRefs(prData: any) {
-  return {
-    head: { ref: prData.head?.ref ?? '', sha: prData.head?.sha ?? '' },
-    base: { ref: prData.base?.ref ?? '' },
-    user: prData.user ? { login: prData.user.login, avatar_url: prData.user.avatar_url } : null,
-  };
-}
-
-function buildPRDetail(
-  prData: any,
-  extras: { reviewDecision: ReviewDecision; checksData: any; lastCommit: PRCommit | null },
-): PRDetail {
-  const checks: CICheck[] = extras.checksData
-    ? ((extras.checksData as any).check_runs ?? []).map(mapCheckRun)
-    : [];
-  const tally = tallyChecks(checks);
-  return {
-    ...mapPRDetailHeader(prData),
-    mergeable_state: mapMergeableState(prData.mergeable),
-    ...mapPRDetailStats(prData),
-    ...mapPRDetailRefs(prData),
-    review_decision: extras.reviewDecision,
-    checks,
-    checks_passed: tally.passed,
-    checks_failed: tally.failed,
-    checks_pending: tally.pending,
-    created_at: prData.created_at ?? '',
-    updated_at: prData.updated_at ?? '',
-    last_commit: extras.lastCommit,
-  };
-}
-
 prRoutes.get('/pr-detail', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
@@ -514,29 +323,14 @@ prRoutes.get('/pr-detail', async (c) => {
 
   const ctx = await resolveGithubProjectContext(projectId, userId, c.get('organizationId'));
   if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
-  const target: PRDetailTarget = { owner: ctx.owner, repo: ctx.repo, token: ctx.token };
-  const { owner, repo, token } = target;
 
   try {
-    // Fetch PR metadata, reviews, and check runs in parallel
-    const [prRes, reviewsRes, checksRes] = await Promise.all([
-      githubApiFetch(`/repos/${owner}/${repo}/pulls/${prNumber}`, token),
-      githubApiFetch(`/repos/${owner}/${repo}/pulls/${prNumber}/reviews`, token),
-      githubApiFetch(`/repos/${owner}/${repo}/commits/HEAD/check-runs?per_page=100`, token),
-    ]);
-
-    if (!prRes.ok) {
-      return c.json({ error: `GitHub API error fetching PR: ${prRes.status}` }, 502);
+    // One GraphQL request: PR, reviews, head commit and its check runs.
+    const detail = await fetchPRDetail(ctx.owner, ctx.repo, prNumber, ctx.token);
+    if (!detail) {
+      return c.json({ error: 'GitHub API error fetching PR: 404' }, 502);
     }
-
-    const prData = (await prRes.json()) as any;
-    const reviewDecision = await readReviewDecision(reviewsRes);
-    const { checksData, lastCommit } = await readHeadCommitData(
-      target,
-      prData.head?.sha,
-      checksRes,
-    );
-    return c.json(buildPRDetail(prData, { reviewDecision, checksData, lastCommit }));
+    return c.json(detail);
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }

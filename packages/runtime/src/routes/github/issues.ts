@@ -1,70 +1,32 @@
-import { getRemoteUrl, listBranches } from '@funny/core/git';
-import type { GitHubPR } from '@funny/shared';
+import { listBranches } from '@funny/core/git';
 import { Hono } from 'hono';
 
+import { log } from '../../lib/logger.js';
 import type { HonoEnv } from '../../types/hono-env.js';
-import {
-  fetchRepoIssues,
-  githubApiFetch,
-  parseGithubOwnerRepo,
-  requireAccessibleProject,
-  resolveGithubToken,
-} from './helpers.js';
-import { linkIssues } from './issue-links.js';
-import { readIssueState, readPaging } from './query.js';
+import { fetchRepoIssues, resolveGithubToken } from './helpers.js';
+import { linkIssues, type LinkablePR } from './issue-links.js';
+import { fetchIssuesWithLinks } from './issues-graphql.js';
+import { type GithubListContext, readGithubListContext } from './list-context.js';
 
 export const issueRoutes = new Hono<HonoEnv>();
 
 // ── GET /issues — list GitHub issues for a project ──────
 
 issueRoutes.get('/issues', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.query('projectId');
-  if (!projectId) {
-    return c.json({ error: 'projectId is required' }, 400);
-  }
-
-  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
-  if (!project) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-
-  // Get remote URL from the project's git repo
-  const remoteResult = await getRemoteUrl(project.path);
-  if (remoteResult.isErr() || !remoteResult.value) {
-    return c.json({ error: 'Could not determine remote URL for this project' }, 400);
-  }
-
-  const parsed = parseGithubOwnerRepo(remoteResult.value);
-  if (!parsed) {
-    return c.json({ error: 'This project is not hosted on GitHub' }, 400);
-  }
-
-  const stateResult = readIssueState(c);
-  if (stateResult.isErr()) return c.json({ error: stateResult.error.message }, 400);
-  const state = stateResult.value;
-  const { page, perPage } = readPaging(c, 30);
+  const list = await readGithubListContext(c);
+  if (!list.ok) return list.response;
+  const { userId, owner, repo, state, page, perPage } = list.ctx;
 
   try {
     const resolved = await resolveGithubToken(userId);
     const token = resolved?.token ?? null;
 
-    const result = await fetchRepoIssues(parsed.owner, parsed.repo, {
-      state,
-      page,
-      perPage,
-      token,
-    });
+    const result = await fetchRepoIssues(owner, repo, { state, page, perPage, token });
     if (!result) {
       return c.json({ error: 'GitHub API error' }, 502);
     }
 
-    return c.json({
-      issues: result.issues,
-      hasMore: result.hasMore,
-      owner: parsed.owner,
-      repo: parsed.repo,
-    });
+    return c.json({ issues: result.issues, hasMore: result.hasMore, owner, repo });
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }
@@ -83,76 +45,54 @@ function suggestBranchName(number: number, title: string): string {
   return `issue-${number}-${slug}`;
 }
 
+/**
+ * With a token, one GraphQL request brings the issues and their PRs. GraphQL
+ * needs authentication, so without one fall back to the anonymous REST search
+ * (public repos only) and show no PR badges.
+ */
+async function loadIssuesPage(ctx: GithubListContext, token: string | null) {
+  const { owner, repo, state, page, perPage, cursor } = ctx;
+  if (token) return fetchIssuesWithLinks(owner, repo, { state, perPage, cursor, token });
+  const rest = await fetchRepoIssues(owner, repo, { state, page, perPage, token: null });
+  if (!rest) return null;
+  return { ...rest, pullRequests: [] as LinkablePR[], nextCursor: null };
+}
+
 issueRoutes.get('/issues-enriched', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.query('projectId');
-  if (!projectId) {
-    return c.json({ error: 'projectId is required' }, 400);
-  }
-
-  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
-  if (!project) {
-    return c.json({ error: 'Project not found' }, 404);
-  }
-
-  const remoteResult = await getRemoteUrl(project.path);
-  if (remoteResult.isErr() || !remoteResult.value) {
-    return c.json({ error: 'Could not determine remote URL for this project' }, 400);
-  }
-
-  const parsed = parseGithubOwnerRepo(remoteResult.value);
-  if (!parsed) {
-    return c.json({ error: 'This project is not hosted on GitHub' }, 400);
-  }
-
-  const stateResult = readIssueState(c);
-  if (stateResult.isErr()) return c.json({ error: stateResult.error.message }, 400);
-  const state = stateResult.value;
-  const { page, perPage } = readPaging(c, 30);
+  const list = await readGithubListContext(c);
+  if (!list.ok) return list.response;
+  const { userId, projectPath, owner, repo } = list.ctx;
 
   try {
     const resolved = await resolveGithubToken(userId);
-    const token = resolved?.token ?? null;
-
-    // Open PRs, plus the most recently updated closed ones so a merged PR
-    // still shows on its issue.
-    const fetchPRs = async (prState: 'open' | 'closed'): Promise<GitHubPR[]> => {
-      if (!token) return [];
-      const res = await githubApiFetch(
-        `/repos/${parsed.owner}/${parsed.repo}/pulls?state=${prState}&sort=updated&direction=desc&per_page=100`,
-        token,
-      );
-      if (!res.ok) return [];
-      const data = await res.json();
-      return Array.isArray(data) ? (data as GitHubPR[]) : [];
-    };
-
-    const [issuesData, branchesResult, openPRs, closedPRs] = await Promise.all([
-      // Issues (via Search API so PRs never crowd out issues)
-      fetchRepoIssues(parsed.owner, parsed.repo, { state, page, perPage, token }),
-      listBranches(project.path),
-      fetchPRs('open'),
-      fetchPRs('closed'),
+    const [issuesData, branchesResult] = await Promise.all([
+      loadIssuesPage(list.ctx, resolved?.token ?? null),
+      listBranches(projectPath),
     ]);
-
     if (!issuesData) {
       return c.json({ error: 'Failed to fetch issues' }, 502);
     }
 
-    const enrichedIssues = linkIssues(issuesData.issues, {
-      branches: branchesResult.isOk() ? branchesResult.value : [],
-      pullRequests: [...openPRs, ...closedPRs],
-      repo: `${parsed.owner}/${parsed.repo}`,
+    const issues = linkIssues(issuesData.issues, {
+      branches: branchesResult.unwrapOr([]),
+      pullRequests: issuesData.pullRequests,
+      repo: `${owner}/${repo}`,
       suggestBranchName: (issue) => suggestBranchName(issue.number, issue.title),
     });
 
     return c.json({
-      issues: enrichedIssues,
+      issues,
       hasMore: issuesData.hasMore,
-      owner: parsed.owner,
-      repo: parsed.repo,
+      nextCursor: issuesData.nextCursor,
+      owner,
+      repo,
     });
   } catch (error: any) {
+    log.warn('failed to load issues', {
+      namespace: 'github-issues',
+      repo: `${owner}/${repo}`,
+      error: error?.message,
+    });
     return c.json({ error: error.message }, 502);
   }
 });

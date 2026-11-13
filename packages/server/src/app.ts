@@ -259,7 +259,6 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
     await import('./routes/threads.js');
   const { shareRoutes } = await import('./routes/thread-shares.js');
   const { teamProjectRoutes } = await import('./routes/team-projects.js');
-  const { teamSettingsRoutes } = await import('./routes/team-settings.js');
   const { pipelineRoutes } = await import('./routes/pipelines.js');
   const { schedulerRoutes } = await import('./routes/scheduler.js');
   const { schedulerSystemRoutes } = await import('./routes/scheduler-system.js');
@@ -287,7 +286,6 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   // letting them fall through to the runner proxy.
   refuseRetiredRestRoutes(app);
   app.route('/api/team-projects', teamProjectRoutes);
-  app.route('/api/team-settings', teamSettingsRoutes);
   app.route('/api/pipelines', pipelineRoutes);
   app.route('/api/invite-links', inviteLinkRoutes);
   app.route('/api/jobs', jobRoutes);

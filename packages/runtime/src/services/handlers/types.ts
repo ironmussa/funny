@@ -42,6 +42,8 @@ interface HandlerThread {
   baseBranch?: string | null;
   worktreePath?: string | null;
   mergedAt?: string | null;
+  isScratch?: boolean | null;
+  mode?: string | null;
 }
 
 interface HandlerProject {

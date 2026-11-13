@@ -6,13 +6,14 @@
  * 2. Starts the agent with the dequeued message
  * 3. Emits a queue update event to the user
  * 4. Re-enqueues the message if startAgent fails
- * 5. Does nothing if the project uses a non-queue follow-up mode
+ * 5. Drains forced queues (non-queue modes) and scratch threads (no project)
  * 6. Does nothing if the queue is empty
  */
 import { describe, test, expect, vi } from 'vitest';
 
 import { agentCompletedQueueHandler } from '../../services/handlers/agent-completed-queue-handler.js';
 import type { HandlerServiceContext } from '../../services/handlers/types.js';
+import { scratchPathFor } from '../../services/thread-context.js';
 import type { AgentCompletedEvent } from '../../services/thread-event-bus.js';
 
 // ── Helpers ────────────────────────────────────────────────────
@@ -100,7 +101,7 @@ describe('agentCompletedQueueHandler', () => {
     expect(ctx.startAgent).not.toHaveBeenCalled();
   });
 
-  test('does nothing when project is not found', async () => {
+  test('does nothing when a project thread has no project', async () => {
     const ctx = makeCtx({ getProject: vi.fn(async () => undefined) });
     await agentCompletedQueueHandler.action(makeEvent(), ctx);
 
@@ -108,14 +109,83 @@ describe('agentCompletedQueueHandler', () => {
     expect(ctx.startAgent).not.toHaveBeenCalled();
   });
 
-  test('does nothing when followUpMode is "interrupt"', async () => {
+  // A non-queue project still parks follow-ups in the queue when the send
+  // forced it (`forceQueue`) or queued to avoid cutting a heavy-thinking turn.
+  // Those must drain too, or they are stranded (#194).
+  test.each(['interrupt', 'steer'])(
+    'drains a forced queue when followUpMode is "%s"',
+    async (followUpMode) => {
+      const entry = makeQueueEntry({ content: 'Forced follow-up' });
+      const ctx = makeCtx({
+        getProject: vi.fn(async () => ({ id: 'p-1', path: '/test', followUpMode })),
+        dequeueMessage: vi.fn(async () => entry),
+      });
+      await agentCompletedQueueHandler.action(makeEvent(), ctx);
+
+      expect(ctx.dequeueMessage).toHaveBeenCalledWith('t-1');
+      expect(ctx.startAgent).toHaveBeenCalledTimes(1);
+      expect((ctx.startAgent as any).mock.calls[0][1]).toBe('Forced follow-up');
+      expect((ctx.startAgent as any).mock.calls[0][2]).toBe('/test');
+    },
+  );
+
+  test('leaves the queue intact when the working directory cannot be resolved', async () => {
     const ctx = makeCtx({
-      getProject: vi.fn(async () => ({ id: 'p-1', path: '/test', followUpMode: 'interrupt' })),
+      getThread: vi.fn(async () => ({
+        id: 't-1',
+        projectId: 'p-1',
+        userId: 'u-1',
+        mode: 'worktree',
+        worktreePath: null,
+      })),
+      dequeueMessage: vi.fn(async () => makeQueueEntry()),
     });
     await agentCompletedQueueHandler.action(makeEvent(), ctx);
 
     expect(ctx.dequeueMessage).not.toHaveBeenCalled();
     expect(ctx.startAgent).not.toHaveBeenCalled();
+  });
+
+  test('leaves a scratch queue intact when its ids fail the scratch path check', async () => {
+    const ctx = makeCtx({
+      getThread: vi.fn(async () => ({
+        id: 't-1',
+        projectId: '',
+        userId: '../escape',
+        isScratch: true,
+        mode: 'local',
+      })),
+      dequeueMessage: vi.fn(async () => makeQueueEntry()),
+    });
+    await agentCompletedQueueHandler.action(makeEvent({ projectId: '' }), ctx);
+
+    expect(ctx.dequeueMessage).not.toHaveBeenCalled();
+    expect(ctx.startAgent).not.toHaveBeenCalled();
+  });
+
+  test('drains a scratch thread queue (no project) in its scratch directory', async () => {
+    const entry = makeQueueEntry({ content: 'Scratch follow-up' });
+    const ctx = makeCtx({
+      getThread: vi.fn(async () => ({
+        id: 't-1',
+        projectId: '',
+        userId: 'u-1',
+        isScratch: true,
+        mode: 'local',
+        model: 'opus',
+        provider: 'claude',
+        permissionMode: 'autoEdit',
+        worktreePath: null,
+      })),
+      getProject: vi.fn(async () => undefined),
+      dequeueMessage: vi.fn(async () => entry),
+    });
+    await agentCompletedQueueHandler.action(makeEvent({ projectId: '' }), ctx);
+
+    expect(ctx.startAgent).toHaveBeenCalledTimes(1);
+    const [, prompt, cwd] = (ctx.startAgent as any).mock.calls[0];
+    expect(prompt).toBe('Scratch follow-up');
+    expect(cwd).toBe(scratchPathFor('u-1', 't-1'));
   });
 
   test('does nothing when queue is empty (dequeue returns null)', async () => {
@@ -163,6 +233,7 @@ describe('agentCompletedQueueHandler', () => {
         model: 'opus',
         provider: 'claude',
         permissionMode: 'autoEdit',
+        mode: 'worktree',
         worktreePath: '/tmp/worktree-1',
       })),
       dequeueMessage: vi.fn(async () => entry),
@@ -208,17 +279,6 @@ describe('agentCompletedQueueHandler', () => {
       'openai', // message-level provider
       false,
     );
-  });
-
-  test('does nothing when followUpMode is "steer"', async () => {
-    const ctx = makeCtx({
-      getProject: vi.fn(async () => ({ id: 'p-1', path: '/test', followUpMode: 'steer' })),
-    });
-
-    await agentCompletedQueueHandler.action(makeEvent(), ctx);
-
-    expect(ctx.dequeueMessage).not.toHaveBeenCalled();
-    expect(ctx.startAgent).not.toHaveBeenCalled();
   });
 
   // ── Queue update emission ───────────────────────────────

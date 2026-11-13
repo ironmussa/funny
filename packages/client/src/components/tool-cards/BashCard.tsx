@@ -1,16 +1,12 @@
 import { ChevronRight, Terminal } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { ensureHighlight, highlightCode } from '@/hooks/use-highlight';
-import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
 
+import { CommandOutput } from './CommandOutput';
 import { unwrapShellCommand } from './format-utils';
 import { ToolContentArea } from './MobileContentPreview';
-
-// eslint-disable-next-line no-control-regex -- ESC is the literal ANSI CSI marker we're detecting
-const ANSI_ESC_RE = /\x1b\[/;
 
 function commandToText(command: unknown): string | null {
   if (typeof command === 'string') return unwrapShellCommand(command);
@@ -24,28 +20,6 @@ function commandToText(command: unknown): string | null {
   } catch {
     return String(command);
   }
-}
-
-/**
- * Pick a syntax-highlighting language for command output based on the command
- * itself. Conservative: returns null when we can't be confident, so we don't
- * mis-tokenize plain text.
- */
-function detectOutputLang(command: string): string | null {
-  const cmd = command.trim();
-  if (/(^|[\s;&|])(bunx\s+)?tsc(\s|$)/.test(cmd)) return 'typescript';
-  if (/(^|[\s;&|])bun\s+--check(\s|$)/.test(cmd)) return 'typescript';
-  if (/(^|[\s;&|])git\s+(diff|show|log\s+-p|format-patch)(\s|$)/.test(cmd)) return 'diff';
-  if (/(^|[\s;&|])(diff|patch)(\s|$)/.test(cmd)) return 'diff';
-  if (/(^|[\s;&|])jq(\s|$)/.test(cmd)) return 'json';
-  const catMatch = cmd.match(
-    /(?:^|[\s;&|])(?:cat|head|tail|less|more|bat)\s+[^|;&]*?\.([a-zA-Z0-9]+)(?:\s|$|[|;&])/,
-  );
-  if (catMatch) {
-    const ext = catMatch[1].toLowerCase();
-    return ext;
-  }
-  return null;
 }
 
 export function BashCard({
@@ -64,53 +38,6 @@ export function BashCard({
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(author === 'shell');
   const command = useMemo(() => commandToText(parsed.command), [parsed.command]);
-  // Security M6: `createAnsiConverter` enforces escapeXML regardless of caller.
-  const ansiConverter = useMemo(
-    () => createAnsiConverter({ fg: '#a1a1aa', bg: 'transparent', newline: false }),
-    [],
-  );
-  const hasAnsi = useMemo(() => (output ? ANSI_ESC_RE.test(output) : false), [output]);
-  const htmlOutput = useMemo(
-    () => (output && hasAnsi ? ansiConverter.toHtml(output) : null),
-    [ansiConverter, output, hasAnsi],
-  );
-  const outputLang = useMemo(
-    () => (command && output && !hasAnsi ? detectOutputLang(command) : null),
-    [command, output, hasAnsi],
-  );
-  const [highlightedCommand, setHighlightedCommand] = useState<{
-    command: string;
-    html: string;
-  } | null>(null);
-  const [highlightedOutput, setHighlightedOutput] = useState<{
-    output: string;
-    lang: string;
-    html: string;
-  } | null>(null);
-
-  useEffect(() => {
-    if (!expanded || !command) return;
-    let cancelled = false;
-    ensureHighlight(command, 'bash').then((ok) => {
-      if (cancelled || !ok) return;
-      setHighlightedCommand({ command, html: highlightCode(command, 'bash') });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [expanded, command]);
-
-  useEffect(() => {
-    if (!expanded || !output || !outputLang) return;
-    let cancelled = false;
-    ensureHighlight(output, outputLang).then((ok) => {
-      if (cancelled || !ok) return;
-      setHighlightedOutput({ output, lang: outputLang, html: highlightCode(output, outputLang) });
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [expanded, output, outputLang]);
 
   return (
     <div className="border-border max-w-full overflow-hidden rounded-lg border text-sm">
@@ -145,58 +72,7 @@ export function BashCard({
           className="border-border/40 border-t"
           viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
         >
-          <div className="space-y-2 py-2">
-            <div className="px-3">
-              <div className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
-                {t('tools.input')}
-              </div>
-              <div className="border-border/40 bg-background/80 overflow-x-auto rounded border px-2.5 py-1.5 font-mono text-xs">
-                {highlightedCommand?.command === command ? (
-                  <pre className="code-viewer hljs text-foreground m-0 leading-relaxed break-all whitespace-pre-wrap">
-                    <code
-                      className="hljs language-bash"
-                      dangerouslySetInnerHTML={{ __html: highlightedCommand.html }}
-                    />
-                  </pre>
-                ) : (
-                  <pre className="text-foreground leading-relaxed break-all whitespace-pre-wrap">
-                    {command}
-                  </pre>
-                )}
-              </div>
-            </div>
-
-            <div className="px-3">
-              <div className="text-muted-foreground mb-1 text-xs font-semibold uppercase">
-                {t('tools.output')}
-              </div>
-              {output ? (
-                <div className="border-border/40 bg-background/80 rounded border px-2.5 py-1.5">
-                  {highlightedOutput?.output === output && highlightedOutput.lang === outputLang ? (
-                    <pre className="code-viewer text-muted-foreground m-0 font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
-                      <code
-                        className="hljs"
-                        dangerouslySetInnerHTML={{ __html: highlightedOutput.html }}
-                      />
-                    </pre>
-                  ) : htmlOutput ? (
-                    <pre
-                      className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap"
-                      dangerouslySetInnerHTML={{ __html: htmlOutput }}
-                    />
-                  ) : (
-                    <pre className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">
-                      {output}
-                    </pre>
-                  )}
-                </div>
-              ) : (
-                <div className="text-muted-foreground/50 py-1 text-sm italic">
-                  {t('tools.waitingForOutput')}
-                </div>
-              )}
-            </div>
-          </div>
+          <CommandOutput command={command} output={output} />
         </ToolContentArea>
       )}
     </div>

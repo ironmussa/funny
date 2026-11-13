@@ -762,6 +762,14 @@
     "thinking": "Thinking",
     "providerError": "Provider Error",
     "background": "Background",
+    "backgroundExitCode": "exit",
+    "jobStatus": {
+      "running": "running",
+      "exited": "done",
+      "failed": "failed",
+      "killed": "killed",
+      "cancelled": "cancelled"
+    },
     "tool": "Tool",
     "done": "done",
     "questions": "question",

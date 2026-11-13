@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { ToolCallGroup, type ToolCallItem } from '@/components/ToolCallGroup';
 
 import { AskQuestionCard } from './AskQuestionCard';
+import { BackgroundCard } from './BackgroundCard';
 import { BashCard } from './BashCard';
 import { CheckRunCard } from './check-cards';
 import { EditFileCard } from './EditFileCard';
@@ -67,6 +68,14 @@ const CARD_RENDERERS: Record<string, CardRenderer> = {
       parsed={parsed}
       output={output}
       author={author}
+      hideLabel={hideLabel}
+      displayTime={displayTime}
+    />
+  ),
+  Background: ({ parsed, output, hideLabel, displayTime }) => (
+    <BackgroundCard
+      parsed={parsed}
+      output={output}
       hideLabel={hideLabel}
       displayTime={displayTime}
     />

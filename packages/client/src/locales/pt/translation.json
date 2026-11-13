@@ -750,6 +750,14 @@
     "thinking": "Pensando",
     "providerError": "Erro do Provedor",
     "background": "Segundo plano",
+    "backgroundExitCode": "saída",
+    "jobStatus": {
+      "running": "em execução",
+      "exited": "concluído",
+      "failed": "falhou",
+      "killed": "interrompido",
+      "cancelled": "cancelado"
+    },
     "tool": "Ferramenta",
     "done": "pronto",
     "questions": "pergunta",

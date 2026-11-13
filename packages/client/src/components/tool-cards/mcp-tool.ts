@@ -211,56 +211,6 @@ export function getMcpSummary(
   return null;
 }
 
-/** Input keys holding source code, with the language they imply (if any). */
-const CODE_KEYS: Record<string, string | null> = {
-  code: null,
-  script: null,
-  source: null,
-  javascript: 'javascript',
-  js: 'javascript',
-  typescript: 'typescript',
-  python: 'python',
-  sql: 'sql',
-  command: 'bash',
-  shell: 'bash',
-};
-
-/** Tool names that imply the language of their code input. */
-const TOOL_LANGUAGES: Record<string, string> = {
-  js: 'javascript',
-  javascript: 'javascript',
-  node: 'javascript',
-  ts: 'typescript',
-  typescript: 'typescript',
-  py: 'python',
-  python: 'python',
-  sql: 'sql',
-  query: 'sql',
-  bash: 'bash',
-  shell: 'bash',
-  sh: 'bash',
-};
-
-export interface McpCodeInput {
-  key: string;
-  code: string;
-  language: string | null;
-}
-
-/** The input that is source code (shown highlighted), if the call has one. */
-export function getMcpCodeInput(
-  parsed: Record<string, unknown>,
-  tool: string,
-): McpCodeInput | null {
-  for (const [key, keyLanguage] of Object.entries(CODE_KEYS)) {
-    const value = parsed[key];
-    if (typeof value !== 'string' || !value.trim()) continue;
-    const toolLanguage = TOOL_LANGUAGES[tool.toLowerCase()] ?? null;
-    return { key, code: value, language: keyLanguage ?? toolLanguage };
-  }
-  return null;
-}
-
 export type McpResultPart =
   | { kind: 'text'; text: string; markdown: boolean }
   | { kind: 'image'; src: string; mimeType: string }

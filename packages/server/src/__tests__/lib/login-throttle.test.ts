@@ -1,8 +1,18 @@
 /**
  * Security HI-12 regression tests for per-identifier login throttle.
  */
-import { afterEach, describe, expect, setSystemTime, test } from 'bun:test';
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  describe,
+  expect,
+  setSystemTime,
+  spyOn,
+  test,
+} from 'bun:test';
 
+import { log } from '../../lib/logger.js';
 import {
   _loginThrottleSize,
   _resetLoginThrottle,
@@ -12,6 +22,15 @@ import {
   recordLoginFailure,
   recordLoginSuccess,
 } from '../../lib/login-throttle.js';
+
+// The cap tests record >10k failures, each audited. Silence the audit log so
+// the output stays small: the coverage gate buffers the child's output and
+// fails when it overflows.
+let logInfo: ReturnType<typeof spyOn>;
+beforeAll(() => {
+  logInfo = spyOn(log, 'info').mockImplementation(() => log);
+});
+afterAll(() => logInfo.mockRestore());
 
 afterEach(() => {
   _resetLoginThrottle();

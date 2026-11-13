@@ -47,13 +47,27 @@ function prefiltered(query: string): string[] {
 beforeEach(() => t.cleanup());
 
 describe('contentPrefilter (case-insensitive)', () => {
-  test('excludes messages that cannot match an ASCII query', () => {
+  test('excludes all-ASCII messages that cannot match an ASCII query', () => {
     seed({
       hit: 'The LOGIN form is broken',
       miss: 'nothing related here',
-      arrows: 'unicode → but no match…',
     });
     expect(prefiltered('login')).toEqual(['m-hit']);
+  });
+
+  test('leaves a message with any non-ASCII character to the JS check', () => {
+    seed({ arrows: 'unicode → but no match…', miss: 'nothing related here' });
+    expect(prefiltered('login')).toEqual(['m-arrows']);
+  });
+
+  test('stays fast on large messages', () => {
+    // Regression: a bracket class with hundreds of ranges made SQLite's GLOB
+    // take ~0.5 s per MB of content (4 s here), blocking the event loop.
+    const big = 'lorem ipsum dolor sit amet '.repeat(40_000); // ~1 MB, ASCII
+    seed(Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`big${i}`, big])));
+    const started = performance.now();
+    expect(prefiltered('login')).toEqual([]);
+    expect(performance.now() - started).toBeLessThan(1000);
   });
 
   test('keeps messages whose accents or combining marks fold onto the query', () => {

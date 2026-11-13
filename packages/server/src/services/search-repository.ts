@@ -20,38 +20,19 @@ function escapeLike(value: string): string {
   return value.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 }
 
-const isAsciiChar = (ch: string) => ch.charCodeAt(0) < 0x80;
-const hasAscii = (text: string) => Array.from(text).some(isAsciiChar);
-const isAscii = (text: string) => Array.from(text).every(isAsciiChar);
+const isAscii = (text: string) => Array.from(text).every((ch) => ch.charCodeAt(0) < 0x80);
 
 /**
- * Bracket-class body (no brackets) of every non-ASCII character that
- * `normalizeSearchText` folds onto ASCII or erases: precomposed letters
- * (`ñ` → `n`), `≠` → `=`, and every combining mark (`\p{M}`), which is
- * stripped and so can sit inside an ASCII word. Derived from the folding
- * itself so it cannot drift from it; built once, on the first search (~150 ms).
+ * Bracket-class body matching any non-ASCII character. (NUL is excluded
+ * because SQL text parameters cannot carry it.)
+ *
+ * Keep this class to ONE range. SQLite's GLOB tests every character of the
+ * content against every entry of the class, so the exact class of characters
+ * that fold onto ASCII (361 ranges) made the pre-filter ~250x slower than this
+ * one while discarding only ~10% more rows, and a search over a large database
+ * blocked the server's event loop for minutes.
  */
-let foldsToAsciiClass: string | undefined;
-function foldsToAscii(): string {
-  if (foldsToAsciiClass !== undefined) return foldsToAsciiClass;
-  const ranges: [number, number][] = [];
-  for (let cp = 0x80; cp <= 0x10ffff; cp++) {
-    if (cp >= 0xd800 && cp <= 0xdfff) continue; // surrogates are not characters
-    const folded = normalizeSearchText(String.fromCodePoint(cp));
-    if (folded !== '' && !hasAscii(folded)) continue;
-    const last = ranges.at(-1);
-    if (last && last[1] === cp - 1) last[1] = cp;
-    else ranges.push([cp, cp]);
-  }
-  foldsToAsciiClass = ranges
-    .map(([from, to]) =>
-      from === to
-        ? String.fromCodePoint(from)
-        : `${String.fromCodePoint(from)}-${String.fromCodePoint(to)}`,
-    )
-    .join('');
-  return foldsToAsciiClass;
-}
+const NON_ASCII_CLASS = '^\u0001-\u007F';
 
 /** `content` holds at least one character of the bracket class `[body]`. */
 function contentHasCharIn(body: string): SQL {
@@ -68,18 +49,18 @@ function contentHasCharIn(body: string): SQL {
  * superset of the matches so the database, not the server, discards the rest.
  *
  * - The folded query is ASCII (the common case, including `niña` → `nina`):
- *   in a message without any character of {@link foldsToAscii}, folding
- *   only lowercases the ASCII runs, so `lower(content) LIKE` decides; a
- *   message with such a character is left to the JS check.
- * - Otherwise a match needs at least one non-ASCII character. (NUL is
- *   excluded from the class because SQL text parameters cannot carry it.)
+ *   in an all-ASCII message, folding only lowercases, so `lower(content) LIKE`
+ *   decides; a message with any non-ASCII character (which may fold onto
+ *   ASCII, like `ñ` → `n`, or be erased, like a combining mark) is left to
+ *   the JS check.
+ * - Otherwise a match needs at least one non-ASCII character.
  */
 export function contentPrefilter(query: string): SQL {
   const folded = normalizeSearchText(query.trim());
   if (!folded) return sql`1 = 1`;
-  if (!isAscii(folded)) return contentHasCharIn('^\u0001-\u007F');
+  if (!isAscii(folded)) return contentHasCharIn(NON_ASCII_CLASS);
   const pattern = `%${escapeLike(folded)}%`;
-  return sql`(lower(${schema.messages.content}) like ${pattern} escape '\\' or ${contentHasCharIn(foldsToAscii())})`;
+  return sql`(lower(${schema.messages.content}) like ${pattern} escape '\\' or ${contentHasCharIn(NON_ASCII_CLASS)})`;
 }
 
 /** Content filter for either search mode; a superset of the JS-checked matches. */

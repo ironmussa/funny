@@ -28,7 +28,8 @@ export type SecretPrompt = (question: string, secret: SecretSpec) => Promise<str
 
 const MODEL_KEY: SecretSpec = {
   envName: 'FUNNY_FACTORY_MODEL_KEY',
-  label: 'model credential (a dedicated key with a spending limit)',
+  label:
+    'model credential (an Anthropic API key with a spending limit, or a Claude subscription token from `claude setup-token`)',
   multiline: false,
 };
 const APP_ID: SecretSpec = {
@@ -85,6 +86,11 @@ export async function resolveFactorySecrets(
     values.set(spec.envName, answer);
   }
 
+  if (usesSandbox(settings) && isSubscriptionToken(values.get(MODEL_KEY.envName)!)) {
+    return err(
+      `${MODEL_KEY.envName} is a Claude subscription token, which a project's sandbox could read: use an Anthropic API key with a spending limit, or the worktree workspace for every project`,
+    );
+  }
   const appId = values.get(APP_ID.envName)!;
   if (!/^\d+$/.test(appId)) return err(`${APP_ID.envName} must be the App's numeric id`);
   const privateKey = values.get(APP_KEY.envName)!;
@@ -96,6 +102,18 @@ export async function resolveFactorySecrets(
     app: { appId, privateKey },
     sandboxCredential: values.get(SANDBOX_CREDENTIAL.envName) ?? null,
   });
+}
+
+/** A Claude subscription (OAuth) token from `claude setup-token`; anything else is an API key. */
+function isSubscriptionToken(modelKey: string): boolean {
+  return modelKey.startsWith('sk-ant-oat');
+}
+
+/** How the agent gets the model credential: a subscription token, or an API key. */
+export function modelCredentialEnv(modelKey: string): Record<string, string> {
+  return isSubscriptionToken(modelKey)
+    ? { CLAUDE_CODE_OAUTH_TOKEN: modelKey }
+    : { ANTHROPIC_API_KEY: modelKey };
 }
 
 /** Every variable a secret may come from. */

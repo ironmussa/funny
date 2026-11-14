@@ -130,12 +130,17 @@ orchestrator. What a factory run needs goes into its workspace only: the model k
 run's App token (in a sandbox, root-only files; in a worktree, the run's own `gh`
 configuration), see [the security model](#security-model).
 
-| Variable                           | What                                                                                       |
-| ---------------------------------- | ------------------------------------------------------------------------------------------ |
-| `FUNNY_FACTORY_MODEL_KEY`          | The model credential (an Anthropic API key): a **dedicated key with a spending limit**.    |
-| `FUNNY_FACTORY_APP_ID`             | The Factory App's numeric id.                                                              |
-| `FUNNY_FACTORY_APP_PRIVATE_KEY`    | Its private key (the PEM; one line with `\n` escapes is fine). It must sign the App's JWT. |
-| `FUNNY_FACTORY_SANDBOX_CREDENTIAL` | The sandbox provider's credential; asked only when a project uses a sandbox.               |
+| Variable                           | What                                                                                                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `FUNNY_FACTORY_MODEL_KEY`          | The model credential: an Anthropic API key (a **dedicated key with a spending limit**), or, for worktree projects only, a Claude subscription token from `claude setup-token`. |
+| `FUNNY_FACTORY_APP_ID`             | The Factory App's numeric id.                                                                                                                                                  |
+| `FUNNY_FACTORY_APP_PRIVATE_KEY`    | Its private key (the PEM; one line with `\n` escapes is fine). It must sign the App's JWT.                                                                                     |
+| `FUNNY_FACTORY_SANDBOX_CREDENTIAL` | The sandbox provider's credential; asked only when a project uses a sandbox.                                                                                                   |
+
+The agent gets an API key as `ANTHROPIC_API_KEY` and a subscription token (`sk-ant-oat…`)
+as `CLAUDE_CODE_OAUTH_TOKEN`, so the factory's runs use your Claude plan. A subscription
+token has no spending limit and is valid for a year, so the factory refuses one while any
+project uses a sandbox, where the agent could read it.
 
 Without a terminal, a missing secret stops the start and names the variable.
 

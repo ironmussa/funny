@@ -224,6 +224,19 @@ describe('orchestrator secrets', () => {
     expect(result.prompted).toEqual([]);
   });
 
+  test('a Claude subscription token is refused while a project uses a sandbox', async () => {
+    const ctx = setup();
+    writeFileSync(ctx.configPath, configYaml(ctx.project));
+    const subscription = ['sk', 'ant', 'oat01', 'subscription-for-tests'].join('-');
+    const result = await run(['start', '--config', ctx.configPath], ctx, {
+      env: { ...fullEnv(), FUNNY_FACTORY_MODEL_KEY: subscription },
+    });
+    expect(result.code).toBe(1);
+    expect(result.err).toContain('Claude subscription token');
+    expect(result.err).toContain('sandbox');
+    expect(result.err).not.toContain(subscription);
+  });
+
   test('missing secrets are prompted for on a TTY', async () => {
     const ctx = setup();
     writeFileSync(ctx.configPath, configYaml(ctx.project));

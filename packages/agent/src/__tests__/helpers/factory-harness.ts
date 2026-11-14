@@ -97,6 +97,8 @@ export interface FactoryHarness {
   sandbox: HarnessSandbox | null;
   /** Whether the next factory's sandbox provider keeps the disk on stop (default true). */
   sandboxKeepsDisk: boolean;
+  /** The model credential the next factory gets (default an API-key-like value). */
+  modelKey: string;
   /** Whether the next factory's sandbox provider has `writeFile` (default false: files go through `exec`). */
   sandboxWritesFiles: boolean;
   /** Root-only secrets of the sandboxes, by run. */
@@ -208,6 +210,7 @@ export function createFactoryHarness(): FactoryHarness {
     github,
     sandbox: null,
     sandboxKeepsDisk: true,
+    modelKey: 'model-key-for-tests',
     sandboxWritesFiles: false,
     sandboxSecrets,
     factory(turns = () => [writesHello], overrides = {}) {
@@ -230,7 +233,7 @@ export function createFactoryHarness(): FactoryHarness {
         {
           settings: settings(overrides),
           secrets: {
-            modelKey: 'model-key-for-tests',
+            modelKey: harness.modelKey,
             app: { appId: '5690396', privateKey },
             sandboxCredential: null,
           },

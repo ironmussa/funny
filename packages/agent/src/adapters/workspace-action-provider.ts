@@ -38,6 +38,36 @@ import { resolveBaseRef } from './base-ref.js';
 const INFRA_AGENT_ERRORS =
   /rate.?limit|overloaded|\b(401|403|429|500|502|503|529)\b|api key|authenticat|credit balance|ECONN|ETIMEDOUT|network/i;
 
+/**
+ * What the agent and the project's commands get over the step's environment:
+ * no way to write to GitHub. Pushing and opening the pull request are the
+ * factory's own steps, which keep the run's credentials. Git's credential
+ * helpers are cleared (command-line config is read last, and an empty helper
+ * drops the ones before it), `git push origin` goes to a URL no transport
+ * serves, and `gh` has neither a login nor a token (in a sandbox, its wrapper
+ * is turned off too). The base is fetched by the factory before the agent
+ * needs it.
+ */
+const NO_GITHUB_WRITE_ENV: Readonly<Record<string, string>> = {
+  GIT_CONFIG_COUNT: '3',
+  GIT_CONFIG_KEY_0: 'credential.helper',
+  GIT_CONFIG_VALUE_0: '',
+  GIT_CONFIG_KEY_1: 'credential.https://github.com.helper',
+  GIT_CONFIG_VALUE_1: '',
+  GIT_CONFIG_KEY_2: 'remote.origin.pushurl',
+  GIT_CONFIG_VALUE_2: 'factory-only://the-issue-factory-pushes',
+  GIT_TERMINAL_PROMPT: '0',
+  GIT_ASKPASS: '',
+  SSH_ASKPASS: '',
+  GH_CONFIG_DIR: '/nonexistent/funny-factory-agent-gh',
+  GH_TOKEN: '',
+  GITHUB_TOKEN: '',
+  GH_ENTERPRISE_TOKEN: '',
+  GITHUB_ENTERPRISE_TOKEN: '',
+  FACTORY_GITHUB_TOKEN_FILE: '',
+  FACTORY_REAL_GH: '',
+};
+
 /** Tools that wait for a person; nobody answers in an unattended run. */
 const INTERACTIVE_TOOLS = ['AskUserQuestion', 'ExitPlanMode'];
 
@@ -80,7 +110,7 @@ export class WorkspaceActionProvider implements ActionProvider {
       permissionMode: 'bypassPermissions',
       disallowedTools: [...INTERACTIVE_TOOLS, ...(opts.disallowedTools ?? [])],
       allowedTools: opts.allowedTools,
-      env: this.authorEnv(),
+      env: this.untrustedEnv(),
     });
 
     // The agent erroring is the agent's failure; the process failing to run or
@@ -126,7 +156,7 @@ export class WorkspaceActionProvider implements ActionProvider {
       run = await executeShell(opts.command, {
         cwd: opts.cwd,
         timeout: opts.timeout ?? DEFAULT_COMMAND_TIMEOUT_MS,
-        env: this.authorEnv(),
+        env: this.untrustedEnv(),
         reject: false,
       });
     } catch (err) {
@@ -240,6 +270,11 @@ export class WorkspaceActionProvider implements ActionProvider {
   }
 
   /** Commits made by the agent or by hooks carry the configured author too. */
+  /** The agent's and the project commands' environment: the author, and no GitHub write access. */
+  private untrustedEnv(): Record<string, string> {
+    return { ...this.authorEnv(), ...NO_GITHUB_WRITE_ENV };
+  }
+
   private authorEnv(): Record<string, string> {
     const { name, email } = this.options.author;
     return {

@@ -17,6 +17,8 @@ export type FakeAgentTurn = (call: {
   cwd: string;
   prompt: string;
   sessionId?: string;
+  /** The agent's environment, as a real agent gets it: the step's, with the agent's options over it. */
+  env: Record<string, string>;
 }) => string | Promise<string>;
 
 export interface FakeAgents extends IAgentProcessFactory {
@@ -29,6 +31,17 @@ export interface FakeAgents extends IAgentProcessFactory {
  * resume gets a new session id (`session-1`, `session-2`, …). Once the turns
  * run out, further starts change nothing.
  */
+/** `process.env` with `overrides` over it, as `@funny/core`'s Claude agent builds a child's environment. */
+function agentEnvironment(
+  overrides: Record<string, string | undefined> = {},
+): Record<string, string> {
+  const env: Record<string, string> = {};
+  for (const [key, value] of Object.entries({ ...process.env, ...overrides })) {
+    if (value !== undefined) env[key] = value;
+  }
+  return env;
+}
+
 export function fakeAgents(turns: FakeAgentTurn[]): FakeAgents {
   const calls: AgentProcessOptions[] = [];
   let sessions = 0;
@@ -83,6 +96,7 @@ class FakeProcess extends EventEmitter implements IAgentProcess {
         cwd: this.options.cwd,
         prompt: this.options.prompt,
         sessionId: this.options.sessionId,
+        env: agentEnvironment(this.options.env),
       });
     } catch (err) {
       text = err instanceof Error ? err.message : String(err);

@@ -256,6 +256,13 @@ prompt injection can make it try anything that shell allows.
   In a sandbox they are in root-only files, but the sandbox user has passwordless `sudo`;
   what keeps them out of the provider's records is that they never go through the sandbox
   create request.
+- **Only the factory pushes and opens the pull request.** The agent, and the project's
+  check command, run with no way to write to GitHub: git's credential helpers are cleared,
+  `git push origin` goes to a URL no transport serves, and `gh` has neither a login nor a
+  token. So a run always lands on its own branch (`factory/issue-<n>-<id>`), pushed by the
+  factory, in one draft pull request, however the agent behaves. This holds against an agent
+  that pushes or opens a pull request on its own; an agent set on it could still dig the
+  token out of its workspace (above), which is what the next point is for.
 - **What limits a prompt injection** is:
   - the token's scope: one repository (a watched one the App is installed on), the
     permissions above, and **one hour**; the factory renews it while a run works;

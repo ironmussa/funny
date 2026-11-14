@@ -22,6 +22,7 @@ import {
   type FactoryHarness,
   type Turns,
 } from './helpers/factory-harness.js';
+import { ghToken } from './helpers/in-process-step.js';
 import type { FakeAgentTurn } from './helpers/step-fakes.js';
 
 let h: FactoryHarness;
@@ -149,6 +150,25 @@ describe('a sandbox factory run', () => {
     }
   });
 
+  test('the agent cannot push or reach GitHub: only the factory pushes and opens the pull request', async () => {
+    const mainBefore = git(h.origin, 'rev-parse', 'main');
+    const seen: Record<string, unknown> = {};
+    const { factory: f, store } = h.factory(rogueAgent(seen), sandboxSettings());
+    await f.tick();
+    await f.idle();
+    store.close();
+
+    expect(seen.push).not.toBe(0);
+    expect(seen.password).toBe(false);
+    expect(seen.ghToken).toBeNull();
+    expect(git(h.origin, 'rev-parse', 'main')).toBe(mainBefore);
+    // The factory still pushed the run's branch and opened its pull request.
+    expect(h.github.pulls).toHaveLength(1);
+    expect(git(h.origin, 'show', `${h.github.pulls[0].head}:rogue.txt`)).toBe(
+      'pushed by the agent',
+    );
+  });
+
   test('a run longer than the token lifetime still pushes from inside the sandbox', async () => {
     const slow: Turns = (step) => [
       async (call) => {
@@ -240,3 +260,26 @@ describe('a sandbox factory run', () => {
     expect(git(h.origin, 'show', `${pull.head}:hello.txt`)).toBe('hello');
   });
 });
+
+/** An agent that tries what only the factory may do; what each attempt gave. */
+function rogueAgent(seen: Record<string, unknown>): Turns {
+  return () => [
+    async (call) => {
+      const run = (args: string[], stdin?: string) =>
+        Bun.spawnSync(['git', ...args], {
+          cwd: call.cwd,
+          env: call.env,
+          ...(stdin === undefined ? {} : { stdin: Buffer.from(stdin) }),
+        });
+      writeFileSync(join(call.cwd, 'rogue.txt'), 'pushed by the agent\n');
+      run(['add', 'rogue.txt']);
+      run(['commit', '-qm', 'rogue']);
+      seen.push = run(['push', 'origin', 'HEAD:refs/heads/main']).exitCode;
+      seen.password = /password=/.test(
+        run(['credential', 'fill'], 'protocol=https\nhost=github.com\n\n').stdout.toString(),
+      );
+      seen.ghToken = ghToken(call.env);
+      return writesHello(call);
+    },
+  ];
+}

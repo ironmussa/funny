@@ -24,7 +24,8 @@ import type { RunStore } from '../../ports/run-store.js';
 import type { FactorySettings } from '../../settings/schema.js';
 import { fakeClock, type FakeClock } from './fake-clock.js';
 import { fakeGithubApi, type FakeGithubApi } from './fake-github-api.js';
-import { inProcessStepLauncher } from './in-process-step.js';
+import { inProcessStepLauncher, type InProcessStepOptions } from './in-process-step.js';
+import { localSandboxProvider, type LocalSandboxProvider } from './local-sandbox.js';
 import type { FakeAgentTurn } from './step-fakes.js';
 
 export const REPO = 'acme/app';
@@ -57,6 +58,8 @@ export const writesHello: FakeAgentTurn = ({ cwd }) => {
 export interface StepContext {
   ghConfigDir: string;
   step: 'implement' | 'fix';
+  /** The token gh would use right now (in a worktree or in a sandbox). */
+  token: () => string | null;
   /** The factory itself, so a turn can tick it mid-run. */
   factory: Factory;
 }
@@ -76,6 +79,10 @@ export interface FactoryHarness {
   userHome: string;
   clock: FakeClock;
   github: FakeGithubApi;
+  /** The sandbox provider of the last factory made (the project in sandbox mode). */
+  sandbox: LocalSandboxProvider | null;
+  /** Root-only secrets of the sandboxes, by run. */
+  sandboxSecrets: string;
   /** A factory over the harness; `settings` overrides the defaults. */
   factory(
     turns?: Turns,
@@ -135,7 +142,9 @@ export function createFactoryHarness(): FactoryHarness {
     ...overrides,
   });
 
-  return {
+  const sandboxSecrets = join(root, 'sandbox-secrets');
+  mkdirSync(join(root, 'sandboxes'), { recursive: true });
+  const harness: FactoryHarness = {
     root,
     home,
     project,
@@ -143,10 +152,18 @@ export function createFactoryHarness(): FactoryHarness {
     userHome,
     clock,
     github,
+    sandbox: null,
+    sandboxSecrets,
     factory(turns = () => [writesHello], overrides = {}) {
       const store = openRunStore(join(home, 'state.db'));
       const log = createFactoryLog({ out: () => {}, err: () => {} }, (t) => t);
       const ref: { factory?: Factory } = {};
+      const steps: InProcessStepOptions = {
+        github,
+        repo: REPO,
+        turns: (step) => turns({ ...step, factory: ref.factory! }),
+      };
+      harness.sandbox = localSandboxProvider(join(root, 'sandboxes'), steps);
       const built = composeFactory(
         {
           settings: settings(overrides),
@@ -163,11 +180,15 @@ export function createFactoryHarness(): FactoryHarness {
           fetch: github.fetch,
           api: github.api,
           clock,
-          launchStep: inProcessStepLauncher({
-            github,
-            repo: REPO,
-            turns: (step) => turns({ ...step, factory: ref.factory! }),
-          }),
+          launchStep: inProcessStepLauncher(steps),
+          sandboxProvider: harness.sandbox,
+          runnerBuild: {
+            commit: 'a'.repeat(40),
+            version: '0.0.0-test',
+            repoUrl: 'https://example.test/funny.git',
+          },
+          sandboxLayout: { secretsRoot: sandboxSecrets, sudo: '', cloneUrl: () => origin },
+          sandboxPollMs: 5,
           // The user's environment, with their personal token in it.
           env: { PATH: process.env.PATH, HOME: userHome, GH_TOKEN: USER_TOKEN },
           admissionTimeoutMs: 1_000,
@@ -200,4 +221,5 @@ export function createFactoryHarness(): FactoryHarness {
     },
     cleanup: () => rmSync(root, { recursive: true, force: true }),
   };
+  return harness;
 }

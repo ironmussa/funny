@@ -58,10 +58,24 @@ export function createFailures(ctx: FactoryContext): Failures {
     return runs.update(run, { handedBackAt: clock.now().toISOString() });
   }
 
-  const giveUp = (run: FactoryRun, reason: string) =>
-    handBack(
-      runs.transition(run, 'failed', { reason, notBefore: undefined, nextCheckAt: undefined }),
-    );
+  /** A failed run's sandbox goes (best effort); its branch and pull request stay. */
+  async function discardWorkspace(run: FactoryRun): Promise<void> {
+    const project = settings.projects.find((p) => p.repo === run.repo);
+    if (!project || !run.branch) return;
+    const discarded = await ctx.workspaces.discard(ctx.workspaceRequest(run, project));
+    if (discarded.isErr())
+      log.warn('Could not free the workspace', { run: run.id, error: discarded.error });
+  }
+
+  const giveUp = async (run: FactoryRun, reason: string) => {
+    const failed = runs.transition(run, 'failed', {
+      reason,
+      notBefore: undefined,
+      nextCheckAt: undefined,
+    });
+    await discardWorkspace(failed);
+    return handBack(failed);
+  };
 
   function onInfraFailure(run: FactoryRun, reason: string, retryIn: RetryState = 'queued') {
     const retries = run.infraRetries ?? 0;

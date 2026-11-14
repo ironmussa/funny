@@ -58,9 +58,9 @@ export function createReconciliation(ctx: FactoryContext, failures: Failures) {
   }
 
   /** The pull request the interrupted step opened becomes the run's. */
-  function adopt(project: FactoryProject, run: FactoryRun, prUrl: string): FactoryRun {
+  async function adopt(project: FactoryProject, run: FactoryRun, prUrl: string) {
     const sessionId =
-      run.sessionId ?? ctx.workspaces.lastSessionId(ctx.workspaceRequest(run, project));
+      run.sessionId ?? (await ctx.workspaces.lastSessionId(ctx.workspaceRequest(run, project)));
     const working = run.state === 'working' ? run : runs.transition(run, 'working');
     const opened = runs.transition(working, 'pr_open', { prUrl, sessionId, pushedAt: now() });
     return runs.transition(opened, 'waiting_ci', { ...ctx.waitingForCi(), infraRetries: 0 });
@@ -83,7 +83,7 @@ export function createReconciliation(ctx: FactoryContext, failures: Failures) {
 
   /** Put one run a previous process (or this one, earlier) left behind back on track. */
   async function reconcileRun(project: FactoryProject, run: FactoryRun): Promise<FactoryRun> {
-    ctx.workspaces.stopLeftovers(ctx.workspaceRequest(run, project));
+    await ctx.workspaces.stopLeftovers(ctx.workspaceRequest(run, project));
     switch (run.state) {
       case 'queued':
       case 'claiming':

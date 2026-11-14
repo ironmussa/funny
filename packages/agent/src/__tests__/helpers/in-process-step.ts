@@ -19,8 +19,18 @@ import { implementStepSpecSchema, runImplementStep } from '../../steps/implement
 import type { FakeGithubApi } from './fake-github-api.js';
 import { fakeAgents, type FakeAgentTurn } from './step-fakes.js';
 
-/** The token `gh` would use with `env`. */
+/**
+ * The token `gh` would use with `env`. In a sandbox the gh wrapper reads it
+ * from the run's root-only token file on every call.
+ */
 export function ghToken(env: Record<string, string | undefined>): string | null {
+  if (env.FACTORY_GITHUB_TOKEN_FILE) {
+    try {
+      return readFileSync(env.FACTORY_GITHUB_TOKEN_FILE, 'utf8').trim() || null;
+    } catch {
+      return null;
+    }
+  }
   if (env.GH_TOKEN) return env.GH_TOKEN;
   if (env.GITHUB_TOKEN) return env.GITHUB_TOKEN;
   const dir =
@@ -88,29 +98,48 @@ async function withProcessEnv<T>(env: Record<string, string>, fn: () => Promise<
   }
 }
 
-export function inProcessStepLauncher(options: {
+export interface InProcessStepContext {
+  /** Where the run's token lives for gh (a worktree run). */
+  ghConfigDir: string;
+  step: 'implement' | 'fix';
+  /** The token gh would use right now. */
+  token: () => string | null;
+}
+
+export interface InProcessStepOptions {
   github: FakeGithubApi;
   repo: string;
-  /** The agent's turns for one step; `ghConfigDir` is where the run's token lives. */
-  turns: (run: { ghConfigDir: string; step: 'implement' | 'fix' }) => FakeAgentTurn[];
-}): StepLauncher {
-  return async ({ step, specPath, cwd, env }) => {
-    const raw = JSON.parse(readFileSync(specPath, 'utf8'));
-    const agents = fakeAgents(options.turns({ ghConfigDir: env.GH_CONFIG_DIR, step }));
-    if (step === 'fix') {
-      const outcome = await withProcessEnv(env, () =>
-        runFixStep(fixStepSpecSchema.parse(raw), { cwd, agents, print: () => {} }),
-      );
-      return outcome.kind === 'pushed' ? 0 : 1;
-    }
+  /** The agent's turns for one step. */
+  turns: (run: InProcessStepContext) => FakeAgentTurn[];
+}
+
+/** Run one step in this process, with exactly `env`; resolves to its exit code. */
+export async function runStepInProcess(
+  options: InProcessStepOptions,
+  launch: { step: 'implement' | 'fix'; spec: unknown; cwd: string; env: Record<string, string> },
+): Promise<number> {
+  const { step, spec, cwd, env } = launch;
+  const agents = fakeAgents(
+    options.turns({ ghConfigDir: env.GH_CONFIG_DIR, step, token: () => ghToken(env) }),
+  );
+  if (step === 'fix') {
     const outcome = await withProcessEnv(env, () =>
-      runImplementStep(implementStepSpecSchema.parse(raw), {
-        cwd,
-        agents,
-        pullRequests: ghLikeOpener(options.github, options.repo, env),
-        print: () => {},
-      }),
+      runFixStep(fixStepSpecSchema.parse(spec), { cwd, agents, print: () => {} }),
     );
-    return outcome.kind === 'pr_opened' ? 0 : 1;
-  };
+    return outcome.kind === 'pushed' ? 0 : 1;
+  }
+  const outcome = await withProcessEnv(env, () =>
+    runImplementStep(implementStepSpecSchema.parse(spec), {
+      cwd,
+      agents,
+      pullRequests: ghLikeOpener(options.github, options.repo, env),
+      print: () => {},
+    }),
+  );
+  return outcome.kind === 'pr_opened' ? 0 : 1;
+}
+
+export function inProcessStepLauncher(options: InProcessStepOptions): StepLauncher {
+  return ({ step, specPath, cwd, env }) =>
+    runStepInProcess(options, { step, spec: JSON.parse(readFileSync(specPath, 'utf8')), cwd, env });
 }

@@ -107,9 +107,6 @@ async function start(args: string[], io: OrchestratorIo): Promise<number> {
     });
     for (const project of settings.value.projects) {
       log.info(`  ${project.repo} (${project.workspace})`, { path: project.path });
-      if (project.workspace === 'sandbox') {
-        log.warn(`  ${project.repo}: sandbox workspaces are not supported yet; it is skipped`);
-      }
     }
     const factory = composeFactory(
       { settings: settings.value, secrets: secrets.value, store, log, home: factoryHome(io.env) },

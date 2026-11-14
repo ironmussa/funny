@@ -61,8 +61,7 @@ export function createFactory(deps: FactoryDeps): Factory {
   const followPullRequest = createPullRequestFollowUp(ctx, failures);
   const reconciliation = createReconciliation(ctx, failures);
   let reconciled = false;
-  /** Sandbox workspaces come with #289; until then only worktree projects run. */
-  const watched = () => settings.projects.filter((p) => p.workspace === 'worktree');
+  const watched = () => settings.projects;
   const inFlight = new Set<Promise<void>>();
   /** Runs with work in progress, so a tick never starts a second piece of work for one. */
   const busy = new Set<string>();

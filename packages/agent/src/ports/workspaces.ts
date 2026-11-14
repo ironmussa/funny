@@ -41,6 +41,8 @@ export interface WorkspaceRequest {
   repo: string;
   /** The project's local checkout. */
   projectPath: string;
+  /** Where the run works: a sandbox (the default) or a worktree. */
+  kind: 'sandbox' | 'worktree';
   base: string;
   branch: string;
 }
@@ -53,12 +55,17 @@ export interface WorkspaceProvider {
    * branch if it disappeared.
    */
   reopen(request: WorkspaceRequest): ResultAsync<RunWorkspace, string>;
-  /** Whether the run's checkout is still there. */
+  /**
+   * Free what a failed run holds that costs (its sandbox); its branch and pull
+   * request stay. A worktree stays as it is, for a look at what happened.
+   */
+  discard(request: WorkspaceRequest): ResultAsync<void, string>;
+  /** Whether the run's workspace is still there (as far as this side knows). */
   exists(request: WorkspaceRequest): boolean;
   /** Stop a step a previous orchestrator process left running for the run (after a crash). */
-  stopLeftovers(request: WorkspaceRequest): void;
+  stopLeftovers(request: WorkspaceRequest): Promise<void>;
   /** The agent session the run's last step recorded, if any. */
-  lastSessionId(request: WorkspaceRequest): string | undefined;
+  lastSessionId(request: WorkspaceRequest): Promise<string | undefined>;
   /**
    * Remove the run's workspace once its pull request merged: the checkout,
    * its local branch and its credentials. The event file stays.

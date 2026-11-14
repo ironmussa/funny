@@ -228,13 +228,14 @@ export function createWorktreeWorkspaces(deps: WorktreeWorkspaceDeps): Workspace
         }),
       );
     },
+    discard: () => okAsync(undefined),
     exists(request) {
       return existsSync(runSetup(request, deps).paths.checkout);
     },
-    stopLeftovers(request) {
+    async stopLeftovers(request) {
       stopLeftoverStep(request.runDir);
     },
-    lastSessionId(request) {
+    async lastSessionId(request) {
       return readSessionId(runSetup(request, deps).paths.exitMarker);
     },
   };

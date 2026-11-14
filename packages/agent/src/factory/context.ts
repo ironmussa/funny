@@ -64,6 +64,7 @@ export function createFactoryContext(deps: FactoryDeps): FactoryContext {
       eventsPath: runs.eventsPath(run.id),
       repo: run.repo,
       projectPath: project.path,
+      kind: project.workspace,
       base: run.base!,
       branch: run.branch!,
     }),

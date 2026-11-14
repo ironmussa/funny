@@ -23,9 +23,6 @@ const { privateKey } = generateKeyPairSync('rsa', {
 const MODEL_KEY = 'sk-ant-api03-factory-model-key-0123456789';
 const SANDBOX_KEY = 'boat_live_sandbox_credential_9876543210';
 
-/** Until sandbox workspaces exist (#289), a sandbox project is skipped with this warning. */
-const SANDBOX_SKIPPED = '  acme/app: sandbox workspaces are not supported yet; it is skipped\n';
-
 const dirs: string[] = [];
 afterEach(() => {
   while (dirs.length) rmSync(dirs.pop()!, { recursive: true, force: true });
@@ -97,7 +94,7 @@ describe('orchestrator start', () => {
     const ctx = setup();
     writeFileSync(ctx.configPath, configYaml(ctx.project));
     const result = await run(['start', '--config', ctx.configPath], ctx, { env: fullEnv() });
-    expect(result.err).toBe(SANDBOX_SKIPPED);
+    expect(result.err).toBe('');
     expect(result.code).toBe(0);
     expect(result.out).toContain('Issue factory started');
     expect(result.out).toContain('acme/app (sandbox)');
@@ -230,7 +227,7 @@ describe('orchestrator secrets', () => {
         return answers[secret.envName] ?? null;
       },
     });
-    expect(result.err).toBe(SANDBOX_SKIPPED);
+    expect(result.err).toBe('');
     expect(result.code).toBe(0);
     expect(asked).toEqual(Object.keys(answers));
   });

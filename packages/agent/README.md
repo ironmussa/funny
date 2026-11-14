@@ -11,8 +11,8 @@ to end: every minute it admits ready issues, takes each to a draft pull request,
 its CI, has the same agent fix failing checks and conflicts, and marks it ready for review
 once green. Infrastructure failures are retried
 and failed issues are handed back; with `auto_merge` on, green pull requests are merged
-through GitHub's auto-merge; factory runs survive a restart. Sandbox workspaces are not
-built yet (#275); a sandbox project is skipped with a warning.
+through GitHub's auto-merge; factory runs survive a restart. Projects run in a sandbox
+by default, or in a worktree.
 
 ## Running it
 
@@ -28,6 +28,29 @@ The factory home is `FUNNY_FACTORY_HOME` (default `~/.funny/factory`): the defau
 settings file `config.yaml` and the state store `state.db` (SQLite: runs and a per-day
 counter of started runs).
 
+### Sandbox workspaces
+
+A project without `workspace: worktree` runs in a sandbox of the configured provider
+(`sandbox.provider`, through `@funny/sandbox`):
+
+- the sandbox is made from the **funny runner template of the orchestrator's own commit**
+  (`FUNNY_BUILD_COMMIT`, or the pushed HEAD of the checkout it runs from), which the
+  template manager builds when the provider account lacks it. The template holds the whole
+  funny checkout at `/opt/funny`, the step runner included, so the server's template and
+  the factory's are one build; the factory never writes the runner's env file, so funny's
+  runner never starts;
+- the create request carries no secret (its env is empty). The model credential and the
+  run's App token are written through `exec` to root-only files
+  (`/etc/funny-factory/<run>/`); git's credential helper and a `gh` wrapper read the token
+  from there on every call, and the orchestrator rewrites it before it expires;
+- the repository is cloned inside the sandbox with the run's token, and every git and
+  GitHub step of the factory run happens there;
+- a step starts detached (`exec` returns when its command ends); every few seconds the
+  orchestrator renews the token if due, appends the new lines of the step's event file to
+  the run's `events.jsonl` on the host, and reads the exit marker;
+- a sandbox that cannot be created or used is an infrastructure failure; a sandbox project
+  never falls back to a worktree.
+
 ### A factory run
 
 On each tick (every 60 seconds) the orchestrator lists the open issues with the ready
@@ -41,7 +64,7 @@ the others; one where the Factory App is not installed is reported in the log an
 
 1. **claims** the issue through the Factory App: assigns the login, swaps the ready label
    for the in-progress one, and comments;
-2. **works** in `<factory home>/runs/<run id>/`: a git worktree of the project on
+2. **works** in its workspace: a sandbox (see above) or, for a worktree project, in `<factory home>/runs/<run id>/` a git worktree of the project on
    `factory/issue-<n>-<id>` from the base branch (the project's `base`, else the
    repository's default branch), and runs the step runner's `implement` step as a child
    process;

@@ -11,6 +11,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 
+import type { FactorySettings } from '../settings/schema.js';
 import {
   createFactoryHarness,
   git,
@@ -40,9 +41,16 @@ async function tick(f: { tick(): Promise<void>; idle(): Promise<void> }) {
   await f.idle();
 }
 
-/** A factory whose pull request for #7 is open and green; `prepare` runs before CI is read. */
-async function greenPullRequest(autoMerge: boolean, prepare: () => void = () => {}) {
-  const built = h.factory(undefined, { auto_merge: autoMerge });
+/**
+ * A factory whose pull request for #7 is open and green; `prepare` runs before
+ * CI is read. `autoMerge` is the global setting, or settings to override.
+ */
+async function greenPullRequest(
+  autoMerge: boolean | Partial<FactorySettings>,
+  prepare: () => void = () => {},
+) {
+  const overrides = typeof autoMerge === 'boolean' ? { auto_merge: autoMerge } : autoMerge;
+  const built = h.factory(undefined, overrides);
   await tick(built.factory);
   const pull = h.github.pulls[0];
   pull.checks = green;
@@ -77,6 +85,27 @@ describe('a green pull request', () => {
     expect(git(h.project, 'branch', '--list', pull.head)).toBe('');
     expect(await h.status()).toContain('merged');
     expect(h.github.issues.get(7)!.labels).not.toContain('agent-in-progress');
+  });
+
+  test("a project's auto_merge wins over the global setting, either way", async () => {
+    const project = { path: h.project, repo: 'acme/app', workspace: 'worktree' as const };
+    const on = await greenPullRequest({
+      auto_merge: false,
+      projects: [{ ...project, auto_merge: true }],
+    });
+    on.store.close();
+    expect(on.pull).toMatchObject({ merged: true, mergedWith: 'squash' });
+  });
+
+  test('a project with auto_merge off is only marked ready, whatever the global setting', async () => {
+    const project = { path: h.project, repo: 'acme/app', workspace: 'worktree' as const };
+    const { store, pull } = await greenPullRequest({
+      auto_merge: true,
+      projects: [{ ...project, auto_merge: false }],
+    });
+    store.close();
+    expect(pull).toMatchObject({ draft: false, autoMerge: null, merged: false, state: 'open' });
+    expect(await h.status()).toContain('ready');
   });
 
   test('uses another allowed method when the repository does not allow squash', async () => {

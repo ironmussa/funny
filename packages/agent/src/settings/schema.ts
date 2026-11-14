@@ -20,6 +20,8 @@ const projectSchema = z
     base: z.string().min(1).optional(),
     /** The repository's check command; without one, the pull request says no checks ran. */
     check: z.string().min(1).optional(),
+    /** Overrides the global `auto_merge` for this project. */
+    auto_merge: z.boolean().optional(),
   })
   .strict();
 
@@ -76,6 +78,14 @@ export const factorySettingsSchema = z
 
 export type FactorySettings = z.infer<typeof factorySettingsSchema>;
 export type FactoryProject = FactorySettings['projects'][number];
+
+/** Whether a project's green pull requests go through GitHub's auto-merge: its own setting, else the global one. */
+export function autoMergeFor(
+  settings: Pick<FactorySettings, 'auto_merge'>,
+  project: Pick<FactoryProject, 'auto_merge'>,
+): boolean {
+  return project.auto_merge ?? settings.auto_merge;
+}
 
 /** Whether any project runs in a sandbox (and so needs a sandbox credential). */
 export function usesSandbox(settings: Pick<FactorySettings, 'projects'>): boolean {

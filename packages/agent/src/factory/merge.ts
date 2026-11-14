@@ -16,7 +16,7 @@
 
 import type { AutoMergeResult } from '../ports/pull-request-ci.js';
 import type { FactoryRun } from '../ports/run-store.js';
-import type { FactoryProject } from '../settings/schema.js';
+import { autoMergeFor, type FactoryProject } from '../settings/schema.js';
 import { prNumberOf, READY_POLL_MS, type FactoryContext } from './context.js';
 import type { Failures } from './failures.js';
 
@@ -107,7 +107,9 @@ export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
     if (marked.isErr()) {
       return onInfraFailure(run, `could not mark it ready: ${marked.error.message}`, 'waiting_ci');
     }
-    return ctx.settings.auto_merge ? enableAutoMerge(project, run) : ready(project, run, null);
+    return autoMergeFor(ctx.settings, project)
+      ? enableAutoMerge(project, run)
+      : ready(project, run, null);
   }
 
   /** While it waits to merge: back to the fix loop if red, auto-merge again if it was turned off. */

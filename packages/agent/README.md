@@ -176,6 +176,7 @@ projects:
     workspace: sandbox # default; or `worktree` (trusted repositories only)
     base: main # default: the repository's default branch
     check: bun run lint # optional
+    auto_merge: true # optional; overrides the global auto_merge for this project
 ```
 
 `start` refuses an invalid file and names the field (`projects.0.repo: expected

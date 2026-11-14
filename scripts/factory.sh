@@ -22,4 +22,4 @@ if [ -f "$secrets" ]; then
 fi
 
 cd "$(dirname "$0")/.."
-exec bun packages/agent/src/bin/orchestrator.ts start "$@"
+exec bun packages/orchestrator/src/bin/orchestrator.ts start "$@"

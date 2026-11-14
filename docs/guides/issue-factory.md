@@ -11,7 +11,7 @@ ready for review, or merges it through GitHub's auto-merge if you allow that.
 The decision to run it apart from funny is
 [ADR 0001](../adr/0001-standalone-issue-factory.md); the vocabulary (issue factory,
 orchestrator, factory run, factory settings, Factory App) is in
-[`GLOSSARY.md`](../../GLOSSARY.md). The code is `packages/agent` (`@funny/orchestrator`).
+[`GLOSSARY.md`](../../GLOSSARY.md). The code is `packages/orchestrator` (`@funny/orchestrator`).
 
 Read [the security model](#security-model) before you start it on a repository.
 

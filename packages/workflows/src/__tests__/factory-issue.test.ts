@@ -2,7 +2,7 @@
  * The issue factory's default workflow ships as a built-in and parses.
  *
  * What it does when run is tested at the step runner seam
- * (packages/agent, `implement` step); here we only pin what the step runner
+ * (packages/orchestrator, `implement` step); here we only pin what the step runner
  * relies on: its name, its inputs, and a draft pull request against the base.
  */
 

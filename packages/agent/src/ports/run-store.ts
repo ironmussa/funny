@@ -26,5 +26,7 @@ export interface RunStore {
   save(run: FactoryRun): void;
   /** Runs started on `day` (`YYYY-MM-DD`, UTC). */
   startedOn(day: string): number;
+  /** Count one more run started on `day`. */
+  recordStart(day: string): void;
   close(): void;
 }

@@ -75,6 +75,7 @@ export const factorySettingsSchema = z
   });
 
 export type FactorySettings = z.infer<typeof factorySettingsSchema>;
+export type FactoryProject = FactorySettings['projects'][number];
 
 /** Whether any project runs in a sandbox (and so needs a sandbox credential). */
 export function usesSandbox(settings: Pick<FactorySettings, 'projects'>): boolean {

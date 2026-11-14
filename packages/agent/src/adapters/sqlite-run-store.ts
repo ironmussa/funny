@@ -61,8 +61,12 @@ export function openRunStore(path: string): RunStore {
   const startedQuery = db.query<{ started: number }, [string]>(
     'SELECT started FROM daily_starts WHERE day = ?',
   );
+  const recordStartQuery = db.query<unknown, [string]>(
+    'INSERT INTO daily_starts (day, started) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET started = started + 1',
+  );
   return {
     list: () => listQuery.all().map(toRun),
+    recordStart: (day) => void recordStartQuery.run(day),
     save: (run) => void saveQuery.run({ ...run }),
     startedOn: (day) => startedQuery.get(day)?.started ?? 0,
     close: () => db.close(),

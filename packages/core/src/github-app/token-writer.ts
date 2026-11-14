@@ -55,8 +55,16 @@ export interface GithubTokenTarget {
   gitConfigFile?: string;
 }
 
+/** Time as the refresh loop sees it; a fake one lets a test move past a token's expiry. */
+export interface RenewalClock {
+  now(): number;
+  sleep(ms: number): Promise<void>;
+}
+
 export interface GithubTokenWriterDeps<Key extends string>
   extends GithubTokenTarget, RenewalTimings {
+  /** Default: the real clock. */
+  clock?: RenewalClock;
   fetchToken(key: Key): Promise<Result<WorkspaceGithubToken, string>>;
   /** Point git's GitHub credential helper at gh. Default: written to the target's git config. */
   configureGit?: () => Promise<Result<void, string>>;
@@ -178,6 +186,10 @@ export function createGithubTokenWriter<Key extends string>(
   const ghDir = deps.ghConfigDir ?? join(homeDir, '.config', 'gh');
   const configureGit = deps.configureGit ?? (() => configureGitWithGh(homeDir, deps));
   const retryBaseMs = deps.retryBaseMs ?? RETRY_BASE_MS;
+  const clock = deps.clock;
+  const now = () => (clock ? clock.now() : Date.now());
+  /** Interruptible either way: interrupting the fiber abandons a pending fake sleep. */
+  const wait = (ms: number) => (clock ? Effect.promise(() => clock.sleep(ms)) : Effect.sleep(ms));
   let gitConfigured = false;
   let refresh: { key: Key; fiber: Fiber.Fiber<unknown, unknown> } | null = null;
 
@@ -221,7 +233,7 @@ export function createGithubTokenWriter<Key extends string>(
 
   /** Sleep until the held token is due, renew it, repeat. A failed renewal keeps the old expiry. */
   const refreshLoop = (key: Key, expiresAt: string | null): Effect.Effect<never> =>
-    Effect.suspend(() => Effect.sleep(renewalDelay(expiresAt, Date.now(), deps))).pipe(
+    Effect.suspend(() => wait(renewalDelay(expiresAt, now(), deps))).pipe(
       Effect.andThen(renewal(key)),
       Effect.flatMap((renewed) => refreshLoop(key, renewed ?? expiresAt)),
     );

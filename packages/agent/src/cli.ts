@@ -13,7 +13,10 @@ import { homedir } from 'os';
 import { join } from 'path';
 
 import { openRunStore } from './adapters/sqlite-run-store.js';
+import { childProcessStepLauncher } from './adapters/worktree-workspace.js';
+import { composeFactory } from './compose.js';
 import { createFactoryLog } from './infrastructure/factory-log.js';
+import { systemClock } from './ports/clock.js';
 import type { FactoryRun, RunStore } from './ports/run-store.js';
 import { loadFactorySettings } from './settings/load.js';
 import {
@@ -25,6 +28,9 @@ import {
   type SecretSources,
 } from './settings/secrets.js';
 
+/** How often `start` looks for ready issues. */
+const TICK_MS = 60_000;
+
 const USAGE = 'Usage: funny-orchestrator <start [--config <file>] | status>';
 
 export interface OrchestratorIo extends SecretSources {
@@ -32,6 +38,8 @@ export interface OrchestratorIo extends SecretSources {
   env: Record<string, string | undefined>;
   stdout: (text: string) => void;
   stderr: (text: string) => void;
+  /** The current time, for the day `status` counts runs started on. Default: now. */
+  now?: () => Date;
   /** Resolves when `start` should stop (a signal, in the real process). */
   untilStopped: () => Promise<void>;
 }
@@ -41,7 +49,7 @@ const factoryHome = (env: OrchestratorIo['env']) =>
 
 const stateDbPath = (env: OrchestratorIo['env']) => join(factoryHome(env), 'state.db');
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = (io: OrchestratorIo) => (io.now?.() ?? new Date()).toISOString().slice(0, 10);
 
 function usage(io: OrchestratorIo): number {
   io.stderr(`${USAGE}\n`);
@@ -99,9 +107,27 @@ async function start(args: string[], io: OrchestratorIo): Promise<number> {
     });
     for (const project of settings.value.projects) {
       log.info(`  ${project.repo} (${project.workspace})`, { path: project.path });
+      if (project.workspace === 'sandbox') {
+        log.warn(`  ${project.repo}: sandbox workspaces are not supported yet; it is skipped`);
+      }
     }
-    // Admission and runs come in later changes (#283): the factory only waits.
-    await io.untilStopped();
+    const factory = composeFactory(
+      { settings: settings.value, secrets: secrets.value, store, log, home: factoryHome(io.env) },
+      { clock: systemClock, launchStep: childProcessStepLauncher, env: io.env },
+    );
+    let stopping = false;
+    const stopped = io.untilStopped().then(() => {
+      stopping = true;
+    });
+    // A stop requested at startup wins over the first tick.
+    await Promise.race([stopped, new Promise((resolve) => setTimeout(resolve, 0))]);
+    while (!stopping) {
+      await factory.tick();
+      await Promise.race([stopped, systemClock.sleep(TICK_MS)]);
+    }
+    // No new admissions; factory runs in flight finish before the store closes.
+    log.info('Issue factory stopping: waiting for the factory runs in flight');
+    await factory.idle();
     log.info('Issue factory stopped');
     return 0;
   } finally {
@@ -127,7 +153,7 @@ function status(args: string[], io: OrchestratorIo): number {
   try {
     const runs = store.list();
     io.stdout(runs.length === 0 ? 'No factory runs yet.\n' : `${runs.map(formatRun).join('\n')}\n`);
-    io.stdout(`Started today: ${store.startedOn(today())}\n`);
+    io.stdout(`Started today: ${store.startedOn(today(io))}\n`);
     return 0;
   } finally {
     store.close();

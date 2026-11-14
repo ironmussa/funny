@@ -6,8 +6,18 @@
  * workspace) may be.
  */
 
-export type FailureKind = 'agent' | 'infra';
+import { z } from 'zod';
 
-export type StepOutcome =
-  | { kind: 'pr_opened'; prUrl: string; sessionId?: string }
-  | { kind: 'failed'; failure: FailureKind; reason: string; sessionId?: string };
+/** The outcome as the step writes it to its exit marker (extra fields are ignored). */
+export const stepOutcomeSchema = z.union([
+  z.object({ kind: z.literal('pr_opened'), prUrl: z.string(), sessionId: z.string().optional() }),
+  z.object({
+    kind: z.literal('failed'),
+    failure: z.enum(['agent', 'infra']),
+    reason: z.string(),
+    sessionId: z.string().optional(),
+  }),
+]);
+
+export type StepOutcome = z.infer<typeof stepOutcomeSchema>;
+export type FailureKind = Extract<StepOutcome, { kind: 'failed' }>['failure'];

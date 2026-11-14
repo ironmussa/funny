@@ -173,3 +173,51 @@ describe('GitHub token writer with a caller-chosen gh config directory', () => {
     expect(failures).toEqual(['run-1']);
   });
 });
+
+describe('GitHub token writer with an injected clock', () => {
+  test('renews only once the clock passes the renewal time', async () => {
+    let now = Date.parse('2026-11-10T12:00:00Z');
+    const sleepers: Array<{ at: number; wake: () => void }> = [];
+    const clock = {
+      now: () => now,
+      sleep: (ms: number) => new Promise<void>((wake) => sleepers.push({ at: now + ms, wake })),
+    };
+    const advance = (ms: number) => {
+      now += ms;
+      for (const s of sleepers.splice(0)) {
+        if (s.at <= now) s.wake();
+        else sleepers.push(s);
+      }
+    };
+    const dir = mkdtempSync(join(tmpdir(), 'funny-token-clock-'));
+    let n = 0;
+    const writer = createGithubTokenWriter<string>({
+      ghConfigDir: dir,
+      configureGit: async () => ok(undefined),
+      clock,
+      fetchToken: async () =>
+        ok({
+          token: `ghs_${++n}`,
+          expiresAt: new Date(now + 60 * 60 * 1000).toISOString(),
+          repo: 'a/b',
+        }),
+    });
+    const hosts = () => readFileSync(join(dir, 'hosts.yml'), 'utf8');
+    const first = (await writer.ensure('run-1'))._unsafeUnwrap();
+    writer.startRefresh('run-1', first.expiresAt);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(hosts()).toContain('ghs_1');
+
+    advance(50 * 60 * 1000);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(hosts()).toContain('ghs_1');
+
+    advance(6 * 60 * 1000);
+    for (let i = 0; i < 50 && !hosts().includes('ghs_2'); i++) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    expect(hosts()).toContain('ghs_2');
+    await writer.stop();
+    rmSync(dir, { recursive: true, force: true });
+  });
+});

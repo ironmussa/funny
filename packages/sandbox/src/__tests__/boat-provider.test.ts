@@ -147,6 +147,22 @@ describe('boat adapter specifics', () => {
     expect(sent?.body).toEqual({ command: 'echo hi', timeoutSeconds: 30 });
   });
 
+  test('writeFile writes through the files API, never as a command', async () => {
+    const provider = providerWith('boat_test_key');
+    const handle = expectOk(
+      await provider.create({ ownerKey: 't1', sizeId: 'small', env: {}, idempotencyKey: 'k' }),
+    );
+    expectOk(await provider.writeFile!(handle, '/home/user/.secret', 's3cret'));
+    const sent = provider.api.requests.find((r) => r.path.endsWith('/files'));
+    expect(sent).toMatchObject({
+      method: 'PUT',
+      body: { path: '/home/user/.secret', content: 's3cret' },
+    });
+    expect(provider.api.files.get(`${handle.sandboxId}:/home/user/.secret`)).toBe('s3cret');
+    expect(provider.api.commands).toHaveLength(0);
+    expect((await provider.writeFile!(handle, '/etc/secret', 'x')).isErr()).toBe(true);
+  });
+
   test('buildTemplate installs, saves the snapshot and always deletes the throwaway sandbox', async () => {
     const provider = providerWith('boat_test_key');
     const ref = expectOk(

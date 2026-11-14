@@ -9,7 +9,7 @@
  */
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import { factorySettingsSchema, type FactorySettings } from '../settings/schema.js';
@@ -110,6 +110,43 @@ describe('a sandbox factory run', () => {
     expect(h.github.tokens.map((t) => t.token)).toContain(
       readFileSync(join(secrets, 'github-token'), 'utf8'),
     );
+  });
+
+  test('with a provider that writes files, no command carries a secret, renewals included', async () => {
+    h.sandboxWritesFiles = true;
+    const slow: Turns = (step) => [
+      async (call) => {
+        const first = step.token();
+        h.clock.advance(70 * MIN);
+        for (let i = 0; i < 400 && step.token() === first; i++) {
+          await new Promise((r) => setTimeout(r, 5));
+        }
+        return writesHello(call);
+      },
+    ];
+    const { factory: f, store } = h.factory(slow, sandboxSettings());
+    await tick(f);
+    store.close();
+
+    expect(h.github.pulls).toHaveLength(1);
+    const tokens = h.github.tokens.map((t) => t.token);
+    expect(tokens.length).toBeGreaterThan(1);
+    const commands = h.sandbox!.provider.commands.map((c) => c.command).join('\n');
+    for (const secret of ['model-key-for-tests', ...tokens]) {
+      expect(commands).not.toContain(secret);
+      expect(commands).not.toContain(Buffer.from(secret).toString('base64'));
+    }
+    expect(h.sandbox!.provider.writtenFiles.length).toBeGreaterThanOrEqual(3);
+    const secrets = join(h.sandboxSecrets, readdirSync(h.sandboxSecrets)[0]);
+    expect(readFileSync(join(secrets, 'model-key'), 'utf8')).toBe('model-key-for-tests');
+    expect(statSync(join(secrets, 'github-token')).mode & 0o777).toBe(0o600);
+    expect(readFileSync(join(secrets, 'github-token'), 'utf8')).toBe(tokens[tokens.length - 1]);
+    // Nothing is left where the provider wrote it.
+    const dir = h.sandbox!.dirOf([...h.sandbox!.provider.sandboxes.keys()][0]);
+    for (const { path } of h.sandbox!.provider.writtenFiles) {
+      expect(path.startsWith(dir)).toBe(true);
+      expect(existsSync(path)).toBe(false);
+    }
   });
 
   test('a run longer than the token lifetime still pushes from inside the sandbox', async () => {

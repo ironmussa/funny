@@ -18,6 +18,8 @@ export interface BoatApiFake {
   sandboxes: Map<string, FakeSandbox>;
   savedSnapshots: Set<string>;
   commands: Array<{ sandboxId: string; command: string }>;
+  /** Files written through `PUT /sandboxes/:id/files`, by sandbox and path. */
+  files: Map<string, string>;
   failNextCommand(exitCode: number): void;
   expire(sandboxId: string): void;
   respondOnce(status: number, body: any, headers?: Record<string, string>): void;
@@ -37,6 +39,7 @@ export function createBoatApiFake(validKey = 'boat_test_key'): BoatApiFake {
   const savedSnapshots = new Set<string>(['funny-runner-0.0.0-test']);
   const savingPolls = new Map<string, number>();
   const commands: Array<{ sandboxId: string; command: string }> = [];
+  const files = new Map<string, string>();
   let nextExitCode: number | undefined;
   const byIdempotencyKey = new Map<string, string>();
   const requests: BoatApiFake['requests'] = [];
@@ -142,6 +145,20 @@ export function createBoatApiFake(validKey = 'boat_test_key'): BoatApiFake {
     return json(200, { ok: true, exitCode, stdout: 'ok', stderr: exitCode ? 'boom' : '' });
   };
 
+  // As the real API answered (checked live): only the work directory or /tmp.
+  const writeFile: Handler = ({ method, body, match }) => {
+    if (method !== 'PUT') return undefined;
+    const sandbox = sandboxes.get(match[1]);
+    if (!sandbox) return error(404, 'not_found');
+    if (sandbox.state !== 'ready') return error(409, 'machine_not_running');
+    const path = String(body?.path ?? '');
+    if (!/^\/(home\/user|tmp)\//.test(path)) {
+      return error(400, 'invalid_path', 'Path must resolve under /home/user or /tmp');
+    }
+    files.set(`${sandbox.id}:${path}`, String(body?.content ?? ''));
+    return json(200, { ok: true, type: 'file.written', success: true, path, encoding: 'utf8' });
+  };
+
   /**
    * Routes in match order; a handler returning `undefined` falls through to the
    * next route (and finally to `unsupported_in_fake`).
@@ -188,6 +205,7 @@ export function createBoatApiFake(validKey = 'boat_test_key'): BoatApiFake {
     { method: 'POST', path: /^\/sandboxes$/, handle: createSandbox },
     { path: /^\/sandboxes\/([^/]+)(\/(stop|resume|host))?$/, handle: sandboxRoute },
     { path: /^\/sandboxes\/([^/]+)\/commands$/, handle: runCommand },
+    { path: /^\/sandboxes\/([^/]+)\/files$/, handle: writeFile },
   ];
 
   const route = (method: string, path: string, headers: Record<string, string>, body: any) => {
@@ -219,6 +237,7 @@ export function createBoatApiFake(validKey = 'boat_test_key'): BoatApiFake {
     sandboxes,
     savedSnapshots,
     commands,
+    files,
     failNextCommand: (exitCode) => {
       nextExitCode = exitCode;
     },

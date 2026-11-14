@@ -114,20 +114,41 @@ export function createSandboxSession(deps: SandboxWorkspaceDeps) {
     };
   };
 
-  /** Write `value` to a root-only file through `exec` (never through the create request). */
-  const writeSecret = (handle: SandboxHandle, file: string, value: string) =>
-    exec(
-      handle,
-      'writing a secret',
-      `printf %s ${q(b64(value))} | base64 -d | ${layout.sudo} tee ${q(file)} >/dev/null && ${layout.sudo} chmod 600 ${q(file)}`,
-    );
+  /**
+   * Write `value` to a root-only file, never through the create request. A
+   * provider that writes files gets the value outside any command (a provider
+   * may keep its commands, Boat does): it lands in the user's home and is moved
+   * into place. Otherwise it goes through `exec`, encoded.
+   */
+  const writeSecret = (record: SandboxRecord, file: string, value: string) => {
+    const into = (input: string) =>
+      `${layout.sudo} tee ${q(file)} ${input} >/dev/null && ${layout.sudo} chmod 600 ${q(file)}`;
+    if (!provider.writeFile) {
+      return exec(
+        record.handle,
+        'writing a secret',
+        `printf %s ${q(b64(value))} | base64 -d | ${into('')}`,
+      );
+    }
+    const staged = `${record.home}/.funny-secret-${randomUUID()}`;
+    return provider
+      .writeFile(record.handle, staged, value)
+      .mapErr(failure)
+      .andThen(() =>
+        exec(
+          record.handle,
+          'writing a secret',
+          `${into(`< ${q(staged)}`)}; moved=$?; rm -f ${q(staged)}; exit $moved`,
+        ),
+      );
+  };
 
   const writeToken = (record: SandboxRecord, request: WorkspaceRequest) =>
     deps.tokens
       .forRepo(request.repo)
       .mapErr((e) => `no GitHub token: ${e.message}`)
       .andThen((token) =>
-        writeSecret(record.handle, paths(record, request.runId).token, token.token).map(() =>
+        writeSecret(record, paths(record, request.runId).token, token.token).map(() =>
           Date.parse(token.expiresAt),
         ),
       );
@@ -184,7 +205,7 @@ export function createSandboxSession(deps: SandboxWorkspaceDeps) {
       file(`${p.work}/bin/run-step`, runStep, '700'),
     ].join(' && ');
     return exec(record.handle, 'setting up the sandbox', command)
-      .andThen(() => writeSecret(record.handle, p.modelKey, deps.modelKey))
+      .andThen(() => writeSecret(record, p.modelKey, deps.modelKey))
       .andThen(() => writeToken(record, request));
   }
 
@@ -211,7 +232,7 @@ export function createSandboxSession(deps: SandboxWorkspaceDeps) {
           ownerKey: request.runId,
           sizeId: deps.sizeId,
           template,
-          // Bootstrap only, and the factory needs none: secrets go through exec.
+          // Bootstrap only, and the factory needs none: secrets go through `writeSecret`.
           env: {},
           lifetimeMs: caps.maxLifetimeMs ?? undefined,
           // A new sandbox each time: a rebuilt one must not be answered with the one gone.

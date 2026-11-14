@@ -283,6 +283,12 @@ export function createBoatProvider(
       }).map(execResultFrom);
     },
 
+    // Outside the command history Boat keeps per sandbox; only the work directory or /tmp.
+    writeFile: (handle, path, content) =>
+      call('PUT', `/sandboxes/${handle.sandboxId}/files`, { body: { path, content } }).map(
+        () => undefined,
+      ),
+
     // A token-gated URL on on.boat.dev; the same port returns the same URL and token.
     exposePort: (handle, port) =>
       call('POST', `/sandboxes/${handle.sandboxId}/host`, {

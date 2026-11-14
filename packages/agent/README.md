@@ -21,6 +21,15 @@ draft pull request against the base that closes the issue. It prints `pr_url=…
 request and end as an agent failure; git or GitHub errors end as an infrastructure
 failure.
 
+A repository can replace the workflow by committing its own at
+`.funny/workflows/factory-issue.yaml` (or `.yml`; `.yaml` wins) on the base branch, for
+example to use its own skills. It is read from the base branch, never from the run's
+branch or working tree, so the agent cannot change what a later step runs. It must be named `factory-issue`; it receives the same inputs
+(`issue_number`, `issue_title`, `issue_body`, `base`, `branch`, `check_command`,
+`pr_body`), and its pull request is always opened as a draft. An override that is
+present but invalid fails the step as an agent failure naming the file; the default is
+never used in its place.
+
 ## Layout
 
 `adapters/` and `bin/` as in the thread scheduler package (`packages/scheduler`), with
@@ -45,6 +54,7 @@ src/
     workspace-action-provider.ts  workflow actions inside a workspace (agent, commands, git, PR)
   steps/
     implement.ts     the `implement` step: runs the `factory-issue` workflow
+    factory-workflow.ts  picks the repository's override or the built-in workflow
   config/          YAML config loading (`.pipeline/config.yaml`) and its zod schema
   infrastructure/  logger, async mutex
   agents/reviewer/ PR reviewer (exported as `@funny/orchestrator/review`)

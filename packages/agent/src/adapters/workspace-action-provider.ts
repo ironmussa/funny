@@ -29,6 +29,7 @@ import { err, ok } from 'neverthrow';
 
 import type { FailureKind } from '../domain/step-outcome.js';
 import type { PullRequestOpener } from '../ports/pull-requests.js';
+import { resolveBaseRef } from './base-ref.js';
 
 /** Tools that wait for a person; nobody answers in an unattended run. */
 const INTERACTIVE_TOOLS = ['AskUserQuestion', 'ExitPlanMode'];
@@ -223,9 +224,7 @@ export class WorkspaceActionProvider implements ActionProvider {
 
   private commitsAheadOfBase() {
     const { cwd, base } = this.options;
-    return git(['rev-parse', '--verify', '--quiet', `origin/${base}`], cwd)
-      .map(() => `origin/${base}`)
-      .orElse(() => git(['rev-parse', '--verify', base], cwd).map(() => base))
+    return resolveBaseRef(cwd, base)
       .andThen((baseRef) => git(['rev-list', '--count', `${baseRef}..HEAD`], cwd))
       .andThen((count) => {
         const ahead = Number.parseInt(count.trim(), 10);

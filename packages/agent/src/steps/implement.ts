@@ -1,7 +1,8 @@
 /**
  * The `implement` step of a factory run.
  *
- * Runs the built-in `factory-issue` workflow in the workspace (`cwd`, already
+ * Runs the `factory-issue` workflow (the repository's override, else the
+ * built-in one; see `factory-workflow.ts`) in the workspace (`cwd`, already
  * on the run's branch) with the pipelines engine and a workspace-local action
  * provider: the agent implements the issue, the checks run with in-place fixes,
  * and the result is committed with the configured author, pushed, and opened as
@@ -17,8 +18,7 @@ import { dirname } from 'path';
 
 import type { IAgentProcessFactory } from '@funny/core/agents';
 import { nullReporter, runPipeline, type StepProgressData } from '@funny/pipelines';
-import { loadWorkflowCatalog } from '@funny/workflows';
-import { compileYamlPipeline, type YamlPipelineContext } from '@funny/workflows/compiler';
+import type { YamlPipelineContext } from '@funny/workflows/compiler';
 import { z } from 'zod';
 
 import { JsonlRunReporter } from '../adapters/jsonl-run-reporter.js';
@@ -27,8 +27,7 @@ import { buildPullRequestBody } from '../domain/pull-request-body.js';
 import type { StepOutcome } from '../domain/step-outcome.js';
 import type { PullRequestOpener } from '../ports/pull-requests.js';
 import type { RunReporter } from '../ports/run-reporter.js';
-
-const FACTORY_ISSUE_WORKFLOW = 'factory-issue';
+import { FACTORY_ISSUE_WORKFLOW, loadFactoryWorkflow } from './factory-workflow.js';
 
 export const implementStepSpecSchema = z.object({
   runId: z.string().min(1),
@@ -96,16 +95,22 @@ export async function runImplementStep(
     branch: spec.branch,
     base: spec.base,
   });
+
   report('workflow.started', workflowEvent);
 
   let outcome: StepOutcome;
   try {
-    outcome = await runWorkflow(spec, deps.cwd, provider, (stepId, progress) =>
-      report(`workflow.step.${progress.status}`, {
-        ...workflowEvent,
-        step_name: stepId,
-        ...(progress.error ? { error: progress.error } : {}),
-      }),
+    outcome = await runWorkflow(
+      spec,
+      deps.cwd,
+      provider,
+      (stepId, progress) =>
+        report(`workflow.step.${progress.status}`, {
+          ...workflowEvent,
+          step_name: stepId,
+          ...(progress.error ? { error: progress.error } : {}),
+        }),
+      (source, path) => report('factory.workflow_selected', { source, ...(path ? { path } : {}) }),
     );
   } catch (err) {
     // Whatever went wrong, the step still ends with an outcome and a marker.
@@ -144,13 +149,11 @@ async function runWorkflow(
   cwd: string,
   provider: WorkspaceActionProvider,
   onStepProgress: (stepId: string, progress: StepProgressData) => void,
+  onWorkflowChosen: (source: 'repository' | 'built-in', path?: string) => void,
 ): Promise<StepOutcome> {
-  const { workflows, warnings } = await loadWorkflowCatalog();
-  const entry = workflows.get(FACTORY_ISSUE_WORKFLOW);
-  if (!entry) {
-    const reason = `built-in workflow "${FACTORY_ISSUE_WORKFLOW}" not found: ${warnings.join('; ')}`;
-    return { kind: 'failed', failure: 'infra', reason };
-  }
+  const workflow = await loadFactoryWorkflow(cwd, spec.base);
+  if (!workflow.ok) return { kind: 'failed', failure: workflow.failure, reason: workflow.reason };
+  onWorkflowChosen(workflow.source, workflow.path);
 
   const ctx: YamlPipelineContext = {
     provider,
@@ -171,7 +174,7 @@ async function runWorkflow(
     outputs: {},
   };
 
-  const result = await runPipeline(compileYamlPipeline(entry.workflow), ctx);
+  const result = await runPipeline(workflow.pipeline, ctx);
   const sessionId = provider.sessionId;
 
   if (result.outcome === 'completed' && provider.prUrl) {

@@ -165,9 +165,6 @@ export function createGithubAppPullRequests(deps: {
 
     enableAutoMerge(repo, number) {
       return github.json<RestRepo>(repo, 'GET', `/repos/${repo}`).andThen((settings) => {
-        if (settings.allow_auto_merge === false) {
-          return okAsync(unavailable(AUTO_MERGE_NOT_ALLOWED));
-        }
         // The settings GitHub shows say which methods are allowed; when it shows
         // none, every method is tried in order and GitHub decides.
         const known = MERGE_METHODS.some(([, setting]) => settings[setting] !== undefined);
@@ -176,7 +173,11 @@ export function createGithubAppPullRequests(deps: {
         );
         if (methods.length === 0)
           return okAsync(unavailable('the repository allows no merge method'));
-        return pull(repo, number).andThen((pr) => tryMethods(repo, number, pr, methods));
+        return pull(repo, number).andThen((pr) =>
+          settings.allow_auto_merge === false
+            ? mergeWhenClean(repo, number, pr, methods[0])
+            : tryMethods(repo, number, pr, methods),
+        );
       });
     },
 
@@ -251,10 +252,24 @@ export function createGithubAppPullRequests(deps: {
   ): ResultAsync<AutoMergeResult | { kind: 'method-refused' }, IssueSourceError> {
     if (!error) return okAsync({ kind: 'enabled', method });
     if (/clean status/i.test(error)) return mergeNow(repo, number, pr.head.sha, method);
-    if (/auto.?merge is not allowed/i.test(error))
-      return okAsync(unavailable(AUTO_MERGE_NOT_ALLOWED));
+    if (/auto.?merge is not allowed/i.test(error)) return mergeWhenClean(repo, number, pr, method);
     if (/merge method|not allowed/i.test(error)) return okAsync({ kind: 'method-refused' });
     return errAsync({ message: `GitHub refused to enable auto-merge: ${error}` });
+  }
+
+  /**
+   * Without GitHub's auto-merge (a private repository on GitHub Free, or the
+   * setting off), the factory does its job: it merges once GitHub reports every
+   * requirement met (`clean`), and looks again later otherwise. The merge itself
+   * still goes through branch protections.
+   */
+  function mergeWhenClean(repo: string, number: number, pr: RestPull, method: MergeMethod) {
+    return MERGEABLE_STATES.has(pr.mergeable_state ?? '')
+      ? mergeNow(repo, number, pr.head.sha, method)
+      : okAsync<AutoMergeResult, IssueSourceError>({
+          kind: 'not-mergeable',
+          reason: `${AUTO_MERGE_NOT_ALLOWED}, so the factory merges it once GitHub reports every requirement met (now: ${pr.mergeable_state ?? 'unknown'})`,
+        });
   }
 
   /** Merge now, only if the head is still the commit whose CI was green. */
@@ -271,6 +286,9 @@ export function createGithubAppPullRequests(deps: {
 }
 
 const AUTO_MERGE_NOT_ALLOWED = 'the repository does not allow auto-merge';
+
+/** `mergeable_state`s in which GitHub reports every requirement met. */
+const MERGEABLE_STATES = new Set(['clean', 'has_hooks']);
 
 const ENABLE_AUTO_MERGE =
   'mutation($id: ID!, $method: PullRequestMergeMethod!) { enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: $method }) { pullRequest { number } } }';

@@ -137,15 +137,36 @@ describe('a green pull request', () => {
     expect(await h.status()).toContain('merged');
   });
 
-  test('stays ready when the repository does not allow auto-merge', async () => {
+  test('merges it itself when the repository does not allow auto-merge and nothing is missing', async () => {
     const { store, pull } = await greenPullRequest(true, () => {
       h.github.repoSettings.allow_auto_merge = false;
     });
     store.close();
-    expect(pull).toMatchObject({ draft: false, merged: false });
-    const out = await h.status();
-    expect(out).toContain('ready');
-    expect(out).toContain('does not allow auto-merge');
+    expect(pull).toMatchObject({ merged: true, mergedWith: 'squash', autoMerge: null });
+    expect(h.github.deletedBranches).toEqual([pull.head]);
+    expect(await h.status()).toContain('merged');
+  });
+
+  test('without auto-merge, a required review is waited for; nothing bypasses it', async () => {
+    let pull = h.github.pulls[0];
+    const built = await greenPullRequest(true, () => {
+      h.github.repoSettings.allow_auto_merge = false;
+      pull = h.github.pulls[0];
+      pull.requiresReview = true;
+    });
+    for (let i = 0; i < 3; i++) {
+      h.clock.advance(POLL);
+      await tick(built.factory);
+    }
+    expect(pull).toMatchObject({ merged: false, autoMerge: null });
+    expect(await h.status()).toContain('merging');
+
+    pull.approved = true;
+    h.clock.advance(POLL);
+    await tick(built.factory);
+    built.store.close();
+    expect(pull).toMatchObject({ merged: true, mergedWith: 'squash' });
+    expect(await h.status()).toContain('merged');
   });
 
   test('a factory run waiting to merge holds no concurrency slot', async () => {

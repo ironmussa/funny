@@ -7,7 +7,58 @@ GitHub issues marked ready for an agent into pull requests. Vocabulary is in the
 
 **Status:** being rebuilt. The old factory attempt (HTTP server, Chat Completions planner,
 session store, webhook workflows) has been removed. The step runner's `implement` step
-works; the long-running orchestrator is still a stub.
+works; the orchestrator reads its settings and secrets and `start` / `status` run, but it
+does not admit issues yet.
+
+## Running it
+
+The factory is started on its own, never by `bun run dev`:
+
+```bash
+bun run factory:start                      # settings from ~/.funny/factory/config.yaml
+bun run factory:start -- --config ./factory.yaml
+bun run factory:status                     # the runs in the state store
+```
+
+The factory home is `FUNNY_FACTORY_HOME` (default `~/.funny/factory`): the default
+settings file `config.yaml` and the state store `state.db` (SQLite: runs and a per-day
+counter of started runs).
+
+### Factory settings
+
+```yaml
+github:
+  login: octo-owner # only this user's issues are admitted
+  author: { name: Octo Owner, email: octo@example.com } # commit author
+model: sonnet
+labels: { ready: ready-for-agent, in_progress: agent-in-progress } # defaults
+limits: { concurrency: 2, daily: 10 } # defaults
+auto_merge: false # default
+retry_delay_minutes: 30 # default
+sandbox: { provider: boat, size: small } # required when a project uses a sandbox
+projects:
+  - path: ~/code/app # local checkout (relative to this file if not absolute)
+    repo: acme/app
+    workspace: sandbox # default; or `worktree` (trusted repositories only)
+    base: main # default: the repository's default branch
+    check: bun run lint # optional
+```
+
+`start` refuses an invalid file and names the field (`projects.0.repo: expected
+owner/name`, `colour: unknown field`), and refuses a file with a key or value that looks
+like a secret.
+
+### Secrets
+
+Given at startup only, from the environment or, on a terminal, a prompt (no echo). They
+live in memory and are replaced by `[redacted]` in every log line.
+
+| Variable                           | What                                                            |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `FUNNY_FACTORY_MODEL_KEY`          | model credential: use a dedicated key with a spending limit     |
+| `FUNNY_FACTORY_APP_ID`             | the Factory App's numeric id                                    |
+| `FUNNY_FACTORY_APP_PRIVATE_KEY`    | its private key (PEM; `\n` escapes allowed)                     |
+| `FUNNY_FACTORY_SANDBOX_CREDENTIAL` | the sandbox provider's credential (only with a sandbox project) |
 
 ## The `implement` step
 
@@ -46,20 +97,25 @@ src/
     tracker.ts         issue source
     pull-requests.ts   opening a draft pull request from a workspace
     run-reporter.ts    a run's events, in funny's ingest event shape
+    run-store.ts       the factory's runs and per-day counter
   adapters/        implementations of the ports
     github-tracker.ts  issues through the `gh` CLI
     event-bus.ts       in-memory pub/sub with a JSONL file per run
     gh-pull-request-opener.ts  `gh pr create --draft`
     jsonl-run-reporter.ts      appends a run's events to its event file
+    sqlite-run-store.ts        the run store in `state.db` (`bun:sqlite`)
     workspace-action-provider.ts  workflow actions inside a workspace (agent, commands, git, PR)
   steps/
     implement.ts     the `implement` step: runs the `factory-issue` workflow
     factory-workflow.ts  picks the repository's override or the built-in workflow
-  config/          YAML config loading (`.pipeline/config.yaml`) and its zod schema
-  infrastructure/  logger, async mutex
+  settings/        factory settings (schema, loading, refusals) and secrets
+  cli.ts           the `start` and `status` commands, with their edges injected
+  config/          the old YAML config loading (`.pipeline/config.yaml`)
+  infrastructure/  redacting factory log (the orchestrator logs only through it), TTY secret
+                   prompt, async mutex, pino logger (old modules)
   agents/reviewer/ PR reviewer (exported as `@funny/orchestrator/review`)
   bin/
-    orchestrator.ts  long-running process: `start`, `status` (stub)
+    orchestrator.ts  long-running process: `start`, `status`
     step.ts          step runner, runs inside a factory run's workspace:
                      `funny-orchestrator-step implement --spec <spec.json>`
 ```

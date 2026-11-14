@@ -1,19 +1,24 @@
 #!/usr/bin/env bun
 /**
- * funny-orchestrator — the long-running issue factory process.
- *
- * Commands: `start` (run the factory) and `status` (list factory runs).
- * Not implemented yet: the issue factory is being rebuilt (see #275).
+ * funny-orchestrator — the long-running issue factory process (see `cli.ts`).
+ * Started on its own (`bun run factory:start`), never by `bun run dev`.
  */
 
-const USAGE = 'Usage: funny-orchestrator <start|status>';
+import { runOrchestratorCli } from '../cli.js';
+import { ttyPrompt } from '../infrastructure/tty-prompt.js';
 
-const command = process.argv[2];
+const stopped = () =>
+  new Promise<void>((resolve) => {
+    process.once('SIGINT', () => resolve());
+    process.once('SIGTERM', () => resolve());
+  });
 
-if (command === 'start' || command === 'status') {
-  console.error(`funny-orchestrator ${command}: not implemented yet`);
-  process.exit(1);
-}
-
-console.error(USAGE);
-process.exit(command === '--help' || command === '-h' ? 0 : 2);
+const code = await runOrchestratorCli(process.argv.slice(2), {
+  env: process.env,
+  stdout: (text) => process.stdout.write(text),
+  stderr: (text) => process.stderr.write(text),
+  isTTY: Boolean(process.stdin.isTTY && process.stderr.isTTY),
+  prompt: ttyPrompt,
+  untilStopped: stopped,
+});
+process.exit(code);

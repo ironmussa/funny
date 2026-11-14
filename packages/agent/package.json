@@ -20,6 +20,7 @@
   "dependencies": {
     "@funny/core": "workspace:*",
     "@funny/pipelines": "workspace:*",
+    "@funny/sandbox": "workspace:*",
     "@funny/shared": "workspace:*",
     "@funny/workflows": "workspace:*",
     "eventemitter3": "^5.0.1",

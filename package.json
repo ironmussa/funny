@@ -125,7 +125,9 @@
     "doctor": "npx react-doctor@latest",
     "lint:proofs": "bun scripts/fitness/check-proof-lint.ts",
     "typecheck:proofs": "tsc -p packages/server/tsconfig.proofs.json --noEmit",
-    "fitness:trpc-api": "bun scripts/fitness/check-trpc-api.ts --self-test"
+    "fitness:trpc-api": "bun scripts/fitness/check-trpc-api.ts --self-test",
+    "factory:start": "bun packages/agent/src/bin/orchestrator.ts start",
+    "factory:status": "bun packages/agent/src/bin/orchestrator.ts status"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^1.2.1",

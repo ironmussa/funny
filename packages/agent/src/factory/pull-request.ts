@@ -11,8 +11,9 @@ import type { CiState } from '../ports/pull-request-ci.js';
 import type { FactoryRun } from '../ports/run-store.js';
 import type { FactoryProject } from '../settings/schema.js';
 import type { FixStepSpec } from '../steps/fix.js';
-import { prNumberOf, type FactoryContext } from './context.js';
+import { prNumberOf, READY_POLL_MS, type FactoryContext } from './context.js';
 import type { Failures } from './failures.js';
+import { createMergeFollowUp } from './merge.js';
 
 /** With no check reported this long after a push, the repository has no CI. */
 const NO_CI_GRACE_MS = 15 * 60 * 1000;
@@ -20,6 +21,7 @@ const NO_CI_GRACE_MS = 15 * 60 * 1000;
 export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failures) {
   const { runs, settings, clock } = ctx;
   const { giveUp, onInfraFailure, onStepFailed } = failures;
+  const merge = createMergeFollowUp(ctx, failures);
 
   /** A `fix` step for a failing check or a conflict, in the run's own checkout. */
   async function fixRun(
@@ -65,6 +67,8 @@ export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failure
         ...ctx.waitingForCi(),
         sessionId: outcome.sessionId ?? fixing.sessionId,
         pushedAt: clock.now().toISOString(),
+        // A new phase: retries of infrastructure failures start over.
+        infraRetries: 0,
       });
     } finally {
       await workspace.value.release();
@@ -93,11 +97,18 @@ export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failure
     return fixRun(project, fixing, problem);
   }
 
-  /** Take the pull request out of draft; the run is `ready`. */
-  async function markReady(run: FactoryRun, number: number, reason: string | null) {
+  /** Take the pull request out of draft without merging (no CI to wait for). */
+  async function markReadyWithoutCi(run: FactoryRun, number: number) {
     const marked = await ctx.pullRequests.markReady(run.repo, number);
-    if (marked.isOk()) return runs.transition(run, 'ready', { reason, nextCheckAt: undefined });
-    return onInfraFailure(run, `could not mark it ready: ${marked.error.message}`, 'waiting_ci');
+    if (marked.isErr()) {
+      return onInfraFailure(run, `could not mark it ready: ${marked.error.message}`, 'waiting_ci');
+    }
+    // Never merged by the factory: nothing has checked it.
+    return runs.transition(run, 'ready', {
+      reason: 'no CI reported any check; marked ready without CI',
+      nextCheckAt: ctx.later(READY_POLL_MS),
+      infraRetries: 0,
+    });
   }
 
   /** No check reported: CI may not have started, or the repository has none. */
@@ -106,11 +117,11 @@ export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failure
     if (clock.now().getTime() - pushedAt < NO_CI_GRACE_MS) {
       return runs.update(run, ctx.waitingForCi('waiting for CI to report a check'));
     }
-    return markReady(run, number, 'no CI reported any check; marked ready without CI');
+    return markReadyWithoutCi(run, number);
   }
 
   /** One look at a waiting run's pull request. */
-  return async function followCi(project: FactoryProject, run: FactoryRun): Promise<FactoryRun> {
+  async function followCi(project: FactoryProject, run: FactoryRun): Promise<FactoryRun> {
     const number = prNumberOf(run.prUrl);
     const ci = await ctx.pullRequests.ciState(run.repo, number);
     if (ci.isErr()) {
@@ -122,9 +133,14 @@ export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failure
       case 'none':
         return onNoChecks(run, number);
       case 'green':
-        return markReady(run, number, null);
+        return merge.onGreen(project, run);
       default:
         return onRed(project, run, ci.value);
     }
+  }
+
+  /** The next look at a run's pull request, by the state it waits in. */
+  return function followPullRequest(project: FactoryProject, run: FactoryRun) {
+    return run.state === 'waiting_ci' ? followCi(project, run) : merge.follow(project, run);
   };
 }

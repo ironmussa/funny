@@ -2,16 +2,18 @@
  * The issue factory. On each tick it follows the pull requests of its runs,
  * retries what is due, then admits ready issues:
  *
- *   queued → claiming → working → pr_open → waiting_ci ⇄ fixing → ready
+ *   queued → claiming → working → pr_open → waiting_ci ⇄ fixing → ready | merging → merged
  *
  * - `factory/implement-run.ts`: a new run claims its issue and runs the
  *   `implement` step to a draft pull request.
  * - `factory/pull-request.ts`: a run waiting for CI looks at its pull request
  *   every 3 minutes; green marks it ready, red runs a `fix`.
+ * - `factory/merge.ts`: with auto-merge on, GitHub merges a green pull request
+ *   (`merging`); once merged, the factory run's workspace and branch are removed.
  * - `factory/failures.ts`: infrastructure failures are retried, agent
  *   failures hand the issue back.
  * - `queued`, `claiming`, `working` and `fixing` hold a concurrency slot;
- *   waiting does not.
+ *   waiting (for CI, to merge) does not.
  *
  * Composed from ports, so the same code runs in production (`cli.ts`) and in
  * the whole-factory tests, which fake only GitHub (over HTTP), the agent and
@@ -21,7 +23,7 @@
 
 import { randomUUID } from 'crypto';
 
-import { blocksAdmission, needsHandBack } from './domain/factory-run.js';
+import { blocksAdmission, needsHandBack, type RunState } from './domain/factory-run.js';
 import { createFactoryContext, type FactoryDeps } from './factory/context.js';
 import { createFailures } from './factory/failures.js';
 import { createImplementRun } from './factory/implement-run.js';
@@ -31,6 +33,9 @@ import type { FactoryRun } from './ports/run-store.js';
 import type { FactoryProject } from './settings/schema.js';
 
 export type { FactoryDeps } from './factory/context.js';
+
+/** States in which a run waits on its pull request and looks at it now and then. */
+const FOLLOWED_STATES = new Set<RunState>(['waiting_ci', 'merging', 'ready']);
 
 export interface Factory {
   /** Follow pull requests and admit what can be admitted now; the work continues in the background. */
@@ -110,10 +115,10 @@ export function createFactory(deps: FactoryDeps): Factory {
     }
   }
 
-  /** Failed runs whose issue could not be handed back yet. */
-  function retryHandBacks(projects: FactoryProject[]): void {
-    for (const [run] of idleRuns(projects)) {
-      if (needsHandBack(run)) track(run.id, () => failures.handBack(run));
+  /** Failed runs whose issue could not be handed back yet, watched project or not. */
+  function retryHandBacks(): void {
+    for (const run of store.list()) {
+      if (needsHandBack(run) && !busy.has(run.id)) track(run.id, () => failures.handBack(run));
     }
   }
 
@@ -133,7 +138,7 @@ export function createFactory(deps: FactoryDeps): Factory {
   /** Runs waiting on their pull request whose next look is due. */
   function followDueRuns(projects: FactoryProject[]): void {
     for (const [run, project] of idleRuns(projects)) {
-      if (run.state === 'waiting_ci' && ctx.isDue(run.nextCheckAt)) {
+      if (FOLLOWED_STATES.has(run.state as RunState) && ctx.isDue(run.nextCheckAt)) {
         track(run.id, () => followPullRequest(project, run));
       }
     }
@@ -145,7 +150,7 @@ export function createFactory(deps: FactoryDeps): Factory {
       const projects = settings.projects.filter((p) => p.workspace === 'worktree');
       followDueRuns(projects);
       retryDueRuns(projects);
-      retryHandBacks(projects);
+      retryHandBacks();
       for (const project of projects) await admit(project);
     },
     async idle() {

@@ -50,4 +50,9 @@ export interface WorkspaceProvider {
   prepare(request: WorkspaceRequest): ResultAsync<RunWorkspace, string>;
   /** The run's existing checkout, for a later step. */
   reopen(request: WorkspaceRequest): ResultAsync<RunWorkspace, string>;
+  /**
+   * Remove the run's workspace once its pull request merged: the checkout,
+   * its local branch and its credentials. The event file stays.
+   */
+  remove(request: WorkspaceRequest): ResultAsync<void, string>;
 }

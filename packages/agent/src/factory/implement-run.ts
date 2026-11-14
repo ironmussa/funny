@@ -91,6 +91,8 @@ export function createImplementRun(ctx: FactoryContext, failures: Failures) {
         prUrl: outcome.prUrl,
         sessionId: outcome.sessionId,
         pushedAt: clock.now().toISOString(),
+        // A new phase: retries of infrastructure failures start over.
+        infraRetries: 0,
       });
       return runs.transition(run, 'waiting_ci', ctx.waitingForCi());
     } finally {

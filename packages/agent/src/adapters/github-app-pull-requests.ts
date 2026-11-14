@@ -8,17 +8,42 @@
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import type { IssueSourceError } from '../ports/issue-source.js';
-import type { CiState, PullRequestCi } from '../ports/pull-request-ci.js';
+import type {
+  AutoMergeResult,
+  CiState,
+  MergeMethod,
+  MergeState,
+  PullRequestCi,
+} from '../ports/pull-request-ci.js';
 import type { FailingCheck } from '../steps/fix.js';
 import type { FactoryAppTokens } from './factory-app.js';
 import { createFactoryGithub, type FactoryGithub } from './factory-github.js';
 
 interface RestPull {
   node_id: string;
+  state?: string;
+  merged?: boolean;
+  auto_merge?: unknown;
   mergeable: boolean | null;
   mergeable_state?: string;
   head: { sha: string };
 }
+
+interface RestRepo {
+  allow_squash_merge?: boolean;
+  allow_merge_commit?: boolean;
+  allow_rebase_merge?: boolean;
+  allow_auto_merge?: boolean;
+}
+
+/** Merge methods in the factory's order of preference, with the setting that allows each. */
+const MERGE_METHODS: Array<[MergeMethod, keyof RestRepo]> = [
+  ['squash', 'allow_squash_merge'],
+  ['merge', 'allow_merge_commit'],
+  ['rebase', 'allow_rebase_merge'],
+];
+
+type GraphqlAnswer = { errors?: Array<{ message: string }> };
 
 interface RestCheckRun {
   id: number;
@@ -130,17 +155,109 @@ export function createGithubAppPullRequests(deps: {
       const mutation =
         'mutation($id: ID!) { markPullRequestReadyForReview(input: { pullRequestId: $id }) { pullRequest { isDraft } } }';
       return pull(repo, number)
-        .andThen((pr) =>
-          github.json<{ errors?: Array<{ message: string }> }>(repo, 'POST', '/graphql', {
-            query: mutation,
-            variables: { id: pr.node_id },
-          }),
-        )
+        .andThen((pr) => graphql(repo, mutation, { id: pr.node_id }))
         .andThen((answer) =>
           answer.errors?.length
             ? errAsync({ message: `GitHub refused to mark it ready: ${answer.errors[0].message}` })
             : okAsync(undefined),
         );
     },
+
+    enableAutoMerge(repo, number) {
+      return github.json<RestRepo>(repo, 'GET', `/repos/${repo}`).andThen((settings) => {
+        if (settings.allow_auto_merge === false) {
+          return okAsync(unavailable(AUTO_MERGE_NOT_ALLOWED));
+        }
+        // The settings GitHub shows say which methods are allowed; when it shows
+        // none, every method is tried in order and GitHub decides.
+        const known = MERGE_METHODS.some(([, setting]) => settings[setting] !== undefined);
+        const methods = MERGE_METHODS.filter(([, setting]) => !known || settings[setting]).map(
+          ([method]) => method,
+        );
+        if (methods.length === 0)
+          return okAsync(unavailable('the repository allows no merge method'));
+        return pull(repo, number).andThen((pr) => tryMethods(repo, number, pr, methods));
+      });
+    },
+
+    mergeState(repo, number) {
+      return pull(repo, number).map((pr): MergeState => ({
+        state: pr.merged ? 'merged' : pr.state === 'closed' ? 'closed' : 'open',
+        autoMerge: !!pr.auto_merge,
+      }));
+    },
+
+    deleteBranch(repo, branch) {
+      const ref = `/repos/${repo}/git/refs/heads/${branch.split('/').map(encodeURIComponent).join('/')}`;
+      return github
+        .json(repo, 'DELETE', ref)
+        .map(() => undefined)
+        .orElse((e) => (e.status === 404 || e.status === 422 ? okAsync(undefined) : errAsync(e)));
+    },
   };
+
+  function graphql(repo: string, query: string, variables: Record<string, unknown>) {
+    return github.json<GraphqlAnswer>(repo, 'POST', '/graphql', { query, variables });
+  }
+
+  /** Enable auto-merge with the first method GitHub accepts. */
+  function tryMethods(
+    repo: string,
+    number: number,
+    pr: RestPull,
+    methods: MergeMethod[],
+  ): ResultAsync<AutoMergeResult, IssueSourceError> {
+    const [method, ...rest] = methods;
+    return graphql(repo, ENABLE_AUTO_MERGE, { id: pr.node_id, method: method.toUpperCase() })
+      .andThen((answer) => afterEnable(repo, number, pr, method, answer.errors?.[0]?.message))
+      .andThen((result) =>
+        result.kind === 'method-refused' && rest.length > 0
+          ? tryMethods(repo, number, pr, rest)
+          : okAsync(
+              result.kind === 'method-refused'
+                ? unavailable('the repository allows no merge method')
+                : result,
+            ),
+      );
+  }
+
+  /**
+   * What enabling auto-merge left: enabled, or, when GitHub says the pull
+   * request already meets every requirement ("clean status"), a merge now, the
+   * same way and of the head commit that was green. Both go through branch
+   * protections.
+   */
+  function afterEnable(
+    repo: string,
+    number: number,
+    pr: RestPull,
+    method: MergeMethod,
+    error: string | undefined,
+  ): ResultAsync<AutoMergeResult | { kind: 'method-refused' }, IssueSourceError> {
+    if (!error) return okAsync({ kind: 'enabled', method });
+    if (/clean status/i.test(error)) return mergeNow(repo, number, pr.head.sha, method);
+    if (/auto.?merge is not allowed/i.test(error))
+      return okAsync(unavailable(AUTO_MERGE_NOT_ALLOWED));
+    if (/merge method|not allowed/i.test(error)) return okAsync({ kind: 'method-refused' });
+    return errAsync({ message: `GitHub refused to enable auto-merge: ${error}` });
+  }
+
+  /** Merge now, only if the head is still the commit whose CI was green. */
+  function mergeNow(repo: string, number: number, sha: string, method: MergeMethod) {
+    return github
+      .json(repo, 'PUT', `/repos/${repo}/pulls/${number}/merge`, { merge_method: method, sha })
+      .map((): AutoMergeResult => ({ kind: 'merged', method }))
+      .orElse((e) =>
+        e.status === 405 || e.status === 409
+          ? okAsync<AutoMergeResult, IssueSourceError>({ kind: 'not-mergeable', reason: e.message })
+          : errAsync(e),
+      );
+  }
 }
+
+const AUTO_MERGE_NOT_ALLOWED = 'the repository does not allow auto-merge';
+
+const ENABLE_AUTO_MERGE =
+  'mutation($id: ID!, $method: PullRequestMergeMethod!) { enablePullRequestAutoMerge(input: { pullRequestId: $id, mergeMethod: $method }) { pullRequest { number } } }';
+
+const unavailable = (reason: string): AutoMergeResult => ({ kind: 'unavailable', reason });

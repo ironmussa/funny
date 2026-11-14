@@ -27,11 +27,13 @@ export interface FactoryDeps {
 
 /** How often a run waiting on its pull request looks at it. */
 const POLL_MS = 3 * 60 * 1000;
+/** How often a run marked ready looks whether a person merged its pull request. */
+export const READY_POLL_MS = 30 * 60 * 1000;
 
 export interface FactoryContext extends FactoryDeps {
   runs: RunRecorder;
-  /** The next look at a pull request (ISO 8601). */
-  later(): string;
+  /** The next look at a pull request (ISO 8601), in 3 minutes unless `ms` says otherwise. */
+  later(ms?: number): string;
   /** The fields of a run that (again) waits for CI. */
   waitingForCi(reason?: string): { nextCheckAt: string; reason: string };
   isDue(at: string | undefined): boolean;
@@ -42,7 +44,7 @@ export interface FactoryContext extends FactoryDeps {
 export function createFactoryContext(deps: FactoryDeps): FactoryContext {
   const { clock, store, settings } = deps;
   const runs = createRunRecorder(deps);
-  const later = () => new Date(clock.now().getTime() + POLL_MS).toISOString();
+  const later = (ms = POLL_MS) => new Date(clock.now().getTime() + ms).toISOString();
   return {
     ...deps,
     runs,

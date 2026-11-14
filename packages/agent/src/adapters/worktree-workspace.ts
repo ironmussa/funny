@@ -151,6 +151,25 @@ export function createWorktreeWorkspaces(deps: WorktreeWorkspaceDeps): Workspace
         ),
       );
     },
+    remove(request) {
+      const { paths, git } = runSetup(request, deps);
+      return removePreviousCheckout(paths.checkout, request.projectPath, git)
+        .andThen(() =>
+          // The branch is merged; the local one has no further use.
+          git(['branch', '-D', request.branch], request.projectPath).orElse(() => okAsync('')),
+        )
+        .andThen(() =>
+          ResultAsync.fromPromise(
+            Promise.all(
+              [paths.home, paths.gh, paths.gitconfig, paths.spec, paths.exitMarker].map((path) =>
+                rm(path, { recursive: true, force: true }),
+              ),
+            ),
+            (error) => `cannot remove the run's files: ${String(error)}`,
+          ),
+        )
+        .map(() => undefined);
+    },
     reopen(request) {
       const setup = runSetup(request, deps);
       if (!existsSync(setup.paths.checkout)) {

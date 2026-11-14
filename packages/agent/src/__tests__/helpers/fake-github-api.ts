@@ -34,6 +34,23 @@ export interface FakePull {
   checks: FakeCheck[];
   /** `false` when it conflicts with its base; `null` while GitHub computes it. */
   mergeable: boolean | null;
+  /** Branch protection: a review is required before merging. */
+  requiresReview: boolean;
+  approved: boolean;
+  /** Auto-merge as enabled through GraphQL. */
+  autoMerge: { method: string } | null;
+  merged: boolean;
+  /** How it was merged. */
+  mergedWith: string | null;
+  state: 'open' | 'closed';
+}
+
+/** The repository's merge settings (`GET /repos/:repo`). */
+export interface FakeRepoSettings {
+  allow_squash_merge: boolean;
+  allow_merge_commit: boolean;
+  allow_rebase_merge: boolean;
+  allow_auto_merge: boolean;
 }
 
 export interface FakeCheck {
@@ -58,6 +75,13 @@ export interface FakeGithubApi {
   addIssue(issue: Partial<FakeIssue> & { number: number; author: string }): FakeIssue;
   /** Every request made with an installation token, in order (`POST /repos/…/assignees`). */
   readonly requests: string[];
+  readonly repoSettings: FakeRepoSettings;
+  /** Leave the merge settings out of `GET /repos/:repo`, as GitHub does for some tokens. */
+  hideMergeSettings: boolean;
+  /** Refuse `PUT /pulls/:n/merge` with 405, as when requirements changed meanwhile. */
+  refuseDirectMerge: boolean;
+  /** Branches deleted through `DELETE /git/refs/heads/…`. */
+  readonly deletedBranches: string[];
   /** Make requests whose method and path end match fail with `status` until `heal`. */
   fail(method: string, pathEnd: string, status?: number): void;
   heal(method: string, pathEnd: string): void;
@@ -71,13 +95,20 @@ export function fakeGithubApi(options: {
   repo: string;
   defaultBranch?: string;
 }): FakeGithubApi {
-  const api = 'https://api.github.test';
+  const apiRoot = 'https://api.github.test';
   const issues = new Map<number, FakeIssue>();
   const pulls: FakePull[] = [];
   const tokens: FakeGithubApi['tokens'] = [];
   const refused: FakeGithubApi['refused'] = [];
   const credentialsSeen = new Set<string>();
   const requests: string[] = [];
+  const deletedBranches: string[] = [];
+  const repoSettings: FakeRepoSettings = {
+    allow_squash_merge: true,
+    allow_merge_commit: true,
+    allow_rebase_merge: true,
+    allow_auto_merge: true,
+  };
   const failures = new Map<string, { method: string; pathEnd: string; status: number }>();
   const injectedFailure = (method: string, path: string) =>
     [...failures.values()].find((f) => f.method === method && path.endsWith(f.pathEnd));
@@ -117,6 +148,7 @@ export function fakeGithubApi(options: {
       return json(200, {
         full_name: options.repo,
         default_branch: options.defaultBranch ?? 'main',
+        ...(api.hideMergeSettings ? {} : repoSettings),
       });
     }
     if (rest === '/issues' && method === 'GET') {
@@ -144,6 +176,12 @@ export function fakeGithubApi(options: {
       token: presented,
       checks: [],
       mergeable: true,
+      requiresReview: false,
+      approved: false,
+      autoMerge: null,
+      merged: false,
+      mergedWith: null,
+      state: 'open',
     };
     pulls.push(pull);
     return json(201, { number, html_url: pull.url, draft: pull.draft });
@@ -154,12 +192,33 @@ export function fakeGithubApi(options: {
 
   const pullByNumber = (n: string | number) => pulls.find((p) => p.number === Number(n));
 
+  /** Branch protections as GitHub applies them: green checks, no conflict, a review if required. */
+  const requirementsMet = (pull: FakePull) =>
+    !pull.draft &&
+    pull.mergeable !== false &&
+    pull.checks.every(
+      (c) =>
+        c.status === 'completed' && ['success', 'neutral', 'skipped'].includes(c.conclusion ?? ''),
+    ) &&
+    (!pull.requiresReview || pull.approved);
+
+  const merge = (pull: FakePull, method: string) => {
+    pull.merged = true;
+    pull.mergedWith = method;
+    pull.state = 'closed';
+  };
+
   const pullRoute = (rest: string): Response | null => {
     const pull = pullByNumber(/^\/pulls\/(\d+)$/.exec(rest)?.[1] ?? NaN);
     if (!pull) return null;
+    // GitHub merges an auto-merge pull request once its requirements are met.
+    if (pull.autoMerge && !pull.merged && requirementsMet(pull)) merge(pull, pull.autoMerge.method);
     return json(200, {
       number: pull.number,
       node_id: `PR_${pull.number}`,
+      state: pull.state,
+      merged: pull.merged,
+      auto_merge: pull.autoMerge ? { merge_method: pull.autoMerge.method } : null,
       draft: pull.draft,
       mergeable: pull.mergeable,
       mergeable_state: pull.mergeable === false ? 'dirty' : 'clean',
@@ -196,16 +255,69 @@ export function fakeGithubApi(options: {
     return pullRoute(rest) ?? commitRoute(rest) ?? logRoute(rest);
   };
 
-  /** GraphQL: only `markPullRequestReadyForReview`. */
+  const gqlError = (message: string) => json(200, { errors: [{ message }] });
+
+  /** `enablePullRequestAutoMerge`, refused the way GitHub refuses it. */
+  const enableAutoMerge = (pull: FakePull, method: string): Response => {
+    if (pull.draft) return gqlError('Pull request is in draft state');
+    if (!repoSettings.allow_auto_merge)
+      return gqlError('Auto merge is not allowed for this repository');
+    if (!methodAllowed(method)) {
+      return gqlError(`Merge method ${method.toLowerCase()} is not allowed on this repository`);
+    }
+    if (requirementsMet(pull)) return gqlError('Pull request is in clean status');
+    pull.autoMerge = { method: method.toLowerCase() };
+    return json(200, {
+      data: { enablePullRequestAutoMerge: { pullRequest: { number: pull.number } } },
+    });
+  };
+
+  /** GraphQL: `markPullRequestReadyForReview` and `enablePullRequestAutoMerge`. */
   const graphql = (body: any): Response => {
     const pull = pulls.find((p) => `PR_${p.number}` === body?.variables?.id);
-    if (!/markPullRequestReadyForReview/.test(body?.query ?? '') || !pull) {
-      return json(200, { errors: [{ message: 'Could not resolve to a node' }] });
-    }
+    const query: string = body?.query ?? '';
+    if (!pull) return gqlError('Could not resolve to a node');
+    if (/enablePullRequestAutoMerge/.test(query))
+      return enableAutoMerge(pull, body.variables.method);
+    if (!/markPullRequestReadyForReview/.test(query)) return gqlError('Unknown mutation');
     pull.draft = false;
     return json(200, {
       data: { markPullRequestReadyForReview: { pullRequest: { isDraft: false } } },
     });
+  };
+
+  const methodAllowed = (method: string) => {
+    const setting = {
+      squash: 'allow_squash_merge',
+      merge: 'allow_merge_commit',
+      rebase: 'allow_rebase_merge',
+    }[method.toLowerCase()] as keyof FakeRepoSettings;
+    return repoSettings[setting];
+  };
+
+  /** `PUT /pulls/:n/merge`: merged only when the branch protections are met. */
+  const mergePullRoute = (rest: string, body: any): Response | null => {
+    const pull = pullByNumber(/^\/pulls\/(\d+)\/merge$/.exec(rest)?.[1] ?? NaN);
+    if (!pull) return null;
+    if (api.refuseDirectMerge || !requirementsMet(pull)) {
+      return json(405, { message: 'Pull Request is not mergeable' });
+    }
+    merge(pull, body?.merge_method ?? 'merge');
+    return json(200, { merged: true });
+  };
+
+  /** `DELETE /git/refs/heads/…`. */
+  const deleteRefRoute = (rest: string): Response | null => {
+    const ref = /^\/git\/refs\/heads\/(.+)$/.exec(rest)?.[1];
+    if (!ref) return null;
+    deletedBranches.push(decodeURIComponent(ref));
+    return new Response(null, { status: 204 });
+  };
+
+  const mergeRoutes: Route = (method, url, body) => {
+    const rest = url.pathname.slice(`/repos/${options.repo}`.length);
+    if (method === 'PUT') return mergePullRoute(rest, body);
+    return method === 'DELETE' ? deleteRefRoute(rest) : null;
   };
 
   const addAll = (list: string[], added: string[]) => {
@@ -253,7 +365,7 @@ export function fakeGithubApi(options: {
   const isJwt = (credential: string) => /^[\w-]+\.[\w-]+\.[\w-]+$/.test(credential);
   const validToken = (credential: string) =>
     tokens.some((t) => t.token === credential && t.expiresAt > options.clock.now().getTime());
-  const repoScoped = [repoRoutes, ciRoutes, issueRoutes];
+  const repoScoped = [repoRoutes, ciRoutes, mergeRoutes, issueRoutes];
 
   /** Routes with an installation token: GraphQL and the repository's REST API. */
   function withToken(method: string, url: URL, body: any): Response {
@@ -292,8 +404,10 @@ export function fakeGithubApi(options: {
     return handle(init.method ?? 'GET', url, headers.authorization ?? '', body);
   }) as unknown as typeof fetch;
 
-  return {
-    api,
+  const api: FakeGithubApi = {
+    hideMergeSettings: false,
+    refuseDirectMerge: false,
+    api: apiRoot,
     fetch: fetchFake,
     issues,
     pulls,
@@ -301,6 +415,8 @@ export function fakeGithubApi(options: {
     refused,
     credentialsSeen,
     requests,
+    repoSettings,
+    deletedBranches,
     fail(method, pathEnd, status = 502) {
       failures.set(`${method} ${pathEnd}`, { method, pathEnd, status });
     },
@@ -324,4 +440,5 @@ export function fakeGithubApi(options: {
       return issue;
     },
   };
+  return api;
 }

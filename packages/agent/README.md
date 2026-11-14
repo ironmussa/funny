@@ -10,8 +10,9 @@ session store, webhook workflows) has been removed. `start` runs worktree factor
 to end: every minute it admits ready issues, takes each to a draft pull request, follows
 its CI, has the same agent fix failing checks and conflicts, and marks it ready for review
 once green. Infrastructure failures are retried
-and failed issues are handed back. Sandbox workspaces, auto-merge and restart
-reconciliation are not built yet (#275); a sandbox project is skipped with a warning.
+and failed issues are handed back; with `auto_merge` on, green pull requests are merged
+through GitHub's auto-merge. Sandbox workspaces and restart reconciliation are not built
+yet (#275); a sandbox project is skipped with a warning.
 
 ## Running it
 
@@ -42,7 +43,20 @@ login that have no active factory run, within the concurrency and daily limits. 
 3. opens the draft pull request (**`pr_open`**) and **waits for CI** (`waiting_ci`). Every
    3 minutes (no webhook) it reads the head commit's check runs and statuses and the pull
    request's mergeability:
-   - green: the pull request is marked ready for review, and the run is **`ready`**;
+   - green: the pull request is marked ready for review (**`ready`**). With `auto_merge:
+true` the factory also enables GitHub's auto-merge (**`merging`**), with squash when the
+     repository allows it, else another allowed method; GitHub merges once the branch
+     protections are met (required reviews and checks still apply, nothing is bypassed).
+     When a pull request already meets them, GitHub refuses auto-merge ("clean status") and
+     the factory merges it at once the same way. Once merged the factory run is
+     **`merged`**, and its worktree, local branch, credentials and remote branch are
+     removed (its `events.jsonl` stays). A pull request that turns red while it waits to
+     merge goes back to waiting for CI; one closed without merging fails the factory run.
+     Auto-merge turned off while the pull request stays green is enabled again; a direct
+     merge is of the commit whose CI was green, and one GitHub refuses waits. A cleanup
+     that fails is tried again before the factory run is `merged`.
+     A repository without auto-merge leaves the pull request ready. A `ready` pull request
+     that a person merges later is noticed (every 30 minutes) and cleaned up the same way;
    - a failing check, or a conflict with the base: the step runner's `fix` step (**`fixing`**)
      resumes the same agent session with the failing checks and the end of their logs, or
      asks it to rebase onto the base, runs the checks, and pushes; then it waits again;
@@ -65,7 +79,8 @@ agent erroring) is not retried. A failed factory run hands its issue back: a com
 why, the in-progress and ready labels are removed (the login stays assigned), and its
 branch and pull request are kept. Adding the ready label again starts a new factory run. Until the hand-back has gone
 through (it is retried on every tick), the issue is not admitted again. Runs in `queued`,
-`claiming`, `working` and `fixing` hold a concurrency slot; waiting for CI does not. The
+`claiming`, `working` and `fixing` hold a concurrency slot; waiting for CI or to merge does
+not. The
 states show in `status` and, with the steps' own events, in the run's `events.jsonl`.
 
 **A factory run never uses your GitHub access.** It has a home of its own (`runs/<id>/home`), a
@@ -189,7 +204,9 @@ src/
     fix-prompts.ts   its prompts
     step-io.ts       spec fields, event file and exit marker shared by the steps
   settings/        factory settings (schema, loading, refusals) and secrets
-  factory.ts       the factory: CI follow-up and admission on each tick, the run lifecycle
+  factory.ts       the factory: admission and the tick's loops over its runs
+  factory/         its parts: context, failures (retries, hand-back), implement-run,
+                   pull-request (CI follow-up, fixes), merge (auto-merge, cleanup)
   run-recorder.ts  state changes through the state machine, saved and reported
   compose.ts       wires the factory from its real parts and the given edges
   cli.ts           the `start` and `status` commands, with their edges injected

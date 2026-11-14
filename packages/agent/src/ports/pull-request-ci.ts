@@ -20,8 +20,35 @@ export type CiState =
   /** The pull request conflicts with its base. */
   | { kind: 'conflict' };
 
+/** How the pull request stands for merging. */
+export interface MergeState {
+  state: 'open' | 'merged' | 'closed';
+  /** Whether GitHub's auto-merge is enabled on it (a push or a person may turn it off). */
+  autoMerge: boolean;
+}
+
+export type MergeMethod = 'squash' | 'merge' | 'rebase';
+
+export type AutoMergeResult =
+  /** GitHub merges it once its requirements are met (reviews, checks). */
+  | { kind: 'enabled'; method: MergeMethod }
+  /** Its requirements were already met: merged at once, the same way. */
+  | { kind: 'merged'; method: MergeMethod }
+  /** The repository does not allow auto-merge (or no merge method). */
+  | { kind: 'unavailable'; reason: string }
+  /** It met its requirements, then no longer did (a push, a new review rule): look again later. */
+  | { kind: 'not-mergeable'; reason: string };
+
 export interface PullRequestCi {
   ciState(repo: string, number: number): ResultAsync<CiState, IssueSourceError>;
   /** Take the pull request out of draft. */
   markReady(repo: string, number: number): ResultAsync<void, IssueSourceError>;
+  /**
+   * Enable GitHub's auto-merge, with squash when the repository allows it,
+   * else another allowed method. Never bypasses branch protections.
+   */
+  enableAutoMerge(repo: string, number: number): ResultAsync<AutoMergeResult, IssueSourceError>;
+  mergeState(repo: string, number: number): ResultAsync<MergeState, IssueSourceError>;
+  /** Delete a branch on GitHub; a branch already gone is not an error. */
+  deleteBranch(repo: string, branch: string): ResultAsync<void, IssueSourceError>;
 }

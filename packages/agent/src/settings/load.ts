@@ -6,7 +6,8 @@
  */
 
 import { existsSync, readFileSync, statSync } from 'fs';
-import { dirname, isAbsolute, resolve } from 'path';
+import { homedir } from 'os';
+import { dirname, isAbsolute, join, resolve } from 'path';
 
 import { productionSandboxProviders, resolveSandboxSize } from '@funny/sandbox';
 import { err, ok, type Result } from 'neverthrow';
@@ -74,6 +75,12 @@ function describeIssues(error: z.ZodError): string {
     .join('\n');
 }
 
+/** A project path: `~` is the user's home; a relative path is relative to the settings file. */
+function projectPath(path: string, baseDir: string): string {
+  if (path === '~' || path.startsWith('~/')) return join(homedir(), path.slice(1));
+  return isAbsolute(path) ? path : resolve(baseDir, path);
+}
+
 /** Checks that need more than the schema: the sandbox provider and size, the project paths. */
 function checkEnvironment(
   settings: FactorySettings,
@@ -99,7 +106,7 @@ function checkEnvironment(
   }
   const projects = [];
   for (const [i, project] of settings.projects.entries()) {
-    const path = isAbsolute(project.path) ? project.path : resolve(baseDir, project.path);
+    const path = projectPath(project.path, baseDir);
     if (!existsSync(path) || !statSync(path).isDirectory()) {
       return err(`projects.${i}.path: ${path} is not a directory`);
     }

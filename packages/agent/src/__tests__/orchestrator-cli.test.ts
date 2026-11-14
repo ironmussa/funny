@@ -8,7 +8,7 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 import { generateKeyPairSync } from 'crypto';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
-import { tmpdir } from 'os';
+import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 
 import { openRunStore } from '../adapters/sqlite-run-store.js';
@@ -100,6 +100,20 @@ describe('orchestrator start', () => {
     expect(result.out).toContain('acme/app (sandbox)');
     expect(result.out).toContain('acme/tools (worktree)');
     expect(result.out).toContain('Issue factory stopped');
+  });
+
+  test("a project path starting with ~ is in the user's home", async () => {
+    const ctx = setup();
+    const inHome = mkdtempSync(join(homedir(), '.funny-factory-cli-'));
+    dirs.push(inHome);
+    const relative = `~/${inHome.slice(homedir().length + 1)}`;
+    writeFileSync(
+      ctx.configPath,
+      configYaml(ctx.project).replaceAll(`path: ${ctx.project}`, `path: ${relative}`),
+    );
+    const result = await run(['start', '--config', ctx.configPath], ctx, { env: fullEnv() });
+    expect(result.err).toBe('');
+    expect(result.out).toContain(`path=${inHome}`);
   });
 
   test('defaults the config file to the factory home', async () => {

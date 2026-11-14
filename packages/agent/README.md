@@ -5,6 +5,10 @@ GitHub issues marked ready for an agent into pull requests. Vocabulary is in the
 `GLOSSARY.md`; the decision to run it apart from the funny server is
 `docs/adr/0001-standalone-issue-factory.md`. The work is tracked in #275.
 
+**To set it up and run it, read the guide: [`docs/guides/issue-factory.md`](../../docs/guides/issue-factory.md)**
+(the Factory App, the settings, the secrets, `status`, the event files, the workflow
+override, and the security model). This README is about the code.
+
 **Status:** being rebuilt. The old factory attempt (HTTP server, Chat Completions planner,
 session store, webhook workflows) has been removed. `start` runs worktree factory runs end
 to end: every minute it admits ready issues, takes each to a draft pull request, follows

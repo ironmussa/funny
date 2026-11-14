@@ -18,6 +18,18 @@ import { createMergeFollowUp } from './merge.js';
 /** With no check reported this long after a push, the repository has no CI. */
 const NO_CI_GRACE_MS = 15 * 60 * 1000;
 
+/** What a pull request marked ready without CI says, so a reviewer knows what was checked. */
+function noCiComment(project: FactoryProject): string {
+  const checked = project.check
+    ? `Only the local checks ran (\`${project.check}\`).`
+    : 'No local check is configured either.';
+  return [
+    `No CI reported a check within ${NO_CI_GRACE_MS / 60_000} minutes of the push, so the issue factory marked it ready for review without CI. ${checked}`,
+    '',
+    'The factory never merges a pull request that no CI has checked.',
+  ].join('\n');
+}
+
 export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failures) {
   const { runs, settings, clock } = ctx;
   const { giveUp, onInfraFailure, onStepFailed } = failures;
@@ -101,6 +113,14 @@ export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failure
     const marked = await ctx.pullRequests.markReady(run.repo, number);
     if (marked.isErr()) {
       return onInfraFailure(run, `could not mark it ready: ${marked.error.message}`, 'waiting_ci');
+    }
+    // Best effort: a retry would comment twice, and the state already says why.
+    const commented = await ctx.pullRequests.comment(run.repo, number, noCiComment(project));
+    if (commented.isErr()) {
+      ctx.log.warn('Could not comment on a pull request marked ready without CI', {
+        run: run.id,
+        error: commented.error.message,
+      });
     }
     // Never merged by the factory: nothing has checked it.
     return merge.ready(project, run, 'no CI reported any check; marked ready without CI');

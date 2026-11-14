@@ -123,6 +123,12 @@ export function createGithubAppIssueSource(deps: {
         .map(() => undefined);
     },
 
+    release(repo, number, release) {
+      return removeLabel(repo, `/repos/${repo}/issues/${number}`, release.inProgressLabel).map(
+        () => undefined,
+      );
+    },
+
     openBlockers(repo, number) {
       // A blocker of unknown state blocks: in doubt, the issue waits.
       return allPages<RestIssue>(

@@ -76,6 +76,7 @@ describe('a green pull request', () => {
     expect(existsSync(join(runDir(), 'events.jsonl'))).toBe(true);
     expect(git(h.project, 'branch', '--list', pull.head)).toBe('');
     expect(await h.status()).toContain('merged');
+    expect(h.github.issues.get(7)!.labels).not.toContain('agent-in-progress');
   });
 
   test('uses another allowed method when the repository does not allow squash', async () => {
@@ -154,13 +155,30 @@ describe('a green pull request', () => {
     const { factory: f, store, pull } = await greenPullRequest(false);
     pull.merged = true;
     pull.state = 'closed';
-    h.clock.advance(30 * MIN);
+    // A ready pull request is looked at every 5 minutes.
+    h.clock.advance(5 * MIN);
     await tick(f);
     store.close();
 
     expect(await h.status()).toContain('merged');
     expect(h.github.deletedBranches).toEqual([pull.head]);
     expect(existsSync(join(runDir(), 'worktree'))).toBe(false);
+    expect(h.github.issues.get(7)!.labels).not.toContain('agent-in-progress');
+  });
+
+  test('merged after someone removed the in-progress label, the cleanup still completes', async () => {
+    const { factory: f, store, pull } = await greenPullRequest(false);
+    const issue = h.github.issues.get(7)!;
+    issue.labels = issue.labels.filter((l) => l !== 'agent-in-progress');
+    pull.merged = true;
+    pull.state = 'closed';
+    h.clock.advance(5 * MIN);
+    await tick(f);
+    store.close();
+
+    const out = await h.status();
+    expect(out).toContain('merged');
+    expect(out).not.toContain('cleanup incomplete');
   });
 
   test('tries the merge methods in order when GitHub does not show the settings', async () => {

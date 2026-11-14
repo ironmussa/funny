@@ -99,6 +99,10 @@ describe('orchestrator start', () => {
     expect(result.out).toContain('Issue factory started');
     expect(result.out).toContain('acme/app (sandbox)');
     expect(result.out).toContain('acme/tools (worktree)');
+    // Silence afterwards means waiting, not stuck: it says what it waits for.
+    expect(result.out).toContain(
+      "Waiting for issues labelled 'ready-for-agent' opened by octo-owner; checking every minute. Ctrl-C to stop.",
+    );
     expect(result.out).toContain('Issue factory stopped');
   });
 

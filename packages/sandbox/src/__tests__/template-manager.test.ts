@@ -10,6 +10,8 @@ import {
   RUNNER_INSTALL_SCRIPT,
   runnerInstallCommand,
   SANDBOX_ENV_FILE,
+  runnerEnvFile,
+  runnerStartCommand,
   startRunnerCommand,
 } from '../runner-install-script.js';
 import { createRunnerTemplateManager } from '../template-manager.js';
@@ -161,6 +163,49 @@ describe('runner install script', () => {
     expect(command).toContain('systemctl restart funny-runner.service');
     expect(startRunnerCommand({ TEAM_SERVER_URL: 'x"; rm -rf /' }).isErr()).toBe(true);
     expect(startRunnerCommand({ 'bad-key': 'v' }).isErr()).toBe(true);
+  });
+});
+
+describe('starting the runner with its env file', () => {
+  const env = { TEAM_SERVER_URL: 'https://funny.example', RUNNER_PROVISION_TOKEN: 'rprov_Ab-9_x' };
+
+  test('without writeFile, the env file goes in the command', async () => {
+    const provider = createFakeSandboxProvider('fake-valid');
+    const handle = expectOk(
+      await provider.create({ ownerKey: 't', sizeId: 'default', env: {}, idempotencyKey: 'k' }),
+    );
+    const command = expectOk(
+      await runnerStartCommand(provider, handle, expectOk(runnerEnvFile(env))),
+    );
+    expect(command).toBe(expectOk(startRunnerCommand(env)));
+  });
+
+  test('with writeFile, the env file is uploaded and the command does not carry it', async () => {
+    const files = new Map<string, string>();
+    const provider = createFakeSandboxProvider('fake-valid', {
+      exec: (_id, command) => ({
+        exitCode: 0,
+        stdout: command === 'printf %s "$HOME"' ? '/home/user' : '',
+        stderr: '',
+      }),
+      writeFile: (_id, path, content) => {
+        files.set(path, content);
+      },
+    });
+    const handle = expectOk(
+      await provider.create({ ownerKey: 't', sizeId: 'default', env: {}, idempotencyKey: 'k' }),
+    );
+    const command = expectOk(
+      await runnerStartCommand(provider, handle, expectOk(runnerEnvFile(env))),
+    );
+    expect(command).not.toContain('rprov_Ab-9_x');
+    const [[staged, content]] = [...files];
+    expect(staged.startsWith('/home/user/')).toBe(true);
+    expect(content).toContain('RUNNER_PROVISION_TOKEN=rprov_Ab-9_x');
+    expect(command).toContain(`'${staged}'`);
+    expect(command).toContain(SANDBOX_ENV_FILE);
+    expect(command).toContain('systemctl restart funny-runner.service');
+    expect(Bun.spawnSync(['bash', '-n'], { stdin: Buffer.from(command) }).exitCode).toBe(0);
   });
 });
 

@@ -9,8 +9,11 @@
  * template therefore contains no credentials and boots without starting a runner.
  */
 
-import { err, ok, type Result } from 'neverthrow';
+import { randomUUID } from 'crypto';
 
+import { err, errAsync, ok, okAsync, type Result, type ResultAsync } from 'neverthrow';
+
+import type { SandboxError, SandboxHandle, SandboxProvider } from './contract.js';
 import type { RunnerBuild } from './runner-build.js';
 
 const SANDBOX_INSTALL_DIR = '/opt/funny';
@@ -132,25 +135,74 @@ export function runnerInstallCommand(build: RunnerBuild): string {
 }
 
 /**
- * Write the per-sandbox runner env (root-only) and (re)start the runner. Values
- * are restricted to URL/token characters so no quoting or escaping is needed in
- * systemd's EnvironmentFile format; anything else is refused.
+ * The per-sandbox runner env file. Values are restricted to URL/token
+ * characters so no quoting or escaping is needed in systemd's EnvironmentFile
+ * format; anything else is refused.
  */
-export function startRunnerCommand(env: Record<string, string>): Result<string, string> {
+export function runnerEnvFile(env: Record<string, string>): Result<string, string> {
   const lines: string[] = [];
   for (const [key, value] of Object.entries(env)) {
     if (!/^[A-Z_][A-Z0-9_]*$/.test(key)) return err(`invalid env key ${key}`);
     if (!/^[A-Za-z0-9._:/@%+=,~-]+$/.test(value)) return err(`unsafe env value for ${key}`);
     lines.push(`${key}=${value}`);
   }
-  return ok(
-    [
-      'sudo install -d -m 700 /etc/funny',
-      `sudo tee ${SANDBOX_ENV_FILE} >/dev/null <<'FUNNY_ENV_EOF'`,
-      ...lines,
-      'FUNNY_ENV_EOF',
-      `sudo chmod 600 ${SANDBOX_ENV_FILE}`,
-      `sudo systemctl restart ${RUNNER_SERVICE}`,
-    ].join('\n'),
-  );
+  return ok(lines.join('\n'));
+}
+
+const RESTART_RUNNER = `sudo systemctl restart ${RUNNER_SERVICE}`;
+
+/** Write the env file (root-only) from inside the command, then (re)start the runner. */
+const inlineStart = (envFile: string) =>
+  [
+    'sudo install -d -m 700 /etc/funny',
+    `sudo tee ${SANDBOX_ENV_FILE} >/dev/null <<'FUNNY_ENV_EOF'`,
+    envFile,
+    'FUNNY_ENV_EOF',
+    `sudo chmod 600 ${SANDBOX_ENV_FILE}`,
+    RESTART_RUNNER,
+  ].join('\n');
+
+/** Move an uploaded env file into place (root-only), remove the upload, then (re)start the runner. */
+const stagedStart = (staged: string) =>
+  [
+    'sudo install -d -m 700 /etc/funny',
+    `sudo install -m 600 -o root -g root ${shellQuote(staged)} ${SANDBOX_ENV_FILE}; moved=$?`,
+    `rm -f ${shellQuote(staged)}`,
+    '[ "$moved" -eq 0 ] || exit "$moved"',
+    RESTART_RUNNER,
+  ].join('\n');
+
+/** Write the per-sandbox runner env and (re)start the runner, in one command. */
+export function startRunnerCommand(env: Record<string, string>): Result<string, string> {
+  return runnerEnvFile(env).map(inlineStart);
+}
+
+/**
+ * The command that starts the runner with `envFile`. A provider that writes
+ * files gets the env file (tokens included) outside any command, since a
+ * provider may keep its commands (Boat does): it lands in the sandbox user's
+ * home and the command only moves it into place. Otherwise the command carries it.
+ */
+export function runnerStartCommand(
+  provider: SandboxProvider,
+  handle: SandboxHandle,
+  envFile: string,
+): ResultAsync<string, SandboxError> {
+  const writeFile = provider.writeFile?.bind(provider);
+  if (!writeFile) return okAsync(inlineStart(envFile));
+  return provider
+    .exec(handle, 'printf %s "$HOME"')
+    .andThen((run) => {
+      const home = run.stdout.trim();
+      return run.exitCode === 0 && home.startsWith('/')
+        ? okAsync(home)
+        : errAsync<string, SandboxError>({
+            kind: 'provider',
+            message: 'cannot read the sandbox home',
+          });
+    })
+    .andThen((home) => {
+      const staged = `${home}/.funny-runner-env-${randomUUID()}`;
+      return writeFile(handle, staged, `${envFile}\n`).map(() => stagedStart(staged));
+    });
 }

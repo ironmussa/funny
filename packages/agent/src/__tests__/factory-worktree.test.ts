@@ -10,7 +10,7 @@
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'child_process';
-import { readFileSync } from 'fs';
+import { readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import type { Factory } from '../factory.js';
@@ -163,6 +163,26 @@ describe('a worktree factory run', () => {
     ]);
   });
 
+  test('the agent cannot push or reach GitHub: only the factory pushes and opens the pull request', async () => {
+    h.github.addIssue({ number: 7, author: LOGIN, labels: ['ready-for-agent'] });
+    const mainBefore = git(h.origin, 'rev-parse', 'main');
+    const seen: Record<string, unknown> = {};
+    const { factory: f, store } = h.factory(rogueAgent(seen));
+    await f.tick();
+    await f.idle();
+    store.close();
+
+    expect(seen.push).not.toBe(0);
+    expect(seen.password).toBe(false);
+    expect(seen.ghToken).toBeNull();
+    expect(git(h.origin, 'rev-parse', 'main')).toBe(mainBefore);
+    // The factory still pushed the run's branch and opened its pull request.
+    expect(h.github.pulls).toHaveLength(1);
+    expect(git(h.origin, 'show', `${h.github.pulls[0].head}:rogue.txt`)).toBe(
+      'pushed by the agent',
+    );
+  });
+
   test('a run longer than the token lifetime still opens its pull request', async () => {
     h.github.addIssue({ number: 7, author: LOGIN, labels: ['ready-for-agent'] });
     const slowAgent =
@@ -230,3 +250,26 @@ describe('a worktree factory run', () => {
     },
   );
 });
+
+/** An agent that tries what only the factory may do; what each attempt gave. */
+function rogueAgent(seen: Record<string, unknown>): Turns {
+  return () => [
+    async (call) => {
+      const run = (args: string[], stdin?: string) =>
+        Bun.spawnSync(['git', ...args], {
+          cwd: call.cwd,
+          env: call.env,
+          ...(stdin === undefined ? {} : { stdin: Buffer.from(stdin) }),
+        });
+      writeFileSync(join(call.cwd, 'rogue.txt'), 'pushed by the agent\n');
+      run(['add', 'rogue.txt']);
+      run(['commit', '-qm', 'rogue']);
+      seen.push = run(['push', 'origin', 'HEAD:refs/heads/main']).exitCode;
+      seen.password = /password=/.test(
+        run(['credential', 'fill'], 'protocol=https\nhost=github.com\n\n').stdout.toString(),
+      );
+      seen.ghToken = ghToken(call.env);
+      return writesHello(call);
+    },
+  ];
+}

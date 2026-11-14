@@ -131,7 +131,10 @@ credential helper asks that `gh` (`runs/<id>/gitconfig`). Git and the step runne
 exactly that environment (plus `PATH`, locale, `TMPDIR`, the configured commit identity and
 the model key as `ANTHROPIC_API_KEY`), so your `gh` login, `~/.gitconfig` and `GH_TOKEN`
 are neither read nor changed. Credential helpers in the project's own `.git/config` (a
-keychain) are overridden too, so only the run's `gh` answers for github.com. The worktree
+keychain) are overridden too, so only the run's `gh` answers for github.com. The agent and the
+project's check command get none of it: their environment clears git's credential helpers,
+points `git push origin` at a URL no transport serves, and leaves `gh` without a login or a
+token, so only the step runner's own `push` and `pull-request` nodes write to GitHub. The worktree
 still shares the project's `.git` directory (its other settings, its hooks), which is why
 worktree mode is for trusted repositories only. On `Ctrl-C`, `start` stops admitting and
 waits for the factory runs in flight.

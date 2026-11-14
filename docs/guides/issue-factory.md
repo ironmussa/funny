@@ -147,8 +147,20 @@ Without a terminal, a missing secret stops the start and names the variable.
 ## 4. Start it
 
 ```bash
-bun run factory:start                          # settings from ~/.funny/factory/config.yaml
-bun run factory:start -- --config ./factory.yaml
+bun run factory                                # secrets from ~/.funny/factory/secrets.env
+bun run factory -- --config ./factory.yaml
+bun run factory:start                          # secrets from the environment or a prompt
+```
+
+`bun run factory` sources the secrets file (`$FUNNY_FACTORY_HOME/secrets.env`, or the path
+in `FUNNY_FACTORY_SECRETS`) into the orchestrator's process only, and refuses it when
+anyone but its owner can read it (`chmod 600`). Keep the secrets out of funny's `.env`,
+which the server and the runner read. A secrets file:
+
+```bash
+export FUNNY_FACTORY_APP_ID='123456'
+export FUNNY_FACTORY_APP_PRIVATE_KEY="$(cat ~/.funny/factory/app.pem)"
+export FUNNY_FACTORY_MODEL_KEY='...'
 ```
 
 It is not part of `bun run dev`. On start it reconciles its state with GitHub and the

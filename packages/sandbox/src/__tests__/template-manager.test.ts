@@ -139,6 +139,16 @@ describe('runner install script', () => {
     expect(command).not.toContain("FUNNY_BUILD_NATIVE='1'");
   });
 
+  test('installs the GitHub CLI when the base image lacks it, without failing the install', () => {
+    expect(RUNNER_INSTALL_SCRIPT).toContain('if ! command -v gh >/dev/null 2>&1');
+    expect(RUNNER_INSTALL_SCRIPT).toContain('sudo apt-get install -y -qq gh');
+    expect(RUNNER_INSTALL_SCRIPT).toContain('|| echo "GitHub CLI install failed');
+    // The whole script still parses.
+    const parsed = Bun.spawnSync(['bash', '-n'], { stdin: Buffer.from(RUNNER_INSTALL_SCRIPT) });
+    expect(parsed.stderr.toString()).toBe('');
+    expect(parsed.exitCode).toBe(0);
+  });
+
   test('the env command writes only safe values and restarts the runner', () => {
     const command = expectOk(
       startRunnerCommand({

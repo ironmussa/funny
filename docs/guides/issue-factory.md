@@ -258,9 +258,11 @@ where you would run the agent by hand.
 
 ### Sandbox providers
 
-Boat's `exec` does not turn off its command history, so the encoded secrets written
-through it may stay in Boat's records of the sandbox; Instabox's does. The sandbox
-template is the funny runner template of the orchestrator's own commit
-(`FUNNY_BUILD_COMMIT`, or the pushed HEAD of its checkout), so the orchestrator must run
-from a pushed commit. The agent opens pull requests with `gh`, which the template must
-provide.
+The secrets reach a sandbox only as `exec` commands (base64-encoded), never in its create
+request. Instabox runs them with its command history off (`noHistory`). Boat keeps a
+command history per sandbox that an API key cannot read and that no request field we know
+of turns off, so on Boat treat the model key and the App token as visible to your Boat
+account, and keep the key's spending limit low. The sandbox template is the
+funny runner template of the orchestrator's own commit (`FUNNY_BUILD_COMMIT`, or the
+pushed HEAD of its checkout), so the orchestrator must run from a pushed commit; the
+template installs the GitHub CLI when the provider's base image lacks it.

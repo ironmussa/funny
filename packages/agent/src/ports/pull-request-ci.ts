@@ -34,7 +34,7 @@ export type AutoMergeResult =
   | { kind: 'enabled'; method: MergeMethod }
   /** Its requirements were already met: merged at once, the same way. */
   | { kind: 'merged'; method: MergeMethod }
-  /** The repository does not allow auto-merge (or no merge method). */
+  /** The repository allows no merge method. */
   | { kind: 'unavailable'; reason: string }
   /** It met its requirements, then no longer did (a push, a new review rule): look again later. */
   | { kind: 'not-mergeable'; reason: string };

@@ -94,7 +94,8 @@ true` the factory also enables GitHub's auto-merge (**`merging`**), with squash 
      Auto-merge turned off while the pull request stays green is enabled again; a direct
      merge is of the commit whose CI was green, and one GitHub refuses waits. A cleanup
      that fails is tried again before the factory run is `merged`.
-     A repository without auto-merge leaves the pull request ready. A `ready` pull request
+     A repository without GitHub's auto-merge (a private one on GitHub Free) is merged by the
+     factory itself once GitHub reports every requirement met (`merging` until then). A `ready` pull request
      that a person merges later is noticed (every 5 minutes) and cleaned up the same way;
    - a failing check, or a conflict with the base: the step runner's `fix` step (**`fixing`**)
      resumes the same agent session with the failing checks and the end of their logs, or

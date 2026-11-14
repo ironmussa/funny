@@ -239,6 +239,12 @@ export function fakeGithubApi(options: {
   const pullByNumber = (n: string | number) => pulls.find((p) => p.number === Number(n));
 
   /** Branch protections as GitHub applies them: green checks, no conflict, a review if required. */
+  /** GitHub's `mergeable_state`: a conflict, every requirement met, or something missing. */
+  const mergeableState = (pull: FakePull) => {
+    if (pull.mergeable === false) return 'dirty';
+    return requirementsMet(pull) ? 'clean' : 'blocked';
+  };
+
   const requirementsMet = (pull: FakePull) =>
     !pull.draft &&
     pull.mergeable !== false &&
@@ -267,7 +273,7 @@ export function fakeGithubApi(options: {
       auto_merge: pull.autoMerge ? { merge_method: pull.autoMerge.method } : null,
       draft: pull.draft,
       mergeable: pull.mergeable,
-      mergeable_state: pull.mergeable === false ? 'dirty' : 'clean',
+      mergeable_state: mergeableState(pull),
       head: { sha: `sha-${pull.number}`, ref: pull.head },
     });
   };

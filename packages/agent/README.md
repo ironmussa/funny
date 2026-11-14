@@ -7,9 +7,10 @@ GitHub issues marked ready for an agent into pull requests. Vocabulary is in the
 
 **Status:** being rebuilt. The old factory attempt (HTTP server, Chat Completions planner,
 session store, webhook workflows) has been removed. `start` runs worktree factory runs end
-to end: every minute it admits ready issues, claims them and runs the `implement` step to a
-draft pull request. Sandbox workspaces, CI follow-up, retries and restart reconciliation
-are not built yet (#275); a sandbox project is skipped with a warning.
+to end: every minute it admits ready issues, takes each to a draft pull request, follows
+its CI, has the same agent fix failing checks and conflicts, and marks it ready for review
+once green. Sandbox workspaces, auto-merge, retries and restart reconciliation are not built
+yet (#275); a sandbox project is skipped with a warning.
 
 ## Running it
 
@@ -37,10 +38,23 @@ login that have no active factory run, within the concurrency and daily limits. 
    `factory/issue-<n>-<id>` from the base branch (the project's `base`, else the
    repository's default branch), and runs the step runner's `implement` step as a child
    process;
-3. ends in **`pr_open`** with the draft pull request, or **`failed`** with the reason.
+3. opens the draft pull request (**`pr_open`**) and **waits for CI** (`waiting_ci`). Every
+   3 minutes (no webhook) it reads the head commit's check runs and statuses and the pull
+   request's mergeability:
+   - green: the pull request is marked ready for review, and the run is **`ready`**;
+   - a failing check, or a conflict with the base: the step runner's `fix` step (**`fixing`**)
+     resumes the same agent session with the failing checks and the end of their logs, or
+     asks it to rebase onto the base, runs the checks, and pushes; then it waits again;
+   - no check reported yet: it keeps waiting; with none 15 minutes after the last push the
+     repository is taken to have no CI, and the pull request is marked ready with that reason;
+   - a fix the agent could not finish (it changed nothing, the rebase is unfinished, the
+     local checks stay red) uses up an attempt and the factory run keeps waiting for CI;
+   - after 3 fix attempts (conflicts included) without green CI, the factory run is
+     **`failed`**.
 
-`queued → claiming → working → pr_open` (or `failed`) shows in `status` and, with the
-step's own events, in the run's `events.jsonl`.
+A step that fails ends the run in **`failed`** with the reason. Runs in `queued`,
+`claiming`, `working` and `fixing` hold a concurrency slot; waiting for CI does not. The
+states show in `status` and, with the steps' own events, in the run's `events.jsonl`.
 
 **A factory run never uses your GitHub access.** It has a home of its own (`runs/<id>/home`), a
 `gh` config directory with its own Factory App token for the repository (`runs/<id>/gh`,
@@ -90,6 +104,16 @@ live in memory and are replaced by `[redacted]` in every log line.
 | `FUNNY_FACTORY_APP_PRIVATE_KEY`    | its private key (PEM; `\n` escapes allowed)                     |
 | `FUNNY_FACTORY_SANDBOX_CREDENTIAL` | the sandbox provider's credential (only with a sandbox project) |
 
+## The `fix` step
+
+Run in the run's checkout when its pull request needs a fix, it resumes the run's agent
+session (`sessionId`) so the agent keeps the context of its implementation. For failing
+checks it gives the agent their names, conclusions and log excerpts; for a conflict it
+fetches the base and asks the agent to `git rebase origin/<base>` and resolve it, then
+verifies the rebase finished. The check command runs with up to two in-place fixes, any
+leftover change is committed with the configured author, and the branch is pushed
+(`--force-with-lease` after a rebase). It writes `pushed` or `failed` to the exit marker.
+
 ## The `implement` step
 
 Run in the workspace's checkout, already on the run's branch, it runs the built-in
@@ -129,6 +153,7 @@ src/
     pull-requests.ts   opening a draft pull request from a workspace
     run-reporter.ts    a run's events, in funny's ingest event shape
     run-store.ts       the factory's runs and per-day counter
+    pull-request-ci.ts a run's pull request after it opened: CI state, mark ready
     issue-source.ts    ready issues, trusted text, claiming (through the Factory App)
     workspaces.ts      where a run works, and how the step runner is started
     clock.ts           time, faked in tests
@@ -139,14 +164,20 @@ src/
     jsonl-run-reporter.ts      appends a run's events to its event file
     sqlite-run-store.ts        the run store in `state.db` (`bun:sqlite`)
     factory-app.ts             the Factory App's repository tokens
+    factory-github.ts          REST / GraphQL calls with the repository's App token
     github-app-issue-source.ts the issue source over GitHub's REST API
+    github-app-pull-requests.ts check runs, statuses, mergeability, job logs, ready for review
     worktree-workspace.ts      worktree workspaces and the step runner as a child process
     workspace-action-provider.ts  workflow actions inside a workspace (agent, commands, git, PR)
   steps/
     implement.ts     the `implement` step: runs the `factory-issue` workflow
     factory-workflow.ts  picks the repository's override or the built-in workflow
+    fix.ts           the `fix` step: resumes the session to fix CI or rebase
+    fix-prompts.ts   its prompts
+    step-io.ts       spec fields, event file and exit marker shared by the steps
   settings/        factory settings (schema, loading, refusals) and secrets
-  factory.ts       the factory: admission on each tick and the run lifecycle
+  factory.ts       the factory: CI follow-up and admission on each tick, the run lifecycle
+  run-recorder.ts  state changes through the state machine, saved and reported
   compose.ts       wires the factory from its real parts and the given edges
   cli.ts           the `start` and `status` commands, with their edges injected
   config/          the old YAML config loading (`.pipeline/config.yaml`)
@@ -156,7 +187,7 @@ src/
   bin/
     orchestrator.ts  long-running process: `start`, `status`
     step.ts          step runner, runs inside a factory run's workspace:
-                     `funny-orchestrator-step implement --spec <spec.json>`
+                     `funny-orchestrator-step <implement|fix> --spec <spec.json>`
 ```
 
 ## Commands

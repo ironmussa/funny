@@ -11,6 +11,8 @@ import { z } from 'zod';
 /** The outcome as the step writes it to its exit marker (extra fields are ignored). */
 export const stepOutcomeSchema = z.union([
   z.object({ kind: z.literal('pr_opened'), prUrl: z.string(), sessionId: z.string().optional() }),
+  /** A `fix` step pushed its changes to the pull request's branch. */
+  z.object({ kind: z.literal('pushed'), sessionId: z.string().optional() }),
   z.object({
     kind: z.literal('failed'),
     failure: z.enum(['agent', 'infra']),

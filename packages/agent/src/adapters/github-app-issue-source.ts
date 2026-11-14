@@ -4,11 +4,9 @@
  * involved.
  */
 
-import { createGithubRest, type GithubRest } from '@funny/core/github-app';
-import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-
-import type { IssueSource, IssueSourceError, ReadyIssue } from '../ports/issue-source.js';
+import type { IssueSource, ReadyIssue } from '../ports/issue-source.js';
 import type { FactoryAppTokens } from './factory-app.js';
+import { createFactoryGithub } from './factory-github.js';
 
 interface RestIssue {
   number: number;
@@ -24,38 +22,13 @@ interface RestComment {
   body: string;
 }
 
-const fail = (message: string): IssueSourceError => ({ message });
-
 export function createGithubAppIssueSource(deps: {
   tokens: FactoryAppTokens;
   fetch?: typeof fetch;
   api?: string;
 }): IssueSource {
-  const rest: GithubRest = createGithubRest({
-    fetch: deps.fetch,
-    api: deps.api,
-    userAgent: 'funny-issue-factory',
-  });
-
-  /** One call with the repository's token; a non-2xx answer is an error naming the call. */
-  const call = <T>(repo: string, method: string, path: string, body?: unknown) =>
-    deps.tokens
-      .forRepo(repo)
-      .mapErr((e) => fail(e.message))
-      .andThen((token) =>
-        rest(path, {
-          method,
-          auth: `token ${token.token}`,
-          body: body === undefined ? undefined : JSON.stringify(body),
-        }).mapErr((e) => fail(e.message)),
-      )
-      .andThen((res): ResultAsync<T, IssueSourceError> => {
-        if (!res.ok) return errAsync(fail(`GitHub answered ${res.status} to ${method} ${path}`));
-        if (res.status === 204) return okAsync(undefined as T);
-        return ResultAsync.fromPromise(res.json() as Promise<T>, () =>
-          fail(`unreadable answer to ${method} ${path}`),
-        );
-      });
+  const github = createFactoryGithub(deps);
+  const call = github.json;
 
   return {
     listReady(repo, label) {

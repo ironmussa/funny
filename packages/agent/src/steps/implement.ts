@@ -13,37 +13,29 @@
  * orchestrator learns how the step ended.
  */
 
-import { mkdir, rename, writeFile } from 'fs/promises';
-import { dirname } from 'path';
-
 import type { IAgentProcessFactory } from '@funny/core/agents';
 import { nullReporter, runPipeline, type StepProgressData } from '@funny/pipelines';
 import type { YamlPipelineContext } from '@funny/workflows/compiler';
 import { z } from 'zod';
 
-import { JsonlRunReporter } from '../adapters/jsonl-run-reporter.js';
 import { WorkspaceActionProvider } from '../adapters/workspace-action-provider.js';
 import { buildPullRequestBody } from '../domain/pull-request-body.js';
 import type { StepOutcome } from '../domain/step-outcome.js';
 import type { PullRequestOpener } from '../ports/pull-requests.js';
-import type { RunReporter } from '../ports/run-reporter.js';
 import { FACTORY_ISSUE_WORKFLOW, loadFactoryWorkflow } from './factory-workflow.js';
+import { stepIo, stepSpecFields } from './step-io.js';
+
+/** How `implement` ends: a pull request, or a failure (it never just pushes). */
+type ImplementOutcome = Exclude<StepOutcome, { kind: 'pushed' }>;
 
 export const implementStepSpecSchema = z.object({
-  runId: z.string().min(1),
+  ...stepSpecFields,
   /** Trusted text only: the configured login's issue body and comments. */
   issue: z.object({
     number: z.number().int().positive(),
     title: z.string().min(1),
     body: z.string(),
   }),
-  base: z.string().min(1),
-  branch: z.string().min(1),
-  checkCommand: z.string().optional(),
-  author: z.object({ name: z.string().min(1), email: z.string().min(1) }),
-  model: z.string().min(1),
-  eventsPath: z.string().min(1),
-  exitMarkerPath: z.string().min(1),
 });
 
 export type ImplementStepSpec = z.infer<typeof implementStepSpecSchema>;
@@ -61,21 +53,9 @@ export interface ImplementStepDeps {
 export async function runImplementStep(
   spec: ImplementStepSpec,
   deps: ImplementStepDeps,
-): Promise<StepOutcome> {
+): Promise<ImplementOutcome> {
   const now = deps.now ?? (() => new Date());
-  const reporter: RunReporter = new JsonlRunReporter(spec.eventsPath);
-  const reports: Promise<void>[] = [];
-  const report = (event_type: string, data: Record<string, unknown>) => {
-    reports.push(
-      reporter.report({
-        event_type,
-        request_id: spec.runId,
-        thread_id: spec.runId,
-        timestamp: now().toISOString(),
-        data,
-      }),
-    );
-  };
+  const { report, finish } = stepIo(spec, now);
   const workflowEvent = { run_id: spec.runId, workflow_name: FACTORY_ISSUE_WORKFLOW };
 
   const provider = new WorkspaceActionProvider({
@@ -98,7 +78,7 @@ export async function runImplementStep(
 
   report('workflow.started', workflowEvent);
 
-  let outcome: StepOutcome;
+  let outcome: ImplementOutcome;
   try {
     outcome = await runWorkflow(
       spec,
@@ -121,27 +101,10 @@ export async function runImplementStep(
   if (outcome.kind === 'pr_opened') {
     deps.print(`pr_url=${outcome.prUrl}`);
     report('workflow.completed', workflowEvent);
-    report('factory.completed', { pr_url: outcome.prUrl, session_id: outcome.sessionId });
   } else {
     report('workflow.failed', { ...workflowEvent, error: outcome.reason });
-    report('factory.failed', {
-      error: outcome.reason,
-      failure_kind: outcome.failure,
-      session_id: outcome.sessionId,
-    });
   }
-  if (outcome.sessionId) deps.print(`session_id=${outcome.sessionId}`);
-
-  // A broken event file loses the run's history but must not hide its outcome.
-  const failedReports = (await Promise.allSettled(reports)).filter((r) => r.status === 'rejected');
-  await writeExitMarker(spec.exitMarkerPath, {
-    ...outcome,
-    ...(failedReports.length > 0
-      ? { eventFileError: String((failedReports[0] as PromiseRejectedResult).reason) }
-      : {}),
-    finishedAt: now().toISOString(),
-  });
-  return outcome;
+  return finish(outcome, deps.print, outcome.kind === 'pr_opened' ? { pr_url: outcome.prUrl } : {});
 }
 
 async function runWorkflow(
@@ -150,7 +113,7 @@ async function runWorkflow(
   provider: WorkspaceActionProvider,
   onStepProgress: (stepId: string, progress: StepProgressData) => void,
   onWorkflowChosen: (source: 'repository' | 'built-in', path?: string) => void,
-): Promise<StepOutcome> {
+): Promise<ImplementOutcome> {
   const workflow = await loadFactoryWorkflow(cwd, spec.base);
   if (!workflow.ok) return { kind: 'failed', failure: workflow.failure, reason: workflow.reason };
   onWorkflowChosen(workflow.source, workflow.path);
@@ -186,12 +149,4 @@ async function runWorkflow(
     reason: result.error ?? `workflow ${result.outcome} without opening a pull request`,
     sessionId,
   };
-}
-
-/** Written last and atomically: its presence means the step has ended. */
-async function writeExitMarker(path: string, marker: Record<string, unknown>): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const temp = `${path}.tmp`;
-  await writeFile(temp, `${JSON.stringify(marker, null, 2)}\n`, 'utf-8');
-  await rename(temp, path);
 }

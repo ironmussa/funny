@@ -7,6 +7,7 @@
 
 import { createFactoryAppTokens } from './adapters/factory-app.js';
 import { createGithubAppIssueSource } from './adapters/github-app-issue-source.js';
+import { createGithubAppPullRequests } from './adapters/github-app-pull-requests.js';
 import { createWorktreeWorkspaces } from './adapters/worktree-workspace.js';
 import { createFactory, type Factory } from './factory.js';
 import type { FactoryLog } from './infrastructure/factory-log.js';
@@ -50,6 +51,7 @@ export function composeFactory(
     home: core.home,
     clock: edges.clock,
     issues: createGithubAppIssueSource({ tokens, fetch: edges.fetch, api: edges.api }),
+    pullRequests: createGithubAppPullRequests({ tokens, fetch: edges.fetch, api: edges.api }),
     workspaces: createWorktreeWorkspaces({
       tokens,
       launchStep: edges.launchStep,

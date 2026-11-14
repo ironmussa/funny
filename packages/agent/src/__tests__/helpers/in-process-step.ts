@@ -14,6 +14,7 @@ import { join } from 'path';
 
 import type { PullRequestOpener } from '../../ports/pull-requests.js';
 import type { StepLauncher } from '../../ports/workspaces.js';
+import { fixStepSpecSchema, runFixStep } from '../../steps/fix.js';
 import { implementStepSpecSchema, runImplementStep } from '../../steps/implement.js';
 import type { FakeGithubApi } from './fake-github-api.js';
 import { fakeAgents, type FakeAgentTurn } from './step-fakes.js';
@@ -76,15 +77,22 @@ async function withProcessEnv<T>(env: Record<string, string>, fn: () => Promise<
 export function inProcessStepLauncher(options: {
   github: FakeGithubApi;
   repo: string;
-  /** The agent's turns for one run; `ghConfigDir` is where the run's token lives. */
-  turns: (run: { ghConfigDir: string }) => FakeAgentTurn[];
+  /** The agent's turns for one step; `ghConfigDir` is where the run's token lives. */
+  turns: (run: { ghConfigDir: string; step: 'implement' | 'fix' }) => FakeAgentTurn[];
 }): StepLauncher {
-  return async ({ specPath, cwd, env }) => {
-    const spec = implementStepSpecSchema.parse(JSON.parse(readFileSync(specPath, 'utf8')));
+  return async ({ step, specPath, cwd, env }) => {
+    const raw = JSON.parse(readFileSync(specPath, 'utf8'));
+    const agents = fakeAgents(options.turns({ ghConfigDir: env.GH_CONFIG_DIR, step }));
+    if (step === 'fix') {
+      const outcome = await withProcessEnv(env, () =>
+        runFixStep(fixStepSpecSchema.parse(raw), { cwd, agents, print: () => {} }),
+      );
+      return outcome.kind === 'pushed' ? 0 : 1;
+    }
     const outcome = await withProcessEnv(env, () =>
-      runImplementStep(spec, {
+      runImplementStep(implementStepSpecSchema.parse(raw), {
         cwd,
-        agents: fakeAgents(options.turns({ ghConfigDir: env.GH_CONFIG_DIR })),
+        agents,
         pullRequests: ghLikeOpener(options.github, options.repo, env),
         print: () => {},
       }),

@@ -30,6 +30,18 @@ export interface FakePull {
   draft: boolean;
   /** The installation token it was opened with. */
   token: string;
+  /** The head commit's check runs; tests set them as CI would. */
+  checks: FakeCheck[];
+  /** `false` when it conflicts with its base; `null` while GitHub computes it. */
+  mergeable: boolean | null;
+}
+
+export interface FakeCheck {
+  name: string;
+  status: 'queued' | 'in_progress' | 'completed';
+  conclusion?: 'success' | 'failure' | 'neutral' | 'skipped' | 'timed_out' | 'cancelled';
+  /** The job's log, served by `GET /actions/jobs/:id/logs`. */
+  log?: string;
 }
 
 export interface FakeGithubApi {
@@ -121,9 +133,70 @@ export function fakeGithubApi(options: {
       base: body.base,
       draft: body.draft === true,
       token: presented,
+      checks: [],
+      mergeable: true,
     };
     pulls.push(pull);
     return json(201, { number, html_url: pull.url, draft: pull.draft });
+  };
+
+  /** Check run ids are the pull request number and the check's index. */
+  const checkId = (pull: FakePull, index: number) => pull.number * 100 + index;
+
+  const pullByNumber = (n: string | number) => pulls.find((p) => p.number === Number(n));
+
+  const pullRoute = (rest: string): Response | null => {
+    const pull = pullByNumber(/^\/pulls\/(\d+)$/.exec(rest)?.[1] ?? NaN);
+    if (!pull) return null;
+    return json(200, {
+      number: pull.number,
+      node_id: `PR_${pull.number}`,
+      draft: pull.draft,
+      mergeable: pull.mergeable,
+      mergeable_state: pull.mergeable === false ? 'dirty' : 'clean',
+      head: { sha: `sha-${pull.number}`, ref: pull.head },
+    });
+  };
+
+  const commitRoute = (rest: string): Response | null => {
+    const match = /^\/commits\/sha-(\d+)\/(check-runs|status)$/.exec(rest);
+    const pull = match ? pullByNumber(match[1]) : undefined;
+    if (!match || !pull) return null;
+    if (match[2] === 'status') return json(200, { state: 'success', statuses: [] });
+    return json(200, {
+      check_runs: pull.checks.map((c, i) => ({
+        id: checkId(pull, i),
+        name: c.name,
+        status: c.status,
+        conclusion: c.conclusion ?? null,
+        app: { slug: 'github-actions' },
+        output: { title: c.name, summary: `${c.name} ${c.conclusion ?? c.status}` },
+      })),
+    });
+  };
+
+  const logRoute = (rest: string): Response | null => {
+    const id = Number(/^\/actions\/jobs\/(\d+)\/logs$/.exec(rest)?.[1] ?? NaN);
+    const check = pullByNumber(Math.floor(id / 100))?.checks[id % 100];
+    return check ? new Response(check.log ?? '', { status: 200 }) : null;
+  };
+
+  const ciRoutes: Route = (method, url) => {
+    if (method !== 'GET') return null;
+    const rest = url.pathname.slice(`/repos/${options.repo}`.length);
+    return pullRoute(rest) ?? commitRoute(rest) ?? logRoute(rest);
+  };
+
+  /** GraphQL: only `markPullRequestReadyForReview`. */
+  const graphql = (body: any): Response => {
+    const pull = pulls.find((p) => `PR_${p.number}` === body?.variables?.id);
+    if (!/markPullRequestReadyForReview/.test(body?.query ?? '') || !pull) {
+      return json(200, { errors: [{ message: 'Could not resolve to a node' }] });
+    }
+    pull.draft = false;
+    return json(200, {
+      data: { markPullRequestReadyForReview: { pullRequest: { isDraft: false } } },
+    });
   };
 
   const addAll = (list: string[], added: string[]) => {
@@ -168,6 +241,21 @@ export function fakeGithubApi(options: {
     return handler ? handler(issue, body, sub) : null;
   };
 
+  const isJwt = (credential: string) => /^[\w-]+\.[\w-]+\.[\w-]+$/.test(credential);
+  const validToken = (credential: string) =>
+    tokens.some((t) => t.token === credential && t.expiresAt > options.clock.now().getTime());
+  const repoScoped = [repoRoutes, ciRoutes, issueRoutes];
+
+  /** Routes with an installation token: GraphQL and the repository's REST API. */
+  function withToken(method: string, url: URL, body: any): Response {
+    if (url.pathname === '/graphql' && method === 'POST') return graphql(body);
+    for (const route of repoScoped) {
+      const answer = route(method, url, body);
+      if (answer) return answer;
+    }
+    return json(404, { message: 'Not Found' });
+  }
+
   function handle(method: string, url: URL, auth: string, body: any): Response {
     const credential = auth.replace(/^(Bearer|token) /, '');
     credentialsSeen.add(credential);
@@ -175,15 +263,14 @@ export function fakeGithubApi(options: {
       refused.push({ method, path: url.pathname, auth: credential });
       return json(401, { message: 'Bad credentials' });
     };
-    const notFound = () => json(404, { message: 'Not Found' });
-    const isJwt = /^[\w-]+\.[\w-]+\.[\w-]+$/.test(credential);
     const app = appRoutes(method, url.pathname, body);
-    if (app) return isJwt ? app : deny();
-    if (!url.pathname.startsWith(`/repos/${options.repo}`)) return notFound();
-    const now = options.clock.now().getTime();
-    if (!tokens.some((t) => t.token === credential && t.expiresAt > now)) return deny();
+    if (app) return isJwt(credential) ? app : deny();
+    const inScope =
+      url.pathname === '/graphql' || url.pathname.startsWith(`/repos/${options.repo}`);
+    if (!inScope) return json(404, { message: 'Not Found' });
+    if (!validToken(credential)) return deny();
     presented = credential;
-    return repoRoutes(method, url, body) ?? issueRoutes(method, url, body) ?? notFound();
+    return withToken(method, url, body);
   }
 
   const fetchFake = (async (input: string | URL | Request, init: RequestInit = {}) => {

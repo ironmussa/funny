@@ -1,6 +1,7 @@
 /**
  * The run store on SQLite (`bun:sqlite`), one file in the factory home.
- * Tables are created on open; no migrations yet.
+ * Tables are created on open, and columns added since are added to an older
+ * file (`ALTER TABLE … ADD COLUMN`).
  */
 
 import { Database } from 'bun:sqlite';
@@ -20,11 +21,23 @@ CREATE TABLE IF NOT EXISTS runs (
   created_at TEXT NOT NULL,
   updated_at TEXT NOT NULL
 );
+-- Later columns are in LATER_COLUMNS.
 CREATE TABLE IF NOT EXISTS daily_starts (
   day TEXT PRIMARY KEY,
   started INTEGER NOT NULL DEFAULT 0
 );
 `;
+
+/** Columns added after the first version of the table. */
+const LATER_COLUMNS: Array<[string, string]> = [
+  ['issue_title', 'TEXT'],
+  ['branch', 'TEXT'],
+  ['base', 'TEXT'],
+  ['session_id', 'TEXT'],
+  ['fix_attempts', 'INTEGER NOT NULL DEFAULT 0'],
+  ['next_check_at', 'TEXT'],
+  ['pushed_at', 'TEXT'],
+];
 
 interface RunRow {
   id: string;
@@ -35,6 +48,13 @@ interface RunRow {
   reason: string | null;
   created_at: string;
   updated_at: string;
+  issue_title: string | null;
+  branch: string | null;
+  base: string | null;
+  session_id: string | null;
+  fix_attempts: number;
+  next_check_at: string | null;
+  pushed_at: string | null;
 }
 
 const toRun = (row: RunRow): FactoryRun => ({
@@ -46,6 +66,13 @@ const toRun = (row: RunRow): FactoryRun => ({
   reason: row.reason,
   createdAt: row.created_at,
   updatedAt: row.updated_at,
+  issueTitle: row.issue_title ?? undefined,
+  branch: row.branch ?? undefined,
+  base: row.base ?? undefined,
+  sessionId: row.session_id ?? undefined,
+  fixAttempts: row.fix_attempts,
+  nextCheckAt: row.next_check_at ?? undefined,
+  pushedAt: row.pushed_at ?? undefined,
 });
 
 export function openRunStore(path: string): RunStore {
@@ -53,10 +80,21 @@ export function openRunStore(path: string): RunStore {
   const db = new Database(path, { create: true, strict: true });
   db.exec('PRAGMA journal_mode = WAL;');
   db.exec(SCHEMA);
+  const present = new Set(
+    db
+      .query<{ name: string }, []>('PRAGMA table_info(runs)')
+      .all()
+      .map((c) => c.name),
+  );
+  for (const [name, type] of LATER_COLUMNS) {
+    if (!present.has(name)) db.exec(`ALTER TABLE runs ADD COLUMN ${name} ${type}`);
+  }
   const listQuery = db.query<RunRow, []>('SELECT * FROM runs ORDER BY created_at DESC, id DESC');
   const saveQuery = db.query(
-    `INSERT OR REPLACE INTO runs (id, repo, issue_number, state, pr_url, reason, created_at, updated_at)
-     VALUES ($id, $repo, $issueNumber, $state, $prUrl, $reason, $createdAt, $updatedAt)`,
+    `INSERT OR REPLACE INTO runs (id, repo, issue_number, state, pr_url, reason, created_at, updated_at,
+       issue_title, branch, base, session_id, fix_attempts, next_check_at, pushed_at)
+     VALUES ($id, $repo, $issueNumber, $state, $prUrl, $reason, $createdAt, $updatedAt,
+       $issueTitle, $branch, $base, $sessionId, $fixAttempts, $nextCheckAt, $pushedAt)`,
   );
   const startedQuery = db.query<{ started: number }, [string]>(
     'SELECT started FROM daily_starts WHERE day = ?',
@@ -67,7 +105,17 @@ export function openRunStore(path: string): RunStore {
   return {
     list: () => listQuery.all().map(toRun),
     recordStart: (day) => void recordStartQuery.run(day),
-    save: (run) => void saveQuery.run({ ...run }),
+    save: (run) =>
+      void saveQuery.run({
+        ...run,
+        issueTitle: run.issueTitle ?? null,
+        branch: run.branch ?? null,
+        base: run.base ?? null,
+        sessionId: run.sessionId ?? null,
+        fixAttempts: run.fixAttempts ?? 0,
+        nextCheckAt: run.nextCheckAt ?? null,
+        pushedAt: run.pushedAt ?? null,
+      }),
     startedOn: (day) => startedQuery.get(day)?.started ?? 0,
     close: () => db.close(),
   };

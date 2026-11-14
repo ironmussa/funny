@@ -8,10 +8,12 @@
 import type { ResultAsync } from 'neverthrow';
 
 import type { StepOutcome } from '../domain/step-outcome.js';
+import type { FixStepSpec } from '../steps/fix.js';
 import type { ImplementStepSpec } from '../steps/implement.js';
 
 /** How the step runner is started: a child process in production. Resolves to its exit code. */
 export type StepLauncher = (launch: {
+  step: 'implement' | 'fix';
   specPath: string;
   /** The workspace's checkout. */
   cwd: string;
@@ -23,6 +25,8 @@ export interface RunWorkspace {
   cwd: string;
   /** Run the `implement` step; resolves to how it ended, as its exit marker says. */
   implement(spec: Omit<ImplementStepSpec, 'eventsPath' | 'exitMarkerPath'>): Promise<StepOutcome>;
+  /** Run the `fix` step in the same checkout. */
+  fix(spec: Omit<FixStepSpec, 'eventsPath' | 'exitMarkerPath'>): Promise<StepOutcome>;
   /** Stop renewing the run's token. The checkout stays for later steps. */
   release(): Promise<void>;
 }
@@ -42,5 +46,8 @@ export interface WorkspaceRequest {
 }
 
 export interface WorkspaceProvider {
+  /** A new checkout on `branch` from the base. */
   prepare(request: WorkspaceRequest): ResultAsync<RunWorkspace, string>;
+  /** The run's existing checkout, for a later step. */
+  reopen(request: WorkspaceRequest): ResultAsync<RunWorkspace, string>;
 }

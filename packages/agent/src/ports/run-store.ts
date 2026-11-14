@@ -17,6 +17,18 @@ export interface FactoryRun {
   /** ISO 8601. */
   createdAt: string;
   updatedAt: string;
+  /** Set once the run is working: what the later steps need. */
+  issueTitle?: string;
+  branch?: string;
+  base?: string;
+  /** The agent session, resumed by every `fix`. */
+  sessionId?: string;
+  /** `fix` steps run so far (conflicts included). */
+  fixAttempts?: number;
+  /** When a run waiting for CI looks at it next (ISO 8601). */
+  nextCheckAt?: string;
+  /** When the branch was last pushed (the pull request opened, or a fix). */
+  pushedAt?: string;
 }
 
 export interface RunStore {

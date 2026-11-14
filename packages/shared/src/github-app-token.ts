@@ -1,7 +1,8 @@
 /**
- * Timing contract between the server, which caches sandbox GitHub App tokens
- * (server `services/github-app/token-issuer.ts`), and the sandbox runner, which
- * renews them (runtime `services/sandbox-github-auth.ts`).
+ * Timing contract between the GitHub App token issuer, which hands back a
+ * cached token while it is fresh (`@funny/core/github-app`, used by the
+ * server), and the token writer, which renews it in a workspace (same module,
+ * used by the sandbox runner and the issue factory).
  */
 
 /** The server hands back a cached token until this long before it expires. */

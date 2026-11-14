@@ -7,7 +7,7 @@
  * real step and a fake agent, in the environment its `step.env` gives.
  */
 
-import { mkdirSync, readFileSync } from 'fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 import type { ExecResult } from '@funny/sandbox';
@@ -34,6 +34,8 @@ function stepEnv(work: string, home: string): Record<string, string> {
 export interface SandboxExec {
   /** The fake provider's `exec` option. */
   exec(sandboxId: string, command: string): ExecResult;
+  /** The fake provider's `writeFile` option: paths are the sandbox's, which are the host's here. */
+  writeFile(sandboxId: string, path: string, content: string): void;
   /** The directory (and `$HOME`) of a sandbox. */
   dirOf(sandboxId: string): string;
 }
@@ -57,6 +59,10 @@ export function sandboxExec(root: string, steps: InProcessStepOptions): SandboxE
   };
   return {
     dirOf,
+    writeFile(sandboxId, path, content) {
+      dirOf(sandboxId);
+      writeFileSync(path, content);
+    },
     exec(sandboxId, command) {
       const dir = dirOf(sandboxId);
       const start = START_STEP.exec(command);

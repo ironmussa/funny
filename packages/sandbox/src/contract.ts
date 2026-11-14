@@ -130,6 +130,12 @@ export interface SandboxProvider {
     opts?: { timeoutMs?: number },
   ): ResultAsync<ExecResult, SandboxError>;
   /**
+   * Write `content` to `path` (in the sandbox user's home) of a running sandbox,
+   * outside any command: a provider that records commands does not record it.
+   * Optional: without it, files are written with `exec`.
+   */
+  writeFile?(handle: SandboxHandle, path: string, content: string): ResultAsync<void, SandboxError>;
+  /**
    * Publish `port` of a running sandbox on an HTTPS URL that only the server
    * can use (WebSockets included). Idempotent per sandbox and port; each call
    * returns usable credentials, rotating them when the provider cannot show

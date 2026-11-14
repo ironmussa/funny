@@ -44,8 +44,9 @@ A project without `workspace: worktree` runs in a sandbox of the configured prov
   the factory's are one build; the factory never writes the runner's env file, so funny's
   runner never starts;
 - the create request carries no secret (its env is empty). The model credential and the
-  run's App token are written through `exec` to root-only files
-  (`/etc/funny-factory/<run>/`); git's credential helper and a `gh` wrapper read the token
+  run's App token are written to root-only files (`/etc/funny-factory/<run>/`): uploaded
+  through the provider's `writeFile` where it has one (Boat, whose commands are kept), else
+  through `exec`; git's credential helper and a `gh` wrapper read the token
   from there on every call, and the orchestrator rewrites it before it expires;
 - the repository is cloned inside the sandbox with the run's token, and every git and
   GitHub step of the factory run happens there;

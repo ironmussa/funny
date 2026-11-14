@@ -45,6 +45,8 @@ export interface FakeProviderOptions {
    * succeeds with no output: the provider only records it.
    */
   exec?: (sandboxId: string, command: string) => ExecResult | Promise<ExecResult>;
+  /** Writes the files of `writeFile`. Absent, the provider has no `writeFile`. */
+  writeFile?: (sandboxId: string, path: string, content: string) => void | Promise<void>;
 }
 
 function fakeCapabilities(opts: FakeProviderOptions = {}): SandboxCapabilities {
@@ -68,6 +70,7 @@ export interface FakeSandboxProvider extends SandboxProvider {
   readonly commands: ReadonlyArray<{ sandboxId: string; command: string }>;
   readonly templateBuilds: ReadonlyArray<TemplateBuildRequest>;
   readonly exposedPorts: ReadonlyArray<{ sandboxId: string; port: number }>;
+  readonly writtenFiles: ReadonlyArray<{ sandboxId: string; path: string }>;
   failNext(error: SandboxError): void;
   expire(sandboxId: string): void;
 }
@@ -84,6 +87,7 @@ export function createFakeSandboxProvider(
   const templateBuilds: TemplateBuildRequest[] = [];
   const byIdempotencyKey = new Map<string, string>();
   const exposedPorts: Array<{ sandboxId: string; port: number }> = [];
+  const writtenFiles: Array<{ sandboxId: string; path: string }> = [];
   let pendingFailure: SandboxError | null = null;
   let counter = 0;
 
@@ -111,6 +115,7 @@ export function createFakeSandboxProvider(
     commands,
     templateBuilds,
     exposedPorts,
+    writtenFiles,
     failNext: (error) => {
       pendingFailure = error;
     },
@@ -209,6 +214,28 @@ export function createFakeSandboxProvider(
           );
         }),
       ),
+
+    ...(opts.writeFile
+      ? {
+          writeFile: (handle: SandboxHandle, path: string, content: string) =>
+            guard(() =>
+              find(handle).andThen((s) => {
+                if (s.state !== 'running') {
+                  return errAsync({
+                    kind: 'unavailable' as const,
+                    message: 'sandbox is not running',
+                  });
+                }
+                writtenFiles.push({ sandboxId: handle.sandboxId, path });
+                const write = opts.writeFile!;
+                return ResultAsync.fromPromise(
+                  Promise.resolve(write(handle.sandboxId, path, content)),
+                  (error): SandboxError => ({ kind: 'provider', message: String(error) }),
+                );
+              }),
+            ),
+        }
+      : {}),
 
     ...(opts.ingressBaseUrl
       ? {

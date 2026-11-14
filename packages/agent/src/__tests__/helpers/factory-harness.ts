@@ -97,6 +97,8 @@ export interface FactoryHarness {
   sandbox: HarnessSandbox | null;
   /** Whether the next factory's sandbox provider keeps the disk on stop (default true). */
   sandboxKeepsDisk: boolean;
+  /** Whether the next factory's sandbox provider has `writeFile` (default false: files go through `exec`). */
+  sandboxWritesFiles: boolean;
   /** Root-only secrets of the sandboxes, by run. */
   sandboxSecrets: string;
   /** A factory over the harness; `settings` overrides the defaults. */
@@ -116,12 +118,14 @@ function fakeSandbox(
   root: string,
   steps: InProcessStepOptions,
   keepsDisk: boolean,
+  writesFiles: boolean,
 ): { sandbox: HarnessSandbox; provider: SandboxProvider } {
   const commands = sandboxExec(root, steps);
   const fake = createFakeSandboxProvider('fake-valid', {
     stopPreservesDisk: keepsDisk,
     templates: ['0.0.0-test'],
     exec: commands.exec,
+    ...(writesFiles ? { writeFile: commands.writeFile } : {}),
   });
   let nextCreateError: SandboxError | null = null;
   const sandbox: HarnessSandbox = {
@@ -204,6 +208,7 @@ export function createFactoryHarness(): FactoryHarness {
     github,
     sandbox: null,
     sandboxKeepsDisk: true,
+    sandboxWritesFiles: false,
     sandboxSecrets,
     factory(turns = () => [writesHello], overrides = {}) {
       const store = openRunStore(join(home, 'state.db'));
@@ -214,7 +219,12 @@ export function createFactoryHarness(): FactoryHarness {
         repo: REPO,
         turns: (step) => turns({ ...step, factory: ref.factory! }),
       };
-      const sandboxed = fakeSandbox(join(root, 'sandboxes'), steps, harness.sandboxKeepsDisk);
+      const sandboxed = fakeSandbox(
+        join(root, 'sandboxes'),
+        steps,
+        harness.sandboxKeepsDisk,
+        harness.sandboxWritesFiles,
+      );
       harness.sandbox = sandboxed.sandbox;
       const built = composeFactory(
         {

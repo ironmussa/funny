@@ -39,7 +39,7 @@ export interface SandboxLayout {
 const DEFAULT_SANDBOX_LAYOUT: SandboxLayout = {
   secretsRoot: '/etc/funny-factory',
   sudo: 'sudo',
-  stepBin: '/opt/funny/packages/agent/src/bin/step.ts',
+  stepBin: '/opt/funny/packages/orchestrator/src/bin/step.ts',
   bun: 'bun',
   cloneUrl: (repo) => `https://github.com/${repo}.git`,
 };

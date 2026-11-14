@@ -29,6 +29,14 @@ export interface FactoryRun {
   nextCheckAt?: string;
   /** When the branch was last pushed (the pull request opened, or a fix). */
   pushedAt?: string;
+  /** Infrastructure failures retried so far. */
+  infraRetries?: number;
+  /** A run waiting to retry does not start again before this (ISO 8601). */
+  notBefore?: string;
+  /** When a failed run's issue was handed back (until then it is not admitted again). */
+  handedBackAt?: string;
+  /** When the issue was first claimed in full (assigned, labelled, commented). */
+  claimedAt?: string;
 }
 
 export interface RunStore {

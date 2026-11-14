@@ -9,8 +9,9 @@ GitHub issues marked ready for an agent into pull requests. Vocabulary is in the
 session store, webhook workflows) has been removed. `start` runs worktree factory runs end
 to end: every minute it admits ready issues, takes each to a draft pull request, follows
 its CI, has the same agent fix failing checks and conflicts, and marks it ready for review
-once green. Sandbox workspaces, auto-merge, retries and restart reconciliation are not built
-yet (#275); a sandbox project is skipped with a warning.
+once green. Infrastructure failures are retried
+and failed issues are handed back. Sandbox workspaces, auto-merge and restart
+reconciliation are not built yet (#275); a sandbox project is skipped with a warning.
 
 ## Running it
 
@@ -52,7 +53,18 @@ login that have no active factory run, within the concurrency and daily limits. 
    - after 3 fix attempts (conflicts included) without green CI, the factory run is
      **`failed`**.
 
-A step that fails ends the run in **`failed`** with the reason. Runs in `queued`,
+**Failures** are of two kinds. An **infrastructure** failure (GitHub, the network, git, the
+token, the workspace) is retried: before the pull request the factory run goes back to
+`queued` and starts over on a fresh branch after `retry_delay_minutes`, then after twice
+that; in a fix it waits for CI again after that delay (without using up a fix attempt).
+Reading CI and marking the pull request ready are retried the same way. The two retries are
+per factory run, across all its steps. After two retries it fails. Errors of the agent CLI
+that come from the model provider (rate limits, overload, a refused key, the network) count
+as infrastructure failures. An **agent** failure (checks that never pass, no changes, the
+agent erroring) is not retried. A failed factory run hands its issue back: a comment says
+why, the in-progress and ready labels are removed (the login stays assigned), and its
+branch and pull request are kept. Adding the ready label again starts a new factory run. Until the hand-back has gone
+through (it is retried on every tick), the issue is not admitted again. Runs in `queued`,
 `claiming`, `working` and `fixing` hold a concurrency slot; waiting for CI does not. The
 states show in `status` and, with the steps' own events, in the run's `events.jsonl`.
 
@@ -148,6 +160,7 @@ src/
     pull-request-body.ts  body of a run's pull request (`Closes #N`, checks note)
     step-outcome.ts    how a step ended (PR opened, agent or infra failure)
     factory-run.ts     the run state machine
+    retry-policy.ts    when an infrastructure failure is retried
   ports/           interfaces the factory depends on
     tracker.ts         issue source
     pull-requests.ts   opening a draft pull request from a workspace

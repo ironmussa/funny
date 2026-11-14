@@ -134,10 +134,13 @@ export function createWorktreeWorkspaces(deps: WorktreeWorkspaceDeps): Workspace
         (error) => `cannot create the run directory: ${String(error)}`,
       ).andThen(() =>
         setup.withToken((expiresAt) =>
-          git(
-            ['fetch', '--quiet', 'origin', `+refs/heads/${request.base}:${remoteBase}`],
-            request.projectPath,
-          )
+          removePreviousCheckout(paths.checkout, request.projectPath, git)
+            .andThen(() =>
+              git(
+                ['fetch', '--quiet', 'origin', `+refs/heads/${request.base}:${remoteBase}`],
+                request.projectPath,
+              ),
+            )
             .andThen(() =>
               git(
                 ['worktree', 'add', '--quiet', '-b', request.branch, paths.checkout, remoteBase],
@@ -158,6 +161,22 @@ export function createWorktreeWorkspaces(deps: WorktreeWorkspaceDeps): Workspace
       );
     },
   };
+}
+
+/** A retried factory run starts from a fresh checkout: the previous attempt's goes. */
+function removePreviousCheckout(
+  checkout: string,
+  projectPath: string,
+  git: (args: string[], cwd: string) => ResultAsync<string, string>,
+): ResultAsync<void, string> {
+  if (!existsSync(checkout)) return okAsync(undefined);
+  // `worktree remove` fails for a checkout git no longer knows about; the
+  // directory is removed and the worktree list pruned either way.
+  return git(['worktree', 'remove', '--force', checkout], projectPath)
+    .orElse(() => okAsync(''))
+    .andThen(() => ResultAsync.fromPromise(rm(checkout, { recursive: true, force: true }), String))
+    .andThen(() => git(['worktree', 'prune'], projectPath))
+    .map(() => undefined);
 }
 
 function worktreeWorkspace(

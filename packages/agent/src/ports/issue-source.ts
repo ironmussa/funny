@@ -24,6 +24,8 @@ export interface TrustedIssue {
 
 export interface IssueSourceError {
   message: string;
+  /** GitHub's HTTP status, when it answered. */
+  status?: number;
 }
 
 export interface IssueSource {
@@ -35,11 +37,25 @@ export interface IssueSource {
     issue: number,
     login: string,
   ): ResultAsync<TrustedIssue, IssueSourceError>;
-  /** Assign `login`, swap the ready label for the in-progress one, and comment. */
+  /**
+   * Assign `login`, swap the ready label for the in-progress one, and comment
+   * (no comment when `comment` is absent: a retry of a claimed issue). Safe to
+   * repeat.
+   */
   claim(
     repo: string,
     issue: number,
-    claim: { login: string; readyLabel: string; inProgressLabel: string; comment: string },
+    claim: { login: string; readyLabel: string; inProgressLabel: string; comment?: string },
+  ): ResultAsync<void, IssueSourceError>;
+  /**
+   * Give the issue back after a failed factory run: reset the labels (neither
+   * ready nor in progress, so it is not admitted again until someone says so)
+   * and say why.
+   */
+  handBack(
+    repo: string,
+    issue: number,
+    handBack: { readyLabel: string; inProgressLabel: string; comment: string },
   ): ResultAsync<void, IssueSourceError>;
   defaultBranch(repo: string): ResultAsync<string, IssueSourceError>;
 }

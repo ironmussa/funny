@@ -25,7 +25,7 @@ export interface RunRecorder {
    * End a run that stopped on an unexpected error while it held a slot
    * (queued, claiming, working, fixing), so it neither stays there nor keeps it.
    */
-  abort(runId: string, reason: string): void;
+  abort(runId: string, reason: string): FactoryRun | null;
   /** Save other fields without changing the state. */
   update(run: FactoryRun, change: Partial<FactoryRun>): FactoryRun;
   /** Resolves once every event so far is written. */
@@ -86,11 +86,12 @@ export function createRunRecorder(deps: {
     },
     abort(runId, reason) {
       const run = store.list().find((r) => r.id === runId);
-      if (!run || !holdsSlot(run.state)) return;
+      if (!run || !holdsSlot(run)) return null;
       const next = { ...run, state: 'failed', reason, updatedAt: clock.now().toISOString() };
       store.save(next);
       reportState(next);
       log.error(`Factory run ${runId} failed`, { reason });
+      return next;
     },
     update(run, change) {
       const next = { ...run, ...change, updatedAt: clock.now().toISOString() };

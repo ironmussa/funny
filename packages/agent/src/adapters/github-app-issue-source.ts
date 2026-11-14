@@ -4,6 +4,8 @@
  * involved.
  */
 
+import { errAsync, okAsync } from 'neverthrow';
+
 import type { IssueSource, ReadyIssue } from '../ports/issue-source.js';
 import type { FactoryAppTokens } from './factory-app.js';
 import { createFactoryGithub } from './factory-github.js';
@@ -29,6 +31,11 @@ export function createGithubAppIssueSource(deps: {
 }): IssueSource {
   const github = createFactoryGithub(deps);
   const call = github.json;
+  /** Removing a label the issue no longer has is not an error (a retry, a person removed it). */
+  const removeLabel = (repo: string, issue: string, label: string) =>
+    call(repo, 'DELETE', `${issue}/labels/${encodeURIComponent(label)}`).orElse((e) =>
+      e.status === 404 ? okAsync(undefined) : errAsync(e),
+    );
 
   return {
     listReady(repo, label) {
@@ -78,10 +85,20 @@ export function createGithubAppIssueSource(deps: {
       const issue = `/repos/${repo}/issues/${number}`;
       return call(repo, 'POST', `${issue}/assignees`, { assignees: [claim.login] })
         .andThen(() => call(repo, 'POST', `${issue}/labels`, { labels: [claim.inProgressLabel] }))
+        .andThen(() => removeLabel(repo, issue, claim.readyLabel))
         .andThen(() =>
-          call(repo, 'DELETE', `${issue}/labels/${encodeURIComponent(claim.readyLabel)}`),
+          claim.comment
+            ? call(repo, 'POST', `${issue}/comments`, { body: claim.comment })
+            : okAsync(undefined),
         )
-        .andThen(() => call(repo, 'POST', `${issue}/comments`, { body: claim.comment }))
+        .map(() => undefined);
+    },
+
+    handBack(repo, number, handBack) {
+      const issue = `/repos/${repo}/issues/${number}`;
+      return removeLabel(repo, issue, handBack.inProgressLabel)
+        .andThen(() => removeLabel(repo, issue, handBack.readyLabel))
+        .andThen(() => call(repo, 'POST', `${issue}/comments`, { body: handBack.comment }))
         .map(() => undefined);
     },
 

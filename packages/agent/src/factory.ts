@@ -21,10 +21,17 @@
 
 import { randomUUID } from 'crypto';
 
-import { holdsSlot, isActive, MAX_FIX_ATTEMPTS } from './domain/factory-run.js';
+import {
+  blocksAdmission,
+  holdsSlot,
+  MAX_FIX_ATTEMPTS,
+  needsHandBack,
+} from './domain/factory-run.js';
+import { MAX_INFRA_RETRIES, nextInfraRetry } from './domain/retry-policy.js';
+import type { FailureKind } from './domain/step-outcome.js';
 import type { FactoryLog } from './infrastructure/factory-log.js';
 import type { Clock } from './ports/clock.js';
-import type { IssueSource, ReadyIssue } from './ports/issue-source.js';
+import type { IssueSource, ReadyIssue, TrustedIssue } from './ports/issue-source.js';
 import type { CiState, PullRequestCi } from './ports/pull-request-ci.js';
 import type { FactoryRun, RunStore } from './ports/run-store.js';
 import type { WorkspaceProvider, WorkspaceRequest } from './ports/workspaces.js';
@@ -59,9 +66,13 @@ const NO_CI_GRACE_MS = 15 * 60 * 1000;
 const claimComment = (runId: string) =>
   `The issue factory is working on this issue (run \`${runId}\`). It will open a draft pull request that closes it.`;
 
+/** Where an infrastructure failure is retried: before the pull request, or after it. */
+type RetryState = 'queued' | 'waiting_ci';
+
+const handBackComment = (runId: string, reason: string, label: string) =>
+  `The issue factory could not finish this issue (run \`${runId}\`): ${reason}\n\nIts branch and pull request, if any, are kept. Add the \`${label}\` label again to start a new factory run.`;
+
 const prNumberOf = (url: string | null) => Number(/\/pull\/(\d+)/.exec(url ?? '')?.[1] ?? NaN);
-const failureOf = (outcome: { failure: string; reason: string }) =>
-  `${outcome.failure} failure: ${outcome.reason}`;
 
 export function createFactory(deps: FactoryDeps): Factory {
   const { settings, store, clock, log } = deps;
@@ -73,20 +84,77 @@ export function createFactory(deps: FactoryDeps): Factory {
   const later = () => new Date(clock.now().getTime() + CI_POLL_MS).toISOString();
   /** The fields of a run that (again) waits for CI. */
   const waitingForCi = (reason = 'waiting for CI') => ({ nextCheckAt: later(), reason });
-  const slotsLeft = () =>
-    settings.limits.concurrency - store.list().filter((r) => holdsSlot(r.state)).length;
-  const fail = (run: FactoryRun, reason: string) => runs.transition(run, 'failed', { reason });
+  const isDue = (at: string | undefined) => !at || Date.parse(at) <= clock.now().getTime();
+  const slotsLeft = () => settings.limits.concurrency - store.list().filter(holdsSlot).length;
+
+  /** Give the issue back: a comment with the reason, the ready and in-progress labels removed. */
+  async function handBack(run: FactoryRun): Promise<FactoryRun> {
+    const back = await deps.issues.handBack(run.repo, run.issueNumber, {
+      readyLabel: settings.labels.ready,
+      inProgressLabel: settings.labels.in_progress,
+      comment: handBackComment(run.id, run.reason ?? 'unknown reason', settings.labels.ready),
+    });
+    if (back.isErr()) {
+      // Tried again on the next tick; until then the issue is not admitted again.
+      log.warn('Could not hand the issue back', { run: run.id, error: back.error.message });
+      return run;
+    }
+    return runs.update(run, { handedBackAt: clock.now().toISOString() });
+  }
+
+  /** The end of a factory run that did not make it: `failed`, and the issue handed back. */
+  const giveUp = (run: FactoryRun, reason: string) =>
+    handBack(
+      runs.transition(run, 'failed', { reason, notBefore: undefined, nextCheckAt: undefined }),
+    );
+
+  /**
+   * An infrastructure failure: tried again after the configured delay, then
+   * twice that; once the retries are used up, the run fails. Before the pull
+   * request the run starts over (`queued`); a fix is looked at again
+   * (`waiting_ci`), without counting as a fix attempt.
+   */
+  function onInfraFailure(run: FactoryRun, reason: string, retryIn: RetryState = 'queued') {
+    const retries = run.infraRetries ?? 0;
+    const at = nextInfraRetry(retries, settings.retry_delay_minutes, clock.now());
+    if (!at) {
+      return giveUp(run, `infra failure (after ${MAX_INFRA_RETRIES} retries): ${reason}`);
+    }
+    const when = at.toISOString();
+    const change: Partial<FactoryRun> = {
+      infraRetries: retries + 1,
+      reason: `infra failure: ${reason}; retrying after ${when}`,
+    };
+    if (retryIn === 'queued') return runs.transition(run, 'queued', { ...change, notBefore: when });
+    // Reading CI failed: look again later, in the same state.
+    if (run.state === 'waiting_ci') return runs.update(run, { ...change, nextCheckAt: when });
+    // A fix that could not run: it was no attempt at fixing CI.
+    return runs.transition(run, 'waiting_ci', {
+      ...change,
+      nextCheckAt: when,
+      fixAttempts: Math.max(0, (run.fixAttempts ?? 1) - 1),
+    });
+  }
+
+  /** A failed step: an agent failure ends the run, an infrastructure one is retried. */
+  const onStepFailed = (
+    run: FactoryRun,
+    outcome: { failure: FailureKind; reason: string },
+    retryIn: RetryState = 'queued',
+  ) =>
+    outcome.failure === 'agent'
+      ? giveUp(run, `agent failure: ${outcome.reason}`)
+      : onInfraFailure(run, outcome.reason, retryIn);
 
   function track(runId: string, work: () => Promise<unknown>): void {
     busy.add(runId);
     const running = work()
       .then(() => undefined)
-      .catch((error) =>
-        runs.abort(
-          runId,
-          `infra failure: stopped unexpectedly: ${error instanceof Error ? error.message : String(error)}`,
-        ),
-      )
+      .catch(async (error) => {
+        const reason = `stopped unexpectedly: ${error instanceof Error ? error.message : String(error)}`;
+        const aborted = runs.abort(runId, reason);
+        if (aborted) await handBack(aborted);
+      })
       .finally(() => {
         busy.delete(runId);
         inFlight.delete(running);
@@ -104,6 +172,35 @@ export function createFactory(deps: FactoryDeps): Factory {
     branch: run.branch!,
   });
 
+  /**
+   * What the `implement` step needs: the base branch and the issue's trusted
+   * text; the run records them and its branch. A failure is returned as the
+   * run it left behind.
+   */
+  async function startWork(
+    project: FactoryProject,
+    working: FactoryRun,
+  ): Promise<FactoryRun | { run: FactoryRun; trusted: TrustedIssue; base: string }> {
+    const base = project.base ?? (await deps.issues.defaultBranch(working.repo).unwrapOr(null));
+    if (!base) return onInfraFailure(working, 'could not read the repository default branch');
+    const trusted = await deps.issues.readTrusted(
+      working.repo,
+      working.issueNumber,
+      settings.github.login,
+    );
+    if (trusted.isErr()) {
+      return onInfraFailure(working, `could not read the issue: ${trusted.error.message}`);
+    }
+    // Each attempt has its own branch: an earlier one may have pushed before it failed.
+    const retry = working.infraRetries ? `-retry${working.infraRetries}` : '';
+    const run = runs.update(working, {
+      base,
+      branch: `factory/issue-${working.issueNumber}-${working.id.slice(-8)}${retry}`,
+      issueTitle: trusted.value.title,
+    });
+    return { run, trusted: trusted.value, base };
+  }
+
   /** From claiming the issue to the pull request of its `implement` step. */
   async function implementIssue(project: FactoryProject, queued: FactoryRun): Promise<FactoryRun> {
     let run = runs.transition(queued, 'claiming');
@@ -111,35 +208,35 @@ export function createFactory(deps: FactoryDeps): Factory {
       login: settings.github.login,
       readyLabel: settings.labels.ready,
       inProgressLabel: settings.labels.in_progress,
-      comment: claimComment(run.id),
+      // Commented once: a retry of a completed claim does not comment again.
+      comment: queued.claimedAt ? undefined : claimComment(run.id),
     });
-    if (claimed.isErr()) return fail(run, `could not claim the issue: ${claimed.error.message}`);
+    if (claimed.isErr())
+      return onInfraFailure(run, `could not claim the issue: ${claimed.error.message}`);
+    if (!run.claimedAt) run = runs.update(run, { claimedAt: clock.now().toISOString() });
 
-    run = runs.transition(run, 'working');
-    const base = project.base ?? (await deps.issues.defaultBranch(run.repo).unwrapOr(null));
-    if (!base) return fail(run, 'could not read the repository default branch');
-    const trusted = await deps.issues.readTrusted(run.repo, run.issueNumber, settings.github.login);
-    if (trusted.isErr()) return fail(run, `could not read the issue: ${trusted.error.message}`);
-    run = runs.update(run, {
-      base,
-      branch: `factory/issue-${run.issueNumber}-${run.id.slice(-8)}`,
-      issueTitle: trusted.value.title,
-    });
+    const working = await startWork(project, runs.transition(run, 'working'));
+    if (!('trusted' in working)) return working;
+    run = working.run;
+    const { trusted, base } = working;
 
     const workspace = await deps.workspaces.prepare(workspaceRequest(run, project));
-    if (workspace.isErr()) return fail(run, `could not prepare the workspace: ${workspace.error}`);
+    if (workspace.isErr()) {
+      return onInfraFailure(run, `could not prepare the workspace: ${workspace.error}`);
+    }
     try {
       const outcome = await workspace.value.implement({
         runId: run.id,
-        issue: trusted.value,
+        issue: trusted,
         base,
         branch: run.branch!,
         checkCommand: project.check,
         author: settings.github.author,
         model: settings.model,
       });
-      if (outcome.kind === 'failed') return fail(run, failureOf(outcome));
-      if (outcome.kind !== 'pr_opened') return fail(run, 'infra failure: no pull request');
+      if (outcome.kind === 'failed') return onStepFailed(run, outcome);
+      if (outcome.kind !== 'pr_opened')
+        return onInfraFailure(run, 'the step opened no pull request');
       run = runs.transition(run, 'pr_open', {
         prUrl: outcome.prUrl,
         sessionId: outcome.sessionId,
@@ -157,10 +254,15 @@ export function createFactory(deps: FactoryDeps): Factory {
     fixing: FactoryRun,
     problem: FixStepSpec['problem'],
   ): Promise<FactoryRun> {
-    if (!fixing.sessionId) return fail(fixing, 'infra failure: no agent session to resume');
+    if (!fixing.sessionId) return giveUp(fixing, 'infra failure: no agent session to resume');
     const workspace = await deps.workspaces.reopen(workspaceRequest(fixing, project));
-    if (workspace.isErr())
-      return fail(fixing, `could not reopen the workspace: ${workspace.error}`);
+    if (workspace.isErr()) {
+      return onInfraFailure(
+        fixing,
+        `could not reopen the workspace: ${workspace.error}`,
+        'waiting_ci',
+      );
+    }
     try {
       const outcome = await workspace.value.fix({
         runId: fixing.id,
@@ -181,7 +283,7 @@ export function createFactory(deps: FactoryDeps): Factory {
       if (outcome.kind === 'failed' && outcome.failure === 'agent') {
         return runs.transition(fixing, 'waiting_ci', waitingForCi(`last fix: ${outcome.reason}`));
       }
-      if (outcome.kind === 'failed') return fail(fixing, failureOf(outcome));
+      if (outcome.kind === 'failed') return onStepFailed(fixing, outcome, 'waiting_ci');
       return runs.transition(fixing, 'waiting_ci', {
         ...waitingForCi(),
         sessionId: outcome.sessionId ?? fixing.sessionId,
@@ -200,7 +302,7 @@ export function createFactory(deps: FactoryDeps): Factory {
   ) {
     const attempts = run.fixAttempts ?? 0;
     if (attempts >= MAX_FIX_ATTEMPTS) {
-      return fail(run, `agent failure: CI did not pass after ${MAX_FIX_ATTEMPTS} fix attempts`);
+      return giveUp(run, `agent failure: CI did not pass after ${MAX_FIX_ATTEMPTS} fix attempts`);
     }
     // Checked and taken without awaiting, so two follow-ups cannot take one slot.
     if (slotsLeft() <= 0)
@@ -217,8 +319,7 @@ export function createFactory(deps: FactoryDeps): Factory {
   async function markReady(run: FactoryRun, number: number, reason: string | null) {
     const marked = await deps.pullRequests.markReady(run.repo, number);
     if (marked.isOk()) return runs.transition(run, 'ready', { reason, nextCheckAt: undefined });
-    log.warn('Could not mark a pull request ready', { run: run.id, error: marked.error.message });
-    return runs.update(run, { nextCheckAt: later() });
+    return onInfraFailure(run, `could not mark it ready: ${marked.error.message}`, 'waiting_ci');
   }
 
   /** No check reported: CI may not have started, or the repository has none. */
@@ -235,8 +336,7 @@ export function createFactory(deps: FactoryDeps): Factory {
     const number = prNumberOf(run.prUrl);
     const ci = await deps.pullRequests.ciState(run.repo, number);
     if (ci.isErr()) {
-      log.warn('Could not read the CI of a pull request', { run: run.id, error: ci.error.message });
-      return runs.update(run, { nextCheckAt: later() });
+      return onInfraFailure(run, `could not read the CI: ${ci.error.message}`, 'waiting_ci');
     }
     switch (ci.value.kind) {
       case 'pending':
@@ -276,7 +376,9 @@ export function createFactory(deps: FactoryDeps): Factory {
     }
     const login = settings.github.login.toLowerCase();
     const active = (n: number) =>
-      store.list().some((r) => r.repo === project.repo && r.issueNumber === n && isActive(r.state));
+      store
+        .list()
+        .some((r) => r.repo === project.repo && r.issueNumber === n && blocksAdmission(r));
     for (const issue of ready.value) {
       if (slotsLeft() <= 0 || settings.limits.daily - store.startedOn(today()) <= 0) return;
       if (issue.author.toLowerCase() !== login || active(issue.number)) continue;
@@ -284,13 +386,36 @@ export function createFactory(deps: FactoryDeps): Factory {
     }
   }
 
-  /** Runs waiting for CI whose next look is due. */
-  function followDueRuns(projects: FactoryProject[]): void {
-    const now = clock.now().getTime();
+  /** Failed runs whose issue could not be handed back yet. */
+  function retryHandBacks(): void {
+    for (const run of store.list()) {
+      if (!needsHandBack(run) || busy.has(run.id)) continue;
+      track(run.id, () => handBack(run));
+    }
+  }
+
+  /** Runs waiting to retry an infrastructure failure whose time has come. */
+  function retryDueRuns(projects: FactoryProject[]): void {
     for (const run of store.list()) {
       const project = projects.find((p) => p.repo === run.repo);
-      const due = !run.nextCheckAt || Date.parse(run.nextCheckAt) <= now;
-      if (run.state !== 'waiting_ci' || !project || busy.has(run.id) || !due) continue;
+      if (run.state !== 'queued' || !run.notBefore || !project || busy.has(run.id)) continue;
+      if (!isDue(run.notBefore)) continue;
+      if (slotsLeft() <= 0) {
+        runs.update(run, { reason: 'retry due; waiting for a free slot' });
+        continue;
+      }
+      const retrying = runs.update(run, { notBefore: undefined });
+      track(run.id, () => implementIssue(project, retrying));
+    }
+  }
+
+  /** Runs waiting for CI whose next look is due. */
+  function followDueRuns(projects: FactoryProject[]): void {
+    for (const run of store.list()) {
+      const project = projects.find((p) => p.repo === run.repo);
+      if (run.state !== 'waiting_ci' || !project || busy.has(run.id) || !isDue(run.nextCheckAt)) {
+        continue;
+      }
       track(run.id, () => followCi(project, run));
     }
   }
@@ -300,6 +425,8 @@ export function createFactory(deps: FactoryDeps): Factory {
       // Sandbox workspaces come with #289; until then only worktree projects run.
       const projects = settings.projects.filter((p) => p.workspace === 'worktree');
       followDueRuns(projects);
+      retryDueRuns(projects);
+      retryHandBacks();
       for (const project of projects) await admit(project);
     },
     async idle() {

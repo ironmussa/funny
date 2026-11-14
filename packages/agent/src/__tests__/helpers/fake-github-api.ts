@@ -56,6 +56,11 @@ export interface FakeGithubApi {
   /** Every credential presented, to prove which ones were (not) used. */
   readonly credentialsSeen: Set<string>;
   addIssue(issue: Partial<FakeIssue> & { number: number; author: string }): FakeIssue;
+  /** Every request made with an installation token, in order (`POST /repos/…/assignees`). */
+  readonly requests: string[];
+  /** Make requests whose method and path end match fail with `status` until `heal`. */
+  fail(method: string, pathEnd: string, status?: number): void;
+  heal(method: string, pathEnd: string): void;
 }
 
 const BOT = 'funny-factory[bot]';
@@ -72,6 +77,10 @@ export function fakeGithubApi(options: {
   const tokens: FakeGithubApi['tokens'] = [];
   const refused: FakeGithubApi['refused'] = [];
   const credentialsSeen = new Set<string>();
+  const requests: string[] = [];
+  const failures = new Map<string, { method: string; pathEnd: string; status: number }>();
+  const injectedFailure = (method: string, path: string) =>
+    [...failures.values()].find((f) => f.method === method && path.endsWith(f.pathEnd));
   let nextNumber = 1000;
 
   const json = (status: number, body?: unknown) =>
@@ -270,6 +279,9 @@ export function fakeGithubApi(options: {
     if (!inScope) return json(404, { message: 'Not Found' });
     if (!validToken(credential)) return deny();
     presented = credential;
+    requests.push(`${method} ${url.pathname}`);
+    const failure = injectedFailure(method, url.pathname);
+    if (failure) return json(failure.status, { message: 'Server Error' });
     return withToken(method, url, body);
   }
 
@@ -288,6 +300,13 @@ export function fakeGithubApi(options: {
     tokens,
     refused,
     credentialsSeen,
+    requests,
+    fail(method, pathEnd, status = 502) {
+      failures.set(`${method} ${pathEnd}`, { method, pathEnd, status });
+    },
+    heal(method, pathEnd) {
+      failures.delete(`${method} ${pathEnd}`);
+    },
     addIssue(partial) {
       const issue: FakeIssue = {
         title: `Issue ${partial.number}`,

@@ -31,6 +31,13 @@ import type { FailureKind } from '../domain/step-outcome.js';
 import type { PullRequestOpener } from '../ports/pull-requests.js';
 import { resolveBaseRef } from './base-ref.js';
 
+/**
+ * Errors of the agent CLI that are the infrastructure's, not the agent's: the
+ * model provider overloaded or rate-limiting, a refused credential, the network.
+ */
+const INFRA_AGENT_ERRORS =
+  /rate.?limit|overloaded|\b(401|403|429|500|502|503|529)\b|api key|authenticat|credit balance|ECONN|ETIMEDOUT|network/i;
+
 /** Tools that wait for a person; nobody answers in an unattended run. */
 const INTERACTIVE_TOOLS = ['AskUserQuestion', 'ExitPlanMode'];
 
@@ -92,11 +99,9 @@ export class WorkspaceActionProvider implements ActionProvider {
             this.sessionId = message.session_id;
           }
           if (message.type === 'result') {
-            settle(
-              message.is_error
-                ? { ok: false, error: message.result || `agent ended with ${message.subtype}` }
-                : { ok: true, output: message.result ?? '' },
-            );
+            const error = message.result || `agent ended with ${message.subtype}`;
+            if (!message.is_error) settle({ ok: true, output: message.result ?? '' });
+            else settle({ ok: false, error }, INFRA_AGENT_ERRORS.test(error) ? 'infra' : 'agent');
           }
         });
         process.on('error', (err) => settle({ ok: false, error: err.message }, 'infra'));

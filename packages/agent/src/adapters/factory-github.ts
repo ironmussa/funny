@@ -24,7 +24,7 @@ export interface FactoryGithub {
   text(repo: string, path: string): ResultAsync<string, GithubCallError>;
 }
 
-const fail = (message: string): GithubCallError => ({ message });
+const fail = (message: string, status?: number): GithubCallError => ({ message, status });
 
 export function createFactoryGithub(deps: {
   tokens: FactoryAppTokens;
@@ -51,7 +51,7 @@ export function createFactoryGithub(deps: {
       .andThen((res) =>
         res.ok
           ? okAsync(res)
-          : errAsync(fail(`GitHub answered ${res.status} to ${method} ${path}`)),
+          : errAsync(fail(`GitHub answered ${res.status} to ${method} ${path}`, res.status)),
       );
 
   return {

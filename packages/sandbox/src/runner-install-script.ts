@@ -44,6 +44,18 @@ git fetch -q --depth 1 origin "$FUNNY_COMMIT"
 git checkout -q --force --detach FETCH_HEAD
 bun install --frozen-lockfile >/tmp/funny-bun-install.log 2>&1 || bun install >/tmp/funny-bun-install.log 2>&1
 
+# git's credential helper (\`gh auth git-credential\`) and pull requests need the GitHub CLI.
+# Bounded, and never fatal: a base image without apt keeps its own gh, or none.
+if ! command -v gh >/dev/null 2>&1 && command -v apt-get >/dev/null 2>&1; then
+  timeout 180 sh -c '
+    sudo mkdir -p -m 755 /etc/apt/keyrings &&
+    curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null &&
+    sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg &&
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list >/dev/null &&
+    sudo apt-get update -qq && sudo apt-get install -y -qq gh
+  ' >/tmp/funny-gh-install.log 2>&1 || echo "GitHub CLI install failed, see /tmp/funny-gh-install.log"
+fi
+
 if [ "\${FUNNY_BUILD_NATIVE:-}" = "1" ]; then
   if ! command -v cargo >/dev/null 2>&1 && [ ! -x "$HOME/.cargo/bin/cargo" ]; then
     timeout 120 sh -c "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal" >/tmp/funny-rustup.log 2>&1 || true

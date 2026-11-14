@@ -41,8 +41,9 @@ export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
   }
 
   /**
-   * The pull request merged: its workspace and remote branch go, then the run
-   * is `merged`. What could not be removed is tried again on the next look.
+   * The pull request merged: its workspace, remote branch and the issue's
+   * in-progress label go, then the run is `merged`. What could not be removed
+   * is tried again on the next look.
    */
   async function cleanUp(project: FactoryProject, run: FactoryRun): Promise<FactoryRun> {
     const problems: string[] = [];
@@ -50,6 +51,10 @@ export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
     if (removed.isErr()) problems.push(removed.error);
     const deleted = await ctx.pullRequests.deleteBranch(run.repo, run.branch ?? '');
     if (deleted.isErr()) problems.push(deleted.error.message);
+    const released = await ctx.issues.release(run.repo, run.issueNumber, {
+      inProgressLabel: ctx.settings.labels.in_progress,
+    });
+    if (released.isErr()) problems.push(released.error.message);
     if (problems.length === 0) {
       return runs.transition(run, 'merged', { reason: null, nextCheckAt: undefined });
     }

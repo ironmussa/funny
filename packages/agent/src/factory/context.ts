@@ -29,8 +29,11 @@ export interface FactoryDeps {
 
 /** How often a run waiting on its pull request looks at it. */
 const POLL_MS = 3 * 60 * 1000;
-/** How often a run marked ready looks whether a person merged its pull request. */
-export const READY_POLL_MS = 30 * 60 * 1000;
+/**
+ * How often a run marked ready looks whether a person merged its pull request,
+ * so the cleanup follows a merge within minutes (two requests a look).
+ */
+export const READY_POLL_MS = 5 * 60 * 1000;
 
 export interface FactoryContext extends FactoryDeps {
   runs: RunRecorder;

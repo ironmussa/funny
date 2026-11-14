@@ -88,19 +88,20 @@ true` the factory also enables GitHub's auto-merge (**`merging`**), with squash 
      protections are met (required reviews and checks still apply, nothing is bypassed).
      When a pull request already meets them, GitHub refuses auto-merge ("clean status") and
      the factory merges it at once the same way. Once merged the factory run is
-     **`merged`**, and its worktree, local branch, credentials and remote branch are
-     removed (its `events.jsonl` stays). A pull request that turns red while it waits to
+     **`merged`**, its worktree, local branch, credentials and remote branch are
+     removed (its `events.jsonl` stays), and the issue loses its in-progress label. A pull request that turns red while it waits to
      merge goes back to waiting for CI; one closed without merging fails the factory run.
      Auto-merge turned off while the pull request stays green is enabled again; a direct
      merge is of the commit whose CI was green, and one GitHub refuses waits. A cleanup
      that fails is tried again before the factory run is `merged`.
      A repository without auto-merge leaves the pull request ready. A `ready` pull request
-     that a person merges later is noticed (every 30 minutes) and cleaned up the same way;
+     that a person merges later is noticed (every 5 minutes) and cleaned up the same way;
    - a failing check, or a conflict with the base: the step runner's `fix` step (**`fixing`**)
      resumes the same agent session with the failing checks and the end of their logs, or
      asks it to rebase onto the base, runs the checks, and pushes; then it waits again;
    - no check reported yet: it keeps waiting; with none 15 minutes after the last push the
-     repository is taken to have no CI, and the pull request is marked ready with that reason;
+     repository is taken to have no CI, and the pull request is marked ready with that reason
+     and a comment saying what was checked (never merged by the factory);
    - a fix the agent could not finish (it changed nothing, the rebase is unfinished, the
      local checks stay red) uses up an attempt and the factory run keeps waiting for CI;
    - after 3 fix attempts (conflicts included) without green CI, the factory run is

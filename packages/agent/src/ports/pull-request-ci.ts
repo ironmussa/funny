@@ -51,6 +51,8 @@ export interface PullRequestCi {
   mergeState(repo: string, number: number): ResultAsync<MergeState, IssueSourceError>;
   /** The URL of the open pull request from `branch`, or null when there is none. */
   findOpen(repo: string, branch: string): ResultAsync<string | null, IssueSourceError>;
+  /** Comment on the pull request. */
+  comment(repo: string, number: number, body: string): ResultAsync<void, IssueSourceError>;
   /** Delete a branch on GitHub; a branch already gone is not an error. */
   deleteBranch(repo: string, branch: string): ResultAsync<void, IssueSourceError>;
 }

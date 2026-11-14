@@ -40,11 +40,15 @@ export interface FakePull {
   requiresReview: boolean;
   approved: boolean;
   /** Auto-merge as enabled through GraphQL. */
-  autoMerge: { method: string } | null;
+  autoMerge: {
+    method: string;
+  } | null;
   merged: boolean;
   /** How it was merged. */
   mergedWith: string | null;
   state: 'open' | 'closed';
+  /** Comments on the pull request (`POST /issues/:n/comments`, as GitHub takes them). */
+  comments: string[];
 }
 
 /** The repository's merge settings (`GET /repos/:repo`). */
@@ -223,6 +227,7 @@ export function fakeGithubApi(options: {
       merged: false,
       mergedWith: null,
       state: 'open',
+      comments: [],
     };
     pulls.push(pull);
     return json(201, { number, html_url: pull.url, draft: pull.draft });
@@ -411,10 +416,19 @@ export function fakeGithubApi(options: {
     return handler ? handler(issue, body, sub) : null;
   };
 
+  /** `POST /issues/:n/comments` on a pull request: GitHub takes its comments through the issues API. */
+  const pullCommentRoutes: Route = (method, url, body) => {
+    const match = /^\/repos\/[^/]+\/[^/]+\/issues\/(\d+)\/comments$/.exec(url.pathname);
+    const pull = match && method === 'POST' ? pullByNumber(match[1]) : undefined;
+    if (!pull || issues.has(pull.number)) return null;
+    pull.comments.push(body.body);
+    return json(201, { body: body.body });
+  };
+
   const isJwt = (credential: string) => /^[\w-]+\.[\w-]+\.[\w-]+$/.test(credential);
   const validToken = (credential: string) =>
     tokens.some((t) => t.token === credential && t.expiresAt > options.clock.now().getTime());
-  const repoScoped = [repoRoutes, ciRoutes, mergeRoutes, issueRoutes];
+  const repoScoped = [repoRoutes, ciRoutes, mergeRoutes, issueRoutes, pullCommentRoutes];
 
   /** Routes with an installation token: GraphQL and the repository's REST API. */
   function withToken(method: string, url: URL, body: any): Response {

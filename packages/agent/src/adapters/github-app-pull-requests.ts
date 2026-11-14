@@ -195,6 +195,13 @@ export function createGithubAppPullRequests(deps: {
         .map((pulls) => pulls[0]?.html_url ?? null);
     },
 
+    comment(repo, number, body) {
+      // GitHub takes a pull request's comments through the issues API.
+      return github
+        .json(repo, 'POST', `/repos/${repo}/issues/${number}/comments`, { body })
+        .map(() => undefined);
+    },
+
     deleteBranch(repo, branch) {
       const ref = `/repos/${repo}/git/refs/heads/${branch.split('/').map(encodeURIComponent).join('/')}`;
       return github

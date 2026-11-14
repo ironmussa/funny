@@ -229,6 +229,10 @@ describe('CI follow-up', () => {
     store.close();
     expect(pull().draft).toBe(false);
     expect(await h.status()).toContain('no CI');
+    // The pull request says so, once.
+    expect(pull().comments).toHaveLength(1);
+    expect(pull().comments[0]).toContain('No CI reported a check');
+    expect(pull().comments[0]).toContain('marked it ready for review');
   });
 
   test('a fix the agent could not finish uses up an attempt and the run keeps waiting', async () => {

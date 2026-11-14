@@ -61,6 +61,12 @@ export interface IssueSource {
     issue: number,
     handBack: { readyLabel: string; inProgressLabel: string; comment: string },
   ): ResultAsync<void, IssueSourceError>;
+  /** Remove the in-progress label once the factory run is over (merged). Safe to repeat. */
+  release(
+    repo: string,
+    issue: number,
+    release: { inProgressLabel: string },
+  ): ResultAsync<void, IssueSourceError>;
   defaultBranch(repo: string): ResultAsync<string, IssueSourceError>;
   /** Numbers of the open issues blocking `issue`, by GitHub's native issue dependencies. */
   openBlockers(repo: string, issue: number): ResultAsync<number[], IssueSourceError>;

@@ -28,6 +28,7 @@ import { createFactoryContext, type FactoryDeps } from './factory/context.js';
 import { createFailures } from './factory/failures.js';
 import { createImplementRun } from './factory/implement-run.js';
 import { createPullRequestFollowUp } from './factory/pull-request.js';
+import { createReconciliation } from './factory/reconcile.js';
 import type { ReadyIssue } from './ports/issue-source.js';
 import type { FactoryRun } from './ports/run-store.js';
 import type { FactoryProject } from './settings/schema.js';
@@ -36,8 +37,15 @@ export type { FactoryDeps } from './factory/context.js';
 
 /** States in which a run waits on its pull request and looks at it now and then. */
 const FOLLOWED_STATES = new Set<RunState>(['waiting_ci', 'merging', 'ready']);
+/** States in which a run is always being worked on by this process, unless it was left behind. */
+const ORPHAN_STATES = new Set<RunState>(['claiming', 'working', 'fixing', 'pr_open']);
 
 export interface Factory {
+  /**
+   * Bring the state in line with GitHub and the workspaces after a (possibly
+   * abrupt) stop; call it once, before the first tick.
+   */
+  reconcile(): Promise<void>;
   /** Follow pull requests and admit what can be admitted now; the work continues in the background. */
   tick(): Promise<void>;
   /** Resolves once every started piece of work has reached a state where it waits. */
@@ -50,6 +58,10 @@ export function createFactory(deps: FactoryDeps): Factory {
   const failures = createFailures(ctx);
   const implementIssue = createImplementRun(ctx, failures);
   const followPullRequest = createPullRequestFollowUp(ctx, failures);
+  const reconciliation = createReconciliation(ctx, failures);
+  let reconciled = false;
+  /** Sandbox workspaces come with #289; until then only worktree projects run. */
+  const watched = () => settings.projects.filter((p) => p.workspace === 'worktree');
   const inFlight = new Set<Promise<void>>();
   /** Runs with work in progress, so a tick never starts a second piece of work for one. */
   const busy = new Set<string>();
@@ -135,6 +147,18 @@ export function createFactory(deps: FactoryDeps): Factory {
     }
   }
 
+  /**
+   * Runs in a working state that nothing in this process works on: left by a
+   * previous process, or by a reconciliation that could not ask GitHub.
+   */
+  function reconcileOrphans(projects: FactoryProject[]): void {
+    for (const [run, project] of idleRuns(projects)) {
+      const orphan =
+        ORPHAN_STATES.has(run.state as RunState) || (run.state === 'queued' && !run.notBefore);
+      if (orphan) track(run.id, () => reconciliation.reconcileRun(project, run));
+    }
+  }
+
   /** Runs waiting on their pull request whose next look is due. */
   function followDueRuns(projects: FactoryProject[]): void {
     for (const [run, project] of idleRuns(projects)) {
@@ -145,9 +169,15 @@ export function createFactory(deps: FactoryDeps): Factory {
   }
 
   return {
+    async reconcile() {
+      if (reconciled) return;
+      reconciled = true;
+      await reconciliation.reconcileAll(watched());
+      await runs.flush();
+    },
     async tick() {
-      // Sandbox workspaces come with #289; until then only worktree projects run.
-      const projects = settings.projects.filter((p) => p.workspace === 'worktree');
+      const projects = watched();
+      reconcileOrphans(projects);
       followDueRuns(projects);
       retryDueRuns(projects);
       retryHandBacks();

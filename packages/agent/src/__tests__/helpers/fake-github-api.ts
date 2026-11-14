@@ -85,6 +85,10 @@ export interface FakeGithubApi {
   /** Make requests whose method and path end match fail with `status` until `heal`. */
   fail(method: string, pathEnd: string, status?: number): void;
   heal(method: string, pathEnd: string): void;
+  /** Never answer requests whose method and path end match (a process that stops waiting on them). */
+  hang(method: string, pathEnd: string): void;
+  /** Requests left hanging, in order. */
+  readonly hung: string[];
 }
 
 const BOT = 'funny-factory[bot]';
@@ -158,8 +162,18 @@ export function fakeGithubApi(options: {
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
       return json(200, listed.map(restIssue));
     }
-    if (rest === '/pulls' && method === 'POST') return openPull(body);
-    return null;
+    return rest === '/pulls' ? pullsRoute(method, url, body) : null;
+  };
+
+  /** `POST /pulls` opens one; `GET /pulls?head=owner:branch` lists the open ones. */
+  const pullsRoute: Route = (method, url, body) => {
+    if (method === 'POST') return openPull(body);
+    const head = url.searchParams.get('head')?.split(':')[1];
+    const open = pulls.filter((p) => p.state === 'open' && (!head || p.head === head));
+    return json(
+      200,
+      open.map((p) => ({ number: p.number, html_url: p.url })),
+    );
   };
 
   let presented = '';
@@ -397,8 +411,15 @@ export function fakeGithubApi(options: {
     return withToken(method, url, body);
   }
 
+  const hangs: Array<{ method: string; pathEnd: string }> = [];
+  const hung: string[] = [];
   const fetchFake = (async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = new URL(String(input instanceof Request ? input.url : input));
+    const method = init.method ?? 'GET';
+    if (hangs.some((x) => x.method === method && url.pathname.endsWith(x.pathEnd))) {
+      hung.push(`${method} ${url.pathname}`);
+      return new Promise<Response>(() => {});
+    }
     const headers = (init.headers ?? {}) as Record<string, string>;
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     return handle(init.method ?? 'GET', url, headers.authorization ?? '', body);
@@ -422,6 +443,12 @@ export function fakeGithubApi(options: {
     },
     heal(method, pathEnd) {
       failures.delete(`${method} ${pathEnd}`);
+      const at = hangs.findIndex((x) => x.method === method && x.pathEnd === pathEnd);
+      if (at >= 0) hangs.splice(at, 1);
+    },
+    hung,
+    hang(method, pathEnd) {
+      hangs.push({ method, pathEnd });
     },
     addIssue(partial) {
       const issue: FakeIssue = {

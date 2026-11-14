@@ -49,6 +49,8 @@ export interface PullRequestCi {
    */
   enableAutoMerge(repo: string, number: number): ResultAsync<AutoMergeResult, IssueSourceError>;
   mergeState(repo: string, number: number): ResultAsync<MergeState, IssueSourceError>;
+  /** The URL of the open pull request from `branch`, or null when there is none. */
+  findOpen(repo: string, branch: string): ResultAsync<string | null, IssueSourceError>;
   /** Delete a branch on GitHub; a branch already gone is not an error. */
   deleteBranch(repo: string, branch: string): ResultAsync<void, IssueSourceError>;
 }

@@ -11,8 +11,8 @@ to end: every minute it admits ready issues, takes each to a draft pull request,
 its CI, has the same agent fix failing checks and conflicts, and marks it ready for review
 once green. Infrastructure failures are retried
 and failed issues are handed back; with `auto_merge` on, green pull requests are merged
-through GitHub's auto-merge. Sandbox workspaces and restart reconciliation are not built
-yet (#275); a sandbox project is skipped with a warning.
+through GitHub's auto-merge; factory runs survive a restart. Sandbox workspaces are not
+built yet (#275); a sandbox project is skipped with a warning.
 
 ## Running it
 
@@ -94,6 +94,29 @@ keychain) are overridden too, so only the run's `gh` answers for github.com. The
 still shares the project's `.git` directory (its other settings, its hooks), which is why
 worktree mode is for trusted repositories only. On `Ctrl-C`, `start` stops admitting and
 waits for the factory runs in flight.
+
+### Restarts
+
+Factory runs survive a restart of the orchestrator, even an abrupt one. Before its first
+tick, `start` reconciles the state store with GitHub and the workspaces:
+
+- a step child the previous process left running (its pid is in `runs/<id>/step.pid`) is
+  stopped first, so it cannot push or open a pull request next to the retry;
+- a factory run interrupted before its pull request adopts the open pull request from its
+  branch if GitHub has one (a stop right after opening it), with the agent session its
+  step recorded (a later fix without one starts a new session); otherwise its pushed
+  branch is deleted and it retries as an infrastructure failure. When GitHub cannot be
+  asked it is asked again on the next tick: it never opens a second pull request or starts
+  a second factory run for the issue;
+- one interrupted in a fix waits for CI again, as an infrastructure failure;
+- one waiting on its pull request records a merge or a close that happened meanwhile
+  (`merged` with cleanup, or `failed`), treats a vanished workspace as an infrastructure
+  failure (the next fix recreates it from the pushed branch), and otherwise looks at the
+  pull request on the first tick.
+
+A factory run in a working state that nothing in the running process works on is
+reconciled the same way on any tick, and runs of projects no longer in the settings hold
+no concurrency slot.
 
 ### Factory settings
 
@@ -206,7 +229,8 @@ src/
   settings/        factory settings (schema, loading, refusals) and secrets
   factory.ts       the factory: admission and the tick's loops over its runs
   factory/         its parts: context, failures (retries, hand-back), implement-run,
-                   pull-request (CI follow-up, fixes), merge (auto-merge, cleanup)
+                   pull-request (CI follow-up, fixes), merge (auto-merge, cleanup),
+                   reconcile (state against GitHub and the workspaces on start)
   run-recorder.ts  state changes through the state machine, saved and reported
   compose.ts       wires the factory from its real parts and the given edges
   cli.ts           the `start` and `status` commands, with their edges injected

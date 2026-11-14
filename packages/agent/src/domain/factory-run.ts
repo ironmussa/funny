@@ -9,6 +9,7 @@
  *   fixing → waiting_ci                 also after an infrastructure failure
  *   merging → waiting_ci                the pull request turned red while it waited to merge
  *   (ready, merging) → failed           the pull request was closed without merging
+ *   waiting_ci → merged                 a person merged it (seen on a restart)
  */
 
 import { StateMachine } from './state-machine.js';
@@ -30,7 +31,7 @@ const TRANSITIONS: Record<RunState, RunState[]> = {
   claiming: ['working', 'queued', 'failed'],
   working: ['pr_open', 'queued', 'failed'],
   pr_open: ['waiting_ci'],
-  waiting_ci: ['fixing', 'ready', 'merging', 'failed'],
+  waiting_ci: ['fixing', 'ready', 'merging', 'merged', 'failed'],
   fixing: ['waiting_ci', 'failed'],
   ready: ['merged', 'failed'],
   merging: ['merged', 'waiting_ci', 'failed'],

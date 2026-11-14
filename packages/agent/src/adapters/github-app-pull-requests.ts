@@ -187,6 +187,14 @@ export function createGithubAppPullRequests(deps: {
       }));
     },
 
+    findOpen(repo, branch) {
+      const owner = repo.split('/')[0];
+      const query = new URLSearchParams({ head: `${owner}:${branch}`, state: 'open' });
+      return github
+        .json<Array<{ html_url: string }>>(repo, 'GET', `/repos/${repo}/pulls?${query}`)
+        .map((pulls) => pulls[0]?.html_url ?? null);
+    },
+
     deleteBranch(repo, branch) {
       const ref = `/repos/${repo}/git/refs/heads/${branch.split('/').map(encodeURIComponent).join('/')}`;
       return github

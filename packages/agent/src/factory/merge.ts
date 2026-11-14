@@ -46,10 +46,14 @@ export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
       return runs.transition(run, 'merged', { reason: null, nextCheckAt: undefined });
     }
     log.warn('Could not clean up after a merge', { run: run.id, error: problems.join('; ') });
-    return runs.update(run, {
+    const retrying = {
       reason: `merged; cleanup incomplete, retrying: ${problems.join('; ')}`,
       nextCheckAt: ctx.later(),
-    });
+    };
+    // Followed as a merge from now on, never as a pull request waiting for CI.
+    return run.state === 'waiting_ci'
+      ? runs.transition(run, 'merging', retrying)
+      : runs.update(run, retrying);
   }
 
   /** What enabling auto-merge leaves; `from` is the state the run is in now. */
@@ -123,5 +127,5 @@ export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
     return whileMerging(project, run, pr.value.autoMerge);
   }
 
-  return { onGreen, follow };
+  return { onGreen, follow, cleanUp };
 }

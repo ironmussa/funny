@@ -115,6 +115,8 @@ async function start(args: string[], io: OrchestratorIo): Promise<number> {
       { settings: settings.value, secrets: secrets.value, store, log, home: factoryHome(io.env) },
       { clock: systemClock, launchStep: childProcessStepLauncher, env: io.env },
     );
+    // Runs a previous process left behind are put back on track before anything new.
+    await factory.reconcile();
     let stopping = false;
     const stopped = io.untilStopped().then(() => {
       stopping = true;

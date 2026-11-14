@@ -11,7 +11,7 @@ export interface ProcessResult {
 
 export async function runClean(
   command: string[],
-  options: { cwd: string; env: Record<string, string> },
+  options: { cwd: string; env: Record<string, string>; onStart?: (pid: number) => void },
 ): Promise<ProcessResult> {
   try {
     const child = Bun.spawn(command, {
@@ -21,6 +21,7 @@ export async function runClean(
       stdout: 'pipe',
       stderr: 'pipe',
     });
+    options.onStart?.(child.pid);
     const [stdout, stderr, exitCode] = await Promise.all([
       new Response(child.stdout).text(),
       new Response(child.stderr).text(),

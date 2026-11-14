@@ -48,8 +48,17 @@ export interface WorkspaceRequest {
 export interface WorkspaceProvider {
   /** A new checkout on `branch` from the base. */
   prepare(request: WorkspaceRequest): ResultAsync<RunWorkspace, string>;
-  /** The run's existing checkout, for a later step. */
+  /**
+   * The run's checkout, for a later step; recreated from the run's pushed
+   * branch if it disappeared.
+   */
   reopen(request: WorkspaceRequest): ResultAsync<RunWorkspace, string>;
+  /** Whether the run's checkout is still there. */
+  exists(request: WorkspaceRequest): boolean;
+  /** Stop a step a previous orchestrator process left running for the run (after a crash). */
+  stopLeftovers(request: WorkspaceRequest): void;
+  /** The agent session the run's last step recorded, if any. */
+  lastSessionId(request: WorkspaceRequest): string | undefined;
   /**
    * Remove the run's workspace once its pull request merged: the checkout,
    * its local branch and its credentials. The event file stays.

@@ -11,9 +11,9 @@
  * runs (`@funny/core/github-app`'s writer).
  */
 
-import { existsSync } from 'fs';
+import { existsSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { mkdir, readFile, rm, writeFile } from 'fs/promises';
-import { join } from 'path';
+import { dirname, join } from 'path';
 
 import { createGithubTokenWriter, ghCredentialHelper } from '@funny/core/github-app';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -32,6 +32,18 @@ import type { FactoryAppTokens } from './factory-app.js';
 
 /** Variables a run may inherit: none of them carries a credential. */
 const INHERITED = ['PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM'];
+
+const STEP_PID_FILE = 'step.pid';
+
+/** The agent session a step's exit marker recorded, if any. */
+function readSessionId(exitMarker: string): string | undefined {
+  try {
+    const marker = stepOutcomeSchema.safeParse(JSON.parse(readFileSync(exitMarker, 'utf8')));
+    return marker.success ? marker.data.sessionId : undefined;
+  } catch {
+    return undefined;
+  }
+}
 
 const infra = (reason: string): StepOutcome => ({ kind: 'failed', failure: 'infra', reason });
 
@@ -118,7 +130,15 @@ function runSetup(request: WorkspaceRequest, deps: WorktreeWorkspaceDeps) {
       .mapErr((e) => `no GitHub token: ${e}`)
       .andThen((token) => next(token.expiresAt))
       .orElse((error) => ResultAsync.fromSafePromise(writer.stop()).andThen(() => errAsync(error)));
-  return { paths, env, writer, git, withToken };
+  /** The run's home and gh config directory, owner-only. */
+  const makeDirs = () =>
+    ResultAsync.fromPromise(
+      Promise.all(
+        [paths.home, paths.gh].map((dir) => mkdir(dir, { recursive: true, mode: 0o700 })),
+      ),
+      (error) => `cannot create the run directory: ${String(error)}`,
+    );
+  return { paths, env, writer, git, withToken, makeDirs };
 }
 
 export function createWorktreeWorkspaces(deps: WorktreeWorkspaceDeps): WorkspaceProvider {
@@ -127,12 +147,7 @@ export function createWorktreeWorkspaces(deps: WorktreeWorkspaceDeps): Workspace
       const setup = runSetup(request, deps);
       const { paths, git } = setup;
       const remoteBase = `refs/remotes/origin/${request.base}`;
-      return ResultAsync.fromPromise(
-        Promise.all(
-          [paths.home, paths.gh].map((dir) => mkdir(dir, { recursive: true, mode: 0o700 })),
-        ),
-        (error) => `cannot create the run directory: ${String(error)}`,
-      ).andThen(() =>
+      return setup.makeDirs().andThen(() =>
         setup.withToken((expiresAt) =>
           removePreviousCheckout(paths.checkout, request.projectPath, git)
             .andThen(() =>
@@ -172,12 +187,40 @@ export function createWorktreeWorkspaces(deps: WorktreeWorkspaceDeps): Workspace
     },
     reopen(request) {
       const setup = runSetup(request, deps);
-      if (!existsSync(setup.paths.checkout)) {
-        return errAsync(`the run's checkout ${setup.paths.checkout} is gone`);
-      }
-      return setup.withToken((expiresAt) =>
-        okAsync(worktreeWorkspace(request, setup, expiresAt, deps)),
+      const { paths, git } = setup;
+      return setup.makeDirs().andThen(() =>
+        setup.withToken((expiresAt) => {
+          if (existsSync(paths.checkout)) {
+            return okAsync(worktreeWorkspace(request, setup, expiresAt, deps));
+          }
+          // The checkout disappeared (a restart, a cleanup by hand): recreate it
+          // from the run's branch as it was pushed.
+          const remoteBranch = `refs/remotes/origin/${request.branch}`;
+          return git(['worktree', 'prune'], request.projectPath)
+            .andThen(() =>
+              git(
+                ['fetch', '--quiet', 'origin', `+refs/heads/${request.branch}:${remoteBranch}`],
+                request.projectPath,
+              ),
+            )
+            .andThen(() =>
+              git(
+                ['worktree', 'add', '--quiet', '-B', request.branch, paths.checkout, remoteBranch],
+                request.projectPath,
+              ),
+            )
+            .map(() => worktreeWorkspace(request, setup, expiresAt, deps));
+        }),
       );
+    },
+    exists(request) {
+      return existsSync(runSetup(request, deps).paths.checkout);
+    },
+    stopLeftovers(request) {
+      stopLeftoverStep(request.runDir);
+    },
+    lastSessionId(request) {
+      return readSessionId(runSetup(request, deps).paths.exitMarker);
     },
   };
 }
@@ -230,6 +273,26 @@ function worktreeWorkspace(
 /** The real step runner: `bin/step.ts` as a child process with the run's environment. */
 export const childProcessStepLauncher: StepLauncher = async ({ step, specPath, cwd, env }) => {
   const stepBin = new URL('../bin/step.ts', import.meta.url).pathname;
-  const run = await runClean([process.execPath, stepBin, step, '--spec', specPath], { cwd, env });
+  // The pid lets a restarted orchestrator stop a step this process left running.
+  const pidFile = join(dirname(specPath), STEP_PID_FILE);
+  const run = await runClean([process.execPath, stepBin, step, '--spec', specPath], {
+    cwd,
+    env,
+    onStart: (pid) => writeFileSync(pidFile, String(pid), { mode: 0o600 }),
+  });
+  rmSync(pidFile, { force: true });
   return run.exitCode;
 };
+
+/** Stop a step a previous orchestrator process left running in this run directory. */
+function stopLeftoverStep(runDir: string): void {
+  const pidFile = join(runDir, STEP_PID_FILE);
+  const pid = Number(existsSync(pidFile) ? readFileSync(pidFile, 'utf8') : NaN);
+  rmSync(pidFile, { force: true });
+  if (!Number.isInteger(pid) || pid <= 0) return;
+  try {
+    process.kill(pid, 'SIGTERM');
+  } catch {
+    // Already gone.
+  }
+}

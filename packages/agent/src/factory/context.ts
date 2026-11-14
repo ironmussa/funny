@@ -51,7 +51,11 @@ export function createFactoryContext(deps: FactoryDeps): FactoryContext {
     later,
     waitingForCi: (reason = 'waiting for CI') => ({ nextCheckAt: later(), reason }),
     isDue: (at) => !at || Date.parse(at) <= clock.now().getTime(),
-    slotsLeft: () => settings.limits.concurrency - store.list().filter(holdsSlot).length,
+    // Runs of projects no longer watched hold no slot: nothing works on them.
+    slotsLeft: () =>
+      settings.limits.concurrency -
+      store.list().filter((r) => holdsSlot(r) && settings.projects.some((p) => p.repo === r.repo))
+        .length,
     workspaceRequest: (run, project) => ({
       runId: run.id,
       runDir: runs.runDir(run.id),

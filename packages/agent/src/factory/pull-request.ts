@@ -29,7 +29,6 @@ export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failure
     fixing: FactoryRun,
     problem: FixStepSpec['problem'],
   ): Promise<FactoryRun> {
-    if (!fixing.sessionId) return giveUp(fixing, 'infra failure: no agent session to resume');
     const workspace = await ctx.workspaces.reopen(ctx.workspaceRequest(fixing, project));
     if (workspace.isErr()) {
       return onInfraFailure(

@@ -36,8 +36,12 @@ const failingCheckSchema = z.object({
 
 export const fixStepSpecSchema = z.object({
   ...stepSpecFields,
-  /** The agent session of the run, resumed so the fix has the implementation's context. */
-  sessionId: z.string().min(1),
+  /**
+   * The agent session of the run, resumed so the fix has the implementation's
+   * context; absent (a pull request adopted after a restart), a new session
+   * starts from the prompt.
+   */
+  sessionId: z.string().min(1).optional(),
   issue: z.object({ number: z.number().int().positive(), title: z.string().min(1) }),
   prUrl: z.string().min(1),
   /** What to fix. */

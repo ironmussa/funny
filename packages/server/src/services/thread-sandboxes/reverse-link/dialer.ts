@@ -9,6 +9,7 @@
  * fires so the owner can refresh the ingress credentials.
  */
 
+import type { SandboxIngress } from '@funny/sandbox';
 import { ByteWriteQueue, frameBytes, type ByteWebSocket } from '@funny/shared/lib/byte-write-queue';
 import {
   REVERSE_LINK_MAX_BUFFERED_BYTES,
@@ -21,7 +22,6 @@ import {
 import { log } from '../../../lib/logger.js';
 import { metric } from '../../../lib/telemetry.js';
 import type { CarrierTcpConnect, CarrierTcpSocket } from '../../grpc/websocket-carrier.js';
-import type { SandboxIngress } from '../contract.js';
 
 export interface ReverseLinkDialerOptions {
   ingress: SandboxIngress;

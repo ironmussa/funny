@@ -3,6 +3,7 @@
  * the DB, the provider connections, runner-access calls and browser events.
  */
 
+import { productionSandboxProviders } from '@funny/sandbox';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, asc, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -15,7 +16,6 @@ import { log } from '../../lib/logger.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { createInfraConnectionService } from './infra-connections.js';
 import { createProjectSandboxSettingsService } from './project-sandbox-settings.js';
-import { productionSandboxProviders } from './provider-catalog.js';
 import { postSandboxError } from './sandbox-events.js';
 import { prepareSandboxLaunch } from './sandbox-launch.js';
 import { createSandboxRunnerCalls } from './sandbox-runner-calls.js';

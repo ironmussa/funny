@@ -98,7 +98,7 @@ export interface WSPipelineRunCompletedData {
 // ─── Approval gates (human-in-the-loop) ─────────────────
 //
 // Mirrors Archon's approval-node semantics so workflows defined in either
-// system share the same data model. See packages/runtime/src/pipelines/approval.ts.
+// system share the same data model. See packages/workflows/src/compiler/approval.ts.
 
 export interface WSPipelineApprovalRequestedData {
   /** Globally-unique id for this pending approval. Used by the response endpoint. */

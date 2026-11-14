@@ -1,246 +1,32 @@
 /**
- * @funny/orchestrator — Orchestrator Service HTTP app.
+ * @funny/orchestrator — the issue factory's orchestrator (see GLOSSARY.md and
+ * docs/adr/0001-standalone-issue-factory.md).
  *
- * 3-layer architecture:
- *   Adapters (inbound/outbound I/O) → Workflows (orchestration) → Agents (atomic executors)
+ * Layout (adapters/ and bin/ as in the thread scheduler package, plus explicit
+ * domain/ and ports/ folders):
+ *   domain/   pure logic: the state machine and the events the factory publishes
+ *   ports/    interfaces the factory's domain will depend on (issue source, …)
+ *   adapters/ implementations of the ports (GitHub tracker, JSONL event bus)
+ *   bin/      entry points: `orchestrator` (start, status) and `step` (runs in a workspace)
  *
- * Flow: Issue → Plan → Implement → PR → CI/Review reactions.
+ * The factory itself is not built yet; the entry points are stubs.
  */
 
-import { ModelFactory } from '@funny/core/agents';
-import { Hono } from 'hono';
-import { cors } from 'hono/cors';
-import { logger as honoLogger } from 'hono/logger';
-
-import { IngestWebhookAdapter } from './adapters/outbound/ingest-webhook.adapter.js';
-import { ReviewEventAdapter } from './adapters/outbound/review-event.adapter.js';
-import { OrchestratorAgent } from './agents/developer/index.js';
-import { loadConfig } from './config/loader.js';
-import type { PipelineServiceConfig } from './config/schema.js';
-import { SessionStore } from './core/session-store.js';
-import { EventBus } from './infrastructure/event-bus.js';
-import { logger } from './infrastructure/logger.js';
-import { createSessionRoutes } from './routes/sessions.js';
-import { createWebhookRoutes } from './routes/webhooks.js';
-import { GitHubTracker } from './trackers/github-tracker.js';
-import type { Tracker } from './trackers/tracker.js';
-import { CIRetryWorkflow } from './workflows/ci-retry.workflow.js';
-import { IssuePipelineWorkflow } from './workflows/issue-pipeline.workflow.js';
-import { MergeWorkflow } from './workflows/merge.workflow.js';
-import { ReviewWorkflow } from './workflows/review.workflow.js';
-
-// ── Bootstrap ────────────────────────────────────────────────────
-
-const projectPath = process.env.PROJECT_PATH ?? process.cwd();
-
-// Load config (YAML + defaults)
-const config: PipelineServiceConfig = await loadConfig(projectPath);
-
-// ── Singletons ──────────────────────────────────────────────────
-
-const eventBus = new EventBus(config.events.path ?? undefined);
-
-// Create shared ModelFactory
-const modelFactory = new ModelFactory({
-  anthropic: {
-    apiKey: process.env[config.llm_providers.anthropic.api_key_env],
-    baseURL: config.llm_providers.anthropic.base_url || undefined,
-  },
-  openai: {
-    apiKey: process.env[config.llm_providers.openai.api_key_env],
-    baseURL: config.llm_providers.openai.base_url || undefined,
-  },
-  ollama: {
-    baseURL: config.llm_providers.ollama.base_url || undefined,
-  },
-});
-
-// ── Session & Orchestrator singletons ───────────────────────────
-
-const sessionStore = new SessionStore(eventBus, config.sessions.persist_path ?? undefined);
-const orchestratorAgent = new OrchestratorAgent(config, modelFactory);
-
-// Initialize tracker (GitHub by default, gracefully handles missing `gh` CLI)
-let tracker: Tracker | null = null;
-try {
-  if (config.tracker.type === 'github') {
-    tracker = config.tracker.repo
-      ? new GitHubTracker(config.tracker.repo, projectPath)
-      : await GitHubTracker.fromCwd(projectPath);
-    logger.info({ tracker: 'github', repo: config.tracker.repo }, 'Issue tracker initialized');
-  }
-} catch (err: any) {
-  logger.warn(
-    { err: err.message },
-    'Issue tracker initialization failed — sessions will work without tracker',
-  );
-}
-
-// ── Shared handler functions ─────────────────────────────────────
-
-const respawnAgent = async (sessionId: string, prompt: string) => {
-  const session = sessionStore.get(sessionId);
-  if (!session || !session.worktreePath || !session.branch) return;
-
-  orchestratorAgent
-    .implementIssue(
-      {
-        number: session.issue.number,
-        title: session.issue.title,
-        state: 'open',
-        body: session.issue.body ?? null,
-        url: session.issue.url,
-        labels: session.issue.labels.map((l) => ({ name: l, color: '' })),
-        assignee: null,
-        commentsCount: 0,
-        createdAt: '',
-        updatedAt: '',
-        comments: [],
-        fullContext: `${session.issue.body ?? ''}\n\n---\n\n**Agent instructions:** ${prompt}`,
-      },
-      session.plan!,
-      session.worktreePath,
-      session.branch,
-    )
-    .catch((err) => {
-      logger.error({ sessionId, err: err.message }, 'Respawned agent failed');
-    });
-};
-
-const notify = async (sessionId: string, message: string) => {
-  logger.info({ sessionId, message }, 'Session notification');
-  await eventBus.publish({
-    event_type: 'reaction.triggered',
-    request_id: sessionId,
-    timestamp: new Date().toISOString(),
-    data: { sessionId, message, type: 'notification' },
-  });
-};
-
-const autoMerge = async (sessionId: string) => {
-  const session = sessionStore.get(sessionId);
-  if (!session?.prNumber) return;
-  const { execute } = await import('@funny/core/git');
-  const ghEnv = process.env.GH_TOKEN ? { GH_TOKEN: process.env.GH_TOKEN } : undefined;
-  await execute('gh', ['pr', 'merge', String(session.prNumber), '--squash', '--delete-branch'], {
-    cwd: session.projectPath,
-    env: ghEnv,
-  });
-  await sessionStore.transition(sessionId, 'merged', { autoMerged: true });
-  logger.info({ sessionId, prNumber: session.prNumber }, 'PR auto-merged');
-};
-
-// ── Workflows ───────────────────────────────────────────────────
-
-const issuePipeline = new IssuePipelineWorkflow({
-  eventBus,
-  sessionStore,
-  orchestratorAgent,
-  config,
-});
-
-const ciRetryWorkflow = new CIRetryWorkflow({
-  eventBus,
-  sessionStore,
-  config,
-  handlers: { respawnAgent, notify },
-});
-ciRetryWorkflow.start();
-
-const reviewWorkflow = new ReviewWorkflow({
-  eventBus,
-  sessionStore,
-  config,
-  handlers: { respawnAgent, notify },
-});
-reviewWorkflow.start();
-
-const mergeWorkflow = new MergeWorkflow({
-  eventBus,
-  sessionStore,
-  config,
-  handlers: { autoMerge, notify },
-});
-mergeWorkflow.start();
-
-// ── Adapters ────────────────────────────────────────────────────
-
-const reviewAdapter = new ReviewEventAdapter(eventBus, { projectPath });
-reviewAdapter.start();
-
-const ingestAdapter = new IngestWebhookAdapter(eventBus);
-ingestAdapter.start();
-
-// ── Hono app ────────────────────────────────────────────────────
-
-const app = new Hono();
-
-const AGENT_HOST = process.env.AGENT_HOST ?? process.env.HOST ?? '127.0.0.1';
-const AGENT_HTTP_AUTH_TOKEN =
-  process.env.AGENT_HTTP_AUTH_TOKEN ?? process.env.FUNNY_AGENT_HTTP_AUTH_TOKEN;
-const LOCAL_HOSTS = new Set(['127.0.0.1', 'localhost', '::1']);
-const REQUIRE_AGENT_AUTH =
-  process.env.AGENT_REQUIRE_HTTP_AUTH === '1' || !LOCAL_HOSTS.has(AGENT_HOST.toLowerCase());
-const ALLOWED_ORIGINS = (
-  process.env.AGENT_CORS_ORIGINS ?? 'http://localhost:5173,http://127.0.0.1:5173'
-)
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
-
-app.use(
-  '*',
-  cors({
-    origin: (origin) => (ALLOWED_ORIGINS.includes(origin) ? origin : undefined),
-  }),
-);
-app.use('*', honoLogger());
-
-app.use('/sessions/*', async (c, next) => {
-  if (!AGENT_HTTP_AUTH_TOKEN) {
-    if (REQUIRE_AGENT_AUTH) {
-      return c.json(
-        { error: 'AGENT_HTTP_AUTH_TOKEN is required when binding to a non-local host' },
-        503,
-      );
-    }
-    await next();
-    return;
-  }
-
-  const auth = c.req.header('Authorization') ?? '';
-  if (auth !== `Bearer ${AGENT_HTTP_AUTH_TOKEN}`) {
-    return c.json({ error: 'Unauthorized' }, 401);
-  }
-  await next();
-});
-
-// Health check
-app.get('/health', (c) => c.json({ status: 'ok', service: 'agent' }));
-
-// Mount route groups
-app.route('/webhooks', createWebhookRoutes(eventBus, config, projectPath));
-app.route('/sessions', createSessionRoutes(sessionStore, issuePipeline, tracker, eventBus, config));
-
-// ── Exports ─────────────────────────────────────────────────────
-
-export {
-  app,
-  eventBus,
-  config,
-  sessionStore,
-  orchestratorAgent,
-  tracker,
-  // Adapters
-  ingestAdapter,
-  reviewAdapter,
-  // Workflows
-  issuePipeline,
-  ciRetryWorkflow,
-  reviewWorkflow,
-  mergeWorkflow,
-};
-export type { PipelineEvent, PipelineEventType } from './core/types.js';
+export { StateMachine, TransitionError } from './domain/state-machine.js';
+export type { PipelineEvent, PipelineEventType } from './domain/events.js';
+export type {
+  Tracker,
+  Issue,
+  IssueDetail,
+  IssueFilter,
+  IssueComment,
+  IssueLabel,
+  IssueUser,
+} from './ports/tracker.js';
+export { GitHubTracker } from './adapters/github-tracker.js';
+export { EventBus } from './adapters/event-bus.js';
+export { AsyncMutex } from './infrastructure/async-mutex.js';
+export { loadConfig } from './config/loader.js';
 export type { PipelineServiceConfig } from './config/schema.js';
 export {
   PRReviewer,

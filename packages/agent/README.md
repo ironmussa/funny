@@ -1,428 +1,292 @@
-# @funny/agent — Autonomous Issue-to-PR Pipeline
+# @funny/orchestrator
 
-An autonomous agent service that takes issues from your GitHub backlog and processes them all the way to merged PRs. It plans implementations, spawns coding agents in isolated worktrees, runs quality checks, creates PRs, handles CI failures, routes review feedback, and only pings you when human judgment is needed.
+The orchestrator of the **issue factory**: a standalone process, one per user, that turns
+GitHub issues marked ready for an agent into pull requests. Vocabulary is in the root
+`GLOSSARY.md`; the decision to run it apart from the funny server is
+`docs/adr/0001-standalone-issue-factory.md`. The work is tracked in #275.
 
-Think of it as an AI project manager: it reads your backlog, decomposes features, assigns tasks to coding agents, monitors their progress, and self-heals when things break.
+**To set it up and run it, read the guide: [`docs/guides/issue-factory.md`](../../docs/guides/issue-factory.md)**
+(the Factory App, the settings, the secrets, `status`, the event files, the workflow
+override, and the security model). This README is about the code.
 
-## Prerequisites
+**Status:** being rebuilt. The old factory attempt (HTTP server, Chat Completions planner,
+session store, webhook workflows) has been removed. `start` runs worktree factory runs end
+to end: every minute it admits ready issues, takes each to a draft pull request, follows
+its CI, has the same agent fix failing checks and conflicts, and marks it ready for review
+once green. Infrastructure failures are retried
+and failed issues are handed back; with `auto_merge` on, green pull requests are merged
+through GitHub's auto-merge; factory runs survive a restart. Projects run in a sandbox
+by default, or in a worktree.
 
-- [Bun](https://bun.sh/) >= 1.2
-- Git
-- [`gh` CLI](https://cli.github.com/) authenticated (`gh auth login`) for GitHub issue tracking
-- An external OpenAI-compatible API (for example [CLIProxyAPI](https://github.com/router-for-me/CLIProxyAPI)), configured with credentials and the requested models
-- [Hatchet](https://hatchet.run/) (optional — enables durable workflows and batch processing)
+## Running it
 
-## Quick Start
-
-```bash
-# From the monorepo root
-bun install
-
-# Start the agent service (port 3002, hot reload)
-cd packages/agent
-bun run dev
-
-# Start a session for a single issue
-curl -X POST http://localhost:3002/sessions/start \
-  -H "Content-Type: application/json" \
-  -d '{"issueNumber": 42, "projectPath": "/path/to/your/repo"}'
-
-# Process multiple issues from backlog (requires Hatchet)
-curl -X POST http://localhost:3002/sessions/batch \
-  -H "Content-Type: application/json" \
-  -d '{"projectPath": "/path/to/your/repo", "labels": ["agent-ready"]}'
-```
-
-## How It Works
-
-### The Session Lifecycle
-
-Every issue gets a **Session** that tracks its full lifecycle:
-
-```
-created → planning → implementing → quality_check → pr_created →
-ci_running → ci_passed → review → merged
-                ↓                      ↓
-           ci_failed              changes_requested
-                ↓                      ↓
-         (auto-retry)           (auto-apply feedback)
-                ↓          Pero me refiero específicamente a este error en el proceso de la gente.             ↓
-           escalated               escalated
-```
-
-### The Flow
-
-1. **Fetch issue** — Pull full issue details + comments from GitHub
-2. **Plan** — Orchestrator agent reads the issue + explores the codebase → produces an implementation plan (which files, approach, risks)
-3. **Create workspace** — Isolated git worktree on `issue/N` branch
-4. **Implement** — Coding agent executes the plan (up to 200 turns)
-5. **Quality check** — Parallel quality agents (tests, security, architecture, style, types)
-6. **Create PR** — Push branch, create PR with `Closes #N`
-7. **Wait for CI** — Durable wait; if CI fails, Watchdog auto-respawns agent to fix
-8. **Wait for review** — Durable wait; if changes requested, agent auto-applies feedback
-9. **Merge & close** — Squash merge, close issue, cleanup worktree
-
-### Reactions (Self-Healing)
-
-The **Watchdog** listens for events and takes automatic action:
-
-| Event               | Default Action  | Behavior                                                       |
-| ------------------- | --------------- | -------------------------------------------------------------- |
-| CI failed           | `respawn_agent` | Agent reads failure logs, fixes code, pushes (up to 3 retries) |
-| Changes requested   | `respawn_agent` | Agent reads review comments, applies fixes (up to 2 retries)   |
-| Approved + CI green | `notify`        | Sends notification (or `auto_merge` if configured)             |
-| Agent stuck         | `escalate`      | Escalates after 15 min of inactivity                           |
-
-All reactions are config-driven — no hardcoded behavior.
-
-## Running
-
-### Development
+The factory is started on its own, never by `bun run dev`:
 
 ```bash
-# From this directory
-bun run dev          # watch mode (auto-restarts)
-
-# Or from the monorepo root
-bun run dev          # starts both server + agent
+bun run factory:start                      # settings from ~/.funny/factory/config.yaml
+bun run factory:start -- --config ./factory.yaml
+bun run factory:status                     # the runs in the state store
 ```
 
-### Production
+The factory home is `FUNNY_FACTORY_HOME` (default `~/.funny/factory`): the default
+settings file `config.yaml` and the state store `state.db` (SQLite: runs and a per-day
+counter of started runs).
 
-```bash
-bun src/server.ts
-```
+### Sandbox workspaces
 
-### Environment Variables
+A project without `workspace: worktree` runs in a sandbox of the configured provider
+(`sandbox.provider`, through `@funny/sandbox`):
 
-| Variable                | Default                                    | Description                                   |
-| ----------------------- | ------------------------------------------ | --------------------------------------------- |
-| `PORT`                  | `3002`                                     | HTTP server port                              |
-| `PROJECT_PATH`          | `process.cwd()`                            | Root of the git repo to operate on            |
-| `HATCHET_CLIENT_TOKEN`  | —                                          | Hatchet API token (enables durable workflows) |
-| `INGEST_WEBHOOK_URL`    | `http://localhost:3001/api/ingest/webhook` | Where to forward events for UI visibility     |
-| `INGEST_WEBHOOK_SECRET` | —                                          | Shared secret for webhook authentication      |
+- the sandbox is made from the **funny runner template of the orchestrator's own commit**
+  (`FUNNY_BUILD_COMMIT`, or the pushed HEAD of the checkout it runs from), which the
+  template manager builds when the provider account lacks it. The template holds the whole
+  funny checkout at `/opt/funny`, the step runner included, so the server's template and
+  the factory's are one build; the factory never writes the runner's env file, so funny's
+  runner never starts;
+- the create request carries no secret (its env is empty). The model credential and the
+  run's App token are written to root-only files (`/etc/funny-factory/<run>/`): uploaded
+  through the provider's `writeFile` where it has one (Boat, whose commands are kept), else
+  through `exec`; git's credential helper and a `gh` wrapper read the token
+  from there on every call, and the orchestrator rewrites it before it expires;
+- the repository is cloned inside the sandbox with the run's token, and every git and
+  GitHub step of the factory run happens there;
+- a step starts detached (`exec` returns when its command ends); every few seconds the
+  orchestrator renews the token if due, appends the new lines of the step's event file to
+  the run's `events.jsonl` on the host, and reads the exit marker;
+- a sandbox that cannot be created or used is an infrastructure failure; a sandbox project
+  never falls back to a worktree;
+- while a pull request waits (for CI, to merge) its sandbox is paused: **stopped** where
+  the provider keeps the disk on stop, and resumed for a fix; else **destroyed**, after the
+  agent's sessions (`~/.claude/projects`) are kept on the host, and made again from the
+  pull request branch for a fix, with the sessions put back, so the fix still resumes the
+  implementation's session;
+- the sandbox is destroyed whenever the factory run ends: merged, ready or failed.
 
-Bun reads `.env` automatically — no `dotenv` needed.
+### A factory run
 
-## Configuration
+On each tick (every 60 seconds) the orchestrator lists the open issues with the ready
+label in each worktree project, oldest first, and admits those opened by the configured
+login, assigned to it or to nobody (an issue also assigned to someone else is not), with no
+open blocker by GitHub's native issue dependencies, and no active factory run, within the
+concurrency limit and the daily limit on new runs (a UTC day). Each repository gets its
+missing labels created once and at most a minute per tick, so a slow one does not hold up
+the others; one where the Factory App is not installed is reported in the log and in
+`status`. A factory run then:
 
-The service reads `.pipeline/config.yaml` from the project root. If the file doesn't exist, all defaults are used. Environment variables in `${VAR_NAME}` format are resolved before validation.
+1. **claims** the issue through the Factory App: assigns the login, swaps the ready label
+   for the in-progress one, and comments;
+2. **works** in its workspace: a sandbox (see above) or, for a worktree project, in `<factory home>/runs/<run id>/` a git worktree of the project on
+   `factory/issue-<n>-<id>` from the base branch (the project's `base`, else the
+   repository's default branch), and runs the step runner's `implement` step as a child
+   process;
+3. opens the draft pull request (**`pr_open`**) and **waits for CI** (`waiting_ci`). Every
+   3 minutes (no webhook) it reads the head commit's check runs and statuses and the pull
+   request's mergeability:
+   - green: the pull request is marked ready for review (**`ready`**). With `auto_merge:
+true` the factory also enables GitHub's auto-merge (**`merging`**), with squash when the
+     repository allows it, else another allowed method; GitHub merges once the branch
+     protections are met (required reviews and checks still apply, nothing is bypassed).
+     When a pull request already meets them, GitHub refuses auto-merge ("clean status") and
+     the factory merges it at once the same way. Once merged the factory run is
+     **`merged`**, and its worktree, local branch, credentials and remote branch are
+     removed (its `events.jsonl` stays). A pull request that turns red while it waits to
+     merge goes back to waiting for CI; one closed without merging fails the factory run.
+     Auto-merge turned off while the pull request stays green is enabled again; a direct
+     merge is of the commit whose CI was green, and one GitHub refuses waits. A cleanup
+     that fails is tried again before the factory run is `merged`.
+     A repository without auto-merge leaves the pull request ready. A `ready` pull request
+     that a person merges later is noticed (every 30 minutes) and cleaned up the same way;
+   - a failing check, or a conflict with the base: the step runner's `fix` step (**`fixing`**)
+     resumes the same agent session with the failing checks and the end of their logs, or
+     asks it to rebase onto the base, runs the checks, and pushes; then it waits again;
+   - no check reported yet: it keeps waiting; with none 15 minutes after the last push the
+     repository is taken to have no CI, and the pull request is marked ready with that reason;
+   - a fix the agent could not finish (it changed nothing, the rebase is unfinished, the
+     local checks stay red) uses up an attempt and the factory run keeps waiting for CI;
+   - after 3 fix attempts (conflicts included) without green CI, the factory run is
+     **`failed`**.
 
-### Full Example
+**Failures** are of two kinds. An **infrastructure** failure (GitHub, the network, git, the
+token, the workspace) is retried: before the pull request the factory run goes back to
+`queued` and starts over on a fresh branch after `retry_delay_minutes`, then after twice
+that; in a fix it waits for CI again after that delay (without using up a fix attempt).
+Reading CI and marking the pull request ready are retried the same way. The two retries are
+per factory run, across all its steps. After two retries it fails. Errors of the agent CLI
+that come from the model provider (rate limits, overload, a refused key, the network) count
+as infrastructure failures. An **agent** failure (checks that never pass, no changes, the
+agent erroring) is not retried. A failed factory run hands its issue back: a comment says
+why, the in-progress and ready labels are removed (the login stays assigned), and its
+branch and pull request are kept. Adding the ready label again starts a new factory run. Until the hand-back has gone
+through (it is retried on every tick), the issue is not admitted again. Runs in `queued`,
+`claiming`, `working` and `fixing` hold a concurrency slot; waiting for CI or to merge does
+not. The
+states show in `status` and, with the steps' own events, in the run's `events.jsonl`.
+
+**A factory run never uses your GitHub access.** It has a home of its own (`runs/<id>/home`), a
+`gh` config directory with its own Factory App token for the repository (`runs/<id>/gh`,
+renewed 5 minutes before it expires, also during a long step) and a git config whose
+credential helper asks that `gh` (`runs/<id>/gitconfig`). Git and the step runner run with
+exactly that environment (plus `PATH`, locale, `TMPDIR`, the configured commit identity and
+the model key as `ANTHROPIC_API_KEY`), so your `gh` login, `~/.gitconfig` and `GH_TOKEN`
+are neither read nor changed. Credential helpers in the project's own `.git/config` (a
+keychain) are overridden too, so only the run's `gh` answers for github.com. The worktree
+still shares the project's `.git` directory (its other settings, its hooks), which is why
+worktree mode is for trusted repositories only. On `Ctrl-C`, `start` stops admitting and
+waits for the factory runs in flight.
+
+### Restarts
+
+Factory runs survive a restart of the orchestrator, even an abrupt one. Before its first
+tick, `start` reconciles the state store with GitHub and the workspaces:
+
+- a step child the previous process left running (its pid is in `runs/<id>/step.pid`) is
+  stopped first, so it cannot push or open a pull request next to the retry;
+- a factory run interrupted before its pull request adopts the open pull request from its
+  branch if GitHub has one (a stop right after opening it), with the agent session its
+  step recorded (a later fix without one starts a new session); otherwise its pushed
+  branch is deleted and it retries as an infrastructure failure. When GitHub cannot be
+  asked it is asked again on the next tick: it never opens a second pull request or starts
+  a second factory run for the issue;
+- one interrupted in a fix waits for CI again, as an infrastructure failure;
+- one waiting on its pull request records a merge or a close that happened meanwhile
+  (`merged` with cleanup, or `failed`), treats a vanished workspace as an infrastructure
+  failure (the next fix recreates it from the pushed branch), and otherwise looks at the
+  pull request on the first tick.
+
+A factory run in a working state that nothing in the running process works on is
+reconciled the same way on any tick, and runs of projects no longer in the settings hold
+no concurrency slot.
+
+### Factory settings
 
 ```yaml
-# ── Issue Tracker ──────────────────────────────────────────────
-tracker:
-  type: github # github | linear (linear coming soon)
-  repo: owner/repo # auto-detected from git remote if not set
-  labels: [agent-ready] # only pick issues with this label
-  exclude_labels: [wontfix, blocked]
-  max_parallel: 5 # max concurrent sessions
-
-# ── Orchestrator Agent ─────────────────────────────────────────
-orchestrator:
-  model: claude-sonnet-4-5-20250929
-  provider: openai
-  auto_decompose: true # split complex issues into sub-tasks
-  plan_approval: false # require human approval before implementing
-  max_planning_turns: 30
-  max_implementing_turns: 200
-
-# ── Sessions ───────────────────────────────────────────────────
-sessions:
-  max_retries_ci: 3 # CI fix attempts before escalating
-  max_retries_review: 2 # review feedback cycles before escalating
-  escalate_after_min: 30 # escalate stuck sessions after N minutes
-  auto_merge: false # auto-merge when approved + CI green
-
-# ── Reactions ──────────────────────────────────────────────────
-reactions:
-  ci_failed:
-    action: respawn_agent # respawn_agent | notify | escalate
-    prompt: 'CI failed on this PR. Read the failure logs and fix the issues.'
-    max_retries: 3
-  changes_requested:
-    action: respawn_agent
-    prompt: 'Review comments have been posted. Address each comment.'
-    max_retries: 2
-    escalate_after_min: 30
-  approved_and_green:
-    action: notify # notify | auto_merge
-    message: 'PR approved and CI green — ready to merge'
-  agent_stuck:
-    action: escalate
-    after_min: 15
-    message: 'Session stuck — needs human review'
-
-# ── Quality Pipeline (existing) ────────────────────────────────
-tiers:
-  small:
-    max_files: 3
-    max_lines: 50
-    agents: [tests, style]
-  medium:
-    max_files: 10
-    max_lines: 300
-    agents: [tests, security, architecture, style, types]
-
-branch:
-  pipeline_prefix: 'pipeline/'
-  integration_prefix: 'integration/'
-  main: main
-
-auto_correction:
-  max_attempts: 2
-
-director:
-  schedule_interval_ms: 0 # 0 = disabled
-  auto_trigger_delay_ms: 500
-
-cleanup:
-  keep_on_failure: false
-  stale_branch_days: 7
-
-adapters:
-  webhooks:
-    - url: https://example.com/webhook
-      secret: '${WEBHOOK_SECRET}'
-      events: [pipeline.completed, pipeline.failed]
-
-logging:
-  level: info
+github:
+  login: octo-owner # only this user's issues are admitted
+  author: { name: Octo Owner, email: octo@example.com } # commit author
+model: sonnet
+labels: { ready: ready-for-agent, in_progress: agent-in-progress } # defaults
+limits: { concurrency: 2, daily: 10 } # defaults
+auto_merge: false # default
+retry_delay_minutes: 30 # default
+sandbox: { provider: boat, size: small } # required when a project uses a sandbox
+projects:
+  - path: ~/code/app # local checkout (relative to this file if not absolute)
+    repo: acme/app
+    workspace: sandbox # default; or `worktree` (trusted repositories only)
+    base: main # default: the repository's default branch
+    check: bun run lint # optional
 ```
 
-## API Endpoints
+`start` refuses an invalid file and names the field (`projects.0.repo: expected
+owner/name`, `colour: unknown field`), and refuses a file with a key or value that looks
+like a secret.
 
-The server runs on `http://localhost:3002` by default. The primary entrypoint is `/sessions` — this is how you trigger autonomous issue processing. Quality checks and merge orchestration happen internally via direct function calls (no separate HTTP endpoints).
+### Secrets
 
-### Health
+Given at startup only, from the environment or, on a terminal, a prompt (no echo). They
+live in memory and are replaced by `[redacted]` in every log line.
 
-| Method | Path      | Description                |
-| ------ | --------- | -------------------------- |
-| GET    | `/health` | Returns `{ status: "ok" }` |
+| Variable                           | What                                                            |
+| ---------------------------------- | --------------------------------------------------------------- |
+| `FUNNY_FACTORY_MODEL_KEY`          | model credential: use a dedicated key with a spending limit     |
+| `FUNNY_FACTORY_APP_ID`             | the Factory App's numeric id                                    |
+| `FUNNY_FACTORY_APP_PRIVATE_KEY`    | its private key (PEM; `\n` escapes allowed)                     |
+| `FUNNY_FACTORY_SANDBOX_CREDENTIAL` | the sandbox provider's credential (only with a sandbox project) |
 
-### Sessions — Primary API
+## The `fix` step
 
-These are the endpoints you'll use to process issues autonomously. Each session takes an issue from your backlog and drives it to a merged PR.
+Run in the run's checkout when its pull request needs a fix, it resumes the run's agent
+session (`sessionId`) so the agent keeps the context of its implementation. For failing
+checks it gives the agent their names, conclusions and log excerpts; for a conflict it
+fetches the base and asks the agent to `git rebase origin/<base>` and resolve it, then
+verifies the rebase finished. The check command runs with up to two in-place fixes, any
+leftover change is committed with the configured author, and the branch is pushed
+(`--force-with-lease` after a rebase). It writes `pushed` or `failed` to the exit marker.
 
-| Method | Path                     | Description                                             |
-| ------ | ------------------------ | ------------------------------------------------------- |
-| GET    | `/sessions`              | List all sessions (filter with `?status=implementing`)  |
-| GET    | `/sessions/:id`          | Session detail with full event log                      |
-| POST   | `/sessions/start`        | Start a session for a single issue                      |
-| POST   | `/sessions/batch`        | Process multiple issues from backlog (requires Hatchet) |
-| POST   | `/sessions/:id/escalate` | Manually escalate a stuck session                       |
-| POST   | `/sessions/:id/cancel`   | Cancel a session                                        |
-| DELETE | `/sessions/:id`          | Remove a session record                                 |
+## The `implement` step
 
-#### POST /sessions/start
+Run in the workspace's checkout, already on the run's branch, it runs the built-in
+`factory-issue` workflow (`packages/workflows/defaults/factory-issue.yaml`): the agent
+implements the issue, the check command runs with in-place fixes in the same agent
+session, and the result is committed with the configured author, pushed, and opened as a
+draft pull request against the base that closes the issue. It prints `pr_url=…` and
+`session_id=…`, appends its events to `eventsPath`, and writes the outcome to
+`exitMarkerPath` last. Checks that never pass or a run that changed nothing open no pull
+request and end as an agent failure; git or GitHub errors end as an infrastructure
+failure.
 
-Starts the full issue-to-PR pipeline for a single issue. The orchestrator agent will plan, implement, create a PR, and handle CI/review cycles.
+A repository can replace the workflow by committing its own at
+`.funny/workflows/factory-issue.yaml` (or `.yml`; `.yaml` wins) on the base branch, for
+example to use its own skills. It is read from the base branch, never from the run's
+branch or working tree, so the agent cannot change what a later step runs. It must be named `factory-issue`; it receives the same inputs
+(`issue_number`, `issue_title`, `issue_body`, `base`, `branch`, `check_command`,
+`pr_body`), and its pull request is always opened as a draft. An override that is
+present but invalid fails the step as an agent failure naming the file; the default is
+never used in its place.
 
-```json
-{
-  "issueNumber": 42,
-  "projectPath": "/path/to/repo",
-  "model": "claude-sonnet-4-5-20250929",
-  "provider": "openai",
-  "baseBranch": "main"
-}
-```
+## Layout
 
-#### POST /sessions/batch
-
-Scans the backlog, prioritizes issues, and spawns parallel sessions (up to `maxParallel`). Requires Hatchet for durable orchestration.
-
-```json
-{
-  "projectPath": "/path/to/repo",
-  "issueNumbers": [42, 58, 61],
-  "labels": ["agent-ready"],
-  "maxParallel": 3
-}
-```
-
-#### GET /sessions/:id — Response
-
-```json
-{
-  "id": "session-abc123",
-  "status": "implementing",
-  "issue": { "number": 42, "title": "Add dark mode", "url": "..." },
-  "plan": { "summary": "...", "files_to_modify": [...], "estimated_complexity": "medium" },
-  "branch": "issue/42",
-  "worktreePath": "/repo/.funny-worktrees/issue-42",
-  "prNumber": null,
-  "ciAttempts": 0,
-  "reviewAttempts": 0,
-  "events": [...]
-}
-```
-
-### Webhooks
-
-Configure GitHub webhooks to point here for automatic CI/review reactions on sessions.
-
-| Method | Path               | Description                   |
-| ------ | ------------------ | ----------------------------- |
-| POST   | `/webhooks/github` | Receive GitHub webhook events |
-
-Supported GitHub events:
-
-- **`check_suite`** (success/failure) — Triggers session reactions (auto-fix CI failures)
-- **`pull_request_review`** (changes_requested) — Triggers session reactions (auto-apply review feedback)
-- **`pull_request_review`** (approved) — Advances session to merged (or notifies for manual merge)
-- **`pull_request`** (merged) — Triggers branch cleanup
-
-### Logs
-
-| Method | Path                 | Description                          |
-| ------ | -------------------- | ------------------------------------ |
-| GET    | `/logs/pipeline/:id` | Logs for a specific pipeline request |
-| GET    | `/logs/system`       | System-level logs                    |
-| GET    | `/logs/requests`     | List all request IDs with logs       |
-
-## GitHub Webhook Setup
-
-To enable automatic CI/review reactions, configure a webhook on your repo:
-
-1. Go to **Settings > Webhooks > Add webhook**
-2. **Payload URL:** `http://<your-host>:3002/webhooks/github`
-3. **Content type:** `application/json`
-4. **Secret:** (optional, set `webhook_secret` in config to match)
-5. **Events:** Select `Check suites`, `Pull requests`, `Pull request reviews`
-
-## Hatchet Workflows
-
-When Hatchet is configured (`HATCHET_CLIENT_TOKEN`), the service registers durable workflows that survive server restarts:
-
-### issue-to-pr (triggered via `POST /sessions/start`)
-
-The core workflow. When you call `POST /sessions/start`, this is what runs under the hood:
-
-1. **fetch-issue** — Pull full issue details + comments from GitHub
-2. **plan-issue** — Orchestrator agent explores codebase, creates implementation plan
-3. **create-workspace** — Isolated git worktree on `issue/N` branch
-4. **implement** — Coding agent executes the plan (up to 200 turns)
-5. **quality-check** — Runs the quality pipeline directly via `PipelineRunner`
-6. **create-pr** — Push branch, create PR with `Closes #N`
-7. **wait-for-ci** — Durable wait for CI result (reactions handle failures automatically)
-8. **wait-for-review** — Durable wait for review (reactions handle feedback automatically)
-9. **merge-and-close** — Squash merge, close issue, cleanup worktree
-
-### backlog-processor (triggered via `POST /sessions/batch`)
-
-When you call `POST /sessions/batch`, this workflow scans the issue backlog, prioritizes by labels/age, and spawns parallel `issue-to-pr` workflows (up to `max_parallel`).
-
-### feature-to-deploy
-
-Alternative flow for text prompts (not issues): classify complexity → create worktree → implement → quality pipeline (direct `PipelineRunner` call) → wait for approval → deploy.
-
-### pr-review-loop (triggered automatically via webhooks)
-
-Fires when GitHub sends a `pull_request_review` webhook with `changes_requested`. Fetches review comments, runs an agent to apply feedback, pushes updates, checks approval status.
-
-### cleanup
-
-Removes stale pipeline/integration branches and orphaned worktrees older than the configured threshold.
-
-### doc-gardening
-
-Scans for stale documentation, generates update suggestions.
-
-## Architecture
+`adapters/` and `bin/` as in the thread scheduler package (`packages/scheduler`), with
+the pure logic and the interfaces it needs in their own `domain/` and `ports/` folders:
 
 ```
 src/
-├── server.ts                      # Bun server bootstrap
-├── index.ts                       # App wiring: config, singletons, event listeners, routes
-├── config/
-│   ├── schema.ts                  # Zod config schema (tiers, tracker, reactions, sessions, etc.)
-│   ├── loader.ts                  # YAML loader with env var resolution
-│   └── defaults.ts                # Default config values
-├── core/
-│   ├── session.ts                 # Session class with lifecycle state machine (14 states)
-│   ├── session-store.ts           # In-memory + file-persisted session CRUD
-│   ├── orchestrator-agent.ts      # LLM agent for issue planning + implementation
-│   ├── watchdog.ts                # Declarative event-driven watchdog
-│   ├── pipeline-runner.ts         # Quality pipeline orchestration
-│   ├── quality-pipeline.ts        # Parallel quality agents with correction cycles
-│   ├── director.ts                # Merge queue management
-│   ├── integrator.ts              # PR creation, conflict resolution, rebasing
-│   ├── manifest-manager.ts        # Branch lifecycle tracking
-│   ├── agent-roles.ts             # Agent role definitions (tests, security, style, etc.)
-│   ├── branch-cleaner.ts          # Stale branch cleanup
-│   ├── saga.ts                    # Saga pattern with compensation
-│   ├── state-machine.ts           # Generic FSM for pipelines + branches
-│   ├── tier-classifier.ts         # Change size classification
-│   └── types.ts                   # Domain types + event types
-├── trackers/
-│   ├── tracker.ts                 # Pluggable issue tracker interface
-│   └── github-tracker.ts          # GitHub Issues via `gh` CLI
-├── hatchet/
-│   ├── client.ts                  # Hatchet SDK singleton
-│   ├── worker.ts                  # Worker registration (all 6 workflows)
-│   └── workflows/
-│       ├── issue-to-pr.ts         # Issue → Plan → Implement → PR → CI → Review → Merge
-│       ├── backlog-processor.ts   # Scan backlog → prioritize → spawn sessions
-│       ├── feature-to-deploy.ts   # Prompt → Implement → Quality → PR → Deploy
-│       ├── pr-review-loop.ts      # Fetch reviews → apply feedback → push
-│       ├── cleanup.ts             # Remove stale branches/worktrees
-│       └── doc-gardening.ts       # Documentation maintenance
-├── infrastructure/
-│   ├── event-bus.ts               # eventemitter3 pub/sub + JSONL persistence
-│   ├── circuit-breaker.ts         # cockatiel circuit breakers (Claude + GitHub)
-│   ├── idempotency.ts             # Duplicate pipeline prevention
-│   ├── dlq.ts                     # File-based dead letter queue
-│   ├── adapter.ts                 # Outbound adapter manager
-│   ├── webhook-adapter.ts         # HTTP webhook delivery
-│   ├── request-logger.ts          # Per-request JSONL logging
-│   └── logger.ts                  # Pino structured logging
-├── routes/
-│   ├── sessions.ts                # /sessions/* endpoints (start, batch, escalate, cancel)
-│   ├── webhooks.ts                # /webhooks/github (PR, review, CI events)
-│   └── logs.ts                    # /logs/* endpoints
-└── validation/
-    └── schemas.ts                 # Zod request/response schemas
+  domain/          pure logic, no I/O
+    state-machine.ts   generic typed state machine
+    events.ts          events published on the event bus
+    pull-request-body.ts  body of a run's pull request (`Closes #N`, checks note)
+    step-outcome.ts    how a step ended (PR opened, agent or infra failure)
+    factory-run.ts     the run state machine
+    retry-policy.ts    when an infrastructure failure is retried
+  ports/           interfaces the factory depends on
+    tracker.ts         issue source
+    pull-requests.ts   opening a draft pull request from a workspace
+    run-reporter.ts    a run's events, in funny's ingest event shape
+    run-store.ts       the factory's runs and per-day counter
+    pull-request-ci.ts a run's pull request after it opened: CI state, mark ready
+    issue-source.ts    ready issues, trusted text, claiming (through the Factory App)
+    workspaces.ts      where a run works, and how the step runner is started
+    clock.ts           time, faked in tests
+  adapters/        implementations of the ports
+    github-tracker.ts  issues through the `gh` CLI
+    event-bus.ts       in-memory pub/sub with a JSONL file per run
+    gh-pull-request-opener.ts  `gh pr create --draft`
+    jsonl-run-reporter.ts      appends a run's events to its event file
+    sqlite-run-store.ts        the run store in `state.db` (`bun:sqlite`)
+    factory-app.ts             the Factory App's repository tokens
+    factory-github.ts          REST / GraphQL calls with the repository's App token
+    github-app-issue-source.ts the issue source over GitHub's REST API
+    github-app-pull-requests.ts check runs, statuses, mergeability, job logs, ready for review
+    worktree-workspace.ts      worktree workspaces and the step runner as a child process
+    workspace-action-provider.ts  workflow actions inside a workspace (agent, commands, git, PR)
+  steps/
+    implement.ts     the `implement` step: runs the `factory-issue` workflow
+    factory-workflow.ts  picks the repository's override or the built-in workflow
+    fix.ts           the `fix` step: resumes the session to fix CI or rebase
+    fix-prompts.ts   its prompts
+    step-io.ts       spec fields, event file and exit marker shared by the steps
+  settings/        factory settings (schema, loading, refusals) and secrets
+  factory.ts       the factory: admission and the tick's loops over its runs
+  factory/         its parts: context, failures (retries, hand-back), implement-run,
+                   pull-request (CI follow-up, fixes), merge (auto-merge, cleanup),
+                   reconcile (state against GitHub and the workspaces on start)
+  run-recorder.ts  state changes through the state machine, saved and reported
+  compose.ts       wires the factory from its real parts and the given edges
+  cli.ts           the `start` and `status` commands, with their edges injected
+  config/          the old YAML config loading (`.pipeline/config.yaml`)
+  infrastructure/  redacting factory log (the orchestrator logs only through it), TTY secret
+                   prompt, async mutex, pino logger (old modules)
+  agents/reviewer/ PR reviewer (exported as `@funny/orchestrator/review`)
+  bin/
+    orchestrator.ts  long-running process: `start`, `status`
+    step.ts          step runner, runs inside a factory run's workspace:
+                     `funny-orchestrator-step <implement|fix> --spec <spec.json>`
 ```
 
-### Key Design Decisions
-
-1. **Sessions are first-class** — Every issue gets a Session with a 14-state lifecycle machine and full audit trail
-2. **Reactions are declarative** — Config-driven policies, not hardcoded logic. Swap between `respawn_agent`, `escalate`, and `notify` per event type
-3. **Orchestrator is an agent** — Uses LLM to understand issues + codebase and produce real implementation plans
-4. **Plugin architecture** — Tracker interface is pluggable (GitHub first, Linear planned). Agent providers are swappable via config
-5. **Builds on existing infra** — EventBus, circuit breakers, DLQ, Integrator, Director all reused from the quality pipeline
-6. **Works with and without Hatchet** — Single-issue sessions work inline; batch processing and durable waits need Hatchet
-
-## Testing
+## Commands
 
 ```bash
-bun test
+bun run test     # unit tests
+bun run start    # funny-orchestrator start (not implemented yet)
+bun run status   # funny-orchestrator status (not implemented yet)
 ```
-
-## Bruno API Collection
-
-The `bruno/` directory contains a [Bruno](https://www.usebruno.com/) collection with pre-built requests for all endpoints.
-
-## Further Reading
-
-- [SAD.md](SAD.md) — Full architecture document
-- [TECH-STACK.md](TECH-STACK.md) — Technology choices
-
-### External LLM API
-
-Funny does not bundle or start an LLM proxy. Run CLIProxyAPI separately only when needed. The orchestrator uses Chat Completions, including standard tool-call messages. Configure `.pipeline/config.yaml`:
-
-```yaml
-llm_providers:
-  openai:
-    base_url: http://localhost:8317/v1
-    api_key_env: OPENAI_API_KEY
-orchestrator:
-  provider: openai
-  model: your-advertised-model
-```
-
-Set `OPENAI_API_KEY` to the external server's client key. Base URLs include the API prefix (`/v1`). Existing configurations using `funny_api_acp` / `funny-api-acp` must switch to `openai`; the former run-based protocol is no longer supported.

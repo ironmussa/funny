@@ -11,10 +11,9 @@
 
 import { runPipeline, nullReporter } from '@funny/pipelines';
 import { parseWorkflowYaml } from '@funny/workflows';
+import type { ActionProvider } from '@funny/workflows/compiler';
+import { compileYamlPipeline, type YamlPipelineContext } from '@funny/workflows/compiler';
 import { describe, expect, test, vi } from 'vitest';
-
-import type { ActionProvider } from '../../pipelines/types.js';
-import { compileYamlPipeline, type YamlPipelineContext } from '../../pipelines/yaml-compiler.js';
 
 // ── Helpers ──────────────────────────────────────────────────
 

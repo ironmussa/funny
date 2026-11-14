@@ -6,6 +6,7 @@
  * pass is an Effect fiber that shutdown interrupts.
  */
 
+import { productionSandboxProviders } from '@funny/sandbox';
 import { Effect, Fiber, Schedule } from 'effect';
 import { errAsync, ResultAsync } from 'neverthrow';
 
@@ -15,7 +16,6 @@ import { removeRunner } from '../runner-manager.js';
 import { sandboxRunnerIdForThread } from '../runner-scope.js';
 import { createSandboxIdleSweeper, DEFAULT_SANDBOX_IDLE_MS } from './idle-sweeper.js';
 import { createInfraConnectionService } from './infra-connections.js';
-import { productionSandboxProviders } from './provider-catalog.js';
 import { cancelAllProvisions, cancelProvision } from './provision-registry.js';
 import { startReverseLinks, type ReverseLinks } from './reverse-link/wiring.js';
 import { postSandboxError, sandboxErrorEventData } from './sandbox-events.js';

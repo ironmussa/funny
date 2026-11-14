@@ -11,7 +11,7 @@ process.env.FUNNY_DATA_DIR = mkdtempSync(join(tmpdir(), 'funny-github-app-test-'
 
 const { loadGithubAppConfig, saveGithubApp, deleteGithubApp } =
   await import('../../../services/github-app/app-config.js');
-const { signAppJwt } = await import('../../../services/github-app/app-jwt.js');
+const { signAppJwt } = await import('@funny/core/github-app');
 const { createGithubAppTokenIssuer, SANDBOX_PERMISSIONS } =
   await import('../../../services/github-app/token-issuer.js');
 

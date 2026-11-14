@@ -48,6 +48,7 @@ const PROJECTS = [
   'packages/agent/tsconfig.json',
   'packages/sdk/tsconfig.json',
   'packages/scheduler/tsconfig.json',
+  'packages/sandbox/tsconfig.json',
 ];
 
 const REFRESH = process.argv.includes('--refresh');

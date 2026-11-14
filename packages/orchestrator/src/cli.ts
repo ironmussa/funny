@@ -117,6 +117,10 @@ async function start(args: string[], io: OrchestratorIo): Promise<number> {
     );
     // Runs a previous process left behind are put back on track before anything new.
     await factory.reconcile();
+    // Nothing is printed while no issue is ready: say so, so quiet reads as waiting.
+    log.info(
+      `Waiting for issues labelled '${settings.value.labels.ready}' opened by ${github.login}; checking every minute. Ctrl-C to stop.`,
+    );
     let stopping = false;
     const stopped = io.untilStopped().then(() => {
       stopping = true;

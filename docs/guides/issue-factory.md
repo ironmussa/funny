@@ -174,7 +174,9 @@ export FUNNY_FACTORY_MODEL_KEY='...'
 It is not part of `bun run dev`. On start it reconciles its state with GitHub and the
 workspaces (a factory run interrupted by a stop, even an abrupt one, is neither lost nor
 started twice), then ticks every minute: it follows the pull requests of its factory runs
-and admits ready issues, oldest first, within the limits. `Ctrl-C` stops admitting and
+and admits ready issues, oldest first, within the limits. After starting it prints what it waits for
+(`Waiting for issues labelled 'ready-for-agent' opened by <login>; checking every minute`)
+and stays quiet until there is something to do: quiet means waiting, not stuck. `Ctrl-C` stops admitting and
 waits for the factory runs in flight.
 
 To work on an issue: label it `ready-for-agent`. An issue blocked by an open issue

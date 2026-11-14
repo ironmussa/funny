@@ -37,6 +37,8 @@ export function sandboxRunWorkspace(
   record: SandboxRecord,
   request: WorkspaceRequest,
   tokenExpiry: number,
+  /** After a step: the sandbox is paused while the pull request waits. */
+  pause: () => Promise<void>,
 ): RunWorkspace {
   const { provider, paths, writeToken, exec } = session;
   const p = paths(record, request.runId);
@@ -135,7 +137,6 @@ export function sandboxRunWorkspace(
     cwd: p.repo,
     implement: (spec) => runStep('implement', spec),
     fix: (spec) => runStep('fix', spec),
-    // The sandbox stays for later steps; pausing it while CI runs comes with #290.
-    release: async () => {},
+    release: pause,
   };
 }

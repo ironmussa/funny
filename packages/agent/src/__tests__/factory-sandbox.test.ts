@@ -103,7 +103,7 @@ describe('a sandbox factory run', () => {
     }
     expect(readFileSync(join(secrets, 'model-key'), 'utf8')).toBe('model-key-for-tests');
     // The scripts the step starts with parse (they never run in this seam).
-    const [{ dir }] = [...h.sandbox!.sandboxes.values()];
+    const dir = h.sandbox!.dirOf([...h.sandbox!.provider.sandboxes.keys()][0]);
     const work = join(dir, 'factory', readdirSync(join(dir, 'factory'))[0]);
     expect(Bun.spawnSync(['bash', '-n', join(work, 'bin', 'run-step')]).exitCode).toBe(0);
     expect(Bun.spawnSync(['sh', '-n', join(work, 'bin', 'gh')]).exitCode).toBe(0);
@@ -198,7 +198,7 @@ describe('a sandbox factory run', () => {
     store.close();
 
     expect(await h.status()).toContain('failed');
-    expect(h.sandbox!.sandboxes.size).toBe(0);
+    expect(h.sandbox!.provider.sandboxes.size).toBe(0);
     expect(h.github.pulls).toHaveLength(1);
     expect(git(h.origin, 'show', `${pull.head}:hello.txt`)).toBe('hello');
   });

@@ -15,6 +15,10 @@ import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSyn
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import type { CreateSandboxRequest, SandboxError, SandboxProvider } from '@funny/sandbox';
+import { createFakeSandboxProvider, type FakeSandboxProvider } from '@funny/sandbox/providers/fake';
+import { errAsync } from 'neverthrow';
+
 import { openRunStore } from '../../adapters/sqlite-run-store.js';
 import { runOrchestratorCli } from '../../cli.js';
 import { composeFactory } from '../../compose.js';
@@ -25,7 +29,7 @@ import type { FactorySettings } from '../../settings/schema.js';
 import { fakeClock, type FakeClock } from './fake-clock.js';
 import { fakeGithubApi, type FakeGithubApi } from './fake-github-api.js';
 import { inProcessStepLauncher, type InProcessStepOptions } from './in-process-step.js';
-import { localSandboxProvider, type LocalSandboxProvider } from './local-sandbox.js';
+import { sandboxExec } from './local-sandbox.js';
 import type { FakeAgentTurn } from './step-fakes.js';
 
 export const REPO = 'acme/app';
@@ -65,6 +69,16 @@ export interface StepContext {
 }
 export type Turns = (step: StepContext) => FakeAgentTurn[];
 
+/** `@funny/sandbox`'s fake provider, with its commands run by `sandboxExec`. */
+export interface HarnessSandbox {
+  provider: FakeSandboxProvider;
+  /** Every create request, as the provider received it. */
+  creates: CreateSandboxRequest[];
+  /** Make the next create fail with `error`. */
+  failNextCreate(error: SandboxError): void;
+  dirOf(sandboxId: string): string;
+}
+
 export interface RunEvent {
   event_type: string;
   request_id: string;
@@ -80,7 +94,9 @@ export interface FactoryHarness {
   clock: FakeClock;
   github: FakeGithubApi;
   /** The sandbox provider of the last factory made (the project in sandbox mode). */
-  sandbox: LocalSandboxProvider | null;
+  sandbox: HarnessSandbox | null;
+  /** Whether the next factory's sandbox provider keeps the disk on stop (default true). */
+  sandboxKeepsDisk: boolean;
   /** Root-only secrets of the sandboxes, by run. */
   sandboxSecrets: string;
   /** A factory over the harness; `settings` overrides the defaults. */
@@ -93,6 +109,40 @@ export interface FactoryHarness {
   /** The events of the only run, or of `runId`. */
   events(runId?: string): RunEvent[];
   cleanup(): void;
+}
+
+/** The fake provider with its commands run by `sandboxExec`, and the provider the factory gets. */
+function fakeSandbox(
+  root: string,
+  steps: InProcessStepOptions,
+  keepsDisk: boolean,
+): { sandbox: HarnessSandbox; provider: SandboxProvider } {
+  const commands = sandboxExec(root, steps);
+  const fake = createFakeSandboxProvider('fake-valid', {
+    stopPreservesDisk: keepsDisk,
+    templates: ['0.0.0-test'],
+    exec: commands.exec,
+  });
+  let nextCreateError: SandboxError | null = null;
+  const sandbox: HarnessSandbox = {
+    provider: fake,
+    creates: [],
+    failNextCreate(error) {
+      nextCreateError = error;
+    },
+    dirOf: commands.dirOf,
+  };
+  // The factory's provider records every create and fails one on demand.
+  const provider: SandboxProvider = {
+    ...fake,
+    create(request) {
+      sandbox.creates.push(request);
+      const error = nextCreateError;
+      nextCreateError = null;
+      return error ? errAsync(error) : fake.create(request);
+    },
+  };
+  return { sandbox, provider };
 }
 
 export function createFactoryHarness(): FactoryHarness {
@@ -153,6 +203,7 @@ export function createFactoryHarness(): FactoryHarness {
     clock,
     github,
     sandbox: null,
+    sandboxKeepsDisk: true,
     sandboxSecrets,
     factory(turns = () => [writesHello], overrides = {}) {
       const store = openRunStore(join(home, 'state.db'));
@@ -163,7 +214,8 @@ export function createFactoryHarness(): FactoryHarness {
         repo: REPO,
         turns: (step) => turns({ ...step, factory: ref.factory! }),
       };
-      harness.sandbox = localSandboxProvider(join(root, 'sandboxes'), steps);
+      const sandboxed = fakeSandbox(join(root, 'sandboxes'), steps, harness.sandboxKeepsDisk);
+      harness.sandbox = sandboxed.sandbox;
       const built = composeFactory(
         {
           settings: settings(overrides),
@@ -181,7 +233,7 @@ export function createFactoryHarness(): FactoryHarness {
           api: github.api,
           clock,
           launchStep: inProcessStepLauncher(steps),
-          sandboxProvider: harness.sandbox,
+          sandboxProvider: sandboxed.provider,
           runnerBuild: {
             commit: 'a'.repeat(40),
             version: '0.0.0-test',

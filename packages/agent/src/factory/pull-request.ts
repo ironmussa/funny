@@ -11,7 +11,7 @@ import type { CiState } from '../ports/pull-request-ci.js';
 import type { FactoryRun } from '../ports/run-store.js';
 import type { FactoryProject } from '../settings/schema.js';
 import type { FixStepSpec } from '../steps/fix.js';
-import { prNumberOf, READY_POLL_MS, type FactoryContext } from './context.js';
+import { prNumberOf, type FactoryContext } from './context.js';
 import type { Failures } from './failures.js';
 import { createMergeFollowUp } from './merge.js';
 
@@ -97,26 +97,22 @@ export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failure
   }
 
   /** Take the pull request out of draft without merging (no CI to wait for). */
-  async function markReadyWithoutCi(run: FactoryRun, number: number) {
+  async function markReadyWithoutCi(project: FactoryProject, run: FactoryRun, number: number) {
     const marked = await ctx.pullRequests.markReady(run.repo, number);
     if (marked.isErr()) {
       return onInfraFailure(run, `could not mark it ready: ${marked.error.message}`, 'waiting_ci');
     }
     // Never merged by the factory: nothing has checked it.
-    return runs.transition(run, 'ready', {
-      reason: 'no CI reported any check; marked ready without CI',
-      nextCheckAt: ctx.later(READY_POLL_MS),
-      infraRetries: 0,
-    });
+    return merge.ready(project, run, 'no CI reported any check; marked ready without CI');
   }
 
   /** No check reported: CI may not have started, or the repository has none. */
-  function onNoChecks(run: FactoryRun, number: number) {
+  function onNoChecks(project: FactoryProject, run: FactoryRun, number: number) {
     const pushedAt = Date.parse(run.pushedAt ?? run.updatedAt);
     if (clock.now().getTime() - pushedAt < NO_CI_GRACE_MS) {
       return runs.update(run, ctx.waitingForCi('waiting for CI to report a check'));
     }
-    return markReadyWithoutCi(run, number);
+    return markReadyWithoutCi(project, run, number);
   }
 
   /** One look at a waiting run's pull request. */
@@ -130,7 +126,7 @@ export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failure
       case 'pending':
         return runs.update(run, ctx.waitingForCi());
       case 'none':
-        return onNoChecks(run, number);
+        return onNoChecks(project, run, number);
       case 'green':
         return merge.onGreen(project, run);
       default:

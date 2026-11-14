@@ -24,13 +24,21 @@ export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
   const { runs, log } = ctx;
   const { giveUp, onInfraFailure } = failures;
 
-  /** Ready for review, not merged by the factory (a new phase: retries start over). */
-  const ready = (run: FactoryRun, reason: string | null) =>
-    runs.transition(run, 'ready', {
+  /**
+   * Ready for review, not merged by the factory: the factory run's work is
+   * done, so its workspace goes (a new phase: retries start over).
+   */
+  async function ready(project: FactoryProject, run: FactoryRun, reason: string | null) {
+    const done = runs.transition(run, 'ready', {
       reason,
       nextCheckAt: ctx.later(READY_POLL_MS),
       infraRetries: 0,
     });
+    const discarded = await ctx.workspaces.discard(ctx.workspaceRequest(done, project));
+    if (discarded.isErr())
+      log.warn('Could not free the workspace', { run: run.id, error: discarded.error });
+    return done;
+  }
 
   /**
    * The pull request merged: its workspace and remote branch go, then the run
@@ -66,7 +74,7 @@ export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
       case 'unavailable':
         return run.state === 'merging'
           ? merging(`not merged: ${result.reason}`)
-          : ready(run, `not merged: ${result.reason}`);
+          : ready(project, run, `not merged: ${result.reason}`);
       case 'not-mergeable':
         return merging(`waiting until GitHub can merge it: ${result.reason}`);
       case 'merged':
@@ -94,7 +102,7 @@ export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
     if (marked.isErr()) {
       return onInfraFailure(run, `could not mark it ready: ${marked.error.message}`, 'waiting_ci');
     }
-    return ctx.settings.auto_merge ? enableAutoMerge(project, run) : ready(run, null);
+    return ctx.settings.auto_merge ? enableAutoMerge(project, run) : ready(project, run, null);
   }
 
   /** While it waits to merge: back to the fix loop if red, auto-merge again if it was turned off. */
@@ -127,5 +135,5 @@ export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
     return whileMerging(project, run, pr.value.autoMerge);
   }
 
-  return { onGreen, follow, cleanUp };
+  return { onGreen, follow, cleanUp, ready };
 }

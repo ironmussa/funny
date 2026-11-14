@@ -23,6 +23,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { stepOutcomeSchema } from '../domain/step-outcome.js';
 import type { WorkspaceProvider, WorkspaceRequest } from '../ports/workspaces.js';
+import { createSandboxPause } from './sandbox-pause.js';
 import {
   createSandboxSession,
   q,
@@ -37,8 +38,11 @@ export function createSandboxWorkspaces(deps: SandboxWorkspaceDeps): WorkspacePr
   const session = createSandboxSession(deps);
   const { provider, recordPath, paths, writeToken, setUp, clone, boot, save, load } = session;
   const failure = (e: { kind: string; message: string }) => `${e.kind}: ${e.message}`;
+  const pausing = createSandboxPause(session, deps);
   const workspace = (record: SandboxRecord, request: WorkspaceRequest, expiry: number) =>
-    sandboxRunWorkspace(session, deps, record, request, expiry);
+    sandboxRunWorkspace(session, deps, record, request, expiry, () =>
+      pausing.pause(record, request),
+    );
 
   /** Destroy a sandbox, best effort (a leak is logged). */
   const destroy = (record: SandboxRecord) =>
@@ -60,7 +64,13 @@ export function createSandboxWorkspaces(deps: SandboxWorkspaceDeps): WorkspacePr
       .andThen((record) =>
         setUp(record, request)
           .andThen((expiry) =>
-            clone(record, request, fromBranch).map(() => workspace(record, request, expiry)),
+            clone(record, request, fromBranch)
+              .andThen(() =>
+                fromBranch
+                  ? ResultAsync.fromSafePromise(pausing.restoreSessions(record, request))
+                  : okAsync(undefined),
+              )
+              .map(() => workspace(record, request, expiry)),
           )
           .orElse((error) => destroy(record).andThen(() => errAsync(error))),
       );
@@ -97,7 +107,12 @@ export function createSandboxWorkspaces(deps: SandboxWorkspaceDeps): WorkspacePr
 
   return {
     prepare(request) {
-      return createIn(request, false);
+      // A retry starts over: a sandbox an earlier attempt left (paused) goes first.
+      return load(request)
+        .andThen((old) => destroy(old))
+        .orElse(() => okAsync(undefined))
+        .andThen(() => ResultAsync.fromSafePromise(pausing.clear(request)))
+        .andThen(() => createIn(request, false));
     },
 
     reopen(request) {
@@ -112,7 +127,8 @@ export function createSandboxWorkspaces(deps: SandboxWorkspaceDeps): WorkspacePr
     },
 
     remove(request) {
-      return load(request)
+      return ResultAsync.fromSafePromise(pausing.clear(request))
+        .andThen(() => load(request))
         .andThen((record) => provider.destroy(record.handle).mapErr(failure))
         .orElse((error) =>
           error === 'the run has no sandbox' ? okAsync(undefined) : errAsync(error),
@@ -125,14 +141,16 @@ export function createSandboxWorkspaces(deps: SandboxWorkspaceDeps): WorkspacePr
     },
 
     discard(request) {
-      return load(request)
+      return ResultAsync.fromSafePromise(pausing.clear(request))
+        .andThen(() => load(request))
         .andThen((record) => destroy(record))
         .orElse(() => okAsync(undefined))
         .andThen(() => ResultAsync.fromPromise(rm(recordPath(request), { force: true }), String));
     },
 
     exists(request) {
-      return existsSync(recordPath(request));
+      // A sandbox destroyed on purpose while CI runs counts as there: it is made again.
+      return existsSync(recordPath(request)) || pausing.paused(request);
     },
 
     async stopLeftovers(request) {

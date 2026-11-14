@@ -49,7 +49,13 @@ A project without `workspace: worktree` runs in a sandbox of the configured prov
   orchestrator renews the token if due, appends the new lines of the step's event file to
   the run's `events.jsonl` on the host, and reads the exit marker;
 - a sandbox that cannot be created or used is an infrastructure failure; a sandbox project
-  never falls back to a worktree.
+  never falls back to a worktree;
+- while a pull request waits (for CI, to merge) its sandbox is paused: **stopped** where
+  the provider keeps the disk on stop, and resumed for a fix; else **destroyed**, after the
+  agent's sessions (`~/.claude/projects`) are kept on the host, and made again from the
+  pull request branch for a fix, with the sessions put back, so the fix still resumes the
+  implementation's session;
+- the sandbox is destroyed whenever the factory run ends: merged, ready or failed.
 
 ### A factory run
 

@@ -4,11 +4,12 @@
  * ephemeral one, and to inject provider failures.
  */
 
-import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import type {
   CreateSandboxRequest,
+  ExecResult,
   SandboxCapabilities,
   SandboxError,
   SandboxHandle,
@@ -39,6 +40,11 @@ export interface FakeProviderOptions {
   templates?: string[];
   /** Base URL `exposePort` publishes on (`<base>/<sandboxId>/<port>`); absent: no ingress. */
   ingressBaseUrl?: string;
+  /**
+   * Runs the commands of `exec` (on a running sandbox). Absent, every command
+   * succeeds with no output: the provider only records it.
+   */
+  exec?: (sandboxId: string, command: string) => ExecResult | Promise<ExecResult>;
 }
 
 function fakeCapabilities(opts: FakeProviderOptions = {}): SandboxCapabilities {
@@ -195,7 +201,12 @@ export function createFakeSandboxProvider(
             return errAsync({ kind: 'unavailable' as const, message: 'sandbox is not running' });
           }
           commands.push({ sandboxId: handle.sandboxId, command });
-          return okAsync({ exitCode: 0, stdout: '', stderr: '' });
+          if (!opts.exec) return okAsync({ exitCode: 0, stdout: '', stderr: '' });
+          const run = opts.exec;
+          return ResultAsync.fromPromise(
+            Promise.resolve(run(handle.sandboxId, command)),
+            (error): SandboxError => ({ kind: 'provider', message: String(error) }),
+          );
         }),
       ),
 

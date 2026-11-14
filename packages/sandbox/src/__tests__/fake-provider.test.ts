@@ -32,3 +32,25 @@ describe('fake provider test controls', () => {
     expect((await provider.validate()).isOk()).toBe(true);
   });
 });
+
+describe('fake sandbox provider exec', () => {
+  test('runs the commands with the exec option, only while the sandbox runs', async () => {
+    const ran: string[] = [];
+    const provider = createFakeSandboxProvider('fake-valid', {
+      exec: (sandboxId, command) => {
+        ran.push(`${sandboxId}: ${command}`);
+        return { exitCode: 3, stdout: 'out', stderr: '' };
+      },
+    });
+    const handle = (
+      await provider.create({ ownerKey: 'o', sizeId: 'default', env: {}, idempotencyKey: 'k' })
+    )._unsafeUnwrap();
+    const result = (await provider.exec(handle, 'echo hi'))._unsafeUnwrap();
+    expect(result).toEqual({ exitCode: 3, stdout: 'out', stderr: '' });
+    expect(ran).toEqual([`${handle.sandboxId}: echo hi`]);
+
+    (await provider.stop(handle))._unsafeUnwrap();
+    expect((await provider.exec(handle, 'echo again')).isErr()).toBe(true);
+    expect(ran).toHaveLength(1);
+  });
+});

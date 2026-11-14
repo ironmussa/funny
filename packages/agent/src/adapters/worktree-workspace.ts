@@ -29,6 +29,7 @@ import type {
   WorkspaceProvider,
   WorkspaceRequest,
 } from '../ports/workspaces.js';
+import { modelCredentialEnv } from '../settings/secrets.js';
 import type { FactoryAppTokens } from './factory-app.js';
 
 /** Variables a run may inherit: none of them carries a credential. */
@@ -81,7 +82,7 @@ export interface WorktreeWorkspaceDeps {
   log: FactoryLog;
   /** The orchestrator's environment; only `INHERITED` variables pass to a run. */
   env: Readonly<Record<string, string | undefined>>;
-  /** Given to the agent as `ANTHROPIC_API_KEY`. */
+  /** Given to the agent as `ANTHROPIC_API_KEY`, or `CLAUDE_CODE_OAUTH_TOKEN` for a subscription token. */
   modelKey: string;
   /** Author and committer of every commit in the run (the run has no git identity of its own). */
   author: { name: string; email: string };
@@ -274,7 +275,7 @@ function worktreeWorkspace(
       step,
       specPath: paths.spec,
       cwd: paths.checkout,
-      env: { ...env, ANTHROPIC_API_KEY: deps.modelKey },
+      env: { ...env, ...modelCredentialEnv(deps.modelKey) },
     });
     return readOutcome(paths.exitMarker, exitCode);
   };

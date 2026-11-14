@@ -22,6 +22,7 @@ import {
   USER_TOKEN,
   writesHello,
   type FactoryHarness,
+  type Turns,
 } from './helpers/factory-harness.js';
 import { ghToken } from './helpers/in-process-step.js';
 import type { FakeAgentTurn } from './helpers/step-fakes.js';
@@ -130,6 +131,36 @@ describe('a worktree factory run', () => {
     // The user's files are as they were.
     expect(readFileSync(join(h.userHome, '.config', 'gh', 'hosts.yml'), 'utf8')).toBe(before.hosts);
     expect(readFileSync(join(h.userHome, '.gitconfig'), 'utf8')).toBe(before.gitconfig);
+  });
+
+  test('the model credential reaches the agent by its kind: API key or Claude subscription token', async () => {
+    const seen: Array<Record<string, string | undefined>> = [];
+    const capture: Turns = () => [
+      async (call) => {
+        seen.push({
+          ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
+          CLAUDE_CODE_OAUTH_TOKEN: process.env.CLAUDE_CODE_OAUTH_TOKEN,
+        });
+        return writesHello(call);
+      },
+    ];
+    const subscription = ['sk', 'ant', 'oat01', 'subscription-for-tests'].join('-');
+    for (const [number, key] of [
+      [7, 'model-key-for-tests'],
+      [8, subscription],
+    ] as const) {
+      h.modelKey = key;
+      h.github.addIssue({ number, author: LOGIN, labels: ['ready-for-agent'] });
+      const { factory: f, store } = h.factory(capture);
+      await f.tick();
+      await f.idle();
+      store.close();
+    }
+
+    expect(seen).toEqual([
+      { ANTHROPIC_API_KEY: 'model-key-for-tests', CLAUDE_CODE_OAUTH_TOKEN: undefined },
+      { ANTHROPIC_API_KEY: undefined, CLAUDE_CODE_OAUTH_TOKEN: subscription },
+    ]);
   });
 
   test('a run longer than the token lifetime still opens its pull request', async () => {

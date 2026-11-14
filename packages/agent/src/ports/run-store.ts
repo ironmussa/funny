@@ -48,5 +48,9 @@ export interface RunStore {
   startedOn(day: string): number;
   /** Count one more run started on `day`. */
   recordStart(day: string): void;
+  /** A problem with a watched repository (the App not installed), or null once it is gone. */
+  setRepoNotice(repo: string, notice: string | null): void;
+  /** Watched repositories with a problem, by name. */
+  repoNotices(): Array<{ repo: string; notice: string }>;
   close(): void;
 }

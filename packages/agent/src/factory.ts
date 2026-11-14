@@ -23,7 +23,8 @@
 
 import { randomUUID } from 'crypto';
 
-import { blocksAdmission, needsHandBack, type RunState } from './domain/factory-run.js';
+import { needsHandBack, type RunState } from './domain/factory-run.js';
+import { createAdmission } from './factory/admission.js';
 import { createFactoryContext, type FactoryDeps } from './factory/context.js';
 import { createFailures } from './factory/failures.js';
 import { createImplementRun } from './factory/implement-run.js';
@@ -54,7 +55,7 @@ export interface Factory {
 
 export function createFactory(deps: FactoryDeps): Factory {
   const ctx = createFactoryContext(deps);
-  const { settings, store, clock, log, runs } = ctx;
+  const { settings, store, clock, runs } = ctx;
   const failures = createFailures(ctx);
   const implementIssue = createImplementRun(ctx, failures);
   const followPullRequest = createPullRequestFollowUp(ctx, failures);
@@ -83,6 +84,10 @@ export function createFactory(deps: FactoryDeps): Factory {
     inFlight.add(running);
   }
 
+  const admit = createAdmission(ctx, (project, issue) => startRun(project, issue), {
+    timeoutMs: deps.admissionTimeoutMs,
+  });
+
   function startRun(project: FactoryProject, issue: ReadyIssue): void {
     const id = `r-${issue.number}-${randomUUID().slice(0, 8)}`;
     const now = clock.now().toISOString();
@@ -99,24 +104,6 @@ export function createFactory(deps: FactoryDeps): Factory {
     runs.create(queued);
     store.recordStart(today());
     track(id, () => implementIssue(project, queued));
-  }
-
-  async function admit(project: FactoryProject): Promise<void> {
-    const ready = await deps.issues.listReady(project.repo, settings.labels.ready);
-    if (ready.isErr()) {
-      log.warn('Could not list ready issues', { repo: project.repo, error: ready.error.message });
-      return;
-    }
-    const login = settings.github.login.toLowerCase();
-    const active = (n: number) =>
-      store
-        .list()
-        .some((r) => r.repo === project.repo && r.issueNumber === n && blocksAdmission(r));
-    for (const issue of ready.value) {
-      if (ctx.slotsLeft() <= 0 || settings.limits.daily - store.startedOn(today()) <= 0) return;
-      if (issue.author.toLowerCase() !== login || active(issue.number)) continue;
-      startRun(project, issue);
-    }
   }
 
   /** Runs of a watched project with no work in progress, with their project. */
@@ -181,7 +168,7 @@ export function createFactory(deps: FactoryDeps): Factory {
       followDueRuns(projects);
       retryDueRuns(projects);
       retryHandBacks();
-      for (const project of projects) await admit(project);
+      await admit(projects);
     },
     async idle() {
       while (inFlight.size > 0) await Promise.all([...inFlight]);

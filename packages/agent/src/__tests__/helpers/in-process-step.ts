@@ -61,16 +61,30 @@ function ghLikeOpener(
   };
 }
 
-/** Swap `process.env` for `env` while `fn` runs. */
-async function withProcessEnv<T>(env: Record<string, string>, fn: () => Promise<T>): Promise<T> {
-  const saved = { ...process.env };
+/** The test's own environment while steps run, and how many run at once. */
+let outside: NodeJS.ProcessEnv | null = null;
+let inside = 0;
+
+const replaceEnv = (env: Record<string, string | undefined>) => {
   for (const key of Object.keys(process.env)) delete process.env[key];
   Object.assign(process.env, env);
+};
+
+/**
+ * Swap `process.env` for `env` while `fn` runs. Steps that overlap (several
+ * factory runs at once) share one swapped environment: the test's own comes
+ * back only when the last of them ends.
+ */
+async function withProcessEnv<T>(env: Record<string, string>, fn: () => Promise<T>): Promise<T> {
+  if (inside++ === 0) outside = { ...process.env };
+  replaceEnv(env);
   try {
     return await fn();
   } finally {
-    for (const key of Object.keys(process.env)) delete process.env[key];
-    Object.assign(process.env, saved);
+    if (--inside === 0) {
+      replaceEnv(outside!);
+      outside = null;
+    }
   }
 }
 

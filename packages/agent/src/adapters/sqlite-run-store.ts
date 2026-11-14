@@ -22,6 +22,10 @@ CREATE TABLE IF NOT EXISTS runs (
   updated_at TEXT NOT NULL
 );
 -- Later columns are in LATER_COLUMNS.
+CREATE TABLE IF NOT EXISTS repo_notices (
+  repo TEXT PRIMARY KEY,
+  notice TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS daily_starts (
   day TEXT PRIMARY KEY,
   started INTEGER NOT NULL DEFAULT 0
@@ -162,8 +166,18 @@ export function openRunStore(path: string): RunStore {
   const recordStartQuery = db.query<unknown, [string]>(
     'INSERT INTO daily_starts (day, started) VALUES (?, 1) ON CONFLICT(day) DO UPDATE SET started = started + 1',
   );
+  const setNotice = db.query<unknown, [string, string]>(
+    'INSERT OR REPLACE INTO repo_notices (repo, notice) VALUES (?, ?)',
+  );
+  const clearNotice = db.query<unknown, [string]>('DELETE FROM repo_notices WHERE repo = ?');
+  const notices = db.query<{ repo: string; notice: string }, []>(
+    'SELECT repo, notice FROM repo_notices ORDER BY repo',
+  );
   return {
     list: () => listQuery.all().map(toRun),
+    setRepoNotice: (repo, notice) =>
+      void (notice === null ? clearNotice.run(repo) : setNotice.run(repo, notice)),
+    repoNotices: () => notices.all(),
     recordStart: (day) => void recordStartQuery.run(day),
     save: (run) => void saveQuery.run(toParams(run)),
     startedOn: (day) => startedQuery.get(day)?.started ?? 0,

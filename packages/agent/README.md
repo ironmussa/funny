@@ -32,7 +32,12 @@ counter of started runs).
 
 On each tick (every 60 seconds) the orchestrator lists the open issues with the ready
 label in each worktree project, oldest first, and admits those opened by the configured
-login that have no active factory run, within the concurrency and daily limits. A factory run then:
+login, assigned to it or to nobody (an issue also assigned to someone else is not), with no
+open blocker by GitHub's native issue dependencies, and no active factory run, within the
+concurrency limit and the daily limit on new runs (a UTC day). Each repository gets its
+missing labels created once and at most a minute per tick, so a slow one does not hold up
+the others; one where the Factory App is not installed is reported in the log and in
+`status`. A factory run then:
 
 1. **claims** the issue through the Factory App: assigns the login, swaps the ready label
    for the in-progress one, and comments;

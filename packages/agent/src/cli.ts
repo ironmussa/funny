@@ -156,6 +156,7 @@ function status(args: string[], io: OrchestratorIo): number {
     const runs = store.list();
     io.stdout(runs.length === 0 ? 'No factory runs yet.\n' : `${runs.map(formatRun).join('\n')}\n`);
     io.stdout(`Started today: ${store.startedOn(today(io))}\n`);
+    for (const { repo, notice } of store.repoNotices()) io.stdout(`${repo}: ${notice}\n`);
     return 0;
   } finally {
     store.close();

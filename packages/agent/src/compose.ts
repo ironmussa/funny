@@ -26,6 +26,8 @@ export interface FactoryEdges {
   launchStep: StepLauncher;
   /** The orchestrator's environment (secrets already removed). */
   env: Readonly<Record<string, string | undefined>>;
+  /** How long one repository's admission may take per tick. */
+  admissionTimeoutMs?: number;
 }
 
 export function composeFactory(
@@ -50,6 +52,7 @@ export function composeFactory(
     log: core.log,
     home: core.home,
     clock: edges.clock,
+    admissionTimeoutMs: edges.admissionTimeoutMs,
     issues: createGithubAppIssueSource({ tokens, fetch: edges.fetch, api: edges.api }),
     pullRequests: createGithubAppPullRequests({ tokens, fetch: edges.fetch, api: edges.api }),
     workspaces: createWorktreeWorkspaces({

@@ -170,6 +170,7 @@ export function createFactoryHarness(): FactoryHarness {
           }),
           // The user's environment, with their personal token in it.
           env: { PATH: process.env.PATH, HOME: userHome, GH_TOKEN: USER_TOKEN },
+          admissionTimeoutMs: 1_000,
         },
       );
       ref.factory = built;

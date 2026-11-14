@@ -19,6 +19,7 @@ import { createGithubTokenWriter, ghCredentialHelper } from '@funny/core/github-
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { stepOutcomeSchema, type StepOutcome } from '../domain/step-outcome.js';
+import { AsyncMutex } from '../infrastructure/async-mutex.js';
 import { runClean } from '../infrastructure/clean-process.js';
 import type { FactoryLog } from '../infrastructure/factory-log.js';
 import type { Clock } from '../ports/clock.js';
@@ -34,6 +35,18 @@ import type { FactoryAppTokens } from './factory-app.js';
 const INHERITED = ['PATH', 'LANG', 'LC_ALL', 'TMPDIR', 'TERM'];
 
 const STEP_PID_FILE = 'step.pid';
+
+/**
+ * One lock per repository the orchestrator runs git in: factory runs of one
+ * project fetch and add worktrees in the same `.git`, and concurrent git
+ * commands there fail on its lock files.
+ */
+const repositoryLocks = new Map<string, AsyncMutex>();
+function repositoryLock(path: string): AsyncMutex {
+  let lock = repositoryLocks.get(path);
+  if (!lock) repositoryLocks.set(path, (lock = new AsyncMutex()));
+  return lock;
+}
 
 /** The agent session a step's exit marker recorded, if any. */
 function readSessionId(exitMarker: string): string | undefined {
@@ -118,7 +131,9 @@ function runSetup(request: WorkspaceRequest, deps: WorktreeWorkspaceDeps) {
       deps.log.warn('Could not renew the factory run token', { run: runId, error }),
   });
   const git = (args: string[], cwd: string) =>
-    ResultAsync.fromSafePromise(runClean(['git', ...args], { cwd, env })).andThen((run) =>
+    ResultAsync.fromSafePromise(
+      repositoryLock(cwd).runExclusive(() => runClean(['git', ...args], { cwd, env })),
+    ).andThen((run) =>
       run.exitCode === 0
         ? okAsync(run.stdout)
         : errAsync(`git ${args[0]} failed: ${(run.stderr || run.stdout).trim()}`),

@@ -24,7 +24,11 @@ export interface FactoryGithub {
   text(repo: string, path: string): ResultAsync<string, GithubCallError>;
 }
 
-const fail = (message: string, status?: number): GithubCallError => ({ message, status });
+const fail = (message: string, status?: number, kind?: string): GithubCallError => ({
+  message,
+  status,
+  kind,
+});
 
 export function createFactoryGithub(deps: {
   tokens: FactoryAppTokens;
@@ -40,7 +44,7 @@ export function createFactoryGithub(deps: {
   const request = (repo: string, method: string, path: string, body?: unknown) =>
     deps.tokens
       .forRepo(repo)
-      .mapErr((e) => fail(e.message))
+      .mapErr((e) => fail(e.message, undefined, e.kind))
       .andThen((token) =>
         rest(path, {
           method,

@@ -12,6 +12,8 @@ export interface ReadyIssue {
   title: string;
   /** Login of the issue's author. */
   author: string;
+  /** Logins it is assigned to. */
+  assignees: string[];
   createdAt: string;
 }
 
@@ -26,6 +28,8 @@ export interface IssueSourceError {
   message: string;
   /** GitHub's HTTP status, when it answered. */
   status?: number;
+  /** `not-installed` when the Factory App is not installed on the repository. */
+  kind?: string;
 }
 
 export interface IssueSource {
@@ -58,4 +62,8 @@ export interface IssueSource {
     handBack: { readyLabel: string; inProgressLabel: string; comment: string },
   ): ResultAsync<void, IssueSourceError>;
   defaultBranch(repo: string): ResultAsync<string, IssueSourceError>;
+  /** Numbers of the open issues blocking `issue`, by GitHub's native issue dependencies. */
+  openBlockers(repo: string, issue: number): ResultAsync<number[], IssueSourceError>;
+  /** Create the labels the repository lacks. */
+  ensureLabels(repo: string, labels: string[]): ResultAsync<void, IssueSourceError>;
 }

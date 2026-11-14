@@ -23,6 +23,8 @@ export interface FactoryDeps {
   log: FactoryLog;
   /** The factory home; runs live in `<home>/runs/<runId>/`. */
   home: string;
+  /** How long one repository's admission may take per tick (tests shorten it). */
+  admissionTimeoutMs?: number;
 }
 
 /** How often a run waiting on its pull request looks at it. */

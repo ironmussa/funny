@@ -18,6 +18,8 @@ export interface FakeIssue {
   comments: Array<{ author: string; body: string }>;
   createdAt: string;
   state: 'open' | 'closed';
+  /** Issues blocking this one (GitHub's native issue dependencies). */
+  blockedBy: number[];
 }
 
 export interface FakePull {
@@ -76,6 +78,10 @@ export interface FakeGithubApi {
   /** Every request made with an installation token, in order (`POST /repos/…/assignees`). */
   readonly requests: string[];
   readonly repoSettings: FakeRepoSettings;
+  /** Whether the Factory App is installed on the repository. */
+  installed: boolean;
+  /** The repository's labels. */
+  readonly labels: Set<string>;
   /** Leave the merge settings out of `GET /repos/:repo`, as GitHub does for some tokens. */
   hideMergeSettings: boolean;
   /** Refuse `PUT /pulls/:n/merge` with 405, as when requirements changed meanwhile. */
@@ -107,6 +113,7 @@ export function fakeGithubApi(options: {
   const credentialsSeen = new Set<string>();
   const requests: string[] = [];
   const deletedBranches: string[] = [];
+  const labels = new Set<string>();
   const repoSettings: FakeRepoSettings = {
     allow_squash_merge: true,
     allow_merge_commit: true,
@@ -117,6 +124,13 @@ export function fakeGithubApi(options: {
   const injectedFailure = (method: string, path: string) =>
     [...failures.values()].find((f) => f.method === method && path.endsWith(f.pathEnd));
   let nextNumber = 1000;
+
+  /** One page of a list, as GitHub pages it (`per_page`, `page`). */
+  const page = <T>(url: URL, items: T[]): T[] => {
+    const size = Number(url.searchParams.get('per_page') ?? 30);
+    const at = Number(url.searchParams.get('page') ?? 1);
+    return items.slice((at - 1) * size, at * size);
+  };
 
   const json = (status: number, body?: unknown) =>
     new Response(body === undefined ? null : JSON.stringify(body), { status });
@@ -135,8 +149,9 @@ export function fakeGithubApi(options: {
 
   /** App endpoints: they take the App's JWT. */
   const appRoutes = (method: string, path: string, body: any): Response | null => {
-    if (path === `/repos/${options.repo}/installation` && method === 'GET')
-      return json(200, { id: 7 });
+    if (path === `/repos/${options.repo}/installation` && method === 'GET') {
+      return api.installed ? json(200, { id: 7 }) : json(404, { message: 'Not Found' });
+    }
     if (path === '/app/installations/7/access_tokens' && method === 'POST') {
       const token = `ghs_installation_${tokens.length + 1}`;
       const expiresAt = options.clock.now().getTime() + TOKEN_LIFETIME_MS;
@@ -160,9 +175,21 @@ export function fakeGithubApi(options: {
       const listed = [...issues.values()]
         .filter((i) => i.state === 'open' && (!label || i.labels.includes(label)))
         .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-      return json(200, listed.map(restIssue));
+      return json(200, page(url, listed).map(restIssue));
     }
-    return rest === '/pulls' ? pullsRoute(method, url, body) : null;
+    if (rest === '/pulls') return pullsRoute(method, url, body);
+    return rest.startsWith('/labels') ? labelsRoute(method, rest, body) : null;
+  };
+
+  /** The repository's labels: `GET /labels/:name`, `POST /labels`. */
+  const labelsRoute = (method: string, rest: string, body: any): Response | null => {
+    if (method === 'POST' && rest === '/labels') {
+      labels.add(body.name);
+      return json(201, { name: body.name });
+    }
+    const name = decodeURIComponent(rest.slice('/labels/'.length));
+    if (method !== 'GET' || !name) return null;
+    return labels.has(name) ? json(200, { name }) : json(404, { message: 'Not Found' });
   };
 
   /** `POST /pulls` opens one; `GET /pulls?head=owner:branch` lists the open ones. */
@@ -365,6 +392,14 @@ export function fakeGithubApi(options: {
       return json(200, []);
     },
     'DELETE /labels/:name': (issue, _body, sub) => removeLabel(issue, sub),
+    'GET /dependencies/blocked_by': (issue) =>
+      json(
+        200,
+        issue.blockedBy.flatMap((n) => {
+          const blocker = issues.get(n);
+          return blocker ? [{ number: n, state: blocker.state }] : [];
+        }),
+      ),
   };
 
   const issueRoutes: Route = (method, url, body) => {
@@ -426,6 +461,8 @@ export function fakeGithubApi(options: {
   }) as unknown as typeof fetch;
 
   const api: FakeGithubApi = {
+    installed: true,
+    labels,
     hideMergeSettings: false,
     refuseDirectMerge: false,
     api: apiRoot,
@@ -457,6 +494,7 @@ export function fakeGithubApi(options: {
         labels: [],
         assignees: [],
         comments: [],
+        blockedBy: [],
         createdAt: new Date(
           Date.parse('2026-11-01T00:00:00Z') + partial.number * 1000,
         ).toISOString(),

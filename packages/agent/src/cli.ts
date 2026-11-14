@@ -106,7 +106,10 @@ async function start(args: string[], io: OrchestratorIo): Promise<number> {
       autoMerge: settings.value.auto_merge,
     });
     for (const project of settings.value.projects) {
-      log.info(`  ${project.repo} (${project.workspace})`, { path: project.path });
+      log.info(`  ${project.repo} (${project.workspace})`, {
+        path: project.path,
+        ...(project.auto_merge === undefined ? {} : { autoMerge: project.auto_merge }),
+      });
     }
     const factory = composeFactory(
       { settings: settings.value, secrets: secrets.value, store, log, home: factoryHome(io.env) },

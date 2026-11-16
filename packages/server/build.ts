@@ -35,4 +35,8 @@ await Bun.build({
 // bundled server so published artifacts do not depend on repository sources.
 await cp('../../protocol', './dist/protocol', { recursive: true });
 
+// The issue factory loads its built-in flows (`@funny/workflows`) from
+// `dist/defaults/` once bundled.
+await cp('../workflows/defaults', './dist/defaults', { recursive: true });
+
 console.log(`✓ Central server built successfully (${BUILD_INFO.label})`);

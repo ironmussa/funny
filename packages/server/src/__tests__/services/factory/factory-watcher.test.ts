@@ -1,15 +1,20 @@
 /**
- * Issue factory watcher: scheduling, admission (dedup + concurrency), dispatch
- * to the enabler's runner, and terminal completion — fake GitHub + fake
- * launcher + fake poll, real test DB.
+ * Issue factory watcher: scheduling, admission (dedup + concurrency), running
+ * the factory's flow as the enabler (agent step → pull request → CI → merge),
+ * and resuming a run after a restart — fake GitHub + fake launcher + fake
+ * poll + scripted thread outcomes, real test DB.
  */
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
+import type { CiState } from '@funny/core/github-app';
 import { err, ok, okAsync } from 'neverthrow';
 
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
-import { onFactoryThreadTerminal } from '../../../services/factory/factory-runs-completion.js';
-import { createFactoryRunsRepository } from '../../../services/factory/factory-runs.js';
+import type { FactoryMergeOutcome } from '../../../services/factory/factory-pull-requests.js';
+import {
+  createFactoryRunsRepository,
+  type FactoryRunView,
+} from '../../../services/factory/factory-runs.js';
 import {
   createFactorySettingsService,
   listEnabledFactories,
@@ -50,15 +55,73 @@ function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
   return { calls, launch: launch as any };
 }
 
-/** Fake GitHub side: a fixed repo and issue list. */
-function fakeGithub(repo: string | null, issues: FactoryIssue[]): FactoryGithubPort {
-  return {
+interface GithubScript {
+  /** The default branch's `.funny/workflows/*` files, by path. */
+  files?: Record<string, string>;
+  /** Whether the agent opened its pull request. */
+  pr?: boolean;
+  ci?: CiState;
+  merge?: FactoryMergeOutcome;
+}
+
+/** Fake GitHub side: a fixed repo and issue list, plus a scripted pull request. */
+function fakeGithub(
+  repo: string | null,
+  issues: FactoryIssue[],
+  script: GithubScript = {},
+): FactoryGithubPort & { fileReads: string[]; merges: number } {
+  const port = {
+    fileReads: [] as string[],
+    merges: 0,
     resolveRepo: async () => repo,
     listReadyIssues: () => okAsync(issues),
+    getIssue: (_reader: unknown, number: number) =>
+      okAsync({ number, title: `Issue ${number}`, url: `u/${number}` }),
+    readDefaultBranchFile: (_reader: unknown, path: string) => {
+      port.fileReads.push(path);
+      return okAsync(script.files?.[path] ?? null);
+    },
+    findPullRequest: () =>
+      okAsync(script.pr === false ? null : { number: 9, url: 'https://github.com/o/r/pull/9' }),
+    pullRequests: {
+      ciState: () => okAsync(script.ci ?? ({ kind: 'green' } as CiState)),
+      merge: () => {
+        port.merges++;
+        return okAsync(
+          script.merge ?? ({ kind: 'merged', method: 'squash', branchDeleted: true } as const),
+        );
+      },
+    },
   };
+  return port;
 }
 
 const resolveRuntime = async () => 'local' as const;
+
+/** Agent threads that never finish until the watcher stops. */
+const pendingThreads = async (_threadId: string, signal: AbortSignal) =>
+  new Promise<{ status: 'cancelled' }>((resolve) =>
+    signal.addEventListener('abort', () => resolve({ status: 'cancelled' })),
+  );
+
+/** Agent threads that end at once with `status`. */
+const finishedThreads = (status: 'completed' | 'failed') => async () => ({
+  status,
+  output: 'done',
+});
+
+/** Wait until the run of `factoryId` satisfies `done` (flows go on after the tick). */
+async function eventually(
+  factoryId: string,
+  done: (run: FactoryRunView) => boolean,
+): Promise<FactoryRunView> {
+  for (let i = 0; i < 200; i++) {
+    const [run] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    if (run && done(run)) return run;
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+  throw new Error('the run never reached the expected state');
+}
 
 async function enableFactory(opts: { label?: string; maxConcurrent?: number } = {}) {
   const settings = createFactorySettingsService();
@@ -101,7 +164,7 @@ describe('factory watcher', () => {
     expect((await listEnabledFactories()).map((f) => f.projectId)).toEqual(['p1']);
   });
 
-  test('a tick admits an open issue and starts an implement run for the enabler', async () => {
+  test("a tick admits an open issue and starts its flow's agent step for the enabler", async () => {
     const factoryId = await enableFactory({ label: 'ready-for-agent' });
     const poll = fakePoll();
     const launcher = fakeLauncher();
@@ -111,6 +174,7 @@ describe('factory watcher', () => {
       createPoll: poll.createPoll,
       launch: launcher.launch,
       resolveRuntime,
+      waitThread: pendingThreads,
     });
 
     await poll.ticks[0]!();
@@ -122,6 +186,7 @@ describe('factory watcher', () => {
       mode: 'local',
       source: 'factory',
     });
+    expect(launcher.calls[0]!.body.prompt).toContain('issue #7 of acme/repo');
 
     const runsResult = await createFactoryRunsRepository().list(factoryId);
     const runs = runsResult._unsafeUnwrap();
@@ -168,6 +233,7 @@ describe('factory watcher', () => {
       createPoll: poll.createPoll,
       launch: launcher.launch,
       resolveRuntime,
+      waitThread: pendingThreads,
     });
 
     await poll.ticks[0]!();
@@ -188,6 +254,7 @@ describe('factory watcher', () => {
       createPoll: poll.createPoll,
       launch: launcher.launch,
       resolveRuntime,
+      waitThread: pendingThreads,
     });
 
     await poll.ticks[0]!();
@@ -213,6 +280,7 @@ describe('factory watcher', () => {
       createPoll: poll.createPoll,
       launch: slowLaunch as any,
       resolveRuntime,
+      waitThread: pendingThreads,
     });
 
     const first = poll.ticks[0]!();
@@ -239,6 +307,7 @@ describe('factory watcher', () => {
       createPoll: poll.createPoll,
       launch: launch as any,
       resolveRuntime,
+      waitThread: pendingThreads,
     });
 
     await poll.ticks[0]!();
@@ -256,6 +325,7 @@ describe('factory watcher', () => {
       createPoll: poll.createPoll,
       launch: offline.launch,
       resolveRuntime,
+      waitThread: pendingThreads,
     });
 
     await poll.ticks[0]!();
@@ -280,6 +350,7 @@ describe('factory watcher', () => {
       createPoll: poll.createPoll,
       launch: launcher.launch,
       resolveRuntime,
+      waitThread: pendingThreads,
     });
 
     await poll.ticks[0]!();
@@ -303,39 +374,12 @@ describe('factory watcher', () => {
       createPoll: poll.createPoll,
       launch: launcher.launch,
       resolveRuntime,
+      waitThread: pendingThreads,
     });
 
     await poll.ticks[0]!();
 
     expect(launcher.calls.map((call) => call.body.title)).toEqual(['[Factory] #2 b']);
-  });
-
-  test('a working run whose thread already finished is completed by the next tick', async () => {
-    const factoryId = await enableFactory();
-    seedThread(testDb.db, { id: 't-done', projectId: 'p1', userId: 'alice', status: 'completed' });
-    const runs = createFactoryRunsRepository();
-    const run = (
-      await runs.start({
-        factoryId,
-        issueNumber: 7,
-        threadIds: ['t-done'],
-        currentStep: 'implement',
-        state: 'working',
-      })
-    )._unsafeUnwrap();
-    const poll = fakePoll();
-    await startFactoryWatcher({
-      ports,
-      github: fakeGithub('acme/repo', []),
-      createPoll: poll.createPoll,
-      launch: fakeLauncher().launch,
-      resolveRuntime,
-    });
-
-    await poll.ticks[0]!();
-
-    const [after] = (await runs.list(factoryId))._unsafeUnwrap();
-    expect(after).toMatchObject({ id: run.id, state: 'waiting_human' });
   });
 
   test('a factory whose enabler lost steer access is turned off and starts nothing', async () => {
@@ -353,6 +397,7 @@ describe('factory watcher', () => {
       createPoll: poll.createPoll,
       launch: launcher.launch,
       resolveRuntime,
+      waitThread: pendingThreads,
     });
 
     await poll.ticks[0]!();
@@ -372,6 +417,7 @@ describe('factory watcher', () => {
       createPoll: poll.createPoll,
       launch: launcher.launch,
       resolveRuntime,
+      waitThread: pendingThreads,
     });
 
     await poll.ticks[0]!();
@@ -380,54 +426,148 @@ describe('factory watcher', () => {
   });
 });
 
-describe('onFactoryThreadTerminal', () => {
-  test('a completed implement thread moves the run to waiting_human', async () => {
+describe('factory flow', () => {
+  const issue7 = [{ number: 7, title: 'Fix it', url: 'u/7' }];
+
+  async function runFlow(
+    script: GithubScript,
+    waitThread: (id: string, signal: AbortSignal) => Promise<any>,
+  ) {
     const factoryId = await enableFactory();
-    const runs = createFactoryRunsRepository();
-    const run = (
-      await runs.start({ factoryId, issueNumber: 3, threadIds: ['t-x'], currentStep: 'implement' })
-    )._unsafeUnwrap();
-    await runs.update(run.id, { state: 'working' });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    const github = fakeGithub('o/r', issue7, script);
+    await startFactoryWatcher({
+      ports,
+      github,
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread,
+    });
+    await poll.ticks[0]!();
+    return { factoryId, launcher, github, poll };
+  }
 
-    await onFactoryThreadTerminal('t-x', 'completed');
-
-    const [after] = (await runs.list(factoryId))._unsafeUnwrap();
-    expect(after).toMatchObject({ state: 'waiting_human', currentStep: null });
+  test('a completed agent step goes on to the pull request, green CI and the merge', async () => {
+    const { factoryId, github } = await runFlow({}, finishedThreads('completed'));
+    const run = await eventually(factoryId, (r) => r.state === 'merged');
+    expect(run).toMatchObject({ prUrl: 'https://github.com/o/r/pull/9', threadIds: ['t-1'] });
+    expect(github.merges).toBe(1);
   });
 
-  test('a failed implement thread fails the run', async () => {
-    const factoryId = await enableFactory();
-    const runs = createFactoryRunsRepository();
-    const run = (
-      await runs.start({ factoryId, issueNumber: 4, threadIds: ['t-y'], currentStep: 'implement' })
-    )._unsafeUnwrap();
-    await runs.update(run.id, { state: 'working' });
-
-    await onFactoryThreadTerminal('t-y', 'failed');
-
-    const [after] = (await runs.list(factoryId))._unsafeUnwrap();
-    expect(after).toMatchObject({ state: 'failed', currentStep: null });
+  test('red CI fails the run and nothing is merged', async () => {
+    const { factoryId, github } = await runFlow(
+      { ci: { kind: 'failing', checks: [{ name: 'test', conclusion: 'failure', excerpt: '' }] } },
+      finishedThreads('completed'),
+    );
+    await eventually(factoryId, (r) => r.state === 'failed');
+    expect(github.merges).toBe(0);
   });
 
-  test('a second terminal signal for the same thread changes nothing', async () => {
+  test('a failed agent thread fails the run before any pull request step', async () => {
+    const { factoryId } = await runFlow({}, finishedThreads('failed'));
+    const run = await eventually(factoryId, (r) => r.state === 'failed');
+    expect(run.prUrl).toBeNull();
+  });
+
+  test('an agent that opened no pull request fails the run', async () => {
+    const { factoryId } = await runFlow({ pr: false }, finishedThreads('completed'));
+    await eventually(factoryId, (r) => r.state === 'failed');
+  });
+
+  test('auto-merge enabled leaves the run for a person instead of claiming a merge', async () => {
+    const { factoryId } = await runFlow(
+      { merge: { kind: 'auto-merge-enabled', method: 'squash' } },
+      finishedThreads('completed'),
+    );
+    await eventually(factoryId, (r) => r.state === 'waiting_human');
+  });
+
+  test("the repository's default-branch copy of the flow replaces the built-in", async () => {
+    const custom = [
+      'name: issue-to-merge',
+      'inputs:',
+      '  issue_number: { type: string, required: true }',
+      'nodes:',
+      '  - id: only',
+      '    spawn_agent:',
+      '      prompt: CUSTOM {{issue_number}}',
+    ].join('\n');
+    const { factoryId, launcher, github } = await runFlow(
+      { files: { '.funny/workflows/issue-to-merge.yaml': custom } },
+      finishedThreads('completed'),
+    );
+    await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(launcher.calls[0]!.body.prompt).toBe('CUSTOM 7');
+    expect(github.fileReads).toEqual(['.funny/workflows/issue-to-merge.yaml']);
+  });
+
+  test('an invalid repository flow fails the run without starting an agent', async () => {
+    const { factoryId, launcher } = await runFlow(
+      { files: { '.funny/workflows/issue-to-merge.yaml': 'name: [' } },
+      finishedThreads('completed'),
+    );
+    await eventually(factoryId, (r) => r.state === 'failed');
+    expect(launcher.calls).toHaveLength(0);
+  });
+
+  async function seedInFlightRun(threadIds: string[]) {
     const factoryId = await enableFactory();
-    const runs = createFactoryRunsRepository();
-    await runs.start({
+    await createFactoryRunsRepository().start({
       factoryId,
-      issueNumber: 5,
-      threadIds: ['t-z'],
-      currentStep: 'implement',
+      issueNumber: 7,
+      threadIds,
       state: 'working',
+      currentStep: 'implement',
+    });
+    return factoryId;
+  }
+
+  test('after a restart a run resumes from its finished thread without starting another', async () => {
+    seedThread(testDb.db, { id: 't-done', projectId: 'p1', userId: 'alice', status: 'completed' });
+    const factoryId = await seedInFlightRun(['t-done']);
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    // The real wait: it reads the thread's persisted status.
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('o/r', []),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
     });
 
-    await onFactoryThreadTerminal('t-z', 'completed');
-    await onFactoryThreadTerminal('t-z', 'failed');
+    await poll.ticks[0]!();
 
-    const [after] = (await runs.list(factoryId))._unsafeUnwrap();
-    expect(after).toMatchObject({ state: 'waiting_human' });
+    await eventually(factoryId, (r) => r.state === 'merged');
+    expect(launcher.calls).toHaveLength(0);
   });
 
-  test('ignores a thread with no factory run', async () => {
-    await expect(onFactoryThreadTerminal('unknown', 'completed')).resolves.toBeUndefined();
+  test('a run whose thread no longer exists fails its step', async () => {
+    const factoryId = await seedInFlightRun(['gone']);
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('o/r', []),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+    });
+
+    await poll.ticks[0]!();
+
+    await eventually(factoryId, (r) => r.state === 'failed');
+    expect(launcher.calls).toHaveLength(0);
+  });
+
+  test('stopping the watcher leaves an in-flight run for the next start', async () => {
+    const { factoryId } = await runFlow({}, pendingThreads);
+    await eventually(factoryId, (r) => r.state === 'working');
+    stopFactoryWatcher();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const [run] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    expect(run).toMatchObject({ state: 'working', threadIds: ['t-1'] });
   });
 });

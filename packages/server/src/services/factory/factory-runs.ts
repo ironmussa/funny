@@ -137,21 +137,6 @@ export function createFactoryRunsRepository(
       ).map((rows) => rows.map(toView));
     },
 
-    /**
-     * The in-flight run that owns `threadId`, if any — the completion lookup.
-     * Only non-terminal rows are read (bounded by the factories' concurrency);
-     * `thread_ids` is a JSON array, so the match itself happens here.
-     */
-    findByThreadId(threadId: string): ResultAsync<FactoryRunView | null, FactoryRunsError> {
-      return ResultAsync.fromPromise(
-        db
-          .select()
-          .from(factoryRuns)
-          .where(notInArray(factoryRuns.state, [...TERMINAL_STATES])),
-        storage,
-      ).map((rows) => rows.map(toView).find((r) => r.threadIds.includes(threadId)) ?? null);
-    },
-
     /** The non-terminal run for an issue, if any — the admission dedup check. */
     activeByIssue(
       factoryId: string,
@@ -240,6 +225,26 @@ export function createFactoryRunsRepository(
           .update(factoryRuns)
           .set(changes)
           .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.state, from)))
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
+    },
+
+    /**
+     * Update a run unless it is already terminal (stopped, merged, failed), so
+     * a flow still finishing cannot revive a run someone stopped. Resolves
+     * whether the run was still in flight.
+     */
+    updateInFlight(runId: string, input: UpdateRunInput): ResultAsync<boolean, FactoryRunsError> {
+      const changes = changesFor(input);
+      if (!changes) return okAsync(true);
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set(changes)
+          .where(
+            and(eq(factoryRuns.id, runId), notInArray(factoryRuns.state, [...TERMINAL_STATES])),
+          )
           .returning({ id: factoryRuns.id }),
         storage,
       ).map((rows) => rows.length > 0);

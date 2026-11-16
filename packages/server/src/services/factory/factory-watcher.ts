@@ -1,14 +1,16 @@
 /**
- * Server-owned issue-factory watcher (change issue-factory, phase 2).
+ * Server-owned issue-factory watcher (change issue-factory, phase 2; flows in
+ * factory-flow-execution).
  *
  * Holds one polling job per enabled factory and, on each tick, resolves the
  * project's GitHub repo, lists its open labelled issues, admits the ones not
- * already running and under the concurrency cap, and starts an "implement"
- * thread for each on the ENABLING user's runner through `startThreadOnRunner` —
- * the same path interactive threads take, so runner isolation and the
- * project ↔ runner binding apply unchanged. Each admitted issue becomes a
- * `factory_runs` row, completed by `onFactoryThreadTerminal` when the runner
- * persists the thread's terminal status.
+ * already running and under the concurrency cap, and runs the factory's flow
+ * for each as the ENABLING user (`factory-flow-runs.ts`): its agent steps are
+ * threads started through `startThreadOnRunner` — the same path interactive
+ * threads take, so runner isolation and the project ↔ runner binding apply
+ * unchanged. Each admitted issue becomes a `factory_runs` row; a run in flight
+ * whose flow is not running in this process (a restart) is resumed by the
+ * next tick.
  *
  * Single-instance assumption (shared with the automation scheduler): every
  * server process that calls `startFactoryWatcher` polls every factory.
@@ -18,25 +20,28 @@
  * @domain layer: application
  */
 
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
+import type { Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
-import { projectSandboxSettings, threads } from '../../db/schema.js';
+import { projectSandboxSettings } from '../../db/schema.js';
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import { projectRole } from '../../lib/server-authorizer.js';
 import { decideProjectAccess } from '../../middleware/project-access.js';
 import { startThreadOnRunner, type RunnerPorts } from '../runner-thread-launcher.js';
 import type { ThreadRuntimeMode } from '../thread-sandboxes/project-sandbox-settings.js';
+import { createFactoryFlowRuns, type FactoryRunJob } from './factory-flow-runs.js';
+import type { FactoryFlow, FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
-import { onFactoryThreadTerminal } from './factory-runs-completion.js';
-import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
+import { createFactoryRunsRepository } from './factory-runs.js';
 import {
   disableFactory,
   getEnabledFactory,
   listEnabledFactories,
   type EnabledFactory,
 } from './factory-settings.js';
+import type { ThreadOutcome } from './factory-thread-waits.js';
 
 /** A repeating poll — a real interval in production, a fake in tests. */
 export interface FactoryPoll {
@@ -57,7 +62,10 @@ export interface FactoryWatcherDeps {
   checkAccess?: (userId: string, projectId: string) => Promise<boolean>;
   /** Runtime resolver override for tests; defaults to the enabler's `project_sandbox_settings`. */
   resolveRuntime?: (userId: string, projectId: string) => Promise<ThreadRuntimeMode>;
-  now?: () => Date;
+  /** Thread wait override for tests; defaults to the DB status plus the terminal signal. */
+  waitThread?: (threadId: string, signal: AbortSignal) => Promise<ThreadOutcome>;
+  /** Flow loader override for tests; defaults to the default branch, then the built-ins. */
+  loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
 }
 
 /** How often each factory polls GitHub while the server is up. */
@@ -73,16 +81,12 @@ const startIntervalPoll: CreatePoll = (onTick) => {
 /** Runs of an issue that may fail before the factory stops re-admitting it. */
 export const MAX_ATTEMPTS = 3;
 
-/** A run still `queued` this long after admission lost its launch (e.g. a crash). */
-const QUEUED_STALE_MS = 10 * 60 * 1000;
-
-const TERMINAL_THREAD_STATUSES = new Set(['completed', 'failed', 'stopped', 'interrupted']);
-
 const jobs = new Map<string, FactoryPoll>();
 /** Factories with a tick in progress: a slow tick is never overlapped by the next one. */
 const busy = new Set<string>();
 let deps: FactoryWatcherDeps | null = null;
 let runs: ReturnType<typeof createFactoryRunsRepository> | null = null;
+let flows: ReturnType<typeof createFactoryFlowRuns> | null = null;
 
 /** The enabler's configured runtime for the project, or local when none is set. */
 async function defaultResolveRuntime(
@@ -107,6 +111,13 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
   stopFactoryWatcher();
   deps = d;
   runs = d.runs ?? createFactoryRunsRepository();
+  flows = createFactoryFlowRuns({
+    runs,
+    github: d.github,
+    launch: (input) => (d.launch ?? startThreadOnRunner)(input, d.ports),
+    waitThread: d.waitThread,
+    loadFlow: d.loadFlow,
+  });
   for (const factory of await listEnabledFactories()) schedule(factory);
   log.info('Issue factory watcher started', { namespace: 'factory', jobs: jobs.size });
 }
@@ -115,6 +126,8 @@ export function stopFactoryWatcher(): void {
   for (const job of jobs.values()) job.stop();
   jobs.clear();
   busy.clear();
+  flows?.stopAll();
+  flows = null;
   deps = null;
   runs = null;
 }
@@ -173,8 +186,7 @@ async function fire(id: string): Promise<void> {
     unscheduleFactory(id);
     return;
   }
-  // In-flight runs settle either way; only admission needs the enabler's access.
-  await reconcile(factory.id);
+  // Resuming and admitting both act as the enabler: both need their access.
   if (!(await enablerCanStillSteer(factory))) return;
   // The enabler's runtime decides where the agent runs. Phase 2 launches only
   // local and worktree threads; a sandbox runtime is NOT downgraded to local
@@ -199,6 +211,8 @@ async function fire(id: string): Promise<void> {
     });
     return;
   }
+
+  await resumeRuns(factory, repo, mode);
 
   const issues = await deps.github.listReadyIssues({
     repo,
@@ -284,58 +298,45 @@ async function isAdmissible(factoryId: string, issueNumber: number): Promise<boo
 }
 
 /**
- * Settle in-flight runs from the server's own records, so a lost signal never
- * holds a slot forever: a `working` run whose thread already finished is
- * completed (its terminal event may have raced the launch, or arrived while the
- * server was down), one whose thread is gone fails, and a `queued` run whose
- * launch never finished fails once stale.
+ * Resume every run in flight whose flow is not running in this process — the
+ * server restarted, or an earlier attempt to resume it stopped. The provider
+ * replays the agent steps already recorded, so nothing starts twice.
  */
-async function reconcile(factoryId: string): Promise<void> {
-  if (!runs) return;
-  const inFlight = await runs.inFlight(factoryId);
+async function resumeRuns(factory: EnabledFactory, repo: string, mode: LaunchMode): Promise<void> {
+  if (!runs || !flows || !deps) return;
+  const inFlight = await runs.inFlight(factory.id);
   if (inFlight.isErr()) return;
-  const now = (deps?.now ?? (() => new Date()))().getTime();
   for (const run of inFlight.value) {
-    if (run.state === 'queued') {
-      if (now - Date.parse(run.startedAt) > QUEUED_STALE_MS) {
-        await runs.advance(run.id, 'queued', { state: 'failed', currentStep: null });
-      }
-    } else if (run.state === 'working') {
-      await settleWorkingRun(run);
+    if (flows.isActive(run.id)) continue;
+    const issue = await deps.github.getIssue(
+      { repo, ownerId: factory.userId, projectId: factory.projectId },
+      run.issueNumber,
+    );
+    if (issue.isErr()) {
+      log.warn('Issue factory run could not be resumed: its issue is unreadable', {
+        namespace: 'factory',
+        runId: run.id,
+        issue: run.issueNumber,
+        error: issue.error.message,
+      });
+      continue;
     }
+    await flows.start({ factory, repo, mode, issue: issue.value, run });
   }
 }
 
-async function settleWorkingRun(run: FactoryRunView): Promise<void> {
-  if (!runs || run.threadIds.length === 0) return;
-  const rows = await db
-    .select({ id: threads.id, status: threads.status })
-    .from(threads)
-    .where(inArray(threads.id, run.threadIds));
-  if (rows.length === 0) {
-    await runs.advance(run.id, 'working', { state: 'failed', currentStep: null });
-    return;
-  }
-  const finished = rows.find((row) => TERMINAL_THREAD_STATUSES.has(row.status));
-  if (finished) await onFactoryThreadTerminal(finished.id, finished.status);
-}
-
-/** Start one implement thread for an issue and record its run. */
+/** Record a run for an issue and start its flow; whether an agent started. */
 async function startImplement(
   factory: EnabledFactory,
   repo: string,
   mode: LaunchMode,
   issue: FactoryIssue,
 ): Promise<boolean> {
-  if (!runs) return false;
+  if (!runs || !flows) return false;
 
   // Record the run before launching, so the issue is taken while the launch is
   // in flight: no later tick (or reschedule) can admit it a second time.
-  const run = await runs.start({
-    factoryId: factory.id,
-    issueNumber: issue.number,
-    currentStep: 'implement',
-  });
+  const run = await runs.start({ factoryId: factory.id, issueNumber: issue.number });
   if (run.isErr()) {
     log.error('Issue factory run could not be recorded', {
       namespace: 'factory',
@@ -346,38 +347,16 @@ async function startImplement(
     return false;
   }
 
-  const threadId = await launchImplement(factory, repo, mode, issue);
-  if (!threadId) {
-    // No agent ran, so this is not an attempt: drop the run and let a later
-    // tick try again (e.g. once the enabler's runner is back online).
-    await runs.remove(run.value.id);
-    return false;
-  }
-
-  const recorded = await runs.advance(run.value.id, 'queued', {
-    state: 'working',
-    threadIds: [threadId],
-  });
-  if (recorded.isErr()) {
-    // The thread runs but its run stays `queued`; reconcile fails it once stale.
-    log.error('Issue factory run started but its thread could not be recorded', {
-      namespace: 'factory',
-      factoryId: factory.id,
-      issue: issue.number,
-      threadId,
-      error: recorded.error.message,
-    });
-    return true;
-  }
-  log.info('Issue factory run started', {
+  const started = await flows.start({ factory, repo, mode, issue, run: run.value });
+  log.info('Issue factory run admitted', {
     namespace: 'factory',
     factoryId: factory.id,
     runId: run.value.id,
     issue: issue.number,
-    threadId,
     mode,
+    started,
   });
-  return true;
+  return started === 'started';
 }
 
 /** The thread modes phase 2 can launch. */
@@ -391,49 +370,4 @@ type LaunchMode = 'local' | 'worktree';
 async function resolveMode(userId: string, projectId: string): Promise<LaunchMode | null> {
   const runtime = await (deps?.resolveRuntime ?? defaultResolveRuntime)(userId, projectId);
   return runtime === 'sandbox' ? null : runtime;
-}
-
-/** Start the implement thread on the enabler's runner; its id, or null when it did not start. */
-async function launchImplement(
-  factory: EnabledFactory,
-  repo: string,
-  mode: LaunchMode,
-  issue: FactoryIssue,
-): Promise<string | null> {
-  if (!deps) return null;
-  const launched = await (deps.launch ?? startThreadOnRunner)(
-    {
-      userId: factory.userId,
-      body: {
-        projectId: factory.projectId,
-        title: `[Factory] #${issue.number} ${issue.title}`.slice(0, 200),
-        mode,
-        source: 'factory',
-        prompt: buildImplementPrompt(repo, issue),
-      },
-    },
-    deps.ports,
-  );
-  const threadId = launched.isOk() ? launched.value.threadId : undefined;
-  if (threadId) return threadId;
-  log.warn('Issue factory run could not start', {
-    namespace: 'factory',
-    factoryId: factory.id,
-    issue: issue.number,
-    reason: launched.isErr() ? launched.error.message : 'runner returned no thread id',
-  });
-  return null;
-}
-
-function buildImplementPrompt(repo: string, issue: FactoryIssue): string {
-  return [
-    `You are implementing GitHub issue #${issue.number} of ${repo}.`,
-    '',
-    `Title: ${issue.title}`,
-    `Issue: ${issue.url}`,
-    '',
-    'Read the issue, implement the change it asks for on a new branch, run the',
-    "project's tests, commit, and open a pull request. Follow the repository's",
-    'conventions.',
-  ].join('\n');
 }

@@ -1,0 +1,63 @@
+# Built-in flow of the server-run issue factory (change factory-flow-execution):
+# implement an issue, open a pull request, wait for its CI and merge it.
+#
+# The server runs this flow as the factory's enabler. Agent steps are threads
+# on the enabler's runner; the agent commits, pushes and opens the pull request
+# itself (the server has no checkout), and the `pull-request` step finds that
+# pull request on GitHub by its branch. `wait_ci` and `merge` run on the server
+# with the deployment's GitHub App token, capped by the enabler's own access;
+# a merge happens only on green checks.
+#
+# The factory supplies every input. `issue_url` points at the issue: the agent
+# reads its text there (issue text is untrusted input, so it is not inlined).
+#
+# To customize per repository, copy this file to
+# `.funny/workflows/issue-to-merge.yaml` on the DEFAULT branch and edit it,
+# keeping the inputs. A copy on any other branch (e.g. a pull request's) is
+# ignored.
+
+name: issue-to-merge
+description: Implement a GitHub issue, open a pull request, wait for green CI and merge it
+
+inputs:
+  repo: { type: string, required: true }
+  issue_number: { type: string, required: true }
+  issue_title: { type: string, required: true }
+  issue_url: { type: string, required: true }
+  branch: { type: string, required: true }
+
+nodes:
+  - id: implement
+    spawn_agent:
+      prompt: |
+        You are working unattended: nobody will answer questions, so make
+        reasonable decisions and state them in your final message.
+
+        Implement GitHub issue #{{issue_number}} of {{repo}}: {{issue_title}}
+        Read the issue first: {{issue_url}}
+
+        How to work:
+        - Work on a new branch named `{{branch}}`, created from the default branch.
+        - Read the code around the change before editing, follow the conventions
+          you find, and keep the change to what the issue asks.
+        - Add or update tests when the change affects behavior, and run the
+          project's checks before you finish.
+        - Commit, push the branch `{{branch}}` to `origin`, and open a pull
+          request from it against the default branch whose body contains
+          `Closes #{{issue_number}}`.
+        - End with a short summary of what you changed and why.
+
+  - id: pull-request
+    depends_on: [implement]
+    create_pr:
+      title: '{{issue_title}}'
+
+  - id: ci
+    depends_on: [pull-request]
+    wait_ci: {}
+
+  - id: merge
+    depends_on: [ci]
+    merge:
+      method: squash
+      delete_branch: true

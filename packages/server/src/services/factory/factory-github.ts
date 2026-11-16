@@ -13,7 +13,8 @@
  * part of a result.
  */
 
-import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { createRepoGithub, type GithubCallError } from '@funny/core/github-app';
+import { errAsync, ResultAsync } from 'neverthrow';
 
 import { accessCapToken } from '../github-app/access-cap-token.js';
 import { loadGithubAppConfig, sqlSettingsStore } from '../github-app/app-config.js';
@@ -25,6 +26,8 @@ import {
 } from '../github-app/token-issuer.js';
 import type { RunnerPorts } from '../runner-thread-launcher.js';
 import { createSandboxRunnerCalls } from '../thread-sandboxes/sandbox-runner-calls.js';
+import { createFactoryPullRequests, type FactoryPullRequests } from './factory-pull-requests.js';
+import { createFactoryRepoReads, type FactoryPullRequestFound } from './factory-repo-reads.js';
 
 /** One open issue the factory may admit. */
 export interface FactoryIssue {
@@ -34,6 +37,13 @@ export interface FactoryIssue {
 }
 
 export type FactoryGithubError = { kind: IssueError['kind']; message: string };
+
+/** Who reads the repository: the factory's enabler, whose access caps the token. */
+export interface FactoryRepoReader {
+  repo: string;
+  ownerId: string;
+  projectId: string;
+}
 
 export interface FactoryGithubPort {
   /** `owner/name` (lowercase) for the project's repo, or null when it can't be resolved now. */
@@ -45,6 +55,26 @@ export interface FactoryGithubPort {
     projectId: string | null;
     label: string;
   }): ResultAsync<FactoryIssue[], FactoryGithubError>;
+  /** One issue, for resuming a run whose issue may no longer carry the label. */
+  getIssue(
+    reader: FactoryRepoReader,
+    issueNumber: number,
+  ): ResultAsync<FactoryIssue, GithubCallError>;
+  /**
+   * A file on the repository's DEFAULT branch (never another branch, so a pull
+   * request cannot change the flow that reviews it), or null when it is absent.
+   */
+  readDefaultBranchFile(
+    reader: FactoryRepoReader,
+    path: string,
+  ): ResultAsync<string | null, GithubCallError>;
+  /** The open pull request whose head is `branch` in the repository itself, or null. */
+  findPullRequest(
+    reader: FactoryRepoReader,
+    branch: string,
+  ): ResultAsync<FactoryPullRequestFound | null, GithubCallError>;
+  /** CI state and merge of a run's pull request (`wait_ci` / `merge`). */
+  pullRequests: FactoryPullRequests;
 }
 
 const GITHUB_API = 'https://api.github.com';
@@ -116,6 +146,22 @@ export function createFactoryGithub(
   // The factory's enabler may be a member, not the project owner: cap by their
   // own access (access-cap-token), never by the owner's project token.
   const ownerToken = accessCapToken;
+  const issue = (repo: string, token: string | null) => tokenIssuer.issue(repo, token);
+
+  /** Reads on the enabler's behalf: the App token for the repo, capped by their access. */
+  const reads = (reader: FactoryRepoReader) =>
+    createFactoryRepoReads(
+      reader.repo,
+      createRepoGithub({
+        tokenFor: (repo) =>
+          ResultAsync.fromSafePromise(ownerToken(reader.ownerId, reader.projectId))
+            .andThen((token) => issue(repo, token))
+            .map((repoToken) => repoToken.token),
+        fetch: fetchImpl,
+        api: GITHUB_API,
+        userAgent: USER_AGENT,
+      }),
+    );
 
   return {
     async resolveRepo(userId, projectId) {
@@ -132,5 +178,11 @@ export function createFactoryGithub(
         )
         .andThen((repoToken) => fetchIssues(fetchImpl, repoToken, repo, label));
     },
+
+    getIssue: (reader, issueNumber) => reads(reader).getIssue(issueNumber),
+    readDefaultBranchFile: (reader, path) => reads(reader).readDefaultBranchFile(path),
+    findPullRequest: (reader, branch) => reads(reader).findPullRequest(branch),
+
+    pullRequests: createFactoryPullRequests({ issue, ownerToken, fetch: fetchImpl }),
   };
 }

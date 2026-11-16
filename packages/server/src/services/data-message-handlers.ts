@@ -20,7 +20,7 @@ import { log } from '../lib/logger.js';
 import { onAutomationThreadTerminal } from './automation-runs.js';
 import { relayToThreadStream, relayToUser } from './browser-events.js';
 import { forgetThreadOwnership } from './data-ownership.js';
-import { onFactoryThreadTerminal } from './factory/factory-runs-completion.js';
+import { signalThreadTerminal } from './factory/factory-thread-waits.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
 import { getSchedulerEventBuffer } from './scheduler-event-buffer.js';
@@ -118,14 +118,8 @@ function notifyTerminalStatusPersisted(
       error: (error as Error).message,
     }),
   );
-  // A thread started by the issue factory completes its run here too.
-  void onFactoryThreadTerminal(threadId, status).catch((error) =>
-    log.error('Failed to complete factory run', {
-      namespace: 'factory',
-      threadId,
-      error: (error as Error).message,
-    }),
-  );
+  // A factory flow waiting on this thread re-reads its status and goes on.
+  signalThreadTerminal(threadId);
   const event = { type: 'thread:updated', threadId, data: { status } };
   relayToUser(runnerUserId, event);
   relayToThreadStream(threadId, event);

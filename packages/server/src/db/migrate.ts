@@ -2027,6 +2027,13 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // issue-factory: why a factory cannot make progress, shown in its settings.
+    name: '099_factory_settings_blocked_reason',
+    async up() {
+      await ctx().addColumn('factory_settings', 'blocked_reason', 'TEXT');
+    },
+  },
 ];
 
 /**

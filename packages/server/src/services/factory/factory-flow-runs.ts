@@ -73,6 +73,8 @@ export interface FactoryFlowRunsDeps {
    * the first one; without it each agent step starts a new thread.
    */
   followUp?: (userId: string, threadId: string, content: string) => Promise<Result<void, string>>;
+  /** Record why the factory cannot make progress (a run that could not start). */
+  reportBlocked?: (factoryId: string, reason: string) => Promise<void>;
   /** Stop the enabler's threads (one a launch started after its run was stopped). */
   stopThreads?: (userId: string, threadIds: string[]) => Promise<void>;
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
@@ -190,6 +192,10 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       kind: error.kind,
       error: error.message,
     });
+    await deps.reportBlocked?.(
+      job.factory.id,
+      `The flow "${job.factory.flowName}" could not be loaded: ${error.message}`,
+    );
     if (error.kind === 'invalid') {
       await deps.runs.updateInFlight(job.run.id, { state: 'failed', currentStep: null });
     } else if (job.run.threadIds.length === 0 && !wasReopened(job)) {
@@ -232,6 +238,15 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     await noticeWaiting(job, why);
   }
 
+  /** A run whose agent never started (e.g. the runner is offline): not an attempt, but say why. */
+  async function dropUnstarted(job: FactoryRunJob, error?: string): Promise<void> {
+    await deps.runs.remove(job.run.id);
+    await deps.reportBlocked?.(
+      job.factory.id,
+      `Issue #${job.run.issueNumber} could not start: ${error ?? 'unknown error'}`,
+    );
+  }
+
   /** Record the flow's end in the run (see the module comment). */
   async function settle(
     job: FactoryRunJob,
@@ -241,9 +256,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   ): Promise<void> {
     const { run } = job;
     if (outcome === 'cancelled') return;
-    if (outcome === 'failed' && !trace.agentsRan && !wasReopened(job)) {
-      // Never ran (e.g. the runner is offline): not an attempt.
-      await deps.runs.remove(run.id);
+    const neverRan = !trace.agentsRan && !wasReopened(job);
+    if (outcome === 'failed' && neverRan) {
+      await dropUnstarted(job, error);
     } else if (outcome === 'failed' && !trace.prOpen) {
       await deps.runs.updateInFlight(run.id, { state: 'failed', currentStep: trace.step });
     } else {

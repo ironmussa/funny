@@ -54,6 +54,8 @@ export interface FactorySettings {
   label: string;
   flowName: string;
   maxConcurrent: number;
+  /** Why the factory cannot make progress now (e.g. its runner is offline), or null. */
+  blockedReason: string | null;
   updatedAt: string;
 }
 

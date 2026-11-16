@@ -50,6 +50,7 @@ import { createFactoryRunsRepository, IN_FLIGHT_STATES } from './factory-runs.js
 import {
   disableFactory,
   getWatchedFactory,
+  setFactoryBlocked,
   listWatchedFactories,
   type WatchedFactory,
 } from './factory-settings.js';
@@ -147,6 +148,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     waitThread: d.waitThread,
     loadFlow: d.loadFlow,
     notify: d.notify,
+    reportBlocked: (factoryId, reason) => reportBlocked(factoryId, reason),
     stopThreads: (userId, threadIds) => stopFactoryThreads(d.ports, userId, threadIds),
     followUp:
       d.followUp ??
@@ -160,6 +162,7 @@ export function stopFactoryWatcher(): void {
   for (const job of jobs.values()) job.stop();
   jobs.clear();
   busy.clear();
+  blockedReasons.clear();
   flows?.stopAll();
   flows = null;
   deps = null;
@@ -248,12 +251,31 @@ async function fire(id: string): Promise<void> {
   if (!(await enablerCanStillSteer(factory))) return;
   const target = await resolveTarget(factory);
   if (!target) return;
+  // Reached the repository as the enabler: nothing blocks the factory (until
+  // the listing or a launch below says otherwise).
+  await reportBlocked(factory.id, null);
   await resumeRuns(factory, target.repo, target.mode);
   // A paused factory finishes its runs but admits nothing new.
   if (factory.enabled) await admitFromGithub(factory, target.repo, target.mode);
 }
 
 /** An enabled factory, or a paused one with runs still in flight. */
+/** Last reason written per factory, so a steady state writes nothing each tick. */
+const blockedReasons = new Map<string, string | null>();
+
+/** Record why the factory cannot make progress (null: it can), when it changed. */
+async function reportBlocked(factoryId: string, reason: string | null): Promise<void> {
+  if (blockedReasons.has(factoryId) && blockedReasons.get(factoryId) === reason) return;
+  blockedReasons.set(factoryId, reason);
+  await setFactoryBlocked(factoryId, reason).catch((error: unknown) =>
+    log.warn('Failed to record why an issue factory is blocked', {
+      namespace: 'factory',
+      factoryId,
+      error: error instanceof Error ? error.message : String(error),
+    }),
+  );
+}
+
 async function hasWork(factory: WatchedFactory): Promise<boolean> {
   if (factory.enabled) return true;
   const active = await runs!.countActive(factory.id);
@@ -277,6 +299,10 @@ async function resolveTarget(
       factoryId: factory.id,
       projectId: factory.projectId,
     });
+    await reportBlocked(
+      factory.id,
+      'Your runtime for this project is sandbox, and this server cannot start sandbox threads.',
+    );
     return null;
   }
   const repo = await deps!.github.resolveRepo(factory.userId, factory.projectId);
@@ -286,6 +312,10 @@ async function resolveTarget(
       factoryId: factory.id,
       projectId: factory.projectId,
     });
+    await reportBlocked(
+      factory.id,
+      "Waiting for your runner: the project's repository could not be read (is your runner online, and does the project have a GitHub origin?).",
+    );
     return null;
   }
   return { mode, repo };
@@ -310,6 +340,10 @@ async function admitFromGithub(
       repo,
       error: issues.error.message,
     });
+    await reportBlocked(
+      factory.id,
+      `The issues of ${repo} could not be read: ${issues.error.message}`,
+    );
     return;
   }
   await admitIssues(factory, repo, mode, issues.value);

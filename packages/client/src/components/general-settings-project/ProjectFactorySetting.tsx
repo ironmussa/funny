@@ -7,6 +7,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { saveFactorySettings } from '@/data/factory/actions';
 import { useFactorySettings } from '@/data/factory/hooks';
@@ -140,6 +141,16 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
             />
           </SettingRow>
         </>
+      )}
+
+      {settings?.blockedReason && (
+        <Alert
+          variant="destructive"
+          className="mx-4 my-2 w-auto"
+          data-testid="settings-factory-blocked"
+        >
+          <AlertDescription>{settings.blockedReason}</AlertDescription>
+        </Alert>
       )}
 
       {/* A paused factory still finishes its runs in flight: they stay listed. */}

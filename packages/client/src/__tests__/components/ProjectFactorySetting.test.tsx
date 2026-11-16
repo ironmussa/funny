@@ -40,6 +40,7 @@ const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   label: 'ready-for-agent',
   flowName: 'issue-to-merge',
   maxConcurrent: 2,
+  blockedReason: null,
   updatedAt: '2026-11-16T00:00:00.000Z',
   ...over,
 });
@@ -139,6 +140,20 @@ const renderRuns = () =>
       <ProjectFactorySetting projectId="p1" />
     </MemoryRouter>,
   );
+
+describe('factory blocked reason', () => {
+  test('why the factory cannot make progress is shown, and nothing when it can', () => {
+    mocks.settings = configured({ blockedReason: 'Waiting for your runner' });
+    const { unmount } = render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.getByTestId('settings-factory-blocked')).toHaveTextContent(
+      'Waiting for your runner',
+    );
+    unmount();
+    mocks.settings = configured();
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.queryByTestId('settings-factory-blocked')).toBeNull();
+  });
+});
 
 describe('factory runs', () => {
   test('a run in flight can be stopped; its thread is linked', () => {

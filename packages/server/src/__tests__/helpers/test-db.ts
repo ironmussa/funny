@@ -327,6 +327,7 @@ export function createTestDb() {
       label TEXT NOT NULL DEFAULT 'ready-for-agent',
       flow_name TEXT NOT NULL DEFAULT 'issue-to-merge',
       max_concurrent INTEGER NOT NULL DEFAULT 2,
+      blocked_reason TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )

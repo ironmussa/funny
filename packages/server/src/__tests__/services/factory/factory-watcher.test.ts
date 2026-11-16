@@ -472,6 +472,49 @@ describe('factory watcher', () => {
     expect(scheduledFactoryCount()).toBe(0);
   });
 
+  test('the settings say why the factory is blocked, and clear it once it is not', async () => {
+    await enableFactory();
+    const poll = fakePoll();
+    let repo: string | null = null;
+    const github = { ...fakeGithub('acme/repo', []), resolveRepo: async () => repo };
+    await startFactoryWatcher({
+      ports,
+      github,
+      createPoll: poll.createPoll,
+      launch: fakeLauncher().launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+    const blocked = async () =>
+      (await createFactorySettingsService().get('alice', 'p1'))._unsafeUnwrap()!.blockedReason;
+
+    await poll.ticks[0]!();
+    expect(await blocked()).toContain('Waiting for your runner');
+
+    repo = 'acme/repo';
+    await poll.ticks[0]!();
+    expect(await blocked()).toBeNull();
+  });
+
+  test('an issue whose agent could not start is reported as the block', async () => {
+    await enableFactory();
+    const poll = fakePoll();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: fakeLauncher('offline').launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+    });
+
+    await poll.ticks[0]!();
+
+    const settings = (await createFactorySettingsService().get('alice', 'p1'))._unsafeUnwrap()!;
+    expect(settings.blockedReason).toContain('Issue #7 could not start');
+    expect(settings.blockedReason).toContain('offline');
+  });
+
   test('skips the tick when the repo cannot be resolved', async () => {
     await enableFactory();
     const poll = fakePoll();

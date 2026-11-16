@@ -299,6 +299,8 @@ export const factorySettings = pgTable(
     label: text('label').notNull().default('ready-for-agent'),
     flowName: text('flow_name').notNull().default('issue-to-merge'),
     maxConcurrent: integer('max_concurrent').notNull().default(2),
+    /** Why the watcher cannot make progress now (runner offline, App missing…); null when it can. */
+    blockedReason: text('blocked_reason'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },

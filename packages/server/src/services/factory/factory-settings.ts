@@ -23,6 +23,8 @@ export interface FactorySettingsView {
   label: string;
   flowName: string;
   maxConcurrent: number;
+  /** Why the factory cannot make progress now, or null. */
+  blockedReason: string | null;
   updatedAt: string;
 }
 
@@ -62,6 +64,7 @@ const toView = (row: Row): FactorySettingsView => ({
   label: row.label,
   flowName: row.flowName,
   maxConcurrent: row.maxConcurrent,
+  blockedReason: row.blockedReason ?? null,
   updatedAt: row.updatedAt,
 });
 
@@ -98,6 +101,8 @@ function buildRow(
     label: input.label ?? base.label,
     flowName: input.flowName ?? base.flowName,
     maxConcurrent: input.maxConcurrent ?? base.maxConcurrent,
+    // A save is a new configuration: the watcher re-reports what still blocks it.
+    blockedReason: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -165,6 +170,11 @@ export async function listWatchedFactories(inFlightStates: string[]): Promise<Wa
       ),
     );
   return rows.map(toEnabled);
+}
+
+/** Record why a factory cannot make progress (null when it can) — the watcher's report. */
+export async function setFactoryBlocked(id: string, reason: string | null): Promise<void> {
+  await db.update(factorySettings).set({ blockedReason: reason }).where(eq(factorySettings.id, id));
 }
 
 /**

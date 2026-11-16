@@ -3,16 +3,16 @@
 The issue factory, when it lives inside funny (ADR 0001 keeps the standalone orchestrator
 for now), is not one engine. It is three levels, each with a single responsibility:
 
-- **Trigger** — *when* a flow starts and *with what data*. Manual, cron, the ingest
+- **Trigger** — _when_ a flow starts and _with what data_. Manual, cron, the ingest
   webhook, a child agent (`funny_spawn_thread`), a git commit, and a new one: a GitHub
   issue carrying a label. A trigger never knows about steps or retries.
-- **Flow** — *what steps, in what order*. A deterministic YAML (the `@funny/workflows`
+- **Flow** — _what steps, in what order_. A deterministic YAML (the `@funny/workflows`
   syntax) read from the repository's **default branch, never the PR branch**, so an agent
   cannot add itself a `merge` step in its own PR. A flow has two kinds of step: a **thread
   step** ("run a thread with profile X" — the only non-deterministic part, the agent's
   output) and an **action step** (commit, push, open PR, wait for CI, merge, ask for an
   approval — fixed code). Opening a PR is an action, not a thread; a review is a thread.
-- **Thread** — *how* an agent step runs. What funny already has, plus a reusable thread
+- **Thread** — _how_ an agent step runs. What funny already has, plus a reusable thread
   profile (prompt, model, permissions, tools, where it runs).
 
 A single flow executor runs the steps, waits for them to finish and applies retries. It is

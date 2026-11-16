@@ -24,9 +24,8 @@ mock.module('../../../services/thread-sandboxes/sandbox-lifecycle.js', () => ({
 
 const { RunnerGrpcSessionRegistry } = await import('../../../services/grpc/session-registry.js');
 const { __resetRunnerScopeCache } = await import('../../../services/runner-scope.js');
-const { sendFactoryFollowUp, stopFactoryThreads } = await import(
-  '../../../services/factory/factory-thread-requests.js'
-);
+const { sendFactoryFollowUp, stopFactoryThreads } =
+  await import('../../../services/factory/factory-thread-requests.js');
 const { FakeRunnerRequestPort } = await import('../../helpers/runner-port-fakes.js');
 const { createTestDb, seedProject, seedRunner, seedRunnerProjectAssignment, seedThread } =
   await import('../../helpers/test-db.js');

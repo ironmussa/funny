@@ -45,6 +45,8 @@ describe('loadPipelines', () => {
       'commit',
       'factory-issue',
       'fusion',
+      'issue-to-merge',
+      'issue-to-pr',
       'pre-push',
       'scheduler-thread',
     ]);

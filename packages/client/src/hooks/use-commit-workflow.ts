@@ -143,6 +143,9 @@ export function useCommitWorkflow({
       setPushInProgress(false);
       setMergeInProgress(false);
       setPrInProgress(false);
+      // A completion marker left by the previous thread must not close this
+      // thread's pane; a workflow ending here sets it again just below.
+      justCompletedWorkflowRef.current = false;
     },
     (action) => {
       justCompletedWorkflowRef.current = true;

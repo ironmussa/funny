@@ -97,4 +97,18 @@ describe('useCommitWorkflow', () => {
     expect(result.current.pushInProgress).toBe(false);
     expect(refresh).toHaveBeenCalledTimes(1);
   });
+
+  test('a completion marker left by the previous thread does not carry over', async () => {
+    const { result, rerender } = renderHook((p: ReturnType<typeof args>) => useCommitWorkflow(p), {
+      initialProps: args('t1'),
+    });
+    // A workflow ended on t1, which still has work, so its pane stayed open.
+    act(() => useCommitProgressStore.getState().finishCommit('t1', 'wf-1', 'commit'));
+    expect(result.current.justCompletedWorkflowRef.current).toBe(true);
+
+    rerender(args('t2'));
+
+    // Left set, it closed t2's pane as soon as t2 looked clean.
+    expect(result.current.justCompletedWorkflowRef.current).toBe(false);
+  });
 });

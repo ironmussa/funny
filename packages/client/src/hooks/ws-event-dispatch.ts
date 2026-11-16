@@ -370,6 +370,10 @@ function handleAgentStatus(threadId: string, data: any): void {
   });
 
   if (data.status === 'waiting' || data.permissionRequest || data.pendingPermissionRequest) {
+    // This status is newer than any still queued for the thread: applying the
+    // queued one afterwards would put the thread back to `running` and clear
+    // the waiting card.
+    pendingStatuses.delete(threadId);
     startTransition(() => {
       useThreadStore.getState().handleWSStatus(threadId, data);
     });
@@ -452,6 +456,10 @@ function handleAgentToolCall(threadId: string, data: any): void {
 
 function handleAgentError(threadId: string, data: any): void {
   wsLog.error('agent:error', { threadId, error: data.error ?? 'unknown' });
+  // The error ends the run: a status still queued is older than it, and the
+  // next run's first status must not be dropped as a duplicate of this run's.
+  pendingStatuses.delete(threadId);
+  lastStatusByThread.delete(threadId);
   startTransition(() => {
     useThreadStore.getState().handleWSError(threadId, data);
   });
@@ -907,9 +915,9 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
       cancelPendingWorkflowClose(threadId);
       store.startCommit(threadId, title, steps, action, workflowId);
     } else if (wfStatus === 'step_update') {
-      store.replaceSteps(threadId, steps);
+      store.replaceSteps(threadId, steps, workflowId);
     } else if (wfStatus === 'completed') {
-      store.replaceSteps(threadId, steps);
+      store.replaceSteps(threadId, steps, workflowId);
       cancelPendingWorkflowClose(threadId);
       const timer = setTimeout(() => {
         pendingWorkflowCloses.delete(threadId);
@@ -918,7 +926,7 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
       pendingWorkflowCloses.set(threadId, timer);
     } else if (wfStatus === 'failed') {
       cancelPendingWorkflowClose(threadId);
-      store.replaceSteps(threadId, steps);
+      store.replaceSteps(threadId, steps, workflowId);
       store.setFailedWorkflow({
         title: title || 'Git operation failed',
         steps: steps ?? [],

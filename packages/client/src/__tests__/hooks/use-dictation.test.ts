@@ -75,6 +75,38 @@ describe('useDictation', () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  test('stop while still connecting cancels the start', async () => {
+    const pendingStream = deferred<MediaStream>();
+    const stopTrack = vi.fn();
+    const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
+    vi.stubGlobal('navigator', {
+      ...navigator,
+      mediaDevices: { getUserMedia: vi.fn(() => pendingStream.promise) },
+    });
+    const onError = vi.fn();
+    const { result } = renderHook(() => useDictation({ onError }));
+
+    let startPromise!: Promise<void>;
+    act(() => {
+      startPromise = result.current.start();
+    });
+    expect(result.current.isConnecting).toBe(true);
+
+    // The push-to-talk keys are released before the microphone is ready.
+    act(() => result.current.stop());
+    expect(result.current.isConnecting).toBe(false);
+
+    await act(async () => {
+      pendingStream.resolve(stream);
+      await startPromise;
+    });
+
+    expect(result.current.isRecording).toBe(false);
+    expect(stopTrack).toHaveBeenCalledOnce(); // the late stream is released
+    expect(apiMocks.getTranscribeToken).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   test('closes a connecting WebSocket without reporting a stale error after unmount', async () => {
     const stop = vi.fn();
     const stream = {

@@ -80,6 +80,7 @@ import { metric, startSpan } from '@/lib/telemetry';
 import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
 import { toastError } from '@/lib/toast-error';
 
+import { rememberPreSendState, takePreSendState } from './optimistic-run-state';
 import { deriveToolLists, useSettingsStore } from './settings-store';
 import {
   expandProject,
@@ -706,6 +707,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const machineEvent = { type: 'START' as const };
     const newStatus = transitionThreadStatus(threadId, machineEvent, entry.status, entry.cost);
+    rememberPreSendState(threadId, {
+      status: entry.status,
+      waitingReason: entry.waitingReason,
+      pendingPermission: entry.pendingPermission,
+      initialPrompt: entry.initialPrompt,
+    });
 
     // Pre-populate initInfo so the card renders immediately instead of
     // waiting for the agent:init WebSocket event from the server.
@@ -770,6 +777,28 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         lastUserMessage: newMessage,
       })),
     }));
+  },
+
+  revertOptimisticRun: (threadId) => {
+    const before = takePreSendState(threadId);
+    if (!before) return;
+    // Only the optimistic mark is undone: a status that has moved on is kept.
+    const undo = <T extends Thread>(t: T): T =>
+      t.status === 'running'
+        ? { ...t, status: before.status, initialPrompt: before.initialPrompt }
+        : t;
+    patchThreadRow(threadId, undo);
+    set((state) =>
+      mutations.applyThreadDataPatch(state, threadId, (t) =>
+        t.status === 'running'
+          ? {
+              ...undo(t),
+              waitingReason: before.waitingReason,
+              pendingPermission: before.pendingPermission,
+            }
+          : t,
+      ),
+    );
   },
 
   rollbackOptimisticMessage: (threadId) => {
@@ -1260,6 +1289,16 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         startedAt: existing?.startedAt,
         completedAt: existing?.completedAt,
       };
+      // A finished step that runs again is a new attempt (a retried setup):
+      // it starts now and has not finished, instead of showing as running
+      // with the previous attempt's end time.
+      const rerun =
+        data.status === 'running' &&
+        (existing?.status === 'completed' || existing?.status === 'failed');
+      if (rerun) {
+        step.startedAt = now;
+        step.completedAt = undefined;
+      }
       if (data.status === 'running' && !existing?.startedAt) {
         step.startedAt = now;
       }

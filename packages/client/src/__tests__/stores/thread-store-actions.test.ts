@@ -1121,6 +1121,81 @@ describe('thread store actions', () => {
     });
   });
 
+  describe('handleWSWorktreeSetup', () => {
+    test('a finished step that runs again is a new attempt', () => {
+      const step = (status: string) =>
+        useThreadStore
+          .getState()
+          .handleWSWorktreeSetup('t1', { step: 'clone', label: 'Clone', status } as any);
+      const stored = () => useThreadStore.getState().setupProgressByThread.t1[0];
+
+      step('running');
+      step('failed');
+      expect(stored().completedAt).toBeTypeOf('number');
+
+      step('running'); // the setup is retried
+      expect(stored()).toMatchObject({ status: 'running', completedAt: undefined });
+      expect(stored().startedAt).toBeTypeOf('number');
+
+      step('completed');
+      expect(stored().completedAt).toBeTypeOf('number');
+    });
+  });
+
+  describe('revertOptimisticRun', () => {
+    const waiting = {
+      ...baseThread,
+      status: 'waiting' as const,
+      waitingReason: 'permission' as const,
+      pendingPermission: { toolName: 'Bash' },
+      messages: [],
+    };
+    const seedWaiting = () =>
+      useThreadStore.setState({
+        ...seedThreads({ p1: [waiting as any] }),
+        threadDataById: { t1: waiting as any },
+      } as any);
+
+    test('a send that started nothing puts the thread back as it was', () => {
+      seedWaiting();
+      useThreadStore.getState().appendOptimisticMessage('t1', 'Approved: Bash');
+      expect(readThreadIndex().threadsById.t1.status).toBe('running');
+
+      useThreadStore.getState().revertOptimisticRun('t1');
+
+      const payload = useThreadStore.getState().threadDataById.t1;
+      expect(readThreadIndex().threadsById.t1.status).toBe('waiting');
+      expect(payload.status).toBe('waiting');
+      expect(payload.waitingReason).toBe('permission');
+      expect(payload.pendingPermission).toEqual({ toolName: 'Bash' });
+    });
+
+    test('does nothing once the server has reported the thread’s status', async () => {
+      const { settlePreSendState } = await import('@/stores/optimistic-run-state');
+      seedWaiting();
+      useThreadStore.getState().appendOptimisticMessage('t1', 'go');
+      settlePreSendState('t1'); // what the status / result WS handlers do
+
+      useThreadStore.getState().revertOptimisticRun('t1');
+
+      expect(readThreadIndex().threadsById.t1.status).toBe('running');
+    });
+
+    test('does nothing without an optimistic send, and only once', async () => {
+      const { settlePreSendState } = await import('@/stores/optimistic-run-state');
+      seedWaiting();
+      useThreadStore.getState().revertOptimisticRun('t1');
+      expect(readThreadIndex().threadsById.t1.status).toBe('waiting');
+
+      useThreadStore.getState().appendOptimisticMessage('t1', 'go');
+      useThreadStore.getState().revertOptimisticRun('t1');
+      useThreadStore.getState().appendOptimisticMessage('t1', 'again');
+      settlePreSendState('t1'); // what the status / result WS handlers do
+      useThreadStore.getState().revertOptimisticRun('t1');
+      expect(readThreadIndex().threadsById.t1.status).toBe('running');
+    });
+  });
+
   describe('rollbackOptimisticMessage', () => {
     test('removes last user message from payload', () => {
       const userMsg = {

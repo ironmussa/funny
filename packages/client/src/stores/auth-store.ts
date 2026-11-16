@@ -89,7 +89,8 @@ export const useAuthStore = create<AuthState>((set, get) => ({
       log.error('initialization error', {
         error: err instanceof Error ? err.message : String(err),
       });
-      set({ isAuthenticated: false, isLoading: false });
+      // Not authenticated means no user: the two never disagree.
+      set({ isAuthenticated: false, isLoading: false, user: null });
     }
   },
 

@@ -28,6 +28,9 @@ export function createCircuitBreakerStore<TTimer>(
   let cooldownTimer: TTimer | undefined;
   let disposed = false;
   let verifying = false;
+  // Bumped by every success, so a probe that started before one can tell its
+  // verdict is out of date.
+  let successes = 0;
 
   const clearCooldown = (): void => {
     if (cooldownTimer !== undefined) options.clearTimer(cooldownTimer);
@@ -61,12 +64,16 @@ export function createCircuitBreakerStore<TTimer>(
         // fail while everything else works. Only open (and block every request)
         // once the health probe confirms the server is unreachable.
         verifying = true;
+        const successesAtStart = successes;
         void options
           .probe()
           .catch(() => false)
           .then((reachable) => {
             verifying = false;
             if (disposed || get().state !== 'closed') return;
+            // A request succeeded while the probe was in flight: the server is
+            // reachable, whatever the probe saw.
+            if (successes !== successesAtStart) return;
             if (reachable) {
               set({ failureCount: 0 });
               return;
@@ -76,6 +83,7 @@ export function createCircuitBreakerStore<TTimer>(
           });
       },
       recordSuccess() {
+        successes++;
         clearCooldown();
         set({ state: 'closed', failureCount: 0 });
       },

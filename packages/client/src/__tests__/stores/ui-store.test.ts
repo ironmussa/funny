@@ -16,10 +16,15 @@ vi.mock('@/stores/project-store', () => ({
   },
 }));
 
+// The listener ui-store registers at import, so a test can fire it.
+const threadSelect = vi.hoisted(() => ({ listener: null as (() => void) | null }));
+
 vi.mock('@/stores/thread-store-internals', () => ({
   invalidateSelectThread: mockInvalidateSelectThread,
   clearThreadSelection: mockClearThreadSelection,
-  setThreadSelectListener: vi.fn(),
+  setThreadSelectListener: (fn: () => void) => {
+    threadSelect.listener = fn;
+  },
 }));
 
 import { seedProjects } from '@/data/projects/testing';
@@ -444,6 +449,24 @@ describe('useUIStore', () => {
       useUIStore.getState().showGlobalSearch();
       expect(useUIStore.getState().newThreadProjectId).toBeNull();
       expect(useUIStore.getState().allThreadsProjectId).toBe('__all__');
+    });
+  });
+
+  describe('selecting a thread', () => {
+    test('ends the compose: no compose flag outlives it', () => {
+      const onThreadSelected = threadSelect.listener;
+      expect(onThreadSelected).toBeTypeOf('function');
+
+      useUIStore.getState().startNewScratchThread();
+      useUIStore.setState({ newThreadIdleOnly: true });
+      onThreadSelected!();
+
+      expect(useUIStore.getState()).toMatchObject({
+        newThreadIsScratch: false,
+        newThreadIdleOnly: false,
+        newThreadProjectId: null,
+        newThreadBaseBranch: null,
+      });
     });
   });
 

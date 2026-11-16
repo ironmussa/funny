@@ -69,6 +69,23 @@ describe('useCommitProgressStore', () => {
   });
 
   describe('replaceSteps', () => {
+    test('ignores an update from a previous workflow run', () => {
+      const store = useCommitProgressStore.getState();
+      store.startCommit(
+        't1',
+        'Commit',
+        [{ id: 'a', label: 'new run', status: 'running' }],
+        'commit',
+        'wf-2',
+      );
+
+      store.replaceSteps('t1', [{ id: 'a', label: 'old run', status: 'failed' }], 'wf-1');
+      expect(useCommitProgressStore.getState().activeCommits.t1.steps[0].label).toBe('new run');
+
+      store.replaceSteps('t1', [{ id: 'a', label: 'new run', status: 'completed' }], 'wf-2');
+      expect(useCommitProgressStore.getState().activeCommits.t1.steps[0].status).toBe('completed');
+    });
+
     test('replaces all steps for an active commit', () => {
       const initial = [{ id: 'stage', label: 'Staging', status: 'pending' as const }];
       const replacement = [{ id: 'push', label: 'Pushing', status: 'running' as const }];

@@ -778,9 +778,14 @@ export const useUIStore = create<UIState>((set) => ({
 // Reset transient UI panes whenever a thread is selected.
 // Registered via the listener API to avoid a thread-store ↔ ui-store import cycle.
 setThreadSelectListener(() => {
+  // Selecting a thread ends any compose: every compose flag goes with it. A
+  // scratch flag left behind made the next "no thread selected" view render
+  // the scratch compose, and `/new` in a project thread start a scratch one.
   useUIStore.setState({
     newThreadProjectId: null,
     newThreadBaseBranch: null,
+    newThreadIsScratch: false,
+    newThreadIdleOnly: false,
     allThreadsProjectId: null,
   });
 });

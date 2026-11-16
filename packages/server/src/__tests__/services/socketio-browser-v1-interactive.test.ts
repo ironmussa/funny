@@ -294,7 +294,7 @@ describe('browser.v1 terminal interactive carrier', () => {
           case: 'browserSession',
           value: {
             browserSessionId: 'browser-1',
-            payload: { case: 'close', value: { reason: 'user' } },
+            payload: { case: 'close', value: { reason: 'user', closeId: 'c-1' } },
           },
         }),
       ];
@@ -312,6 +312,12 @@ describe('browser.v1 terminal interactive carrier', () => {
         'browser-session:heartbeat',
         'browser-session:close',
       ]);
+      // The close's id travels to the runner, which echoes it in `closed`.
+      expect(JSON.parse(requests.requests[4]!.request.body as string).data).toMatchObject({
+        sessionId: 'browser-1',
+        reason: 'user',
+        closeId: 'c-1',
+      });
       expect(JSON.parse(requests.requests[2]!.request.body as string).data).toMatchObject({
         sessionId: 'browser-1',
         type: 'click',

@@ -129,7 +129,13 @@ describe('BrowserSessionManager lifecycle', () => {
 
     addSession({ sessionId: 'panel-1' });
     await browserSessionManager.closeFromClient('u1', 'panel-1', 'detach');
-    expect(close).toHaveBeenCalledWith('panel-1', 'user');
+    expect(close).toHaveBeenCalledWith('panel-1', 'user', undefined);
+  });
+
+  test('a client close passes its id on, for the closed event to echo', async () => {
+    addSession({ sessionId: 'panel-2' });
+    await browserSessionManager.closeFromClient('u1', 'panel-2', 'user', 'c-1');
+    expect(close).toHaveBeenCalledWith('panel-2', 'user', 'c-1');
   });
 
   test('attach attempt for a missing session reports not_found and creates nothing', async () => {

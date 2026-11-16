@@ -124,9 +124,11 @@ export function handleBrowserSessionMessage(type: string, data: unknown, userId:
 
     case 'browser-session:close': {
       const d = data as WSBrowserSessionCloseData;
-      browserSessionManager.closeFromClient(userId, d.sessionId, d.reason).catch((err) => {
-        log.warn('close failed', { namespace: NS, sessionId: d.sessionId, error: String(err) });
-      });
+      browserSessionManager
+        .closeFromClient(userId, d.sessionId, d.reason, d.closeId)
+        .catch((err) => {
+          log.warn('close failed', { namespace: NS, sessionId: d.sessionId, error: String(err) });
+        });
       return true;
     }
 

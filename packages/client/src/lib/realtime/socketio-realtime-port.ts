@@ -616,7 +616,12 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
           this.socket.emit('browser-session:heartbeat', base);
           break;
         case 'close':
-          this.socket.emit('browser-session:close', { ...base, reason: payload.value.reason });
+          // An absent closeId (undefined) is dropped when the event is serialized.
+          this.socket.emit('browser-session:close', {
+            ...base,
+            reason: payload.value.reason,
+            closeId: payload.value.closeId,
+          });
           break;
       }
     }

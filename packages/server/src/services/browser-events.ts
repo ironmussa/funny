@@ -340,7 +340,13 @@ const BROWSER_SESSION_MAPPERS = new Map<string, BrowserSessionMapper>([
     'browser-session:closed',
     ({ data }) =>
       sessionMapping(
-        { case: 'close', value: { reason: String(data.reason ?? 'closed') } },
+        {
+          case: 'close',
+          value: {
+            reason: String(data.reason ?? 'closed'),
+            ...(typeof data.closeId === 'string' ? { closeId: data.closeId } : {}),
+          },
+        },
         { priority: 100 },
       ),
   ],

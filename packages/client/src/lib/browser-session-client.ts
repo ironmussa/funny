@@ -108,7 +108,11 @@ const FIRE_AND_FORGET_FRAMES: Record<string, (extra: Record<string, unknown>) =>
   }),
   'browser-session:input': (extra) => ({ case: 'input', action: extra as JsonObject }),
   'browser-session:heartbeat': () => ({ case: 'heartbeat' }),
-  'browser-session:close': (extra) => ({ case: 'close', reason: String(extra.reason ?? 'user') }),
+  'browser-session:close': (extra) => ({
+    case: 'close',
+    reason: String(extra.reason ?? 'user'),
+    ...(typeof extra.closeId === 'string' ? { closeId: extra.closeId } : {}),
+  }),
 };
 
 function sendFireAndForget(
@@ -177,8 +181,13 @@ export const browserSessionClient = {
     sendFireAndForget('browser-session:heartbeat', sessionId);
   },
 
-  close(sessionId: string, reason: BrowserSessionCloseRequestReason = 'user'): void {
+  /** `closeId` comes back in the `closed` that answers this close. */
+  close(
+    sessionId: string,
+    reason: BrowserSessionCloseRequestReason = 'user',
+    closeId?: string,
+  ): void {
     log.info('close', { sessionId, reason });
-    sendFireAndForget('browser-session:close', sessionId, { reason });
+    sendFireAndForget('browser-session:close', sessionId, { reason, closeId });
   },
 };

@@ -62,6 +62,8 @@ type BrowserSessionClosedData = {
   reason: string;
   message?: string;
   threadId?: string;
+  /** The id of the client close this answers (runners that echo it). */
+  closeId?: string;
 };
 
 function handleReady(d: BrowserSessionReadyData): void {
@@ -87,7 +89,7 @@ function handleClosed(d: BrowserSessionClosedData): void {
   }
   // The answer to a close this tab sent: the panel already shows it closed,
   // and may hold a new session under the same (per-thread) id by now.
-  if (d.reason === 'user' && takeOwnClose(d.sessionId)) return;
+  if (d.reason === 'user' && takeOwnClose(d.sessionId, d.closeId)) return;
   if (store.sessionId === d.sessionId) {
     const status = d.reason === 'too_many_sessions' ? 'too-many-sessions' : 'disconnected';
     store.setSessionStatus(status, d.message ?? null);

@@ -191,6 +191,10 @@ message BrowserSessionFrame {
 
 message BrowserSessionClose {
   string reason = 1;
+  // Set by the client on a close it sends; the `close` that answers it echoes
+  // it, so the client can tell its own close's answer from any other close of
+  // the same (per-thread) session.
+  optional string close_id = 2;
 }
 
 message BrowserSessionResult {

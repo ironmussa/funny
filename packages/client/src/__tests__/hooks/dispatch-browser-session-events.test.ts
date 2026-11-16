@@ -99,7 +99,7 @@ describe('browser-session:closed', () => {
     attachingTo(SESSION);
     useBrowserPanelStore.setState({ sessionStatus: 'ready', sessionThreadId: 't1' });
     await useBrowserPanelStore.getState().endBrowserSession(); // sends close(SESSION, 'user')
-    expect(clientCalls.close).toHaveBeenCalledWith(SESSION, 'user');
+    expect(clientCalls.close).toHaveBeenCalledWith(SESSION, 'user', expect.any(String));
 
     // The thread's session is reopened (same id) before the runner's answer arrives.
     attachingTo(SESSION);
@@ -135,6 +135,34 @@ describe('browser-session:closed', () => {
     dispatchBrowserSessionEvent('browser-session:closed', { sessionId: SESSION, reason: 'user' });
     dispatchBrowserSessionEvent('browser-session:closed', { sessionId: SESSION, reason: 'user' });
 
+    expect(useBrowserPanelStore.getState().sessionStatus).toBe('spawning');
+  });
+
+  test('with the echoed id, only the answer to this tab’s own close is ignored', async () => {
+    clientCalls.close.mockClear();
+    attachingTo(SESSION);
+    useBrowserPanelStore.setState({ sessionStatus: 'ready', sessionThreadId: 't1' });
+    await useBrowserPanelStore.getState().endBrowserSession();
+    const ownCloseId = clientCalls.close.mock.calls[0]?.[2] as string;
+    expect(ownCloseId).toBeTruthy();
+
+    attachingTo(SESSION);
+    useBrowserPanelStore.setState({ sessionStatus: 'ready' });
+    // Another tab closes the reopened session while this tab's close is unanswered.
+    dispatchBrowserSessionEvent('browser-session:closed', {
+      sessionId: SESSION,
+      reason: 'user',
+      closeId: 'another-tab',
+    });
+    expect(useBrowserPanelStore.getState().sessionStatus).toBe('disconnected');
+
+    // This tab's answer, however late, is still recognised as its own.
+    attachingTo(SESSION);
+    dispatchBrowserSessionEvent('browser-session:closed', {
+      sessionId: SESSION,
+      reason: 'user',
+      closeId: ownCloseId,
+    });
     expect(useBrowserPanelStore.getState().sessionStatus).toBe('spawning');
   });
 

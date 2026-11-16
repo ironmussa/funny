@@ -93,7 +93,9 @@ has a regression test next to the code.
 - A step update from a previous git workflow run does not overwrite a new run's.
 - A page-load session check that resolves after a login no longer undoes it.
 - A browser panel's own close, answered after it reopened the thread's session,
-  no longer marks the new session disconnected.
+  no longer marks the new session disconnected: each close carries a
+  `close_id` (`browser.v1` `BrowserSessionClose`) that the runner echoes in
+  the `closed` that answers it.
 
 ## Observing thread status writes (log-only)
 

@@ -132,6 +132,8 @@ export interface WSBrowserSessionCloseData {
   sessionId: string;
   /** Optional client-supplied reason; defaults to `'user'` on the runner side. */
   reason?: BrowserSessionCloseRequestReason;
+  /** Client-chosen id of this close, echoed in the `closed` that answers it. */
+  closeId?: string;
 }
 
 /**
@@ -279,4 +281,6 @@ export interface WSBrowserSessionClosedData {
   threadId?: string;
   /** Free-text detail for `'error'` reasons. */
   message?: string;
+  /** The `closeId` of the client close this answers, when one caused it. */
+  closeId?: string;
 }

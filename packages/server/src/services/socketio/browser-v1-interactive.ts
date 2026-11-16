@@ -141,7 +141,11 @@ function legacyBrowserSessionEvent(message: BrowserSessionMessage, requestId?: s
     case 'close':
       return {
         type: 'browser-session:close',
-        data: { ...base, reason: message.payload.value.reason },
+        data: {
+          ...base,
+          reason: message.payload.value.reason,
+          ...(message.payload.value.closeId ? { closeId: message.payload.value.closeId } : {}),
+        },
       };
     default:
       return null;

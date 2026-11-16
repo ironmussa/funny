@@ -318,7 +318,13 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
   'data:watcher_list_by_user': ['watcherListByUser', noValue],
   'data:watcher_update': [
     'watcherUpdate',
-    (_input, payload) => ({ watcherId: payload.id, patch: payload.patch }),
+    (_input, payload) => ({
+      watcherId: payload.id,
+      patch: payload.patch,
+      ...(payload.expectedNextWakeAt !== undefined
+        ? { expectedNextWakeAtMs: String(payload.expectedNextWakeAt) }
+        : {}),
+    }),
   ],
   'data:watcher_delete_by_thread': ['watcherDeleteByThread', payloadThreadId],
   'data:job_insert': [

@@ -638,6 +638,10 @@ pub struct WatcherUpdate {
     pub watcher_id: ::prost::alloc::string::String,
     #[prost(message, optional, tag="2")]
     pub patch: ::core::option::Option<::prost_types::Struct>,
+    /// Apply only while the watcher is still due at this time (ms since epoch):
+    /// a fire must not consume a watcher re-armed since the scan read it.
+    #[prost(uint64, optional, tag="3")]
+    pub expected_next_wake_at_ms: ::core::option::Option<u64>,
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct WatcherDeleteByThread {

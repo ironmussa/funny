@@ -430,7 +430,12 @@ export interface IWatcherRepository {
   listDueWatchers(now: number): Promise<Watcher[]>;
   listWatchersByUser(userId: string): Promise<Watcher[]>;
   /** Resolves false when a status in `patch` is not a legal transition from the stored one. */
-  updateWatcher(id: string, patch: Record<string, any>): Promise<boolean>;
+  updateWatcher(
+    id: string,
+    patch: Record<string, any>,
+    /** Apply only while the watcher's `nextWakeAt` still equals this. */
+    expect?: { expectedNextWakeAt?: number },
+  ): Promise<boolean>;
   deleteWatchersByThread(threadId: string): Promise<void>;
 }
 

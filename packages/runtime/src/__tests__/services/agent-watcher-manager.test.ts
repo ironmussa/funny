@@ -20,9 +20,15 @@ const { rows, fakeWatchers, emitToUser } = vi.hoisted(() => {
     },
     // Like the repository: a status is written only from a status the watcher
     // machine allows, and the result says whether it was.
-    async updateWatcher(id: string, patch: any) {
+    async updateWatcher(id: string, patch: any, expect?: { expectedNextWakeAt?: number }) {
       const cur = rows.get(id);
       if (!cur) return false;
+      if (
+        expect?.expectedNextWakeAt !== undefined &&
+        cur.nextWakeAt !== expect.expectedNextWakeAt
+      ) {
+        return false;
+      }
       const from: Record<string, string[]> = {
         pending: ['pending', 'fired'],
         fired: ['pending'],
@@ -276,5 +282,40 @@ describe('watcher firing', () => {
       'user-1',
       expect.objectContaining({ type: 'watcher:fired' }),
     );
+  });
+
+  test('a watcher snoozed after the scan read it is not fired early', async () => {
+    vi.useFakeTimers();
+    const { sendMessage } = await import('../../services/thread-service/messaging.js');
+    vi.mocked(sendMessage).mockClear();
+    startAgentWatchers();
+    const watcher = await createOrReschedule({
+      threadId: 't1',
+      userId: 'user-1',
+      key: 'snooze',
+      label: 'snooze',
+      delayMs: 60_000,
+    });
+    const listDue = fakeWatchers.listDueWatchers;
+    let snoozedAfterScan = false;
+    fakeWatchers.listDueWatchers = async (now: number) => {
+      const due = await listDue(now);
+      if (due.some((w: { id: string }) => w.id === watcher.id)) {
+        // The agent re-arms it (still pending, later due time) before the fire.
+        rows.set(watcher.id, { ...rows.get(watcher.id), nextWakeAt: now + 300_000 });
+        snoozedAfterScan = true;
+      }
+      return due;
+    };
+    try {
+      await vi.advanceTimersByTimeAsync(61_000);
+    } finally {
+      fakeWatchers.listDueWatchers = listDue;
+      vi.useRealTimers();
+    }
+
+    expect(snoozedAfterScan).toBe(true);
+    expect(rows.get(watcher.id).status).toBe('pending');
+    expect(sendMessage).not.toHaveBeenCalled();
   });
 });

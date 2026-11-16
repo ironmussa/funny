@@ -147,6 +147,17 @@ describe('update — status writes follow the watcher machine', () => {
     expect(await repo.update('w1', { status: 'done' })).toBe(true);
   });
 
+  test('a fire that expects the due time the scan read is refused once the watcher is re-armed', async () => {
+    await repo.insert(makeRow({ id: 'w1', status: 'pending', nextWakeAt: 1000 }));
+    // The agent snoozes it after the scan read nextWakeAt = 1000.
+    expect(await repo.update('w1', { status: 'pending', nextWakeAt: 301000 })).toBe(true);
+
+    expect(await repo.update('w1', { status: 'fired' }, { expectedNextWakeAt: 1000 })).toBe(false);
+    expect((await repo.getById('w1'))?.status).toBe('pending');
+    // Due at the time it expects: it fires.
+    expect(await repo.update('w1', { status: 'fired' }, { expectedNextWakeAt: 301000 })).toBe(true);
+  });
+
   test('an unknown status is refused', async () => {
     await repo.insert(makeRow({ id: 'w1', status: 'pending' }));
     expect(await repo.update('w1', { status: 'bogus' as never })).toBe(false);

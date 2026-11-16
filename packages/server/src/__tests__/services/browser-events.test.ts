@@ -107,6 +107,23 @@ describe('browser-events Socket.IO delivery', () => {
     expect(event.data.sequence).toBe(9007199254740993n);
   });
 
+  test('a closed event keeps the id of the client close it answers', () => {
+    const sink = new FakeBrowserEventSink();
+    setBrowserEventSink(sink);
+    relayToUser('alice', {
+      type: 'browser-session:closed',
+      threadId: '',
+      data: { sessionId: 'browser-1', reason: 'user', closeId: 'c-1' },
+    });
+
+    expect(sink.publications[0]?.browserV1Interactive).toMatchObject({
+      payload: {
+        case: 'browserSession',
+        value: { payload: { case: 'close', value: { reason: 'user', closeId: 'c-1' } } },
+      },
+    });
+  });
+
   test('moves browser frames to bounded principal-scoped HTTP references', () => {
     const sink = new FakeBrowserEventSink();
     setBrowserEventSink(sink);

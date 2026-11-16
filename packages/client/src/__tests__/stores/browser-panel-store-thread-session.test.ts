@@ -108,7 +108,9 @@ describe('browser panel thread sessions', () => {
     await store().openBrowserSession('https://example.com');
     const id = store().sessionId;
     store().closePanel();
-    await vi.waitFor(() => expect(mocks.close).toHaveBeenCalledWith(id, 'user'));
+    await vi.waitFor(() =>
+      expect(mocks.close).toHaveBeenCalledWith(id, 'user', expect.any(String)),
+    );
   });
 
   test('switching to a thread with the panel open detaches the old session and probes the new one', async () => {
@@ -194,7 +196,7 @@ describe('browser panel thread sessions', () => {
   test('ending and clearing the profile send explicit close reasons', async () => {
     await store().attachThreadSession('t1');
     await store().endBrowserSession();
-    expect(mocks.close).toHaveBeenCalledWith('thread:t1', 'user');
+    expect(mocks.close).toHaveBeenCalledWith('thread:t1', 'user', expect.any(String));
     await store().clearBrowserProfile();
     expect(mocks.close).toHaveBeenLastCalledWith('browser-profile', 'clear-profile');
   });

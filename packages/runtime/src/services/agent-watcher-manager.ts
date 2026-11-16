@@ -201,16 +201,16 @@ async function fire(watcher: Watcher, now: number): Promise<void> {
   }
 
   const wakeCount = watcher.wakeCount + 1;
-  const applied = await getServices().watchers.updateWatcher(watcher.id, {
-    status: 'fired',
-    wakeCount,
-  });
+  // Only the watcher the scan read: still pending AND still due at the time it
+  // was due then. A watcher re-armed (snoozed) since keeps its new time.
+  const applied = await getServices().watchers.updateWatcher(
+    watcher.id,
+    { status: 'fired', wakeCount },
+    { expectedNextWakeAt: watcher.nextWakeAt },
+  );
   if (!applied) {
-    // Cancelled (or otherwise finished) between the scan and now: do not wake
-    // the agent. A watcher re-armed in that window is still `pending`, so it
-    // fires; guarding on its due time needs `nextWakeAt` in the update
-    // protocol (docs/architecture/state-machines.md).
-    log.info('Watcher no longer pending, not fired', { namespace: NS, watcherId: watcher.id });
+    // Cancelled, finished or re-armed between the scan and now: do not wake the agent.
+    log.info('Watcher no longer due, not fired', { namespace: NS, watcherId: watcher.id });
     return;
   }
   const fired: Watcher = { ...watcher, status: 'fired', wakeCount };

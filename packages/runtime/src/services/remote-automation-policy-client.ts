@@ -55,11 +55,14 @@ class RemoteAutomationPolicyClient {
     );
   }
   /** False when the server refused the status transition (see watcher-machine). */
-  async updateWatcher(id: string, patch: Record<string, any>): Promise<boolean> {
+  async updateWatcher(
+    id: string,
+    patch: Record<string, any>,
+    expect?: { expectedNextWakeAt?: number },
+  ): Promise<boolean> {
     // A server from before the guard answers without `applied`: it wrote.
-    return (
-      (await this.request('data:watcher_update', { payload: { id, patch } }))?.applied !== false
-    );
+    const payload = { id, patch, ...(expect ?? {}) };
+    return (await this.request('data:watcher_update', { payload }))?.applied !== false;
   }
   async deleteWatchersByThread(threadId: string): Promise<void> {
     await this.request('data:watcher_delete_by_thread', { payload: { threadId } });

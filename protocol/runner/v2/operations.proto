@@ -162,7 +162,13 @@ message WatcherGetLiveByThreadKey { string thread_id = 1; string key = 2; }
 message WatcherListPending {}
 message WatcherListDue { uint64 now_ms = 1; }
 message WatcherListByUser {}
-message WatcherUpdate { string watcher_id = 1; google.protobuf.Struct patch = 2; }
+message WatcherUpdate {
+  string watcher_id = 1;
+  google.protobuf.Struct patch = 2;
+  // Apply only while the watcher is still due at this time (ms since epoch):
+  // a fire must not consume a watcher re-armed since the scan read it.
+  optional uint64 expected_next_wake_at_ms = 3;
+}
 message WatcherDeleteByThread { string thread_id = 1; }
 message JobInsert { string thread_id = 1; google.protobuf.Struct job = 2; }
 message JobGet { string job_id = 1; }

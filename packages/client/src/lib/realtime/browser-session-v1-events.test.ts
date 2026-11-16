@@ -92,6 +92,11 @@ describe('browserSessionEventFromV1', () => {
       { case: 'close', value: { reason: 'idle' } },
       { type: 'browser-session:closed', data: { sessionId: 's1', reason: 'idle' } },
     ],
+    [
+      'close answering a client close',
+      { case: 'close', value: { reason: 'user', closeId: 'c-1' } },
+      { type: 'browser-session:closed', data: { sessionId: 's1', reason: 'user', closeId: 'c-1' } },
+    ],
   ] as const)('%s', (_name, payload, expected) => {
     expect(browserSessionEventFromV1(wire(payload as BrowserSessionMessage['payload']))).toEqual(
       expected,

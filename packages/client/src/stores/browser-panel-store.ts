@@ -350,28 +350,36 @@ const loadFrames = () => (framesModule ??= import('@/lib/browser-session-frames'
  * panel reopened that thread's session would otherwise mark the new session
  * disconnected.
  */
-/** Per session id, when each close still waiting for its answer was sent. */
-const closesInFlight = new Map<string, number[]>();
+/** Per session id, each close still waiting for its answer: its id and when it was sent. */
+const closesInFlight = new Map<string, { closeId: string; sentAt: number }[]>();
 /**
- * How long a close waits for its answer. The runner sends none for a session it
- * had already dropped, and a remembered close must not swallow a later, real
- * `closed` for the same id.
+ * How long a close without an echoed id waits for its answer (a runner from
+ * before `close_id` answers without one). The runner sends nothing for a
+ * session it had already dropped, and a remembered close must not swallow a
+ * later, real `closed` for the same id.
  */
 const OWN_CLOSE_ANSWER_MS = 15_000;
 
 /**
- * True when `closed` for `sessionId` answers a close this tab sent; each answer
- * accounts for one close, so two closes are answered by two events.
+ * True when `closed` for `sessionId` answers a close this tab sent. With the
+ * `closeId` the runner echoes, the match is exact: another tab's close, or an
+ * answer to a close this tab no longer waits for, is not taken for its own.
+ * Without one, each answer accounts for the oldest close sent recently.
  */
-export function takeOwnClose(sessionId: string, now = Date.now()): boolean {
-  const pending = (closesInFlight.get(sessionId) ?? []).filter(
-    (sentAt) => now - sentAt < OWN_CLOSE_ANSWER_MS,
-  );
-  const answered = pending.length > 0;
-  if (answered) pending.shift();
+export function takeOwnClose(sessionId: string, closeId?: string, now = Date.now()): boolean {
+  const pending = closesInFlight.get(sessionId) ?? [];
+  let index: number;
+  if (closeId) {
+    index = pending.findIndex((close) => close.closeId === closeId);
+  } else {
+    const fresh = pending.filter((close) => now - close.sentAt < OWN_CLOSE_ANSWER_MS);
+    pending.splice(0, pending.length, ...fresh);
+    index = pending.length > 0 ? 0 : -1;
+  }
+  if (index >= 0) pending.splice(index, 1);
   if (pending.length > 0) closesInFlight.set(sessionId, pending);
   else closesInFlight.delete(sessionId);
-  return answered;
+  return index >= 0;
 }
 
 /** The runner had no such session: none of this tab's closes for it will be answered. */
@@ -387,9 +395,15 @@ async function releaseSession(sessionId: string, reason: 'user' | 'detach'): Pro
   ]);
   // A detach keeps the session running and is not answered with `closed`.
   if (reason === 'user') {
-    closesInFlight.set(sessionId, [...(closesInFlight.get(sessionId) ?? []), Date.now()]);
+    const closeId = crypto.randomUUID();
+    closesInFlight.set(sessionId, [
+      ...(closesInFlight.get(sessionId) ?? []),
+      { closeId, sentAt: Date.now() },
+    ]);
+    browserSessionClient.close(sessionId, reason, closeId);
+  } else {
+    browserSessionClient.close(sessionId, reason);
   }
-  browserSessionClient.close(sessionId, reason);
   clearLatestFrame(sessionId);
 }
 

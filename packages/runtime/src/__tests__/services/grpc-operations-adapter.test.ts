@@ -158,6 +158,20 @@ describe('GrpcOperationsAdapter mapping', () => {
     }
   });
 
+  test('a watcher update sends the due time it expects, and nothing when there is none', () => {
+    expect(
+      mapRunnerOperation('data:watcher_update', {
+        payload: { id: 'w1', patch: { status: 'fired' }, expectedNextWakeAt: 300000 },
+      }),
+    ).toEqual({
+      kind: 'watcherUpdate',
+      value: { watcherId: 'w1', patch: { status: 'fired' }, expectedNextWakeAtMs: '300000' },
+    });
+    expect(
+      mapRunnerOperation('data:watcher_update', { payload: { id: 'w1', patch: {} } }).value,
+    ).toEqual({ watcherId: 'w1', patch: {} });
+  });
+
   test('falls back to the input as payload and fills operation defaults', () => {
     expect(mapRunnerOperation('data:insert_tool_call', { toolCallId: 'tc1' })).toEqual({
       kind: 'insertToolCall',

@@ -29,7 +29,7 @@ type BrowserSessionRealtimeCommand =
   | { case: 'historyNavigation'; action: string; requestId: string }
   | { case: 'screenshot'; requestId: string }
   | { case: 'heartbeat' }
-  | { case: 'close'; reason?: string };
+  | { case: 'close'; reason?: string; closeId?: string };
 
 /** Send browser-session commands through their independently negotiated traffic class. */
 export function sendBrowserSessionRealtime(
@@ -88,7 +88,13 @@ export function sendBrowserSessionRealtime(
     }
     case 'close':
       deliveryClass = DeliveryClass.SNAPSHOT_RECOVERABLE;
-      payload = { case: 'close', value: { reason: command.reason ?? 'user' } };
+      payload = {
+        case: 'close',
+        value: {
+          reason: command.reason ?? 'user',
+          ...(command.closeId ? { closeId: command.closeId } : {}),
+        },
+      };
       break;
   }
   transport.sendInteractive(

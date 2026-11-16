@@ -96,10 +96,20 @@ export function createWatcherRepository(deps: WatcherRepositoryDeps) {
 
   /**
    * Patch a watcher. A status in the patch is written only from a status the
-   * watcher machine allows; false means nothing was written.
+   * watcher machine allows; with `expectedNextWakeAt`, only while the watcher is
+   * still due at that time (a fire must not consume a watcher re-armed since the
+   * scan read it). False means nothing was written.
    */
-  function update(id: string, patch: WatcherPatch): Promise<boolean> {
-    return updateWithStatusGuard(deps, table, id, patch, WATCHER_STATUS_WRITTEN_FROM);
+  function update(
+    id: string,
+    patch: WatcherPatch,
+    expect?: { expectedNextWakeAt?: number },
+  ): Promise<boolean> {
+    const also =
+      expect?.expectedNextWakeAt !== undefined
+        ? [eq(table.nextWakeAt, expect.expectedNextWakeAt)]
+        : [];
+    return updateWithStatusGuard(deps, table, id, patch, WATCHER_STATUS_WRITTEN_FROM, also);
   }
 
   async function deleteByThread(threadId: string): Promise<void> {

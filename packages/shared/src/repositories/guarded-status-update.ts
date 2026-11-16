@@ -1,4 +1,4 @@
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, type SQL } from 'drizzle-orm';
 
 import type { RepoDeps } from './deps.js';
 
@@ -18,6 +18,8 @@ export async function updateWithStatusGuard<S extends string>(
   id: string,
   patch: Partial<GuardedTable['$inferInsert']> & { status?: S },
   writtenFrom: Readonly<Record<S, readonly S[]>>,
+  /** Further conditions the row must still meet (compare-and-set on them too). */
+  also: SQL[] = [],
 ): Promise<boolean> {
   // An unknown status has no legal source: `inArray(…, [])` matches no row.
   const from = patch.status === undefined ? null : (writtenFrom[patch.status] ?? []);
@@ -25,7 +27,7 @@ export async function updateWithStatusGuard<S extends string>(
     deps.db
       .update(table)
       .set({ updatedAt: new Date().toISOString(), ...patch })
-      .where(from ? and(eq(table.id, id), inArray(table.status, [...from])) : eq(table.id, id))
+      .where(and(eq(table.id, id), ...(from ? [inArray(table.status, [...from])] : []), ...also))
       .returning({ id: table.id }),
   );
   return rows.length > 0;

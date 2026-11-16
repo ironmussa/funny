@@ -61,10 +61,6 @@ making each one explicit.
 
 Known gaps in the guarded writers:
 
-- **Watcher snoozed during a scan.** The fire is guarded on `pending` only, so a
-  watcher re-armed between the scan and the fire (still `pending`, later
-  `nextWakeAt`) is fired early. Closing it needs the expected `nextWakeAt` in
-  the `watcher_update` operation of the runner protocol.
 - **Status observer.** It reads the row's status before the write, outside it,
   so two concurrent writers can report a `from` that never happened. Expect a
   little noise in `thread.status_write_unmodelled`.
@@ -97,7 +93,9 @@ has a regression test next to the code.
 - A step update from a previous git workflow run does not overwrite a new run's.
 - A page-load session check that resolves after a login no longer undoes it.
 - A browser panel's own close, answered after it reopened the thread's session,
-  no longer marks the new session disconnected.
+  no longer marks the new session disconnected: each close carries a
+  `close_id` (`browser.v1` `BrowserSessionClose`) that the runner echoes in
+  the `closed` that answers it.
 
 ## Observing thread status writes (log-only)
 

@@ -1095,7 +1095,13 @@ class BrowserSessionManager {
    * Client-initiated close. `detach` keeps thread-bound sessions running;
    * `clear-profile` wipes the user's persistent profile.
    */
-  async closeFromClient(userId: string, sessionId: string, reason?: string): Promise<void> {
+  async closeFromClient(
+    userId: string,
+    sessionId: string,
+    reason?: string,
+    /** Echoed in the `closed` event, so the client can match its own close. */
+    closeId?: string,
+  ): Promise<void> {
     if (reason === 'clear-profile') {
       await this.clearProfile(userId);
       return;
@@ -1107,7 +1113,7 @@ class BrowserSessionManager {
       log.info('Panel detached from thread session', { namespace: NS, sessionId });
       return;
     }
-    await this.close(sessionId, 'user');
+    await this.close(sessionId, 'user', closeId);
   }
 
   /** Fire-and-forget close: the session is already gone from the map, so a
@@ -1123,7 +1129,11 @@ class BrowserSessionManager {
     });
   }
 
-  async close(sessionId: string, reason: BrowserSessionClosedReason): Promise<void> {
+  async close(
+    sessionId: string,
+    reason: BrowserSessionClosedReason,
+    closeId?: string,
+  ): Promise<void> {
     const s = this.sessions.get(sessionId);
     if (!s) return;
     this.sessions.delete(sessionId);
@@ -1140,7 +1150,11 @@ class BrowserSessionManager {
     for (const tab of [s.tab, ...s.backgroundTabs]) await s.host.closeTab(tab);
 
     metric('browser_session.closed', 1, { type: 'sum', attributes: { reason } });
-    this.emit(s, 'browser-session:closed', { sessionId, reason });
+    this.emit(s, 'browser-session:closed', {
+      sessionId,
+      reason,
+      ...(closeId ? { closeId } : {}),
+    });
 
     this.scheduleHostShutdownIfUnused(s.userId);
     this.stopReaperIfIdle();

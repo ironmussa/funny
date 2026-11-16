@@ -161,7 +161,14 @@ export function browserSessionEventFromV1(
     case 'status':
       return { type: 'browser-session:error', data: { sessionId, message: payload.value.message } };
     case 'close':
-      return { type: 'browser-session:closed', data: { sessionId, reason: payload.value.reason } };
+      return {
+        type: 'browser-session:closed',
+        data: {
+          sessionId,
+          reason: payload.value.reason,
+          ...(payload.value.closeId ? { closeId: payload.value.closeId } : {}),
+        },
+      };
     case 'console':
       return consoleEvent(sessionId, payload.value);
     default:

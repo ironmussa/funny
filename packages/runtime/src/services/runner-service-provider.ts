@@ -391,9 +391,9 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         const { remoteListWatchersByUser } = await import('./remote-automation-policy-client.js');
         return remoteListWatchersByUser(userId);
       },
-      async updateWatcher(id, patch) {
+      async updateWatcher(id, patch, expect) {
         const { remoteUpdateWatcher } = await import('./remote-automation-policy-client.js');
-        return remoteUpdateWatcher(id, patch);
+        return remoteUpdateWatcher(id, patch, expect);
       },
       async deleteWatchersByThread(threadId) {
         const { remoteDeleteWatchersByThread } =

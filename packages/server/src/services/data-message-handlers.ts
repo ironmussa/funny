@@ -747,9 +747,14 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
   }),
   'data:watcher_update': async ({ data }) => {
     // `applied: false` — the watcher is no longer in a status this write is legal from.
+    const expected = data.payload.expectedNextWakeAt;
     const applied = await repos
       .watchers()
-      .update(data.payload.id, pickWatcherPatch(data.payload.patch));
+      .update(
+        data.payload.id,
+        pickWatcherPatch(data.payload.patch),
+        isNum(expected) ? { expectedNextWakeAt: expected } : undefined,
+      );
     return { type: 'data:watcher_update_response', ok: true, applied };
   },
   'data:watcher_delete_by_thread': async ({ data }) => {

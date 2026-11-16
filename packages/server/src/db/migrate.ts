@@ -1959,6 +1959,47 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // issue-factory: per-(project, user) factory settings and one run per issue.
+    name: '097_issue_factory',
+    // fallow-ignore-next-line code-duplication
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_settings (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 0,
+          label TEXT NOT NULL DEFAULT 'ready-for-agent',
+          flow_name TEXT NOT NULL DEFAULT 'issue-to-merge',
+          max_concurrent INTEGER NOT NULL DEFAULT 2,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_settings_project_user
+        ON factory_settings (project_id, user_id)
+      `);
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_runs (
+          id TEXT PRIMARY KEY,
+          factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,
+          issue_number INTEGER NOT NULL,
+          pr_url TEXT,
+          state TEXT NOT NULL DEFAULT 'queued',
+          current_step TEXT,
+          thread_ids TEXT,
+          started_at TEXT NOT NULL,
+          completed_at TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_factory_runs_factory
+        ON factory_runs (factory_id)
+      `);
+    },
+  },
 ];
 
 /**

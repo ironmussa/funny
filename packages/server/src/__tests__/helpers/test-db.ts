@@ -319,6 +319,36 @@ export function createTestDb() {
   `);
 
   testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_settings (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      label TEXT NOT NULL DEFAULT 'ready-for-agent',
+      flow_name TEXT NOT NULL DEFAULT 'issue-to-merge',
+      max_concurrent INTEGER NOT NULL DEFAULT 2,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  testDb.run(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS factory_settings_project_user ON factory_settings (project_id, user_id)`,
+  );
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_runs (
+      id TEXT PRIMARY KEY,
+      factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,
+      issue_number INTEGER NOT NULL,
+      pr_url TEXT,
+      state TEXT NOT NULL DEFAULT 'queued',
+      current_step TEXT,
+      thread_ids TEXT,
+      started_at TEXT NOT NULL,
+      completed_at TEXT
+    )
+  `);
+
+  testDb.run(sql`
     CREATE TABLE IF NOT EXISTS runner_provision_tokens (
       id TEXT PRIMARY KEY,
       token_hash TEXT NOT NULL UNIQUE,

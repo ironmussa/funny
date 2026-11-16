@@ -258,6 +258,49 @@ export const automationRuns = sqliteTable('automation_runs', {
   completedAt: text('completed_at'),
 });
 
+/**
+ * Per-(project, user) issue factory (change issue-factory): a toggle plus the
+ * watched label, the flow to run, and how many issues may be in flight. One row
+ * per user per project; runs hang off `factory_runs`.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factorySettings = sqliteTable(
+  'factory_settings',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
+    enabled: integer('enabled').notNull().default(0),
+    label: text('label').notNull().default('ready-for-agent'),
+    flowName: text('flow_name').notNull().default('issue-to-merge'),
+    maxConcurrent: integer('max_concurrent').notNull().default(2),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [uniqueIndex('factory_settings_project_user').on(t.projectId, t.userId)],
+);
+
+/** One factory run per admitted issue (change issue-factory). */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryRuns = sqliteTable('factory_runs', {
+  id: text('id').primaryKey(),
+  factoryId: text('factory_id')
+    .notNull()
+    .references(() => factorySettings.id, { onDelete: 'cascade' }),
+  issueNumber: integer('issue_number').notNull(),
+  prUrl: text('pr_url'),
+  state: text('state').notNull().default('queued'),
+  currentStep: text('current_step'),
+  /** JSON array of the thread ids the run's thread steps created. */
+  threadIds: text('thread_ids'),
+  startedAt: text('started_at').notNull(),
+  completedAt: text('completed_at'),
+});
+
 export const watchers = sqliteTable('watchers', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')

@@ -16,7 +16,8 @@ import { and, eq } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
-import { projectMembers, projects, projectSandboxSettings } from '../../db/schema.js';
+import { projectSandboxSettings } from '../../db/schema.js';
+import { requireProjectAccess as sharedRequireProjectAccess } from '../project-access.js';
 import type { InfraConnectionService } from './infra-connections.js';
 
 /** Where a user's new threads run on a project. `sandbox` uses the connection/size. */
@@ -70,31 +71,8 @@ const notFound = (): ProjectSandboxError => ({ kind: 'not-found', message: 'Proj
  * (`project_members`) — as not found. The runtime is per-user, so any member
  * may read and write their own row.
  */
-function requireProjectAccess(
-  userId: string,
-  projectId: string,
-): ResultAsync<void, ProjectSandboxError> {
-  return ResultAsync.fromPromise(
-    db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(and(eq(projects.id, projectId), eq(projects.userId, userId))),
-    storage,
-  ).andThen(([owned]) => {
-    if (owned) return okAsync<void, ProjectSandboxError>(undefined);
-    return ResultAsync.fromPromise(
-      db
-        .select({ projectId: projectMembers.projectId })
-        .from(projectMembers)
-        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))),
-      storage,
-    ).andThen(([member]) =>
-      member
-        ? okAsync<void, ProjectSandboxError>(undefined)
-        : errAsync<void, ProjectSandboxError>(notFound()),
-    );
-  });
-}
+const requireProjectAccess = (userId: string, projectId: string) =>
+  sharedRequireProjectAccess(userId, projectId, storage, notFound);
 
 export function createProjectSandboxSettingsService(
   connections: Pick<InfraConnectionService, 'providerFor'>,

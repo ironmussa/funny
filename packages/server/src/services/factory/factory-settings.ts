@@ -6,8 +6,9 @@
  *
  * Each user's issue factory for a project (change issue-factory): the on/off
  * toggle plus the watched label, the flow to run and the concurrency. Keyed per
- * `(project, user)` and scoped to project access — any member runs their own
- * factory. Runs are stored separately (`factory-runs`).
+ * `(project, user)` and scoped to project access: anyone who may start threads
+ * on the project (`steer`) runs their own factory; a viewer may only read
+ * theirs. Runs are stored separately (`factory-runs`).
  */
 import { and, eq } from 'drizzle-orm';
 import { errAsync, ResultAsync } from 'neverthrow';
@@ -27,6 +28,8 @@ export interface FactorySettingsView {
 
 export type FactorySettingsError =
   | { kind: 'not-found'; message: string }
+  /** The caller can see the project but their role does not allow this. */
+  | { kind: 'forbidden'; message: string }
   | { kind: 'invalid'; message: string }
   | { kind: 'storage'; message: string };
 
@@ -44,7 +47,14 @@ const storage = (error: unknown): FactorySettingsError => ({
   message: error instanceof Error ? error.message : String(error),
 });
 
-const notFound = (): FactorySettingsError => ({ kind: 'not-found', message: 'Project not found' });
+const accessErrors = {
+  storage,
+  notFound: (): FactorySettingsError => ({ kind: 'not-found', message: 'Project not found' }),
+  forbidden: (): FactorySettingsError => ({
+    kind: 'forbidden',
+    message: 'Running an issue factory needs contributor access to the project',
+  }),
+};
 
 const toView = (row: Row): FactorySettingsView => ({
   projectId: row.projectId,
@@ -157,14 +167,14 @@ export function createFactorySettingsService(
       userId: string,
       projectId: string,
     ): ResultAsync<FactorySettingsView | null, FactorySettingsError> {
-      return requireProjectAccess(userId, projectId, storage, notFound).andThen(() =>
+      return requireProjectAccess(userId, projectId, 'view', accessErrors).andThen(() =>
         find(userId, projectId),
       );
     },
 
     /** The caller's factory row id for a project, or null — used to list its runs. */
     factoryId(userId: string, projectId: string): ResultAsync<string | null, FactorySettingsError> {
-      return requireProjectAccess(userId, projectId, storage, notFound).andThen(() =>
+      return requireProjectAccess(userId, projectId, 'view', accessErrors).andThen(() =>
         ResultAsync.fromPromise(
           db
             .select({ id: factorySettings.id })
@@ -182,7 +192,9 @@ export function createFactorySettingsService(
     ): ResultAsync<FactorySettingsView, FactorySettingsError> {
       const invalid = validate(input);
       if (invalid) return errAsync(invalid);
-      return requireProjectAccess(userId, projectId, storage, notFound)
+      // Enabling a factory starts agent threads on the project as this user,
+      // so it needs the same capability as starting a thread by hand.
+      return requireProjectAccess(userId, projectId, 'steer', accessErrors)
         .andThen(() => find(userId, projectId))
         .andThen((existing) => upsert(buildRow(deps.newId(), userId, projectId, input, existing)));
     },

@@ -145,6 +145,20 @@ async function fire(id: string): Promise<void> {
     unscheduleFactory(id);
     return;
   }
+  // The enabler's runtime decides where the agent runs. Phase 2 launches only
+  // local and worktree threads; a sandbox runtime is NOT downgraded to local
+  // (issue text is untrusted input, and the enabler chose isolation), so the
+  // factory waits until sandbox launches are supported.
+  const mode = await resolveMode(factory.userId, factory.projectId);
+  if (!mode) {
+    log.info('Issue factory tick skipped: sandbox runtime is not supported yet', {
+      namespace: 'factory',
+      factoryId: id,
+      projectId: factory.projectId,
+    });
+    return;
+  }
+
   const repo = await deps.github.resolveRepo(factory.userId, factory.projectId);
   if (!repo) {
     log.info('Issue factory tick skipped: repository not resolvable', {
@@ -171,13 +185,14 @@ async function fire(id: string): Promise<void> {
     return;
   }
 
-  await admitIssues(factory, repo, issues.value);
+  await admitIssues(factory, repo, mode, issues.value);
 }
 
 /** Admit each issue not already running, up to the concurrency cap. */
 async function admitIssues(
   factory: EnabledFactory,
   repo: string,
+  mode: LaunchMode,
   issues: FactoryIssue[],
 ): Promise<void> {
   if (!runs) return;
@@ -197,7 +212,7 @@ async function admitIssues(
     const existing = await runs.activeByIssue(factory.id, issue.number);
     if (existing.isErr()) continue;
     if (existing.value) continue; // already running for this issue
-    const started = await startImplement(factory, repo, issue);
+    const started = await startImplement(factory, repo, mode, issue);
     if (started) slots--;
   }
 }
@@ -206,10 +221,10 @@ async function admitIssues(
 async function startImplement(
   factory: EnabledFactory,
   repo: string,
+  mode: LaunchMode,
   issue: FactoryIssue,
 ): Promise<boolean> {
   if (!deps || !runs) return false;
-  const mode = await resolveMode(factory.userId, factory.projectId);
   const title = `[Factory] #${issue.number} ${issue.title}`.slice(0, 200);
   const prompt = buildImplementPrompt(repo, issue);
 
@@ -266,13 +281,17 @@ async function startImplement(
   return true;
 }
 
+/** The thread modes phase 2 can launch. */
+type LaunchMode = 'local' | 'worktree';
+
 /**
- * The thread mode for the enabler's runtime. Phase 2 honors local and worktree;
- * a sandbox runtime falls back to local (the sandbox launch path is phase 3+).
+ * The thread mode for the enabler's runtime, or `null` for a sandbox runtime:
+ * the sandbox launch path is phase 3+, and the spec forbids falling back to a
+ * different runtime.
  */
-async function resolveMode(userId: string, projectId: string): Promise<'local' | 'worktree'> {
+async function resolveMode(userId: string, projectId: string): Promise<LaunchMode | null> {
   const runtime = await (deps?.resolveRuntime ?? defaultResolveRuntime)(userId, projectId);
-  return runtime === 'worktree' ? 'worktree' : 'local';
+  return runtime === 'sandbox' ? null : runtime;
 }
 
 function buildImplementPrompt(repo: string, issue: FactoryIssue): string {

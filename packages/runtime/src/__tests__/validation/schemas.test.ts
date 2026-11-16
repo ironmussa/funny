@@ -168,6 +168,14 @@ describe('createThreadSchema', () => {
     }
   });
 
+  test('accepts the issue factory as a thread source', () => {
+    // The server's factory watcher starts threads with source 'factory'; a
+    // runner that refused it would fail every factory run with a 400.
+    const result = createThreadSchema.safeParse({ ...validThread, source: 'factory' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.source).toBe('factory');
+  });
+
   test('applies default model to "opus-4.8"', () => {
     const result = createThreadSchema.safeParse(validThread);
     expect(result.success).toBe(true);

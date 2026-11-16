@@ -133,6 +133,17 @@ describe('project sandbox settings service', () => {
     expect(outsider.isErr() && outsider.error.kind).toBe('not-found');
   });
 
+  test('a viewer member can read but not set their runtime', async () => {
+    const { settings } = services();
+    // `setMemberLocalPath` writes viewer rows like this one for org viewers.
+    seedProjectMember(testDb.db, { projectId: 'bob-project', userId: 'alice', role: 'viewer' });
+    expect(expectOk(await settings.get('alice', 'bob-project'))).toBeNull();
+    const saved = await settings.save('alice', 'bob-project', { mode: 'worktree' });
+    expect(saved.isErr() && saved.error.kind).toBe('forbidden');
+    const cleared = await settings.clear('alice', 'bob-project');
+    expect(cleared.isErr() && cleared.error.kind).toBe('forbidden');
+  });
+
   test('each user keeps their own configuration for the same project', async () => {
     const { connections, settings } = services();
     seedProject(testDb.db, { id: 'shared', userId: 'alice', path: '/tmp/shared' });

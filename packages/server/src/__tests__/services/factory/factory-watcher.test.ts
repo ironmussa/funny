@@ -129,6 +129,24 @@ describe('factory watcher', () => {
     expect(runs[0]!.threadIds).toEqual(['t-1']);
   });
 
+  test('a sandbox runtime is not downgraded to a local thread', async () => {
+    const factoryId = await enableFactory();
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime: async () => 'sandbox' as const,
+    });
+
+    await poll.ticks[0]!();
+
+    expect(launcher.calls).toHaveLength(0);
+    expect((await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap()).toHaveLength(0);
+  });
+
   test('does not re-admit an issue that already has an active run', async () => {
     const factoryId = await enableFactory();
     const runs = createFactoryRunsRepository();

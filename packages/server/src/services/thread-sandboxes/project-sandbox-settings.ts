@@ -34,6 +34,8 @@ export interface ProjectSandboxView {
 export type ProjectSandboxError =
   /** The project is not the caller's, or the connection is not theirs. */
   | { kind: 'not-found'; message: string }
+  /** The caller can see the project but their role does not allow this. */
+  | { kind: 'forbidden'; message: string }
   | { kind: 'invalid-size'; message: string }
   /** The connection exists but cannot be used (undecryptable, bad config). */
   | { kind: 'connection'; message: string }
@@ -64,15 +66,22 @@ const toView = (row: Row): ProjectSandboxView => ({
 const byOwner = (userId: string, projectId: string) =>
   and(eq(projectSandboxSettings.projectId, projectId), eq(projectSandboxSettings.userId, userId));
 
-const notFound = (): ProjectSandboxError => ({ kind: 'not-found', message: 'Project not found' });
+const accessErrors = {
+  storage,
+  notFound: (): ProjectSandboxError => ({ kind: 'not-found', message: 'Project not found' }),
+  forbidden: (): ProjectSandboxError => ({
+    kind: 'forbidden',
+    message: 'Choosing where threads run needs contributor access to the project',
+  }),
+};
 
 /**
- * Refuses a project the caller cannot access — neither its owner nor a member
- * (`project_members`) — as not found. The runtime is per-user, so any member
- * may read and write their own row.
+ * The runtime is per-user: anyone who can see the project reads their own row,
+ * and anyone who may start threads on it (`steer`) writes it. A viewer cannot
+ * start threads, so their runtime choice would never be used.
  */
-const requireProjectAccess = (userId: string, projectId: string) =>
-  sharedRequireProjectAccess(userId, projectId, storage, notFound);
+const requireProjectAccess = (userId: string, projectId: string, capability: 'view' | 'steer') =>
+  sharedRequireProjectAccess(userId, projectId, capability, accessErrors);
 
 export function createProjectSandboxSettingsService(
   connections: Pick<InfraConnectionService, 'providerFor'>,
@@ -114,7 +123,7 @@ export function createProjectSandboxSettingsService(
       userId: string,
       projectId: string,
     ): ResultAsync<ProjectSandboxView | null, ProjectSandboxError> {
-      return requireProjectAccess(userId, projectId).andThen(() => find(userId, projectId));
+      return requireProjectAccess(userId, projectId, 'view').andThen(() => find(userId, projectId));
     },
 
     save(
@@ -147,7 +156,7 @@ export function createProjectSandboxSettingsService(
         ).map(() => toView(row));
       };
 
-      return requireProjectAccess(userId, projectId).andThen(() => {
+      return requireProjectAccess(userId, projectId, 'steer').andThen(() => {
         // sandbox: the connection must be the caller's and the size must exist.
         if (input.mode === 'sandbox') {
           if (!input.connectionId) {
@@ -173,7 +182,7 @@ export function createProjectSandboxSettingsService(
     },
 
     clear(userId: string, projectId: string): ResultAsync<void, ProjectSandboxError> {
-      return requireProjectAccess(userId, projectId).andThen(() =>
+      return requireProjectAccess(userId, projectId, 'steer').andThen(() =>
         ResultAsync.fromPromise(
           db.delete(projectSandboxSettings).where(byOwner(userId, projectId)),
           storage,

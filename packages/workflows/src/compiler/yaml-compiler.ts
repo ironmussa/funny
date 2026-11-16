@@ -267,31 +267,21 @@ async function dispatchThreadLifecycleNode(
   ctx: YamlPipelineContext,
   scope: TemplateScope,
 ): Promise<NodeOutput | null> {
-  const provider = ctx.provider;
+  const action = yamlNode.set_status
+    ? { name: 'set_status', raw: yamlNode.set_status, apply: ctx.provider.setStatus }
+    : yamlNode.set_stage
+      ? { name: 'set_stage', raw: yamlNode.set_stage, apply: ctx.provider.setStage }
+      : null;
+  if (!action) return null;
 
-  if (yamlNode.set_status) {
-    const opts = interpolateObject(yamlNode.set_status, scope);
-    const result = await provider.setStatus({
-      threadId: resolveThreadId(ctx),
-      value: opts.value,
-      reason: opts.reason,
-    });
-    if (!result.ok) throw new Error(`set_status[${yamlNode.id}] failed: ${result.error}`);
-    return { output: opts.value, json: { value: opts.value, reason: opts.reason } };
-  }
-
-  if (yamlNode.set_stage) {
-    const opts = interpolateObject(yamlNode.set_stage, scope);
-    const result = await provider.setStage({
-      threadId: resolveThreadId(ctx),
-      value: opts.value,
-      reason: opts.reason,
-    });
-    if (!result.ok) throw new Error(`set_stage[${yamlNode.id}] failed: ${result.error}`);
-    return { output: opts.value, json: { value: opts.value, reason: opts.reason } };
-  }
-
-  return null;
+  const opts = interpolateObject(action.raw, scope);
+  const result = await action.apply.call(ctx.provider, {
+    threadId: resolveThreadId(ctx),
+    value: opts.value,
+    reason: opts.reason,
+  });
+  if (!result.ok) throw new Error(`${action.name}[${yamlNode.id}] failed: ${result.error}`);
+  return { output: opts.value, json: { value: opts.value, reason: opts.reason } };
 }
 
 /**

@@ -24,7 +24,14 @@ export type ThreadStatus =
   | 'interrupted';
 export type ThreadStage = 'backlog' | 'planning' | 'in_progress' | 'review' | 'done' | 'archived';
 export type WaitingReason = 'question' | 'plan' | 'permission' | 'provider_error';
-export type ThreadSource = 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest';
+export type ThreadSource =
+  | 'web'
+  | 'chrome_extension'
+  | 'api'
+  | 'automation'
+  | 'ingest'
+  // Started by a project's issue factory (server-owned watcher).
+  | 'factory';
 
 // ─── Agent ──────────────────────────────────────────────
 /** The bundled providers funny ships with — literal union for autocomplete + exhaustiveness. */

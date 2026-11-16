@@ -35,6 +35,7 @@ import {
 } from '../services/thread-sandboxes/project-sandbox-settings.js';
 import { prepareSandboxLaunch } from '../services/thread-sandboxes/sandbox-launch.js';
 import { sqlThreadSandboxStore } from '../services/thread-sandboxes/thread-sandbox-store.js';
+import { projectAccessRefusal } from './project-access-response.js';
 
 const provisionSchema = sandboxMachineRequestSchema;
 
@@ -59,7 +60,8 @@ const projectSandboxSchema = z
 function respondProjectSandbox(c: Context<ServerEnv>, error: ProjectSandboxError) {
   switch (error.kind) {
     case 'not-found':
-      return c.json({ error: error.message, code: error.kind }, 404);
+    case 'forbidden':
+      return projectAccessRefusal(c, error);
     case 'invalid-size':
       return c.json({ error: error.message, code: error.kind }, 400);
     case 'connection':

@@ -18,6 +18,7 @@ import {
   type FactorySettingsError,
 } from '../services/factory/factory-settings.js';
 import { rescheduleFactory } from '../services/factory/factory-watcher.js';
+import { projectAccessRefusal } from './project-access-response.js';
 
 const saveSchema = z
   .object({
@@ -31,7 +32,8 @@ const saveSchema = z
 function respondSettings(c: Context<ServerEnv>, error: FactorySettingsError) {
   switch (error.kind) {
     case 'not-found':
-      return c.json({ error: error.message, code: error.kind }, 404);
+    case 'forbidden':
+      return projectAccessRefusal(c, error);
     case 'invalid':
       return c.json({ error: error.message, code: error.kind }, 400);
     case 'storage':

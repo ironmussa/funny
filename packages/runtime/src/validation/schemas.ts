@@ -91,7 +91,14 @@ export const threadStageSchema = z.enum([
   'done',
   'archived',
 ]);
-const threadSourceSchema = z.enum(['web', 'chrome_extension', 'api', 'automation', 'ingest']);
+const threadSourceSchema = z.enum([
+  'web',
+  'chrome_extension',
+  'api',
+  'automation',
+  'ingest',
+  'factory',
+]);
 
 // ── Image attachment ─────────────────────────────────────────────
 

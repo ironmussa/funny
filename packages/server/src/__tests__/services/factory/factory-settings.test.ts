@@ -63,6 +63,19 @@ describe('factory settings service', () => {
     expect(outsider.isErr() && outsider.error.kind).toBe('not-found');
   });
 
+  test('a viewer member can read but not enable a factory', async () => {
+    const svc = settings();
+    // `setMemberLocalPath` writes viewer rows like this one for org viewers.
+    seedProjectMember(testDb.db, { projectId: 'bob-project', userId: 'alice', role: 'viewer' });
+    expect((await svc.get('alice', 'bob-project'))._unsafeUnwrap()).toBeNull();
+    const saved = await svc.save('alice', 'bob-project', { enabled: true });
+    expect(saved.isErr() && saved.error.kind).toBe('forbidden');
+    const rows = testDb.sqlite.query('SELECT COUNT(*) AS n FROM factory_settings').get() as {
+      n: number;
+    };
+    expect(rows.n).toBe(0);
+  });
+
   test('each user keeps their own factory for the same project', async () => {
     const svc = settings();
     seedProjectMember(testDb.db, { projectId: 'p1', userId: 'bob', role: 'member' });

@@ -27,6 +27,7 @@ type AuditAction =
   | 'infra.connection_removed'
   | 'infra.sandbox_provisioned'
   | 'infra.project_sandbox_set'
+  | 'factory.settings_set'
   | 'infra.project_sandbox_cleared'
   | 'runner.remove'
   | 'runner.enroll_approved'

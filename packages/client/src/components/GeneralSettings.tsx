@@ -15,6 +15,7 @@ import {
   WeaveStatusSetting,
 } from '@/components/general-settings-project/project-section-rows';
 import { ProjectColorPicker } from '@/components/general-settings-project/ProjectColorPicker';
+import { ProjectFactorySetting } from '@/components/general-settings-project/ProjectFactorySetting';
 import { ProjectPathSetting } from '@/components/general-settings-project/ProjectPathSetting';
 import { ProjectRedirectChecksSetting } from '@/components/general-settings-project/ProjectRedirectChecksSetting';
 import { ProjectSandboxSetting } from '@/components/general-settings-project/ProjectSandboxSetting';
@@ -299,6 +300,7 @@ export function GeneralSettings() {
             />
             <WeaveStatusSetting projectId={selectedProject.id} />
             <ProjectSandboxSetting projectId={selectedProject.id} />
+            <ProjectFactorySetting projectId={selectedProject.id} />
             <DefaultTemplateSetting
               projectId={selectedProject.id}
               currentTemplateId={selectedProject.defaultAgentTemplateId}

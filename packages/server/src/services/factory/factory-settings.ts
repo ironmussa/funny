@@ -128,6 +128,19 @@ export function createFactorySettingsService(
       );
     },
 
+    /** The caller's factory row id for a project, or null — used to list its runs. */
+    factoryId(userId: string, projectId: string): ResultAsync<string | null, FactorySettingsError> {
+      return requireProjectAccess(userId, projectId, storage, notFound).andThen(() =>
+        ResultAsync.fromPromise(
+          db
+            .select({ id: factorySettings.id })
+            .from(factorySettings)
+            .where(byOwner(userId, projectId)),
+          storage,
+        ).map(([row]) => row?.id ?? null),
+      );
+    },
+
     save(
       userId: string,
       projectId: string,

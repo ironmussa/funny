@@ -1,3 +1,4 @@
+import { parseStoredJson } from '@funny/shared/json-validation';
 /**
  * @domain subdomain: Issue Factory
  * @domain subdomain-type: core
@@ -11,9 +12,12 @@
  */
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { okAsync, ResultAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { factoryRuns } from '../../db/schema.js';
+
+const THREAD_IDS_SCHEMA = z.array(z.string());
 
 /** States a run moves through; non-terminal ones block re-admitting the issue. */
 export type FactoryRunState =
@@ -64,12 +68,8 @@ const toView = (row: Row): FactoryRunView => ({
 
 function parseThreadIds(raw: string | null): string[] {
   if (!raw) return [];
-  try {
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
-  } catch {
-    return [];
-  }
+  const parsed = parseStoredJson(THREAD_IDS_SCHEMA, raw, 'factory_runs.thread_ids');
+  return parsed.ok ? parsed.value : [];
 }
 
 export interface StartRunInput {

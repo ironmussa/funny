@@ -254,6 +254,7 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   const { projectRoutes } = await import('./routes/projects.js');
   const { runnerRoutes } = await import('./routes/runners.js');
   const { infraRoutes } = await import('./routes/infra.js');
+  const { createFactoryRoutes } = await import('./routes/factory.js');
   const { profileRoutes } = await import('./routes/profile.js');
   const { threadRoutes, requireThreadOwner, requireThreadSteer } =
     await import('./routes/threads.js');
@@ -273,6 +274,7 @@ export async function createServerApp(opts: ServerAppOptions): Promise<Hono<Serv
   app.route('/api/users', userRoutes);
   app.route('/api/runners', runnerRoutes);
   app.route('/api/infra', infraRoutes());
+  app.route('/api/factory', createFactoryRoutes());
   app.route('/api/media', mediaRoutes);
   app.route('/api/browser-v1/resources', browserV1ResourceRoutes);
   app.route('/api/profile', profileRoutes);

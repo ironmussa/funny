@@ -123,6 +123,43 @@ describe('update', () => {
   });
 });
 
+describe('update — status writes follow the watcher machine', () => {
+  test('a cancelled watcher is not fired: the scanner’s write is refused', async () => {
+    await repo.insert(makeRow({ id: 'w1', status: 'pending' }));
+    expect(await repo.update('w1', { status: 'cancelled' })).toBe(true);
+
+    expect(await repo.update('w1', { status: 'fired', wakeCount: 1 })).toBe(false);
+    const w = await repo.getById('w1');
+    expect(w?.status).toBe('cancelled');
+    expect(w?.wakeCount).toBe(0); // nothing in a refused patch is written
+  });
+
+  test('a cancelled watcher is not re-armed', async () => {
+    await repo.insert(makeRow({ id: 'w1', status: 'cancelled' }));
+    expect(await repo.update('w1', { status: 'pending', nextWakeAt: 9 })).toBe(false);
+    expect((await repo.getById('w1'))?.status).toBe('cancelled');
+  });
+
+  test('only a pending watcher expires or fires', async () => {
+    await repo.insert(makeRow({ id: 'w1', status: 'fired' }));
+    expect(await repo.update('w1', { status: 'expired' })).toBe(false);
+    expect(await repo.update('w1', { status: 'fired' })).toBe(false);
+    expect(await repo.update('w1', { status: 'done' })).toBe(true);
+  });
+
+  test('an unknown status is refused', async () => {
+    await repo.insert(makeRow({ id: 'w1', status: 'pending' }));
+    expect(await repo.update('w1', { status: 'bogus' as never })).toBe(false);
+    expect((await repo.getById('w1'))?.status).toBe('pending');
+  });
+
+  test('a patch without a status applies in any status', async () => {
+    await repo.insert(makeRow({ id: 'w1', status: 'cancelled' }));
+    expect(await repo.update('w1', { lastDelayMs: 5 })).toBe(true);
+    expect(await repo.update('missing', { lastDelayMs: 5 })).toBe(false);
+  });
+});
+
 describe('deleteByThread', () => {
   test('removes all of a thread’s watchers', async () => {
     await repo.insert(makeRow({ id: 'w1', threadId: 't1', key: 'a' }));

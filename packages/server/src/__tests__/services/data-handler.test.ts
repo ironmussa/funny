@@ -1967,7 +1967,7 @@ describe('data-handler handleDataMessageWithAck', () => {
           },
         },
       });
-      expect(res).toEqual({ type: 'data:job_update_response', ok: true });
+      expect(res).toEqual({ type: 'data:job_update_response', ok: true, applied: true });
       const [row] = allJobs();
       expect(row?.logPath).toBe('/home/user-1/.funny/jobs/j-1/log');
       expect(row?.exitPath).toBe('/home/user-1/.funny/jobs/j-1/exit');

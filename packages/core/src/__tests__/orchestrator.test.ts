@@ -412,6 +412,34 @@ describe('AgentOrchestrator', () => {
       expect(unexpectedExits).toHaveLength(0);
     });
 
+    test('a run restarted within the cleanup delay keeps its own result', async () => {
+      const unexpectedExits: string[] = [];
+      orchestrator.on('agent:unexpected-exit', (id) => unexpectedExits.push(id));
+      const result = {
+        type: 'result',
+        subtype: 'success',
+        is_error: false,
+        duration_ms: 1,
+        num_turns: 1,
+        total_cost_usd: 0,
+        session_id: 'sess-1',
+      } as CLIMessage;
+
+      await orchestrator.startAgent(baseOpts());
+      factory.lastProcess.simulateMessage(result);
+      factory.lastProcess.simulateExit(0); // schedules the delayed cleanup
+
+      // A second run for the same thread delivers its result before the first
+      // run's cleanup fires, and exits after it.
+      await orchestrator.startAgent(baseOpts());
+      const second = factory.lastProcess;
+      second.simulateMessage(result);
+      await new Promise((resolve) => setTimeout(resolve, 1100));
+      second.simulateExit(0);
+
+      expect(unexpectedExits).toHaveLength(0);
+    });
+
     test('emits unexpected-exit when no result received', async () => {
       const unexpectedExits: { id: string; code: number | null }[] = [];
       orchestrator.on('agent:unexpected-exit', (id, code) => unexpectedExits.push({ id, code }));

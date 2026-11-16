@@ -94,12 +94,17 @@ export function createSchedulerRunRepository(deps: SchedulerRunRepositoryDeps) {
     return rows.map((r) => r.threadId);
   }
 
-  /** Update the pipeline run ID once the dispatcher hands the thread off. */
+  /**
+   * Record the pipeline run once the dispatcher hands the thread off. The run
+   * is running from here on, so its retry due time is cleared: a row with
+   * `nextRetryAtMs` set is in the retry queue, and a retried run that kept it
+   * was dispatched again on every tick while it was still in flight.
+   */
   async function setPipelineRunId(threadId: string, pipelineRunId: string): Promise<void> {
     await dbRun(
       db
         .update(table)
-        .set({ pipelineRunId, updatedAtMs: Date.now() })
+        .set({ pipelineRunId, nextRetryAtMs: null, updatedAtMs: Date.now() })
         .where(eq(table.threadId, threadId)),
     );
   }

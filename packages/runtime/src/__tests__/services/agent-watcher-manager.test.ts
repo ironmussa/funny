@@ -18,9 +18,21 @@ const { rows, fakeWatchers, emitToUser } = vi.hoisted(() => {
         (w) => w.threadId === threadId && w.key === key && LIVE.has(w.status),
       );
     },
+    // Like the repository: a status is written only from a status the watcher
+    // machine allows, and the result says whether it was.
     async updateWatcher(id: string, patch: any) {
       const cur = rows.get(id);
-      if (cur) rows.set(id, { ...cur, ...patch });
+      if (!cur) return false;
+      const from: Record<string, string[]> = {
+        pending: ['pending', 'fired'],
+        fired: ['pending'],
+        expired: ['pending'],
+        done: ['fired'],
+        cancelled: ['pending', 'fired'],
+      };
+      if (patch.status !== undefined && !from[patch.status]?.includes(cur.status)) return false;
+      rows.set(id, { ...cur, ...patch });
+      return true;
     },
     async listPendingWatchers() {
       return [...rows.values()].filter((w) => w.status === 'pending');
@@ -116,6 +128,37 @@ describe('createOrReschedule — idempotent by (threadId, key)', () => {
     );
   });
 
+  test('a watcher cancelled in the meantime is not re-armed: a new one is created', async () => {
+    const first = await createOrReschedule({
+      threadId: 't1',
+      userId: 'user-1',
+      key: 'build',
+      label: 'build',
+      delayMs: 120_000,
+    });
+    // The cancel lands after the manager read the live row.
+    const readLive = fakeWatchers.getLiveWatcherByThreadKey;
+    fakeWatchers.getLiveWatcherByThreadKey = async (threadId: string, key: string) => {
+      const live = await readLive(threadId, key);
+      rows.set(first.id, { ...rows.get(first.id), status: 'cancelled' });
+      return live;
+    };
+    try {
+      const second = await createOrReschedule({
+        threadId: 't1',
+        userId: 'user-1',
+        key: 'build',
+        label: 'build',
+        delayMs: 300_000,
+      });
+      expect(second.id).not.toBe(first.id);
+      expect(rows.get(first.id).status).toBe('cancelled');
+      expect(rows.get(second.id).status).toBe('pending');
+    } finally {
+      fakeWatchers.getLiveWatcherByThreadKey = readLive;
+    }
+  });
+
   test('a different key creates a separate watcher', async () => {
     await createOrReschedule({
       threadId: 't1',
@@ -191,5 +234,41 @@ describe('watcher scanner lifecycle', () => {
     expect(listDue).not.toHaveBeenCalled();
     await vi.advanceTimersByTimeAsync(1);
     expect(listDue).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('watcher firing', () => {
+  test('a watcher cancelled after the scan read it does not wake the agent', async () => {
+    vi.useFakeTimers();
+    const { sendMessage } = await import('../../services/thread-service/messaging.js');
+    vi.mocked(sendMessage).mockClear();
+    startAgentWatchers();
+    const watcher = await createOrReschedule({
+      threadId: 't1',
+      userId: 'user-1',
+      key: 'build',
+      label: 'build',
+      delayMs: 60_000,
+    });
+    // The scan lists it as due; the user's cancel lands before it is fired.
+    const listDue = fakeWatchers.listDueWatchers;
+    fakeWatchers.listDueWatchers = async (now: number) => {
+      const due = await listDue(now);
+      rows.set(watcher.id, { ...rows.get(watcher.id), status: 'cancelled' });
+      return due;
+    };
+    try {
+      await vi.advanceTimersByTimeAsync(61_000);
+    } finally {
+      fakeWatchers.listDueWatchers = listDue;
+      vi.useRealTimers();
+    }
+
+    expect(rows.get(watcher.id).status).toBe('cancelled');
+    expect(sendMessage).not.toHaveBeenCalled();
+    expect(emitToUser).not.toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ type: 'watcher:fired' }),
+    );
   });
 });

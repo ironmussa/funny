@@ -7,6 +7,8 @@ import { describe, test, expect, beforeAll, afterAll, afterEach, vi } from 'vite
 const { fakeJobs } = vi.hoisted(() => ({
   fakeJobs: {
     listRunningJobs: vi.fn<() => Promise<Array<{ pid: number; exitPath: string }>>>(async () => []),
+    getJob: vi.fn<(id: string) => Promise<Record<string, unknown> | undefined>>(),
+    updateJob: vi.fn<(id: string, patch: Record<string, unknown>) => Promise<boolean>>(),
   },
 }));
 
@@ -25,7 +27,12 @@ vi.mock('../../services/shutdown-manager.js', () => ({
   ShutdownPhase: { SERVICES: 'services' },
 }));
 
-import { deriveStatus, startAgentJobs, stopAgentJobs } from '../../services/agent-job-manager.js';
+import {
+  cancelJob,
+  deriveStatus,
+  startAgentJobs,
+  stopAgentJobs,
+} from '../../services/agent-job-manager.js';
 
 let dir: string;
 beforeAll(() => {
@@ -38,6 +45,8 @@ afterEach(() => {
   stopAgentJobs();
   fakeJobs.listRunningJobs.mockReset();
   fakeJobs.listRunningJobs.mockResolvedValue([]);
+  fakeJobs.getJob.mockReset();
+  fakeJobs.updateJob.mockReset();
   vi.useRealTimers();
 });
 
@@ -102,5 +111,31 @@ describe('job scanner lifecycle', () => {
 
     await vi.advanceTimersByTimeAsync(5_000);
     expect(fakeJobs.listRunningJobs).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('cancelJob', () => {
+  const job = (status: string) => ({ id: 'j1', userId: 'u1', threadId: 't1', pid: null, status });
+
+  test('cancels a running job', async () => {
+    fakeJobs.getJob.mockResolvedValue(job('running'));
+    fakeJobs.updateJob.mockResolvedValue(true);
+
+    expect(await cancelJob('j1', 'u1')).toBe(true);
+    expect(fakeJobs.updateJob).toHaveBeenCalledWith('j1', { status: 'cancelled' });
+  });
+
+  test('leaves a finished job as it ended', async () => {
+    fakeJobs.getJob.mockResolvedValue(job('exited'));
+
+    expect(await cancelJob('j1', 'u1')).toBe(false);
+    expect(fakeJobs.updateJob).not.toHaveBeenCalled();
+  });
+
+  test('reports a job that finished while it was being cancelled', async () => {
+    fakeJobs.getJob.mockResolvedValue(job('running'));
+    fakeJobs.updateJob.mockResolvedValue(false); // the store refused running → cancelled
+
+    expect(await cancelJob('j1', 'u1')).toBe(false);
   });
 });

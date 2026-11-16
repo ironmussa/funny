@@ -289,6 +289,24 @@ describe('runner-manager service', () => {
   });
 
   describe('runner tasks', () => {
+    test('two polls at once hand a task to only one of them', async () => {
+      seedRunner(t.db as any, { id: 'r-race', userId: 'user-1', token: 'tok-race' });
+      await rm.createRunnerTask('r-race', 't1', 'start_agent', { threadId: 't1' } as any);
+
+      const polls = await Promise.all([rm.getPendingTasks('r-race'), rm.getPendingTasks('r-race')]);
+      expect(polls.map((p) => p.length).sort()).toEqual([0, 1]);
+    });
+
+    test('a task that has a result keeps it', async () => {
+      seedRunner(t.db as any, { id: 'r-done', userId: 'user-1', token: 'tok-done' });
+      const task = await rm.createRunnerTask('r-done', 't1', 'start_agent', {
+        threadId: 't1',
+      } as any);
+      await rm.getPendingTasks('r-done');
+      expect(await rm.completeTask('r-done', { taskId: task.taskId, success: true })).toBe(true);
+      expect(await rm.completeTask('r-done', { taskId: task.taskId, success: false })).toBe(false);
+    });
+
     test('createRunnerTask → getPendingTasks → completeTask', async () => {
       seedRunner(t.db as any, { id: 'r-task', userId: 'user-1', token: 'tok-task' });
 

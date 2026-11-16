@@ -71,6 +71,33 @@ describe('update', () => {
   });
 });
 
+describe('update — status writes follow the job machine', () => {
+  test('a cancel is not overwritten by the scanner’s late verdict', async () => {
+    await repo.insert(makeRow({ id: 'j1', status: 'running' }));
+    expect(await repo.update('j1', { status: 'cancelled' })).toBe(true);
+
+    expect(await repo.update('j1', { status: 'killed', exitCode: null })).toBe(false);
+    expect((await repo.getById('j1'))?.status).toBe('cancelled');
+  });
+
+  test('a finished job cannot be cancelled', async () => {
+    await repo.insert(makeRow({ id: 'j1', status: 'running' }));
+    await repo.update('j1', { status: 'failed', exitCode: 2 });
+
+    expect(await repo.update('j1', { status: 'cancelled' })).toBe(false);
+    const j = await repo.getById('j1');
+    expect(j?.status).toBe('failed');
+    expect(j?.exitCode).toBe(2);
+  });
+
+  test('a patch without a status applies; an unknown status is refused', async () => {
+    await repo.insert(makeRow({ id: 'j1', status: 'running' }));
+    expect(await repo.update('j1', { pid: 42 })).toBe(true);
+    expect(await repo.update('j1', { status: 'bogus' as never })).toBe(false);
+    expect(await repo.update('missing', { pid: 1 })).toBe(false);
+  });
+});
+
 describe('deleteByThread', () => {
   test('removes all of a thread’s jobs', async () => {
     await repo.insert(makeRow({ id: 'j1', threadId: 't1' }));

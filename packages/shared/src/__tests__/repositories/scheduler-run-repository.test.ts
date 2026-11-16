@@ -75,6 +75,17 @@ describe('setPipelineRunId / setRetry / touchLastEvent / addTokens', () => {
     expect(row?.pipelineRunId).toBe('pr-abc');
   });
 
+  test('setPipelineRunId takes a retried run out of the retry queue', async () => {
+    await repo.claim({ threadId: 't1', userId: 'user-1' });
+    await repo.setRetry({ threadId: 't1', attempt: 1, nextRetryAtMs: 5, lastError: 'boom' });
+
+    await repo.setPipelineRunId('t1', 'pr-retry');
+
+    const row = await repo.getRun('t1');
+    expect(row?.nextRetryAtMs).toBeNull();
+    expect(row?.attempt).toBe(1); // the attempt count is kept
+  });
+
   test('setRetry bumps attempt + records error and next due time', async () => {
     await repo.claim({ threadId: 't1', userId: 'user-1' });
     await repo.setRetry({

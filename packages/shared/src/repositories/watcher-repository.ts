@@ -17,6 +17,7 @@
 import { and, eq, inArray, lte } from 'drizzle-orm';
 
 import type { Watcher, WatcherStatus } from '../types.js';
+import { WATCHER_STATUS_WRITTEN_FROM } from '../watcher-machine.js';
 import type { RepoDeps } from './deps.js';
 
 export type WatcherRepositoryDeps = RepoDeps;
@@ -92,13 +93,24 @@ export function createWatcherRepository(deps: WatcherRepositoryDeps) {
     return dbAll<WatcherRow>(db.select().from(table).where(eq(table.userId, userId)));
   }
 
-  async function update(id: string, patch: WatcherPatch): Promise<void> {
-    await dbRun(
+  /**
+   * Patch a watcher. A patch that carries a `status` is a transition: it is
+   * applied only from a status the watcher machine allows (compare-and-set).
+   * Returns false when nothing was written — no such row, or the row is no
+   * longer in a status the transition is legal from.
+   */
+  async function update(id: string, patch: WatcherPatch): Promise<boolean> {
+    // An unknown status has no legal source: `inArray(…, [])` matches no row.
+    const from =
+      patch.status === undefined ? null : (WATCHER_STATUS_WRITTEN_FROM[patch.status] ?? []);
+    const rows = await dbAll<{ id: string }>(
       db
         .update(table)
         .set({ updatedAt: new Date().toISOString(), ...patch })
-        .where(eq(table.id, id)),
+        .where(from ? and(eq(table.id, id), inArray(table.status, [...from])) : eq(table.id, id))
+        .returning({ id: table.id }),
     );
+    return rows.length > 0;
   }
 
   async function deleteByThread(threadId: string): Promise<void> {

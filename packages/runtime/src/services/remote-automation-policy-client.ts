@@ -54,8 +54,12 @@ class RemoteAutomationPolicyClient {
       (await this.request('data:watcher_list_by_user', { payload: { userId } }))?.watchers ?? []
     );
   }
-  async updateWatcher(id: string, patch: Record<string, any>): Promise<void> {
-    await this.request('data:watcher_update', { payload: { id, patch } });
+  /** False when the server refused the status transition (see watcher-machine). */
+  async updateWatcher(id: string, patch: Record<string, any>): Promise<boolean> {
+    // A server from before the guard answers without `applied`: it wrote.
+    return (
+      (await this.request('data:watcher_update', { payload: { id, patch } }))?.applied !== false
+    );
   }
   async deleteWatchersByThread(threadId: string): Promise<void> {
     await this.request('data:watcher_delete_by_thread', { payload: { threadId } });
@@ -72,8 +76,9 @@ class RemoteAutomationPolicyClient {
   async listJobsByUser(userId: string): Promise<any[]> {
     return (await this.request('data:job_list_by_user', { payload: { userId } }))?.jobs ?? [];
   }
-  async updateJob(id: string, patch: Record<string, any>): Promise<void> {
-    await this.request('data:job_update', { payload: { id, patch } });
+  /** False when the server refused the status transition (see job-machine). */
+  async updateJob(id: string, patch: Record<string, any>): Promise<boolean> {
+    return (await this.request('data:job_update', { payload: { id, patch } }))?.applied !== false;
   }
   async deleteJobsByThread(threadId: string): Promise<void> {
     await this.request('data:job_delete_by_thread', { payload: { threadId } });

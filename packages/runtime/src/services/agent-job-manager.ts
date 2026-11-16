@@ -210,7 +210,12 @@ function armScanner(): void {
 }
 
 async function onTerminal(job: Job, status: JobStatus, exitCode: number | null): Promise<void> {
-  await getServices().jobs.updateJob(job.id, { status, exitCode });
+  const applied = await getServices().jobs.updateJob(job.id, { status, exitCode });
+  if (!applied) {
+    // Cancelled since the scan read it: the cancel stands and the agent is not woken.
+    log.info('Job no longer running, completion ignored', { namespace: NS, jobId: job.id });
+    return;
+  }
   const finished: Job = { ...job, status, exitCode };
   emit(job.userId, status === 'killed' ? 'job:killed' : 'job:exited', finished);
   log.info('Job finished', { namespace: NS, jobId: job.id, status, exitCode });
@@ -342,6 +347,8 @@ function renderCompletionToolInput(job: Job): Record<string, unknown> {
 export async function cancelJob(jobId: string, userId: string): Promise<boolean> {
   const job = (await getServices().jobs.getJob(jobId)) as Job | undefined;
   if (!job || job.userId !== userId) return false;
+  // A finished job keeps its outcome, and its pid may belong to another process by now.
+  if (job.status !== 'running') return false;
   if (job.pid != null) {
     // Negative pid → the whole process group (the detached session).
     try {
@@ -350,7 +357,8 @@ export async function cancelJob(jobId: string, userId: string): Promise<boolean>
       // already gone
     }
   }
-  await getServices().jobs.updateJob(jobId, { status: 'cancelled' });
+  const applied = await getServices().jobs.updateJob(jobId, { status: 'cancelled' });
+  if (!applied) return false;
   emit(userId, 'job:cancelled', { ...job, status: 'cancelled' });
   log.info('Job cancelled', { namespace: NS, jobId });
   return true;

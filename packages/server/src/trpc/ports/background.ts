@@ -7,7 +7,7 @@
 
 import { failure, type JobsPort, type WatchersPort } from '@funny/api';
 import type { Job, JobStatus, Watcher, WatcherStatus } from '@funny/shared';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, inArray } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 
 import { db } from '../../db/index.js';
@@ -43,7 +43,9 @@ export const watchersPort: WatchersPort = {
       await db
         .update(watchers)
         .set({ status: 'cancelled', updatedAt: new Date().toISOString() })
-        .where(eq(watchers.id, id));
+        // Compare-and-set: a watcher that reached a final status since the
+        // read above keeps it.
+        .where(and(eq(watchers.id, id), inArray(watchers.status, ['pending', 'fired'])));
     }
     const updated = await db.select().from(watchers).where(eq(watchers.id, id));
     return ok(toWatcher(updated[0]));

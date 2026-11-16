@@ -14,8 +14,9 @@
  * `Result.fromThrowable` per CLAUDE.md's neverthrow boundary mandate.
  */
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
+import { JOB_STATUS_WRITTEN_FROM } from '../job-machine.js';
 import type { Job, JobStatus } from '../types.js';
 import type { RepoDeps } from './deps.js';
 
@@ -59,13 +60,23 @@ export function createJobRepository(deps: JobRepositoryDeps) {
     return dbAll<JobRow>(db.select().from(table).where(eq(table.userId, userId)));
   }
 
-  async function update(id: string, patch: JobPatch): Promise<void> {
-    await dbRun(
+  /**
+   * Patch a job. A patch that carries a `status` is a transition: it is
+   * applied only from a status the job machine allows (compare-and-set).
+   * Returns false when nothing was written — no such row, or the row is no
+   * longer in a status the transition is legal from.
+   */
+  async function update(id: string, patch: JobPatch): Promise<boolean> {
+    // An unknown status has no legal source: `inArray(…, [])` matches no row.
+    const from = patch.status === undefined ? null : (JOB_STATUS_WRITTEN_FROM[patch.status] ?? []);
+    const rows = await dbAll<{ id: string }>(
       db
         .update(table)
         .set({ updatedAt: new Date().toISOString(), ...patch })
-        .where(eq(table.id, id)),
+        .where(from ? and(eq(table.id, id), inArray(table.status, [...from])) : eq(table.id, id))
+        .returning({ id: table.id }),
     );
+    return rows.length > 0;
   }
 
   async function deleteByThread(threadId: string): Promise<void> {

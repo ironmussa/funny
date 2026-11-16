@@ -42,4 +42,24 @@ describe('thread-status-machine', () => {
     expect(restart.status).toBe('running');
     expect(restart.resumeReason).toBe('fresh');
   });
+
+  test('transitions from the status on the row, not from a remembered one', () => {
+    // The agent fails while a permission request is pending: the machine says
+    // `failed`, but the row is saved as `waiting` (agent-event-router).
+    expect(transitionStatus(THREAD_ID, { type: 'START' }, 'pending').status).toBe('running');
+    expect(transitionStatus(THREAD_ID, { type: 'FAIL' }, 'running').status).toBe('failed');
+    // The user answers. A bridge that remembered `failed` rejected RESPOND and
+    // the thread was saved as `failed` while its agent started.
+    const resumed = transitionStatus(THREAD_ID, { type: 'RESPOND' }, 'waiting');
+    expect(resumed.status).toBe('running');
+    expect(resumed.resumeReason).toBe('waiting-response');
+  });
+
+  test('a restart of a running thread keeps its resume reason', () => {
+    transitionStatus(THREAD_ID, { type: 'FOLLOW_UP' }, 'completed');
+    expect(transitionStatus(THREAD_ID, { type: 'START' }, 'running')).toEqual({
+      status: 'running',
+      resumeReason: 'follow-up',
+    });
+  });
 });

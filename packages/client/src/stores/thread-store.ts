@@ -1324,7 +1324,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const { loadThreadsForProject } = get();
     const setupDone = <T extends Thread>(t: T): T => ({
       ...t,
-      status: t.status === 'setting_up' ? 'pending' : t.status,
+      // setting_up → pending; any other status is left alone.
+      status: transitionThreadStatus(threadId, { type: 'SETUP_COMPLETE' }, t.status, t.cost),
       branch: data.branch,
       ...(data.worktreePath ? { worktreePath: data.worktreePath } : {}),
     });

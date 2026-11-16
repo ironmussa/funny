@@ -123,6 +123,17 @@ describe('Runner Enrollment (device-link)', () => {
       expect(poll2.status).toBe('invalid');
     });
 
+    test('two polls at once deliver the credentials to only one of them', async () => {
+      const started = await enroll.startEnrollment({ hostname: 'h', os: 'linux', ip: '' });
+      await enroll.approve(started.userCode, 'user-1');
+
+      const polls = await Promise.all([
+        enroll.pollByToken(started.pollToken),
+        enroll.pollByToken(started.pollToken),
+      ]);
+      expect(polls.map((p) => p.status).sort()).toEqual(['approved', 'invalid']);
+    });
+
     test('approving an unknown code fails; a code cannot be approved twice', async () => {
       const miss = await enroll.approve('ZZZZ-ZZZZ', 'user-1');
       expect(miss).toEqual({ ok: false, reason: 'not_found' });

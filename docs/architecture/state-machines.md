@@ -1,0 +1,90 @@
+# State machines
+
+A lifecycle is a state machine whether or not the code says so: a `status` /
+`state` / `phase` column, a cluster of booleans, or a nullable timestamp, plus
+the code that changes it. This page says how this repository writes them down,
+and lists the ones that are still implicit.
+
+## The rule
+
+1. **One table.** The states and the legal transitions live in one module, as an
+   xstate machine in `packages/shared/src/` when more than one package needs it
+   (`thread-machine.ts`, `sandbox-machine.ts`) or in the owning package
+   otherwise (`packages/client/src/machines/`).
+2. **The stored state is the only state.** A transition is computed from the
+   state that was just read from where it is stored (the DB row, the collection
+   row) by a pure function: `resolveThreadTransition(from, event)`,
+   `nextSandboxState(from, event)`. Do not keep a long-lived actor as a second
+   copy of a stored status; it drifts as soon as anything else writes the row.
+   Actors are for state that lives only in memory (data loading, a terminal
+   spawn, a debounce).
+3. **Writes are compare-and-set.** A DB transition is
+   `UPDATE … WHERE id = ? AND state IN (<legal from-states>)` with the row count
+   checked, as `thread-sandbox-store.ts` `transition()` does. Reading the state,
+   checking it in JS and then writing by id alone is a race.
+4. **An event the state does not accept changes nothing**, and the caller can
+   tell (`accepted: false`, `applied: false`). Do not overwrite the result.
+
+## Explicit machines
+
+| Machine          | Definition                                                 | Enforced by                                                                                                                         |
+| ---------------- | ---------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Thread status    | `shared/src/thread-machine.ts`                             | `runtime/src/services/thread-status-machine.ts` (runner), `client/src/stores/thread-machine-bridge.ts` (client). See the gap below. |
+| Thread sandbox   | `shared/src/sandbox-machine.ts`                            | `server/src/services/thread-sandboxes/thread-sandbox-store.ts` (compare-and-set on every write)                                     |
+| Factory run      | `orchestrator/src/domain/factory-run.ts`                   | `orchestrator/src/domain/state-machine.ts`, `run-recorder.ts`                                                                       |
+| Thread data load | `client/src/machines/thread-data-machine.ts`               | `client/src/stores/thread-machine-bridge.ts`                                                                                        |
+| Terminal spawn   | `client/src/machines/terminal-spawn-machine.ts`            | `client/src/components/TerminalPanel.tsx`                                                                                           |
+| History refresh  | `client/src/machines/history-refresh-machine.ts`           | `client/src/hooks/use-git-history-auto-refresh.ts`                                                                                  |
+| Pending approval | `shared/src/repositories/pending-permission-repository.ts` | No table, but every write is a compare-and-set on `status = 'active'`                                                               |
+| Stage on start   | `runtime/src/services/thread-lifecycle-machine.ts`         | One rule (backlog / planning / review → in_progress when an agent starts)                                                           |
+
+## Implicit machines
+
+Found by reading the code; "risk" is what the code allows, not a reproduced
+failure unless it says so. Paths are under `packages/`. Ordered by value of
+making each one explicit.
+
+### Backend
+
+| #   | Lifecycle                         | States                                                                                     | Where it is written                                                                                                                                                                                                                          | Risk                                                                                                                                                                                                                                     |
+| --- | --------------------------------- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Thread status, around the machine | `ThreadStatus`                                                                             | `runtime/src/services/thread-service/{create,update,messaging,fork,rewind}.ts`, `ingest-mapper.ts`, `pipeline-adapter.ts`; `server/src/trpc/ports/threads.ts` `setStatus`; `server/src/services/data-handler.ts`, `data-message-handlers.ts` | About 30 writes set `threads.status` without asking the machine. `threads.setStatus` lets an owner set any status. The runner's `data:update_thread` is saved as sent. Next step: a guarded `transitionThread` in the thread repository. |
+| 2   | Scheduler run                     | row exists / `nextRetryAtMs` null or set / `pipelineRunId`                                 | `scheduler/src/service.ts`, `shared/src/repositories/scheduler-run-repository.ts`                                                                                                                                                            | The state is rebuilt from nullable columns on every tick. A retried run keeps `nextRetryAtMs` set while in flight, so it reads as a due retry again. No "gave up" state.                                                                 |
+| 3   | Watcher                           | `pending, fired, done, cancelled, expired`                                                 | `runtime/src/services/agent-watcher-manager.ts`, `server/src/trpc/ports/background.ts`                                                                                                                                                       | The scanner writes `fired` without checking, so a cancel that lands mid-scan is overwritten and the agent is woken. `done` is never written. The data channel accepts any string as status.                                              |
+| 4   | Background job                    | `running, exited, failed, killed, cancelled`                                               | `runtime/src/services/agent-job-manager.ts`                                                                                                                                                                                                  | `cancelJob` overwrites a finished job; the scanner overwrites a cancel.                                                                                                                                                                  |
+| 5   | Runner presence and tasks         | `online, busy, offline`; task `pending, running, completed, failed`                        | `server/src/services/runner-manager.ts`, `grpc/runner-grpc-server.ts`                                                                                                                                                                        | `runners.status` has two writers (HTTP heartbeat, gRPC presence). Two task polls can receive the same task.                                                                                                                              |
+| 6   | Thread stage                      | `ThreadStage`                                                                              | `server/src/trpc/ports/threads.ts`, `runtime/src/services/thread-service/{update,messaging}.ts`, `ingest-mapper.ts`                                                                                                                          | Ingest sets `review` over a user's `done`. Archiving sets the `archived` flag and emits stage `archived` without writing the stage column.                                                                                               |
+| 7   | Automation run                    | `running, completed, failed` (`archived` unused)                                           | `server/src/services/automation-scheduler.ts`, `automation-runs.ts`                                                                                                                                                                          | Completion checks `running` in JS and then writes by id; it can race the stale sweep.                                                                                                                                                    |
+| 8   | Runner enrollment                 | `pending, approved, consumed`                                                              | `server/src/services/runner-enrollment-service.ts`                                                                                                                                                                                           | `approved → consumed` is now a compare-and-set (two polls no longer both get credentials). `pending → approved` still reads, registers a runner, then writes by id.                                                                      |
+| 9   | Pipeline run                      | `PipelineRunStatus`                                                                        | `runtime/src/services/pipeline-manager.ts`                                                                                                                                                                                                   | The runner's `pipelines.createRun` returns `''` and `updateRun` does nothing, so runs are not stored and share one in-memory id. Fix persistence before modelling the states.                                                            |
+| 10  | Agent process                     | sets and flags in `core/src/agents/orchestrator.ts`, `runtime/src/services/agent-state.ts` | `agent-message-handler.ts`, `agent-event-router.ts`                                                                                                                                                                                          | `resultReceived` is cleared by a timer keyed by thread, not by process.                                                                                                                                                                  |
+
+Small and already guarded (no action): MCP OAuth state, git workflow mutex, test
+and command runners (keyed by run id), gRPC control negotiation, session
+presence epochs.
+
+### Client
+
+| #   | Lifecycle                                                                         | Where                                                                                                                                    | Risk                                                                                                                                                                                            |
+| --- | --------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Status event ordering                                                             | `client/src/hooks/ws-event-dispatch.ts`                                                                                                  | `running` is batched to the next frame while `waiting` and `agent:error` apply at once, so a queued `running` can land after them. The dedup map is cleared only by a result.                   |
+| 2   | Optimistic `running`                                                              | `client/src/stores/thread-store.ts` `appendOptimisticMessage` / `rollbackOptimisticMessage`                                              | Rollback removes the message but not the status, so a failed or locally handled send leaves the thread "running".                                                                               |
+| 3   | Waiting card answer                                                               | `components/thread/MemoizedMessageList.renderers.tsx`, `use-thread-handlers.ts`, `tool-cards/`                                           | The card is marked answered before the send succeeds; a send in flight drops the answer; no failed / retry state.                                                                               |
+| 4   | Commit / push / PR / merge                                                        | `client/src/hooks/use-commit-workflow.ts`, `stores/commit-progress-store.ts`                                                             | Four in-progress booleans and a string, cleared by one watcher whose "previous entry" is not keyed by thread; `step_update` ignores the workflow id.                                            |
+| 5   | Main view and compose mode                                                        | `client/src/stores/ui-store.ts`                                                                                                          | Fifteen-odd flags meant to be exclusive, each opener clearing a different subset. `newThreadIsScratch` outlives thread selection. One `mainView` union plus a compose union would replace them. |
+| 6   | Dictation / push-to-talk                                                          | `client/src/hooks/use-dictation.ts`, `use-push-to-talk.ts`                                                                               | `connecting` cannot be cancelled, so a slow connect records after the keys are released.                                                                                                        |
+| 7   | Circuit breaker                                                                   | `client-core/src/stores/circuit-breaker.ts`                                                                                              | A probe that finishes after a success can reopen the circuit.                                                                                                                                   |
+| 8   | Auth session                                                                      | `client/src/stores/auth-store.ts`                                                                                                        | `isAuthenticated` and `user` can disagree; a slow `initialize` can overwrite a finished `login`. `client-core/src/stores/auth-session.ts` already models this for client-gpuix.                 |
+| 9   | Browser panel session                                                             | `client/src/stores/browser-panel-store.ts`                                                                                               | Session ids are deterministic per thread, so a late `closed` from an earlier attach can revert a fresh one.                                                                                     |
+| 10  | Worktree setup steps                                                              | `client/src/stores/thread-store.ts`                                                                                                      | Step status is overwritten without an order check; progress for a failed setup is never dropped.                                                                                                |
+| 11  | Terminal tabs, clone view, runner enrollment dialog, extension draw / browse mode | `stores/terminal-store.ts`, `components/CloneRepoView.tsx`, `components/settings/RunnersSettings.tsx`, `chrome-extension/src/content.ts` | Local; boolean pairs that can both be set, or responses applied out of order.                                                                                                                   |
+
+## Adding or changing one
+
+- New lifecycle: write the table first (rule 1), then the store write (rule 3).
+  Test the table: every legal transition, and one illegal one per state.
+- Existing implicit one: move its writes behind one function that takes the
+  event, not the target status, before adding states.
+- When the server sends a status the client's machine has no transition for,
+  the fix is a transition in the shared machine, not an override at the call
+  site.

@@ -5,18 +5,21 @@
  * @domain layer: domain
  * @domain aggregate: Thread
  *
- * Server-side thread state machine bridge.
- * Manages XState actors per thread for status transitions with resume-reason tracking.
+ * Runner-side thread status transitions.
+ *
+ * The status stored on the thread row is the source of truth: every transition
+ * is computed from the status the caller just read (`currentStatus`), never
+ * from a status remembered here. The only thing kept in memory is the reason
+ * the thread last entered `running`, which is not persisted and which a
+ * `running` self-transition must carry over.
  */
 
 import type { ThreadStatus } from '@funny/shared';
 import {
-  threadMachine,
+  resolveThreadTransition,
   type ThreadEvent,
-  type ThreadContext,
   type ResumeReason,
 } from '@funny/shared/thread-machine';
-import { createActor } from 'xstate';
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -25,35 +28,16 @@ export interface TransitionResult {
   resumeReason: ResumeReason;
 }
 
-// ── Actor registry ────────────────────────────────────────────────
+// ── Resume reasons ────────────────────────────────────────────────
 
-type ThreadActor = ReturnType<typeof createActor<typeof threadMachine>>;
-const threadActors = new Map<string, ThreadActor>();
-
-function getOrCreateActor(
-  threadId: string,
-  initialStatus: ThreadStatus = 'pending',
-  cost: number = 0,
-): ThreadActor {
-  let actor = threadActors.get(threadId);
-  if (!actor) {
-    actor = createActor(threadMachine, {
-      input: { threadId, cost, resumeReason: null } as ThreadContext,
-    });
-    actor.start();
-    if (initialStatus !== 'pending') {
-      actor.send({ type: 'SET_STATUS', status: initialStatus });
-    }
-    threadActors.set(threadId, actor);
-  }
-  return actor;
-}
+const resumeReasons = new Map<string, NonNullable<ResumeReason>>();
 
 // ── Public API ────────────────────────────────────────────────────
 
 /**
- * Transition a thread's status via the state machine.
- * Returns the new status and the resumeReason context.
+ * Transition a thread's status via the state machine, from `currentStatus`
+ * (the status on the thread row). Returns the new status and the resume
+ * reason; an event `currentStatus` does not accept leaves both unchanged.
  */
 export function transitionStatus(
   threadId: string,
@@ -61,31 +45,25 @@ export function transitionStatus(
   currentStatus: ThreadStatus,
   cost: number = 0,
 ): TransitionResult {
-  const actor = getOrCreateActor(threadId, currentStatus, cost);
-  actor.send(event);
-  const snap = actor.getSnapshot();
-  return {
-    status: snap.value as ThreadStatus,
-    resumeReason: snap.context.resumeReason,
-  };
+  const { status, resumeReason } = resolveThreadTransition(currentStatus, event, {
+    cost,
+    resumeReason: resumeReasons.get(threadId) ?? null,
+  });
+  if (resumeReason) resumeReasons.set(threadId, resumeReason);
+  else resumeReasons.delete(threadId);
+  return { status, resumeReason };
 }
 
 /**
  * Read the current resumeReason for a thread without transitioning.
  */
 export function getResumeReason(threadId: string): ResumeReason {
-  const actor = threadActors.get(threadId);
-  if (!actor) return null;
-  return actor.getSnapshot().context.resumeReason;
+  return resumeReasons.get(threadId) ?? null;
 }
 
 /**
- * Clean up the actor for a thread. Call on delete/archive.
+ * Forget what is remembered about a thread. Call on delete/archive.
  */
 export function cleanupThreadActor(threadId: string): void {
-  const actor = threadActors.get(threadId);
-  if (actor) {
-    actor.stop();
-    threadActors.delete(threadId);
-  }
+  resumeReasons.delete(threadId);
 }

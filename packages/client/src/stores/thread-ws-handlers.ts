@@ -818,8 +818,8 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
   // back to the caller for the toast/notification + payload paths.
   const foundInSidebar = patchSidebarThread(threadId, (t) => {
     const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, data.cost ?? t.cost);
-    // Use server status as authoritative if xstate transition didn't change state
-    // (e.g., actor was in stale state that didn't accept the event)
+    // The server's result is authoritative: when the machine has no
+    // transition for it from the row's status, take the server status as is.
     const nextStatus = newStatus !== t.status ? newStatus : serverStatus;
     resultStatus = nextStatus;
     return applyResultToRow(t, nextStatus, data);

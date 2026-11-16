@@ -254,11 +254,14 @@ export async function pollByToken(pollToken: string): Promise<PollResult> {
   // Per-runner key (security H1): the runner gets K_r, never the root secret.
   const forwardingKey = rootSecret ? deriveRunnerForwardingKey(rootSecret, row.runnerId) : '';
 
-  // Deliver once: mark consumed so a re-poll can't re-issue the credentials.
-  await db
+  // Deliver once: approved → consumed is a compare-and-set, so of two polls
+  // that both read `approved` only the one that wins the write gets credentials.
+  const consumed = await db
     .update(runnerEnrollments)
     .set({ status: 'consumed' })
-    .where(eq(runnerEnrollments.id, row.id));
+    .where(and(eq(runnerEnrollments.id, row.id), eq(runnerEnrollments.status, 'approved')))
+    .returning({ id: runnerEnrollments.id });
+  if (consumed.length === 0) return { status: 'invalid' };
 
   return {
     status: 'approved',

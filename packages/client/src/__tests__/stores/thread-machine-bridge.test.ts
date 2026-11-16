@@ -22,8 +22,7 @@ const {
   invalidateThreadData,
   isThreadDataPrefetched,
   cleanupThreadActor,
-  getThreadActor,
-  getThreadActorCountForTests,
+  transitionThreadStatus,
 } = await import('@/stores/thread-machine-bridge');
 
 function fakeThread(id: string): ThreadWithMessages {
@@ -283,19 +282,41 @@ describe('thread-machine-bridge — data actors', () => {
     });
   });
 
-  describe('thread actors', () => {
-    test('caps the actor registry to avoid retaining every visited thread', () => {
-      const ids = Array.from({ length: 70 }, () => uniqueId('status-actor'));
+  describe('transitionThreadStatus', () => {
+    test('judges each event against the status it is given, not a remembered one', () => {
+      const id = uniqueId('status');
+      // The thread completes...
+      expect(transitionThreadStatus(id, { type: 'COMPLETE' }, 'running')).toBe('completed');
+      // ...then a list refresh says it is running again (a follow-up sent from
+      // another tab). The next event must apply to `running`: a bridge that
+      // still remembered `completed` dropped it and reverted the row.
+      expect(transitionThreadStatus(id, { type: 'SET_STATUS', status: 'waiting' }, 'running')).toBe(
+        'waiting',
+      );
+    });
 
-      for (const id of ids) {
-        getThreadActor(id, 'running');
-      }
+    test('applying the same event to the row and to the loaded payload agrees', () => {
+      const id = uniqueId('status');
+      const event = { type: 'START' } as const;
+      expect(transitionThreadStatus(id, event, 'completed')).toBe('running');
+      expect(transitionThreadStatus(id, event, 'completed')).toBe('running');
+    });
 
-      expect(getThreadActorCountForTests()).toBeLessThanOrEqual(64);
+    test('a failed sandbox thread follows the server back to setting_up, then pending', () => {
+      const id = uniqueId('status');
+      const settingUp = transitionThreadStatus(
+        id,
+        { type: 'SET_STATUS', status: 'setting_up' },
+        'failed',
+      );
+      expect(settingUp).toBe('setting_up');
+      expect(transitionThreadStatus(id, { type: 'SETUP_COMPLETE' }, settingUp)).toBe('pending');
+    });
 
-      for (const id of ids) {
-        cleanupThreadActor(id);
-      }
+    test('an event the status does not accept leaves it unchanged', () => {
+      const id = uniqueId('status');
+      expect(transitionThreadStatus(id, { type: 'SETUP_COMPLETE' }, 'running')).toBe('running');
+      expect(transitionThreadStatus(id, null, 'running')).toBe('running');
     });
   });
 });

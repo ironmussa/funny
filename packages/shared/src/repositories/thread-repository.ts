@@ -43,10 +43,17 @@ export type ThreadRepositoryDeps = RepoDeps & {
   commentRepo: ReturnType<typeof createCommentRepository>;
   /** Stage history repository instance (for recordStageChange) */
   stageHistoryRepo: ReturnType<typeof createStageHistoryRepository>;
+  /**
+   * Told about every status write, with the status the row had just before.
+   * Observation only: the write is not checked or blocked. When set, a status
+   * write costs one extra read.
+   */
+  onStatusWrite?: (write: { threadId: string; from: string | null; to: string }) => void;
 };
 
 export function createThreadRepository(deps: ThreadRepositoryDeps) {
-  const { db, schema, dbAll, dbGet, dbRun, log, commentRepo, stageHistoryRepo } = deps;
+  const { db, schema, dbAll, dbGet, dbRun, log, commentRepo, stageHistoryRepo, onStatusWrite } =
+    deps;
   const { getCommentCounts } = commentRepo;
   const { recordStageChange } = stageHistoryRepo;
 
@@ -325,6 +332,20 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
       contextRecoveryReason: string | null;
     }>,
   ) {
+    if (updates.status !== undefined && onStatusWrite) {
+      const before = await dbGet<{ status: string }>(
+        db
+          .select({ status: schema.threads.status })
+          .from(schema.threads)
+          .where(eq(schema.threads.id, id)),
+      );
+      try {
+        onStatusWrite({ threadId: id, from: before?.status ?? null, to: updates.status });
+      } catch {
+        // An observer must never fail the write it observes.
+      }
+    }
+
     if (updates.sessionId !== undefined) {
       // Persist ownership before replacing/clearing the active session. INSERT SELECT
       // avoids a read/write gap and also works for pre-migration threads.

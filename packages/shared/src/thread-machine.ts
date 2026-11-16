@@ -418,6 +418,38 @@ export function resolveThreadTransition(
   };
 }
 
+const STATUS_WRITE_EVENTS: ThreadEvent['type'][] = [
+  'START',
+  'SETUP_COMPLETE',
+  'RESPOND',
+  'RESTART',
+  'FOLLOW_UP',
+  'COMPLETE',
+  'FAIL',
+  'WAIT',
+  'STOP',
+  'INTERRUPT',
+];
+
+/** Whether `value` is a status the thread machine has (a state of it). */
+export function isThreadStatus(value: string): value is ThreadStatus {
+  return Object.hasOwn(threadMachine.states, value);
+}
+
+/**
+ * Whether storing `to` over `from` is a transition the machine has: some
+ * event leads from one to the other (or nothing changes). Writers that store a
+ * target status rather than an event (the runner's `data:update_thread`, the
+ * pipeline `set_status` action) are checked against this.
+ */
+export function isThreadStatusWriteModelled(from: ThreadStatus, to: ThreadStatus): boolean {
+  if (from === to) return true;
+  if (resolveThreadTransition(from, { type: 'SET_STATUS', status: to }).status === to) return true;
+  return STATUS_WRITE_EVENTS.some(
+    (type) => resolveThreadTransition(from, { type } as ThreadEvent).status === to,
+  );
+}
+
 /**
  * Map WebSocket event types to machine events.
  * Used by the client to translate incoming WS messages.

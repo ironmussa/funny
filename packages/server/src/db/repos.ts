@@ -19,6 +19,7 @@ import {
   createWatcherRepository,
 } from '@funny/shared/repositories';
 
+import { observeThreadStatusWrite } from '../services/thread-status-observer.js';
 import { db, dbAll, dbGet, dbRun } from './index.js';
 import * as schema from './schema.js';
 
@@ -42,7 +43,13 @@ export const repos = {
   schedulerRuns: lazy(() => createSchedulerRunRepository(deps)),
   stageHistory,
   threads: lazy(() =>
-    createThreadRepository({ ...deps, commentRepo: comments(), stageHistoryRepo: stageHistory() }),
+    createThreadRepository({
+      ...deps,
+      commentRepo: comments(),
+      stageHistoryRepo: stageHistory(),
+      // Log-only: counts status writes the thread machine does not model.
+      onStatusWrite: observeThreadStatusWrite,
+    }),
   ),
   threadShares: lazy(() => createThreadShareRepository(deps)),
   toolCalls: lazy(() => createToolCallRepository(deps)),

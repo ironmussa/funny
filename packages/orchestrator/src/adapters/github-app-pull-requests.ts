@@ -279,7 +279,11 @@ export function createGithubAppPullRequests(deps: {
       .map((): AutoMergeResult => ({ kind: 'merged', method }))
       .orElse((e) =>
         e.status === 405 || e.status === 409
-          ? okAsync<AutoMergeResult, IssueSourceError>({ kind: 'not-mergeable', reason: e.message })
+          ? okAsync<AutoMergeResult, IssueSourceError>({
+              kind: 'not-mergeable',
+              reason: e.message,
+              refused: true,
+            })
           : errAsync(e),
       );
   }

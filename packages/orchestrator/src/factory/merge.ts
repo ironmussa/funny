@@ -20,6 +20,13 @@ import { autoMergeFor, type FactoryProject } from '../settings/schema.js';
 import { prNumberOf, READY_POLL_MS, type FactoryContext } from './context.js';
 import type { Failures } from './failures.js';
 
+/**
+ * After GitHub refuses a merge (another pull request just landed, a push), the
+ * pull request's state is changing: look again at the next tick, not after a
+ * full poll, so a conflict is found and fixed in minutes.
+ */
+const REFUSED_MERGE_RECHECK_MS = 60 * 1000;
+
 export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
   const { runs, log } = ctx;
   const { giveUp, onInfraFailure } = failures;
@@ -71,17 +78,24 @@ export function createMergeFollowUp(ctx: FactoryContext, failures: Failures) {
 
   /** What enabling auto-merge leaves; `from` is the state the run is in now. */
   function afterAutoMerge(project: FactoryProject, run: FactoryRun, result: AutoMergeResult) {
-    const merging = (reason: string) =>
+    const merging = (reason: string, recheckMs?: number) =>
       run.state === 'merging'
-        ? runs.update(run, { reason, nextCheckAt: ctx.later() })
-        : runs.transition(run, 'merging', { reason, nextCheckAt: ctx.later(), infraRetries: 0 });
+        ? runs.update(run, { reason, nextCheckAt: ctx.later(recheckMs) })
+        : runs.transition(run, 'merging', {
+            reason,
+            nextCheckAt: ctx.later(recheckMs),
+            infraRetries: 0,
+          });
     switch (result.kind) {
       case 'unavailable':
         return run.state === 'merging'
           ? merging(`not merged: ${result.reason}`)
           : ready(project, run, `not merged: ${result.reason}`);
       case 'not-mergeable':
-        return merging(`waiting until GitHub can merge it: ${result.reason}`);
+        return merging(
+          `waiting until GitHub can merge it: ${result.reason}`,
+          result.refused ? REFUSED_MERGE_RECHECK_MS : undefined,
+        );
       case 'merged':
         return cleanUp(project, merging('merged'));
       default:

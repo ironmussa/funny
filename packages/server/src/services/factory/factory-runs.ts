@@ -40,6 +40,18 @@ const TERMINAL: ReadonlySet<FactoryRunState> = new Set(TERMINAL_STATES);
  */
 const PARKED_STATES = ['waiting_human'] as const satisfies FactoryRunState[];
 
+/** States in which a flow is driving the run: neither terminal nor parked. */
+export const IN_FLIGHT_STATES = [
+  'queued',
+  'working',
+  'pr_open',
+  'waiting_ci',
+  'fixing',
+] as const satisfies FactoryRunState[];
+
+/** States a run can be retried or taken over from. */
+const REOPENABLE_STATES = ['failed', 'waiting_human'] as const satisfies FactoryRunState[];
+
 export interface FactoryRunView {
   id: string;
   factoryId: string;
@@ -251,6 +263,48 @@ export function createFactoryRunsRepository(
           .where(
             and(eq(factoryRuns.id, runId), notInArray(factoryRuns.state, [...TERMINAL_STATES])),
           )
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
+    },
+
+    /** One run by its id, or null. */
+    get(runId: string): ResultAsync<FactoryRunView | null, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db.select().from(factoryRuns).where(eq(factoryRuns.id, runId)),
+        storage,
+      ).map((rows) => (rows[0] ? toView(rows[0]) : null));
+    },
+
+    /** The parked or failed runs a thread belongs to (a member following up on it). */
+    reopenableByThread(threadId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select()
+          .from(factoryRuns)
+          .where(inArray(factoryRuns.state, [...REOPENABLE_STATES])),
+        storage,
+      ).map((rows) => rows.map(toView).filter((run) => run.threadIds.includes(threadId)));
+    },
+
+    /**
+     * Put a failed or parked run back in flight (`queued`) with `threadIds` as
+     * the steps to replay — a retry or a take-over. Resolves whether it was
+     * reopenable; the unique index refuses it while another run of the issue
+     * is in flight (a storage error).
+     */
+    reopen(runId: string, threadIds: string[]): ResultAsync<boolean, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set({
+            state: 'queued',
+            currentStep: null,
+            completedAt: null,
+            launchStartedAt: null,
+            threadIds: JSON.stringify(threadIds),
+          })
+          .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...REOPENABLE_STATES])))
           .returning({ id: factoryRuns.id }),
         storage,
       ).map((rows) => rows.length > 0);

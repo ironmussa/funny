@@ -16,8 +16,11 @@
  *
  * How a run ends:
  * - the flow completes → `waiting_human`, unless it merged (`merged`);
- * - the flow fails after an agent ran → `failed` (an attempt: the watcher
- *   re-admits the issue up to `MAX_ATTEMPTS` times);
+ * - the flow fails once its pull request is open (e.g. CI still red after
+ *   the fixes the flow allows) → `waiting_human` at the failed step: the work
+ *   is on GitHub for the member to take over or retry, and they are notified;
+ * - the flow fails before that, after an agent ran → `failed` (an attempt: the
+ *   watcher re-admits the issue up to `MAX_ATTEMPTS` times);
  * - the flow fails before any agent ran (e.g. the runner is offline) → the run
  *   is dropped, not counted, and a later tick tries again;
  * - the run was stopped, or the watcher shut down → nothing more is written.
@@ -35,6 +38,7 @@ import type {
   StartThreadError,
   StartThreadInput,
 } from '../runner-thread-launcher.js';
+import { sendPush } from '../web-push.js';
 import { createFactoryActionProvider, type FactoryRunScope } from './factory-action-provider.js';
 import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
@@ -43,11 +47,11 @@ import type {
   FactoryRunView,
   UpdateRunInput,
 } from './factory-runs.js';
-import type { EnabledFactory } from './factory-settings.js';
+import type { WatchedFactory } from './factory-settings.js';
 import { createThreadWaits, type ThreadOutcome } from './factory-thread-waits.js';
 
 export interface FactoryRunJob {
-  factory: EnabledFactory;
+  factory: WatchedFactory;
   repo: string;
   mode: 'local' | 'worktree';
   issue: FactoryIssue;
@@ -60,6 +64,23 @@ export interface FactoryFlowRunsDeps {
   launch(input: StartThreadInput): Promise<Result<StartedThread, StartThreadError>>;
   waitThread?: (threadId: string, signal: AbortSignal) => Promise<ThreadOutcome>;
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
+  /** Tell the enabler a run waits for them; defaults to Web Push. */
+  notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
+}
+
+export interface WaitingNotice {
+  title: string;
+  body: string;
+  url: string;
+  tag: string;
+}
+
+/** What the flow left behind when it ended, for `settle`. */
+interface FlowTrace {
+  agentsRan: boolean;
+  prOpen: boolean;
+  /** The last step the flow entered. */
+  step: string | null;
 }
 
 /** Allowance for the runner's clock being behind the server's when matching a launch. */
@@ -133,20 +154,55 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     }
   }
 
+  const notify = deps.notify ?? sendPush;
+
+  /** Tell the enabler their run waits for them; best-effort. */
+  async function noticeWaiting(job: FactoryRunJob, why: string): Promise<void> {
+    await notify(job.factory.userId, {
+      title: `Issue #${job.issue.number} needs you`,
+      body: why.length > 200 ? `${why.slice(0, 199)}…` : why,
+      url: `/projects/${job.factory.projectId}`,
+      tag: `factory-run-${job.run.id}`,
+    }).catch((error: unknown) =>
+      log.warn('Issue factory notification failed', {
+        namespace: 'factory',
+        runId: job.run.id,
+        error: error instanceof Error ? error.message : String(error),
+      }),
+    );
+  }
+
+  /**
+   * Leave the run for the member — completed without a merge, or failed (at
+   * `failedStep`) with its pull request open — and tell them.
+   */
+  async function park(job: FactoryRunJob, failedStep: string | null, error?: string) {
+    const parked = await deps.runs.updateInFlight(job.run.id, {
+      state: 'waiting_human',
+      currentStep: failedStep,
+    });
+    if (parked.isErr() || !parked.value) return;
+    const why = failedStep
+      ? `The ${failedStep} step failed: ${error ?? ''}`.trim()
+      : 'Its pull request is ready.';
+    await noticeWaiting(job, why);
+  }
+
   /** Record the flow's end in the run (see the module comment). */
   async function settle(
     job: FactoryRunJob,
     outcome: 'completed' | 'failed' | 'cancelled',
-    agentsRan: boolean,
+    trace: FlowTrace,
     error?: string,
   ): Promise<void> {
     const { run } = job;
     if (outcome === 'cancelled') return;
-    if (outcome === 'failed' && !agentsRan) {
+    if (outcome === 'failed' && !trace.agentsRan) {
       await deps.runs.remove(run.id);
+    } else if (outcome === 'failed' && !trace.prOpen) {
+      await deps.runs.updateInFlight(run.id, { state: 'failed', currentStep: trace.step });
     } else {
-      const state = outcome === 'completed' ? 'waiting_human' : 'failed';
-      await deps.runs.updateInFlight(run.id, { state, currentStep: null });
+      await park(job, outcome === 'failed' ? trace.step : null, error);
     }
     log.info('Issue factory run ended', {
       namespace: 'factory',
@@ -168,15 +224,20 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       await flowUnavailable(job, flow.error);
       return 'not-started';
     }
-    let agentsRan = job.run.threadIds.length > 0;
-    if (agentsRan) agentStarted();
+    const trace: FlowTrace = {
+      agentsRan: job.run.threadIds.length > 0,
+      prOpen: job.run.prUrl !== null,
+      step: null,
+    };
+    if (trace.agentsRan) agentStarted();
 
     const record = async (input: UpdateRunInput): Promise<void> => {
       const live = await deps.runs.updateInFlight(job.run.id, input);
       // Stopped (or finished) elsewhere: stop driving it.
       if (live.isOk() && !live.value) controller.abort();
+      if (input.prUrl) trace.prOpen = true;
       if (input.threadIds) {
-        agentsRan = true;
+        trace.agentsRan = true;
         agentStarted();
       }
     };
@@ -222,14 +283,16 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       {
         signal: controller.signal,
         onStateChange: (change) => {
-          if (change.kind === 'entering') void record({ currentStep: change.nodeName });
+          if (change.kind !== 'entering') return;
+          trace.step = change.nodeName;
+          void record({ currentStep: change.nodeName });
         },
       },
     );
     // A stop or a shutdown fails the step in flight; that is not the flow failing.
     const outcome = controller.signal.aborted ? 'cancelled' : result.outcome;
-    await settle(job, outcome, agentsRan, result.error);
-    return agentsRan ? 'started' : 'not-started';
+    await settle(job, outcome, trace, result.error);
+    return trace.agentsRan ? 'started' : 'not-started';
   }
 
   return {
@@ -260,6 +323,12 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     },
 
     isActive: (runId: string) => active.has(runId),
+
+    /** Stop driving one run's flow (the run was stopped); nothing more is written for it. */
+    stop(runId: string): void {
+      active.get(runId)?.abort();
+      active.delete(runId);
+    },
 
     /** Stop driving every flow (shutdown); their runs resume on the next start. */
     stopAll(): void {

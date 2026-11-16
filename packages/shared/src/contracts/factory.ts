@@ -33,6 +33,9 @@ const label = z
 
 export const factoryProjectInput = z.object({ projectId }).strict();
 
+/** One run of the caller's factory for the project (stop, retry). */
+export const factoryRunInput = z.object({ projectId, runId: z.string().min(1) }).strict();
+
 export const saveFactorySettingsInput = z
   .object({
     projectId,

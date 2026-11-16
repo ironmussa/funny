@@ -103,4 +103,51 @@ describe('factory over tRPC', () => {
     const res = await t.app.request('/api/factory/projects/p1', { headers: headersFor('alice') });
     expect(res.status).toBe(404);
   });
+
+  const mutate = async (userId: string, path: string, input: unknown) => {
+    const res = await t.app.request(`/api/trpc/factory.${path}`, {
+      method: 'POST',
+      headers: headersFor(userId),
+      body: JSON.stringify(input),
+    });
+    return { status: res.status, body: ((await res.json()) as any).result?.data };
+  };
+
+  async function seededRun(state: string) {
+    await save('alice', { projectId: 'p1', enabled: false });
+    const { createFactorySettingsService } =
+      await import('../../services/factory/factory-settings.js');
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const factoryId = (
+      await createFactorySettingsService().factoryId('alice', 'p1')
+    )._unsafeUnwrap()!;
+    return (
+      await createFactoryRunsRepository().start({ factoryId, issueNumber: 7, state: state as any })
+    )._unsafeUnwrap();
+  }
+
+  test('the owner stops a run in flight and retries a failed one', async () => {
+    const running = await seededRun('working');
+    const stopped = await mutate('alice', 'stopRun', { projectId: 'p1', runId: running.id });
+    expect(stopped).toMatchObject({ status: 200, body: { state: 'stopped' } });
+    // A stopped run has ended: neither stop nor retry applies.
+    expect((await mutate('alice', 'stopRun', { projectId: 'p1', runId: running.id })).status).toBe(
+      409,
+    );
+    expect((await mutate('alice', 'retryRun', { projectId: 'p1', runId: running.id })).status).toBe(
+      409,
+    );
+
+    const failed = await seededRun('failed');
+    const retried = await mutate('alice', 'retryRun', { projectId: 'p1', runId: failed.id });
+    expect(retried).toMatchObject({ status: 200, body: { state: 'queued' } });
+  });
+
+  test("another user's run is not found, and a viewer cannot control runs", async () => {
+    const run = await seededRun('working');
+    expect((await mutate('bob', 'stopRun', { projectId: 'p1', runId: run.id })).status).toBe(404);
+    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    expect((await mutate('vic', 'stopRun', { projectId: 'p1', runId: run.id })).status).toBe(403);
+    expect((await mutate('alice', 'stopRun', { projectId: 'p1', runId: 'nope' })).status).toBe(404);
+  });
 });

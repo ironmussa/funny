@@ -31,16 +31,21 @@ import { projectRole } from '../../lib/server-authorizer.js';
 import { decideProjectAccess } from '../../middleware/project-access.js';
 import { startThreadOnRunner, type RunnerPorts } from '../runner-thread-launcher.js';
 import type { ThreadRuntimeMode } from '../thread-sandboxes/project-sandbox-settings.js';
-import { createFactoryFlowRuns, type FactoryRunJob } from './factory-flow-runs.js';
+import {
+  createFactoryFlowRuns,
+  type FactoryRunJob,
+  type WaitingNotice,
+} from './factory-flow-runs.js';
 import type { FactoryFlow, FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
-import { createFactoryRunsRepository } from './factory-runs.js';
+import { createFactoryRunsRepository, IN_FLIGHT_STATES } from './factory-runs.js';
 import {
   disableFactory,
-  getEnabledFactory,
-  listEnabledFactories,
-  type EnabledFactory,
+  getWatchedFactory,
+  listWatchedFactories,
+  type WatchedFactory,
 } from './factory-settings.js';
+import { stopFactoryThreads } from './factory-thread-stop.js';
 import type { ThreadOutcome } from './factory-thread-waits.js';
 
 /** A repeating poll — a real interval in production, a fake in tests. */
@@ -64,6 +69,8 @@ export interface FactoryWatcherDeps {
   resolveRuntime?: (userId: string, projectId: string) => Promise<ThreadRuntimeMode>;
   /** Thread wait override for tests; defaults to the DB status plus the terminal signal. */
   waitThread?: (threadId: string, signal: AbortSignal) => Promise<ThreadOutcome>;
+  /** Notification override for tests; defaults to Web Push. */
+  notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
   /** Flow loader override for tests; defaults to the default branch, then the built-ins. */
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
 }
@@ -117,8 +124,9 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     launch: (input) => (d.launch ?? startThreadOnRunner)(input, d.ports),
     waitThread: d.waitThread,
     loadFlow: d.loadFlow,
+    notify: d.notify,
   });
-  for (const factory of await listEnabledFactories()) schedule(factory);
+  for (const factory of await listWatchedFactories([...IN_FLIGHT_STATES])) schedule(factory);
   log.info('Issue factory watcher started', { namespace: 'factory', jobs: jobs.size });
 }
 
@@ -136,7 +144,7 @@ export function stopFactoryWatcher(): void {
 export async function rescheduleFactory(id: string): Promise<void> {
   unscheduleFactory(id);
   if (!deps) return;
-  const factory = await getEnabledFactory(id);
+  const factory = await getWatchedFactory(id);
   if (factory) schedule(factory);
 }
 
@@ -151,8 +159,32 @@ export function scheduledFactoryCount(): number {
   return jobs.size;
 }
 
-function schedule(factory: EnabledFactory): void {
+/**
+ * Look at a factory now instead of at its next poll, scheduling it if it was
+ * not polled (a paused factory whose run was retried or taken over).
+ */
+export async function pokeFactory(id: string): Promise<void> {
   if (!deps) return;
+  if (!jobs.has(id)) {
+    const factory = await getWatchedFactory(id);
+    if (!factory) return;
+    schedule(factory);
+  }
+  await tick(id);
+}
+
+/** Stop driving a run's flow in this process (the run was stopped). */
+export function stopFactoryFlow(runId: string): void {
+  flows?.stop(runId);
+}
+
+/** The runner ports the watcher acts through, while it runs. */
+export function factoryRunnerPorts(): RunnerPorts | null {
+  return deps?.ports ?? null;
+}
+
+function schedule(factory: WatchedFactory): void {
+  if (!deps || jobs.has(factory.id)) return;
   const job = (deps.createPoll ?? startIntervalPoll)(() => tick(factory.id));
   jobs.set(factory.id, job);
 }
@@ -181,40 +213,64 @@ function tick(id: string): Promise<void> {
 async function fire(id: string): Promise<void> {
   if (!deps || !runs) return;
   // Re-read so a disable or an edit that raced the tick is honored.
-  const factory = await getEnabledFactory(id);
-  if (!factory) {
+  const factory = await getWatchedFactory(id);
+  if (!factory || !(await hasWork(factory))) {
     unscheduleFactory(id);
     return;
   }
   // Resuming and admitting both act as the enabler: both need their access.
   if (!(await enablerCanStillSteer(factory))) return;
-  // The enabler's runtime decides where the agent runs. Phase 2 launches only
-  // local and worktree threads; a sandbox runtime is NOT downgraded to local
-  // (issue text is untrusted input, and the enabler chose isolation), so the
-  // factory waits until sandbox launches are supported.
+  const target = await resolveTarget(factory);
+  if (!target) return;
+  await resumeRuns(factory, target.repo, target.mode);
+  // A paused factory finishes its runs but admits nothing new.
+  if (factory.enabled) await admitFromGithub(factory, target.repo, target.mode);
+}
+
+/** An enabled factory, or a paused one with runs still in flight. */
+async function hasWork(factory: WatchedFactory): Promise<boolean> {
+  if (factory.enabled) return true;
+  const active = await runs!.countActive(factory.id);
+  return active.isErr() || active.value > 0;
+}
+
+/**
+ * Where the factory's runs execute: the enabler's runtime and the project's
+ * repository, or null (logged) when it cannot run now. A sandbox runtime is
+ * NOT downgraded to local (issue text is untrusted input, and the enabler
+ * chose isolation): the factory waits until sandbox launches are supported.
+ */
+async function resolveTarget(
+  factory: WatchedFactory,
+): Promise<{ mode: LaunchMode; repo: string } | null> {
   const mode = await resolveMode(factory.userId, factory.projectId);
   if (!mode) {
     log.info('Issue factory tick skipped: sandbox runtime is not supported yet', {
       namespace: 'factory',
-      factoryId: id,
+      factoryId: factory.id,
       projectId: factory.projectId,
     });
-    return;
+    return null;
   }
-
-  const repo = await deps.github.resolveRepo(factory.userId, factory.projectId);
+  const repo = await deps!.github.resolveRepo(factory.userId, factory.projectId);
   if (!repo) {
     log.info('Issue factory tick skipped: repository not resolvable', {
       namespace: 'factory',
-      factoryId: id,
+      factoryId: factory.id,
       projectId: factory.projectId,
     });
-    return;
+    return null;
   }
+  return { mode, repo };
+}
 
-  await resumeRuns(factory, repo, mode);
-
-  const issues = await deps.github.listReadyIssues({
+/** List the labelled issues and admit what fits. */
+async function admitFromGithub(
+  factory: WatchedFactory,
+  repo: string,
+  mode: LaunchMode,
+): Promise<void> {
+  const issues = await deps!.github.listReadyIssues({
     repo,
     ownerId: factory.userId,
     projectId: factory.projectId,
@@ -223,13 +279,12 @@ async function fire(id: string): Promise<void> {
   if (issues.isErr()) {
     log.warn('Issue factory could not list issues', {
       namespace: 'factory',
-      factoryId: id,
+      factoryId: factory.id,
       repo,
       error: issues.error.message,
     });
     return;
   }
-
   await admitIssues(factory, repo, mode, issues.value);
 }
 
@@ -239,11 +294,12 @@ async function fire(id: string): Promise<void> {
  * be lowered or a member removed after the factory was turned on. When they
  * lost it, the factory is turned off (and audited) instead of acting for them.
  */
-async function enablerCanStillSteer(factory: EnabledFactory): Promise<boolean> {
+async function enablerCanStillSteer(factory: WatchedFactory): Promise<boolean> {
   const check = deps?.checkAccess ?? defaultCheckAccess;
   if (await check(factory.userId, factory.projectId)) return true;
   await disableFactory(factory.id);
   unscheduleFactory(factory.id);
+  await stopOpenRuns(factory);
   audit({
     action: 'factory.disabled_access_lost',
     actorId: factory.userId,
@@ -253,13 +309,28 @@ async function enablerCanStillSteer(factory: EnabledFactory): Promise<boolean> {
   return false;
 }
 
+/** Stop every run of a factory that lost its enabler's access: nothing acts for them now. */
+async function stopOpenRuns(factory: WatchedFactory): Promise<void> {
+  if (!runs || !deps) return;
+  const all = await runs.list(factory.id);
+  if (all.isErr()) return;
+  const open = all.value.filter((run) => !['merged', 'failed', 'stopped'].includes(run.state));
+  for (const run of open) flows?.stop(run.id);
+  await runs.stopMany(open.map((run) => run.id));
+  await stopFactoryThreads(
+    deps.ports,
+    factory.userId,
+    open.flatMap((run) => run.threadIds),
+  );
+}
+
 async function defaultCheckAccess(userId: string, projectId: string): Promise<boolean> {
   return (await decideProjectAccess(projectRole, 'steer', projectId, userId)) === null;
 }
 
 /** Admit each issue not already running, up to the concurrency cap. */
 async function admitIssues(
-  factory: EnabledFactory,
+  factory: WatchedFactory,
   repo: string,
   mode: LaunchMode,
   issues: FactoryIssue[],
@@ -302,7 +373,7 @@ async function isAdmissible(factoryId: string, issueNumber: number): Promise<boo
  * server restarted, or an earlier attempt to resume it stopped. The provider
  * replays the agent steps already recorded, so nothing starts twice.
  */
-async function resumeRuns(factory: EnabledFactory, repo: string, mode: LaunchMode): Promise<void> {
+async function resumeRuns(factory: WatchedFactory, repo: string, mode: LaunchMode): Promise<void> {
   if (!runs || !flows || !deps) return;
   const inFlight = await runs.inFlight(factory.id);
   if (inFlight.isErr()) return;
@@ -327,7 +398,7 @@ async function resumeRuns(factory: EnabledFactory, repo: string, mode: LaunchMod
 
 /** Record a run for an issue and start its flow; whether an agent started. */
 async function startImplement(
-  factory: EnabledFactory,
+  factory: WatchedFactory,
   repo: string,
   mode: LaunchMode,
   issue: FactoryIssue,

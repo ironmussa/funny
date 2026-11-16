@@ -10,11 +10,11 @@
  * on the project (`steer`) runs their own factory; a viewer may only read
  * theirs. Runs are stored separately (`factory-runs`).
  */
-import { and, eq } from 'drizzle-orm';
+import { and, eq, exists, inArray, or } from 'drizzle-orm';
 import { errAsync, ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
-import { factorySettings } from '../../db/schema.js';
+import { factoryRuns, factorySettings } from '../../db/schema.js';
 import { requireProjectAccess } from '../project-access.js';
 
 export interface FactorySettingsView {
@@ -103,9 +103,14 @@ function buildRow(
   };
 }
 
-/** A factory the watcher should poll — server-internal, unscoped (like `listAutomations`). */
-export interface EnabledFactory {
+/**
+ * A factory the watcher polls — server-internal, unscoped (like
+ * `listAutomations`). A paused (disabled) factory is still polled while it has
+ * runs in flight, so they run to completion; it admits nothing new.
+ */
+export interface WatchedFactory {
   id: string;
+  enabled: boolean;
   projectId: string;
   userId: string;
   label: string;
@@ -113,8 +118,9 @@ export interface EnabledFactory {
   maxConcurrent: number;
 }
 
-const toEnabled = (row: Row): EnabledFactory => ({
+const toEnabled = (row: Row): WatchedFactory => ({
   id: row.id,
+  enabled: row.enabled === 1,
   projectId: row.projectId,
   userId: row.userId,
   label: row.label,
@@ -126,15 +132,39 @@ const toEnabled = (row: Row): EnabledFactory => ({
  * Every enabled factory across all users/projects, for the watcher. Server-only
  * (no access check): the watcher acts as each factory's own enabling user.
  */
-export async function listEnabledFactories(): Promise<EnabledFactory[]> {
+export async function listEnabledFactories(): Promise<WatchedFactory[]> {
   const rows = await db.select().from(factorySettings).where(eq(factorySettings.enabled, 1));
   return rows.map(toEnabled);
 }
 
-/** One factory by its id, or null — the watcher re-reads it each tick. */
-export async function getEnabledFactory(id: string): Promise<EnabledFactory | null> {
+/** One factory by its id, enabled or paused, or null — the watcher re-reads it each tick. */
+export async function getWatchedFactory(id: string): Promise<WatchedFactory | null> {
   const [row] = await db.select().from(factorySettings).where(eq(factorySettings.id, id));
-  return row && row.enabled === 1 ? toEnabled(row) : null;
+  return row ? toEnabled(row) : null;
+}
+
+/** Enabled factories plus paused ones with runs in flight: what the watcher polls at startup. */
+export async function listWatchedFactories(inFlightStates: string[]): Promise<WatchedFactory[]> {
+  const rows = await db
+    .select()
+    .from(factorySettings)
+    .where(
+      or(
+        eq(factorySettings.enabled, 1),
+        exists(
+          db
+            .select({ id: factoryRuns.id })
+            .from(factoryRuns)
+            .where(
+              and(
+                eq(factoryRuns.factoryId, factorySettings.id),
+                inArray(factoryRuns.state, inFlightStates),
+              ),
+            ),
+        ),
+      ),
+    );
+  return rows.map(toEnabled);
 }
 
 /**

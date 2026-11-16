@@ -29,6 +29,8 @@ type AuditAction =
   | 'infra.project_sandbox_set'
   | 'factory.settings_set'
   | 'factory.disabled_access_lost'
+  | 'factory.run_stopped'
+  | 'factory.run_retried'
   | 'infra.project_sandbox_cleared'
   | 'runner.remove'
   | 'runner.enroll_approved'

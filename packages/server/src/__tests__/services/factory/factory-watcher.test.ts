@@ -12,6 +12,10 @@ import { err, ok, okAsync } from 'neverthrow';
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
 import type { FactoryMergeOutcome } from '../../../services/factory/factory-pull-requests.js';
 import {
+  createFactoryRunControl,
+  onFactoryThreadTerminal,
+} from '../../../services/factory/factory-run-control.js';
+import {
   createFactoryRunsRepository,
   type FactoryRunView,
 } from '../../../services/factory/factory-runs.js';
@@ -442,6 +446,7 @@ describe('factory flow', () => {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     const github = fakeGithub('o/r', issue7, script);
+    const notices: Array<{ title: string; body: string }> = [];
     await startFactoryWatcher({
       ports,
       github,
@@ -449,9 +454,10 @@ describe('factory flow', () => {
       launch: launcher.launch,
       resolveRuntime,
       waitThread,
+      notify: async (_userId, notice) => notices.push(notice),
     });
     await poll.ticks[0]!();
-    return { factoryId, launcher, github, poll };
+    return { factoryId, launcher, github, poll, notices };
   }
 
   test('a completed agent step goes on to the pull request, green CI and the merge', async () => {
@@ -479,15 +485,18 @@ describe('factory flow', () => {
     expect(github.merges).toBe(1);
   });
 
-  test('CI still red after the fix attempts fails the run without merging', async () => {
-    const { factoryId, launcher, github } = await runFlow(
+  test('CI still red after the fix attempts waits for the member, notified, without merging', async () => {
+    const { factoryId, launcher, github, notices } = await runFlow(
       { ci: red },
       finishedThreads('completed'),
     );
-    await eventually(factoryId, (r) => r.state === 'failed');
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
     // The implement agent plus two fixes: three looks at the CI in all.
     expect(launcher.calls).toHaveLength(3);
     expect(github.merges).toBe(0);
+    expect(run.currentStep).toBe('ci');
+    expect(notices).toHaveLength(1);
+    expect(notices[0]!.title).toBe('Issue #7 needs you');
   });
 
   test('a failed agent thread fails the run before any pull request step', async () => {
@@ -691,5 +700,163 @@ describe('factory flow', () => {
     await new Promise((resolve) => setTimeout(resolve, 20));
     const [run] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
     expect(run).toMatchObject({ state: 'working', threadIds: ['t-1'] });
+  });
+});
+
+describe('factory operator controls', () => {
+  const issue7 = [{ number: 7, title: 'Fix it', url: 'u/7' }];
+
+  async function watch(
+    opts: {
+      issues?: FactoryIssue[];
+      waitThread?: (id: string, signal: AbortSignal) => Promise<any>;
+      checkAccess?: (userId: string, projectId: string) => Promise<boolean>;
+    } = {},
+  ) {
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('o/r', opts.issues ?? issue7),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: opts.waitThread ?? pendingThreads,
+      checkAccess: opts.checkAccess,
+      notify: async () => undefined,
+    });
+    return { poll, launcher };
+  }
+
+  async function seedRun(factoryId: string, state: FactoryRunView['state'], threadIds: string[]) {
+    return (
+      await createFactoryRunsRepository().start({ factoryId, issueNumber: 7, threadIds, state })
+    )._unsafeUnwrap();
+  }
+
+  test('a paused factory finishes its run in flight but admits no new issue', async () => {
+    const factoryId = await enableFactory();
+    await createFactorySettingsService().save('alice', 'p1', { enabled: false });
+    seedThread(testDb.db, { id: 't-done', projectId: 'p1', userId: 'alice', status: 'completed' });
+    await seedRun(factoryId, 'working', ['t-done']);
+    const { poll, launcher } = await watch({
+      issues: [{ number: 8, title: 'New', url: 'u/8' }],
+      waitThread: finishedThreads('completed'),
+    });
+
+    expect(scheduledFactoryCount()).toBe(1);
+    await poll.ticks[0]!();
+
+    await eventually(factoryId, (r) => r.state === 'merged');
+    expect(launcher.calls).toHaveLength(0);
+  });
+
+  test('a paused factory with nothing in flight is not polled', async () => {
+    await enableFactory();
+    await createFactorySettingsService().save('alice', 'p1', { enabled: false });
+    await watch();
+    expect(scheduledFactoryCount()).toBe(0);
+  });
+
+  test("losing the enabler's access stops their open runs too", async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'waiting_human', ['t-1']);
+    const { poll } = await watch({ checkAccess: async () => false });
+
+    await poll.ticks[0]!();
+
+    const [after] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    expect(after).toMatchObject({ id: run.id, state: 'stopped' });
+  });
+
+  test('stopping a run ends it and its flow does not go on', async () => {
+    const factoryId = await enableFactory();
+    const { poll, launcher } = await watch();
+    await poll.ticks[0]!();
+    const running = await eventually(factoryId, (r) => r.state === 'working');
+
+    const stopped = await createFactoryRunControl().stop('alice', factoryId, running.id);
+
+    expect(stopped._unsafeUnwrap().state).toBe('stopped');
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const [after] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    expect(after!.state).toBe('stopped');
+    expect(launcher.calls).toHaveLength(1);
+    // Stopping twice is refused: the run already ended.
+    const again = await createFactoryRunControl().stop('alice', factoryId, running.id);
+    expect(again.isErr() && again.error.kind).toBe('conflict');
+  });
+
+  test('a run of another factory cannot be controlled', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'failed', []);
+    const control = createFactoryRunControl();
+    const stop = await control.stop('alice', 'other-factory', run.id);
+    expect(stop.isErr() && stop.error.kind).toBe('not-found');
+    const retry = await control.retry('other-factory', run.id);
+    expect(retry.isErr() && retry.error.kind).toBe('not-found');
+  });
+
+  test('retrying a run whose agent failed starts the agent again', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-bad', projectId: 'p1', userId: 'alice', status: 'failed' });
+    const run = await seedRun(factoryId, 'failed', ['t-bad']);
+    const { launcher } = await watch({ issues: [], waitThread: finishedThreads('completed') });
+
+    const retried = await createFactoryRunControl().retry(factoryId, run.id);
+
+    expect(retried._unsafeUnwrap()).toMatchObject({ state: 'queued', threadIds: [] });
+    await eventually(factoryId, (r) => r.state === 'merged');
+    expect(launcher.calls).toHaveLength(1);
+  });
+
+  test('retrying keeps a completed implement step and runs the later steps again', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-ok', projectId: 'p1', userId: 'alice', status: 'completed' });
+    seedThread(testDb.db, { id: 't-fix', projectId: 'p1', userId: 'alice', status: 'completed' });
+    const run = await seedRun(factoryId, 'waiting_human', ['t-ok', 't-fix']);
+
+    const retried = await createFactoryRunControl().retry(factoryId, run.id);
+
+    expect(retried._unsafeUnwrap().threadIds).toEqual(['t-ok']);
+  });
+
+  test('only a failed or waiting run can be retried', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'merged', []);
+    const retried = await createFactoryRunControl().retry(factoryId, run.id);
+    expect(retried.isErr() && retried.error.kind).toBe('conflict');
+  });
+
+  test("a member's follow-up on a waiting run's thread takes the run over", async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-impl', projectId: 'p1', userId: 'alice', status: 'completed' });
+    await seedRun(factoryId, 'waiting_human', ['t-impl']);
+    // The real wait: the replayed step reads t-impl's persisted status.
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('o/r', []),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      notify: async () => undefined,
+    });
+
+    // The member's follow-up ran on t-impl and completed again.
+    await onFactoryThreadTerminal('t-impl', 'completed');
+
+    await eventually(factoryId, (r) => r.state === 'merged');
+    expect(launcher.calls).toHaveLength(0);
+  });
+
+  test('a follow-up that fails, or on an earlier thread, does not reopen the run', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'waiting_human', ['t-a', 't-b']);
+    await onFactoryThreadTerminal('t-b', 'failed');
+    await onFactoryThreadTerminal('t-a', 'completed');
+    const after = (await createFactoryRunsRepository().get(run.id))._unsafeUnwrap();
+    expect(after!.state).toBe('waiting_human');
   });
 });

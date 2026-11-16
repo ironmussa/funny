@@ -22,6 +22,8 @@ export interface DataQueryOptions<T> {
   queryFn: QueryFunction<T>;
   staleTime?: number;
   enabled?: boolean;
+  /** Refetch while a component reads it (data a server job changes without an event). */
+  refetchInterval?: number;
 }
 
 /** One observer per query client and key, shared by every component reading that key. */

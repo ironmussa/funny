@@ -6,10 +6,14 @@
  */
 
 import { failure, type ApiFailure, type FactoryPort } from '@funny/api';
-import { okAsync } from 'neverthrow';
+import { errAsync, okAsync } from 'neverthrow';
 
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
+import {
+  createFactoryRunControl,
+  type FactoryRunControlError,
+} from '../../services/factory/factory-run-control.js';
 import {
   createFactoryRunsRepository,
   type FactoryRunView,
@@ -35,6 +39,11 @@ function settingsFailure(error: FactorySettingsError): ApiFailure {
   return failure(STATUS[error.kind], error.message);
 }
 
+function controlFailure(error: FactoryRunControlError): ApiFailure {
+  if (error.kind === 'storage') return storageFailure(error);
+  return failure(error.kind === 'not-found' ? 404 : 409, error.message);
+}
+
 const storageFailure = (error: { message: string }) => {
   log.error('Factory runs storage failure', { namespace: 'factory', error: error.message });
   return failure(500, 'Internal error');
@@ -54,7 +63,37 @@ async function reschedule(factoryId: string, projectId: string): Promise<void> {
 function createFactoryPort(
   settings = createFactorySettingsService(),
   runs = createFactoryRunsRepository(),
+  control = createFactoryRunControl(runs),
 ): FactoryPort {
+  /** The caller's factory for the project; 404 when they have none. */
+  const ownFactory = (userId: string, projectId: string) =>
+    settings
+      .factoryId(userId, projectId)
+      .mapErr(settingsFailure)
+      .andThen((factoryId) =>
+        factoryId
+          ? okAsync(factoryId)
+          : errAsync<string, ApiFailure>(failure(404, 'Run not found')),
+      );
+
+  const controlled = (action: 'stop' | 'retry', userId: string, projectId: string, runId: string) =>
+    ownFactory(userId, projectId)
+      .andThen((factoryId) =>
+        (action === 'stop'
+          ? control.stop(userId, factoryId, runId)
+          : control.retry(factoryId, runId)
+        ).mapErr(controlFailure),
+      )
+      .map((run) => {
+        audit({
+          action: action === 'stop' ? 'factory.run_stopped' : 'factory.run_retried',
+          actorId: userId,
+          detail: `Factory run for issue #${run.issueNumber} ${action === 'stop' ? 'stopped' : 'retried'}`,
+          meta: { projectId, runId, issueNumber: run.issueNumber },
+        });
+        return run;
+      });
+
   return {
     async settings(userId, projectId) {
       return settings.get(userId, projectId).mapErr(settingsFailure);
@@ -72,6 +111,14 @@ function createFactoryPort(
       const factoryId = await settings.factoryId(userId, projectId);
       if (factoryId.isOk() && factoryId.value) await reschedule(factoryId.value, projectId);
       return saved;
+    },
+
+    async stopRun(userId, projectId, runId) {
+      return controlled('stop', userId, projectId, runId);
+    },
+
+    async retryRun(userId, projectId, runId) {
+      return controlled('retry', userId, projectId, runId);
     },
 
     async runs(userId, projectId) {

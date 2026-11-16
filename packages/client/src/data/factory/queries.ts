@@ -1,4 +1,4 @@
-import type { FactorySettings } from '@funny/shared/contracts/factory';
+import type { FactoryRun, FactorySettings } from '@funny/shared/contracts/factory';
 
 import { factoryApi } from '@/lib/api/factory';
 
@@ -22,6 +22,33 @@ export function factorySettingsQuery(projectId: string) {
     queryFn: (): Promise<FactorySettings | null> => unwrapResult(factoryApi.getSettings(projectId)),
     staleTime: 30_000,
   };
+}
+
+const factoryRunsKey = (projectId: string) => ['factory', 'runs', projectId] as const;
+
+/**
+ * The caller's factory runs for a project. The server's watcher advances them
+ * with no realtime event, so a reader polls while it is shown.
+ */
+export function factoryRunsQuery(projectId: string) {
+  return {
+    queryKey: factoryRunsKey(projectId),
+    queryFn: (): Promise<FactoryRun[]> => unwrapResult(factoryApi.listRuns(projectId)),
+    staleTime: 10_000,
+    refetchInterval: 15_000,
+  };
+}
+
+/** Put a run the server just changed into the cached list. */
+export function writeFactoryRun(
+  projectId: string,
+  run: FactoryRun,
+  layer: DataLayer = getDataLayer(),
+): void {
+  if (layer.disposed) return;
+  layer.queryClient.setQueryData<FactoryRun[]>(factoryRunsKey(projectId), (runs) =>
+    runs?.map((r) => (r.id === run.id ? run : r)),
+  );
 }
 
 /** Record the settings a save returned (the server's confirmed state). */

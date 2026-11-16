@@ -3,7 +3,6 @@ import {
   DEFAULT_MODEL,
   DEFAULT_PERMISSION_MODE,
   DEFAULT_PROVIDER,
-  DEFAULT_THREAD_MODE,
   getModelContextWindow,
   type AgentModel,
 } from '@funny/shared/models';
@@ -36,11 +35,14 @@ function resolveModelDefaults(project: Project | undefined) {
   };
 }
 
-/** Mode defaults inherited from the project (falling back to global defaults). */
+/**
+ * Permission-mode default inherited from the project. The thread mode is NOT
+ * here: it comes from the caller's runtime row (change project-runtime-settings),
+ * resolved in the hook below.
+ */
 function resolveModeDefaults(project: Project | undefined) {
   return {
     defaultPermissionMode: project?.defaultPermissionMode ?? DEFAULT_PERMISSION_MODE,
-    defaultThreadMode: project?.defaultMode ?? DEFAULT_THREAD_MODE,
   };
 }
 

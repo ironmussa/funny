@@ -55,6 +55,9 @@ export const projects = sqliteTable('projects', {
   defaultProvider: text('default_provider'),
   defaultModel: text('default_model'),
   defaultEffort: text('default_effort'),
+  // Legacy project-level thread mode. No longer the runtime source for the web
+  // client (that is each user's project_sandbox_settings row,
+  // project-runtime-settings); still read by the Chrome extension.
   defaultMode: text('default_mode'),
   defaultPermissionMode: text('default_permission_mode'),
   defaultBranch: text('default_branch'),

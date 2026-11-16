@@ -1,5 +1,5 @@
 import type { Project } from '@funny/shared';
-import { DEFAULT_PROVIDER, DEFAULT_THREAD_MODE } from '@funny/shared/models';
+import { DEFAULT_PROVIDER } from '@funny/shared/models';
 import { CircleDot, GitFork, NotebookPen } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -556,8 +556,9 @@ function useComposeProject(
 }
 
 function composeProjectDefaults(project: Project | undefined) {
+  // The thread mode comes from the caller's runtime row (project-runtime-settings),
+  // resolved by the hook above; it is not a project-level default.
   return {
-    defaultThreadMode: project?.defaultMode ?? DEFAULT_THREAD_MODE,
     projectPath: project?.path ?? '',
     defaultProvider: project?.defaultProvider ?? DEFAULT_PROVIDER,
   };

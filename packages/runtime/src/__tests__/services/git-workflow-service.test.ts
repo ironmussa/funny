@@ -1,0 +1,39 @@
+import { describe, expect, test, vi } from 'vitest';
+
+const mocks = vi.hoisted(() => ({
+  emitToUser: vi.fn(),
+  getPipelineForProject: vi.fn(),
+}));
+
+vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mocks.emitToUser } }));
+vi.mock('../../services/pipeline-manager.js', () => ({
+  getPipelineForProject: mocks.getPipelineForProject,
+}));
+vi.mock('../../services/project-hooks-service.js', () => ({ listHooks: () => [] }));
+vi.mock('../../services/workflow-event-helpers.js', () => ({ emitWorkflowEvent: vi.fn() }));
+
+import { executeWorkflow } from '../../services/git-workflow-service.js';
+
+describe('executeWorkflow', () => {
+  test('a workflow whose setup fails tells the client it failed', async () => {
+    mocks.getPipelineForProject.mockRejectedValue(new Error('db down'));
+
+    const { workflowId } = executeWorkflow({
+      contextId: 'thread-1',
+      threadId: 'thread-1',
+      projectId: 'p1',
+      userId: 'u1',
+      cwd: '/tmp',
+      action: 'push',
+    } as Parameters<typeof executeWorkflow>[0]);
+
+    // Without this the client's buttons waited for an end that never came.
+    await vi.waitFor(() =>
+      expect(mocks.emitToUser).toHaveBeenCalledWith('u1', {
+        type: 'git:workflow_progress',
+        threadId: 'thread-1',
+        data: expect.objectContaining({ workflowId, status: 'failed', action: 'push' }),
+      }),
+    );
+  });
+});

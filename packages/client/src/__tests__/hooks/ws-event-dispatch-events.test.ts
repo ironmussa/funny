@@ -623,7 +623,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     });
 
     vi.advanceTimersByTime(1500);
-    expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined);
+    expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined, 'push');
     vi.useRealTimers();
   });
 
@@ -662,7 +662,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       expect(mockSetFailedWorkflow).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'Push failed', action: 'push' }),
       );
-      expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined);
+      expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined, 'push');
     });
   });
 

@@ -927,7 +927,7 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
       cancelPendingWorkflowClose(threadId);
       const timer = setTimeout(() => {
         pendingWorkflowCloses.delete(threadId);
-        store.finishCommit(threadId, workflowId);
+        store.finishCommit(threadId, workflowId, action);
       }, COMPLETED_WORKFLOW_CLOSE_MS);
       pendingWorkflowCloses.set(threadId, timer);
     } else if (wfStatus === 'failed') {
@@ -938,7 +938,7 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
         steps: steps ?? [],
         action: action ?? '',
       });
-      store.finishCommit(threadId, workflowId);
+      store.finishCommit(threadId, workflowId, action);
     }
   });
 

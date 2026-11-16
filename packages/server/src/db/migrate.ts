@@ -2000,6 +2000,33 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // issue-factory: one run in flight per issue, enforced by the database (the
+    // watcher's check alone assumed a single server), and the marker of an agent
+    // thread being started, which a resumed run adopts instead of starting another.
+    name: '098_factory_runs_one_active_per_issue',
+    async up() {
+      await ctx().addColumn('factory_runs', 'launch_started_at', 'TEXT');
+      // Keep the newest in-flight run of an issue; stop older duplicates.
+      await ctx().exec(sql`
+        UPDATE factory_runs SET state = 'stopped', completed_at = started_at
+        WHERE state NOT IN ('merged', 'failed', 'stopped')
+          AND EXISTS (
+            SELECT 1 FROM factory_runs newer
+            WHERE newer.factory_id = factory_runs.factory_id
+              AND newer.issue_number = factory_runs.issue_number
+              AND newer.state NOT IN ('merged', 'failed', 'stopped')
+              AND (newer.started_at > factory_runs.started_at
+                OR (newer.started_at = factory_runs.started_at AND newer.id > factory_runs.id))
+          )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
+        ON factory_runs (factory_id, issue_number)
+        WHERE state NOT IN ('merged', 'failed', 'stopped')
+      `);
+    },
+  },
 ];
 
 /**

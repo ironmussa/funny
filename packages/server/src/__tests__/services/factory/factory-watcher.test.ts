@@ -604,6 +604,68 @@ describe('factory flow', () => {
     expect(launcher.calls).toHaveLength(0);
   });
 
+  test('a resumed run adopts the thread an interrupted launch started', async () => {
+    const factoryId = await seedInFlightRun([]);
+    const runs = createFactoryRunsRepository();
+    const [seeded] = (await runs.list(factoryId))._unsafeUnwrap();
+    const launchedAt = new Date().toISOString();
+    await runs.update(seeded!.id, { launchStartedAt: launchedAt });
+    // The runner created the thread, but the server crashed before recording it.
+    seedThread(testDb.db, {
+      id: 't-orphan',
+      projectId: 'p1',
+      userId: 'alice',
+      status: 'completed',
+      source: 'factory',
+      title: '[Factory] #7 Issue 7',
+      createdAt: launchedAt,
+    });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('o/r', []),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+    });
+
+    await poll.ticks[0]!();
+
+    const run = await eventually(factoryId, (r) => r.state === 'merged');
+    expect(run).toMatchObject({ threadIds: ['t-orphan'], launchStartedAt: null });
+    expect(launcher.calls).toHaveLength(0);
+  });
+
+  test('a resumed run whose interrupted launch never reached the runner starts it', async () => {
+    const factoryId = await seedInFlightRun([]);
+    const runs = createFactoryRunsRepository();
+    const [seeded] = (await runs.list(factoryId))._unsafeUnwrap();
+    await runs.update(seeded!.id, { launchStartedAt: new Date().toISOString() });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('o/r', []),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: finishedThreads('completed'),
+    });
+
+    await poll.ticks[0]!();
+
+    await eventually(factoryId, (r) => r.state === 'merged');
+    expect(launcher.calls).toHaveLength(1);
+  });
+
+  test('the database refuses a second in-flight run for an issue', async () => {
+    const factoryId = await enableFactory();
+    const runs = createFactoryRunsRepository();
+    (await runs.start({ factoryId, issueNumber: 7 }))._unsafeUnwrap();
+    expect((await runs.start({ factoryId, issueNumber: 7 })).isErr()).toBe(true);
+  });
+
   test('a run whose thread no longer exists fails its step', async () => {
     const factoryId = await seedInFlightRun(['gone']);
     const poll = fakePoll();

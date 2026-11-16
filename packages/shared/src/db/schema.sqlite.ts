@@ -283,7 +283,11 @@ export const factorySettings = sqliteTable(
   (t) => [uniqueIndex('factory_settings_project_user').on(t.projectId, t.userId)],
 );
 
-/** One factory run per admitted issue (change issue-factory). */
+/**
+ * One factory run per admitted issue (change issue-factory). At most one run
+ * per issue is in flight: the partial unique index
+ * `factory_runs_one_active_per_issue` (migration 098) enforces it.
+ */
 // Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
 // fallow-ignore-next-line code-duplication
 export const factoryRuns = sqliteTable('factory_runs', {
@@ -297,6 +301,11 @@ export const factoryRuns = sqliteTable('factory_runs', {
   currentStep: text('current_step'),
   /** JSON array of the thread ids the run's thread steps created. */
   threadIds: text('thread_ids'),
+  /**
+   * Set while an agent step's thread is being started and not yet recorded, so
+   * a run resumed after a crash adopts that thread instead of starting another.
+   */
+  launchStartedAt: text('launch_started_at'),
   startedAt: text('started_at').notNull(),
   completedAt: text('completed_at'),
 });

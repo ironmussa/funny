@@ -343,9 +343,15 @@ export function createTestDb() {
       state TEXT NOT NULL DEFAULT 'queued',
       current_step TEXT,
       thread_ids TEXT,
+      launch_started_at TEXT,
       started_at TEXT NOT NULL,
       completed_at TEXT
     )
+  `);
+  testDb.run(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
+    ON factory_runs (factory_id, issue_number)
+    WHERE state NOT IN ('merged', 'failed', 'stopped')
   `);
 
   testDb.run(sql`

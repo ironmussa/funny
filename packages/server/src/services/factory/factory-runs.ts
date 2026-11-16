@@ -48,6 +48,8 @@ export interface FactoryRunView {
   state: FactoryRunState;
   currentStep: string | null;
   threadIds: string[];
+  /** When an agent thread started being launched and is not recorded yet. */
+  launchStartedAt: string | null;
   startedAt: string;
   completedAt: string | null;
 }
@@ -69,6 +71,7 @@ const toView = (row: Row): FactoryRunView => ({
   state: row.state as FactoryRunState,
   currentStep: row.currentStep,
   threadIds: parseThreadIds(row.threadIds),
+  launchStartedAt: row.launchStartedAt ?? null,
   startedAt: row.startedAt,
   completedAt: row.completedAt,
 });
@@ -92,6 +95,7 @@ export interface UpdateRunInput {
   currentStep?: string | null;
   prUrl?: string | null;
   threadIds?: string[];
+  launchStartedAt?: string | null;
 }
 
 function changesFor(input: UpdateRunInput): Partial<Row> | null {
@@ -103,6 +107,7 @@ function changesFor(input: UpdateRunInput): Partial<Row> | null {
   if (input.currentStep !== undefined) changes.currentStep = input.currentStep;
   if (input.prUrl !== undefined) changes.prUrl = input.prUrl;
   if (input.threadIds !== undefined) changes.threadIds = JSON.stringify(input.threadIds);
+  if (input.launchStartedAt !== undefined) changes.launchStartedAt = input.launchStartedAt;
   return Object.keys(changes).length === 0 ? null : changes;
 }
 
@@ -190,6 +195,7 @@ export function createFactoryRunsRepository(
         state: input.state ?? 'queued',
         currentStep: input.currentStep ?? null,
         threadIds: JSON.stringify(input.threadIds ?? []),
+        launchStartedAt: null,
         startedAt: new Date().toISOString(),
         completedAt: null,
       };

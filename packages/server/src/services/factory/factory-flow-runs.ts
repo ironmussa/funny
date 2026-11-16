@@ -24,8 +24,11 @@
  */
 
 import { nullReporter, runPipeline } from '@funny/pipelines';
+import { and, asc, eq, gte } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
 
+import { db } from '../../db/index.js';
+import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import type {
   StartedThread,
@@ -57,6 +60,38 @@ export interface FactoryFlowRunsDeps {
   launch(input: StartThreadInput): Promise<Result<StartedThread, StartThreadError>>;
   waitThread?: (threadId: string, signal: AbortSignal) => Promise<ThreadOutcome>;
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
+}
+
+/** Allowance for the runner's clock being behind the server's when matching a launch. */
+const LAUNCH_CLOCK_SLACK_MS = 60 * 1000;
+
+/**
+ * The factory thread an interrupted launch started: the enabler's, in the
+ * project, with the step's title, created since the launch began. One run per
+ * issue is in flight and its steps run one at a time, so the title and the time
+ * identify it.
+ */
+async function findLaunchedThread(
+  scope: { userId: string; projectId: string },
+  title: string,
+  since: string,
+): Promise<string | null> {
+  const after = new Date(Date.parse(since) - LAUNCH_CLOCK_SLACK_MS).toISOString();
+  const [row] = await db
+    .select({ id: threads.id })
+    .from(threads)
+    .where(
+      and(
+        eq(threads.userId, scope.userId),
+        eq(threads.projectId, scope.projectId),
+        eq(threads.source, 'factory'),
+        eq(threads.title, title),
+        gte(threads.createdAt, after),
+      ),
+    )
+    .orderBy(asc(threads.createdAt))
+    .limit(1);
+  return row?.id ?? null;
 }
 
 /** Whether a started run has an agent working (or is done), or never started one. */
@@ -160,6 +195,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       scope,
       threadIds: job.run.threadIds,
       prUrl: job.run.prUrl,
+      launchStartedAt: job.run.launchStartedAt,
+      findLaunched: (title, since) => findLaunchedThread(scope, title, since),
       launch: (body) => deps.launch({ userId: scope.userId, body }),
       waitThread,
       github: deps.github,

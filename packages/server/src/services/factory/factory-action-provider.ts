@@ -61,6 +61,13 @@ export interface FactoryActionProviderDeps {
   threadIds: string[];
   /** The run's pull request, when an earlier attempt found it. */
   prUrl: string | null;
+  /**
+   * Set when the run was interrupted while starting its next agent thread:
+   * that step first looks for the thread it may have started.
+   */
+  launchStartedAt: string | null;
+  /** A factory thread of the enabler with this title created since `since`, if any. */
+  findLaunched(title: string, since: string): Promise<string | null>;
   /** Start a thread on the enabler's runner (`startThreadOnRunner` for the enabler). */
   launch(body: Record<string, unknown>): Promise<Result<StartedThread, StartThreadError>>;
   /** Resolves with the thread's terminal status (or why it never will reach one). */
@@ -100,6 +107,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   const threadIds = [...deps.threadIds];
   let agentSteps = 0;
   let prUrl = deps.prUrl;
+  let pendingLaunch = deps.launchStartedAt;
+  const title = `[Factory] #${scope.issueNumber} ${scope.issueTitle}`.slice(0, 200);
 
   const pullRequest = (): FactoryPullRequestRef | null => {
     const number = prUrl ? Number(PR_NUMBER.exec(prUrl)?.[1]) : NaN;
@@ -120,13 +129,39 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     markMerged: () => deps.record({ state: 'merged', currentStep: null }),
   });
 
-  /** The thread of the current agent step: the recorded one, or a new one. */
+  /** Record the step's thread; the launch marker is cleared in the same write. */
+  async function recordThread(threadId: string): Promise<string> {
+    threadIds.push(threadId);
+    // A fix after the pull request is open is a `fixing` step, not new work.
+    await deps.record({
+      state: prUrl ? 'fixing' : 'working',
+      threadIds: [...threadIds],
+      launchStartedAt: null,
+    });
+    return threadId;
+  }
+
+  /** The thread an interrupted launch of this step started, if it got that far. */
+  async function adoptInterrupted(step: number): Promise<string | null> {
+    const since = pendingLaunch;
+    pendingLaunch = null;
+    if (!since || step !== threadIds.length) return null;
+    const found = await deps.findLaunched(title, since);
+    return found && !threadIds.includes(found) ? found : null;
+  }
+
+  /** The thread of the current agent step: the recorded one, an adopted one, or a new one. */
   async function threadFor(opts: SpawnAgentOpts, step: number): Promise<string | ActionResult> {
     const recorded = threadIds[step];
     if (recorded) return recorded;
+    const adopted = await adoptInterrupted(step);
+    if (adopted) return recordThread(adopted);
+    // Marked before the launch: a crash before the thread is recorded is
+    // adopted on resume instead of starting the agent twice.
+    await deps.record({ launchStartedAt: new Date().toISOString() });
     const launched = await deps.launch({
       projectId: scope.projectId,
-      title: `[Factory] #${scope.issueNumber} ${scope.issueTitle}`.slice(0, 200),
+      title,
       mode: scope.mode,
       source: 'factory',
       prompt: prompted(opts),
@@ -134,6 +169,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     });
     const threadId = launched.isOk() ? launched.value.threadId : undefined;
     if (!threadId) {
+      await deps.record({ launchStartedAt: null });
       return {
         ok: false,
         error: launched.isErr()
@@ -141,10 +177,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
           : 'The agent could not start: the runner returned no thread.',
       };
     }
-    threadIds.push(threadId);
-    // A fix after the pull request is open is a `fixing` step, not new work.
-    await deps.record({ state: prUrl ? 'fixing' : 'working', threadIds: [...threadIds] });
-    return threadId;
+    return recordThread(threadId);
   }
 
   return {

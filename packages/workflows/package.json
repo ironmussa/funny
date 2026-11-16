@@ -7,12 +7,15 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./browser": "./src/browser.ts"
+    "./browser": "./src/browser.ts",
+    "./compiler": "./src/compiler/index.ts"
   },
   "scripts": {
     "test": "bun test"
   },
   "dependencies": {
+    "@funny/pipelines": "workspace:*",
+    "@funny/shared": "workspace:*",
     "yaml": "^2.8.3",
     "zod": "^4.6.6"
   },

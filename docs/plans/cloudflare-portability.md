@@ -146,7 +146,7 @@ Move every item of the inventory behind a port, with today's code as the in-memo
 
 Can start any time; does not depend on Phases 1–5.
 
-- [ ] `providers/cloudflare/` implementing `SandboxProvider` (`thread-sandboxes/contract.ts`), talking to a small companion Worker + DO in the user's Cloudflare account.
+- [ ] `providers/cloudflare/` in `@funny/sandbox` implementing `SandboxProvider` (`packages/sandbox/src/contract.ts`), talking to a small companion Worker + DO in the user's Cloudflare account.
 - [ ] Runner as a Docker image per server commit (no `systemd`/`sudo`; replaces `runner-install-script.ts` for this provider).
 - [ ] Start with `stopPreservesDisk: false` (recover from the thread branch); optional R2 directory backups later.
 - [ ] Verify sleep behavior with an outbound-only runner connection, isolation level, and size limits (≈4 vCPU / 12 GiB self-serve, unconfirmed).

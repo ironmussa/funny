@@ -8,9 +8,10 @@
  * error kind, so the user knows what to do next.
  */
 
+import type { SandboxError } from '@funny/sandbox';
+
 import { log } from '../../lib/logger.js';
 import { saveThreadEvent } from '../thread-event-repository.js';
-import type { SandboxError } from './contract.js';
 import type { ProvisionError } from './thread-sandbox-service.js';
 
 const SANDBOX_ERROR_EVENT = 'sandbox:error';

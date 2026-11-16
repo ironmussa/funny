@@ -1,26 +1,22 @@
 import { describe, expect, test } from 'bun:test';
 
+import { resolveRunnerBuild, createRunnerTemplateManager } from '@funny/sandbox';
+import { createFakeSandboxProvider, type FakeSandboxProvider } from '@funny/sandbox/providers/fake';
+import { expectOk } from '@funny/sandbox/testing';
 import { REVERSE_LINK_LOOPBACK_PORT } from '@funny/shared/reverse-link';
 import { nextSandboxState, type SandboxState } from '@funny/shared/sandbox-machine';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 
 import { hashLlmProxyToken } from '../../../services/llm-proxy/llm-proxy-tokens.js';
 import {
-  createFakeSandboxProvider,
-  type FakeSandboxProvider,
-} from '../../../services/thread-sandboxes/providers/fake/fake-provider.js';
-import { resolveRunnerBuild } from '../../../services/thread-sandboxes/runner-build.js';
-import {
   reverseLinkSecret,
   type RunnerLink,
 } from '../../../services/thread-sandboxes/runner-link.js';
-import { createRunnerTemplateManager } from '../../../services/thread-sandboxes/template-manager.js';
 import { createThreadSandboxService } from '../../../services/thread-sandboxes/thread-sandbox-service.js';
 import type {
   ThreadSandboxRow,
   ThreadSandboxStore,
 } from '../../../services/thread-sandboxes/thread-sandbox-store.js';
-import { expectOk } from './provider-contract.js';
 
 const build = expectOk(resolveRunnerBuild({ FUNNY_BUILD_COMMIT: 'c'.repeat(40) }));
 
@@ -70,9 +66,26 @@ function setup(
     runnerConnects?: boolean;
     checkoutFails?: boolean;
     runnerLink?: RunnerLink;
+    /** Files the provider's `writeFile` got, when it has one. */
+    files?: Map<string, string>;
   } = {},
 ): Setup {
-  const provider = createFakeSandboxProvider('fake-valid', { templates: opts.templates ?? [] });
+  const files = opts.files;
+  const provider = createFakeSandboxProvider('fake-valid', {
+    templates: opts.templates ?? [],
+    ...(files
+      ? {
+          exec: (_id: string, command: string) => ({
+            exitCode: 0,
+            stdout: command === 'printf %s "$HOME"' ? '/home/user' : '',
+            stderr: '',
+          }),
+          writeFile: (_id: string, path: string, content: string) => {
+            files.set(path, content);
+          },
+        }
+      : {}),
+  });
   const store = memoryStore();
   const issued: string[] = [];
   const checkouts: Setup['checkouts'] = [];
@@ -137,6 +150,29 @@ describe('thread sandbox provisioning', () => {
     expect(store.rows.get('t-1')?.sandboxId).toBe(
       sandbox ? [...provider.sandboxes.keys()][0] : null,
     );
+  });
+
+  test('with a provider that writes files, no command carries the runner tokens', async () => {
+    const files = new Map<string, string>();
+    const secretKey = Buffer.from('k'.repeat(32));
+    const { provider, service, issued } = setup({
+      templates: [build.version],
+      files,
+      runnerLink: { kind: 'reverse', secretKey },
+    });
+    const row = expectOk(await service.provision(input));
+
+    expect(row.state).toBe('running');
+    const envFile = [...files.values()].join('\n');
+    const llmToken = envFile.match(/FUNNY_LLM_PROXY_TOKEN=(llmp_[A-Za-z0-9_-]+)/)?.[1];
+    const linkSecret = reverseLinkSecret(secretKey, 't-1', 0);
+    expect(envFile).toContain(`RUNNER_PROVISION_TOKEN=${issued[0]}`);
+    expect(llmToken).toBeDefined();
+    expect(envFile).toContain(linkSecret);
+    const commands = provider.commands.map((c) => c.command).join('\n');
+    for (const secret of [issued[0], llmToken!, linkSecret]) {
+      expect(commands).not.toContain(secret);
+    }
   });
 
   test('a reverse link points the runner at the relay and gives it its secret', async () => {

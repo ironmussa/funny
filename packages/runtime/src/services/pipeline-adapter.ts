@@ -16,10 +16,7 @@ import { gitRead, runHookCommand, invalidateStatusCache } from '@funny/core/git'
 import type { ProgressReporter, StepProgressData } from '@funny/pipelines';
 import type { AgentModel, PermissionMode, WSEvent, WorkflowNodeRunStatus } from '@funny/shared';
 import { sleep as effectSleep } from '@funny/shared/async';
-import { nanoid } from 'nanoid';
-
-import { log } from '../lib/logger.js';
-import { ApprovalTimeoutError } from '../pipelines/approval.js';
+import { ApprovalTimeoutError } from '@funny/workflows/compiler';
 import type {
   ActionProvider,
   ActionResult,
@@ -33,7 +30,10 @@ import type {
   RequestApprovalOpts,
   SetStatusOpts,
   SetStageOpts,
-} from '../pipelines/types.js';
+} from '@funny/workflows/compiler';
+import { nanoid } from 'nanoid';
+
+import { log } from '../lib/logger.js';
 import {
   commitChanges as gitServiceCommit,
   pushChanges as gitServicePush,

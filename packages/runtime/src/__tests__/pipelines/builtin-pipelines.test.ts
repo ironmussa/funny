@@ -13,10 +13,10 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 import { runPipeline, nullReporter } from '@funny/pipelines';
+import type { ActionProvider, ActionResult } from '@funny/workflows/compiler';
+import type { YamlPipelineContext } from '@funny/workflows/compiler';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-import type { ActionProvider, ActionResult } from '../../pipelines/types.js';
-import type { YamlPipelineContext } from '../../pipelines/yaml-compiler.js';
 import { loadPipelines } from '../../pipelines/yaml-loader.js';
 import { resolveBuiltinAgentByName } from '../../services/agent-registry.js';
 

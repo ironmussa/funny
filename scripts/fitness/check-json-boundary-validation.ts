@@ -30,6 +30,7 @@ const INPUT_ROOTS = [
   'packages/shared/src',
   'packages/core/src',
   'packages/scheduler/src',
+  'packages/sandbox/src',
   'packages/memory/src',
 ];
 const SOURCE_EXTENSIONS = new Set(['.ts', '.tsx', '.mts', '.cts']);

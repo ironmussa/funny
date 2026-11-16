@@ -17,6 +17,7 @@ How to use or operate funny.
 | Doc                                               | Purpose                                                 |
 | ------------------------------------------------- | ------------------------------------------------------- |
 | [ingest-api.md](./guides/ingest-api.md)           | External agent webhook API                              |
+| [issue-factory.md](./guides/issue-factory.md)     | Issue factory: Factory App, settings, secrets, security |
 | [process-cleanup.md](./guides/process-cleanup.md) | Ghost sockets, port cleanup, Windows handle inheritance |
 
 ## Architecture

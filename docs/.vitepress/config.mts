@@ -48,6 +48,7 @@ export default defineConfig({
         items: [
           { text: 'Ingest API', link: '/guides/ingest-api' },
           { text: 'Public REST API', link: '/guides/public-api' },
+          { text: 'Issue factory', link: '/guides/issue-factory' },
           { text: 'Process cleanup', link: '/guides/process-cleanup' },
           { text: 'Visualizer plugins', link: '/visualizer-plugins' },
         ],

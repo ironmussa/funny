@@ -43,6 +43,7 @@ describe('loadPipelines', () => {
       'code-quality',
       'code-review',
       'commit',
+      'factory-issue',
       'fusion',
       'pre-push',
       'scheduler-thread',

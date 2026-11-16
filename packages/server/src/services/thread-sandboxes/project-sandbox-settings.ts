@@ -11,12 +11,12 @@
  * its owner and the size against the provider's declared sizes.
  */
 
+import { resolveSandboxSize } from '@funny/sandbox';
 import { and, eq } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
 import { projects, projectSandboxSettings } from '../../db/schema.js';
-import { resolveSandboxSize } from './contract.js';
 import type { InfraConnectionService } from './infra-connections.js';
 
 export interface ProjectSandboxView {

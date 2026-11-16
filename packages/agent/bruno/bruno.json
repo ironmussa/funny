@@ -1,6 +1,0 @@
-{
-  "version": "1",
-  "name": "Agent Service",
-  "type": "collection",
-  "ignore": ["node_modules", "dist"]
-}

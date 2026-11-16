@@ -22,10 +22,9 @@ import {
   type PipelineInputDefinition,
   type PipelineLoader,
 } from '@funny/thread-scheduler';
+import type { ActionProvider } from '@funny/workflows/compiler';
+import type { YamlPipelineContext } from '@funny/workflows/compiler';
 import { describe, expect, test, vi } from 'vitest';
-
-import type { ActionProvider } from '../../pipelines/types.js';
-import type { YamlPipelineContext } from '../../pipelines/yaml-compiler.js';
 
 // ── Helpers ──────────────────────────────────────────────────
 

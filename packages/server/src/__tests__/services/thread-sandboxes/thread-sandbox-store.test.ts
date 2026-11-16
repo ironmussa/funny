@@ -1,12 +1,13 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 
+import { expectOk } from '@funny/sandbox/testing';
+
 import { resolvePublicServerUrl } from '../../../services/thread-sandboxes/public-server-url.js';
 import {
   sqlThreadSandboxStore,
   type ThreadSandboxRow,
 } from '../../../services/thread-sandboxes/thread-sandbox-store.js';
 import { createTestDb } from '../../helpers/test-db.js';
-import { expectOk } from './provider-contract.js';
 
 describe('resolvePublicServerUrl', () => {
   test('prefers FUNNY_PUBLIC_URL, then the Railway public domain', () => {

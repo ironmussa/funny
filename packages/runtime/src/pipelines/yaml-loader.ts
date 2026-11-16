@@ -27,14 +27,14 @@ import {
   type ParsedWorkflow,
   type WorkflowCatalogEntry,
 } from '@funny/workflows';
-
-import { log } from '../lib/logger.js';
 import {
   compileYamlPipeline,
   YamlCompileError,
   type AgentResolver,
   type YamlPipelineContext,
-} from './yaml-compiler.js';
+} from '@funny/workflows/compiler';
+
+import { log } from '../lib/logger.js';
 
 // ── Public API ──────────────────────────────────────────────
 
@@ -179,4 +179,4 @@ function topoSortByPipelineRefs(
 
 // ── Re-exports ──────────────────────────────────────────────
 
-export { type AgentResolver } from './yaml-compiler.js';
+export { type AgentResolver } from '@funny/workflows/compiler';

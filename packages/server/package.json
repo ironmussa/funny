@@ -31,6 +31,7 @@
     "@bufbuild/protobuf": "2.14.0",
     "@funny/api": "workspace:*",
     "@funny/core": "workspace:*",
+    "@funny/sandbox": "workspace:*",
     "@funny/shared": "workspace:*",
     "@funny/thread-scheduler": "workspace:*",
     "@gdp-ts/core": "0.1.0",

@@ -4,6 +4,11 @@
  * infra API (sandbox for an existing thread) and sandbox thread creation.
  */
 
+import {
+  resolveServerRunnerBuild,
+  createRunnerTemplateManager,
+  type RunnerTemplateManager,
+} from '@funny/sandbox';
 import { ACTIVE_SANDBOX_STATES, type SandboxState } from '@funny/shared/sandbox-machine';
 import { and, desc, eq, isNotNull } from 'drizzle-orm';
 import { err, ok, type Result } from 'neverthrow';
@@ -11,16 +16,16 @@ import { err, ok, type Result } from 'neverthrow';
 import { db } from '../../db/index.js';
 import { threadSandboxes, threads } from '../../db/schema.js';
 import { deriveServerKey } from '../../lib/auth.js';
+import { log } from '../../lib/logger.js';
+import { metric } from '../../lib/telemetry.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { issueThreadProvisionToken } from '../runner-provision-tokens.js';
 import { sandboxRunnerIdForThread } from '../runner-scope.js';
 import type { InfraConnectionService } from './infra-connections.js';
 import { withProvisionTracking } from './provision-registry.js';
 import { resolvePublicServerUrl } from './public-server-url.js';
-import { resolveServerRunnerBuild } from './runner-build.js';
 import { chooseRunnerLink, type RunnerLink } from './runner-link.js';
 import { createSandboxRunnerCalls } from './sandbox-runner-calls.js';
-import { createRunnerTemplateManager, type RunnerTemplateManager } from './template-manager.js';
 import { createThreadSandboxService, type ProvisionError } from './thread-sandbox-service.js';
 import { sqlThreadSandboxStore, type ThreadSandboxRow } from './thread-sandbox-store.js';
 
@@ -132,7 +137,7 @@ export async function prepareSandboxLaunch(
 
   let templates = templateManagers.get(build.value.version);
   if (!templates) {
-    templates = createRunnerTemplateManager(build.value);
+    templates = createRunnerTemplateManager(build.value, { log, metric });
     templateManagers.set(build.value.version, templates);
   }
   const service = createThreadSandboxService({

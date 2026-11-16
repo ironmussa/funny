@@ -1,0 +1,103 @@
+# Built-in workflow of the issue factory's `implement` step.
+#
+# Runs inside a factory run's workspace (sandbox or worktree), already on the
+# run's branch. The agent implements the issue, the check command runs with
+# in-place fixes, and the result is committed, pushed and opened as a DRAFT
+# pull request against the base branch.
+#
+# The step runner supplies every input. `issue_body` holds trusted text only
+# (the configured login's issue body and comments); `pr_body` is built by the
+# factory and already contains `Closes #N` and the checks note. Every agent
+# node of one run resumes the same agent session, so a fix keeps the context
+# of the implementation.
+#
+# The prompt needs no skills or plugins. To customize per repository, copy this
+# file to `.funny/workflows/factory-issue.yaml` and edit it, keeping the inputs.
+
+name: factory-issue
+description: Implement a GitHub issue and open a draft pull request
+
+inputs:
+  issue_number: { type: string, required: true }
+  issue_title: { type: string, required: true }
+  issue_body: { type: string, required: true }
+  base: { type: string, required: true }
+  branch: { type: string, required: true }
+  check_command: { type: string, required: false, default: '' }
+  pr_body: { type: string, required: true }
+
+nodes:
+  - id: implement
+    spawn_agent:
+      prompt: |
+        You are working unattended: nobody will answer questions, so make
+        reasonable decisions and state them in your final message.
+
+        Implement GitHub issue #{{issue_number}} in this repository.
+
+        Title: {{issue_title}}
+
+        Issue text:
+
+        {{issue_body}}
+
+        How to work:
+        - You are on the branch `{{branch}}`, created from `{{base}}`. Stay on it.
+        - Read the code around the change before editing, follow the conventions
+          you find, and keep the change to what the issue asks.
+        - Add or update tests when the change affects behavior.
+        - Run the project's checks before you finish{{#check_command}}: `{{check_command}}`{{/check_command}}.
+        - Do not push, and do not open a pull request: that happens after you finish.
+        - Commit your work, or leave it uncommitted; both are fine.
+        - End with a short summary of what you changed and why.
+
+  - id: checks
+    depends_on: [implement]
+    when: "check_command != ''"
+    run_command:
+      command: '{{check_command}}'
+    retry:
+      max_attempts: 3
+      before_retry:
+        prompt: |
+          The checks (`{{check_command}}`) failed after your change:
+
+          ```
+          {{LAST_ERROR}}
+          ```
+
+          Fix the cause in the code (do not disable or skip checks), then stop.
+          The checks run again after you finish.
+
+  - id: commit
+    depends_on: [checks]
+    git_commit:
+      message: '{{issue_title}} (#{{issue_number}})'
+    retry:
+      max_attempts: 2
+      # Only a failing pre-commit hook is worth a fix; a run that changed
+      # nothing fails at once.
+      should_retry: "$not($contains(error, 'no changes'))"
+      before_retry:
+        prompt: |
+          Committing failed with the following error:
+
+          ```
+          {{LAST_ERROR}}
+          ```
+
+          Fix the cause and stage the fix with `git add`. Do not commit.
+
+  - id: push
+    depends_on: [commit]
+    git_push:
+      branch: '{{branch}}'
+      set_upstream: true
+
+  - id: pull-request
+    depends_on: [push]
+    create_pr:
+      title: '{{issue_title}}'
+      body: '{{pr_body}}'
+      base: '{{base}}'
+      draft: true

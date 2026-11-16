@@ -1,15 +1,15 @@
 import { beforeEach, describe, expect, test } from 'bun:test';
 
+import { createSandboxProviderRegistry } from '@funny/sandbox';
+import { fakeSandboxProviderEntry } from '@funny/sandbox/providers/fake';
+import { expectOk } from '@funny/sandbox/testing';
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../../lib/types.js';
 import { createInfraRoutes } from '../../../routes/infra.js';
 import { createInfraConnectionService } from '../../../services/thread-sandboxes/infra-connections.js';
 import { createProjectSandboxSettingsService } from '../../../services/thread-sandboxes/project-sandbox-settings.js';
-import { fakeSandboxProviderEntry } from '../../../services/thread-sandboxes/providers/fake/fake-provider.js';
-import { createSandboxProviderRegistry } from '../../../services/thread-sandboxes/registry.js';
 import { createTestDb, seedProject } from '../../helpers/test-db.js';
-import { expectOk } from './provider-contract.js';
 
 let testDb: ReturnType<typeof createTestDb>;
 const registry = expectOk(createSandboxProviderRegistry([fakeSandboxProviderEntry()]));

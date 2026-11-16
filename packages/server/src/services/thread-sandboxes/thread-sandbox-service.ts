@@ -22,6 +22,19 @@
  * becomes the `sandbox` runner of the thread.
  */
 
+import {
+  resolveSandboxSize,
+  type SandboxError,
+  type SandboxHandle,
+  type SandboxProvider,
+  type TemplateRef,
+  pollUntil,
+  type RunnerBuild,
+  runnerInstallCommand,
+  runnerEnvFile,
+  runnerStartCommand,
+  type RunnerTemplateManager,
+} from '@funny/sandbox';
 import { ACTIVE_SANDBOX_STATES } from '@funny/shared/sandbox-machine';
 import { Effect, Exit } from 'effect';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -30,20 +43,9 @@ import { log } from '../../lib/logger.js';
 import { metric } from '../../lib/telemetry.js';
 import { mintLlmProxyToken } from '../llm-proxy/llm-proxy-tokens.js';
 import type { ProvisionTokenError } from '../runner-provision-tokens.js';
-import {
-  resolveSandboxSize,
-  type SandboxError,
-  type SandboxHandle,
-  type SandboxProvider,
-  type TemplateRef,
-} from './contract.js';
 import { fromResult, runToResult } from './effect-bridge.js';
-import { pollUntil } from './poll.js';
-import type { RunnerBuild } from './runner-build.js';
-import { runnerInstallCommand, startRunnerCommand } from './runner-install-script.js';
 import { runnerLinkEnv, type RunnerLink } from './runner-link.js';
 import { providerForConnection } from './sandbox-store-ops.js';
-import type { RunnerTemplateManager } from './template-manager.js';
 import {
   createThreadSandboxControl,
   DEFAULT_SANDBOX_LIFETIME_MS,
@@ -209,7 +211,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
       // Safe to retry: the idempotency key returns the machine an earlier attempt made.
       ops.call(() =>
         provider.create({
-          threadId: input.threadId,
+          ownerKey: input.threadId,
           sizeId: row.sizeId,
           ...(template ? { template } : {}),
           env: {},
@@ -240,14 +242,14 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
   ) =>
     Effect.scoped(
       Effect.gen(function* () {
-        const start = startRunnerCommand({
+        const envFile = runnerEnvFile({
           ...runnerLinkEnv(deps.runnerLink, row),
           RUNNER_PROVISION_TOKEN: provisionToken,
           // Model calls go through the server's LLM proxy with this token (llm-proxy).
           FUNNY_LLM_PROXY_TOKEN: llmToken,
         });
-        if (start.isErr()) {
-          return yield* Effect.fail<ProvisionError>({ kind: 'connection', message: start.error });
+        if (envFile.isErr()) {
+          return yield* Effect.fail<ProvisionError>({ kind: 'connection', message: envFile.error });
         }
 
         const handle = yield* acquireMachine(input, row, provider, template);
@@ -259,7 +261,10 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
           yield* ops.transition(input.threadId, 'INSTALL');
           yield* exec(provider, handle, runnerInstallCommand(deps.build), 'runner install');
         }
-        yield* exec(provider, handle, start.value, 'runner start');
+        const start = yield* providerCall(() =>
+          runnerStartCommand(provider, handle, envFile.value),
+        );
+        yield* exec(provider, handle, start, 'runner start');
         // The connect timeout starts here, once the runner is started.
         yield* ops.transition(input.threadId, 'CONNECT');
         const runnerId = yield* waitForSandboxRunner(

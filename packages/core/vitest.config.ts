@@ -25,6 +25,7 @@ export default defineConfig({
       '@funny/shared/checks': path.join(shared, 'checks/index.ts'),
       '@funny/shared/test-progress': path.join(shared, 'test-progress.ts'),
       '@funny/shared/task-progress': path.join(shared, 'task-progress.ts'),
+      '@funny/shared/github-app-token': path.join(shared, 'github-app-token.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),
       '@funny/core/agents': path.resolve(__dirname, 'src/agents/index.ts'),
       '@funny/core/git': path.resolve(__dirname, 'src/git/index.ts'),

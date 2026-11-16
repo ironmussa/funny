@@ -4,9 +4,9 @@
  * `ProvisionError`.
  */
 
+import type { SandboxProvider } from '@funny/sandbox';
 import type { ResultAsync } from 'neverthrow';
 
-import type { SandboxProvider } from './contract.js';
 import type { InfraConnectionError, InfraConnectionService } from './infra-connections.js';
 import type { ProvisionError } from './thread-sandbox-service.js';
 

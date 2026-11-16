@@ -11,6 +11,7 @@
  * written to logs. Every read is scoped to the owning user.
  */
 
+import type { SandboxError, SandboxProvider, SandboxProviderRegistry } from '@funny/sandbox';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
@@ -20,8 +21,6 @@ import { z } from 'zod';
 import { db } from '../../db/index.js';
 import { infraConnections, projectSandboxSettings } from '../../db/schema.js';
 import { decrypt, encrypt } from '../../lib/crypto.js';
-import type { SandboxError, SandboxProvider } from './contract.js';
-import type { SandboxProviderRegistry } from './registry.js';
 
 export interface InfraConnectionView {
   id: string;

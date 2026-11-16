@@ -15,10 +15,10 @@
 
 import { createHmac } from 'node:crypto';
 
+import type { SandboxProvider } from '@funny/sandbox';
 import { REVERSE_LINK_LOOPBACK_PORT, REVERSE_LINK_SECRET_ENV } from '@funny/shared/reverse-link';
 import { err, ok, type Result } from 'neverthrow';
 
-import type { SandboxProvider } from './contract.js';
 import type { PublicServerUrlError } from './public-server-url.js';
 
 export type RunnerLink =

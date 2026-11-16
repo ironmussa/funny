@@ -4,6 +4,7 @@
  */
 import { describe, expect, test } from 'bun:test';
 
+import { createFakeSandboxProvider } from '@funny/sandbox/providers/fake';
 import {
   REVERSE_LINK_INGRESS_PORT,
   REVERSE_LINK_LOOPBACK_PORT,
@@ -11,7 +12,6 @@ import {
 } from '@funny/shared/reverse-link';
 import { err, errAsync, ok, okAsync } from 'neverthrow';
 
-import { createFakeSandboxProvider } from '../../../services/thread-sandboxes/providers/fake/fake-provider.js';
 import type { ReverseLinkDialer } from '../../../services/thread-sandboxes/reverse-link/dialer.js';
 import {
   createReverseLinkSupervisor,
@@ -64,7 +64,7 @@ function setup(opts: { ingress?: boolean } = {}) {
   /** A running machine of the fake provider, as a linked row. */
   const machine = async (threadId: string, generation = 0): Promise<ReverseLinkedSandbox> => {
     const handle = await provider.create({
-      threadId,
+      ownerKey: threadId,
       sizeId: 'default',
       env: {},
       idempotencyKey: `${threadId}:${generation}`,

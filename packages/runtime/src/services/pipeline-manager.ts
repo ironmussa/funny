@@ -26,9 +26,9 @@ import type {
   PipelineVerdict,
   WSEvent,
 } from '@funny/shared';
+import type { YamlPipelineContext } from '@funny/workflows/compiler';
 
 import { log } from '../lib/logger.js';
-import type { YamlPipelineContext } from '../pipelines/yaml-compiler.js';
 import { loadPipelines, type LoadedPipeline } from '../pipelines/yaml-loader.js';
 import { BUILTIN_AGENTS, resolveAgent, resolveBuiltinAgentByName } from './agent-registry.js';
 import { RuntimeActionProvider, RuntimeProgressReporter } from './pipeline-adapter.js';

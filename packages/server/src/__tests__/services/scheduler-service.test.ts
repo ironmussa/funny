@@ -301,6 +301,35 @@ describe('SchedulerService.refresh', () => {
     expect(dispatcher.handles).toHaveLength(1); // still the one in-flight run
   });
 
+  test('an archived blocker is terminal, whatever its stage column says', async () => {
+    // Archiving keeps the stage (it is what unarchiving restores).
+    seedThread(testDb.db, {
+      id: 'gate',
+      projectId: 'p1',
+      userId: 'user-1',
+      stage: 'in_progress',
+      status: 'completed',
+      archived: 1,
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    seedThread(testDb.db, {
+      id: 'follow',
+      projectId: 'p1',
+      userId: 'user-1',
+      stage: 'in_progress',
+      status: 'pending',
+      createdAt: '2026-01-02T00:00:00Z',
+    });
+    await runRepo.addDependency('follow', 'gate');
+
+    const terminal = await threadQuery.listTerminalThreadIds();
+    expect(terminal.has('gate')).toBe(true);
+
+    // So the thread waiting on it is dispatched instead of blocked forever.
+    await makeService().refresh();
+    expect(dispatcher.handles).toHaveLength(1);
+  });
+
   test('blocked-by-dependency threads stay queued until the blocker is terminal', async () => {
     seedThread(testDb.db, {
       id: 'gate',

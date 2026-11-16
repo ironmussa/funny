@@ -19,12 +19,14 @@ import type { Thread } from '@funny/shared';
 import type { AppDatabase } from '@funny/shared/db/connection';
 import { dbAll, dbGet } from '@funny/shared/db/connection';
 import type { ThreadQueryAdapter } from '@funny/thread-scheduler';
-import { and, eq, inArray, notInArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, or, sql } from 'drizzle-orm';
 
 import { db as defaultDb } from '../db/index.js';
 import * as defaultSchema from '../db/schema.js';
 
 const ELIGIBLE_STAGES = ['backlog', 'planning', 'in_progress'] as const;
+// Archiving sets the `archived` flag and keeps `stage` (so unarchiving restores
+// it): an archived thread is terminal whatever its stage column says.
 const TERMINAL_STAGES = ['done', 'archived'] as const;
 const RUNNING_STATUSES = ['running', 'setting_up', 'completed'] as const;
 
@@ -72,7 +74,12 @@ export function createThreadQuery(deps: ThreadQueryDeps): ThreadQueryAdapter {
         db
           .select({ id: schema.threads.id })
           .from(schema.threads)
-          .where(inArray(schema.threads.stage, TERMINAL_STAGES as unknown as string[])),
+          .where(
+            or(
+              inArray(schema.threads.stage, TERMINAL_STAGES as unknown as string[]),
+              eq(schema.threads.archived, 1),
+            ),
+          ),
       );
       return new Set(rows.map((r) => r.id));
     },

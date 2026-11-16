@@ -18,15 +18,16 @@
  * @domain layer: application
  */
 
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../db/index.js';
-import { projectSandboxSettings } from '../../db/schema.js';
+import { projectSandboxSettings, threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { startThreadOnRunner, type RunnerPorts } from '../runner-thread-launcher.js';
 import type { ThreadRuntimeMode } from '../thread-sandboxes/project-sandbox-settings.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
-import { createFactoryRunsRepository } from './factory-runs.js';
+import { onFactoryThreadTerminal } from './factory-runs-completion.js';
+import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
 import {
   getEnabledFactory,
   listEnabledFactories,
@@ -63,7 +64,17 @@ const startIntervalPoll: CreatePoll = (onTick) => {
   return { stop: () => clearInterval(timer) };
 };
 
+/** Runs of an issue that may fail before the factory stops re-admitting it. */
+export const MAX_ATTEMPTS = 3;
+
+/** A run still `queued` this long after admission lost its launch (e.g. a crash). */
+const QUEUED_STALE_MS = 10 * 60 * 1000;
+
+const TERMINAL_THREAD_STATUSES = new Set(['completed', 'failed', 'stopped', 'interrupted']);
+
 const jobs = new Map<string, FactoryPoll>();
+/** Factories with a tick in progress: a slow tick is never overlapped by the next one. */
+const busy = new Set<string>();
 let deps: FactoryWatcherDeps | null = null;
 let runs: ReturnType<typeof createFactoryRunsRepository> | null = null;
 
@@ -97,6 +108,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
 export function stopFactoryWatcher(): void {
   for (const job of jobs.values()) job.stop();
   jobs.clear();
+  busy.clear();
   deps = null;
   runs = null;
 }
@@ -128,13 +140,23 @@ function schedule(factory: EnabledFactory): void {
 
 /** One poll. A rejection is logged here; it is never passed on to a timer. */
 function tick(id: string): Promise<void> {
-  return fire(id).catch((error: unknown) => {
-    log.error('Issue factory tick failed', {
+  if (busy.has(id)) {
+    log.info('Issue factory tick skipped: the previous tick is still running', {
       namespace: 'factory',
       factoryId: id,
-      error: error instanceof Error ? error.message : String(error),
     });
-  });
+    return Promise.resolve();
+  }
+  busy.add(id);
+  return fire(id)
+    .catch((error: unknown) => {
+      log.error('Issue factory tick failed', {
+        namespace: 'factory',
+        factoryId: id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    })
+    .finally(() => busy.delete(id));
 }
 
 async function fire(id: string): Promise<void> {
@@ -145,6 +167,7 @@ async function fire(id: string): Promise<void> {
     unscheduleFactory(id);
     return;
   }
+  await reconcile(factory.id);
   // The enabler's runtime decides where the agent runs. Phase 2 launches only
   // local and worktree threads; a sandbox runtime is NOT downgraded to local
   // (issue text is untrusted input, and the enabler chose isolation), so the
@@ -209,12 +232,60 @@ async function admitIssues(
 
   for (const issue of issues) {
     if (slots <= 0) break;
-    const existing = await runs.activeByIssue(factory.id, issue.number);
-    if (existing.isErr()) continue;
-    if (existing.value) continue; // already running for this issue
+    if (!(await isAdmissible(factory.id, issue.number))) continue;
     const started = await startImplement(factory, repo, mode, issue);
     if (started) slots--;
   }
+}
+
+/**
+ * An issue may be admitted when it has no run in progress (or parked for a
+ * person) and has failed fewer than `MAX_ATTEMPTS` times. A lookup that fails
+ * skips the issue this tick rather than risk a second run.
+ */
+async function isAdmissible(factoryId: string, issueNumber: number): Promise<boolean> {
+  if (!runs) return false;
+  const existing = await runs.activeByIssue(factoryId, issueNumber);
+  if (existing.isErr() || existing.value) return false;
+  const failures = await runs.failedCount(factoryId, issueNumber);
+  return failures.isOk() && failures.value < MAX_ATTEMPTS;
+}
+
+/**
+ * Settle in-flight runs from the server's own records, so a lost signal never
+ * holds a slot forever: a `working` run whose thread already finished is
+ * completed (its terminal event may have raced the launch, or arrived while the
+ * server was down), one whose thread is gone fails, and a `queued` run whose
+ * launch never finished fails once stale.
+ */
+async function reconcile(factoryId: string): Promise<void> {
+  if (!runs) return;
+  const inFlight = await runs.inFlight(factoryId);
+  if (inFlight.isErr()) return;
+  const now = (deps?.now ?? (() => new Date()))().getTime();
+  for (const run of inFlight.value) {
+    if (run.state === 'queued') {
+      if (now - Date.parse(run.startedAt) > QUEUED_STALE_MS) {
+        await runs.advance(run.id, 'queued', { state: 'failed', currentStep: null });
+      }
+    } else if (run.state === 'working') {
+      await settleWorkingRun(run);
+    }
+  }
+}
+
+async function settleWorkingRun(run: FactoryRunView): Promise<void> {
+  if (!runs || run.threadIds.length === 0) return;
+  const rows = await db
+    .select({ id: threads.id, status: threads.status })
+    .from(threads)
+    .where(inArray(threads.id, run.threadIds));
+  if (rows.length === 0) {
+    await runs.advance(run.id, 'working', { state: 'failed', currentStep: null });
+    return;
+  }
+  const finished = rows.find((row) => TERMINAL_THREAD_STATUSES.has(row.status));
+  if (finished) await onFactoryThreadTerminal(finished.id, finished.status);
 }
 
 /** Start one implement thread for an issue and record its run. */
@@ -224,52 +295,48 @@ async function startImplement(
   mode: LaunchMode,
   issue: FactoryIssue,
 ): Promise<boolean> {
-  if (!deps || !runs) return false;
-  const title = `[Factory] #${issue.number} ${issue.title}`.slice(0, 200);
-  const prompt = buildImplementPrompt(repo, issue);
+  if (!runs) return false;
 
-  const launched = await (deps.launch ?? startThreadOnRunner)(
-    {
-      userId: factory.userId,
-      body: {
-        projectId: factory.projectId,
-        title,
-        mode,
-        source: 'factory',
-        prompt,
-      },
-    },
-    deps.ports,
-  );
-
-  const threadId = launched.isOk() ? launched.value.threadId : undefined;
-  if (launched.isErr() || !threadId) {
-    log.warn('Issue factory run could not start', {
+  // Record the run before launching, so the issue is taken while the launch is
+  // in flight: no later tick (or reschedule) can admit it a second time.
+  const run = await runs.start({
+    factoryId: factory.id,
+    issueNumber: issue.number,
+    currentStep: 'implement',
+  });
+  if (run.isErr()) {
+    log.error('Issue factory run could not be recorded', {
       namespace: 'factory',
       factoryId: factory.id,
       issue: issue.number,
-      reason: launched.isErr() ? launched.error.message : 'runner returned no thread id',
+      error: run.error.message,
     });
     return false;
   }
 
-  const run = await runs.start({
-    factoryId: factory.id,
-    issueNumber: issue.number,
+  const threadId = await launchImplement(factory, repo, mode, issue);
+  if (!threadId) {
+    // No agent ran, so this is not an attempt: drop the run and let a later
+    // tick try again (e.g. once the enabler's runner is back online).
+    await runs.remove(run.value.id);
+    return false;
+  }
+
+  const recorded = await runs.advance(run.value.id, 'queued', {
+    state: 'working',
     threadIds: [threadId],
-    currentStep: 'implement',
   });
-  if (run.isErr()) {
-    log.error('Issue factory run started but could not be recorded', {
+  if (recorded.isErr()) {
+    // The thread runs but its run stays `queued`; reconcile fails it once stale.
+    log.error('Issue factory run started but its thread could not be recorded', {
       namespace: 'factory',
       factoryId: factory.id,
       issue: issue.number,
       threadId,
-      error: run.error.message,
+      error: recorded.error.message,
     });
     return true;
   }
-  await runs.update(run.value.id, { state: 'working' });
   log.info('Issue factory run started', {
     namespace: 'factory',
     factoryId: factory.id,
@@ -292,6 +359,38 @@ type LaunchMode = 'local' | 'worktree';
 async function resolveMode(userId: string, projectId: string): Promise<LaunchMode | null> {
   const runtime = await (deps?.resolveRuntime ?? defaultResolveRuntime)(userId, projectId);
   return runtime === 'sandbox' ? null : runtime;
+}
+
+/** Start the implement thread on the enabler's runner; its id, or null when it did not start. */
+async function launchImplement(
+  factory: EnabledFactory,
+  repo: string,
+  mode: LaunchMode,
+  issue: FactoryIssue,
+): Promise<string | null> {
+  if (!deps) return null;
+  const launched = await (deps.launch ?? startThreadOnRunner)(
+    {
+      userId: factory.userId,
+      body: {
+        projectId: factory.projectId,
+        title: `[Factory] #${issue.number} ${issue.title}`.slice(0, 200),
+        mode,
+        source: 'factory',
+        prompt: buildImplementPrompt(repo, issue),
+      },
+    },
+    deps.ports,
+  );
+  const threadId = launched.isOk() ? launched.value.threadId : undefined;
+  if (threadId) return threadId;
+  log.warn('Issue factory run could not start', {
+    namespace: 'factory',
+    factoryId: factory.id,
+    issue: issue.number,
+    reason: launched.isErr() ? launched.error.message : 'runner returned no thread id',
+  });
+  return null;
 }
 
 function buildImplementPrompt(repo: string, issue: FactoryIssue): string {

@@ -9,7 +9,10 @@
  *     PR for a person to carry forward. Non-terminal keeps the issue from being
  *     re-admitted; phase 4's stop/retry/take-over frees the slot. The CI + merge
  *     steps that would advance it automatically arrive in phase 3.
- *   - otherwise → `failed` (terminal).
+ *   - otherwise → `failed` (terminal). The watcher re-admits a failed issue up
+ *     to `MAX_ATTEMPTS` times in all.
+ *   - `waiting_human` frees the factory's concurrency slot (it holds no agent)
+ *     but still blocks re-admitting its issue.
  *
  * @domain subdomain: Issue Factory
  * @domain type: app-service
@@ -40,7 +43,9 @@ export async function onFactoryThreadTerminal(threadId: string, status: string):
   if (run.currentStep !== 'implement') return;
 
   const completed = status === 'completed';
-  const updated = await runs.update(run.id, {
+  // Only a run still `working` moves: a second terminal signal (the runner's
+  // event plus the watcher's reconcile) or a stop that raced it changes nothing.
+  const updated = await runs.advance(run.id, 'working', {
     state: completed ? 'waiting_human' : 'failed',
     currentStep: null,
   });
@@ -53,6 +58,7 @@ export async function onFactoryThreadTerminal(threadId: string, status: string):
     });
     return;
   }
+  if (!updated.value) return;
   log.info('Issue factory run completed', {
     namespace: 'factory',
     runId: run.id,

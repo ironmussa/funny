@@ -1,4 +1,4 @@
-import type { ParsedNode, ParsedWorkflow } from './schema.js';
+import { ACTION_KEYS, type ParsedNode, type ParsedWorkflow } from './schema.js';
 
 export interface WorkflowGraphPosition {
   x: number;
@@ -154,17 +154,3 @@ function computeLevels(workflow: ParsedWorkflow): Map<string, number> {
 function dedupe(values: string[]): string[] {
   return [...new Set(values)];
 }
-
-const ACTION_KEYS = [
-  'spawn_agent',
-  'run_command',
-  'bash',
-  'git_commit',
-  'git_push',
-  'create_pr',
-  'notify',
-  'set_status',
-  'set_stage',
-  'approval',
-  'pipeline',
-] as const;

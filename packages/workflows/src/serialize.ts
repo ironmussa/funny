@@ -1,6 +1,6 @@
 import { stringify } from 'yaml';
 
-import type { ParsedNode, ParsedWorkflow } from './schema.js';
+import { ACTION_KEYS, type ParsedNode, type ParsedWorkflow } from './schema.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -40,17 +40,3 @@ function normalizeNodeForYaml(node: ParsedNode): JsonObject {
 
   return out;
 }
-
-const ACTION_KEYS = [
-  'spawn_agent',
-  'run_command',
-  'bash',
-  'git_commit',
-  'git_push',
-  'create_pr',
-  'notify',
-  'set_status',
-  'set_stage',
-  'approval',
-  'pipeline',
-] as const;

@@ -10,7 +10,7 @@ import { parseStoredJson } from '@funny/shared/json-validation';
  * `activeByIssue` for admission (one run per issue) and the Factory tab lists
  * them per factory.
  */
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, notInArray } from 'drizzle-orm';
 import { okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
@@ -31,7 +31,14 @@ export type FactoryRunState =
   | 'failed'
   | 'stopped';
 
-const TERMINAL: ReadonlySet<FactoryRunState> = new Set(['merged', 'failed', 'stopped']);
+const TERMINAL_STATES = ['merged', 'failed', 'stopped'] as const satisfies FactoryRunState[];
+const TERMINAL: ReadonlySet<FactoryRunState> = new Set(TERMINAL_STATES);
+
+/**
+ * Non-terminal states that do NOT hold a concurrency slot: the agent is done and
+ * the run waits for a person. It still blocks re-admitting its issue.
+ */
+const PARKED_STATES = ['waiting_human'] as const satisfies FactoryRunState[];
 
 export interface FactoryRunView {
   id: string;
@@ -75,6 +82,7 @@ function parseThreadIds(raw: string | null): string[] {
 export interface StartRunInput {
   factoryId: string;
   issueNumber: number;
+  state?: FactoryRunState;
   threadIds?: string[];
   currentStep?: string;
 }
@@ -86,9 +94,36 @@ export interface UpdateRunInput {
   threadIds?: string[];
 }
 
+function changesFor(input: UpdateRunInput): Partial<Row> | null {
+  const changes: Partial<Row> = {};
+  if (input.state !== undefined) {
+    changes.state = input.state;
+    if (TERMINAL.has(input.state)) changes.completedAt = new Date().toISOString();
+  }
+  if (input.currentStep !== undefined) changes.currentStep = input.currentStep;
+  if (input.prUrl !== undefined) changes.prUrl = input.prUrl;
+  if (input.threadIds !== undefined) changes.threadIds = JSON.stringify(input.threadIds);
+  return Object.keys(changes).length === 0 ? null : changes;
+}
+
 export function createFactoryRunsRepository(
   deps: { newId: () => string } = { newId: () => crypto.randomUUID() },
 ) {
+  /** Runs holding a concurrency slot: non-terminal and not parked for a person. */
+  const inFlight = (factoryId: string): ResultAsync<FactoryRunView[], FactoryRunsError> =>
+    ResultAsync.fromPromise(
+      db
+        .select()
+        .from(factoryRuns)
+        .where(
+          and(
+            eq(factoryRuns.factoryId, factoryId),
+            notInArray(factoryRuns.state, [...TERMINAL_STATES, ...PARKED_STATES]),
+          ),
+        ),
+      storage,
+    ).map((rows) => rows.map(toView));
+
   return {
     /** Runs for a factory, newest first. */
     list(factoryId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
@@ -103,14 +138,18 @@ export function createFactoryRunsRepository(
     },
 
     /**
-     * The run that owns `threadId`, if any — the completion lookup. Scans the
-     * table (bounded by the concurrency cap); `thread_ids` is a JSON array, so
-     * there is no indexed column to match on.
+     * The in-flight run that owns `threadId`, if any — the completion lookup.
+     * Only non-terminal rows are read (bounded by the factories' concurrency);
+     * `thread_ids` is a JSON array, so the match itself happens here.
      */
     findByThreadId(threadId: string): ResultAsync<FactoryRunView | null, FactoryRunsError> {
-      return ResultAsync.fromPromise(db.select().from(factoryRuns), storage).map(
-        (rows) => rows.map(toView).find((r) => r.threadIds.includes(threadId)) ?? null,
-      );
+      return ResultAsync.fromPromise(
+        db
+          .select()
+          .from(factoryRuns)
+          .where(notInArray(factoryRuns.state, [...TERMINAL_STATES])),
+        storage,
+      ).map((rows) => rows.map(toView).find((r) => r.threadIds.includes(threadId)) ?? null);
     },
 
     /** The non-terminal run for an issue, if any — the admission dedup check. */
@@ -123,21 +162,38 @@ export function createFactoryRunsRepository(
           .select()
           .from(factoryRuns)
           .where(
-            and(eq(factoryRuns.factoryId, factoryId), eq(factoryRuns.issueNumber, issueNumber)),
+            and(
+              eq(factoryRuns.factoryId, factoryId),
+              eq(factoryRuns.issueNumber, issueNumber),
+              notInArray(factoryRuns.state, [...TERMINAL_STATES]),
+            ),
           ),
         storage,
-      ).map((rows) => {
-        const active = rows.map(toView).find((r) => !TERMINAL.has(r.state));
-        return active ?? null;
-      });
+      ).map((rows) => (rows[0] ? toView(rows[0]) : null));
     },
 
-    /** How many runs are in flight for a factory (for the concurrency cap). */
-    countActive(factoryId: string): ResultAsync<number, FactoryRunsError> {
+    /** How many times an issue's run has failed — the retry cap. */
+    failedCount(factoryId: string, issueNumber: number): ResultAsync<number, FactoryRunsError> {
       return ResultAsync.fromPromise(
-        db.select().from(factoryRuns).where(eq(factoryRuns.factoryId, factoryId)),
+        db
+          .select({ id: factoryRuns.id })
+          .from(factoryRuns)
+          .where(
+            and(
+              eq(factoryRuns.factoryId, factoryId),
+              eq(factoryRuns.issueNumber, issueNumber),
+              eq(factoryRuns.state, 'failed'),
+            ),
+          ),
         storage,
-      ).map((rows) => rows.map(toView).filter((r) => !TERMINAL.has(r.state)).length);
+      ).map((rows) => rows.length);
+    },
+
+    inFlight,
+
+    /** How many runs hold a concurrency slot (see `inFlight`). */
+    countActive(factoryId: string): ResultAsync<number, FactoryRunsError> {
+      return inFlight(factoryId).map((rows) => rows.length);
     },
 
     start(input: StartRunInput): ResultAsync<FactoryRunView, FactoryRunsError> {
@@ -146,7 +202,7 @@ export function createFactoryRunsRepository(
         factoryId: input.factoryId,
         issueNumber: input.issueNumber,
         prUrl: null,
-        state: 'queued',
+        state: input.state ?? 'queued',
         currentStep: input.currentStep ?? null,
         threadIds: JSON.stringify(input.threadIds ?? []),
         startedAt: new Date().toISOString(),
@@ -158,17 +214,41 @@ export function createFactoryRunsRepository(
     },
 
     update(runId: string, input: UpdateRunInput): ResultAsync<void, FactoryRunsError> {
-      const changes: Partial<Row> = {};
-      if (input.state !== undefined) {
-        changes.state = input.state;
-        if (TERMINAL.has(input.state)) changes.completedAt = new Date().toISOString();
-      }
-      if (input.currentStep !== undefined) changes.currentStep = input.currentStep;
-      if (input.prUrl !== undefined) changes.prUrl = input.prUrl;
-      if (input.threadIds !== undefined) changes.threadIds = JSON.stringify(input.threadIds);
-      if (Object.keys(changes).length === 0) return okAsync(undefined);
+      const changes = changesFor(input);
+      if (!changes) return okAsync(undefined);
       return ResultAsync.fromPromise(
         db.update(factoryRuns).set(changes).where(eq(factoryRuns.id, runId)),
+        storage,
+      ).map(() => undefined);
+    },
+
+    /**
+     * Update a run only while it is still in `from` — so a late writer cannot
+     * overwrite a transition another path already made (e.g. the launch marking
+     * a run `working` after its thread already finished). Resolves whether the
+     * run was in `from` and changed.
+     */
+    advance(
+      runId: string,
+      from: FactoryRunState,
+      input: UpdateRunInput,
+    ): ResultAsync<boolean, FactoryRunsError> {
+      const changes = changesFor(input);
+      if (!changes) return okAsync(false);
+      return ResultAsync.fromPromise(
+        db
+          .update(factoryRuns)
+          .set(changes)
+          .where(and(eq(factoryRuns.id, runId), eq(factoryRuns.state, from)))
+          .returning({ id: factoryRuns.id }),
+        storage,
+      ).map((rows) => rows.length > 0);
+    },
+
+    /** Drop a run that never started (its launch failed before any agent ran). */
+    remove(runId: string): ResultAsync<void, FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db.delete(factoryRuns).where(eq(factoryRuns.id, runId)),
         storage,
       ).map(() => undefined);
     },

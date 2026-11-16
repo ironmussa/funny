@@ -16,12 +16,13 @@ import {
 } from '../../../services/factory/factory-settings.js';
 import {
   type CreatePoll,
+  MAX_ATTEMPTS,
   scheduledFactoryCount,
   startFactoryWatcher,
   stopFactoryWatcher,
 } from '../../../services/factory/factory-watcher.js';
 import type { StartThreadInput } from '../../../services/runner-thread-launcher.js';
-import { createTestDb, seedProject } from '../../helpers/test-db.js';
+import { createTestDb, seedProject, seedThread } from '../../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
 
@@ -149,6 +150,7 @@ describe('factory watcher', () => {
 
   test('does not re-admit an issue that already has an active run', async () => {
     const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 'old', projectId: 'p1', userId: 'alice', status: 'running' });
     const runs = createFactoryRunsRepository();
     const first = await runs.start({
       factoryId,
@@ -192,6 +194,148 @@ describe('factory watcher', () => {
 
     expect(launcher.calls).toHaveLength(1);
     expect(launcher.calls[0]!.body.title).toContain('#1');
+  });
+
+  test('a tick still running is not overlapped by the next one', async () => {
+    await enableFactory();
+    const poll = fakePoll();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    const calls: StartThreadInput[] = [];
+    const slowLaunch = async (input: StartThreadInput) => {
+      calls.push(input);
+      await gate;
+      return ok({ thread: { id: 't-1' }, threadId: 't-1', runnerId: 'r1' });
+    };
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: slowLaunch as any,
+      resolveRuntime,
+    });
+
+    const first = poll.ticks[0]!();
+    await poll.ticks[0]!(); // fires while the first launch is still in flight
+    release();
+    await first;
+
+    expect(calls).toHaveLength(1);
+  });
+
+  test('the issue is taken before the launch returns, so no second run starts for it', async () => {
+    const factoryId = await enableFactory();
+    const poll = fakePoll();
+    let seenDuringLaunch: unknown = 'unset';
+    const launch = async () => {
+      seenDuringLaunch = (
+        await createFactoryRunsRepository().activeByIssue(factoryId, 7)
+      )._unsafeUnwrap()?.state;
+      return ok({ thread: { id: 't-1' }, threadId: 't-1', runnerId: 'r1' });
+    };
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: launch as any,
+      resolveRuntime,
+    });
+
+    await poll.ticks[0]!();
+
+    expect(seenDuringLaunch).toBe('queued');
+  });
+
+  test('a launch that fails leaves no run, and a later tick tries again', async () => {
+    const factoryId = await enableFactory();
+    const poll = fakePoll();
+    const offline = fakeLauncher('offline');
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: offline.launch,
+      resolveRuntime,
+    });
+
+    await poll.ticks[0]!();
+    await poll.ticks[0]!();
+
+    expect(offline.calls).toHaveLength(2);
+    expect((await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap()).toEqual([]);
+  });
+
+  test(`an issue that failed ${MAX_ATTEMPTS} times is not admitted again`, async () => {
+    const factoryId = await enableFactory();
+    const runs = createFactoryRunsRepository();
+    for (let i = 0; i < MAX_ATTEMPTS; i++) {
+      const run = (await runs.start({ factoryId, issueNumber: 7 }))._unsafeUnwrap();
+      await runs.update(run.id, { state: 'failed' });
+    }
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+    });
+
+    await poll.ticks[0]!();
+
+    expect(launcher.calls).toHaveLength(0);
+  });
+
+  test('a run waiting for a person frees its slot but still holds its issue', async () => {
+    const factoryId = await enableFactory({ maxConcurrent: 1 });
+    const runs = createFactoryRunsRepository();
+    const parked = (await runs.start({ factoryId, issueNumber: 1 }))._unsafeUnwrap();
+    await runs.update(parked.id, { state: 'waiting_human' });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', [
+        { number: 1, title: 'a', url: 'u/1' },
+        { number: 2, title: 'b', url: 'u/2' },
+      ]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+    });
+
+    await poll.ticks[0]!();
+
+    expect(launcher.calls.map((call) => call.body.title)).toEqual(['[Factory] #2 b']);
+  });
+
+  test('a working run whose thread already finished is completed by the next tick', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-done', projectId: 'p1', userId: 'alice', status: 'completed' });
+    const runs = createFactoryRunsRepository();
+    const run = (
+      await runs.start({
+        factoryId,
+        issueNumber: 7,
+        threadIds: ['t-done'],
+        currentStep: 'implement',
+        state: 'working',
+      })
+    )._unsafeUnwrap();
+    const poll = fakePoll();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', []),
+      createPoll: poll.createPoll,
+      launch: fakeLauncher().launch,
+      resolveRuntime,
+    });
+
+    await poll.ticks[0]!();
+
+    const [after] = (await runs.list(factoryId))._unsafeUnwrap();
+    expect(after).toMatchObject({ id: run.id, state: 'waiting_human' });
   });
 
   test('skips the tick when the repo cannot be resolved', async () => {
@@ -239,6 +383,24 @@ describe('onFactoryThreadTerminal', () => {
 
     const [after] = (await runs.list(factoryId))._unsafeUnwrap();
     expect(after).toMatchObject({ state: 'failed', currentStep: null });
+  });
+
+  test('a second terminal signal for the same thread changes nothing', async () => {
+    const factoryId = await enableFactory();
+    const runs = createFactoryRunsRepository();
+    await runs.start({
+      factoryId,
+      issueNumber: 5,
+      threadIds: ['t-z'],
+      currentStep: 'implement',
+      state: 'working',
+    });
+
+    await onFactoryThreadTerminal('t-z', 'completed');
+    await onFactoryThreadTerminal('t-z', 'failed');
+
+    const [after] = (await runs.list(factoryId))._unsafeUnwrap();
+    expect(after).toMatchObject({ state: 'waiting_human' });
   });
 
   test('ignores a thread with no factory run', async () => {

@@ -321,8 +321,10 @@ export async function startBunServer(opts: BunHostOptions) {
       process.exit(1);
     }, 5000);
 
-    // Stop firing automations before the runner transport goes away
+    // Stop firing automations and factory polls before the runner transport goes away
     automationScheduler.stopAutomationScheduler();
+    const { stopFactoryWatcher } = await import('../../services/factory/factory-watcher.js');
+    stopFactoryWatcher();
     // Cancelled sandbox setups destroy their machines (bounded wait, under forceExit).
     await sandboxLifecycle.stopSandboxLifecycle();
 

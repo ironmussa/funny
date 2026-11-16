@@ -35,4 +35,29 @@ nodes:
     expect(reparsed.ok).toBe(true);
     if (reparsed.ok) expect(reparsed.workflow).toEqual(parsed.workflow);
   });
+
+  test('round-trips the CI and merge nodes', () => {
+    const parsed = parseWorkflowYaml(`
+name: ci-merge
+nodes:
+  - id: ci
+    wait_ci:
+      timeout_ms: 600000
+      required_checks: [build]
+  - id: ship
+    depends_on: [ci]
+    merge:
+      method: squash
+      delete_branch: true
+`);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+
+    const yaml = serializeWorkflow(parsed.workflow);
+    expect(yaml).toContain('wait_ci');
+    expect(yaml).toContain('merge');
+    const reparsed = parseWorkflowYaml(yaml);
+    expect(reparsed.ok).toBe(true);
+    if (reparsed.ok) expect(reparsed.workflow).toEqual(parsed.workflow);
+  });
 });

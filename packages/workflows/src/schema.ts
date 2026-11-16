@@ -212,7 +212,11 @@ const loopConfig = z
 
 // ── Action keys (one of) ────────────────────────────────────
 
-const ACTION_KEYS = [
+/**
+ * Every node action key. The single list the parser, the serializer, the graph
+ * view and the editor share: a key missing from it is dropped on save.
+ */
+export const ACTION_KEYS = [
   'spawn_agent',
   'run_command',
   'bash',
@@ -227,6 +231,8 @@ const ACTION_KEYS = [
   'approval',
   'pipeline',
 ] as const;
+
+export type WorkflowActionKey = (typeof ACTION_KEYS)[number];
 
 // ── Workflow node ───────────────────────────────────────────
 

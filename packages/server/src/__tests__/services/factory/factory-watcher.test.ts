@@ -22,7 +22,7 @@ import {
   stopFactoryWatcher,
 } from '../../../services/factory/factory-watcher.js';
 import type { StartThreadInput } from '../../../services/runner-thread-launcher.js';
-import { createTestDb, seedProject, seedThread } from '../../helpers/test-db.js';
+import { createTestDb, seedProject, seedProjectMember, seedThread } from '../../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
 
@@ -336,6 +336,30 @@ describe('factory watcher', () => {
 
     const [after] = (await runs.list(factoryId))._unsafeUnwrap();
     expect(after).toMatchObject({ id: run.id, state: 'waiting_human' });
+  });
+
+  test('a factory whose enabler lost steer access is turned off and starts nothing', async () => {
+    seedProject(testDb.db, { id: 'bob-project', userId: 'bob', path: '/tmp/bob' });
+    seedProjectMember(testDb.db, { projectId: 'bob-project', userId: 'alice', role: 'member' });
+    const settings = createFactorySettingsService();
+    (await settings.save('alice', 'bob-project', { enabled: true }))._unsafeUnwrap();
+    // Demoted to viewer after turning the factory on.
+    testDb.sqlite.query("UPDATE project_members SET role = 'viewer' WHERE user_id = 'alice'").run();
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+    });
+
+    await poll.ticks[0]!();
+
+    expect(launcher.calls).toHaveLength(0);
+    expect((await settings.get('alice', 'bob-project'))._unsafeUnwrap()?.enabled).toBe(false);
+    expect(scheduledFactoryCount()).toBe(0);
   });
 
   test('skips the tick when the repo cannot be resolved', async () => {

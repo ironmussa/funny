@@ -137,6 +137,17 @@ export async function getEnabledFactory(id: string): Promise<EnabledFactory | nu
   return row && row.enabled === 1 ? toEnabled(row) : null;
 }
 
+/**
+ * Turn a factory off from the server (no caller to authorize) — the watcher
+ * does this when its enabler can no longer start threads on the project.
+ */
+export async function disableFactory(id: string): Promise<void> {
+  await db
+    .update(factorySettings)
+    .set({ enabled: 0, updatedAt: new Date().toISOString() })
+    .where(eq(factorySettings.id, id));
+}
+
 export function createFactorySettingsService(
   deps: { newId: () => string } = { newId: () => crypto.randomUUID() },
 ) {

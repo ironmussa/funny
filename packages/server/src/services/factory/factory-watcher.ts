@@ -22,13 +22,17 @@ import { and, eq, inArray } from 'drizzle-orm';
 
 import { db } from '../../db/index.js';
 import { projectSandboxSettings, threads } from '../../db/schema.js';
+import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
+import { projectRole } from '../../lib/server-authorizer.js';
+import { decideProjectAccess } from '../../middleware/project-access.js';
 import { startThreadOnRunner, type RunnerPorts } from '../runner-thread-launcher.js';
 import type { ThreadRuntimeMode } from '../thread-sandboxes/project-sandbox-settings.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
 import { onFactoryThreadTerminal } from './factory-runs-completion.js';
 import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
 import {
+  disableFactory,
   getEnabledFactory,
   listEnabledFactories,
   type EnabledFactory,
@@ -49,6 +53,8 @@ export interface FactoryWatcherDeps {
   createPoll?: CreatePoll;
   /** Launcher override for tests. */
   launch?: typeof startThreadOnRunner;
+  /** Access check override for tests; defaults to `steer` via the server's role resolver. */
+  checkAccess?: (userId: string, projectId: string) => Promise<boolean>;
   /** Runtime resolver override for tests; defaults to the enabler's `project_sandbox_settings`. */
   resolveRuntime?: (userId: string, projectId: string) => Promise<ThreadRuntimeMode>;
   now?: () => Date;
@@ -167,7 +173,9 @@ async function fire(id: string): Promise<void> {
     unscheduleFactory(id);
     return;
   }
+  // In-flight runs settle either way; only admission needs the enabler's access.
   await reconcile(factory.id);
+  if (!(await enablerCanStillSteer(factory))) return;
   // The enabler's runtime decides where the agent runs. Phase 2 launches only
   // local and worktree threads; a sandbox runtime is NOT downgraded to local
   // (issue text is untrusted input, and the enabler chose isolation), so the
@@ -209,6 +217,30 @@ async function fire(id: string): Promise<void> {
   }
 
   await admitIssues(factory, repo, mode, issues.value);
+}
+
+/**
+ * The factory runs as its enabler, so it may only start threads while they
+ * still hold `steer` on the project — re-checked every tick, since a role can
+ * be lowered or a member removed after the factory was turned on. When they
+ * lost it, the factory is turned off (and audited) instead of acting for them.
+ */
+async function enablerCanStillSteer(factory: EnabledFactory): Promise<boolean> {
+  const check = deps?.checkAccess ?? defaultCheckAccess;
+  if (await check(factory.userId, factory.projectId)) return true;
+  await disableFactory(factory.id);
+  unscheduleFactory(factory.id);
+  audit({
+    action: 'factory.disabled_access_lost',
+    actorId: factory.userId,
+    detail: `Factory for project ${factory.projectId} turned off: its enabler can no longer start threads there`,
+    meta: { factoryId: factory.id, projectId: factory.projectId },
+  });
+  return false;
+}
+
+async function defaultCheckAccess(userId: string, projectId: string): Promise<boolean> {
+  return (await decideProjectAccess(projectRole, 'steer', projectId, userId)) === null;
 }
 
 /** Admit each issue not already running, up to the concurrency cap. */

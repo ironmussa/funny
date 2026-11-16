@@ -61,10 +61,15 @@ export interface PullRequestCi {
   /** Take the pull request out of draft. */
   markReady(repo: string, number: number): ResultAsync<void, GithubCallError>;
   /**
-   * Enable GitHub's auto-merge, with squash when the repository allows it,
-   * else another allowed method. Never bypasses branch protections.
+   * Enable GitHub's auto-merge, with `preferred` (else squash) when the
+   * repository allows it, else another allowed method. Never bypasses branch
+   * protections.
    */
-  enableAutoMerge(repo: string, number: number): ResultAsync<AutoMergeResult, GithubCallError>;
+  enableAutoMerge(
+    repo: string,
+    number: number,
+    preferred?: MergeMethod,
+  ): ResultAsync<AutoMergeResult, GithubCallError>;
   mergeState(repo: string, number: number): ResultAsync<MergeState, GithubCallError>;
   /** The URL of the open pull request from `branch`, or null when there is none. */
   findOpen(repo: string, branch: string): ResultAsync<string | null, GithubCallError>;
@@ -212,13 +217,16 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
         );
     },
 
-    enableAutoMerge(repo, number) {
+    enableAutoMerge(repo, number, preferred) {
       return github.json<RestRepo>(repo, 'GET', `/repos/${repo}`).andThen((settings) => {
         // The settings GitHub shows say which methods are allowed; when it shows
         // none, every method is tried in order and GitHub decides.
         const known = MERGE_METHODS.some(([, setting]) => settings[setting] !== undefined);
-        const methods = MERGE_METHODS.filter(([, setting]) => !known || settings[setting]).map(
-          ([method]) => method,
+        const methods = preferredFirst(
+          MERGE_METHODS.filter(([, setting]) => !known || settings[setting]).map(
+            ([method]) => method,
+          ),
+          preferred,
         );
         if (methods.length === 0)
           return okAsync(unavailable('the repository allows no merge method'));
@@ -336,6 +344,12 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
           : errAsync(e),
       );
   }
+}
+
+/** `methods` with `preferred` moved first, when the repository allows it. */
+function preferredFirst(methods: MergeMethod[], preferred: MergeMethod | undefined): MergeMethod[] {
+  if (!preferred || !methods.includes(preferred)) return methods;
+  return [preferred, ...methods.filter((method) => method !== preferred)];
 }
 
 const AUTO_MERGE_NOT_ALLOWED = 'the repository does not allow auto-merge';

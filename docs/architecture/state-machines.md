@@ -61,10 +61,6 @@ making each one explicit.
 
 Known gaps in the guarded writers:
 
-- **Watcher snoozed during a scan.** The fire is guarded on `pending` only, so a
-  watcher re-armed between the scan and the fire (still `pending`, later
-  `nextWakeAt`) is fired early. Closing it needs the expected `nextWakeAt` in
-  the `watcher_update` operation of the runner protocol.
 - **Status observer.** It reads the row's status before the write, outside it,
   so two concurrent writers can report a `from` that never happened. Expect a
   little noise in `thread.status_write_unmodelled`.

@@ -305,6 +305,19 @@ describe('operations handler legacy request mapping', () => {
     });
   });
 
+  test('a watcher update carries the due time it expects, when the runner sends one', async () => {
+    expect(
+      await mapKind('watcherUpdate', {
+        watcherId: 'w1',
+        patch: RICH_VALUE.patch,
+        expectedNextWakeAtMs: '300000',
+      }),
+    ).toEqual({
+      type: 'data:watcher_update',
+      payload: { id: 'w1', patch: decoded, expectedNextWakeAt: 300000 },
+    });
+  });
+
   test('infers the operation kind from the populated oneof field', async () => {
     const outcome = await mapViaHandler({ getProject: { projectId: 'p9' } });
     expect(outcome.request).toEqual({ type: 'data:get_project', projectId: 'p9' });

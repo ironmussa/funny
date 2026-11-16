@@ -390,7 +390,16 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
     payload: { now: Number(value.nowMs) },
   }),
   watcherListByUser: principalPayload('data:watcher_list_by_user'),
-  watcherUpdate: idPatchPayload('data:watcher_update', 'watcherId'),
+  watcherUpdate: (value) => ({
+    type: 'data:watcher_update',
+    payload: {
+      id: value.watcherId,
+      patch: decodeStruct(value.patch),
+      ...(value.expectedNextWakeAtMs !== undefined
+        ? { expectedNextWakeAt: Number(value.expectedNextWakeAtMs) }
+        : {}),
+    },
+  }),
   watcherDeleteByThread: threadIdPayload('data:watcher_delete_by_thread'),
   jobInsert: threadRowPayload('data:job_insert', 'job'),
   jobGet: (value) => ({ type: 'data:job_get', payload: { id: value.jobId } }),

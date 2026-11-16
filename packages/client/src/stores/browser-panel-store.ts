@@ -344,12 +344,51 @@ let framesModule: Promise<typeof import('@/lib/browser-session-frames')> | null 
 const loadClient = () => (clientModule ??= import('@/lib/browser-session-client'));
 const loadFrames = () => (framesModule ??= import('@/lib/browser-session-frames'));
 
+/**
+ * Sessions this tab closed whose `closed` event has not arrived yet. A thread's
+ * session id is the same every time, so a `closed` that arrives after the
+ * panel reopened that thread's session would otherwise mark the new session
+ * disconnected.
+ */
+/** Per session id, when each close still waiting for its answer was sent. */
+const closesInFlight = new Map<string, number[]>();
+/**
+ * How long a close waits for its answer. The runner sends none for a session it
+ * had already dropped, and a remembered close must not swallow a later, real
+ * `closed` for the same id.
+ */
+const OWN_CLOSE_ANSWER_MS = 15_000;
+
+/**
+ * True when `closed` for `sessionId` answers a close this tab sent; each answer
+ * accounts for one close, so two closes are answered by two events.
+ */
+export function takeOwnClose(sessionId: string, now = Date.now()): boolean {
+  const pending = (closesInFlight.get(sessionId) ?? []).filter(
+    (sentAt) => now - sentAt < OWN_CLOSE_ANSWER_MS,
+  );
+  const answered = pending.length > 0;
+  if (answered) pending.shift();
+  if (pending.length > 0) closesInFlight.set(sessionId, pending);
+  else closesInFlight.delete(sessionId);
+  return answered;
+}
+
+/** The runner had no such session: none of this tab's closes for it will be answered. */
+export function forgetOwnCloses(sessionId: string): void {
+  closesInFlight.delete(sessionId);
+}
+
 /** Tell the runner to close or detach a session and drop its cached frame. */
 async function releaseSession(sessionId: string, reason: 'user' | 'detach'): Promise<void> {
   const [{ browserSessionClient }, { clearLatestFrame }] = await Promise.all([
     loadClient(),
     loadFrames(),
   ]);
+  // A detach keeps the session running and is not answered with `closed`.
+  if (reason === 'user') {
+    closesInFlight.set(sessionId, [...(closesInFlight.get(sessionId) ?? []), Date.now()]);
+  }
   browserSessionClient.close(sessionId, reason);
   clearLatestFrame(sessionId);
 }

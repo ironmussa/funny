@@ -1,4 +1,4 @@
-import { setup } from 'xstate';
+import { assign, getNextSnapshot, setup } from 'xstate';
 
 import type { ThreadStatus, ResumeReason } from './primitives.js';
 
@@ -8,7 +8,8 @@ export type { ResumeReason };
  * Thread lifecycle state machine (shared between client and server)
  *
  * States:
- * - setting_up: Worktree is being created in the background
+ * - setting_up: Worktree or sandbox is being created in the background
+ * - idle: Thread created without an agent (backlog); nothing has run yet
  * - pending: Thread created but not started
  * - running: Agent is actively working
  * - completed: Agent finished successfully
@@ -21,6 +22,9 @@ export type { ResumeReason };
  * - setting_up → pending (SETUP_COMPLETE — worktree created, agent about to start)
  * - setting_up → idle (SETUP_COMPLETE — idle thread, no agent)
  * - setting_up → failed (FAIL — worktree creation failed)
+ * - idle → setting_up (SET_STATUS — a backlog thread starts its deferred worktree)
+ * - idle → running (START)
+ * - failed → setting_up (SET_STATUS — a failed sandbox is provisioned again)
  * - pending → running (START)
  * - running → completed (COMPLETE)
  * - running → failed (FAIL)
@@ -78,39 +82,29 @@ export const threadMachine = setup({
     events: {} as ThreadEvent,
   },
   actions: {
-    updateCost: ({ context, event }) => {
-      if ('cost' in event && event.cost !== undefined) {
-        context.cost = event.cost;
-      }
-    },
-    setResultInfo: ({ context, event }) => {
-      if (event.type === 'COMPLETE' || event.type === 'FAIL') {
-        context.resultInfo = {
-          status: event.type === 'COMPLETE' ? 'completed' : 'failed',
-          cost: event.cost ?? context.cost,
-          duration: event.duration ?? 0,
-          error: event.type === 'FAIL' ? event.error : undefined,
-        };
-      }
-    },
-    clearResultInfo: ({ context }) => {
-      context.resultInfo = undefined;
-    },
-    setResumeFresh: ({ context }) => {
-      context.resumeReason = 'fresh';
-    },
-    setResumeWaitingResponse: ({ context }) => {
-      context.resumeReason = 'waiting-response';
-    },
-    setResumeInterrupted: ({ context }) => {
-      context.resumeReason = 'interrupted';
-    },
-    setResumeFollowUp: ({ context }) => {
-      context.resumeReason = 'follow-up';
-    },
-    clearResumeReason: ({ context }) => {
-      context.resumeReason = null;
-    },
+    updateCost: assign({
+      cost: ({ context, event }) =>
+        'cost' in event && event.cost !== undefined ? event.cost : context.cost,
+    }),
+    // Runs after `updateCost` in every transition that lists both, so
+    // `context.cost` here is already the cost the event carried.
+    setResultInfo: assign({
+      resultInfo: ({ context, event }) =>
+        event.type === 'COMPLETE' || event.type === 'FAIL'
+          ? {
+              status: event.type === 'COMPLETE' ? ('completed' as const) : ('failed' as const),
+              cost: event.cost ?? context.cost,
+              duration: event.duration ?? 0,
+              error: event.type === 'FAIL' ? event.error : undefined,
+            }
+          : context.resultInfo,
+    }),
+    clearResultInfo: assign({ resultInfo: undefined }),
+    setResumeFresh: assign({ resumeReason: 'fresh' as ResumeReason }),
+    setResumeWaitingResponse: assign({ resumeReason: 'waiting-response' as ResumeReason }),
+    setResumeInterrupted: assign({ resumeReason: 'interrupted' as ResumeReason }),
+    setResumeFollowUp: assign({ resumeReason: 'follow-up' as ResumeReason }),
+    clearResumeReason: assign({ resumeReason: null }),
   },
 }).createMachine({
   id: 'thread',
@@ -152,6 +146,8 @@ export const threadMachine = setup({
           },
           { target: 'pending', guard: ({ event }) => event.status === 'pending' },
           { target: 'failed', guard: ({ event }) => event.status === 'failed' },
+          // Starting a backlog thread whose worktree was deferred.
+          { target: 'setting_up', guard: ({ event }) => event.status === 'setting_up' },
         ],
       },
     },
@@ -315,6 +311,12 @@ export const threadMachine = setup({
             guard: ({ event }) => event.status === 'running',
             actions: ['clearResultInfo', 'setResumeInterrupted'],
           },
+          // A sandbox that failed before its agent started is provisioned again.
+          {
+            target: 'setting_up',
+            guard: ({ event }) => event.status === 'setting_up',
+            actions: 'clearResultInfo',
+          },
         ],
       },
     },
@@ -372,6 +374,81 @@ export const threadMachine = setup({
 });
 
 // ── Helpers ────────────────────────────────────────────────────────
+
+export interface ThreadTransition {
+  /** The status after the event. Equals `from` when the event was not accepted. */
+  status: ThreadStatus;
+  /** Why the thread entered `running`; carried over when the event does not set it. */
+  resumeReason: ResumeReason;
+  /** False when `from` has no transition for the event: nothing changed. */
+  accepted: boolean;
+}
+
+/**
+ * The transition `event` causes from the stored status `from`.
+ *
+ * Pure: the stored status (the DB row on the runner, the thread row on the
+ * client) is the only source of truth, so there is no actor whose state can
+ * drift from it. Callers write `status` back to the same place they read
+ * `from`.
+ */
+export function resolveThreadTransition(
+  from: ThreadStatus,
+  event: ThreadEvent,
+  context: { cost?: number; resumeReason?: ResumeReason } = {},
+): ThreadTransition {
+  // A row without a (known) status is a thread nothing has happened to yet.
+  if (!isThreadStatus(from)) from = 'pending';
+  const snapshot = threadMachine.resolveState({
+    value: from,
+    context: {
+      threadId: '',
+      cost: context.cost ?? 0,
+      resumeReason: context.resumeReason ?? null,
+    },
+  });
+  if (!snapshot.can(event)) {
+    return { status: from, resumeReason: context.resumeReason ?? null, accepted: false };
+  }
+  const next = getNextSnapshot(threadMachine, snapshot, event);
+  return {
+    status: next.value as ThreadStatus,
+    resumeReason: next.context.resumeReason,
+    accepted: true,
+  };
+}
+
+const STATUS_WRITE_EVENTS: ThreadEvent['type'][] = [
+  'START',
+  'SETUP_COMPLETE',
+  'RESPOND',
+  'RESTART',
+  'FOLLOW_UP',
+  'COMPLETE',
+  'FAIL',
+  'WAIT',
+  'STOP',
+  'INTERRUPT',
+];
+
+/** Whether `value` is a status the thread machine has (a state of it). */
+export function isThreadStatus(value: string): value is ThreadStatus {
+  return Object.hasOwn(threadMachine.states, value);
+}
+
+/**
+ * Whether storing `to` over `from` is a transition the machine has: some
+ * event leads from one to the other (or nothing changes). Writers that store a
+ * target status rather than an event (the runner's `data:update_thread`, the
+ * pipeline `set_status` action) are checked against this.
+ */
+export function isThreadStatusWriteModelled(from: ThreadStatus, to: ThreadStatus): boolean {
+  if (from === to) return true;
+  if (resolveThreadTransition(from, { type: 'SET_STATUS', status: to }).status === to) return true;
+  return STATUS_WRITE_EVENTS.some(
+    (type) => resolveThreadTransition(from, { type } as ThreadEvent).status === to,
+  );
+}
 
 /**
  * Map WebSocket event types to machine events.

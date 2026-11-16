@@ -370,6 +370,10 @@ function handleAgentStatus(threadId: string, data: any): void {
   });
 
   if (data.status === 'waiting' || data.permissionRequest || data.pendingPermissionRequest) {
+    // Apply what is still queued first, in order: applied afterwards, a queued
+    // `running` would put the thread back to running and clear the waiting
+    // card, and dropping it would lose the stage or mode it carried.
+    flushPendingBatchNow();
     startTransition(() => {
       useThreadStore.getState().handleWSStatus(threadId, data);
     });
@@ -452,6 +456,11 @@ function handleAgentToolCall(threadId: string, data: any): void {
 
 function handleAgentError(threadId: string, data: any): void {
   wsLog.error('agent:error', { threadId, error: data.error ?? 'unknown' });
+  // The error ends the run: what is still queued is older, so it applies first,
+  // and the next run's first status must not be dropped as a duplicate of this
+  // run's.
+  flushPendingBatchNow();
+  lastStatusByThread.delete(threadId);
   startTransition(() => {
     useThreadStore.getState().handleWSError(threadId, data);
   });
@@ -901,15 +910,20 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
   import('@/stores/commit-progress-store').then(({ useCommitProgressStore }) => {
     const store = useCommitProgressStore.getState();
     const { status: wfStatus, title, action, steps, workflowId } = data;
+    // An event of an earlier run of this thread's workflow (another one has
+    // started since): it must not touch the current run's steps, its close
+    // timer, or open a failure modal.
+    const current = store.activeCommits[threadId]?.workflowId;
+    if (wfStatus !== 'started' && workflowId && current && current !== workflowId) return;
 
     if (wfStatus === 'started') {
       // A restart within the close delay must not be closed by the previous run's timer.
       cancelPendingWorkflowClose(threadId);
       store.startCommit(threadId, title, steps, action, workflowId);
     } else if (wfStatus === 'step_update') {
-      store.replaceSteps(threadId, steps);
+      store.replaceSteps(threadId, steps, workflowId);
     } else if (wfStatus === 'completed') {
-      store.replaceSteps(threadId, steps);
+      store.replaceSteps(threadId, steps, workflowId);
       cancelPendingWorkflowClose(threadId);
       const timer = setTimeout(() => {
         pendingWorkflowCloses.delete(threadId);
@@ -918,7 +932,7 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
       pendingWorkflowCloses.set(threadId, timer);
     } else if (wfStatus === 'failed') {
       cancelPendingWorkflowClose(threadId);
-      store.replaceSteps(threadId, steps);
+      store.replaceSteps(threadId, steps, workflowId);
       store.setFailedWorkflow({
         title: title || 'Git operation failed',
         steps: steps ?? [],

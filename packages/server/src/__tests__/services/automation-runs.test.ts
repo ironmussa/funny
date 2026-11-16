@@ -101,6 +101,18 @@ describe('onAutomationThreadTerminal', () => {
     expect(run('r1')).toEqual(first);
   });
 
+  test('two terminal events at once finish the run once', async () => {
+    seedRun('r1', 't1');
+
+    await Promise.all([
+      onAutomationThreadTerminal('t1', 'completed'),
+      onAutomationThreadTerminal('t1', 'failed'),
+    ]);
+
+    // The first write wins; before the compare-and-set the second overwrote it.
+    expect(run('r1').status).toBe('completed');
+  });
+
   test('a thread that is not an automation run is ignored', async () => {
     seedThread(t.db as any, { id: 'plain', projectId: 'p1', userId: 'alice' });
 

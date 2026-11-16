@@ -17,7 +17,9 @@
 import { and, eq, inArray, lte } from 'drizzle-orm';
 
 import type { Watcher, WatcherStatus } from '../types.js';
+import { WATCHER_STATUS_WRITTEN_FROM } from '../watcher-machine.js';
 import type { RepoDeps } from './deps.js';
+import { updateWithStatusGuard } from './guarded-status-update.js';
 
 export type WatcherRepositoryDeps = RepoDeps;
 
@@ -92,13 +94,12 @@ export function createWatcherRepository(deps: WatcherRepositoryDeps) {
     return dbAll<WatcherRow>(db.select().from(table).where(eq(table.userId, userId)));
   }
 
-  async function update(id: string, patch: WatcherPatch): Promise<void> {
-    await dbRun(
-      db
-        .update(table)
-        .set({ updatedAt: new Date().toISOString(), ...patch })
-        .where(eq(table.id, id)),
-    );
+  /**
+   * Patch a watcher. A status in the patch is written only from a status the
+   * watcher machine allows; false means nothing was written.
+   */
+  function update(id: string, patch: WatcherPatch): Promise<boolean> {
+    return updateWithStatusGuard(deps, table, id, patch, WATCHER_STATUS_WRITTEN_FROM);
   }
 
   async function deleteByThread(threadId: string): Promise<void> {

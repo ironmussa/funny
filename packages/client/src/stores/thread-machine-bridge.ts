@@ -1,60 +1,33 @@
 import type { ThreadStatus } from '@funny/shared';
 /**
- * Thread state machine bridge — manages xstate actors per thread.
+ * Thread state machine bridge — status transitions (pure, from the stored
+ * status) and the per-thread data-loading actors.
  * Extracted from thread-store.ts for testability and separation of concerns.
  */
 import { waitFor } from '@funny/shared/async';
-import {
-  threadMachine,
-  wsEventToMachineEvent,
-  type ThreadContext,
-} from '@funny/shared/thread-machine';
+import { resolveThreadTransition, wsEventToMachineEvent } from '@funny/shared/thread-machine';
 import { createActor } from 'xstate';
 
+import { createClientLogger } from '@/lib/client-logger';
 import { loadThreadScrollPosition } from '@/lib/thread-scroll-position';
 import { threadDataMachine, type ThreadDataSnapshot } from '@/machines/thread-data-machine';
+
+const log = createClientLogger('thread-machine');
 
 export { wsEventToMachineEvent };
 export type { ThreadDataSnapshot };
 
-// ── Actor registry ──────────────────────────────────────────────
+// ── Thread status ───────────────────────────────────────────────
 
-const THREAD_ACTOR_LIMIT = 64;
-const threadActors = new Map<string, ReturnType<typeof createActor<typeof threadMachine>>>();
-
-function evictOldestThreadActorIfNeeded(): void {
-  if (threadActors.size < THREAD_ACTOR_LIMIT) return;
-  const oldestId = threadActors.keys().next().value;
-  if (!oldestId) return;
-  const oldest = threadActors.get(oldestId);
-  oldest?.stop();
-  threadActors.delete(oldestId);
-}
-
-export function getThreadActor(
-  threadId: string,
-  initialStatus: ThreadStatus = 'pending',
-  cost: number = 0,
-) {
-  let actor = threadActors.get(threadId);
-  if (actor) {
-    threadActors.delete(threadId);
-    threadActors.set(threadId, actor);
-    return actor;
-  }
-
-  evictOldestThreadActorIfNeeded();
-  actor = createActor(threadMachine, {
-    input: { threadId, cost, resumeReason: null } as ThreadContext,
-  });
-  actor.start();
-  if (initialStatus !== 'pending') {
-    actor.send({ type: 'SET_STATUS', status: initialStatus });
-  }
-  threadActors.set(threadId, actor);
-  return actor;
-}
-
+/**
+ * The status `event` leads to from `currentStatus` (the status on the thread
+ * row or loaded payload being patched). An event `currentStatus` does not
+ * accept returns `currentStatus` unchanged.
+ *
+ * Pure on purpose: the store is the only place a thread's status lives, so a
+ * row refreshed from the server (list reload, detail fetch, reconnect resync)
+ * is what the next event is judged against.
+ */
 export function transitionThreadStatus(
   threadId: string,
   event: ReturnType<typeof wsEventToMachineEvent>,
@@ -62,21 +35,23 @@ export function transitionThreadStatus(
   cost: number = 0,
 ): ThreadStatus {
   if (!event) return currentStatus;
-  const actor = getThreadActor(threadId, currentStatus, cost);
-  actor.send(event);
-  return actor.getSnapshot().value as ThreadStatus;
+  const { status, accepted } = resolveThreadTransition(currentStatus, event, { cost });
+  if (!accepted) {
+    log.debug('status event not accepted', {
+      threadId,
+      from: currentStatus,
+      event: event.type,
+      status: event.type === 'SET_STATUS' ? event.status : '',
+    });
+  }
+  return status;
 }
 
 /**
- * Clean up the actor for a thread (stop + remove from registry).
+ * Clean up the data actor for a thread (stop + remove from registry).
  * Call when archiving or deleting a thread.
  */
 export function cleanupThreadActor(threadId: string): void {
-  const actor = threadActors.get(threadId);
-  if (actor) {
-    actor.stop();
-    threadActors.delete(threadId);
-  }
   const dataActor = dataActors.get(threadId);
   if (dataActor) {
     dataActor.stop();
@@ -110,10 +85,6 @@ function getDataActor(threadId: string) {
     dataActors.set(threadId, actor);
   }
   return actor;
-}
-
-export function getThreadActorCountForTests(): number {
-  return threadActors.size;
 }
 
 /** Kick off a background prefetch (no-op if already fetching/loaded). */

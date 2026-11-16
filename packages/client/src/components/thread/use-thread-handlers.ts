@@ -175,6 +175,8 @@ export function useThreadHandlers(refs: Refs) {
           approved,
           error: result.error.message,
         });
+        // The answer did not reach the agent: show the request again.
+        useThreadStore.getState().revertOptimisticRun(thread.id);
       }
     },
     [refs],
@@ -241,6 +243,25 @@ function applyQueuedCount(threadId: string, responseQueuedCount: unknown) {
  *   - false → no optimistic message to roll back (e.g. when the thread was
  *             already running — the bubble was never added).
  */
+/**
+ * A send failed: tell the user, and undo the `running` the optimistic message
+ * put on the thread, since nothing started.
+ */
+export function reportSendFailure(
+  err: { type: string; message: string },
+  threadId: string,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  /** False when this send did not mark the thread running (it was already running). */
+  undoOptimisticRun = true,
+): void {
+  toast.error(
+    err.type === 'INTERNAL'
+      ? t('thread.sendFailed')
+      : t('thread.sendFailedGeneric', { error: err.message }),
+  );
+  if (undoOptimisticRun) useThreadStore.getState().revertOptimisticRun(threadId);
+}
+
 function handleSendResult(
   result: Awaited<ReturnType<typeof api.sendMessage>>,
   threadId: string,
@@ -248,12 +269,7 @@ function handleSendResult(
   t: (key: string, opts?: Record<string, unknown>) => string,
 ) {
   if (result.isErr()) {
-    const err = result.error;
-    toast.error(
-      err.type === 'INTERNAL'
-        ? t('thread.sendFailed')
-        : t('thread.sendFailedGeneric', { error: err.message }),
-    );
+    reportSendFailure(result.error, threadId, t, options.rollbackOnQueue);
     return;
   }
   if (result.value && (result.value as any).queued) {
@@ -266,5 +282,7 @@ function handleSendResult(
   }
   if (result.value?.handledLocally === 'shell_escape' && options.rollbackOnQueue) {
     useThreadStore.getState().rollbackOptimisticMessage(threadId);
+    // A shell escape runs no agent.
+    useThreadStore.getState().revertOptimisticRun(threadId);
   }
 }

@@ -89,6 +89,12 @@ export interface ThreadState {
     effort?: EffortLevel,
   ) => void;
   rollbackOptimisticMessage: (threadId: string) => void;
+  /**
+   * Undo the `running` an optimistic send put on a thread, when that send did
+   * not start anything. A no-op once the server has reported the thread's
+   * status since the send.
+   */
+  revertOptimisticRun: (threadId: string) => void;
   loadOlderMessages: () => Promise<void>;
   loadNewerMessages: () => Promise<void>;
   /**

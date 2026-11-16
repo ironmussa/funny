@@ -206,6 +206,18 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
     expect(state.threadDataById[THREAD_ID].permissionApprovalCapability).toEqual(capability);
   });
 
+  test('a status from the server settles an optimistic send: nothing is left to undo', async () => {
+    const { rememberPreSendState, takePreSendState } =
+      await import('@/stores/optimistic-run-state');
+    const state = makeState();
+    const { get, set } = makeGetSet(state);
+
+    rememberPreSendState(THREAD_ID, { status: 'completed' });
+    handleWSStatus(get, set, THREAD_ID, { status: 'running' });
+
+    expect(takePreSendState(THREAD_ID)).toBeUndefined();
+  });
+
   test('handleWSStatus no-ops when machine event is invalid', () => {
     mockWsEventToMachine.mockReturnValueOnce(null as any);
     const state = makeState();

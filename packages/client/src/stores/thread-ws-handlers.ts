@@ -40,6 +40,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import { saveContextUsage } from '@/lib/context-usage-storage';
 import { buildPath } from '@/lib/url';
 
+import { settlePreSendState } from './optimistic-run-state';
 import { parseToolInput, useThreadActiveToolStore } from './thread-active-tool-store';
 import {
   invalidateThreadData,
@@ -573,6 +574,9 @@ export function handleWSStatus(
     permissionMode?: string;
   },
 ): void {
+  // The server has spoken about this thread's status: an optimistic
+  // `running` from a send is no longer something to undo.
+  settlePreSendState(threadId);
   // Buffer status events when thread is selected but not yet fully loaded.
   // Invalidate cache unconditionally so the active thread's snapshot reflects
   // the new status when the user navigates away and returns.
@@ -778,6 +782,9 @@ function applyResultToRow(t: Thread, nextStatus: ThreadStatus, data: any): Threa
 }
 
 export function handleWSResult(get: Get, set: Set, threadId: string, data: any): void {
+  // The server has spoken about this thread's status: an optimistic
+  // `running` from a send is no longer something to undo.
+  settlePreSendState(threadId);
   // Invalidate the cached snapshot unconditionally so the next selectThread()
   // refetches the final messages/tool calls/resultInfo from the server. Must
   // run even for the active thread — otherwise the user switches away, comes
@@ -818,8 +825,8 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
   // back to the caller for the toast/notification + payload paths.
   const foundInSidebar = patchSidebarThread(threadId, (t) => {
     const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, data.cost ?? t.cost);
-    // Use server status as authoritative if xstate transition didn't change state
-    // (e.g., actor was in stale state that didn't accept the event)
+    // The server's result is authoritative: when the machine has no
+    // transition for it from the row's status, take the server status as is.
     const nextStatus = newStatus !== t.status ? newStatus : serverStatus;
     resultStatus = nextStatus;
     return applyResultToRow(t, nextStatus, data);

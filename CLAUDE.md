@@ -256,6 +256,10 @@ bunx tsc --noEmit
 - WebSocket events carry a `threadId` field so the client can associate updates with the correct thread
 - The model selector maps friendly names (sonnet/opus/haiku) to full model IDs in `agent-runner.ts`
 
+### State machines
+
+A `status` / `state` / `phase` field is a state machine: declare its transitions in one table, compute each transition from the STORED state with a pure function (`resolveThreadTransition`, `nextSandboxState`), and write it with a compare-and-set (`UPDATE … WHERE state IN (legal from-states)`, row count checked). Do not keep a long-lived actor as a second copy of a stored status, and do not read-check-then-write by id. The rule, the explicit machines and the inventory of lifecycles that are still implicit are in [docs/architecture/state-machines.md](docs/architecture/state-machines.md); read it before adding a status value or a writer.
+
 ### Asynchronous orchestration with Effect
 
 Prefer Effect for cancellation, retry waits, timeouts, bounded concurrency, and

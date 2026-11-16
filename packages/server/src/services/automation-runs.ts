@@ -31,12 +31,15 @@ export async function onAutomationThreadTerminal(threadId: string, status: strin
 
   const completed = status === 'completed';
   const summary = (await lastAssistantReply(threadId)) ?? 'No summary available';
-  await automationRepo.updateRun(run.id, {
+  const finished = await automationRepo.finishRunningRun(run.id, {
     status: completed ? 'completed' : 'failed',
     hasFindings: completed ? 1 : 0,
     summary,
     completedAt: new Date().toISOString(),
   });
+  // Finished meanwhile (the stale sweep, or a second terminal event): that
+  // outcome stands and its notification has already been sent.
+  if (!finished) return;
 
   relayToUser(automation.userId, {
     type: 'automation:run_completed',

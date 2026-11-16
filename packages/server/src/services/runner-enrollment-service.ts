@@ -181,22 +181,38 @@ export async function approve(userCode: string, userId: string): Promise<Approve
     return { ok: false, reason: 'locked' };
   }
 
+  // Claim the approval first: pending → approved is a compare-and-set, so of
+  // two approvals at once only one registers a runner. The credentials are
+  // staged below; until then a poll still reads `pending`.
+  const claimed = await db
+    .update(runnerEnrollments)
+    .set({ status: 'approved', approverUserId: userId })
+    .where(and(eq(runnerEnrollments.id, row.id), eq(runnerEnrollments.status, 'pending')))
+    .returning({ id: runnerEnrollments.id });
+  if (claimed.length === 0) return { ok: false, reason: 'already_approved' };
+
   // Register a runner owned by the approving user; reuses any existing runner
   // for this hostname under the same user (runner-manager handles that).
-  const { runnerId, token } = await rm.registerRunner(
-    { name: `${row.hostname}-funny`, hostname: row.hostname, os: row.os },
-    userId,
-  );
-
-  await db
-    .update(runnerEnrollments)
-    .set({
-      status: 'approved',
-      runnerId,
-      runnerToken: token,
-      approverUserId: userId,
-    })
-    .where(eq(runnerEnrollments.id, row.id));
+  let runnerId: string;
+  try {
+    const registered = await rm.registerRunner(
+      { name: `${row.hostname}-funny`, hostname: row.hostname, os: row.os },
+      userId,
+    );
+    runnerId = registered.runnerId;
+    await db
+      .update(runnerEnrollments)
+      .set({ runnerId, runnerToken: registered.token })
+      .where(eq(runnerEnrollments.id, row.id));
+  } catch (error) {
+    // Registering or staging failed: give the code back, so it can be approved
+    // again instead of reading `pending` to the runner until it expires.
+    await db
+      .update(runnerEnrollments)
+      .set({ status: 'pending', approverUserId: null, runnerId: null, runnerToken: null })
+      .where(and(eq(runnerEnrollments.id, row.id), eq(runnerEnrollments.status, 'approved')));
+    throw error;
+  }
 
   log.info('Runner enrollment approved', {
     namespace: 'runner',
@@ -238,7 +254,10 @@ export async function pollByToken(pollToken: string): Promise<PollResult> {
 
   if (!row) return { status: 'invalid' };
   if (Date.parse(row.expiresAt) <= Date.now()) return { status: 'invalid' };
-  if (row.status === 'pending') return { status: 'pending' };
+  // Approved but its credentials not staged yet: the approval is mid-flight.
+  if (row.status === 'pending' || (row.status === 'approved' && !row.runnerToken)) {
+    return { status: 'pending' };
+  }
   if (row.status !== 'approved' || !row.runnerId || !row.runnerToken) {
     // 'consumed' or a malformed approved row — credentials already delivered.
     return { status: 'invalid' };
@@ -254,11 +273,14 @@ export async function pollByToken(pollToken: string): Promise<PollResult> {
   // Per-runner key (security H1): the runner gets K_r, never the root secret.
   const forwardingKey = rootSecret ? deriveRunnerForwardingKey(rootSecret, row.runnerId) : '';
 
-  // Deliver once: mark consumed so a re-poll can't re-issue the credentials.
-  await db
+  // Deliver once: approved → consumed is a compare-and-set, so of two polls
+  // that both read `approved` only the one that wins the write gets credentials.
+  const consumed = await db
     .update(runnerEnrollments)
     .set({ status: 'consumed' })
-    .where(eq(runnerEnrollments.id, row.id));
+    .where(and(eq(runnerEnrollments.id, row.id), eq(runnerEnrollments.status, 'approved')))
+    .returning({ id: runnerEnrollments.id });
+  if (consumed.length === 0) return { status: 'invalid' };
 
   return {
     status: 'approved',

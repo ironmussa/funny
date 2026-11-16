@@ -406,6 +406,53 @@ describe('ws-event-dispatch — additional event types', () => {
     expect(order).toEqual(['message:m1:q', 'toolCall:ask']);
   });
 
+  test('a queued running status does not land after a later waiting or error', async () => {
+    const applied: string[] = [];
+    useThreadStore.setState({
+      handleWSStatus: ((_tid: string, data: any) => {
+        applied.push(data.status);
+      }) as any,
+      handleWSError: (() => {
+        applied.push('error');
+      }) as any,
+    });
+    const handlers = await captureHandlers();
+
+    handlers['agent:status']({ threadId: 't1', data: { status: 'running' } });
+    handlers['agent:status']({
+      threadId: 't1',
+      data: { status: 'waiting', waitingReason: 'question' },
+    });
+    drainRaf();
+    // The queued status applies first (with whatever stage it carried), never after.
+    expect(applied).toEqual(['running', 'waiting']);
+
+    applied.length = 0;
+    handlers['agent:status']({ threadId: 't2', data: { status: 'running' } });
+    handlers['agent:error']({ threadId: 't2', data: { error: 'boom' } });
+    drainRaf();
+    expect(applied).toEqual(['running', 'error']);
+  });
+
+  test('after an error, the next run’s running status is not dropped as a duplicate', async () => {
+    const applied: string[] = [];
+    useThreadStore.setState({
+      handleWSStatus: ((_tid: string, data: any) => {
+        applied.push(data.status);
+      }) as any,
+      handleWSError: (() => {}) as any,
+    });
+    const handlers = await captureHandlers();
+
+    handlers['agent:status']({ threadId: 't3', data: { status: 'running' } });
+    drainRaf();
+    handlers['agent:error']({ threadId: 't3', data: { error: 'boom' } });
+    handlers['agent:status']({ threadId: 't3', data: { status: 'running' } });
+    drainRaf();
+
+    expect(applied).toEqual(['running', 'running']);
+  });
+
   test('agent:error routes to handleWSError immediately', async () => {
     const errorCalls: any[] = [];
     useThreadStore.setState({

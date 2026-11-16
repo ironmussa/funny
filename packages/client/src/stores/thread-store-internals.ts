@@ -34,7 +34,7 @@ export class ThreadStoreInternals {
   private navigateFn: ((path: string) => void) | null = null;
 
   /** Callback registered by ui-store to reset UI state on thread select */
-  private threadSelectListener: (() => void) | null = null;
+  private threadSelectListener: ((threadId: string | null) => void) | null = null;
 
   /** Callback registered by thread-store so UI actions can clear selection without importing it */
   private clearThreadSelectionFn: (() => void) | null = null;
@@ -160,12 +160,13 @@ export class ThreadStoreInternals {
 
   // ── Thread-select listener (UI state reset) ──────────────────
 
-  setThreadSelectListener(fn: () => void): void {
+  setThreadSelectListener(fn: (threadId: string | null) => void): void {
     this.threadSelectListener = fn;
   }
 
-  notifyThreadSelected(): void {
-    this.threadSelectListener?.();
+  /** `threadId` is null when the selection was cleared rather than a thread opened. */
+  notifyThreadSelected(threadId: string | null): void {
+    this.threadSelectListener?.(threadId);
   }
 
   setClearThreadSelection(fn: () => void): void {
@@ -200,8 +201,10 @@ export const rebuildThreadProjectIndex = (t: Record<string, string[]>) =>
 export const getProjectIdForThread = (id: string) => internals.getProjectIdForThread(id);
 export const setAppNavigate = (fn: (path: string) => void) => internals.setAppNavigate(fn);
 export const getNavigate = () => internals.getNavigate();
-export const setThreadSelectListener = (fn: () => void) => internals.setThreadSelectListener(fn);
-export const notifyThreadSelected = () => internals.notifyThreadSelected();
+export const setThreadSelectListener = (fn: (threadId: string | null) => void) =>
+  internals.setThreadSelectListener(fn);
+export const notifyThreadSelected = (threadId: string | null) =>
+  internals.notifyThreadSelected(threadId);
 export const setClearThreadSelection = (fn: () => void) => internals.setClearThreadSelection(fn);
 export const clearThreadSelection = () => internals.clearThreadSelection();
 export const getUrlThreadId = () => internals.getUrlThreadId();

@@ -746,8 +746,11 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     watchers: ownerId ? await repos.watchers().listByUser(ownerId) : OWNER_SCOPED_LIST_FALLBACK,
   }),
   'data:watcher_update': async ({ data }) => {
-    await repos.watchers().update(data.payload.id, pickWatcherPatch(data.payload.patch));
-    return { type: 'data:watcher_update_response', ok: true };
+    // `applied: false` — the watcher is no longer in a status this write is legal from.
+    const applied = await repos
+      .watchers()
+      .update(data.payload.id, pickWatcherPatch(data.payload.patch));
+    return { type: 'data:watcher_update_response', ok: true, applied };
   },
   'data:watcher_delete_by_thread': async ({ data }) => {
     await repos.watchers().deleteByThread(data.payload.threadId);
@@ -772,8 +775,8 @@ const DATA_MESSAGE_HANDLERS: Readonly<Record<string, DataMessageHandler>> = {
     jobs: ownerId ? await repos.jobs().listByUser(ownerId) : OWNER_SCOPED_LIST_FALLBACK,
   }),
   'data:job_update': async ({ data }) => {
-    await repos.jobs().update(data.payload.id, pickJobPatch(data.payload.patch));
-    return { type: 'data:job_update_response', ok: true };
+    const applied = await repos.jobs().update(data.payload.id, pickJobPatch(data.payload.patch));
+    return { type: 'data:job_update_response', ok: true, applied };
   },
   'data:job_delete_by_thread': async ({ data }) => {
     await repos.jobs().deleteByThread(data.payload.threadId);

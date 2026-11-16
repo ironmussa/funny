@@ -43,10 +43,17 @@ export type ThreadRepositoryDeps = RepoDeps & {
   commentRepo: ReturnType<typeof createCommentRepository>;
   /** Stage history repository instance (for recordStageChange) */
   stageHistoryRepo: ReturnType<typeof createStageHistoryRepository>;
+  /**
+   * Told about every status write, with the status the row had just before.
+   * Observation only: the write is not checked or blocked. When set, a status
+   * write costs one extra read.
+   */
+  onStatusWrite?: (write: { threadId: string; from: string | null; to: string }) => void;
 };
 
 export function createThreadRepository(deps: ThreadRepositoryDeps) {
-  const { db, schema, dbAll, dbGet, dbRun, log, commentRepo, stageHistoryRepo } = deps;
+  const { db, schema, dbAll, dbGet, dbRun, log, commentRepo, stageHistoryRepo, onStatusWrite } =
+    deps;
   const { getCommentCounts } = commentRepo;
   const { recordStageChange } = stageHistoryRepo;
 
@@ -301,6 +308,24 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
 
   /** Update thread fields by ID. Automatically bumps updatedAt.
    *  Wraps read-then-write + stage history in a transaction to prevent race conditions. */
+  /** Tell `onStatusWrite` (if any) about a status write, before it is made. */
+  async function reportStatusWrite(id: string, to: string): Promise<void> {
+    if (!onStatusWrite) return;
+    // An observer must never fail the write it observes: neither its read of
+    // the current status nor the observer itself.
+    try {
+      const before = await dbGet<{ status: string }>(
+        db
+          .select({ status: schema.threads.status })
+          .from(schema.threads)
+          .where(eq(schema.threads.id, id)),
+      );
+      onStatusWrite({ threadId: id, from: before?.status ?? null, to });
+    } catch {
+      // Observation only.
+    }
+  }
+
   async function updateThread(
     id: string,
     updates: Partial<{
@@ -325,6 +350,8 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
       contextRecoveryReason: string | null;
     }>,
   ) {
+    if (updates.status !== undefined) await reportStatusWrite(id, updates.status);
+
     if (updates.sessionId !== undefined) {
       // Persist ownership before replacing/clearing the active session. INSERT SELECT
       // avoids a read/write gap and also works for pre-migration threads.

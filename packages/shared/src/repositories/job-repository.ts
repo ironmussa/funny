@@ -16,8 +16,10 @@
 
 import { and, eq } from 'drizzle-orm';
 
+import { JOB_STATUS_WRITTEN_FROM } from '../job-machine.js';
 import type { Job, JobStatus } from '../types.js';
 import type { RepoDeps } from './deps.js';
+import { updateWithStatusGuard } from './guarded-status-update.js';
 
 export type JobRepositoryDeps = RepoDeps;
 
@@ -59,13 +61,12 @@ export function createJobRepository(deps: JobRepositoryDeps) {
     return dbAll<JobRow>(db.select().from(table).where(eq(table.userId, userId)));
   }
 
-  async function update(id: string, patch: JobPatch): Promise<void> {
-    await dbRun(
-      db
-        .update(table)
-        .set({ updatedAt: new Date().toISOString(), ...patch })
-        .where(eq(table.id, id)),
-    );
+  /**
+   * Patch a job. A status in the patch is written only from a status the
+   * job machine allows; false means nothing was written.
+   */
+  function update(id: string, patch: JobPatch): Promise<boolean> {
+    return updateWithStatusGuard(deps, table, id, patch, JOB_STATUS_WRITTEN_FROM);
   }
 
   async function deleteByThread(threadId: string): Promise<void> {

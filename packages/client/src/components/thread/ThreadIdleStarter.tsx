@@ -13,6 +13,8 @@ import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadMessages, type ThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
+import { reportSendFailure } from './use-thread-handlers';
+
 interface Props {
   activeThread: ThreadCore;
 }
@@ -133,14 +135,11 @@ export function ThreadIdleStarter({ activeThread }: Props) {
           images,
         );
         if (result.isErr()) {
-          const err = result.error;
-          toast.error(
-            err.type === 'INTERNAL'
-              ? t('thread.sendFailed')
-              : t('thread.sendFailedGeneric', { error: err.message }),
-          );
+          // Back to idle, with the draft prompt it had.
+          reportSendFailure(result.error, activeThread.id, t);
         } else if (result.value.handledLocally === 'shell_escape') {
           useThreadStore.getState().rollbackOptimisticMessage(activeThread.id);
+          useThreadStore.getState().revertOptimisticRun(activeThread.id);
         }
         return true;
       })().finally(() => setSending(false));

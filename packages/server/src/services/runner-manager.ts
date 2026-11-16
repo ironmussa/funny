@@ -568,18 +568,28 @@ export async function getPendingTasks(runnerId: string): Promise<RunnerTask[]> {
     .from(runnerTasks)
     .where(and(eq(runnerTasks.runnerId, runnerId), eq(runnerTasks.status, 'pending')));
 
+  // pending → running is a compare-and-set, so of two polls that read the same
+  // pending task only one is handed it.
+  const claimed = new Set<string>();
   if (rows.length > 0) {
     const ids = rows.map((r) => r.id);
-    await db.update(runnerTasks).set({ status: 'running' }).where(inArray(runnerTasks.id, ids));
+    const updated = await db
+      .update(runnerTasks)
+      .set({ status: 'running' })
+      .where(and(inArray(runnerTasks.id, ids), eq(runnerTasks.status, 'pending')))
+      .returning({ id: runnerTasks.id });
+    for (const row of updated) claimed.add(row.id);
   }
 
-  return rows.map((r) => ({
-    taskId: r.id,
-    type: r.type as RunnerTask['type'],
-    threadId: r.threadId,
-    payload: JSON.parse(r.payload) as RunnerTaskPayload,
-    createdAt: r.createdAt,
-  }));
+  return rows
+    .filter((r) => claimed.has(r.id))
+    .map((r) => ({
+      taskId: r.id,
+      type: r.type as RunnerTask['type'],
+      threadId: r.threadId,
+      payload: JSON.parse(r.payload) as RunnerTaskPayload,
+      createdAt: r.createdAt,
+    }));
 }
 
 /**
@@ -601,7 +611,14 @@ export async function completeTask(
       resultError: req.error ?? null,
       completedAt: now,
     })
-    .where(and(eq(runnerTasks.id, req.taskId), eq(runnerTasks.runnerId, runnerId)))
+    // A task that already has a result keeps it.
+    .where(
+      and(
+        eq(runnerTasks.id, req.taskId),
+        eq(runnerTasks.runnerId, runnerId),
+        inArray(runnerTasks.status, ['pending', 'running']),
+      ),
+    )
     .returning({ id: runnerTasks.id });
   return updated.length > 0;
 }

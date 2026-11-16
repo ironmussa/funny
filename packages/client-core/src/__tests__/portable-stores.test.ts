@@ -106,4 +106,22 @@ describe('portable client stores', () => {
     store.dispose();
     expect(timers.size).toBe(0);
   });
+
+  test('a probe that finishes after a request succeeded does not open the circuit', async () => {
+    let finishProbe!: (reachable: boolean) => void;
+    const store = createCircuitBreakerStore({
+      probe: () => new Promise<boolean>((resolve) => (finishProbe = resolve)),
+      setTimer: () => 0,
+      clearTimer: () => {},
+      failureThreshold: 2,
+    });
+    store.getState().recordFailure();
+    store.getState().recordFailure(); // starts the probe
+    store.getState().recordSuccess(); // the server answered a request meanwhile
+    finishProbe(false);
+    await settle();
+
+    expect(store.getState()).toMatchObject({ state: 'closed', failureCount: 0 });
+    store.dispose();
+  });
 });

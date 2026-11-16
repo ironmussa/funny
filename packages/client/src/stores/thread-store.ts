@@ -80,6 +80,11 @@ import { metric, startSpan } from '@/lib/telemetry';
 import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
 import { toastError } from '@/lib/toast-error';
 
+import {
+  rememberPreSendState,
+  settlePreSendStateFromFetch,
+  takePreSendState,
+} from './optimistic-run-state';
 import { deriveToolLists, useSettingsStore } from './settings-store';
 import {
   expandProject,
@@ -423,7 +428,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // re-select guard — it must paint immediately so the click feels
       // instant. It's cheap (one string), so keep it synchronous/urgent.
       set({ selectedThreadId: threadId });
-      notifyThreadSelected();
+      notifyThreadSelected(threadId);
 
       // Phase boundary for a memory profiling run: the heavy MessageStream
       // subtree mounts just below. No-op unless a run is active.
@@ -552,6 +557,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // arriving). Publish the initial thread urgently instead.
       // The detail view reads row fields from the collection; an opened thread
       // outside every loaded list gets its row from this detail.
+      settlePreSendStateFromFetch(thread.id, thread.status);
       adoptThreadDetail(thread);
       const publishHydratedThread = () => {
         set((state) => mutations.setThreadData(state, threadId, hydrated));
@@ -706,6 +712,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const machineEvent = { type: 'START' as const };
     const newStatus = transitionThreadStatus(threadId, machineEvent, entry.status, entry.cost);
+    rememberPreSendState(threadId, {
+      status: entry.status,
+      waitingReason: entry.waitingReason,
+      pendingPermission: entry.pendingPermission,
+      initialPrompt: entry.initialPrompt,
+    });
 
     // Pre-populate initInfo so the card renders immediately instead of
     // waiting for the agent:init WebSocket event from the server.
@@ -770,6 +782,28 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         lastUserMessage: newMessage,
       })),
     }));
+  },
+
+  revertOptimisticRun: (threadId) => {
+    const before = takePreSendState(threadId);
+    if (!before) return;
+    // Only the optimistic mark is undone: a status that has moved on is kept.
+    const undo = <T extends Thread>(t: T): T =>
+      t.status === 'running'
+        ? { ...t, status: before.status, initialPrompt: before.initialPrompt }
+        : t;
+    patchThreadRow(threadId, undo);
+    set((state) =>
+      mutations.applyThreadDataPatch(state, threadId, (t) =>
+        t.status === 'running'
+          ? {
+              ...undo(t),
+              waitingReason: before.waitingReason,
+              pendingPermission: before.pendingPermission,
+            }
+          : t,
+      ),
+    );
   },
 
   rollbackOptimisticMessage: (threadId) => {
@@ -1003,6 +1037,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     ]);
     if (result.isErr()) return; // silently ignore
     const thread = result.value;
+    settlePreSendStateFromFetch(threadId, thread.status);
     const eventsFallback = active.threadEvents;
     const threadEvents = eventsResult.isOk() ? eventsResult.value.events : eventsFallback;
 
@@ -1179,6 +1214,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Refcount may have dropped while fetching (unmount, race) — only land
     // the data if someone still wants it.
     if ((_liveThreadRefCounts.get(threadId) ?? 0) <= 0) return;
+    settlePreSendStateFromFetch(result.value.id, result.value.status);
     adoptThreadDetail(result.value);
     set((state) => mutations.setThreadData(state, threadId, result.value as ThreadWithMessages));
   },
@@ -1260,6 +1296,16 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         startedAt: existing?.startedAt,
         completedAt: existing?.completedAt,
       };
+      // A finished step that runs again is a new attempt (a retried setup):
+      // it starts now and has not finished, instead of showing as running
+      // with the previous attempt's end time.
+      const rerun =
+        data.status === 'running' &&
+        (existing?.status === 'completed' || existing?.status === 'failed');
+      if (rerun) {
+        step.startedAt = now;
+        step.completedAt = undefined;
+      }
       if (data.status === 'running' && !existing?.startedAt) {
         step.startedAt = now;
       }
@@ -1324,7 +1370,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const { loadThreadsForProject } = get();
     const setupDone = <T extends Thread>(t: T): T => ({
       ...t,
-      status: t.status === 'setting_up' ? 'pending' : t.status,
+      // setting_up → pending; any other status is left alone.
+      status: transitionThreadStatus(threadId, { type: 'SETUP_COMPLETE' }, t.status, t.cost),
       branch: data.branch,
       ...(data.worktreePath ? { worktreePath: data.worktreePath } : {}),
     });

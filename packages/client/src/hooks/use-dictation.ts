@@ -265,6 +265,13 @@ export function useDictation({ onPartial, onFinal, onError }: UseDictationOption
   }, [onPartial, onFinal, onError, cleanup]);
 
   const stop = useCallback(() => {
+    // Stopping while still connecting cancels the start: otherwise a release
+    // of the push-to-talk keys during a slow connect was ignored and the
+    // microphone went live afterwards, with nothing left to stop it.
+    if (isConnectingRef.current) {
+      cleanup();
+      return;
+    }
     if (!isRecordingRef.current) return;
     playBeep('off');
     cleanup();

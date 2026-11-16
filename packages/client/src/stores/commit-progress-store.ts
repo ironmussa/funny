@@ -30,8 +30,12 @@ interface CommitProgressState {
     workflowId?: string,
   ) => void;
   updateStep: (id: string, stepId: string, update: Partial<GitProgressStep>) => void;
-  /** Replace all steps at once (used by server-side workflow progress via WS) */
-  replaceSteps: (id: string, steps: GitProgressStep[]) => void;
+  /**
+   * Replace all steps at once (used by server-side workflow progress via WS).
+   * With a `workflowId`, only when the entry is still that workflow: a late
+   * update from a previous run must not overwrite the steps of a new one.
+   */
+  replaceSteps: (id: string, steps: GitProgressStep[], workflowId?: string) => void;
   /**
    * Remove the entry. With a `workflowId`, only when the entry is still that
    * workflow: a delayed close must not drop a workflow restarted in between.
@@ -67,10 +71,11 @@ export const useCommitProgressStore = create<CommitProgressState>((set) => ({
       };
     }),
 
-  replaceSteps: (id, steps) =>
+  replaceSteps: (id, steps, workflowId) =>
     set((state) => {
       const entry = state.activeCommits[id];
       if (!entry) return state;
+      if (workflowId && entry.workflowId && entry.workflowId !== workflowId) return state;
       return {
         activeCommits: {
           ...state.activeCommits,

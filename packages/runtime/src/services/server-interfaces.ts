@@ -429,7 +429,8 @@ export interface IWatcherRepository {
   /** Pending watchers for this runner's user whose `nextWakeAt <= now`. */
   listDueWatchers(now: number): Promise<Watcher[]>;
   listWatchersByUser(userId: string): Promise<Watcher[]>;
-  updateWatcher(id: string, patch: Record<string, any>): Promise<void>;
+  /** Resolves false when a status in `patch` is not a legal transition from the stored one. */
+  updateWatcher(id: string, patch: Record<string, any>): Promise<boolean>;
   deleteWatchersByThread(threadId: string): Promise<void>;
 }
 
@@ -441,6 +442,7 @@ export interface IJobRepository {
   /** Running jobs for this runner's user — polled by the scanner for completion. */
   listRunningJobs(): Promise<Job[]>;
   listJobsByUser(userId: string): Promise<Job[]>;
-  updateJob(id: string, patch: Record<string, any>): Promise<void>;
+  /** Resolves false when a status in `patch` is not a legal transition from the stored one. */
+  updateJob(id: string, patch: Record<string, any>): Promise<boolean>;
   deleteJobsByThread(threadId: string): Promise<void>;
 }

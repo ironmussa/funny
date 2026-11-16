@@ -277,6 +277,30 @@ describe('SchedulerService.refresh', () => {
     expect(retryEvent?.data.error).toBe('runner offline');
   });
 
+  test('a retried run is dispatched once, not again on every tick while in flight', async () => {
+    seedThread(testDb.db, {
+      id: 't1',
+      projectId: 'p1',
+      userId: 'user-1',
+      stage: 'in_progress',
+      status: 'pending',
+      createdAt: '2026-01-01T00:00:00Z',
+    });
+    let nowMs = 1_000_000;
+    dispatcher.nextResult = { ok: false, error: { message: 'runner offline' } };
+    const svc = makeService({}, () => nowMs);
+    await svc.refresh(); // fails → retry queued
+
+    nowMs += 24 * 60 * 60 * 1000; // past any backoff
+    await svc.refresh(); // the retry is dispatched
+    expect(dispatcher.handles).toHaveLength(1);
+    expect((await runRepo.getRun('t1'))?.nextRetryAtMs).toBeNull();
+
+    await svc.refresh();
+    await svc.refresh();
+    expect(dispatcher.handles).toHaveLength(1); // still the one in-flight run
+  });
+
   test('blocked-by-dependency threads stay queued until the blocker is terminal', async () => {
     seedThread(testDb.db, {
       id: 'gate',

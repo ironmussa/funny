@@ -94,6 +94,16 @@ describe('cancelling', () => {
     expect(result.current.j1?.status).toBe('cancelled');
   });
 
+  test('a job that ended before the cancel reached it keeps how it ended', async () => {
+    const { result } = renderHook(() => useJobsById());
+    api.cancelJob.mockReturnValue(okAsync({ ok: true, status: 'exited' }));
+    await act(async () => {
+      await cancelJob('j1');
+    });
+    expect(result.current.j1?.status).toBe('exited');
+    expect(effects.emit).not.toHaveBeenCalledWith(expect.objectContaining({ level: 'error' }));
+  });
+
   test('a refused watcher cancel rolls back with a toast', async () => {
     api.cancelWatcher.mockReturnValue(errAsync(failure));
     expect((await cancelWatcher('w1')).isErr()).toBe(true);

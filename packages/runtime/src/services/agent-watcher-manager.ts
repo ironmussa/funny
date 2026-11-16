@@ -87,12 +87,15 @@ export async function createOrReschedule(args: CreateOrRescheduleArgs): Promise<
   const nextWakeAt = now + delayMs;
 
   const existing = await getServices().watchers.getLiveWatcherByThreadKey(args.threadId, args.key);
-  if (existing) {
-    await getServices().watchers.updateWatcher(existing.id, {
+  // A watcher cancelled since the read above is not re-armed: a new one is created.
+  const rearmed =
+    existing &&
+    (await getServices().watchers.updateWatcher(existing.id, {
       nextWakeAt,
       lastDelayMs: delayMs,
       status: 'pending',
-    });
+    }));
+  if (existing && rearmed) {
     const updated: Watcher = { ...existing, nextWakeAt, lastDelayMs: delayMs, status: 'pending' };
     armScannerAt(nextWakeAt);
     emit(args.userId, 'watcher:rescheduled', updated);
@@ -187,7 +190,7 @@ async function fire(watcher: Watcher, now: number): Promise<void> {
   const deadlinePassed = watcher.deadline != null && now > watcher.deadline;
   const overWakeBudget = watcher.wakeCount + 1 > watcher.maxWakes;
   if (deadlinePassed || overWakeBudget) {
-    await setStatus(watcher, 'expired');
+    if (!(await setStatus(watcher, 'expired'))) return;
     emit(watcher.userId, 'watcher:completed', { ...watcher, status: 'expired' });
     log.info('Watcher expired', {
       namespace: NS,
@@ -198,7 +201,18 @@ async function fire(watcher: Watcher, now: number): Promise<void> {
   }
 
   const wakeCount = watcher.wakeCount + 1;
-  await getServices().watchers.updateWatcher(watcher.id, { status: 'fired', wakeCount });
+  const applied = await getServices().watchers.updateWatcher(watcher.id, {
+    status: 'fired',
+    wakeCount,
+  });
+  if (!applied) {
+    // Cancelled (or otherwise finished) between the scan and now: do not wake
+    // the agent. A watcher re-armed in that window is still `pending`, so it
+    // fires; guarding on its due time needs `nextWakeAt` in the update
+    // protocol (docs/architecture/state-machines.md).
+    log.info('Watcher no longer pending, not fired', { namespace: NS, watcherId: watcher.id });
+    return;
+  }
   const fired: Watcher = { ...watcher, status: 'fired', wakeCount };
   emit(watcher.userId, 'watcher:fired', fired);
 
@@ -232,8 +246,8 @@ function renderFollowUp(w: Watcher): string {
 
 // ── Status ───────────────────────────────────────────────────────
 
-async function setStatus(watcher: Watcher, status: WatcherStatus): Promise<void> {
-  await getServices().watchers.updateWatcher(watcher.id, { status });
+async function setStatus(watcher: Watcher, status: WatcherStatus): Promise<boolean> {
+  return getServices().watchers.updateWatcher(watcher.id, { status });
 }
 
 // ── Lifecycle ────────────────────────────────────────────────────

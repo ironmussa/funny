@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
+const clientCalls = vi.hoisted(() => ({ close: vi.fn(), open: vi.fn() }));
+vi.mock('@/lib/browser-session-client', () => ({ browserSessionClient: clientCalls }));
+
 import {
   dispatchBrowserSessionEvent,
   recoverBrowserPanelSession,
@@ -88,5 +91,58 @@ describe('recoverBrowserPanelSession', () => {
     useBrowserPanelStore.setState({ sessionThreadId: null, attachThreadSession });
     recoverBrowserPanelSession();
     expect(attachThreadSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('browser-session:closed', () => {
+  test("the answer to the panel's own close does not end a session reopened since", async () => {
+    attachingTo(SESSION);
+    useBrowserPanelStore.setState({ sessionStatus: 'ready', sessionThreadId: 't1' });
+    await useBrowserPanelStore.getState().endBrowserSession(); // sends close(SESSION, 'user')
+    expect(clientCalls.close).toHaveBeenCalledWith(SESSION, 'user');
+
+    // The thread's session is reopened (same id) before the runner's answer arrives.
+    attachingTo(SESSION);
+    dispatchBrowserSessionEvent('browser-session:closed', { sessionId: SESSION, reason: 'user' });
+
+    expect(useBrowserPanelStore.getState().sessionStatus).toBe('spawning');
+  });
+
+  test('an own close that was never answered does not swallow a later real one', async () => {
+    attachingTo(SESSION);
+    useBrowserPanelStore.setState({ sessionStatus: 'ready', sessionThreadId: 't1' });
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      await useBrowserPanelStore.getState().endBrowserSession(); // the runner never answers
+      vi.setSystemTime(Date.now() + 60_000);
+
+      attachingTo(SESSION);
+      useBrowserPanelStore.setState({ sessionStatus: 'ready' });
+      dispatchBrowserSessionEvent('browser-session:closed', { sessionId: SESSION, reason: 'user' });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(useBrowserPanelStore.getState().sessionStatus).toBe('disconnected');
+  });
+
+  test('two closes are answered by two events, neither ending the newest session', async () => {
+    for (let i = 0; i < 2; i++) {
+      attachingTo(SESSION);
+      useBrowserPanelStore.setState({ sessionStatus: 'ready', sessionThreadId: 't1' });
+      await useBrowserPanelStore.getState().endBrowserSession();
+    }
+    attachingTo(SESSION);
+    dispatchBrowserSessionEvent('browser-session:closed', { sessionId: SESSION, reason: 'user' });
+    dispatchBrowserSessionEvent('browser-session:closed', { sessionId: SESSION, reason: 'user' });
+
+    expect(useBrowserPanelStore.getState().sessionStatus).toBe('spawning');
+  });
+
+  test('a close the panel did not send still ends the session', () => {
+    attachingTo(SESSION);
+    useBrowserPanelStore.setState({ sessionStatus: 'ready' });
+    dispatchBrowserSessionEvent('browser-session:closed', { sessionId: SESSION, reason: 'user' });
+
+    expect(useBrowserPanelStore.getState().sessionStatus).toBe('disconnected');
   });
 });

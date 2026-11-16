@@ -14,6 +14,7 @@ const {
   mockReplaceSteps,
   mockFinishCommit,
   mockSetFailedWorkflow,
+  mockActiveCommits,
   mockToastSuccess,
   mockToastError,
   mockShowAgentNotification,
@@ -32,6 +33,7 @@ const {
   mockReplaceSteps: vi.fn(),
   mockFinishCommit: vi.fn(),
   mockSetFailedWorkflow: vi.fn(),
+  mockActiveCommits: {} as Record<string, { workflowId?: string }>,
   mockToastSuccess: vi.fn(),
   mockToastError: vi.fn(),
   mockShowAgentNotification: vi.fn(),
@@ -45,6 +47,7 @@ vi.mock('@/stores/commit-progress-store', () => ({
       replaceSteps: mockReplaceSteps,
       finishCommit: mockFinishCommit,
       setFailedWorkflow: mockSetFailedWorkflow,
+      activeCommits: mockActiveCommits,
     }),
   },
 }));
@@ -661,6 +664,29 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       );
       expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined);
     });
+  });
+
+  test('git:workflow_progress ignores a terminal event of an earlier run', async () => {
+    mockActiveCommits.t1 = { workflowId: 'wf-2' };
+    try {
+      captureHandlers()['git:workflow_progress']({
+        threadId: 't1',
+        data: {
+          status: 'failed',
+          title: 'Push failed',
+          action: 'push',
+          workflowId: 'wf-1',
+          steps: [{ id: 'push', status: 'failed' }],
+        },
+      });
+      // Let the dynamic store import settle, then check nothing was touched.
+      await new Promise((resolve) => setTimeout(resolve, 20));
+      expect(mockSetFailedWorkflow).not.toHaveBeenCalled();
+      expect(mockReplaceSteps).not.toHaveBeenCalled();
+      expect(mockFinishCommit).not.toHaveBeenCalled();
+    } finally {
+      delete mockActiveCommits.t1;
+    }
   });
 
   test('agent:result dispatches desktop notification when tab is hidden', async () => {

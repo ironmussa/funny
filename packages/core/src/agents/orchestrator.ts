@@ -766,8 +766,20 @@ export class AgentOrchestrator extends EventEmitter {
 
       // Defer cleanup so the error handler can still check resultReceived
       // if an error event fires shortly after exit (e.g., container teardown).
-      setTimeout(() => this.resultReceived.delete(threadId), 1000);
+      this.clearResultFlagLater(threadId);
     });
+  }
+
+  /**
+   * Forget that the exited process delivered its result, after a grace period
+   * in which an error handler may still ask. The flag is keyed by thread, so a
+   * process started for the same thread in the meantime now owns it: clearing
+   * it then would make that run's own exit look like one without a result.
+   */
+  private clearResultFlagLater(threadId: string): void {
+    setTimeout(() => {
+      if (!this.activeAgents.has(threadId)) this.resultReceived.delete(threadId);
+    }, 1000);
   }
 
   /**
@@ -917,7 +929,7 @@ export class AgentOrchestrator extends EventEmitter {
         dlog.warn('Resume unexpected exit (no result)', { threadId, code });
         this.emit('agent:unexpected-exit', threadId, code);
       }
-      setTimeout(() => this.resultReceived.delete(threadId), 1000);
+      this.clearResultFlagLater(threadId);
     });
   }
 

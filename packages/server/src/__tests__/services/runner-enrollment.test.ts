@@ -16,7 +16,7 @@
 // Must be set before the service/routes read it (root of the per-runner keys).
 process.env.RUNNER_AUTH_SECRET = 'test-shared-secret';
 
-import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
+import { describe, test, expect, beforeAll, beforeEach, spyOn } from 'bun:test';
 
 import {
   signForwardedIdentity,
@@ -121,6 +121,45 @@ describe('Runner Enrollment (device-link)', () => {
       // Second poll must NOT re-issue (consumed).
       const poll2 = await enroll.pollByToken(started.pollToken);
       expect(poll2.status).toBe('invalid');
+    });
+
+    test('two approvals at once register one runner', async () => {
+      const started = await enroll.startEnrollment({ hostname: 'twice', os: 'linux', ip: '' });
+
+      const results = await Promise.all([
+        enroll.approve(started.userCode, 'user-1'),
+        enroll.approve(started.userCode, 'user-2'),
+      ]);
+
+      expect(results.filter((r) => r.ok)).toHaveLength(1);
+      expect(results.filter((r) => !r.ok)).toEqual([{ ok: false, reason: 'already_approved' }]);
+      const runners = t.db.select().from(t.schema.runners).all() as { hostname: string }[];
+      expect(runners.filter((r) => r.hostname === 'twice')).toHaveLength(1);
+    });
+
+    test('a failed approval gives the code back so it can be approved again', async () => {
+      const rm = await import('../../services/runner-manager.js');
+      const started = await enroll.startEnrollment({ hostname: 'flaky', os: 'linux', ip: '' });
+      const failing = spyOn(rm, 'registerRunner').mockRejectedValueOnce(new Error('db down'));
+      try {
+        await expect(enroll.approve(started.userCode, 'user-1')).rejects.toThrow('db down');
+      } finally {
+        failing.mockRestore();
+      }
+
+      expect((await enroll.approve(started.userCode, 'user-1')).ok).toBe(true);
+      expect((await enroll.pollByToken(started.pollToken)).status).toBe('approved');
+    });
+
+    test('two polls at once deliver the credentials to only one of them', async () => {
+      const started = await enroll.startEnrollment({ hostname: 'h', os: 'linux', ip: '' });
+      await enroll.approve(started.userCode, 'user-1');
+
+      const polls = await Promise.all([
+        enroll.pollByToken(started.pollToken),
+        enroll.pollByToken(started.pollToken),
+      ]);
+      expect(polls.map((p) => p.status).sort()).toEqual(['approved', 'invalid']);
     });
 
     test('approving an unknown code fails; a code cannot be approved twice', async () => {

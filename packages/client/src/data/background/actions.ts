@@ -33,7 +33,9 @@ export function cancelJob(
     persist: () => jobsApi.cancelJob(jobId),
     // The runner follows with job:cancelled carrying the authoritative row;
     // until then keep the confirmed cancel instead of flicking back to running.
-    confirm: () => data.patch(jobId, (row) => ({ ...row, status: 'cancelled' })),
+    // A job that ended before the cancel reached it keeps how it ended.
+    confirm: (result) =>
+      data.patch(jobId, (row) => ({ ...row, status: result.status ?? 'cancelled' })),
     failureMessageKey: FAILURE_KEY,
   });
 }

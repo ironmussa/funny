@@ -60,6 +60,22 @@ export async function updateRun(id: string, updates: Record<string, any>) {
   );
 }
 
+/**
+ * Finish a run: `running` → `updates.status`, as a compare-and-set. Returns
+ * false when the run is no longer `running` (the stale sweep or another
+ * completion got there first), in which case nothing is written.
+ */
+export async function finishRunningRun(id: string, updates: Record<string, any>): Promise<boolean> {
+  const rows = await dbAll<{ id: string }>(
+    db
+      .update(schema.automationRuns)
+      .set(updates)
+      .where(and(eq(schema.automationRuns.id, id), eq(schema.automationRuns.status, 'running')))
+      .returning({ id: schema.automationRuns.id }),
+  );
+  return rows.length > 0;
+}
+
 export async function getRunByThreadId(threadId: string) {
   return dbGet(
     db.select().from(schema.automationRuns).where(eq(schema.automationRuns.threadId, threadId)),

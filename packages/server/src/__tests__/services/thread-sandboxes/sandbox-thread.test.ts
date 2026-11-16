@@ -41,7 +41,7 @@ function setup(
   const events: string[] = [];
   const recorded: FirstMessage[] = [];
   const launcher = createSandboxThreadLauncher({
-    findOwnedProject: async (userId, projectId) =>
+    findAccessibleProject: async (userId, projectId) =>
       opts.project !== undefined
         ? opts.project
         : userId === 'alice' && projectId === 'p1'

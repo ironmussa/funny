@@ -116,7 +116,7 @@ export interface RetryableSandboxThread {
 }
 
 export interface SandboxThreadDeps {
-  findOwnedProject(userId: string, projectId: string): Promise<{ path: string } | null>;
+  findAccessibleProject(userId: string, projectId: string): Promise<{ path: string } | null>;
   /** The caller's sandbox for the project (project-sandboxes), or null when none. */
   projectSandbox(
     userId: string,
@@ -391,7 +391,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     const retryable = checkRetryable(await deps.findOwnedThread(userId, threadId));
     if (retryable.isErr()) return err(retryable.error);
     const thread = retryable.value;
-    const project = await deps.findOwnedProject(userId, thread.projectId);
+    const project = await deps.findAccessibleProject(userId, thread.projectId);
     if (!project) {
       return err<never, SandboxThreadFailure>({
         status: 404,
@@ -482,7 +482,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
       const parsed = parseSandboxThread(payload);
       if (parsed.isErr()) return err(parsed.error);
       const input = parsed.value;
-      const project = await deps.findOwnedProject(userId, input.projectId);
+      const project = await deps.findAccessibleProject(userId, input.projectId);
       if (!project) return err({ status: 404, code: 'not-found', message: 'Project not found' });
 
       const machine = await resolveMachine(userId, input);

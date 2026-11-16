@@ -1,9 +1,8 @@
 /**
- * The project's sandbox for the current user (change project-sandboxes): which
- * of their provider connections new threads use and at what size. Whether new
- * threads start in it is the Sandbox option of the default thread mode
- * (`ProjectThreadModeSetting`). Only the project owner can run sandbox threads,
- * so other users see nothing.
+ * The project's sandbox for the current user (change project-runtime-settings):
+ * which of their provider connections new threads use and at what size. Whether
+ * new threads start in it is the Sandbox option of the default thread mode
+ * (`ProjectThreadModeSetting`). Every member configures their own connection.
  */
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -19,25 +18,12 @@ import {
 import { clearProjectSandbox, saveProjectSandbox } from '@/data/runner/actions';
 import { useProjectSandbox, useSandboxConnections, useSandboxProviders } from '@/data/runner/hooks';
 import { buildPath } from '@/lib/url';
-import { useAuthStore } from '@/stores/auth-store';
 
 import { SettingRow } from './setting-primitives';
 
 const NO_SANDBOX = '__none__';
 
-/** Rendered for the project owner only; nothing is fetched for anyone else. */
-export function ProjectSandboxSetting({
-  projectId,
-  ownerId,
-}: {
-  projectId: string;
-  ownerId: string;
-}) {
-  const isOwner = useAuthStore((s) => s.user?.id === ownerId);
-  return isOwner ? <ProjectSandboxRows projectId={projectId} /> : null;
-}
-
-function ProjectSandboxRows({ projectId }: { projectId: string }) {
+export function ProjectSandboxSetting({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { connections, loading } = useSandboxConnections();

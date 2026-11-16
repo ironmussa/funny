@@ -233,10 +233,7 @@ export function GeneralSettings() {
                 />
               </SettingRow>
             )}
-            <ProjectThreadModeSetting
-              projectId={selectedProject.id}
-              ownerId={selectedProject.userId}
-            />
+            <ProjectThreadModeSetting projectId={selectedProject.id} />
             <SettingRow
               title={t('settings.projectDefaultPermission', 'Default Permission Mode')}
               description={t(
@@ -301,10 +298,7 @@ export function GeneralSettings() {
               onSave={saveProject}
             />
             <WeaveStatusSetting projectId={selectedProject.id} />
-            <ProjectSandboxSetting
-              projectId={selectedProject.id}
-              ownerId={selectedProject.userId}
-            />
+            <ProjectSandboxSetting projectId={selectedProject.id} />
             <DefaultTemplateSetting
               projectId={selectedProject.id}
               currentTemplateId={selectedProject.defaultAgentTemplateId}

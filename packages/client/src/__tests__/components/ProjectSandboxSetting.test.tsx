@@ -55,20 +55,15 @@ beforeEach(() => {
 });
 
 describe('ProjectSandboxSetting', () => {
-  test('renders nothing for a project the user does not own', () => {
-    const { container } = render(<ProjectSandboxSetting projectId="p1" ownerId="bob" />);
-    expect(container).toBeEmptyDOMElement();
-  });
-
   test('without connections it links to Settings > Sandboxes', () => {
     mocks.connections = [];
-    render(<ProjectSandboxSetting projectId="p1" ownerId="alice" />);
+    render(<ProjectSandboxSetting projectId="p1" />);
     fireEvent.click(screen.getByTestId('settings-project-sandbox-add-connection'));
     expect(mocks.navigate).toHaveBeenCalledWith(expect.stringContaining('/preferences/sandboxes'));
   });
 
   test('not configured: only the connection picker, set to None', () => {
-    render(<ProjectSandboxSetting projectId="p1" ownerId="alice" />);
+    render(<ProjectSandboxSetting projectId="p1" />);
     expect(screen.getByTestId('settings-project-sandbox-connection')).toHaveTextContent('None');
     expect(screen.queryByTestId('settings-project-sandbox-size')).toBeNull();
   });
@@ -76,7 +71,7 @@ describe('ProjectSandboxSetting', () => {
   test('choosing a connection starts with the sandbox off, so new threads run locally', async () => {
     // jsdom has no scrollIntoView; the open Radix Select calls it.
     Element.prototype.scrollIntoView = vi.fn();
-    render(<ProjectSandboxSetting projectId="p1" ownerId="alice" />);
+    render(<ProjectSandboxSetting projectId="p1" />);
     fireEvent.keyDown(screen.getByTestId('settings-project-sandbox-connection'), { key: 'Enter' });
     fireEvent.click(await screen.findByRole('option', { name: /funny-laptop/ }));
     expect(mocks.save).toHaveBeenCalledWith('p1', { mode: 'local', connectionId: 'c1' });
@@ -89,7 +84,7 @@ describe('ProjectSandboxSetting', () => {
       sizeId: 'large',
       mode: 'sandbox',
     };
-    render(<ProjectSandboxSetting projectId="p1" ownerId="alice" />);
+    render(<ProjectSandboxSetting projectId="p1" />);
     // The connection name and its provider, so two same-named connections differ.
     expect(screen.getByTestId('settings-project-sandbox-connection')).toHaveTextContent(
       'funny-laptop · InstaBox',

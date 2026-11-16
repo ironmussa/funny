@@ -40,8 +40,8 @@ const configured = (mode: 'local' | 'worktree' | 'sandbox', connectionId: string
   mode,
 });
 
-function renderRow(ownerId = 'alice') {
-  return render(<ProjectThreadModeSetting projectId="p1" ownerId={ownerId} />);
+function renderRow() {
+  return render(<ProjectThreadModeSetting projectId="p1" />);
 }
 
 const pressed = (mode: string) =>
@@ -55,10 +55,10 @@ beforeEach(() => {
 });
 
 describe('ProjectThreadModeSetting', () => {
-  test('a non-owner member picks local or worktree, but gets no sandbox option', () => {
+  test('every member sees the three modes; worktree reflects their row', () => {
     mocks.settings = configured('worktree');
-    renderRow('bob');
-    expect(screen.queryByTestId('settings-thread-mode-sandbox')).toBeNull();
+    renderRow();
+    expect(screen.getByTestId('settings-thread-mode-sandbox')).toBeInTheDocument();
     expect(pressed('worktree')).toBe('true');
   });
 
@@ -67,7 +67,7 @@ describe('ProjectThreadModeSetting', () => {
     expect(pressed('local')).toBe('true');
   });
 
-  test('the owner sandbox option is disabled without a connection', () => {
+  test('the sandbox option is disabled without a connection', () => {
     mocks.settings = configured('local', '');
     renderRow();
     expect(screen.getByTestId('settings-thread-mode-sandbox')).toBeDisabled();

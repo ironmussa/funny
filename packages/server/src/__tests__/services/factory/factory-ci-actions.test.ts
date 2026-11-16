@@ -73,7 +73,7 @@ describe('wait_ci', () => {
     const result = await actionsFor(prs).waitCi();
     expect(result).toMatchObject({
       ok: false,
-      error: 'Failing checks: test',
+      error: 'Failing checks: test\n\n--- test ---\nboom',
       metadata: { verdict: 'red', failingChecks: checks },
     });
   });

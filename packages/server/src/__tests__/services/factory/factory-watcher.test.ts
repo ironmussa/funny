@@ -60,7 +60,8 @@ interface GithubScript {
   files?: Record<string, string>;
   /** Whether the agent opened its pull request. */
   pr?: boolean;
-  ci?: CiState;
+  /** CI answers in order; the last one repeats. */
+  ci?: CiState | CiState[];
   merge?: FactoryMergeOutcome;
 }
 
@@ -70,6 +71,8 @@ function fakeGithub(
   issues: FactoryIssue[],
   script: GithubScript = {},
 ): FactoryGithubPort & { fileReads: string[]; merges: number } {
+  const answers = ([] as CiState[]).concat(script.ci ?? { kind: 'green' });
+  let looks = 0;
   const port = {
     fileReads: [] as string[],
     merges: 0,
@@ -84,7 +87,7 @@ function fakeGithub(
     findPullRequest: () =>
       okAsync(script.pr === false ? null : { number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {
-      ciState: () => okAsync(script.ci ?? ({ kind: 'green' } as CiState)),
+      ciState: () => okAsync(answers[Math.min(looks++, answers.length - 1)]!),
       merge: () => {
         port.merges++;
         return okAsync(
@@ -456,12 +459,32 @@ describe('factory flow', () => {
     expect(github.merges).toBe(1);
   });
 
-  test('red CI fails the run and nothing is merged', async () => {
-    const { factoryId, github } = await runFlow(
-      { ci: { kind: 'failing', checks: [{ name: 'test', conclusion: 'failure', excerpt: '' }] } },
+  const red: CiState = {
+    kind: 'failing',
+    checks: [{ name: 'test', conclusion: 'failure', excerpt: 'expected 1, got 2' }],
+  };
+
+  test('red CI runs a fix agent with the failing log, then merges once green', async () => {
+    const { factoryId, launcher, github } = await runFlow(
+      { ci: [red, { kind: 'green' }] },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'merged');
+    expect(run.threadIds).toEqual(['t-1', 't-2']);
+    const fix = String(launcher.calls[1]!.body.prompt);
+    expect(fix).toContain('expected 1, got 2');
+    expect(fix).toContain(`push to \`factory/issue-7-${run.id.slice(0, 8)}\``);
+    expect(github.merges).toBe(1);
+  });
+
+  test('CI still red after the fix attempts fails the run without merging', async () => {
+    const { factoryId, launcher, github } = await runFlow(
+      { ci: red },
       finishedThreads('completed'),
     );
     await eventually(factoryId, (r) => r.state === 'failed');
+    // The implement agent plus two fixes: three looks at the CI in all.
+    expect(launcher.calls).toHaveLength(3);
     expect(github.merges).toBe(0);
   });
 

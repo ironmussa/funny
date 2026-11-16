@@ -93,6 +93,40 @@ function buildRow(
   };
 }
 
+/** A factory the watcher should poll — server-internal, unscoped (like `listAutomations`). */
+export interface EnabledFactory {
+  id: string;
+  projectId: string;
+  userId: string;
+  label: string;
+  flowName: string;
+  maxConcurrent: number;
+}
+
+const toEnabled = (row: Row): EnabledFactory => ({
+  id: row.id,
+  projectId: row.projectId,
+  userId: row.userId,
+  label: row.label,
+  flowName: row.flowName,
+  maxConcurrent: row.maxConcurrent,
+});
+
+/**
+ * Every enabled factory across all users/projects, for the watcher. Server-only
+ * (no access check): the watcher acts as each factory's own enabling user.
+ */
+export async function listEnabledFactories(): Promise<EnabledFactory[]> {
+  const rows = await db.select().from(factorySettings).where(eq(factorySettings.enabled, 1));
+  return rows.map(toEnabled);
+}
+
+/** One factory by its id, or null — the watcher re-reads it each tick. */
+export async function getEnabledFactory(id: string): Promise<EnabledFactory | null> {
+  const [row] = await db.select().from(factorySettings).where(eq(factorySettings.id, id));
+  return row && row.enabled === 1 ? toEnabled(row) : null;
+}
+
 export function createFactorySettingsService(
   deps: { newId: () => string } = { newId: () => crypto.randomUUID() },
 ) {

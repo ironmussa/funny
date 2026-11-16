@@ -144,9 +144,14 @@ export async function startBunServer(opts: BunHostOptions) {
   // automation owner's runner (services/automation-scheduler.ts).
   const automationScheduler = await import('../../services/automation-scheduler.js');
   if (runnerTransport) {
-    await automationScheduler.startAutomationScheduler({
-      ports: { requests: runnerTransport.requests, presence: runnerTransport.presence },
-    });
+    const ports = { requests: runnerTransport.requests, presence: runnerTransport.presence };
+    await automationScheduler.startAutomationScheduler({ ports });
+    // Issue factory: the server polls each enabled factory's repo for labelled
+    // issues and dispatches an implement thread to the enabler's runner
+    // (services/factory/factory-watcher.ts).
+    const { startFactoryWatcher } = await import('../../services/factory/factory-watcher.js');
+    const { createFactoryGithub } = await import('../../services/factory/factory-github.js');
+    await startFactoryWatcher({ ports, github: createFactoryGithub(ports) });
   }
 
   // Runners outside the private network reach the gRPC listener through a

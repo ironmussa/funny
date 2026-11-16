@@ -17,6 +17,7 @@ import {
   createFactorySettingsService,
   type FactorySettingsError,
 } from '../services/factory/factory-settings.js';
+import { rescheduleFactory } from '../services/factory/factory-watcher.js';
 
 const saveSchema = z
   .object({
@@ -67,6 +68,18 @@ export function createFactoryRoutes() {
       detail: `Project ${projectId} factory ${result.value.enabled ? 'enabled' : 'disabled'}`,
       meta: { projectId, enabled: result.value.enabled, label: result.value.label },
     });
+    // Pick up the change in the running watcher without a restart (enable starts
+    // polling; disable stops it). Best-effort — the watcher may not be running.
+    const factoryId = await settings.factoryId(userId, projectId);
+    if (factoryId.isOk() && factoryId.value) {
+      await rescheduleFactory(factoryId.value).catch((error: unknown) =>
+        log.error('Failed to reschedule factory', {
+          namespace: 'factory',
+          projectId,
+          error: error instanceof Error ? error.message : String(error),
+        }),
+      );
+    }
     return c.json({ settings: result.value });
   });
 

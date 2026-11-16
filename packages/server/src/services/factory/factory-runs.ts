@@ -102,6 +102,17 @@ export function createFactoryRunsRepository(
       ).map((rows) => rows.map(toView));
     },
 
+    /**
+     * The run that owns `threadId`, if any — the completion lookup. Scans the
+     * table (bounded by the concurrency cap); `thread_ids` is a JSON array, so
+     * there is no indexed column to match on.
+     */
+    findByThreadId(threadId: string): ResultAsync<FactoryRunView | null, FactoryRunsError> {
+      return ResultAsync.fromPromise(db.select().from(factoryRuns), storage).map(
+        (rows) => rows.map(toView).find((r) => r.threadIds.includes(threadId)) ?? null,
+      );
+    },
+
     /** The non-terminal run for an issue, if any — the admission dedup check. */
     activeByIssue(
       factoryId: string,

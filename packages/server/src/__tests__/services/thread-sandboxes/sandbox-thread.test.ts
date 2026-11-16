@@ -17,7 +17,7 @@ const provisioned = { threadId: 't-new', runnerId: 'r-box' } as ThreadSandboxRow
 
 function setup(
   opts: {
-    project?: { path: string } | null;
+    project?: { path: string } | { refused: 403 } | null;
     refusal?: { code: string; message: string };
     provisionError?: ProvisionError;
     messageFails?: boolean;
@@ -126,6 +126,14 @@ describe('sandbox thread creation', () => {
     });
     expectOkCreate(await launcher.create('alice', payload));
     expect(prepared[0]).toMatchObject({ connectionId: 'conn-1', sizeId: 'default' });
+  });
+
+  test('a caller whose role cannot steer the project gets a 403 and nothing is created', async () => {
+    const { launcher, inserted, prepared } = setup({ project: { refused: 403 } });
+    const result = await launcher.create('alice', payload);
+    expect(result.isErr() && result.error).toMatchObject({ status: 403, code: 'forbidden' });
+    expect(prepared).toEqual([]);
+    expect(inserted).toEqual([]);
   });
 
   test('without a connection or a project sandbox nothing is created (409)', async () => {

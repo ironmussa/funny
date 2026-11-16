@@ -15,6 +15,7 @@
 
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
+import { accessCapToken } from '../github-app/access-cap-token.js';
 import { loadGithubAppConfig, sqlSettingsStore } from '../github-app/app-config.js';
 import { githubRepoOf } from '../github-app/sandbox-tokens.js';
 import {
@@ -22,8 +23,6 @@ import {
   type IssueError,
   type RepoToken,
 } from '../github-app/token-issuer.js';
-import { getProviderKey } from '../profile-service.js';
-import { serverSideProjectGithubToken } from '../runner-scope.js';
 import type { RunnerPorts } from '../runner-thread-launcher.js';
 import { createSandboxRunnerCalls } from '../thread-sandboxes/sandbox-runner-calls.js';
 
@@ -114,10 +113,9 @@ export function createFactoryGithub(
     fetch: fetchImpl,
   });
 
-  const ownerToken = async (ownerId: string, projectId: string | null): Promise<string | null> => {
-    const projectToken = projectId ? await serverSideProjectGithubToken(projectId) : null;
-    return projectToken ?? (await getProviderKey(ownerId, 'github'));
-  };
+  // The factory's enabler may be a member, not the project owner: cap by their
+  // own access (access-cap-token), never by the owner's project token.
+  const ownerToken = accessCapToken;
 
   return {
     async resolveRepo(userId, projectId) {

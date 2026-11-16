@@ -18,9 +18,8 @@ import { db } from '../../db/index.js';
 import { threadSandboxes, threads } from '../../db/schema.js';
 import { audit } from '../../lib/audit.js';
 import { relayToUser } from '../browser-events.js';
-import { getProviderKey } from '../profile-service.js';
-import { serverSideProjectGithubToken } from '../runner-scope.js';
 import { postSandboxError } from '../thread-sandboxes/sandbox-events.js';
+import { accessCapToken } from './access-cap-token.js';
 import { loadGithubAppConfig, sqlSettingsStore } from './app-config.js';
 import { createGithubAppTokenIssuer, type IssueError, type RepoToken } from './token-issuer.js';
 
@@ -142,10 +141,9 @@ export function sandboxTokenService() {
         usable: !row.archived && USABLE_STATES.has(row.state),
       };
     },
-    async ownerToken(ownerId, projectId) {
-      const projectToken = projectId ? await serverSideProjectGithubToken(projectId) : null;
-      return projectToken ?? (await getProviderKey(ownerId, 'github'));
-    },
+    // The thread's launcher may be a member, not the project owner: cap by
+    // their own access (access-cap-token), never by the owner's project token.
+    ownerToken: accessCapToken,
     issue: createGithubAppTokenIssuer({
       app: () => loadGithubAppConfig(process.env, sqlSettingsStore),
     }).issue,

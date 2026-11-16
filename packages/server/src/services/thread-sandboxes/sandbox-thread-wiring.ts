@@ -11,10 +11,11 @@ import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { repos } from '../../db/repos.js';
-import { messages, projectMembers, projects } from '../../db/schema.js';
+import { messages } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { createInfraConnectionService } from './infra-connections.js';
+import { findLaunchableProject } from './launch-project.js';
 import { createProjectSandboxSettingsService } from './project-sandbox-settings.js';
 import { postSandboxError } from './sandbox-events.js';
 import { prepareSandboxLaunch } from './sandbox-launch.js';
@@ -41,25 +42,11 @@ export function sandboxThreadLauncherFor(env: {
   const messageRepo = repos.messages();
 
   return createSandboxThreadLauncher({
-    // Any member may launch a sandbox thread, not only the owner
-    // (project-runtime-settings, phase 2b). This does not widen GitHub access:
-    // the per-thread App token is capped by the LAUNCHER's own access
-    // (`threads.userId`, see github-app/sandbox-tokens), and the sandbox runs on
-    // the launcher's own provider connection — a member never exceeds what they
-    // could already reach.
-    findAccessibleProject: async (userId, projectId) => {
-      const [row] = await db
-        .select({ path: projects.path, ownerId: projects.userId })
-        .from(projects)
-        .where(eq(projects.id, projectId));
-      if (!row) return null;
-      if (row.ownerId === userId) return { path: row.path };
-      const [member] = await db
-        .select({ projectId: projectMembers.projectId })
-        .from(projectMembers)
-        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
-      return member ? { path: row.path } : null;
-    },
+    // Anyone who may steer the project may launch a sandbox thread, not only
+    // the owner (project-runtime-settings, phase 2b). The sandbox runs on the
+    // launcher's own provider connection, and its App token is capped by the
+    // LAUNCHER's own GitHub access (`threads.userId`, github-app/sandbox-tokens).
+    findAccessibleProject: findLaunchableProject,
     projectSandbox: async (userId, projectId) => {
       const configured = await projectSandboxes.forThread(userId, projectId);
       // A storage failure is a 500, never "no sandbox configured".

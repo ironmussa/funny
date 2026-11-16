@@ -44,6 +44,9 @@ import type { FactoryPullRequestRef } from './factory-pull-requests.js';
 import type { UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
+/** Where the run's agent threads run: the enabler's runtime for the project. */
+export type FactoryThreadMode = 'local' | 'worktree' | 'sandbox';
+
 /** Everything a run's steps are bound to. */
 export interface FactoryRunScope {
   runId: string;
@@ -52,7 +55,7 @@ export interface FactoryRunScope {
   projectId: string;
   /** `owner/name`. */
   repo: string;
-  mode: 'local' | 'worktree';
+  mode: FactoryThreadMode;
   issueNumber: number;
   issueTitle: string;
   /** The branch the agent pushes and opens the pull request from. */

@@ -228,6 +228,55 @@ describe('factory watcher', () => {
     expect((await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap()).toHaveLength(0);
   });
 
+  test("a sandbox runtime starts the agent in the enabler's sandbox, marked as the factory's", async () => {
+    const factoryId = await enableFactory();
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    const sandboxCalls: Array<{ userId: string; body: Record<string, unknown> }> = [];
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime: async () => 'sandbox' as const,
+      waitThread: pendingThreads,
+      launchSandbox: async (userId, body) => {
+        sandboxCalls.push({ userId, body });
+        return ok({ thread: { id: 's-1' }, threadId: 's-1', runnerId: 'sandbox' });
+      },
+    });
+
+    await poll.ticks[0]!();
+
+    expect(launcher.calls).toHaveLength(0);
+    expect(sandboxCalls).toHaveLength(1);
+    expect(sandboxCalls[0]!.userId).toBe('alice');
+    expect(sandboxCalls[0]!.body).toMatchObject({ projectId: 'p1', source: 'factory' });
+    // The sandbox launcher takes no thread mode: the sandbox is the isolation.
+    expect(sandboxCalls[0]!.body.mode).toBeUndefined();
+    const run = await eventually(factoryId, (r) => r.threadIds.length > 0);
+    expect(run).toMatchObject({ state: 'working', threadIds: ['s-1'] });
+  });
+
+  test('a sandbox launch refusal starts nothing and the issue waits for a later tick', async () => {
+    const factoryId = await enableFactory();
+    const poll = fakePoll();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
+      createPoll: poll.createPoll,
+      launch: fakeLauncher().launch,
+      resolveRuntime: async () => 'sandbox' as const,
+      waitThread: pendingThreads,
+      launchSandbox: async () =>
+        err({ kind: 'runner-error' as const, status: 409, message: 'no sandbox configured' }),
+    });
+
+    await poll.ticks[0]!();
+
+    expect((await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap()).toEqual([]);
+  });
+
   test('does not re-admit an issue that already has an active run', async () => {
     const factoryId = await enableFactory();
     seedThread(testDb.db, { id: 'old', projectId: 'p1', userId: 'alice', status: 'running' });

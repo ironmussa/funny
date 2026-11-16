@@ -54,6 +54,8 @@ const createSandboxThreadSchema = z
     baseBranch: z.string().trim().min(1).max(255).optional(),
     // Without a connection, the caller's project sandbox is used (project-sandboxes).
     sandbox: sandboxMachineRequestSchema.partial({ connectionId: true }).optional(),
+    // Who started it: the web composer, or the issue factory (services/factory).
+    source: z.enum(['web', 'factory']).optional(),
   })
   // The compose payload carries more fields; only the ones above are used here,
   // plus the message extras forwarded below.
@@ -99,7 +101,7 @@ export interface NewSandboxThreadRow {
   permissionMode?: string;
   baseBranch?: string;
   initialPrompt: string;
-  source: 'web';
+  source: 'web' | 'factory';
   createdAt: string;
   updatedAt: string;
 }
@@ -204,7 +206,7 @@ function newSandboxThreadRow(
     permissionMode: input.permissionMode,
     baseBranch: input.baseBranch,
     initialPrompt: input.prompt,
-    source: 'web',
+    source: input.source ?? 'web',
     createdAt,
     updatedAt: createdAt,
   };

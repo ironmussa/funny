@@ -107,6 +107,20 @@ const payload = {
 };
 
 describe('sandbox thread creation', () => {
+  test("a thread is marked as the web composer's unless the issue factory started it", async () => {
+    const web = setup();
+    expectOkCreate(await web.launcher.create('alice', payload));
+    expect(web.inserted[0]!.source).toBe('web');
+
+    const factory = setup();
+    expectOkCreate(await factory.launcher.create('alice', { ...payload, source: 'factory' }));
+    expect(factory.inserted[0]!.source).toBe('factory');
+
+    const forged = setup();
+    const refused = await forged.launcher.create('alice', { ...payload, source: 'automation' });
+    expect(refused.isErr()).toBe(true);
+  });
+
   test("without a connection it uses the caller's project sandbox (connection and size)", async () => {
     const { launcher, prepared } = setup({
       projectSandbox: { connectionId: 'conn-instabox', sizeId: 'large' },

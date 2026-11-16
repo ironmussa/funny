@@ -146,12 +146,7 @@ export async function startBunServer(opts: BunHostOptions) {
   if (runnerTransport) {
     const ports = { requests: runnerTransport.requests, presence: runnerTransport.presence };
     await automationScheduler.startAutomationScheduler({ ports });
-    // Issue factory: the server polls each enabled factory's repo for labelled
-    // issues and dispatches an implement thread to the enabler's runner
-    // (services/factory/factory-watcher.ts).
-    const { startFactoryWatcher } = await import('../../services/factory/factory-watcher.js');
-    const { createFactoryGithub } = await import('../../services/factory/factory-github.js');
-    await startFactoryWatcher({ ports, github: createFactoryGithub(ports) });
+    await startIssueFactory(ports, browserEvents);
   }
 
   // Runners outside the private network reach the gRPC listener through a
@@ -372,4 +367,24 @@ export async function startBunServer(opts: BunHostOptions) {
   });
 
   return { app, server };
+}
+
+/**
+ * Issue factory: the server polls each enabled factory's repo for labelled
+ * issues and runs its flow as the enabler, on their runner or in their sandbox
+ * (services/factory/factory-watcher.ts).
+ */
+async function startIssueFactory(
+  ports: import('../../services/runner-thread-launcher.js').RunnerPorts,
+  browserEvents: { toUser(userId: string, event: Record<string, unknown>): void },
+): Promise<void> {
+  const { startFactoryWatcher } = await import('../../services/factory/factory-watcher.js');
+  const { createFactoryGithub } = await import('../../services/factory/factory-github.js');
+  const { factorySandboxLauncher } =
+    await import('../../services/factory/factory-sandbox-launch.js');
+  await startFactoryWatcher({
+    ports,
+    github: createFactoryGithub(ports),
+    launchSandbox: factorySandboxLauncher(ports, browserEvents),
+  });
 }

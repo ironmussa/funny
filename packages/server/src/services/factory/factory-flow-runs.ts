@@ -39,7 +39,11 @@ import type {
   StartThreadInput,
 } from '../runner-thread-launcher.js';
 import { sendPush } from '../web-push.js';
-import { createFactoryActionProvider, type FactoryRunScope } from './factory-action-provider.js';
+import {
+  createFactoryActionProvider,
+  type FactoryRunScope,
+  type FactoryThreadMode,
+} from './factory-action-provider.js';
 import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
 import type {
@@ -53,7 +57,7 @@ import { createThreadWaits, type ThreadOutcome, type WaitAfter } from './factory
 export interface FactoryRunJob {
   factory: WatchedFactory;
   repo: string;
-  mode: 'local' | 'worktree';
+  mode: FactoryThreadMode;
   issue: FactoryIssue;
   run: FactoryRunView;
 }

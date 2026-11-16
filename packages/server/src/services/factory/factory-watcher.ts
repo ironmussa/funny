@@ -29,8 +29,15 @@ import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
 import { projectRole } from '../../lib/server-authorizer.js';
 import { decideProjectAccess } from '../../middleware/project-access.js';
-import { startThreadOnRunner, type RunnerPorts } from '../runner-thread-launcher.js';
+import {
+  startThreadOnRunner,
+  type RunnerPorts,
+  type StartedThread,
+  type StartThreadError,
+  type StartThreadInput,
+} from '../runner-thread-launcher.js';
 import type { ThreadRuntimeMode } from '../thread-sandboxes/project-sandbox-settings.js';
+import type { FactoryThreadMode } from './factory-action-provider.js';
 import {
   createFactoryFlowRuns,
   type FactoryRunJob,
@@ -65,6 +72,15 @@ export interface FactoryWatcherDeps {
   launch?: typeof startThreadOnRunner;
   /** Access check override for tests; defaults to `steer` via the server's role resolver. */
   checkAccess?: (userId: string, projectId: string) => Promise<boolean>;
+  /**
+   * Start a sandbox thread for the enabler (the sandbox thread launcher of
+   * `thread-sandboxes`, with their own connection). Without it a sandbox
+   * runtime is skipped, never run elsewhere.
+   */
+  launchSandbox?: (
+    userId: string,
+    body: Record<string, unknown>,
+  ) => Promise<Result<StartedThread, StartThreadError>>;
   /** Runtime resolver override for tests; defaults to the enabler's `project_sandbox_settings`. */
   resolveRuntime?: (userId: string, projectId: string) => Promise<ThreadRuntimeMode>;
   /** Thread wait override for tests; defaults to the DB status plus the terminal signal. */
@@ -123,7 +139,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
   flows = createFactoryFlowRuns({
     runs,
     github: d.github,
-    launch: (input) => (d.launch ?? startThreadOnRunner)(input, d.ports),
+    launch: launchFor(d),
     waitThread: d.waitThread,
     loadFlow: d.loadFlow,
     notify: d.notify,
@@ -241,16 +257,17 @@ async function hasWork(factory: WatchedFactory): Promise<boolean> {
 
 /**
  * Where the factory's runs execute: the enabler's runtime and the project's
- * repository, or null (logged) when it cannot run now. A sandbox runtime is
- * NOT downgraded to local (issue text is untrusted input, and the enabler
- * chose isolation): the factory waits until sandbox launches are supported.
+ * repository, or null (logged) when it cannot run now. A sandbox runtime runs
+ * its threads in the enabler's sandbox; it is NOT downgraded to local when
+ * sandboxes cannot be launched here (issue text is untrusted input, and the
+ * enabler chose isolation): the factory then waits.
  */
 async function resolveTarget(
   factory: WatchedFactory,
 ): Promise<{ mode: LaunchMode; repo: string } | null> {
   const mode = await resolveMode(factory.userId, factory.projectId);
   if (!mode) {
-    log.info('Issue factory tick skipped: sandbox runtime is not supported yet', {
+    log.info('Issue factory tick skipped: sandbox threads cannot be launched here', {
       namespace: 'factory',
       factoryId: factory.id,
       projectId: factory.projectId,
@@ -436,14 +453,28 @@ async function startImplement(
 }
 
 /** The thread modes phase 2 can launch. */
-type LaunchMode = 'local' | 'worktree';
+type LaunchMode = FactoryThreadMode;
 
 /**
- * The thread mode for the enabler's runtime, or `null` for a sandbox runtime:
- * the sandbox launch path is phase 3+, and the spec forbids falling back to a
- * different runtime.
+ * The thread mode for the enabler's runtime, or `null` for a sandbox runtime
+ * when this server cannot launch sandbox threads (`launchSandbox` not wired):
+ * the spec forbids falling back to a different runtime.
  */
 async function resolveMode(userId: string, projectId: string): Promise<LaunchMode | null> {
   const runtime = await (deps?.resolveRuntime ?? defaultResolveRuntime)(userId, projectId);
-  return runtime === 'sandbox' ? null : runtime;
+  return runtime === 'sandbox' && !deps?.launchSandbox ? null : runtime;
+}
+
+/**
+ * Start a run's agent thread where the enabler's runtime says: a sandbox thread
+ * on their own sandbox connection, or a local / worktree thread on their runner.
+ */
+function launchFor(d: FactoryWatcherDeps) {
+  return async (input: StartThreadInput): Promise<Result<StartedThread, StartThreadError>> => {
+    const { mode, ...body } = input.body;
+    if (mode === 'sandbox' && d.launchSandbox) {
+      return d.launchSandbox(input.userId, { ...body, source: 'factory' });
+    }
+    return (d.launch ?? startThreadOnRunner)(input, d.ports);
+  };
 }

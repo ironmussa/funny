@@ -6,12 +6,14 @@
  *
  * Requests to a factory run's agent threads on their runner (issue-factory
  * phase 4, factory-flow-execution): stop them when a run is stopped, and send
- * a follow-up when a later agent step continues the run's first thread. The
- * threads are the factory enabler's, so each request is signed as the enabler
- * and sent to the runner the thread runs on, certified as theirs
- * (`withRunnerFor`, `owned-runner`): never another user's runner. A thread
- * whose runner is not the enabler's is refused (and audited by
- * `runner-access`).
+ * a follow-up when a later agent step continues the run's first thread.
+ *
+ * The threads are the factory enabler's, so each request is signed as the
+ * enabler. The runner is the one the thread runs on, resolved from the
+ * thread's own route (`withRunnerFor` with a `request` target, the same rule
+ * as the proxy): a sandbox thread's own sandbox runner, any other thread its
+ * project's runner — certified for the enabler, never another user's runner.
+ * A follow-up to a sandbox stopped while idle wakes it first, as the proxy does.
  */
 
 import { and, eq, inArray } from 'drizzle-orm';
@@ -22,38 +24,48 @@ import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { authorizedRunnerRequests, runnerActor, withRunnerFor } from '../runner-access/index.js';
 import type { RunnerPorts } from '../runner-thread-launcher.js';
+import { sandboxWaker } from '../thread-sandboxes/sandbox-lifecycle.js';
 
-const ACTIVE_STATUSES = ['running', 'waiting', 'pending'];
+const ACTIVE_STATUSES = ['running', 'waiting', 'pending', 'setting_up'];
 
-/** POST `path` for `threadId` on its runner, as `userId`; a message when it could not be sent. */
+type PostError = { message: string; sandboxAsleep: boolean };
+
+/** POST `path` (a thread route) to the thread's runner, as `userId`. */
 async function postToThread(
   ports: RunnerPorts,
   userId: string,
-  thread: { id: string; runnerId: string | null },
   path: string,
   body: unknown,
-): Promise<Result<void, string>> {
-  if (!thread.runnerId) return err('the thread has no runner');
+): Promise<Result<void, PostError>> {
   const sink = authorizedRunnerRequests(ports.requests);
   try {
     const sent = await withRunnerFor(
       runnerActor({ userId }),
-      { kind: 'owned-runner', runnerId: thread.runnerId },
+      { kind: 'request', path, query: {} },
       ports.presence,
-      async (actor, runner, proof): Promise<Result<void, string>> => {
-        if (!(await sink.isAvailable(runner))) return err("the enabler's runner is offline");
-        const res = await sink.send(actor, runner, proof, {
+      (actor, runner, proof) =>
+        sink.send(actor, runner, proof, {
           method: 'POST',
           path,
           headers: { 'Content-Type': 'application/json' },
           body: body === null ? null : JSON.stringify(body),
-        });
-        return res.status < 400 ? ok(undefined) : err(`the runner answered ${res.status}`);
-      },
+        }),
     );
-    return sent.isErr() ? err("the thread's runner is not the enabler's") : sent.value;
+    if (sent.isErr()) {
+      const reason = sent.error.reason;
+      return err({
+        message: `the thread's runner is unavailable (${reason})`,
+        sandboxAsleep: reason === 'thread-sandbox-unavailable',
+      });
+    }
+    return sent.value.status < 400
+      ? ok(undefined)
+      : err({ message: `the runner answered ${sent.value.status}`, sandboxAsleep: false });
   } catch (error) {
-    return err(error instanceof Error ? error.message : String(error));
+    return err({
+      message: error instanceof Error ? error.message : String(error),
+      sandboxAsleep: false,
+    });
   }
 }
 
@@ -65,7 +77,7 @@ export async function stopFactoryThreads(
 ): Promise<void> {
   if (threadIds.length === 0) return;
   const active = await db
-    .select({ id: threads.id, runnerId: threads.runnerId })
+    .select({ id: threads.id })
     .from(threads)
     .where(
       and(
@@ -75,18 +87,12 @@ export async function stopFactoryThreads(
       ),
     );
   for (const thread of active) {
-    const stopped = await postToThread(
-      ports,
-      userId,
-      thread,
-      `/api/threads/${thread.id}/stop`,
-      null,
-    );
+    const stopped = await postToThread(ports, userId, `/api/threads/${thread.id}/stop`, null);
     if (stopped.isErr()) {
       log.warn('Failed to stop a factory thread', {
         namespace: 'factory',
         threadId: thread.id,
-        error: stopped.error,
+        error: stopped.error.message,
       });
     }
   }
@@ -100,9 +106,17 @@ export async function sendFactoryFollowUp(
   content: string,
 ): Promise<Result<void, string>> {
   const [thread] = await db
-    .select({ id: threads.id, runnerId: threads.runnerId })
+    .select({ id: threads.id })
     .from(threads)
     .where(and(eq(threads.id, threadId), eq(threads.userId, userId)));
   if (!thread) return err('the thread no longer exists');
-  return postToThread(ports, userId, thread, `/api/threads/${threadId}/message`, { content });
+  const path = `/api/threads/${threadId}/message`;
+  const sent = await postToThread(ports, userId, path, { content });
+  if (sent.isOk() || !sent.error.sandboxAsleep) return sent.mapErr((e) => e.message);
+  // The run waited (e.g. on CI) long enough for its sandbox to sleep: wake it once.
+  const waker = sandboxWaker();
+  if (!waker) return err(sent.error.message);
+  const woken = await waker.wake(threadId, userId);
+  if (woken.isErr()) return err(`the sandbox could not be woken: ${woken.error.message}`);
+  return (await postToThread(ports, userId, path, { content })).mapErr((e) => e.message);
 }

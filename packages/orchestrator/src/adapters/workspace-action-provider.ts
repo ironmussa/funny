@@ -247,6 +247,17 @@ export class WorkspaceActionProvider implements ActionProvider {
     return { ok: true };
   }
 
+  // The orchestrator drives CI/merge through its own factory follow-ups, not
+  // through workflow nodes; its flows stop at the draft PR. A flow that reaches
+  // these here fails with a clear message rather than silently passing.
+  async waitCi(): Promise<ActionResult> {
+    return { ok: false, error: 'wait_ci is not supported by the orchestrator workspace provider' };
+  }
+
+  async merge(): Promise<ActionResult> {
+    return { ok: false, error: 'merge is not supported by the orchestrator workspace provider' };
+  }
+
   async requestApproval(): Promise<ApprovalDecision> {
     return { decision: 'reject', reason: 'factory runs are unattended: nobody can approve' };
   }

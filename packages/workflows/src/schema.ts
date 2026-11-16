@@ -122,6 +122,37 @@ const setStageAction = z
   })
   .strict();
 
+// ── GitHub integration actions ──────────────────────────────
+//
+// `wait_ci` and `merge` are run-implicit, like `set_status`/`set_stage`: the
+// provider binds them to the run's pull request, so YAML authors pass only the
+// knobs, not a repo or PR id. The provider (the issue factory's, server-side)
+// does the GitHub work under a repo-scoped token.
+const waitCiAction = z
+  .object({
+    /** Overall budget before the step gives up with a timeout verdict. */
+    timeout_ms: z.number().int().positive().optional(),
+    /** Poll cadence while checks are pending. */
+    interval_ms: z.number().int().positive().optional(),
+    /**
+     * Subset of check names that must pass; default is every required check
+     * the repository reports for the PR's head.
+     */
+    required_checks: z.array(z.string()).optional(),
+  })
+  .strict();
+
+const mergeAction = z
+  .object({
+    /** Merge strategy; default decided by the provider / repository. */
+    method: z.enum(['merge', 'squash', 'rebase']).optional(),
+    /** Delete the head branch after a successful merge. */
+    delete_branch: z.boolean().optional(),
+    /** Enable auto-merge instead of merging directly (for required-check repos). */
+    auto: z.boolean().optional(),
+  })
+  .strict();
+
 const approvalAction = z
   .object({
     /** User-facing message (Mustache-templated). */
@@ -191,6 +222,8 @@ const ACTION_KEYS = [
   'notify',
   'set_status',
   'set_stage',
+  'wait_ci',
+  'merge',
   'approval',
   'pipeline',
 ] as const;
@@ -237,6 +270,8 @@ const pipelineNodeShape = z
     notify: notifyAction.optional(),
     set_status: setStatusAction.optional(),
     set_stage: setStageAction.optional(),
+    wait_ci: waitCiAction.optional(),
+    merge: mergeAction.optional(),
     approval: approvalAction.optional(),
     pipeline: pipelineCallAction.optional(),
   })

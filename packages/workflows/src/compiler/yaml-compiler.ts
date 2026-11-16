@@ -257,6 +257,81 @@ function buildEngineNode(
 
 // ── Action dispatch ─────────────────────────────────────────
 
+/**
+ * Thread-lifecycle nodes (`set_status`, `set_stage`) — bound to the run's
+ * thread by the provider; the YAML carries only the value + reason.
+ * Returns `null` when `yamlNode` is not a lifecycle node.
+ */
+async function dispatchThreadLifecycleNode(
+  yamlNode: ParsedNode,
+  ctx: YamlPipelineContext,
+  scope: TemplateScope,
+): Promise<NodeOutput | null> {
+  const provider = ctx.provider;
+
+  if (yamlNode.set_status) {
+    const opts = interpolateObject(yamlNode.set_status, scope);
+    const result = await provider.setStatus({
+      threadId: resolveThreadId(ctx),
+      value: opts.value,
+      reason: opts.reason,
+    });
+    if (!result.ok) throw new Error(`set_status[${yamlNode.id}] failed: ${result.error}`);
+    return { output: opts.value, json: { value: opts.value, reason: opts.reason } };
+  }
+
+  if (yamlNode.set_stage) {
+    const opts = interpolateObject(yamlNode.set_stage, scope);
+    const result = await provider.setStage({
+      threadId: resolveThreadId(ctx),
+      value: opts.value,
+      reason: opts.reason,
+    });
+    if (!result.ok) throw new Error(`set_stage[${yamlNode.id}] failed: ${result.error}`);
+    return { output: opts.value, json: { value: opts.value, reason: opts.reason } };
+  }
+
+  return null;
+}
+
+/**
+ * GitHub CI/merge nodes (`wait_ci`, `merge`) — bound to the run's repo + PR
+ * by the provider. Unsupported outside the factory's server provider, which
+ * surfaces as a step error so `retry`/`on_error` act.
+ * Returns `null` when `yamlNode` is not a GitHub node.
+ */
+async function dispatchGithubNode(
+  yamlNode: ParsedNode,
+  ctx: YamlPipelineContext,
+  scope: TemplateScope,
+): Promise<NodeOutput | null> {
+  const provider = ctx.provider;
+
+  if (yamlNode.wait_ci) {
+    const opts = interpolateObject(yamlNode.wait_ci, scope);
+    const result = await provider.waitCi({
+      timeoutMs: opts.timeout_ms,
+      intervalMs: opts.interval_ms,
+      requiredChecks: opts.required_checks,
+    });
+    if (!result.ok) throw new Error(`wait_ci[${yamlNode.id}] failed: ${result.error}`);
+    return { output: result.output ?? '', json: result.metadata };
+  }
+
+  if (yamlNode.merge) {
+    const opts = interpolateObject(yamlNode.merge, scope);
+    const result = await provider.merge({
+      method: opts.method,
+      deleteBranch: opts.delete_branch,
+      auto: opts.auto,
+    });
+    if (!result.ok) throw new Error(`merge[${yamlNode.id}] failed: ${result.error}`);
+    return { output: result.output ?? '', json: result.metadata };
+  }
+
+  return null;
+}
+
 async function dispatch(
   yamlNode: ParsedNode,
   ctx: YamlPipelineContext,
@@ -347,29 +422,11 @@ async function dispatch(
     return { output: opts.message };
   }
 
-  if (yamlNode.set_status) {
-    const opts = interpolateObject(yamlNode.set_status, scope);
-    const threadId = resolveThreadId(ctx);
-    const result = await provider.setStatus({
-      threadId,
-      value: opts.value,
-      reason: opts.reason,
-    });
-    if (!result.ok) throw new Error(`set_status[${yamlNode.id}] failed: ${result.error}`);
-    return { output: opts.value, json: { value: opts.value, reason: opts.reason } };
-  }
+  const lifecycle = await dispatchThreadLifecycleNode(yamlNode, ctx, scope);
+  if (lifecycle) return lifecycle;
 
-  if (yamlNode.set_stage) {
-    const opts = interpolateObject(yamlNode.set_stage, scope);
-    const threadId = resolveThreadId(ctx);
-    const result = await provider.setStage({
-      threadId,
-      value: opts.value,
-      reason: opts.reason,
-    });
-    if (!result.ok) throw new Error(`set_stage[${yamlNode.id}] failed: ${result.error}`);
-    return { output: opts.value, json: { value: opts.value, reason: opts.reason } };
-  }
+  const github = await dispatchGithubNode(yamlNode, ctx, scope);
+  if (github) return github;
 
   if (yamlNode.pipeline) {
     const subName = yamlNode.pipeline.name;

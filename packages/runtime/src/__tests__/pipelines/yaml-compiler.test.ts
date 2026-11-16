@@ -27,6 +27,8 @@ function mockProvider(overrides: Partial<ActionProvider> = {}): ActionProvider {
     notify: vi.fn().mockResolvedValue({ ok: true }),
     setStatus: vi.fn().mockResolvedValue({ ok: true, output: 'running' }),
     setStage: vi.fn().mockResolvedValue({ ok: true, output: 'in_progress' }),
+    waitCi: vi.fn().mockResolvedValue({ ok: true, output: 'green' }),
+    merge: vi.fn().mockResolvedValue({ ok: true, output: 'merged' }),
     requestApproval: vi.fn().mockResolvedValue({ decision: 'approve' }),
     ...overrides,
   };
@@ -70,6 +72,41 @@ nodes:
     expect(provider.notify).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'Hello Argenis', level: 'info' }),
     );
+  });
+
+  test('dispatches wait_ci and merge; a red wait_ci fails the run before merge', async () => {
+    const yaml = `
+name: ci-merge
+nodes:
+  - id: ci
+    wait_ci:
+      timeout_ms: 1000
+      interval_ms: 100
+  - id: done
+    depends_on: [ci]
+    merge:
+      method: squash
+      delete_branch: true
+    `;
+
+    const green = mockProvider();
+    const okRun = await runPipeline(compile(yaml), ctxOf(green));
+    expect(okRun.outcome).toBe('completed');
+    expect(green.waitCi).toHaveBeenCalledWith(
+      expect.objectContaining({ timeoutMs: 1000, intervalMs: 100 }),
+    );
+    expect(green.merge).toHaveBeenCalledWith(
+      expect.objectContaining({ method: 'squash', deleteBranch: true }),
+    );
+
+    const red = mockProvider({
+      waitCi: vi
+        .fn()
+        .mockResolvedValue({ ok: false, error: 'red', metadata: { failingChecks: ['unit'] } }),
+    });
+    const failRun = await runPipeline(compile(yaml), ctxOf(red));
+    expect(failRun.outcome).not.toBe('completed');
+    expect(red.merge).not.toHaveBeenCalled();
   });
 
   test('dispatches every action type to the provider', async () => {

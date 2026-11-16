@@ -39,6 +39,8 @@ function fakeProvider(overrides: Partial<ActionProvider> = {}): ActionProvider {
     notify: vi.fn().mockResolvedValue({ ok: true }),
     setStatus: vi.fn().mockResolvedValue({ ok: true }),
     setStage: vi.fn().mockResolvedValue({ ok: true }),
+    waitCi: vi.fn().mockResolvedValue({ ok: true, output: 'green' }),
+    merge: vi.fn().mockResolvedValue({ ok: true, output: 'merged' }),
     requestApproval: vi.fn().mockResolvedValue({ decision: 'approve' }),
     ...overrides,
   };

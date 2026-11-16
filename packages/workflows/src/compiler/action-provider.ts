@@ -125,6 +125,30 @@ export interface SetStageOpts {
   reason?: string;
 }
 
+// ── GitHub integration action options ───────────────────────
+//
+// Run-implicit, like SetStatusOpts: the provider binds these to the run's
+// pull request, so the options carry only the knobs. The factory's
+// server-side provider does the GitHub work under a repo-scoped token.
+
+export interface WaitCiOpts {
+  /** Overall budget before the step returns a timeout verdict. */
+  timeoutMs?: number;
+  /** Poll cadence while checks are pending. */
+  intervalMs?: number;
+  /** Subset of check names that must pass; default is all required checks. */
+  requiredChecks?: string[];
+}
+
+export interface MergeOpts {
+  /** Merge strategy; default decided by the provider / repository. */
+  method?: 'merge' | 'squash' | 'rebase';
+  /** Delete the head branch after a successful merge. */
+  deleteBranch?: boolean;
+  /** Enable auto-merge instead of merging directly. */
+  auto?: boolean;
+}
+
 // ── Approval (human-in-the-loop) ────────────────────────────
 //
 // Modeled to match Archon's `approval:` node semantics so workflows can be
@@ -193,6 +217,20 @@ export interface ActionProvider {
 
   /** Update a thread's stage. Validates `value` against ThreadStage. */
   setStage(opts: SetStageOpts): Promise<ActionResult>;
+
+  /**
+   * Wait for the run's pull-request checks to reach a terminal verdict.
+   * Resolves `ok: true` when required checks pass (green); `ok: false` with a
+   * timeout or the failing check names (in `error` and `metadata.failingChecks`)
+   * when red or timed out, so the flow's retry can act on it.
+   */
+  waitCi(opts: WaitCiOpts): Promise<ActionResult>;
+
+  /**
+   * Merge the run's pull request (or enable auto-merge). Only merges when the
+   * PR's required checks are green; otherwise resolves `ok: false`.
+   */
+  merge(opts: MergeOpts): Promise<ActionResult>;
 
   /**
    * Request a human approval and block until decided (or timeout).

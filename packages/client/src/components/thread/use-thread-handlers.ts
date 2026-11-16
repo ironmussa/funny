@@ -251,13 +251,15 @@ export function reportSendFailure(
   err: { type: string; message: string },
   threadId: string,
   t: (key: string, opts?: Record<string, unknown>) => string,
+  /** False when this send did not mark the thread running (it was already running). */
+  undoOptimisticRun = true,
 ): void {
   toast.error(
     err.type === 'INTERNAL'
       ? t('thread.sendFailed')
       : t('thread.sendFailedGeneric', { error: err.message }),
   );
-  useThreadStore.getState().revertOptimisticRun(threadId);
+  if (undoOptimisticRun) useThreadStore.getState().revertOptimisticRun(threadId);
 }
 
 function handleSendResult(
@@ -267,7 +269,7 @@ function handleSendResult(
   t: (key: string, opts?: Record<string, unknown>) => string,
 ) {
   if (result.isErr()) {
-    reportSendFailure(result.error, threadId, t);
+    reportSendFailure(result.error, threadId, t, options.rollbackOnQueue);
     return;
   }
   if (result.value && (result.value as any).queued) {

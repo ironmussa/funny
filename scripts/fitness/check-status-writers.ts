@@ -15,7 +15,7 @@
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { join, relative, sep } from 'node:path';
 
 const ROOT = join(import.meta.dir, '..', '..');
 const SCANNED = [
@@ -144,7 +144,9 @@ function main(): void {
   const violations: string[] = [];
   for (const dir of SCANNED) {
     for (const abs of walk(join(ROOT, dir))) {
-      violations.push(...classify(relative(ROOT, abs), readFileSync(abs, 'utf8')));
+      // Owners are listed with `/`; `relative` answers backslashes on Windows.
+      const file = relative(ROOT, abs).split(sep).join('/');
+      violations.push(...classify(file, readFileSync(abs, 'utf8')));
     }
   }
   if (violations.length) {

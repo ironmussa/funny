@@ -910,6 +910,11 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
   import('@/stores/commit-progress-store').then(({ useCommitProgressStore }) => {
     const store = useCommitProgressStore.getState();
     const { status: wfStatus, title, action, steps, workflowId } = data;
+    // An event of an earlier run of this thread's workflow (another one has
+    // started since): it must not touch the current run's steps, its close
+    // timer, or open a failure modal.
+    const current = store.activeCommits[threadId]?.workflowId;
+    if (wfStatus !== 'started' && workflowId && current && current !== workflowId) return;
 
     if (wfStatus === 'started') {
       // A restart within the close delay must not be closed by the previous run's timer.

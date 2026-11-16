@@ -20,7 +20,7 @@ import { resolveBrowserSessionRequest } from '@/lib/browser-session-client';
 import { ingestBrowserSessionFrame } from '@/lib/browser-session-frames';
 import { createClientLogger } from '@/lib/client-logger';
 import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
-import { takeOwnClose, useBrowserPanelStore } from '@/stores/browser-panel-store';
+import { forgetOwnCloses, takeOwnClose, useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useBrowserPointerStore } from '@/stores/browser-pointer-store';
 import { getUrlThreadId } from '@/stores/thread-store';
 
@@ -81,6 +81,7 @@ function handleClosed(d: BrowserSessionClosedData): void {
   if (closedThreadId) useBrowserLiveThreadsStore.getState().markClosed(closedThreadId);
   const store = useBrowserPanelStore.getState();
   if (d.reason === 'not_found') {
+    forgetOwnCloses(d.sessionId);
     store.handleSessionNotFound(d.sessionId);
     return;
   }

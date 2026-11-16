@@ -252,9 +252,14 @@ describe('watcher firing', () => {
     });
     // The scan lists it as due; the user's cancel lands before it is fired.
     const listDue = fakeWatchers.listDueWatchers;
+    let cancelledAfterScan = false;
     fakeWatchers.listDueWatchers = async (now: number) => {
       const due = await listDue(now);
-      rows.set(watcher.id, { ...rows.get(watcher.id), status: 'cancelled' });
+      // Cancel only once the scan really listed it, so the refused fire is exercised.
+      if (due.some((w: { id: string }) => w.id === watcher.id)) {
+        rows.set(watcher.id, { ...rows.get(watcher.id), status: 'cancelled' });
+        cancelledAfterScan = true;
+      }
       return due;
     };
     try {
@@ -264,6 +269,7 @@ describe('watcher firing', () => {
       vi.useRealTimers();
     }
 
+    expect(cancelledAfterScan).toBe(true);
     expect(rows.get(watcher.id).status).toBe('cancelled');
     expect(sendMessage).not.toHaveBeenCalled();
     expect(emitToUser).not.toHaveBeenCalledWith(

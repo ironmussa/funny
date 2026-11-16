@@ -29,6 +29,17 @@ export function takePreSendState(threadId: string): PreSendRunState | undefined 
   return state;
 }
 
+/**
+ * A fetch read the thread's status from the server. If it is no longer the
+ * status the thread had before the send, the server has moved on (another tab
+ * started a run, say), so there is nothing to undo. A fetch that still reads
+ * the pre-send status may have started before the send, and settles nothing.
+ */
+export function settlePreSendStateFromFetch(threadId: string, serverStatus: ThreadStatus): void {
+  const before = preSendStates.get(threadId);
+  if (before && before.status !== serverStatus) preSendStates.delete(threadId);
+}
+
 /** The server reported the thread's status: the optimistic mark is settled. */
 export function settlePreSendState(threadId: string): void {
   preSendStates.delete(threadId);

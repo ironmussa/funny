@@ -69,6 +69,31 @@ describe('thread repository onStatusWrite', () => {
   });
 });
 
+describe('thread repository onStatusWrite — failures', () => {
+  test('a failing status lookup does not fail the write', async () => {
+    const deps = createTestDb();
+    const { db, schema, dbAll, dbGet, dbRun } = deps;
+    let lookups = 0;
+    const repo = createThreadRepository({
+      db,
+      schema,
+      dbAll,
+      // The first dbGet is the observer's lookup of the current status.
+      dbGet: (query: unknown) =>
+        lookups++ === 0 ? Promise.reject(new Error('db busy')) : dbGet(query as never),
+      dbRun,
+      commentRepo: createCommentRepository({ db, schema, dbAll, dbRun } as any),
+      stageHistoryRepo: createStageHistoryRepository({ db, schema, dbRun } as any),
+      onStatusWrite: () => {},
+    } as any);
+    seedProject(db, { id: 'p1', userId: 'u1' });
+    seedThread(db, { id: 't1', projectId: 'p1', userId: 'u1', status: 'running' });
+
+    await repo.updateThread('t1', { status: 'completed' });
+    expect((await repo.getThread('t1'))?.status).toBe('completed');
+  });
+});
+
 describe('isThreadStatusWriteModelled', () => {
   test('accepts what an event leads to, and a write that changes nothing', () => {
     expect(isThreadStatusWriteModelled('running', 'completed')).toBe(true);

@@ -125,6 +125,19 @@ describe('browser-session:closed', () => {
     expect(useBrowserPanelStore.getState().sessionStatus).toBe('disconnected');
   });
 
+  test('two closes are answered by two events, neither ending the newest session', async () => {
+    for (let i = 0; i < 2; i++) {
+      attachingTo(SESSION);
+      useBrowserPanelStore.setState({ sessionStatus: 'ready', sessionThreadId: 't1' });
+      await useBrowserPanelStore.getState().endBrowserSession();
+    }
+    attachingTo(SESSION);
+    dispatchBrowserSessionEvent('browser-session:closed', { sessionId: SESSION, reason: 'user' });
+    dispatchBrowserSessionEvent('browser-session:closed', { sessionId: SESSION, reason: 'user' });
+
+    expect(useBrowserPanelStore.getState().sessionStatus).toBe('spawning');
+  });
+
   test('a close the panel did not send still ends the session', () => {
     attachingTo(SESSION);
     useBrowserPanelStore.setState({ sessionStatus: 'ready' });

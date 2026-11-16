@@ -1181,6 +1181,18 @@ describe('thread store actions', () => {
       expect(readThreadIndex().threadsById.t1.status).toBe('running');
     });
 
+    test('a fetch that shows the server moved on settles it; one that still shows the old status does not', async () => {
+      const { rememberPreSendState, settlePreSendStateFromFetch, takePreSendState } =
+        await import('@/stores/optimistic-run-state');
+      rememberPreSendState('t9', { status: 'completed' });
+      settlePreSendStateFromFetch('t9', 'completed'); // may predate the send
+      expect(takePreSendState('t9')).toEqual({ status: 'completed' });
+
+      rememberPreSendState('t9', { status: 'completed' });
+      settlePreSendStateFromFetch('t9', 'running'); // another tab started a run
+      expect(takePreSendState('t9')).toBeUndefined();
+    });
+
     test('does nothing without an optimistic send, and only once', async () => {
       const { settlePreSendState } = await import('@/stores/optimistic-run-state');
       seedWaiting();

@@ -311,16 +311,18 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
   /** Tell `onStatusWrite` (if any) about a status write, before it is made. */
   async function reportStatusWrite(id: string, to: string): Promise<void> {
     if (!onStatusWrite) return;
-    const before = await dbGet<{ status: string }>(
-      db
-        .select({ status: schema.threads.status })
-        .from(schema.threads)
-        .where(eq(schema.threads.id, id)),
-    );
+    // An observer must never fail the write it observes: neither its read of
+    // the current status nor the observer itself.
     try {
+      const before = await dbGet<{ status: string }>(
+        db
+          .select({ status: schema.threads.status })
+          .from(schema.threads)
+          .where(eq(schema.threads.id, id)),
+      );
       onStatusWrite({ threadId: id, from: before?.status ?? null, to });
     } catch {
-      // An observer must never fail the write it observes.
+      // Observation only.
     }
   }
 

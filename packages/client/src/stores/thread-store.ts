@@ -80,7 +80,11 @@ import { metric, startSpan } from '@/lib/telemetry';
 import { loadThreadScrollFetchOptions } from '@/lib/thread-scroll-position';
 import { toastError } from '@/lib/toast-error';
 
-import { rememberPreSendState, takePreSendState } from './optimistic-run-state';
+import {
+  rememberPreSendState,
+  settlePreSendStateFromFetch,
+  takePreSendState,
+} from './optimistic-run-state';
 import { deriveToolLists, useSettingsStore } from './settings-store';
 import {
   expandProject,
@@ -553,6 +557,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // arriving). Publish the initial thread urgently instead.
       // The detail view reads row fields from the collection; an opened thread
       // outside every loaded list gets its row from this detail.
+      settlePreSendStateFromFetch(thread.id, thread.status);
       adoptThreadDetail(thread);
       const publishHydratedThread = () => {
         set((state) => mutations.setThreadData(state, threadId, hydrated));
@@ -1032,6 +1037,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     ]);
     if (result.isErr()) return; // silently ignore
     const thread = result.value;
+    settlePreSendStateFromFetch(threadId, thread.status);
     const eventsFallback = active.threadEvents;
     const threadEvents = eventsResult.isOk() ? eventsResult.value.events : eventsFallback;
 
@@ -1208,6 +1214,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Refcount may have dropped while fetching (unmount, race) — only land
     // the data if someone still wants it.
     if ((_liveThreadRefCounts.get(threadId) ?? 0) <= 0) return;
+    settlePreSendStateFromFetch(result.value.id, result.value.status);
     adoptThreadDetail(result.value);
     set((state) => mutations.setThreadData(state, threadId, result.value as ThreadWithMessages));
   },

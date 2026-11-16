@@ -70,6 +70,7 @@ const MIGRATED_GROUPS: Array<{
   // What a runner calls with its own credential (register, enrollment start /
   // poll, heartbeat, tasks) stays REST, but the web client calls none of it.
   { path: '/runners' },
+  { path: '/factory' },
   // `projects` (and the project runner settings under it) has no entry: its
   // server-answered routes moved, but creation and the runner's routes
   // (`/projects/:id/branches`, `/hooks`, `/config`, …) share the same paths and

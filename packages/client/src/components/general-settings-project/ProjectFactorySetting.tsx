@@ -1,12 +1,17 @@
 /**
  * The issue factory for a project (change issue-factory): a per-user toggle plus
  * the watched issue label, the flow to run, and how many issues run at once.
- * Every member configures their own; runs appear once the watcher exists.
+ * Every contributor configures their own; a viewer sees theirs but a save is
+ * refused (403) and shown as an error.
  */
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Input } from '@/components/ui/input';
-import { useProjectFactory } from '@/hooks/use-project-factory';
+import { saveFactorySettings } from '@/data/factory/actions';
+import { useFactorySettings } from '@/data/factory/hooks';
+import type { SaveFactorySettingsInput } from '@/lib/api/factory';
+import { toastError } from '@/lib/toast-error';
 
 import { SegmentedControl, SettingRow } from './setting-primitives';
 
@@ -14,14 +19,24 @@ type OnOff = 'on' | 'off';
 
 export function ProjectFactorySetting({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
-  const { settings, save } = useProjectFactory(projectId);
+  const settings = useFactorySettings(projectId);
+  // Bumped after every save settles, so the inputs re-read the confirmed row —
+  // also after a refused save, which leaves the row (and its updatedAt) unchanged.
+  const [revision, setRevision] = useState(0);
+
+  const save = (input: Omit<SaveFactorySettingsInput, 'projectId'>) =>
+    saveFactorySettings({ projectId, ...input })
+      .orTee((error) => toastError(error))
+      .match(
+        () => setRevision((r) => r + 1),
+        () => setRevision((r) => r + 1),
+      );
 
   const enabled = settings?.enabled ?? false;
   const label = settings?.label ?? 'ready-for-agent';
   const flowName = settings?.flowName ?? 'issue-to-merge';
   const maxConcurrent = settings?.maxConcurrent ?? 2;
-  // Re-key the inputs on a confirmed save so their defaultValue tracks the row.
-  const rowKey = settings?.updatedAt ?? 'none';
+  const rowKey = `${settings?.updatedAt ?? 'none'}-${revision}`;
 
   const setEnabled = (value: OnOff) => void save({ enabled: value === 'on' });
   const setLabel = (value: string) => {

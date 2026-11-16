@@ -1,53 +1,14 @@
-/** The issue factory for a project (change issue-factory): settings + runs. */
-import { request } from './_core';
+/** The caller's issue factory for a project (change issue-factory): settings + runs, over tRPC. */
+import type { SaveFactorySettingsInput } from '@funny/shared/contracts/factory';
 
-export interface FactorySettings {
-  projectId: string;
-  enabled: boolean;
-  label: string;
-  flowName: string;
-  maxConcurrent: number;
-  updatedAt: string;
-}
+import { trpc, trpcCall } from './_trpc';
 
-export interface SaveFactorySettingsInput {
-  enabled: boolean;
-  label?: string;
-  flowName?: string;
-  maxConcurrent?: number;
-}
+export type { FactorySettings, SaveFactorySettingsInput } from '@funny/shared/contracts/factory';
 
-type FactoryRunState =
-  | 'queued'
-  | 'working'
-  | 'pr_open'
-  | 'waiting_ci'
-  | 'fixing'
-  | 'waiting_human'
-  | 'merged'
-  | 'failed'
-  | 'stopped';
-
-interface FactoryRun {
-  id: string;
-  factoryId: string;
-  issueNumber: number;
-  prUrl: string | null;
-  state: FactoryRunState;
-  currentStep: string | null;
-  threadIds: string[];
-  startedAt: string;
-  completedAt: string | null;
-}
+const procedures = trpc.factory;
 
 export const factoryApi = {
-  getSettings: (projectId: string) =>
-    request<{ settings: FactorySettings | null }>(`/factory/projects/${projectId}`),
-  saveSettings: (projectId: string, data: SaveFactorySettingsInput) =>
-    request<{ settings: FactorySettings }>(`/factory/projects/${projectId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    }),
-  listRuns: (projectId: string) =>
-    request<{ runs: FactoryRun[] }>(`/factory/projects/${projectId}/runs`),
+  getSettings: (projectId: string) => trpcCall(() => procedures.settings.query({ projectId })),
+  saveSettings: (data: SaveFactorySettingsInput) => trpcCall(() => procedures.save.mutate(data)),
+  listRuns: (projectId: string) => trpcCall(() => procedures.runs.query({ projectId })),
 };

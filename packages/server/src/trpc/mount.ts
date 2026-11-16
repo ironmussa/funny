@@ -16,6 +16,7 @@ import { authzPort } from './ports/authz.js';
 import { automationsPort } from './ports/automations.js';
 import { jobsPort, watchersPort } from './ports/background.js';
 import { designsPort } from './ports/designs.js';
+import { factoryPort } from './ports/factory.js';
 import { createGithubAppPort, defaultGithubAppDeps } from './ports/github-app.js';
 import { analyticsPort, pushPort } from './ports/insights.js';
 import { personalTokensPort } from './ports/personal-tokens.js';
@@ -53,6 +54,7 @@ function serverPorts(c: Context<ServerEnv>): ApiPorts {
       requests: c.env?.runnerRequests,
       presence: c.env?.runnerPresence,
     }),
+    factory: factoryPort,
     threadAccess: threadAccessPort,
     authz: authzPort,
   };

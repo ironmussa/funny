@@ -52,6 +52,11 @@ import type {
 } from '@funny/shared/contracts/automations';
 import type { CreateDesignBody } from '@funny/shared/contracts/designs';
 import type {
+  FactoryRun,
+  FactorySettings,
+  SaveFactorySettingsInput,
+} from '@funny/shared/contracts/factory';
+import type {
   GithubAppAccounts,
   GithubAppManifestStart,
   GithubAppStatus,
@@ -386,6 +391,24 @@ export interface ProjectRunnersPort {
   ): PortResult<{ generalRunnerId: string | null }>;
 }
 
+/**
+ * The caller's own issue factory for one project (change issue-factory). The
+ * procedure has already checked the project capability (`view` to read, `steer`
+ * to save); every method acts on the caller's own row only.
+ */
+export interface FactoryPort {
+  /** `null` when the caller never configured one. */
+  settings(userId: string, projectId: string): PortResult<FactorySettings | null>;
+  /** Saves and reschedules the server's watcher; audited. */
+  save(
+    userId: string,
+    projectId: string,
+    data: Omit<SaveFactorySettingsInput, 'projectId'>,
+  ): PortResult<FactorySettings>;
+  /** Newest first; empty when there is no factory. */
+  runs(userId: string, projectId: string): PortResult<FactoryRun[]>;
+}
+
 /** The server's authorization decisions that are not about one thread. */
 export interface AuthzPort {
   /**
@@ -420,6 +443,7 @@ export interface ApiPorts {
   githubApp: GithubAppPort;
   personalTokens: PersonalTokensPort;
   projectRunners: ProjectRunnersPort;
+  factory: FactoryPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;
 }

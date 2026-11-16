@@ -308,6 +308,22 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
 
   /** Update thread fields by ID. Automatically bumps updatedAt.
    *  Wraps read-then-write + stage history in a transaction to prevent race conditions. */
+  /** Tell `onStatusWrite` (if any) about a status write, before it is made. */
+  async function reportStatusWrite(id: string, to: string): Promise<void> {
+    if (!onStatusWrite) return;
+    const before = await dbGet<{ status: string }>(
+      db
+        .select({ status: schema.threads.status })
+        .from(schema.threads)
+        .where(eq(schema.threads.id, id)),
+    );
+    try {
+      onStatusWrite({ threadId: id, from: before?.status ?? null, to });
+    } catch {
+      // An observer must never fail the write it observes.
+    }
+  }
+
   async function updateThread(
     id: string,
     updates: Partial<{
@@ -332,19 +348,7 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
       contextRecoveryReason: string | null;
     }>,
   ) {
-    if (updates.status !== undefined && onStatusWrite) {
-      const before = await dbGet<{ status: string }>(
-        db
-          .select({ status: schema.threads.status })
-          .from(schema.threads)
-          .where(eq(schema.threads.id, id)),
-      );
-      try {
-        onStatusWrite({ threadId: id, from: before?.status ?? null, to: updates.status });
-      } catch {
-        // An observer must never fail the write it observes.
-      }
-    }
+    if (updates.status !== undefined) await reportStatusWrite(id, updates.status);
 
     if (updates.sessionId !== undefined) {
       // Persist ownership before replacing/clearing the active session. INSERT SELECT

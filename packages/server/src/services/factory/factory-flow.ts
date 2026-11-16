@@ -31,6 +31,9 @@ export interface LoadFactoryFlowDeps {
   defaultsDir?: string;
 }
 
+/** Built-ins written for the orchestrator's workspace, not for a server-run factory. */
+const WORKSPACE_ONLY_FLOWS = new Set(['factory-issue']);
+
 export interface FactoryFlow {
   name: string;
   source: 'repository' | 'built-in';
@@ -79,6 +82,12 @@ export async function loadFactoryFlow(
   if (copy.isErr()) return err(copy.error);
   if (copy.value) return compile(copy.value.yaml, copy.value.path, 'repository');
 
+  if (WORKSPACE_ONLY_FLOWS.has(flowName)) {
+    return err({
+      kind: 'invalid',
+      message: `"${flowName}" runs inside a workspace and never pushes, so it cannot run as a server factory flow. Use "issue-to-pr" (stops at the pull request) or "issue-to-merge".`,
+    });
+  }
   const { workflows } = await loadWorkflowCatalog({ defaultsDir: deps.defaultsDir });
   const builtIn = workflows.get(flowName);
   if (!builtIn) {

@@ -47,6 +47,7 @@ describe('loadWorkflowCatalog', () => {
       'factory-issue',
       'fusion',
       'issue-to-merge',
+      'issue-to-pr',
       'pre-push',
       'scheduler-thread',
     ]);
@@ -61,6 +62,7 @@ describe('loadWorkflowCatalog', () => {
       'factory-issue',
       'fusion',
       'issue-to-merge',
+      'issue-to-pr',
       'pre-push',
       'scheduler-thread',
     ]);

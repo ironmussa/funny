@@ -1,7 +1,8 @@
 /**
- * The server factory's default flow: a built-in that compiles beside
- * `factory-issue`, and its CI fix loop — red runs a fix agent with the failing
- * log, green merges, a red that outlasts the fixes or a timeout fails without
+ * The server factory's flows: `issue-to-merge` (the default) and
+ * `issue-to-pr`, built-ins that compile beside `factory-issue`, and the CI fix
+ * loop of `issue-to-merge` — red runs a fix agent with the failing log, green
+ * merges, a red that outlasts the fixes or a timeout fails without
  * merging (a timeout gets no fix agent).
  */
 
@@ -45,9 +46,9 @@ const red: ActionResult = { ok: false, error: 'Failing checks: test\n\n--- test 
 const green: ActionResult = { ok: true, output: 'green' };
 const timeout: ActionResult = { ok: false, error: 'The checks did not finish within 3600 s.' };
 
-async function run(ci: ActionResult[]) {
+async function run(ci: ActionResult[], flow = 'issue-to-merge') {
   const { workflows } = await loadWorkflowCatalog();
-  const pipeline = compileYamlPipeline(workflows.get('issue-to-merge')!.workflow);
+  const pipeline = compileYamlPipeline(workflows.get(flow)!.workflow);
   const fake = provider(ci);
   const result = await runPipeline(pipeline, {
     provider: fake.p,
@@ -69,10 +70,18 @@ describe('issue-to-merge workflow', () => {
   test('is a built-in beside factory-issue, and both compile', async () => {
     const { workflows, warnings } = await loadWorkflowCatalog();
     expect(warnings).toEqual([]);
-    for (const name of ['issue-to-merge', 'factory-issue']) {
+    for (const name of ['issue-to-merge', 'issue-to-pr', 'factory-issue']) {
       expect(workflows.get(name)?.source).toBe('built-in');
       expect(() => compileYamlPipeline(workflows.get(name)!.workflow)).not.toThrow();
     }
+  });
+
+  test('issue-to-pr stops at the pull request: no CI wait, no merge', async () => {
+    const r = await run([green], 'issue-to-pr');
+    expect(r.outcome).toBe('completed');
+    expect(r.prompts).toHaveLength(1);
+    expect(r.looks()).toBe(0);
+    expect(r.merges()).toBe(0);
   });
 
   test('green CI merges after the one implement agent', async () => {

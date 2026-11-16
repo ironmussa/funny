@@ -126,7 +126,9 @@ async function eventually(
   throw new Error('the run never reached the expected state');
 }
 
-async function enableFactory(opts: { label?: string; maxConcurrent?: number } = {}) {
+async function enableFactory(
+  opts: { label?: string; maxConcurrent?: number; flowName?: string } = {},
+) {
   const settings = createFactorySettingsService();
   const saved = await settings.save('alice', 'p1', { enabled: true, ...opts });
   if (saved.isErr()) throw new Error(saved.error.message);
@@ -524,6 +526,41 @@ describe('factory flow', () => {
     await eventually(factoryId, (r) => r.state === 'waiting_human');
     expect(launcher.calls[0]!.body.prompt).toBe('CUSTOM 7');
     expect(github.fileReads).toEqual(['.funny/workflows/issue-to-merge.yaml']);
+  });
+
+  test('the built-in issue-to-pr flow leaves the open pull request for a person', async () => {
+    const factoryId = await enableFactory({ flowName: 'issue-to-pr' });
+    const poll = fakePoll();
+    const github = fakeGithub('o/r', issue7);
+    await startFactoryWatcher({
+      ports,
+      github,
+      createPoll: poll.createPoll,
+      launch: fakeLauncher().launch,
+      resolveRuntime,
+      waitThread: finishedThreads('completed'),
+    });
+    await poll.ticks[0]!();
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(run.prUrl).toBe('https://github.com/o/r/pull/9');
+    expect(github.merges).toBe(0);
+  });
+
+  test('the workspace-only factory-issue flow is refused before any agent starts', async () => {
+    const factoryId = await enableFactory({ flowName: 'factory-issue' });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('o/r', issue7),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: finishedThreads('completed'),
+    });
+    await poll.ticks[0]!();
+    await eventually(factoryId, (r) => r.state === 'failed');
+    expect(launcher.calls).toHaveLength(0);
   });
 
   test('an invalid repository flow fails the run without starting an agent', async () => {

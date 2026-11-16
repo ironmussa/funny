@@ -1,0 +1,52 @@
+# Built-in flow of the server-run issue factory for repositories that merge by
+# hand (change factory-flow-execution): implement an issue and open a pull
+# request, then stop. The run ends `waiting_human` with the pull request for a
+# person to review and merge. `issue-to-merge` is the same flow plus the CI fix
+# loop and the merge.
+#
+# The server runs this flow as the factory's enabler: the agent step is a
+# thread on the enabler's runner, the agent commits, pushes and opens the pull
+# request, and the `pull-request` step finds it on GitHub by its branch.
+#
+# (`factory-issue` is the orchestrator's flow: it runs inside a workspace and
+# tells the agent not to push, so it does not work as a server factory flow.)
+#
+# To customize per repository, copy this file to
+# `.funny/workflows/issue-to-pr.yaml` on the DEFAULT branch and edit it, keeping
+# the inputs. A copy on any other branch is ignored.
+
+name: issue-to-pr
+description: Implement a GitHub issue and open a pull request for a person to merge
+
+inputs:
+  repo: { type: string, required: true }
+  issue_number: { type: string, required: true }
+  issue_title: { type: string, required: true }
+  issue_url: { type: string, required: true }
+  branch: { type: string, required: true }
+
+nodes:
+  - id: implement
+    spawn_agent:
+      prompt: |
+        You are working unattended: nobody will answer questions, so make
+        reasonable decisions and state them in your final message.
+
+        Implement GitHub issue #{{issue_number}} of {{repo}}: {{issue_title}}
+        Read the issue first: {{issue_url}}
+
+        How to work:
+        - Work on a new branch named `{{branch}}`, created from the default branch.
+        - Read the code around the change before editing, follow the conventions
+          you find, and keep the change to what the issue asks.
+        - Add or update tests when the change affects behavior, and run the
+          project's checks before you finish.
+        - Commit, push the branch `{{branch}}` to `origin`, and open a pull
+          request from it against the default branch whose body contains
+          `Closes #{{issue_number}}`.
+        - End with a short summary of what you changed and why.
+
+  - id: pull-request
+    depends_on: [implement]
+    create_pr:
+      title: '{{issue_title}}'

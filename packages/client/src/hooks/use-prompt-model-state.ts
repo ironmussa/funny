@@ -45,7 +45,8 @@ export function useSandboxToggle(projectId: string | null | undefined, offered: 
   const [choice, setChoice] = useState<{ projectId: string; enabled: boolean } | null>(null);
   return useMemo((): SandboxToggle | null => {
     if (!sandbox) return null;
-    const { projectId: id, enabledByDefault } = sandbox.settings;
+    const { projectId: id, mode } = sandbox.settings;
+    const enabledByDefault = mode === 'sandbox';
     return {
       label: sandbox.connection?.label ?? 'Sandbox',
       enabled: choice?.projectId === id ? choice.enabled : enabledByDefault,

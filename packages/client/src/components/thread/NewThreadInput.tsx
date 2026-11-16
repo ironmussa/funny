@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { useProjects } from '@/data/projects/hooks';
+import { useProjectThreadMode } from '@/data/runner/hooks';
 import { useSaveBacklogOnLeave } from '@/hooks/use-save-backlog-on-leave';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { api } from '@/lib/api';
@@ -543,11 +544,14 @@ function useComposeProject(
   const project = effectiveProjectId
     ? projects.find((p) => p.id === effectiveProjectId)
     : undefined;
+  // Local/worktree comes from the caller's runtime row (project-runtime-settings).
+  const defaultThreadMode = useProjectThreadMode(effectiveProjectId);
   return {
     newThreadIsScratch,
     effectiveProjectId,
     project,
     ...composeProjectDefaults(project),
+    defaultThreadMode,
   };
 }
 

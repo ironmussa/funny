@@ -26,19 +26,23 @@ export interface InfraConnection {
   lastValidatedAt: string | null;
 }
 
-/** The user's sandbox for one project (change project-sandboxes). */
+/** Where a user's new threads run on a project. `sandbox` uses the connection/size. */
+export type ThreadRuntimeMode = 'local' | 'worktree' | 'sandbox';
+
+/** The user's thread runtime for one project (change project-runtime-settings). */
 export interface ProjectSandboxSettings {
   projectId: string;
   connectionId: string;
   sizeId: string;
-  enabledByDefault: boolean;
+  mode: ThreadRuntimeMode;
   updatedAt: string;
 }
 
 export interface SaveProjectSandboxInput {
-  connectionId: string;
+  mode: ThreadRuntimeMode;
+  /** Required when mode is 'sandbox'; ignored (but preserved) for local/worktree. */
+  connectionId?: string;
   sizeId?: string;
-  enabledByDefault: boolean;
 }
 
 /** The shared sandbox machine's states (type-only: the machine itself stays server-side). */

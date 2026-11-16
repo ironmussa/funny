@@ -50,9 +50,9 @@ async function ownedThreadProject(userId: string, threadId: string) {
 
 const projectSandboxSchema = z
   .object({
-    connectionId: z.string().min(1),
+    mode: z.enum(['local', 'worktree', 'sandbox']),
+    connectionId: z.string().min(1).optional(),
     sizeId: z.string().min(1).max(32).optional(),
-    enabledByDefault: z.boolean(),
   })
   .strict();
 

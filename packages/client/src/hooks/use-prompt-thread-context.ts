@@ -12,6 +12,7 @@ import { useMemo } from 'react';
 import { useContextUsage } from '@/data/context-usage/hooks';
 import { useGitStatusForThread } from '@/data/git-status/hooks';
 import { useProjects } from '@/data/projects/hooks';
+import { useProjectThreadMode } from '@/data/runner/hooks';
 import { normalizeEffort } from '@/lib/providers';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
@@ -101,6 +102,9 @@ export function usePromptProjectContext({
     () => (resolvedProjectId ? (projects.find((p) => p.id === resolvedProjectId)?.path ?? '') : ''),
     [resolvedProjectId, projects],
   );
+  // The local/worktree default now comes from the caller's own runtime row
+  // (change project-runtime-settings), not the project-wide default_mode.
+  const defaultThreadMode = useProjectThreadMode(resolvedProjectId);
 
   return {
     projects,
@@ -110,6 +114,7 @@ export function usePromptProjectContext({
     projectPath,
     ...resolveModelDefaults(effectiveProject),
     ...resolveModeDefaults(effectiveProject),
+    defaultThreadMode,
   };
 }
 

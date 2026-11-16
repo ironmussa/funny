@@ -1916,6 +1916,49 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // project-runtime-settings: the per-(project, user) sandbox row becomes the
+    // per-user thread runtime. Add `mode` and backfill it from the old
+    // `enabled_by_default` flag (sandbox) or the project's default_mode, then
+    // drop the flag. No row still means `local` at the service layer.
+    name: '095_project_runtime_mode',
+    async up() {
+      await ctx().addColumn('project_sandbox_settings', 'mode', 'TEXT NOT NULL', "'local'");
+      await ctx().exec(sql`
+        UPDATE project_sandbox_settings
+        SET mode = CASE
+          WHEN enabled_by_default = 1 THEN 'sandbox'
+          ELSE COALESCE(
+            (SELECT default_mode FROM projects WHERE projects.id = project_sandbox_settings.project_id),
+            'local'
+          )
+        END
+      `);
+      await ctx().dropColumn('project_sandbox_settings', 'enabled_by_default');
+    },
+  },
+  {
+    // project-runtime-settings (phase 2a): the composer now reads each user's
+    // runtime row, which defaults to `local` when absent. To keep existing
+    // owners who had a `worktree` project default from silently dropping to
+    // local, seed a runtime row for the OWNER of every project whose
+    // default_mode is 'worktree' and who has no row yet. Members still get no
+    // row (= local); this is a one-time migration seed, not a read-time one.
+    name: '096_seed_owner_worktree_runtime',
+    async up() {
+      const now = new Date().toISOString();
+      await ctx().exec(sql`
+        INSERT INTO project_sandbox_settings (project_id, user_id, connection_id, size_id, mode, updated_at)
+        SELECT p.id, p.user_id, '', '', 'worktree', ${now}
+        FROM projects p
+        WHERE p.default_mode = 'worktree'
+          AND NOT EXISTS (
+            SELECT 1 FROM project_sandbox_settings s
+            WHERE s.project_id = p.id AND s.user_id = p.user_id
+          )
+      `);
+    },
+  },
 ];
 
 /**

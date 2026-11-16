@@ -22,7 +22,7 @@ export function SettingRow({ title, description, children }: RowProps) {
 }
 
 interface SegmentedControlProps<T extends string> {
-  options: { value: T; label: string; icon?: ReactNode; testId?: string }[];
+  options: { value: T; label: string; icon?: ReactNode; testId?: string; disabled?: boolean }[];
   value: T;
   onChange: (value: T) => void;
 }
@@ -40,9 +40,10 @@ export function SegmentedControl<T extends string>({
           key={opt.value}
           onClick={() => onChange(opt.value)}
           aria-pressed={value === opt.value}
+          disabled={opt.disabled}
           data-testid={opt.testId}
           className={cn(
-            'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors',
+            'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors disabled:pointer-events-none disabled:opacity-50',
             value === opt.value
               ? 'bg-background text-foreground shadow-xs'
               : 'text-muted-foreground hover:text-foreground',

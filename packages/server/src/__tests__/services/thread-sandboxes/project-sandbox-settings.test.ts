@@ -9,7 +9,7 @@ import type { ServerEnv } from '../../../lib/types.js';
 import { createInfraRoutes } from '../../../routes/infra.js';
 import { createInfraConnectionService } from '../../../services/thread-sandboxes/infra-connections.js';
 import { createProjectSandboxSettingsService } from '../../../services/thread-sandboxes/project-sandbox-settings.js';
-import { createTestDb, seedProject } from '../../helpers/test-db.js';
+import { createTestDb, seedProject, seedProjectMember } from '../../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
 const registry = expectOk(createSandboxProviderRegistry([fakeSandboxProviderEntry()]));
@@ -43,33 +43,46 @@ const connect = async (
   ).id;
 
 describe('project sandbox settings service', () => {
-  test('saves a connection, size and default, and reads it back', async () => {
+  test('saves a sandbox connection, size and mode, and reads it back', async () => {
     const { connections, settings } = services();
     const connectionId = await connect(connections);
     const saved = expectOk(
       await settings.save('alice', 'p1', {
+        mode: 'sandbox',
         connectionId,
         sizeId: 'small',
-        enabledByDefault: false,
       }),
     );
     expect(saved).toMatchObject({
       projectId: 'p1',
       connectionId,
       sizeId: 'small',
-      enabledByDefault: false,
+      mode: 'sandbox',
     });
     expect(expectOk(await settings.get('alice', 'p1'))).toEqual(saved);
     expect(expectOk(await settings.get('alice', 'p2'))).toBeNull();
   });
 
+  test('a local runtime stores without requiring a connection', async () => {
+    const { settings } = services();
+    const saved = expectOk(await settings.save('alice', 'p1', { mode: 'local' }));
+    expect(saved.mode).toBe('local');
+    expect(expectOk(await settings.get('alice', 'p1'))?.mode).toBe('local');
+  });
+
+  test('sandbox mode requires a connection', async () => {
+    const { settings } = services();
+    const missing = await settings.save('alice', 'p1', { mode: 'sandbox' });
+    expect(missing.isErr() && missing.error.kind).toBe('not-found');
+  });
+
   test('an omitted size stores the provider default; saving again replaces the row', async () => {
     const { connections, settings } = services();
     const connectionId = await connect(connections);
-    expectOk(await settings.save('alice', 'p1', { connectionId, enabledByDefault: true }));
+    expectOk(await settings.save('alice', 'p1', { mode: 'sandbox', connectionId }));
     expect(expectOk(await settings.get('alice', 'p1'))?.sizeId).toBe('default');
     expectOk(
-      await settings.save('alice', 'p1', { connectionId, sizeId: 'small', enabledByDefault: true }),
+      await settings.save('alice', 'p1', { mode: 'sandbox', connectionId, sizeId: 'small' }),
     );
     expect(expectOk(await settings.get('alice', 'p1'))?.sizeId).toBe('small');
     const rows = testDb.sqlite
@@ -86,21 +99,21 @@ describe('project sandbox settings service', () => {
     const aliceConnection = await connect(connections);
 
     const foreign = await settings.save('alice', 'p1', {
+      mode: 'sandbox',
       connectionId: bobConnection,
-      enabledByDefault: true,
     });
     expect(foreign.isErr() && foreign.error.kind).toBe('not-found');
 
     const badSize = await settings.save('alice', 'p1', {
+      mode: 'sandbox',
       connectionId: aliceConnection,
       sizeId: 'huge',
-      enabledByDefault: true,
     });
     expect(badSize.isErr() && badSize.error.kind).toBe('invalid-size');
 
     const notOwned = await settings.save('alice', 'bob-project', {
+      mode: 'sandbox',
       connectionId: aliceConnection,
-      enabledByDefault: true,
     });
     expect(notOwned.isErr() && notOwned.error.kind).toBe('not-found');
     const read = await settings.get('alice', 'bob-project');
@@ -108,11 +121,23 @@ describe('project sandbox settings service', () => {
     expect(expectOk(await settings.get('alice', 'p1'))).toBeNull();
   });
 
+  test('a project member (not the owner) can set their own runtime', async () => {
+    const { settings } = services();
+    // 'bob-project' is owned by bob; make alice a member.
+    seedProjectMember(testDb.db, { projectId: 'bob-project', userId: 'alice', role: 'member' });
+    const saved = expectOk(await settings.save('alice', 'bob-project', { mode: 'worktree' }));
+    expect(saved.mode).toBe('worktree');
+    expect(expectOk(await settings.get('alice', 'bob-project'))?.mode).toBe('worktree');
+    // A non-member still cannot.
+    const outsider = await settings.save('carol', 'bob-project', { mode: 'worktree' });
+    expect(outsider.isErr() && outsider.error.kind).toBe('not-found');
+  });
+
   test('each user keeps their own configuration for the same project', async () => {
     const { connections, settings } = services();
     seedProject(testDb.db, { id: 'shared', userId: 'alice', path: '/tmp/shared' });
     const connectionId = await connect(connections);
-    expectOk(await settings.save('alice', 'shared', { connectionId, enabledByDefault: true }));
+    expectOk(await settings.save('alice', 'shared', { mode: 'sandbox', connectionId }));
     expect(expectOk(await settings.forThread('bob', 'shared'))).toBeNull();
     expect(expectOk(await settings.forThread('alice', 'shared'))?.connectionId).toBe(connectionId);
   });
@@ -120,7 +145,7 @@ describe('project sandbox settings service', () => {
   test('clear removes it', async () => {
     const { connections, settings } = services();
     const connectionId = await connect(connections);
-    expectOk(await settings.save('alice', 'p1', { connectionId, enabledByDefault: true }));
+    expectOk(await settings.save('alice', 'p1', { mode: 'sandbox', connectionId }));
     expectOk(await settings.clear('alice', 'p1'));
     expect(expectOk(await settings.get('alice', 'p1'))).toBeNull();
   });
@@ -129,8 +154,8 @@ describe('project sandbox settings service', () => {
     const { connections, settings } = services();
     const used = await connect(connections);
     const other = await connect(connections);
-    expectOk(await settings.save('alice', 'p1', { connectionId: used, enabledByDefault: true }));
-    expectOk(await settings.save('alice', 'p2', { connectionId: other, enabledByDefault: true }));
+    expectOk(await settings.save('alice', 'p1', { mode: 'sandbox', connectionId: used }));
+    expectOk(await settings.save('alice', 'p2', { mode: 'sandbox', connectionId: other }));
     expectOk(await connections.remove('alice', used));
     expect(expectOk(await settings.get('alice', 'p1'))).toBeNull();
     expect(expectOk(await settings.get('alice', 'p2'))?.connectionId).toBe(other);
@@ -159,7 +184,7 @@ describe('project sandbox routes', () => {
     const empty = await app().request('/api/infra/projects/p1/sandbox');
     expect(await empty.json()).toEqual({ settings: null });
 
-    const saved = await put({ connectionId, sizeId: 'small', enabledByDefault: true });
+    const saved = await put({ mode: 'sandbox', connectionId, sizeId: 'small' });
     expect(saved.status).toBe(200);
     expect((await saved.json()).settings).toMatchObject({ connectionId, sizeId: 'small' });
 
@@ -176,9 +201,9 @@ describe('project sandbox routes', () => {
   test('refuses malformed bodies, unknown sizes, foreign projects and connections', async () => {
     const connectionId = await connect(services().connections);
     expect((await put({ connectionId })).status).toBe(400);
-    expect((await put({ connectionId, sizeId: 'huge', enabledByDefault: true })).status).toBe(400);
-    expect((await put({ connectionId, enabledByDefault: true }, 'bob-project')).status).toBe(404);
-    expect((await put({ connectionId, enabledByDefault: true }, 'p1', 'bob')).status).toBe(404);
+    expect((await put({ mode: 'sandbox', connectionId, sizeId: 'huge' })).status).toBe(400);
+    expect((await put({ mode: 'sandbox', connectionId }, 'bob-project')).status).toBe(404);
+    expect((await put({ mode: 'sandbox', connectionId }, 'p1', 'bob')).status).toBe(404);
     const bobRead = await app('bob').request('/api/infra/projects/p1/sandbox');
     expect(bobRead.status).toBe(404);
   });

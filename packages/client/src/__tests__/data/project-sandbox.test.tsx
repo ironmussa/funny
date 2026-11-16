@@ -30,7 +30,7 @@ const settings = {
   projectId: 'p1',
   connectionId: 'c1',
   sizeId: 'default',
-  enabledByDefault: true,
+  mode: 'sandbox' as const,
   updatedAt: '2026-11-08T00:00:00.000Z',
 };
 
@@ -66,14 +66,14 @@ describe('project sandbox (project-sandboxes)', () => {
     await waitFor(() => expect(result.current.sandbox).not.toBeNull());
 
     api.saveProjectSandbox.mockReturnValue(
-      okAsync({ settings: { ...settings, sizeId: 'large', enabledByDefault: false } }),
+      okAsync({ settings: { ...settings, sizeId: 'large', mode: 'sandbox' } }),
     );
     await act(() =>
-      saveProjectSandbox('p1', { connectionId: 'c1', sizeId: 'large', enabledByDefault: false }),
+      saveProjectSandbox('p1', { mode: 'sandbox', connectionId: 'c1', sizeId: 'large' }),
     );
     expect(result.current.sandbox?.settings).toMatchObject({
       sizeId: 'large',
-      enabledByDefault: false,
+      mode: 'sandbox',
     });
 
     const emit = vi.spyOn(clientComposition.platform.effects, 'emit');

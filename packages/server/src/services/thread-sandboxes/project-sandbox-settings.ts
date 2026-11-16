@@ -16,14 +16,17 @@ import { and, eq } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
-import { projects, projectSandboxSettings } from '../../db/schema.js';
+import { projectMembers, projects, projectSandboxSettings } from '../../db/schema.js';
 import type { InfraConnectionService } from './infra-connections.js';
+
+/** Where a user's new threads run on a project. `sandbox` uses the connection/size. */
+export type ThreadRuntimeMode = 'local' | 'worktree' | 'sandbox';
 
 export interface ProjectSandboxView {
   projectId: string;
   connectionId: string;
   sizeId: string;
-  enabledByDefault: boolean;
+  mode: ThreadRuntimeMode;
   updatedAt: string;
 }
 
@@ -36,9 +39,10 @@ export type ProjectSandboxError =
   | { kind: 'storage'; message: string };
 
 export interface SaveProjectSandboxInput {
-  connectionId: string;
+  mode: ThreadRuntimeMode;
+  /** Required when mode is 'sandbox'; ignored (but preserved) for local/worktree. */
+  connectionId?: string;
   sizeId?: string;
-  enabledByDefault: boolean;
 }
 
 type Row = typeof projectSandboxSettings.$inferSelect;
@@ -52,15 +56,21 @@ const toView = (row: Row): ProjectSandboxView => ({
   projectId: row.projectId,
   connectionId: row.connectionId,
   sizeId: row.sizeId,
-  enabledByDefault: row.enabledByDefault === 1,
+  mode: row.mode as ThreadRuntimeMode,
   updatedAt: row.updatedAt,
 });
 
 const byOwner = (userId: string, projectId: string) =>
   and(eq(projectSandboxSettings.projectId, projectId), eq(projectSandboxSettings.userId, userId));
 
-/** Refuses a project the caller does not own, as not found. */
-function requireOwnedProject(
+const notFound = (): ProjectSandboxError => ({ kind: 'not-found', message: 'Project not found' });
+
+/**
+ * Refuses a project the caller cannot access — neither its owner nor a member
+ * (`project_members`) — as not found. The runtime is per-user, so any member
+ * may read and write their own row.
+ */
+function requireProjectAccess(
   userId: string,
   projectId: string,
 ): ResultAsync<void, ProjectSandboxError> {
@@ -70,11 +80,20 @@ function requireOwnedProject(
       .from(projects)
       .where(and(eq(projects.id, projectId), eq(projects.userId, userId))),
     storage,
-  ).andThen(([row]) =>
-    row
-      ? okAsync<void, ProjectSandboxError>(undefined)
-      : errAsync<void, ProjectSandboxError>({ kind: 'not-found', message: 'Project not found' }),
-  );
+  ).andThen(([owned]) => {
+    if (owned) return okAsync<void, ProjectSandboxError>(undefined);
+    return ResultAsync.fromPromise(
+      db
+        .select({ projectId: projectMembers.projectId })
+        .from(projectMembers)
+        .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId))),
+      storage,
+    ).andThen(([member]) =>
+      member
+        ? okAsync<void, ProjectSandboxError>(undefined)
+        : errAsync<void, ProjectSandboxError>(notFound()),
+    );
+  });
 }
 
 export function createProjectSandboxSettingsService(
@@ -117,7 +136,7 @@ export function createProjectSandboxSettingsService(
       userId: string,
       projectId: string,
     ): ResultAsync<ProjectSandboxView | null, ProjectSandboxError> {
-      return requireOwnedProject(userId, projectId).andThen(() => find(userId, projectId));
+      return requireProjectAccess(userId, projectId).andThen(() => find(userId, projectId));
     },
 
     save(
@@ -125,33 +144,58 @@ export function createProjectSandboxSettingsService(
       projectId: string,
       input: SaveProjectSandboxInput,
     ): ResultAsync<ProjectSandboxView, ProjectSandboxError> {
-      return requireOwnedProject(userId, projectId)
-        .andThen(() => resolveSize(userId, input.connectionId, input.sizeId))
-        .andThen((sizeId) => {
-          const row: Row = {
-            projectId,
-            userId,
-            connectionId: input.connectionId,
-            sizeId,
-            enabledByDefault: input.enabledByDefault ? 1 : 0,
-            updatedAt: new Date().toISOString(),
-          };
-          const { projectId: _p, userId: _u, ...changes } = row;
-          return ResultAsync.fromPromise(
-            db
-              .insert(projectSandboxSettings)
-              .values(row)
-              .onConflictDoUpdate({
-                target: [projectSandboxSettings.projectId, projectSandboxSettings.userId],
-                set: changes,
-              }),
-            storage,
-          ).map(() => toView(row));
-        });
+      const persist = (
+        connectionId: string,
+        sizeId: string,
+      ): ResultAsync<ProjectSandboxView, ProjectSandboxError> => {
+        const row: Row = {
+          projectId,
+          userId,
+          connectionId,
+          sizeId,
+          mode: input.mode,
+          updatedAt: new Date().toISOString(),
+        };
+        const { projectId: _p, userId: _u, ...changes } = row;
+        return ResultAsync.fromPromise(
+          db
+            .insert(projectSandboxSettings)
+            .values(row)
+            .onConflictDoUpdate({
+              target: [projectSandboxSettings.projectId, projectSandboxSettings.userId],
+              set: changes,
+            }),
+          storage,
+        ).map(() => toView(row));
+      };
+
+      return requireProjectAccess(userId, projectId).andThen(() => {
+        // sandbox: the connection must be the caller's and the size must exist.
+        if (input.mode === 'sandbox') {
+          if (!input.connectionId) {
+            return errAsync<ProjectSandboxView, ProjectSandboxError>({
+              kind: 'not-found',
+              message: 'A sandbox connection is required',
+            });
+          }
+          const connectionId = input.connectionId;
+          return resolveSize(userId, connectionId, input.sizeId).andThen((sizeId) =>
+            persist(connectionId, sizeId),
+          );
+        }
+        // local / worktree: no connection validation; keep the last sandbox
+        // connection/size (or a sentinel) so the NOT NULL columns stay filled.
+        return find(userId, projectId).andThen((existing) =>
+          persist(
+            input.connectionId ?? existing?.connectionId ?? '',
+            input.sizeId ?? existing?.sizeId ?? '',
+          ),
+        );
+      });
     },
 
     clear(userId: string, projectId: string): ResultAsync<void, ProjectSandboxError> {
-      return requireOwnedProject(userId, projectId).andThen(() =>
+      return requireProjectAccess(userId, projectId).andThen(() =>
         ResultAsync.fromPromise(
           db.delete(projectSandboxSettings).where(byOwner(userId, projectId)),
           storage,

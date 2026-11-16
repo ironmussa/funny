@@ -834,7 +834,9 @@ export const projectSandboxSettings = pgTable(
     userId: text('user_id').notNull(),
     connectionId: text('connection_id').notNull(),
     sizeId: text('size_id').notNull(),
-    enabledByDefault: integer('enabled_by_default').notNull().default(0),
+    // Where this user's new threads run on this project: 'local' | 'worktree' | 'sandbox'.
+    // connection_id/size_id are only meaningful when mode = 'sandbox'.
+    mode: text('mode').notNull().default('local'),
     updatedAt: text('updated_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.userId] })],

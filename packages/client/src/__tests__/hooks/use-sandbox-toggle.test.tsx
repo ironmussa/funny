@@ -2,7 +2,7 @@ import { act, render, renderHook, screen, fireEvent } from '@testing-library/rea
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 const state = vi.hoisted(() => ({
-  byProject: {} as Record<string, { enabledByDefault: boolean } | undefined>,
+  byProject: {} as Record<string, { mode: 'local' | 'worktree' | 'sandbox' } | undefined>,
 }));
 
 vi.mock('@/data/runner/hooks', () => ({
@@ -16,7 +16,7 @@ vi.mock('@/data/runner/hooks', () => ({
               projectId,
               connectionId: 'c1',
               sizeId: 'default',
-              enabledByDefault: configured.enabledByDefault,
+              mode: configured.mode,
               updatedAt: '',
             },
             connection: { id: 'c1', label: 'InstaBox' },
@@ -30,7 +30,7 @@ import { PromptFooterBar } from '@/components/prompt-input/PromptFooterBar';
 import { useSandboxToggle } from '@/hooks/use-prompt-model-state';
 
 beforeEach(() => {
-  state.byProject = { p1: { enabledByDefault: true }, p2: { enabledByDefault: false } };
+  state.byProject = { p1: { mode: 'sandbox' }, p2: { mode: 'local' } };
 });
 
 describe('sandbox toggle (project-sandboxes)', () => {

@@ -74,6 +74,16 @@ export function useProjectSandbox(projectId: string | null | undefined): {
   return { sandbox, loading: isFetching };
 }
 
+/**
+ * The caller's local/worktree thread mode for a project (change
+ * project-runtime-settings). Derived from their runtime row; `local` when the
+ * row is absent or set to sandbox (sandbox is a separate composer axis).
+ */
+export function useProjectThreadMode(projectId: string | null | undefined): 'local' | 'worktree' {
+  const { sandbox } = useProjectSandbox(projectId);
+  return sandbox?.settings.mode === 'worktree' ? 'worktree' : 'local';
+}
+
 /** Discovery state of every dynamic ACP provider, keyed by provider id. */
 export function useAcpModels(): Record<string, ProviderModels> {
   const results = useDataQueries(acpModelQueries);

@@ -1,8 +1,9 @@
 /**
  * The project's sandbox for the current user (change project-sandboxes): which
- * of their provider connections new threads use, at what size, and whether the
- * composer starts with the sandbox on. Only the project owner can run sandbox
- * threads, so other users see nothing.
+ * of their provider connections new threads use and at what size. Whether new
+ * threads start in it is the Sandbox option of the default thread mode
+ * (`ProjectThreadModeSetting`). Only the project owner can run sandbox threads,
+ * so other users see nothing.
  */
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -15,7 +16,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Switch } from '@/components/ui/switch';
 import { clearProjectSandbox, saveProjectSandbox } from '@/data/runner/actions';
 import { useProjectSandbox, useSandboxConnections, useSandboxProviders } from '@/data/runner/hooks';
 import { buildPath } from '@/lib/url';
@@ -77,9 +77,10 @@ function ProjectSandboxRows({ projectId }: { projectId: string }) {
       return;
     }
     // A new connection may be another provider: start from its default size.
+    // Picking a connection does not change the runtime mode on its own.
     void saveProjectSandbox(projectId, {
+      mode: settings?.mode ?? 'local',
       connectionId: value,
-      enabledByDefault: settings?.enabledByDefault ?? false,
     });
   };
 
@@ -114,57 +115,36 @@ function ProjectSandboxRows({ projectId }: { projectId: string }) {
         </Select>
       </SettingRow>
       {settings && (
-        <>
-          <SettingRow
-            title={t('settings.projectSandboxSize', 'Sandbox size')}
-            description={t('settings.projectSandboxSizeDesc', 'Machine size for new sandboxes')}
+        <SettingRow
+          title={t('settings.projectSandboxSize', 'Sandbox size')}
+          description={t('settings.projectSandboxSizeDesc', 'Machine size for new sandboxes')}
+        >
+          <Select
+            value={settings.sizeId}
+            onValueChange={(sizeId) =>
+              void saveProjectSandbox(projectId, {
+                mode: settings.mode,
+                connectionId: settings.connectionId,
+                sizeId,
+              })
+            }
           >
-            <Select
-              value={settings.sizeId}
-              onValueChange={(sizeId) =>
-                void saveProjectSandbox(projectId, {
-                  connectionId: settings.connectionId,
-                  sizeId,
-                  enabledByDefault: settings.enabledByDefault,
-                })
-              }
-            >
-              <SelectTrigger className="w-[220px]" data-testid="settings-project-sandbox-size">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {sizes.map((s) => (
-                  <SelectItem
-                    key={s.id}
-                    value={s.id}
-                    data-testid={`settings-project-sandbox-size-${s.id}`}
-                  >
-                    {`${s.id} · ${s.vcpu} vCPU · ${s.memoryGb} GB`}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </SettingRow>
-          <SettingRow
-            title={t('settings.projectSandboxDefault', 'On by default')}
-            description={t(
-              'settings.projectSandboxDefaultDesc',
-              'New threads start with the sandbox turned on',
-            )}
-          >
-            <Switch
-              checked={settings.enabledByDefault}
-              data-testid="settings-project-sandbox-default"
-              onCheckedChange={(enabledByDefault) =>
-                void saveProjectSandbox(projectId, {
-                  connectionId: settings.connectionId,
-                  sizeId: settings.sizeId,
-                  enabledByDefault,
-                })
-              }
-            />
-          </SettingRow>
-        </>
+            <SelectTrigger className="w-[220px]" data-testid="settings-project-sandbox-size">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {sizes.map((s) => (
+                <SelectItem
+                  key={s.id}
+                  value={s.id}
+                  data-testid={`settings-project-sandbox-size-${s.id}`}
+                >
+                  {`${s.id} · ${s.vcpu} vCPU · ${s.memoryGb} GB`}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </SettingRow>
       )}
     </>
   );

@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
     projectId: string;
     connectionId: string;
     sizeId: string;
-    enabledByDefault: boolean;
+    mode: 'local' | 'worktree' | 'sandbox';
   },
   save: vi.fn(),
   clear: vi.fn(),
@@ -71,7 +71,6 @@ describe('ProjectSandboxSetting', () => {
     render(<ProjectSandboxSetting projectId="p1" ownerId="alice" />);
     expect(screen.getByTestId('settings-project-sandbox-connection')).toHaveTextContent('None');
     expect(screen.queryByTestId('settings-project-sandbox-size')).toBeNull();
-    expect(screen.queryByTestId('settings-project-sandbox-default')).toBeNull();
   });
 
   test('choosing a connection starts with the sandbox off, so new threads run locally', async () => {
@@ -80,15 +79,15 @@ describe('ProjectSandboxSetting', () => {
     render(<ProjectSandboxSetting projectId="p1" ownerId="alice" />);
     fireEvent.keyDown(screen.getByTestId('settings-project-sandbox-connection'), { key: 'Enter' });
     fireEvent.click(await screen.findByRole('option', { name: /funny-laptop/ }));
-    expect(mocks.save).toHaveBeenCalledWith('p1', { connectionId: 'c1', enabledByDefault: false });
+    expect(mocks.save).toHaveBeenCalledWith('p1', { mode: 'local', connectionId: 'c1' });
   });
 
-  test('configured: size and default are shown; toggling the default saves it', () => {
+  test('configured: the connection and size are shown', () => {
     mocks.settings = {
       projectId: 'p1',
       connectionId: 'c1',
       sizeId: 'large',
-      enabledByDefault: true,
+      mode: 'sandbox',
     };
     render(<ProjectSandboxSetting projectId="p1" ownerId="alice" />);
     // The connection name and its provider, so two same-named connections differ.
@@ -96,12 +95,5 @@ describe('ProjectSandboxSetting', () => {
       'funny-laptop · InstaBox',
     );
     expect(screen.getByTestId('settings-project-sandbox-size')).toHaveTextContent('large');
-
-    fireEvent.click(screen.getByTestId('settings-project-sandbox-default'));
-    expect(mocks.save).toHaveBeenCalledWith('p1', {
-      connectionId: 'c1',
-      sizeId: 'large',
-      enabledByDefault: false,
-    });
   });
 });

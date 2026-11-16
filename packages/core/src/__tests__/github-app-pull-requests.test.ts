@@ -1,0 +1,96 @@
+import { errAsync, okAsync } from 'neverthrow';
+import { describe, expect, test } from 'vitest';
+
+import { createPullRequestCi, createRepoGithub } from '../github-app/index.js';
+
+/** A fetch that answers GitHub paths from a table; records what was called. */
+function fakeGithub(routes: Record<string, unknown>) {
+  const calls: Array<{ method: string; path: string; auth: string | null }> = [];
+  const fetchImpl = (async (url: string, init?: RequestInit) => {
+    const path = url.replace('https://api.github.com', '');
+    const method = init?.method ?? 'GET';
+    const auth = new Headers(init?.headers).get('authorization');
+    calls.push({ method, path, auth });
+    const key = `${method} ${path}`;
+    if (!(key in routes)) return new Response('not found', { status: 404 });
+    const body = routes[key];
+    return typeof body === 'string'
+      ? new Response(body, { status: 200 })
+      : new Response(JSON.stringify(body), { status: 200 });
+  }) as typeof fetch;
+  return { calls, fetchImpl };
+}
+
+const pull = { node_id: 'PR_1', mergeable: true, mergeable_state: 'clean', head: { sha: 'abc' } };
+
+const ciFor = (routes: Record<string, unknown>) => {
+  const gh = fakeGithub(routes);
+  const ci = createPullRequestCi(
+    createRepoGithub({ tokenFor: () => okAsync('tok-1'), fetch: gh.fetchImpl }),
+  );
+  return { ci, calls: gh.calls };
+};
+
+describe('pull request CI over GitHub (shared by the factory and the server)', () => {
+  test('green when every check run completed successfully, with the given token', async () => {
+    const { ci, calls } = ciFor({
+      'GET /repos/o/r/pulls/7': pull,
+      'GET /repos/o/r/commits/abc/check-runs?per_page=100': {
+        check_runs: [{ id: 1, name: 'build', status: 'completed', conclusion: 'success' }],
+      },
+      'GET /repos/o/r/commits/abc/status': { statuses: [] },
+    });
+    expect((await ci.ciState('o/r', 7))._unsafeUnwrap()).toEqual({ kind: 'green' });
+    expect(calls.every((c) => c.auth === 'token tok-1')).toBe(true);
+  });
+
+  test('failing with the end of a failed Actions job log', async () => {
+    const { ci } = ciFor({
+      'GET /repos/o/r/pulls/7': pull,
+      'GET /repos/o/r/commits/abc/check-runs?per_page=100': {
+        check_runs: [
+          {
+            id: 9,
+            name: 'test',
+            status: 'completed',
+            conclusion: 'failure',
+            app: { slug: 'github-actions' },
+          },
+        ],
+      },
+      'GET /repos/o/r/commits/abc/status': { statuses: [] },
+      'GET /repos/o/r/actions/jobs/9/logs': 'FAIL src/x.test.ts',
+    });
+    expect((await ci.ciState('o/r', 7))._unsafeUnwrap()).toEqual({
+      kind: 'failing',
+      checks: [{ name: 'test', conclusion: 'failure', excerpt: 'FAIL src/x.test.ts' }],
+    });
+  });
+
+  test('pending while a check runs, conflict when the PR cannot merge', async () => {
+    const running = ciFor({
+      'GET /repos/o/r/pulls/7': pull,
+      'GET /repos/o/r/commits/abc/check-runs?per_page=100': {
+        check_runs: [{ id: 1, name: 'build', status: 'in_progress', conclusion: null }],
+      },
+      'GET /repos/o/r/commits/abc/status': { statuses: [] },
+    });
+    expect((await running.ci.ciState('o/r', 7))._unsafeUnwrap()).toEqual({ kind: 'pending' });
+
+    const dirty = ciFor({ 'GET /repos/o/r/pulls/7': { ...pull, mergeable: false } });
+    expect((await dirty.ci.ciState('o/r', 7))._unsafeUnwrap()).toEqual({ kind: 'conflict' });
+  });
+
+  test('a refused token is an error naming its kind, and no GitHub call is made', async () => {
+    const gh = fakeGithub({});
+    const ci = createPullRequestCi(
+      createRepoGithub({
+        tokenFor: () => errAsync({ message: 'App not installed', kind: 'not-installed' }),
+        fetch: gh.fetchImpl,
+      }),
+    );
+    const result = await ci.ciState('o/r', 7);
+    expect(result.isErr() && result.error).toMatchObject({ kind: 'not-installed' });
+    expect(gh.calls).toEqual([]);
+  });
+});

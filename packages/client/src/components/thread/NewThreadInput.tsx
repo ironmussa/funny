@@ -79,6 +79,16 @@ function useComposeAttempt(onCreated: NewThreadInputProps['onCreated']) {
   return useCallback(() => abandonedRef.current && !onCreated, [onCreated]);
 }
 
+/**
+ * Mirrors the composer's worktree toggle for the branch preview: the user's
+ * choice once they flip it, else the runtime row's default (which may still be
+ * loading on the first render).
+ */
+function useWorktreePreview(defaultThreadMode: string): [boolean, (enabled: boolean) => void] {
+  const [choice, setChoice] = useState<boolean | null>(null);
+  return [choice ?? defaultThreadMode === 'worktree', setChoice];
+}
+
 export function NewThreadInput({
   projectIdOverride,
   isScratchOverride,
@@ -126,7 +136,7 @@ export function NewThreadInput({
 
   // ── Worktree preview ──
   const [previewBranch, setPreviewBranch] = useState<string | null>(null);
-  const [isWorktreeMode, setIsWorktreeMode] = useState(defaultThreadMode === 'worktree');
+  const [isWorktreeMode, setIsWorktreeMode] = useWorktreePreview(defaultThreadMode);
 
   // ── Save-to-backlog guard ──
   const hasContentRef = useRef(false);

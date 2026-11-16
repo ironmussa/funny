@@ -14,7 +14,7 @@ import type { Project } from '@funny/shared';
 import { includesSearchText } from '@funny/shared/lib/text-search';
 import { err, ok } from 'neverthrow';
 
-import { authorizer } from '../../lib/server-authorizer.js';
+import { authorizer, projectRole } from '../../lib/server-authorizer.js';
 import * as pm from '../../services/project-manager.js';
 import * as projectRepo from '../../services/project-repository.js';
 import * as cmdRepo from '../../services/startup-commands-repository.js';
@@ -164,6 +164,12 @@ export function createProjectsPort(organizationName: string | null | undefined):
     async reorder(userId, projectIds) {
       const result = await projectRepo.reorderProjects(userId, projectIds);
       return result.isErr() ? err(failure(500, result.error.message)) : ok200();
+    },
+
+    async myRole(userId, projectId) {
+      // The procedure already required `view`, so a role exists.
+      const role = await projectRole(userId, projectId);
+      return role ? ok({ role }) : err(failure(404, 'Project not found'));
     },
 
     async members(projectId) {

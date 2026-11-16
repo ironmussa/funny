@@ -35,7 +35,7 @@ import type {
   UserProfile,
   Watcher,
 } from '@funny/shared';
-import type { Capability } from '@funny/shared/auth/roles';
+import type { Capability, Role } from '@funny/shared/auth/roles';
 import type {
   AgentTemplateBody,
   UpdateAgentTemplateBody,
@@ -281,6 +281,11 @@ export type ProjectCommand = StartupCommand & { port?: number; portEnvVar?: stri
  * takes a `projectId` runs after `projectProcedure` checked the caller's access.
  */
 export interface ProjectsPort {
+  /**
+   * The caller's effective role on a project, as the server authorizes it, so
+   * a client can hide what it would refuse. Never the basis of a decision.
+   */
+  myRole(userId: string, projectId: string): PortResult<{ role: Role }>;
   /** Own + shared projects, or one organization's (403 for a non-member). */
   list(caller: ApiCaller, query: ListProjectsQuery): PortResult<Project[]>;
   /** The caller's project whose URL patterns match `url`. */

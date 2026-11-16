@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useCanSteerProject } from '@/data/projects/hooks';
 import { clearProjectSandbox, saveProjectSandbox } from '@/data/runner/actions';
 import { useProjectSandbox, useSandboxConnections, useSandboxProviders } from '@/data/runner/hooks';
 import { buildPath } from '@/lib/url';
@@ -23,7 +24,22 @@ import { SettingRow } from './setting-primitives';
 
 const NO_SANDBOX = '__none__';
 
-export function ProjectSandboxSetting({ projectId }: { projectId: string }) {
+/** The select value: the attached connection, or "none" (also for a row that kept only its runtime). */
+function connectionValue(settings: { connectionId: string } | null): string {
+  return settings?.connectionId || NO_SANDBOX;
+}
+
+/** The sizes the attached connection's provider offers. */
+function sizesFor(
+  connectionId: string | undefined,
+  connections: ReturnType<typeof useSandboxConnections>['connections'],
+  providers: ReturnType<typeof useSandboxProviders>,
+) {
+  const connection = connections.find((c) => c.id === connectionId);
+  return providers.find((p) => p.id === connection?.provider)?.capabilities.sizes ?? [];
+}
+
+function ProjectSandboxSettingRows({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { connections, loading } = useSandboxConnections();
@@ -52,8 +68,7 @@ export function ProjectSandboxSetting({ projectId }: { projectId: string }) {
     );
   }
 
-  const connection = connections.find((c) => c.id === settings?.connectionId);
-  const sizes = providers.find((p) => p.id === connection?.provider)?.capabilities.sizes ?? [];
+  const sizes = sizesFor(settings?.connectionId, connections, providers);
   // Two connections can share a name: the provider tells them apart.
   const providerName = (id: string) => providers.find((p) => p.id === id)?.displayName ?? id;
 
@@ -79,7 +94,7 @@ export function ProjectSandboxSetting({ projectId }: { projectId: string }) {
           'Provider connection your new threads in this project can run in',
         )}
       >
-        <Select value={settings?.connectionId ?? NO_SANDBOX} onValueChange={onConnectionChange}>
+        <Select value={connectionValue(settings)} onValueChange={onConnectionChange}>
           <SelectTrigger className="w-[220px]" data-testid="settings-project-sandbox-connection">
             <SelectValue />
           </SelectTrigger>
@@ -100,7 +115,7 @@ export function ProjectSandboxSetting({ projectId }: { projectId: string }) {
           </SelectContent>
         </Select>
       </SettingRow>
-      {settings && (
+      {settings?.connectionId && (
         <SettingRow
           title={t('settings.projectSandboxSize', 'Sandbox size')}
           description={t('settings.projectSandboxSizeDesc', 'Machine size for new sandboxes')}
@@ -134,4 +149,10 @@ export function ProjectSandboxSetting({ projectId }: { projectId: string }) {
       )}
     </>
   );
+}
+
+/** Hidden from a viewer: the setting is per-user and only matters to whoever may start threads. */
+export function ProjectSandboxSetting({ projectId }: { projectId: string }) {
+  const canSteer = useCanSteerProject(projectId);
+  return canSteer ? <ProjectSandboxSettingRows projectId={projectId} /> : null;
 }

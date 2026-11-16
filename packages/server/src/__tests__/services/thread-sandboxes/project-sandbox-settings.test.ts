@@ -153,22 +153,49 @@ describe('project sandbox settings service', () => {
     expect(expectOk(await settings.forThread('alice', 'shared'))?.connectionId).toBe(connectionId);
   });
 
-  test('clear removes it', async () => {
+  test('clear drops the sandbox; a sandbox runtime falls back to local', async () => {
     const { connections, settings } = services();
     const connectionId = await connect(connections);
     expectOk(await settings.save('alice', 'p1', { mode: 'sandbox', connectionId }));
     expectOk(await settings.clear('alice', 'p1'));
-    expect(expectOk(await settings.get('alice', 'p1'))).toBeNull();
+    expect(expectOk(await settings.get('alice', 'p1'))).toMatchObject({
+      mode: 'local',
+      connectionId: '',
+    });
+    // No connection left: thread creation sees no sandbox.
+    expect(expectOk(await settings.forThread('alice', 'p1'))?.connectionId).toBe('');
   });
 
-  test('removing a connection clears the projects that use it', async () => {
+  test('clearing the sandbox keeps a worktree runtime', async () => {
     const { connections, settings } = services();
+    const connectionId = await connect(connections);
+    expectOk(await settings.save('alice', 'p1', { mode: 'sandbox', connectionId }));
+    expectOk(await settings.save('alice', 'p1', { mode: 'worktree' }));
+    expectOk(await settings.clear('alice', 'p1'));
+    expect(expectOk(await settings.get('alice', 'p1'))).toMatchObject({
+      mode: 'worktree',
+      connectionId: '',
+    });
+  });
+
+  test('removing a connection detaches it from the projects that use it, keeping their runtime', async () => {
+    const { connections, settings } = services();
+    seedProject(testDb.db, { id: 'p3', userId: 'alice', path: '/tmp/p3' });
     const used = await connect(connections);
     const other = await connect(connections);
     expectOk(await settings.save('alice', 'p1', { mode: 'sandbox', connectionId: used }));
+    expectOk(await settings.save('alice', 'p3', { mode: 'sandbox', connectionId: used }));
+    expectOk(await settings.save('alice', 'p3', { mode: 'worktree' }));
     expectOk(await settings.save('alice', 'p2', { mode: 'sandbox', connectionId: other }));
     expectOk(await connections.remove('alice', used));
-    expect(expectOk(await settings.get('alice', 'p1'))).toBeNull();
+    expect(expectOk(await settings.get('alice', 'p1'))).toMatchObject({
+      mode: 'local',
+      connectionId: '',
+    });
+    expect(expectOk(await settings.get('alice', 'p3'))).toMatchObject({
+      mode: 'worktree',
+      connectionId: '',
+    });
     expect(expectOk(await settings.get('alice', 'p2'))?.connectionId).toBe(other);
   });
 });
@@ -190,7 +217,7 @@ describe('project sandbox routes', () => {
       body: JSON.stringify(body),
     });
 
-  test('GET answers null until configured, PUT stores, DELETE clears', async () => {
+  test('GET answers null until configured, PUT stores, DELETE drops the sandbox', async () => {
     const connectionId = await connect(services().connections);
     const empty = await app().request('/api/infra/projects/p1/sandbox');
     expect(await empty.json()).toEqual({ settings: null });
@@ -204,9 +231,8 @@ describe('project sandbox routes', () => {
 
     const cleared = await app().request('/api/infra/projects/p1/sandbox', { method: 'DELETE' });
     expect(cleared.status).toBe(200);
-    expect(await (await app().request('/api/infra/projects/p1/sandbox')).json()).toEqual({
-      settings: null,
-    });
+    const after = await (await app().request('/api/infra/projects/p1/sandbox')).json();
+    expect(after.settings).toMatchObject({ mode: 'local', connectionId: '' });
   });
 
   test('refuses malformed bodies, unknown sizes, foreign projects and connections', async () => {

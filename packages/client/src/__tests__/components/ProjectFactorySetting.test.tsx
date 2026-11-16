@@ -8,7 +8,10 @@ const mocks = vi.hoisted(() => ({
   settings: null as FactorySettings | null,
   save: vi.fn(),
   toastError: vi.fn(),
+  canSteer: true,
 }));
+
+vi.mock('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
 
 vi.mock('@/data/factory/hooks', () => ({
   useFactorySettings: () => mocks.settings,
@@ -39,10 +42,18 @@ const pressed = (v: string) =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.settings = null;
+  mocks.canSteer = true;
   mocks.save.mockImplementation((input: object) => okAsync({ ...configured(), ...input }));
 });
 
 describe('ProjectFactorySetting', () => {
+  test('hidden from a caller who cannot start threads on the project (a viewer)', () => {
+    mocks.canSteer = false;
+    mocks.settings = configured();
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(screen.queryByTestId('settings-factory-on')).toBeNull();
+  });
+
   test('off by default, with no detail rows', () => {
     render(<ProjectFactorySetting projectId="p1" />);
     expect(pressed('off')).toBe('true');

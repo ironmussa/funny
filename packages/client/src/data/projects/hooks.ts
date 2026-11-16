@@ -6,6 +6,7 @@ import { useMemo } from 'react';
 import { useDataLayer, useDataQuery } from '../hooks';
 import { liveQueryKey } from '../live-query-key';
 import { projectBranchesQuery } from './branches';
+import { projectRoleQuery, roleAllows } from './role';
 import { compareProjects, getProjectsData } from './store';
 
 /**
@@ -47,4 +48,13 @@ export function useProjectById(projectId: string | null | undefined): Project | 
 export function useProjectCurrentBranch(projectId: string | null | undefined): string | undefined {
   const { data } = useDataQuery({ ...projectBranchesQuery(projectId ?? ''), enabled: false });
   return projectId ? (data?.currentBranch ?? undefined) : undefined;
+}
+
+/**
+ * Whether the caller may start threads on the project (`steer`): hides the
+ * per-user runtime and factory controls from a viewer, whose saves the server
+ * refuses. While the role loads, the controls show (the server still decides).
+ */
+export function useCanSteerProject(projectId: string): boolean {
+  return roleAllows(useDataQuery(projectRoleQuery(projectId)).data, 'steer');
 }

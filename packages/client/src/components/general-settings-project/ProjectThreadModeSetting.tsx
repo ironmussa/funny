@@ -8,6 +8,7 @@
 import { Boxes, GitBranch, Monitor } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { useCanSteerProject } from '@/data/projects/hooks';
 import { saveProjectSandbox } from '@/data/runner/actions';
 import { useProjectSandbox } from '@/data/runner/hooks';
 
@@ -19,7 +20,7 @@ interface Props {
   projectId: string;
 }
 
-export function ProjectThreadModeSetting({ projectId }: Props) {
+function ProjectThreadModeSettingRows({ projectId }: Props) {
   const { t } = useTranslation();
   const { sandbox } = useProjectSandbox(projectId);
   const settings = sandbox?.settings ?? null;
@@ -74,4 +75,10 @@ export function ProjectThreadModeSetting({ projectId }: Props) {
       />
     </SettingRow>
   );
+}
+
+/** Hidden from a viewer: the setting is per-user and only matters to whoever may start threads. */
+export function ProjectThreadModeSetting({ projectId }: Props) {
+  const canSteer = useCanSteerProject(projectId);
+  return canSteer ? <ProjectThreadModeSettingRows projectId={projectId} /> : null;
 }

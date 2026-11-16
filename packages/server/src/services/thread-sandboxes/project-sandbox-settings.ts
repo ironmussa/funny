@@ -12,7 +12,7 @@
  */
 
 import { resolveSandboxSize } from '@funny/sandbox';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql, type SQL } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
@@ -82,6 +82,28 @@ const accessErrors = {
  */
 const requireProjectAccess = (userId: string, projectId: string, capability: 'view' | 'steer') =>
   sharedRequireProjectAccess(userId, projectId, capability, accessErrors);
+
+/**
+ * Drop the sandbox connection from the rows `where` selects, keeping the
+ * user's runtime choice: a `worktree` (or `local`) preference survives losing
+ * the sandbox, and only a `sandbox` runtime — which has nothing left to run on
+ * — falls back to `local`. Used when a connection is removed and when the user
+ * picks "no sandbox".
+ */
+export function detachSandboxConnection(
+  executor: Pick<typeof db, 'update'>,
+  where: SQL | undefined,
+): Promise<unknown> {
+  return executor
+    .update(projectSandboxSettings)
+    .set({
+      connectionId: '',
+      sizeId: '',
+      mode: sql`CASE WHEN ${projectSandboxSettings.mode} = 'sandbox' THEN 'local' ELSE ${projectSandboxSettings.mode} END`,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(where);
+}
 
 export function createProjectSandboxSettingsService(
   connections: Pick<InfraConnectionService, 'providerFor'>,
@@ -184,7 +206,7 @@ export function createProjectSandboxSettingsService(
     clear(userId: string, projectId: string): ResultAsync<void, ProjectSandboxError> {
       return requireProjectAccess(userId, projectId, 'steer').andThen(() =>
         ResultAsync.fromPromise(
-          db.delete(projectSandboxSettings).where(byOwner(userId, projectId)),
+          detachSandboxConnection(db, byOwner(userId, projectId)),
           storage,
         ).map(() => undefined),
       );

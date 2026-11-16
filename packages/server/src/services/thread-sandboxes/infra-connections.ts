@@ -21,6 +21,7 @@ import { z } from 'zod';
 import { db } from '../../db/index.js';
 import { infraConnections, projectSandboxSettings } from '../../db/schema.js';
 import { decrypt, encrypt } from '../../lib/crypto.js';
+import { detachSandboxConnection } from './project-sandbox-settings.js';
 
 export interface InfraConnectionView {
   id: string;
@@ -133,19 +134,21 @@ export function createInfraConnectionService(registry: SandboxProviderRegistry) 
       ).map((rows) => rows.map(toView));
     },
 
-    /** Also removes the project sandboxes that use it (change project-sandboxes). */
+    /**
+     * Also detaches it from the project sandboxes that use it (change
+     * project-sandboxes), keeping each project's runtime choice.
+     */
     remove(userId: string, id: string): ResultAsync<void, InfraConnectionError> {
       return ownedRow(userId, id).andThen(() =>
         ResultAsync.fromPromise(
           db.transaction(async (tx) => {
-            await tx
-              .delete(projectSandboxSettings)
-              .where(
-                and(
-                  eq(projectSandboxSettings.connectionId, id),
-                  eq(projectSandboxSettings.userId, userId),
-                ),
-              );
+            await detachSandboxConnection(
+              tx,
+              and(
+                eq(projectSandboxSettings.connectionId, id),
+                eq(projectSandboxSettings.userId, userId),
+              ),
+            );
             await tx
               .delete(infraConnections)
               .where(and(eq(infraConnections.id, id), eq(infraConnections.userId, userId)));

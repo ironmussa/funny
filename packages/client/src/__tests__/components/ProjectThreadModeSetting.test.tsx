@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
 }));
 
+vi.mock('@/data/projects/hooks', () => ({ useCanSteerProject: () => true }));
 vi.mock('@/data/runner/hooks', () => ({
   useProjectSandbox: () => {
     mocks.sandboxReads += 1;

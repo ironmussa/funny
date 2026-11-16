@@ -10,14 +10,38 @@ import { useTranslation } from 'react-i18next';
 import { Input } from '@/components/ui/input';
 import { saveFactorySettings } from '@/data/factory/actions';
 import { useFactorySettings } from '@/data/factory/hooks';
-import type { SaveFactorySettingsInput } from '@/lib/api/factory';
+import { useCanSteerProject } from '@/data/projects/hooks';
+import type { FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
 import { toastError } from '@/lib/toast-error';
 
 import { SegmentedControl, SettingRow } from './setting-primitives';
 
 type OnOff = 'on' | 'off';
 
-export function ProjectFactorySetting({ projectId }: { projectId: string }) {
+/** What the form shows: the saved settings, or the server's defaults before the first save. */
+function formValues(settings: FactorySettings | null | undefined) {
+  return {
+    enabled: settings?.enabled ?? false,
+    label: settings?.label ?? 'ready-for-agent',
+    flowName: settings?.flowName ?? 'issue-to-merge',
+    maxConcurrent: settings?.maxConcurrent ?? 2,
+  };
+}
+
+/** The trimmed text when it is non-empty and differs from `current`, else null (nothing to save). */
+function changedText(value: string, current: string): string | null {
+  const next = value.trim();
+  return next && next !== current ? next : null;
+}
+
+/** A concurrency within 1–20 that differs from `current`, else null. */
+function changedConcurrency(value: string, current: number): number | null {
+  const next = Number.parseInt(value, 10);
+  const inRange = Number.isFinite(next) && next >= 1 && next <= 20;
+  return inRange && next !== current ? next : null;
+}
+
+function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
   const settings = useFactorySettings(projectId);
   // Bumped after every save settles, so the inputs re-read the confirmed row —
@@ -32,26 +56,21 @@ export function ProjectFactorySetting({ projectId }: { projectId: string }) {
         () => setRevision((r) => r + 1),
       );
 
-  const enabled = settings?.enabled ?? false;
-  const label = settings?.label ?? 'ready-for-agent';
-  const flowName = settings?.flowName ?? 'issue-to-merge';
-  const maxConcurrent = settings?.maxConcurrent ?? 2;
+  const { enabled, label, flowName, maxConcurrent } = formValues(settings);
   const rowKey = `${settings?.updatedAt ?? 'none'}-${revision}`;
 
   const setEnabled = (value: OnOff) => void save({ enabled: value === 'on' });
   const setLabel = (value: string) => {
-    const next = value.trim();
-    if (next && next !== label) void save({ enabled, label: next });
+    const next = changedText(value, label);
+    if (next) void save({ enabled, label: next });
   };
   const setFlow = (value: string) => {
-    const next = value.trim();
-    if (next && next !== flowName) void save({ enabled, flowName: next });
+    const next = changedText(value, flowName);
+    if (next) void save({ enabled, flowName: next });
   };
   const setConcurrency = (value: string) => {
-    const next = Number.parseInt(value, 10);
-    if (Number.isFinite(next) && next >= 1 && next <= 20 && next !== maxConcurrent) {
-      void save({ enabled, maxConcurrent: next });
-    }
+    const next = changedConcurrency(value, maxConcurrent);
+    if (next !== null) void save({ enabled, maxConcurrent: next });
   };
 
   return (
@@ -123,4 +142,10 @@ export function ProjectFactorySetting({ projectId }: { projectId: string }) {
       )}
     </>
   );
+}
+
+/** Hidden from a viewer: the setting is per-user and only matters to whoever may start threads. */
+export function ProjectFactorySetting({ projectId }: { projectId: string }) {
+  const canSteer = useCanSteerProject(projectId);
+  return canSteer ? <ProjectFactorySettingRows projectId={projectId} /> : null;
 }

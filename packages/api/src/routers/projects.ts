@@ -48,6 +48,11 @@ export const projectsRouter = router({
     .mutation(async ({ ctx, input }) =>
       unwrap(await ctx.ports.projects.reorder(ctx.userId, input.projectIds)),
     ),
+  myRole: projectProcedure('view')
+    .input(z.object({ projectId }))
+    .query(async ({ ctx, input }) =>
+      unwrap(await ctx.ports.projects.myRole(ctx.userId, input.projectId)),
+    ),
   members: projectProcedure('view')
     .input(z.object({ projectId }))
     .query(async ({ ctx, input }) => unwrap(await ctx.ports.projects.members(input.projectId))),

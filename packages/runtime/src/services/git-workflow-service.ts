@@ -263,6 +263,9 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
       error: String(err),
     });
     activeWorkflows.delete(params.contextId);
+    // The client was told the workflow started (it got the id back) and waits
+    // for its end: without this its buttons stayed disabled until a reload.
+    emitProgress(params.userId, params.contextId, workflowId, 'failed', params.action, []);
   });
 
   return { workflowId };

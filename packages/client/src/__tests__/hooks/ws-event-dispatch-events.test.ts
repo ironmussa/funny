@@ -623,7 +623,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     });
 
     vi.advanceTimersByTime(1500);
-    expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined);
+    expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined, 'push');
     vi.useRealTimers();
   });
 
@@ -662,8 +662,45 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
       expect(mockSetFailedWorkflow).toHaveBeenCalledWith(
         expect.objectContaining({ title: 'Push failed', action: 'push' }),
       );
-      expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined);
+      expect(mockFinishCommit).toHaveBeenCalledWith('t1', undefined, 'push');
     });
+  });
+
+  test('git:workflow_progress takes a new run’s setup failure during the previous run’s close delay', async () => {
+    vi.useFakeTimers();
+    try {
+      // Run A completes: its entry stays on screen for the close delay.
+      captureHandlers()['git:workflow_progress']({
+        threadId: 't1',
+        data: { status: 'completed', action: 'push', workflowId: 'wf-a', steps: [] },
+      });
+      await vi.waitFor(() => expect(mockReplaceSteps).toHaveBeenCalled());
+      mockActiveCommits.t1 = { workflowId: 'wf-a' };
+
+      // Run B fails during setup: `failed` without `started`.
+      captureHandlers()['git:workflow_progress']({
+        threadId: 't1',
+        data: {
+          status: 'failed',
+          title: 'Commit failed',
+          action: 'commit',
+          workflowId: 'wf-b',
+          steps: [],
+        },
+      });
+      await vi.waitFor(() =>
+        expect(mockSetFailedWorkflow).toHaveBeenCalledWith(
+          expect.objectContaining({ title: 'Commit failed' }),
+        ),
+      );
+      // A's entry is ended at once rather than by its delayed close.
+      expect(mockFinishCommit).toHaveBeenCalledWith('t1', 'wf-a');
+      vi.advanceTimersByTime(5000);
+      expect(mockFinishCommit).not.toHaveBeenCalledWith('t1', 'wf-a', 'push');
+    } finally {
+      delete mockActiveCommits.t1;
+      vi.useRealTimers();
+    }
   });
 
   test('git:workflow_progress ignores a terminal event of an earlier run', async () => {

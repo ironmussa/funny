@@ -910,11 +910,21 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
   import('@/stores/commit-progress-store').then(({ useCommitProgressStore }) => {
     const store = useCommitProgressStore.getState();
     const { status: wfStatus, title, action, steps, workflowId } = data;
-    // An event of an earlier run of this thread's workflow (another one has
-    // started since): it must not touch the current run's steps, its close
-    // timer, or open a failure modal.
     const current = store.activeCommits[threadId]?.workflowId;
-    if (wfStatus !== 'started' && workflowId && current && current !== workflowId) return;
+    if (workflowId && current && current !== workflowId) {
+      if (pendingWorkflowCloses.has(threadId)) {
+        // The entry is a finished run kept on screen for its close delay; this
+        // event is a newer run's (one that failed during setup sends `failed`
+        // without `started`). End the finished one now and handle this one.
+        cancelPendingWorkflowClose(threadId);
+        store.finishCommit(threadId, current);
+      } else if (wfStatus !== 'started') {
+        // An event of an earlier run (another one has started since): it must
+        // not touch the current run's steps, its close timer, or open a
+        // failure modal.
+        return;
+      }
+    }
 
     if (wfStatus === 'started') {
       // A restart within the close delay must not be closed by the previous run's timer.
@@ -927,7 +937,7 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
       cancelPendingWorkflowClose(threadId);
       const timer = setTimeout(() => {
         pendingWorkflowCloses.delete(threadId);
-        store.finishCommit(threadId, workflowId);
+        store.finishCommit(threadId, workflowId, action);
       }, COMPLETED_WORKFLOW_CLOSE_MS);
       pendingWorkflowCloses.set(threadId, timer);
     } else if (wfStatus === 'failed') {
@@ -938,7 +948,7 @@ function handleGitWorkflowProgress(threadId: string, data: any) {
         steps: steps ?? [],
         action: action ?? '',
       });
-      store.finishCommit(threadId, workflowId);
+      store.finishCommit(threadId, workflowId, action);
     }
   });
 

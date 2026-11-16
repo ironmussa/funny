@@ -4,7 +4,7 @@ import { useCommitProgressStore } from '@/stores/commit-progress-store';
 
 describe('useCommitProgressStore', () => {
   beforeEach(() => {
-    useCommitProgressStore.setState({ activeCommits: {}, failedWorkflow: null });
+    useCommitProgressStore.setState({ activeCommits: {}, settled: {}, failedWorkflow: null });
   });
 
   describe('startCommit', () => {
@@ -119,6 +119,25 @@ describe('useCommitProgressStore', () => {
   });
 
   describe('finishCommit', () => {
+    test('marks the workflow ended, with or without an entry', () => {
+      const store = useCommitProgressStore.getState();
+      store.startCommit('t1', 'Push', [], 'push', 'wf-1');
+      store.finishCommit('t1', 'wf-1');
+      expect(useCommitProgressStore.getState().settled.t1).toEqual({ count: 1, action: 'push' });
+
+      // A workflow that failed before it started never had an entry.
+      useCommitProgressStore.getState().finishCommit('t1', 'wf-2', 'merge');
+      expect(useCommitProgressStore.getState().settled.t1).toEqual({ count: 2, action: 'merge' });
+    });
+
+    test('an end of an earlier run does not count for the current one', () => {
+      const store = useCommitProgressStore.getState();
+      store.startCommit('t3', 'Push', [], 'push', 'wf-2');
+      store.finishCommit('t3', 'wf-1');
+      expect(useCommitProgressStore.getState().settled.t3).toBeUndefined();
+      expect(useCommitProgressStore.getState().activeCommits.t3).toBeDefined();
+    });
+
     test('removes the entry', () => {
       const steps = [{ id: 'stage', label: 'Staging', status: 'completed' as const }];
       useCommitProgressStore.getState().startCommit('t1', 'Committing', steps, 'commit');

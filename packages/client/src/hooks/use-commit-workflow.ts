@@ -135,31 +135,37 @@ export function useCommitWorkflow({
   const commitEntry = useCommitProgressStore((s) => s.activeCommits[commitProgressId]);
   const commitInProgress = !!commitEntry;
 
-  // React to server-driven workflow progress (completion, failure, cleanup).
-  // This is the keystone effect that clears all the in-progress flags when
-  // a workflow finishes — without it, the action buttons stay disabled.
-  const prevCommitEntryRef = useRef(commitEntry);
-  useEffect(() => {
-    const prev = prevCommitEntryRef.current;
-    prevCommitEntryRef.current = commitEntry;
-
-    // Workflow finished (entry removed by finishCommit after completed)
-    if (prev && !commitEntry) {
+  useClearOnWorkflowEnd(
+    commitProgressId,
+    () => {
       setActionInProgress(null);
       commitLockRef.current = false;
       setPushInProgress(false);
       setMergeInProgress(false);
       setPrInProgress(false);
+      // A completion marker left by the previous thread must not close this
+      // thread's pane; a workflow ending here sets it again just below.
+      justCompletedWorkflowRef.current = false;
+    },
+    (action) => {
       justCompletedWorkflowRef.current = true;
       // Refresh diffs and git status
       refresh();
-      if (effectiveThreadId && (prev.action === 'commit-merge' || prev.action === 'merge')) {
+      if (effectiveThreadId && (action === 'commit-merge' || action === 'merge')) {
         // Refresh both active thread and sidebar thread list
         useThreadStore.getState().refreshActiveThread();
         useThreadStore.getState().refreshAllLoadedThreads();
       }
-      return;
-    }
+    },
+  );
+
+  // React to server-driven progress of the running workflow (failure, success).
+  const prevCommitEntryRef = useRef({ id: commitProgressId, entry: commitEntry });
+  useEffect(() => {
+    const previous = prevCommitEntryRef.current;
+    prevCommitEntryRef.current = { id: commitProgressId, entry: commitEntry };
+    // Just switched threads: the previous entry is another thread's.
+    const prev = previous.id === commitProgressId ? previous.entry : undefined;
 
     if (!commitEntry) return;
 
@@ -223,7 +229,7 @@ export function useCommitWorkflow({
         toast.success(t('review.commitSuccess', 'Changes committed successfully'));
       }
     }
-  }, [commitEntry]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [commitProgressId, commitEntry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleCommitAction = useCallback(async () => {
     if (!hasGitContext || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
@@ -397,4 +403,33 @@ export function useCommitWorkflow({
     handleMergeWithTarget,
     handleCreatePROnly,
   };
+}
+
+/**
+ * Runs `clearInProgress` and then `onEnded(action)` when a workflow ends for
+ * `commitProgressId`. Keyed on the store's per-thread `settled` counter, not on
+ * the entry disappearing: an entry also "disappears" when the pane switches to
+ * another thread, and a workflow that failed before it started never had one.
+ * Switching threads only runs `clearInProgress` (the flags were the previous
+ * thread's): nothing ended here, so no after-workflow refresh or auto-close.
+ */
+function useClearOnWorkflowEnd(
+  commitProgressId: string,
+  clearInProgress: () => void,
+  onEnded: (action: string | undefined) => void,
+): void {
+  const settled = useCommitProgressStore((s) => s.settled[commitProgressId]);
+  const lastSettledRef = useRef({ id: commitProgressId, count: settled?.count ?? 0 });
+  useEffect(() => {
+    const last = lastSettledRef.current;
+    const count = settled?.count ?? 0;
+    lastSettledRef.current = { id: commitProgressId, count };
+    if (last.id !== commitProgressId) {
+      clearInProgress();
+      return;
+    }
+    if (count === last.count) return;
+    clearInProgress();
+    onEnded(settled?.action);
+  }, [commitProgressId, settled]); // eslint-disable-line react-hooks/exhaustive-deps
 }

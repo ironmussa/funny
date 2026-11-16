@@ -37,7 +37,12 @@ export type AutoMergeResult =
   /** The repository allows no merge method. */
   | { kind: 'unavailable'; reason: string }
   /** It met its requirements, then no longer did (a push, a new review rule): look again later. */
-  | { kind: 'not-mergeable'; reason: string };
+  | {
+      kind: 'not-mergeable';
+      reason: string;
+      /** GitHub refused the merge just now: the pull request's state is changing, look again soon. */
+      refused?: boolean;
+    };
 
 export interface PullRequestCi {
   ciState(repo: string, number: number): ResultAsync<CiState, IssueSourceError>;

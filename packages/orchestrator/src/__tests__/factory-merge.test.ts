@@ -255,6 +255,20 @@ describe('a green pull request', () => {
     expect(pull).toMatchObject({ merged: true, mergedWith: 'squash' });
   });
 
+  test('after GitHub refuses a merge, it looks again at the next tick, not after a full poll', async () => {
+    const built = await greenPullRequest(true, () => {
+      h.github.refuseDirectMerge = true;
+    });
+    const pull = h.github.pulls[0];
+    expect(pull.merged).toBe(false);
+
+    h.github.refuseDirectMerge = false;
+    h.clock.advance(MIN);
+    await tick(built.factory);
+    built.store.close();
+    expect(pull).toMatchObject({ merged: true, mergedWith: 'squash' });
+  });
+
   test('auto-merge turned off while the pull request stays green is enabled again', async () => {
     const built = await greenPullRequest(true, () => {
       h.github.pulls[0].requiresReview = true;

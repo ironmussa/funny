@@ -39,6 +39,17 @@ const THREAD_STALE_MS = 24 * 60 * 60 * 1000;
 export interface ThreadRecord {
   status: string;
   createdAt: string;
+  /** When its agent last finished; reset when a follow-up runs it again. */
+  completedAt?: string | null;
+}
+
+/**
+ * Waiting on a follow-up: the thread's `completedAt` before it was sent. The
+ * run it starts counts as finished only once `completedAt` differs — a
+ * compare, not a clock check, so the runner's clock does not matter.
+ */
+export interface WaitAfter {
+  completedAt: string | null;
 }
 
 export interface ThreadWaitsDeps {
@@ -64,7 +75,11 @@ export function isWaitingOn(threadId: string): boolean {
 
 async function dbReadThread(threadId: string): Promise<ThreadRecord | null> {
   const [row] = await db
-    .select({ status: threads.status, createdAt: threads.createdAt })
+    .select({
+      status: threads.status,
+      createdAt: threads.createdAt,
+      completedAt: threads.completedAt,
+    })
     .from(threads)
     .where(eq(threads.id, threadId));
   return row ?? null;
@@ -89,22 +104,32 @@ export function createThreadWaits(deps: ThreadWaitsDeps = {}) {
   const staleMs = deps.staleMs ?? THREAD_STALE_MS;
 
   /** The outcome once the thread is settled, or null while it still runs. */
-  async function look(threadId: string): Promise<ThreadOutcome | null> {
+  /** Whether the thread's last finish is a run after the one `after` names. */
+  const finishedAfter = (thread: ThreadRecord, after?: WaitAfter) =>
+    TERMINAL.has(thread.status) &&
+    (after === undefined || (thread.completedAt ?? null) !== after.completedAt);
+
+  async function finished(threadId: string, thread: ThreadRecord): Promise<ThreadOutcome> {
+    const status = thread.status as ThreadOutcome['status'];
+    return status === 'completed' ? { status, output: await readOutput(threadId) } : { status };
+  }
+
+  /** Running for longer than `staleMs` since it started (or was followed up). */
+  function staleOutcome(threadId: string, startedAt: string): ThreadOutcome | null {
+    if (now() - Date.parse(startedAt) <= staleMs) return null;
+    return {
+      status: 'stale',
+      reason: `The agent thread ${threadId} did not finish within ${Math.round(staleMs / 3_600_000)} h.`,
+    };
+  }
+
+  async function look(threadId: string, after?: WaitAfter): Promise<ThreadOutcome | null> {
     const thread = await readThread(threadId);
     if (!thread) {
       return { status: 'missing', reason: `The agent thread ${threadId} no longer exists.` };
     }
-    if (TERMINAL.has(thread.status)) {
-      const status = thread.status as ThreadOutcome['status'];
-      return status === 'completed' ? { status, output: await readOutput(threadId) } : { status };
-    }
-    if (now() - Date.parse(thread.createdAt) > staleMs) {
-      return {
-        status: 'stale',
-        reason: `The agent thread ${threadId} did not finish within ${Math.round(staleMs / 3_600_000)} h.`,
-      };
-    }
-    return null;
+    if (finishedAfter(thread, after)) return finished(threadId, thread);
+    return staleOutcome(threadId, after?.completedAt ?? thread.createdAt);
   }
 
   /** Sleep until the poll interval passes, the thread is signalled, or the run stops. */
@@ -124,10 +149,14 @@ export function createThreadWaits(deps: ThreadWaitsDeps = {}) {
     }
   }
 
-  return async function waitThread(threadId: string, signal: AbortSignal): Promise<ThreadOutcome> {
+  return async function waitThread(
+    threadId: string,
+    signal: AbortSignal,
+    after?: WaitAfter,
+  ): Promise<ThreadOutcome> {
     for (;;) {
       if (signal.aborted) return { status: 'cancelled', reason: 'The run was stopped.' };
-      const outcome = await look(threadId);
+      const outcome = await look(threadId, after);
       if (outcome) return outcome;
       await nap(threadId, signal);
     }

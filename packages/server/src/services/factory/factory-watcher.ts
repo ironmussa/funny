@@ -45,8 +45,8 @@ import {
   listWatchedFactories,
   type WatchedFactory,
 } from './factory-settings.js';
-import { stopFactoryThreads } from './factory-thread-stop.js';
-import type { ThreadOutcome } from './factory-thread-waits.js';
+import { sendFactoryFollowUp, stopFactoryThreads } from './factory-thread-requests.js';
+import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
 /** A repeating poll — a real interval in production, a fake in tests. */
 export interface FactoryPoll {
@@ -68,7 +68,9 @@ export interface FactoryWatcherDeps {
   /** Runtime resolver override for tests; defaults to the enabler's `project_sandbox_settings`. */
   resolveRuntime?: (userId: string, projectId: string) => Promise<ThreadRuntimeMode>;
   /** Thread wait override for tests; defaults to the DB status plus the terminal signal. */
-  waitThread?: (threadId: string, signal: AbortSignal) => Promise<ThreadOutcome>;
+  waitThread?: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
+  /** Follow-up override for tests; defaults to a message on the thread's runner, as the enabler. */
+  followUp?: (userId: string, threadId: string, content: string) => Promise<Result<void, string>>;
   /** Notification override for tests; defaults to Web Push. */
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
   /** Flow loader override for tests; defaults to the default branch, then the built-ins. */
@@ -125,6 +127,9 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     waitThread: d.waitThread,
     loadFlow: d.loadFlow,
     notify: d.notify,
+    followUp:
+      d.followUp ??
+      ((userId, threadId, content) => sendFactoryFollowUp(d.ports, userId, threadId, content)),
   });
   for (const factory of await listWatchedFactories([...IN_FLIGHT_STATES])) schedule(factory);
   log.info('Issue factory watcher started', { namespace: 'factory', jobs: jobs.size });

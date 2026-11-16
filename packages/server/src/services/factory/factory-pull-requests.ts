@@ -51,6 +51,8 @@ export interface FactoryPullRequestError {
 export interface FactoryMergeOptions {
   method?: MergeMethod;
   deleteBranch?: boolean;
+  /** Only these checks must be green (the flow's `wait_ci.required_checks`); all when absent. */
+  requiredChecks?: readonly string[];
 }
 
 export type FactoryMergeOutcome =
@@ -64,7 +66,11 @@ export type FactoryMergeOutcome =
   | { kind: 'not-mergeable'; reason: string };
 
 export interface FactoryPullRequests {
-  ciState(pr: FactoryPullRequestRef): ResultAsync<CiState, FactoryPullRequestError>;
+  /** With `required`, only those checks count (see `PullRequestCi.ciState`). */
+  ciState(
+    pr: FactoryPullRequestRef,
+    required?: readonly string[],
+  ): ResultAsync<CiState, FactoryPullRequestError>;
   /** Merges only when the checks are green; otherwise answers `not-green` without acting. */
   merge(
     pr: FactoryPullRequestRef,
@@ -141,14 +147,14 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
     );
 
   return {
-    ciState(pr) {
-      return pullRequestsFor(pr, 'read').ciState(pr.repo, pr.number).mapErr(callError);
+    ciState(pr, required) {
+      return pullRequestsFor(pr, 'read').ciState(pr.repo, pr.number, required).mapErr(callError);
     },
 
     merge(pr, options = {}) {
       const github = pullRequestsFor(pr, 'write');
       return github
-        .ciState(pr.repo, pr.number)
+        .ciState(pr.repo, pr.number, options.requiredChecks)
         .mapErr(callError)
         .andThen((ci): ResultAsync<FactoryMergeOutcome, FactoryPullRequestError> => {
           if (ci.kind !== 'green') return okAsync({ kind: 'not-green', ci });

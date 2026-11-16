@@ -9,8 +9,11 @@
 # a merge happens only on green checks.
 #
 # CI fix loop: when the checks fail (or the pull request conflicts with its
-# base), a fix agent gets the failing checks and their log excerpts, pushes a
-# fix to the same branch, and `wait_ci` looks again — up to 3 looks in all. A
+# base), the implementing agent gets the failing checks and their log excerpts
+# as a follow-up on its own thread (so it keeps the context of its change),
+# pushes a fix to the same branch, and `wait_ci` looks again — up to 3 looks
+# in all. Add `required_checks: [name, ...]` to `wait_ci` to wait on (and
+# merge on) only those checks. A
 # timeout or a GitHub access error is not retried. When the loop runs out, the
 # run fails and nothing is merged.
 #

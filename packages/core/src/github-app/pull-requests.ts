@@ -57,7 +57,16 @@ export type AutoMergeResult =
     };
 
 export interface PullRequestCi {
-  ciState(repo: string, number: number): ResultAsync<CiState, GithubCallError>;
+  /**
+   * The CI verdict of the pull request's head. With `required`, only the
+   * checks (or commit statuses) of those names count, and one not reported
+   * yet is pending.
+   */
+  ciState(
+    repo: string,
+    number: number,
+    required?: readonly string[],
+  ): ResultAsync<CiState, GithubCallError>;
   /** Take the pull request out of draft. */
   markReady(repo: string, number: number): ResultAsync<void, GithubCallError>;
   /**
@@ -145,6 +154,27 @@ function excerptOf(github: RepoGithub, repo: string, run: RestCheckRun) {
     .orElse(() => okAsync(tail(checkSummary(run))));
 }
 
+/**
+ * The check runs and statuses that count: all of them, or only the `required`
+ * names — then `missing` says whether one of those has not reported yet.
+ */
+function onlyRequired(
+  runs: RestCheckRun[],
+  status: RestCombinedStatus,
+  required?: readonly string[],
+): { runs: RestCheckRun[]; status: RestCombinedStatus; missing: boolean } {
+  if (!required?.length) return { runs, status, missing: false };
+  const wanted = new Set(required);
+  const keptRuns = runs.filter((run) => wanted.has(run.name));
+  const keptStatuses = status.statuses.filter((s) => wanted.has(s.context));
+  const reported = new Set([...keptRuns.map((r) => r.name), ...keptStatuses.map((s) => s.context)]);
+  return {
+    runs: keptRuns,
+    status: { statuses: keptStatuses },
+    missing: required.some((name) => !reported.has(name)),
+  };
+}
+
 export function createPullRequestCi(github: RepoGithub): PullRequestCi {
   const failingChecks = (
     repo: string,
@@ -171,7 +201,11 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
     );
   };
 
-  const stateOfCommit = (repo: string, sha: string): ResultAsync<CiState, GithubCallError> =>
+  const stateOfCommit = (
+    repo: string,
+    sha: string,
+    required?: readonly string[],
+  ): ResultAsync<CiState, GithubCallError> =>
     github
       .json<{ check_runs: RestCheckRun[] }>(
         repo,
@@ -181,8 +215,9 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
       .andThen((checks) =>
         github
           .json<RestCombinedStatus>(repo, 'GET', `/repos/${repo}/commits/${sha}/status`)
-          .andThen((status): ResultAsync<CiState, GithubCallError> => {
-            const runs = checks.check_runs;
+          .andThen((all): ResultAsync<CiState, GithubCallError> => {
+            const { runs, status, missing } = onlyRequired(checks.check_runs, all, required);
+            if (missing) return okAsync({ kind: 'pending' });
             if (runs.length === 0 && status.statuses.length === 0) return okAsync({ kind: 'none' });
             const pending =
               runs.some((r) => r.status !== 'completed') ||
@@ -198,11 +233,11 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
     github.json<RestPull>(repo, 'GET', `/repos/${repo}/pulls/${number}`);
 
   return {
-    ciState(repo, number) {
+    ciState(repo, number, required) {
       return pull(repo, number).andThen((pr) =>
         pr.mergeable === false || pr.mergeable_state === 'dirty'
           ? okAsync<CiState, GithubCallError>({ kind: 'conflict' })
-          : stateOfCommit(repo, pr.head.sha),
+          : stateOfCommit(repo, pr.head.sha, required),
       );
     },
     markReady(repo, number) {

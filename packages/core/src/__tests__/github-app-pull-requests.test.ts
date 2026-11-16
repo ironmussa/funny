@@ -32,6 +32,31 @@ const ciFor = (routes: Record<string, unknown>) => {
 };
 
 describe('pull request CI over GitHub (shared by the factory and the server)', () => {
+  test('required checks: only the named ones count, and a missing one is pending', async () => {
+    const routes = (runs: unknown[]) => ({
+      'GET /repos/o/r/pulls/7': pull,
+      'GET /repos/o/r/commits/abc/check-runs?per_page=100': { check_runs: runs },
+      'GET /repos/o/r/commits/abc/status': {
+        statuses: [{ context: 'deploy-preview', state: 'pending', description: null }],
+      },
+    });
+    const build = { id: 1, name: 'build', status: 'completed', conclusion: 'success' };
+    const lint = { id: 2, name: 'lint', status: 'completed', conclusion: 'failure' };
+
+    // A failing `lint` and a pending preview do not matter when only `build` is required.
+    const onlyBuild = ciFor(routes([build, lint]));
+    expect((await onlyBuild.ci.ciState('o/r', 7, ['build']))._unsafeUnwrap()).toEqual({
+      kind: 'green',
+    });
+    // Without the filter the pending preview keeps it pending.
+    expect((await onlyBuild.ci.ciState('o/r', 7))._unsafeUnwrap()).toEqual({ kind: 'pending' });
+    // A required check that has not reported yet is pending, not green.
+    const notYet = ciFor(routes([lint]));
+    expect((await notYet.ci.ciState('o/r', 7, ['build']))._unsafeUnwrap()).toEqual({
+      kind: 'pending',
+    });
+  });
+
   test('green when every check run completed successfully, with the given token', async () => {
     const { ci, calls } = ciFor({
       'GET /repos/o/r/pulls/7': pull,

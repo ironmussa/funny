@@ -31,7 +31,13 @@ import {
   stopFactoryWatcher,
 } from '../../../services/factory/factory-watcher.js';
 import type { StartThreadInput } from '../../../services/runner-thread-launcher.js';
-import { createTestDb, seedProject, seedProjectMember, seedThread } from '../../helpers/test-db.js';
+import {
+  createTestDb,
+  seedMessage,
+  seedProject,
+  seedProjectMember,
+  seedThread,
+} from '../../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
 
@@ -447,6 +453,7 @@ describe('factory flow', () => {
     const launcher = fakeLauncher();
     const github = fakeGithub('o/r', issue7, script);
     const notices: Array<{ title: string; body: string }> = [];
+    const followUps: Array<{ threadId: string; content: string }> = [];
     await startFactoryWatcher({
       ports,
       github,
@@ -455,9 +462,13 @@ describe('factory flow', () => {
       resolveRuntime,
       waitThread,
       notify: async (_userId, notice) => notices.push(notice),
+      followUp: async (_userId, threadId, content) => {
+        followUps.push({ threadId, content });
+        return ok(undefined);
+      },
     });
     await poll.ticks[0]!();
-    return { factoryId, launcher, github, poll, notices };
+    return { factoryId, launcher, github, poll, notices, followUps };
   }
 
   test('a completed agent step goes on to the pull request, green CI and the merge', async () => {
@@ -472,27 +483,31 @@ describe('factory flow', () => {
     checks: [{ name: 'test', conclusion: 'failure', excerpt: 'expected 1, got 2' }],
   };
 
-  test('red CI runs a fix agent with the failing log, then merges once green', async () => {
-    const { factoryId, launcher, github } = await runFlow(
+  test('red CI continues the implement thread with the failing log, then merges once green', async () => {
+    const { factoryId, launcher, github, followUps } = await runFlow(
       { ci: [red, { kind: 'green' }] },
       finishedThreads('completed'),
     );
     const run = await eventually(factoryId, (r) => r.state === 'merged');
-    expect(run.threadIds).toEqual(['t-1', 't-2']);
-    const fix = String(launcher.calls[1]!.body.prompt);
+    // The fix is a follow-up on the implement thread, keeping its context.
+    expect(launcher.calls).toHaveLength(1);
+    expect(run.threadIds).toEqual(['t-1', 't-1']);
+    expect(followUps.map((f) => f.threadId)).toEqual(['t-1']);
+    const fix = followUps[0]!.content;
     expect(fix).toContain('expected 1, got 2');
     expect(fix).toContain(`push to \`factory/issue-7-${run.id.slice(0, 8)}\``);
     expect(github.merges).toBe(1);
   });
 
   test('CI still red after the fix attempts waits for the member, notified, without merging', async () => {
-    const { factoryId, launcher, github, notices } = await runFlow(
+    const { factoryId, launcher, github, notices, followUps } = await runFlow(
       { ci: red },
       finishedThreads('completed'),
     );
     const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
-    // The implement agent plus two fixes: three looks at the CI in all.
-    expect(launcher.calls).toHaveLength(3);
+    // The implement agent plus two fixes on its thread: three looks at the CI in all.
+    expect(launcher.calls).toHaveLength(1);
+    expect(followUps).toHaveLength(2);
     expect(github.merges).toBe(0);
     expect(run.currentStep).toBe('ci');
     expect(notices).toHaveLength(1);
@@ -666,6 +681,47 @@ describe('factory flow', () => {
 
     await eventually(factoryId, (r) => r.state === 'merged');
     expect(launcher.calls).toHaveLength(1);
+  });
+
+  test('a resumed run does not resend a follow-up that reached the thread before a crash', async () => {
+    const factoryId = await seedInFlightRun(['t-impl']);
+    const runs = createFactoryRunsRepository();
+    const [seeded] = (await runs.list(factoryId))._unsafeUnwrap();
+    const sentAt = new Date().toISOString();
+    await runs.update(seeded!.id, {
+      prUrl: 'https://github.com/o/r/pull/9',
+      launchStartedAt: sentAt,
+    });
+    seedThread(testDb.db, { id: 't-impl', projectId: 'p1', userId: 'alice', status: 'completed' });
+    // The fix's follow-up reached the thread; the server crashed before recording it.
+    seedMessage(testDb.db, { id: 'm-fix', threadId: 't-impl', role: 'user', timestamp: sentAt });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    const followUps: string[] = [];
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('o/r', [], {
+        ci: [
+          { kind: 'failing', checks: [{ name: 'test', conclusion: 'failure', excerpt: 'x' }] },
+          { kind: 'green' },
+        ],
+      }),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+      waitThread: finishedThreads('completed'),
+      followUp: async (_userId, threadId) => {
+        followUps.push(threadId);
+        return ok(undefined);
+      },
+    });
+
+    await poll.ticks[0]!();
+
+    const run = await eventually(factoryId, (r) => r.state === 'merged');
+    expect(run.threadIds).toEqual(['t-impl', 't-impl']);
+    expect(followUps).toEqual([]);
+    expect(launcher.calls).toHaveLength(0);
   });
 
   test('the database refuses a second in-flight run for an issue', async () => {

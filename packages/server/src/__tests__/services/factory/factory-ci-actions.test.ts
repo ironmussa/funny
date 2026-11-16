@@ -108,6 +108,26 @@ describe('wait_ci', () => {
     });
   });
 
+  test('required checks are asked for, and merge holds the PR to the same ones', async () => {
+    const asked: unknown[] = [];
+    const merged: unknown[] = [];
+    const prs: FactoryPullRequests = {
+      ciState: (_pr, required) => {
+        asked.push(required);
+        return okAsync({ kind: 'green' });
+      },
+      merge: (_pr, options) => {
+        merged.push(options?.requiredChecks);
+        return okAsync({ kind: 'merged', method: 'squash', branchDeleted: false });
+      },
+    };
+    const actions = actionsFor(prs);
+    expect((await actions.waitCi({ requiredChecks: ['build'] })).ok).toBe(true);
+    expect((await actions.merge()).ok).toBe(true);
+    expect(asked).toEqual([['build']]);
+    expect(merged).toEqual([['build']]);
+  });
+
   test('stopping the run ends the wait', async () => {
     const controller = new AbortController();
     const { prs } = scripted([{ kind: 'pending' }]);

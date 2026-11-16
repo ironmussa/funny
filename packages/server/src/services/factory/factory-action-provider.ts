@@ -15,6 +15,10 @@
  *   (after a server restart) re-runs the flow, and the N-th agent step finds
  *   the thread it already started instead of starting another; a flow's control
  *   flow depends only on step results, so the order is the same.
+ * - Every agent step after the first CONTINUES the run's first thread with a
+ *   follow-up message (when `continuation` is given), so a CI fix keeps the
+ *   context of the implementation instead of starting cold. Such a step is
+ *   recorded under the same thread id again.
  * - `git_commit` / `git_push` are acknowledged: the server has no checkout, the
  *   agent commits and pushes on the runner. `create_pr` finds the pull request
  *   the agent opened from the run's branch.
@@ -38,7 +42,7 @@ import { createFactoryCiActions } from './factory-ci-actions.js';
 import type { FactoryGithubPort } from './factory-github.js';
 import type { FactoryPullRequestRef } from './factory-pull-requests.js';
 import type { UpdateRunInput } from './factory-runs.js';
-import type { ThreadOutcome } from './factory-thread-waits.js';
+import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
 /** Everything a run's steps are bound to. */
 export interface FactoryRunScope {
@@ -71,11 +75,28 @@ export interface FactoryActionProviderDeps {
   /** Start a thread on the enabler's runner (`startThreadOnRunner` for the enabler). */
   launch(body: Record<string, unknown>): Promise<Result<StartedThread, StartThreadError>>;
   /** Resolves with the thread's terminal status (or why it never will reach one). */
-  waitThread(threadId: string, signal: AbortSignal): Promise<ThreadOutcome>;
+  waitThread(threadId: string, signal: AbortSignal, after?: WaitAfter): Promise<ThreadOutcome>;
+  /** Continue the first thread for later agent steps; without it each step starts a thread. */
+  continuation?: FactoryContinuation;
   github: Pick<FactoryGithubPort, 'findPullRequest' | 'pullRequests'>;
   /** Write the run's progress; ignored once the run is terminal (e.g. stopped). */
   record(input: UpdateRunInput): Promise<void>;
   signal: AbortSignal;
+}
+
+/** Following up on a run's thread, as the enabler. */
+export interface FactoryContinuation {
+  followUp(threadId: string, content: string): Promise<Result<void, string>>;
+  /** The thread's `completedAt` now (before a follow-up runs it again). */
+  completedAt(threadId: string): Promise<string | null>;
+  /** Whether a member/user message reached the thread since `since` (an interrupted follow-up). */
+  followedUpSince(threadId: string, since: string): Promise<boolean>;
+}
+
+/** The thread an agent step waits on; `after` when a follow-up runs it again. */
+interface StepThread {
+  threadId: string;
+  after?: WaitAfter;
 }
 
 const PR_NUMBER = /\/pull\/(\d+)(?:$|[/?#])/;
@@ -150,14 +171,30 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     return found && !threadIds.includes(found) ? found : null;
   }
 
-  /** The thread of the current agent step: the recorded one, an adopted one, or a new one. */
-  async function threadFor(opts: SpawnAgentOpts, step: number): Promise<string | ActionResult> {
-    const recorded = threadIds[step];
-    if (recorded) return recorded;
-    const adopted = await adoptInterrupted(step);
-    if (adopted) return recordThread(adopted);
-    // Marked before the launch: a crash before the thread is recorded is
-    // adopted on resume instead of starting the agent twice.
+  /** Continue the run's first thread with this step's prompt (a later agent step). */
+  async function followUp(
+    continuation: FactoryContinuation,
+    first: string,
+    opts: SpawnAgentOpts,
+  ): Promise<StepThread | ActionResult> {
+    const since = pendingLaunch;
+    pendingLaunch = null;
+    if (since && (await continuation.followedUpSince(first, since))) {
+      // Sent before an interruption: wait for that run, do not send it twice.
+      return { threadId: await recordThread(first) };
+    }
+    const before = await continuation.completedAt(first);
+    await deps.record({ launchStartedAt: new Date().toISOString() });
+    const sent = await continuation.followUp(first, prompted(opts));
+    if (sent.isErr()) {
+      await deps.record({ launchStartedAt: null });
+      return { ok: false, error: `The agent could not continue: ${sent.error}` };
+    }
+    return { threadId: await recordThread(first), after: { completedAt: before } };
+  }
+
+  /** Start a new thread for this step, marked first so a crash in between is adopted. */
+  async function launchNew(opts: SpawnAgentOpts): Promise<StepThread | ActionResult> {
     await deps.record({ launchStartedAt: new Date().toISOString() });
     const launched = await deps.launch({
       projectId: scope.projectId,
@@ -168,23 +205,34 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       ...(opts.model ? { model: opts.model } : {}),
     });
     const threadId = launched.isOk() ? launched.value.threadId : undefined;
-    if (!threadId) {
-      await deps.record({ launchStartedAt: null });
-      return {
-        ok: false,
-        error: launched.isErr()
-          ? `The agent could not start: ${launched.error.message}`
-          : 'The agent could not start: the runner returned no thread.',
-      };
-    }
-    return recordThread(threadId);
+    if (threadId) return { threadId: await recordThread(threadId) };
+    await deps.record({ launchStartedAt: null });
+    return {
+      ok: false,
+      error: launched.isErr()
+        ? `The agent could not start: ${launched.error.message}`
+        : 'The agent could not start: the runner returned no thread.',
+    };
+  }
+
+  /** The thread of the current agent step: recorded, continued, adopted, or new. */
+  async function threadFor(opts: SpawnAgentOpts, step: number): Promise<StepThread | ActionResult> {
+    const recorded = threadIds[step];
+    if (recorded) return { threadId: recorded };
+    const first = threadIds[0];
+    if (step > 0 && first && deps.continuation) return followUp(deps.continuation, first, opts);
+    const adopted = await adoptInterrupted(step);
+    return adopted ? { threadId: await recordThread(adopted) } : launchNew(opts);
   }
 
   return {
     async spawnAgent(opts) {
-      const thread = await threadFor(opts, agentSteps++);
-      if (typeof thread !== 'string') return thread;
-      return outcomeResult(thread, await deps.waitThread(thread, deps.signal));
+      const step = await threadFor(opts, agentSteps++);
+      if (!('threadId' in step)) return step;
+      return outcomeResult(
+        step.threadId,
+        await deps.waitThread(step.threadId, deps.signal, step.after),
+      );
     },
 
     async gitCommit() {

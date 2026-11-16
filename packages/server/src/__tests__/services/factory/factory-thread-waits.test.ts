@@ -41,6 +41,30 @@ describe('factory thread waits', () => {
     expect(isWaitingOn('t1')).toBe(false);
   });
 
+  test('a follow-up counts as done only once the thread finishes again', async () => {
+    const before = '2026-11-16T10:00:00.000Z';
+    // Still showing the previous run's completion: the follow-up has not run yet.
+    const record = {
+      current: {
+        status: 'completed',
+        createdAt: created,
+        completedAt: before,
+      } as ThreadRecord | null,
+    };
+    const wait = waitsOver(record)('t4', new AbortController().signal, { completedAt: before });
+    await Bun.sleep(1);
+    expect(isWaitingOn('t4')).toBe(true);
+
+    record.current = {
+      status: 'completed',
+      createdAt: created,
+      completedAt: '2026-11-16T10:05:00.000Z',
+    };
+    signalThreadTerminal('t4');
+
+    expect((await wait).status).toBe('completed');
+  });
+
   test('a thread that no longer exists fails the step', async () => {
     const outcome = await waitsOver({ current: null })('gone', new AbortController().signal);
     expect(outcome.status).toBe('missing');

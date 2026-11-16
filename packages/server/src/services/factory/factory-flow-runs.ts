@@ -31,7 +31,7 @@ import { and, asc, eq, gte } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
-import { threads } from '../../db/schema.js';
+import { messages, threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import type {
   StartedThread,
@@ -48,7 +48,7 @@ import type {
   UpdateRunInput,
 } from './factory-runs.js';
 import type { WatchedFactory } from './factory-settings.js';
-import { createThreadWaits, type ThreadOutcome } from './factory-thread-waits.js';
+import { createThreadWaits, type ThreadOutcome, type WaitAfter } from './factory-thread-waits.js';
 
 export interface FactoryRunJob {
   factory: WatchedFactory;
@@ -62,7 +62,12 @@ export interface FactoryFlowRunsDeps {
   runs: ReturnType<typeof createFactoryRunsRepository>;
   github: FactoryGithubPort;
   launch(input: StartThreadInput): Promise<Result<StartedThread, StartThreadError>>;
-  waitThread?: (threadId: string, signal: AbortSignal) => Promise<ThreadOutcome>;
+  waitThread?: (threadId: string, signal: AbortSignal, after?: WaitAfter) => Promise<ThreadOutcome>;
+  /**
+   * Send a follow-up to the enabler's thread, so later agent steps continue
+   * the first one; without it each agent step starts a new thread.
+   */
+  followUp?: (userId: string, threadId: string, content: string) => Promise<Result<void, string>>;
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Tell the enabler a run waits for them; defaults to Web Push. */
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
@@ -86,6 +91,33 @@ interface FlowTrace {
 /** Allowance for the runner's clock being behind the server's when matching a launch. */
 const LAUNCH_CLOCK_SLACK_MS = 60 * 1000;
 
+const slackBefore = (since: string) =>
+  new Date(Date.parse(since) - LAUNCH_CLOCK_SLACK_MS).toISOString();
+
+async function threadCompletedAt(threadId: string): Promise<string | null> {
+  const [row] = await db
+    .select({ completedAt: threads.completedAt })
+    .from(threads)
+    .where(eq(threads.id, threadId));
+  return row?.completedAt ?? null;
+}
+
+/** A user message on the thread since `since`: an interrupted follow-up reached it. */
+async function followedUpSince(threadId: string, since: string): Promise<boolean> {
+  const [row] = await db
+    .select({ id: messages.id })
+    .from(messages)
+    .where(
+      and(
+        eq(messages.threadId, threadId),
+        eq(messages.role, 'user'),
+        gte(messages.timestamp, slackBefore(since)),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 /**
  * The factory thread an interrupted launch started: the enabler's, in the
  * project, with the step's title, created since the launch began. One run per
@@ -97,7 +129,7 @@ async function findLaunchedThread(
   title: string,
   since: string,
 ): Promise<string | null> {
-  const after = new Date(Date.parse(since) - LAUNCH_CLOCK_SLACK_MS).toISOString();
+  const after = slackBefore(since);
   const [row] = await db
     .select({ id: threads.id })
     .from(threads)
@@ -260,6 +292,13 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       findLaunched: (title, since) => findLaunchedThread(scope, title, since),
       launch: (body) => deps.launch({ userId: scope.userId, body }),
       waitThread,
+      continuation: deps.followUp
+        ? {
+            followUp: (threadId, content) => deps.followUp!(scope.userId, threadId, content),
+            completedAt: threadCompletedAt,
+            followedUpSince,
+          }
+        : undefined,
       github: deps.github,
       record,
       signal: controller.signal,

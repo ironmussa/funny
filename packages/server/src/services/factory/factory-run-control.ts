@@ -28,7 +28,7 @@ import { db } from '../../db/index.js';
 import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
-import { stopFactoryThreads } from './factory-thread-stop.js';
+import { stopFactoryThreads } from './factory-thread-requests.js';
 import { signalThreadTerminal } from './factory-thread-waits.js';
 import { factoryRunnerPorts, pokeFactory, stopFactoryFlow } from './factory-watcher.js';
 

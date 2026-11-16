@@ -18,6 +18,8 @@
  *   skip the CI — and as green ("no CI") after it.
  * - `merge` merges (or enables auto-merge) only on green checks, and reports
  *   the run merged; anything else is not ok and leaves the PR alone.
+ * - `required_checks` narrows both to the named checks (a named check not
+ *   reported yet is pending); `merge` uses the names of the last `wait_ci`.
  */
 
 import type { CiState, MergeMethod } from '@funny/core/github-app';
@@ -127,11 +129,11 @@ export function createFactoryCiActions(deps: FactoryCiActionsDeps) {
   const sleep = deps.sleep ?? interruptibleSleep;
   const now = deps.now ?? Date.now;
 
+  /** The checks the last `wait_ci` waited on; `merge` holds the PR to the same ones. */
+  let required: readonly string[] | undefined;
+
   async function waitCi(options: WaitCiOptions = {}): Promise<CiActionResult> {
-    if (options.requiredChecks?.length) {
-      // Refused rather than ignored: waiting on every check is not what the flow asked for.
-      return { ok: false, error: 'wait_ci does not support required_checks yet.' };
-    }
+    required = options.requiredChecks?.length ? options.requiredChecks : undefined;
     const pr = deps.pullRequest();
     if (!pr) return noPullRequest;
     return poll(
@@ -167,7 +169,7 @@ export function createFactoryCiActions(deps: FactoryCiActionsDeps) {
     timeoutMs: number,
     intervalMs: number,
   ): Promise<CiActionResult | null> {
-    const ci = await deps.prs.ciState(pr);
+    const ci = await deps.prs.ciState(pr, required);
     if (ci.isErr())
       return { ok: false, error: ci.error.message, metadata: { kind: ci.error.kind } };
     return verdictOf(ci.value, elapsedMs) ?? timedOut(elapsedMs + intervalMs, timeoutMs);
@@ -179,6 +181,7 @@ export function createFactoryCiActions(deps: FactoryCiActionsDeps) {
     const merged = await deps.prs.merge(pr, {
       method: options.method,
       deleteBranch: options.deleteBranch,
+      requiredChecks: required,
     });
     if (merged.isErr()) {
       return { ok: false, error: merged.error.message, metadata: { kind: merged.error.kind } };

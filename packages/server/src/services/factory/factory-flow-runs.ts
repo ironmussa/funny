@@ -27,7 +27,7 @@
  */
 
 import { nullReporter, runPipeline } from '@funny/pipelines';
-import { and, asc, eq, gte } from 'drizzle-orm';
+import { and, asc, eq, gte, like } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
 
 import { db } from '../../db/index.js';
@@ -46,10 +46,11 @@ import {
 } from './factory-action-provider.js';
 import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
-import type {
-  createFactoryRunsRepository,
-  FactoryRunView,
-  UpdateRunInput,
+import {
+  REOPENED_STEP,
+  type createFactoryRunsRepository,
+  type FactoryRunView,
+  type UpdateRunInput,
 } from './factory-runs.js';
 import type { WatchedFactory } from './factory-settings.js';
 import { createThreadWaits, type ThreadOutcome, type WaitAfter } from './factory-thread-waits.js';
@@ -72,6 +73,8 @@ export interface FactoryFlowRunsDeps {
    * the first one; without it each agent step starts a new thread.
    */
   followUp?: (userId: string, threadId: string, content: string) => Promise<Result<void, string>>;
+  /** Stop the enabler's threads (one a launch started after its run was stopped). */
+  stopThreads?: (userId: string, threadIds: string[]) => Promise<void>;
   loadFlow?: (job: FactoryRunJob) => Promise<Result<FactoryFlow, FactoryFlowError>>;
   /** Tell the enabler a run waits for them; defaults to Web Push. */
   notify?: (userId: string, message: WaitingNotice) => Promise<unknown>;
@@ -130,7 +133,7 @@ async function followedUpSince(threadId: string, since: string): Promise<boolean
  */
 async function findLaunchedThread(
   scope: { userId: string; projectId: string },
-  title: string,
+  titlePrefix: string,
   since: string,
 ): Promise<string | null> {
   const after = slackBefore(since);
@@ -142,7 +145,8 @@ async function findLaunchedThread(
         eq(threads.userId, scope.userId),
         eq(threads.projectId, scope.projectId),
         eq(threads.source, 'factory'),
-        eq(threads.title, title),
+        // The prefix (`[Factory] #N `) is stable; the issue title may have changed.
+        like(threads.title, `${titlePrefix}%`),
         gte(threads.createdAt, after),
       ),
     )
@@ -157,6 +161,9 @@ export type FactoryRunStart = 'started' | 'not-started';
 /** The branch a run's agent pushes and opens its pull request from. */
 const runBranch = (run: FactoryRunView): string =>
   `factory/issue-${run.issueNumber}-${run.id.slice(0, 8)}`;
+
+/** A run a retry or take-over put back in flight (it has a history). */
+const wasReopened = (job: FactoryRunJob) => job.run.currentStep === REOPENED_STEP;
 
 export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const active = new Map<string, AbortController>();
@@ -185,7 +192,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     });
     if (error.kind === 'invalid') {
       await deps.runs.updateInFlight(job.run.id, { state: 'failed', currentStep: null });
-    } else if (job.run.threadIds.length === 0) {
+    } else if (job.run.threadIds.length === 0 && !wasReopened(job)) {
+      // A run that never ran is dropped; a retried one stays queued for a later tick.
       await deps.runs.remove(job.run.id);
     }
   }
@@ -233,7 +241,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   ): Promise<void> {
     const { run } = job;
     if (outcome === 'cancelled') return;
-    if (outcome === 'failed' && !trace.agentsRan) {
+    if (outcome === 'failed' && !trace.agentsRan && !wasReopened(job)) {
+      // Never ran (e.g. the runner is offline): not an attempt.
       await deps.runs.remove(run.id);
     } else if (outcome === 'failed' && !trace.prOpen) {
       await deps.runs.updateInFlight(run.id, { state: 'failed', currentStep: trace.step });
@@ -268,6 +277,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     if (trace.agentsRan) agentStarted();
 
     const record = async (input: UpdateRunInput): Promise<void> => {
+      // A stopped flow writes nothing more: its run may already be retried.
+      if (controller.signal.aborted) return;
       const live = await deps.runs.updateInFlight(job.run.id, input);
       // Stopped (or finished) elsewhere: stop driving it.
       if (live.isOk() && !live.value) controller.abort();
@@ -293,7 +304,8 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       threadIds: job.run.threadIds,
       prUrl: job.run.prUrl,
       launchStartedAt: job.run.launchStartedAt,
-      findLaunched: (title, since) => findLaunchedThread(scope, title, since),
+      findLaunched: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since),
+      abandon: async (threadId) => deps.stopThreads?.(scope.userId, [threadId]),
       launch: (body) => deps.launch({ userId: scope.userId, body }),
       waitThread,
       continuation: deps.followUp
@@ -369,8 +381,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
 
     /** Stop driving one run's flow (the run was stopped); nothing more is written for it. */
     stop(runId: string): void {
+      // It stays active until its flow returns, so a retry cannot start a
+      // second flow for the run while this one is still unwinding.
       active.get(runId)?.abort();
-      active.delete(runId);
     },
 
     /** Stop driving every flow (shutdown); their runs resume on the next start. */

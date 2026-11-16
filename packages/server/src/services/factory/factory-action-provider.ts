@@ -73,8 +73,14 @@ export interface FactoryActionProviderDeps {
    * that step first looks for the thread it may have started.
    */
   launchStartedAt: string | null;
-  /** A factory thread of the enabler with this title created since `since`, if any. */
-  findLaunched(title: string, since: string): Promise<string | null>;
+  /**
+   * A factory thread of the enabler whose title starts with `titlePrefix`
+   * (`[Factory] #N `, stable even if the issue is renamed) created since
+   * `since`, if any.
+   */
+  findLaunched(titlePrefix: string, since: string): Promise<string | null>;
+  /** Stop a thread this run started after it was stopped (a launch racing the stop). */
+  abandon?(threadId: string): Promise<void>;
   /** Start a thread on the enabler's runner (`startThreadOnRunner` for the enabler). */
   launch(body: Record<string, unknown>): Promise<Result<StartedThread, StartThreadError>>;
   /** Resolves with the thread's terminal status (or why it never will reach one). */
@@ -100,7 +106,12 @@ export interface FactoryContinuation {
 interface StepThread {
   threadId: string;
   after?: WaitAfter;
+  /** A step recorded before a resume, retry or take-over. */
+  replayed?: boolean;
 }
+
+/** Allowance for the runner's clock when comparing its timestamps with the server's. */
+const CLOCK_SLACK_MS = 60 * 1000;
 
 const PR_NUMBER = /\/pull\/(\d+)(?:$|[/?#])/;
 
@@ -132,7 +143,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   let agentSteps = 0;
   let prUrl = deps.prUrl;
   let pendingLaunch = deps.launchStartedAt;
-  const title = `[Factory] #${scope.issueNumber} ${scope.issueTitle}`.slice(0, 200);
+  const titlePrefix = `[Factory] #${scope.issueNumber} `;
+  const title = `${titlePrefix}${scope.issueTitle}`.slice(0, 200);
 
   const pullRequest = (): FactoryPullRequestRef | null => {
     const number = prUrl ? Number(PR_NUMBER.exec(prUrl)?.[1]) : NaN;
@@ -162,6 +174,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       threadIds: [...threadIds],
       launchStartedAt: null,
     });
+    // Stopped while the launch was in flight: the stop missed this thread.
+    if (deps.signal.aborted) await deps.abandon?.(threadId);
     return threadId;
   }
 
@@ -170,7 +184,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     const since = pendingLaunch;
     pendingLaunch = null;
     if (!since || step !== threadIds.length) return null;
-    const found = await deps.findLaunched(title, since);
+    const found = await deps.findLaunched(titlePrefix, since);
     return found && !threadIds.includes(found) ? found : null;
   }
 
@@ -184,16 +198,36 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
     pendingLaunch = null;
     if (since && (await continuation.followedUpSince(first, since))) {
       // Sent before an interruption: wait for that run, do not send it twice.
-      return { threadId: await recordThread(first) };
+      return {
+        threadId: await recordThread(first),
+        after: await interruptedAfter(continuation, first, since),
+      };
     }
     const before = await continuation.completedAt(first);
-    await deps.record({ launchStartedAt: new Date().toISOString() });
+    const sentAt = new Date().toISOString();
+    await deps.record({ launchStartedAt: sentAt });
     const sent = await continuation.followUp(first, prompted(opts));
     if (sent.isErr()) {
       await deps.record({ launchStartedAt: null });
       return { ok: false, error: `The agent could not continue: ${sent.error}` };
     }
-    return { threadId: await recordThread(first), after: { completedAt: before } };
+    return { threadId: await recordThread(first), after: { completedAt: before, sentAt } };
+  }
+
+  /**
+   * What an adopted (interrupted) follow-up waits for: when the thread last
+   * finished before the follow-up was sent, the follow-up's own run has not
+   * finished yet, so wait for `completedAt` to change.
+   */
+  async function interruptedAfter(
+    continuation: FactoryContinuation,
+    threadId: string,
+    since: string,
+  ): Promise<WaitAfter | undefined> {
+    const current = await continuation.completedAt(threadId);
+    const finishedBefore =
+      current !== null && Date.parse(current) < Date.parse(since) - CLOCK_SLACK_MS;
+    return finishedBefore ? { completedAt: current, sentAt: since } : undefined;
   }
 
   /** Start a new thread for this step, marked first so a crash in between is adopted. */
@@ -221,7 +255,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   /** The thread of the current agent step: recorded, continued, adopted, or new. */
   async function threadFor(opts: SpawnAgentOpts, step: number): Promise<StepThread | ActionResult> {
     const recorded = threadIds[step];
-    if (recorded) return { threadId: recorded };
+    if (recorded) return { threadId: recorded, replayed: true };
     const first = threadIds[0];
     if (step > 0 && first && deps.continuation) return followUp(deps.continuation, first, opts);
     const adopted = await adoptInterrupted(step);
@@ -230,8 +264,15 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
 
   return {
     async spawnAgent(opts) {
-      const step = await threadFor(opts, agentSteps++);
+      const index = agentSteps++;
+      const step = await threadFor(opts, index);
       if (!('threadId' in step)) return step;
+      // A replayed step that a LATER recorded step continued on the same thread
+      // finished before that one started: waiting on the thread now would read
+      // the later step's run instead of this one.
+      if (step.replayed && threadIds.slice(index + 1).includes(step.threadId)) {
+        return { ok: true, output: '', metadata: { threadId: step.threadId, replayed: true } };
+      }
       return outcomeResult(
         step.threadId,
         await deps.waitThread(step.threadId, deps.signal, step.after),

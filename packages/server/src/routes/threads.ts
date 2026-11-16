@@ -10,7 +10,7 @@
 import type { CommentAuthor, Thread, ThreadComment } from '@funny/shared';
 import { THREAD_COMMENT_EVENT, THREAD_COMMENT_DELETED_EVENT } from '@funny/shared/socket-events';
 import { inArray } from 'drizzle-orm';
-import { Hono, type Context } from 'hono';
+import { Hono, type Context, type Next } from 'hono';
 import type { Result } from 'neverthrow';
 import { z } from 'zod';
 
@@ -42,6 +42,7 @@ import {
   type ForkVariant,
 } from '../modules/threads/index.js';
 import { forgetThreadOwnership } from '../services/data-ownership.js';
+import { noteOwnerFollowUp } from '../services/factory/factory-follow-ups.js';
 import * as messageQueueRepo from '../services/message-queue-repository.js';
 import {
   authorizedRunnerRequests,
@@ -409,12 +410,25 @@ threadRoutes.post('/:id/scheduler/workflow-event', async (c) => {
   return c.json({ ok: true });
 });
 
+/**
+ * A follow-up the OWNER sent to an issue-factory thread may take its parked
+ * run over (services/factory/factory-run-control.ts); a steer sharee's may not.
+ * Noted only once the runner accepted it.
+ */
+export async function noteFactoryOwnerFollowUp(c: Context<ServerEnv>, next: Next) {
+  await next();
+  const thread = c.get('thread') as { id: string; userId: string; source?: string } | undefined;
+  if (thread?.source === 'factory' && thread.userId === c.get('userId') && c.res.status < 400) {
+    noteOwnerFollowUp(thread.id);
+  }
+}
+
 // POST /api/threads/:id/message — send message to running agent.
 // ALLOW-LISTED for steer sharees (thread-sharing-steer): owner OR a sharee
 // whose grant level is `steer`. This is one of only two runner-bound actions a
 // non-owner may reach; the gate runs BEFORE proxyToRunner so a `view` sharee /
 // non-sharee gets 404 here instead of crossing runner isolation.
-threadRoutes.post('/:id/message', requireThreadSteer, proxyToRunner);
+threadRoutes.post('/:id/message', requireThreadSteer, noteFactoryOwnerFollowUp, proxyToRunner);
 
 // A follow-up on a sandbox thread whose setup failed: provision a new sandbox
 // for it and start the agent there (thread-sandboxes). Owner only.

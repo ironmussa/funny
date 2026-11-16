@@ -27,6 +27,7 @@ import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { db } from '../../db/index.js';
 import { threads } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
+import { forgetOwnerFollowUp, ownerFollowUpAt } from './factory-follow-ups.js';
 import { createFactoryRunsRepository, type FactoryRunView } from './factory-runs.js';
 import { stopFactoryThreads } from './factory-thread-requests.js';
 import { signalThreadTerminal } from './factory-thread-waits.js';
@@ -144,6 +145,13 @@ export function createFactoryRunControl(runs = createFactoryRunsRepository()) {
  * waiting on it, and when a member's follow-up completed the last agent thread
  * of a failed or parked run, put the run back in flight (take over).
  */
+/** Whether the owner followed up on the thread after the run parked (`completedAt`). */
+function followedUpAfterParking(run: FactoryRunView, threadId: string): boolean {
+  const noted = ownerFollowUpAt(threadId);
+  if (noted === undefined || !run.completedAt) return false;
+  return noted >= Date.parse(run.completedAt);
+}
+
 export async function onFactoryThreadTerminal(threadId: string, status: string): Promise<void> {
   signalThreadTerminal(threadId);
   if (status !== 'completed') return;
@@ -151,7 +159,8 @@ export async function onFactoryThreadTerminal(threadId: string, status: string):
   const found = await runs.reopenableByThread(threadId);
   if (found.isErr()) return;
   for (const run of found.value) {
-    if (run.threadIds.at(-1) !== threadId) continue;
+    if (run.threadIds.at(-1) !== threadId || !followedUpAfterParking(run, threadId)) continue;
+    forgetOwnerFollowUp(threadId);
     const reopened = await runs.reopen(run.id, run.threadIds);
     if (reopened.isOk() && reopened.value) {
       log.info('Issue factory run taken over by a follow-up', {

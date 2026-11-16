@@ -154,6 +154,10 @@ function excerptOf(github: RepoGithub, repo: string, run: RestCheckRun) {
     .orElse(() => okAsync(tail(checkSummary(run))));
 }
 
+const anyFailed = (runs: RestCheckRun[], status: RestCombinedStatus) =>
+  runs.some((run) => run.conclusion && FAILED_CONCLUSIONS.has(run.conclusion)) ||
+  status.statuses.some((s) => s.state === 'failure' || s.state === 'error');
+
 /**
  * The check runs and statuses that count: all of them, or only the `required`
  * names — then `missing` says whether one of those has not reported yet.
@@ -217,7 +221,9 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
           .json<RestCombinedStatus>(repo, 'GET', `/repos/${repo}/commits/${sha}/status`)
           .andThen((all): ResultAsync<CiState, GithubCallError> => {
             const { runs, status, missing } = onlyRequired(checks.check_runs, all, required);
-            if (missing) return okAsync({ kind: 'pending' });
+            // A required check that already failed is red even while another
+            // required one has not reported: the fix loop should not wait on it.
+            if (missing && !anyFailed(runs, status)) return okAsync({ kind: 'pending' });
             if (runs.length === 0 && status.statuses.length === 0) return okAsync({ kind: 'none' });
             const pending =
               runs.some((r) => r.status !== 'completed') ||

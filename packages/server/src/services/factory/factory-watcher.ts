@@ -20,6 +20,7 @@
  * @domain layer: application
  */
 
+import { sleep as interruptibleSleep } from '@funny/shared/async';
 import { and, eq } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
 
@@ -103,6 +104,9 @@ const startIntervalPoll: CreatePoll = (onTick) => {
   return { stop: () => clearInterval(timer) };
 };
 
+/** How long admission waits for a run's first agent before counting it as started. */
+const ADMIT_WAIT_MS = 15 * 1000;
+
 /** Runs of an issue that may fail before the factory stops re-admitting it. */
 export const MAX_ATTEMPTS = 3;
 
@@ -143,6 +147,7 @@ export async function startFactoryWatcher(d: FactoryWatcherDeps): Promise<void> 
     waitThread: d.waitThread,
     loadFlow: d.loadFlow,
     notify: d.notify,
+    stopThreads: (userId, threadIds) => stopFactoryThreads(d.ports, userId, threadIds),
     followUp:
       d.followUp ??
       ((userId, threadId, content) => sendFactoryFollowUp(d.ports, userId, threadId, content)),
@@ -414,7 +419,9 @@ async function resumeRuns(factory: WatchedFactory, repo: string, mode: LaunchMod
       });
       continue;
     }
-    await flows.start({ factory, repo, mode, issue: issue.value, run });
+    // Not awaited: a resumed flow may wait on a thread or on CI for hours, and
+    // the tick must stay free (`isActive` keeps a second start out).
+    void flows.start({ factory, repo, mode, issue: issue.value, run });
   }
 }
 
@@ -440,7 +447,17 @@ async function startImplement(
     return false;
   }
 
-  const started = await flows.start({ factory, repo, mode, issue, run: run.value });
+  // Wait for the first agent to be recorded so a launch that fails frees its
+  // slot this tick, but not longer than ADMIT_WAIT_MS: a flow that does not
+  // start with an agent (or a slow sandbox) must not hold the tick.
+  const timer = new AbortController();
+  const started = await Promise.race([
+    flows.start({ factory, repo, mode, issue, run: run.value }),
+    interruptibleSleep(ADMIT_WAIT_MS, timer.signal).then(
+      () => 'started' as const,
+      () => 'started' as const,
+    ),
+  ]).finally(() => timer.abort());
   log.info('Issue factory run admitted', {
     namespace: 'factory',
     factoryId: factory.id,

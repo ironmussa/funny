@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import type { CiState } from '@funny/core/github-app';
 import { err, ok, okAsync } from 'neverthrow';
 
+import { noteOwnerFollowUp } from '../../../services/factory/factory-follow-ups.js';
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
 import type { FactoryMergeOutcome } from '../../../services/factory/factory-pull-requests.js';
 import {
@@ -833,6 +834,17 @@ describe('factory operator controls', () => {
     return { poll, launcher };
   }
 
+  /** A run that parked a minute ago (its `completedAt` is when it parked). */
+  async function seedParkedRun(factoryId: string, threadIds: string[]) {
+    const run = await seedRun(factoryId, 'working', threadIds);
+    await createFactoryRunsRepository().update(run.id, { state: 'waiting_human' });
+    const parked = new Date(Date.now() - 60_000).toISOString();
+    testDb.sqlite
+      .query('UPDATE factory_runs SET completed_at = ? WHERE id = ?')
+      .run(parked, run.id);
+    return (await createFactoryRunsRepository().get(run.id))._unsafeUnwrap()!;
+  }
+
   async function seedRun(factoryId: string, state: FactoryRunView['state'], threadIds: string[]) {
     return (
       await createFactoryRunsRepository().start({ factoryId, issueNumber: 7, threadIds, state })
@@ -936,7 +948,7 @@ describe('factory operator controls', () => {
   test("a member's follow-up on a waiting run's thread takes the run over", async () => {
     const factoryId = await enableFactory();
     seedThread(testDb.db, { id: 't-impl', projectId: 'p1', userId: 'alice', status: 'completed' });
-    await seedRun(factoryId, 'waiting_human', ['t-impl']);
+    await seedParkedRun(factoryId, ['t-impl']);
     // The real wait: the replayed step reads t-impl's persisted status.
     const poll = fakePoll();
     const launcher = fakeLauncher();
@@ -949,16 +961,53 @@ describe('factory operator controls', () => {
       notify: async () => undefined,
     });
 
-    // The member's follow-up ran on t-impl and completed again.
+    // The owner's follow-up (noted by the message route) ran on t-impl and completed again.
+    noteOwnerFollowUp('t-impl');
     await onFactoryThreadTerminal('t-impl', 'completed');
 
     await eventually(factoryId, (r) => r.state === 'merged');
     expect(launcher.calls).toHaveLength(0);
   });
 
+  test('a completion with no owner follow-up since the run parked does not reopen it', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedParkedRun(factoryId, ['t-s']);
+    // A steer sharee's follow-up is never noted, and a duplicate terminal
+    // write has no follow-up at all: neither moves the flow on to a merge.
+    await onFactoryThreadTerminal('t-s', 'completed');
+    // A note from before the run parked does not count either.
+    noteOwnerFollowUp('t-s', Date.parse(run.completedAt!) - 1000);
+    await onFactoryThreadTerminal('t-s', 'completed');
+    const after = (await createFactoryRunsRepository().get(run.id))._unsafeUnwrap();
+    expect(after!.state).toBe('waiting_human');
+  });
+
+  test('retrying while the runner is offline keeps the run, failed, instead of dropping it', async () => {
+    const factoryId = await enableFactory();
+    seedThread(testDb.db, { id: 't-bad', projectId: 'p1', userId: 'alice', status: 'failed' });
+    const run = await seedRun(factoryId, 'failed', ['t-bad']);
+    const poll = fakePoll();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('o/r', []),
+      createPoll: poll.createPoll,
+      launch: fakeLauncher('offline').launch,
+      resolveRuntime,
+      waitThread: pendingThreads,
+      notify: async () => undefined,
+    });
+
+    (await createFactoryRunControl().retry(factoryId, run.id))._unsafeUnwrap();
+
+    const after = await eventually(factoryId, (r) => r.state === 'failed');
+    expect(after.id).toBe(run.id);
+  });
+
   test('a follow-up that fails, or on an earlier thread, does not reopen the run', async () => {
     const factoryId = await enableFactory();
-    const run = await seedRun(factoryId, 'waiting_human', ['t-a', 't-b']);
+    const run = await seedParkedRun(factoryId, ['t-a', 't-b']);
+    noteOwnerFollowUp('t-a');
+    noteOwnerFollowUp('t-b');
     await onFactoryThreadTerminal('t-b', 'failed');
     await onFactoryThreadTerminal('t-a', 'completed');
     const after = (await createFactoryRunsRepository().get(run.id))._unsafeUnwrap();

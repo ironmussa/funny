@@ -50,6 +50,8 @@ export interface ThreadRecord {
  */
 export interface WaitAfter {
   completedAt: string | null;
+  /** When the follow-up was sent: the stale limit counts from here. */
+  sentAt: string;
 }
 
 export interface ThreadWaitsDeps {
@@ -129,7 +131,7 @@ export function createThreadWaits(deps: ThreadWaitsDeps = {}) {
       return { status: 'missing', reason: `The agent thread ${threadId} no longer exists.` };
     }
     if (finishedAfter(thread, after)) return finished(threadId, thread);
-    return staleOutcome(threadId, after?.completedAt ?? thread.createdAt);
+    return staleOutcome(threadId, after?.sentAt ?? thread.createdAt);
   }
 
   /** Sleep until the poll interval passes, the thread is signalled, or the run stops. */

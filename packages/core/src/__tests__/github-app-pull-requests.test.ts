@@ -55,6 +55,13 @@ describe('pull request CI over GitHub (shared by the factory and the server)', (
     expect((await notYet.ci.ciState('o/r', 7, ['build']))._unsafeUnwrap()).toEqual({
       kind: 'pending',
     });
+    // But a required check that already failed is red even while another has not reported.
+    const redFirst = ciFor({
+      ...routes([lint]),
+      'GET /repos/o/r/commits/abc/status': { statuses: [] },
+    });
+    const state = (await redFirst.ci.ciState('o/r', 7, ['lint', 'e2e']))._unsafeUnwrap();
+    expect(state.kind).toBe('failing');
   });
 
   test('green when every check run completed successfully, with the given token', async () => {

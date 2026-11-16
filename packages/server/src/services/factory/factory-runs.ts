@@ -10,7 +10,7 @@ import { parseStoredJson } from '@funny/shared/json-validation';
  * `activeByIssue` for admission (one run per issue) and the Factory tab lists
  * them per factory.
  */
-import { and, desc, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, desc, eq, inArray, like, notInArray } from 'drizzle-orm';
 import { okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
@@ -48,6 +48,13 @@ export const IN_FLIGHT_STATES = [
   'waiting_ci',
   'fixing',
 ] as const satisfies FactoryRunState[];
+
+/**
+ * The `currentStep` of a run a retry or take-over put back in flight, until its
+ * flow enters a step: such a run has a history, so a flow that cannot start
+ * again marks it failed instead of dropping it as never started.
+ */
+export const REOPENED_STEP = 'retrying';
 
 /** States a run can be retried or taken over from. */
 const REOPENABLE_STATES = ['failed', 'waiting_human'] as const satisfies FactoryRunState[];
@@ -114,7 +121,10 @@ function changesFor(input: UpdateRunInput): Partial<Row> | null {
   const changes: Partial<Row> = {};
   if (input.state !== undefined) {
     changes.state = input.state;
-    if (TERMINAL.has(input.state)) changes.completedAt = new Date().toISOString();
+    // A parked run's flow ended too: when it parked is when a take-over may follow.
+    if (TERMINAL.has(input.state) || input.state === 'waiting_human') {
+      changes.completedAt = new Date().toISOString();
+    }
   }
   if (input.currentStep !== undefined) changes.currentStep = input.currentStep;
   if (input.prUrl !== undefined) changes.prUrl = input.prUrl;
@@ -282,7 +292,13 @@ export function createFactoryRunsRepository(
         db
           .select()
           .from(factoryRuns)
-          .where(inArray(factoryRuns.state, [...REOPENABLE_STATES])),
+          .where(
+            and(
+              inArray(factoryRuns.state, [...REOPENABLE_STATES]),
+              // Narrowed in SQL (thread_ids is a JSON array); the exact match is below.
+              like(factoryRuns.threadIds, `%${JSON.stringify(threadId)}%`),
+            ),
+          ),
         storage,
       ).map((rows) => rows.map(toView).filter((run) => run.threadIds.includes(threadId)));
     },
@@ -299,7 +315,7 @@ export function createFactoryRunsRepository(
           .update(factoryRuns)
           .set({
             state: 'queued',
-            currentStep: null,
+            currentStep: REOPENED_STEP,
             completedAt: null,
             launchStartedAt: null,
             threadIds: JSON.stringify(threadIds),

@@ -51,7 +51,10 @@ describe('factory thread waits', () => {
         completedAt: before,
       } as ThreadRecord | null,
     };
-    const wait = waitsOver(record)('t4', new AbortController().signal, { completedAt: before });
+    const wait = waitsOver(record)('t4', new AbortController().signal, {
+      completedAt: before,
+      sentAt: before,
+    });
     await Bun.sleep(1);
     expect(isWaitingOn('t4')).toBe(true);
 
@@ -63,6 +66,24 @@ describe('factory thread waits', () => {
     signalThreadTerminal('t4');
 
     expect((await wait).status).toBe('completed');
+  });
+
+  test('a follow-up on a thread that finished days ago is not stale at once', async () => {
+    const daysAgo = new Date(0).toISOString();
+    const sentAt = new Date(5 * 24 * 60 * 60 * 1000).toISOString();
+    const record = {
+      current: { status: 'running', createdAt: daysAgo, completedAt: null } as ThreadRecord | null,
+    };
+    const controller = new AbortController();
+    // "Now" is a minute after the follow-up was sent, days after the last finish.
+    const wait = waitsOver(record, () => Date.parse(sentAt) + 60_000)('t5', controller.signal, {
+      completedAt: daysAgo,
+      sentAt,
+    });
+    await Bun.sleep(1);
+    expect(isWaitingOn('t5')).toBe(true);
+    controller.abort();
+    expect((await wait).status).toBe('cancelled');
   });
 
   test('a thread that no longer exists fails the step', async () => {

@@ -193,26 +193,26 @@ export async function approve(userCode: string, userId: string): Promise<Approve
 
   // Register a runner owned by the approving user; reuses any existing runner
   // for this hostname under the same user (runner-manager handles that).
-  let registered: { runnerId: string; token: string };
+  let runnerId: string;
   try {
-    registered = await rm.registerRunner(
+    const registered = await rm.registerRunner(
       { name: `${row.hostname}-funny`, hostname: row.hostname, os: row.os },
       userId,
     );
-  } catch (error) {
-    // Give the code back, so it can be approved again.
+    runnerId = registered.runnerId;
     await db
       .update(runnerEnrollments)
-      .set({ status: 'pending', approverUserId: null })
+      .set({ runnerId, runnerToken: registered.token })
+      .where(eq(runnerEnrollments.id, row.id));
+  } catch (error) {
+    // Registering or staging failed: give the code back, so it can be approved
+    // again instead of reading `pending` to the runner until it expires.
+    await db
+      .update(runnerEnrollments)
+      .set({ status: 'pending', approverUserId: null, runnerId: null, runnerToken: null })
       .where(and(eq(runnerEnrollments.id, row.id), eq(runnerEnrollments.status, 'approved')));
     throw error;
   }
-  const { runnerId, token } = registered;
-
-  await db
-    .update(runnerEnrollments)
-    .set({ runnerId, runnerToken: token })
-    .where(eq(runnerEnrollments.id, row.id));
 
   log.info('Runner enrollment approved', {
     namespace: 'runner',

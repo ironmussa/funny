@@ -108,6 +108,23 @@ describe('browser-session:closed', () => {
     expect(useBrowserPanelStore.getState().sessionStatus).toBe('spawning');
   });
 
+  test('an own close that was never answered does not swallow a later real one', async () => {
+    attachingTo(SESSION);
+    useBrowserPanelStore.setState({ sessionStatus: 'ready', sessionThreadId: 't1' });
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      await useBrowserPanelStore.getState().endBrowserSession(); // the runner never answers
+      vi.setSystemTime(Date.now() + 60_000);
+
+      attachingTo(SESSION);
+      useBrowserPanelStore.setState({ sessionStatus: 'ready' });
+      dispatchBrowserSessionEvent('browser-session:closed', { sessionId: SESSION, reason: 'user' });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(useBrowserPanelStore.getState().sessionStatus).toBe('disconnected');
+  });
+
   test('a close the panel did not send still ends the session', () => {
     attachingTo(SESSION);
     useBrowserPanelStore.setState({ sessionStatus: 'ready' });

@@ -424,7 +424,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // re-select guard — it must paint immediately so the click feels
       // instant. It's cheap (one string), so keep it synchronous/urgent.
       set({ selectedThreadId: threadId });
-      notifyThreadSelected();
+      notifyThreadSelected(threadId);
 
       // Phase boundary for a memory profiling run: the heavy MessageStream
       // subtree mounts just below. No-op unless a run is active.

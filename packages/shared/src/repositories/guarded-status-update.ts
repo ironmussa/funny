@@ -9,11 +9,14 @@ import type { RepoDeps } from './deps.js';
  * written — no such row, or the row is no longer in a status the transition is
  * legal from.
  */
+/** The tables whose status writes go through this guard. */
+type GuardedTable = RepoDeps['schema']['watchers'] | RepoDeps['schema']['jobs'];
+
 export async function updateWithStatusGuard<S extends string>(
   deps: Pick<RepoDeps, 'db' | 'dbAll'>,
-  table: any,
+  table: GuardedTable,
   id: string,
-  patch: { status?: S; updatedAt?: string },
+  patch: Partial<GuardedTable['$inferInsert']> & { status?: S },
   writtenFrom: Readonly<Record<S, readonly S[]>>,
 ): Promise<boolean> {
   // An unknown status has no legal source: `inArray(…, [])` matches no row.

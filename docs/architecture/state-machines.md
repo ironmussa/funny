@@ -59,6 +59,16 @@ making each one explicit.
 | 9   | Pipeline run                      | `PipelineRunStatus`                                                                        | `runtime/src/services/pipeline-manager.ts`                                                                                                                                                                                                   | The runner's `pipelines.createRun` returns `''` and `updateRun` does nothing, so runs are not stored and share one in-memory id. Fix persistence before modelling the states.                               |
 | 10  | Agent process                     | sets and flags in `core/src/agents/orchestrator.ts`, `runtime/src/services/agent-state.ts` | `agent-message-handler.ts`, `agent-event-router.ts`                                                                                                                                                                                          | Six per-thread sets and maps that must agree, cleared at different points.                                                                                                                                  |
 
+Known gaps in the guarded writers:
+
+- **Watcher snoozed during a scan.** The fire is guarded on `pending` only, so a
+  watcher re-armed between the scan and the fire (still `pending`, later
+  `nextWakeAt`) is fired early. Closing it needs the expected `nextWakeAt` in
+  the `watcher_update` operation of the runner protocol.
+- **Status observer.** It reads the row's status before the write, outside it,
+  so two concurrent writers can report a `from` that never happened. Expect a
+  little noise in `thread.status_write_unmodelled`.
+
 Small and already guarded (no action): MCP OAuth state, git workflow mutex, test
 and command runners (keyed by run id), gRPC control negotiation, session
 presence epochs.

@@ -206,7 +206,10 @@ async function fire(watcher: Watcher, now: number): Promise<void> {
     wakeCount,
   });
   if (!applied) {
-    // Cancelled (or re-armed) between the scan and now: do not wake the agent.
+    // Cancelled (or otherwise finished) between the scan and now: do not wake
+    // the agent. A watcher re-armed in that window is still `pending`, so it
+    // fires; guarding on its due time needs `nextWakeAt` in the update
+    // protocol (docs/architecture/state-machines.md).
     log.info('Watcher no longer pending, not fired', { namespace: NS, watcherId: watcher.id });
     return;
   }

@@ -39,7 +39,8 @@ jobRoutes.post('/:id/cancel', async (c) => {
   const userId = c.get('userId');
   if (!userId) return c.json({ error: 'Unauthorized' }, 401);
 
-  const ok = await cancelJob(c.req.param('id'), userId);
-  if (!ok) return c.json({ error: 'Not found' }, 404);
-  return c.json({ ok: true });
+  const status = await cancelJob(c.req.param('id'), userId);
+  if (!status) return c.json({ error: 'Not found' }, 404);
+  // `status` is not `cancelled` when the job had already ended: nothing to stop.
+  return c.json({ ok: true, status });
 });

@@ -398,7 +398,7 @@ export function resolveThreadTransition(
   context: { cost?: number; resumeReason?: ResumeReason } = {},
 ): ThreadTransition {
   // A row without a (known) status is a thread nothing has happened to yet.
-  if (!(from in threadMachine.states)) from = 'pending';
+  if (!isThreadStatus(from)) from = 'pending';
   const snapshot = threadMachine.resolveState({
     value: from,
     context: {

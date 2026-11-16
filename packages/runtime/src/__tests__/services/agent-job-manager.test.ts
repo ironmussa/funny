@@ -121,21 +121,26 @@ describe('cancelJob', () => {
     fakeJobs.getJob.mockResolvedValue(job('running'));
     fakeJobs.updateJob.mockResolvedValue(true);
 
-    expect(await cancelJob('j1', 'u1')).toBe(true);
+    expect(await cancelJob('j1', 'u1')).toBe('cancelled');
     expect(fakeJobs.updateJob).toHaveBeenCalledWith('j1', { status: 'cancelled' });
   });
 
-  test('leaves a finished job as it ended', async () => {
+  test('leaves a finished job as it ended, and says how it ended', async () => {
     fakeJobs.getJob.mockResolvedValue(job('exited'));
 
-    expect(await cancelJob('j1', 'u1')).toBe(false);
+    expect(await cancelJob('j1', 'u1')).toBe('exited');
     expect(fakeJobs.updateJob).not.toHaveBeenCalled();
   });
 
   test('reports a job that finished while it was being cancelled', async () => {
-    fakeJobs.getJob.mockResolvedValue(job('running'));
+    fakeJobs.getJob.mockResolvedValueOnce(job('running')).mockResolvedValueOnce(job('failed'));
     fakeJobs.updateJob.mockResolvedValue(false); // the store refused running → cancelled
 
-    expect(await cancelJob('j1', 'u1')).toBe(false);
+    expect(await cancelJob('j1', 'u1')).toBe('failed');
+  });
+
+  test('answers null for a job the caller does not have', async () => {
+    fakeJobs.getJob.mockResolvedValue({ ...job('running'), userId: 'someone-else' });
+    expect(await cancelJob('j1', 'u1')).toBeNull();
   });
 });

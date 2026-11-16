@@ -424,13 +424,14 @@ describe('ws-event-dispatch — additional event types', () => {
       data: { status: 'waiting', waitingReason: 'question' },
     });
     drainRaf();
-    expect(applied).toEqual(['waiting']);
+    // The queued status applies first (with whatever stage it carried), never after.
+    expect(applied).toEqual(['running', 'waiting']);
 
     applied.length = 0;
     handlers['agent:status']({ threadId: 't2', data: { status: 'running' } });
     handlers['agent:error']({ threadId: 't2', data: { error: 'boom' } });
     drainRaf();
-    expect(applied).toEqual(['error']);
+    expect(applied).toEqual(['running', 'error']);
   });
 
   test('after an error, the next run’s running status is not dropped as a duplicate', async () => {

@@ -350,11 +350,19 @@ const loadFrames = () => (framesModule ??= import('@/lib/browser-session-frames'
  * panel reopened that thread's session would otherwise mark the new session
  * disconnected.
  */
-const closesInFlight = new Set<string>();
+const closesInFlight = new Map<string, number>();
+/**
+ * How long a close waits for its answer. The runner sends none for a session it
+ * had already dropped, and a remembered close must not swallow a later, real
+ * `closed` for the same id.
+ */
+const OWN_CLOSE_ANSWER_MS = 15_000;
 
 /** True (once) when `closed` for `sessionId` answers a close this tab sent. */
-export function takeOwnClose(sessionId: string): boolean {
-  return closesInFlight.delete(sessionId);
+export function takeOwnClose(sessionId: string, now = Date.now()): boolean {
+  const sentAt = closesInFlight.get(sessionId);
+  closesInFlight.delete(sessionId);
+  return sentAt !== undefined && now - sentAt < OWN_CLOSE_ANSWER_MS;
 }
 
 /** Tell the runner to close or detach a session and drop its cached frame. */
@@ -364,7 +372,7 @@ async function releaseSession(sessionId: string, reason: 'user' | 'detach'): Pro
     loadFrames(),
   ]);
   // A detach keeps the session running and is not answered with `closed`.
-  if (reason === 'user') closesInFlight.add(sessionId);
+  if (reason === 'user') closesInFlight.set(sessionId, Date.now());
   browserSessionClient.close(sessionId, reason);
   clearLatestFrame(sessionId);
 }

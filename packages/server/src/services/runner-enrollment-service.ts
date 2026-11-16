@@ -181,21 +181,37 @@ export async function approve(userCode: string, userId: string): Promise<Approve
     return { ok: false, reason: 'locked' };
   }
 
+  // Claim the approval first: pending → approved is a compare-and-set, so of
+  // two approvals at once only one registers a runner. The credentials are
+  // staged below; until then a poll still reads `pending`.
+  const claimed = await db
+    .update(runnerEnrollments)
+    .set({ status: 'approved', approverUserId: userId })
+    .where(and(eq(runnerEnrollments.id, row.id), eq(runnerEnrollments.status, 'pending')))
+    .returning({ id: runnerEnrollments.id });
+  if (claimed.length === 0) return { ok: false, reason: 'already_approved' };
+
   // Register a runner owned by the approving user; reuses any existing runner
   // for this hostname under the same user (runner-manager handles that).
-  const { runnerId, token } = await rm.registerRunner(
-    { name: `${row.hostname}-funny`, hostname: row.hostname, os: row.os },
-    userId,
-  );
+  let registered: { runnerId: string; token: string };
+  try {
+    registered = await rm.registerRunner(
+      { name: `${row.hostname}-funny`, hostname: row.hostname, os: row.os },
+      userId,
+    );
+  } catch (error) {
+    // Give the code back, so it can be approved again.
+    await db
+      .update(runnerEnrollments)
+      .set({ status: 'pending', approverUserId: null })
+      .where(and(eq(runnerEnrollments.id, row.id), eq(runnerEnrollments.status, 'approved')));
+    throw error;
+  }
+  const { runnerId, token } = registered;
 
   await db
     .update(runnerEnrollments)
-    .set({
-      status: 'approved',
-      runnerId,
-      runnerToken: token,
-      approverUserId: userId,
-    })
+    .set({ runnerId, runnerToken: token })
     .where(eq(runnerEnrollments.id, row.id));
 
   log.info('Runner enrollment approved', {
@@ -238,7 +254,10 @@ export async function pollByToken(pollToken: string): Promise<PollResult> {
 
   if (!row) return { status: 'invalid' };
   if (Date.parse(row.expiresAt) <= Date.now()) return { status: 'invalid' };
-  if (row.status === 'pending') return { status: 'pending' };
+  // Approved but its credentials not staged yet: the approval is mid-flight.
+  if (row.status === 'pending' || (row.status === 'approved' && !row.runnerToken)) {
+    return { status: 'pending' };
+  }
   if (row.status !== 'approved' || !row.runnerId || !row.runnerToken) {
     // 'consumed' or a malformed approved row — credentials already delivered.
     return { status: 'invalid' };

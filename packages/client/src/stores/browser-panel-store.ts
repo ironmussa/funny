@@ -344,12 +344,27 @@ let framesModule: Promise<typeof import('@/lib/browser-session-frames')> | null 
 const loadClient = () => (clientModule ??= import('@/lib/browser-session-client'));
 const loadFrames = () => (framesModule ??= import('@/lib/browser-session-frames'));
 
+/**
+ * Sessions this tab closed whose `closed` event has not arrived yet. A thread's
+ * session id is the same every time, so a `closed` that arrives after the
+ * panel reopened that thread's session would otherwise mark the new session
+ * disconnected.
+ */
+const closesInFlight = new Set<string>();
+
+/** True (once) when `closed` for `sessionId` answers a close this tab sent. */
+export function takeOwnClose(sessionId: string): boolean {
+  return closesInFlight.delete(sessionId);
+}
+
 /** Tell the runner to close or detach a session and drop its cached frame. */
 async function releaseSession(sessionId: string, reason: 'user' | 'detach'): Promise<void> {
   const [{ browserSessionClient }, { clearLatestFrame }] = await Promise.all([
     loadClient(),
     loadFrames(),
   ]);
+  // A detach keeps the session running and is not answered with `closed`.
+  if (reason === 'user') closesInFlight.add(sessionId);
   browserSessionClient.close(sessionId, reason);
   clearLatestFrame(sessionId);
 }

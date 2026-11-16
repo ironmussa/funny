@@ -12,6 +12,14 @@ import { dropWebPushSubscription } from '@/lib/web-push';
 
 const log = createClientLogger('auth-store');
 
+/**
+ * Bumped by every login and logout. A session check that started before one
+ * of them is out of date when it resolves: it must not overwrite the identity
+ * the login or logout just set (a page-load check that resolved after a quick
+ * login put the user back on the login screen).
+ */
+let identityGeneration = 0;
+
 interface AuthState {
   user: SafeUser | null;
   isAuthenticated: boolean;
@@ -41,9 +49,16 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
   initialize: async () => {
     set({ isLoading: true });
+    const generation = identityGeneration;
+    const superseded = () => {
+      if (generation === identityGeneration) return false;
+      set({ isLoading: false });
+      return true;
+    };
 
     try {
       const session = await authClient.getSession();
+      if (superseded()) return;
       if (session.data?.user) {
         const u = session.data.user as any;
 
@@ -67,6 +82,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           }
         }
 
+        if (superseded()) return;
         set({
           isAuthenticated: true,
           isLoading: false,
@@ -86,6 +102,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         setActiveOrgSlug(null);
       }
     } catch (err) {
+      if (superseded()) return;
       log.error('initialization error', {
         error: err instanceof Error ? err.message : String(err),
       });
@@ -95,6 +112,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   },
 
   login: async (username: string, password: string) => {
+    identityGeneration++;
     const result = await authClient.signIn.username({
       username,
       password,
@@ -141,6 +159,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
     // ends here, and reloading then would loop.
     const { user, isAuthenticated } = get();
     const wasSignedIn = user !== null || isAuthenticated;
+    identityGeneration++;
     // Before signing out: the server side of the unsubscribe needs the session.
     if (wasSignedIn) await dropWebPushSubscription().catch(() => {});
     try {

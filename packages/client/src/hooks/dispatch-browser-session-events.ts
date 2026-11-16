@@ -20,7 +20,7 @@ import { resolveBrowserSessionRequest } from '@/lib/browser-session-client';
 import { ingestBrowserSessionFrame } from '@/lib/browser-session-frames';
 import { createClientLogger } from '@/lib/client-logger';
 import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
-import { useBrowserPanelStore } from '@/stores/browser-panel-store';
+import { takeOwnClose, useBrowserPanelStore } from '@/stores/browser-panel-store';
 import { useBrowserPointerStore } from '@/stores/browser-pointer-store';
 import { getUrlThreadId } from '@/stores/thread-store';
 
@@ -84,6 +84,9 @@ function handleClosed(d: BrowserSessionClosedData): void {
     store.handleSessionNotFound(d.sessionId);
     return;
   }
+  // The answer to a close this tab sent: the panel already shows it closed,
+  // and may hold a new session under the same (per-thread) id by now.
+  if (d.reason === 'user' && takeOwnClose(d.sessionId)) return;
   if (store.sessionId === d.sessionId) {
     const status = d.reason === 'too_many_sessions' ? 'too-many-sessions' : 'disconnected';
     store.setSessionStatus(status, d.message ?? null);

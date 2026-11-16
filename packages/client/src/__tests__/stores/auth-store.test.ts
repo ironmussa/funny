@@ -169,6 +169,27 @@ describe('auth-store', () => {
     expect(mockAuth.getSession).toHaveBeenCalledTimes(1);
   });
 
+  test('a session check that resolves after a login does not undo it', async () => {
+    let finishPageLoadCheck!: (value: unknown) => void;
+    mockAuth.getSession.mockImplementationOnce(
+      () => new Promise((resolve) => (finishPageLoadCheck = resolve)),
+    );
+    const pageLoad = useAuthStore.getState().initialize(); // no session yet
+
+    mockAuth.signIn.mockResolvedValue({ error: null });
+    mockAuth.getSession.mockResolvedValue({ data: { user: { id: 'u1', username: 'alice' } } });
+    await useAuthStore.getState().login('alice', 'pw');
+
+    finishPageLoadCheck({ data: null });
+    await pageLoad;
+
+    expect(useAuthStore.getState()).toMatchObject({
+      isAuthenticated: true,
+      isLoading: false,
+      user: expect.objectContaining({ id: 'u1' }),
+    });
+  });
+
   test('logout clears user and org state', async () => {
     useAuthStore.setState({
       isAuthenticated: true,

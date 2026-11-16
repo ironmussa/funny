@@ -123,6 +123,20 @@ describe('Runner Enrollment (device-link)', () => {
       expect(poll2.status).toBe('invalid');
     });
 
+    test('two approvals at once register one runner', async () => {
+      const started = await enroll.startEnrollment({ hostname: 'twice', os: 'linux', ip: '' });
+
+      const results = await Promise.all([
+        enroll.approve(started.userCode, 'user-1'),
+        enroll.approve(started.userCode, 'user-2'),
+      ]);
+
+      expect(results.filter((r) => r.ok)).toHaveLength(1);
+      expect(results.filter((r) => !r.ok)).toEqual([{ ok: false, reason: 'already_approved' }]);
+      const runners = t.db.select().from(t.schema.runners).all() as { hostname: string }[];
+      expect(runners.filter((r) => r.hostname === 'twice')).toHaveLength(1);
+    });
+
     test('two polls at once deliver the credentials to only one of them', async () => {
       const started = await enroll.startEnrollment({ hostname: 'h', os: 'linux', ip: '' });
       await enroll.approve(started.userCode, 'user-1');

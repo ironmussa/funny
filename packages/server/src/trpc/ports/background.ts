@@ -7,10 +7,11 @@
 
 import { failure, type JobsPort, type WatchersPort } from '@funny/api';
 import type { Job, JobStatus, Watcher, WatcherStatus } from '@funny/shared';
-import { and, desc, eq, inArray } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { err, ok } from 'neverthrow';
 
 import { db } from '../../db/index.js';
+import { repos } from '../../db/repos.js';
 import { jobs, watchers } from '../../db/schema.js';
 
 type WatcherRow = typeof watchers.$inferSelect;
@@ -38,15 +39,9 @@ export const watchersPort: WatchersPort = {
       .where(and(eq(watchers.id, id), eq(watchers.userId, userId)));
     if (!rows[0]) return err(failure(404, 'Not found'));
 
-    // Only live watchers can be cancelled; terminal states stay as they are.
-    if (rows[0].status === 'pending' || rows[0].status === 'fired') {
-      await db
-        .update(watchers)
-        .set({ status: 'cancelled', updatedAt: new Date().toISOString() })
-        // Compare-and-set: a watcher that reached a final status since the
-        // read above keeps it.
-        .where(and(eq(watchers.id, id), inArray(watchers.status, ['pending', 'fired'])));
-    }
+    // The watcher machine allows cancelling only a live watcher; a final status
+    // (reached before or during this request) is kept.
+    await repos.watchers().update(id, { status: 'cancelled' });
     const updated = await db.select().from(watchers).where(eq(watchers.id, id));
     return ok(toWatcher(updated[0]));
   },

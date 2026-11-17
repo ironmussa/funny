@@ -12,33 +12,40 @@
  */
 
 import { resolveSandboxSize } from '@funny/sandbox';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql, type SQL } from 'drizzle-orm';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 import { db } from '../../db/index.js';
-import { projects, projectSandboxSettings } from '../../db/schema.js';
+import { projectSandboxSettings } from '../../db/schema.js';
+import { requireProjectAccess as sharedRequireProjectAccess } from '../project-access.js';
 import type { InfraConnectionService } from './infra-connections.js';
+
+/** Where a user's new threads run on a project. `sandbox` uses the connection/size. */
+export type ThreadRuntimeMode = 'local' | 'worktree' | 'sandbox';
 
 export interface ProjectSandboxView {
   projectId: string;
   connectionId: string;
   sizeId: string;
-  enabledByDefault: boolean;
+  mode: ThreadRuntimeMode;
   updatedAt: string;
 }
 
 export type ProjectSandboxError =
   /** The project is not the caller's, or the connection is not theirs. */
   | { kind: 'not-found'; message: string }
+  /** The caller can see the project but their role does not allow this. */
+  | { kind: 'forbidden'; message: string }
   | { kind: 'invalid-size'; message: string }
   /** The connection exists but cannot be used (undecryptable, bad config). */
   | { kind: 'connection'; message: string }
   | { kind: 'storage'; message: string };
 
 export interface SaveProjectSandboxInput {
-  connectionId: string;
+  mode: ThreadRuntimeMode;
+  /** Required when mode is 'sandbox'; ignored (but preserved) for local/worktree. */
+  connectionId?: string;
   sizeId?: string;
-  enabledByDefault: boolean;
 }
 
 type Row = typeof projectSandboxSettings.$inferSelect;
@@ -52,29 +59,50 @@ const toView = (row: Row): ProjectSandboxView => ({
   projectId: row.projectId,
   connectionId: row.connectionId,
   sizeId: row.sizeId,
-  enabledByDefault: row.enabledByDefault === 1,
+  mode: row.mode as ThreadRuntimeMode,
   updatedAt: row.updatedAt,
 });
 
 const byOwner = (userId: string, projectId: string) =>
   and(eq(projectSandboxSettings.projectId, projectId), eq(projectSandboxSettings.userId, userId));
 
-/** Refuses a project the caller does not own, as not found. */
-function requireOwnedProject(
-  userId: string,
-  projectId: string,
-): ResultAsync<void, ProjectSandboxError> {
-  return ResultAsync.fromPromise(
-    db
-      .select({ id: projects.id })
-      .from(projects)
-      .where(and(eq(projects.id, projectId), eq(projects.userId, userId))),
-    storage,
-  ).andThen(([row]) =>
-    row
-      ? okAsync<void, ProjectSandboxError>(undefined)
-      : errAsync<void, ProjectSandboxError>({ kind: 'not-found', message: 'Project not found' }),
-  );
+const accessErrors = {
+  storage,
+  notFound: (): ProjectSandboxError => ({ kind: 'not-found', message: 'Project not found' }),
+  forbidden: (): ProjectSandboxError => ({
+    kind: 'forbidden',
+    message: 'Choosing where threads run needs contributor access to the project',
+  }),
+};
+
+/**
+ * The runtime is per-user: anyone who can see the project reads their own row,
+ * and anyone who may start threads on it (`steer`) writes it. A viewer cannot
+ * start threads, so their runtime choice would never be used.
+ */
+const requireProjectAccess = (userId: string, projectId: string, capability: 'view' | 'steer') =>
+  sharedRequireProjectAccess(userId, projectId, capability, accessErrors);
+
+/**
+ * Drop the sandbox connection from the rows `where` selects, keeping the
+ * user's runtime choice: a `worktree` (or `local`) preference survives losing
+ * the sandbox, and only a `sandbox` runtime — which has nothing left to run on
+ * — falls back to `local`. Used when a connection is removed and when the user
+ * picks "no sandbox".
+ */
+export function detachSandboxConnection(
+  executor: Pick<typeof db, 'update'>,
+  where: SQL | undefined,
+): Promise<unknown> {
+  return executor
+    .update(projectSandboxSettings)
+    .set({
+      connectionId: '',
+      sizeId: '',
+      mode: sql`CASE WHEN ${projectSandboxSettings.mode} = 'sandbox' THEN 'local' ELSE ${projectSandboxSettings.mode} END`,
+      updatedAt: new Date().toISOString(),
+    })
+    .where(where);
 }
 
 export function createProjectSandboxSettingsService(
@@ -117,7 +145,7 @@ export function createProjectSandboxSettingsService(
       userId: string,
       projectId: string,
     ): ResultAsync<ProjectSandboxView | null, ProjectSandboxError> {
-      return requireOwnedProject(userId, projectId).andThen(() => find(userId, projectId));
+      return requireProjectAccess(userId, projectId, 'view').andThen(() => find(userId, projectId));
     },
 
     save(
@@ -125,35 +153,60 @@ export function createProjectSandboxSettingsService(
       projectId: string,
       input: SaveProjectSandboxInput,
     ): ResultAsync<ProjectSandboxView, ProjectSandboxError> {
-      return requireOwnedProject(userId, projectId)
-        .andThen(() => resolveSize(userId, input.connectionId, input.sizeId))
-        .andThen((sizeId) => {
-          const row: Row = {
-            projectId,
-            userId,
-            connectionId: input.connectionId,
-            sizeId,
-            enabledByDefault: input.enabledByDefault ? 1 : 0,
-            updatedAt: new Date().toISOString(),
-          };
-          const { projectId: _p, userId: _u, ...changes } = row;
-          return ResultAsync.fromPromise(
-            db
-              .insert(projectSandboxSettings)
-              .values(row)
-              .onConflictDoUpdate({
-                target: [projectSandboxSettings.projectId, projectSandboxSettings.userId],
-                set: changes,
-              }),
-            storage,
-          ).map(() => toView(row));
-        });
+      const persist = (
+        connectionId: string,
+        sizeId: string,
+      ): ResultAsync<ProjectSandboxView, ProjectSandboxError> => {
+        const row: Row = {
+          projectId,
+          userId,
+          connectionId,
+          sizeId,
+          mode: input.mode,
+          updatedAt: new Date().toISOString(),
+        };
+        const { projectId: _p, userId: _u, ...changes } = row;
+        return ResultAsync.fromPromise(
+          db
+            .insert(projectSandboxSettings)
+            .values(row)
+            .onConflictDoUpdate({
+              target: [projectSandboxSettings.projectId, projectSandboxSettings.userId],
+              set: changes,
+            }),
+          storage,
+        ).map(() => toView(row));
+      };
+
+      return requireProjectAccess(userId, projectId, 'steer').andThen(() => {
+        // sandbox: the connection must be the caller's and the size must exist.
+        if (input.mode === 'sandbox') {
+          if (!input.connectionId) {
+            return errAsync<ProjectSandboxView, ProjectSandboxError>({
+              kind: 'not-found',
+              message: 'A sandbox connection is required',
+            });
+          }
+          const connectionId = input.connectionId;
+          return resolveSize(userId, connectionId, input.sizeId).andThen((sizeId) =>
+            persist(connectionId, sizeId),
+          );
+        }
+        // local / worktree: no connection validation; keep the last sandbox
+        // connection/size (or a sentinel) so the NOT NULL columns stay filled.
+        return find(userId, projectId).andThen((existing) =>
+          persist(
+            input.connectionId ?? existing?.connectionId ?? '',
+            input.sizeId ?? existing?.sizeId ?? '',
+          ),
+        );
+      });
     },
 
     clear(userId: string, projectId: string): ResultAsync<void, ProjectSandboxError> {
-      return requireOwnedProject(userId, projectId).andThen(() =>
+      return requireProjectAccess(userId, projectId, 'steer').andThen(() =>
         ResultAsync.fromPromise(
-          db.delete(projectSandboxSettings).where(byOwner(userId, projectId)),
+          detachSandboxConnection(db, byOwner(userId, projectId)),
           storage,
         ).map(() => undefined),
       );

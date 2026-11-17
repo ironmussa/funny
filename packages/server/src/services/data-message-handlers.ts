@@ -20,6 +20,7 @@ import { log } from '../lib/logger.js';
 import { onAutomationThreadTerminal } from './automation-runs.js';
 import { relayToThreadStream, relayToUser } from './browser-events.js';
 import { forgetThreadOwnership } from './data-ownership.js';
+import { onFactoryThreadTerminal } from './factory/factory-run-control.js';
 import * as messageQueueRepo from './message-queue-repository.js';
 import * as projectRepo from './project-repository.js';
 import { getSchedulerEventBuffer } from './scheduler-event-buffer.js';
@@ -113,6 +114,15 @@ function notifyTerminalStatusPersisted(
   void onAutomationThreadTerminal(threadId, status).catch((error) =>
     log.error('Failed to complete automation run', {
       namespace: 'automation',
+      threadId,
+      error: (error as Error).message,
+    }),
+  );
+  // A factory flow waiting on this thread goes on; a member's follow-up on a
+  // failed or parked run's thread puts the run back in flight.
+  void onFactoryThreadTerminal(threadId, status).catch((error) =>
+    log.error('Failed to resume factory run', {
+      namespace: 'factory',
       threadId,
       error: (error as Error).message,
     }),

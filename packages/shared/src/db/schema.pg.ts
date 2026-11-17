@@ -77,6 +77,9 @@ export const projects = pgTable('projects', {
   defaultProvider: text('default_provider'),
   defaultModel: text('default_model'),
   defaultEffort: text('default_effort'),
+  // Legacy project-level thread mode. No longer the runtime source for the web
+  // client (that is each user's project_sandbox_settings row,
+  // project-runtime-settings); still read by the Chrome extension.
   defaultMode: text('default_mode'),
   defaultPermissionMode: text('default_permission_mode'),
   defaultBranch: text('default_branch'),
@@ -273,6 +276,60 @@ export const automationRuns = pgTable('automation_runs', {
   triageStatus: text('triage_status').notNull().default('pending'),
   hasFindings: integer('has_findings'),
   summary: text('summary'),
+  startedAt: text('started_at').notNull(),
+  completedAt: text('completed_at'),
+});
+
+/**
+ * Per-(project, user) issue factory (change issue-factory): a toggle plus the
+ * watched label, the flow to run, and how many issues may be in flight. One row
+ * per user per project; runs hang off `factory_runs`.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factorySettings = pgTable(
+  'factory_settings',
+  {
+    id: text('id').primaryKey(),
+    projectId: text('project_id')
+      .notNull()
+      .references(() => projects.id, { onDelete: 'cascade' }),
+    userId: text('user_id').notNull(),
+    enabled: integer('enabled').notNull().default(0),
+    label: text('label').notNull().default('ready-for-agent'),
+    flowName: text('flow_name').notNull().default('issue-to-merge'),
+    maxConcurrent: integer('max_concurrent').notNull().default(2),
+    /** Why the watcher cannot make progress now (runner offline, App missing…); null when it can. */
+    blockedReason: text('blocked_reason'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [uniqueIndex('factory_settings_project_user').on(t.projectId, t.userId)],
+);
+
+/**
+ * One factory run per admitted issue (change issue-factory). At most one run
+ * per issue is in flight: the partial unique index
+ * `factory_runs_one_active_per_issue` (migration 098) enforces it.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
+export const factoryRuns = pgTable('factory_runs', {
+  id: text('id').primaryKey(),
+  factoryId: text('factory_id')
+    .notNull()
+    .references(() => factorySettings.id, { onDelete: 'cascade' }),
+  issueNumber: integer('issue_number').notNull(),
+  prUrl: text('pr_url'),
+  state: text('state').notNull().default('queued'),
+  currentStep: text('current_step'),
+  /** JSON array of the thread ids the run's thread steps created. */
+  threadIds: text('thread_ids'),
+  /**
+   * Set while an agent step's thread is being started and not yet recorded, so
+   * a run resumed after a crash adopts that thread instead of starting another.
+   */
+  launchStartedAt: text('launch_started_at'),
   startedAt: text('started_at').notNull(),
   completedAt: text('completed_at'),
 });
@@ -834,7 +891,9 @@ export const projectSandboxSettings = pgTable(
     userId: text('user_id').notNull(),
     connectionId: text('connection_id').notNull(),
     sizeId: text('size_id').notNull(),
-    enabledByDefault: integer('enabled_by_default').notNull().default(0),
+    // Where this user's new threads run on this project: 'local' | 'worktree' | 'sandbox'.
+    // connection_id/size_id are only meaningful when mode = 'sandbox'.
+    mode: text('mode').notNull().default('local'),
     updatedAt: text('updated_at').notNull(),
   },
   (t) => [primaryKey({ columns: [t.projectId, t.userId] })],

@@ -50,9 +50,9 @@ async function ownedThreadProject(userId: string, threadId: string) {
 
 const projectSandboxSchema = z
   .object({
-    connectionId: z.string().min(1),
+    mode: z.enum(['local', 'worktree', 'sandbox']),
+    connectionId: z.string().min(1).optional(),
     sizeId: z.string().min(1).max(32).optional(),
-    enabledByDefault: z.boolean(),
   })
   .strict();
 
@@ -60,6 +60,8 @@ function respondProjectSandbox(c: Context<ServerEnv>, error: ProjectSandboxError
   switch (error.kind) {
     case 'not-found':
       return c.json({ error: error.message, code: error.kind }, 404);
+    case 'forbidden':
+      return c.json({ error: error.message, code: error.kind }, 403);
     case 'invalid-size':
       return c.json({ error: error.message, code: error.kind }, 400);
     case 'connection':

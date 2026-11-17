@@ -6,6 +6,8 @@
  */
 
 export {
+  ACTION_KEYS,
+  type WorkflowActionKey,
   workflowSchema,
   type ParsedWorkflow,
   type ParsedNode,

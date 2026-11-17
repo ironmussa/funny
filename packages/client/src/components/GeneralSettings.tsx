@@ -1,6 +1,6 @@
 import type { AgentProvider, ToolPermission } from '@funny/shared';
 import { DEFAULT_FOLLOW_UP_MODE, DEFAULT_PROVIDER, getDefaultModel } from '@funny/shared/models';
-import { GitBranch, Monitor, RotateCcw } from 'lucide-react';
+import { RotateCcw } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -15,9 +15,11 @@ import {
   WeaveStatusSetting,
 } from '@/components/general-settings-project/project-section-rows';
 import { ProjectColorPicker } from '@/components/general-settings-project/ProjectColorPicker';
+import { ProjectFactorySetting } from '@/components/general-settings-project/ProjectFactorySetting';
 import { ProjectPathSetting } from '@/components/general-settings-project/ProjectPathSetting';
 import { ProjectRedirectChecksSetting } from '@/components/general-settings-project/ProjectRedirectChecksSetting';
 import { ProjectSandboxSetting } from '@/components/general-settings-project/ProjectSandboxSetting';
+import { ProjectThreadModeSetting } from '@/components/general-settings-project/ProjectThreadModeSetting';
 import {
   SegmentedControl,
   SettingRow,
@@ -232,32 +234,7 @@ export function GeneralSettings() {
                 />
               </SettingRow>
             )}
-            <SettingRow
-              title={t('settings.projectDefaultMode', 'Default Thread Mode')}
-              description={t(
-                'settings.projectDefaultModeDesc',
-                'Local or worktree for new threads',
-              )}
-            >
-              <SegmentedControl<string>
-                value={selectedProject.defaultMode || 'local'}
-                onChange={(v) => saveProject(selectedProject.id, { defaultMode: v })}
-                options={[
-                  {
-                    value: 'local',
-                    label: t('thread.mode.local'),
-                    icon: <Monitor className="icon-xs" />,
-                    testId: 'settings-thread-mode-local',
-                  },
-                  {
-                    value: 'worktree',
-                    label: t('thread.mode.worktree'),
-                    icon: <GitBranch className="icon-xs" />,
-                    testId: 'settings-thread-mode-worktree',
-                  },
-                ]}
-              />
-            </SettingRow>
+            <ProjectThreadModeSetting projectId={selectedProject.id} />
             <SettingRow
               title={t('settings.projectDefaultPermission', 'Default Permission Mode')}
               description={t(
@@ -322,10 +299,8 @@ export function GeneralSettings() {
               onSave={saveProject}
             />
             <WeaveStatusSetting projectId={selectedProject.id} />
-            <ProjectSandboxSetting
-              projectId={selectedProject.id}
-              ownerId={selectedProject.userId}
-            />
+            <ProjectSandboxSetting projectId={selectedProject.id} />
+            <ProjectFactorySetting projectId={selectedProject.id} />
             <DefaultTemplateSetting
               projectId={selectedProject.id}
               currentTemplateId={selectedProject.defaultAgentTemplateId}

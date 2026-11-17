@@ -144,9 +144,9 @@ export async function startBunServer(opts: BunHostOptions) {
   // automation owner's runner (services/automation-scheduler.ts).
   const automationScheduler = await import('../../services/automation-scheduler.js');
   if (runnerTransport) {
-    await automationScheduler.startAutomationScheduler({
-      ports: { requests: runnerTransport.requests, presence: runnerTransport.presence },
-    });
+    const ports = { requests: runnerTransport.requests, presence: runnerTransport.presence };
+    await automationScheduler.startAutomationScheduler({ ports });
+    await startIssueFactory(ports, browserEvents);
   }
 
   // Runners outside the private network reach the gRPC listener through a
@@ -316,8 +316,10 @@ export async function startBunServer(opts: BunHostOptions) {
       process.exit(1);
     }, 5000);
 
-    // Stop firing automations before the runner transport goes away
+    // Stop firing automations and factory polls before the runner transport goes away
     automationScheduler.stopAutomationScheduler();
+    const { stopFactoryWatcher } = await import('../../services/factory/factory-watcher.js');
+    stopFactoryWatcher();
     // Cancelled sandbox setups destroy their machines (bounded wait, under forceExit).
     await sandboxLifecycle.stopSandboxLifecycle();
 
@@ -365,4 +367,24 @@ export async function startBunServer(opts: BunHostOptions) {
   });
 
   return { app, server };
+}
+
+/**
+ * Issue factory: the server polls each enabled factory's repo for labelled
+ * issues and runs its flow as the enabler, on their runner or in their sandbox
+ * (services/factory/factory-watcher.ts).
+ */
+async function startIssueFactory(
+  ports: import('../../services/runner-thread-launcher.js').RunnerPorts,
+  browserEvents: { toUser(userId: string, event: Record<string, unknown>): void },
+): Promise<void> {
+  const { startFactoryWatcher } = await import('../../services/factory/factory-watcher.js');
+  const { createFactoryGithub } = await import('../../services/factory/factory-github.js');
+  const { factorySandboxLauncher } =
+    await import('../../services/factory/factory-sandbox-launch.js');
+  await startFactoryWatcher({
+    ports,
+    github: createFactoryGithub(ports),
+    launchSandbox: factorySandboxLauncher(ports, browserEvents),
+  });
 }

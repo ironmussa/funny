@@ -292,7 +292,8 @@
       "chrome_extension": "Creado desde la extensión de Chrome",
       "api": "Creado desde la API",
       "automation": "Creado desde automatización",
-      "ingest": "Creado desde fuente externa"
+      "ingest": "Creado desde fuente externa",
+      "factory": "Creado por la fábrica de issues"
     }
   },
   "review": {

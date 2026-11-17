@@ -35,7 +35,7 @@ import type {
   UserProfile,
   Watcher,
 } from '@funny/shared';
-import type { Capability } from '@funny/shared/auth/roles';
+import type { Capability, Role } from '@funny/shared/auth/roles';
 import type {
   AgentTemplateBody,
   UpdateAgentTemplateBody,
@@ -51,6 +51,11 @@ import type {
   UpdateAutomationRequest,
 } from '@funny/shared/contracts/automations';
 import type { CreateDesignBody } from '@funny/shared/contracts/designs';
+import type {
+  FactoryRun,
+  FactorySettings,
+  SaveFactorySettingsInput,
+} from '@funny/shared/contracts/factory';
 import type {
   GithubAppAccounts,
   GithubAppManifestStart,
@@ -276,6 +281,11 @@ export type ProjectCommand = StartupCommand & { port?: number; portEnvVar?: stri
  * takes a `projectId` runs after `projectProcedure` checked the caller's access.
  */
 export interface ProjectsPort {
+  /**
+   * The caller's effective role on a project, as the server authorizes it, so
+   * a client can hide what it would refuse. Never the basis of a decision.
+   */
+  myRole(userId: string, projectId: string): PortResult<{ role: Role }>;
   /** Own + shared projects, or one organization's (403 for a non-member). */
   list(caller: ApiCaller, query: ListProjectsQuery): PortResult<Project[]>;
   /** The caller's project whose URL patterns match `url`. */
@@ -386,6 +396,28 @@ export interface ProjectRunnersPort {
   ): PortResult<{ generalRunnerId: string | null }>;
 }
 
+/**
+ * The caller's own issue factory for one project (change issue-factory). The
+ * procedure has already checked the project capability (`view` to read, `steer`
+ * to save); every method acts on the caller's own row only.
+ */
+export interface FactoryPort {
+  /** `null` when the caller never configured one. */
+  settings(userId: string, projectId: string): PortResult<FactorySettings | null>;
+  /** Saves and reschedules the server's watcher; audited. */
+  save(
+    userId: string,
+    projectId: string,
+    data: Omit<SaveFactorySettingsInput, 'projectId'>,
+  ): PortResult<FactorySettings>;
+  /** Newest first; empty when there is no factory. */
+  runs(userId: string, projectId: string): PortResult<FactoryRun[]>;
+  /** Stop one run of the caller's factory and its agent threads; audited. */
+  stopRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /** Put a failed (or waiting) run of the caller's factory back in flight; audited. */
+  retryRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+}
+
 /** The server's authorization decisions that are not about one thread. */
 export interface AuthzPort {
   /**
@@ -420,6 +452,7 @@ export interface ApiPorts {
   githubApp: GithubAppPort;
   personalTokens: PersonalTokensPort;
   projectRunners: ProjectRunnersPort;
+  factory: FactoryPort;
   threadAccess: ThreadAccessPort;
   authz: AuthzPort;
 }

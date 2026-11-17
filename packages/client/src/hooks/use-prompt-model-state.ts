@@ -45,7 +45,8 @@ export function useSandboxToggle(projectId: string | null | undefined, offered: 
   const [choice, setChoice] = useState<{ projectId: string; enabled: boolean } | null>(null);
   return useMemo((): SandboxToggle | null => {
     if (!sandbox) return null;
-    const { projectId: id, enabledByDefault } = sandbox.settings;
+    const { projectId: id, mode } = sandbox.settings;
+    const enabledByDefault = mode === 'sandbox';
     return {
       label: sandbox.connection?.label ?? 'Sandbox',
       enabled: choice?.projectId === id ? choice.enabled : enabledByDefault,
@@ -55,7 +56,7 @@ export function useSandboxToggle(projectId: string | null | undefined, offered: 
 }
 
 /** Runtime (local / launcher / project sandbox) + worktree toggle for the composer. */
-function usePromptRuntime({
+export function usePromptRuntime({
   isNewThread,
   projectId,
   launcherUrl,
@@ -68,13 +69,18 @@ function usePromptRuntime({
   defaultThreadMode: string;
   onWorktreeModeChange?: (enabled: boolean) => void;
 }) {
-  const [createWorktree, setCreateWorktreeRaw] = useState(defaultThreadMode === 'worktree');
+  // Follows the caller's runtime row until they flip the toggle for this
+  // project. The row loads asynchronously, so seeding state once from it would
+  // start a worktree user on `local` and create a local thread by mistake.
+  const [choice, setChoice] = useState<{ projectId: string | null | undefined; value: boolean }>();
+  const createWorktree =
+    choice && choice.projectId === projectId ? choice.value : defaultThreadMode === 'worktree';
   const setCreateWorktree = useCallback(
     (v: boolean) => {
-      setCreateWorktreeRaw(v);
+      setChoice({ projectId, value: v });
       onWorktreeModeChange?.(v);
     },
-    [onWorktreeModeChange],
+    [projectId, onWorktreeModeChange],
   );
   const [selectedRuntime, setRuntime] = useState<string>('local');
   const hasLauncher = !!launcherUrl;

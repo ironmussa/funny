@@ -28,6 +28,8 @@ const RETIRED_PREFIXES = [
   '/api/designs',
   '/api/analytics',
   '/api/push',
+  // The issue factory settings and runs (tRPC `factory`).
+  '/api/factory',
   // Removed outright (#196): the org had no columns for its fields and Better
   // Auth refused `updateOrganization` for every role. Per-user keys live in the profile.
   '/api/team-settings',

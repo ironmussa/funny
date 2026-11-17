@@ -5,6 +5,7 @@ import type {
   WorkflowSummary,
 } from '@funny/shared/types/workflows';
 import {
+  ACTION_KEYS,
   serializeWorkflow,
   workflowToGraph,
   type ParsedNode,
@@ -759,41 +760,23 @@ function actionOf(node: ParsedNode): { type: keyof ParsedNode; value: unknown } 
   return { type: 'notify', value: {} };
 }
 
-const ACTION_KEYS = [
-  'spawn_agent',
-  'run_command',
-  'bash',
-  'git_commit',
-  'git_push',
-  'create_pr',
-  'notify',
-  'set_status',
-  'set_stage',
-  'approval',
-  'pipeline',
-] as const;
+/** The starting value of each action when the editor switches a node to it. */
+const DEFAULT_ACTION_VALUES: Record<(typeof ACTION_KEYS)[number], Record<string, unknown>> = {
+  spawn_agent: { prompt: '' },
+  run_command: { command: '' },
+  bash: { command: '' },
+  git_commit: { message: '' },
+  git_push: {},
+  create_pr: { title: '' },
+  notify: { message: '' },
+  set_status: { value: '' },
+  set_stage: { value: '' },
+  wait_ci: {},
+  merge: {},
+  approval: { message: '' },
+  pipeline: { name: '' },
+};
 
 function defaultActionValue(actionType: (typeof ACTION_KEYS)[number]): Record<string, unknown> {
-  switch (actionType) {
-    case 'spawn_agent':
-      return { prompt: '' };
-    case 'run_command':
-    case 'bash':
-      return { command: '' };
-    case 'git_commit':
-      return { message: '' };
-    case 'git_push':
-      return {};
-    case 'create_pr':
-      return { title: '' };
-    case 'notify':
-      return { message: '' };
-    case 'set_status':
-    case 'set_stage':
-      return { value: '' };
-    case 'approval':
-      return { message: '' };
-    case 'pipeline':
-      return { name: '' };
-  }
+  return { ...DEFAULT_ACTION_VALUES[actionType] };
 }

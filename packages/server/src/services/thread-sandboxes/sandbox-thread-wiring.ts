@@ -11,10 +11,11 @@ import { z } from 'zod';
 
 import { db } from '../../db/index.js';
 import { repos } from '../../db/repos.js';
-import { messages, projects } from '../../db/schema.js';
+import { messages } from '../../db/schema.js';
 import { log } from '../../lib/logger.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../runner-ports.js';
 import { createInfraConnectionService } from './infra-connections.js';
+import { findLaunchableProject } from './launch-project.js';
 import { createProjectSandboxSettingsService } from './project-sandbox-settings.js';
 import { postSandboxError } from './sandbox-events.js';
 import { prepareSandboxLaunch } from './sandbox-launch.js';
@@ -41,18 +42,17 @@ export function sandboxThreadLauncherFor(env: {
   const messageRepo = repos.messages();
 
   return createSandboxThreadLauncher({
-    findOwnedProject: async (userId, projectId) => {
-      const [row] = await db
-        .select({ path: projects.path })
-        .from(projects)
-        .where(and(eq(projects.id, projectId), eq(projects.userId, userId)));
-      return row ?? null;
-    },
+    // Anyone who may steer the project may launch a sandbox thread, not only
+    // the owner (project-runtime-settings, phase 2b). The sandbox runs on the
+    // launcher's own provider connection, and its App token is capped by the
+    // LAUNCHER's own GitHub access (`threads.userId`, github-app/sandbox-tokens).
+    findAccessibleProject: findLaunchableProject,
     projectSandbox: async (userId, projectId) => {
       const configured = await projectSandboxes.forThread(userId, projectId);
       // A storage failure is a 500, never "no sandbox configured".
       if (configured.isErr()) throw new Error(configured.error.message);
-      return configured.value;
+      // A row without a connection keeps only the runtime choice: no sandbox.
+      return configured.value?.connectionId ? configured.value : null;
     },
     prepare: (req) => prepareSandboxLaunch(req, { connections, ...ports }),
     insertThread: (row) => threadRepo.createThread(row),

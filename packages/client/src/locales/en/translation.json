@@ -293,7 +293,8 @@
       "chrome_extension": "Created from Chrome extension",
       "api": "Created from API",
       "automation": "Created from automation",
-      "ingest": "Created from external source"
+      "ingest": "Created from external source",
+      "factory": "Created by the issue factory"
     }
   },
   "review": {

@@ -54,6 +54,8 @@ const createSandboxThreadSchema = z
     baseBranch: z.string().trim().min(1).max(255).optional(),
     // Without a connection, the caller's project sandbox is used (project-sandboxes).
     sandbox: sandboxMachineRequestSchema.partial({ connectionId: true }).optional(),
+    // Who started it: the web composer, or the issue factory (services/factory).
+    source: z.enum(['web', 'factory']).optional(),
   })
   // The compose payload carries more fields; only the ones above are used here,
   // plus the message extras forwarded below.
@@ -80,7 +82,7 @@ const FORWARDED_MESSAGE_FIELDS = [
 ] as const;
 
 export interface SandboxThreadFailure {
-  status: 400 | 404 | 409;
+  status: 400 | 403 | 404 | 409;
   code: string;
   message: string;
 }
@@ -99,7 +101,7 @@ export interface NewSandboxThreadRow {
   permissionMode?: string;
   baseBranch?: string;
   initialPrompt: string;
-  source: 'web';
+  source: 'web' | 'factory';
   createdAt: string;
   updatedAt: string;
 }
@@ -116,7 +118,14 @@ export interface RetryableSandboxThread {
 }
 
 export interface SandboxThreadDeps {
-  findOwnedProject(userId: string, projectId: string): Promise<{ path: string } | null>;
+  /**
+   * The project's path when the caller may start threads on it; `{ refused: 403 }`
+   * when they can see it but their role cannot steer; null when they cannot see it.
+   */
+  findAccessibleProject(
+    userId: string,
+    projectId: string,
+  ): Promise<{ path: string } | { refused: 403 } | null>;
   /** The caller's sandbox for the project (project-sandboxes), or null when none. */
   projectSandbox(
     userId: string,
@@ -197,7 +206,7 @@ function newSandboxThreadRow(
     permissionMode: input.permissionMode,
     baseBranch: input.baseBranch,
     initialPrompt: input.prompt,
-    source: 'web',
+    source: input.source ?? 'web',
     createdAt,
     updatedAt: createdAt,
   };
@@ -263,6 +272,21 @@ function checkRetryable(
 
 /** Threads with a retry being prepared, so a double submit starts one sandbox. */
 const retriesInFlight = new Set<string>();
+
+/** The launchable project, or the 404 / 403 a sandbox thread start answers. */
+function projectRefusal(
+  found: { path: string } | { refused: 403 } | null,
+): Result<{ path: string }, SandboxThreadFailure> {
+  if (!found) return err({ status: 404, code: 'not-found', message: 'Project not found' });
+  if ('refused' in found) {
+    return err({
+      status: 403,
+      code: 'forbidden',
+      message: 'Starting a thread needs contributor access to the project',
+    });
+  }
+  return ok(found);
+}
 
 export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
   const now = deps.now ?? (() => new Date().toISOString());
@@ -391,14 +415,8 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
     const retryable = checkRetryable(await deps.findOwnedThread(userId, threadId));
     if (retryable.isErr()) return err(retryable.error);
     const thread = retryable.value;
-    const project = await deps.findOwnedProject(userId, thread.projectId);
-    if (!project) {
-      return err<never, SandboxThreadFailure>({
-        status: 404,
-        code: 'not-found',
-        message: 'Project not found',
-      });
-    }
+    const project = projectRefusal(await deps.findAccessibleProject(userId, thread.projectId));
+    if (project.isErr()) return err(project.error);
     const machine = await retryMachine(userId, threadId, thread.projectId);
     if (machine.isErr()) return err(machine.error);
     return ok({ thread, project, machine: machine.value });
@@ -425,7 +443,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
       userId,
       threadId,
       projectId: thread.projectId,
-      projectPath: project.path,
+      projectPath: project.value.path,
       branch: thread.baseBranch ?? undefined,
       ...machine,
     });
@@ -482,8 +500,8 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
       const parsed = parseSandboxThread(payload);
       if (parsed.isErr()) return err(parsed.error);
       const input = parsed.value;
-      const project = await deps.findOwnedProject(userId, input.projectId);
-      if (!project) return err({ status: 404, code: 'not-found', message: 'Project not found' });
+      const project = projectRefusal(await deps.findAccessibleProject(userId, input.projectId));
+      if (project.isErr()) return err(project.error);
 
       const machine = await resolveMachine(userId, input);
       if (machine.isErr()) return err(machine.error);
@@ -493,7 +511,7 @@ export function createSandboxThreadLauncher(deps: SandboxThreadDeps) {
         userId,
         threadId,
         projectId: input.projectId,
-        projectPath: project.path,
+        projectPath: project.value.path,
         branch: input.baseBranch,
         ...machine.value,
         repoUrl: input.sandbox?.repoUrl,

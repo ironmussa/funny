@@ -145,6 +145,9 @@ export const projectsApi = {
       body: JSON.stringify({ hookType, newOrder }),
     }),
 
+  /** The caller's effective role on the project (to hide what the server would refuse). */
+  getMyProjectRole: (projectId: string) => trpcCall(() => procedures.myRole.query({ projectId })),
+
   // Project Collaborators (project_members)
   listProjectMembers: (projectId: string) =>
     trpcCall(() => procedures.members.query({ projectId })),

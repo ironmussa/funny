@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 
-import { workflowToGraph, graphToWorkflow } from '../graph.js';
+import { getWorkflowNodeAction, graphToWorkflow, workflowToGraph } from '../graph.js';
 import { parseWorkflowYaml } from '../parse.js';
 
 describe('workflow graph conversion', () => {
@@ -66,5 +66,23 @@ nodes:
 
     const updated = graphToWorkflow(parsed.workflow, graph);
     expect(updated.nodes.find((node) => node.id === 'b')?.depends_on).toEqual(['a']);
+  });
+
+  test('names the CI and merge actions instead of unknown', () => {
+    const parsed = parseWorkflowYaml(`
+name: ci-merge
+nodes:
+  - id: ci
+    wait_ci: {}
+  - id: ship
+    depends_on: [ci]
+    merge: { method: squash }
+`);
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.workflow.nodes.map((node) => getWorkflowNodeAction(node).type)).toEqual([
+      'wait_ci',
+      'merge',
+    ]);
   });
 });

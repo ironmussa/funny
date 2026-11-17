@@ -30,6 +30,8 @@ import type {
   RequestApprovalOpts,
   SetStatusOpts,
   SetStageOpts,
+  WaitCiOpts,
+  MergeOpts,
 } from '@funny/workflows/compiler';
 import { nanoid } from 'nanoid';
 
@@ -485,6 +487,20 @@ export class RuntimeActionProvider implements ActionProvider {
     } catch (err) {
       return { ok: false, error: err instanceof Error ? err.message : String(err) };
     }
+  }
+
+  /**
+   * CI/merge are not available to a runner-side pipeline: it has the working
+   * tree but no repo-scoped GitHub App token and no PR context. The issue
+   * factory's server-side provider implements these; a flow that reaches them
+   * here fails with a clear message rather than silently passing.
+   */
+  async waitCi(_opts: WaitCiOpts): Promise<ActionResult> {
+    return { ok: false, error: 'wait_ci is not supported by the runtime pipeline provider' };
+  }
+
+  async merge(_opts: MergeOpts): Promise<ActionResult> {
+    return { ok: false, error: 'merge is not supported by the runtime pipeline provider' };
   }
 }
 

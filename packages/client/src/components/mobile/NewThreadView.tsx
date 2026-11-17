@@ -1,4 +1,3 @@
-import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import { Sparkles } from 'lucide-react';
 import { ArrowLeft } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
@@ -6,7 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { PromptInput } from '@/components/PromptInput';
 import { NewThreadContextBar } from '@/components/thread/NewThreadContextBar';
 import { EmptyState } from '@/components/ui/empty-state';
-import { useProjects } from '@/data/projects/hooks';
+import { useProjectThreadMode } from '@/data/runner/hooks';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -20,9 +19,8 @@ interface Props {
 export function NewThreadView({ projectId, onBack, onCreated }: Props) {
   const { t } = useTranslation();
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
-  const projects = useProjects();
-  const project = projects.find((p) => p.id === projectId);
-  const defaultThreadMode = project?.defaultMode ?? DEFAULT_THREAD_MODE;
+  // Local/worktree comes from the caller's runtime row (project-runtime-settings).
+  const defaultThreadMode = useProjectThreadMode(projectId);
   const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 
   const { creating, createThread } = useThreadCreation({

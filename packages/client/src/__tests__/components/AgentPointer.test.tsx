@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react';
+import { act, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, test } from 'vitest';
 
 import { AgentPointer } from '@/components/browser-panel/AgentPointer';
@@ -36,5 +36,20 @@ describe('AgentPointer', () => {
     render(<AgentPointer sessionId="s1" viewport={viewport} />);
     act(() => useBrowserPointerStore.getState().setPointer('s2', { x: 1, y: 1, kind: 'move' }));
     expect(screen.queryByTestId('browser-agent-pointer')).not.toBeInTheDocument();
+  });
+
+  test('the click pulse plays once and then goes away', async () => {
+    render(<AgentPointer sessionId="s1" viewport={viewport} />);
+    const click = () =>
+      act(() => useBrowserPointerStore.getState().setPointer('s1', { x: 5, y: 5, kind: 'click' }));
+    click();
+    const pulse = await screen.findByTestId('browser-agent-pointer-pulse');
+    // jsdom's style has no unprefixed `animation`, so React listens for the
+    // WebKit-prefixed name there.
+    fireEvent(pulse, new Event('webkitAnimationEnd', { bubbles: true }));
+    expect(screen.queryByTestId('browser-agent-pointer-pulse')).not.toBeInTheDocument();
+    // A second click on the same spot pulses again.
+    click();
+    expect(screen.getByTestId('browser-agent-pointer-pulse')).toBeInTheDocument();
   });
 });

@@ -67,9 +67,9 @@ export function saveProjectSandbox(
 ): ResultAsync<ProjectSandboxSettings | null, DomainError> {
   const optimistic: ProjectSandboxSettings = {
     projectId,
-    connectionId: input.connectionId,
+    connectionId: input.connectionId ?? '',
     sizeId: input.sizeId ?? '',
-    enabledByDefault: input.enabledByDefault,
+    mode: input.mode,
     updatedAt: new Date().toISOString(),
   };
   return write(

@@ -1,4 +1,5 @@
 import { MousePointer2 } from 'lucide-react';
+import { useState } from 'react';
 
 import { cn } from '@/lib/utils';
 import { useBrowserPointerStore } from '@/stores/browser-pointer-store';
@@ -16,8 +17,12 @@ export function AgentPointer({
   viewport: { width: number; height: number };
 }) {
   const pointer = useBrowserPointerStore((s) => s.bySession[sessionId]);
+  // The press whose pulse already played. Without this the ping element would
+  // stay mounted after its animation and snap back to a solid circle.
+  const [pulsedSeq, setPulsedSeq] = useState<number | null>(null);
   if (!pointer || viewport.width <= 0 || viewport.height <= 0) return null;
   const presses = pointer.kind !== 'move';
+  const pulsing = presses && pulsedSeq !== pointer.seq;
 
   return (
     <div
@@ -32,9 +37,11 @@ export function AgentPointer({
     >
       {/* Always-on halo so the cursor stands out in a small, scaled-down panel. */}
       <span className="bg-status-info/30 ring-status-info/60 absolute -top-4 -left-4 size-8 rounded-full ring-2" />
-      {presses && (
+      {pulsing && (
         <span
           key={pointer.seq}
+          data-testid="browser-agent-pointer-pulse"
+          onAnimationEnd={() => setPulsedSeq(pointer.seq)}
           className="bg-status-info/50 absolute -top-6 -left-6 size-12 animate-ping rounded-full [animation-iteration-count:2]"
         />
       )}
@@ -44,7 +51,7 @@ export function AgentPointer({
         strokeWidth={2.5}
         className={cn(
           'relative size-7 fill-black text-white drop-shadow-lg',
-          presses && 'scale-90 transition-transform',
+          pulsing && 'scale-90 transition-transform',
         )}
       />
     </div>

@@ -1,7 +1,6 @@
 import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element';
 import { draggable, monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Thread, ThreadStage, GitStatusInfo } from '@funny/shared';
-import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import {
   Trash2,
   Terminal,
@@ -34,6 +33,7 @@ import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { useGitStatusMaps } from '@/data/git-status/hooks';
 import { branchKey as computeBranchKey } from '@/data/git-status/keys';
 import { useProjects } from '@/data/projects/hooks';
+import { useProjectThreadMode } from '@/data/runner/hooks';
 import { groupThreadsByStage } from '@/data/threads/views';
 import { useGitStatusScope } from '@/hooks/use-git-status-scope';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
@@ -423,9 +423,8 @@ export function KanbanView({
   }, [mergeWarning, projectId, threads, updateThreadStage, t]);
 
   // Kanban forces idle for backlog/planning columns; in_progress runs normally.
-  const slideUpProject = projects.find((p) => p.id === slideUpProjectId);
-  const slideUpDefaultThreadMode =
-    (slideUpProject?.defaultMode as 'local' | 'worktree') || DEFAULT_THREAD_MODE;
+  // Local/worktree comes from the caller's runtime row (project-runtime-settings).
+  const slideUpDefaultThreadMode = useProjectThreadMode(slideUpProjectId);
   const slideUpForceIdle = slideUpStage === 'backlog' || slideUpStage === 'planning';
 
   const { creating, createThread: handlePromptSubmit } = useThreadCreation({

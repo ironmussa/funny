@@ -17,7 +17,7 @@ const provisioned = { threadId: 't-new', runnerId: 'r-box' } as ThreadSandboxRow
 
 function setup(
   opts: {
-    project?: { path: string } | null;
+    project?: { path: string } | { refused: 403 } | null;
     refusal?: { code: string; message: string };
     provisionError?: ProvisionError;
     messageFails?: boolean;
@@ -41,7 +41,7 @@ function setup(
   const events: string[] = [];
   const recorded: FirstMessage[] = [];
   const launcher = createSandboxThreadLauncher({
-    findOwnedProject: async (userId, projectId) =>
+    findAccessibleProject: async (userId, projectId) =>
       opts.project !== undefined
         ? opts.project
         : userId === 'alice' && projectId === 'p1'
@@ -107,6 +107,20 @@ const payload = {
 };
 
 describe('sandbox thread creation', () => {
+  test("a thread is marked as the web composer's unless the issue factory started it", async () => {
+    const web = setup();
+    expectOkCreate(await web.launcher.create('alice', payload));
+    expect(web.inserted[0]!.source).toBe('web');
+
+    const factory = setup();
+    expectOkCreate(await factory.launcher.create('alice', { ...payload, source: 'factory' }));
+    expect(factory.inserted[0]!.source).toBe('factory');
+
+    const forged = setup();
+    const refused = await forged.launcher.create('alice', { ...payload, source: 'automation' });
+    expect(refused.isErr()).toBe(true);
+  });
+
   test("without a connection it uses the caller's project sandbox (connection and size)", async () => {
     const { launcher, prepared } = setup({
       projectSandbox: { connectionId: 'conn-instabox', sizeId: 'large' },
@@ -126,6 +140,14 @@ describe('sandbox thread creation', () => {
     });
     expectOkCreate(await launcher.create('alice', payload));
     expect(prepared[0]).toMatchObject({ connectionId: 'conn-1', sizeId: 'default' });
+  });
+
+  test('a caller whose role cannot steer the project gets a 403 and nothing is created', async () => {
+    const { launcher, inserted, prepared } = setup({ project: { refused: 403 } });
+    const result = await launcher.create('alice', payload);
+    expect(result.isErr() && result.error).toMatchObject({ status: 403, code: 'forbidden' });
+    expect(prepared).toEqual([]);
+    expect(inserted).toEqual([]);
   });
 
   test('without a connection or a project sandbox nothing is created (409)', async () => {

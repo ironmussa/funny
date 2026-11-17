@@ -312,10 +312,47 @@ export function createTestDb() {
       user_id TEXT NOT NULL,
       connection_id TEXT NOT NULL,
       size_id TEXT NOT NULL,
-      enabled_by_default INTEGER NOT NULL DEFAULT 0,
+      mode TEXT NOT NULL DEFAULT 'local',
       updated_at TEXT NOT NULL,
       PRIMARY KEY (project_id, user_id)
     )
+  `);
+
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_settings (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      user_id TEXT NOT NULL,
+      enabled INTEGER NOT NULL DEFAULT 0,
+      label TEXT NOT NULL DEFAULT 'ready-for-agent',
+      flow_name TEXT NOT NULL DEFAULT 'issue-to-merge',
+      max_concurrent INTEGER NOT NULL DEFAULT 2,
+      blocked_reason TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  testDb.run(
+    sql`CREATE UNIQUE INDEX IF NOT EXISTS factory_settings_project_user ON factory_settings (project_id, user_id)`,
+  );
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS factory_runs (
+      id TEXT PRIMARY KEY,
+      factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,
+      issue_number INTEGER NOT NULL,
+      pr_url TEXT,
+      state TEXT NOT NULL DEFAULT 'queued',
+      current_step TEXT,
+      thread_ids TEXT,
+      launch_started_at TEXT,
+      started_at TEXT NOT NULL,
+      completed_at TEXT
+    )
+  `);
+  testDb.run(sql`
+    CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
+    ON factory_runs (factory_id, issue_number)
+    WHERE state NOT IN ('merged', 'failed', 'stopped')
   `);
 
   testDb.run(sql`

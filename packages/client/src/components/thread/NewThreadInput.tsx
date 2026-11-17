@@ -1,5 +1,5 @@
 import type { Project } from '@funny/shared';
-import { DEFAULT_PROVIDER, DEFAULT_THREAD_MODE } from '@funny/shared/models';
+import { DEFAULT_PROVIDER } from '@funny/shared/models';
 import { CircleDot, GitFork, NotebookPen } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { useProjects } from '@/data/projects/hooks';
+import { useProjectThreadMode } from '@/data/runner/hooks';
 import { useSaveBacklogOnLeave } from '@/hooks/use-save-backlog-on-leave';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { api } from '@/lib/api';
@@ -78,6 +79,16 @@ function useComposeAttempt(onCreated: NewThreadInputProps['onCreated']) {
   return useCallback(() => abandonedRef.current && !onCreated, [onCreated]);
 }
 
+/**
+ * Mirrors the composer's worktree toggle for the branch preview: the user's
+ * choice once they flip it, else the runtime row's default (which may still be
+ * loading on the first render).
+ */
+function useWorktreePreview(defaultThreadMode: string): [boolean, (enabled: boolean) => void] {
+  const [choice, setChoice] = useState<boolean | null>(null);
+  return [choice ?? defaultThreadMode === 'worktree', setChoice];
+}
+
 export function NewThreadInput({
   projectIdOverride,
   isScratchOverride,
@@ -125,7 +136,7 @@ export function NewThreadInput({
 
   // ── Worktree preview ──
   const [previewBranch, setPreviewBranch] = useState<string | null>(null);
-  const [isWorktreeMode, setIsWorktreeMode] = useState(defaultThreadMode === 'worktree');
+  const [isWorktreeMode, setIsWorktreeMode] = useWorktreePreview(defaultThreadMode);
 
   // ── Save-to-backlog guard ──
   const hasContentRef = useRef(false);
@@ -543,17 +554,21 @@ function useComposeProject(
   const project = effectiveProjectId
     ? projects.find((p) => p.id === effectiveProjectId)
     : undefined;
+  // Local/worktree comes from the caller's runtime row (project-runtime-settings).
+  const defaultThreadMode = useProjectThreadMode(effectiveProjectId);
   return {
     newThreadIsScratch,
     effectiveProjectId,
     project,
     ...composeProjectDefaults(project),
+    defaultThreadMode,
   };
 }
 
 function composeProjectDefaults(project: Project | undefined) {
+  // The thread mode comes from the caller's runtime row (project-runtime-settings),
+  // resolved by the hook above; it is not a project-level default.
   return {
-    defaultThreadMode: project?.defaultMode ?? DEFAULT_THREAD_MODE,
     projectPath: project?.path ?? '',
     defaultProvider: project?.defaultProvider ?? DEFAULT_PROVIDER,
   };

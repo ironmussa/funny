@@ -14,6 +14,7 @@ import { agentTemplatesRouter } from './routers/agent-templates.js';
 import { automationsRouter } from './routers/automations.js';
 import { jobsRouter, watchersRouter } from './routers/background.js';
 import { designsRouter } from './routers/designs.js';
+import { factoryRouter } from './routers/factory.js';
 import { githubAppRouter } from './routers/github-app.js';
 import { analyticsRouter, pushRouter } from './routers/insights.js';
 import { personalTokensRouter } from './routers/personal-tokens.js';
@@ -42,6 +43,7 @@ export const appRouter = router({
   projectRunners: projectRunnersRouter,
   githubApp: githubAppRouter,
   personalTokens: personalTokensRouter,
+  factory: factoryRouter,
 });
 
 export type AppRouter = typeof appRouter;
@@ -64,6 +66,7 @@ export type {
   AuthzPort,
   AutomationsPort,
   DesignsPort,
+  FactoryPort,
   GithubAppPort,
   JobsPort,
   PersonalTokensPort,

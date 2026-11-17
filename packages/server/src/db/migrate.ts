@@ -1916,6 +1916,124 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // project-runtime-settings: the per-(project, user) sandbox row becomes the
+    // per-user thread runtime. Add `mode` and backfill it from the old
+    // `enabled_by_default` flag (sandbox) or the project's default_mode, then
+    // drop the flag. No row still means `local` at the service layer.
+    name: '095_project_runtime_mode',
+    async up() {
+      await ctx().addColumn('project_sandbox_settings', 'mode', 'TEXT NOT NULL', "'local'");
+      await ctx().exec(sql`
+        UPDATE project_sandbox_settings
+        SET mode = CASE
+          WHEN enabled_by_default = 1 THEN 'sandbox'
+          ELSE COALESCE(
+            (SELECT default_mode FROM projects WHERE projects.id = project_sandbox_settings.project_id),
+            'local'
+          )
+        END
+      `);
+      await ctx().dropColumn('project_sandbox_settings', 'enabled_by_default');
+    },
+  },
+  {
+    // project-runtime-settings (phase 2a): the composer now reads each user's
+    // runtime row, which defaults to `local` when absent. To keep existing
+    // owners who had a `worktree` project default from silently dropping to
+    // local, seed a runtime row for the OWNER of every project whose
+    // default_mode is 'worktree' and who has no row yet. Members still get no
+    // row (= local); this is a one-time migration seed, not a read-time one.
+    name: '096_seed_owner_worktree_runtime',
+    async up() {
+      const now = new Date().toISOString();
+      await ctx().exec(sql`
+        INSERT INTO project_sandbox_settings (project_id, user_id, connection_id, size_id, mode, updated_at)
+        SELECT p.id, p.user_id, '', '', 'worktree', ${now}
+        FROM projects p
+        WHERE p.default_mode = 'worktree'
+          AND NOT EXISTS (
+            SELECT 1 FROM project_sandbox_settings s
+            WHERE s.project_id = p.id AND s.user_id = p.user_id
+          )
+      `);
+    },
+  },
+  {
+    // issue-factory: per-(project, user) factory settings and one run per issue.
+    name: '097_issue_factory',
+    // fallow-ignore-next-line code-duplication
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_settings (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 0,
+          label TEXT NOT NULL DEFAULT 'ready-for-agent',
+          flow_name TEXT NOT NULL DEFAULT 'issue-to-merge',
+          max_concurrent INTEGER NOT NULL DEFAULT 2,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_settings_project_user
+        ON factory_settings (project_id, user_id)
+      `);
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS factory_runs (
+          id TEXT PRIMARY KEY,
+          factory_id TEXT NOT NULL REFERENCES factory_settings(id) ON DELETE CASCADE,
+          issue_number INTEGER NOT NULL,
+          pr_url TEXT,
+          state TEXT NOT NULL DEFAULT 'queued',
+          current_step TEXT,
+          thread_ids TEXT,
+          started_at TEXT NOT NULL,
+          completed_at TEXT
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_factory_runs_factory
+        ON factory_runs (factory_id)
+      `);
+    },
+  },
+  {
+    // issue-factory: one run in flight per issue, enforced by the database (the
+    // watcher's check alone assumed a single server), and the marker of an agent
+    // thread being started, which a resumed run adopts instead of starting another.
+    name: '098_factory_runs_one_active_per_issue',
+    async up() {
+      await ctx().addColumn('factory_runs', 'launch_started_at', 'TEXT');
+      // Keep the newest in-flight run of an issue; stop older duplicates.
+      await ctx().exec(sql`
+        UPDATE factory_runs SET state = 'stopped', completed_at = started_at
+        WHERE state NOT IN ('merged', 'failed', 'stopped')
+          AND EXISTS (
+            SELECT 1 FROM factory_runs newer
+            WHERE newer.factory_id = factory_runs.factory_id
+              AND newer.issue_number = factory_runs.issue_number
+              AND newer.state NOT IN ('merged', 'failed', 'stopped')
+              AND (newer.started_at > factory_runs.started_at
+                OR (newer.started_at = factory_runs.started_at AND newer.id > factory_runs.id))
+          )
+      `);
+      await ctx().exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS factory_runs_one_active_per_issue
+        ON factory_runs (factory_id, issue_number)
+        WHERE state NOT IN ('merged', 'failed', 'stopped')
+      `);
+    },
+  },
+  {
+    // issue-factory: why a factory cannot make progress, shown in its settings.
+    name: '099_factory_settings_blocked_reason',
+    async up() {
+      await ctx().addColumn('factory_settings', 'blocked_reason', 'TEXT');
+    },
+  },
 ];
 
 /**

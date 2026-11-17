@@ -16,6 +16,7 @@ vi.mock('@/components/browser-panel/InspectOverlay', () => ({ InspectOverlay: ()
 
 import { BrowserViewport } from '@/components/browser-panel/BrowserViewport';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
+import { useBrowserPointerStore } from '@/stores/browser-pointer-store';
 
 describe('browser viewport control and annotations', () => {
   beforeEach(() => {
@@ -65,5 +66,17 @@ describe('browser viewport control and annotations', () => {
     act(() => useBrowserPanelStore.getState().setSessionController('thread:t1', 'user'));
     expect(screen.getByTestId('draft-canvas')).toBe(canvas);
     expect(canvas.parentElement?.style.visibility).toBe('visible');
+  });
+
+  test("hides the agent's pointer once the session disconnects", () => {
+    act(() =>
+      useBrowserPointerStore.getState().setPointer('thread:t1', { x: 5, y: 5, kind: 'click' }),
+    );
+    render(<BrowserViewport />);
+    expect(screen.getByTestId('browser-agent-pointer')).toBeInTheDocument();
+
+    act(() => useBrowserPanelStore.setState({ sessionStatus: 'disconnected' }));
+    expect(screen.queryByTestId('browser-agent-pointer')).not.toBeInTheDocument();
+    act(() => useBrowserPointerStore.setState({ bySession: {} }));
   });
 });

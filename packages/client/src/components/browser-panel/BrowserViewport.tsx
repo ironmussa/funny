@@ -64,6 +64,8 @@ function ActiveBrowserViewport() {
   const sessionId = useBrowserPanelStore((s) => s.sessionId);
   const viewport = useBrowserPanelStore((s) => s.viewport);
   const inspectActive = useBrowserPanelStore((s) => s.inspectActive);
+  // Only a live session has a pointer; a disconnected one keeps its last spot.
+  const sessionLive = useBrowserPanelStore((s) => s.sessionStatus === 'ready');
 
   const overlayRef = useRef<HTMLDivElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -116,7 +118,9 @@ function ActiveBrowserViewport() {
         />
       </div>
 
-      {!userControls && sessionId && <AgentPointer sessionId={sessionId} viewport={viewport} />}
+      {!userControls && sessionLive && sessionId && (
+        <AgentPointer sessionId={sessionId} viewport={viewport} />
+      )}
     </div>
   );
 }

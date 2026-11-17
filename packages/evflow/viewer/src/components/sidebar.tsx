@@ -127,7 +127,7 @@ export function Sidebar() {
               variant="ghost"
               size="icon-xs"
               onClick={() => setSearchQuery('')}
-              className="absolute top-1/2 right-1 -translate-y-1/2"
+              className="absolute right-1 top-1/2 -translate-y-1/2"
               data-testid="viewer-search-clear"
             >
               <X className="h-3 w-3" />
@@ -171,7 +171,7 @@ export function Sidebar() {
       {/* Kind filters */}
       <div className="p-2">
         <div className="mb-1.5 flex items-center gap-1">
-          <span className="text-muted-foreground text-[10px] tracking-wider uppercase">Kind</span>
+          <span className="text-muted-foreground text-[10px] uppercase tracking-wider">Kind</span>
           {activeSlice && activeKind && (
             <span className="ml-auto text-[10px] text-amber-500/70">highlighting</span>
           )}
@@ -212,7 +212,7 @@ export function Sidebar() {
       {model.slices.length > 0 && (
         <>
           <div className="p-2">
-            <span className="text-muted-foreground mb-1.5 block text-[10px] tracking-wider uppercase">
+            <span className="text-muted-foreground mb-1.5 block text-[10px] uppercase tracking-wider">
               Slices
             </span>
             <div className="space-y-0.5">
@@ -254,7 +254,7 @@ export function Sidebar() {
         <ScrollArea edgeFade className="flex-1">
           <div className="p-2">
             <div className="mb-1.5 flex items-center justify-between">
-              <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
+              <span className="text-muted-foreground text-[10px] uppercase tracking-wider">
                 Selected
               </span>
               <Button

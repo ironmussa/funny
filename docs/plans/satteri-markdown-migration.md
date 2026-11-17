@@ -167,7 +167,7 @@ loading, safe source-text errors, and the distribution smoke test.
 
 - [ ] Move `satteri` from root devDependencies into `packages/client`
       dependencies; verify Vite bundles the wasi-browser path (dev + `bun run
-build` + preview).
+  build` + preview).
 - [ ] `packages/client/src/lib/satteri-markdown.ts`:
       `renderMarkdownToSafeHtml(content: string): string` = Sätteri compile →
       allow-list sanitizer (same effective policy as the current `rehype-sanitize`

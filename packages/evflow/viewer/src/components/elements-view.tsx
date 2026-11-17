@@ -95,7 +95,7 @@ export function ElementsView() {
 
           return (
             <div key={kind}>
-              <h3 className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-semibold tracking-wider uppercase">
+              <h3 className="text-muted-foreground mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider">
                 <span>{EVFLOW_ICONS[kind]}</span>
                 <span>{KIND_LABELS[kind]}s</span>
                 <span className="text-muted-foreground/50">({items.length})</span>

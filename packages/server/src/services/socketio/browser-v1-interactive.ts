@@ -348,7 +348,21 @@ export function setupBrowserV1Interactive(
         dependencies.presence,
         async (a, runner, proof) => {
           if (!(await terminalSink.isAvailable(runner))) return false;
-          await terminalSink.dispatch(a, runner, proof, event);
+          try {
+            await terminalSink.dispatch(a, runner, proof, event);
+          } catch (error) {
+            // e.g. TERMINAL_SESSION_UNAVAILABLE after a server restart: tell
+            // the browser so it re-attaches instead of typing into the void.
+            socket.emit(
+              BROWSER_V1_CARRIER_EVENTS.interactive,
+              terminalError(
+                terminal.terminalId,
+                StatusCode.UNAVAILABLE,
+                error instanceof Error ? error.message : 'Terminal request failed',
+              ),
+            );
+            return true;
+          }
           route.dispatched();
           return true;
         },

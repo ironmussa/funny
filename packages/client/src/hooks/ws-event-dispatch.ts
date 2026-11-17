@@ -5,6 +5,7 @@ import {
   type RealtimeEvent,
 } from '@funny/client-core';
 import type { GitRefsUpdatedChange, WSGitRefsUpdatedData } from '@funny/shared';
+import { isTerminalSessionUnavailable } from '@funny/shared/socket-events';
 import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
 
@@ -39,7 +40,7 @@ import { buildPath } from '@/lib/url';
 import { clientComposition } from '@/platform/client-composition';
 import { useCheckRunsStore } from '@/stores/check-runs-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useTerminalStore } from '@/stores/terminal-store';
+import { notifyPtySessionLost, useTerminalStore } from '@/stores/terminal-store';
 import * as threadMutations from '@/stores/thread-mutations';
 import { patchThreadRow } from '@/stores/thread-row-writes';
 import { useThreadStore } from '@/stores/thread-store';
@@ -786,6 +787,9 @@ const WEB_EVENT_HANDLERS: Record<WebEventType, WebEventHandler> = {
     useTerminalStore.getState().removeTab(data.ptyId);
   },
   'pty:error': (_threadId, data) => {
+    // The server or runner restarted and forgot this terminal while its shell
+    // lives on: re-attach instead of marking the tab dead.
+    if (isTerminalSessionUnavailable(data.error) && notifyPtySessionLost(data.ptyId)) return;
     useTerminalStore.getState().setTabError(data.ptyId, data.error ?? 'Failed to create terminal');
   },
   'runner:status': (_threadId, data) => handleRunnerStatus(data),

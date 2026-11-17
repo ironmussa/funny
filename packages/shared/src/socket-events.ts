@@ -21,6 +21,19 @@ export const BROWSER_PTY_FORWARD_EVENTS = [
 
 export type BrowserPtyForwardEvent = (typeof BROWSER_PTY_FORWARD_EVENTS)[number];
 
+/**
+ * `pty:error` message for a terminal the server or the runner no longer tracks
+ * (their in-memory terminal maps are lost when either process restarts, while
+ * the shell lives on in the PTY daemon). The client answers it by re-attaching:
+ * it re-sends `pty:spawn` with the same id, which the runner turns into a
+ * screen snapshot of the live session (or a fresh shell if it is gone).
+ */
+export const TERMINAL_SESSION_UNAVAILABLE = 'terminal session is unavailable';
+
+export function isTerminalSessionUnavailable(error: unknown): boolean {
+  return error === TERMINAL_SESSION_UNAVAILABLE;
+}
+
 export const BROWSER_SESSION_EVENTS = [
   'browser-session:open',
   'browser-session:navigate',

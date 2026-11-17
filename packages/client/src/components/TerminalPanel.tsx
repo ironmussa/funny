@@ -76,7 +76,12 @@ import {
 } from '@/machines/terminal-spawn-machine';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { type TerminalShell, useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
-import { tabSandboxThreadId, useTerminalStore, type TerminalTab } from '@/stores/terminal-store';
+import {
+  onPtySessionLost,
+  tabSandboxThreadId,
+  useTerminalStore,
+  type TerminalTab,
+} from '@/stores/terminal-store';
 
 /** Tauri PTY tab — uses xterm.js (lazy-loaded) */
 export function TauriTerminalTabContent({
@@ -232,6 +237,33 @@ export function TauriTerminalTabContent({
 }
 
 /** Web PTY tab — uses xterm.js over WebSocket */
+/** Forward socket connection and session-lost signals to a tab's spawn machine. */
+function bridgeTerminalSignals(
+  id: string,
+  send: (
+    event: { type: 'SOCKET_CONNECTED'; connected: boolean } | { type: 'SESSION_LOST' },
+  ) => void,
+): () => void {
+  const unwatchSocket = watchSocketConnection(getActiveWS, subscribeActiveWS, (connected) =>
+    send({ type: 'SOCKET_CONNECTED', connected }),
+  );
+  const offSessionLost = onPtySessionLost(id, () => send({ type: 'SESSION_LOST' }));
+  return () => {
+    unwatchSocket();
+    offSessionLost();
+  };
+}
+
+/**
+ * Re-attach a live tab whose session the server/runner forgot after a restart.
+ * The runner's snapshot repaints the whole screen, so start from a clean
+ * screen instead of appending it below the old content.
+ */
+function reattachTerminal(term: { terminal: any } | null, spawn: () => void): void {
+  term?.terminal.reset();
+  spawn();
+}
+
 export function WebTerminalTabContent({
   id,
   cwd,
@@ -318,6 +350,7 @@ export function WebTerminalTabContent({
         actions: {
           emitSpawn: () => emitSpawnRef.current(),
           emitRestore: () => emitRestoreRef.current(),
+          emitReattach: () => reattachTerminal(termRef.current, emitSpawnRef.current),
         },
       }),
     [],
@@ -364,13 +397,9 @@ export function WebTerminalTabContent({
   // socket reconnects, so retries during a runner reconnect storm pick up
   // automatically without needing a manual restart — and follows the socket
   // when it is replaced (HMR / teardown), instead of the one seen at mount.
-  useEffect(
-    () =>
-      watchSocketConnection(getActiveWS, subscribeActiveWS, (connected) =>
-        send({ type: 'SOCKET_CONNECTED', connected }),
-      ),
-    [send],
-  );
+  // Also bridges "the server/runner forgot this terminal" (a restart) so the
+  // machine re-attaches.
+  useEffect(() => bridgeTerminalSignals(id, send), [id, send]);
 
   // The effect cleanup clears the focus timeout, cancels both RAFs, and invokes terminal teardown.
   // react-doctor-disable-next-line effect-needs-cleanup

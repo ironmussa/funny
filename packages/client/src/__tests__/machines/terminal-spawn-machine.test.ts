@@ -22,11 +22,13 @@ function makeActor(opts: {
   wasAliveOnMount?: boolean;
   emitSpawn?: () => void;
   emitRestore?: () => void;
+  emitReattach?: () => void;
 }) {
   const emitSpawn = opts.emitSpawn ?? vi.fn();
   const emitRestore = opts.emitRestore ?? vi.fn();
+  const emitReattach = opts.emitReattach ?? vi.fn();
   const machine = terminalSpawnMachine.provide({
-    actions: { emitSpawn, emitRestore },
+    actions: { emitSpawn, emitRestore, emitReattach },
   });
   const actor = createActor(machine, {
     input: {
@@ -35,7 +37,7 @@ function makeActor(opts: {
     },
   });
   actor.start();
-  return { actor, emitSpawn, emitRestore };
+  return { actor, emitSpawn, emitRestore, emitReattach };
 }
 
 describe('terminalSpawnMachine', () => {
@@ -44,6 +46,37 @@ describe('terminalSpawnMachine', () => {
   });
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  describe('session lost (server/runner restarted while the shell lived on)', () => {
+    function connectedActor() {
+      const made = makeActor({ wasAliveOnMount: true });
+      made.actor.send({ type: 'TERM_READY' });
+      made.actor.send({ type: 'PANEL_VISIBLE', visible: true });
+      made.actor.send({ type: 'SOCKET_CONNECTED', connected: true });
+      made.actor.send({ type: 'DATA_RECEIVED' });
+      expect(made.actor.getSnapshot().value).toBe('connected');
+      return made;
+    }
+
+    test('re-attaches and returns to connected on the snapshot', () => {
+      const { actor, emitReattach } = connectedActor();
+      actor.send({ type: 'SESSION_LOST' });
+      expect(actor.getSnapshot().value).toBe('reattaching');
+      expect(emitReattach).toHaveBeenCalledTimes(1);
+      actor.send({ type: 'DATA_RECEIVED' });
+      expect(actor.getSnapshot().value).toBe('connected');
+      actor.stop();
+    });
+
+    test('a re-attach that gets no answer ends in error', () => {
+      const { actor } = connectedActor();
+      actor.send({ type: 'SESSION_LOST' });
+      vi.advanceTimersByTime(SPAWN_TIMEOUT_MS);
+      expect(actor.getSnapshot().value).toBe('error');
+      expect(actor.getSnapshot().context.error).toBe('terminal re-attach timed out');
+      actor.stop();
+    });
   });
 
   describe('initial state', () => {

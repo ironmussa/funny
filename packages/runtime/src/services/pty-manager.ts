@@ -450,6 +450,17 @@ export function spawnPty(
   label?: string,
 ): void {
   if (activeSessions.has(id)) {
+    // A session reattached from the daemon after a runner restart has no
+    // owner yet; the browser's re-attach spawn adopts it (runner mode only).
+    // Anyone else's session is refused.
+    if (!assertSessionAccess(id, userId)) {
+      log.warn('PTY spawn denied: session exists and is not owned by user', {
+        namespace: 'pty-manager',
+        ptyId: id,
+        userId,
+      });
+      return;
+    }
     log.info('PTY already spawned — sending restore instead', {
       namespace: 'pty-manager',
       ptyId: id,

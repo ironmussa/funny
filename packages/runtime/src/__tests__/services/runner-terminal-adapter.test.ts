@@ -1,3 +1,4 @@
+import { TERMINAL_SESSION_UNAVAILABLE } from '@funny/shared/socket-events';
 import { describe, expect, test, vi } from 'vitest';
 
 import { RunnerTerminalAdapter } from '../../services/runner-terminal-adapter.js';
@@ -86,5 +87,26 @@ describe('RunnerTerminalAdapter', () => {
       expect.objectContaining({ type: 'pty:restore' }),
       expect.any(Function),
     );
+  });
+
+  test('reports an unknown terminal as unavailable instead of dropping the command', () => {
+    // A runner restart forgets which user opened each terminal while the shell
+    // lives on in the PTY daemon. Input for it used to vanish silently.
+    const send = vi.fn((_name: 'terminal', _message: Record<string, any>) => true);
+    const handle = vi.fn();
+    const adapter = new RunnerTerminalAdapter({ send }, undefined, handle);
+
+    adapter.receive({
+      terminalId: 'pty-1',
+      input: { ordinal: '1', data: Buffer.from('ls').toString('base64') },
+    });
+    adapter.receive({ terminalId: 'pty-1', close: { reason: 'pty:close' } });
+
+    expect(handle).not.toHaveBeenCalled();
+    expect(send).toHaveBeenCalledTimes(1);
+    expect(send).toHaveBeenCalledWith('terminal', {
+      terminalId: 'pty-1',
+      failure: expect.objectContaining({ message: TERMINAL_SESSION_UNAVAILABLE, retryable: true }),
+    });
   });
 });

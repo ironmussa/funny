@@ -101,6 +101,11 @@ describe('execute', () => {
       expect(error.message).toContain('timed out');
     }
   });
+
+  test('timeout 0 disables the deadline instead of expiring at once', async () => {
+    const result = await execute('node', ['-e', 'setTimeout(() => {}, 300)'], { timeout: 0 });
+    expect(result.exitCode).toBe(0);
+  });
 });
 
 describe('executeSync', () => {

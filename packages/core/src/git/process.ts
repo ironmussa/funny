@@ -85,8 +85,21 @@ export async function executeShell(
   return execute(SHELL, ['-c', command], options);
 }
 
+const DEFAULT_TIMEOUT_MS = 30_000;
+
+/** The deadline `runAsync` enforces: undefined (none) when the caller passed 0. */
+function resolveTimeoutMs(options: ProcessOptions): number | undefined {
+  const timeout = options.timeout ?? DEFAULT_TIMEOUT_MS;
+  return timeout > 0 ? timeout : undefined;
+}
+
 export interface ProcessOptions {
   cwd?: string;
+  /**
+   * Deadline in milliseconds (default 30 s). Set to 0 to disable it, for
+   * commands whose length depends on the repository (a large checkout) or on
+   * user hooks; give those a `signal` instead if they must be cancellable.
+   */
   timeout?: number;
   /** Cancel an in-flight process. */
   signal?: AbortSignal;
@@ -327,7 +340,7 @@ async function executeRawBun(
     stdin: options.stdin != null ? new Blob([options.stdin]) : undefined,
   });
 
-  const timeoutMs = options.timeout ?? 30_000;
+  const timeoutMs = resolveTimeoutMs(options);
   const maxBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
   try {
     // Read streams BEFORE awaiting exit to avoid race condition.
@@ -374,7 +387,7 @@ async function executeRawNode(
   args: string[],
   options: ProcessOptions,
 ): Promise<ProcessResult> {
-  const timeoutMs = options.timeout ?? 30_000;
+  const timeoutMs = resolveTimeoutMs(options);
   const maxBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
 
   return waitFor(

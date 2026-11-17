@@ -17,7 +17,7 @@ import type {
   AssignProjectRequest,
   UnassignProjectRequest,
 } from '@funny/shared/runner-protocol';
-import { eq, and, lt, or, isNull, inArray } from 'drizzle-orm';
+import { eq, and, lt, or, isNull, inArray, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { db } from '../db/index.js';
@@ -291,10 +291,16 @@ export async function handleHeartbeat(
   const now = new Date().toISOString();
   const activeCount = req.activeThreadIds.length;
 
+  // Presence (online / offline) belongs to the gRPC session: the HTTP heartbeat
+  // only reports load. A runner whose gRPC session dropped is unreachable even
+  // while its HTTP heartbeat keeps arriving, so it must stay offline until the
+  // session comes back (markRunnerOnline), or routing would pick it.
   await db
     .update(runners)
     .set({
-      status: activeCount > 0 ? 'busy' : 'online',
+      status: sql`CASE WHEN ${runners.status} = 'offline' THEN 'offline' ELSE ${
+        activeCount > 0 ? 'busy' : 'online'
+      } END`,
       activeThreadIds: JSON.stringify(req.activeThreadIds),
       lastHeartbeatAt: now,
     })
@@ -689,11 +695,19 @@ export async function markRunnerOffline(runnerId: string): Promise<void> {
   });
 }
 
-/** Mark an authenticated transport session online and refresh its presence. */
+/**
+ * Mark an authenticated transport session online and refresh its presence.
+ * Called on connect and on every gRPC heartbeat, so it keeps the load the HTTP
+ * heartbeat last reported (busy while threads are active) instead of resetting
+ * it to online every beat.
+ */
 export async function markRunnerOnline(runnerId: string): Promise<void> {
   await db
     .update(runners)
-    .set({ status: 'online', lastHeartbeatAt: new Date().toISOString() })
+    .set({
+      status: sql`CASE WHEN ${runners.activeThreadIds} = '[]' THEN 'online' ELSE 'busy' END`,
+      lastHeartbeatAt: new Date().toISOString(),
+    })
     .where(eq(runners.id, runnerId));
 }
 

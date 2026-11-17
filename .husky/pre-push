@@ -1,8 +1,0 @@
-#!/usr/bin/env sh
-
-export PATH="$HOME/.bun/bin:$PATH"
-
-# Run only the test suites the pushed commits can affect. CI runs every suite
-# and builds Storybook. Git passes the pushed refs on stdin.
-# FUNNY_PREPUSH_ALL=1 runs every suite.
-bun run test:pre-push

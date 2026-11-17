@@ -1,8 +1,0 @@
-#!/usr/bin/env sh
-
-# Auto-install dependencies if lockfile changed
-changed=$(git diff-tree -r --name-only ORIG_HEAD HEAD)
-if echo "$changed" | grep -q 'bun.lock'; then
-  echo "Dependencies changed, running bun install..."
-  bun install
-fi

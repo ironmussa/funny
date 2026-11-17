@@ -1,0 +1,106 @@
+# Git hooks, installed by `bun install` (the root `prepare` script runs
+# scripts/git-hooks/install.sh). Run a hook by hand with
+# `bunx lefthook run pre-commit`; skip every hook once with `LEFTHOOK=0 git commit …`.
+#
+# Lefthook hides the unstaged hunks of partially staged files while pre-commit
+# runs, so only the staged content is checked, and `stage_fixed` re-stages only
+# what the formatter changed.
+
+# `*` never crosses `/`, and `**/` also matches the repository root.
+glob_matcher: doublestar
+
+pre-commit:
+  jobs:
+    # Format first (and re-stage), so format issues never block the checks below.
+    - name: format
+      glob: '**/*.{ts,tsx,js,jsx}'
+      exclude:
+        - '.claude/**'
+      run: bunx oxfmt --write {staged_files}
+      stage_fixed: true
+
+    - name: checks
+      group:
+        parallel: true
+        jobs:
+          - name: secrets
+            exclude:
+              - 'docker/**'
+            run: bunx secretlint {staged_files}
+
+          - name: lint
+            glob: '**/*.{ts,tsx,js,jsx}'
+            run: bunx oxlint {staged_files}
+
+          - name: conflict-markers
+            run: |
+              files=$(grep -lE '^<{7} |^={7}$|^>{7} ' {staged_files} || true)
+              if [ -n "$files" ]; then
+                echo "Merge conflict markers found in:"
+                echo "$files"
+                exit 1
+              fi
+
+          # console.log / debugger outside tests, CLI tools, build scripts and loggers.
+          - name: debug-statements
+            glob: '**/*.{ts,tsx}'
+            exclude:
+              - '**/__tests__/**'
+              - '**/*.test.*'
+              - '**/*.spec.*'
+              - '**/scripts/**'
+              - '**/dev-watch.ts'
+              - '**/kill-port.ts'
+              - '**/lib/logger.ts'
+              - 'packages/domain-map/**'
+              - 'packages/reviewbot/**'
+              - 'packages/memory/benchmark/**'
+              - 'packages/server/build.ts'
+            run: |
+              matches=$(grep -Hn 'console\.log\|debugger' {staged_files} || true)
+              if [ -n "$matches" ]; then
+                echo "Debug statements found:"
+                echo "$matches"
+                exit 1
+              fi
+
+          # Typecheck baseline diff: fails only when the staged TS changes add NEW
+          # errors (the baseline is .fitness/typecheck-baseline.txt), and checks only
+          # the projects the staged files can affect (CI checks all). Config and
+          # manifest changes can affect every project, so they are passed too.
+          - name: typecheck
+            glob: '**/*.{ts,tsx}'
+            run: |
+              config=$(git diff --cached --name-only --diff-filter=ACMRD | grep -E '(^|/)(package\.json|bun\.lockb?|tsconfig[^/]*\.json)$' || true)
+              # shellcheck disable=SC2086
+              bun scripts/fitness/check-typecheck.ts --affected {staged_files} $config
+
+commit-msg:
+  jobs:
+    - name: conventional-commit
+      run: |
+        commit_msg=$(head -1 "{1}")
+        if ! echo "$commit_msg" | grep -qE '^(feat|fix|chore|docs|style|refactor|test|ci|build|perf|revert)(\(.+\))?: .+'; then
+          echo "Invalid commit message format."
+          echo "Expected: type(scope): description"
+          echo "Types: feat, fix, chore, docs, style, refactor, test, ci, build, perf, revert"
+          exit 1
+        fi
+
+pre-push:
+  jobs:
+    # Runs only the test suites the pushed commits can affect; CI runs every
+    # suite and builds Storybook. Git passes the pushed refs on stdin.
+    # FUNNY_PREPUSH_ALL=1 runs every suite.
+    - name: affected-tests
+      use_stdin: true
+      run: PATH="$HOME/.bun/bin:$PATH" bun run test:pre-push
+
+post-merge:
+  jobs:
+    - name: install-on-lockfile-change
+      run: |
+        if git diff-tree -r --name-only ORIG_HEAD HEAD | grep -q 'bun.lock'; then
+          echo "Dependencies changed, running bun install..."
+          bun install
+        fi

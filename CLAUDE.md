@@ -322,7 +322,7 @@ When resolving a bug or problem, always propose adding a test that covers the ca
 
 ## Formatting
 
-Format with **oxfmt** (`bun run format`, or `bunx oxfmt --write <files>`), never prettier — the repo has no prettier config, so prettier silently rewrites files to its own defaults. The pre-commit hook re-formats staged files with oxfmt.
+Format with **oxfmt** (`bun run format`, or `bunx oxfmt --write <files>`), never prettier — the repo has no prettier config, so prettier silently rewrites files to its own defaults. The pre-commit hook (`lefthook.yml`) re-formats staged files with oxfmt.
 
 ## Agent Safety Rules
 

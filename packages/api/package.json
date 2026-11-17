@@ -12,7 +12,7 @@
   },
   "dependencies": {
     "@funny/shared": "workspace:*",
-    "@trpc/server": "11.28.0",
+    "@trpc/server": "11.28.1",
     "neverthrow": "^8.2.0",
     "zod": "^4.6.6"
   },

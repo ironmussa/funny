@@ -55,6 +55,30 @@ export interface TerminalTab {
 type PtyChunk = string | Uint8Array;
 const pendingPtyData = new Map<string, PtyChunk[]>();
 
+// Terminal views listening for "the server/runner lost this session" (a
+// `pty:error` carrying TERMINAL_SESSION_UNAVAILABLE). Outside Zustand: it is
+// a signal to the mounted view, not state.
+const sessionLostListeners = new Map<string, () => void>();
+
+/** Register the mounted view of `ptyId` for session-lost signals. */
+export function onPtySessionLost(ptyId: string, listener: () => void): () => void {
+  sessionLostListeners.set(ptyId, listener);
+  return () => {
+    if (sessionLostListeners.get(ptyId) === listener) sessionLostListeners.delete(ptyId);
+  };
+}
+
+/**
+ * Tell the mounted view of `ptyId` that its session must be re-attached.
+ * Returns false when no view is mounted (the caller then records an error).
+ */
+export function notifyPtySessionLost(ptyId: string): boolean {
+  const listener = sessionLostListeners.get(ptyId);
+  if (!listener) return false;
+  listener();
+  return true;
+}
+
 interface TerminalState {
   tabs: TerminalTab[];
   activeTabId: string | null;

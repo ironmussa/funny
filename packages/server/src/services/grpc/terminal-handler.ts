@@ -1,4 +1,5 @@
 import { FailureCode } from '@funny/shared/runner-v2/common';
+import { TERMINAL_SESSION_UNAVAILABLE } from '@funny/shared/socket-events';
 
 import type { RunnerTerminalEvent, RunnerTerminalPort } from '../runner-ports.js';
 import type { RunnerGrpcConfig } from './config.js';
@@ -129,7 +130,7 @@ export class RunnerGrpcTerminalDispatcher {
       return;
     }
     if (!state || state.userId !== userId)
-      throw new GrpcTerminalUnavailableError('terminal session is unavailable');
+      throw new GrpcTerminalUnavailableError(TERMINAL_SESSION_UNAVAILABLE);
 
     switch (event.type) {
       case 'pty:write': {

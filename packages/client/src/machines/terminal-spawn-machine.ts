@@ -51,6 +51,7 @@ type TerminalSpawnEvent =
   | { type: 'DATA_RECEIVED' }
   | { type: 'TAB_ERROR'; error: string }
   | { type: 'TAB_EXITED' }
+  | { type: 'SESSION_LOST' }
   | { type: 'RESTART' };
 
 export const terminalSpawnMachine = setup({
@@ -63,6 +64,9 @@ export const terminalSpawnMachine = setup({
     // Side-effect placeholders. Components override these via .provide().
     emitSpawn: () => {},
     emitRestore: () => {},
+    // Re-attach a live tab whose session the server/runner forgot (restart):
+    // clear the screen and re-send spawn with the same id.
+    emitReattach: () => {},
     setSessionsChecked: assign({ sessionsChecked: true }),
     setRestored: assign({ restored: true }),
     setPanelVisible: assign({
@@ -184,6 +188,24 @@ export const terminalSpawnMachine = setup({
     connected: {
       on: {
         TAB_EXITED: 'exited',
+        SESSION_LOST: 'reattaching',
+      },
+    },
+
+    // The runner answers the re-sent spawn with a snapshot of the live shell
+    // (or a fresh prompt if the shell is gone). Losing the socket again just
+    // waits; the server re-reports the loss on the next keystroke.
+    reattaching: {
+      entry: 'emitReattach',
+      after: {
+        SPAWN_TIMEOUT: {
+          target: 'error',
+          actions: assign({ error: 'terminal re-attach timed out' }),
+        },
+      },
+      on: {
+        DATA_RECEIVED: 'connected',
+        TAB_EXITED: 'exited',
       },
     },
 
@@ -229,7 +251,12 @@ export function renderPhaseFromState(
   if (runnerStatus === 'offline') return 'awaiting-runner';
 
   if (stateValue === 'awaitingSessionsCheck') return 'awaiting-sessions';
-  if (stateValue === 'restoring' || stateValue === 'awaitingSocketRestore') return 'restoring';
+  if (
+    stateValue === 'restoring' ||
+    stateValue === 'awaitingSocketRestore' ||
+    stateValue === 'reattaching'
+  )
+    return 'restoring';
   if (
     stateValue === 'spawning' ||
     stateValue === 'awaitingSocketSpawn' ||

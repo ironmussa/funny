@@ -1,5 +1,6 @@
 import type { WSEvent } from '@funny/shared';
 import { FailureCode } from '@funny/shared/runner-v2/common';
+import { TERMINAL_SESSION_UNAVAILABLE } from '@funny/shared/socket-events';
 
 import type { RunnerGrpcWireMessage } from './grpc-runner-client.js';
 import { GrpcTerminalReplayStore } from './grpc-terminal-replay-store.js';
@@ -73,7 +74,13 @@ export class RunnerTerminalAdapter {
     message: RunnerGrpcWireMessage,
   ): GrpcTerminalCommand | undefined {
     const userId = this.users.get(terminalId);
-    if (!userId) return undefined;
+    if (!userId) {
+      // This runner process never saw the terminal opened (it restarted while
+      // the shell lived on in the PTY daemon). Say so instead of dropping the
+      // command: the browser re-attaches with a fresh `open`.
+      if (!message.close) this.sendSessionUnavailable(terminalId);
+      return undefined;
+    }
     if (message.input) return this.inputCommand(terminalId, userId, message.input);
     if (message.resize) {
       const { columns: cols, rows } = message.resize;
@@ -168,6 +175,17 @@ export class RunnerTerminalAdapter {
 
   shutdown(): void {
     this.users.clear();
+  }
+
+  private sendSessionUnavailable(terminalId: string): void {
+    this.sender.send('terminal', {
+      terminalId,
+      failure: {
+        code: FailureCode.UNAVAILABLE,
+        message: TERMINAL_SESSION_UNAVAILABLE,
+        retryable: true,
+      },
+    });
   }
 
   private sendOutput(terminalId: string, output: { sequence: bigint; data: Uint8Array }): void {

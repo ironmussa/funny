@@ -1,12 +1,4 @@
-import {
-  AppWindow,
-  FlaskConical,
-  FolderTree,
-  GitCompare,
-  Globe,
-  MessageSquare,
-  Terminal,
-} from 'lucide-react';
+import { FlaskConical, FolderTree, GitCompare, Globe, MessageSquare, Terminal } from 'lucide-react';
 import { memo, startTransition, useCallback, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
@@ -195,7 +187,7 @@ function BrowserToggleButton({
       onClick={togglePanel}
       label={t('preview.browser')}
     >
-      <AppWindow className="icon-base" />
+      <Globe className="icon-base" />
     </HeaderActionButton>
   );
 }

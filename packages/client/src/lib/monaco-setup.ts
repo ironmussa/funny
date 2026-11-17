@@ -9,11 +9,11 @@ import * as monaco from 'monaco-editor';
 // constructors at build time. eslint-plugin-import's resolver can't see through
 // the query string, so disable `import/default` for this block only.
 /* eslint-disable import/default */
-import editorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker';
-import cssWorker from 'monaco-editor/esm/vs/language/css/css.worker?worker';
-import htmlWorker from 'monaco-editor/esm/vs/language/html/html.worker?worker';
-import jsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker';
-import tsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker';
+import editorWorker from 'monaco-editor/editor/editor.worker?worker';
+import cssWorker from 'monaco-editor/language/css/css.worker?worker';
+import htmlWorker from 'monaco-editor/language/html/html.worker?worker';
+import jsonWorker from 'monaco-editor/language/json/json.worker?worker';
+import tsWorker from 'monaco-editor/language/typescript/ts.worker?worker';
 /* eslint-enable import/default */
 
 import { trackWorker } from './worker-diagnostics';

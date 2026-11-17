@@ -18,7 +18,6 @@ import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync, readdirSync, symlinkSync } from 'fs';
 import { dirname, join as pathJoin, resolve as pathResolve } from 'path';
-import { Readable, Writable } from 'stream';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -27,20 +26,21 @@ import { buildChildEnv } from '@funny/shared/lib/child-env';
 
 import { toACPImageBlocks, type ACPImageBlock } from './acp-image.js';
 import { toACPMcpServers } from './acp-mcp.js';
+import { childAcpStream } from './acp-stream.js';
 import { inferACPToolName, buildACPToolInput, extractACPToolOutput } from './acp-tool-input.js';
 import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-process.js';
 import type { CLIMessage } from './types.js';
 
 type Uuid = `${string}-${string}-${string}-${string}-${string}`;
 
-// Lazy-loaded SDK types (avoid crash if not installed)
-type ACPSDK = typeof import('@agentclientprotocol/sdk');
-type ACPClient = import('@agentclientprotocol/sdk').Client;
-type ACPAgent = import('@agentclientprotocol/sdk').Agent;
-type ACPSessionNotification = import('@agentclientprotocol/sdk').SessionNotification;
-type ACPSessionUpdate = import('@agentclientprotocol/sdk').SessionUpdate;
-type ACPRequestPermissionRequest = import('@agentclientprotocol/sdk').RequestPermissionRequest;
-type ACPRequestPermissionResponse = import('@agentclientprotocol/sdk').RequestPermissionResponse;
+// Lazy-loaded SDK types (avoid crash if not installed). `/unstable` keeps the
+// full v1 surface the 1.x default import exposed (prompt `usage`); the wire
+// protocol is still ACP v1.
+type ACPSDK = typeof import('@agentclientprotocol/sdk/unstable');
+type ACPSessionUpdate = import('@agentclientprotocol/sdk/unstable').SessionUpdate;
+type ACPRequestPermissionResponse =
+  import('@agentclientprotocol/sdk/unstable').RequestPermissionResponse;
+type ACPPromptRequest = import('@agentclientprotocol/sdk/unstable').PromptRequest;
 
 /** Known Deep Agents built-in tools. */
 const DEEPAGENT_BUILTIN_TOOLS = [
@@ -83,7 +83,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
     // Dynamic import — fails gracefully if SDK not installed
     let SDK: ACPSDK;
     try {
-      SDK = await import('@agentclientprotocol/sdk');
+      SDK = await import('@agentclientprotocol/sdk/unstable');
     } catch {
       throw new Error(
         'ACP SDK not installed. Run: bun add @agentclientprotocol/sdk\n' +
@@ -91,7 +91,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
       );
     }
 
-    const { ClientSideConnection, ndJsonStream } = SDK;
+    const { client, methods, ndJsonStream } = SDK;
 
     // Resolve binary
     const bin = this.resolveBinary();
@@ -204,12 +204,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
     this.forwardStderrErrors(child);
     if (!(await this.waitForSpawn(child))) return;
 
-    // Convert Node streams to Web streams for ACP SDK
-    const outputStream = Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>;
-    const inputStream = Readable.toWeb(child.stdout!) as unknown as ReadableStream<Uint8Array>;
-
-    // Create ACP NDJSON stream
-    const stream = ndJsonStream(outputStream, inputStream);
+    const stream = childAcpStream(child, ndJsonStream);
 
     const sessionId = this.options.sessionId ?? randomUUID();
     const startTime = Date.now();
@@ -231,45 +226,43 @@ export class DeepAgentProcess extends BaseAgentProcess {
     // Value: tool name while pending, 'done' after result emitted.
     const toolCallsSeen = new Map<string, string>();
 
-    // Create ACP client implementation
-    const acpClient: ACPClient = {
-      sessionUpdate: async (params: ACPSessionNotification): Promise<void> => {
+    // Create the client-side ACP connection
+    const connection = client({ name: 'funny' })
+      .onNotification(methods.client.session.update, ({ params }) => {
         if (this.isAborted) return;
 
         const update = params.update;
         const result = this.translateUpdate(update, assistantMsgId, toolCallsSeen, accumulatedText);
         accumulatedText = result.text;
         assistantMsgId = result.msgId;
-      },
-
+      })
       // Auto-allow all permission requests
-      requestPermission: async (
-        params: ACPRequestPermissionRequest,
-      ): Promise<ACPRequestPermissionResponse> => {
-        const allowOption = params.options.find(
-          (opt) => opt.kind === 'allow_once' || opt.kind === 'allow_always',
-        );
+      .onRequest(
+        methods.client.session.requestPermission,
+        ({ params }): ACPRequestPermissionResponse => {
+          const allowOption = params.options.find(
+            (opt) => opt.kind === 'allow_once' || opt.kind === 'allow_always',
+          );
 
-        if (allowOption) {
+          if (allowOption) {
+            return {
+              outcome: {
+                outcome: 'selected',
+                optionId: allowOption.optionId,
+              },
+            };
+          }
+
           return {
             outcome: {
               outcome: 'selected',
-              optionId: allowOption.optionId,
+              optionId: params.options[0]?.optionId ?? '',
             },
           };
-        }
-
-        return {
-          outcome: {
-            outcome: 'selected',
-            optionId: params.options[0]?.optionId ?? '',
-          },
-        };
-      },
-    };
-
-    // Create client-side ACP connection
-    const connection = new ClientSideConnection((_agent: ACPAgent) => acpClient, stream);
+        },
+      )
+      .connect(stream);
+    const agent = connection.agent;
 
     // Emit init message
     this.emitInit(
@@ -281,7 +274,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
 
     try {
       // Step 1: Initialize the ACP connection
-      const initResult = await connection.initialize({
+      const initResult = await agent.request(methods.agent.initialize, {
         protocolVersion: 1,
         clientInfo: { name: 'funny', version: '1.0.0' },
         clientCapabilities: {},
@@ -291,7 +284,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
       // Step 2: Create a new session
       // MCP servers can be injected via agent templates or project config
       const mcpServerList = toACPMcpServers(this.options.mcpServers);
-      const sessionResponse = await connection.newSession({
+      const sessionResponse = await agent.request(methods.agent.session.new, {
         cwd: this.options.cwd,
         mcpServers: mcpServerList,
       });
@@ -311,10 +304,11 @@ export class DeepAgentProcess extends BaseAgentProcess {
           );
         }
       }
-      const promptResponse = await connection.prompt({
+      const promptParams: ACPPromptRequest = {
         sessionId: sessionResponse.sessionId,
         prompt: promptBlocks,
-      });
+      };
+      const promptResponse = await agent.request(methods.agent.session.prompt, promptParams);
 
       // Extract usage if available
       if (promptResponse.usage) {
@@ -358,6 +352,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
         });
       }
     } finally {
+      connection.close();
       if (this.childProcess && !this.childProcess.killed) {
         killProcessTree(this.childProcess);
       }

@@ -2,7 +2,7 @@
  * Tests for `discoverOpenCodeModels` — spawns `opencode acp` just long enough to
  * call `initialize` + `newSession`, reads the advertised `models.availableModels`,
  * then tears the child down. We mock `child_process.spawn` and
- * `@agentclientprotocol/sdk` so every branch is exercised without shelling out.
+ * `@agentclientprotocol/sdk/unstable` so every branch is exercised without shelling out.
  */
 
 import { EventEmitter } from 'events';
@@ -45,16 +45,26 @@ const { spawnMock, mockInitialize, mockNewSession } = vi.hoisted(() => ({
 }));
 
 vi.mock('child_process', () => ({ spawn: spawnMock }));
-vi.mock('@agentclientprotocol/sdk', () => {
-  class ClientSideConnection {
-    initialize(...args: unknown[]) {
-      return mockInitialize(...args);
-    }
-    newSession(...args: unknown[]) {
-      return mockNewSession(...args);
-    }
-  }
-  return { ClientSideConnection, ndJsonStream: () => ({}) as unknown };
+vi.mock('@agentclientprotocol/sdk/unstable', () => {
+  const methods = {
+    agent: { initialize: 'initialize', session: { new: 'session/new' } },
+    client: {
+      session: { update: 'session/update', requestPermission: 'session/request_permission' },
+    },
+  };
+  const agent = {
+    request(method: string, params: unknown) {
+      if (method === methods.agent.initialize) return mockInitialize(params);
+      if (method === methods.agent.session.new) return mockNewSession(params);
+      return Promise.reject(new Error(`unexpected ACP method ${method}`));
+    },
+  };
+  const app = {
+    onNotification: () => app,
+    onRequest: () => app,
+    connect: () => ({ agent, close: () => {} }),
+  };
+  return { client: () => app, methods, ndJsonStream: () => ({}) as unknown };
 });
 
 const ENVS = ['OPENCODE_BIN', 'ACP_OPENCODE_BIN', 'OPENCODE_ACP_USE_NPX'];

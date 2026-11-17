@@ -75,7 +75,7 @@ const PI_EXTENSION_PACKAGE_SCHEMA = z
 
 type PiSdk = typeof import('@earendil-works/pi-coding-agent');
 type AgentSession = Awaited<ReturnType<PiSdk['createAgentSession']>>['session'];
-type ModelRegistry = ReturnType<PiSdk['ModelRegistry']['create']>;
+type ModelRuntime = Awaited<ReturnType<PiSdk['ModelRuntime']['create']>>;
 
 export class PiSDKProcess extends BaseAgentProcess {
   private session: AgentSession | null = null;
@@ -105,6 +105,7 @@ export class PiSDKProcess extends BaseAgentProcess {
 
   protected async runProcess(): Promise<void> {
     this.startTime = Date.now();
+    let modelRuntime: ModelRuntime | null = null;
     try {
       let sdk: PiSdk;
       try {
@@ -116,11 +117,10 @@ export class PiSDKProcess extends BaseAgentProcess {
       }
 
       const agentDir = sdk.getAgentDir();
-      const authStorage = sdk.AuthStorage.create();
-      const modelRegistry = sdk.ModelRegistry.create(authStorage);
+      modelRuntime = await createModelRuntime(sdk, agentDir);
       const settingsManager = sdk.SettingsManager.create(this.options.cwd, agentDir);
       const sessionManager = await createPiSessionManager(this.options.cwd, this.options.sessionId);
-      const model = resolveRequestedModel(modelRegistry, this.options.model);
+      const model = resolveRequestedModel(modelRuntime, this.options.model);
       const thinkingLevel = normalizeThinkingLevel(this.options.effort);
       const resourceLoader = await createResourceLoader(
         sdk,
@@ -135,8 +135,7 @@ export class PiSDKProcess extends BaseAgentProcess {
       const { session } = await sdk.createAgentSession({
         cwd: this.options.cwd,
         agentDir,
-        authStorage,
-        modelRegistry,
+        modelRuntime,
         settingsManager,
         sessionManager,
         ...(resourceLoader ? { resourceLoader } : {}),
@@ -163,6 +162,7 @@ export class PiSDKProcess extends BaseAgentProcess {
       this.session = null;
       await this.mcpBridge?.close();
       this.mcpBridge = null;
+      await settleCredentialWrites(modelRuntime);
       if (!this.hasExited) this.finalize();
     }
   }
@@ -473,10 +473,10 @@ export async function discoverPiModels(): Promise<
     return { ok: false, reason: 'sdk_missing', message: 'Pi SDK is not installed' };
   }
 
+  let runtime: ModelRuntime | null = null;
   try {
-    const authStorage = sdk.AuthStorage.create();
-    const registry = sdk.ModelRegistry.create(authStorage);
-    const available = registry.getAvailable();
+    runtime = await createModelRuntime(sdk, sdk.getAgentDir());
+    const available = await runtime.getAvailable();
     if (available.length === 0) {
       return {
         ok: false,
@@ -501,30 +501,49 @@ export async function discoverPiModels(): Promise<
       reason: 'agent_error',
       message: err instanceof Error ? err.message : String(err),
     };
+  } finally {
+    await settleCredentialWrites(runtime);
   }
 }
 
+/**
+ * Pi's model/auth runtime, reading the same `auth.json` (API keys and OAuth
+ * logins) and `models.json` that `pi` itself uses under the agent directory.
+ * Pi 1.x replaced `AuthStorage` + `ModelRegistry` with this single facade.
+ */
+function createModelRuntime(sdk: PiSdk, agentDir: string): Promise<ModelRuntime> {
+  return sdk.ModelRuntime.create({
+    authPath: join(agentDir, 'auth.json'),
+    modelsPath: join(agentDir, 'models.json'),
+  });
+}
+
+/** Let an OAuth refresh in progress save its rotated token before we drop the runtime. */
+async function settleCredentialWrites(runtime: ModelRuntime | null): Promise<void> {
+  await runtime?.settleCredentialWrites().catch(() => undefined);
+}
+
 export function resolveRequestedModel(
-  modelRegistry: ModelRegistry,
+  modelRuntime: ModelRuntime,
   requested?: string,
 ): any | undefined {
   if (!requested || requested === 'default') return undefined;
   const [provider, ...rest] = requested.includes('/') ? requested.split('/') : [];
   if (provider && rest.length > 0) {
-    const found = modelRegistry.find(provider, rest.join('/'));
+    const found = modelRuntime.getModel(provider, rest.join('/'));
     if (found) return found;
 
     if (PI_OPENAI_PROVIDERS.has(provider)) {
       const gpt56Id = resolvePiGpt56ModelId(rest.join('/'));
-      if (gpt56Id) return createPiGpt56Model(modelRegistry, provider, gpt56Id);
+      if (gpt56Id) return createPiGpt56Model(modelRuntime, provider, gpt56Id);
     }
   }
-  return modelRegistry.getAll().find((m: any) => m.id === requested);
+  return modelRuntime.getModels().find((m: any) => m.id === requested);
 }
 
 function addPiGpt56Models(
   models: { modelId: string; name: string }[],
-  available: Array<{ provider: string; id: string }>,
+  available: ReadonlyArray<{ provider: string; id: string }>,
 ): void {
   // Use a single configured OpenAI transport so the picker does not show
   // duplicate variants when both an API key and a Codex subscription exist.
@@ -546,16 +565,17 @@ function resolvePiGpt56ModelId(requested: string): string | undefined {
 }
 
 function createPiGpt56Model(
-  modelRegistry: ModelRegistry,
+  modelRuntime: ModelRuntime,
   provider: string,
   id: string,
 ): any | undefined {
-  // Pi 0.80.3 predates GPT-5.6. Its OpenAI Responses model is otherwise a
-  // compatible template: retain its provider/auth/transport configuration and
-  // only replace the documented GPT-5.6 model metadata.
+  // Builds funny's GPT-5.6 model (the `gpt-5.6` alias, or an id the catalog
+  // lacks). Its OpenAI Responses model is a compatible template: retain its
+  // provider/auth/transport configuration and only replace the documented
+  // GPT-5.6 model metadata.
   const template =
-    modelRegistry.find(provider, 'gpt-5.5') ??
-    modelRegistry.getAll().find((model: any) => model.provider === provider);
+    modelRuntime.getModel(provider, 'gpt-5.5') ??
+    modelRuntime.getModels().find((model: any) => model.provider === provider);
   if (!template) return undefined;
 
   const definition = PI_GPT_56_MODELS.find((model) => model.id === id);

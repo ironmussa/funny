@@ -268,6 +268,23 @@ export function graphNodeForkedFromRefLabels(
   return labels;
 }
 
+/**
+ * Branch label (as shown in a node's tooltip) → hash of the commit its tip sits
+ * on, so the tooltip can paint each branch in its tip's lane color. The first
+ * entry wins, matching topo order (newest first).
+ */
+export function graphBranchTipHashByLabel(
+  entries: readonly GraphNodeParentRefEntry[],
+): Map<string, string> {
+  const tips = new Map<string, string>();
+  for (const entry of entries) {
+    for (const label of graphNodeRefLabels(foldGraphRefs(entry.refs, entry.headBranch))) {
+      if (!tips.has(label)) tips.set(label, entry.hash);
+    }
+  }
+  return tips;
+}
+
 export interface GraphNodeParentLabel {
   commit: string;
   branchLabels: string[];

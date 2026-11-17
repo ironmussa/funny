@@ -14,6 +14,7 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactNode,
   type Ref,
   type UIEvent,
   type WheelEvent,
@@ -22,7 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
-import { GraphGutter, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
+import { GraphGutter, initialsOf, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
 import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
 import {
   DEFAULT_GRAPH_BRANCH_SCOPE,
@@ -32,6 +33,7 @@ import { useBranchActions } from '@/components/commit-graph/use-branch-actions';
 import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDialog';
 import { DiffStats } from '@/components/DiffStats';
 import { PRBadge } from '@/components/PRBadge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -69,6 +71,7 @@ import {
 import { graphLanePastel } from '@/lib/graph-colors';
 import {
   foldGraphRefs,
+  graphBranchTipHashByLabel,
   graphNodeForkedFromRefLabels,
   graphNodeParentLabels,
   graphNodeParentRefLabels,
@@ -522,27 +525,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   );
   const parentLabelByHash = useMemo(() => graphNodeParentLabels(displayEntries), [displayEntries]);
 
-  const layout = useMemo(() => {
-    // While filtering, the surviving commits are no longer contiguous in topo
-    // order, so the lane graph would render as a meaningless staircase. Show a
-    // flat list instead: one standalone node per row, no connecting rails.
-    if (isFiltering) {
-      return {
-        rows: displayEntries.map(() => ({
-          commitLane: 0,
-          nodeColor: 0,
-          segments: [],
-        })),
-        laneCount: 1,
-      };
-    }
-    return computeGraphRows(
-      displayEntries.map((e) => ({
-        hash: e.hash,
-        parentHashes: e.parentHashes,
-      })),
-    );
-  }, [displayEntries, isFiltering]);
+  const { layout, branchColorByLabel } = useGraphLayout(displayEntries, isFiltering);
   const laneCount = renderedGraphLaneCount(layout.laneCount);
   const laneGutterWidth = laneCount * LANE_WIDTH;
   const rebaseRailWidth = useMemo(() => {
@@ -826,6 +809,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                     null
                   }
                   parentLabel={parentLabelByHash.get(entry.hash) ?? null}
+                  branchColorByLabel={branchColorByLabel}
                   unpushed={unpushed.has(entry.hash)}
                   unpulled={unpulled.has(entry.hash) || inferredUnpulled.has(entry.hash)}
                   connectToWip={!!wipStatus && virtualRow.index === 0}
@@ -1263,6 +1247,126 @@ export function GraphWipRow({
   );
 }
 
+/** Lane layout of the visible rows (computed once per entries / filter change). */
+function graphLayout(entries: GraphLayoutEntries, isFiltering: boolean) {
+  // While filtering, the surviving commits are no longer contiguous in topo
+  // order, so the lane graph would render as a meaningless staircase. Show a
+  // flat list instead: one standalone node per row, no connecting rails.
+  if (isFiltering) {
+    return {
+      rows: entries.map(() => ({
+        commitLane: 0,
+        nodeColor: 0,
+        segments: [],
+      })),
+      laneCount: 1,
+    };
+  }
+  return computeGraphRows(
+    entries.map((e) => ({
+      hash: e.hash,
+      parentHashes: e.parentHashes,
+    })),
+  );
+}
+
+type GraphLayoutEntries = readonly (Parameters<typeof graphBranchTipHashByLabel>[0][number] & {
+  parentHashes: string[];
+})[];
+
+/**
+ * Branch label → its tip's lane pastel, for the colored dots in the node
+ * tooltip's parent-branch list (same color as the branch's chip and line).
+ */
+function branchColorsByLabel(
+  entries: GraphLayoutEntries,
+  layout: ReturnType<typeof graphLayout>,
+): ReadonlyMap<string, string> {
+  const rowIndexByHash = new Map(entries.map((e, index) => [e.hash, index]));
+  const colors = new Map<string, string>();
+  for (const [label, hash] of graphBranchTipHashByLabel(entries)) {
+    const row = layout.rows[rowIndexByHash.get(hash) ?? -1];
+    if (row) colors.set(label, graphLanePastel(row.nodeColor));
+  }
+  return colors;
+}
+
+/** The graph's lane layout plus each branch's lane color, recomputed together. */
+function useGraphLayout(entries: GraphLayoutEntries, isFiltering: boolean) {
+  return useMemo(() => {
+    const layout = graphLayout(entries, isFiltering);
+    return { layout, branchColorByLabel: branchColorsByLabel(entries, layout) };
+  }, [entries, isFiltering]);
+}
+
+/** A branch's lane color dot; muted when the branch has no row in view. */
+function BranchColorDot({ color }: { color: string | undefined }) {
+  return (
+    <span
+      aria-hidden
+      className={cn('size-2 shrink-0 rounded-full', !color && 'bg-muted-foreground')}
+      style={color ? { backgroundColor: color } : undefined}
+    />
+  );
+}
+
+/**
+ * The branches a node's parent sits on, each marked with its lane color: the
+ * same hue as its chip and graph line, so the entry reads as a branch rather
+ * than a bullet point.
+ */
+function ParentBranchList({
+  branches,
+  colorByLabel,
+}: {
+  branches: readonly string[];
+  colorByLabel: ReadonlyMap<string, string>;
+}) {
+  if (branches.length === 0) return null;
+  return (
+    <ul className="space-y-0.5" data-testid="graph-node-parent-branches">
+      {branches.map((branch) => (
+        <Tooltip key={branch}>
+          <TooltipTrigger asChild>
+            <li className="flex items-center gap-1.5">
+              <BranchColorDot color={colorByLabel.get(branch)} />
+              <span>{middleTruncate(branch, PARENT_BRANCH_LABEL_MAX_CHARS)}</span>
+            </li>
+          </TooltipTrigger>
+          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
+            {branch}
+          </TooltipContent>
+        </Tooltip>
+      ))}
+    </ul>
+  );
+}
+
+/** A person line in a graph node's tooltip: their avatar (initials if none) + label. */
+function NodeTooltipPerson({
+  name,
+  avatarUrl,
+  testId,
+  children,
+}: {
+  name: string;
+  avatarUrl: string | undefined;
+  testId: string;
+  children: ReactNode;
+}) {
+  return (
+    <span className="flex items-center gap-1.5" data-testid={testId}>
+      <Avatar size="xs">
+        {avatarUrl ? <AvatarImage src={avatarUrl} alt="" /> : null}
+        <AvatarFallback name={name} className="text-[0.5rem] font-semibold">
+          {initialsOf(name)}
+        </AvatarFallback>
+      </Avatar>
+      <span>{children}</span>
+    </span>
+  );
+}
+
 /** One commit row: graph gutter + subject/refs + author avatar, hash, link. */
 function GraphCommitRow({
   entry,
@@ -1287,6 +1391,7 @@ function GraphCommitRow({
   onSelectRebaseEvent,
   forkedFromRefLabel,
   parentLabel,
+  branchColorByLabel,
   unpushed,
   unpulled,
   connectToWip,
@@ -1317,6 +1422,8 @@ function GraphCommitRow({
   onSelectRebaseEvent: (event: GitRebaseReflogEventDTO) => void;
   forkedFromRefLabel: string | null;
   parentLabel: GraphNodeParentLabel | null;
+  /** Branch label → its tip's lane pastel (tooltip branch dots). */
+  branchColorByLabel: ReadonlyMap<string, string>;
   unpushed: boolean;
   unpulled: boolean;
   /** HEAD row with a dirty tree → draw the dashed stub up to the WIP node. */
@@ -1526,19 +1633,27 @@ function GraphCommitRow({
                     </TooltipTrigger>
                     <TooltipContent side="top">
                       <div className="flex flex-col gap-0.5">
-                        <span>
+                        <NodeTooltipPerson
+                          name={entry.author}
+                          avatarUrl={cachedAvatarUrl}
+                          testId="graph-node-tooltip-author"
+                        >
                           {t('graph.nodeAuthor', {
                             author: entry.author,
                             defaultValue: `Author: ${entry.author}`,
                           })}
-                        </span>
+                        </NodeTooltipPerson>
                         {hasDistinctCommitter ? (
-                          <span>
+                          <NodeTooltipPerson
+                            name={entry.committer}
+                            avatarUrl={cachedCommitterAvatarUrl}
+                            testId="graph-node-tooltip-committer"
+                          >
                             {t('graph.nodeCommitter', {
                               committer: entry.committer,
                               defaultValue: `Committed by: ${entry.committer}`,
                             })}
-                          </span>
+                          </NodeTooltipPerson>
                         ) : null}
                         {forkedFromRefLabel ? (
                           <span>
@@ -1556,22 +1671,10 @@ function GraphCommitRow({
                                 defaultValue: `Parent: ${parentLabel.commit}`,
                               })}
                             </span>
-                            {parentLabel.branchLabels.length > 0 ? (
-                              <ul className="list-disc space-y-0.5 pl-4">
-                                {parentLabel.branchLabels.map((branch) => (
-                                  <Tooltip key={branch}>
-                                    <TooltipTrigger asChild>
-                                      <li>
-                                        {middleTruncate(branch, PARENT_BRANCH_LABEL_MAX_CHARS)}
-                                      </li>
-                                    </TooltipTrigger>
-                                    <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
-                                      {branch}
-                                    </TooltipContent>
-                                  </Tooltip>
-                                ))}
-                              </ul>
-                            ) : null}
+                            <ParentBranchList
+                              branches={parentLabel.branchLabels}
+                              colorByLabel={branchColorByLabel}
+                            />
                           </>
                         ) : null}
                         {unpushed && <span>{t('history.unpushed', 'Not pushed')}</span>}

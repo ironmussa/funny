@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { GraphRefDTO } from '@/lib/api/git';
 import {
   foldGraphRefs,
+  graphBranchTipHashByLabel,
   graphNodeForkedFromRefLabels,
   graphNodeParentLabels,
   graphNodeParentRefLabels,
@@ -482,6 +483,31 @@ describe('summarizeGraphBranches', () => {
         state: 'remote-only',
         primaryAction: 'checkout',
       }),
+    ]);
+  });
+});
+
+describe('graphBranchTipHashByLabel', () => {
+  it('maps each branch label to the commit its tip sits on', () => {
+    const tips = graphBranchTipHashByLabel([
+      {
+        hash: 'feature-tip',
+        refs: [local('feat/x'), remote('origin/feat/x')],
+        headBranch: 'feat/x',
+        parentHashes: ['master-tip'],
+      },
+      { hash: 'middle', refs: [], headBranch: 'feat/x', parentHashes: ['master-tip'] },
+      {
+        hash: 'master-tip',
+        refs: [local('master'), remote('origin/master'), tag('v1')],
+        headBranch: 'feat/x',
+        parentHashes: [],
+      },
+    ]);
+
+    expect([...tips]).toEqual([
+      ['feat/x', 'feature-tip'],
+      ['master', 'master-tip'],
     ]);
   });
 });

@@ -43,7 +43,7 @@
     "@socket.io/bun-engine": "^0.1.0",
     "@trpc/server": "11.28.0",
     "better-auth": "^1.7.7",
-    "croner": "^10.0.1",
+    "croner": "^11.0.0",
     "drizzle-orm": "^0.45.2",
     "effect": "4.1.4",
     "hono": "^4.13.18",

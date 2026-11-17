@@ -23,6 +23,32 @@ vi.mock('@/components/PromptInput', () => ({
 }));
 
 describe('ThreadPreparationView', () => {
+  test('shows the time elapsed since the prompt was sent while preparing', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-11-17T10:00:07.000Z'));
+      renderWithProviders(
+        <ThreadPreparationView
+          prompt="hola"
+          metadata={{ timestamp: '2026-11-17T10:00:00.000Z' }}
+        />,
+      );
+      expect(screen.getByTestId('agent-working-elapsed')).toHaveTextContent('(duration.seconds:7)');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('hides the elapsed time once preparation failed', () => {
+    renderWithProviders(
+      <ThreadPreparationView
+        prompt="Fix the bug"
+        steps={[{ id: 'clone', label: 'Creating worktree', status: 'failed', error: 'Disk full' }]}
+      />,
+    );
+    expect(screen.queryByTestId('agent-working-elapsed')).not.toBeInTheDocument();
+  });
+
   test('keeps the prompt and disabled follow-up visible while worktree setup progresses', () => {
     renderWithProviders(
       <ThreadPreparationView

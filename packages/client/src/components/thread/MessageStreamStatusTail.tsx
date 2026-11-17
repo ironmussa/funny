@@ -9,8 +9,8 @@ import type { TFunction } from 'i18next';
 import { Clock } from 'lucide-react';
 import type { ReactNode } from 'react';
 
-import { D4CAnimation } from '../D4CAnimation';
 import { AgentResultCard, AgentInterruptedCard, AgentStoppedCard } from './AgentStatusCards';
+import { AgentWorkingIndicator } from './AgentWorkingIndicator';
 import {
   CodexSdkApprovalUnavailableCard,
   PermissionContinuationLostCard,
@@ -74,10 +74,11 @@ export function MessageStreamStatusTail(props: MessageStreamStatusTailProps) {
   return (
     <>
       {isRunning && !isExternal && (
-        <StatusBlock className="text-muted-foreground flex items-center gap-2.5 py-1 text-sm">
-          <D4CAnimation size={compact ? 'sm' : undefined} />
-          <span className="text-xs">{t('thread.agentWorking')}</span>
-        </StatusBlock>
+        <AgentWorkingIndicator
+          label={t('thread.agentWorking')}
+          startedAt={turnStartedAt}
+          compact={compact}
+        />
       )}
 
       {isRunning && isExternal && (

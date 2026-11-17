@@ -224,8 +224,10 @@ export function UserMessageRenderer({
 }: UserMessageRendererProps) {
   const msg = item.msg;
   return (
+    // No bottom padding: the footer (model · mode · time) already sits under the
+    // card, and the virtual-row gap separates it from the next row.
     <div
-      className="relative pb-3"
+      className="relative"
       {...(includeUserObserver ? { 'data-user-msg': msg.id } : {})}
       {...(includeItemKey ? { 'data-item-key': msg.id } : {})}
     >

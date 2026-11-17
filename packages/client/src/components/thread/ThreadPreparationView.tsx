@@ -1,12 +1,11 @@
 import { CircleX } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { D4CAnimation } from '@/components/D4CAnimation';
 import type { GitProgressStep } from '@/components/GitProgressModal';
 import { PromptInput } from '@/components/PromptInput';
 import type { SubmitFn } from '@/hooks/prompt-input-types';
-import { cn } from '@/lib/utils';
 
+import { AgentWorkingIndicator } from './AgentWorkingIndicator';
 import { UserMessageCard, type UserMessageCardProps } from './UserMessageCard';
 
 /** The submitted message as the card shows it, images included, so the swap to
@@ -65,35 +64,34 @@ export function ThreadPreparationView({
       >
         <div className="mx-auto w-full max-w-3xl min-w-0 space-y-4 px-4 pt-1 pb-4 md:pt-4">
           {prompt && (
-            <div className="relative pt-3 pb-3">
+            <div className="relative pt-3">
               <UserMessageCard content={prompt} {...metadata} />
             </div>
           )}
-          <div
-            role="status"
-            className={cn(
-              'text-muted-foreground py-1 text-sm',
-              failed && 'border-destructive/40 bg-destructive/5 rounded-md border px-3 py-2',
-            )}
-            data-testid="thread-preparation-status"
-          >
-            <div className="flex items-center gap-2.5">
-              {failed ? (
+          {failed ? (
+            <div
+              role="status"
+              className="border-destructive/40 bg-destructive/5 text-muted-foreground rounded-md border px-3 py-2 text-sm"
+              data-testid="thread-preparation-status"
+            >
+              <div className="flex items-center gap-2.5">
                 <CircleX
                   className="text-destructive icon-sm shrink-0"
                   data-testid="thread-preparation-failed"
                 />
-              ) : (
-                <D4CAnimation />
+                <span className="text-destructive text-xs font-medium">{step?.label}</span>
+              </div>
+              {step?.error && (
+                <p className="text-destructive mt-2 text-xs whitespace-pre-wrap">{step.error}</p>
               )}
-              <span className={cn('text-xs', failed && 'text-destructive font-medium')}>
-                {step?.label ?? t('common.preparing', 'Preparing…')}
-              </span>
             </div>
-            {step?.error && (
-              <p className="text-destructive mt-2 text-xs whitespace-pre-wrap">{step.error}</p>
-            )}
-          </div>
+          ) : (
+            <AgentWorkingIndicator
+              data-testid="thread-preparation-status"
+              label={step?.label ?? t('common.preparing', 'Preparing…')}
+              startedAt={metadata?.timestamp}
+            />
+          )}
         </div>
 
         <div className="grow" aria-hidden="true" />

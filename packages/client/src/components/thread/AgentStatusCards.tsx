@@ -4,19 +4,7 @@ import { Trans, useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 
 import { CopyThreadButton } from './CopyThreadButton';
-
-function formatDuration(ms: number, t: (key: string, opts?: any) => string): string {
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return t('duration.seconds', { count: seconds });
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) {
-    const remainingSeconds = seconds % 60;
-    return t('duration.minutesSeconds', { minutes, seconds: remainingSeconds });
-  }
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return t('duration.hoursMinutes', { hours, minutes: remainingMinutes });
-}
+import { formatDuration } from './format-duration';
 
 /** Live runs report their duration; reloaded threads derive it from the turn bounds. */
 function resolveDuration(duration: number, startedAt?: string | null, completedAt?: string | null) {

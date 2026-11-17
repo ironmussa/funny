@@ -1,4 +1,4 @@
-import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
 import { describe, expect, test, vi } from 'vitest';
 
@@ -170,5 +170,28 @@ describe('MessageStreamStatusTail', () => {
     expect(screen.queryByTestId('provider-error-card')).not.toBeInTheDocument();
     expect(screen.queryByTestId('permission-approve-once')).not.toBeInTheDocument();
     expect(screen.queryByTestId('codex-sdk-approval-unavailable')).not.toBeInTheDocument();
+  });
+
+  test('shows the seconds elapsed since the turn started while the agent works', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-11-17T10:00:12.000Z'));
+      render(
+        <MessageStreamStatusTail
+          {...baseProps}
+          status="running"
+          isRunning
+          turnStartedAt="2026-11-17T10:00:00.000Z"
+        />,
+      );
+      expect(screen.getByTestId('agent-working-elapsed')).toHaveTextContent('(12s)');
+
+      act(() => {
+        vi.advanceTimersByTime(3000);
+      });
+      expect(screen.getByTestId('agent-working-elapsed')).toHaveTextContent('(15s)');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

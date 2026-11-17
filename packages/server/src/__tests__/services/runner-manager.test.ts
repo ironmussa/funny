@@ -85,6 +85,23 @@ describe('runner-manager service', () => {
       expect(runner?.activeThreadCount).toBe(2);
     });
 
+    test('does not bring back a runner whose gRPC session dropped', async () => {
+      seedRunner(t.db as any, {
+        id: 'r-gone',
+        token: 'tok-gone',
+        userId: 'user-1',
+        status: 'online',
+      });
+      await rm.markRunnerOffline('r-gone');
+
+      expect(await rm.handleHeartbeat('r-gone', { activeThreadIds: ['t1'] })).toBe(true);
+
+      const runner = await rm.getRunner('r-gone');
+      expect(runner?.status).toBe('offline');
+      expect(runner?.activeThreadCount).toBe(1);
+      expect(await rm.findAnyRunnerForUser('user-1')).toBeNull();
+    });
+
     test('returns false when runner no longer exists', async () => {
       expect(await rm.handleHeartbeat('missing', { activeThreadIds: [] })).toBe(false);
     });
@@ -399,6 +416,21 @@ describe('runner-manager service', () => {
       const purged = await rm.purgeOfflineRunners(60_000);
       expect(purged).toBe(1);
       expect(await rm.getRunner('stale-off')).toBeNull();
+    });
+  });
+
+  describe('markRunnerOnline', () => {
+    test('brings an offline runner back and keeps the load it reported', async () => {
+      seedRunner(t.db as any, { id: 'r-on', token: 'tok-on', userId: 'user-1', status: 'online' });
+      await rm.handleHeartbeat('r-on', { activeThreadIds: ['t1'] });
+      await rm.markRunnerOffline('r-on');
+
+      await rm.markRunnerOnline('r-on');
+      expect((await rm.getRunner('r-on'))?.status).toBe('busy');
+
+      await rm.handleHeartbeat('r-on', { activeThreadIds: [] });
+      await rm.markRunnerOnline('r-on');
+      expect((await rm.getRunner('r-on'))?.status).toBe('online');
     });
   });
 

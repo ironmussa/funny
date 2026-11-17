@@ -95,6 +95,22 @@ describe('queue list', () => {
     expect(queueNeedsLoad(row())).toBe(false);
   });
 
+  test('a stale count from a late send response is corrected by the list', async () => {
+    // The queued message was dequeued (queue:update count 0) before the send
+    // response, still saying queuedCount 1, reached the client.
+    applyQueueSummary('t1', 1, 'fase 4');
+    applyQueueSummary('t1', 0, undefined);
+    applyQueueCount('t1', 1);
+    expect(queueNeedsLoad(row())).toBe(true);
+    mockApi.listQueue.mockReturnValue(okAsync([]));
+
+    await loadList();
+
+    expect(row()).toMatchObject({ count: 0, messages: [] });
+    expect(readQueuedCount('t1')).toBe(0);
+    expect(queueNeedsLoad(row())).toBe(false);
+  });
+
   test('a list that returns after the summary moved on is dropped', async () => {
     applyQueueSummary('t1', 1, 'first');
     const response = deferred<QueuedMessage[]>();

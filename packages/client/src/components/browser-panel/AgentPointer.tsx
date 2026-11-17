@@ -35,8 +35,6 @@ export function AgentPointer({
         top: `${(pointer.y / viewport.height) * 100}%`,
       }}
     >
-      {/* Always-on halo so the cursor stands out in a small, scaled-down panel. */}
-      <span className="bg-status-info/30 ring-status-info/60 absolute -top-4 -left-4 size-8 rounded-full ring-2" />
       {pulsing && (
         <span
           key={pointer.seq}

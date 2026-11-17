@@ -106,7 +106,12 @@ export function queueListQuery(threadId: string, rev: number, layer: DataLayer =
       const store = getQueueStore(layer);
       const row = store.getSynced(threadId);
       if (row && row.rev === rev) {
-        store.upsert([{ ...row, messages, next: messages[0]?.content, loadedRev: rev }]);
+        // The list is the server's queue, so its length is the count. A send
+        // response that lands after the dequeue event can leave the summary
+        // at a count the queue no longer has; the list corrects it.
+        store.upsert([
+          { ...row, count: messages.length, messages, next: messages[0]?.content, loadedRev: rev },
+        ]);
       }
       return messages.length;
     },

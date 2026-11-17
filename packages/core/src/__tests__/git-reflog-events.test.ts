@@ -5,10 +5,24 @@ import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+// Count the `git patch-id` runs: one per computation of the commit pairs.
+const patchIdRuns = vi.hoisted(() => ({ count: 0 }));
+vi.mock('../git/process.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../git/process.js')>();
+  return {
+    ...actual,
+    execute: (...args: Parameters<typeof actual.execute>) => {
+      if (args[0] === 'git' && args[1][0] === 'patch-id') patchIdRuns.count += 1;
+      return actual.execute(...args);
+    },
+  };
+});
 
 import { getRebaseReflogEvents } from '../git/index.js';
 import { executeSync } from '../git/process.js';
+import { clearRebasePairsCache } from '../git/rebase-pairs-cache.js';
 
 const TMP = resolve(tmpdir(), 'core-reflog-events-' + Date.now());
 
@@ -57,6 +71,8 @@ function initRebasedRepo(): {
 describe('getRebaseReflogEvents', () => {
   beforeEach(() => {
     mkdirSync(TMP, { recursive: true });
+    clearRebasePairsCache();
+    patchIdRuns.count = 0;
   });
 
   afterEach(() => {
@@ -101,5 +117,42 @@ describe('getRebaseReflogEvents', () => {
         }),
       ]),
     );
+  });
+
+  it('reuses the commit pairs until a new rebase reaches the reflog', async () => {
+    const { repo, originalOne, rebasedOne } = initRebasedRepo();
+
+    const first = (await getRebaseReflogEvents(repo))._unsafeUnwrap();
+    expect(patchIdRuns.count).toBe(1);
+
+    // A plain commit adds a reflog entry but no rebase step, so the pairs come
+    // from the cache.
+    commitFile(repo, 'later.txt', 'later', 'later work');
+    const second = (await getRebaseReflogEvents(repo))._unsafeUnwrap();
+    expect(patchIdRuns.count).toBe(1);
+    expect(second[0].commitPairs).toEqual(first[0].commitPairs);
+    expect(second[0].commitPairs).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ originalHash: originalOne, rebasedHash: rebasedOne }),
+      ]),
+    );
+
+    // A new rebase changes the events, so the pairs are computed again.
+    git(repo, ['checkout', 'main']);
+    commitFile(repo, 'main-two.txt', 'main two', 'more main work');
+    git(repo, ['checkout', 'feature']);
+    git(repo, ['rebase', 'main']);
+    const third = (await getRebaseReflogEvents(repo))._unsafeUnwrap();
+    expect(patchIdRuns.count).toBe(2);
+    expect(third).toHaveLength(2);
+    expect(third[0].commitPairs.length).toBeGreaterThan(0);
+  });
+
+  it('shares one computation between concurrent requests', async () => {
+    const { repo } = initRebasedRepo();
+
+    const [a, b] = await Promise.all([getRebaseReflogEvents(repo), getRebaseReflogEvents(repo)]);
+    expect(patchIdRuns.count).toBe(1);
+    expect(a._unsafeUnwrap()[0].commitPairs).toEqual(b._unsafeUnwrap()[0].commitPairs);
   });
 });

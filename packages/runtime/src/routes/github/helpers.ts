@@ -1,9 +1,12 @@
 import { execute, getRemoteUrl } from '@funny/core/git';
 import type { GitHubIssue, PRIssueComment, PRReactionSummary } from '@funny/shared';
+import type { Context } from 'hono';
+import type { ContentfulStatusCode } from 'hono/utils/http-status';
 
 import { parseGithubOwnerRepo } from '../../lib/github-remote.js';
 import { log } from '../../lib/logger.js';
 import { getServices } from '../../services/service-registry.js';
+import type { HonoEnv } from '../../types/hono-env.js';
 import { requireProject } from '../../utils/route-helpers.js';
 import {
   cacheKey,
@@ -17,6 +20,7 @@ import {
   setEntry,
   touchEntry,
 } from './github-cache.js';
+import { positiveIntParam } from './query.js';
 
 export const GITHUB_API = 'https://api.github.com';
 export const DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -234,13 +238,53 @@ export function mapIssueComment(cm: any): PRIssueComment {
   };
 }
 
-/** Post a comment (`{ body }`) to a GitHub comments endpoint. */
-export function postGithubComment(path: string, token: string, body: string): Promise<Response> {
+/** Send a JSON body to the GitHub REST API (POST / PATCH / PUT / DELETE). */
+export function sendGithubJson(
+  path: string,
+  token: string,
+  method: 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+  payload: unknown,
+): Promise<Response> {
   return githubApiFetch(path, token, {
-    method: 'POST',
+    method,
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ body }),
+    body: JSON.stringify(payload),
   });
+}
+
+/** REST path of a PR comment: a conversation (`issue`) or a review (`review`) comment. */
+export function githubCommentPath(
+  repo: { owner: string; repo: string },
+  kind: 'issue' | 'review',
+  commentId: number,
+): string {
+  const scope = kind === 'issue' ? 'issues' : 'pulls';
+  return `/repos/${repo.owner}/${repo.repo}/${scope}/comments/${commentId}`;
+}
+
+/** 502 carrying GitHub's status and response text, for a failed write. */
+export async function githubErrorWithBody(c: Context<HonoEnv>, res: Response) {
+  const text = await res.text();
+  return c.json({ error: `GitHub API error: ${res.status} ${text}` }, 502);
+}
+
+/**
+ * Every item of a paginated GitHub list (`path` without paging params),
+ * 100 per page, or the status of the first page that failed.
+ */
+export async function fetchAllPages(
+  path: string,
+  token: string,
+): Promise<{ ok: true; items: any[] } | { ok: false; status: number }> {
+  const items: any[] = [];
+  const separator = path.includes('?') ? '&' : '?';
+  for (let page = 1; ; page++) {
+    const res = await githubApiFetch(`${path}${separator}per_page=100&page=${page}`, token);
+    if (!res.ok) return { ok: false, status: res.status };
+    const data = (await res.json()) as any[];
+    items.push(...data);
+    if (data.length < 100) return { ok: true, items };
+  }
 }
 
 /** One issue's (or PR's) conversation comments, oldest first, up to 100. */
@@ -271,7 +315,7 @@ export async function requireAccessibleProject(
 }
 
 /** Resolve a GitHub project context: parse remote, token, owner/repo. */
-export async function resolveGithubProjectContext(
+async function resolveGithubProjectContext(
   projectId: string,
   userId: string,
   organizationId: string | null,
@@ -290,6 +334,46 @@ export async function resolveGithubProjectContext(
   const resolved = await resolveGithubToken(userId);
   if (!resolved) return { ok: false, status: 401, error: 'No GitHub token available' };
   return { ok: true, owner: parsed.owner, repo: parsed.repo, token: resolved.token };
+}
+
+/** The GitHub repository a project points at, with the caller's token for it. */
+export interface GithubRepoAccess {
+  owner: string;
+  repo: string;
+  token: string;
+}
+
+/**
+ * The caller's GitHub access for a project, or the error response the route
+ * returns as is (404 project not visible, 400 no GitHub remote, 401 no token).
+ */
+export async function githubRepoFor(
+  c: Context<HonoEnv>,
+  projectId: string,
+): Promise<GithubRepoAccess | Response> {
+  const ctx = await resolveGithubProjectContext(
+    projectId,
+    c.get('userId') as string,
+    c.get('organizationId'),
+  );
+  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as ContentfulStatusCode);
+  return { owner: ctx.owner, repo: ctx.repo, token: ctx.token };
+}
+
+/**
+ * `githubRepoFor` for a PR route whose query carries `projectId` and
+ * `prNumber`: 400 when either is missing, then the same answers.
+ */
+export async function githubPrFor(
+  c: Context<HonoEnv>,
+): Promise<(GithubRepoAccess & { prNumber: number }) | Response> {
+  const projectId = c.req.query('projectId');
+  const prNumber = positiveIntParam(c, 'prNumber');
+  if (!projectId || !prNumber) {
+    return c.json({ error: 'projectId and prNumber are required' }, 400);
+  }
+  const access = await githubRepoFor(c, projectId);
+  return access instanceof Response ? access : { ...access, prNumber };
 }
 
 export interface ResolvedToken {

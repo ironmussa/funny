@@ -7,8 +7,8 @@ import type { HonoEnv } from '../../types/hono-env.js';
 import {
   fetchIssueComments,
   fetchRepoIssues,
+  githubRepoFor,
   mapIssueComment,
-  resolveGithubProjectContext,
   resolveGithubToken,
 } from './helpers.js';
 import { linkIssues, type LinkablePR } from './issue-links.js';
@@ -114,12 +114,8 @@ issueRoutes.get('/issue-comments', async (c) => {
     return c.json({ error: 'projectId and issueNumber are required' }, 400);
   }
 
-  const repo = await resolveGithubProjectContext(
-    projectId,
-    c.get('userId') as string,
-    c.get('organizationId'),
-  );
-  if (!repo.ok) return c.json({ error: repo.error }, repo.status as any);
+  const repo = await githubRepoFor(c, projectId);
+  if (repo instanceof Response) return repo;
 
   try {
     const res = await fetchIssueComments(repo, issueNumber);

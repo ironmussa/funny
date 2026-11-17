@@ -173,6 +173,11 @@ export const githubApi = {
       body: JSON.stringify({ projectId, prNumber, method }),
     }),
 
+  githubIssueComments: (projectId: string, issueNumber: number) =>
+    request<{ comments: import('@funny/shared').PRIssueComment[] }>(
+      `/github/issue-comments?projectId=${projectId}&issueNumber=${issueNumber}`,
+    ),
+
   githubPRConversation: (projectId: string, prNumber: number) =>
     request<import('@funny/shared').PRConversation>(
       `/github/pr-conversation?projectId=${projectId}&prNumber=${prNumber}`,

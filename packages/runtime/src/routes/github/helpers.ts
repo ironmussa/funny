@@ -1,5 +1,5 @@
 import { execute, getRemoteUrl } from '@funny/core/git';
-import type { GitHubIssue, PRReactionSummary } from '@funny/shared';
+import type { GitHubIssue, PRIssueComment, PRReactionSummary } from '@funny/shared';
 
 import { parseGithubOwnerRepo } from '../../lib/github-remote.js';
 import { log } from '../../lib/logger.js';
@@ -217,6 +217,41 @@ export function mapReactions(raw: any): PRReactionSummary {
     rocket: raw.rocket ?? 0,
     eyes: raw.eyes ?? 0,
   };
+}
+
+/** Map a REST issue comment (`/issues/:n/comments`) — PRs and issues share them. */
+export function mapIssueComment(cm: any): PRIssueComment {
+  return {
+    id: cm.id,
+    author: cm.user?.login ?? '',
+    author_avatar_url: cm.user?.avatar_url ?? '',
+    author_association: cm.author_association ?? '',
+    body: cm.body ?? '',
+    created_at: cm.created_at ?? '',
+    updated_at: cm.updated_at ?? '',
+    html_url: cm.html_url ?? '',
+    reactions: mapReactions(cm.reactions),
+  };
+}
+
+/** Post a comment (`{ body }`) to a GitHub comments endpoint. */
+export function postGithubComment(path: string, token: string, body: string): Promise<Response> {
+  return githubApiFetch(path, token, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ body }),
+  });
+}
+
+/** One issue's (or PR's) conversation comments, oldest first, up to 100. */
+export function fetchIssueComments(
+  repo: { owner: string; repo: string; token: string },
+  issueNumber: number,
+): Promise<Response> {
+  return githubApiFetch(
+    `/repos/${repo.owner}/${repo.repo}/issues/${issueNumber}/comments?per_page=100&sort=created&direction=asc`,
+    repo.token,
+  );
 }
 
 /**

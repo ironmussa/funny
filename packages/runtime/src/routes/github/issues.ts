@@ -1,12 +1,20 @@
 import { listBranches } from '@funny/core/git';
+import type { PRIssueComment } from '@funny/shared';
 import { Hono } from 'hono';
 
 import { log } from '../../lib/logger.js';
 import type { HonoEnv } from '../../types/hono-env.js';
-import { fetchRepoIssues, resolveGithubToken } from './helpers.js';
+import {
+  fetchIssueComments,
+  fetchRepoIssues,
+  mapIssueComment,
+  resolveGithubProjectContext,
+  resolveGithubToken,
+} from './helpers.js';
 import { linkIssues, type LinkablePR } from './issue-links.js';
 import { fetchIssuesWithLinks } from './issues-graphql.js';
 import { type GithubListContext, readGithubListContext } from './list-context.js';
+import { positiveIntParam } from './query.js';
 
 export const issueRoutes = new Hono<HonoEnv>();
 
@@ -93,6 +101,32 @@ issueRoutes.get('/issues-enriched', async (c) => {
       repo: `${owner}/${repo}`,
       error: error?.message,
     });
+    return c.json({ error: error.message }, 502);
+  }
+});
+
+// ── GET /issue-comments — comments of one issue, oldest first ──────
+
+issueRoutes.get('/issue-comments', async (c) => {
+  const projectId = c.req.query('projectId');
+  const issueNumber = positiveIntParam(c, 'issueNumber');
+  if (!projectId || !issueNumber) {
+    return c.json({ error: 'projectId and issueNumber are required' }, 400);
+  }
+
+  const repo = await resolveGithubProjectContext(
+    projectId,
+    c.get('userId') as string,
+    c.get('organizationId'),
+  );
+  if (!repo.ok) return c.json({ error: repo.error }, repo.status as any);
+
+  try {
+    const res = await fetchIssueComments(repo, issueNumber);
+    if (!res.ok) return c.json({ error: `GitHub API error: ${res.status}` }, 502);
+    const comments: PRIssueComment[] = ((await res.json()) as any[]).map(mapIssueComment);
+    return c.json({ comments });
+  } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }
 });

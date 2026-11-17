@@ -13,9 +13,12 @@ import { log } from '../../lib/logger.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody } from '../../validation/request.js';
 import {
+  fetchIssueComments,
   githubApiFetch,
   githubGraphQL,
+  mapIssueComment,
   mapReactions,
+  postGithubComment,
   parseGithubOwnerRepo,
   requireAccessibleProject,
   resolveGithubProjectContext,
@@ -240,10 +243,7 @@ prThreadRoutes.get('/pr-conversation', async (c) => {
 
   try {
     const [commentsRes, reviewsRes] = await Promise.all([
-      githubApiFetch(
-        `/repos/${owner}/${repo}/issues/${prNumber}/comments?per_page=100&sort=created&direction=asc`,
-        token,
-      ),
+      fetchIssueComments(ctx, prNumber),
       githubApiFetch(`/repos/${owner}/${repo}/pulls/${prNumber}/reviews?per_page=100`, token),
     ]);
 
@@ -253,17 +253,7 @@ prThreadRoutes.get('/pr-conversation', async (c) => {
     const rawComments = (await commentsRes.json()) as any[];
     const rawReviews = (await reviewsRes.json()) as any[];
 
-    const comments: PRIssueComment[] = rawComments.map((cm) => ({
-      id: cm.id,
-      author: cm.user?.login ?? '',
-      author_avatar_url: cm.user?.avatar_url ?? '',
-      author_association: cm.author_association ?? '',
-      body: cm.body ?? '',
-      created_at: cm.created_at ?? '',
-      updated_at: cm.updated_at ?? '',
-      html_url: cm.html_url ?? '',
-      reactions: mapReactions(cm.reactions),
-    }));
+    const comments: PRIssueComment[] = rawComments.map(mapIssueComment);
 
     const reviews: PRReview[] = rawReviews
       .filter((rv) => rv.state !== 'PENDING')
@@ -300,31 +290,16 @@ prThreadRoutes.post('/pr-comment', async (c) => {
   const { owner, repo, token } = ctx;
 
   try {
-    const res = await githubApiFetch(
+    const res = await postGithubComment(
       `/repos/${owner}/${repo}/issues/${raw.prNumber}/comments`,
       token,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: raw.body }),
-      },
+      raw.body,
     );
     if (!res.ok) {
       const text = await res.text();
       return c.json({ error: `GitHub API error: ${res.status} ${text}` }, 502);
     }
-    const cm = (await res.json()) as any;
-    const comment: PRIssueComment = {
-      id: cm.id,
-      author: cm.user?.login ?? '',
-      author_avatar_url: cm.user?.avatar_url ?? '',
-      author_association: cm.author_association ?? '',
-      body: cm.body ?? '',
-      created_at: cm.created_at ?? '',
-      updated_at: cm.updated_at ?? '',
-      html_url: cm.html_url ?? '',
-      reactions: mapReactions(cm.reactions),
-    };
+    const comment: PRIssueComment = mapIssueComment(await res.json());
     return c.json(comment);
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
@@ -347,14 +322,10 @@ prThreadRoutes.post('/pr-review-reply', async (c) => {
   const { owner, repo, token } = ctx;
 
   try {
-    const res = await githubApiFetch(
+    const res = await postGithubComment(
       `/repos/${owner}/${repo}/pulls/${raw.prNumber}/comments/${raw.commentId}/replies`,
       token,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: raw.body }),
-      },
+      raw.body,
     );
     if (!res.ok) {
       const text = await res.text();

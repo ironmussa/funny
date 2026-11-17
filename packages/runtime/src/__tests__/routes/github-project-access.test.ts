@@ -58,10 +58,11 @@ function app(userId: string) {
   return a;
 }
 
-const q = 'projectId=p-1&prNumber=1&filePath=README.md&sha=abc';
+const q = 'projectId=p-1&prNumber=1&issueNumber=1&filePath=README.md&sha=abc';
 const GET_ROUTES = [
   `/gh/issues?${q}`,
   `/gh/issues-enriched?${q}`,
+  `/gh/issue-comments?${q}`,
   `/gh/prs?${q}`,
   `/gh/prs-search?${q}&q=x`,
   `/gh/pr-filter-options?${q}`,

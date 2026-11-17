@@ -25,10 +25,11 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { AuthorBadge } from '@/components/AuthorBadge';
+import { MarkdownBody } from '@/components/MarkdownBody';
 import { PRBadge } from '@/components/PRBadge';
 import { getLastCommitAuthor } from '@/components/pull-requests/last-commit-author';
 import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
@@ -47,32 +48,9 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
-import {
-  baseMarkdownComponents,
-  remarkPlugins,
-  markdownProseClassName,
-} from '@/lib/markdown-components';
 import { cn } from '@/lib/utils';
 
 const log = createClientLogger('pinned-pr-card');
-
-const LazyMarkdown = lazy(() =>
-  Promise.all([import('react-markdown'), import('rehype-raw'), import('rehype-sanitize')]).then(
-    ([{ default: ReactMarkdown }, { default: rehypeRaw }, { default: rehypeSanitize }]) => ({
-      default: function Md({ content }: { content: string }) {
-        return (
-          <ReactMarkdown
-            remarkPlugins={remarkPlugins}
-            rehypePlugins={[rehypeRaw, rehypeSanitize]}
-            components={baseMarkdownComponents}
-          >
-            {content}
-          </ReactMarkdown>
-        );
-      },
-    }),
-  ),
-);
 
 function timeAgo(dateStr: string, now = Date.now()): string {
   if (!dateStr) return '';
@@ -211,22 +189,6 @@ function ReactionBar({
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-// ── Comment body renderer ──
-
-function MarkdownBody({ body }: { body: string }) {
-  const trimmed = (body ?? '').trim();
-  if (!trimmed) {
-    return <span className="text-muted-foreground italic">(empty)</span>;
-  }
-  return (
-    <div className={markdownProseClassName}>
-      <Suspense fallback={<pre className="text-xs whitespace-pre-wrap">{trimmed}</pre>}>
-        <LazyMarkdown content={trimmed} />
-      </Suspense>
     </div>
   );
 }

@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 
 import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 import { IssueBadges } from '@/components/IssueBadges';
+import { IssueDetailDialog } from '@/components/IssueDetailDialog';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -55,6 +56,7 @@ function IssuesContent({ visible }: IssuesTabProps) {
   const projectId = useGitHubProjectId();
   const startNewThreadFromIssue = useUIStore((s) => s.startNewThreadFromIssue);
   const [state, setState] = useState<IssueState>('open');
+  const [selectedIssue, setSelectedIssue] = useState<EnrichedGitHubIssue | null>(null);
 
   const fetchPage = useMemo<FetchGitHubListPage<EnrichedGitHubIssue> | null>(() => {
     if (!projectId) return null;
@@ -115,7 +117,19 @@ function IssuesContent({ visible }: IssuesTabProps) {
         hasMore={list.hasMore}
         onLoadMore={list.loadMore}
         onCreateThread={handleCreateThread}
+        onOpenIssue={setSelectedIssue}
       />
+      {selectedIssue && (
+        <IssueDetailDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setSelectedIssue(null);
+          }}
+          projectId={projectId}
+          issue={selectedIssue}
+          onCreateThread={repoInfo ? handleCreateThread : undefined}
+        />
+      )}
     </div>
   );
 }
@@ -208,6 +222,7 @@ function IssuesBody({
   hasMore,
   onLoadMore,
   onCreateThread,
+  onOpenIssue,
 }: {
   issues: EnrichedGitHubIssue[];
   loading: boolean;
@@ -216,6 +231,7 @@ function IssuesBody({
   hasMore: boolean;
   onLoadMore: () => void;
   onCreateThread: (issue: EnrichedGitHubIssue) => void;
+  onOpenIssue: (issue: EnrichedGitHubIssue) => void;
 }) {
   const { t } = useTranslation();
   const now = useMinuteTick();
@@ -253,7 +269,13 @@ function IssuesBody({
     <ScrollArea className="min-h-0 flex-1">
       <div className="divide-sidebar-border divide-y">
         {issues.map((issue) => (
-          <IssueRow key={issue.number} issue={issue} now={now} onCreateThread={onCreateThread} />
+          <IssueRow
+            key={issue.number}
+            issue={issue}
+            now={now}
+            onCreateThread={onCreateThread}
+            onOpen={onOpenIssue}
+          />
         ))}
       </div>
 
@@ -272,10 +294,12 @@ function IssueRow({
   issue,
   now,
   onCreateThread,
+  onOpen,
 }: {
   issue: EnrichedGitHubIssue;
   now: number;
   onCreateThread: (issue: EnrichedGitHubIssue) => void;
+  onOpen: (issue: EnrichedGitHubIssue) => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -290,14 +314,14 @@ function IssueRow({
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-baseline gap-1.5">
-          <a
-            href={issue.html_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="hover:text-primary text-foreground line-clamp-2 text-[11px] leading-5 font-medium transition-colors"
+          <button
+            type="button"
+            onClick={() => onOpen(issue)}
+            className="hover:text-primary text-foreground line-clamp-2 cursor-pointer text-left text-[11px] leading-5 font-medium transition-colors"
+            data-testid={`issue-title-${issue.number}`}
           >
             {issue.title}
-          </a>
+          </button>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-muted-foreground text-[10px]">#{issue.number}</span>

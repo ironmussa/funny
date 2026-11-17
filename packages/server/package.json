@@ -41,7 +41,7 @@
     "@grpc/proto-loader": "0.8.1",
     "@ironmussa/funny-runtime": "workspace:*",
     "@socket.io/bun-engine": "^0.1.0",
-    "@trpc/server": "11.28.0",
+    "@trpc/server": "11.28.2",
     "better-auth": "^1.7.7",
     "croner": "^10.0.1",
     "drizzle-orm": "^0.45.2",

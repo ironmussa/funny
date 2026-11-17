@@ -1,4 +1,11 @@
 import DOMPurify from 'dompurify';
+// Type-only: the WASM compiler itself is loaded lazily in loadSatteriCompiler().
+import type {
+  MdastPluginEntry,
+  MdastTarget,
+  MdastVisitorContext,
+  PluginFactoryContext,
+} from 'satteri';
 
 /** Maximum source + sanitized HTML retained by the shared markdown cache. */
 const SATTERI_MARKDOWN_CACHE_MAX_BYTES = 2 * 1024 * 1024;
@@ -214,12 +221,52 @@ export function createSafeMarkdownRenderer({
   };
 }
 
+type MdastLink = Extract<MdastTarget, { type: 'link' }>;
+
+const HAS_FILE_EXTENSION_RE = /\.[A-Za-z0-9][A-Za-z0-9_-]*$/;
+
+/**
+ * Href for an Obsidian-style `[[target]]` link. Sätteri emits the bare target
+ * (`slug`), which names a note, not a file: a target without an extension
+ * points at `target.md` beside the document, so the existing local-file link
+ * handling opens it. A `#heading` or `|alias` is already split off by the parser.
+ */
+export function wikilinkHref(target: string): string {
+  return HAS_FILE_EXTENSION_RE.test(target) ? target : `${target}.md`;
+}
+
+/**
+ * Sätteri parses `[[target]]` into an ordinary `link` node, indistinguishable
+ * from `[text](target)` once rendered. Its source position is not: a wiki link
+ * starts with `[[`. The factory drops out for documents without `[[`, which
+ * keeps them on Sätteri's plugin-free one-call path.
+ */
+// `satisfies`, not an annotation: Sätteri infers from the visitor's declared
+// `void` return that the compile is synchronous, which the sync render path needs.
+const wikilinkHrefPlugin = (({ source }: PluginFactoryContext) => {
+  if (!source.includes('[[')) return false;
+  return {
+    name: 'funny-wikilink-href',
+    options: { position: true },
+    link(node: Readonly<MdastLink>, ctx: MdastVisitorContext): void {
+      const offset = node.position?.start.offset;
+      if (offset === undefined || !source.startsWith('[[', offset)) return;
+      const href = wikilinkHref(node.url);
+      if (href !== node.url) ctx.setProperty(node, 'url', href);
+    },
+  };
+}) satisfies MdastPluginEntry;
+
 let compilerPromise: Promise<MarkdownCompiler> | null = null;
 let loadedCompiler: ((content: string) => string) | null = null;
 
 function loadSatteriCompiler(): Promise<MarkdownCompiler> {
   compilerPromise ??= import('satteri').then(({ markdownToHtml }) => {
-    loadedCompiler = (content) => markdownToHtml(content, { features: { gfm: true } }).html;
+    loadedCompiler = (content) =>
+      markdownToHtml(content, {
+        features: { gfm: true, wikilinks: true },
+        mdastPlugins: [wikilinkHrefPlugin],
+      }).html;
     return loadedCompiler;
   });
   return compilerPromise;

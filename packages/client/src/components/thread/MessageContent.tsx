@@ -9,8 +9,15 @@ import { SatteriMessageContent } from './SatteriMessageContent';
  * The sole thread markdown renderer. Sätteri emits sanitized HTML; a WASM
  * failure preserves the source as plain text rather than switching engines.
  */
-export const MessageContent = memo(function MessageContent({ content }: { content: string }) {
-  return <SatteriMessageContent content={content} />;
+export const MessageContent = memo(function MessageContent({
+  content,
+  basePath,
+}: {
+  content: string;
+  /** Folder relative links resolve against; defaults to the active thread's workspace. */
+  basePath?: string | null;
+}) {
+  return <SatteriMessageContent content={content} basePath={basePath} />;
 });
 
 export function CopyButton({ content }: { content: string }) {

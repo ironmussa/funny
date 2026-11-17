@@ -6,6 +6,7 @@ import {
   renderMarkdownToSafeHtml,
   renderReadyMarkdownToSafeHtml,
   sanitizeSatteriHtml,
+  wikilinkHref,
 } from '@/lib/satteri-markdown';
 
 describe('satteri markdown sanitization', () => {
@@ -160,5 +161,39 @@ describe('renderMarkdownToSafeHtml', () => {
     expect(html).toContain('type="checkbox"');
     expect(html).toContain('checked=""');
     expect(html).toContain('class="language-ts"');
+  });
+});
+
+describe('satteri wiki links', () => {
+  test('points an extensionless target at the Markdown file beside the document', () => {
+    expect(wikilinkHref('fresh-worktree-needs-native-git')).toBe(
+      'fresh-worktree-needs-native-git.md',
+    );
+    expect(wikilinkHref('notes/plan')).toBe('notes/plan.md');
+    expect(wikilinkHref('diagram.png')).toBe('diagram.png');
+  });
+
+  test('renders [[target]] and [[target|alias]] as links to target.md', async () => {
+    const html = await renderMarkdownToSafeHtml(
+      'See [[fresh-worktree-needs-native-git]] and [[other-note|the other note]].',
+    );
+
+    expect(html).toContain(
+      '<a href="fresh-worktree-needs-native-git.md">fresh-worktree-needs-native-git</a>',
+    );
+    expect(html).toContain('<a href="other-note.md">the other note</a>');
+    expect(html).not.toContain('[[');
+  });
+
+  test('leaves ordinary links and wiki-link syntax inside code untouched', async () => {
+    const html = await renderMarkdownToSafeHtml(
+      '[plain](plain) and `[[inline]]`\n\n```\n[[fenced]]\n```',
+    );
+
+    expect(html).toContain('<a href="plain">plain</a>');
+    expect(html).toContain('<code>[[inline]]</code>');
+    expect(html).toContain('[[fenced]]');
+    expect(html).not.toContain('inline.md');
+    expect(html).not.toContain('fenced.md');
   });
 });

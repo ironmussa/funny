@@ -98,6 +98,18 @@ function resolvePathSegments(path: string): string {
   return '/' + resolved.join('/');
 }
 
+/**
+ * Folder a Markdown file's relative links resolve against: the folder holding
+ * the file, as for any document. `null` for a bare file name.
+ */
+export function markdownFileBasePath(filePath: string | null | undefined): string | null {
+  if (!filePath) return null;
+  const normalized = filePath.replace(/\\/g, '/');
+  const slash = normalized.lastIndexOf('/');
+  if (slash < 0) return null;
+  return slash === 0 ? '/' : normalized.slice(0, slash);
+}
+
 export function resolveMarkdownFilePath(filePath: string, basePath?: string | null): string {
   if (!basePath || isAbsoluteFilePath(filePath)) return filePath;
 

@@ -7,6 +7,7 @@ import { MessageContent } from '@/components/thread/MessageContent';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureHighlight, extToHljsLang, highlightCode } from '@/hooks/use-highlight';
 import { isMarkdownFile } from '@/lib/markdown-file';
+import { markdownFileBasePath } from '@/lib/markdown-file-links';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -146,7 +147,7 @@ export function WriteFileCard({
           <div>
             {isMarkdown && renderMarkdown ? (
               <div className="px-3 py-2">
-                <MessageContent content={content} />
+                <MessageContent content={content} basePath={markdownFileBasePath(filePath)} />
               </div>
             ) : highlighted ? (
               <pre className="code-viewer text-foreground/80 px-3 py-2 font-mono text-sm leading-relaxed break-all whitespace-pre-wrap">

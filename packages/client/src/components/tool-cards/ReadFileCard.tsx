@@ -7,6 +7,7 @@ import { MessageContent } from '@/components/thread/MessageContent';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ensureHighlight, filePathToHljsLang, highlightLine } from '@/hooks/use-highlight';
 import { isMarkdownFile } from '@/lib/markdown-file';
+import { markdownFileBasePath } from '@/lib/markdown-file-links';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -249,7 +250,7 @@ export function ReadFileCard({
           <div>
             {isMarkdown && renderMarkdown ? (
               <div className="px-3 py-2">
-                <MessageContent content={cleanContent} />
+                <MessageContent content={cleanContent} basePath={markdownFileBasePath(filePath)} />
               </div>
             ) : (
               <HighlightedFileContent content={output!} filePath={filePath} />

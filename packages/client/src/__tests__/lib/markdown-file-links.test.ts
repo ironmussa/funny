@@ -3,6 +3,7 @@ import { describe, expect, test } from 'vitest';
 import {
   getMarkdownFileLinkPath,
   isLikelyMarkdownFilePath,
+  markdownFileBasePath,
   resolveMarkdownFilePath,
 } from '@/lib/markdown-file-links';
 
@@ -47,5 +48,21 @@ describe('markdown file links', () => {
     expect(resolveMarkdownFilePath('/home/u/project/file.ts:7', '/home/u/projects/funny')).toBe(
       '/home/u/project/file.ts:7',
     );
+  });
+});
+
+describe('markdownFileBasePath', () => {
+  test("resolves a file's relative links against its own folder", () => {
+    const base = markdownFileBasePath('/home/u/.claude/memory/dependency-updates.md');
+    expect(base).toBe('/home/u/.claude/memory');
+    expect(resolveMarkdownFilePath('fresh-worktree.md', base)).toBe(
+      '/home/u/.claude/memory/fresh-worktree.md',
+    );
+  });
+
+  test('handles Windows separators, the root and bare names', () => {
+    expect(markdownFileBasePath('C:\\notes\\a.md')).toBe('C:/notes');
+    expect(markdownFileBasePath('/a.md')).toBe('/');
+    expect(markdownFileBasePath('a.md')).toBeNull();
   });
 });

@@ -36,6 +36,17 @@ describe('SatteriMessageContent', () => {
     expect(container.querySelector('[data-satteri-pending]')).toBeNull();
   });
 
+  test("resolves relative links against the given basePath (a previewed file's folder)", () => {
+    markdown.renderReadyMarkdownToSafeHtml.mockReturnValue(
+      '<p><a href="fresh-worktree.md">fresh-worktree</a></p>',
+    );
+
+    render(<SatteriMessageContent content="[[fresh-worktree]]" basePath="/home/u/memory" />);
+
+    const link = screen.getByRole('link', { name: 'fresh-worktree' });
+    expect(link).toHaveAttribute('data-satteri-file-path', '/home/u/memory/fresh-worktree.md');
+  });
+
   test('preserves the source text instead of switching markdown engines after a compiler failure', async () => {
     markdown.renderMarkdownToSafeHtml.mockRejectedValueOnce(new Error('WASM unavailable'));
 

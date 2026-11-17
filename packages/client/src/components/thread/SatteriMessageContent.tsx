@@ -135,13 +135,17 @@ function setCopyButtonIcon(button: HTMLButtonElement, icon: 'copy' | 'check'): v
   button.replaceChildren(svg);
 }
 
-function enhanceStaticHtml(root: HTMLElement): void {
+/**
+ * `basePath` is the folder relative links resolve against: the previewed file's
+ * own folder for a Markdown file preview, else the active thread's workspace.
+ */
+function enhanceStaticHtml(root: HTMLElement, linkBase: string | null): void {
   for (const link of root.querySelectorAll<HTMLAnchorElement>('a[href]')) {
     const href = link.getAttribute('href');
     const filePath = getMarkdownFileLinkPath(href, link.textContent);
     if (filePath) {
       const { defaultEditor, useInternalEditor } = useSettingsStore.getState();
-      const resolvedPath = resolveMarkdownFilePath(filePath, getActiveFileBasePath());
+      const resolvedPath = resolveMarkdownFilePath(filePath, linkBase);
       const uri = toEditorUriWithLine(resolvedPath, defaultEditor);
       link.dataset.satteriFilePath = resolvedPath;
       link.classList.add('hover:underline');
@@ -259,7 +263,13 @@ class SatteriErrorBoundary extends Component<
   }
 }
 
-function MarkdownIsland({ segment }: { segment: Exclude<RenderedSegment, { type: 'html' }> }) {
+function MarkdownIsland({
+  segment,
+  basePath,
+}: {
+  segment: Exclude<RenderedSegment, { type: 'html' }>;
+  basePath?: string | null;
+}) {
   if (segment.type === 'image') {
     return <MarkdownImage src={segment.src} alt={segment.alt} title={segment.title} />;
   }
@@ -268,7 +278,7 @@ function MarkdownIsland({ segment }: { segment: Exclude<RenderedSegment, { type:
       <div
         className={cn(markdownProseClassName, 'border-border bg-muted/30 my-2 rounded border p-4')}
       >
-        <SatteriMessageContent content={segment.markdown} />
+        <SatteriMessageContent content={segment.markdown} basePath={basePath} />
       </div>
     );
   }
@@ -291,7 +301,13 @@ function MarkdownIsland({ segment }: { segment: Exclude<RenderedSegment, { type:
   );
 }
 
-function SatteriMessageContentInner({ content }: { content: string }) {
+function SatteriMessageContentInner({
+  content,
+  basePath,
+}: {
+  content: string;
+  basePath?: string | null;
+}) {
   const rootRef = useRef<HTMLDivElement>(null);
   const { t } = useTranslation();
   const copyText = useCallback(
@@ -362,9 +378,9 @@ function SatteriMessageContentInner({ content }: { content: string }) {
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root || state.status !== 'ready') return;
-    enhanceStaticHtml(root);
+    enhanceStaticHtml(root, basePath ?? getActiveFileBasePath());
     return scheduleIdle(() => highlightCodeBlocks(root));
-  }, [state]);
+  }, [state, basePath]);
 
   const onClick = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
@@ -434,7 +450,7 @@ function SatteriMessageContentInner({ content }: { content: string }) {
         ) : (
           // Islands cannot reorder within a compiled result; they stay mounted while text streams.
           // react-doctor-disable-next-line no-array-index-as-key
-          <MarkdownIsland key={`island-${index}`} segment={segment} />
+          <MarkdownIsland key={`island-${index}`} segment={segment} basePath={basePath} />
         ),
       )}
     </div>
@@ -443,12 +459,15 @@ function SatteriMessageContentInner({ content }: { content: string }) {
 
 export const SatteriMessageContent = memo(function SatteriMessageContent({
   content,
+  basePath,
 }: {
   content: string;
+  /** Folder relative links resolve against; defaults to the active thread's workspace. */
+  basePath?: string | null;
 }) {
   return (
     <SatteriErrorBoundary content={content}>
-      <SatteriMessageContentInner content={content} />
+      <SatteriMessageContentInner content={content} basePath={basePath} />
     </SatteriErrorBoundary>
   );
 });

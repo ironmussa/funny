@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   save: vi.fn(),
   runs: [] as FactoryRun[],
   control: vi.fn(),
+  empty: vi.fn(),
   toastError: vi.fn(),
   canSteer: true,
 }));
@@ -23,6 +24,7 @@ vi.mock('@/data/factory/hooks', () => ({
 vi.mock('@/data/factory/actions', () => ({
   saveFactorySettings: (input: unknown) => mocks.save(input),
   controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
+  emptyFactory: (...args: unknown[]) => mocks.empty(...args),
 }));
 vi.mock('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
 vi.mock('react-i18next', () => ({
@@ -37,6 +39,8 @@ import { ProjectFactorySetting } from '@/components/general-settings-project/Pro
 const configured = (over: Partial<FactorySettings> = {}): FactorySettings => ({
   projectId: 'p1',
   enabled: true,
+  // The label rows below are automatic mode's.
+  mode: 'automatic',
   label: 'ready-for-agent',
   flowName: 'issue-to-merge',
   maxConcurrent: 2,
@@ -54,6 +58,7 @@ beforeEach(() => {
   mocks.canSteer = true;
   mocks.runs = [];
   mocks.control.mockImplementation(() => okAsync({}));
+  mocks.empty.mockImplementation(() => okAsync({ cleared: 0, stopped: 0 }));
   mocks.save.mockImplementation((input: object) => okAsync({ ...configured(), ...input }));
 });
 
@@ -131,6 +136,10 @@ const runOf = (over: Partial<FactoryRun>): FactoryRun => ({
   threadIds: ['t1'],
   startedAt: '2026-11-16T00:00:00.000Z',
   completedAt: null,
+  source: 'label',
+  flowName: null,
+  queueOrder: null,
+  waitReason: null,
   ...over,
 });
 
@@ -194,5 +203,51 @@ describe('factory runs', () => {
     expect(screen.queryByTestId('factory-run-retry-r2')).toBeNull();
     fireEvent.click(screen.getByTestId('factory-run-retry-r1'));
     await waitFor(() => expect(mocks.toastError).toHaveBeenCalled());
+  });
+  test('manual mode hides the label; switching the mode saves it with the enabled flag', () => {
+    mocks.settings = configured({ mode: 'manual' });
+    render(<ProjectFactorySetting projectId="p1" />);
+    expect(pressed('mode-manual')).toBe('true');
+    expect(screen.queryByTestId('settings-factory-label')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('settings-factory-mode-automatic'));
+    expect(mocks.save).toHaveBeenCalledWith({ projectId: 'p1', enabled: true, mode: 'automatic' });
+  });
+
+  test('queued issues come first with why they wait, and the queue can be cleared', () => {
+    mocks.settings = configured();
+    mocks.runs = [
+      runOf({ id: 'w', issueNumber: 5 }),
+      runOf({
+        id: 'q2',
+        issueNumber: 3,
+        state: 'requested',
+        currentStep: null,
+        queueOrder: 2,
+        waitReason: { kind: 'blocker-not-sent', blockers: [9] },
+      }),
+      runOf({ id: 'q1', issueNumber: 4, state: 'requested', currentStep: null, queueOrder: 1 }),
+    ];
+    renderRuns();
+
+    const rows = screen.getAllByTestId(/^factory-run-(w|q1|q2)$/).map((el) => el.dataset.testid);
+    expect(rows).toEqual(['factory-run-q1', 'factory-run-q2', 'factory-run-w']);
+    expect(screen.getByTestId('factory-run-wait-q2')).toHaveTextContent(
+      'Blocked by #9, which is not in the factory',
+    );
+
+    fireEvent.click(screen.getByTestId('factory-clear-queue'));
+    expect(mocks.empty).toHaveBeenCalledWith('clear-queue', 'p1');
+  });
+
+  test('stop all asks for a confirmation first', () => {
+    mocks.settings = configured();
+    mocks.runs = [runOf({ id: 'w' })];
+    renderRuns();
+
+    fireEvent.click(screen.getByTestId('factory-stop-all'));
+    expect(mocks.empty).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
+    expect(mocks.empty).toHaveBeenCalledWith('stop-all', 'p1');
   });
 });

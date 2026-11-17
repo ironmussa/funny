@@ -3,14 +3,16 @@ import type { ResultAsync } from 'neverthrow';
 
 import {
   factoryApi,
+  type FactoryQueueClearResult,
   type FactoryRun,
   type FactorySettings,
+  type FactorySubmitResult,
   type SaveFactorySettingsInput,
 } from '@/lib/api/factory';
 
 import type { DataLayer } from '../data-layer';
 import { getDataLayer } from '../runtime';
-import { writeFactoryRun, writeFactorySettings } from './queries';
+import { refreshFactoryRuns, writeFactoryRun, writeFactorySettings } from './queries';
 
 /**
  * Save the caller's factory settings for a project. Not optimistic: the panel
@@ -43,5 +45,38 @@ export function controlFactoryRun(
   return call(projectId, runId).map((run) => {
     writeFactoryRun(projectId, run, layer);
     return run;
+  });
+}
+
+/**
+ * Send chosen issues to the caller's factory with one flow. Not optimistic:
+ * the server checks the factory can work now and answers per issue; the runs
+ * are re-read so the queued ones show at once. The caller shows refusals.
+ */
+export function sendIssuesToFactory(
+  projectId: string,
+  issueNumbers: number[],
+  flowName: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactorySubmitResult, DomainError> {
+  return factoryApi.submitIssues({ projectId, issueNumbers, flowName }).map((result) => {
+    refreshFactoryRuns(projectId, layer);
+    return result;
+  });
+}
+
+/**
+ * Clear the caller's factory queue, or (`stop-all`) clear it and stop every
+ * run in progress. Not optimistic; the runs are re-read afterwards.
+ */
+export function emptyFactory(
+  action: 'clear-queue' | 'stop-all',
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): ResultAsync<FactoryQueueClearResult, DomainError> {
+  const call = action === 'clear-queue' ? factoryApi.clearQueue : factoryApi.stopAll;
+  return call(projectId).map((result) => {
+    refreshFactoryRuns(projectId, layer);
+    return result;
   });
 }

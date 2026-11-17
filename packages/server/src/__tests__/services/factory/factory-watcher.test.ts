@@ -7,7 +7,8 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import type { CiState } from '@funny/core/github-app';
-import { err, ok, okAsync } from 'neverthrow';
+import type { IssueBlocker } from '@funny/core/github-app';
+import { err, errAsync, ok, okAsync } from 'neverthrow';
 
 import { noteOwnerFollowUp } from '../../../services/factory/factory-follow-ups.js';
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
@@ -74,6 +75,10 @@ interface GithubScript {
   /** CI answers in order; the last one repeats. */
   ci?: CiState | CiState[];
   merge?: FactoryMergeOutcome;
+  /** Each issue's blockers (GitHub's "blocked by"); an issue absent here has none. */
+  blockers?: Record<number, IssueBlocker[] | 'unreadable'>;
+  /** Issues GitHub reports as closed. */
+  closed?: number[];
 }
 
 /** Fake GitHub side: a fixed repo and issue list, plus a scripted pull request. */
@@ -90,7 +95,21 @@ function fakeGithub(
     resolveRepo: async () => repo,
     listReadyIssues: () => okAsync(issues),
     getIssue: (_reader: unknown, number: number) =>
-      okAsync({ number, title: `Issue ${number}`, url: `u/${number}` }),
+      okAsync({
+        number,
+        title: `Issue ${number}`,
+        url: `u/${number}`,
+        state: script.closed?.includes(number) ? ('closed' as const) : ('open' as const),
+        pullRequest: false,
+        createdAt: '2026-01-01T00:00:00Z',
+      }),
+    issueBlockers: (_reader: unknown, number: number) => {
+      const blockers = script.blockers?.[number] ?? [];
+      return blockers === 'unreadable'
+        ? errAsync({ message: 'GitHub answered 500', status: 500 })
+        : okAsync(blockers);
+    },
+    listDefaultBranchDir: () => okAsync([] as string[]),
     readDefaultBranchFile: (_reader: unknown, path: string) => {
       port.fileReads.push(path);
       return okAsync(script.files?.[path] ?? null);
@@ -138,10 +157,16 @@ async function eventually(
 }
 
 async function enableFactory(
-  opts: { label?: string; maxConcurrent?: number; flowName?: string } = {},
+  opts: {
+    label?: string;
+    maxConcurrent?: number;
+    flowName?: string;
+    mode?: 'manual' | 'automatic';
+  } = {},
 ) {
   const settings = createFactorySettingsService();
-  const saved = await settings.save('alice', 'p1', { enabled: true, ...opts });
+  // Most tests admit labelled issues: automatic mode unless a test says otherwise.
+  const saved = await settings.save('alice', 'p1', { enabled: true, mode: 'automatic', ...opts });
   if (saved.isErr()) throw new Error(saved.error.message);
   const factoryId = await settings.factoryId('alice', 'p1');
   if (factoryId.isErr() || !factoryId.value) throw new Error('no factory id');

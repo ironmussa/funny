@@ -3,8 +3,10 @@
  * factory-flow-execution).
  *
  * Holds one polling job per enabled factory and, on each tick, resolves the
- * project's GitHub repo, lists its open labelled issues, admits the ones not
- * already running and under the concurrency cap, and runs the factory's flow
+ * project's GitHub repo, admits the issues sent to the factory (its queue, in
+ * the order they were sent) and, in automatic mode, then its open labelled
+ * issues — the ones not already running, not blocked by an unfinished issue
+ * (`factory-dependencies.ts`) and under the concurrency cap — and runs each run's flow
  * for each as the ENABLING user (`factory-flow-runs.ts`): its agent steps are
  * threads started through `startThreadOnRunner` — the same path interactive
  * threads take, so runner isolation and the project ↔ runner binding apply
@@ -20,6 +22,7 @@
  * @domain layer: application
  */
 
+import type { IssueBlocker } from '@funny/core/github-app';
 import { sleep as interruptibleSleep } from '@funny/shared/async';
 import { and, eq } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
@@ -40,13 +43,24 @@ import {
 import type { ThreadRuntimeMode } from '../thread-sandboxes/project-sandbox-settings.js';
 import type { FactoryThreadMode } from './factory-action-provider.js';
 import {
+  sameWaitReason,
+  unfinishedBlockers,
+  waitReasonFor,
+  type LatestRunState,
+} from './factory-dependencies.js';
+import {
   createFactoryFlowRuns,
   type FactoryRunJob,
   type WaitingNotice,
 } from './factory-flow-runs.js';
 import type { FactoryFlow, FactoryFlowError } from './factory-flow.js';
-import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
-import { createFactoryRunsRepository, IN_FLIGHT_STATES } from './factory-runs.js';
+import type { FactoryGithubPort, FactoryIssue, FactoryRepoReader } from './factory-github.js';
+import {
+  createFactoryRunsRepository,
+  IN_FLIGHT_STATES,
+  type FactoryRunState,
+  type FactoryRunView,
+} from './factory-runs.js';
 import {
   disableFactory,
   getWatchedFactory,
@@ -255,8 +269,8 @@ async function fire(id: string): Promise<void> {
   // the listing or a launch below says otherwise).
   await reportBlocked(factory.id, null);
   await resumeRuns(factory, target.repo, target.mode);
-  // A paused factory finishes its runs but admits nothing new.
-  if (factory.enabled) await admitFromGithub(factory, target.repo, target.mode);
+  // A paused factory finishes its runs but admits nothing new; its queue waits.
+  if (factory.enabled) await admitWork(factory, target.repo, target.mode);
 }
 
 /** An enabled factory, or a paused one with runs still in flight. */
@@ -282,50 +296,229 @@ async function hasWork(factory: WatchedFactory): Promise<boolean> {
   return active.isErr() || active.value > 0;
 }
 
+/** Where a factory's runs execute now, or why they cannot. */
+export type FactoryTarget = { mode: LaunchMode; repo: string } | { reason: string };
+
 /**
  * Where the factory's runs execute: the enabler's runtime and the project's
- * repository, or null (logged) when it cannot run now. A sandbox runtime runs
- * its threads in the enabler's sandbox; it is NOT downgraded to local when
- * sandboxes cannot be launched here (issue text is untrusted input, and the
- * enabler chose isolation): the factory then waits.
+ * repository, or why it cannot run now. A sandbox runtime runs its threads in
+ * the enabler's sandbox; it is NOT downgraded to local when sandboxes cannot
+ * be launched here (issue text is untrusted input, and the enabler chose
+ * isolation): the factory then waits.
  */
-async function resolveTarget(
-  factory: WatchedFactory,
-): Promise<{ mode: LaunchMode; repo: string } | null> {
+async function targetOf(factory: WatchedFactory): Promise<FactoryTarget> {
   const mode = await resolveMode(factory.userId, factory.projectId);
   if (!mode) {
-    log.info('Issue factory tick skipped: sandbox threads cannot be launched here', {
-      namespace: 'factory',
-      factoryId: factory.id,
-      projectId: factory.projectId,
-    });
-    await reportBlocked(
-      factory.id,
-      'Your runtime for this project is sandbox, and this server cannot start sandbox threads.',
-    );
-    return null;
+    return {
+      reason:
+        'Your runtime for this project is sandbox, and this server cannot start sandbox threads.',
+    };
   }
   const repo = await deps!.github.resolveRepo(factory.userId, factory.projectId);
   if (!repo) {
-    log.info('Issue factory tick skipped: repository not resolvable', {
-      namespace: 'factory',
-      factoryId: factory.id,
-      projectId: factory.projectId,
-    });
-    await reportBlocked(
-      factory.id,
-      "Waiting for your runner: the project's repository could not be read (is your runner online, and does the project have a GitHub origin?).",
-    );
-    return null;
+    return {
+      reason:
+        "Waiting for your runner: the project's repository could not be read (is your runner online, and does the project have a GitHub origin?).",
+    };
   }
   return { mode, repo };
 }
 
-/** List the labelled issues and admit what fits. */
+/** The tick's target, or null (logged, and reported as the factory's block). */
+async function resolveTarget(
+  factory: WatchedFactory,
+): Promise<{ mode: LaunchMode; repo: string } | null> {
+  const target = await targetOf(factory);
+  if ('reason' in target) {
+    log.info('Issue factory tick skipped', {
+      namespace: 'factory',
+      factoryId: factory.id,
+      projectId: factory.projectId,
+      reason: target.reason,
+    });
+    await reportBlocked(factory.id, target.reason);
+    return null;
+  }
+  return target;
+}
+
+/**
+ * Where a factory's runs would execute right now, checked live (a send must not
+ * trust a `blockedReason` up to a poll old). Null when the watcher is not
+ * running in this process.
+ */
+export async function checkFactoryTarget(factory: WatchedFactory): Promise<FactoryTarget | null> {
+  if (!deps) return null;
+  return targetOf(factory);
+}
+
+/** The GitHub side the watcher reads through, while it runs. */
+export function factoryGithubPort(): FactoryGithubPort | null {
+  return deps?.github ?? null;
+}
+
+/** What one admission pass knows: the factory's runs, and the blockers read so far. */
+interface AdmissionContext {
+  reader: FactoryRepoReader;
+  latestRuns: LatestRunState;
+  /** Issues waiting in the queue (`requested`). */
+  queued: ReadonlySet<number>;
+  /** Blockers read this pass, by issue (null: unreadable). */
+  blockers: Map<number, Promise<IssueBlocker[] | null>>;
+}
+
+function admissionContext(
+  factory: WatchedFactory,
+  repo: string,
+  all: FactoryRunView[],
+): AdmissionContext {
+  // `list` is newest first: the first run seen for an issue is its latest.
+  const latestRuns = new Map<number, FactoryRunState>();
+  for (const run of all)
+    if (!latestRuns.has(run.issueNumber)) latestRuns.set(run.issueNumber, run.state);
+  return {
+    reader: { repo, ownerId: factory.userId, projectId: factory.projectId },
+    latestRuns,
+    queued: new Set(all.filter((run) => run.state === 'requested').map((run) => run.issueNumber)),
+    blockers: new Map(),
+  };
+}
+
+/** An issue's blockers, read once per pass. */
+function blockersOf(ctx: AdmissionContext, issue: number): Promise<IssueBlocker[] | null> {
+  let read = ctx.blockers.get(issue);
+  if (!read) {
+    read = Promise.resolve(deps!.github.issueBlockers(ctx.reader, issue)).then((result) =>
+      result.isOk() ? result.value : null,
+    );
+    ctx.blockers.set(issue, read);
+  }
+  return read;
+}
+
+/**
+ * Why `issue` must wait for its blockers, or null when it may start. The cycle
+ * check follows the unfinished blockers that are themselves waiting in the
+ * queue (each read once per pass).
+ */
+async function blockedReason(
+  ctx: AdmissionContext,
+  issue: number,
+): Promise<FactoryRunView['waitReason']> {
+  const blockers = await blockersOf(ctx, issue);
+  const graph = new Map<number, number[]>();
+  const pending = [issue];
+  while (pending.length > 0) {
+    const next = pending.pop()!;
+    if (graph.has(next)) continue;
+    const own = next === issue ? blockers : await blockersOf(ctx, next);
+    const edges = own ? unfinishedBlockers(ctx.reader.repo, own, ctx.latestRuns).sameRepo : [];
+    graph.set(next, edges);
+    pending.push(...edges.filter((n) => ctx.queued.has(n) && !graph.has(n)));
+  }
+  return waitReasonFor({
+    repo: ctx.reader.repo,
+    issue,
+    blockers,
+    latestRuns: ctx.latestRuns,
+    queueGraph: graph,
+  });
+}
+
+/** How many more runs may start now (0 when the count cannot be read). */
+async function freeSlots(factory: WatchedFactory): Promise<number> {
+  const active = await runs!.countActive(factory.id);
+  if (active.isOk()) return factory.maxConcurrent - active.value;
+  log.warn('Issue factory could not read active runs', {
+    namespace: 'factory',
+    factoryId: factory.id,
+    error: active.error.message,
+  });
+  return 0;
+}
+
+/**
+ * Fill the free slots: first the issues sent to the factory, in the order they
+ * were sent, then (automatic mode) its labelled issues. A blocked issue is
+ * skipped, not waited on, so it does not hold up the ones behind it.
+ */
+async function admitWork(factory: WatchedFactory, repo: string, mode: LaunchMode): Promise<void> {
+  const slots = runs ? await freeSlots(factory) : 0;
+  if (slots <= 0) return;
+  const all = await runs!.list(factory.id);
+  const queue = await runs!.queue(factory.id);
+  if (all.isErr() || queue.isErr()) return;
+  const ctx = admissionContext(factory, repo, all.value);
+
+  const left = await admitQueue(factory, repo, mode, queue.value, slots, ctx);
+  if (factory.mode === 'automatic' && left > 0) {
+    await admitFromGithub(factory, repo, mode, left, ctx);
+  }
+}
+
+/** Admit sent issues in queue order while slots remain; the slots left. */
+async function admitQueue(
+  factory: WatchedFactory,
+  repo: string,
+  mode: LaunchMode,
+  queue: FactoryRunView[],
+  slots: number,
+  ctx: AdmissionContext,
+): Promise<number> {
+  let left = slots;
+  for (const run of queue) {
+    if (left <= 0) break;
+    if (await admitQueued(factory, repo, mode, run, ctx)) left--;
+  }
+  return left;
+}
+
+/** Admit one sent issue when nothing holds it back; whether an agent started. */
+async function admitQueued(
+  factory: WatchedFactory,
+  repo: string,
+  mode: LaunchMode,
+  run: FactoryRunView,
+  ctx: AdmissionContext,
+): Promise<boolean> {
+  if (!runs || !deps) return false;
+  const reason = await blockedReason(ctx, run.issueNumber);
+  if (!sameWaitReason(reason, run.waitReason)) await runs.setWaitReason(run.id, reason);
+  if (reason) return false;
+
+  const issue = await deps.github.getIssue(ctx.reader, run.issueNumber);
+  if (issue.isErr()) {
+    log.warn('Issue factory could not read a queued issue', {
+      namespace: 'factory',
+      runId: run.id,
+      issue: run.issueNumber,
+      error: issue.error.message,
+    });
+    return false;
+  }
+  if (issue.value.state === 'closed') {
+    // Closed since it was sent: nothing left to do for it.
+    await runs.cancel(factory.id, run.id);
+    log.info('Issue factory dropped a queued issue that was closed', {
+      namespace: 'factory',
+      runId: run.id,
+      issue: run.issueNumber,
+    });
+    return false;
+  }
+  const admitted = await runs.admit(run.id);
+  // Cancelled meanwhile (or another pass took it): not ours to start.
+  if (admitted.isErr() || !admitted.value) return false;
+  return startFlow(factory, repo, mode, issue.value, { ...run, state: 'queued', waitReason: null });
+}
+
+/** List the labelled issues and admit what fits (automatic mode). */
 async function admitFromGithub(
   factory: WatchedFactory,
   repo: string,
   mode: LaunchMode,
+  slots: number,
+  ctx: AdmissionContext,
 ): Promise<void> {
   const issues = await deps!.github.listReadyIssues({
     repo,
@@ -346,7 +539,7 @@ async function admitFromGithub(
     );
     return;
   }
-  await admitIssues(factory, repo, mode, issues.value);
+  await admitIssues(factory, repo, mode, issues.value, slots, ctx);
 }
 
 /**
@@ -389,30 +582,22 @@ async function defaultCheckAccess(userId: string, projectId: string): Promise<bo
   return (await decideProjectAccess(projectRole, 'steer', projectId, userId)) === null;
 }
 
-/** Admit each issue not already running, up to the concurrency cap. */
+/** Admit each labelled issue not already running nor blocked, while slots remain. */
 async function admitIssues(
   factory: WatchedFactory,
   repo: string,
   mode: LaunchMode,
   issues: FactoryIssue[],
+  slots: number,
+  ctx: AdmissionContext,
 ): Promise<void> {
-  if (!runs) return;
-  const activeResult = await runs.countActive(factory.id);
-  if (activeResult.isErr()) {
-    log.warn('Issue factory could not read active runs', {
-      namespace: 'factory',
-      factoryId: factory.id,
-      error: activeResult.error.message,
-    });
-    return;
-  }
-  let slots = factory.maxConcurrent - activeResult.value;
-
+  let free = slots;
   for (const issue of issues) {
-    if (slots <= 0) break;
+    if (free <= 0) break;
     if (!(await isAdmissible(factory.id, issue.number))) continue;
+    if (await blockedReason(ctx, issue.number)) continue;
     const started = await startImplement(factory, repo, mode, issue);
-    if (started) slots--;
+    if (started) free--;
   }
 }
 
@@ -470,7 +655,12 @@ async function startImplement(
 
   // Record the run before launching, so the issue is taken while the launch is
   // in flight: no later tick (or reschedule) can admit it a second time.
-  const run = await runs.start({ factoryId: factory.id, issueNumber: issue.number });
+  const run = await runs.start({
+    factoryId: factory.id,
+    issueNumber: issue.number,
+    source: 'label',
+    flowName: factory.flowName,
+  });
   if (run.isErr()) {
     log.error('Issue factory run could not be recorded', {
       namespace: 'factory',
@@ -480,13 +670,24 @@ async function startImplement(
     });
     return false;
   }
+  return startFlow(factory, repo, mode, issue, run.value);
+}
 
+/** Start an admitted run's flow; whether its first agent started. */
+async function startFlow(
+  factory: WatchedFactory,
+  repo: string,
+  mode: LaunchMode,
+  issue: FactoryIssue,
+  run: FactoryRunView,
+): Promise<boolean> {
+  if (!flows) return false;
   // Wait for the first agent to be recorded so a launch that fails frees its
   // slot this tick, but not longer than ADMIT_WAIT_MS: a flow that does not
   // start with an agent (or a slow sandbox) must not hold the tick.
   const timer = new AbortController();
   const started = await Promise.race([
-    flows.start({ factory, repo, mode, issue, run: run.value }),
+    flows.start({ factory, repo, mode, issue, run }),
     interruptibleSleep(ADMIT_WAIT_MS, timer.signal).then(
       () => 'started' as const,
       () => 'started' as const,
@@ -495,8 +696,9 @@ async function startImplement(
   log.info('Issue factory run admitted', {
     namespace: 'factory',
     factoryId: factory.id,
-    runId: run.value.id,
+    runId: run.id,
     issue: issue.number,
+    source: run.source,
     mode,
     started,
   });

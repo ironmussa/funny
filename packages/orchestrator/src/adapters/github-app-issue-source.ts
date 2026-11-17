@@ -4,6 +4,7 @@
  * involved.
  */
 
+import { openBlockers } from '@funny/core/github-app';
 import { errAsync, okAsync, type ResultAsync } from 'neverthrow';
 
 import type { IssueSource, IssueSourceError, ReadyIssue } from '../ports/issue-source.js';
@@ -14,7 +15,6 @@ interface RestIssue {
   number: number;
   title: string;
   body: string | null;
-  state?: string;
   user: { login: string } | null;
   assignees?: Array<{ login: string }>;
   created_at: string;
@@ -130,11 +130,8 @@ export function createGithubAppIssueSource(deps: {
     },
 
     openBlockers(repo, number) {
-      // A blocker of unknown state blocks: in doubt, the issue waits.
-      return allPages<RestIssue>(
-        repo,
-        `/repos/${repo}/issues/${number}/dependencies/blocked_by`,
-      ).map((blockers) => blockers.filter((b) => b.state !== 'closed').map((b) => b.number));
+      // Shared with the server factory; a blocker of unknown state blocks.
+      return openBlockers(github, repo, number);
     },
 
     ensureLabels(repo, labels) {

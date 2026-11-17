@@ -21,8 +21,10 @@
  *   is on GitHub for the member to take over or retry, and they are notified;
  * - the flow fails before that, after an agent ran → `failed` (an attempt: the
  *   watcher re-admits the issue up to `MAX_ATTEMPTS` times);
- * - the flow fails before any agent ran (e.g. the runner is offline) → the run
- *   is dropped, not counted, and a later tick tries again;
+ * - the flow fails before any agent ran (e.g. the runner is offline) → a
+ *   label run is dropped, not counted, and a later tick tries again; a sent
+ *   issue goes back to the queue (`requested`) in its place, so the request
+ *   is not lost;
  * - the run was stopped, or the watcher shut down → nothing more is written.
  */
 
@@ -167,6 +169,13 @@ const runBranch = (run: FactoryRunView): string =>
 /** A run a retry or take-over put back in flight (it has a history). */
 const wasReopened = (job: FactoryRunJob) => job.run.currentStep === REOPENED_STEP;
 
+/**
+ * The flow the run executes: the one it recorded (chosen when the issue was
+ * sent, or the factory's at admission), else the factory's for rows from
+ * before runs recorded their own.
+ */
+const flowOf = (job: FactoryRunJob): string => job.run.flowName ?? job.factory.flowName;
+
 export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const active = new Map<string, AbortController>();
   const waitThread = deps.waitThread ?? createThreadWaits();
@@ -174,7 +183,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const loadFlow =
     deps.loadFlow ??
     ((job: FactoryRunJob) =>
-      loadFactoryFlow(job.factory.flowName, {
+      loadFactoryFlow(flowOf(job), {
         readDefaultBranchFile: (path) =>
           deps.github.readDefaultBranchFile(
             { repo: job.repo, ownerId: job.factory.userId, projectId: job.factory.projectId },
@@ -188,20 +197,27 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       namespace: 'factory',
       factoryId: job.factory.id,
       runId: job.run.id,
-      flow: job.factory.flowName,
+      flow: flowOf(job),
       kind: error.kind,
       error: error.message,
     });
     await deps.reportBlocked?.(
       job.factory.id,
-      `The flow "${job.factory.flowName}" could not be loaded: ${error.message}`,
+      `The flow "${flowOf(job)}" could not be loaded: ${error.message}`,
     );
     if (error.kind === 'invalid') {
       await deps.runs.updateInFlight(job.run.id, { state: 'failed', currentStep: null });
     } else if (job.run.threadIds.length === 0 && !wasReopened(job)) {
-      // A run that never ran is dropped; a retried one stays queued for a later tick.
-      await deps.runs.remove(job.run.id);
+      // A run that never ran is dropped (a sent one goes back in line); a
+      // retried one stays queued for a later tick.
+      await forgetUnstarted(job);
     }
+  }
+
+  /** A run that never started an agent: a sent issue goes back in line, a label run is dropped. */
+  async function forgetUnstarted(job: FactoryRunJob): Promise<void> {
+    if (job.run.source === 'manual') await deps.runs.requeue(job.run.id);
+    else await deps.runs.remove(job.run.id);
   }
 
   const notify = deps.notify ?? sendPush;
@@ -240,7 +256,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
 
   /** A run whose agent never started (e.g. the runner is offline): not an attempt, but say why. */
   async function dropUnstarted(job: FactoryRunJob, error?: string): Promise<void> {
-    await deps.runs.remove(job.run.id);
+    await forgetUnstarted(job);
     await deps.reportBlocked?.(
       job.factory.id,
       `Issue #${job.run.issueNumber} could not start: ${error ?? 'unknown error'}`,

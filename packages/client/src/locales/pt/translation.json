@@ -647,7 +647,22 @@
     "projectSaved": "Configurações do projeto salvas",
     "agentResources": "Recursos do agente",
     "agentProfiles": "Perfis de agente",
-    "apiTokens": "Tokens de API"
+    "apiTokens": "Tokens de API",
+    "projectFactoryMode": "Modo",
+    "projectFactoryModeAutomaticDesc": "Também pega as issues com a etiqueta, depois das que você envia",
+    "projectFactoryModeManualDesc": "Apenas as issues que você envia",
+    "projectFactoryManual": "Manual",
+    "projectFactoryAutomatic": "Automático",
+    "projectFactoryLabel": "Etiqueta da issue",
+    "projectFactoryLabelDesc": "As issues com esta etiqueta são pegas",
+    "projectFactory": "Factory de issues",
+    "projectFactoryDesc": "Executa um fluxo até o PR para as issues que você envia pela aba Issues. Pausado: nada novo começa",
+    "projectFactoryPaused": "Pausado",
+    "projectFactoryRunning": "Em execução",
+    "projectFactoryFlow": "Fluxo",
+    "projectFactoryFlowDesc": "O fluxo padrão: pré-selecionado ao enviar issues e usado para as que têm a etiqueta",
+    "projectFactoryConcurrency": "Máximo em andamento",
+    "projectFactoryConcurrencyDesc": "Quantas issues são processadas ao mesmo tempo"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",
@@ -1063,7 +1078,8 @@
     "rewindFailedGeneric": "Falha ao reverter: {{error}}",
     "rewindNoCheckpoints": "Ainda não foi capturado nenhum checkpoint de arquivos neste thread",
     "forkAndRewindSuccess": "Conversa bifurcada e código revertido",
-    "forkAndRewindFailed": "Falha ao bifurcar e reverter"
+    "forkAndRewindFailed": "Falha ao bifurcar e reverter",
+    "clear": "Limpar"
   },
   "editor": {
     "failedToLoad": "Falha ao carregar o arquivo",
@@ -1584,5 +1600,51 @@
       "revoked": "Revogado",
       "expired": "Expirado"
     }
+  },
+  "factory": {
+    "pullRequest": "PR",
+    "thread": "Thread",
+    "retry": "Tentar de novo",
+    "stop": "Parar",
+    "clearQueue": "Esvaziar fila",
+    "stopAll": "Parar tudo",
+    "stopAllTitle": "Parar o factory?",
+    "stopAllDesc": "Esvazia a fila e para todas as runs em andamento e suas threads de agente.",
+    "runs": "Runs do factory",
+    "state": {
+      "requested": "Na fila",
+      "queued": "Aguardando",
+      "working": "Trabalhando",
+      "prOpen": "PR aberto",
+      "waitingCi": "Aguardando CI",
+      "fixing": "Corrigindo CI",
+      "waitingHuman": "Aguardando você",
+      "merged": "Merged",
+      "failed": "Falhou",
+      "stopped": "Parada"
+    },
+    "wait": {
+      "notSent": "Bloqueada por {{blockers}}, que não está no factory",
+      "inProgress": "Aguardando {{blockers}} terminar",
+      "waitingMerge": "Aguardando o pull request de {{blockers}}",
+      "failed": "Bloqueada por {{blockers}}, cuja run falhou ou foi parada",
+      "otherRepo": "Bloqueada por {{blockers}} em outro repositório",
+      "circular": "Dependência circular com {{blockers}}",
+      "unreadable": "Não foi possível ler as bloqueadoras no GitHub"
+    },
+    "selectIssue": "Selecionar #{{number}} para o factory",
+    "queuePosition": "{{label}} · #{{position}}",
+    "issueInFactory": "No seu factory de issues",
+    "sendBlockers": "Enviar {{blockers}}",
+    "cancelQueued": "Tirar da fila",
+    "pausedSend": "O factory está pausado. Retome-o nas configurações do projeto.",
+    "send": "Enviar ao factory",
+    "blockerWarning": "Depende de {{blockers}}, que não está no factory: essas issues vão esperar por ela.",
+    "sent_one": "{{count}} issue enviada ao factory",
+    "sent_other": "{{count}} issues enviadas ao factory",
+    "waitingCount_one": "{{count}} aguardando você",
+    "waitingCount_other": "{{count}} aguardando você",
+    "selectedCount_one": "{{count}} selecionada",
+    "selectedCount_other": "{{count}} selecionadas"
   }
 }

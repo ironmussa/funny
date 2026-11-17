@@ -1,4 +1,9 @@
-import type { FactoryRun, FactorySettings } from '@funny/shared/contracts/factory';
+import type {
+  FactoryFlowOption,
+  FactoryIssueBlockers,
+  FactoryRun,
+  FactorySettings,
+} from '@funny/shared/contracts/factory';
 
 import { factoryApi } from '@/lib/api/factory';
 
@@ -36,6 +41,36 @@ export function factoryRunsQuery(projectId: string) {
     queryFn: (): Promise<FactoryRun[]> => unwrapResult(factoryApi.listRuns(projectId)),
     staleTime: 10_000,
     refetchInterval: 15_000,
+  };
+}
+
+/** Re-read the runs now (after a send, a clear or a stop all changed several at once). */
+export function refreshFactoryRuns(projectId: string, layer: DataLayer = getDataLayer()): void {
+  if (layer.disposed) return;
+  void layer.queryClient.invalidateQueries({ queryKey: factoryRunsKey(projectId) });
+}
+
+/**
+ * The flows a send may pick: the built-ins, plus the repository's flows when
+ * the factory can read them. They change only with the default branch.
+ */
+export function factoryFlowsQuery(projectId: string) {
+  return {
+    queryKey: ['factory', 'flows', projectId] as const,
+    queryFn: (): Promise<FactoryFlowOption[]> => unwrapResult(factoryApi.listFlows(projectId)),
+    staleTime: 5 * 60_000,
+  };
+}
+
+/** The open blockers of the selected issues (the send bar's warning). */
+export function factoryBlockersQuery(projectId: string, issueNumbers: number[]) {
+  const sorted = [...issueNumbers].sort((a, b) => a - b);
+  return {
+    queryKey: ['factory', 'blockers', projectId, sorted] as const,
+    queryFn: (): Promise<FactoryIssueBlockers[]> =>
+      unwrapResult(factoryApi.blockers(projectId, sorted)),
+    staleTime: 30_000,
+    enabled: sorted.length > 0,
   };
 }
 

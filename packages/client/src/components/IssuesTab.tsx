@@ -6,6 +6,14 @@ import { useTranslation } from 'react-i18next';
 import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 import { IssueBadges } from '@/components/IssueBadges';
 import { IssueDetailDialog } from '@/components/IssueDetailDialog';
+import {
+  canSendIssue,
+  IssueFactoryStatus,
+  IssuesFactoryBar,
+  IssueSelectBox,
+  useIssueFactory,
+  type IssueFactory,
+} from '@/components/issues/IssueFactoryControls';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -110,6 +118,7 @@ function IssuesContent({ visible }: IssuesTabProps) {
         repoInfo={repoInfo}
       />
       <IssuesBody
+        projectId={projectId}
         issues={list.items}
         loading={list.loading}
         error={list.error}
@@ -215,6 +224,7 @@ function IssuesToolbar({
 }
 
 function IssuesBody({
+  projectId,
   issues,
   loading,
   error,
@@ -224,6 +234,7 @@ function IssuesBody({
   onCreateThread,
   onOpenIssue,
 }: {
+  projectId: string;
   issues: EnrichedGitHubIssue[];
   loading: boolean;
   error: string | null;
@@ -234,7 +245,6 @@ function IssuesBody({
   onOpenIssue: (issue: EnrichedGitHubIssue) => void;
 }) {
   const { t } = useTranslation();
-  const now = useMinuteTick();
 
   if (loading && issues.length === 0) {
     return (
@@ -266,47 +276,126 @@ function IssuesBody({
     );
   }
   return (
-    <ScrollArea className="min-h-0 flex-1">
-      <div className="divide-sidebar-border divide-y">
-        {issues.map((issue) => (
-          <IssueRow
-            key={issue.number}
-            issue={issue}
-            now={now}
-            onCreateThread={onCreateThread}
-            onOpen={onOpenIssue}
-          />
-        ))}
-      </div>
+    <IssuesList
+      projectId={projectId}
+      issues={issues}
+      loading={loading}
+      hasMore={hasMore}
+      onLoadMore={onLoadMore}
+      onCreateThread={onCreateThread}
+      onOpenIssue={onOpenIssue}
+    />
+  );
+}
 
-      <LoadMoreSentinel
-        hasMore={hasMore}
-        loading={loading}
-        itemCount={issues.length}
-        onLoadMore={onLoadMore}
-        testId="issues-load-more"
-      />
-    </ScrollArea>
+/**
+ * The issues, plus their state in the caller's factory and the selection sent
+ * to it (change factory-manual-queue).
+ */
+function IssuesList({
+  projectId,
+  issues,
+  loading,
+  hasMore,
+  onLoadMore,
+  onCreateThread,
+  onOpenIssue,
+}: {
+  projectId: string;
+  issues: EnrichedGitHubIssue[];
+  loading: boolean;
+  hasMore: boolean;
+  onLoadMore: () => void;
+  onCreateThread: (issue: EnrichedGitHubIssue) => void;
+  onOpenIssue: (issue: EnrichedGitHubIssue) => void;
+}) {
+  const now = useMinuteTick();
+  const factory = useIssueFactory(projectId);
+  const [selected, setSelected] = useState<number[]>([]);
+  const toggle = useCallback(
+    (n: number) =>
+      setSelected((current) =>
+        current.includes(n) ? current.filter((x) => x !== n) : [...current, n],
+      ),
+    [],
+  );
+  // A selected issue that can no longer be sent (it entered the factory) drops out.
+  const sendable = selected.filter((n) => {
+    const issue = issues.find((i) => i.number === n);
+    return issue ? canSendIssue(factory, issue) : false;
+  });
+
+  return (
+    <>
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="divide-sidebar-border divide-y">
+          {issues.map((issue) => (
+            <IssueRow
+              key={issue.number}
+              projectId={projectId}
+              issue={issue}
+              now={now}
+              factory={factory}
+              selected={sendable.includes(issue.number)}
+              onToggle={toggle}
+              onCreateThread={onCreateThread}
+              onOpen={onOpenIssue}
+            />
+          ))}
+        </div>
+
+        <LoadMoreSentinel
+          hasMore={hasMore}
+          loading={loading}
+          itemCount={issues.length}
+          onLoadMore={onLoadMore}
+          testId="issues-load-more"
+        />
+      </ScrollArea>
+      {factory.settings && sendable.length > 0 && (
+        <IssuesFactoryBar
+          projectId={projectId}
+          settings={factory.settings}
+          selected={sendable}
+          onSent={(accepted) =>
+            setSelected((current) => current.filter((n) => !accepted.includes(n)))
+          }
+          onClear={() => setSelected([])}
+        />
+      )}
+    </>
   );
 }
 
 function IssueRow({
+  projectId,
   issue,
   now,
+  factory,
+  selected,
+  onToggle,
   onCreateThread,
   onOpen,
 }: {
+  projectId: string;
   issue: EnrichedGitHubIssue;
   now: number;
+  factory: IssueFactory;
+  selected: boolean;
+  onToggle: (issueNumber: number) => void;
   onCreateThread: (issue: EnrichedGitHubIssue) => void;
   onOpen: (issue: EnrichedGitHubIssue) => void;
 }) {
   const { t } = useTranslation();
+  const factoryRun = factory.active ? factory.latestRun.get(issue.number) : undefined;
   return (
     <div
       className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors"
       data-testid={`issue-item-${issue.number}`}
     >
+      {canSendIssue(factory, issue) && (
+        <IssueSelectBox issueNumber={issue.number} checked={selected} onToggle={onToggle} />
+      )}
       {issue.state === 'open' ? (
         <CircleDot className="icon-base mt-0.5 shrink-0 text-green-500" />
       ) : (
@@ -325,6 +414,13 @@ function IssueRow({
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
           <span className="text-muted-foreground text-[10px]">#{issue.number}</span>
+          {factoryRun && (
+            <IssueFactoryStatus
+              projectId={projectId}
+              run={factoryRun}
+              position={factory.queuePosition.get(issue.number)}
+            />
+          )}
           <IssueBadges issue={issue} badgeClassName="h-3.5 text-[9px] leading-none" />
           <span className="text-muted-foreground text-[10px]">
             {timeAgo(issue.created_at, now)}

@@ -1,10 +1,17 @@
 # Issue factory (server-run)
 
-The issue factory watches a project's GitHub repository for issues carrying a label and runs a
-workflow for each one, as the user who turned the factory on (the **enabler**): implement the
-issue, open a pull request, wait for CI, fix red CI, merge. The flow, not a setting, decides how far
-a run goes. Specs: `openspec/specs/issue-factory/spec.md`. Changes:
-`openspec/changes/issue-factory` (phases 1–5) and the archived `factory-flow-execution`.
+The issue factory runs a workflow for each issue it takes, as the user who set it up (the
+**enabler**): implement the issue, open a pull request, wait for CI, fix red CI, merge. The flow,
+not a setting, decides how far a run goes. Issues come in two ways:
+
+- **Sent from funny**: the member selects issues in the Issues tab and sends them with a flow.
+  They wait in the factory's **queue** and start in the order they were sent.
+- **By label**, only in **automatic** mode: the factory also takes the open issues carrying its
+  label, after the queue. A **manual** factory (the default for a new one) takes only what is sent.
+
+Specs: `openspec/specs/issue-factory/spec.md`. Changes: `openspec/changes/issue-factory`
+(phases 1–5), the archived `factory-flow-execution`, and `factory-manual-queue` (queue, modes,
+dependencies).
 
 All code is in `packages/server/src/services/factory/`. The client part is the factory row in a
 project's settings (`components/general-settings-project/ProjectFactorySetting.tsx`,
@@ -16,23 +23,35 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
 
 ## Pieces
 
-| File                                                | Role                                                                                                                                                                                                                     |
-| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `factory-settings.ts`                               | One row per (project, user): enabled, label, `flowName` (default `issue-to-merge`), `maxConcurrent`, `blockedReason`. Save needs `steer`.                                                                                |
-| `factory-watcher.ts`                                | One poll per factory (60 s; also paused factories with runs in flight). Per tick: re-check the enabler's `steer`, resolve runtime and repo, resume runs not driven in this process, admit labelled issues up to the cap. |
-| `factory-flow.ts`                                   | Loads `.funny/workflows/<flowName>.yaml` from the repo's **default branch** (contents API, App token), else the built-in. `factory-issue` is refused (workspace-only).                                                   |
-| `factory-flow-runs.ts`                              | Runs the compiled flow with `@funny/pipelines` and writes progress to `factory_runs`; decides how a run ends.                                                                                                            |
-| `factory-action-provider.ts`                        | The server `ActionProvider`: agent steps are threads; `create_pr` finds the agent's PR by branch; `wait_ci` / `merge` via `factory-ci-actions.ts`; `run_command` and approvals refused.                                  |
-| `factory-thread-waits.ts`                           | An agent step waits on the thread's persisted status, woken by `notifyTerminalStatusPersisted` and a 30 s DB poll; missing or > 24 h thread fails the step.                                                              |
-| `factory-run-control.ts`, `factory-follow-ups.ts`   | Stop, retry, take-over.                                                                                                                                                                                                  |
-| `factory-thread-requests.ts`                        | Stop / follow-up to a run's threads, routed by the thread's path (`withRunnerFor` `request` target), waking a sleeping sandbox.                                                                                          |
-| `factory-sandbox-launch.ts`                         | Starts a thread in the enabler's sandbox (the `thread-sandboxes` launcher, `source: 'factory'`).                                                                                                                         |
-| `factory-pull-requests.ts`, `factory-ci-actions.ts` | CI verdict (green / red / conflict / timeout, `required_checks`) and merge only on green, with the App token capped by the enabler (`accessCapToken`).                                                                   |
+| File                                                | Role                                                                                                                                                                                                                                                                                        |
+| --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `factory-settings.ts`                               | One row per (project, user): enabled (running / paused), `mode` (`manual` / `automatic`), label (automatic only), `flowName` (default `issue-to-merge`), `maxConcurrent`, `blockedReason`. Save needs `steer`.                                                                              |
+| `factory-watcher.ts`                                | One poll per factory (60 s; also paused factories with runs in flight). Per tick: re-check the enabler's `steer`, resolve runtime and repo, resume runs not driven in this process, then fill free slots: the queue in order, then (automatic) labelled issues; blocked issues are skipped. |
+| `factory-queue.ts`                                  | Sending issues (checked live: running, target resolves, flow loads, each issue open and not a PR), the flows a send may pick, the send bar's blockers, Clear queue and Stop all.                                                                                                            |
+| `factory-dependencies.ts`                           | Pure: whether an issue waits for its blockers (GitHub's "blocked by", read with `issueBlockers` from `@funny/core/github-app`) and why.                                                                                                                                                     |
+| `factory-flow.ts`                                   | Loads `.funny/workflows/<flowName>.yaml` from the repo's **default branch** (contents API, App token), else the built-in. `factory-issue` is refused (workspace-only).                                                                                                                      |
+| `factory-flow-runs.ts`                              | Runs the compiled flow with `@funny/pipelines` and writes progress to `factory_runs`; decides how a run ends.                                                                                                                                                                               |
+| `factory-action-provider.ts`                        | The server `ActionProvider`: agent steps are threads; `create_pr` finds the agent's PR by branch; `wait_ci` / `merge` via `factory-ci-actions.ts`; `run_command` and approvals refused.                                                                                                     |
+| `factory-thread-waits.ts`                           | An agent step waits on the thread's persisted status, woken by `notifyTerminalStatusPersisted` and a 30 s DB poll; missing or > 24 h thread fails the step.                                                                                                                                 |
+| `factory-run-control.ts`, `factory-follow-ups.ts`   | Stop, retry, take-over.                                                                                                                                                                                                                                                                     |
+| `factory-thread-requests.ts`                        | Stop / follow-up to a run's threads, routed by the thread's path (`withRunnerFor` `request` target), waking a sleeping sandbox.                                                                                                                                                             |
+| `factory-sandbox-launch.ts`                         | Starts a thread in the enabler's sandbox (the `thread-sandboxes` launcher, `source: 'factory'`).                                                                                                                                                                                            |
+| `factory-pull-requests.ts`, `factory-ci-actions.ts` | CI verdict (green / red / conflict / timeout, `required_checks`) and merge only on green, with the App token capped by the enabler (`accessCapToken`).                                                                                                                                      |
 
 ## A run
 
-1. **Admit**: a `factory_runs` row (`queued`) is written before anything starts; a partial unique
-   index (migration 098) allows one in-flight run per issue.
+0. **Queue** (sent issues): a send writes one `requested` row per accepted issue, with the chosen
+   flow (`flow_name`) and a `queue_order`; issues sent together go oldest first. `requested` holds
+   no slot and no flow drives it. A send is refused as a whole when the factory is paused or
+   cannot work now (409, with the reason), and per issue when it is closed, a pull request,
+   missing, or already in the factory.
+1. **Admit**: each tick fills `maxConcurrent − slot-holding runs`: first the `requested` runs in
+   queue order (compare-and-set `requested → queued`), then, in automatic mode, labelled issues
+   (a new `queued` row, `source = 'label'`). An issue whose blockers are unfinished is skipped,
+   with its `wait_reason` recorded, and the next one is tried. A blocker is finished when its
+   issue is closed or it has a merged run in this factory; an unreadable blocker list blocks for
+   that tick. A partial unique index (migration 098) allows one non-terminal run per issue, so a
+   queued issue cannot be sent or labelled into a second run.
 2. **Agent steps**: the first is a new thread on the enabler's runtime (local / worktree on their
    runner via `startThreadOnRunner`, or their sandbox). Every later agent step (e.g. a CI fix)
    **continues that thread** with a follow-up message, so the agent keeps its context. The agent
@@ -42,8 +61,12 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    to the fix step via `retry.before_retry`, up to the flow's attempts. A timeout is not retried.
 4. **End**: merged → `merged`; completed without a merge → `waiting_human`; failed with the PR
    open → `waiting_human` at the failed step + Web Push to the enabler; failed earlier → `failed`
-   (re-admitted up to 3 times); failed before any agent ran → the row is dropped and the reason is
-   shown as the factory's `blockedReason`.
+   (a labelled issue is re-admitted up to 3 times; a sent one is not, use Retry); failed before
+   any agent ran → a label run is dropped, a sent one goes back to `requested` in its place, and
+   the reason is shown as the factory's `blockedReason`.
+
+Each run executes its own `flow_name` (resume, retry and take-over too); rows from before the
+queue fall back to the factory's flow.
 
 Built-in flows (`packages/workflows/defaults/`): `issue-to-merge` (default) and `issue-to-pr` (stops
 at the PR for teams that merge by hand).
@@ -62,7 +85,12 @@ at the PR for teams that merge by hand).
 
 ## Operator controls
 
-- **Pause**: turning the factory off stops admissions; runs in flight finish.
+- **Pause**: turning the factory off stops admissions; runs in flight finish, the queue is kept
+  and sending is refused. Pausing does not change the mode.
+- **Cancel / Clear queue** (`factory.stopRun` on a waiting run, `factory.clearQueue`): waiting
+  issues end `stopped`; runs in progress go on.
+- **Stop all** (`factory.stopAll`, confirmed in the UI): clears the queue and stops every run in
+  flight.
 - **Stop** (`factory.stopRun`): the run is `stopped`, its flow stops and its running threads are
   stopped on the enabler's runner. A thread whose launch raced the stop is stopped when recorded.
 - **Retry** (`factory.retryRun`): a `failed` / `waiting_human` run goes back in flight on the same

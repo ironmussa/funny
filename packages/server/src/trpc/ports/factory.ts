@@ -10,6 +10,11 @@ import { errAsync, okAsync } from 'neverthrow';
 
 import { audit } from '../../lib/audit.js';
 import { log } from '../../lib/logger.js';
+import { BUILT_IN_FACTORY_FLOWS } from '../../services/factory/factory-flow.js';
+import {
+  createFactoryQueue,
+  type FactoryQueueError,
+} from '../../services/factory/factory-queue.js';
 import {
   createFactoryRunControl,
   type FactoryRunControlError,
@@ -44,6 +49,20 @@ function controlFailure(error: FactoryRunControlError): ApiFailure {
   return failure(error.kind === 'not-found' ? 404 : 409, error.message);
 }
 
+function queueFailure(error: FactoryQueueError): ApiFailure {
+  switch (error.kind) {
+    case 'storage':
+      return storageFailure(error);
+    case 'not-found':
+      return failure(404, error.message);
+    case 'invalid-flow':
+      return failure(400, error.message);
+    default:
+      // paused / cannot-work: the factory exists but cannot take a send now.
+      return failure(409, error.message);
+  }
+}
+
 const storageFailure = (error: { message: string }) => {
   log.error('Factory runs storage failure', { namespace: 'factory', error: error.message });
   return failure(500, 'Internal error');
@@ -64,17 +83,33 @@ function createFactoryPort(
   settings = createFactorySettingsService(),
   runs = createFactoryRunsRepository(),
   control = createFactoryRunControl(runs),
+  queue = createFactoryQueue({ runs, control }),
 ): FactoryPort {
-  /** The caller's factory for the project; 404 when they have none. */
-  const ownFactory = (userId: string, projectId: string) =>
+  /** The caller's factory for the project; 404 with `missing` when they have none. */
+  const factoryOf = (userId: string, projectId: string, missing: string) =>
     settings
       .factoryId(userId, projectId)
       .mapErr(settingsFailure)
       .andThen((factoryId) =>
-        factoryId
-          ? okAsync(factoryId)
-          : errAsync<string, ApiFailure>(failure(404, 'Run not found')),
+        factoryId ? okAsync(factoryId) : errAsync<string, ApiFailure>(failure(404, missing)),
       );
+  const ownFactory = (userId: string, projectId: string) =>
+    factoryOf(userId, projectId, 'Run not found');
+  const configured = (userId: string, projectId: string) =>
+    factoryOf(userId, projectId, 'Set up the issue factory first.');
+
+  /** Audit a queue action and pass its result on. */
+  const audited =
+    <T>(
+      action: 'factory.issues_sent' | 'factory.queue_cleared' | 'factory.stopped_all',
+      userId: string,
+      detail: (result: T) => string,
+      meta: (result: T) => Record<string, unknown>,
+    ) =>
+    (result: T): T => {
+      audit({ action, actorId: userId, detail: detail(result), meta: meta(result) });
+      return result;
+    };
 
   const controlled = (action: 'stop' | 'retry', userId: string, projectId: string, runId: string) =>
     ownFactory(userId, projectId)
@@ -106,7 +141,12 @@ function createFactoryPort(
         action: 'factory.settings_set',
         actorId: userId,
         detail: `Project ${projectId} factory ${saved.value.enabled ? 'enabled' : 'disabled'}`,
-        meta: { projectId, enabled: saved.value.enabled, label: saved.value.label },
+        meta: {
+          projectId,
+          enabled: saved.value.enabled,
+          mode: saved.value.mode,
+          label: saved.value.label,
+        },
       });
       const factoryId = await settings.factoryId(userId, projectId);
       if (factoryId.isOk() && factoryId.value) await reschedule(factoryId.value, projectId);
@@ -119,6 +159,82 @@ function createFactoryPort(
 
     async retryRun(userId, projectId, runId) {
       return controlled('retry', userId, projectId, runId);
+    },
+
+    async submitIssues(userId, projectId, input) {
+      return configured(userId, projectId).andThen((factoryId) =>
+        queue
+          .submit(factoryId, input)
+          .mapErr(queueFailure)
+          .map(
+            audited(
+              'factory.issues_sent',
+              userId,
+              (r) => `Sent ${r.accepted.length} issue(s) to the factory of project ${projectId}`,
+              (r) => ({
+                projectId,
+                flowName: input.flowName,
+                accepted: r.accepted,
+                refused: r.refused.map((refusal) => refusal.issue),
+              }),
+            ),
+          ),
+      );
+    },
+
+    async flows(userId, projectId) {
+      return settings
+        .factoryId(userId, projectId)
+        .mapErr(settingsFailure)
+        .andThen((factoryId) =>
+          factoryId
+            ? queue.flows(factoryId).mapErr(queueFailure)
+            : okAsync(
+                BUILT_IN_FACTORY_FLOWS.map((name) => ({ name, source: 'built-in' as const })),
+              ),
+        );
+    },
+
+    async blockers(userId, projectId, issueNumbers) {
+      return settings
+        .factoryId(userId, projectId)
+        .mapErr(settingsFailure)
+        .andThen((factoryId) =>
+          factoryId ? queue.blockers(factoryId, issueNumbers).mapErr(queueFailure) : okAsync([]),
+        );
+    },
+
+    async clearQueue(userId, projectId) {
+      return configured(userId, projectId).andThen((factoryId) =>
+        queue
+          .clearQueue(factoryId)
+          .mapErr(queueFailure)
+          .map(
+            audited(
+              'factory.queue_cleared',
+              userId,
+              (r) => `Cleared ${r.cleared} queued issue(s) of the factory of project ${projectId}`,
+              (r) => ({ projectId, cleared: r.cleared }),
+            ),
+          ),
+      );
+    },
+
+    async stopAll(userId, projectId) {
+      return configured(userId, projectId).andThen((factoryId) =>
+        queue
+          .stopAll(userId, factoryId)
+          .mapErr(queueFailure)
+          .map(
+            audited(
+              'factory.stopped_all',
+              userId,
+              (r) =>
+                `Stopped the factory of project ${projectId}: ${r.cleared} queued, ${r.stopped} running`,
+              (r) => ({ projectId, ...r }),
+            ),
+          ),
+      );
     },
 
     async runs(userId, projectId) {

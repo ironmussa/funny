@@ -11,13 +11,13 @@
  * can decide between "show error" and "show empty + configure" UX.
  */
 import { tmpdir } from 'os';
-import { Readable, Writable } from 'stream';
 
 import { runAsync } from '@funny/shared/async';
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
 import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
 
 import { spawnAcpProbe } from './acp-probe-spawn.js';
+import { childAcpStream } from './acp-stream.js';
 import { killProcessTree } from './base-process.js';
 
 export interface DiscoveredAcpModel {
@@ -58,9 +58,11 @@ export async function discoverAcpModels(
   const timeoutMs = opts.timeoutMs ?? 15_000;
   const label = manifest.label;
 
-  let SDK: typeof import('@agentclientprotocol/sdk');
+  // `/unstable` keeps the full v1 surface the 1.x default import exposed
+  // (session/new `models`, prompt `usage`); the wire protocol is still ACP v1.
+  let SDK: typeof import('@agentclientprotocol/sdk/unstable');
   try {
-    SDK = await import('@agentclientprotocol/sdk');
+    SDK = await import('@agentclientprotocol/sdk/unstable');
   } catch {
     return {
       ok: false,
@@ -69,7 +71,7 @@ export async function discoverAcpModels(
     };
   }
 
-  const { ClientSideConnection, ndJsonStream } = SDK;
+  const { client, methods, ndJsonStream } = SDK;
   const { command, args } = resolveSpawnCommand(manifest.spawn);
 
   // Isolated process group so cleanup can terminate MCP grandchildren.
@@ -77,33 +79,34 @@ export async function discoverAcpModels(
   if (spawned.isErr()) return { ok: false, reason: 'spawn_failed', message: spawned.error };
   const child = spawned.value;
 
+  let closeConnection: (() => void) | null = null;
   const cleanup = () => {
+    closeConnection?.();
+    closeConnection = null;
     killProcessTree(child);
   };
 
   const work = (async (): Promise<DiscoverAcpModelsResult> => {
-    const outputStream = Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>;
-    const inputStream = Readable.toWeb(child.stdout!) as unknown as ReadableStream<Uint8Array>;
-    const stream = ndJsonStream(outputStream, inputStream);
-
-    const connection = new ClientSideConnection(
-      () => ({
-        sessionUpdate: async () => {},
-        requestPermission: async (params) => ({
-          outcome: { outcome: 'selected', optionId: params.options[0]?.optionId ?? '' },
-        }),
-      }),
-      stream,
-    );
+    const connection = client({ name: `funny-${manifest.id}-discover` })
+      .onNotification(methods.client.session.update, () => {})
+      .onRequest(methods.client.session.requestPermission, ({ params }) => ({
+        outcome: { outcome: 'selected', optionId: params.options[0]?.optionId ?? '' },
+      }))
+      .connect(childAcpStream(child, ndJsonStream));
+    closeConnection = () => connection.close();
+    const agent = connection.agent;
 
     try {
-      await connection.initialize({
+      await agent.request(methods.agent.initialize, {
         protocolVersion: 1,
         clientInfo: { name: `funny-${manifest.id}-discover`, version: '1.0.0' },
         clientCapabilities: {},
       });
 
-      const sessionResponse = await connection.newSession({ cwd, mcpServers: [] });
+      const sessionResponse = await agent.request(methods.agent.session.new, {
+        cwd,
+        mcpServers: [],
+      });
       const models = (sessionResponse as { models?: { availableModels?: unknown } }).models;
       const raw = Array.isArray(models?.availableModels) ? models!.availableModels : [];
 

@@ -464,92 +464,91 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                   </button>
 
                   {/* Other text input — mini PromptEditor with @ mentions, / commands, and mic */}
-                  {isOtherSelected &&
-                    !submitted && (
-                      // Padding clicks forward focus to the nested editor; the wrapper is not an input itself.
-                      // react-doctor-disable-next-line react-doctor/no-static-element-interactions
-                      <div
-                        ref={otherEditorContainerRef}
-                        onMouseDown={(e) => {
-                          const target = e.target as HTMLElement;
-                          // Mic and editor handle their own focus — don't interfere
-                          if (target.closest('[data-testid="ask-question-dictate"]')) return;
-                          if (target.closest('[data-testid="prompt-editor"]')) return;
-                          // Clicked padding/border — route caret into the input
-                          e.preventDefault();
-                          otherEditorRef.current?.focus();
-                        }}
-                        className="border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-ring/50 rounded-md border focus-within:ring-1"
-                      >
-                        <div className="px-2.5 py-1.5">
-                          <PromptEditor
-                            ref={handleOtherEditorRef}
-                            placeholder={t('tools.otherPlaceholder')}
-                            onChange={handleOtherEditorChange}
-                            onSubmit={() => {
-                              // Flush editor text to state before submitting
-                              const text = otherEditorRef.current?.getText() ?? '';
-                              setOtherTexts((prev) => {
-                                const next = new Map(prev);
-                                next.set(activeTab, text);
-                                return next;
-                              });
-                              if (isLastTab || questions.length === 1) {
-                                // Use setTimeout to let state update flush before handleSubmit reads it
-                                setTimeout(handleSubmit, 0);
-                              } else {
-                                goToTab(activeTab + 1);
-                              }
-                            }}
-                            cwd={cwd}
-                            slashSkills={slashSkills}
-                            slashSkillsLoading={slashSkillsLoading}
-                            onSlashOpen={ensureSlashSkills}
-                            className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
-                          />
-                        </div>
-                        {hasAssemblyaiKey && (
-                          <div className="border-border/20 flex items-center justify-end border-t px-1.5 py-0.5">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  data-testid="ask-question-dictate"
-                                  onClick={toggleRecording}
-                                  variant="ghost"
-                                  size="icon-sm"
-                                  tabIndex={-1}
-                                  aria-label={
-                                    isRecording
-                                      ? t('prompt.stopDictation', 'Stop dictation')
-                                      : t('prompt.startDictation', 'Start dictation')
-                                  }
-                                  disabled={isTranscribing}
-                                  className={cn(
-                                    'text-muted-foreground hover:text-foreground',
-                                    isRecording && 'text-destructive hover:text-destructive',
-                                  )}
-                                >
-                                  {isTranscribing ? (
-                                    <Loader2 className="icon-xs animate-spin" />
-                                  ) : isRecording ? (
-                                    <MicOff className="icon-xs" />
-                                  ) : (
-                                    <Mic className="icon-xs" />
-                                  )}
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {isTranscribing
-                                  ? t('prompt.transcribing', 'Transcribing...')
-                                  : isRecording
-                                    ? t('prompt.stopDictation', 'Stop dictation')
-                                    : t('prompt.startDictation', 'Start dictation')}
-                              </TooltipContent>
-                            </Tooltip>
-                          </div>
-                        )}
+                  {isOtherSelected && !submitted && (
+                    // Padding clicks forward focus to the nested editor; the wrapper is not an input itself.
+                    // react-doctor-disable-next-line react-doctor/no-static-element-interactions
+                    <div
+                      ref={otherEditorContainerRef}
+                      onMouseDown={(e) => {
+                        const target = e.target as HTMLElement;
+                        // Mic and editor handle their own focus — don't interfere
+                        if (target.closest('[data-testid="ask-question-dictate"]')) return;
+                        if (target.closest('[data-testid="prompt-editor"]')) return;
+                        // Clicked padding/border — route caret into the input
+                        e.preventDefault();
+                        otherEditorRef.current?.focus();
+                      }}
+                      className="border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-ring/50 rounded-md border focus-within:ring-1"
+                    >
+                      <div className="px-2.5 py-1.5">
+                        <PromptEditor
+                          ref={handleOtherEditorRef}
+                          placeholder={t('tools.otherPlaceholder')}
+                          onChange={handleOtherEditorChange}
+                          onSubmit={() => {
+                            // Flush editor text to state before submitting
+                            const text = otherEditorRef.current?.getText() ?? '';
+                            setOtherTexts((prev) => {
+                              const next = new Map(prev);
+                              next.set(activeTab, text);
+                              return next;
+                            });
+                            if (isLastTab || questions.length === 1) {
+                              // Use setTimeout to let state update flush before handleSubmit reads it
+                              setTimeout(handleSubmit, 0);
+                            } else {
+                              goToTab(activeTab + 1);
+                            }
+                          }}
+                          cwd={cwd}
+                          slashSkills={slashSkills}
+                          slashSkillsLoading={slashSkillsLoading}
+                          onSlashOpen={ensureSlashSkills}
+                          className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
+                        />
                       </div>
-                    )}
+                      {hasAssemblyaiKey && (
+                        <div className="border-border/20 flex items-center justify-end border-t px-1.5 py-0.5">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                data-testid="ask-question-dictate"
+                                onClick={toggleRecording}
+                                variant="ghost"
+                                size="icon-sm"
+                                tabIndex={-1}
+                                aria-label={
+                                  isRecording
+                                    ? t('prompt.stopDictation', 'Stop dictation')
+                                    : t('prompt.startDictation', 'Start dictation')
+                                }
+                                disabled={isTranscribing}
+                                className={cn(
+                                  'text-muted-foreground hover:text-foreground',
+                                  isRecording && 'text-destructive hover:text-destructive',
+                                )}
+                              >
+                                {isTranscribing ? (
+                                  <Loader2 className="icon-xs animate-spin" />
+                                ) : isRecording ? (
+                                  <MicOff className="icon-xs" />
+                                ) : (
+                                  <Mic className="icon-xs" />
+                                )}
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {isTranscribing
+                                ? t('prompt.transcribing', 'Transcribing...')
+                                : isRecording
+                                  ? t('prompt.stopDictation', 'Stop dictation')
+                                  : t('prompt.startDictation', 'Start dictation')}
+                            </TooltipContent>
+                          </Tooltip>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   {isOtherSelected && submitted && otherText.trim() && (
                     <div className="border-border/40 bg-background/50 text-muted-foreground rounded-md border px-2.5 py-1.5 text-xs opacity-70">
                       {otherText}

@@ -37,9 +37,10 @@ describe('external Claude sessions sync', () => {
     vi.mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
 
     const { unmount } = renderHook(() => useExternalClaudeSessionsSync());
-    // Initial sync is deferred to idle (setTimeout fallback under jsdom).
+    // Initial sync is deferred to idle. Vitest 5 fakes requestIdleCallback, so
+    // it runs at the 3 s idle timeout (the setTimeout(500) fallback is unused).
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(3_000);
     });
     await flushMicrotasks();
 
@@ -71,7 +72,7 @@ describe('external Claude sessions sync', () => {
     const b = renderHook(() => useExternalClaudeSessionsSync());
     const c = renderHook(() => useExternalClaudeSessionsSync());
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(3_000);
     });
     await flushMicrotasks();
 
@@ -90,7 +91,7 @@ describe('external Claude sessions sync', () => {
 
     const sync = renderHook(() => useExternalClaudeSessionsSync());
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(500);
+      await vi.advanceTimersByTimeAsync(3_000);
     });
     await flushMicrotasks();
 

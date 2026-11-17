@@ -18,7 +18,6 @@
 
 import { spawn, type ChildProcess } from 'child_process';
 import { randomUUID } from 'crypto';
-import { Readable, Writable } from 'stream';
 
 import type { ProviderManifest } from '@funny/shared/provider-manifest';
 import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
@@ -26,6 +25,7 @@ import { resolveSpawnCommand } from '@funny/shared/provider-manifest';
 import { createDebugLogger, type DebugLogger } from '../debug.js';
 import { toACPImageBlocks, type ACPImageBlock } from './acp-image.js';
 import { toACPMcpServers } from './acp-mcp.js';
+import { childAcpStream } from './acp-stream.js';
 import {
   buildACPToolInput,
   buildTodoWriteInputFromPlanEntries,
@@ -40,15 +40,20 @@ import { BaseAgentProcess, killProcessTree, type ResultSubtype } from './base-pr
 import { buildAgentChildEnv } from './reap-orphaned-agents.js';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
-// Lazy-loaded SDK types (avoid crash if not installed)
-type ACPSDK = typeof import('@agentclientprotocol/sdk');
-type ACPClient = import('@agentclientprotocol/sdk').Client;
-type ACPAgent = import('@agentclientprotocol/sdk').Agent;
-type ACPSessionNotification = import('@agentclientprotocol/sdk').SessionNotification;
-type ACPSessionUpdate = import('@agentclientprotocol/sdk').SessionUpdate;
-type ACPRequestPermissionRequest = import('@agentclientprotocol/sdk').RequestPermissionRequest;
-type ACPRequestPermissionResponse = import('@agentclientprotocol/sdk').RequestPermissionResponse;
-type ACPConnection = import('@agentclientprotocol/sdk').ClientSideConnection;
+// Lazy-loaded SDK types (avoid crash if not installed). `/unstable` keeps the
+// full v1 surface the 1.x default import exposed (prompt `usage`, `usage_update`,
+// session config options); the wire protocol is still ACP v1.
+type ACPSDK = typeof import('@agentclientprotocol/sdk/unstable');
+type ACPSessionUpdate = import('@agentclientprotocol/sdk/unstable').SessionUpdate;
+type ACPRequestPermissionRequest =
+  import('@agentclientprotocol/sdk/unstable').RequestPermissionRequest;
+type ACPRequestPermissionResponse =
+  import('@agentclientprotocol/sdk/unstable').RequestPermissionResponse;
+type ACPConnection = import('@agentclientprotocol/sdk/unstable').ClientConnection;
+type ACPPromptRequest = import('@agentclientprotocol/sdk/unstable').PromptRequest;
+/** Context for calling agent-side ACP methods on a live connection. */
+type ACPAgentContext = ACPConnection['agent'];
+type ACPMethods = ACPSDK['methods'];
 
 type ACPUpdateOf<K extends ACPSessionUpdate['sessionUpdate']> = Extract<
   ACPSessionUpdate,
@@ -74,6 +79,7 @@ export class GenericACPProcess extends BaseAgentProcess {
 
   // ── Long-lived per-process state ─────────────────────────────────
   private connection: ACPConnection | null = null;
+  private acpMethods: ACPMethods | null = null;
   private activeSessionId: string | null = null;
   private numTurns = 0;
   private totalCost = 0;
@@ -176,12 +182,14 @@ export class GenericACPProcess extends BaseAgentProcess {
   /** Expose the live ACP session so BaseAgentProcess.steerPrompt can cancel it. */
   protected getCancellableSession() {
     if (!this.connection || !this.activeSessionId) return null;
+    if (!this.acpMethods) return null;
     const sessionId = this.activeSessionId;
-    const conn = this.connection;
+    const agent = this.connection.agent;
+    const methods = this.acpMethods;
     return {
       sessionId,
       cancel: async () => {
-        await conn.cancel({ sessionId });
+        await agent.notify(methods.agent.session.cancel, { sessionId });
       },
     };
   }
@@ -191,7 +199,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   protected async runProcess(): Promise<void> {
     let SDK: ACPSDK;
     try {
-      SDK = await import('@agentclientprotocol/sdk');
+      SDK = await import('@agentclientprotocol/sdk/unstable');
     } catch {
       throw new Error(
         'ACP SDK not installed. Run: bun add @agentclientprotocol/sdk\n' +
@@ -199,7 +207,8 @@ export class GenericACPProcess extends BaseAgentProcess {
       );
     }
 
-    const { ClientSideConnection, ndJsonStream } = SDK;
+    const { client, methods, ndJsonStream } = SDK;
+    this.acpMethods = methods;
 
     await this.runPrelaunch();
 
@@ -239,34 +248,24 @@ export class GenericACPProcess extends BaseAgentProcess {
     this.forwardStderrErrors(child);
     if (!(await this.waitForSpawn(child))) return;
 
-    const outputStream = Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>;
-    const inputStream = Readable.toWeb(child.stdout!) as unknown as ReadableStream<Uint8Array>;
-    const stream = ndJsonStream(outputStream, inputStream);
-
-    const acpClient: ACPClient = {
-      sessionUpdate: async (params: ACPSessionNotification): Promise<void> => {
+    const connection = client({ name: 'funny' })
+      .onNotification(methods.client.session.update, ({ params }) => {
         if (this.isAborted) return;
         const update = params.update;
         // History replay streams old message/tool chunks we must not re-ingest,
         // but usage_update carries the live context window size we still want.
         if (this.replayingHistory && update.sessionUpdate !== 'usage_update') return;
         this.translateUpdate(update);
-      },
-
-      requestPermission: async (
-        params: ACPRequestPermissionRequest,
-      ): Promise<ACPRequestPermissionResponse> => {
-        return this.handleRequestPermission(params);
-      },
-    };
-
-    const connection = new ClientSideConnection((_agent: ACPAgent) => acpClient, stream);
+      })
+      .onRequest(methods.client.session.requestPermission, ({ params }) =>
+        this.handleRequestPermission(params),
+      )
+      .connect(childAcpStream(child, ndJsonStream));
     this.connection = connection;
-
-    let sessionResponse: Awaited<ReturnType<typeof connection.newSession>> | null = null;
+    const agent = connection.agent;
 
     try {
-      const initResult = await connection.initialize({
+      const initResult = await agent.request(methods.agent.initialize, {
         protocolVersion: 1,
         clientInfo: { name: 'funny', version: '1.0.0' },
         clientCapabilities: { fs: { readTextFile: true, writeTextFile: true } },
@@ -300,7 +299,7 @@ export class GenericACPProcess extends BaseAgentProcess {
         this.activeSessionId = this.options.sessionId!;
         this.replayingHistory = true;
         try {
-          const loadResponse = await connection.loadSession({
+          const loadResponse = await agent.request(methods.agent.session.load, {
             sessionId: this.options.sessionId!,
             cwd: this.options.cwd,
             mcpServers: mcpServerList,
@@ -317,7 +316,7 @@ export class GenericACPProcess extends BaseAgentProcess {
           this.replayingHistory = false;
         }
       } else {
-        sessionResponse = await connection.newSession({
+        const sessionResponse = await agent.request(methods.agent.session.new, {
           cwd: this.options.cwd,
           mcpServers: mcpServerList,
         });
@@ -332,9 +331,9 @@ export class GenericACPProcess extends BaseAgentProcess {
         this.options.cwd,
       );
 
-      await this.applyModelSelection(connection);
-      await this.applyThoughtLevelSelection(connection);
-      await this.applySessionMode(connection, isResume);
+      await this.applyModelSelection(agent, methods);
+      await this.applyThoughtLevelSelection(agent, methods);
+      await this.applySessionMode(agent, methods, isResume);
 
       // Run initial prompt inline so a setup error surfaces as a failed turn.
       await this.runOnePrompt(this.options.prompt, this.options.images);
@@ -360,6 +359,7 @@ export class GenericACPProcess extends BaseAgentProcess {
       if (this.childProcess && !this.childProcess.killed) {
         killProcessTree(this.childProcess);
       }
+      connection.close();
       this.connection = null;
       this.finalize();
     }
@@ -438,17 +438,16 @@ export class GenericACPProcess extends BaseAgentProcess {
    * configured default). For `modelVia: 'cli-arg'` (gemini) the model is
    * already on the launch args — nothing to do here.
    */
-  private async applyModelSelection(connection: ACPConnection): Promise<void> {
+  private async applyModelSelection(agent: ACPAgentContext, methods: ACPMethods): Promise<void> {
     if (this.manifest.modelVia !== 'acp-method' || !this.manifest.setModel) return;
     const requestedModel = this.options.model;
     if (!requestedModel || requestedModel === 'default' || !this.activeSessionId) return;
 
-    const conn = connection as any;
     const declaredMethod = this.manifest.setModel.method;
     try {
       // opencode implements the raw method without advertising the capability.
       if (declaredMethod === 'session/set_model') {
-        await conn.extMethod('session/set_model', {
+        await agent.request('session/set_model', {
           sessionId: this.activeSessionId,
           modelId: requestedModel,
         });
@@ -458,8 +457,8 @@ export class GenericACPProcess extends BaseAgentProcess {
 
       // ACP 0.26+ removed the dedicated `unstable_setSessionModel` method —
       // the model is now a `category: 'model'` session config option set via
-      // `setSessionConfigOption`. Prefer this when the agent advertised it.
-      if (typeof conn.setSessionConfigOption === 'function' && this.modelConfigOption) {
+      // `session/set_config_option`. Use it when the agent advertised one.
+      if (this.modelConfigOption) {
         const { configId, valueIds } = this.modelConfigOption;
         if (valueIds.size > 0 && !valueIds.has(requestedModel)) {
           this.notifyModelFallback(
@@ -469,7 +468,7 @@ export class GenericACPProcess extends BaseAgentProcess {
           );
           return;
         }
-        await conn.setSessionConfigOption({
+        await agent.request(methods.agent.session.setConfigOption, {
           sessionId: this.activeSessionId,
           configId,
           value: requestedModel,
@@ -477,19 +476,6 @@ export class GenericACPProcess extends BaseAgentProcess {
         this.dlog.info('model selected', {
           via: 'setSessionConfigOption',
           configId,
-          modelId: requestedModel,
-        });
-        return;
-      }
-
-      // Legacy SDK fallback (<0.26): the typed `unstable_setSessionModel` method.
-      if (typeof conn.unstable_setSessionModel === 'function') {
-        await conn.unstable_setSessionModel({
-          sessionId: this.activeSessionId,
-          modelId: requestedModel,
-        });
-        this.dlog.info('model selected', {
-          via: 'unstable_setSessionModel',
           modelId: requestedModel,
         });
         return;
@@ -561,10 +547,12 @@ export class GenericACPProcess extends BaseAgentProcess {
     return valueIds;
   }
 
-  private async applyThoughtLevelSelection(connection: ACPConnection): Promise<void> {
+  private async applyThoughtLevelSelection(
+    agent: ACPAgentContext,
+    methods: ACPMethods,
+  ): Promise<void> {
     if (!this.activeSessionId || !this.options.effort) return;
-    const conn = connection as any;
-    if (typeof conn.setSessionConfigOption !== 'function' || !this.thoughtLevelConfigOption) return;
+    if (!this.thoughtLevelConfigOption) return;
 
     const requestedEffort = this.options.effort === 'max' ? 'xhigh' : this.options.effort;
     const { configId, valueIds } = this.thoughtLevelConfigOption;
@@ -577,7 +565,7 @@ export class GenericACPProcess extends BaseAgentProcess {
     }
 
     try {
-      await conn.setSessionConfigOption({
+      await agent.request(methods.agent.session.setConfigOption, {
         sessionId: this.activeSessionId,
         configId,
         value: requestedEffort,
@@ -600,13 +588,20 @@ export class GenericACPProcess extends BaseAgentProcess {
    * are handled at spawn time or not at all. Mode is set only on a fresh session
    * — a resumed session keeps its previously approved mode.
    */
-  private async applySessionMode(connection: ACPConnection, isResume: boolean): Promise<void> {
+  private async applySessionMode(
+    agent: ACPAgentContext,
+    methods: ACPMethods,
+    isResume: boolean,
+  ): Promise<void> {
     if (this.manifest.modeVia !== 'acp-setSessionMode' || isResume || !this.activeSessionId) return;
     const funnyMode = this.options.originalPermissionMode ?? this.options.permissionMode;
     const desiredMode = this.manifest.modeMap[funnyMode as keyof typeof this.manifest.modeMap];
     if (!desiredMode) return;
     try {
-      await connection.setSessionMode({ sessionId: this.activeSessionId, modeId: desiredMode });
+      await agent.request(methods.agent.session.setMode, {
+        sessionId: this.activeSessionId,
+        modeId: desiredMode,
+      });
       this.dlog.info('session mode applied', { modeId: desiredMode });
     } catch (e) {
       this.emitErrorToolCall(
@@ -618,7 +613,7 @@ export class GenericACPProcess extends BaseAgentProcess {
   // ── Per-turn execution ──────────────────────────────────────────
 
   protected async runOnePrompt(prompt: string, images?: unknown[]): Promise<void> {
-    if (!this.connection || !this.activeSessionId) {
+    if (!this.connection || !this.acpMethods || !this.activeSessionId) {
       throw new Error(`${this.manifest.label} ACP: connection not initialized`);
     }
 
@@ -633,66 +628,29 @@ export class GenericACPProcess extends BaseAgentProcess {
 
     const startTime = Date.now();
 
-    const promptBlocks: Array<{ type: 'text'; text: string } | ACPImageBlock> = [
-      { type: 'text', text: prompt },
-    ];
-    const imageBlocks = toACPImageBlocks(images);
-    if (imageBlocks.length > 0) {
-      if (this.supportsImages) {
-        promptBlocks.push(...imageBlocks);
-      } else {
-        this.dlog.warn('agent does not advertise promptCapabilities.image — dropping images', {
-          count: imageBlocks.length,
-        });
-      }
-    }
-
     try {
-      const promptResponse = await this.connection.prompt({
+      const promptParams: ACPPromptRequest = {
         sessionId: this.activeSessionId,
-        prompt: promptBlocks,
-      });
+        prompt: this.buildPromptBlocks(prompt, images),
+      };
+      const promptResponse = await this.connection.agent.request(
+        this.acpMethods.agent.session.prompt,
+        promptParams,
+      );
 
       this.emitAcpPromptResponseUsage(promptResponse.usage);
 
       this.numTurns += 1;
 
-      const subtype: ResultSubtype =
-        promptResponse.stopReason === 'end_turn'
-          ? 'success'
-          : promptResponse.stopReason === 'cancelled'
-            ? 'error_during_execution'
-            : promptResponse.stopReason === 'max_tokens'
-              ? 'error_max_turns'
-              : 'success';
-
       this.flushPendingThought();
       this.flushDeferredToolInputs();
-
-      // Empty-turn guard: a turn that the agent reports as completed but which
-      // produced no visible output at all (no assistant text, no tool calls, no
-      // thought) reads to the user as the agent silently not responding. Surface
-      // it as a visible notice instead of an empty "success".
       if (this.turnEmitCount === 0 && !this.isAborted) {
-        const notice =
-          `${this.manifest.label} ended the turn without producing any output ` +
-          `(stopReason: ${promptResponse.stopReason ?? 'unknown'}) — no text, tool calls, ` +
-          `or reasoning. This usually means the model was not applied or the backend ` +
-          `returned nothing.`;
-        this.dlog.warn('empty turn — agent produced no output', {
-          stopReason: promptResponse.stopReason,
-          modelId: this.options.model,
-        });
-        this.emitMessage({
-          type: 'assistant',
-          message: { id: randomUUID(), content: [{ type: 'text', text: notice }] },
-        } as CLIMessage);
-        this.lastAssistantText = notice;
+        this.emitEmptyTurnNotice(promptResponse.stopReason);
       }
 
       this.emitResult({
         sessionId: this.activeSessionId,
-        subtype,
+        subtype: stopReasonToSubtype(promptResponse.stopReason),
         startTime,
         numTurns: this.numTurns,
         totalCost: this.totalCost,
@@ -714,6 +672,48 @@ export class GenericACPProcess extends BaseAgentProcess {
         });
       }
     }
+  }
+
+  private buildPromptBlocks(
+    prompt: string,
+    images: unknown[] | undefined,
+  ): Array<{ type: 'text'; text: string } | ACPImageBlock> {
+    const promptBlocks: Array<{ type: 'text'; text: string } | ACPImageBlock> = [
+      { type: 'text', text: prompt },
+    ];
+    const imageBlocks = toACPImageBlocks(images);
+    if (imageBlocks.length === 0) return promptBlocks;
+    if (this.supportsImages) {
+      promptBlocks.push(...imageBlocks);
+    } else {
+      this.dlog.warn('agent does not advertise promptCapabilities.image — dropping images', {
+        count: imageBlocks.length,
+      });
+    }
+    return promptBlocks;
+  }
+
+  /**
+   * Empty-turn guard: a turn that the agent reports as completed but which
+   * produced no visible output at all (no assistant text, no tool calls, no
+   * thought) reads to the user as the agent silently not responding. Surface
+   * it as a visible notice instead of an empty "success".
+   */
+  private emitEmptyTurnNotice(stopReason: string | undefined): void {
+    const notice =
+      `${this.manifest.label} ended the turn without producing any output ` +
+      `(stopReason: ${stopReason ?? 'unknown'}) — no text, tool calls, ` +
+      `or reasoning. This usually means the model was not applied or the backend ` +
+      `returned nothing.`;
+    this.dlog.warn('empty turn — agent produced no output', {
+      stopReason,
+      modelId: this.options.model,
+    });
+    this.emitMessage({
+      type: 'assistant',
+      message: { id: randomUUID(), content: [{ type: 'text', text: notice }] },
+    } as CLIMessage);
+    this.lastAssistantText = notice;
   }
 
   // ── Permission request handling ─────────────────────────────
@@ -1289,4 +1289,10 @@ async function ensureGeminiTrustedFolder(cwd: string, dlog: DebugLogger): Promis
   } catch (e) {
     dlog.warn('failed to mark gemini trusted folder', { cwd, error: (e as Error)?.message });
   }
+}
+
+function stopReasonToSubtype(stopReason: string | undefined): ResultSubtype {
+  if (stopReason === 'cancelled') return 'error_during_execution';
+  if (stopReason === 'max_tokens') return 'error_max_turns';
+  return 'success';
 }

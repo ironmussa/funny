@@ -83,7 +83,7 @@ the others; one where the Factory App is not installed is reported in the log an
    3 minutes (no webhook) it reads the head commit's check runs and statuses and the pull
    request's mergeability:
    - green: the pull request is marked ready for review (**`ready`**). With `auto_merge:
-true` the factory also enables GitHub's auto-merge (**`merging`**), with squash when the
+     true` the factory also enables GitHub's auto-merge (**`merging`**), with squash when the
      repository allows it, else another allowed method; GitHub merges once the branch
      protections are met (required reviews and checks still apply, nothing is bypassed).
      When a pull request already meets them, GitHub refuses auto-merge ("clean status") and

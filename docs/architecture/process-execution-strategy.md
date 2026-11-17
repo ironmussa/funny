@@ -138,8 +138,8 @@ await execa('git', ['commit', '-m', userInput]);
 ### 2. Validate Paths Before Use
 
 ```typescript
-import { resolve, isAbsolute } from 'path';
 import { access } from 'fs/promises';
+import { resolve, isAbsolute } from 'path';
 
 export async function validatePath(path: string): Promise<string> {
   if (!isAbsolute(path)) {
@@ -231,9 +231,9 @@ export class ProcessExecutionError extends Error {
 ### Phase 2: Refactor Git Utils
 
 ```typescript
+import { validatePath } from './path-validation.js';
 // src/utils/git-v2.ts (new file)
 import { execute } from './process.js';
-import { validatePath } from './path-validation.js';
 
 export async function git(args: string[], cwd: string): Promise<string> {
   await validatePath(cwd);
@@ -335,6 +335,7 @@ app.get('/status', async (c) => {
 ```typescript
 // tests/utils/process.test.ts
 import { vi, describe, it, expect } from 'vitest';
+
 import { execute } from '../src/utils/process';
 
 // Mock execa for testing

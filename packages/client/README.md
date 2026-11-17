@@ -104,8 +104,8 @@ The `AuthGate` in `main.tsx` detects the server's auth mode and either auto-auth
 `@/` maps to `src/` — configured in both `vite.config.ts` and `tsconfig.json`.
 
 ```tsx
-import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api';
 ```
 
 ## Logging & Telemetry

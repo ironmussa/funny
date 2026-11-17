@@ -21,6 +21,10 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 10
+    ignore:
+      # Pinned: the tree-sitter-wasms grammars are built for the 0.20 ABI and
+      # newer web-tree-sitter extracts no symbols from them (d63c68829).
+      - dependency-name: web-tree-sitter
     groups:
       production-dependencies:
         dependency-type: production

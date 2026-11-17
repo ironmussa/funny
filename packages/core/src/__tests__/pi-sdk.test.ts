@@ -15,13 +15,13 @@ const { availableModels } = vi.hoisted(() => ({
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
   getAgentDir: () => '/tmp/pi-agent',
-  AuthStorage: { create: () => ({}) },
-  ModelRegistry: {
-    create: () => ({
-      getAvailable: () => availableModels,
-      getAll: () => availableModels,
-      find: (provider: string, id: string) =>
+  ModelRuntime: {
+    create: async () => ({
+      getAvailable: async () => availableModels,
+      getModels: () => availableModels,
+      getModel: (provider: string, id: string) =>
         availableModels.find((m) => m.provider === provider && m.id === id),
+      settleCredentialWrites: async () => {},
     }),
   },
   SettingsManager: { create: () => ({}) },
@@ -176,8 +176,8 @@ describe('discoverPiModels', () => {
   });
 
   test("resolves the GPT-5.6 alias and variants through Pi's OpenAI transport", async () => {
-    const { AuthStorage, ModelRegistry } = await import('@earendil-works/pi-coding-agent');
-    const registry = ModelRegistry.create(AuthStorage.create());
+    const { ModelRuntime } = await import('@earendil-works/pi-coding-agent');
+    const registry = await ModelRuntime.create();
 
     expect(resolveRequestedModel(registry, 'openai-codex/gpt-5.6')).toMatchObject({
       provider: 'openai-codex',

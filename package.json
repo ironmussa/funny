@@ -132,7 +132,7 @@
     "factory:status": "bun packages/orchestrator/src/bin/orchestrator.ts status"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^1.2.1",
+    "@agentclientprotocol/sdk": "^2.6.0",
     "@anthropic-ai/claude-agent-sdk": "^0.3.322",
     "@langchain/google-genai": "^2.1.31",
     "@langchain/openai": "^1.4.7",
@@ -147,8 +147,8 @@
     "nodemailer": "^10.1.4"
   },
   "devDependencies": {
-    "@bufbuild/buf": "1.72.0",
-    "@bufbuild/protobuf": "2.14.0",
+    "@bufbuild/buf": "1.75.0",
+    "@bufbuild/protobuf": "2.17.0",
     "@gdp-ts/core": "0.1.0",
     "@playwright/test": "^1.61.1",
     "@secretlint/secretlint-rule-preset-recommend": "^13.0.2",
@@ -157,8 +157,8 @@
     "concurrently": "^10.0.6",
     "eslint-plugin-zod": "4.7.1",
     "husky": "^9.1.7",
-    "oxfmt": "^0.66.0",
-    "oxlint": "1.86.0",
+    "oxfmt": "^0.78.0",
+    "oxlint": "1.93.0",
     "secretlint": "^13.0.2",
     "typescript": "7.0.2",
     "vitepress": "^2.0.0-alpha.17"
@@ -180,7 +180,7 @@
     "tinypool": "^2.1.2",
     "undici": "^7.30.1",
     "uuid": "^11.1.1",
-    "vitest": "^4.1.12",
+    "vitest": "^5.1.0",
     "vue": "^3.5.42"
   },
   "engines": {

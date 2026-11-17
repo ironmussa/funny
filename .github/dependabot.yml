@@ -14,25 +14,16 @@ updates:
           - '*'
 
   # JavaScript/TypeScript dependencies (Bun workspace, bun.lock).
-  # If your Dependabot version doesn't yet support the `bun` ecosystem,
-  # switch this to `npm` once a package-lock/yarn lockfile exists.
+  # Version updates are off (limit 0): we update every package together
+  # locally and land it as one tested PR, see
+  # docs/guides/dependency-updates.md. Security updates are not affected
+  # by this limit and still open their own PRs.
   - package-ecosystem: bun
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 0
     ignore:
       # Pinned: the tree-sitter-wasms grammars are built for the 0.20 ABI and
       # newer web-tree-sitter extracts no symbols from them (d63c68829).
       - dependency-name: web-tree-sitter
-    groups:
-      production-dependencies:
-        dependency-type: production
-        update-types:
-          - minor
-          - patch
-      development-dependencies:
-        dependency-type: development
-        update-types:
-          - minor
-          - patch

@@ -3,3 +3,4 @@ export * from './installation-tokens.js';
 export * from './token-writer.js';
 export * from './pull-requests.js';
 export * from './repo-github.js';
+export * from './issue-dependencies.js';

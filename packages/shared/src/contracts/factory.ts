@@ -36,10 +36,18 @@ export const factoryProjectInput = z.object({ projectId }).strict();
 /** One run of the caller's factory for the project (stop, retry). */
 export const factoryRunInput = z.object({ projectId, runId: z.string().min(1) }).strict();
 
+/**
+ * What a factory admits (change factory-manual-queue): `manual`, only the
+ * issues sent to it; `automatic`, also the open issues carrying its label.
+ */
+export const factoryMode = z.enum(['manual', 'automatic']);
+export type FactoryMode = z.infer<typeof factoryMode>;
+
 export const saveFactorySettingsInput = z
   .object({
     projectId,
     enabled: z.boolean(),
+    mode: factoryMode.optional(),
     label: label.optional(),
     flowName: flowName.optional(),
     maxConcurrent: z.number().int().min(1).max(20).optional(),
@@ -50,7 +58,10 @@ export type SaveFactorySettingsInput = z.input<typeof saveFactorySettingsInput>;
 
 export interface FactorySettings {
   projectId: string;
+  /** Running (true) or paused (false); separate from the mode. */
   enabled: boolean;
+  mode: FactoryMode;
+  /** The label automatic mode admits; kept (and unused) in manual mode. */
   label: string;
   flowName: string;
   maxConcurrent: number;
@@ -60,6 +71,8 @@ export interface FactorySettings {
 }
 
 export type FactoryRunState =
+  /** Sent to the factory and waiting in its queue; holds no concurrency slot. */
+  | 'requested'
   | 'queued'
   | 'working'
   | 'pr_open'
@@ -78,6 +91,89 @@ export interface FactoryRun {
   state: FactoryRunState;
   currentStep: string | null;
   threadIds: string[];
+  /** When the row was written: the send time for a sent issue. */
   startedAt: string;
   completedAt: string | null;
+  /** How the issue came in: sent from funny, or found by the label (automatic mode). */
+  source: FactoryRunSource;
+  /** The flow the run executes; null on runs from before runs recorded their own. */
+  flowName: string | null;
+  /** Position in the queue while `requested` (lower goes first). */
+  queueOrder: number | null;
+  /** Why a `requested` run is not admitted yet, or null. */
+  waitReason: FactoryWaitReason | null;
+}
+
+export type FactoryRunSource = 'manual' | 'label';
+
+/**
+ * Why a queued issue waits on another one (GitHub's "blocked by" relation).
+ * `blockers` are the issue numbers in the same repository that hold it back.
+ */
+export interface FactoryWaitReason {
+  kind:
+    | 'blocker-not-sent'
+    | 'blocker-in-progress'
+    | 'blocker-waiting-merge'
+    | 'blocker-failed'
+    /** A blocker in another repository: it counts only by its issue state. */
+    | 'blocker-other-repo'
+    | 'circular'
+    | 'blockers-unreadable';
+  blockers: number[];
+}
+
+/** At most this many issues per send. */
+export const MAX_ISSUES_PER_SEND = 50;
+
+const issueNumber = z.number().int().positive();
+
+/** Send chosen issues of the project's repository to the caller's own factory. */
+export const submitFactoryIssuesInput = z
+  .object({
+    projectId,
+    issueNumbers: z.array(issueNumber).min(1).max(MAX_ISSUES_PER_SEND),
+    flowName,
+  })
+  .strict();
+
+export type SubmitFactoryIssuesInput = z.input<typeof submitFactoryIssuesInput>;
+
+/** Why one issue of a send was not queued. */
+export type FactorySubmitRefusal =
+  | 'not-found'
+  | 'closed'
+  | 'pull-request'
+  | 'already-in-factory'
+  | 'unreadable';
+
+export interface FactorySubmitResult {
+  /** The queued issues, in queue order. */
+  accepted: number[];
+  refused: Array<{ issue: number; reason: FactorySubmitRefusal; message: string }>;
+}
+
+/** A flow a send may pick. */
+export interface FactoryFlowOption {
+  name: string;
+  source: 'built-in' | 'repository';
+}
+
+/** The open blockers of some issues (the send bar's warning). */
+export const factoryBlockersInput = z
+  .object({ projectId, issueNumbers: z.array(issueNumber).min(1).max(MAX_ISSUES_PER_SEND) })
+  .strict();
+
+export interface FactoryIssueBlockers {
+  issue: number;
+  /** Open blockers in the same repository, and whether the caller's factory has a run for each. */
+  blockers: Array<{ issue: number; inFactory: boolean }>;
+}
+
+/** What "Clear queue" / "Stop all" did. */
+export interface FactoryQueueClearResult {
+  /** Waiting issues removed from the queue. */
+  cleared: number;
+  /** Runs in progress that were stopped (`stopAll` only). */
+  stopped: number;
 }

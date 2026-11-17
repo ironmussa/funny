@@ -1,11 +1,21 @@
-/** The caller's issue factory for a project (change issue-factory): settings + runs, over tRPC. */
-import type { SaveFactorySettingsInput } from '@funny/shared/contracts/factory';
+/**
+ * The caller's issue factory for a project (change issue-factory): settings,
+ * runs and the queue of issues sent to it (change factory-manual-queue), over tRPC.
+ */
+import type {
+  SaveFactorySettingsInput,
+  SubmitFactoryIssuesInput,
+} from '@funny/shared/contracts/factory';
 
 import { trpc, trpcCall } from './_trpc';
 
 export type {
+  FactoryMode,
+  FactoryQueueClearResult,
   FactoryRun,
   FactorySettings,
+  FactorySubmitResult,
+  FactoryWaitReason,
   SaveFactorySettingsInput,
 } from '@funny/shared/contracts/factory';
 
@@ -19,4 +29,11 @@ export const factoryApi = {
     trpcCall(() => procedures.stopRun.mutate({ projectId, runId })),
   retryRun: (projectId: string, runId: string) =>
     trpcCall(() => procedures.retryRun.mutate({ projectId, runId })),
+  submitIssues: (input: SubmitFactoryIssuesInput) =>
+    trpcCall(() => procedures.submitIssues.mutate(input)),
+  listFlows: (projectId: string) => trpcCall(() => procedures.flows.query({ projectId })),
+  blockers: (projectId: string, issueNumbers: number[]) =>
+    trpcCall(() => procedures.blockers.query({ projectId, issueNumbers })),
+  clearQueue: (projectId: string) => trpcCall(() => procedures.clearQueue.mutate({ projectId })),
+  stopAll: (projectId: string) => trpcCall(() => procedures.stopAll.mutate({ projectId })),
 };

@@ -328,6 +328,7 @@ export function createTestDb() {
       flow_name TEXT NOT NULL DEFAULT 'issue-to-merge',
       max_concurrent INTEGER NOT NULL DEFAULT 2,
       blocked_reason TEXT,
+      mode TEXT NOT NULL DEFAULT 'manual',
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )
@@ -346,7 +347,12 @@ export function createTestDb() {
       thread_ids TEXT,
       launch_started_at TEXT,
       started_at TEXT NOT NULL,
-      completed_at TEXT
+      completed_at TEXT,
+      source TEXT NOT NULL DEFAULT 'label',
+      flow_name TEXT,
+      queue_order INTEGER,
+      wait_reason TEXT,
+      admitted_at TEXT
     )
   `);
   testDb.run(sql`

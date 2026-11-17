@@ -150,4 +150,17 @@ describe('factory runs repository', () => {
     (await repo.stopMany([a.id, b.id]))._unsafeUnwrap();
     expect((await repo.countActive(factoryId))._unsafeUnwrap()).toBe(0);
   });
+
+  test('two saves in flight do not undo each other (the label save leaves the mode alone)', async () => {
+    const settings = createFactorySettingsService();
+    await settings.save('alice', 'p1', { enabled: true, mode: 'automatic', label: 'old' });
+
+    await Promise.all([
+      settings.save('alice', 'p1', { enabled: true, label: 'new' }),
+      settings.save('alice', 'p1', { enabled: true, mode: 'manual' }),
+    ]);
+
+    const stored = (await settings.get('alice', 'p1'))._unsafeUnwrap();
+    expect(stored).toMatchObject({ mode: 'manual', label: 'new' });
+  });
 });

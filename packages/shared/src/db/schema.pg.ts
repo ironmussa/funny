@@ -301,6 +301,11 @@ export const factorySettings = pgTable(
     maxConcurrent: integer('max_concurrent').notNull().default(2),
     /** Why the watcher cannot make progress now (runner offline, App missing…); null when it can. */
     blockedReason: text('blocked_reason'),
+    /**
+     * What the factory admits (change factory-manual-queue): `manual`, only the
+     * issues sent to it; `automatic`, also the open issues carrying `label`.
+     */
+    mode: text('mode').notNull().default('manual'),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
@@ -332,6 +337,16 @@ export const factoryRuns = pgTable('factory_runs', {
   launchStartedAt: text('launch_started_at'),
   startedAt: text('started_at').notNull(),
   completedAt: text('completed_at'),
+  /** How the issue came in (change factory-manual-queue): `manual` (sent) or `label`. */
+  source: text('source').notNull().default('label'),
+  /** The flow the run executes; null on rows from before runs recorded their own. */
+  flowName: text('flow_name'),
+  /** Position in the factory's queue while the run is `requested`. */
+  queueOrder: integer('queue_order'),
+  /** JSON: why a `requested` run is not admitted yet (a blocker), or null. */
+  waitReason: text('wait_reason'),
+  /** When the run left the queue (`requested` → `queued`). */
+  admittedAt: text('admitted_at'),
 });
 
 export const watchers = pgTable('watchers', {

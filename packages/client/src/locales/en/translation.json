@@ -659,7 +659,22 @@
     "projectSaved": "Project settings saved",
     "agentResources": "Agent Resources",
     "agentProfiles": "Agent Profiles",
-    "apiTokens": "API tokens"
+    "apiTokens": "API tokens",
+    "projectFactoryMode": "Mode",
+    "projectFactoryModeAutomaticDesc": "Also picks up the issues carrying the label, after the ones you send",
+    "projectFactoryModeManualDesc": "Only the issues you send",
+    "projectFactoryManual": "Manual",
+    "projectFactoryAutomatic": "Automatic",
+    "projectFactoryLabel": "Issue label",
+    "projectFactoryLabelDesc": "Issues with this label are picked up",
+    "projectFactory": "Issue factory",
+    "projectFactoryDesc": "Run a flow to PR for the issues you send from the Issues tab. Paused: nothing new starts",
+    "projectFactoryPaused": "Paused",
+    "projectFactoryRunning": "Running",
+    "projectFactoryFlow": "Flow",
+    "projectFactoryFlowDesc": "The default flow: preselected when you send issues, and run for labelled ones",
+    "projectFactoryConcurrency": "Max in flight",
+    "projectFactoryConcurrencyDesc": "How many issues run at once"
   },
   "skills": {
     "showingFor": "Showing skills for:",
@@ -1079,7 +1094,8 @@
     "rewindFailedGeneric": "Rewind failed: {{error}}",
     "rewindNoCheckpoints": "No file checkpoint has been captured for this thread yet",
     "forkAndRewindSuccess": "Forked and rewound code",
-    "forkAndRewindFailed": "Failed to fork and rewind"
+    "forkAndRewindFailed": "Failed to fork and rewind",
+    "clear": "Clear"
   },
   "editor": {
     "failedToLoad": "Failed to load file",
@@ -1625,5 +1641,52 @@
       "revoked": "Revoked",
       "expired": "Expired"
     }
+  },
+  "factory": {
+    "pullRequest": "PR",
+    "thread": "Thread",
+    "retry": "Retry",
+    "stop": "Stop",
+    "clearQueue": "Clear queue",
+    "stopAll": "Stop all",
+    "stopAllTitle": "Stop the factory?",
+    "stopAllDesc": "This clears the queue and stops every run in progress and its agent threads.",
+    "runs": "Factory runs",
+    "state": {
+      "requested": "In queue",
+      "queued": "Queued",
+      "working": "Working",
+      "prOpen": "PR open",
+      "waitingCi": "Waiting for CI",
+      "fixing": "Fixing CI",
+      "waitingHuman": "Waiting for you",
+      "merged": "Merged",
+      "failed": "Failed",
+      "stopped": "Stopped"
+    },
+    "wait": {
+      "notSent": "Blocked by {{blockers}}, which is not in the factory",
+      "inProgress": "Waiting for {{blockers}} to finish",
+      "waitingMerge": "Waiting for the pull request of {{blockers}}",
+      "failed": "Blocked by {{blockers}}, whose run failed or was stopped",
+      "otherRepo": "Blocked by {{blockers}} in another repository",
+      "circular": "Circular dependency with {{blockers}}",
+      "unreadable": "Its blockers could not be read from GitHub"
+    },
+    "selectIssue": "Select #{{number}} for the factory",
+    "queuePosition": "{{label}} · #{{position}}",
+    "issueInFactory": "In your issue factory",
+    "sendBlockers": "Send {{blockers}}",
+    "cancelQueued": "Remove from the queue",
+    "pausedSend": "The factory is paused. Resume it in the project settings.",
+    "send": "Send to factory",
+    "blockerWarning": "Depends on {{blockers}}, which is not in the factory: those issues will wait for it.",
+    "sent_one": "Sent {{count}} issue to the factory",
+    "sent_other": "Sent {{count}} issues to the factory",
+    "waitingCount_one": "{{count}} waiting for you",
+    "waitingCount_other": "{{count}} waiting for you",
+    "selectedCount_one": "{{count}} selected",
+    "selectedCount_other": "{{count}} selected",
+    "sendLimit": "Up to {{max}} issues per send"
   }
 }

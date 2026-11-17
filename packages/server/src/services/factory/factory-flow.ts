@@ -98,3 +98,41 @@ export async function loadFactoryFlow(
   }
   return compile(builtIn.yaml, builtIn.filePath, 'built-in');
 }
+
+/** The built-in flows written for a server-run factory (they push and open a pull request). */
+export const BUILT_IN_FACTORY_FLOWS = ['issue-to-merge', 'issue-to-pr'] as const;
+
+/** A flow name as the contract accepts it (`flowName` in `contracts/factory`). */
+const FLOW_NAME = /^[a-z0-9][a-z0-9._-]{0,63}$/;
+
+export interface FactoryFlowChoice {
+  name: string;
+  source: FactoryFlow['source'];
+}
+
+/**
+ * The flows a send may pick (change factory-manual-queue): the built-in
+ * factory flows, plus every `.funny/workflows/*.y{a,}ml` of the default branch
+ * (a repository copy replaces the built-in of its name, as `loadFactoryFlow`
+ * does), minus the workspace-only ones. A listed repository flow may still fail
+ * to compile; the send loads it and says so.
+ */
+export async function listFactoryFlows(deps: {
+  listDefaultBranchDir(path: string): PromiseLike<Result<string[], GithubCallError>>;
+}): Promise<Result<FactoryFlowChoice[], FactoryFlowError>> {
+  const files = await deps.listDefaultBranchDir('.funny/workflows');
+  if (files.isErr()) return err({ kind: 'unavailable', message: files.error.message });
+  const fromRepo = new Set(
+    files.value
+      .map((file) => file.match(/^(.+)\.ya?ml$/)?.[1])
+      .filter((name): name is string => !!name && FLOW_NAME.test(name))
+      .filter((name) => !WORKSPACE_ONLY_FLOWS.has(name)),
+  );
+  const builtIns = BUILT_IN_FACTORY_FLOWS.filter((name) => !fromRepo.has(name)).map(
+    (name): FactoryFlowChoice => ({ name, source: 'built-in' }),
+  );
+  const repository = [...fromRepo]
+    .sort()
+    .map((name): FactoryFlowChoice => ({ name, source: 'repository' }));
+  return ok([...builtIns, ...repository]);
+}

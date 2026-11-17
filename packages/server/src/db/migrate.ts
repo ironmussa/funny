@@ -2034,6 +2034,21 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_settings', 'blocked_reason', 'TEXT');
     },
   },
+  {
+    // factory-manual-queue: a factory's mode (manual / automatic), and the queue
+    // of issues sent to it. Factories from before this change admitted their
+    // label, so they become automatic; a new one starts manual (the default).
+    name: '100_factory_manual_queue',
+    async up() {
+      await ctx().addColumn('factory_settings', 'mode', 'TEXT NOT NULL', "'manual'");
+      await ctx().exec(sql`UPDATE factory_settings SET mode = 'automatic'`);
+      await ctx().addColumn('factory_runs', 'source', 'TEXT NOT NULL', "'label'");
+      await ctx().addColumn('factory_runs', 'flow_name', 'TEXT');
+      await ctx().addColumn('factory_runs', 'queue_order', 'INTEGER');
+      await ctx().addColumn('factory_runs', 'wait_reason', 'TEXT');
+      await ctx().addColumn('factory_runs', 'admitted_at', 'TEXT');
+    },
+  },
 ];
 
 /**

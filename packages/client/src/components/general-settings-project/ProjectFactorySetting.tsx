@@ -1,6 +1,8 @@
 /**
- * The issue factory for a project (change issue-factory): a per-user toggle plus
- * the watched issue label, the flow to run, and how many issues run at once.
+ * The issue factory for a project (change issue-factory): a per-user running /
+ * paused toggle, the mode (manual: only the issues sent from the Issues tab;
+ * automatic: also the issues carrying the label, change factory-manual-queue),
+ * the default flow, and how many issues run at once.
  * Every contributor configures their own; a viewer sees theirs but a save is
  * refused (403) and shown as an error.
  */
@@ -12,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { saveFactorySettings } from '@/data/factory/actions';
 import { useFactorySettings } from '@/data/factory/hooks';
 import { useCanSteerProject } from '@/data/projects/hooks';
-import type { FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
+import type { FactoryMode, FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
 import { toastError } from '@/lib/toast-error';
 
 import { ProjectFactoryRuns } from './ProjectFactoryRuns';
@@ -20,14 +22,20 @@ import { SegmentedControl, SettingRow } from './setting-primitives';
 
 type OnOff = 'on' | 'off';
 
-/** What the form shows: the saved settings, or the server's defaults before the first save. */
+/** The server's defaults: what the form shows before the first save. */
+const DEFAULT_FORM = {
+  enabled: false,
+  mode: 'manual' as FactoryMode,
+  label: 'ready-for-agent',
+  flowName: 'issue-to-merge',
+  maxConcurrent: 2,
+};
+
+/** What the form shows: the saved settings, or the defaults before the first save. */
 function formValues(settings: FactorySettings | null | undefined) {
-  return {
-    enabled: settings?.enabled ?? false,
-    label: settings?.label ?? 'ready-for-agent',
-    flowName: settings?.flowName ?? 'issue-to-merge',
-    maxConcurrent: settings?.maxConcurrent ?? 2,
-  };
+  if (!settings) return DEFAULT_FORM;
+  const { enabled, mode, label, flowName, maxConcurrent } = settings;
+  return { enabled, mode, label, flowName, maxConcurrent };
 }
 
 /** The trimmed text when it is non-empty and differs from `current`, else null (nothing to save). */
@@ -41,6 +49,73 @@ function changedConcurrency(value: string, current: number): number | null {
   const next = Number.parseInt(value, 10);
   const inRange = Number.isFinite(next) && next >= 1 && next <= 20;
   return inRange && next !== current ? next : null;
+}
+
+/** The mode, and the label that automatic mode picks up. */
+function FactoryModeRows({
+  mode,
+  label,
+  labelKey,
+  onMode,
+  onLabel,
+}: {
+  mode: FactoryMode;
+  label: string;
+  labelKey: string;
+  onMode: (mode: FactoryMode) => void;
+  onLabel: (label: string) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <>
+      <SettingRow
+        title={t('settings.projectFactoryMode', 'Mode')}
+        description={
+          mode === 'automatic'
+            ? t(
+                'settings.projectFactoryModeAutomaticDesc',
+                'Also picks up the issues carrying the label, after the ones you send',
+              )
+            : t('settings.projectFactoryModeManualDesc', 'Only the issues you send')
+        }
+      >
+        <SegmentedControl<FactoryMode>
+          value={mode}
+          onChange={onMode}
+          options={[
+            {
+              value: 'manual',
+              label: t('settings.projectFactoryManual', 'Manual'),
+              testId: 'settings-factory-mode-manual',
+            },
+            {
+              value: 'automatic',
+              label: t('settings.projectFactoryAutomatic', 'Automatic'),
+              testId: 'settings-factory-mode-automatic',
+            },
+          ]}
+        />
+      </SettingRow>
+
+      {mode === 'automatic' && (
+        <SettingRow
+          title={t('settings.projectFactoryLabel', 'Issue label')}
+          description={t(
+            'settings.projectFactoryLabelDesc',
+            'Issues with this label are picked up',
+          )}
+        >
+          <Input
+            key={labelKey}
+            defaultValue={label}
+            className="w-[220px]"
+            data-testid="settings-factory-label"
+            onBlur={(e) => onLabel(e.target.value)}
+          />
+        </SettingRow>
+      )}
+    </>
+  );
 }
 
 function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
@@ -58,10 +133,11 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
         () => setRevision((r) => r + 1),
       );
 
-  const { enabled, label, flowName, maxConcurrent } = formValues(settings);
+  const { enabled, mode, label, flowName, maxConcurrent } = formValues(settings);
   const rowKey = `${settings?.updatedAt ?? 'none'}-${revision}`;
 
   const setEnabled = (value: OnOff) => void save({ enabled: value === 'on' });
+  const setMode = (value: FactoryMode) => void save({ enabled, mode: value });
   const setLabel = (value: string) => {
     const next = changedText(value, label);
     if (next) void save({ enabled, label: next });
@@ -81,40 +157,44 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
         title={t('settings.projectFactory', 'Issue factory')}
         description={t(
           'settings.projectFactoryDesc',
-          'Watch this repo for labelled issues and run a flow to PR',
+          'Run a flow to PR for the issues you send from the Issues tab. Paused: nothing new starts',
         )}
       >
         <SegmentedControl<OnOff>
           value={enabled ? 'on' : 'off'}
           onChange={setEnabled}
           options={[
-            { value: 'off', label: t('common.off', 'Off'), testId: 'settings-factory-off' },
-            { value: 'on', label: t('common.on', 'On'), testId: 'settings-factory-on' },
+            {
+              value: 'off',
+              label: t('settings.projectFactoryPaused', 'Paused'),
+              testId: 'settings-factory-off',
+            },
+            {
+              value: 'on',
+              label: t('settings.projectFactoryRunning', 'Running'),
+              testId: 'settings-factory-on',
+            },
           ]}
         />
       </SettingRow>
 
+      {/* The mode can change while paused, so switching to manual never lets labelled issues in. */}
+      <FactoryModeRows
+        mode={mode}
+        label={label}
+        labelKey={`label-${rowKey}`}
+        onMode={setMode}
+        onLabel={setLabel}
+      />
+
       {enabled && (
         <>
           <SettingRow
-            title={t('settings.projectFactoryLabel', 'Issue label')}
-            description={t(
-              'settings.projectFactoryLabelDesc',
-              'Issues with this label are picked up',
-            )}
-          >
-            <Input
-              key={`label-${rowKey}`}
-              defaultValue={label}
-              className="w-[220px]"
-              data-testid="settings-factory-label"
-              onBlur={(e) => setLabel(e.target.value)}
-            />
-          </SettingRow>
-
-          <SettingRow
             title={t('settings.projectFactoryFlow', 'Flow')}
-            description={t('settings.projectFactoryFlowDesc', 'Workflow file run for each issue')}
+            description={t(
+              'settings.projectFactoryFlowDesc',
+              'The default flow: preselected when you send issues, and run for labelled ones',
+            )}
           >
             <Input
               key={`flow-${rowKey}`}

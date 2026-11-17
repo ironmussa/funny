@@ -5,11 +5,14 @@
  * @domain layer: application
  *
  * Each user's issue factory for a project (change issue-factory): the on/off
- * toggle plus the watched label, the flow to run and the concurrency. Keyed per
+ * (running / paused) toggle, the mode (manual: only the issues sent to it;
+ * automatic: also the watched label, change factory-manual-queue), the flow to
+ * run and the concurrency. Keyed per
  * `(project, user)` and scoped to project access: anyone who may start threads
  * on the project (`steer`) runs their own factory; a viewer may only read
  * theirs. Runs are stored separately (`factory-runs`).
  */
+import type { FactoryMode } from '@funny/shared/contracts/factory';
 import { and, eq, exists, inArray, or } from 'drizzle-orm';
 import { errAsync, ResultAsync } from 'neverthrow';
 
@@ -19,7 +22,9 @@ import { requireProjectAccess } from '../project-access.js';
 
 export interface FactorySettingsView {
   projectId: string;
+  /** Running (true) or paused; separate from the mode. */
   enabled: boolean;
+  mode: FactoryMode;
   label: string;
   flowName: string;
   maxConcurrent: number;
@@ -37,6 +42,7 @@ export type FactorySettingsError =
 
 export interface SaveFactorySettingsInput {
   enabled: boolean;
+  mode?: FactoryMode;
   label?: string;
   flowName?: string;
   maxConcurrent?: number;
@@ -58,9 +64,13 @@ const accessErrors = {
   }),
 };
 
+/** A stored mode; anything else reads as manual, which admits only what is sent. */
+const modeOf = (row: Row): FactoryMode => (row.mode === 'automatic' ? 'automatic' : 'manual');
+
 const toView = (row: Row): FactorySettingsView => ({
   projectId: row.projectId,
   enabled: row.enabled === 1,
+  mode: modeOf(row),
   label: row.label,
   flowName: row.flowName,
   maxConcurrent: row.maxConcurrent,
@@ -75,13 +85,22 @@ function validate(input: SaveFactorySettingsInput): FactorySettingsError | null 
   if (input.label !== undefined && input.label.trim() === '') {
     return { kind: 'invalid', message: 'Label must not be empty' };
   }
+  if (input.mode !== undefined && input.mode !== 'manual' && input.mode !== 'automatic') {
+    return { kind: 'invalid', message: 'mode must be manual or automatic' };
+  }
   if (input.maxConcurrent !== undefined && (input.maxConcurrent < 1 || input.maxConcurrent > 20)) {
     return { kind: 'invalid', message: 'maxConcurrent must be between 1 and 20' };
   }
   return null;
 }
 
-const DEFAULTS = { label: 'ready-for-agent', flowName: 'issue-to-merge', maxConcurrent: 2 };
+/** A new factory starts manual: it admits only the issues sent to it. */
+const DEFAULTS = {
+  mode: 'manual' as FactoryMode,
+  label: 'ready-for-agent',
+  flowName: 'issue-to-merge',
+  maxConcurrent: 2,
+};
 
 /** The row to upsert, carrying forward the caller's existing values when a field is omitted. */
 function buildRow(
@@ -98,6 +117,7 @@ function buildRow(
     projectId,
     userId,
     enabled: input.enabled ? 1 : 0,
+    mode: input.mode ?? base.mode,
     label: input.label ?? base.label,
     flowName: input.flowName ?? base.flowName,
     maxConcurrent: input.maxConcurrent ?? base.maxConcurrent,
@@ -116,6 +136,8 @@ function buildRow(
 export interface WatchedFactory {
   id: string;
   enabled: boolean;
+  /** `automatic` also admits labelled issues; `manual` only the queue. */
+  mode: FactoryMode;
   projectId: string;
   userId: string;
   label: string;
@@ -126,6 +148,7 @@ export interface WatchedFactory {
 const toEnabled = (row: Row): WatchedFactory => ({
   id: row.id,
   enabled: row.enabled === 1,
+  mode: modeOf(row),
   projectId: row.projectId,
   userId: row.userId,
   label: row.label,
@@ -197,10 +220,25 @@ export function createFactorySettingsService(
       storage,
     ).map(([row]) => (row ? toView(row) : null));
 
-  const upsert = (row: Row): ResultAsync<FactorySettingsView, FactorySettingsError> => {
-    // On conflict keep the row's existing id and created_at; change only the
-    // mutable fields (id/created_at are excluded from `set`).
-    const { id: _id, projectId: _p, userId: _u, createdAt: _c, ...changes } = row;
+  /**
+   * Insert the row, or on conflict change only the fields this save carries
+   * (plus the toggle and the bookkeeping). An omitted field is never written
+   * from an earlier read, so two saves in flight (the label and the mode)
+   * cannot undo each other. The answer is the row as stored afterwards.
+   */
+  const upsert = (
+    row: Row,
+    input: SaveFactorySettingsInput,
+  ): ResultAsync<FactorySettingsView, FactorySettingsError> => {
+    const changes: Partial<Row> = {
+      enabled: row.enabled,
+      blockedReason: row.blockedReason,
+      updatedAt: row.updatedAt,
+      ...(input.mode !== undefined && { mode: row.mode }),
+      ...(input.label !== undefined && { label: row.label }),
+      ...(input.flowName !== undefined && { flowName: row.flowName }),
+      ...(input.maxConcurrent !== undefined && { maxConcurrent: row.maxConcurrent }),
+    };
     return ResultAsync.fromPromise(
       db
         .insert(factorySettings)
@@ -210,7 +248,9 @@ export function createFactorySettingsService(
           set: changes,
         }),
       storage,
-    ).map(() => toView(row));
+    )
+      .andThen(() => find(row.userId, row.projectId))
+      .map((stored) => stored ?? toView(row));
   };
 
   return {
@@ -247,7 +287,9 @@ export function createFactorySettingsService(
       // so it needs the same capability as starting a thread by hand.
       return requireProjectAccess(userId, projectId, 'steer', accessErrors)
         .andThen(() => find(userId, projectId))
-        .andThen((existing) => upsert(buildRow(deps.newId(), userId, projectId, input, existing)));
+        .andThen((existing) =>
+          upsert(buildRow(deps.newId(), userId, projectId, input, existing), input),
+        );
     },
   };
 }

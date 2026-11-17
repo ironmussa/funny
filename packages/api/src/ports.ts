@@ -52,8 +52,12 @@ import type {
 } from '@funny/shared/contracts/automations';
 import type { CreateDesignBody } from '@funny/shared/contracts/designs';
 import type {
+  FactoryFlowOption,
+  FactoryIssueBlockers,
+  FactoryQueueClearResult,
   FactoryRun,
   FactorySettings,
+  FactorySubmitResult,
   SaveFactorySettingsInput,
 } from '@funny/shared/contracts/factory';
 import type {
@@ -416,6 +420,29 @@ export interface FactoryPort {
   stopRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /** Put a failed (or waiting) run of the caller's factory back in flight; audited. */
   retryRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
+  /**
+   * Queue chosen issues of the project's repository in the caller's own factory
+   * with one flow (change factory-manual-queue). Refused as a whole (409) when
+   * the factory is paused or cannot work now, 400 for an unusable flow; per
+   * issue otherwise. Audited.
+   */
+  submitIssues(
+    userId: string,
+    projectId: string,
+    input: { issueNumbers: number[]; flowName: string },
+  ): PortResult<FactorySubmitResult>;
+  /** The flows a send may pick: the built-ins, plus the repository's when it can be read. */
+  flows(userId: string, projectId: string): PortResult<FactoryFlowOption[]>;
+  /** The open blockers of some issues, and whether the caller's factory has each. */
+  blockers(
+    userId: string,
+    projectId: string,
+    issueNumbers: number[],
+  ): PortResult<FactoryIssueBlockers[]>;
+  /** Remove the issues waiting in the caller's factory queue; audited. */
+  clearQueue(userId: string, projectId: string): PortResult<FactoryQueueClearResult>;
+  /** Clear the queue and stop every run in progress of the caller's factory; audited. */
+  stopAll(userId: string, projectId: string): PortResult<FactoryQueueClearResult>;
 }
 
 /** The server's authorization decisions that are not about one thread. */

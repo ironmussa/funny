@@ -110,7 +110,8 @@ describe('factory over tRPC', () => {
       headers: headersFor(userId),
       body: JSON.stringify(input),
     });
-    return { status: res.status, body: ((await res.json()) as any).result?.data };
+    const json = (await res.json()) as any;
+    return { status: res.status, body: json.result?.data, message: json.error?.message };
   };
 
   async function seededRun(state: string) {
@@ -149,5 +150,60 @@ describe('factory over tRPC', () => {
     seedProjectMember(t.db as any, { projectId: 'p1', userId: 'vic', role: 'viewer' });
     expect((await mutate('vic', 'stopRun', { projectId: 'p1', runId: run.id })).status).toBe(403);
     expect((await mutate('alice', 'stopRun', { projectId: 'p1', runId: 'nope' })).status).toBe(404);
+  });
+  test('the mode is saved and read back, a new factory is manual, and a bad mode is refused', async () => {
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      mode: 'manual',
+    });
+    expect(
+      (await save('alice', { projectId: 'p1', enabled: false, mode: 'automatic' })).body,
+    ).toMatchObject({ mode: 'automatic', enabled: false });
+    // Omitting the mode keeps it.
+    expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
+      mode: 'automatic',
+    });
+    expect((await save('alice', { projectId: 'p1', enabled: true, mode: 'later' })).status).toBe(
+      400,
+    );
+  });
+
+  test('a send needs a factory, a running one, and a usable input', async () => {
+    const send = { projectId: 'p1', issueNumbers: [7], flowName: 'issue-to-merge' };
+    expect((await mutate('alice', 'submitIssues', send)).status).toBe(404);
+
+    await save('alice', { projectId: 'p1', enabled: false });
+    const paused = await mutate('alice', 'submitIssues', send);
+    expect(paused.status).toBe(409);
+    expect(paused.message).toContain('paused');
+
+    expect((await mutate('alice', 'submitIssues', { ...send, issueNumbers: [] })).status).toBe(400);
+    expect((await mutate('alice', 'submitIssues', { ...send, flowName: '../x' })).status).toBe(400);
+    expect((await query('alice', 'runs', { projectId: 'p1' })).body).toEqual([]);
+  });
+
+  test('a viewer may list flows but not send, clear or stop all', async () => {
+    seedProjectMember(t.db as any, { projectId: 'bob-project', userId: 'vic', role: 'viewer' });
+    const flows = await query('vic', 'flows', { projectId: 'bob-project' });
+    expect(flows.body).toEqual([
+      { name: 'issue-to-merge', source: 'built-in' },
+      { name: 'issue-to-pr', source: 'built-in' },
+    ]);
+    const send = { projectId: 'bob-project', issueNumbers: [7], flowName: 'issue-to-merge' };
+    expect((await mutate('vic', 'submitIssues', send)).status).toBe(403);
+    expect((await mutate('vic', 'clearQueue', { projectId: 'bob-project' })).status).toBe(403);
+    expect((await mutate('vic', 'stopAll', { projectId: 'bob-project' })).status).toBe(403);
+  });
+
+  test('clear queue and stop all act on the caller own factory', async () => {
+    expect((await mutate('alice', 'clearQueue', { projectId: 'p1' })).status).toBe(404);
+    await save('alice', { projectId: 'p1', enabled: true });
+    expect((await mutate('alice', 'clearQueue', { projectId: 'p1' })).body).toEqual({
+      cleared: 0,
+      stopped: 0,
+    });
+    expect((await mutate('alice', 'stopAll', { projectId: 'p1' })).body).toEqual({
+      cleared: 0,
+      stopped: 0,
+    });
   });
 });

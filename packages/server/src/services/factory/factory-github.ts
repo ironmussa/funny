@@ -13,7 +13,7 @@
  * part of a result.
  */
 
-import { createRepoGithub, type GithubCallError } from '@funny/core/github-app';
+import { createRepoGithub, type GithubCallError, type IssueBlocker } from '@funny/core/github-app';
 import { errAsync, ResultAsync } from 'neverthrow';
 
 import { accessCapToken } from '../github-app/access-cap-token.js';
@@ -27,7 +27,11 @@ import {
 import type { RunnerPorts } from '../runner-thread-launcher.js';
 import { createSandboxRunnerCalls } from '../thread-sandboxes/sandbox-runner-calls.js';
 import { createFactoryPullRequests, type FactoryPullRequests } from './factory-pull-requests.js';
-import { createFactoryRepoReads, type FactoryPullRequestFound } from './factory-repo-reads.js';
+import {
+  createFactoryRepoReads,
+  type FactoryPullRequestFound,
+  type RepoIssue,
+} from './factory-repo-reads.js';
 
 /** One open issue the factory may admit. */
 export interface FactoryIssue {
@@ -35,6 +39,9 @@ export interface FactoryIssue {
   title: string;
   url: string;
 }
+
+/** One issue as GitHub has it now: what a send and the queue check before admitting. */
+export type FactoryIssueDetail = FactoryIssue & Partial<Omit<RepoIssue, keyof FactoryIssue>>;
 
 export type FactoryGithubError = { kind: IssueError['kind']; message: string };
 
@@ -59,7 +66,17 @@ export interface FactoryGithubPort {
   getIssue(
     reader: FactoryRepoReader,
     issueNumber: number,
-  ): ResultAsync<FactoryIssue, GithubCallError>;
+  ): ResultAsync<FactoryIssueDetail, GithubCallError>;
+  /** The issue's blockers (GitHub's native "blocked by" relation), open or closed. */
+  issueBlockers(
+    reader: FactoryRepoReader,
+    issueNumber: number,
+  ): ResultAsync<IssueBlocker[], GithubCallError>;
+  /** The file names in a directory of the DEFAULT branch; empty when it is absent. */
+  listDefaultBranchDir(
+    reader: FactoryRepoReader,
+    path: string,
+  ): ResultAsync<string[], GithubCallError>;
   /**
    * A file on the repository's DEFAULT branch (never another branch, so a pull
    * request cannot change the flow that reviews it), or null when it is absent.
@@ -180,6 +197,8 @@ export function createFactoryGithub(
     },
 
     getIssue: (reader, issueNumber) => reads(reader).getIssue(issueNumber),
+    issueBlockers: (reader, issueNumber) => reads(reader).blockers(issueNumber),
+    listDefaultBranchDir: (reader, path) => reads(reader).listDefaultBranchDir(path),
     readDefaultBranchFile: (reader, path) => reads(reader).readDefaultBranchFile(path),
     findPullRequest: (reader, branch) => reads(reader).findPullRequest(branch),
 

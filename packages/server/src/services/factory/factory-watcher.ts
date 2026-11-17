@@ -482,11 +482,28 @@ async function admitQueued(
   ctx: AdmissionContext,
 ): Promise<boolean> {
   if (!runs || !deps) return false;
+  // The issue first: one closed since it was sent leaves the queue even while
+  // something still blocks it.
+  const issue = await openQueuedIssue(factory, run, ctx);
+  if (!issue) return false;
+
   const reason = await blockedReason(ctx, run.issueNumber);
   if (!sameWaitReason(reason, run.waitReason)) await runs.setWaitReason(run.id, reason);
   if (reason) return false;
 
-  const issue = await deps.github.getIssue(ctx.reader, run.issueNumber);
+  const admitted = await runs.admit(run.id);
+  // Cancelled meanwhile (or another pass took it): not ours to start.
+  if (admitted.isErr() || !admitted.value) return false;
+  return startFlow(factory, repo, mode, issue, { ...run, state: 'queued', waitReason: null });
+}
+
+/** A queued issue as GitHub has it, or null: unreadable now, or closed (then it leaves the queue). */
+async function openQueuedIssue(
+  factory: WatchedFactory,
+  run: FactoryRunView,
+  ctx: AdmissionContext,
+): Promise<FactoryIssue | null> {
+  const issue = await deps!.github.getIssue(ctx.reader, run.issueNumber);
   if (issue.isErr()) {
     log.warn('Issue factory could not read a queued issue', {
       namespace: 'factory',
@@ -494,22 +511,16 @@ async function admitQueued(
       issue: run.issueNumber,
       error: issue.error.message,
     });
-    return false;
+    return null;
   }
-  if (issue.value.state === 'closed') {
-    // Closed since it was sent: nothing left to do for it.
-    await runs.cancel(factory.id, run.id);
-    log.info('Issue factory dropped a queued issue that was closed', {
-      namespace: 'factory',
-      runId: run.id,
-      issue: run.issueNumber,
-    });
-    return false;
-  }
-  const admitted = await runs.admit(run.id);
-  // Cancelled meanwhile (or another pass took it): not ours to start.
-  if (admitted.isErr() || !admitted.value) return false;
-  return startFlow(factory, repo, mode, issue.value, { ...run, state: 'queued', waitReason: null });
+  if (issue.value.state !== 'closed') return issue.value;
+  await runs!.cancel(factory.id, run.id);
+  log.info('Issue factory dropped a queued issue that was closed', {
+    namespace: 'factory',
+    runId: run.id,
+    issue: run.issueNumber,
+  });
+  return null;
 }
 
 /** List the labelled issues and admit what fits (automatic mode). */

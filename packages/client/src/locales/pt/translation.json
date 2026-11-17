@@ -1645,6 +1645,7 @@
     "waitingCount_one": "{{count}} aguardando você",
     "waitingCount_other": "{{count}} aguardando você",
     "selectedCount_one": "{{count}} selecionada",
-    "selectedCount_other": "{{count}} selecionadas"
+    "selectedCount_other": "{{count}} selecionadas",
+    "sendLimit": "Até {{max}} issues por envio"
   }
 }

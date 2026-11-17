@@ -117,6 +117,19 @@ const alreadyIn = (issue: number): Refusal => ({
   message: `#${issue} is already in the factory.`,
 });
 
+/**
+ * How many runs Stop all stopped. A run that ended meanwhile (a conflict)
+ * needs no stop; any other failure means a run may still be going, so Stop all
+ * fails instead of claiming success.
+ */
+function stoppedCount(
+  results: Result<unknown, { kind: string; message: string }>[],
+): Result<number, { message: string }> {
+  const failed = results.find((r) => r.isErr() && r.error.kind !== 'conflict');
+  if (failed?.isErr()) return err({ message: failed.error.message });
+  return ok(results.filter((r) => r.isOk()).length);
+}
+
 export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
   const runs = deps.runs ?? createFactoryRunsRepository();
   const control = deps.control ?? createFactoryRunControl(runs);
@@ -291,11 +304,10 @@ export function createFactoryQueue(deps: FactoryQueueDeps = {}) {
             .mapErr(storage)
             .andThen((inFlight) =>
               ResultAsync.fromSafePromise(
-                Promise.all(inFlight.map((run) => control.stop(userId, factoryId, run.id))).then(
-                  (results) => results.filter((r) => r.isOk()).length,
-                ),
+                Promise.all(inFlight.map((run) => control.stop(userId, factoryId, run.id))),
               ),
             )
+            .andThen((results) => stoppedCount(results).mapErr(storage))
             .map((stopped) => ({ cleared: cleared.length, stopped })),
         );
     },

@@ -178,16 +178,17 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
         />
       </SettingRow>
 
+      {/* The mode can change while paused, so switching to manual never lets labelled issues in. */}
+      <FactoryModeRows
+        mode={mode}
+        label={label}
+        labelKey={`label-${rowKey}`}
+        onMode={setMode}
+        onLabel={setLabel}
+      />
+
       {enabled && (
         <>
-          <FactoryModeRows
-            mode={mode}
-            label={label}
-            labelKey={`label-${rowKey}`}
-            onMode={setMode}
-            onLabel={setLabel}
-          />
-
           <SettingRow
             title={t('settings.projectFactoryFlow', 'Flow')}
             description={t(

@@ -401,6 +401,17 @@ describe('the queue', () => {
     expect((await runFor(factoryId, 7)).state).toBe('stopped');
   });
 
+  test('a queued issue closed while still blocked also leaves the queue', async () => {
+    const script: Script = { blockers: { 7: [blocker(1)] } };
+    const { factoryId, queue, tick } = await setUp({ script });
+    await queue.submit(factoryId, { issueNumbers: [7], flowName: 'issue-to-merge' });
+    script.closed = [7];
+
+    await tick();
+
+    expect((await runFor(factoryId, 7)).state).toBe('stopped');
+  });
+
   test('a finished sent issue is not admitted again', async () => {
     const { factoryId, queue, launcher, tick } = await setUp({
       waitThread: finishedThreads('failed'),
@@ -456,6 +467,23 @@ describe('pause, clear and stop all', () => {
 
     expect(stopped).toEqual({ cleared: 1, stopped: 1 });
     expect((await runsOf(factoryId)).map((r) => r.state)).toEqual(['stopped', 'stopped']);
+  });
+
+  test('stop all fails when a run in progress could not be stopped', async () => {
+    const { factoryId, queue, tick } = await setUp({ maxConcurrent: 1 });
+    await queue.submit(factoryId, { issueNumbers: [1], flowName: 'issue-to-merge' });
+    await tick();
+    const failing = createFactoryQueue({
+      wake: async () => {},
+      control: {
+        stop: () => errAsync({ kind: 'storage' as const, message: 'database is locked' }),
+        retry: () => errAsync({ kind: 'storage' as const, message: 'unused' }),
+      },
+    });
+
+    const stopped = await failing.stopAll('alice', factoryId);
+
+    expect(stopped._unsafeUnwrapErr()).toMatchObject({ kind: 'storage' });
   });
 
   test('cancelling one waiting issue keeps the order of the others', async () => {

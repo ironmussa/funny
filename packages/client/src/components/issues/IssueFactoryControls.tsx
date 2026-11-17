@@ -4,6 +4,7 @@
  * that sends the selection with one flow. Only a caller who may start threads
  * on the project and has set up a factory sees any of it.
  */
+import { MAX_ISSUES_PER_SEND } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
 import { Send, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
@@ -299,6 +300,11 @@ export function IssuesFactoryBar({
       {blocked && (
         <p className="text-status-warning" data-testid="issues-factory-disabled-reason">
           {blocked}
+        </p>
+      )}
+      {selected.length >= MAX_ISSUES_PER_SEND && (
+        <p className="text-muted-foreground" data-testid="issues-factory-limit">
+          {t('factory.sendLimit', 'Up to {{max}} issues per send', { max: MAX_ISSUES_PER_SEND })}
         </p>
       )}
       {!blocked && outside.length > 0 && (

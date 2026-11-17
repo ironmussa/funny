@@ -345,4 +345,15 @@ describe('IssuesTab and the issue factory', () => {
 
     expect(factory.send).toHaveBeenCalledWith('project-1', [1], 'issue-to-pr');
   });
+
+  test('a send takes at most 50 issues: past that, a checkbox adds nothing', async () => {
+    showIssues(Array.from({ length: 51 }, (_, i) => issue(i + 1)));
+    await screen.findByTestId('issue-select-1');
+    for (let n = 1; n <= 51; n++) fireEvent.click(screen.getByTestId(`issue-select-${n}`));
+
+    expect(screen.getByTestId('issue-select-51')).not.toBeChecked();
+    expect(screen.getByTestId('issues-factory-limit')).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('issues-factory-send'));
+    expect((factory.send.mock.calls[0][1] as number[]).length).toBe(50);
+  });
 });

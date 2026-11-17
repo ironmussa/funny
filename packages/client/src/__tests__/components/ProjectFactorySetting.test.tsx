@@ -250,4 +250,13 @@ describe('factory runs', () => {
     fireEvent.click(screen.getByTestId('confirm-dialog-confirm'));
     expect(mocks.empty).toHaveBeenCalledWith('stop-all', 'p1');
   });
+
+  test('the mode can change while the factory is paused, keeping it paused', () => {
+    mocks.settings = configured({ enabled: false, mode: 'automatic' });
+    render(<ProjectFactorySetting projectId="p1" />);
+
+    fireEvent.click(screen.getByTestId('settings-factory-mode-manual'));
+
+    expect(mocks.save).toHaveBeenCalledWith({ projectId: 'p1', enabled: false, mode: 'manual' });
+  });
 });

@@ -1,4 +1,5 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
+import { MAX_ISSUES_PER_SEND } from '@funny/shared/contracts/factory';
 import { CircleCheck, CircleDot, ExternalLink, MessageSquare, Plus, RefreshCw } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -312,18 +313,22 @@ function IssuesList({
   const now = useMinuteTick();
   const factory = useIssueFactory(projectId);
   const [selected, setSelected] = useState<number[]>([]);
+  // One send takes at most MAX_ISSUES_PER_SEND issues: past that, a checkbox adds nothing.
   const toggle = useCallback(
     (n: number) =>
-      setSelected((current) =>
-        current.includes(n) ? current.filter((x) => x !== n) : [...current, n],
-      ),
+      setSelected((current) => {
+        if (current.includes(n)) return current.filter((x) => x !== n);
+        return current.length < MAX_ISSUES_PER_SEND ? [...current, n] : current;
+      }),
     [],
   );
-  // A selected issue that can no longer be sent (it entered the factory) drops out.
+  // A selected issue that can no longer be sent (it entered the factory) leaves
+  // the selection for good, so it does not come back if its run is cancelled.
   const sendable = selected.filter((n) => {
     const issue = issues.find((i) => i.number === n);
     return issue ? canSendIssue(factory, issue) : false;
   });
+  if (sendable.length !== selected.length) setSelected(sendable);
 
   return (
     <>

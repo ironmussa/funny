@@ -149,10 +149,6 @@ function parseWaitReason(raw: string | null): FactoryWaitReason | null {
   return parsed.ok ? parsed.value : null;
 }
 
-/** Whether a storage error is the one-run-per-issue index refusing a row. */
-const isDuplicateRun = (error: FactoryRunsError): boolean =>
-  /unique|duplicate/i.test(error.message);
-
 function parseThreadIds(raw: string | null): string[] {
   if (!raw) return [];
   const parsed = parseStoredJson(THREAD_IDS_SCHEMA, raw, 'factory_runs.thread_ids');
@@ -222,10 +218,12 @@ function moveRun(
 function queueOperations(newId: () => string) {
   return {
     /**
-     * Queue sent issues, in the given order, behind the factory's queue. Each
-     * issue is its own insert: one the unique index refuses (it already has a
-     * run waiting, in flight or parked) is reported, the others still queue.
-     * Two sends racing may share a position; send time breaks the tie.
+     * Queue sent issues, in the given order, behind the factory's queue, in one
+     * statement: either every new row is written or none is. An issue the
+     * one-run-per-issue index already holds (a run waiting, in flight or
+     * parked) is skipped by the conflict clause and reported as a duplicate;
+     * its position is left unused. Two sends racing may share a position; send
+     * time breaks the tie.
      */
     enqueue(input: {
       factoryId: string;
@@ -240,37 +238,35 @@ function queueOperations(newId: () => string) {
             .where(eq(factoryRuns.factoryId, input.factoryId))
             .orderBy(desc(factoryRuns.queueOrder))
             .limit(1);
-          let next = (last?.order ?? 0) + 1;
-          const queued: FactoryRunView[] = [];
-          const duplicates: number[] = [];
-          for (const issueNumber of input.issueNumbers) {
-            const row: Row = {
-              id: newId(),
-              factoryId: input.factoryId,
-              issueNumber,
-              prUrl: null,
-              state: 'requested',
-              currentStep: null,
-              threadIds: JSON.stringify([]),
-              launchStartedAt: null,
-              startedAt: new Date().toISOString(),
-              completedAt: null,
-              source: 'manual',
-              flowName: input.flowName,
-              queueOrder: next,
-              waitReason: null,
-              admittedAt: null,
-            };
-            try {
-              await db.insert(factoryRuns).values(row);
-              queued.push(toView(row));
-              next++;
-            } catch (error) {
-              if (isDuplicateRun(storage(error))) duplicates.push(issueNumber);
-              else throw error;
-            }
-          }
-          return { queued, duplicates };
+          const first = (last?.order ?? 0) + 1;
+          const now = new Date().toISOString();
+          const rows: Row[] = input.issueNumbers.map((issueNumber, index) => ({
+            id: newId(),
+            factoryId: input.factoryId,
+            issueNumber,
+            prUrl: null,
+            state: 'requested',
+            currentStep: null,
+            threadIds: JSON.stringify([]),
+            launchStartedAt: null,
+            startedAt: now,
+            completedAt: null,
+            source: 'manual',
+            flowName: input.flowName,
+            queueOrder: first + index,
+            waitReason: null,
+            admittedAt: null,
+          }));
+          const written = await db
+            .insert(factoryRuns)
+            .values(rows)
+            .onConflictDoNothing()
+            .returning({ id: factoryRuns.id });
+          const ids = new Set(written.map((row) => row.id));
+          return {
+            queued: rows.filter((row) => ids.has(row.id)).map(toView),
+            duplicates: rows.filter((row) => !ids.has(row.id)).map((row) => row.issueNumber),
+          };
         })(),
         storage,
       );

@@ -1679,6 +1679,7 @@
     "waitingCount_one": "{{count}} te espera",
     "waitingCount_other": "{{count}} te esperan",
     "selectedCount_one": "{{count}} seleccionada",
-    "selectedCount_other": "{{count}} seleccionadas"
+    "selectedCount_other": "{{count}} seleccionadas",
+    "sendLimit": "Hasta {{max}} issues por envío"
   }
 }

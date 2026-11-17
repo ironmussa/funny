@@ -220,10 +220,25 @@ export function createFactorySettingsService(
       storage,
     ).map(([row]) => (row ? toView(row) : null));
 
-  const upsert = (row: Row): ResultAsync<FactorySettingsView, FactorySettingsError> => {
-    // On conflict keep the row's existing id and created_at; change only the
-    // mutable fields (id/created_at are excluded from `set`).
-    const { id: _id, projectId: _p, userId: _u, createdAt: _c, ...changes } = row;
+  /**
+   * Insert the row, or on conflict change only the fields this save carries
+   * (plus the toggle and the bookkeeping). An omitted field is never written
+   * from an earlier read, so two saves in flight (the label and the mode)
+   * cannot undo each other. The answer is the row as stored afterwards.
+   */
+  const upsert = (
+    row: Row,
+    input: SaveFactorySettingsInput,
+  ): ResultAsync<FactorySettingsView, FactorySettingsError> => {
+    const changes: Partial<Row> = {
+      enabled: row.enabled,
+      blockedReason: row.blockedReason,
+      updatedAt: row.updatedAt,
+      ...(input.mode !== undefined && { mode: row.mode }),
+      ...(input.label !== undefined && { label: row.label }),
+      ...(input.flowName !== undefined && { flowName: row.flowName }),
+      ...(input.maxConcurrent !== undefined && { maxConcurrent: row.maxConcurrent }),
+    };
     return ResultAsync.fromPromise(
       db
         .insert(factorySettings)
@@ -233,7 +248,9 @@ export function createFactorySettingsService(
           set: changes,
         }),
       storage,
-    ).map(() => toView(row));
+    )
+      .andThen(() => find(row.userId, row.projectId))
+      .map((stored) => stored ?? toView(row));
   };
 
   return {
@@ -270,7 +287,9 @@ export function createFactorySettingsService(
       // so it needs the same capability as starting a thread by hand.
       return requireProjectAccess(userId, projectId, 'steer', accessErrors)
         .andThen(() => find(userId, projectId))
-        .andThen((existing) => upsert(buildRow(deps.newId(), userId, projectId, input, existing)));
+        .andThen((existing) =>
+          upsert(buildRow(deps.newId(), userId, projectId, input, existing), input),
+        );
     },
   };
 }

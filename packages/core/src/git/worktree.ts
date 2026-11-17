@@ -6,7 +6,6 @@ import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
 import type { SetupProgressFn } from '../ports/setup-progress.js';
-import { git } from './base.js';
 import { toDomainError } from './errors.js';
 import { getNativeGit } from './native.js';
 import { validatePath } from './path-validation.js';
@@ -200,15 +199,20 @@ export function createWorktree(
       if (!safeBranchDir || safeBranchDir === '.' || safeBranchDir === '..') {
         throw badRequest('Invalid branch name after sanitization');
       }
-      const worktreePath = resolve(base, safeBranchDir);
-
-      if (existsSync(worktreePath)) {
-        throw badRequest(`Worktree already exists: ${worktreePath}`);
-      }
+      const worktreePath = pickWorktreePath(base, safeBranchDir);
 
       // Pre-register the worktree path as safe so subsequent git commands
       // inside the worktree don't fail due to ownership mismatch.
       await ensureSafeDirectory(worktreePath);
+
+      // Only a branch this call creates may be deleted if the creation fails.
+      const branchExisted =
+        (
+          await gitRead(['rev-parse', '--verify', '--quiet', `refs/heads/${branchName}`], {
+            cwd: projectPath,
+            reject: false,
+          })
+        ).exitCode === 0;
 
       onProgress?.(
         'worktree:create',
@@ -217,13 +221,18 @@ export function createWorktree(
       );
       const args = ['worktree', 'add', '-b', branchName, worktreePath];
       if (effectiveBase) args.push(effectiveBase);
-      const result = await git(args, projectPath);
+      // No deadline: the checkout of a large repository and its post-checkout
+      // hook can take minutes, and killing git halfway leaves a broken worktree.
+      const result = await validatePath(projectPath).andThen((cwd) =>
+        ResultAsync.fromPromise(gitWrite(args, { cwd, timeout: 0 }), toDomainError),
+      );
       if (result.isErr()) {
         onProgress?.(
           'worktree:create',
           `Creating worktree from ${effectiveBase ?? 'HEAD'}`,
           'failed',
         );
+        await discardFailedWorktree(projectPath, worktreePath, branchName, branchExisted);
         throw result.error;
       }
       onProgress?.(
@@ -238,6 +247,60 @@ export function createWorktree(
       return internal(String(error));
     },
   );
+}
+
+/** A path in a form two spellings of one folder share (symlinks resolved when it exists). */
+function normalizeForCompare(path: string): string {
+  try {
+    return normalize(realpathSync(path));
+  } catch {
+    return normalize(resolve(path));
+  }
+}
+
+/**
+ * The folder a new worktree for `safeBranchDir` goes in: `<base>/<dir>`, or
+ * `<dir>-2`, `<dir>-3`… when that is taken. A leftover folder (a worktree
+ * deleted by hand) or two branches that sanitize alike (`feat/a`, `feat-a`)
+ * must not block the creation. Stays a direct child of `base`, which
+ * `assertWorktreeInProjectBase` requires.
+ */
+function pickWorktreePath(base: string, safeBranchDir: string): string {
+  const first = resolve(base, safeBranchDir);
+  let candidate = first;
+  for (let suffix = 2; existsSync(candidate); suffix++) {
+    candidate = `${first}-${suffix}`;
+  }
+  return candidate;
+}
+
+/**
+ * Undo what a failed `git worktree add -b` left: its registration and folder
+ * (git keeps both when the post-checkout hook fails) and the branch, unless
+ * the branch existed before. Only a worktree registered at `worktreePath` on
+ * `branchName` is removed, and git refuses to delete a branch checked out
+ * elsewhere, so another worktree is never touched. Best effort.
+ */
+async function discardFailedWorktree(
+  projectPath: string,
+  worktreePath: string,
+  branchName: string,
+  branchExisted: boolean,
+): Promise<void> {
+  const listed = await gitRead(['worktree', 'list', '--porcelain'], {
+    cwd: projectPath,
+    reject: false,
+  });
+  const target = normalizeForCompare(worktreePath);
+  const ours =
+    listed.exitCode === 0 &&
+    parseWorktreeListPorcelain(listed.stdout).some(
+      (entry) => normalizeForCompare(entry.path) === target && entry.branch === branchName,
+    );
+  if (ours) await removeWorktree(projectPath, worktreePath);
+  else await forgetSafeDirectory(worktreePath);
+  await gitWrite(['worktree', 'prune'], { cwd: projectPath, reject: false });
+  if (!branchExisted) await removeBranch(projectPath, branchName);
 }
 
 type WorktreeEntry = Omit<WorktreeInfo, 'isMain' | 'lastActivityMs'>;
@@ -324,14 +387,6 @@ export function isRegisteredWorktreePath(
   ) {
     return ResultAsync.fromSafePromise(Promise.resolve(false));
   }
-
-  const normalizeForCompare = (path: string): string => {
-    try {
-      return normalize(realpathSync(path));
-    } catch {
-      return normalize(resolve(path));
-    }
-  };
 
   const target = normalizeForCompare(worktreePath);
   return listWorktrees(projectPath).map((worktrees) =>
@@ -610,12 +665,14 @@ export function previewWorktree(
       }
       const base = getWorktreeBasePath(projectPath);
       const safeBranchDir = branchName.replace(/[^a-zA-Z0-9._-]/g, '-');
-      const worktreePath = resolve(base, safeBranchDir);
+      const preferredPath = resolve(base, safeBranchDir);
       return {
         sanitizedBranchDir: safeBranchDir,
         branchName,
-        worktreePath,
-        alreadyExists: existsSync(worktreePath),
+        // Where createWorktree would put it; `alreadyExists` means the
+        // preferred folder is taken, so a numbered sibling is used instead.
+        worktreePath: pickWorktreePath(base, safeBranchDir),
+        alreadyExists: existsSync(preferredPath),
       };
     })(),
     (error) => internal(String(error)),

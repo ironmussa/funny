@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync, existsSync } from 'fs';
+import { chmodSync, mkdirSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
 
@@ -7,6 +7,7 @@ import {
   checkWorktreePathInProject,
   createWorktree,
   findWorktreeForBranch,
+  getWorktreeBasePath,
   listWorktrees,
   removeWorktree,
   removeBranch,
@@ -25,6 +26,22 @@ function initTestRepo(): string {
   executeSync('git', ['add', '.'], { cwd: repoPath });
   executeSync('git', ['commit', '-m', 'initial commit'], { cwd: repoPath });
   return repoPath;
+}
+
+function branchExists(repoPath: string, branch: string): boolean {
+  return (
+    executeSync('git', ['rev-parse', '--verify', '--quiet', `refs/heads/${branch}`], {
+      cwd: repoPath,
+      reject: false,
+    }).exitCode === 0
+  );
+}
+
+function registeredBranches(repoPath: string): string[] {
+  return executeSync('git', ['worktree', 'list', '--porcelain'], { cwd: repoPath })
+    .stdout.split('\n')
+    .filter((line) => line.startsWith('branch refs/heads/'))
+    .map((line) => line.slice('branch refs/heads/'.length));
 }
 
 describe('worktree operations', () => {
@@ -65,12 +82,53 @@ describe('worktree operations', () => {
       }
     });
 
-    test('returns error for duplicate worktree', async () => {
+    test('returns error for duplicate worktree and keeps the first one', async () => {
       const first = await createWorktree(repoPath, 'dup-branch');
       expect(first.isOk()).toBe(true);
 
       const second = await createWorktree(repoPath, 'dup-branch');
       expect(second.isErr()).toBe(true);
+
+      // The failed attempt must not clean up the branch or worktree it did not create.
+      const firstPath = first._unsafeUnwrap();
+      expect(existsSync(firstPath)).toBe(true);
+      expect(branchExists(repoPath, 'dup-branch')).toBe(true);
+      const branches = registeredBranches(repoPath);
+      expect(branches.filter((b) => b === 'dup-branch')).toHaveLength(1);
+    });
+
+    test('uses a numbered folder when a leftover folder takes the branch name', async () => {
+      const leftover = resolve(getWorktreeBasePath(repoPath), 'leftover');
+      mkdirSync(leftover, { recursive: true });
+      writeFileSync(resolve(leftover, 'stale.txt'), 'from a worktree deleted by hand');
+
+      const result = await createWorktree(repoPath, 'leftover');
+      expect(result._unsafeUnwrap()).toBe(`${leftover}-2`);
+      expect(existsSync(resolve(leftover, 'stale.txt'))).toBe(true);
+    });
+
+    test('branches that sanitize to the same folder both get a worktree', async () => {
+      const slashed = (await createWorktree(repoPath, 'feat/a'))._unsafeUnwrap();
+      const dashed = (await createWorktree(repoPath, 'feat-a'))._unsafeUnwrap();
+      expect(slashed).not.toBe(dashed);
+      expect(dashed).toBe(`${slashed}-2`);
+    });
+
+    test('a failed post-checkout hook leaves no worktree or branch behind', async () => {
+      const hook = resolve(repoPath, '.git', 'hooks', 'post-checkout');
+      writeFileSync(hook, '#!/bin/sh\nexit 1\n');
+      chmodSync(hook, 0o755);
+
+      const result = await createWorktree(repoPath, 'hook-fails');
+      expect(result.isErr()).toBe(true);
+
+      expect(existsSync(resolve(getWorktreeBasePath(repoPath), 'hook-fails'))).toBe(false);
+      expect(registeredBranches(repoPath)).not.toContain('hook-fails');
+      expect(branchExists(repoPath, 'hook-fails')).toBe(false);
+
+      // Nothing is left to block a retry once the hook is fixed.
+      rmSync(hook);
+      expect((await createWorktree(repoPath, 'hook-fails')).isOk()).toBe(true);
     });
 
     test('creates worktree from specific base branch', async () => {

@@ -35,6 +35,7 @@ import { SocketIoClientRealtimePort } from '@/lib/realtime/socketio-realtime-por
 import { metric } from '@/lib/telemetry';
 import { clientComposition } from '@/platform/client-composition';
 import { useAuthStore } from '@/stores/auth-store';
+import { loadLiveBrowserThreads } from '@/stores/browser-live-threads-store';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
@@ -173,6 +174,7 @@ function connect() {
     if (scope.kind === ScopeKind.USER) {
       void useThreadStore.getState().loadSharedThreads();
       recoverBrowserPanelSession();
+      void loadLiveBrowserThreads();
     }
     if (
       (scope.kind === ScopeKind.THREAD_STREAM || scope.kind === ScopeKind.THREAD_PRESENCE) &&
@@ -189,6 +191,9 @@ function connect() {
     // long-polling (reverse-proxy without WS upgrade) — that's the most
     // common cause of trailing `agent:result` events going missing.
     metric('ws.connected', 1, { attributes: { transport } });
+    // Realtime events are not replayed on (re)connect: ask the runner which
+    // threads hold a live browser so the sidebar marks survive a reload.
+    void loadLiveBrowserThreads();
     void realtimePort
       .negotiate(
         create(NegotiationRequestSchema, {

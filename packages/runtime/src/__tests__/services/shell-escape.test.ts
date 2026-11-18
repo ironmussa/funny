@@ -1,15 +1,30 @@
+import { existsSync, readFileSync } from 'node:fs';
+
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { executeShellEscape } from '../../services/thread-service/shell-escape.js';
 
 const posix = process.platform !== 'win32';
 
+/**
+ * Whether `pid` is still running. A zombie is dead: it has exited and only
+ * waits to be reaped, which in a container whose PID 1 is not an init that
+ * reaps orphans (Docker without `--init`, some cloud sandboxes) never happens.
+ * `kill(pid, 0)` still succeeds on a zombie, so on Linux read its state.
+ */
 function isAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
-    return true;
   } catch {
     return false;
+  }
+  try {
+    // `/proc/<pid>/stat` is `pid (comm) state …`; comm may contain spaces.
+    const stat = readFileSync(`/proc/${pid}/stat`, 'utf8');
+    return stat.slice(stat.lastIndexOf(')') + 2, stat.lastIndexOf(')') + 3) !== 'Z';
+  } catch {
+    // No procfs (macOS): `kill(pid, 0)` is all there is.
+    return !existsSync('/proc');
   }
 }
 

@@ -75,25 +75,21 @@ export function canSendIssue(factory: IssueFactory, issue: { number: number; sta
 
 /**
  * The issue's state icon, which turns into its selection checkbox: the icon
- * shows by default, the checkbox on hover or keyboard focus, and the checkbox
- * stays while the issue is selected or any selection is in progress.
+ * shows by default (also while other issues are selected), the checkbox on
+ * hover or keyboard focus, and the checkbox stays while this issue is selected.
  */
 export function IssueSelectToggle({
   issueNumber,
   icon,
   checked,
-  selecting,
   onToggle,
 }: {
   issueNumber: number;
   icon: ReactNode;
   checked: boolean;
-  /** Some issue is selected: every checkbox stays visible. */
-  selecting: boolean;
   onToggle: (issueNumber: number) => void;
 }) {
   const { t } = useTranslation();
-  const pinned = checked || selecting;
   return (
     <span
       className="group/select icon-base relative mt-0.5 shrink-0"
@@ -103,7 +99,9 @@ export function IssueSelectToggle({
         aria-hidden
         className={cn(
           'absolute inset-0 grid place-items-center transition-opacity',
-          pinned ? 'opacity-0' : 'group-focus-within/select:opacity-0 group-hover/select:opacity-0',
+          checked
+            ? 'opacity-0'
+            : 'group-focus-within/select:opacity-0 group-hover/select:opacity-0',
         )}
       >
         {icon}
@@ -111,7 +109,7 @@ export function IssueSelectToggle({
       <span
         className={cn(
           'absolute inset-0 grid place-items-center transition-opacity',
-          pinned
+          checked
             ? 'opacity-100'
             : 'opacity-0 group-focus-within/select:opacity-100 group-hover/select:opacity-100',
         )}
@@ -237,7 +235,7 @@ function reportSend(t: TFunction, result: FactorySubmitResult): void {
   }
 }
 
-/** The bar shown while issues are selected: pick a flow and send them. */
+/** The bar shown above the issues while some are selected: pick a flow and send them. */
 export function IssuesFactoryBar({
   projectId,
   settings,
@@ -287,7 +285,7 @@ export function IssuesFactoryBar({
 
   return (
     <div
-      className="border-sidebar-border bg-sidebar flex flex-col gap-1.5 border-t px-3 py-2 text-xs"
+      className="border-sidebar-border bg-sidebar flex flex-col gap-1.5 border-b px-2 py-1 text-xs"
       data-testid="issues-factory-bar"
     >
       <div className="flex items-center gap-1.5">

@@ -358,7 +358,7 @@ describe('IssuesTab and the issue factory', () => {
     // 51 rows and 51 clicks: slow when the whole suite runs in parallel.
   }, 20_000);
 
-  test('the state icon turns into the checkbox, which stays shown once anything is selected', async () => {
+  test('the state icon turns into the checkbox on hover; only a selected issue keeps it', async () => {
     showIssues([issue(1), issue(2)]);
     const box = (n: number) => screen.getByTestId(`issue-select-${n}`).parentElement!;
     await screen.findByTestId('issue-select-toggle-1');
@@ -369,7 +369,17 @@ describe('IssuesTab and the issue factory', () => {
 
     fireEvent.click(screen.getByTestId('issue-select-1'));
 
+    // The selected issue keeps its checkbox; the others keep their state icon.
     expect(box(1)).toHaveClass('opacity-100');
-    expect(box(2)).toHaveClass('opacity-100');
+    expect(box(2)).toHaveClass('opacity-0');
+  });
+
+  test('the factory bar sits above the issues', async () => {
+    showIssues([issue(1)]);
+    fireEvent.click(await screen.findByTestId('issue-select-1'));
+
+    const bar = screen.getByTestId('issues-factory-bar');
+    const row = screen.getByTestId('issue-item-1');
+    expect(bar.compareDocumentPosition(row) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 });

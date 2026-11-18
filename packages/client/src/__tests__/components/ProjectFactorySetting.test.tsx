@@ -70,6 +70,13 @@ describe('ProjectFactorySetting', () => {
     expect(screen.queryByTestId('settings-factory-on')).toBeNull();
   });
 
+  test('is its own settings section, headed "Issue factory"', () => {
+    render(<ProjectFactorySetting projectId="p1" />);
+    const section = screen.getByTestId('settings-factory-section');
+    expect(section.querySelector('h3')).toHaveTextContent('Issue factory');
+    expect(section).toContainElement(screen.getByTestId('settings-factory-on'));
+  });
+
   test('off by default, with no detail rows', () => {
     render(<ProjectFactorySetting projectId="p1" />);
     expect(pressed('off')).toBe('true');

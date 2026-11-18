@@ -355,5 +355,6 @@ describe('IssuesTab and the issue factory', () => {
     expect(screen.getByTestId('issues-factory-limit')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('issues-factory-send'));
     expect((factory.send.mock.calls[0][1] as number[]).length).toBe(50);
-  });
+    // 51 rows and 51 clicks: slow when the whole suite runs in parallel.
+  }, 20_000);
 });

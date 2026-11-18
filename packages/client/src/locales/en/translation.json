@@ -668,13 +668,15 @@
     "projectFactoryLabel": "Issue label",
     "projectFactoryLabelDesc": "Issues with this label are picked up",
     "projectFactory": "Issue factory",
-    "projectFactoryDesc": "Run a flow to PR for the issues you send from the Issues tab. Paused: nothing new starts",
+    "projectFactoryDesc": "Runs a flow up to a pull request for each issue: the ones you send from the Issues tab, and in automatic mode the ones with its label. Your own; each member has theirs.",
     "projectFactoryPaused": "Paused",
     "projectFactoryRunning": "Running",
     "projectFactoryFlow": "Flow",
     "projectFactoryFlowDesc": "The default flow: preselected when you send issues, and run for labelled ones",
     "projectFactoryConcurrency": "Max in flight",
-    "projectFactoryConcurrencyDesc": "How many issues run at once"
+    "projectFactoryConcurrencyDesc": "How many issues run at once",
+    "projectFactoryStatus": "Status",
+    "projectFactoryStatusDesc": "Running: takes the issues you send from the Issues tab. Paused: nothing new starts; queued issues wait"
   },
   "skills": {
     "showingFor": "Showing skills for:",

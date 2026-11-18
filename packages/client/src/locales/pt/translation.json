@@ -1501,6 +1501,11 @@
       "fetchFailed": "Conexão perdida. Verifique sua conexão com a internet e tente novamente.",
       "generic": "Ocorreu um erro de rede. Verifique sua conexão e tente novamente."
     },
+    "factory": {
+      "CONFLICT": "{{message}}",
+      "BAD_REQUEST": "{{message}}",
+      "NOT_FOUND": "{{message}}"
+    },
     "transcribeToken": {
       "BAD_REQUEST": "A transcrição de voz não está configurada. Configure sua chave API do AssemblyAI em Configurações > Perfil.",
       "INTERNAL": "O serviço de transcrição de voz está temporariamente indisponível. Tente novamente mais tarde."

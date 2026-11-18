@@ -462,6 +462,7 @@ describe('AgentLifecycleManager', () => {
       expect(mocks.resolveEffectiveProfile).toHaveBeenCalledWith('proj-1', 'user-1');
       expect(mocks.loadProjectMcpServers).toHaveBeenCalledWith('thread-1', '/tmp/repo', 'claude', {
         claudeConfigDir: '/tmp/claude-work',
+        cwd: '/tmp/repo',
       });
     });
   });

@@ -1542,6 +1542,11 @@
       "fetchFailed": "Connection lost. Please check your internet connection and try again.",
       "generic": "A network error occurred. Please check your connection and try again."
     },
+    "factory": {
+      "CONFLICT": "{{message}}",
+      "BAD_REQUEST": "{{message}}",
+      "NOT_FOUND": "{{message}}"
+    },
     "transcribeToken": {
       "BAD_REQUEST": "Voice transcription is not configured. Set up your AssemblyAI API key in Settings > Profile.",
       "INTERNAL": "Voice transcription service is temporarily unavailable. Please try again later."

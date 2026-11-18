@@ -20,7 +20,7 @@ export async function resolveAgentTooling(input: {
   mcpServers?: Record<string, any>;
   disallowedTools?: string[];
   claudeConfigDir?: string;
-  /** Thread working directory (browser `upload` sandbox). */
+  /** Thread working directory (browser `upload` sandbox; project MCP servers are only injected when it is not the project directory). */
   cwd?: string;
 }): Promise<AgentTemplateResolution> {
   const { threadId, thread, projectPath, provider } = input;
@@ -28,6 +28,7 @@ export async function resolveAgentTooling(input: {
   if (!mcpServers && projectPath) {
     mcpServers = await loadProjectMcpServers(threadId, projectPath, provider, {
       claudeConfigDir: input.claudeConfigDir,
+      cwd: input.cwd,
     });
   }
 

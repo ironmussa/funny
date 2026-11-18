@@ -133,6 +133,24 @@ async function readMcpJson(projectPath: string): Promise<
 }
 
 /**
+ * The MCP servers a project's config files declare (`~/.claude.json` user and
+ * per-project scope, `.mcp.json`) and the names disabled for that project.
+ */
+async function readMcpConfigFiles(projectPath: string, options: ClaudeProfileOptions) {
+  const [config, mcpJson] = await Promise.all([
+    readClaudeConfig(options),
+    readMcpJson(projectPath),
+  ]);
+  const settings = getProjectSettings(config, projectPath);
+  return {
+    mcpJson,
+    disabledProjectNames: new Set(settings.disabledMcpjsonServers ?? []),
+    disabledUserNames: getDisabledUserMcpNames(config, settings),
+    userServers: mergeUserMcpServers(config, settings),
+  };
+}
+
+/**
  * List MCP servers configured for a project.
  * Merges CLI output with config files to include disabled servers.
  */
@@ -175,15 +193,8 @@ function listClaudeMcpServers(
         }
 
         // Read config files to find disabled servers and annotate sources
-        const [config, mcpJson] = await Promise.all([
-          readClaudeConfig(options),
-          readMcpJson(projectPath),
-        ]);
-
-        const settings = getProjectSettings(config, projectPath);
-        const disabledProjectNames = new Set(settings.disabledMcpjsonServers ?? []);
-        const disabledUserNames = getDisabledUserMcpNames(config, settings);
-        const userServers = mergeUserMcpServers(config, settings);
+        const { mcpJson, disabledProjectNames, disabledUserNames, userServers } =
+          await readMcpConfigFiles(projectPath, options);
         const activeNames = new Set(activeServers.map((s) => s.name));
 
         // Annotate active servers with source, disabled state, and config fields
@@ -212,48 +223,14 @@ function listClaudeMcpServers(
         for (const name of disabledProjectNames) {
           if (activeNames.has(name)) continue;
           const cfg = mcpJson[name];
-          if (!cfg) continue;
-          const type = (cfg.type?.toLowerCase() ?? 'stdio') as McpServerType;
-          const server: McpServer = {
-            name,
-            provider: 'claude',
-            type,
-            disabled: true,
-            source: 'project',
-          };
-          if (type === 'http' || type === 'sse') {
-            server.url = cfg.url;
-          } else {
-            server.command = cfg.command;
-            server.args = cfg.args;
-          }
-          if (cfg.headers) server.headers = cfg.headers;
-          if (cfg.env) server.env = cfg.env;
-          activeServers.push(server);
+          if (cfg) activeServers.push(configuredServer(name, cfg, 'project', true));
         }
 
         // Add disabled user-scoped servers not in CLI output
         for (const name of disabledUserNames) {
           if (activeNames.has(name)) continue;
           const cfg = userServers[name];
-          if (!cfg) continue;
-          const type = (cfg.type?.toLowerCase() ?? 'stdio') as McpServerType;
-          const server: McpServer = {
-            name,
-            provider: 'claude',
-            type,
-            disabled: true,
-            source: 'user',
-          };
-          if (type === 'http' || type === 'sse') {
-            server.url = cfg.url;
-          } else {
-            server.command = cfg.command;
-            server.args = cfg.args;
-          }
-          if (cfg.headers) server.headers = cfg.headers;
-          if (cfg.env) server.env = cfg.env;
-          activeServers.push(server);
+          if (cfg) activeServers.push(configuredServer(name, cfg, 'user', true));
         }
 
         return activeServers;
@@ -261,6 +238,61 @@ function listClaudeMcpServers(
         log.error('Failed to list MCP servers', { namespace: 'mcp-service', error: e });
         return [];
       }
+    })(),
+    (error) => internal(String(error)),
+  );
+}
+
+/** A server as written in `~/.claude.json` or `.mcp.json`. */
+function configuredServer(
+  name: string,
+  cfg: ClaudeMcpServerEntry,
+  source: 'user' | 'project',
+  disabled: boolean,
+): McpServer {
+  const type = (cfg.type?.toLowerCase() ?? 'stdio') as McpServerType;
+  const server: McpServer = { name, provider: 'claude', type, source };
+  if (disabled) server.disabled = true;
+  if (type === 'http' || type === 'sse') {
+    server.url = cfg.url;
+  } else {
+    server.command = cfg.command;
+    server.args = cfg.args;
+  }
+  if (cfg.headers) server.headers = cfg.headers;
+  if (cfg.env) server.env = cfg.env;
+  return server;
+}
+
+/**
+ * The Claude MCP servers configured for a project, read from `~/.claude.json`
+ * (user and per-project scope) and the project's `.mcp.json` only.
+ *
+ * Unlike {@link listMcpServers} it does not run `claude mcp list`, which
+ * connects to every server to report its status (2–4 s). Agent startup uses
+ * this: a server that needs sign-in still loads (the CLI marks it
+ * `needs-auth` without waiting), so the status is not needed there. Plugin
+ * servers and claude.ai connectors are not in these files; the CLI loads them
+ * itself.
+ */
+export function listConfiguredClaudeMcpServers(
+  projectPath: string,
+  options: ClaudeProfileOptions = {},
+): ResultAsync<McpServer[], DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const { mcpJson, disabledProjectNames, disabledUserNames, userServers } =
+        await readMcpConfigFiles(projectPath, options);
+
+      const servers = new Map<string, McpServer>();
+      for (const [name, cfg] of Object.entries(userServers)) {
+        servers.set(name, configuredServer(name, cfg, 'user', disabledUserNames.has(name)));
+      }
+      // `.mcp.json` wins on a name clash, as in `listMcpServers`.
+      for (const [name, cfg] of Object.entries(mcpJson)) {
+        servers.set(name, configuredServer(name, cfg, 'project', disabledProjectNames.has(name)));
+      }
+      return [...servers.values()];
     })(),
     (error) => internal(String(error)),
   );

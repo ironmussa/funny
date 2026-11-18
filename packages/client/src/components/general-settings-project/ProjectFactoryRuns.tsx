@@ -33,7 +33,9 @@ function RunRow({ projectId, run }: { projectId: string; run: FactoryRun }) {
   const { t } = useTranslation();
   const lastThread = run.threadIds.at(-1);
   const control = (action: 'stop' | 'retry') =>
-    void controlFactoryRun(action, projectId, run.id).orTee((error) => toastError(error));
+    void controlFactoryRun(action, projectId, run.id).orTee((error) =>
+      toastError(error, 'factory'),
+    );
 
   return (
     <li className="flex items-center gap-2 py-1.5 text-sm" data-testid={`factory-run-${run.id}`}>
@@ -101,7 +103,7 @@ function QueueControls({ projectId, runs }: { projectId: string; runs: FactoryRu
   const queued = runs.some((run) => run.state === 'requested');
   const active = runs.some((run) => !ENDED.has(run.state) && run.state !== 'waiting_human');
   const empty = (action: 'clear-queue' | 'stop-all') =>
-    void emptyFactory(action, projectId).orTee((error) => toastError(error));
+    void emptyFactory(action, projectId).orTee((error) => toastError(error, 'factory'));
 
   return (
     <span className="ml-auto flex items-center gap-1">

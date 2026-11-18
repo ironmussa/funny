@@ -8,6 +8,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { listRowActionClassName } from '@/lib/list-row-styles';
 
 interface PRActionsMenuProps {
   prNumber: number;
@@ -25,11 +26,11 @@ export function PRActionsMenu({ prNumber, branch, onCreateThread }: PRActionsMen
         <Button
           variant="ghost"
           size="icon-xs"
-          className="text-muted-foreground shrink-0"
+          className={listRowActionClassName}
           aria-label={t('review.pullRequests.actions', 'Pull request actions')}
           data-testid={`pr-actions-${prNumber}`}
         >
-          <MoreHorizontal className="icon-xs" />
+          <MoreHorizontal className="icon-sm" />
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" side="bottom" className="w-48">

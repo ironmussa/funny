@@ -27,6 +27,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useCommitActions } from '@/hooks/use-commit-actions';
 import type { GitRebaseReflogEventDTO } from '@/lib/api/git';
+import { listRowActionClassName } from '@/lib/list-row-styles';
 import { rebaseEventScopeLabel } from '@/lib/rebase-events';
 import { cn } from '@/lib/utils';
 
@@ -138,12 +139,9 @@ export function CommitActionsMenu({
             tabIndex={-1}
             onClick={(e) => e.stopPropagation()}
             className={cn(
-              'text-muted-foreground hover:text-foreground shrink-0',
-              triggerClassName ??
-                cn(
-                  'ml-auto opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100',
-                  open && 'opacity-100',
-                ),
+              triggerClassName
+                ? cn('text-muted-foreground hover:text-foreground shrink-0', triggerClassName)
+                : cn(listRowActionClassName, 'ml-auto', open && 'opacity-100'),
             )}
             data-testid={`graph-commit-more-${shortHash}`}
           >

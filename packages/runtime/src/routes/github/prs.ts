@@ -8,15 +8,15 @@ import { parseJsonBody } from '../../validation/request.js';
 import {
   GITHUB_API,
   githubApiFetch,
+  githubPrFor,
+  githubRepoFor,
   parseGithubOwnerRepo,
   requireAccessibleProject,
-  resolveGithubProjectContext,
   resolveGithubToken,
 } from './helpers.js';
 import { readGithubListContext } from './list-context.js';
 import { fetchPRDetail } from './pr-detail-graphql.js';
 import { fetchPullRequests } from './prs-graphql.js';
-import { positiveIntParam } from './query.js';
 
 export const prRoutes = new Hono<HonoEnv>();
 
@@ -314,15 +314,9 @@ prRoutes.get('/pr-filter-options', async (c) => {
 // ── GET /pr-detail — rich PR data with CI checks and review decision ──────
 
 prRoutes.get('/pr-detail', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.query('projectId');
-  const prNumber = positiveIntParam(c, 'prNumber');
-  if (!projectId || !prNumber) {
-    return c.json({ error: 'projectId and prNumber are required' }, 400);
-  }
-
-  const ctx = await resolveGithubProjectContext(projectId, userId, c.get('organizationId'));
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
+  const ctx = await githubPrFor(c);
+  if (ctx instanceof Response) return ctx;
+  const { prNumber } = ctx;
 
   try {
     // One GraphQL request: PR, reviews, head commit and its check runs.
@@ -341,7 +335,6 @@ prRoutes.get('/pr-detail', async (c) => {
 const MERGE_METHODS = new Set(['squash', 'merge', 'rebase']);
 
 prRoutes.post('/pr-merge', async (c) => {
-  const userId = c.get('userId') as string;
   const parsed = await parseJsonBody(c, prMergeBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const raw = parsed.value;
@@ -355,8 +348,8 @@ prRoutes.post('/pr-merge', async (c) => {
     return c.json({ error: 'Invalid merge method' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
+  const ctx = await githubRepoFor(c, raw.projectId);
+  if (ctx instanceof Response) return ctx;
   const { owner, repo, token } = ctx;
 
   try {

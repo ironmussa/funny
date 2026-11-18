@@ -1,4 +1,3 @@
-import { getRemoteUrl } from '@funny/core/git';
 import type {
   PRReviewThread,
   PRThreadComment,
@@ -15,14 +14,14 @@ import { parseJsonBody } from '../../validation/request.js';
 import {
   fetchIssueComments,
   githubApiFetch,
+  githubCommentPath,
+  githubErrorWithBody,
   githubGraphQL,
+  githubPrFor,
+  githubRepoFor,
   mapIssueComment,
   mapReactions,
-  postGithubComment,
-  parseGithubOwnerRepo,
-  requireAccessibleProject,
-  resolveGithubProjectContext,
-  resolveGithubToken,
+  sendGithubJson,
 } from './helpers.js';
 import { positiveIntParam, prCommentKindParam } from './query.js';
 
@@ -87,29 +86,9 @@ const prPatchCommentBodySchema = z
 // ── GET /pr-threads — PR review comment threads ──────
 
 prThreadRoutes.get('/pr-threads', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.query('projectId');
-  const prNumber = positiveIntParam(c, 'prNumber');
-  if (!projectId || !prNumber) {
-    return c.json({ error: 'projectId and prNumber are required' }, 400);
-  }
-
-  const project = await requireAccessibleProject(projectId, userId, c.get('organizationId'));
-  if (!project) return c.json({ error: 'Project not found' }, 404);
-
-  const remoteResult = await getRemoteUrl(project.path);
-  if (remoteResult.isErr() || !remoteResult.value) {
-    return c.json({ error: 'Could not determine remote URL' }, 400);
-  }
-
-  const parsed = parseGithubOwnerRepo(remoteResult.value);
-  if (!parsed) return c.json({ error: 'Not a GitHub project' }, 400);
-
-  const resolved = await resolveGithubToken(userId);
-  if (!resolved) return c.json({ error: 'No GitHub token available' }, 401);
-
-  const { owner, repo } = parsed;
-  const { token } = resolved;
+  const access = await githubPrFor(c);
+  if (access instanceof Response) return access;
+  const { owner, repo, token, prNumber } = access;
 
   try {
     // Fetch all review comments (paginated, up to 100)
@@ -230,16 +209,9 @@ prThreadRoutes.get('/pr-threads', async (c) => {
 // ── GET /pr-conversation — PR body comments + reviews ───────
 
 prThreadRoutes.get('/pr-conversation', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.query('projectId');
-  const prNumber = positiveIntParam(c, 'prNumber');
-  if (!projectId || !prNumber) {
-    return c.json({ error: 'projectId and prNumber are required' }, 400);
-  }
-
-  const ctx = await resolveGithubProjectContext(projectId, userId, c.get('organizationId'));
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
-  const { owner, repo, token } = ctx;
+  const ctx = await githubPrFor(c);
+  if (ctx instanceof Response) return ctx;
+  const { owner, repo, token, prNumber } = ctx;
 
   try {
     const [commentsRes, reviewsRes] = await Promise.all([
@@ -277,7 +249,6 @@ prThreadRoutes.get('/pr-conversation', async (c) => {
 // ── POST /pr-comment — create issue (conversation) comment ───
 
 prThreadRoutes.post('/pr-comment', async (c) => {
-  const userId = c.get('userId') as string;
   const parsed = await parseJsonBody(c, prCommentBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const raw = parsed.value;
@@ -285,20 +256,18 @@ prThreadRoutes.post('/pr-comment', async (c) => {
     return c.json({ error: 'projectId, prNumber and body are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
+  const ctx = await githubRepoFor(c, raw.projectId);
+  if (ctx instanceof Response) return ctx;
   const { owner, repo, token } = ctx;
 
   try {
-    const res = await postGithubComment(
+    const res = await sendGithubJson(
       `/repos/${owner}/${repo}/issues/${raw.prNumber}/comments`,
       token,
-      raw.body,
+      'POST',
+      { body: raw.body },
     );
-    if (!res.ok) {
-      const text = await res.text();
-      return c.json({ error: `GitHub API error: ${res.status} ${text}` }, 502);
-    }
+    if (!res.ok) return githubErrorWithBody(c, res);
     const comment: PRIssueComment = mapIssueComment(await res.json());
     return c.json(comment);
   } catch (error: any) {
@@ -309,7 +278,6 @@ prThreadRoutes.post('/pr-comment', async (c) => {
 // ── POST /pr-review-reply — reply in a review thread ────────
 
 prThreadRoutes.post('/pr-review-reply', async (c) => {
-  const userId = c.get('userId') as string;
   const parsed = await parseJsonBody(c, prReviewReplyBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const raw = parsed.value;
@@ -317,20 +285,18 @@ prThreadRoutes.post('/pr-review-reply', async (c) => {
     return c.json({ error: 'projectId, prNumber, commentId and body are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
+  const ctx = await githubRepoFor(c, raw.projectId);
+  if (ctx instanceof Response) return ctx;
   const { owner, repo, token } = ctx;
 
   try {
-    const res = await postGithubComment(
+    const res = await sendGithubJson(
       `/repos/${owner}/${repo}/pulls/${raw.prNumber}/comments/${raw.commentId}/replies`,
       token,
-      raw.body,
+      'POST',
+      { body: raw.body },
     );
-    if (!res.ok) {
-      const text = await res.text();
-      return c.json({ error: `GitHub API error: ${res.status} ${text}` }, 502);
-    }
+    if (!res.ok) return githubErrorWithBody(c, res);
     const cm = (await res.json()) as any;
     const comment: PRThreadComment = {
       id: cm.id,
@@ -350,7 +316,6 @@ prThreadRoutes.post('/pr-review-reply', async (c) => {
 // ── POST /pr-thread-resolve — resolve/unresolve review thread ───
 
 prThreadRoutes.post('/pr-thread-resolve', async (c) => {
-  const userId = c.get('userId') as string;
   const parsed = await parseJsonBody(c, prThreadResolveBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const raw = parsed.value;
@@ -358,8 +323,8 @@ prThreadRoutes.post('/pr-thread-resolve', async (c) => {
     return c.json({ error: 'projectId, threadNodeId and resolve are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
+  const ctx = await githubRepoFor(c, raw.projectId);
+  if (ctx instanceof Response) return ctx;
   const { token } = ctx;
 
   const mutation = raw.resolve
@@ -384,7 +349,6 @@ prThreadRoutes.post('/pr-thread-resolve', async (c) => {
 // ── POST /pr-reaction — add reaction to a comment ───────────
 
 prThreadRoutes.post('/pr-reaction', async (c) => {
-  const userId = c.get('userId') as string;
   const parsed = await parseJsonBody(c, prReactionBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const raw = parsed.value;
@@ -392,25 +356,13 @@ prThreadRoutes.post('/pr-reaction', async (c) => {
     return c.json({ error: 'projectId, kind, commentId and content are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
-  const { owner, repo, token } = ctx;
-
-  const path =
-    raw.kind === 'issue'
-      ? `/repos/${owner}/${repo}/issues/comments/${raw.commentId}/reactions`
-      : `/repos/${owner}/${repo}/pulls/comments/${raw.commentId}/reactions`;
+  const ctx = await githubRepoFor(c, raw.projectId);
+  if (ctx instanceof Response) return ctx;
+  const path = `${githubCommentPath(ctx, raw.kind, raw.commentId)}/reactions`;
 
   try {
-    const res = await githubApiFetch(path, token, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ content: raw.content }),
-    });
-    if (!res.ok && res.status !== 200 && res.status !== 201) {
-      const text = await res.text();
-      return c.json({ error: `GitHub API error: ${res.status} ${text}` }, 502);
-    }
+    const res = await sendGithubJson(path, ctx.token, 'POST', { content: raw.content });
+    if (!res.ok) return githubErrorWithBody(c, res);
     const reaction = (await res.json()) as { id: number; content: string };
     return c.json({ id: reaction.id, content: reaction.content });
   } catch (error: any) {
@@ -421,7 +373,6 @@ prThreadRoutes.post('/pr-reaction', async (c) => {
 // ── PATCH /pr-comment — edit a comment ──────────────────────
 
 prThreadRoutes.patch('/pr-comment', async (c) => {
-  const userId = c.get('userId') as string;
   const parsed = await parseJsonBody(c, prPatchCommentBodySchema);
   if (parsed.isErr()) return c.json({ error: parsed.error.message }, 400);
   const raw = parsed.value;
@@ -429,25 +380,13 @@ prThreadRoutes.patch('/pr-comment', async (c) => {
     return c.json({ error: 'projectId, kind, commentId and body are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(raw.projectId, userId, c.get('organizationId'));
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
-  const { owner, repo, token } = ctx;
-
-  const path =
-    raw.kind === 'issue'
-      ? `/repos/${owner}/${repo}/issues/comments/${raw.commentId}`
-      : `/repos/${owner}/${repo}/pulls/comments/${raw.commentId}`;
+  const ctx = await githubRepoFor(c, raw.projectId);
+  if (ctx instanceof Response) return ctx;
+  const path = githubCommentPath(ctx, raw.kind, raw.commentId);
 
   try {
-    const res = await githubApiFetch(path, token, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ body: raw.body }),
-    });
-    if (!res.ok) {
-      const text = await res.text();
-      return c.json({ error: `GitHub API error: ${res.status} ${text}` }, 502);
-    }
+    const res = await sendGithubJson(path, ctx.token, 'PATCH', { body: raw.body });
+    if (!res.ok) return githubErrorWithBody(c, res);
     const cm = (await res.json()) as any;
     return c.json({
       id: cm.id,
@@ -463,7 +402,6 @@ prThreadRoutes.patch('/pr-comment', async (c) => {
 // ── DELETE /pr-comment — delete a comment ───────────────────
 
 prThreadRoutes.delete('/pr-comment', async (c) => {
-  const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
   const kind = prCommentKindParam(c);
   const commentId = positiveIntParam(c, 'commentId');
@@ -471,21 +409,14 @@ prThreadRoutes.delete('/pr-comment', async (c) => {
     return c.json({ error: 'projectId, kind and commentId are required' }, 400);
   }
 
-  const ctx = await resolveGithubProjectContext(projectId, userId, c.get('organizationId'));
-  if (!ctx.ok) return c.json({ error: ctx.error }, ctx.status as any);
-  const { owner, repo, token } = ctx;
-
-  const path =
-    kind === 'issue'
-      ? `/repos/${owner}/${repo}/issues/comments/${commentId}`
-      : `/repos/${owner}/${repo}/pulls/comments/${commentId}`;
+  const ctx = await githubRepoFor(c, projectId);
+  if (ctx instanceof Response) return ctx;
 
   try {
-    const res = await githubApiFetch(path, token, { method: 'DELETE' });
-    if (!res.ok && res.status !== 204) {
-      const text = await res.text();
-      return c.json({ error: `GitHub API error: ${res.status} ${text}` }, 502);
-    }
+    const res = await githubApiFetch(githubCommentPath(ctx, kind, commentId), ctx.token, {
+      method: 'DELETE',
+    });
+    if (!res.ok) return githubErrorWithBody(c, res);
     return c.json({ ok: true });
   } catch (error: any) {
     return c.json({ error: error.message }, 502);

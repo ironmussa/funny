@@ -390,7 +390,7 @@ describe('MCP list + toggle integration', () => {
         env: { CLAUDE_CONFIG_DIR: '/home/user/.claude-work' },
       }),
     );
-    expect(fsMocks.readFile).toHaveBeenCalledWith('/home/user/.claude-work.json', 'utf-8');
+    expect(fsMocks.readFile).toHaveBeenCalledWith('/home/user/.claude-work/.claude.json', 'utf-8');
   });
 
   test('toggleMcpServer writes profile-specific Claude config', async () => {
@@ -410,7 +410,7 @@ describe('MCP list + toggle integration', () => {
 
     expect(result.isOk()).toBe(true);
     expect(fsMocks.writeFile).toHaveBeenCalledWith(
-      '/home/user/.claude-work.json',
+      '/home/user/.claude-work/.claude.json',
       expect.any(String),
       'utf-8',
     );

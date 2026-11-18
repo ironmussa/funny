@@ -14,9 +14,13 @@ export function normalizeClaudeConfigDir(configDir?: string): string | undefined
   return expanded ? resolve(expanded) : undefined;
 }
 
+/**
+ * The Claude CLI's global config file: `~/.claude.json` by default, and
+ * `<CLAUDE_CONFIG_DIR>/.claude.json` when a profile sets its own directory
+ * (inside it, not `<dir>.json` beside it).
+ */
 export function claudeConfigJsonPath(configDir?: string): string {
-  const resolvedConfigDir = normalizeClaudeConfigDir(configDir) ?? join(homedir(), '.claude');
-  return `${resolvedConfigDir}.json`;
+  return join(normalizeClaudeConfigDir(configDir) ?? homedir(), '.claude.json');
 }
 
 export function defaultClaudeConfigDir(): string {

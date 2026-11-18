@@ -4,7 +4,7 @@ import {
   getStatusSummary,
   pruneStaleWorktreeSafeDirectories,
 } from '@funny/core/git';
-import type { AgentModel, PermissionMode } from '@funny/shared';
+import { AUTO_RESUME_MESSAGE_AUTHOR, type AgentModel, type PermissionMode } from '@funny/shared';
 import type { Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
@@ -149,6 +149,9 @@ export async function initRuntime(app: Hono<HonoEnv>): Promise<void> {
   });
 }
 
+/** The prompt the runner sends to resume a thread its restart interrupted. */
+const AUTO_RESUME_PROMPT = 'continue';
+
 /**
  * On startup, find threads that were running when the runtime crashed,
  * mark them as interrupted, and automatically resume each one.
@@ -184,9 +187,20 @@ async function autoResumeStaleThreads(): Promise<void> {
         cwd = pathResult.value;
       }
 
+      // The runner sends this prompt, not the user: mark it so the UI shows a
+      // resume divider instead of a user card. The interrupted-resume system
+      // note tells the agent what happened.
+      await tm.insertMessage({
+        threadId: thread.id,
+        role: 'user',
+        content: AUTO_RESUME_PROMPT,
+        model: thread.model,
+        permissionMode: thread.permissionMode,
+        author: AUTO_RESUME_MESSAGE_AUTHOR,
+      });
       await startAgent(
         thread.id,
-        'continue',
+        AUTO_RESUME_PROMPT,
         cwd,
         thread.model,
         thread.permissionMode,
@@ -194,6 +208,8 @@ async function autoResumeStaleThreads(): Promise<void> {
         undefined,
         undefined,
         thread.provider,
+        undefined,
+        true, // skipMessageInsert: the marked message above is the turn's prompt
       );
 
       log.info('Auto-resumed thread', {

@@ -1,5 +1,5 @@
-import type { ThreadEvent } from '@funny/shared';
-import { useContext, useMemo } from 'react';
+import { AUTO_RESUME_MESSAGE_AUTHOR, type ThreadEvent } from '@funny/shared';
+import { type ComponentProps, useContext, useMemo } from 'react';
 
 import { getItemKey, type RenderItem, type ToolItem } from '@/lib/render-items';
 import { turnOutcomesFromEvents } from '@/lib/turn-outcomes-from-events';
@@ -9,6 +9,7 @@ import { ToolCallCard } from '../ToolCallCard';
 import { ToolCallGroup } from '../ToolCallGroup';
 import { AgentResultCard } from './AgentStatusCards';
 import { AuthorAvatar } from './AuthorAvatar';
+import { AutoResumeMarker } from './AutoResumeMarker';
 import { ChangedFilesSummary } from './ChangedFilesSummary';
 import { CompactionEventCard } from './CompactionEventCard';
 import { FrozenViewerContext } from './frozen-message-context';
@@ -209,6 +210,21 @@ type UserMessageRendererProps = {
   scrollToUserMessagePosition: (messageId: string) => void;
 };
 
+/**
+ * The user card, or the auto-resume divider when the runner (not the user)
+ * sent the prompt to resume a turn its restart interrupted.
+ */
+function UserMessageOrResume({
+  author,
+  resumeTestId,
+  ...props
+}: ComponentProps<typeof UserMessageCard> & { author?: string; resumeTestId: string }) {
+  if (author === AUTO_RESUME_MESSAGE_AUTHOR) {
+    return <AutoResumeMarker data-testid={resumeTestId} timestamp={props.timestamp} />;
+  }
+  return <UserMessageCard {...props} />;
+}
+
 export function UserMessageRenderer({
   item,
   includeItemKey = true,
@@ -231,7 +247,9 @@ export function UserMessageRenderer({
       {...(includeUserObserver ? { 'data-user-msg': msg.id } : {})}
       {...(includeItemKey ? { 'data-item-key': msg.id } : {})}
     >
-      <UserMessageCard
+      <UserMessageOrResume
+        author={msg.author}
+        resumeTestId={`auto-resume-${msg.id}`}
         data-testid={`user-message-${msg.id}`}
         content={msg.content}
         automatic={msg.author === 'Claude Code'}

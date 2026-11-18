@@ -21,6 +21,12 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
+import {
+  listRowActionClassName,
+  listRowClassName,
+  listRowTitleClassName,
+} from '@/lib/list-row-styles';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
 import { BranchPicker } from './SearchablePicker';
@@ -47,12 +53,12 @@ function WorktreeCard({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors">
+    <div className={listRowClassName}>
       <div className="flex min-w-0 flex-1 items-start gap-2">
         <GitFork className="icon-sm text-status-info mt-0.5 shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="text-foreground min-w-0 text-[11px] leading-5 font-medium break-words">
+            <span className={cn(listRowTitleClassName, 'min-w-0 break-words')}>
               {worktree.branch}
             </span>
             {worktree.isMain && (
@@ -99,7 +105,11 @@ function WorktreeCard({
           title={t('dialog.deleteWorktree')}
           onClick={onRemove}
           disabled={removing}
-          className="text-muted-foreground hover:text-destructive shrink-0"
+          className={cn(
+            listRowActionClassName,
+            'hover:text-destructive',
+            removing && 'opacity-100',
+          )}
         >
           {removing ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}
         </Button>

@@ -13,7 +13,13 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import type { UseStashStateResult } from '@/hooks/use-stash-state';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
+import {
+  listRowActionClassName,
+  listRowClassName,
+  listRowTitleClassName,
+} from '@/lib/list-row-styles';
 import { timeAgo } from '@/lib/thread-utils';
+import { cn } from '@/lib/utils';
 
 interface StashTabProps {
   stash: UseStashStateResult;
@@ -77,86 +83,19 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
     <>
       <ScrollArea className="flex min-h-0 flex-1 flex-col">
         <div className="divide-sidebar-border flex flex-col divide-y">
-          {filteredStashEntries.map((entry) => {
-            const idx = entry.index.replace('stash@{', '').replace('}', '');
-            return (
-              <div
-                key={entry.index}
-                role="button"
-                tabIndex={0}
-                className="hover:bg-sidebar-accent/50 flex w-full cursor-pointer items-center gap-2 px-3 py-2 text-left text-xs transition-colors"
-                onClick={() => setSelectedStashIndex(idx)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setSelectedStashIndex(idx);
-                  }
-                }}
-                data-testid={`stash-entry-${idx}`}
-              >
-                <div className="flex min-w-0 flex-1 flex-col">
-                  <span className="truncate font-medium">{entry.message}</span>
-                  <span className="text-muted-foreground text-[10px]">
-                    {timeAgo(entry.createdAt, t, now)}
-                  </span>
-                </div>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={
-                        idx === '0'
-                          ? t('review.popStash', 'Pop stash')
-                          : t('review.popStashOnlyLatest', 'Only the latest stash can be popped')
-                      }
-                      className="text-muted-foreground hover:text-foreground hover:bg-sidebar-accent shrink-0 rounded p-1 transition-colors disabled:pointer-events-none disabled:opacity-50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleStashPop();
-                      }}
-                      disabled={stashPopInProgress || !!isAgentRunning || idx !== '0'}
-                      data-testid={`stash-pop-${idx}`}
-                    >
-                      {stashPopInProgress && idx === '0' ? (
-                        <Loader2 className="icon-xs animate-spin" />
-                      ) : (
-                        <ArchiveRestore className="icon-xs" />
-                      )}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="left">
-                    {idx === '0'
-                      ? t('review.popStash', 'Pop stash')
-                      : t('review.popStashOnlyLatest', 'Only the latest stash can be popped')}
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <button
-                      type="button"
-                      aria-label={t('review.dropStash', 'Discard stash')}
-                      className="text-muted-foreground hover:text-destructive hover:bg-sidebar-accent shrink-0 rounded p-1 transition-colors disabled:pointer-events-none disabled:opacity-50"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRequestDrop(idx);
-                      }}
-                      disabled={!!stashDropInProgress || !!isAgentRunning}
-                      data-testid={`stash-drop-${idx}`}
-                    >
-                      {stashDropInProgress === idx ? (
-                        <Loader2 className="icon-xs animate-spin" />
-                      ) : (
-                        <Trash2 className="icon-xs" />
-                      )}
-                    </button>
-                  </TooltipTrigger>
-                  <TooltipContent side="left">
-                    {t('review.dropStash', 'Discard stash')}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            );
-          })}
+          {filteredStashEntries.map((entry) => (
+            <StashRow
+              key={entry.index}
+              entry={entry}
+              now={now}
+              isAgentRunning={isAgentRunning}
+              stashPopInProgress={stashPopInProgress}
+              stashDropInProgress={stashDropInProgress}
+              onSelect={setSelectedStashIndex}
+              onPop={handleStashPop}
+              onRequestDrop={onRequestDrop}
+            />
+          ))}
         </div>
       </ScrollArea>
 
@@ -285,5 +224,154 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
         </DialogContent>
       </Dialog>
     </>
+  );
+}
+
+/** One stash in the list: opens its detail; pop (latest only) and drop appear on hover. */
+function StashRow({
+  entry,
+  now,
+  isAgentRunning,
+  stashPopInProgress,
+  stashDropInProgress,
+  onSelect,
+  onPop,
+  onRequestDrop,
+}: {
+  entry: UseStashStateResult['filteredStashEntries'][number];
+  now: number;
+  isAgentRunning: boolean;
+  stashPopInProgress: UseStashStateResult['stashPopInProgress'];
+  stashDropInProgress: UseStashStateResult['stashDropInProgress'];
+  onSelect: (idx: string) => void;
+  onPop: () => void;
+  onRequestDrop: (idx: string) => void;
+}) {
+  const { t } = useTranslation();
+  const idx = entry.index.replace('stash@{', '').replace('}', '');
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={cn(listRowClassName, 'cursor-pointer text-left')}
+      onClick={() => onSelect(idx)}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onSelect(idx);
+        }
+      }}
+      data-testid={`stash-entry-${idx}`}
+    >
+      <Archive className="icon-sm text-muted-foreground mt-0.5 shrink-0" />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <span className={cn(listRowTitleClassName, 'line-clamp-2 break-words')}>
+          {entry.message}
+        </span>
+        <span className="text-muted-foreground text-[10px]">
+          {timeAgo(entry.createdAt, t, now)}
+        </span>
+      </div>
+      <StashPopButton
+        idx={idx}
+        busy={stashPopInProgress}
+        disabled={stashPopInProgress || isAgentRunning || idx !== '0'}
+        onPop={onPop}
+      />
+      <StashDropButton
+        idx={idx}
+        dropping={stashDropInProgress === idx}
+        disabled={!!stashDropInProgress || isAgentRunning}
+        onRequestDrop={onRequestDrop}
+      />
+    </div>
+  );
+}
+
+/** Pop the stash back into the working tree; only the latest (`stash@{0}`) can be popped. */
+function StashPopButton({
+  idx,
+  busy,
+  disabled,
+  onPop,
+}: {
+  idx: string;
+  busy: boolean;
+  disabled: boolean;
+  onPop: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={
+            idx === '0'
+              ? t('review.popStash', 'Pop stash')
+              : t('review.popStashOnlyLatest', 'Only the latest stash can be popped')
+          }
+          className={cn(listRowActionClassName, busy && idx === '0' && 'opacity-100')}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPop();
+          }}
+          disabled={disabled}
+          data-testid={`stash-pop-${idx}`}
+        >
+          {busy && idx === '0' ? (
+            <Loader2 className="icon-sm animate-spin" />
+          ) : (
+            <ArchiveRestore className="icon-sm" />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="left">
+        {idx === '0'
+          ? t('review.popStash', 'Pop stash')
+          : t('review.popStashOnlyLatest', 'Only the latest stash can be popped')}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Ask to discard the stash (the caller confirms). */
+function StashDropButton({
+  idx,
+  dropping,
+  disabled,
+  onRequestDrop,
+}: {
+  idx: string;
+  dropping: boolean;
+  disabled: boolean;
+  onRequestDrop: (idx: string) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={t('review.dropStash', 'Discard stash')}
+          className={cn(
+            listRowActionClassName,
+            'hover:text-destructive',
+            dropping && 'opacity-100',
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRequestDrop(idx);
+          }}
+          disabled={disabled}
+          data-testid={`stash-drop-${idx}`}
+        >
+          {dropping ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent side="left">{t('review.dropStash', 'Discard stash')}</TooltipContent>
+    </Tooltip>
   );
 }

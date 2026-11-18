@@ -28,6 +28,7 @@ import { useGitHubProjectId } from '@/hooks/use-github-project-id';
 import { usePagedGitHubList, type FetchGitHubListPage } from '@/hooks/use-paged-github-list';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { listRowClassName } from '@/lib/list-row-styles';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import {
   useThreadId,
@@ -87,10 +88,7 @@ function PullRequestRow({
     : pr;
 
   return (
-    <div
-      className="group hover:bg-sidebar-accent/50 flex w-full items-start gap-2 px-3 py-2.5 text-xs transition-colors"
-      data-testid={`pr-item-${pr.number}`}
-    >
+    <div className={listRowClassName} data-testid={`pr-item-${pr.number}`}>
       <PRCompactIdentity
         pr={compactPr}
         onTitleClick={() => onOpen(pr)}

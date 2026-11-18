@@ -154,10 +154,10 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
   return (
     <>
       <SettingRow
-        title={t('settings.projectFactory', 'Issue factory')}
+        title={t('settings.projectFactoryStatus', 'Status')}
         description={t(
-          'settings.projectFactoryDesc',
-          'Run a flow to PR for the issues you send from the Issues tab. Paused: nothing new starts',
+          'settings.projectFactoryStatusDesc',
+          'Running: takes the issues you send from the Issues tab. Paused: nothing new starts; queued issues wait',
         )}
       >
         <SegmentedControl<OnOff>
@@ -239,8 +239,29 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
   );
 }
 
-/** Hidden from a viewer: the setting is per-user and only matters to whoever may start threads. */
+/**
+ * The project's issue factory as its own settings section, apart from the
+ * project's general options. Hidden from a viewer: the setting is per-user and
+ * only matters to whoever may start threads.
+ */
 export function ProjectFactorySetting({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
   const canSteer = useCanSteerProject(projectId);
-  return canSteer ? <ProjectFactorySettingRows projectId={projectId} /> : null;
+  if (!canSteer) return null;
+  return (
+    <section data-testid="settings-factory-section">
+      <h3 className="text-muted-foreground px-1 pb-1 text-xs font-semibold tracking-wider uppercase">
+        {t('settings.projectFactory', 'Issue factory')}
+      </h3>
+      <p className="text-muted-foreground px-1 pb-2 text-xs">
+        {t(
+          'settings.projectFactoryDesc',
+          'Runs a flow up to a pull request for each issue: the ones you send from the Issues tab, and in automatic mode the ones with its label. Your own; each member has theirs.',
+        )}
+      </p>
+      <div className="border-border/50 mb-6 overflow-hidden rounded-lg border">
+        <ProjectFactorySettingRows projectId={projectId} />
+      </div>
+    </section>
+  );
 }

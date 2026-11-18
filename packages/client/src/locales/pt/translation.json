@@ -656,13 +656,15 @@
     "projectFactoryLabel": "Etiqueta da issue",
     "projectFactoryLabelDesc": "As issues com esta etiqueta são pegas",
     "projectFactory": "Factory de issues",
-    "projectFactoryDesc": "Executa um fluxo até o PR para as issues que você envia pela aba Issues. Pausado: nada novo começa",
+    "projectFactoryDesc": "Executa um fluxo até um pull request para cada issue: as que você envia pela aba Issues e, no modo automático, as que têm a etiqueta. É seu; cada membro tem o seu.",
     "projectFactoryPaused": "Pausado",
     "projectFactoryRunning": "Em execução",
     "projectFactoryFlow": "Fluxo",
     "projectFactoryFlowDesc": "O fluxo padrão: pré-selecionado ao enviar issues e usado para as que têm a etiqueta",
     "projectFactoryConcurrency": "Máximo em andamento",
-    "projectFactoryConcurrencyDesc": "Quantas issues são processadas ao mesmo tempo"
+    "projectFactoryConcurrencyDesc": "Quantas issues são processadas ao mesmo tempo",
+    "projectFactoryStatus": "Status",
+    "projectFactoryStatusDesc": "Em execução: pega as issues que você envia pela aba Issues. Pausado: nada novo começa; as issues na fila esperam"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

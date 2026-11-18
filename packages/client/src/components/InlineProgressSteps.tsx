@@ -9,6 +9,7 @@ import {
   useTotalFromSteps,
 } from '@/components/GitProgressModal';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { stripAnsi } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
 
 interface InlineProgressStepsProps {
@@ -79,7 +80,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
               {step.error && !(step.subItems && step.subItems.length > 0) && (
                 <ScrollArea className="bg-destructive/5 mt-0.5 max-h-40 rounded">
                   <pre className="text-destructive/80 p-1.5 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
-                    {step.error}
+                    {stripAnsi(step.error)}
                   </pre>
                 </ScrollArea>
               )}

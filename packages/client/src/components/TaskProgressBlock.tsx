@@ -1,6 +1,6 @@
 import type { TaskIssue, TaskProgress, TaskStep } from '@funny/shared/task-progress';
 import { AlertTriangle, XCircle } from 'lucide-react';
-import type { ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -14,6 +14,7 @@ import {
 } from '@/components/progress/progress-parts';
 import { Progress } from '@/components/ui/progress';
 import { useTaskProgress } from '@/hooks/use-task-progress';
+import { createAnsiConverter, stripAnsi } from '@/lib/ansi-to-html';
 import { summarizeTaskProgress } from '@/lib/task-progress-summary';
 import { cn } from '@/lib/utils';
 
@@ -59,26 +60,37 @@ function StepStats({ step, t }: { step: TaskStep; t: TFunction }) {
   );
 }
 
+/** Tools write colored output (vitest, tsc): the tail keeps its ANSI colors instead of showing raw escapes. */
+const tailConverter = createAnsiConverter({
+  fg: 'hsl(var(--muted-foreground))',
+  bg: 'transparent',
+  newline: false,
+});
+
+/** The output tail of a failed step, ANSI colors rendered (the converter escapes HTML). */
+function StepTail({ step, t }: { step: TaskStep; t: TFunction }) {
+  const html = useMemo(() => tailConverter.toHtml(step.tail.join('\n')), [step.tail]);
+  return (
+    <pre
+      className="bg-muted/40 text-muted-foreground ml-5 overflow-x-auto rounded px-2 py-1 font-mono whitespace-pre-wrap"
+      data-testid={`task-progress-tail-${step.name}`}
+      aria-label={t('taskProgress.output')}
+      dangerouslySetInnerHTML={{ __html: html }}
+    />
+  );
+}
+
 /** What a running step prints now, or the output tail of a failed one. */
 function StepDetail({ step, t }: { step: TaskStep; t: TFunction }) {
   if (step.status === 'running' && step.current) {
+    const current = stripAnsi(step.current);
     return (
-      <span className="text-muted-foreground truncate pl-5 font-mono" title={step.current}>
-        {step.current}
+      <span className="text-muted-foreground truncate pl-5 font-mono" title={current}>
+        {current}
       </span>
     );
   }
-  if (step.status === 'failed' && step.tail.length > 0) {
-    return (
-      <pre
-        className="bg-muted/40 text-muted-foreground ml-5 overflow-x-auto rounded px-2 py-1 font-mono whitespace-pre-wrap"
-        data-testid={`task-progress-tail-${step.name}`}
-        aria-label={t('taskProgress.output')}
-      >
-        {step.tail.join('\n')}
-      </pre>
-    );
-  }
+  if (step.status === 'failed' && step.tail.length > 0) return <StepTail step={step} t={t} />;
   return null;
 }
 

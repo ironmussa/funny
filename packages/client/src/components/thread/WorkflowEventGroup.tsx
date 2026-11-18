@@ -13,6 +13,7 @@ import { useShallow } from 'zustand/shallow';
 import { SubItemsList } from '@/components/GitProgressModal';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { stripAnsi } from '@/lib/ansi-to-html';
 import type { GitProgressStep } from '@/lib/git-progress-types';
 import { parseThreadEventData } from '@/lib/thread-event-data';
 import { timeAgo } from '@/lib/thread-utils';
@@ -125,7 +126,7 @@ function LiveStepRow({ step }: { step: GitProgressStep }) {
           <SubItemsList subItems={step.subItems} parentStatus={step.status} />
         )}
         {step.error && !(step.subItems && step.subItems.length > 0) && (
-          <div className="text-destructive min-w-0 truncate">{step.error}</div>
+          <div className="text-destructive min-w-0 truncate">{stripAnsi(step.error)}</div>
         )}
       </div>
     </div>

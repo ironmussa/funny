@@ -23,6 +23,7 @@ import { fileURLToPath } from 'node:url';
 
 import { runAsync, sleep } from '@funny/shared/async';
 import {
+  cleanLine,
   createOutputParser,
   createStepParser,
   isEventLine,
@@ -150,7 +151,9 @@ async function runStep(
   const tail: string[] = [];
   const read = (line: string) => {
     onLine(line);
-    if (!isEventLine(line) && line.trim()) tail.push(line);
+    // The tail reaches the card and the agent's summary as text: no color escapes.
+    const clean = cleanLine(line);
+    if (!isEventLine(line) && clean.trim()) tail.push(clean);
     if (tail.length > TAIL_LINES) tail.shift();
   };
   let killTimer: ReturnType<typeof setTimeout> | undefined;

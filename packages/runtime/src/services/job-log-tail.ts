@@ -17,9 +17,7 @@
  * byte cap keeps the persisted tail small.
  */
 
-// CSI / SGR escape sequences (colors, cursor moves). Mirrors the lightweight
-// strippers already used in skills-service.ts and coverage-gate.ts.
-const ANSI_RE = new RegExp(String.raw`\u001B\[[0-9;?]*[ -/]*[@-~]`, 'g');
+import { stripAnsi } from '@funny/shared/lib/ansi';
 
 /** Hard ceiling on the persisted tail, in characters. A single line with no
  *  carriage returns can still be arbitrarily large (e.g. one huge JSON blob),
@@ -48,7 +46,7 @@ function collapseCarriageReturns(line: string): string {
 export function buildLogTail(raw: string, maxLines = 50): string {
   const collapsed = raw
     .split('\n')
-    .map((line) => collapseCarriageReturns(line).replace(ANSI_RE, ''))
+    .map((line) => stripAnsi(collapseCarriageReturns(line)))
     .slice(-maxLines)
     .join('\n')
     .trim();

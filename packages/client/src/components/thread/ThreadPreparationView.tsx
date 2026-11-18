@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import type { GitProgressStep } from '@/components/GitProgressModal';
 import { PromptInput } from '@/components/PromptInput';
 import type { SubmitFn } from '@/hooks/prompt-input-types';
+import { stripAnsi } from '@/lib/ansi-to-html';
 
 import { AgentWorkingIndicator } from './AgentWorkingIndicator';
 import { UserMessageCard, type UserMessageCardProps } from './UserMessageCard';
@@ -82,7 +83,9 @@ export function ThreadPreparationView({
                 <span className="text-destructive text-xs font-medium">{step?.label}</span>
               </div>
               {step?.error && (
-                <p className="text-destructive mt-2 text-xs whitespace-pre-wrap">{step.error}</p>
+                <p className="text-destructive mt-2 text-xs whitespace-pre-wrap">
+                  {stripAnsi(step.error)}
+                </p>
               )}
             </div>
           ) : (

@@ -20,7 +20,8 @@ function JobStatusBadge({ status, exitCode }: { status: string; exitCode: number
   return (
     <Badge
       variant={failed ? 'destructive' : 'secondary'}
-      className="shrink-0 px-1.5 py-0 font-normal"
+      size="xs"
+      className="font-normal"
       data-testid="background-card-status"
     >
       {JOB_STATUSES.has(status) ? t(`tools.jobStatus.${status}`) : status}

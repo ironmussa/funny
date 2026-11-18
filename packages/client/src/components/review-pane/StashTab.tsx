@@ -1,4 +1,4 @@
-import { Archive, ArchiveRestore, FileCode, Loader2, Trash2, X } from 'lucide-react';
+import { Archive, ArchiveRestore, FileCode, GitBranch, Loader2, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { FileTree } from '@/components/FileTree';
@@ -35,6 +35,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
   const {
     stashEntries,
     filteredStashEntries,
+    otherBranchStashGroups,
     selectedStashIndex,
     setSelectedStashIndex,
     selectedStashEntry,
@@ -55,48 +56,78 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
     loadStashFileDiff,
   } = stash;
 
-  if (filteredStashEntries.length === 0) {
-    return (
-      <EmptyState
-        icon={Archive}
-        title={
-          currentBranch
-            ? t('review.noStashesOnBranch', {
-                branch: currentBranch,
-                defaultValue: `No stashed changes on ${currentBranch}`,
-              })
-            : t('review.noStashes', 'No stashed changes')
-        }
-        description={
-          stashEntries.length > 0
-            ? t('review.stashesOnOtherBranches', {
-                count: stashEntries.length,
-                defaultValue: `${stashEntries.length} stash(es) on other branches`,
-              })
-            : undefined
-        }
-      />
-    );
+  const noStashesTitle = currentBranch
+    ? t('review.noStashesOnBranch', {
+        branch: currentBranch,
+        defaultValue: `No stashed changes on ${currentBranch}`,
+      })
+    : t('review.noStashes', 'No stashed changes');
+
+  if (stashEntries.length === 0) {
+    return <EmptyState icon={Archive} title={noStashesTitle} />;
   }
+
+  const rowProps = {
+    now,
+    isAgentRunning,
+    stashPopInProgress,
+    stashDropInProgress,
+    onSelect: setSelectedStashIndex,
+    onPop: handleStashPop,
+    onRequestDrop,
+  };
 
   return (
     <>
       <ScrollArea className="flex min-h-0 flex-1 flex-col">
-        <div className="divide-sidebar-border flex flex-col divide-y">
-          {filteredStashEntries.map((entry) => (
-            <StashRow
-              key={entry.index}
-              entry={entry}
-              now={now}
-              isAgentRunning={isAgentRunning}
-              stashPopInProgress={stashPopInProgress}
-              stashDropInProgress={stashDropInProgress}
-              onSelect={setSelectedStashIndex}
-              onPop={handleStashPop}
-              onRequestDrop={onRequestDrop}
-            />
-          ))}
-        </div>
+        {filteredStashEntries.length > 0 ? (
+          <div className="divide-sidebar-border flex flex-col divide-y">
+            {filteredStashEntries.map((entry) => (
+              <StashRow key={entry.index} entry={entry} {...rowProps} />
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            fill={false}
+            className="py-6"
+            icon={Archive}
+            title={noStashesTitle}
+            testId="stash-current-branch-empty"
+          />
+        )}
+
+        {otherBranchStashGroups.length > 0 && (
+          <div className="flex flex-col" data-testid="stash-other-branches">
+            <div className="text-muted-foreground border-sidebar-border border-y px-3 py-1.5 text-xs font-medium">
+              {t('review.stashOtherBranches', 'Other branches')}
+            </div>
+            {otherBranchStashGroups.map((group) => (
+              <div
+                key={group.branch}
+                className="flex flex-col"
+                data-testid={`stash-branch-group-${group.branch}`}
+              >
+                <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 px-3 pt-2 pb-1 text-xs">
+                  <GitBranch className="icon-xs shrink-0" />
+                  <span className="truncate font-mono" title={group.branch}>
+                    {group.branch}
+                  </span>
+                  <span className="shrink-0">({group.entries.length})</span>
+                </div>
+                <div className="divide-sidebar-border flex flex-col divide-y">
+                  {group.entries.map((entry) => (
+                    <StashRow
+                      key={entry.index}
+                      entry={entry}
+                      otherBranch={group.branch}
+                      {...rowProps}
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </ScrollArea>
 
       {/* Stash detail dialog */}
@@ -227,9 +258,13 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
   );
 }
 
-/** One stash in the list: opens its detail; pop (latest only) and drop appear on hover. */
+/**
+ * One stash in the list: opens its detail; pop (latest only, and only on the
+ * branch it was made on) and drop appear on hover.
+ */
 function StashRow({
   entry,
+  otherBranch,
   now,
   isAgentRunning,
   stashPopInProgress,
@@ -239,6 +274,8 @@ function StashRow({
   onRequestDrop,
 }: {
   entry: UseStashStateResult['filteredStashEntries'][number];
+  /** Set when the stash was made on another branch: popping it here is refused. */
+  otherBranch?: string;
   now: number;
   isAgentRunning: boolean;
   stashPopInProgress: UseStashStateResult['stashPopInProgress'];
@@ -274,8 +311,9 @@ function StashRow({
       </div>
       <StashPopButton
         idx={idx}
+        otherBranch={otherBranch}
         busy={stashPopInProgress}
-        disabled={stashPopInProgress || isAgentRunning || idx !== '0'}
+        disabled={stashPopInProgress || isAgentRunning || idx !== '0' || !!otherBranch}
         onPop={onPop}
       />
       <StashDropButton
@@ -291,27 +329,33 @@ function StashRow({
 /** Pop the stash back into the working tree; only the latest (`stash@{0}`) can be popped. */
 function StashPopButton({
   idx,
+  otherBranch,
   busy,
   disabled,
   onPop,
 }: {
   idx: string;
+  otherBranch?: string;
   busy: boolean;
   disabled: boolean;
   onPop: () => void;
 }) {
   const { t } = useTranslation();
+  const label = otherBranch
+    ? t('review.popStashOtherBranch', {
+        branch: otherBranch,
+        defaultValue: `Made on ${otherBranch}: switch to that branch to pop it`,
+      })
+    : idx === '0'
+      ? t('review.popStash', 'Pop stash')
+      : t('review.popStashOnlyLatest', 'Only the latest stash can be popped');
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Button
           variant="ghost"
           size="icon-xs"
-          aria-label={
-            idx === '0'
-              ? t('review.popStash', 'Pop stash')
-              : t('review.popStashOnlyLatest', 'Only the latest stash can be popped')
-          }
+          aria-label={label}
           className={cn(listRowActionClassName, busy && idx === '0' && 'opacity-100')}
           onClick={(e) => {
             e.stopPropagation();
@@ -327,11 +371,7 @@ function StashPopButton({
           )}
         </Button>
       </TooltipTrigger>
-      <TooltipContent side="left">
-        {idx === '0'
-          ? t('review.popStash', 'Pop stash')
-          : t('review.popStashOnlyLatest', 'Only the latest stash can be popped')}
-      </TooltipContent>
+      <TooltipContent side="left">{label}</TooltipContent>
     </Tooltip>
   );
 }

@@ -2,7 +2,7 @@ import { screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { StashTab } from '@/components/review-pane/StashTab';
-import type { UseStashStateResult } from '@/hooks/use-stash-state';
+import { stashBranch, type UseStashStateResult } from '@/hooks/use-stash-state';
 import { listRowActionClassName, listRowClassName } from '@/lib/list-row-styles';
 
 import { mockT } from '../helpers/mock-i18n';
@@ -18,6 +18,7 @@ function stashState(overrides: Partial<UseStashStateResult> = {}): UseStashState
   return {
     stashEntries: entries,
     filteredStashEntries: entries,
+    otherBranchStashGroups: [],
     selectedStashIndex: null,
     setSelectedStashIndex: vi.fn(),
     selectedStashEntry: null,
@@ -72,5 +73,56 @@ describe('StashTab rows', () => {
     renderStash({ stashDropInProgress: '0' });
 
     expect(screen.getByTestId('stash-drop-0')).toHaveClass('opacity-100');
+  });
+});
+
+describe('StashTab other branches', () => {
+  const other = {
+    index: 'stash@{0}',
+    message: 'WIP on feat/x: abc123 work',
+    createdAt: Date.now(),
+  };
+
+  test('lists stashes from other branches under their branch name', () => {
+    renderStash({
+      stashEntries: [other],
+      filteredStashEntries: [],
+      otherBranchStashGroups: [{ branch: 'feat/x', entries: [other] }],
+    });
+
+    expect(screen.getByTestId('stash-current-branch-empty')).toHaveTextContent(
+      'No stashed changes on main',
+    );
+    const group = screen.getByTestId('stash-branch-group-feat/x');
+    expect(group).toHaveTextContent('feat/x');
+    expect(group).toContainElement(screen.getByTestId('stash-entry-0'));
+  });
+
+  test('cannot pop a stash made on another branch, even the latest', () => {
+    renderStash({
+      stashEntries: [other],
+      filteredStashEntries: [],
+      otherBranchStashGroups: [{ branch: 'feat/x', entries: [other] }],
+    });
+
+    const pop = screen.getByTestId('stash-pop-0');
+    expect(pop).toBeDisabled();
+    expect(pop).toHaveAccessibleName('Made on feat/x: switch to that branch to pop it');
+    expect(screen.getByTestId('stash-drop-0')).toBeEnabled();
+  });
+
+  test('shows the plain empty state when there are no stashes at all', () => {
+    renderStash({ stashEntries: [], filteredStashEntries: [] });
+
+    expect(screen.queryByTestId('stash-other-branches')).not.toBeInTheDocument();
+    expect(screen.getByText('No stashed changes on main')).toBeInTheDocument();
+  });
+});
+
+describe('stashBranch', () => {
+  test('reads the branch from both stash message forms', () => {
+    expect(stashBranch('On main: wip')).toBe('main');
+    expect(stashBranch('WIP on feat/x: abc123 msg')).toBe('feat/x');
+    expect(stashBranch('autostash')).toBeNull();
   });
 });

@@ -414,6 +414,8 @@
     "stashPopSuccess": "Stash applied",
     "stashPopFailed": "Stash pop failed: {{message}}",
     "stashedChanges": "{{count}} stash(es) saved",
+    "stashOtherBranches": "Other branches",
+    "popStashOtherBranch": "Made on {{branch}}: switch to that branch to pop it",
     "amend": "Amend",
     "amendSuccess": "Commit amended",
     "undoLastCommit": "Undo last commit",

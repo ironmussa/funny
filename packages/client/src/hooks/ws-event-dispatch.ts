@@ -34,6 +34,7 @@ import { showAgentNotification } from '@/hooks/use-notifications';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { validateContainerUrl } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { notifyGitHistoryChanged } from '@/lib/git-history-invalidation';
 import { metric, startSpan } from '@/lib/telemetry';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
@@ -647,6 +648,7 @@ function refetchChangedGitViews(
   // Thread-mode panes key on the thread id, project-mode panes on the project id.
   if (changed.includes('diff')) notifyReviewDirty(threadId || projectId);
   if (changed.includes('branches')) void fetchProjectBranches(projectId, { force: true });
+  if (changed.includes('history')) notifyGitHistoryChanged(threadId || projectId);
 }
 
 function refetchGitStatusAfterRefsMoved(projectId: string): void {

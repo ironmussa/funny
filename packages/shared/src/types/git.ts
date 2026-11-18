@@ -99,7 +99,7 @@ export interface WSGitRefsUpdatedData {
 }
 
 /** A view whose server-side cached value went stale and was recomputed. */
-export type GitRefsUpdatedChange = 'status' | 'diff' | 'branches';
+export type GitRefsUpdatedChange = 'status' | 'diff' | 'branches' | 'history';
 
 // ─── Merge Agent ─────────────────────────────────────────
 

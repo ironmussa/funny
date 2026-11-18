@@ -27,6 +27,7 @@ import { z } from 'zod';
 import { log } from '../../lib/logger.js';
 import { requestSpan } from '../../middleware/tracing.js';
 import { resolveIdentity, resolveThreadIdentity } from '../../services/git-service.js';
+import { wsBroker } from '../../services/ws-broker.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { resultToResponse } from '../../utils/result-response.js';
 import { requireThread, requireThreadCwd, steerFromContext } from '../../utils/route-helpers.js';
@@ -34,6 +35,7 @@ import { parseQuery, queryBoolean } from '../../validation/request.js';
 import { gitRefSchema, validate } from '../../validation/schemas.js';
 import {
   getCachedPR,
+  getLastKnownPR,
   requireGitWorkingTree,
   requireProjectCwd,
   schedulePRLookup,
@@ -193,13 +195,30 @@ function toGraphRefPullRequest(pr: BranchPRInfo): GraphRefPullRequest {
   };
 }
 
-async function enrichGraphRefsWithPullRequests(
-  c: Context<HonoEnv>,
-  cwd: string,
-  entries: GitGraphLogEntry[],
-  attrs: Record<string, unknown>,
-  ghEnv: Record<string, string> | undefined,
-): Promise<GitGraphLogEntry[]> {
+function samePR(a: BranchPRInfo | null, b: BranchPRInfo | null): boolean {
+  if (!a || !b) return a === b;
+  return a.prNumber === b.prNumber && a.prUrl === b.prUrl && a.prState === b.prState;
+}
+
+/** Who to tell when a PR looked up after the response changes the graph. */
+interface GraphPRAudience {
+  userId: string;
+  projectId: string;
+  /** Empty for the project-scoped graph. */
+  threadId: string;
+}
+
+/** Hint the client that the graph it was served is missing (or has a stale) PR badge. */
+function emitGraphPRChanged({ userId, projectId, threadId }: GraphPRAudience): void {
+  wsBroker.emitToUser(userId, {
+    type: 'git:refs-updated',
+    threadId,
+    data: { projectId, changed: ['history'] },
+  });
+}
+
+/** Branch names of the refs in the graph that may have a PR. */
+function graphBranches(entries: GitGraphLogEntry[]): Set<string> {
   const branches = new Set<string>();
   for (const entry of entries) {
     for (const ref of entry.refs) {
@@ -207,6 +226,59 @@ async function enrichGraphRefsWithPullRequests(
       if (branch) branches.add(branch);
     }
   }
+  return branches;
+}
+
+/**
+ * The PR to show for a branch right now. A fresh cache entry is used as is; an
+ * expired one is shown while a background lookup revalidates it, and a branch
+ * never looked up shows none yet. When that lookup answers differently from
+ * what was served, the client is told to reload the graph.
+ */
+function servedPRForBranch(
+  cwd: string,
+  branch: string,
+  ghEnv: Record<string, string> | undefined,
+  audience: GraphPRAudience,
+): BranchPRInfo | null {
+  const fresh = getCachedPR(cwd, branch);
+  if (fresh !== undefined) return fresh;
+  const served = getLastKnownPR(cwd, branch) ?? null;
+  schedulePRLookup({
+    projectPath: cwd,
+    branch,
+    ghEnv,
+    onUpdate: (next) => {
+      if (!samePR(served, next)) emitGraphPRChanged(audience);
+    },
+  });
+  return served;
+}
+
+function withPullRequests(
+  entries: GitGraphLogEntry[],
+  prByBranch: Map<string, GraphRefPullRequest>,
+): GitGraphLogEntry[] {
+  return entries.map((entry) => ({
+    ...entry,
+    refs: entry.refs.map((ref) => {
+      const branch = branchNameForGraphPRLookup(ref);
+      const pullRequest = branch ? prByBranch.get(branch) : undefined;
+      return pullRequest ? { ...ref, pullRequest } : ref;
+    }),
+  }));
+}
+
+/** Annotate branch refs with their PR from the PR cache, never waiting on GitHub. */
+async function enrichGraphRefsWithPullRequests(
+  c: Context<HonoEnv>,
+  cwd: string,
+  entries: GitGraphLogEntry[],
+  attrs: Record<string, unknown>,
+  ghEnv: Record<string, string> | undefined,
+  audience: GraphPRAudience,
+): Promise<GitGraphLogEntry[]> {
+  const branches = graphBranches(entries);
   if (branches.size === 0) return entries;
 
   const span = requestSpan(c, 'github.graph_log_pr_cache_lookup', {
@@ -217,24 +289,11 @@ async function enrichGraphRefsWithPullRequests(
   try {
     const prByBranch = new Map<string, GraphRefPullRequest>();
     for (const branch of branches) {
-      const pr = getCachedPR(cwd, branch);
-      if (pr === undefined) {
-        schedulePRLookup({ projectPath: cwd, branch, ghEnv });
-      } else if (pr) {
-        prByBranch.set(branch, toGraphRefPullRequest(pr));
-      }
+      const pr = servedPRForBranch(cwd, branch, ghEnv, audience);
+      if (pr) prByBranch.set(branch, toGraphRefPullRequest(pr));
     }
     span.end('ok');
-    if (prByBranch.size === 0) return entries;
-
-    return entries.map((entry) => ({
-      ...entry,
-      refs: entry.refs.map((ref) => {
-        const branch = branchNameForGraphPRLookup(ref);
-        const pullRequest = branch ? prByBranch.get(branch) : undefined;
-        return pullRequest ? { ...ref, pullRequest } : ref;
-      }),
-    }));
+    return prByBranch.size === 0 ? entries : withPullRequests(entries, prByBranch);
   } catch (error) {
     span.end('error', String(error));
     log.warn('graph-log PR lookup failed; returning refs without PR metadata', {
@@ -322,6 +381,7 @@ logRoutes.get('/project/:projectId/graph-log', async (c) => {
     payload.entries,
     { projectId },
     ghEnv,
+    { userId, projectId, threadId: '' },
   );
   return c.json({ ...payload, entries });
 });
@@ -459,6 +519,7 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
     payload.entries,
     { threadId },
     ghEnv,
+    { userId, projectId: threadResult.value.projectId, threadId },
   );
   return c.json({ ...payload, entries });
 });

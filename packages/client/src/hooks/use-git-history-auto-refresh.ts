@@ -5,6 +5,7 @@ import { fromPromise } from 'xstate';
 import { useGitStatusForThread, useProjectGitStatus } from '@/data/git-status/hooks';
 import { useStableCallback } from '@/hooks/use-stable-callback';
 import { gitHistoryFingerprint } from '@/lib/git-history-fingerprint';
+import { subscribeGitHistoryChanged } from '@/lib/git-history-invalidation';
 import { metric } from '@/lib/telemetry';
 import { historyRefreshMachine } from '@/machines/history-refresh-machine';
 
@@ -42,7 +43,9 @@ function withRefreshLoader(refresh: () => Promise<unknown>) {
  * signal converges (WS `git:status`, `git:refs-updated`, status refetches after
  * commit / push / pull, window focus) — and feeds changes in the
  * history-relevant fingerprint into {@link historyRefreshMachine}, which
- * debounces them and reloads only when the tab is visible and idle.
+ * debounces them and reloads only when the tab is visible and idle. Changes the
+ * fingerprint cannot see (a branch's PR found after the graph was served) come
+ * through {@link subscribeGitHistoryChanged}.
  *
  * Returns `invalidate`, for callers that know history changed (e.g. after a
  * push or pull). Going through the machine instead of reloading directly lets
@@ -93,5 +96,25 @@ export function useGitHistoryAutoRefresh({
     }
   }, [contextKey, fingerprint, send]);
 
-  return useCallback(() => send({ type: 'INVALIDATED' }), [send]);
+  const invalidate = useCallback(() => send({ type: 'INVALIDATED' }), [send]);
+  useHistoryChangedSignal(effectiveThreadId, projectModeId, invalidate);
+  return invalidate;
+}
+
+/**
+ * Call `invalidate` when the runtime reports a change to this history. Thread-mode
+ * history is keyed by thread id, project-mode by project id.
+ */
+function useHistoryChangedSignal(
+  threadId: string | undefined,
+  projectId: string | null,
+  invalidate: () => void,
+) {
+  const historyKey = threadId ?? projectId;
+  useEffect(() => {
+    if (!historyKey) return;
+    return subscribeGitHistoryChanged((key) => {
+      if (key === historyKey) invalidate();
+    });
+  }, [historyKey, invalidate]);
 }

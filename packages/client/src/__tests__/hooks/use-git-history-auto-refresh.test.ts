@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { seedGitStatus } from '@/data/git-status/testing';
 import { useGitHistoryAutoRefresh } from '@/hooks/use-git-history-auto-refresh';
+import { notifyGitHistoryChanged } from '@/lib/git-history-invalidation';
 import { HISTORY_REFRESH_DEBOUNCE_MS } from '@/machines/history-refresh-machine';
 
 const BK = 'p1:main';
@@ -113,6 +114,18 @@ describe('useGitHistoryAutoRefresh', () => {
     setStatus(clean);
     const { result, refresh } = renderAutoRefresh();
     act(() => result.current());
+    await flushDebounce();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  test('reloads when the runtime reports a late PR for this history, not for another', async () => {
+    setStatus(clean);
+    const { refresh } = renderAutoRefresh();
+    act(() => notifyGitHistoryChanged('t2'));
+    await flushDebounce();
+    expect(refresh).not.toHaveBeenCalled();
+
+    act(() => notifyGitHistoryChanged('t1'));
     await flushDebounce();
     expect(refresh).toHaveBeenCalledTimes(1);
   });

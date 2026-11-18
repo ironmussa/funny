@@ -337,6 +337,17 @@ function IssuesList({
 
   return (
     <>
+      {factory.settings && sendable.length > 0 && (
+        <IssuesFactoryBar
+          projectId={projectId}
+          settings={factory.settings}
+          selected={sendable}
+          onSent={(accepted) =>
+            setSelected((current) => current.filter((n) => !accepted.includes(n)))
+          }
+          onClear={() => setSelected([])}
+        />
+      )}
       <ScrollArea className="min-h-0 flex-1">
         <div className="divide-sidebar-border divide-y">
           {issues.map((issue) => (
@@ -347,7 +358,6 @@ function IssuesList({
               now={now}
               factory={factory}
               selected={sendable.includes(issue.number)}
-              selecting={sendable.length > 0}
               onToggle={toggle}
               onCreateThread={onCreateThread}
               onOpen={onOpenIssue}
@@ -363,17 +373,6 @@ function IssuesList({
           testId="issues-load-more"
         />
       </ScrollArea>
-      {factory.settings && sendable.length > 0 && (
-        <IssuesFactoryBar
-          projectId={projectId}
-          settings={factory.settings}
-          selected={sendable}
-          onSent={(accepted) =>
-            setSelected((current) => current.filter((n) => !accepted.includes(n)))
-          }
-          onClear={() => setSelected([])}
-        />
-      )}
     </>
   );
 }
@@ -393,7 +392,6 @@ function IssueRow({
   now,
   factory,
   selected,
-  selecting,
   onToggle,
   onCreateThread,
   onOpen,
@@ -403,8 +401,6 @@ function IssueRow({
   now: number;
   factory: IssueFactory;
   selected: boolean;
-  /** Some issue is selected: every row shows its checkbox. */
-  selecting: boolean;
   onToggle: (issueNumber: number) => void;
   onCreateThread: (issue: EnrichedGitHubIssue) => void;
   onOpen: (issue: EnrichedGitHubIssue) => void;
@@ -418,7 +414,6 @@ function IssueRow({
           issueNumber={issue.number}
           icon={<IssueStateIcon state={issue.state} className="icon-base" />}
           checked={selected}
-          selecting={selecting}
           onToggle={onToggle}
         />
       ) : (

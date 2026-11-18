@@ -135,9 +135,9 @@ jobs:
         if: matrix.shard == 'core'
         run: bun test scripts/__tests__/test-env.test.ts
 
-      - name: Test the suite runner's affected-package selection (pre-push)
+      - name: Test the suite runner's affected-package and test-impact selection
         if: matrix.shard == 'core'
-        run: bun test scripts/__tests__/run-tests.test.ts scripts/__tests__/pre-push.test.ts
+        run: bun test scripts/__tests__/run-tests.test.ts scripts/__tests__/pre-push.test.ts scripts/__tests__/test-impact.test.ts
 
       - name: Run tests (shared)
         if: matrix.shard == 'core'

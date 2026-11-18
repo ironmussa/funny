@@ -11,7 +11,7 @@ import {
   canSendIssue,
   IssueFactoryStatus,
   IssuesFactoryBar,
-  IssueSelectBox,
+  IssueSelectToggle,
   useIssueFactory,
   type IssueFactory,
 } from '@/components/issues/IssueFactoryControls';
@@ -347,6 +347,7 @@ function IssuesList({
               now={now}
               factory={factory}
               selected={sendable.includes(issue.number)}
+              selecting={sendable.length > 0}
               onToggle={toggle}
               onCreateThread={onCreateThread}
               onOpen={onOpenIssue}
@@ -377,12 +378,22 @@ function IssuesList({
   );
 }
 
+/** Open (green dot) or closed (purple check). */
+function IssueStateIcon({ state, className }: { state: string; className?: string }) {
+  return state === 'open' ? (
+    <CircleDot className={cn(className, 'text-green-500')} />
+  ) : (
+    <CircleCheck className={cn(className, 'text-purple-500')} />
+  );
+}
+
 function IssueRow({
   projectId,
   issue,
   now,
   factory,
   selected,
+  selecting,
   onToggle,
   onCreateThread,
   onOpen,
@@ -392,6 +403,8 @@ function IssueRow({
   now: number;
   factory: IssueFactory;
   selected: boolean;
+  /** Some issue is selected: every row shows its checkbox. */
+  selecting: boolean;
   onToggle: (issueNumber: number) => void;
   onCreateThread: (issue: EnrichedGitHubIssue) => void;
   onOpen: (issue: EnrichedGitHubIssue) => void;
@@ -400,13 +413,16 @@ function IssueRow({
   const factoryRun = factory.active ? factory.latestRun.get(issue.number) : undefined;
   return (
     <div className={listRowClassName} data-testid={`issue-item-${issue.number}`}>
-      {canSendIssue(factory, issue) && (
-        <IssueSelectBox issueNumber={issue.number} checked={selected} onToggle={onToggle} />
-      )}
-      {issue.state === 'open' ? (
-        <CircleDot className="icon-base mt-0.5 shrink-0 text-green-500" />
+      {canSendIssue(factory, issue) ? (
+        <IssueSelectToggle
+          issueNumber={issue.number}
+          icon={<IssueStateIcon state={issue.state} className="icon-base" />}
+          checked={selected}
+          selecting={selecting}
+          onToggle={onToggle}
+        />
       ) : (
-        <CircleCheck className="icon-base mt-0.5 shrink-0 text-purple-500" />
+        <IssueStateIcon state={issue.state} className="icon-base mt-0.5 shrink-0" />
       )}
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="flex items-baseline gap-1.5">

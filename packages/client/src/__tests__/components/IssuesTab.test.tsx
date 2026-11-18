@@ -357,4 +357,19 @@ describe('IssuesTab and the issue factory', () => {
     expect((factory.send.mock.calls[0][1] as number[]).length).toBe(50);
     // 51 rows and 51 clicks: slow when the whole suite runs in parallel.
   }, 20_000);
+
+  test('the state icon turns into the checkbox, which stays shown once anything is selected', async () => {
+    showIssues([issue(1), issue(2)]);
+    const box = (n: number) => screen.getByTestId(`issue-select-${n}`).parentElement!;
+    await screen.findByTestId('issue-select-toggle-1');
+
+    // Hidden behind the state icon until hover or focus.
+    expect(box(1)).toHaveClass('opacity-0');
+    expect(box(2)).toHaveClass('opacity-0');
+
+    fireEvent.click(screen.getByTestId('issue-select-1'));
+
+    expect(box(1)).toHaveClass('opacity-100');
+    expect(box(2)).toHaveClass('opacity-100');
+  });
 });

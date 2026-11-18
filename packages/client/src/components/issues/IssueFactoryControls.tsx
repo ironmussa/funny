@@ -7,7 +7,7 @@
 import { MAX_ISSUES_PER_SEND } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
 import { Send, X } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -34,6 +34,7 @@ import {
 } from '@/lib/factory-run-labels';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
+import { cn } from '@/lib/utils';
 
 export interface IssueFactory {
   /** The caller may send issues (steer + a configured factory). */
@@ -72,26 +73,59 @@ export function canSendIssue(factory: IssueFactory, issue: { number: number; sta
   return !run || ENDED_FACTORY_STATES.has(run.state);
 }
 
-export function IssueSelectBox({
+/**
+ * The issue's state icon, which turns into its selection checkbox: the icon
+ * shows by default, the checkbox on hover or keyboard focus, and the checkbox
+ * stays while the issue is selected or any selection is in progress.
+ */
+export function IssueSelectToggle({
   issueNumber,
+  icon,
   checked,
+  selecting,
   onToggle,
 }: {
   issueNumber: number;
+  icon: ReactNode;
   checked: boolean;
+  /** Some issue is selected: every checkbox stays visible. */
+  selecting: boolean;
   onToggle: (issueNumber: number) => void;
 }) {
   const { t } = useTranslation();
+  const pinned = checked || selecting;
   return (
-    <Checkbox
-      checked={checked}
-      onCheckedChange={() => onToggle(issueNumber)}
-      className="mt-0.5"
-      aria-label={t('factory.selectIssue', 'Select #{{number}} for the factory', {
-        number: issueNumber,
-      })}
-      data-testid={`issue-select-${issueNumber}`}
-    />
+    <span
+      className="group/select icon-base relative mt-0.5 shrink-0"
+      data-testid={`issue-select-toggle-${issueNumber}`}
+    >
+      <span
+        aria-hidden
+        className={cn(
+          'absolute inset-0 grid place-items-center transition-opacity',
+          pinned ? 'opacity-0' : 'group-focus-within/select:opacity-0 group-hover/select:opacity-0',
+        )}
+      >
+        {icon}
+      </span>
+      <span
+        className={cn(
+          'absolute inset-0 grid place-items-center transition-opacity',
+          pinned
+            ? 'opacity-100'
+            : 'opacity-0 group-focus-within/select:opacity-100 group-hover/select:opacity-100',
+        )}
+      >
+        <Checkbox
+          checked={checked}
+          onCheckedChange={() => onToggle(issueNumber)}
+          aria-label={t('factory.selectIssue', 'Select #{{number}} for the factory', {
+            number: issueNumber,
+          })}
+          data-testid={`issue-select-${issueNumber}`}
+        />
+      </span>
+    </span>
   );
 }
 

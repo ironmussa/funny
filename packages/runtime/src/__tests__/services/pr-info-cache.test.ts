@@ -8,6 +8,7 @@ vi.mock('@funny/core/git', () => core);
 import {
   resetPRInfoCacheForTests,
   getCachedPR,
+  getLastKnownPR,
   getPRInfoCached,
   invalidatePRInfo,
   schedulePRLookup,
@@ -52,6 +53,19 @@ describe('pr-info-cache', () => {
     expect(getCachedPR('/repo', 'feat')).toBeNull(); // a confirmed "no PR" is cached
   });
 
+  test('a scheduled lookup that joins one in flight still reports its result', async () => {
+    const { lookup, resolve } = deferredLookup();
+    core.lookupPRForBranch.mockReturnValue(lookup);
+
+    const first = getPRInfoCached('/repo', 'feat');
+    const onUpdate = vi.fn();
+    schedulePRLookup({ projectPath: '/repo', branch: 'feat', onUpdate });
+    resolve(PR);
+    await first;
+    await vi.waitFor(() => expect(onUpdate).toHaveBeenCalledWith(PR));
+    expect(core.lookupPRForBranch).toHaveBeenCalledTimes(1);
+  });
+
   test('a failed gh lookup (rate limit, auth, timeout) is not cached as "no PR"', async () => {
     core.lookupPRForBranch
       .mockReturnValueOnce(errAsync(processError('gh pr list failed', 1, 'API rate limit')))
@@ -91,6 +105,21 @@ describe('pr-info-cache', () => {
       await getPRInfoCached('/repo', 'feat');
       vi.advanceTimersByTime(60_001);
       expect(getCachedPR('/repo', 'feat')).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test('an expired entry stays readable as the last known PR, then is dropped', async () => {
+    vi.useFakeTimers();
+    try {
+      core.lookupPRForBranch.mockImplementation(() => okAsync(PR));
+      await getPRInfoCached('/repo', 'feat');
+      vi.advanceTimersByTime(60_001);
+      expect(getCachedPR('/repo', 'feat')).toBeUndefined(); // needs a revalidation
+      expect(getLastKnownPR('/repo', 'feat')).toEqual(PR); // but can still be shown
+      vi.advanceTimersByTime(10 * 60_000);
+      expect(getLastKnownPR('/repo', 'feat')).toBeUndefined();
     } finally {
       vi.useRealTimers();
     }

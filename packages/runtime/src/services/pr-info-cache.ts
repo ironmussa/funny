@@ -17,6 +17,9 @@ import { log } from '../lib/logger.js';
 import { startSpan } from '../lib/telemetry.js';
 
 const PR_INFO_CACHE_TTL_MS = 60_000; // 1 minute
+// How long an expired answer may still be shown while a fresh lookup runs, so a
+// PR badge does not blink out every minute when its entry expires.
+const PR_INFO_STALE_MAX_MS = 10 * 60_000;
 
 const prInfoCache = new Map<string, { data: BranchPRInfo | null; ts: number }>();
 const prFetchInflight = new Map<string, Promise<BranchPRInfo | null>>();
@@ -30,13 +33,31 @@ function prCacheKey(projectPath: string, branch: string): string {
 
 /** Read cached PR info. Returns `undefined` on miss, `null` for known-no-PR, otherwise the cached value. */
 export function getCachedPR(projectPath: string, branch: string): BranchPRInfo | null | undefined {
-  const cached = prInfoCache.get(prCacheKey(projectPath, branch));
-  if (!cached) return undefined;
-  if (Date.now() - cached.ts >= PR_INFO_CACHE_TTL_MS) {
-    prInfoCache.delete(prCacheKey(projectPath, branch));
+  const cached = cachedEntry(projectPath, branch);
+  if (!cached || Date.now() - cached.ts >= PR_INFO_CACHE_TTL_MS) return undefined;
+  return cached.data;
+}
+
+/**
+ * The last answer for a branch even when it has expired (up to
+ * {@link PR_INFO_STALE_MAX_MS}), to show while a fresh lookup revalidates it.
+ * Same `undefined` / `null` meaning as {@link getCachedPR}.
+ */
+export function getLastKnownPR(
+  projectPath: string,
+  branch: string,
+): BranchPRInfo | null | undefined {
+  return cachedEntry(projectPath, branch)?.data;
+}
+
+function cachedEntry(projectPath: string, branch: string) {
+  const key = prCacheKey(projectPath, branch);
+  const cached = prInfoCache.get(key);
+  if (cached && Date.now() - cached.ts >= PR_INFO_STALE_MAX_MS) {
+    prInfoCache.delete(key);
     return undefined;
   }
-  return cached.data;
+  return cached;
 }
 
 /** Start (or join) the lookup for a branch; the result is cached on success. */
@@ -97,7 +118,8 @@ export async function getPRInfoCached(
  * Fire-and-forget PR lookup. Caches the result and invokes `onUpdate` so the
  * caller can broadcast a follow-up WS event with the freshly-resolved PR info.
  * Deduped per (projectPath, branch) so concurrent thread switches don't pile
- * up `gh pr list` invocations.
+ * up `gh pr list` invocations: a caller that arrives while a lookup is in
+ * flight joins it, and its `onUpdate` still runs when it lands.
  */
 export function schedulePRLookup(opts: {
   projectPath: string;
@@ -106,7 +128,6 @@ export function schedulePRLookup(opts: {
   onUpdate?: (pr: BranchPRInfo | null) => void;
 }): void {
   const { projectPath, branch, ghEnv, onUpdate } = opts;
-  if (prFetchInflight.has(prCacheKey(projectPath, branch))) return;
   const cached = getCachedPR(projectPath, branch);
   if (cached !== undefined) {
     onUpdate?.(cached);

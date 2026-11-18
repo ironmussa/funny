@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   getUnpushedHashes: vi.fn(),
   getUnpulledHashes: vi.fn(),
   getCachedPR: vi.fn(),
+  getLastKnownPR: vi.fn(),
   schedulePRLookup: vi.fn(),
   emitPRUpdateForThread: vi.fn(),
   stashList: vi.fn(),
@@ -118,6 +119,7 @@ vi.mock('../../routes/git/helpers.js', async (importOriginal) => {
   return {
     ...actual,
     getCachedPR: mocks.getCachedPR,
+    getLastKnownPR: mocks.getLastKnownPR,
     scheduleBackgroundFetch: vi.fn(),
     schedulePRLookup: mocks.schedulePRLookup,
     emitPRUpdateForThread: mocks.emitPRUpdateForThread,
@@ -163,6 +165,7 @@ vi.mock('../../lib/logger.js', () => ({
 import { gitRoutes } from '../../routes/git.js';
 import { getCachedPR, schedulePRLookup } from '../../routes/git/helpers.js';
 import { resolveIdentity } from '../../services/git-service.js';
+import { wsBroker } from '../../services/ws-broker.js';
 
 function makeApp() {
   const app = new Hono<HonoEnv>();
@@ -279,6 +282,7 @@ describe('gitRoutes (mounted)', () => {
     mocks.getUnpulledHashes.mockReturnValue(okAsync(new Set()));
     mocks.getPRForBranch.mockResolvedValue(null);
     mocks.getCachedPR.mockReturnValue(undefined);
+    mocks.getLastKnownPR.mockReturnValue(undefined);
     mocks.schedulePRLookup.mockReset();
     mocks.emitPRUpdateForThread.mockReset();
     mocks.stashList.mockReturnValue(okAsync([{ index: 0, message: 'wip' }]));
@@ -1351,9 +1355,66 @@ describe('gitRoutes (mounted)', () => {
       projectPath: '/tmp/repo',
       branch: 'feature/visible',
       ghEnv: { GH_TOKEN: 'ghs_test' },
+      onUpdate: expect.any(Function),
     });
     expect(getCachedPR).not.toHaveBeenCalledWith('/tmp/repo', 'feature/lookahead');
     expect(mocks.getPRForBranch).not.toHaveBeenCalled();
+  });
+
+  describe('graph-log PR badge while the PR cache revalidates', () => {
+    const PR = { prNumber: 325, prUrl: 'https://github.com/acme/repo/pull/325', prState: 'OPEN' };
+    const graphEntry = (branch: string) => ({
+      hash: 'abc111',
+      shortHash: 'abc',
+      author: 'a',
+      authorEmail: 'a@x',
+      committer: 'a',
+      committerEmail: 'a@x',
+      relativeDate: '1d',
+      message: 'init',
+      body: '',
+      parentHashes: [],
+      refs: [{ name: branch, kind: 'local' }],
+      headBranch: branch,
+    });
+    const lookupFor = (branch: string) =>
+      mocks.schedulePRLookup.mock.calls.find(([opts]) => opts.branch === branch)![0];
+
+    test('an expired PR entry keeps the badge and is revalidated in the background', async () => {
+      mocks.getLastKnownPR.mockReturnValue(PR);
+      mocks.getGraphLog.mockReturnValueOnce(okAsync([graphEntry('feat/pr')]));
+      const emit = vi.spyOn(wsBroker, 'emitToUser').mockImplementation(() => {});
+
+      const res = await makeApp().request('/api/git/project/p1/graph-log');
+      const body = await res.json();
+
+      expect(body.entries[0].refs[0].pullRequest).toEqual({
+        number: 325,
+        url: PR.prUrl,
+        state: 'OPEN',
+      });
+      lookupFor('feat/pr').onUpdate(PR); // same answer: nothing to reload
+      expect(emit).not.toHaveBeenCalled();
+      emit.mockRestore();
+    });
+
+    test('a PR found after the graph was served tells the client to reload it', async () => {
+      mocks.getGraphLog.mockReturnValueOnce(okAsync([graphEntry('feat/new')]));
+      const emit = vi.spyOn(wsBroker, 'emitToUser').mockImplementation(() => {});
+
+      const res = await makeApp().request('/api/git/project/p1/graph-log');
+      expect((await res.json()).entries[0].refs[0].pullRequest).toBeUndefined();
+
+      lookupFor('feat/new').onUpdate(null); // still no PR: nothing to reload
+      expect(emit).not.toHaveBeenCalled();
+      lookupFor('feat/new').onUpdate(PR);
+      expect(emit).toHaveBeenCalledWith('user-1', {
+        type: 'git:refs-updated',
+        threadId: '',
+        data: { projectId: 'p1', changed: ['history'] },
+      });
+      emit.mockRestore();
+    });
   });
 
   test('GET /api/git/project/:projectId/graph-log?all=false opts out of all refs', async () => {

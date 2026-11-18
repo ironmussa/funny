@@ -29,7 +29,7 @@ export const _gitStatusCache = gitStatusCache;
 
 // The per-branch PR info cache lives in services/pr-info-cache.ts so the
 // `git:changed` status path shares it with these routes.
-export { getCachedPR, schedulePRLookup } from '../../services/pr-info-cache.js';
+export { getCachedPR, getLastKnownPR, schedulePRLookup } from '../../services/pr-info-cache.js';
 
 /**
  * Emit a `git:status` WS event for a single thread carrying just the PR fields.

@@ -67,7 +67,10 @@ type BrowserSessionClosedData = {
 };
 
 function handleReady(d: BrowserSessionReadyData): void {
-  if (d.threadId) useBrowserLiveThreadsStore.getState().markOpen(d.threadId);
+  // The browser.v1 `ready` carries no threadId: read it from the session id,
+  // as `closed` does, or the sidebar globe never shows after a reload.
+  const readyThreadId = d.threadId ?? threadIdFromBrowserSessionId(d.sessionId);
+  if (readyThreadId) useBrowserLiveThreadsStore.getState().markOpen(readyThreadId);
   const store = useBrowserPanelStore.getState();
   if (store.sessionId !== d.sessionId) return;
   store.setSessionStatus('ready', null);

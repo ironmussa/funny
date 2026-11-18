@@ -7,6 +7,7 @@ import {
   dispatchBrowserSessionEvent,
   recoverBrowserPanelSession,
 } from '@/hooks/dispatch-browser-session-events';
+import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';
 
 const SESSION = 'thread:t1';
@@ -20,7 +21,10 @@ function attachingTo(sessionId: string, fields: { url?: string; loadedUrl?: stri
   });
 }
 
-afterEach(() => useBrowserPanelStore.getState().reset());
+afterEach(() => {
+  useBrowserPanelStore.getState().reset();
+  useBrowserLiveThreadsStore.setState({ byThread: {} });
+});
 
 describe('browser-session:ready', () => {
   test('marks the attached session ready right away', () => {
@@ -45,6 +49,13 @@ describe('browser-session:ready', () => {
     const s = useBrowserPanelStore.getState();
     expect(s.url).toBe('https://example.com/');
     expect(s.loadedUrl).toBe('https://example.com/');
+  });
+
+  test('marks the thread as having a live browser when the ready carries no threadId', () => {
+    // browser.v1 `ready` has no threadId field: the thread comes from the
+    // session id, so the sidebar globe shows after a reload re-attaches.
+    dispatchBrowserSessionEvent('browser-session:ready', { sessionId: SESSION, url: 'x' });
+    expect(useBrowserLiveThreadsStore.getState().byThread).toEqual({ t1: true });
   });
 
   test('ignores another session', () => {

@@ -74,6 +74,16 @@ browserSessionRoutes.delete('/:sessionId', async (c) => {
 });
 
 /**
+ * GET /api/browser-session/threads
+ * The caller's threads that hold a live browser session. The client reads it
+ * on every connect: the sidebar's "browser open" marks otherwise only come
+ * from realtime events, which a page reload never replays.
+ */
+browserSessionRoutes.get('/threads', (c) => {
+  return c.json({ threadIds: browserSessionManager.listThreadsWithSessions(c.get('userId')) });
+});
+
+/**
  * GET /api/browser-session
  * Returns per-runner stats — used for diagnostics, not by the panel UI.
  */

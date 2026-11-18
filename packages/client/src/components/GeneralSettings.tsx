@@ -300,13 +300,15 @@ export function GeneralSettings() {
             />
             <WeaveStatusSetting projectId={selectedProject.id} />
             <ProjectSandboxSetting projectId={selectedProject.id} />
-            <ProjectFactorySetting projectId={selectedProject.id} />
             <DefaultTemplateSetting
               projectId={selectedProject.id}
               currentTemplateId={selectedProject.defaultAgentTemplateId}
               onSave={saveProject}
             />
           </div>
+
+          {/* The issue factory: its own section, not mixed with the project's options. */}
+          <ProjectFactorySetting projectId={selectedProject.id} />
         </>
       )}
 

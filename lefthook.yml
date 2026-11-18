@@ -92,9 +92,13 @@ pre-push:
     # Runs only the test suites the pushed commits can affect; CI runs every
     # suite and builds Storybook. Git passes the pushed refs on stdin.
     # FUNNY_PREPUSH_ALL=1 runs every suite.
+    # A script job (.lefthook/pre-push/affected-tests.sh), because lefthook
+    # skips a `run` job when HEAD has no push files, even if another branch
+    # is being pushed.
     - name: affected-tests
+      script: affected-tests.sh
+      runner: sh
       use_stdin: true
-      run: PATH="$HOME/.bun/bin:$PATH" bun run test:pre-push
 
 post-merge:
   jobs:

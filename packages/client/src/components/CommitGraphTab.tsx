@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   ArrowDownCircle,
   ArrowUpCircle,
+  GitBranch,
   GitCommit,
   RefreshCw,
   Search,
@@ -1656,11 +1657,34 @@ function GraphCommitRow({
                           </NodeTooltipPerson>
                         ) : null}
                         {forkedFromRefLabel ? (
-                          <span>
-                            {t('graph.nodeBranchedFrom', {
-                              branch: forkedFromRefLabel,
-                              defaultValue: `Branched from: ${forkedFromRefLabel}`,
-                            })}
+                          <span
+                            className="flex items-center gap-1.5"
+                            data-testid="graph-node-tooltip-branched-from"
+                          >
+                            {(() => {
+                              // The label may join several refs ("a, b"); the
+                              // first one is the branch whose lane color to use.
+                              const color = branchColorByLabel.get(
+                                forkedFromRefLabel.split(', ')[0],
+                              );
+                              return (
+                                <GitBranch
+                                  aria-hidden
+                                  className={cn(
+                                    'h-3 w-3 shrink-0',
+                                    !color && 'text-muted-foreground',
+                                  )}
+                                  style={color ? { color } : undefined}
+                                />
+                              );
+                            })()}
+                            <span className="sr-only">
+                              {t('graph.nodeBranchedFrom', {
+                                branch: forkedFromRefLabel,
+                                defaultValue: `Branched from: ${forkedFromRefLabel}`,
+                              })}
+                            </span>
+                            <span aria-hidden>{forkedFromRefLabel}</span>
                           </span>
                         ) : null}
                         {parentLabel ? (

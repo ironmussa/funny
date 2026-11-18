@@ -5,6 +5,10 @@
 //   bun run test                                   # every package (CI, manual)
 //   bun scripts/run-tests.ts --affected <files…>   # only packages those files can affect
 //
+// With `--affected`, a `bun test` suite that has a test-impact map (CI builds
+// them; `bun scripts/test-impact.ts fetch` downloads them) runs only the test
+// files that executed a changed source, see scripts/test-impact.ts.
+//
 // The pre-push hook (scripts/pre-push.ts) selects packages the same way from
 // the files a push adds, so a push that only touches one package runs only its
 // suite and those of the packages depending on it. CI still runs everything.
@@ -15,6 +19,9 @@ import { join } from 'node:path';
 
 import { createOutputParser, isEventLine } from '../packages/shared/src/checks';
 import { collectOutput } from './progress-io';
+import { BUN_TEST, type Narrowing, narrowPackage } from './test-impact';
+
+export type { Narrowing };
 import { testSuiteEnv } from './test-env';
 import { ProgressFile } from './test-progress';
 
@@ -31,12 +38,22 @@ export interface TestPackage {
   testScript?: string;
 }
 
-/** A suite to run: the whole suite, or (vitest only) the tests related to `related`. */
+/**
+ * A suite to run: the whole suite, (vitest only) the tests related to
+ * `related`, or (`bun test` only) the test files in `testFiles`.
+ */
 export interface TestRun {
   pkg: TestPackage;
   /** Absolute paths for `vitest related`; null runs the whole suite. */
   related: string[] | null;
+  /** Package-relative `./` test files a test-impact map selected. */
+  testFiles?: string[];
+  /** Why a suite that could have been narrowed runs whole. */
+  note?: string;
 }
+
+/** Narrows a `bun test` suite selected by `files` (see `narrowPackage`). */
+export type Narrower = (pkg: TestPackage, files: readonly string[]) => Narrowing;
 
 interface TestResult extends TestPackage {
   related: boolean;
@@ -153,12 +170,16 @@ export function declaredExternalDeps(packages: readonly TestPackage[]): Set<stri
  * (`vitest related`, which follows imports across packages), unless it is
  * affected through a dependency change or a suite input (config, manifest,
  * setup file), which no import graph shows: then it runs whole.
+ *
+ * Under the same conditions, `narrow` can cut a `bun test` suite down to the
+ * test files a test-impact map selects; a suite left with none is dropped.
  */
 export function planTests(
   files: readonly string[],
   packages: readonly TestPackage[],
   changedDeps?: ReadonlySet<string> | null,
   root = ROOT,
+  narrow?: Narrower,
 ): TestRun[] {
   const testable = packages.filter((pkg) => pkg.hasTest);
   const whole = (pkg: TestPackage): TestRun => ({ pkg, related: null });
@@ -186,15 +207,21 @@ export function planTests(
     const path = join(root, file);
     return existsSync(path) ? [path] : [];
   });
-  return testable.flatMap((pkg) =>
-    reaches(pkg.dir, changedDirs, depsOf)
-      ? [
-          pkg.testScript && VITEST_RUN.test(pkg.testScript) && !reaches(pkg.dir, wholeDirs, depsOf)
-            ? { pkg, related: sources }
-            : whole(pkg),
-        ]
-      : [],
-  );
+  const narrowed = (pkg: TestPackage): TestRun[] => {
+    const script = pkg.testScript ?? '';
+    if (reaches(pkg.dir, wholeDirs, depsOf)) return [whole(pkg)];
+    if (VITEST_RUN.test(script)) return [{ pkg, related: sources }];
+    if (!narrow || !BUN_TEST.test(script)) return [whole(pkg)];
+    const narrowing = narrow(pkg, files);
+    if ('whole' in narrowing) return [{ ...whole(pkg), note: narrowing.whole }];
+    return narrowing.tests.length > 0 ? [{ pkg, related: null, testFiles: narrowing.tests }] : [];
+  };
+  return testable.flatMap((pkg) => (reaches(pkg.dir, changedDirs, depsOf) ? narrowed(pkg) : []));
+}
+
+/** A `Narrower` from the test-impact maps, for changes up to `heads`. */
+export function impactNarrower(heads: readonly string[], root = ROOT): Narrower {
+  return (pkg, files) => narrowPackage(pkg.dir, files, heads, { root });
 }
 
 /** The packages `planTests` selects (whole or related). */
@@ -236,6 +263,7 @@ function vitestFlags({ progress, maxWorkers }: CommandOptions): string {
  */
 function testCommand(run: TestRun, options: CommandOptions = {}): string[] {
   const script = run.pkg.testScript ?? '';
+  if (run.testFiles) return ['sh', '-c', [script, ...run.testFiles.map(shellQuote)].join(' ')];
   const flags = VITEST_RUN.test(script) ? vitestFlags(options) : '';
   if (!run.related && !flags) return ['bun', 'run', 'test'];
   let command = run.related
@@ -265,7 +293,12 @@ function concurrencyFrom(env: Record<string, string | undefined>): number {
   return Number.isInteger(value) && value > 0 ? value : DEFAULT_CONCURRENCY;
 }
 
-const label = (run: TestRun) => `${run.pkg.name}${run.related ? ' (related tests)' : ''}`;
+/** A run's name with how much of the suite it covers. */
+export function runLabel(run: TestRun): string {
+  if (run.testFiles) return `${run.pkg.name} (${run.testFiles.length} test files)`;
+  return `${run.pkg.name}${run.related ? ' (related tests)' : ''}`;
+}
+const label = runLabel;
 
 /**
  * Runs one suite, handing every output line to `onLine` (and, when `onLine` is
@@ -305,7 +338,7 @@ async function runPackageTests(
     onLine,
     hide: isEventLine,
   });
-  return { ...pkg, related: Boolean(run.related), code, durationMs };
+  return { ...pkg, related: Boolean(run.related || run.testFiles), code, durationMs };
 }
 
 function printSummary(results: readonly TestResult[]): void {
@@ -337,7 +370,10 @@ export async function runTests(
   const progress = progressPath
     ? new ProgressFile(
         progressPath,
-        queue.map((run) => ({ name: run.pkg.name, related: Boolean(run.related) })),
+        queue.map((run) => ({
+          name: run.pkg.name,
+          related: Boolean(run.related || run.testFiles),
+        })),
         { concurrency },
       )
     : null;
@@ -369,7 +405,10 @@ if (import.meta.main) {
   const selected =
     at === -1
       ? all.filter((pkg) => pkg.hasTest)
-      : selectAffectedPackages(process.argv.slice(at + 1), all);
+      : planTests(process.argv.slice(at + 1), all, undefined, ROOT, impactNarrower(['HEAD']));
   if (selected.length === 0) console.log('✓ No package test suite is affected by these files');
+  for (const run of selected) {
+    if ('note' in run && run.note) console.log(`${run.pkg.name}: whole suite (${run.note})`);
+  }
   process.exit(await runTests(selected));
 }

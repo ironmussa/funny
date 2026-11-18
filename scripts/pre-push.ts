@@ -10,13 +10,23 @@
 // A change to `bun.lock` or the root `package.json` selects only the packages
 // declaring an external dependency it touches (see lockfile-changes.ts), and a
 // vitest suite selected by source changes runs only the tests related to them.
+// A `bun test` suite with a test-impact map runs only the test files that
+// executed a changed source (scripts/test-impact.ts; `fetch` downloads the
+// maps CI builds).
 //
 // Set FUNNY_PREPUSH_ALL=1 to run every suite anyway.
 
 import { spawnSync } from 'node:child_process';
 
 import { changedDependencies, type DependencySnapshot } from './lockfile-changes';
-import { declaredExternalDeps, discoverPackages, planTests, runTests } from './run-tests';
+import {
+  declaredExternalDeps,
+  discoverPackages,
+  impactNarrower,
+  planTests,
+  runLabel,
+  runTests,
+} from './run-tests';
 import { testSuiteEnv } from './test-env';
 
 const ZERO_SHA = /^0+$/;
@@ -60,6 +70,11 @@ function pushRanges(stdin: string, cwd: string, defaultBase: string): PushRange[
  * Files changed across every ref in the pre-push `stdin`, or null when a range
  * cannot be resolved (the caller then runs everything). Deletions add nothing.
  */
+/** The pushed commits in the pre-push `stdin`, or null when a range cannot be resolved. */
+export function pushedHeads(stdin: string, cwd = process.cwd(), defaultBase = DEFAULT_BASE) {
+  return pushRanges(stdin, cwd, defaultBase)?.map((range) => range.head) ?? null;
+}
+
 export function changedFiles(stdin: string, cwd = process.cwd(), defaultBase = DEFAULT_BASE) {
   const ranges = pushRanges(stdin, cwd, defaultBase);
   return ranges && [...new Set(ranges.flatMap((range) => range.files))];
@@ -122,14 +137,17 @@ if (import.meta.main) {
           files,
           packages,
           changedDependenciesOfPush(stdin, declaredExternalDeps(packages)),
+          undefined,
+          impactNarrower(pushedHeads(stdin) ?? []),
         );
 
   if (runs.length === 0) {
     console.log('pre-push: no package test suite is affected by this push');
     process.exit(0);
   }
-  const label = ({ pkg, related }: (typeof runs)[number]) =>
-    related ? `${pkg.name} (related)` : pkg.name;
-  console.log(`pre-push: testing ${runs.map(label).join(', ')}`);
+  console.log(`pre-push: testing ${runs.map(runLabel).join(', ')}`);
+  for (const run of runs) {
+    if (run.note) console.log(`pre-push: ${run.pkg.name} runs whole (${run.note})`);
+  }
   process.exit(await runTests(runs));
 }

@@ -1,12 +1,9 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createAnsiConverter } from '@/lib/ansi-to-html';
+import { createAnsiConverter, hasAnsi } from '@/lib/ansi-to-html';
 
 import { HighlightedCode } from './HighlightedCode';
-
-// eslint-disable-next-line no-control-regex -- ESC is the literal ANSI CSI marker we're detecting
-const ANSI_ESC_RE = /\x1b\[/;
 
 /**
  * Pick a syntax-highlighting language for command output based on the command
@@ -43,14 +40,14 @@ export function CommandOutput({ command, output }: { command: string; output?: s
     () => createAnsiConverter({ fg: '#a1a1aa', bg: 'transparent', newline: false }),
     [],
   );
-  const hasAnsi = useMemo(() => (output ? ANSI_ESC_RE.test(output) : false), [output]);
+  const colored = useMemo(() => (output ? hasAnsi(output) : false), [output]);
   const htmlOutput = useMemo(
-    () => (output && hasAnsi ? ansiConverter.toHtml(output) : null),
-    [ansiConverter, output, hasAnsi],
+    () => (output && colored ? ansiConverter.toHtml(output) : null),
+    [ansiConverter, output, colored],
   );
   const outputLang = useMemo(
-    () => (output && !hasAnsi ? detectOutputLang(command) : null),
-    [command, output, hasAnsi],
+    () => (output && !colored ? detectOutputLang(command) : null),
+    [command, output, colored],
   );
 
   return (

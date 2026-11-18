@@ -146,6 +146,34 @@ describe('TaskProgressBlock', () => {
     expect(oxlint).not.toHaveTextContent('No issues');
   });
 
+  test('renders the ANSI colors of a failed tail instead of the raw escapes', async () => {
+    const esc = String.fromCharCode(27);
+    const base = progress();
+    apiMock.readFile.mockResolvedValue(
+      respond(
+        progress({
+          status: 'failed',
+          steps: [
+            {
+              ...base.steps[2],
+              name: 'oxfmt',
+              status: 'failed',
+              tail: [`${esc}[31m1 failed${esc}[39m | <script>x</script>`],
+            },
+          ],
+        }),
+      ),
+    );
+    renderWithProviders(<TaskProgressBlock path={PATH} />);
+    await flush();
+
+    const tail = screen.getByTestId('task-progress-tail-oxfmt');
+    expect(tail.textContent).toBe('1 failed | <script>x</script>');
+    expect(tail.textContent).not.toContain(esc);
+    expect(tail.querySelector('span[style*="color"]')).not.toBeNull();
+    expect(tail.querySelector('script')).toBeNull();
+  });
+
   test('polls while running and stops once the task finishes', async () => {
     apiMock.readFile
       .mockResolvedValueOnce(respond(progress()))

@@ -9,14 +9,9 @@
 
 import AnsiToHtml from 'ansi-to-html';
 
-export type AnsiConverterOptions = Omit<ConstructorParameters<typeof AnsiToHtml>[0], 'escapeXML'>;
+export { hasAnsi, stripAnsi } from '@funny/shared/lib/ansi';
 
-const ESC = String.fromCharCode(27);
-const BEL = String.fromCharCode(7);
-const ANSI_PATTERN = new RegExp(
-  `${ESC}\\[[0-?]*[ -/]*[@-~]|${ESC}\\][^${BEL}]*(?:${BEL}|${ESC}\\\\)|${ESC}[@-_]`,
-  'g',
-);
+export type AnsiConverterOptions = Omit<ConstructorParameters<typeof AnsiToHtml>[0], 'escapeXML'>;
 
 /**
  * Build an ansi-to-html converter. `escapeXML` is always `true`; callers do
@@ -24,8 +19,4 @@ const ANSI_PATTERN = new RegExp(
  */
 export function createAnsiConverter(options: AnsiConverterOptions = {}): AnsiToHtml {
   return new AnsiToHtml({ ...options, escapeXML: true });
-}
-
-export function stripAnsi(text: string): string {
-  return text.replace(ANSI_PATTERN, '');
 }

@@ -16,6 +16,7 @@ import { execute } from '@funny/core/git';
 import type { AgentResource, Skill } from '@funny/shared';
 import { type DomainError, processError } from '@funny/shared/errors';
 import { parseStoredJson } from '@funny/shared/json-validation';
+import { stripAnsi } from '@funny/shared/lib/ansi';
 import { ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
@@ -669,16 +670,6 @@ function scanPluginResources(options: ClaudeResourceScanOptions = {}): AgentReso
     log.error('Failed to scan plugin resources', { namespace: 'skills-service', error: err });
     return [];
   }
-}
-
-/**
- * Strip ANSI escape codes from a string.
- */
-function stripAnsi(str: string): string {
-  const ansiColorPattern = new RegExp(String.raw`\u001B\[[0-9;]*m`, 'g');
-  const ansiPrivateModePattern = new RegExp(String.raw`\u001B\[\?[0-9;]*[a-zA-Z]`, 'g');
-
-  return str.replace(ansiColorPattern, '').replace(ansiPrivateModePattern, '');
 }
 
 /**

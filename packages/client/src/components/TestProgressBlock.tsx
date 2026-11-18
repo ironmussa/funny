@@ -90,7 +90,7 @@ function SuiteRow({ suite, now, t }: { suite: TestProgressSuite; now: number; t:
         <StatusIcon status={suite.status} />
         <span className="truncate font-medium">{suite.name}</span>
         {suite.related && (
-          <Badge variant="outline" className="shrink-0 px-1.5 py-0 font-normal">
+          <Badge variant="outline" size="xs" className="font-normal">
             {t('testProgress.related')}
           </Badge>
         )}

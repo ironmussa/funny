@@ -142,6 +142,13 @@ describe('runCheck', () => {
     );
   });
 
+  test('the output tail drops color escapes', async () => {
+    const run = plan('build', [{ code: 1, output: '\x1b[31mSomething broke\x1b[39m' }]);
+    const result = await runCheck(run, { progressPath });
+    expect(readTask().steps[0].tail).toEqual(['Something broke']);
+    expect(summarizeCheckRun(run, result, progressPath)).not.toContain('\x1b');
+  });
+
   test('cancelling mid-run kills the process and ends the file failed', async () => {
     const run: CheckPlan = {
       kind: 'test',

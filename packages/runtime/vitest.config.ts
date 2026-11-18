@@ -59,6 +59,7 @@ export default defineConfig({
       '@funny/shared/lib/file-search': path.join(shared, 'lib/file-search.ts'),
       '@funny/shared/lib/sliding-window-hits': path.join(shared, 'lib/sliding-window-hits.ts'),
       '@funny/shared/lib/child-env': path.join(shared, 'lib/child-env.ts'),
+      '@funny/shared/lib/ansi': path.join(shared, 'lib/ansi.ts'),
       '@funny/shared/checks/progress-file': path.join(shared, 'checks/progress-file.ts'),
       '@funny/shared/checks': path.join(shared, 'checks/index.ts'),
       '@funny/shared/test-progress': path.join(shared, 'test-progress.ts'),

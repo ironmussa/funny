@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { stripAnsi } from '@/lib/ansi-to-html';
 import type { GitProgressStep, GitProgressSubItem } from '@/lib/git-progress-types';
 import { cn } from '@/lib/utils';
 
@@ -148,7 +149,7 @@ export function SubItemsList({
           </span>
           {item.error && (
             <pre className="bg-destructive/5 text-destructive/80 mt-0.5 max-h-60 overflow-auto rounded p-1.5 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
-              {item.error}
+              {stripAnsi(item.error)}
             </pre>
           )}
         </div>
@@ -253,7 +254,7 @@ export function GitProgressModal({
                   )}
                   {step.error && !(step.subItems && step.subItems.length > 0) && (
                     <pre className="bg-destructive/5 text-destructive/80 mt-0.5 max-h-60 overflow-auto rounded p-1.5 font-mono text-[11px] wrap-break-word whitespace-pre-wrap">
-                      {step.error}
+                      {stripAnsi(step.error)}
                     </pre>
                   )}
                 </div>

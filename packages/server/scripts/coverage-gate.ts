@@ -11,6 +11,8 @@ import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { stripAnsi } from '@funny/shared/lib/ansi';
+
 const MIN_LINE_COVERAGE = Number(process.env.SERVER_COVERAGE_MIN_LINES ?? 65);
 const pkgRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -26,20 +28,6 @@ process.stderr.write(result.stderr);
 
 if (result.status !== 0) {
   process.exit(result.status ?? 1);
-}
-
-/** Strip ANSI SGR sequences from Bun coverage output (char 0x1b + "[…m"). */
-function stripAnsi(text: string): string {
-  let out = '';
-  for (let i = 0; i < text.length; i++) {
-    if (text.charCodeAt(i) === 0x1b && text[i + 1] === '[') {
-      i += 2;
-      while (i < text.length && text[i] !== 'm') i++;
-      continue;
-    }
-    out += text[i];
-  }
-  return out;
 }
 
 const stripped = stripAnsi(output);

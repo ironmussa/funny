@@ -156,13 +156,15 @@ export function IssueFactoryStatus({
     </Badge>
   );
   const cancel = () =>
-    void controlFactoryRun('stop', projectId, run.id).orTee((error) => toastError(error));
+    void controlFactoryRun('stop', projectId, run.id).orTee((error) =>
+      toastError(error, 'factory'),
+    );
   // A blocker that is not in the factory can be sent from here, with this issue's flow.
   const unsent = run.state === 'requested' && run.waitReason?.kind === 'blocker-not-sent';
   const sendBlockers = () =>
     void sendIssuesToFactory(projectId, run.waitReason!.blockers, run.flowName ?? '').match(
       (result) => reportSend(t, result),
-      (error) => toastError(error),
+      (error) => toastError(error, 'factory'),
     );
 
   return (
@@ -278,7 +280,7 @@ export function IssuesFactoryBar({
       },
       (error) => {
         setSending(false);
-        toastError(error);
+        toastError(error, 'factory');
       },
     );
   };

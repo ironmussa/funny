@@ -127,7 +127,7 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
 
   const save = (input: Omit<SaveFactorySettingsInput, 'projectId'>) =>
     saveFactorySettings({ projectId, ...input })
-      .orTee((error) => toastError(error))
+      .orTee((error) => toastError(error, 'factory'))
       .match(
         () => setRevision((r) => r + 1),
         () => setRevision((r) => r + 1),

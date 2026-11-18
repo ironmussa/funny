@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { MessageStreamStatusTail } from '@/components/thread/MessageStreamStatusTail';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { useRunnerStatusStore } from '@/stores/runner-status-store';
 
 const render = (ui: ReactElement) => rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
 
@@ -34,6 +35,27 @@ describe('MessageStreamStatusTail', () => {
     );
     expect(container.querySelector('time')).toHaveAttribute('datetime', '2026-10-30T20:42:00.000Z');
     expect(screen.getByRole('button', { name: 'Copy latest prompt and response' })).toBeEnabled();
+  });
+
+  test('says it is reconnecting while the runner is offline mid-turn', () => {
+    useRunnerStatusStore.getState().setStatus('offline');
+    try {
+      render(<MessageStreamStatusTail {...baseProps} status="running" isRunning />);
+      expect(screen.getByText('thread.reconnectingRunner')).toBeInTheDocument();
+      expect(screen.queryByText('thread.agentWorking')).toBeNull();
+    } finally {
+      useRunnerStatusStore.getState().reset();
+    }
+  });
+
+  test('says the agent is working while the runner is online', () => {
+    useRunnerStatusStore.getState().setStatus('online');
+    try {
+      render(<MessageStreamStatusTail {...baseProps} status="running" isRunning />);
+      expect(screen.getByText('thread.agentWorking')).toBeInTheDocument();
+    } finally {
+      useRunnerStatusStore.getState().reset();
+    }
   });
 
   test('renders running externally as a static status', () => {

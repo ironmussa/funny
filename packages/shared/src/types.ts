@@ -593,6 +593,13 @@ export interface Message {
   author?: string;
 }
 
+/**
+ * `Message.author` of the prompt the runner sends on its own when it resumes a
+ * thread its restart interrupted. The UI shows it as a resume marker, not as a
+ * message the user wrote.
+ */
+export const AUTO_RESUME_MESSAGE_AUTHOR = 'funny:auto-resume';
+
 // ─── Thread with Messages ────────────────────────────────
 
 export interface ThreadWithMessages extends Thread {

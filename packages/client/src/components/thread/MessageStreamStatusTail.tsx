@@ -9,6 +9,8 @@ import type { TFunction } from 'i18next';
 import { Clock } from 'lucide-react';
 import type { ReactNode } from 'react';
 
+import { useRunnerStatusStore } from '@/stores/runner-status-store';
+
 import { AgentResultCard, AgentInterruptedCard, AgentStoppedCard } from './AgentStatusCards';
 import { AgentWorkingIndicator } from './AgentWorkingIndicator';
 import {
@@ -70,12 +72,14 @@ export function MessageStreamStatusTail(props: MessageStreamStatusTailProps) {
     onSend,
   } = props;
   const sendContinue = () => onSend('Continue', { model, mode: permissionMode, effort });
+  // The runner dropped mid-turn: it resumes the turn on its own once it is back.
+  const runnerOffline = useRunnerStatusStore((s) => s.status === 'offline');
 
   return (
     <>
       {isRunning && !isExternal && (
         <AgentWorkingIndicator
-          label={t('thread.agentWorking')}
+          label={runnerOffline ? t('thread.reconnectingRunner') : t('thread.agentWorking')}
           startedAt={turnStartedAt}
           compact={compact}
         />

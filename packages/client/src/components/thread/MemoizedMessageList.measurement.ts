@@ -1,3 +1,4 @@
+import { AUTO_RESUME_MESSAGE_AUTHOR } from '@funny/shared';
 import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual';
 
 import { getCachedPrepared, isPretextReady, layoutSync } from '@/hooks/use-pretext';
@@ -26,6 +27,8 @@ const USER_MESSAGE_FILE_CHIP_ROW_PX = 28;
 // Hover footer (model, mode, time, actions) below the card; it always reserves its height.
 const USER_MESSAGE_FOOTER_PX = 28;
 const USER_MESSAGE_MIN_ESTIMATE_PX = 100;
+// The auto-resume divider that replaces the user card (`AutoResumeMarker`).
+const AUTO_RESUME_MARKER_PX = 24;
 
 export interface FontConfig {
   proseFont: string;
@@ -121,6 +124,9 @@ export function estimateItemHeight(
   fonts?: FontConfig,
 ): number {
   if (item.type === 'message') {
+    if (item.msg.role === 'user' && item.msg.author === AUTO_RESUME_MESSAGE_AUTHOR) {
+      return AUTO_RESUME_MARKER_PX;
+    }
     if (item.msg.role === 'user') return estimateUserMessageHeight(item.msg, containerWidth, fonts);
     return estimateAssistantMessageHeight(item, containerWidth, fonts);
   }

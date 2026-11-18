@@ -406,6 +406,8 @@
     "stashPopSuccess": "Stash aplicado",
     "stashPopFailed": "Erro ao aplicar stash: {{message}}",
     "stashedChanges": "{{count}} stash(es) salvos",
+    "stashOtherBranches": "Outros branches",
+    "popStashOtherBranch": "Feito em {{branch}}: mude para esse branch para aplicá-lo",
     "amend": "Emendar",
     "amendSuccess": "Commit emendado",
     "undoLastCommit": "Desfazer último commit",

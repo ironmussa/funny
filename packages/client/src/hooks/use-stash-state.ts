@@ -11,6 +11,22 @@ interface StashEntry {
   createdAt: number;
 }
 
+/** Stashes made on one other branch, in stash order. */
+export interface StashBranchGroup {
+  branch: string;
+  entries: StashEntry[];
+}
+
+/**
+ * The branch a stash was made on, read from its message
+ * ("On <branch>: <message>" or "WIP on <branch>: <message>"); null when the
+ * message does not say.
+ */
+export function stashBranch(message: string): string | null {
+  const match = message.match(/^(?:WIP )?[Oo]n ([^:]+):/);
+  return match ? match[1] : null;
+}
+
 interface StashFile {
   path: string;
   additions: number;
@@ -34,6 +50,8 @@ interface UseStashStateArgs {
 export interface UseStashStateResult {
   stashEntries: StashEntry[];
   filteredStashEntries: StashEntry[];
+  /** Stashes made on other branches, grouped by branch (first-seen order). */
+  otherBranchStashGroups: StashBranchGroup[];
   selectedStashIndex: string | null;
   setSelectedStashIndex: (s: string | null) => void;
   selectedStashEntry: StashEntry | null;
@@ -90,12 +108,27 @@ export function useStashState({
 
   // Filter stash entries to only show those from the current branch.
   // Stash messages have format: "On <branch>: <message>" or "WIP on <branch>: <message>".
-  const filteredStashEntries = useMemo(() => {
-    if (!currentBranch) return stashEntries;
-    return stashEntries.filter((e) => {
-      const match = e.message.match(/^(?:WIP )?[Oo]n ([^:]+):/);
-      return match ? match[1] === currentBranch : true;
-    });
+  // Stashes whose message names no branch count as the current branch's.
+  const { filteredStashEntries, otherBranchStashGroups } = useMemo(() => {
+    if (!currentBranch) {
+      return { filteredStashEntries: stashEntries, otherBranchStashGroups: [] };
+    }
+    const current: StashEntry[] = [];
+    const groups = new Map<string, StashEntry[]>();
+    for (const entry of stashEntries) {
+      const branch = stashBranch(entry.message);
+      if (branch === null || branch === currentBranch) {
+        current.push(entry);
+        continue;
+      }
+      const group = groups.get(branch);
+      if (group) group.push(entry);
+      else groups.set(branch, [entry]);
+    }
+    return {
+      filteredStashEntries: current,
+      otherBranchStashGroups: [...groups].map(([branch, entries]) => ({ branch, entries })),
+    };
   }, [stashEntries, currentBranch]);
 
   const refreshStashList = useCallback(async () => {
@@ -276,6 +309,7 @@ export function useStashState({
   return {
     stashEntries,
     filteredStashEntries,
+    otherBranchStashGroups,
     selectedStashIndex,
     setSelectedStashIndex,
     selectedStashEntry,

@@ -62,9 +62,17 @@ jobs:
       # `npm audit` / `audit-ci` cannot read it (they build a phantom tree from
       # a non-existent package-lock.json and report false positives). `bun audit`
       # audits exactly what bun installs, so it is the correct gate here.
+      #
+      # --ignore GHSA-fc5q-39xc-vjpf: picomatch <=4.0.7 ReDoS through repeated
+      # extglobs. No patched release exists yet (4.0.7 is the latest). Almost
+      # every path is dev tooling (vite, vitest, storybook, typescript-eslint,
+      # secretlint); the one runtime path is @funny/core -> deepagents ->
+      # micromatch -> picomatch@2.3.2, where the glob comes from the agent,
+      # which can already run shell commands on its runner. Remove this flag
+      # once picomatch ships a fix.
       - name: Audit dependencies (bun audit)
         id: audit
-        run: bun audit --audit-level=moderate
+        run: bun audit --audit-level=moderate --ignore GHSA-fc5q-39xc-vjpf
         continue-on-error: false # Fail the build on moderate+ vulnerabilities
 
       # Non-gating JSON report for the uploaded artifact (never fails the build).

@@ -110,6 +110,41 @@ export function isThinkingBlockError(text: string): boolean {
 /** Upper bound on the end-of-turn `getContextUsage` request before the turn's result is released. */
 const CONTEXT_BREAKDOWN_TIMEOUT_MS = 3_000;
 
+/**
+ * How long a held empty resume result (see `screenResumeResult`) waits for the
+ * session to continue before it is published anyway.
+ */
+export const EMPTY_RESUME_RESULT_HOLD_MS = 10_000;
+
+type ResultMessage = Extract<CLIMessage, { type: 'result' }>;
+
+function toResultMessage(r: any): ResultMessage {
+  return {
+    type: 'result',
+    subtype: r.subtype,
+    is_error: r.is_error,
+    duration_ms: r.duration_ms,
+    num_turns: r.num_turns,
+    result: r.result,
+    total_cost_usd: r.total_cost_usd,
+    session_id: r.session_id,
+    errors: r.errors,
+  };
+}
+
+function isEmptySuccessResult(msg: any): boolean {
+  return msg.type === 'result' && msg.subtype === 'success' && !msg.is_error && !msg.num_turns;
+}
+
+/** A message that shows the resumed session went on to a turn of its own. */
+function continuesSession(msg: any): boolean {
+  return (
+    msg.type === 'assistant' ||
+    msg.type === 'result' ||
+    (msg.type === 'system' && msg.subtype === 'init')
+  );
+}
+
 export class SDKClaudeProcess extends BaseAgentProcess {
   private activeQuery: Query | null = null;
   private stderrBuffer: string[] = [];
@@ -131,7 +166,12 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   private inputWaiters: Array<() => void> = [];
   private inputClosed = false;
   private backgroundTaskIds = new Set<string>();
-  private deferredResult: Extract<CLIMessage, { type: 'result' }> | null = null;
+  private deferredResult: ResultMessage | null = null;
+
+  // ── Empty resume result (see screenResumeResult) ───────────────
+  private modelOutputSeen = false;
+  private heldResumeResult: { result: ResultMessage; timer: ReturnType<typeof setTimeout> } | null =
+    null;
 
   constructor(options: ClaudeProcessOptions) {
     super(options);
@@ -441,36 +481,13 @@ export class SDKClaudeProcess extends BaseAgentProcess {
             type: sdkMsg.type,
             subtype: (sdkMsg as any).subtype,
           });
+          if (this.screenResumeResult(sdkMsg)) return;
           // Before trackInputLifetime: it may close the input channel on this
           // very result, and the breakdown request needs the CLI's stdin.
           await this.captureContextBreakdown(sdkMsg);
           this.trackInputLifetime(sdkMsg);
 
-          // Synthetic assistant messages (model: "<synthetic>") carry provider
-          // errors like "API Error: 529 {...}" as plain text. Render them as a
-          // collapsible ProviderError tool card instead of an opaque text bubble.
-          if (sdkMsg.type === 'assistant') {
-            const rawMsg = (sdkMsg as any).message;
-            if (rawMsg?.model === '<synthetic>') {
-              const errorText = (rawMsg.content ?? [])
-                .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
-                .map((b: any) => b.text)
-                .join('\n')
-                .trim();
-              if (errorText) {
-                dlog.info('Synthetic provider error', { preview: errorText.slice(0, 200) });
-                this.emitErrorToolCall(errorText);
-                // A poisoned thinking block makes the resumed session permanently
-                // unusable — signal the orchestrator to drop the sessionId so the
-                // next message recovers context from the DB instead of resuming.
-                if (isThinkingBlockError(errorText)) {
-                  dlog.warn('Thinking-block 400 detected — invalidating session');
-                  this.emit('session-invalidated');
-                }
-                return;
-              }
-            }
-          }
+          if (this.handleSyntheticError(sdkMsg)) return;
 
           const cliMsg = this.translateMessage(sdkMsg);
           if (cliMsg) {
@@ -508,8 +525,95 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       }
     } finally {
       this.activeQuery = null;
+      // Nothing followed a held empty resume result: it was the real end.
+      this.releaseResumeResult();
       this.finalize();
     }
+  }
+
+  /**
+   * Synthetic assistant messages (model: "<synthetic>") carry provider errors
+   * like "API Error: 529 {...}" as plain text. Render them as a collapsible
+   * ProviderError tool card instead of an opaque text bubble. Returns true
+   * when `sdkMsg` was one.
+   */
+  private handleSyntheticError(sdkMsg: SDKMessage): boolean {
+    if (sdkMsg.type !== 'assistant') return false;
+    const rawMsg = (sdkMsg as any).message;
+    if (rawMsg?.model !== '<synthetic>') return false;
+    const errorText = (rawMsg.content ?? [])
+      .filter((b: any) => b?.type === 'text' && typeof b.text === 'string')
+      .map((b: any) => b.text)
+      .join('\n')
+      .trim();
+    if (!errorText) return false;
+    dlog.info('Synthetic provider error', { preview: errorText.slice(0, 200) });
+    this.emitErrorToolCall(errorText);
+    // A poisoned thinking block makes the resumed session permanently
+    // unusable — signal the orchestrator to drop the sessionId so the
+    // next message recovers context from the DB instead of resuming.
+    if (isThinkingBlockError(errorText)) {
+      dlog.warn('Thinking-block 400 detected — invalidating session');
+      this.emit('session-invalidated');
+    }
+    return true;
+  }
+
+  /**
+   * Resuming an interrupted session, the CLI first closes the dangling turn
+   * itself (a synthetic "No response requested." reply it does not stream)
+   * and ends it with a `success` result of 0 turns, then runs the queued
+   * prompt in the same process. Published, that result marks the thread
+   * completed until the next turn reopens it, and the issue factory ended an
+   * agent step on it (issue #343). So on a resumed query, a 0-turn success
+   * before any model output is held: dropped as soon as the session goes on
+   * to a turn, published when it goes idle, when the query ends, or after
+   * EMPTY_RESUME_RESULT_HOLD_MS without anything else (a resume that really
+   * did nothing). Returns true when `sdkMsg` is held.
+   */
+  private screenResumeResult(sdkMsg: SDKMessage): boolean {
+    const msg = sdkMsg as any;
+    if (this.heldResumeResult) {
+      if (isSessionIdle(msg)) this.releaseResumeResult();
+      else if (continuesSession(msg)) this.dropResumeResult();
+    }
+    if (msg.type === 'assistant') this.modelOutputSeen = true;
+    if (!this.options.sessionId || this.modelOutputSeen || !isEmptySuccessResult(msg)) return false;
+
+    dlog.info('Holding empty resume result until the session shows whether it continues', {
+      durationMs: msg.duration_ms,
+    });
+    const timer = setTimeout(() => this.releaseResumeResult(), EMPTY_RESUME_RESULT_HOLD_MS);
+    timer.unref?.();
+    this.heldResumeResult = { result: toResultMessage(msg), timer };
+    return true;
+  }
+
+  private takeHeldResumeResult(): ResultMessage | null {
+    const held = this.heldResumeResult;
+    if (!held) return null;
+    clearTimeout(held.timer);
+    this.heldResumeResult = null;
+    return held.result;
+  }
+
+  private dropResumeResult(): void {
+    if (this.takeHeldResumeResult())
+      dlog.info('Dropped empty resume result: the session continued');
+  }
+
+  /** Publish a held empty resume result: it was the end of the run after all. */
+  private releaseResumeResult(): void {
+    const result = this.takeHeldResumeResult();
+    // A killed process ends as stopped, not with this result.
+    if (!result || this.isAborted) return;
+    if (this.backgroundTaskIds.size > 0) {
+      this.deferredResult = result;
+      return;
+    }
+    this.emit('message', result);
+    // The result would have closed the one-shot input channel.
+    this.trackInputLifetime({ type: 'result' } as SDKMessage);
   }
 
   /**
@@ -929,17 +1033,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
 
       case 'result': {
         const r = sdkMsg as any;
-        const result: Extract<CLIMessage, { type: 'result' }> = {
-          type: 'result',
-          subtype: r.subtype,
-          is_error: r.is_error,
-          duration_ms: r.duration_ms,
-          num_turns: r.num_turns,
-          result: r.result,
-          total_cost_usd: r.total_cost_usd,
-          session_id: r.session_id,
-          errors: r.errors,
-        };
+        const result = toResultMessage(r);
         // A turn result is not session completion while background agents
         // still run. Publishing it would complete the thread and cause the
         // runtime to discard the real final result as a duplicate.

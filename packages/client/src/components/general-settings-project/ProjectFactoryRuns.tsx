@@ -13,9 +13,10 @@ import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { controlFactoryRun, emptyFactory } from '@/data/factory/actions';
+import { emptyFactory } from '@/data/factory/actions';
 import { useFactoryRuns } from '@/data/factory/hooks';
 import type { FactoryRun } from '@/lib/api/factory';
 import {
@@ -27,16 +28,9 @@ import {
 import { getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 
-const RETRYABLE = new Set<FactoryRun['state']>(['failed', 'waiting_human']);
-
 function RunRow({ projectId, run }: { projectId: string; run: FactoryRun }) {
   const { t } = useTranslation();
   const lastThread = run.threadIds.at(-1);
-  const control = (action: 'stop' | 'retry') =>
-    void controlFactoryRun(action, projectId, run.id).orTee((error) =>
-      toastError(error, 'factory'),
-    );
-
   return (
     <li className="flex items-center gap-2 py-1.5 text-sm" data-testid={`factory-run-${run.id}`}>
       <span className="w-14 shrink-0 font-medium">#{run.issueNumber}</span>
@@ -50,40 +44,19 @@ function RunRow({ projectId, run }: { projectId: string; run: FactoryRun }) {
         </span>
       )}
       <span className="ml-auto flex shrink-0 items-center gap-1">
-        {run.prUrl && (
-          <Button asChild size="xs" variant="link" data-testid={`factory-run-pr-${run.id}`}>
-            <a href={run.prUrl} target="_blank" rel="noreferrer">
-              {t('factory.pullRequest', 'PR')}
-            </a>
-          </Button>
-        )}
-        {lastThread && (
-          <Button asChild size="xs" variant="link" data-testid={`factory-run-thread-${run.id}`}>
-            <Link to={getThreadRoute({ id: lastThread, projectId, isScratch: false })}>
-              {t('factory.thread', 'Thread')}
-            </Link>
-          </Button>
-        )}
-        {RETRYABLE.has(run.state) && (
-          <Button
-            size="xs"
-            variant="outline"
-            data-testid={`factory-run-retry-${run.id}`}
-            onClick={() => control('retry')}
-          >
-            {t('factory.retry', 'Retry')}
-          </Button>
-        )}
-        {!ENDED.has(run.state) && (
-          <Button
-            size="xs"
-            variant="ghost"
-            data-testid={`factory-run-stop-${run.id}`}
-            onClick={() => control('stop')}
-          >
-            {t('factory.stop', 'Stop')}
-          </Button>
-        )}
+        <FactoryRunControls
+          projectId={projectId}
+          run={run}
+          testId={(button) => `factory-run-${button}-${run.id}`}
+        >
+          {lastThread && (
+            <Button asChild size="xs" variant="link" data-testid={`factory-run-thread-${run.id}`}>
+              <Link to={getThreadRoute({ id: lastThread, projectId, isScratch: false })}>
+                {t('factory.thread', 'Thread')}
+              </Link>
+            </Button>
+          )}
+        </FactoryRunControls>
       </span>
     </li>
   );

@@ -16,7 +16,7 @@
  */
 import type { FactoryWaitReason } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
-import { and, asc, desc, eq, inArray, like, notInArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, like, notInArray, or } from 'drizzle-orm';
 import { okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
@@ -97,6 +97,13 @@ export const REOPENED_STEP = 'retrying';
 
 /** States a run can be retried or taken over from. */
 const REOPENABLE_STATES = ['failed', 'waiting_human'] as const satisfies FactoryRunState[];
+
+/**
+ * How long a failed run keeps showing on its thread in the thread lists. The
+ * failure stays in the thread view and the project's run list after that; the
+ * window only bounds what every list poll reads.
+ */
+const FAILED_RUN_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 export interface FactoryRunView {
   id: string;
@@ -413,12 +420,17 @@ export function createFactoryRunsRepository(
     },
 
     /**
-     * The runs of every factory `userId` owns that have threads and have not
-     * ended: in flight, or parked waiting for the member. The thread lists read
-     * them to show a factory thread as busy while its run works outside the
-     * agent (CI, merge). Queued (`requested`) runs have no thread yet.
+     * The runs of every factory `userId` owns that the thread lists show on
+     * their threads: not ended (in flight, or parked waiting for the member),
+     * or failed within `FAILED_RUN_WINDOW_MS`. A thread shows busy while its run
+     * works outside the agent (CI, merge), and the error icon once it failed.
+     * Queued (`requested`) runs have no thread yet.
      */
-    activeForOwner(userId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
+    activeForOwner(
+      userId: string,
+      now: number = Date.now(),
+    ): ResultAsync<FactoryRunView[], FactoryRunsError> {
+      const failedSince = new Date(now - FAILED_RUN_WINDOW_MS).toISOString();
       return ResultAsync.fromPromise(
         db
           .select({ run: factoryRuns })
@@ -427,7 +439,10 @@ export function createFactoryRunsRepository(
           .where(
             and(
               eq(factorySettings.userId, userId),
-              notInArray(factoryRuns.state, [...TERMINAL_STATES, ...WAITING_STATES]),
+              or(
+                notInArray(factoryRuns.state, [...TERMINAL_STATES, ...WAITING_STATES]),
+                and(eq(factoryRuns.state, 'failed'), gte(factoryRuns.completedAt, failedSince)),
+              ),
             ),
           ),
         storage,

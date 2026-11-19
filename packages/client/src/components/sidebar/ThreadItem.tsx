@@ -103,6 +103,7 @@ const ACTIVITY_TIME_TONE: Record<ThreadActivityView['activity'], string> = {
   none: 'text-muted-foreground',
   factory: 'text-status-info',
   'factory-attention': 'text-status-warning',
+  'factory-failed': 'text-muted-foreground',
 };
 
 /**

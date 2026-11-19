@@ -8,13 +8,17 @@
 import type { ThreadStatus } from '@funny/shared';
 import type { FactoryRun } from '@funny/shared/contracts/factory';
 
+import { isFactoryRunFailed } from './factory-run-labels';
+
 export type ThreadActivity =
   /** Nothing beyond the thread's own status. */
   | 'none'
   /** The factory run is working outside the agent (CI, merge, between steps). */
   | 'factory'
   /** The factory run parked waiting for the member. */
-  | 'factory-attention';
+  | 'factory-attention'
+  /** The factory run's pipeline stopped on an error (failed, or parked after one). */
+  | 'factory-failed';
 
 /** Factory run states in which its flow drives the run. */
 const FACTORY_IN_FLIGHT: ReadonlySet<FactoryRun['state']> = new Set([
@@ -40,9 +44,10 @@ export function isFactoryRunInFlight(state: FactoryRun['state']): boolean {
 
 export function threadActivity(
   thread: { status: ThreadStatus },
-  run: Pick<FactoryRun, 'state'> | null | undefined,
+  run: Pick<FactoryRun, 'state' | 'failureReason'> | null | undefined,
 ): ThreadActivity {
   if (!run || AGENT_BUSY.has(thread.status)) return 'none';
+  if (isFactoryRunFailed(run)) return 'factory-failed';
   if (run.state === 'waiting_human') return 'factory-attention';
   return FACTORY_IN_FLIGHT.has(run.state) ? 'factory' : 'none';
 }

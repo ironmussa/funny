@@ -151,7 +151,7 @@ describe('factory over tRPC', () => {
     expect((await mutate('vic', 'stopRun', { projectId: 'p1', runId: run.id })).status).toBe(403);
     expect((await mutate('alice', 'stopRun', { projectId: 'p1', runId: 'nope' })).status).toBe(404);
   });
-  test('activeRuns lists the caller own runs with threads that have not ended, across projects', async () => {
+  test('activeRuns lists the caller own runs with threads that have not ended or recently failed', async () => {
     const { createFactorySettingsService } =
       await import('../../services/factory/factory-settings.js');
     const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
@@ -168,14 +168,23 @@ describe('factory over tRPC', () => {
     const ci = await seed(alice, 1, 'waiting_ci');
     const parked = await seed(alice, 2, 'waiting_human');
     await seed(alice, 3, 'merged');
-    await seed(alice, 4, 'failed');
+    const failed = await seed(alice, 4, 'failed');
+    const oldFailure = await seed(alice, 7, 'failed');
+    const { db } = await import('../../db/index.js');
+    const { factoryRuns } = await import('../../db/schema.js');
+    const { eq } = await import('drizzle-orm');
+    // A failed run shows on its thread for two weeks after it failed.
+    const failedAt = async (id: string, completedAt: string) =>
+      db.update(factoryRuns).set({ completedAt }).where(eq(factoryRuns.id, id));
+    await failedAt(failed.id, new Date().toISOString());
+    await failedAt(oldFailure.id, '2026-01-01T00:00:00.000Z');
     await seed(alice, 5, 'requested');
     await seed(bob, 6, 'working');
 
     const listed = await query('alice', 'activeRuns', undefined);
     expect(listed.status).toBe(200);
     expect(listed.body.map((run: { id: string }) => run.id).sort()).toEqual(
-      [ci.id, parked.id].sort(),
+      [ci.id, parked.id, failed.id].sort(),
     );
     expect((await query('carol', 'activeRuns', undefined)).body).toEqual([]);
   });

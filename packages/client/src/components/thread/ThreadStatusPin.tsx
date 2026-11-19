@@ -182,6 +182,20 @@ function ThreadStatusIcon({
 }
 
 /**
+ * How a thread's factory activity reads: a spinner in the info tone while the
+ * run works (apart from the agent's own), a clock while it waits for the
+ * member, and the thread's own error icon once its pipeline stopped on an error.
+ */
+const ACTIVITY_GLYPH: Record<
+  Exclude<ThreadActivityView['activity'], 'none'>,
+  { icon: typeof Clock; className: string }
+> = {
+  factory: { icon: Loader2, className: 'text-status-info animate-spin' },
+  'factory-attention': { icon: Clock, className: 'text-status-warning' },
+  'factory-failed': statusConfig.failed,
+};
+
+/**
  * The status icon of a thread whose factory run is working outside the agent
  * (a spinner in the info tone, so it reads apart from the agent's own) or
  * waiting for the member.
@@ -196,20 +210,15 @@ function ThreadActivityIcon({
   withTooltip: boolean;
 }) {
   const { t } = useTranslation();
-  const glyph =
-    view.activity === 'factory' ? (
-      <Loader2
-        className="icon-sm text-status-info animate-spin"
-        data-testid={`thread-factory-activity-${threadId}`}
-        data-activity="factory"
-      />
-    ) : (
-      <Clock
-        className="icon-sm text-status-warning"
-        data-testid={`thread-factory-activity-${threadId}`}
-        data-activity="factory-attention"
-      />
-    );
+  if (view.activity === 'none') return null;
+  const { icon: Icon, className } = ACTIVITY_GLYPH[view.activity];
+  const glyph = (
+    <Icon
+      className={cn('icon-sm', className)}
+      data-testid={`thread-factory-activity-${threadId}`}
+      data-activity={view.activity}
+    />
+  );
   const label = threadActivityTooltip(t, view);
   if (!withTooltip || !label) return glyph;
   return (

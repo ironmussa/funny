@@ -352,6 +352,17 @@ describe('ThreadItem', () => {
       expect(screen.queryByTestId('thread-stop-factory-run-t-factory')).not.toBeInTheDocument();
     });
 
+    test('a run whose pipeline stopped on an error shows the error icon and keeps the time', () => {
+      seedActiveRuns([run({ state: 'waiting_human', failureReason: 'wait_ci[ci] failed' })]);
+      renderThread();
+
+      expect(screen.getByTestId('thread-factory-activity-t-factory')).toHaveAttribute(
+        'data-activity',
+        'factory-failed',
+      );
+      expect(screen.getByText('2m')).toBeInTheDocument();
+    });
+
     test('a thread whose agent is running keeps its own status', () => {
       seedActiveRuns([run({ state: 'fixing' })]);
       renderThread({ status: 'running' });

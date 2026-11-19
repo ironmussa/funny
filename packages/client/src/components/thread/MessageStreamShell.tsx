@@ -5,6 +5,7 @@ import type { ReactNode, RefObject } from 'react';
 import { LoadingState } from '@/components/ui/loading-state';
 import { cn } from '@/lib/utils';
 
+import { FactoryRunFailureCard } from './FactoryRunFailureCard';
 import type { MessageStreamProps } from './message-stream-types';
 import { MessageStreamStatusTail } from './MessageStreamStatusTail';
 import { ProviderAuthRecovery } from './ProviderAuthRecovery';
@@ -154,6 +155,8 @@ export function MessageStreamShell({
           onPermissionDeny={onPermissionDeny}
           onPermissionDecision={onPermissionDecision}
         />
+
+        <FactoryRunFailureCard threadId={copyThreadId} agentRunning={isRunning} />
 
         {/* Prompt pin spacer (full mode only) */}
         <PromptPinSpacer compact={compact} height={promptPinSpacerHeight} />

@@ -3,7 +3,7 @@ import type { FactoryRun } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
 
 import { useActiveFactoryRunForThread } from '@/data/factory/hooks';
-import { factoryRunStateLabel } from '@/lib/factory-run-labels';
+import { factoryRunFailedStep, factoryRunStateLabel } from '@/lib/factory-run-labels';
 import { threadActivity, type ThreadActivity } from '@/lib/thread-activity';
 
 export interface ThreadActivityView {
@@ -25,7 +25,8 @@ export function useThreadActivity(thread: {
 
 /** The short label a row shows in place of its time: the run's step, else its state. */
 export function threadActivityShortLabel(t: TFunction, view: ThreadActivityView): string | null {
-  if (!view.run) return null;
+  // A failed run keeps the row's time: the error icon says what happened.
+  if (!view.run || view.activity === 'factory-failed') return null;
   if (view.activity === 'factory-attention') return factoryRunStateLabel(t, view.run.state);
   return view.run.currentStep ?? factoryRunStateLabel(t, view.run.state);
 }
@@ -33,6 +34,13 @@ export function threadActivityShortLabel(t: TFunction, view: ThreadActivityView)
 /** The tooltip of a row's activity: "Factory · #225 · Waiting for CI". */
 export function threadActivityTooltip(t: TFunction, view: ThreadActivityView): string | null {
   if (!view.run) return null;
+  const failedStep = view.activity === 'factory-failed' ? factoryRunFailedStep(view.run) : null;
+  if (failedStep) {
+    return t('factory.activity.failedTooltip', 'Factory · #{{issue}} · Failed at {{step}}', {
+      issue: view.run.issueNumber,
+      step: failedStep,
+    });
+  }
   return t('factory.activity.tooltip', 'Factory · #{{issue}} · {{state}}', {
     issue: view.run.issueNumber,
     state: factoryRunStateLabel(t, view.run.state),

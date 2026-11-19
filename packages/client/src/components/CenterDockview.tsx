@@ -19,6 +19,8 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+
+import { isLightTheme } from '@/lib/theme';
 import 'dockview-react/dist/styles/dockview.css';
 
 import { useAnimatedPanelToggle } from './dockview/use-animated-panel-toggle';
@@ -464,7 +466,7 @@ export function CenterDockview({
     addRightPanels(api, currentWidth ?? undefined);
   }, [rightTabsSig, rightPaneOpen, right, addRightPanels, removeRightPanels, getCurrentRightWidth]);
 
-  const theme = resolvedTheme === 'light' ? themeFunnyLight : themeFunnyDark;
+  const theme = isLightTheme(resolvedTheme) ? themeFunnyLight : themeFunnyDark;
 
   return (
     <>

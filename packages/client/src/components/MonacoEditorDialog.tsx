@@ -47,6 +47,7 @@ import { markdownProseClassName } from '@/lib/markdown-components';
 import { isMarkdownFile } from '@/lib/markdown-file';
 import { toRawFileSrc } from '@/lib/raw-file-src';
 import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
+import { isLightTheme } from '@/lib/theme';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { getVisualizerForFence, getVisualizerForFileExt } from '@/lib/visualizer-registry';
@@ -162,7 +163,7 @@ export function MonacoEditorDialog({
   const showHistory = hiddenHistoryFile !== filePath;
 
   // Derive Monaco theme — monochrome (light) uses VS, everything else is dark-based
-  const monacoTheme = resolvedTheme === 'monochrome' ? 'vs' : 'funny-dark';
+  const monacoTheme = isLightTheme(resolvedTheme) ? 'vs' : 'funny-dark';
 
   // Initialize the editor buffer synchronously, DURING render — not in an
   // effect. This guarantees Monaco's <Editor> mounts with the real content

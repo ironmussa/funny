@@ -46,3 +46,20 @@ describe('BashCard', () => {
     expect(screen.getByText('tests passed')).toBeInTheDocument();
   });
 });
+
+describe('BashCard search output', () => {
+  test('shows rg output grouped by file', () => {
+    render(
+      <BashCard
+        parsed={{ command: 'rg -n "lint" src' }}
+        output={'src/a.ts:4:const lint = 1;\nsrc/a.ts:9:lint();'}
+        author="shell"
+      />,
+    );
+
+    expect(screen.getByTestId('command-output-search')).toBeInTheDocument();
+    expect(screen.getAllByText('src/a.ts')).toHaveLength(1);
+    expect(screen.getByText('const lint = 1;')).toBeInTheDocument();
+    expect(screen.getByText('9')).toBeInTheDocument();
+  });
+});

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { createAnsiConverter, hasAnsi } from '@/lib/ansi-to-html';
 
 import { HighlightedCode } from './HighlightedCode';
+import { isSearchCommand, parseSearchOutput, type SearchOutputBlock } from './search-output';
 
 /**
  * Pick a syntax-highlighting language for command output based on the command
@@ -25,6 +26,44 @@ function detectOutputLang(command: string): string | null {
 
 const SECTION_LABEL = 'text-muted-foreground mb-1 text-xs font-semibold uppercase';
 const BOX = 'border-border/40 bg-background/80 overflow-x-auto rounded border px-2.5 py-1.5';
+const MATCH_ROW = 'grid grid-cols-[auto_1fr] gap-x-2 font-mono text-xs leading-relaxed';
+
+/** `rg` / `grep` output grouped by file: the path, then each line number and text. */
+function SearchResults({ blocks }: { blocks: SearchOutputBlock[] }) {
+  return (
+    <div className="space-y-1.5" data-testid="command-output-search">
+      {blocks.map((block, i) => {
+        if (block.kind === 'note') {
+          return (
+            <div key={i} className="text-muted-foreground/60 font-mono text-xs italic">
+              {block.text}
+            </div>
+          );
+        }
+        return (
+          <div key={i}>
+            {block.kind === 'file' && (
+              <div className="text-foreground font-mono text-xs font-medium break-all">
+                {block.path}
+              </div>
+            )}
+            {block.matches.map((match, j) => (
+              <div key={j} className={MATCH_ROW}>
+                <span className="text-muted-foreground/60 min-w-[3ch] text-right tabular-nums">
+                  {match.line}
+                </span>
+                <span className="text-muted-foreground break-all whitespace-pre-wrap">
+                  {match.text}
+                </span>
+              </div>
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const OUTPUT_PRE =
   'text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap';
 
@@ -49,6 +88,10 @@ export function CommandOutput({ command, output }: { command: string; output?: s
     () => (output && !colored ? detectOutputLang(command) : null),
     [command, output, colored],
   );
+  const searchBlocks = useMemo(
+    () => (output && !colored && isSearchCommand(command) ? parseSearchOutput(output) : null),
+    [command, output, colored],
+  );
 
   return (
     <div className="space-y-2 py-2">
@@ -65,6 +108,8 @@ export function CommandOutput({ command, output }: { command: string; output?: s
           <div className={BOX}>
             {htmlOutput ? (
               <pre className={OUTPUT_PRE} dangerouslySetInnerHTML={{ __html: htmlOutput }} />
+            ) : searchBlocks ? (
+              <SearchResults blocks={searchBlocks} />
             ) : (
               <HighlightedCode
                 code={output}

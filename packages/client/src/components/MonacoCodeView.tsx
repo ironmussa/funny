@@ -86,29 +86,29 @@ const handleBeforeMount: BeforeMount = (monaco) => {
   });
 
   const compilerOptions: import('monaco-editor').typescript.CompilerOptions = {
-    jsx: monaco.languages.typescript.JsxEmit.React,
+    jsx: monaco.typescript.JsxEmit.React,
     jsxFactory: 'React.createElement',
     reactNamespace: 'React',
     allowJs: true,
     allowNonTsExtensions: true,
-    target: monaco.languages.typescript.ScriptTarget.ESNext,
-    module: monaco.languages.typescript.ModuleKind.ESNext,
-    moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+    target: monaco.typescript.ScriptTarget.ESNext,
+    module: monaco.typescript.ModuleKind.ESNext,
+    moduleResolution: monaco.typescript.ModuleResolutionKind.NodeJs,
     noEmit: true,
   };
-  monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions);
-  monaco.languages.typescript.javascriptDefaults.setCompilerOptions(compilerOptions);
+  monaco.typescript.typescriptDefaults.setCompilerOptions(compilerOptions);
+  monaco.typescript.javascriptDefaults.setCompilerOptions(compilerOptions);
 
   // Monaco's bundled TS worker only sees a single file in isolation (no
   // tsconfig, no project graph), so its diagnostics are misleading: false
   // positives on valid project code and no real cross-file resolution. We use
   // it purely as a viewer/highlighter — the real type/syntax checking is done
   // by the agent via `bun run build`. Disable both validation passes.
-  monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+  monaco.typescript.typescriptDefaults.setDiagnosticsOptions({
     noSemanticValidation: true,
     noSyntaxValidation: true,
   });
-  monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+  monaco.typescript.javascriptDefaults.setDiagnosticsOptions({
     noSemanticValidation: true,
     noSyntaxValidation: true,
   });

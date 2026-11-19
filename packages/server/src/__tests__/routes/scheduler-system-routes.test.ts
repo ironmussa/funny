@@ -500,6 +500,47 @@ describe('Scheduler System Routes (Integration)', () => {
       expect(res.status).toBe(400);
     });
 
+    test('refuses a userId that does not own the thread', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db as any, { id: 't-owned', projectId: 'p1', userId: 'user-1' });
+
+      const res = await app.request('/api/scheduler/system/runs', {
+        method: 'POST',
+        headers: { ...schedulerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ threadId: 't-owned', userId: 'user-2' }),
+      });
+      expect(res.status).toBe(403);
+
+      // Nothing was claimed, so the thread is still free for its owner.
+      const getRes = await app.request('/api/scheduler/system/runs/t-owned', {
+        headers: schedulerHeaders(),
+      });
+      expect((await getRes.json()).run).toBeNull();
+    });
+
+    test('returns 404 for an unknown thread', async () => {
+      const res = await app.request('/api/scheduler/system/runs', {
+        method: 'POST',
+        headers: { ...schedulerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ threadId: 'ghost', userId: 'user-1' }),
+      });
+      expect(res.status).toBe(404);
+    });
+
+    test('claims with the thread owner even if the body carries a different userId', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db as any, { id: 't-owner', projectId: 'p1', userId: 'user-1' });
+
+      // A body userId that matches the owner is claimed under the owner's id.
+      const res = await app.request('/api/scheduler/system/runs', {
+        method: 'POST',
+        headers: { ...schedulerHeaders(), 'content-type': 'application/json' },
+        body: JSON.stringify({ threadId: 't-owner', userId: 'user-1' }),
+      });
+      expect(res.status).toBe(201);
+      expect((await res.json()).run.userId).toBe('user-1');
+    });
+
     test('returns 409 when run is already claimed', async () => {
       seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
       seedThread(t.db as any, { id: 't-dup', projectId: 'p1', userId: 'user-1' });

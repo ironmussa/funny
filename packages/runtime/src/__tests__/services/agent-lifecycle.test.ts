@@ -395,6 +395,11 @@ describe('AgentLifecycleManager', () => {
         'permission denied',
       );
       expect(mocks.orchestrator.startAgent).not.toHaveBeenCalled();
+      // The workspace-prep throw must not leave the thread `running` (#195).
+      expect(mocks.threadManager.updateThread).toHaveBeenCalledWith(
+        'scratch-2',
+        expect.objectContaining({ status: 'failed' }),
+      );
     });
   });
 
@@ -617,6 +622,41 @@ describe('AgentLifecycleManager', () => {
         'user-1',
         'agent:error',
         { error: 'spawn failed' },
+      );
+    });
+  });
+
+  describe('startAgent — early start failures (#195)', () => {
+    // A throw before launchAgent (here: the user-message insert) used to leave
+    // the thread stuck `running`. The whole start now shares one failure path.
+    test('marks thread failed when a start phase throws before the agent launches', async () => {
+      seedProjectThread();
+      mocks.threadManager.insertMessage.mockRejectedValueOnce(new Error('db write failed'));
+
+      const manager = createManager();
+
+      await expect(manager.startAgent('thread-1', 'hello', '/tmp/repo')).rejects.toThrow(
+        'db write failed',
+      );
+
+      // The agent process must never have been handed off...
+      expect(mocks.orchestrator.startAgent).not.toHaveBeenCalled();
+      // ...and the thread must not be left `running`.
+      expect(mocks.threadManager.updateThread).toHaveBeenCalledWith(
+        'thread-1',
+        expect.objectContaining({ status: 'failed' }),
+      );
+      expect(mocks.eventRouter.emitWSToUser).toHaveBeenCalledWith(
+        'thread-1',
+        'user-1',
+        'agent:error',
+        { error: 'db write failed' },
+      );
+      expect(mocks.eventRouter.emitWSToUser).toHaveBeenCalledWith(
+        'thread-1',
+        'user-1',
+        'agent:status',
+        { status: 'failed' },
       );
     });
   });

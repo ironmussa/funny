@@ -1695,6 +1695,9 @@
     "sendLimit": "Hasta {{max}} issues por envío",
     "banner": {
       "title": "Factory · #{{issue}}"
+    },
+    "indicator": {
+      "label": "Run del factory: {{step}}"
     }
   }
 }

@@ -1661,6 +1661,9 @@
     "sendLimit": "Até {{max}} issues por envio",
     "banner": {
       "title": "Factory · #{{issue}}"
+    },
+    "indicator": {
+      "label": "Execução da factory: {{step}}"
     }
   }
 }

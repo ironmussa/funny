@@ -3,9 +3,11 @@ import { Boxes } from 'lucide-react';
 
 import { ModeSelect } from '@/components/PromptSelectors';
 import { ContextUsageRing } from '@/components/thread/ContextUsageRing';
+import { FactoryRunIndicator } from '@/components/thread/FactoryRunIndicator';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import type { SandboxToggle } from '@/hooks/use-prompt-model-state';
+import { isFactoryThread } from '@/lib/thread-variant';
 
 export interface RuntimeMode {
   value: string;
@@ -150,6 +152,12 @@ function FooterLeading(props: FooterLeadingProps) {
           copyable
           onDiffStatsClick={props.onOpenReview}
           data-testid="prompt-powerline"
+        />
+      )}
+      {props.powerlineThread?.projectId && isFactoryThread(props.powerlineThread) && (
+        <FactoryRunIndicator
+          projectId={props.powerlineThread.projectId}
+          threadId={props.powerlineThread.id}
         />
       )}
     </div>

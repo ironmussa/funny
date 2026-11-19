@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
+import { ActionsTab } from '@/components/ActionsTab';
 import { CommitGraphTab } from '@/components/CommitGraphTab';
 import { IssuesTab } from '@/components/IssuesTab';
 import { PullRequestsTab } from '@/components/PullRequestsTab';
@@ -180,6 +181,23 @@ export function PRsPanel() {
   return (
     <div className="flex h-full w-full flex-col text-xs">
       <PullRequestsTab visible={ctx.reviewSubTab === 'prs' && ctx.reviewPaneOpen} />
+    </div>
+  );
+}
+
+/** Dockview panel: Actions — the repository's workflow runs, plus the PR's checks. */
+export function ActionsPanel() {
+  const ctx = useReviewPaneContext();
+  return (
+    <div className="flex h-full w-full flex-col text-xs">
+      <ActionsTab
+        projectId={ctx.remoteCheckProjectId ?? ''}
+        prNumber={ctx.gitStatus?.prNumber ?? undefined}
+        prUrl={ctx.gitStatus?.prUrl ?? undefined}
+        currentBranch={ctx.currentBranch}
+        visible={ctx.reviewSubTab === 'ci' && ctx.reviewPaneOpen}
+        readOnly={ctx.viewerReadOnly}
+      />
     </div>
   );
 }

@@ -57,7 +57,11 @@ function isRateLimitError(error: unknown): boolean {
   return message.includes('403') || message.includes('429');
 }
 
-function trackRateLimit<T>(request: Promise<T>, layer: DataLayer = getDataLayer()): Promise<T> {
+/** Record whether a GitHub request hit the rate limit (shared by the PR and Actions queries). */
+export function trackRateLimit<T>(
+  request: Promise<T>,
+  layer: DataLayer = getDataLayer(),
+): Promise<T> {
   const setRateLimited = (value: boolean) =>
     layer.queryClient.setQueryData(githubRateLimitQuery.queryKey, value);
   return request.then(

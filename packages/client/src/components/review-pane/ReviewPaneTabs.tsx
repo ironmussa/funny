@@ -7,7 +7,7 @@ import { TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ReviewSubTab } from '@/stores/ui-store';
 
-import { CITab } from '../CITab';
+import { ActionsTab } from '../ActionsTab';
 import { CommitGraphTab } from '../CommitGraphTab';
 import { IssuesTab } from '../IssuesTab';
 import { PullRequestsTab } from '../PullRequestsTab';
@@ -25,7 +25,7 @@ const TABS: Array<{ value: ReviewSubTab; labelKey: string; fallback: string }> =
   { value: 'stash', labelKey: 'review.stash', fallback: 'Stash' },
   { value: 'worktrees', labelKey: 'settings.worktrees', fallback: 'Worktrees' },
   { value: 'prs', labelKey: 'review.prs', fallback: 'PRs' },
-  { value: 'ci', labelKey: 'review.ci.tab', fallback: 'CI' },
+  { value: 'ci', labelKey: 'review.actions.tab', fallback: 'Actions' },
   { value: 'issues', labelKey: 'review.issues.tab', fallback: 'Issues' },
 ];
 
@@ -113,13 +113,15 @@ export function ReviewSecondaryTabs({
         <PullRequestsTab visible={reviewSubTab === 'prs'} />
       </TabsContent>
 
-      {/* CI tab */}
+      {/* Actions tab (workflow runs + the PR's checks) */}
       <TabsContent value="ci" className={TAB_CONTENT_CLASS} forceMount>
-        <CITab
+        <ActionsTab
           projectId={projectId}
           prNumber={prNumber}
           prUrl={prUrl}
+          currentBranch={stashTab.currentBranch ?? undefined}
           visible={reviewSubTab === 'ci' && reviewPaneOpen}
+          readOnly={readOnly}
         />
       </TabsContent>
 

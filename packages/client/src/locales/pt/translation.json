@@ -454,6 +454,25 @@
       "rateLimitedHint": "Limite da API do GitHub atingido. Polling pausado.",
       "openOnGithub": "Abrir PR no GitHub"
     },
+    "actions": {
+      "tab": "Actions",
+      "noProject": "Selecione um projeto para ver suas execuções",
+      "thisBranch": "Esta branch",
+      "allBranches": "Todas as branches",
+      "loading": "Carregando execuções…",
+      "loadFailed": "Não foi possível carregar as execuções",
+      "noRuns": "Nenhuma execução",
+      "rerun": "Reexecutar jobs com falha",
+      "rerunStarted": "Reexecutando jobs com falha",
+      "rerunFailed": "Não foi possível reexecutar: {{message}}",
+      "openRun": "Abrir execução no GitHub",
+      "openOnGithub": "Abrir Actions no GitHub",
+      "loadingJobs": "Carregando jobs…",
+      "showLog": "Ver log",
+      "hideLog": "Ocultar log",
+      "loadingLog": "Carregando log…",
+      "logTruncated": "Mostrando as últimas linhas até o erro"
+    },
     "issues": {
       "tab": "Issues",
       "loading": "Carregando issues…",

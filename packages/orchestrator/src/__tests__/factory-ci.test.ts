@@ -199,6 +199,19 @@ describe('CI follow-up', () => {
     expect(states().at(-1)).toBe('failed');
   });
 
+  test('a check that waits for a person fails the run without a fix attempt', async () => {
+    const { factory: f, store } = h.factory(agent());
+    await tick(f);
+    pull().checks = [{ name: 'deploy-gate', status: 'completed', conclusion: 'action_required' }];
+    h.clock.advance(POLL);
+    await tick(f);
+    store.close();
+
+    expect(asked.filter((a) => a.step === 'fix')).toHaveLength(0);
+    expect(await h.status()).toContain('checks need a person: deploy-gate');
+    expect(states().at(-1)).toBe('failed');
+  });
+
   test('a run waiting for CI does not hold a concurrency slot', async () => {
     h.github.addIssue({ number: 8, author: LOGIN, title: 'Another', labels: ['ready-for-agent'] });
     const { factory: f, store } = h.factory(agent(), { limits: { concurrency: 1, daily: 10 } });

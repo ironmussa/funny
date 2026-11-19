@@ -149,6 +149,12 @@ export function createPullRequestFollowUp(ctx: FactoryContext, failures: Failure
         return onNoChecks(project, run, number);
       case 'green':
         return merge.onGreen(project, run);
+      case 'blocked':
+        // A CI service that could not run: no fix attempt helps, a person decides.
+        return giveUp(
+          run,
+          `checks need a person: ${ci.value.checks.map((check) => check.name).join(', ')}`,
+        );
       default:
         return onRed(project, run, ci.value);
     }

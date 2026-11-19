@@ -99,6 +99,63 @@ describe('pull request CI over GitHub (shared by the factory and the server)', (
     });
   });
 
+  // The 0security status of PR #342: its service could not run ("add a card").
+  // A fix step cannot change that, so it is `blocked`, not `failing`.
+  const blockedRoutes = (runs: unknown[]) => ({
+    'GET /repos/o/r/pulls/7': pull,
+    'GET /repos/o/r/commits/abc/check-runs?per_page=100': { check_runs: runs },
+    'GET /repos/o/r/commits/abc/status': {
+      statuses: [
+        {
+          context: '0security - PR Security',
+          state: 'error',
+          description: 'Review not started: add a card',
+        },
+      ],
+    },
+  });
+
+  test('blocked when the only failure is a status whose service could not run', async () => {
+    const build = { id: 1, name: 'build', status: 'completed', conclusion: 'success' };
+    const { ci } = ciFor(blockedRoutes([build]));
+    expect((await ci.ciState('o/r', 7))._unsafeUnwrap()).toEqual({
+      kind: 'blocked',
+      checks: [
+        {
+          name: '0security - PR Security',
+          conclusion: 'error',
+          excerpt: 'Review not started: add a card',
+        },
+      ],
+    });
+  });
+
+  test('blocked when a check run waits for someone (action_required)', async () => {
+    const gate = { id: 3, name: 'deploy-gate', status: 'completed', conclusion: 'action_required' };
+    const { ci } = ciFor({
+      ...blockedRoutes([gate]),
+      'GET /repos/o/r/commits/abc/status': { statuses: [] },
+    });
+    expect((await ci.ciState('o/r', 7))._unsafeUnwrap()).toMatchObject({
+      kind: 'blocked',
+      checks: [{ name: 'deploy-gate', conclusion: 'action_required' }],
+    });
+  });
+
+  test('a real failure next to a blocked status is failing, with only the fixable check', async () => {
+    const lint = { id: 2, name: 'lint', status: 'completed', conclusion: 'failure' };
+    const { ci } = ciFor(blockedRoutes([lint]));
+    const state = (await ci.ciState('o/r', 7))._unsafeUnwrap();
+    expect(state.kind).toBe('failing');
+    expect(state.kind === 'failing' && state.checks.map((c) => c.name)).toEqual(['lint']);
+  });
+
+  test('a blocked status that is not required does not count', async () => {
+    const build = { id: 1, name: 'build', status: 'completed', conclusion: 'success' };
+    const { ci } = ciFor(blockedRoutes([build]));
+    expect((await ci.ciState('o/r', 7, ['build']))._unsafeUnwrap()).toEqual({ kind: 'green' });
+  });
+
   test('pending while a check runs, conflict when the PR cannot merge', async () => {
     const running = ciFor({
       'GET /repos/o/r/pulls/7': pull,

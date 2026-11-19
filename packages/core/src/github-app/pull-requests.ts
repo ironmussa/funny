@@ -29,6 +29,12 @@ export type CiState =
   | { kind: 'none' }
   /** At least one check failed; none is still running. */
   | { kind: 'failing'; checks: FailingCheck[] }
+  /**
+   * Nothing failed in the code, but a check could not run: a commit status in
+   * `error` (the CI service itself failed, e.g. "add a card") or a check run
+   * waiting for someone (`action_required`). No code change fixes it.
+   */
+  | { kind: 'blocked'; checks: FailingCheck[] }
   /** The pull request conflicts with its base. */
   | { kind: 'conflict' };
 
@@ -134,6 +140,10 @@ const FAILED_CONCLUSIONS = new Set([
   'action_required',
   'startup_failure',
 ]);
+/** A check run that waits for a person, not for a code change. */
+const BLOCKED_CONCLUSIONS = new Set(['action_required']);
+/** A commit status whose CI service itself failed to run. */
+const BLOCKED_STATUS_STATES = new Set(['error']);
 /** How many failing checks, and how much of each log, reach the agent. */
 const MAX_CHECKS = 5;
 const MAX_EXCERPT = 4_000;
@@ -177,6 +187,21 @@ function onlyRequired(
     status: { statuses: keptStatuses },
     missing: required.some((name) => !reported.has(name)),
   };
+}
+
+const isBlocked = (check: FailingCheck) =>
+  BLOCKED_CONCLUSIONS.has(check.conclusion) || BLOCKED_STATUS_STATES.has(check.conclusion);
+
+/**
+ * Failed checks become `failing` when one of them is the code's (only those,
+ * so a fix step is not asked to fix a CI service), else `blocked`.
+ */
+function verdictOfFailures(failing: FailingCheck[]): CiState {
+  if (failing.length === 0) return { kind: 'green' };
+  const fixable = failing.filter((check) => !isBlocked(check));
+  return fixable.length > 0
+    ? { kind: 'failing', checks: fixable }
+    : { kind: 'blocked', checks: failing };
 }
 
 export function createPullRequestCi(github: RepoGithub): PullRequestCi {
@@ -229,9 +254,7 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
               runs.some((r) => r.status !== 'completed') ||
               status.statuses.some((s) => s.state === 'pending');
             if (pending) return okAsync({ kind: 'pending' });
-            return failingChecks(repo, runs, status).map((failing): CiState =>
-              failing.length > 0 ? { kind: 'failing', checks: failing } : { kind: 'green' },
-            );
+            return failingChecks(repo, runs, status).map(verdictOfFailures);
           }),
       );
 

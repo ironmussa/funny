@@ -78,6 +78,21 @@ describe('wait_ci', () => {
     });
   });
 
+  test('checks that could not run fail without the "Failing checks" the fix loop retries', async () => {
+    const checks = [
+      { name: '0security - PR Security', conclusion: 'error', excerpt: 'add a card' },
+    ];
+    const { prs } = scripted([{ kind: 'blocked', checks }]);
+    const result = await actionsFor(prs).waitCi();
+    expect(result).toMatchObject({
+      ok: false,
+      metadata: { verdict: 'blocked', blockedChecks: checks },
+    });
+    if (result.ok) throw new Error('expected a failure');
+    expect(result.error).toContain('0security - PR Security (error: add a card)');
+    expect(result.error).not.toContain('Failing checks');
+  });
+
   test('a timeout is a terminal, non-green verdict instead of blocking the run', async () => {
     const { prs } = scripted([{ kind: 'pending' }]);
     const result = await actionsFor(prs).waitCi({ timeoutMs: 5000, intervalMs: 1000 });

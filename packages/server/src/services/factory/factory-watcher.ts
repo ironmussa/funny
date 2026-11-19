@@ -723,9 +723,15 @@ type LaunchMode = FactoryThreadMode;
  * The thread mode for the enabler's runtime, or `null` for a sandbox runtime
  * when this server cannot launch sandbox threads (`launchSandbox` not wired):
  * the spec forbids falling back to a different runtime.
+ *
+ * A `local` runtime runs factory threads in a worktree, never in the
+ * enabler's own checkout: an unattended agent there stashes their
+ * uncommitted work, switches its branch under them, and restarts a dev
+ * runner watching those files.
  */
 async function resolveMode(userId: string, projectId: string): Promise<LaunchMode | null> {
   const runtime = await (deps?.resolveRuntime ?? defaultResolveRuntime)(userId, projectId);
+  if (runtime === 'local') return 'worktree';
   return runtime === 'sandbox' && !deps?.launchSandbox ? null : runtime;
 }
 

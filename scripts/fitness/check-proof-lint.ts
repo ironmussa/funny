@@ -129,6 +129,8 @@ const sandbox = mkdtempSync(join(tmpdir(), 'funny-proof-lint-'));
 try {
   copyFileSync(join(root, 'oxlint.config.ts'), join(sandbox, 'oxlint.config.ts'));
   symlinkSync(join(root, 'node_modules'), join(sandbox, 'node_modules'));
+  // oxlint.config.ts loads the vendored anti-slop plugin by a relative path.
+  symlinkSync(join(root, 'tools'), join(sandbox, 'tools'));
   for (const fixture of fixtures) {
     const file = join(sandbox, fixture.path);
     mkdirSync(dirname(file), { recursive: true });

@@ -1,5 +1,51 @@
 import gdp from '@gdp-ts/core/lint/oxlint';
 
+// Vendored anti-slop rules (tools/oxlint/anti-slop, see its UPSTREAM.md) and
+// @shadcn/lint (design-system rules, client only). A rule is 'error' once the
+// repo has no findings left for it; the others stay 'warn' until their cleanup
+// lands, and move to ERROR_* then.
+const ANTI_SLOP_ERROR = [
+  'no-reduce-accumulator-copy',
+  'no-reflect-apply',
+  'no-reflect-get',
+  'no-unknown-type-aliases',
+  'no-widen-then-assert',
+];
+const ANTI_SLOP_WARN = [
+  'no-array-filter-map',
+  'no-chained-type-assertions',
+  'no-conditional-empty-object-spread',
+  'no-known-value-widening',
+  'no-object-parameters',
+  'no-runtime-typeof',
+  'no-shape-in-symbol-names',
+  'no-unknown-parameters',
+  'no-unknown-returns',
+  'no-unsafe-dictionary-type',
+  'require-safety-comment-for-type-assertion',
+];
+// Off on purpose: oxfmt owns blank lines (require-readable-spacing), and the
+// tests mock modules with vi.mock by design (no-module-mocking).
+const ANTI_SLOP_OFF = ['require-readable-spacing', 'no-module-mocking'];
+const ANTI_SLOP_EFFECT_ERROR = [
+  'no-manual-effect-error-tag',
+  'no-manual-tag-comparison',
+  'no-manual-tagged-construction',
+];
+const ANTI_SLOP_EFFECT_WARN = ['no-service-constructor-imports', 'prefer-effect-match'];
+const SHADCN_WARN = [
+  'no-restyle',
+  'no-raw-colors',
+  'no-inline-styles',
+  'no-unknown-classes',
+  'require-static-classes',
+];
+// Off: the font-size rule in CLAUDE.md requires arbitrary values such as
+// `text-[length:var(--diff-font-size)]`.
+const SHADCN_OFF = ['no-arbitrary-values'];
+const severity = (prefix: string, rules: string[], level: 'warn' | 'error') =>
+  Object.fromEntries(rules.map((rule) => [`${prefix}/${rule}`, level]));
+
 const existing = {
   categories: {
     correctness: 'error',
@@ -10,8 +56,19 @@ const existing = {
     nursery: 'off',
   },
   plugins: ['typescript', 'react', 'import', 'oxc'],
-  jsPlugins: ['eslint-plugin-zod'],
+  jsPlugins: [
+    'eslint-plugin-zod',
+    { name: 'anti-slop', specifier: './tools/oxlint/anti-slop/index.ts' },
+    { name: 'anti-slop-effect', specifier: './tools/oxlint/anti-slop/effect/index.ts' },
+    '@shadcn/lint',
+  ],
   rules: {
+    'oxc/no-accumulating-spread': 'error',
+    ...severity('anti-slop', ANTI_SLOP_ERROR, 'error'),
+    ...severity('anti-slop', ANTI_SLOP_WARN, 'warn'),
+    ...severity('anti-slop', ANTI_SLOP_OFF, 'off'),
+    ...severity('anti-slop-effect', ANTI_SLOP_EFFECT_ERROR, 'error'),
+    ...severity('anti-slop-effect', ANTI_SLOP_EFFECT_WARN, 'warn'),
     'react/react-in-jsx-scope': 'off',
     'react/capitalized-calls': 'error',
     'react/error-boundaries': 'error',
@@ -138,6 +195,18 @@ const existing = {
   },
   overrides: [
     {
+      files: ['packages/client/src/**/*.{ts,tsx}'],
+      rules: {
+        ...severity('shadcn', SHADCN_WARN, 'warn'),
+        ...severity('shadcn', SHADCN_OFF, 'off'),
+      },
+    },
+    {
+      // The shadcn/ui primitives themselves define the component styles.
+      files: ['packages/client/src/components/ui/**'],
+      rules: severity('shadcn', [...SHADCN_WARN, ...SHADCN_OFF], 'off'),
+    },
+    {
       files: ['**/__tests__/**', '**/*.test.*', '**/*.spec.*'],
       rules: {
         'no-constant-condition': 'off',
@@ -173,10 +242,18 @@ const existing = {
     '.funny-worktrees/',
     'src-tauri/',
     'packages/evflow/plugin/bundle.cjs',
+    // Agent tooling (skills, hooks) and the vendored anti-slop plugin.
+    '.cursor/**',
+    '.claude/**',
+    '.codex/**',
+    'tools/oxlint/anti-slop/**',
   ],
   settings: {
     react: {
       version: '19',
+    },
+    shadcn: {
+      ui: '@/components/ui',
     },
   },
 };

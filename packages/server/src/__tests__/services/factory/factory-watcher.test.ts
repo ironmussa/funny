@@ -643,6 +643,23 @@ describe('factory flow', () => {
     await eventually(factoryId, (r) => r.state === 'failed');
   });
 
+  // Issue #343: the factory thread shows the run's step chain and why it
+  // failed, which were only in the server log.
+  test('a failed run records its flow steps, the step it failed at and why', async () => {
+    const { factoryId } = await runFlow({ pr: false }, finishedThreads('completed'));
+    const run = await eventually(factoryId, (r) => r.state === 'failed');
+    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'ci', 'merge']);
+    expect(run.currentStep).toBe('pull-request');
+    expect(run.failureReason).toContain('No open pull request');
+  });
+
+  test('a merged run has its steps and no failure reason', async () => {
+    const { factoryId } = await runFlow({}, finishedThreads('completed'));
+    const run = await eventually(factoryId, (r) => r.state === 'merged');
+    expect(run.flowSteps).toEqual(['implement', 'pull-request', 'ci', 'merge']);
+    expect(run.failureReason).toBeNull();
+  });
+
   test('auto-merge enabled leaves the run for a person instead of claiming a merge', async () => {
     const { factoryId } = await runFlow(
       { merge: { kind: 'auto-merge-enabled', method: 'squash' } },
@@ -988,9 +1005,16 @@ describe('factory operator controls', () => {
     const run = await seedRun(factoryId, 'failed', ['t-bad']);
     const { launcher } = await watch({ issues: [], waitThread: finishedThreads('completed') });
 
+    await createFactoryRunsRepository().update(run.id, { failureReason: 'The agent failed.' });
+
     const retried = await createFactoryRunControl().retry(factoryId, run.id);
 
-    expect(retried._unsafeUnwrap()).toMatchObject({ state: 'queued', threadIds: [] });
+    // A retried run no longer says it failed.
+    expect(retried._unsafeUnwrap()).toMatchObject({
+      state: 'queued',
+      threadIds: [],
+      failureReason: null,
+    });
     await eventually(factoryId, (r) => r.state === 'merged');
     expect(launcher.calls).toHaveLength(1);
   });

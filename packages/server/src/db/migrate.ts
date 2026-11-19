@@ -2049,6 +2049,15 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'admitted_at', 'TEXT');
     },
   },
+  {
+    // A factory thread shows its run (issue #343): the flow's step chain and why
+    // the run failed, which before were only in the server log.
+    name: '101_factory_runs_steps_and_failure',
+    async up() {
+      await ctx().addColumn('factory_runs', 'flow_steps', 'TEXT');
+      await ctx().addColumn('factory_runs', 'failure_reason', 'TEXT');
+    },
+  },
 ];
 
 /**

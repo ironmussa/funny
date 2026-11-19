@@ -83,6 +83,14 @@ export function canOpenOnHost(thread: { runtime?: string } | null | undefined): 
   return !runsInSandbox(thread);
 }
 
+/**
+ * A thread the issue factory started for one step of a run. Its view shows
+ * the run (step chain, state, why it failed) above the conversation.
+ */
+export function isFactoryThread(thread: { source?: string } | null | undefined): boolean {
+  return thread?.source === 'factory';
+}
+
 // ── Capability predicates ────────────────────────────────────────
 
 /**

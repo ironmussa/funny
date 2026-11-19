@@ -23,6 +23,19 @@ export function useFactoryRuns(projectId: string): FactoryRun[] | undefined {
   return useDataQuery(factoryRunsQuery(projectId)).data;
 }
 
+/**
+ * The caller's factory run that started `threadId`, or null; `undefined` while
+ * loading. Reads the project's run list (polled while shown), so the thread
+ * view follows the run as the watcher advances it.
+ */
+export function useFactoryRunForThread(
+  projectId: string,
+  threadId: string,
+): FactoryRun | null | undefined {
+  const runs = useFactoryRuns(projectId);
+  return runs && (runs.find((run) => run.threadIds.includes(threadId)) ?? null);
+}
+
 /** The flows a send may pick; `undefined` while loading. */
 export function useFactoryFlows(projectId: string): FactoryFlowOption[] | undefined {
   return useDataQuery(factoryFlowsQuery(projectId)).data;

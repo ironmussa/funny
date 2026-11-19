@@ -147,6 +147,8 @@ const runOf = (over: Partial<FactoryRun>): FactoryRun => ({
   flowName: null,
   queueOrder: null,
   waitReason: null,
+  flowSteps: [],
+  failureReason: null,
   ...over,
 });
 

@@ -169,6 +169,9 @@ const runBranch = (run: FactoryRunView): string =>
 /** A run a retry or take-over put back in flight (it has a history). */
 const wasReopened = (job: FactoryRunJob) => job.run.currentStep === REOPENED_STEP;
 
+/** What the thread view says about a failed run: the flow's error. */
+const failureReason = (error: string | undefined): string => error?.trim() || 'The flow failed.';
+
 /**
  * The flow the run executes: the one it recorded (chosen when the issue was
  * sent, or the factory's at admission), else the factory's for rows from
@@ -206,7 +209,11 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       `The flow "${flowOf(job)}" could not be loaded: ${error.message}`,
     );
     if (error.kind === 'invalid') {
-      await deps.runs.updateInFlight(job.run.id, { state: 'failed', currentStep: null });
+      await deps.runs.updateInFlight(job.run.id, {
+        state: 'failed',
+        currentStep: null,
+        failureReason: `The flow "${flowOf(job)}" could not be loaded: ${error.message}`,
+      });
     } else if (job.run.threadIds.length === 0 && !wasReopened(job)) {
       // A run that never ran is dropped (a sent one goes back in line); a
       // retried one stays queued for a later tick.
@@ -246,6 +253,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     const parked = await deps.runs.updateInFlight(job.run.id, {
       state: 'waiting_human',
       currentStep: failedStep,
+      failureReason: failedStep ? failureReason(error) : null,
     });
     if (parked.isErr() || !parked.value) return;
     const why = failedStep
@@ -276,7 +284,11 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     if (outcome === 'failed' && neverRan) {
       await dropUnstarted(job, error);
     } else if (outcome === 'failed' && !trace.prOpen) {
-      await deps.runs.updateInFlight(run.id, { state: 'failed', currentStep: trace.step });
+      await deps.runs.updateInFlight(run.id, {
+        state: 'failed',
+        currentStep: trace.step,
+        failureReason: failureReason(error),
+      });
     } else {
       await park(job, outcome === 'failed' ? trace.step : null, error);
     }
@@ -319,6 +331,9 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
         agentStarted();
       }
     };
+
+    // The thread view draws the run's step chain from these.
+    await record({ flowSteps: flow.value.pipeline.nodes.map((node) => node.name) });
 
     const scope: FactoryRunScope = {
       runId: job.run.id,

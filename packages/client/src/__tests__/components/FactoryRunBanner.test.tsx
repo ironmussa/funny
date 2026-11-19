@@ -1,0 +1,157 @@
+import { fireEvent, render, screen } from '@testing-library/react';
+import { okAsync } from 'neverthrow';
+import { beforeEach, describe, expect, test, vi } from 'vitest';
+
+import type { FactoryRun } from '@/lib/api/factory';
+import { factoryRunSteps } from '@/lib/factory-run-labels';
+
+const mocks = vi.hoisted(() => ({
+  run: null as FactoryRun | null,
+  canSteer: true,
+  control: vi.fn(),
+}));
+
+vi.mock('@/data/factory/hooks', () => ({ useFactoryRunForThread: () => mocks.run }));
+vi.mock('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
+vi.mock('@/data/factory/actions', () => ({
+  controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
+}));
+vi.mock('@/lib/toast-error', () => ({ toastError: vi.fn() }));
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (_k: string, fallback?: string, vars?: Record<string, unknown>) =>
+      (fallback ?? _k).replace(/\{\{(\w+)\}\}/g, (_m, name) => String(vars?.[name] ?? '')),
+  }),
+}));
+
+import { FactoryRunBanner } from '@/components/thread/FactoryRunBanner';
+
+const STEPS = ['implement', 'pull-request', 'ci', 'merge'];
+
+const runOf = (over: Partial<FactoryRun> = {}): FactoryRun => ({
+  id: 'r1',
+  factoryId: 'f1',
+  issueNumber: 235,
+  prUrl: null,
+  state: 'working',
+  currentStep: 'implement',
+  threadIds: ['t1'],
+  startedAt: '2026-11-19T18:28:20.146Z',
+  completedAt: null,
+  source: 'manual',
+  flowName: 'issue-to-merge',
+  queueOrder: null,
+  waitReason: null,
+  flowSteps: STEPS,
+  failureReason: null,
+  ...over,
+});
+
+const statuses = () =>
+  STEPS.map((name) => screen.getByTestId(`factory-run-step-${name}`).getAttribute('data-status'));
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  mocks.run = null;
+  mocks.canSteer = true;
+  mocks.control.mockImplementation(() => okAsync(runOf()));
+});
+
+describe('FactoryRunBanner', () => {
+  test('shows nothing for a thread with no factory run', () => {
+    render(<FactoryRunBanner projectId="p1" threadId="t1" />);
+    expect(screen.queryByTestId('factory-run-banner')).toBeNull();
+  });
+
+  test('shows the step the run is on while it works', () => {
+    mocks.run = runOf();
+    render(<FactoryRunBanner projectId="p1" threadId="t1" />);
+    expect(screen.getByTestId('factory-run-banner')).toHaveTextContent('Factory · #235');
+    expect(screen.getByTestId('factory-run-flow')).toHaveTextContent('issue-to-merge');
+    expect(statuses()).toEqual(['current', 'pending', 'pending', 'pending']);
+    expect(screen.getByTestId('factory-run-banner-stop')).toBeInTheDocument();
+    expect(screen.queryByTestId('factory-run-banner-retry')).toBeNull();
+  });
+
+  // The incident of issue #343: the run failed at pull-request while the
+  // thread kept working, and the thread said nothing about it.
+  test('a run that failed says where and why, and offers a retry', () => {
+    mocks.run = runOf({
+      state: 'failed',
+      currentStep: 'pull-request',
+      failureReason:
+        'create_pr[pull-request] failed: No open pull request from the branch factory/issue-235-1cca3fa8: the agent did not open one.',
+    });
+    render(<FactoryRunBanner projectId="p1" threadId="t1" />);
+    expect(statuses()).toEqual(['done', 'failed', 'pending', 'pending']);
+    expect(screen.getByTestId('factory-run-failure')).toHaveTextContent('No open pull request');
+    expect(screen.queryByTestId('factory-run-banner-stop')).toBeNull();
+
+    fireEvent.click(screen.getByTestId('factory-run-banner-retry'));
+    expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
+  });
+
+  test('links the pull request once there is one', () => {
+    mocks.run = runOf({
+      state: 'waiting_ci',
+      currentStep: 'ci',
+      prUrl: 'https://github.com/o/r/pull/9',
+    });
+    render(<FactoryRunBanner projectId="p1" threadId="t1" />);
+    expect(statuses()).toEqual(['done', 'done', 'current', 'pending']);
+    expect(screen.getByTestId('factory-run-banner-pr')).toHaveAttribute(
+      'href',
+      'https://github.com/o/r/pull/9',
+    );
+  });
+
+  test('a caller who cannot steer the project sees the run but no controls', () => {
+    mocks.canSteer = false;
+    mocks.run = runOf({ state: 'failed', currentStep: 'pull-request', failureReason: 'x' });
+    render(<FactoryRunBanner projectId="p1" threadId="t1" />);
+    expect(screen.getByTestId('factory-run-banner')).toBeInTheDocument();
+    expect(screen.queryByTestId('factory-run-banner-retry')).toBeNull();
+  });
+});
+
+describe('factoryRunSteps', () => {
+  const names = (run: Partial<FactoryRun>) =>
+    factoryRunSteps({ ...runOf(), ...run }).map((s) => s.status);
+
+  test('a merged run has done every step', () => {
+    expect(names({ state: 'merged', currentStep: null })).toEqual(['done', 'done', 'done', 'done']);
+  });
+
+  test('a run parked with its PR ready has done every step', () => {
+    expect(names({ state: 'waiting_human', currentStep: null })).toEqual([
+      'done',
+      'done',
+      'done',
+      'done',
+    ]);
+  });
+
+  test('a run parked after a failure shows the failed step', () => {
+    expect(names({ state: 'waiting_human', currentStep: 'ci', failureReason: 'red CI' })).toEqual([
+      'done',
+      'done',
+      'failed',
+      'pending',
+    ]);
+  });
+
+  test('a retried run that has not entered a step yet shows them all pending', () => {
+    expect(names({ state: 'queued', currentStep: 'retrying' })).toEqual([
+      'pending',
+      'pending',
+      'pending',
+      'pending',
+    ]);
+  });
+
+  test('an older run with no recorded steps shows only its current step', () => {
+    expect(factoryRunSteps(runOf({ flowSteps: [], currentStep: 'ci' }))).toEqual([
+      { name: 'ci', status: 'current' },
+    ]);
+  });
+});

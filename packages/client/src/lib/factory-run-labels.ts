@@ -66,3 +66,38 @@ export function factoryWaitReasonText(t: TFunction, reason: FactoryWaitReason): 
       return t('factory.wait.unreadable', 'Its blockers could not be read from GitHub');
   }
 }
+
+export type FactoryStepStatus = 'done' | 'current' | 'failed' | 'pending';
+
+/** States a flow is moving through a step in. */
+const MOVING: ReadonlySet<FactoryRun['state']> = new Set([
+  'queued',
+  'working',
+  'pr_open',
+  'waiting_ci',
+  'fixing',
+]);
+
+/**
+ * Each step of the run's flow, with how far the run got: the steps before the
+ * current one are done; the current one is in progress, or failed when the
+ * run failed (or waits for the member after a failure) there. A run whose flow
+ * ended without a current step (merged, or parked with its PR ready) has done
+ * them all. Older runs recorded no steps: only the current one is known.
+ */
+export function factoryRunSteps(
+  run: Pick<FactoryRun, 'state' | 'currentStep' | 'flowSteps' | 'failureReason'>,
+): Array<{ name: string; status: FactoryStepStatus }> {
+  const names = run.flowSteps.length > 0 ? run.flowSteps : run.currentStep ? [run.currentStep] : [];
+  const at = run.currentStep ? names.indexOf(run.currentStep) : -1;
+  const flowEnded = run.state === 'merged' || (run.state === 'waiting_human' && at === -1);
+  const failedHere =
+    run.state === 'failed' || (run.state === 'waiting_human' && run.failureReason !== null);
+  return names.map((name, index) => {
+    if (flowEnded) return { name, status: 'done' };
+    if (at === -1 || index > at) return { name, status: 'pending' };
+    if (index < at) return { name, status: 'done' };
+    if (failedHere) return { name, status: 'failed' };
+    return { name, status: MOVING.has(run.state) ? 'current' : 'pending' };
+  });
+}

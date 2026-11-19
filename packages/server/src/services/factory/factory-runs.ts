@@ -25,6 +25,8 @@ import { factoryRuns } from '../../db/schema.js';
 
 const THREAD_IDS_SCHEMA = z.array(z.string());
 
+const STEP_NAMES_SCHEMA = z.array(z.string());
+
 const WAIT_REASON_SCHEMA = z.object({
   kind: z.enum([
     'blocker-not-sent',
@@ -113,6 +115,10 @@ export interface FactoryRunView {
   flowName: string | null;
   queueOrder: number | null;
   waitReason: FactoryWaitReason | null;
+  /** The flow's step names in order, once its flow started; empty before. */
+  flowSteps: string[];
+  /** Why the run failed, or null. */
+  failureReason: string | null;
 }
 
 export type FactoryRunSource = 'manual' | 'label';
@@ -141,6 +147,8 @@ const toView = (row: Row): FactoryRunView => ({
   flowName: row.flowName ?? null,
   queueOrder: row.queueOrder ?? null,
   waitReason: parseWaitReason(row.waitReason ?? null),
+  flowSteps: parseStepNames(row.flowSteps ?? null),
+  failureReason: row.failureReason ?? null,
 });
 
 function parseWaitReason(raw: string | null): FactoryWaitReason | null {
@@ -152,6 +160,12 @@ function parseWaitReason(raw: string | null): FactoryWaitReason | null {
 function parseThreadIds(raw: string | null): string[] {
   if (!raw) return [];
   const parsed = parseStoredJson(THREAD_IDS_SCHEMA, raw, 'factory_runs.thread_ids');
+  return parsed.ok ? parsed.value : [];
+}
+
+function parseStepNames(raw: string | null): string[] {
+  if (!raw) return [];
+  const parsed = parseStoredJson(STEP_NAMES_SCHEMA, raw, 'factory_runs.flow_steps');
   return parsed.ok ? parsed.value : [];
 }
 
@@ -172,7 +186,13 @@ export interface UpdateRunInput {
   prUrl?: string | null;
   threadIds?: string[];
   launchStartedAt?: string | null;
+  flowSteps?: string[];
+  failureReason?: string | null;
 }
+
+/** Update fields stored as they are, and the ones stored as JSON. */
+const PLAIN_FIELDS = ['currentStep', 'prUrl', 'launchStartedAt', 'failureReason'] as const;
+const JSON_FIELDS = ['threadIds', 'flowSteps'] as const;
 
 function changesFor(input: UpdateRunInput): Partial<Row> | null {
   const changes: Partial<Row> = {};
@@ -183,10 +203,12 @@ function changesFor(input: UpdateRunInput): Partial<Row> | null {
       changes.completedAt = new Date().toISOString();
     }
   }
-  if (input.currentStep !== undefined) changes.currentStep = input.currentStep;
-  if (input.prUrl !== undefined) changes.prUrl = input.prUrl;
-  if (input.threadIds !== undefined) changes.threadIds = JSON.stringify(input.threadIds);
-  if (input.launchStartedAt !== undefined) changes.launchStartedAt = input.launchStartedAt;
+  for (const field of PLAIN_FIELDS) {
+    if (input[field] !== undefined) changes[field] = input[field];
+  }
+  for (const field of JSON_FIELDS) {
+    if (input[field] !== undefined) changes[field] = JSON.stringify(input[field]);
+  }
   return Object.keys(changes).length === 0 ? null : changes;
 }
 
@@ -256,6 +278,8 @@ function queueOperations(newId: () => string) {
             queueOrder: first + index,
             waitReason: null,
             admittedAt: null,
+            flowSteps: null,
+            failureReason: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -290,7 +314,12 @@ function queueOperations(newId: () => string) {
 
     /** `queued → requested`, keeping its place: its flow could not start any agent. */
     requeue: (runId: string) =>
-      moveRun(runId, 'requeue', { admittedAt: null, currentStep: null, launchStartedAt: null }),
+      moveRun(runId, 'requeue', {
+        admittedAt: null,
+        currentStep: null,
+        launchStartedAt: null,
+        failureReason: null,
+      }),
 
     /**
      * `requested → stopped` for one run, or for every waiting run of the factory
@@ -426,6 +455,8 @@ export function createFactoryRunsRepository(
         queueOrder: null,
         waitReason: null,
         admittedAt: input.state === 'requested' ? null : new Date().toISOString(),
+        flowSteps: null,
+        failureReason: null,
       };
       return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
         toView(row),
@@ -527,6 +558,7 @@ export function createFactoryRunsRepository(
             completedAt: null,
             launchStartedAt: null,
             threadIds: JSON.stringify(threadIds),
+            failureReason: null,
           })
           .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...REOPENABLE_STATES])))
           .returning({ id: factoryRuns.id }),

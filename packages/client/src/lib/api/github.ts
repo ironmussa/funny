@@ -158,6 +158,29 @@ export const githubApi = {
       `/github/pr-detail?projectId=${projectId}&prNumber=${prNumber}`,
     ),
 
+  githubActionRuns: (projectId: string, params: { branch?: string | null; page?: number } = {}) => {
+    const p = new URLSearchParams({ projectId });
+    if (params.branch) p.set('branch', params.branch);
+    if (params.page) p.set('page', String(params.page));
+    return request<import('@funny/shared').ActionRunsPage>(`/github/actions/runs?${p}`);
+  },
+
+  githubActionJobs: (projectId: string, runId: number) =>
+    request<{ jobs: import('@funny/shared').ActionJob[] }>(
+      `/github/actions/jobs?${new URLSearchParams({ projectId, runId: String(runId) })}`,
+    ),
+
+  githubActionJobLog: (projectId: string, jobId: number) =>
+    request<import('@funny/shared').ActionJobLog>(
+      `/github/actions/job-log?${new URLSearchParams({ projectId, jobId: String(jobId) })}`,
+    ),
+
+  githubRerunFailedJobs: (projectId: string, runId: number) =>
+    request<{ ok: boolean }>('/github/actions/rerun-failed', {
+      method: 'POST',
+      body: JSON.stringify({ projectId, runId }),
+    }),
+
   githubPRThreads: (projectId: string, prNumber: number) =>
     request<{ threads: import('@funny/shared').PRReviewThread[] }>(
       `/github/pr-threads?projectId=${projectId}&prNumber=${prNumber}`,

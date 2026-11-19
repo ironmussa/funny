@@ -123,6 +123,8 @@ export type CICheckConclusion =
   | 'timed_out'
   | 'action_required'
   | 'stale'
+  /** Actions only: the run could not start (e.g. an invalid workflow file). */
+  | 'startup_failure'
   | null;
 
 export interface CICheck {
@@ -276,4 +278,67 @@ export interface CloneRepoRequest {
   cloneUrl: string;
   destinationPath: string;
   name?: string;
+}
+
+// ── GitHub Actions (the review pane's Actions tab) ──────────
+
+/** A run, job or step lifecycle: GitHub's `waiting` / `requested` / `pending` count as `queued`. */
+export type ActionStatus = 'queued' | 'in_progress' | 'completed';
+
+/** One workflow run, as listed by `GET /repos/{owner}/{repo}/actions/runs`. */
+export interface ActionRun {
+  id: number;
+  /** Workflow name (`CI`, `E2E`, …). */
+  name: string;
+  /** What GitHub shows as the run's title: the commit message or PR title. */
+  display_title: string;
+  run_number: number;
+  run_attempt: number;
+  /** Trigger: `push`, `pull_request`, `schedule`, `workflow_dispatch`, … */
+  event: string;
+  status: ActionStatus;
+  conclusion: CICheckConclusion;
+  head_branch: string | null;
+  head_sha: string;
+  html_url: string;
+  actor: GitHubUserRef | null;
+  created_at: string;
+  run_started_at: string | null;
+  updated_at: string;
+}
+
+export interface ActionRunsPage {
+  runs: ActionRun[];
+  total_count: number;
+  hasMore: boolean;
+}
+
+export interface ActionStep {
+  number: number;
+  name: string;
+  status: ActionStatus;
+  conclusion: CICheckConclusion;
+  started_at: string | null;
+  completed_at: string | null;
+}
+
+export interface ActionJob {
+  id: number;
+  name: string;
+  status: ActionStatus;
+  conclusion: CICheckConclusion;
+  html_url: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  steps: ActionStep[];
+}
+
+/**
+ * The end of a job's log, up to its last `##[error]` line: where a failed job
+ * says why. Timestamps are stripped; error lines are colored with ANSI red.
+ */
+export interface ActionJobLog {
+  lines: string[];
+  /** Earlier lines were cut. */
+  truncated: boolean;
 }

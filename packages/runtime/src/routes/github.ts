@@ -6,13 +6,14 @@
  */
 
 /**
- * GitHub OAuth (Device Flow) + repo listing + PR routes.
+ * GitHub OAuth (Device Flow) + repo listing + PR + Actions routes.
  * Mounted at /api/github. Split by verb — see ./github/*.ts.
  */
 
 import { Hono } from 'hono';
 
 import type { HonoEnv } from '../types/hono-env.js';
+import { actionRoutes } from './github/actions.js';
 import { authRoutes } from './github/auth.js';
 import { issueRoutes } from './github/issues.js';
 import { prFileRoutes } from './github/pr-files.js';
@@ -28,3 +29,4 @@ githubRoutes.route('/', issueRoutes);
 githubRoutes.route('/', prRoutes);
 githubRoutes.route('/', prThreadRoutes);
 githubRoutes.route('/', prFileRoutes);
+githubRoutes.route('/', actionRoutes);

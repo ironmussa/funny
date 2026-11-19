@@ -84,6 +84,12 @@ export type {
   PRFile,
   PRCommit,
   CloneRepoRequest,
+  ActionStatus,
+  ActionRun,
+  ActionRunsPage,
+  ActionStep,
+  ActionJob,
+  ActionJobLog,
 } from './types/github.js';
 
 export type {

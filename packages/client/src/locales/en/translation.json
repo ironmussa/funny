@@ -462,6 +462,25 @@
       "rateLimitedHint": "GitHub API rate limit reached. Polling paused.",
       "openOnGithub": "Open PR on GitHub"
     },
+    "actions": {
+      "tab": "Actions",
+      "noProject": "Select a project to view its workflow runs",
+      "thisBranch": "This branch",
+      "allBranches": "All branches",
+      "loading": "Loading workflow runs…",
+      "loadFailed": "Could not load workflow runs",
+      "noRuns": "No workflow runs",
+      "rerun": "Re-run failed jobs",
+      "rerunStarted": "Re-running failed jobs",
+      "rerunFailed": "Could not re-run: {{message}}",
+      "openRun": "Open run on GitHub",
+      "openOnGithub": "Open Actions on GitHub",
+      "loadingJobs": "Loading jobs…",
+      "showLog": "Show log",
+      "hideLog": "Hide log",
+      "loadingLog": "Loading log…",
+      "logTruncated": "Showing the last lines up to the error"
+    },
     "issues": {
       "tab": "Issues",
       "loading": "Loading issues…",

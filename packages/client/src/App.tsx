@@ -1,4 +1,13 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  type ComponentType,
+  type ReactNode,
+} from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 
 import { CenterDockview } from '@/components/CenterDockview';
@@ -96,6 +105,9 @@ const StashPanel = lazy(() =>
 const PRsPanel = lazy(() =>
   import('@/components/review-pane/panels/ChangesPanel').then((m) => ({ default: m.PRsPanel })),
 );
+const ActionsPanel = lazy(() =>
+  import('@/components/review-pane/panels/ChangesPanel').then((m) => ({ default: m.ActionsPanel })),
+);
 const IssuesPanel = lazy(() =>
   import('@/components/review-pane/panels/ChangesPanel').then((m) => ({ default: m.IssuesPanel })),
 );
@@ -144,11 +156,23 @@ const BrowserPanel = lazy(() =>
   import('@/components/browser-panel/BrowserPanel').then((m) => ({ default: m.BrowserPanel })),
 );
 
-function WorktreesTab({ ready }: { ready: boolean }) {
+/** The review pane's dockview tabs, in order. `id` is the `ReviewSubTab`. */
+const REVIEW_TABS: Array<{ id: string; title: string; Panel: ComponentType }> = [
+  { id: 'changes', title: 'Changes', Panel: ChangesPanel },
+  { id: 'graph', title: 'History', Panel: GraphPanel },
+  { id: 'stash', title: 'Stash', Panel: StashPanel },
+  { id: 'worktrees', title: 'Worktrees', Panel: WorktreesPanel },
+  { id: 'prs', title: 'PRs', Panel: PRsPanel },
+  { id: 'ci', title: 'Actions', Panel: ActionsPanel },
+  { id: 'issues', title: 'Issues', Panel: IssuesPanel },
+];
+
+/** A review tab's lazy panel, held back until the primary view is ready. */
+function ReviewTabPanel({ ready, Panel }: { ready: boolean; Panel: ComponentType }) {
   if (!ready) return RIGHT_PANE_LOADING_FALLBACK;
   return (
     <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
-      <WorktreesPanel />
+      <Panel />
     </Suspense>
   );
 }
@@ -309,77 +333,21 @@ export function App() {
   const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
 
   // When the user is on the review tab and has git context, the right pane
-  // is split into native dockview tabs (Changes/History/Stash/PRs/Issues). For the
+  // is split into native dockview tabs (Changes/History/Stash/PRs/Actions/Issues). For the
   // other top-level tabs (files / activity / project-mode), we fall back to a
   // single header-less panel.
   const useReviewTabs =
     rightPaneVisible && rightPaneTab === 'review' && (activeThreadCanShowGit || hasSelectedProject);
 
   const rightTabs: RightTabSpec[] | undefined = useReviewTabs
-    ? [
-        {
-          id: 'changes',
-          title: 'Changes',
-          content: primaryViewReady ? (
-            <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
-              <ChangesPanel />
-            </Suspense>
-          ) : (
-            RIGHT_PANE_LOADING_FALLBACK
-          ),
-        },
-        {
-          id: 'graph',
-          title: 'History',
-          content: primaryViewReady ? (
-            <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
-              <GraphPanel />
-            </Suspense>
-          ) : (
-            RIGHT_PANE_LOADING_FALLBACK
-          ),
-        },
-        {
-          id: 'stash',
-          title: 'Stash',
-          content: primaryViewReady ? (
-            <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
-              <StashPanel />
-            </Suspense>
-          ) : (
-            RIGHT_PANE_LOADING_FALLBACK
-          ),
-        },
-        {
-          id: 'worktrees',
-          title: 'Worktrees',
-          content: <WorktreesTab ready={primaryViewReady} />,
-        },
-        {
-          id: 'prs',
-          title: 'PRs',
-          content: primaryViewReady ? (
-            <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
-              <PRsPanel />
-            </Suspense>
-          ) : (
-            RIGHT_PANE_LOADING_FALLBACK
-          ),
-        },
-        {
-          id: 'issues',
-          title: 'Issues',
-          content: primaryViewReady ? (
-            <Suspense fallback={RIGHT_PANE_LOADING_FALLBACK}>
-              <IssuesPanel />
-            </Suspense>
-          ) : (
-            RIGHT_PANE_LOADING_FALLBACK
-          ),
-        },
-      ].map((tab) => ({
-        ...tab,
-        content: <ErrorBoundary area={`review-${tab.id}`}>{tab.content}</ErrorBoundary>,
+    ? REVIEW_TABS.map(({ id, title, Panel }) => ({
+        id,
+        title,
+        content: (
+          <ErrorBoundary area={`review-${id}`}>
+            <ReviewTabPanel ready={primaryViewReady} Panel={Panel} />
+          </ErrorBoundary>
+        ),
       }))
     : undefined;
 

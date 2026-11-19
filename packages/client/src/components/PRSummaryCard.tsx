@@ -29,7 +29,8 @@ interface PRSummaryCardProps {
   visible: boolean;
 }
 
-export function CheckIcon({ check }: { check: CICheck }) {
+/** Status icon of a check, workflow run, job or step (anything with a status and conclusion). */
+export function CheckIcon({ check }: { check: Pick<CICheck, 'status' | 'conclusion'> }) {
   if (check.status !== 'completed') {
     return <Loader2 className="icon-sm shrink-0 animate-spin text-yellow-500" />;
   }
@@ -40,6 +41,7 @@ export function CheckIcon({ check }: { check: CICheck }) {
       return <CheckCircle2 className="size-3.5 shrink-0 text-green-500" />;
     case 'failure':
     case 'timed_out':
+    case 'startup_failure':
     case 'action_required':
       return <XCircle className="size-3.5 shrink-0 text-red-500" />;
     case 'cancelled':

@@ -460,6 +460,25 @@
       "rateLimitedHint": "Se alcanzó el límite de la API de GitHub. Sondeo en pausa.",
       "openOnGithub": "Abrir PR en GitHub"
     },
+    "actions": {
+      "tab": "Actions",
+      "noProject": "Selecciona un proyecto para ver sus ejecuciones",
+      "thisBranch": "Esta rama",
+      "allBranches": "Todas las ramas",
+      "loading": "Cargando ejecuciones…",
+      "loadFailed": "No se pudieron cargar las ejecuciones",
+      "noRuns": "No hay ejecuciones",
+      "rerun": "Reejecutar jobs fallidos",
+      "rerunStarted": "Reejecutando jobs fallidos",
+      "rerunFailed": "No se pudo reejecutar: {{message}}",
+      "openRun": "Abrir ejecución en GitHub",
+      "openOnGithub": "Abrir Actions en GitHub",
+      "loadingJobs": "Cargando jobs…",
+      "showLog": "Ver log",
+      "hideLog": "Ocultar log",
+      "loadingLog": "Cargando log…",
+      "logTruncated": "Mostrando las últimas líneas hasta el error"
+    },
     "issues": {
       "tab": "Issues",
       "loading": "Cargando issues…",

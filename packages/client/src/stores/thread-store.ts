@@ -501,7 +501,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const { queuedCount, queuedNextMessage, ...thread } = snapshot.thread;
 
       if (getSelectGeneration() !== gen) {
-        clearWSBuffer(threadId);
+        // A newer selection of this same thread (A → B → A) owns the buffer:
+        // its load is still in flight and will replay the events when it
+        // settles, so clearing here would lose them.
+        if (getSelectingThreadId() !== threadId) clearWSBuffer(threadId);
         return;
       }
 

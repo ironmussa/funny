@@ -1702,6 +1702,9 @@
     "sendLimit": "Up to {{max}} issues per send",
     "banner": {
       "title": "Factory · #{{issue}}"
+    },
+    "indicator": {
+      "label": "Factory run: {{step}}"
     }
   }
 }

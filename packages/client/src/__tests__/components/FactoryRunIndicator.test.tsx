@@ -24,7 +24,7 @@ vi.mock('react-i18next', () => ({
   }),
 }));
 
-import { FactoryRunBanner } from '@/components/thread/FactoryRunBanner';
+import { FactoryRunIndicator } from '@/components/thread/FactoryRunIndicator';
 
 const STEPS = ['implement', 'pull-request', 'ci', 'merge'];
 
@@ -57,49 +57,66 @@ beforeEach(() => {
   mocks.control.mockImplementation(() => okAsync(runOf()));
 });
 
-describe('FactoryRunBanner', () => {
+/** Render the footer icon and open its popover. */
+function openIndicator() {
+  render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+  fireEvent.click(screen.getByTestId('factory-run-indicator'));
+}
+
+describe('FactoryRunIndicator', () => {
   test('shows nothing for a thread with no factory run', () => {
-    render(<FactoryRunBanner projectId="p1" threadId="t1" />);
-    expect(screen.queryByTestId('factory-run-banner')).toBeNull();
+    render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+    expect(screen.queryByTestId('factory-run-indicator')).toBeNull();
   });
 
-  test('shows the step the run is on while it works', () => {
+  test('the icon names the step the run is on; its popover lists every step', () => {
     mocks.run = runOf();
-    render(<FactoryRunBanner projectId="p1" threadId="t1" />);
-    expect(screen.getByTestId('factory-run-banner')).toHaveTextContent('Factory · #235');
+    render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+    const icon = screen.getByTestId('factory-run-indicator');
+    expect(icon).toHaveTextContent('implement');
+    expect(screen.queryByTestId('factory-run-popover')).toBeNull();
+
+    fireEvent.click(icon);
+    expect(screen.getByTestId('factory-run-popover')).toHaveTextContent('Factory · #235');
     expect(screen.getByTestId('factory-run-flow')).toHaveTextContent('issue-to-merge');
     expect(statuses()).toEqual(['current', 'pending', 'pending', 'pending']);
-    expect(screen.getByTestId('factory-run-banner-stop')).toBeInTheDocument();
-    expect(screen.queryByTestId('factory-run-banner-retry')).toBeNull();
+    expect(screen.getByTestId('factory-run-stop')).toBeInTheDocument();
+    expect(screen.queryByTestId('factory-run-retry')).toBeNull();
   });
 
   // The incident of issue #343: the run failed at pull-request while the
   // thread kept working, and the thread said nothing about it.
-  test('a run that failed says where and why, and offers a retry', () => {
+  test('a run that failed names the failed step, says why, and offers a retry', () => {
     mocks.run = runOf({
       state: 'failed',
       currentStep: 'pull-request',
       failureReason:
         'create_pr[pull-request] failed: No open pull request from the branch factory/issue-235-1cca3fa8: the agent did not open one.',
     });
-    render(<FactoryRunBanner projectId="p1" threadId="t1" />);
+    render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+    expect(screen.getByTestId('factory-run-indicator')).toHaveTextContent('pull-request');
+
+    fireEvent.click(screen.getByTestId('factory-run-indicator'));
     expect(statuses()).toEqual(['done', 'failed', 'pending', 'pending']);
     expect(screen.getByTestId('factory-run-failure')).toHaveTextContent('No open pull request');
-    expect(screen.queryByTestId('factory-run-banner-stop')).toBeNull();
+    expect(screen.queryByTestId('factory-run-stop')).toBeNull();
 
-    fireEvent.click(screen.getByTestId('factory-run-banner-retry'));
+    fireEvent.click(screen.getByTestId('factory-run-retry'));
     expect(mocks.control).toHaveBeenCalledWith('retry', 'p1', 'r1');
   });
 
-  test('links the pull request once there is one', () => {
+  test('a merged run names its state and links the pull request', () => {
     mocks.run = runOf({
-      state: 'waiting_ci',
-      currentStep: 'ci',
+      state: 'merged',
+      currentStep: null,
       prUrl: 'https://github.com/o/r/pull/9',
     });
-    render(<FactoryRunBanner projectId="p1" threadId="t1" />);
-    expect(statuses()).toEqual(['done', 'done', 'current', 'pending']);
-    expect(screen.getByTestId('factory-run-banner-pr')).toHaveAttribute(
+    render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+    expect(screen.getByTestId('factory-run-indicator')).toHaveTextContent('Merged');
+
+    fireEvent.click(screen.getByTestId('factory-run-indicator'));
+    expect(statuses()).toEqual(['done', 'done', 'done', 'done']);
+    expect(screen.getByTestId('factory-run-pr')).toHaveAttribute(
       'href',
       'https://github.com/o/r/pull/9',
     );
@@ -108,9 +125,9 @@ describe('FactoryRunBanner', () => {
   test('a caller who cannot steer the project sees the run but no controls', () => {
     mocks.canSteer = false;
     mocks.run = runOf({ state: 'failed', currentStep: 'pull-request', failureReason: 'x' });
-    render(<FactoryRunBanner projectId="p1" threadId="t1" />);
-    expect(screen.getByTestId('factory-run-banner')).toBeInTheDocument();
-    expect(screen.queryByTestId('factory-run-banner-retry')).toBeNull();
+    openIndicator();
+    expect(screen.getByTestId('factory-run-popover')).toBeInTheDocument();
+    expect(screen.queryByTestId('factory-run-retry')).toBeNull();
   });
 });
 

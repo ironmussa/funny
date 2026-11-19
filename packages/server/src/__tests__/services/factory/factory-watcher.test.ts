@@ -19,6 +19,7 @@ import {
 } from '../../../services/factory/factory-run-control.js';
 import {
   createFactoryRunsRepository,
+  factoryRunBranch,
   type FactoryRunView,
 } from '../../../services/factory/factory-runs.js';
 import {
@@ -81,6 +82,8 @@ interface GithubScript {
   closed?: number[];
   /** Each pull request's state, by number; an absent one is open. */
   prStates?: Record<number, 'open' | 'merged' | 'closed'>;
+  /** The pull request on each branch in any state (lookups with `state: 'all'`). */
+  branchPrs?: Record<string, { number: number; url: string }>;
 }
 
 /** Fake GitHub side: a fixed repo and issue list, plus a scripted pull request. */
@@ -88,12 +91,17 @@ function fakeGithub(
   repo: string | null,
   issues: FactoryIssue[],
   script: GithubScript = {},
-): FactoryGithubPort & { fileReads: string[]; merges: number } {
+): FactoryGithubPort & {
+  fileReads: string[];
+  merges: number;
+  prLookups: Array<{ branch: string; state: string }>;
+} {
   const answers = ([] as CiState[]).concat(script.ci ?? { kind: 'green' });
   let looks = 0;
   const port = {
     fileReads: [] as string[],
     merges: 0,
+    prLookups: [] as Array<{ branch: string; state: string }>,
     resolveRepo: async () => repo,
     listReadyIssues: () => okAsync(issues),
     getIssue: (_reader: unknown, number: number) =>
@@ -116,8 +124,13 @@ function fakeGithub(
       port.fileReads.push(path);
       return okAsync(script.files?.[path] ?? null);
     },
-    findPullRequest: () =>
-      okAsync(script.pr === false ? null : { number: 9, url: 'https://github.com/o/r/pull/9' }),
+    findPullRequest: (_reader: unknown, branch: string, state: 'open' | 'all' = 'open') => {
+      port.prLookups.push({ branch, state });
+      if (state === 'all') return okAsync(script.branchPrs?.[branch] ?? null);
+      return okAsync(
+        script.pr === false ? null : { number: 9, url: 'https://github.com/o/r/pull/9' },
+      );
+    },
     pullRequests: {
       prState: (pr: { number: number }) => okAsync(script.prStates?.[pr.number] ?? 'open'),
       ciState: () => okAsync(answers[Math.min(looks++, answers.length - 1)]!),
@@ -930,9 +943,10 @@ describe('factory operator controls', () => {
   ) {
     const poll = fakePoll();
     const launcher = fakeLauncher();
+    const github = fakeGithub('o/r', opts.issues ?? issue7, opts.github);
     await startFactoryWatcher({
       ports,
-      github: fakeGithub('o/r', opts.issues ?? issue7, opts.github),
+      github,
       createPoll: poll.createPoll,
       launch: launcher.launch,
       resolveRuntime,
@@ -940,7 +954,7 @@ describe('factory operator controls', () => {
       checkAccess: opts.checkAccess,
       notify: async () => undefined,
     });
-    return { poll, launcher };
+    return { poll, launcher, github };
   }
 
   /** A run that parked a minute ago (its `completedAt` is when it parked). */
@@ -1019,6 +1033,105 @@ describe('factory operator controls', () => {
 
     expect((await repo.closeParked(run.id, 'merged'))._unsafeUnwrap()).toBe(false);
     expect((await runById(run.id)).state).toBe('queued');
+  });
+
+  /** Make a parked run look parked `days` ago. */
+  const parkedDaysAgo = (runId: string, days: number) =>
+    testDb.sqlite
+      .query('UPDATE factory_runs SET completed_at = ? WHERE id = ?')
+      .run(new Date(Date.now() - days * 24 * 60 * 60 * 1000).toISOString(), runId);
+
+  // A custom flow without a `create_pr` step never records the pull request
+  // its agent opened, so the run could only be found by its branch.
+  test('a parked run with no recorded pull request is closed by the one on its branch', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedParkedRun(factoryId, ['t-1']);
+    const { poll, github } = await watch({
+      issues: [],
+      github: {
+        branchPrs: {
+          [factoryRunBranch(run)]: { number: 12, url: 'https://github.com/o/r/pull/12' },
+        },
+        prStates: { 12: 'merged' },
+      },
+    });
+
+    await poll.ticks[0]!();
+
+    expect(github.prLookups).toEqual([{ branch: factoryRunBranch(run), state: 'all' }]);
+    expect(await runById(run.id)).toMatchObject({
+      state: 'merged',
+      prUrl: 'https://github.com/o/r/pull/12',
+    });
+  });
+
+  test('a pull request found open on the branch is recorded and the run keeps waiting', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedParkedRun(factoryId, ['t-1']);
+    const { poll, github } = await watch({
+      issues: [],
+      github: {
+        branchPrs: {
+          [factoryRunBranch(run)]: { number: 12, url: 'https://github.com/o/r/pull/12' },
+        },
+      },
+    });
+
+    await poll.ticks[0]!();
+    await poll.ticks[0]!();
+
+    expect(await runById(run.id)).toMatchObject({
+      state: 'waiting_human',
+      prUrl: 'https://github.com/o/r/pull/12',
+    });
+    // Recorded on the first tick: the second reads it instead of searching again.
+    expect(github.prLookups).toHaveLength(1);
+  });
+
+  test('a parked run with no pull request on its branch keeps waiting', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedParkedRun(factoryId, ['t-1']);
+    const { poll } = await watch({ issues: [] });
+
+    await poll.ticks[0]!();
+
+    expect(await runById(run.id)).toMatchObject({ state: 'waiting_human', prUrl: null });
+  });
+
+  test('an old parked run with no recorded pull request is not looked up again', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedParkedRun(factoryId, ['t-1']);
+    parkedDaysAgo(run.id, 15);
+    const { poll, github } = await watch({ issues: [] });
+
+    await poll.ticks[0]!();
+
+    expect(github.prLookups).toEqual([]);
+  });
+
+  test('a paused factory still closes a parked run whose pull request a person merged', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedParkedWithPr(factoryId);
+    await createFactorySettingsService().save('alice', 'p1', { enabled: false });
+    const { poll } = await watch({ issues: [], github: { prStates: { 9: 'merged' } } });
+
+    expect(scheduledFactoryCount()).toBe(1);
+    await poll.ticks[0]!();
+
+    expect((await runById(run.id)).state).toBe('merged');
+    // Nothing left to close: the paused factory stops polling.
+    await poll.ticks[0]!();
+    expect(scheduledFactoryCount()).toBe(0);
+  });
+
+  test('a paused factory whose parked runs cannot close any more is not polled', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedParkedRun(factoryId, ['t-1']);
+    parkedDaysAgo(run.id, 15);
+    await createFactorySettingsService().save('alice', 'p1', { enabled: false });
+    await watch({ issues: [] });
+
+    expect(scheduledFactoryCount()).toBe(0);
   });
 
   test('a paused factory finishes its run in flight but admits no new issue', async () => {

@@ -68,7 +68,11 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
 5. **Finished outside the factory**: each tick looks at the parked runs (`waiting_human`, `failed`)
    that have a PR. If a person merged it, the run becomes `merged`; if it was closed without a
    merge, `stopped` with that reason. The write is a compare-and-set from the parked states
-   (`closeParked`), so a run retried in the meantime is left alone.
+   (`closeParked`), so a run retried in the meantime is left alone. This works for any flow: a run
+   with no recorded PR (its flow has no `create_pr` step) is looked up on its branch
+   (`factoryRunBranch`, any state) for `BRANCH_LOOKUP_WINDOW_MS` (14 days) after it parked, and
+   the PR found is recorded. A paused factory keeps polling while it has such a run
+   (`awaitsPullRequest`), and stops once none is left.
 
 Each run executes its own `flow_name` (resume, retry and take-over too); rows from before the
 queue fall back to the factory's flow.

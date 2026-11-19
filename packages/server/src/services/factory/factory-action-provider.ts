@@ -40,7 +40,7 @@ import { log } from '../../lib/logger.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import type { FactoryGithubPort } from './factory-github.js';
-import type { FactoryPullRequestRef } from './factory-pull-requests.js';
+import { prNumberOf, type FactoryPullRequestRef } from './factory-pull-requests.js';
 import type { UpdateRunInput } from './factory-runs.js';
 import type { ThreadOutcome, WaitAfter } from './factory-thread-waits.js';
 
@@ -113,8 +113,6 @@ interface StepThread {
 /** Allowance for the runner's clock when comparing its timestamps with the server's. */
 const CLOCK_SLACK_MS = 60 * 1000;
 
-const PR_NUMBER = /\/pull\/(\d+)(?:$|[/?#])/;
-
 const refused = (step: string, why: string): ActionResult => ({
   ok: false,
   error: `${step} is not available in a factory flow: ${why}`,
@@ -147,8 +145,8 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   const title = `${titlePrefix}${scope.issueTitle}`.slice(0, 200);
 
   const pullRequest = (): FactoryPullRequestRef | null => {
-    const number = prUrl ? Number(PR_NUMBER.exec(prUrl)?.[1]) : NaN;
-    if (!Number.isInteger(number)) return null;
+    const number = prNumberOf(prUrl);
+    if (number === null) return null;
     return {
       repo: scope.repo,
       number,

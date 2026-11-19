@@ -35,6 +35,7 @@ function providerWith(over: Partial<Parameters<typeof createFactoryActionProvide
     github: {
       findPullRequest: () => okAsync(null),
       pullRequests: {
+        prState: () => okAsync('open' as const),
         ciState: () => okAsync({ kind: 'green' as const }),
         merge: () =>
           okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),

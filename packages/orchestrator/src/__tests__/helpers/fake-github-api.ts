@@ -62,7 +62,14 @@ export interface FakeRepoSettings {
 export interface FakeCheck {
   name: string;
   status: 'queued' | 'in_progress' | 'completed';
-  conclusion?: 'success' | 'failure' | 'neutral' | 'skipped' | 'timed_out' | 'cancelled';
+  conclusion?:
+    | 'success'
+    | 'failure'
+    | 'neutral'
+    | 'skipped'
+    | 'timed_out'
+    | 'cancelled'
+    | 'action_required';
   /** The job's log, served by `GET /actions/jobs/:id/logs`. */
   log?: string;
 }

@@ -52,8 +52,9 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    issue is closed or it has a merged run in this factory; an unreadable blocker list blocks for
    that tick. A partial unique index (migration 098) allows one non-terminal run per issue, so a
    queued issue cannot be sent or labelled into a second run.
-2. **Agent steps**: the first is a new thread on the enabler's runtime (local / worktree on their
-   runner via `startThreadOnRunner`, or their sandbox). Every later agent step (e.g. a CI fix)
+2. **Agent steps**: the first is a new thread on the enabler's runtime (a worktree on their runner
+   via `startThreadOnRunner`, also when their runtime is `local`, so an unattended agent never
+   works in their own checkout; or their sandbox). Every later agent step (e.g. a CI fix)
    **continues that thread** with a follow-up message, so the agent keeps its context. The agent
    commits, pushes the run's branch (`factory/issue-<n>-<runId8>`) and opens the PR; the server has no
    checkout.

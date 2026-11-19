@@ -96,6 +96,19 @@ function redResult(ci: Extract<CiState, { kind: 'failing' | 'conflict' }>): CiAc
   };
 }
 
+/**
+ * Checks that could not run: not retried (the flow's fix loop retries only
+ * "Failing checks" and conflicts), so the run waits for the member with why.
+ */
+function blockedResult(ci: Extract<CiState, { kind: 'blocked' }>): CiActionResult {
+  const checks = ci.checks.map((check) => `${check.name} (${check.conclusion}: ${check.excerpt})`);
+  return {
+    ok: false,
+    error: `Checks that need a person, not a code change: ${checks.join('; ')}`,
+    metadata: { verdict: 'blocked', blockedChecks: ci.checks },
+  };
+}
+
 const stopped: CiActionResult = { ok: false, error: 'The run was stopped.' };
 
 /** A terminal verdict for one look at the CI, or null while it is still pending. */
@@ -106,6 +119,8 @@ function verdictOf(state: CiState, elapsedMs: number): CiActionResult | null {
     case 'failing':
     case 'conflict':
       return redResult(state);
+    case 'blocked':
+      return blockedResult(state);
     case 'none':
       return elapsedMs >= NO_CHECKS_GRACE_MS
         ? { ok: true, output: 'no-checks', metadata: { verdict: 'no-checks' } }

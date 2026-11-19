@@ -222,9 +222,10 @@ describe('factory watcher', () => {
 
     expect(launcher.calls).toHaveLength(1);
     expect(launcher.calls[0]!.userId).toBe('alice');
+    // A local runtime runs the agent in a worktree, never in the enabler's checkout.
     expect(launcher.calls[0]!.body).toMatchObject({
       projectId: 'p1',
-      mode: 'local',
+      mode: 'worktree',
       source: 'factory',
     });
     expect(launcher.calls[0]!.body.prompt).toContain('issue #7 of acme/repo');
@@ -630,6 +631,25 @@ describe('factory flow', () => {
     expect(run.currentStep).toBe('ci');
     expect(notices).toHaveLength(1);
     expect(notices[0]!.title).toBe('Issue #7 needs you');
+  });
+
+  // The PR #342 retry: a 0security status in `error` sent the agent to "fix"
+  // a billing check. Checks that could not run now wait for the member.
+  test('checks that could not run wait for the member without a fix attempt', async () => {
+    const blocked: CiState = {
+      kind: 'blocked',
+      checks: [{ name: '0security - PR Security', conclusion: 'error', excerpt: 'add a card' }],
+    };
+    const { factoryId, github, followUps, notices } = await runFlow(
+      { ci: blocked },
+      finishedThreads('completed'),
+    );
+    const run = await eventually(factoryId, (r) => r.state === 'waiting_human');
+    expect(followUps).toHaveLength(0);
+    expect(github.merges).toBe(0);
+    expect(run.currentStep).toBe('ci');
+    expect(run.failureReason).toContain('0security - PR Security');
+    expect(notices).toHaveLength(1);
   });
 
   test('a failed agent thread fails the run before any pull request step', async () => {

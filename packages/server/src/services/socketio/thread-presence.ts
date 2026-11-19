@@ -107,7 +107,7 @@ export function setupThreadPresenceHandlers(socket: Socket, userId: string): voi
   const openThreads: Set<string> = (socket.data.openThreads ??= new Set<string>());
 
   socket.on(THREAD_OPEN_EVENT, async (raw: unknown) => {
-    if (isRateLimited(socket.id, 60, 10_000)) return;
+    if (isRateLimited(socket.id, 60, 10_000, THREAD_OPEN_EVENT)) return;
     const parsed = threadOpenSchema.safeParse(raw);
     if (!parsed.success) return;
     const { threadId } = parsed.data;

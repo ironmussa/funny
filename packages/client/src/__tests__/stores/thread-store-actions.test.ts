@@ -130,7 +130,16 @@ import { getThreadsData } from '@/data/threads/store';
 import { withThreadIndex } from '@/data/threads/testing';
 import { prefetchThreadData } from '@/stores/thread-machine-bridge';
 import { useThreadStore } from '@/stores/thread-store';
+import {
+  clearWSBuffer,
+  getAndClearWSBuffer,
+  getSelectGeneration,
+  getSelectingThreadId,
+  nextSelectGeneration,
+  setSelectingThreadId,
+} from '@/stores/thread-store-internals';
 import { readActiveThreadView } from '@/stores/thread-view';
+import { handleWSCompactBoundary } from '@/stores/thread-ws-handlers';
 
 import { deferred } from '../helpers/data-layer-harness';
 import { seedThreads } from '../helpers/seed-thread-state';
@@ -759,6 +768,76 @@ describe('thread store actions', () => {
 
       expect(useThreadStore.getState().selectedThreadId).toBeNull();
       expect(useThreadStore.getState().activeThread).toBeNull();
+    });
+
+    test('A → B → A keeps events buffered for the newer A load (#225)', async () => {
+      // Stateful stand-ins for the select generation, in-flight id and WS buffer.
+      let generation = 0;
+      let selecting: string | null = null;
+      const buffers = new Map<string, Array<{ type: string; data: any }>>();
+      vi.mocked(nextSelectGeneration).mockImplementation(() => ++generation);
+      vi.mocked(getSelectGeneration).mockImplementation(() => generation);
+      vi.mocked(getSelectingThreadId).mockImplementation(() => selecting);
+      vi.mocked(setSelectingThreadId).mockImplementation((id: string | null) => {
+        selecting = id;
+      });
+      vi.mocked(clearWSBuffer).mockImplementation((id: string) => {
+        buffers.delete(id);
+      });
+      vi.mocked(getAndClearWSBuffer).mockImplementation((id: string) => {
+        const events = buffers.get(id);
+        buffers.delete(id);
+        return events as any;
+      });
+
+      try {
+        const tB = { ...baseThread, id: 't2' };
+        useThreadStore.setState({
+          ...seedThreads({ p1: [baseThread as any, tB as any] }),
+        } as any);
+
+        const firstA = deferred<any>();
+        const loadB = deferred<any>();
+        const secondA = deferred<any>();
+        mockLoadThreadData
+          .mockReturnValueOnce(firstA.promise)
+          .mockReturnValueOnce(loadB.promise)
+          .mockReturnValueOnce(secondA.promise);
+
+        const store = useThreadStore.getState();
+        const pFirstA = store.selectThread('t1');
+        const pB = store.selectThread('t2');
+        const pSecondA = store.selectThread('t1');
+
+        // A compact_boundary arrives while the second A load is in flight.
+        const boundary = { trigger: 'auto', preTokens: 1234, timestamp: 'now' };
+        buffers.set('t1', [{ type: 'compact_boundary', data: boundary }]);
+
+        // The first (stale) A load settles first and must not wipe the buffer.
+        firstA.resolve({ thread: { ...baseThread, messages: [] }, events: [] });
+        await pFirstA;
+        expect(buffers.get('t1')).toHaveLength(1);
+
+        loadB.resolve({ thread: { ...tB, messages: [] }, events: [] });
+        await pB;
+        secondA.resolve({ thread: { ...baseThread, messages: [] }, events: [] });
+        await pSecondA;
+
+        expect(handleWSCompactBoundary).toHaveBeenCalledWith(
+          expect.anything(),
+          expect.anything(),
+          't1',
+          boundary,
+        );
+        expect(useThreadStore.getState().activeThread?.id).toBe('t1');
+      } finally {
+        vi.mocked(nextSelectGeneration).mockReset().mockReturnValue(1);
+        vi.mocked(getSelectGeneration).mockReset().mockReturnValue(1);
+        vi.mocked(getSelectingThreadId).mockReset();
+        vi.mocked(setSelectingThreadId).mockReset();
+        vi.mocked(clearWSBuffer).mockReset();
+        vi.mocked(getAndClearWSBuffer).mockReset().mockReturnValue([]);
+      }
     });
   });
 

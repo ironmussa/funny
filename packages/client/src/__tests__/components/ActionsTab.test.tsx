@@ -6,7 +6,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { ActionsTab } from '@/components/ActionsTab';
 import { createDataLayer } from '@/data/data-layer';
 import { seedPR } from '@/data/pull-requests/queries';
-import { replaceDataLayer } from '@/data/runtime';
+import { getDataLayer, replaceDataLayer } from '@/data/runtime';
 import { sortChecks } from '@/lib/ci-checks';
 import {
   canRerunFailed,
@@ -153,6 +153,29 @@ describe('ActionsTab', () => {
     renderTab({ currentBranch: undefined });
     await flushAsyncUpdates();
     expect(api.githubActionRuns).toHaveBeenCalledWith('project-1', { branch: null });
+  });
+
+  test('Refresh fetches the runs even while the rate limit pauses polling', async () => {
+    getDataLayer().queryClient.setQueryData(['github-rate-limited'], true);
+    renderTab();
+    await flushAsyncUpdates();
+    expect(api.githubActionRuns).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByTestId('actions-refresh'));
+    await flushAsyncUpdates();
+
+    expect(api.githubActionRuns).toHaveBeenCalledWith('project-1', { branch: 'feat/x' });
+    // A successful answer lifts the pause.
+    expect(getDataLayer().queryClient.getQueryData(['github-rate-limited'])).toBe(false);
+  });
+
+  test("a hidden tab does not fetch an expanded run's jobs", async () => {
+    const { rerender } = renderTab();
+    await flushAsyncUpdates();
+    rerender(<ActionsTab projectId="project-1" currentBranch="feat/x" visible={false} />);
+    fireEvent.click(screen.getByTestId('actions-run-toggle-2'));
+    await flushAsyncUpdates();
+    expect(api.githubActionJobs).not.toHaveBeenCalled();
   });
 
   test('offers a re-run only on a failed run, and not to a read-only viewer', async () => {

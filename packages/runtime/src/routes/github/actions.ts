@@ -15,15 +15,27 @@ import type {
   ActionStep,
   CICheckConclusion,
 } from '@funny/shared';
-import { Hono } from 'hono';
+import { Hono, type Context } from 'hono';
 import { z } from 'zod';
 
+import { log } from '../../lib/logger.js';
 import type { HonoEnv } from '../../types/hono-env.js';
 import { parseJsonBody, parseQuery } from '../../validation/request.js';
-import { GITHUB_API, githubApiFetch, githubRepoFor } from './helpers.js';
+import { fetchAllPages, GITHUB_API, githubApiFetch, githubRepoFor } from './helpers.js';
 import { positiveIntParam, readPaging } from './query.js';
 
 export const actionRoutes = new Hono<HonoEnv>();
+
+/**
+ * Log a failed GitHub call (never the token, a signed URL or log contents)
+ * and answer 502 with what went wrong.
+ */
+function upstreamFailure(c: Context<HonoEnv>, action: string, failure: number | Error) {
+  const detail = typeof failure === 'number' ? { status: failure } : { error: failure.message };
+  log.warn('github actions request failed', { namespace: 'github-actions', action, ...detail });
+  const message = typeof failure === 'number' ? `GitHub API error: ${failure}` : failure.message;
+  return c.json({ error: message }, 502);
+}
 
 /** Lines of a job log the tab shows, ending at the last error. */
 const JOB_LOG_TAIL_LINES = 200;
@@ -168,14 +180,14 @@ actionRoutes.get('/actions/runs', async (c) => {
       `/repos/${ctx.owner}/${ctx.repo}/actions/runs?${params.toString()}`,
       ctx.token,
     );
-    if (!res.ok) return c.json({ error: `GitHub API error: ${res.status}` }, 502);
+    if (!res.ok) return upstreamFailure(c, 'runs', res.status);
     const body = (await res.json()) as { total_count?: number; workflow_runs?: any[] };
     const runs = (body.workflow_runs ?? []).map(mapActionRun);
     const total = body.total_count ?? runs.length;
     const result: ActionRunsPage = { runs, total_count: total, hasMore: page * perPage < total };
     return c.json(result);
   } catch (error: any) {
-    return c.json({ error: error.message }, 502);
+    return upstreamFailure(c, 'runs', error);
   }
 });
 
@@ -190,15 +202,16 @@ actionRoutes.get('/actions/jobs', async (c) => {
   if (ctx instanceof Response) return ctx;
 
   try {
-    const res = await githubApiFetch(
-      `/repos/${ctx.owner}/${ctx.repo}/actions/runs/${runId}/jobs?filter=latest&per_page=100`,
+    // GitHub pages jobs 100 at a time; a big matrix needs the later pages.
+    const jobs = await fetchAllPages(
+      `/repos/${ctx.owner}/${ctx.repo}/actions/runs/${runId}/jobs?filter=latest`,
       ctx.token,
+      'jobs',
     );
-    if (!res.ok) return c.json({ error: `GitHub API error: ${res.status}` }, 502);
-    const body = (await res.json()) as { jobs?: any[] };
-    return c.json({ jobs: (body.jobs ?? []).map(mapActionJob) });
+    if (!jobs.ok) return upstreamFailure(c, 'jobs', jobs.status);
+    return c.json({ jobs: jobs.items.map(mapActionJob) });
   } catch (error: any) {
-    return c.json({ error: error.message }, 502);
+    return upstreamFailure(c, 'jobs', error);
   }
 });
 
@@ -242,10 +255,10 @@ actionRoutes.get('/actions/job-log', async (c) => {
     if (res.status === 404 || res.status === 410) {
       return c.json({ error: 'The log is not available (still running or expired)' }, 404);
     }
-    if (!res.ok) return c.json({ error: `GitHub API error: ${res.status}` }, 502);
+    if (!res.ok) return upstreamFailure(c, 'job-log', res.status);
     return c.json(extractFailureTail(await res.text()));
   } catch (error: any) {
-    return c.json({ error: error.message }, 502);
+    return upstreamFailure(c, 'job-log', error);
   }
 });
 
@@ -275,8 +288,13 @@ actionRoutes.post('/actions/rerun-failed', async (c) => {
     const message = body.message || `GitHub API error: ${res.status}`;
     // 403: the token cannot write Actions; 409: the run is still in progress.
     if (res.status === 403 || res.status === 409) return c.json({ error: message }, res.status);
+    log.warn('github actions request failed', {
+      namespace: 'github-actions',
+      action: 'rerun-failed',
+      status: res.status,
+    });
     return c.json({ error: message }, 502);
   } catch (error: any) {
-    return c.json({ error: error.message }, 502);
+    return upstreamFailure(c, 'rerun-failed', error);
   }
 });

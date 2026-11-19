@@ -181,6 +181,21 @@ describe('GET /actions/jobs', () => {
     expect(url.searchParams.get('filter')).toBe('latest');
   });
 
+  test('reads every page of a run with more than 100 jobs', async () => {
+    const job = (id: number) => ({ id, name: `job-${id}`, status: 'completed', steps: [] });
+    fetchMock
+      .mockResolvedValueOnce(json({ jobs: Array.from({ length: 100 }, (_, i) => job(i + 1)) }))
+      .mockResolvedValueOnce(json({ jobs: [job(101)] }));
+
+    const res = await app().request('/gh/actions/jobs?projectId=p-1&runId=11');
+
+    expect(res.status).toBe(200);
+    const { jobs } = await res.json();
+    expect(jobs).toHaveLength(101);
+    expect(jobs[100].id).toBe(101);
+    expect(new URL(String(fetchMock.mock.calls[1][0])).searchParams.get('page')).toBe('2');
+  });
+
   test('requires a run id', async () => {
     const res = await app().request('/gh/actions/jobs?projectId=p-1&runId=abc');
     expect(res.status).toBe(400);

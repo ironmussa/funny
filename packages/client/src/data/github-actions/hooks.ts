@@ -1,4 +1,4 @@
-import type { ActionJob, ActionJobLog, ActionRunsPage } from '@funny/shared';
+import type { ActionJob, ActionJobLog, ActionRun, ActionRunsPage } from '@funny/shared';
 
 import { useDataLayer, useDataQuery } from '../hooks';
 import { githubRateLimitQuery } from '../pull-requests/queries';
@@ -40,15 +40,21 @@ export function useActionRuns(
   };
 }
 
-/** A run's jobs, fetched while the run is expanded; polled while it is not finished. */
+/**
+ * A run's jobs, fetched while the run is expanded, polled while it runs and
+ * the tab is visible, never while GitHub's rate limit pauses polling.
+ */
 export function useActionJobs(
   projectId: string,
-  runId: number,
-  runFinished: boolean,
+  run: ActionRun,
+  visible: boolean,
 ): { jobs: ActionJob[] | undefined; loading: boolean; error: string | null } {
+  const rateLimited = useDataQuery(githubRateLimitQuery).data ?? false;
+  const polling = visible && !rateLimited && run.status !== 'completed';
   const query = useDataQuery({
-    ...actionJobsQuery(projectId, runId),
-    refetchInterval: runFinished ? undefined : ACTIVE_POLL_MS,
+    ...actionJobsQuery(projectId, run),
+    enabled: visible && !rateLimited,
+    refetchInterval: polling ? ACTIVE_POLL_MS : undefined,
   });
   return {
     jobs: query.data,

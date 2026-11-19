@@ -28,12 +28,20 @@ export function actionRunsQuery(projectId: string, branch: string | null) {
   };
 }
 
-export function actionJobsQuery(projectId: string, runId: number) {
+/**
+ * A run's jobs (its latest attempt). The key carries the attempt and whether
+ * the run had finished, so a re-run, or the run finishing, reads the jobs anew.
+ */
+export function actionJobsQuery(
+  projectId: string,
+  run: { id: number; run_attempt: number; status: string },
+) {
+  const finished = run.status === 'completed';
   return {
-    queryKey: ['actions-jobs', projectId, runId] as const,
+    queryKey: ['actions-jobs', projectId, run.id, run.run_attempt, finished] as const,
     queryFn: (): Promise<ActionJob[]> =>
       trackRateLimit(
-        unwrapResult(githubApi.githubActionJobs(projectId, runId)).then((r) => r.jobs),
+        unwrapResult(githubApi.githubActionJobs(projectId, run.id)).then((r) => r.jobs),
       ),
     staleTime: RUNS_STALE_MS,
   };
@@ -49,9 +57,22 @@ export function actionJobLogQuery(projectId: string, jobId: number) {
   };
 }
 
-/** Re-read the run lists now (an explicit refresh, or after a re-run). */
-export function refreshActionRuns(projectId: string, layer: DataLayer = getDataLayer()): void {
+/**
+ * Re-read the run lists and jobs now. `shown` is the list on screen (its
+ * branch, or null for all branches): an explicit refresh fetches it even
+ * while GitHub's rate limit pauses polling (that query is disabled then, and
+ * invalidating a disabled query sends nothing), and its success lifts the pause.
+ */
+export function refreshActionRuns(
+  projectId: string,
+  shown?: string | null,
+  layer: DataLayer = getDataLayer(),
+): void {
   if (layer.disposed) return;
   void layer.queryClient.invalidateQueries({ queryKey: actionRunsKey(projectId) });
   void layer.queryClient.invalidateQueries({ queryKey: ['actions-jobs', projectId] });
+  if (shown === undefined) return;
+  void layer.queryClient
+    .fetchQuery({ ...actionRunsQuery(projectId, shown), staleTime: 0 })
+    .catch(() => undefined);
 }

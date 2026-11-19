@@ -275,13 +275,16 @@ export async function githubErrorWithBody(c: Context<HonoEnv>, res: Response) {
 export async function fetchAllPages(
   path: string,
   token: string,
+  /** The array's field when the page is an object (`jobs` for a run's jobs). */
+  field?: string,
 ): Promise<{ ok: true; items: any[] } | { ok: false; status: number }> {
   const items: any[] = [];
   const separator = path.includes('?') ? '&' : '?';
   for (let page = 1; ; page++) {
     const res = await githubApiFetch(`${path}${separator}per_page=100&page=${page}`, token);
     if (!res.ok) return { ok: false, status: res.status };
-    const data = (await res.json()) as any[];
+    const body = (await res.json()) as any;
+    const data: any[] = (field ? body?.[field] : body) ?? [];
     items.push(...data);
     if (data.length < 100) return { ok: true, items };
   }

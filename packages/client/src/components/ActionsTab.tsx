@@ -91,7 +91,7 @@ export function ActionsTab({
   }
 
   const handleRefresh = () => {
-    refreshActionRuns(projectId);
+    refreshActionRuns(projectId, branch);
     if (prNumber) void fetchPRDetail(projectId, prNumber, { force: true });
   };
   const runs = page?.runs ?? [];
@@ -139,6 +139,7 @@ export function ActionsTab({
         loading={loading}
         error={error}
         readOnly={readOnly}
+        visible={visible}
       />
     </div>
   );
@@ -151,6 +152,7 @@ function RunList({
   loading,
   error,
   readOnly,
+  visible,
 }: {
   projectId: string;
   runs: ActionRun[];
@@ -158,6 +160,7 @@ function RunList({
   loading: boolean;
   error: string | null;
   readOnly: boolean;
+  visible: boolean;
 }) {
   const { t } = useTranslation();
   if (!loaded && loading) {
@@ -186,7 +189,13 @@ function RunList({
     <ScrollArea className="flex min-h-0 flex-1 flex-col">
       <div className="divide-sidebar-border flex flex-col divide-y" data-testid="actions-runs-list">
         {runs.map((run) => (
-          <RunRow key={run.id} projectId={projectId} run={run} readOnly={readOnly} />
+          <RunRow
+            key={run.id}
+            projectId={projectId}
+            run={run}
+            readOnly={readOnly}
+            visible={visible}
+          />
         ))}
       </div>
     </ScrollArea>
@@ -316,10 +325,12 @@ function RunRow({
   projectId,
   run,
   readOnly,
+  visible,
 }: {
   projectId: string;
   run: ActionRun;
   readOnly: boolean;
+  visible: boolean;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -401,14 +412,24 @@ function RunRow({
           <ExternalLink className="icon-sm" />
         </a>
       </div>
-      <CollapsibleContent>{open && <RunJobs projectId={projectId} run={run} />}</CollapsibleContent>
+      <CollapsibleContent>
+        {open && <RunJobs projectId={projectId} run={run} visible={visible} />}
+      </CollapsibleContent>
     </Collapsible>
   );
 }
 
-function RunJobs({ projectId, run }: { projectId: string; run: ActionRun }) {
+function RunJobs({
+  projectId,
+  run,
+  visible,
+}: {
+  projectId: string;
+  run: ActionRun;
+  visible: boolean;
+}) {
   const { t } = useTranslation();
-  const { jobs, loading, error } = useActionJobs(projectId, run.id, run.status === 'completed');
+  const { jobs, loading, error } = useActionJobs(projectId, run, visible);
   if (!jobs) {
     return (
       <div

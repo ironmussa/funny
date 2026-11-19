@@ -65,6 +65,31 @@ interface StartContext {
   projectSystemPrompt: string | undefined;
 }
 
+/** The caller's start arguments, bundled so the start sequence takes one object. */
+interface StartRequest {
+  threadId: string;
+  prompt: string;
+  cwd: string;
+  model: AgentModel;
+  permissionMode: PermissionMode;
+  images?: any[];
+  disallowedTools?: string[];
+  allowedTools?: string[];
+  provider: AgentProvider;
+  mcpServers?: Record<string, any>;
+  skipMessageInsert?: boolean;
+  effort?: string;
+  steer?: boolean;
+}
+
+/** State produced by the running-transition, forwarded to the start sequence. */
+interface StartState {
+  currentThread: RuntimeThreadRecord | undefined;
+  newStatus: ThreadStatus;
+  resumeReason: ResumeReason;
+  ownerId: string | undefined;
+}
+
 /** Project-level run flags forwarded to the orchestrator. */
 function projectRunFlags(project: StartProject): {
   fastMode: boolean;
@@ -205,19 +230,69 @@ export class AgentLifecycleManager {
     );
     const ownerId = currentThread?.userId;
 
+    const req: StartRequest = {
+      threadId,
+      prompt,
+      cwd,
+      model,
+      permissionMode,
+      images,
+      disallowedTools,
+      allowedTools,
+      provider,
+      mcpServers,
+      skipMessageInsert,
+      effort,
+      steer,
+    };
+
+    // Once the thread is `running`, ANY failure before the agent process is
+    // handed off has to drive it back to `failed` and close the run span.
+    // Previously only `launchAgent` did that, so a throw earlier in the start
+    // (insertMessage, context load, workspace prep, tooling, env build, …) left
+    // the thread stuck `running` with its span open (#195). This one failure
+    // path covers the whole start sequence.
+    try {
+      await this.runStartSequence(req, { currentThread, newStatus, resumeReason, ownerId });
+    } catch (err: any) {
+      // Close the span (a no-op if it never opened) and mark the thread failed
+      // before re-throwing, so no start failure leaves the thread `running`.
+      this.endRunSpan(threadId, 'error', err?.message);
+      const message = err?.message || `Failed to start ${provider} agent process`;
+      log.error(`Failed to start ${provider} agent`, {
+        namespace: 'agent',
+        threadId,
+        error: message,
+      });
+      await this.failStart(threadId, ownerId, message);
+      throw err;
+    }
+  }
+
+  /**
+   * The start sequence from the user-message insert through handing the process
+   * to the orchestrator. Any throw here is caught by `startAgent`'s single
+   * failure path (#195). Returns early (leaving the thread failed via
+   * `resolveCwdOrFail`) when the cwd cannot be resolved.
+   */
+  private async runStartSequence(req: StartRequest, startState: StartState): Promise<void> {
+    const { threadId, prompt, model, permissionMode, provider } = req;
+    const { currentThread, resumeReason } = startState;
+    let cwd = req.cwd;
+
     // Save user message in DB (skip when a draft message already exists).
     // The `prompt` we receive here is the agent-ready prompt (with file/symbol
     // contents inlined when references were used). Persist a path-only version
     // so the UI renders chips instead of dumping the full source files.
-    if (!skipMessageInsert) {
+    if (!req.skipMessageInsert) {
       await this.threadManager.insertMessage({
         threadId,
         role: 'user',
         content: stripInlineReferencedContent(prompt),
-        images: images ? JSON.stringify(images) : null,
+        images: req.images ? JSON.stringify(req.images) : null,
         model,
         permissionMode,
-        effort,
+        effort: req.effort,
       });
     }
 
@@ -236,14 +311,33 @@ export class AgentLifecycleManager {
       await this.prepareWorkspace(threadId, thread, project, cwd);
     }
 
+    await this.prepareAndLaunch(req, startState, ctx, cwd);
+  }
+
+  /**
+   * The tail of the start sequence: resolve the agent profile, tooling and
+   * system prefix, emit the running status, open the run span, build the agent
+   * env and hand the process to the orchestrator. A throw here still unwinds
+   * through `startAgent`'s single failure path (#195).
+   */
+  private async prepareAndLaunch(
+    req: StartRequest,
+    startState: StartState,
+    ctx: StartContext,
+    cwd: string,
+  ): Promise<void> {
+    const { threadId, model, permissionMode, provider } = req;
+    const { newStatus, resumeReason, ownerId } = startState;
+    const { thread, project } = ctx;
+
     const activeAgentProfile = await resolveActiveAgentProfile(thread, provider);
     const tooling = await resolveAgentTooling({
       threadId,
       thread,
       projectPath: project?.path,
       provider,
-      mcpServers,
-      disallowedTools,
+      mcpServers: req.mcpServers,
+      disallowedTools: req.disallowedTools,
       claudeConfigDir: activeAgentProfile.env.CLAUDE_CONFIG_DIR,
       cwd,
     });
@@ -280,17 +374,17 @@ export class AgentLifecycleManager {
         cwd,
         model,
         permissionMode,
-        images,
+        images: req.images,
         disallowedTools: tooling.disallowedTools,
-        allowedTools,
+        allowedTools: req.allowedTools,
         provider,
         sessionId: ctx.effectiveSessionId,
         systemPrefix,
         mcpServers: tooling.mcpServers,
         env: agentEnv,
-        effort,
+        effort: req.effort,
         ...projectRunFlags(project),
-        steer: !!steer,
+        steer: !!req.steer,
         builtinSkillsDisabled: tooling.builtinSkillsDisabled,
         customSkillPaths: tooling.customSkillPaths,
         agentName: tooling.agentName,
@@ -302,7 +396,6 @@ export class AgentLifecycleManager {
         bypassExecutor: buildBypassExecutor(cwd),
       },
       thread,
-      ownerId,
     );
   }
 
@@ -579,39 +672,27 @@ export class AgentLifecycleManager {
     return { ...(agentEnv ?? {}), ...activeAgentProfile.env };
   }
 
-  /** Delegate the process lifecycle to the orchestrator. */
+  /**
+   * Delegate the process lifecycle to the orchestrator. A spawn failure throws;
+   * the caller's single start-failure path (see `startAgent`) ends the span and
+   * marks the thread failed.
+   */
   private async launchAgent(
     options: Parameters<AgentOrchestrator['startAgent']>[0],
     thread: RuntimeThreadRecord | undefined,
-    ownerId: string | undefined,
   ): Promise<void> {
     const { threadId, provider, cwd, model } = options;
-    try {
-      await this.orchestrator.startAgent(options);
+    await this.orchestrator.startAgent(options);
 
-      threadEventBus.emit('agent:started', {
-        threadId,
-        projectId: thread?.projectId ?? '',
-        userId: thread?.userId ?? '',
-        worktreePath: thread?.worktreePath ?? null,
-        cwd,
-        model,
-        provider,
-      });
-    } catch (err: any) {
-      this.endRunSpan(threadId, 'error', err.message);
-      log.error(`Failed to start ${provider} process`, {
-        namespace: 'agent',
-        threadId,
-        error: err.message,
-      });
-      await this.failStart(
-        threadId,
-        ownerId,
-        err.message || `Failed to start ${provider} agent process`,
-      );
-      throw err;
-    }
+    threadEventBus.emit('agent:started', {
+      threadId,
+      projectId: thread?.projectId ?? '',
+      userId: thread?.userId ?? '',
+      worktreePath: thread?.worktreePath ?? null,
+      cwd,
+      model,
+      provider,
+    });
   }
 
   // ── Stop / Cleanup ─────────────────────────────────────────────

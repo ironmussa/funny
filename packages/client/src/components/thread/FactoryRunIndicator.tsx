@@ -23,6 +23,7 @@ import {
   factoryRunSteps,
   type FactoryStepStatus,
 } from '@/lib/factory-run-labels';
+import { isFactoryRunInFlight } from '@/lib/thread-activity';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
 
@@ -99,6 +100,8 @@ export function FactoryRunIndicator({
   const failed = run.state === 'failed' || run.failureReason !== null;
   const stateLabel = factoryRunStateLabel(t, run.state);
   const label = triggerLabel(run) ?? stateLabel;
+  // The run is still working, also after its agent finished (waiting for CI, merging).
+  const inFlight = !failed && isFactoryRunInFlight(run.state);
 
   return (
     <Popover>
@@ -112,7 +115,14 @@ export function FactoryRunIndicator({
           aria-label={t('factory.indicator.label', 'Factory run: {{step}}', { step: label })}
           data-testid="factory-run-indicator"
         >
-          <Factory className="icon-xs" />
+          {inFlight ? (
+            <Loader2
+              className="icon-xs text-status-info animate-spin"
+              data-testid="factory-run-indicator-spinner"
+            />
+          ) : (
+            <Factory className="icon-xs" />
+          )}
           <span className="max-w-32 truncate">{label}</span>
         </button>
       </PopoverTrigger>

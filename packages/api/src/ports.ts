@@ -416,6 +416,11 @@ export interface FactoryPort {
   ): PortResult<FactorySettings>;
   /** Newest first; empty when there is no factory. */
   runs(userId: string, projectId: string): PortResult<FactoryRun[]>;
+  /**
+   * The runs of all the caller's factories, across projects, that have threads
+   * and have not ended (in flight, or waiting for the caller).
+   */
+  activeRuns(userId: string): PortResult<FactoryRun[]>;
   /** Stop one run of the caller's factory and its agent threads; audited. */
   stopRun(userId: string, projectId: string, runId: string): PortResult<FactoryRun>;
   /** Put a failed (or waiting) run of the caller's factory back in flight; audited. */

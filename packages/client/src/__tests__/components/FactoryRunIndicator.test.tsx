@@ -69,6 +69,20 @@ describe('FactoryRunIndicator', () => {
     expect(screen.queryByTestId('factory-run-indicator')).toBeNull();
   });
 
+  test('spins while the run works, also after its agent finished; not once it failed or parked', () => {
+    mocks.run = runOf({ state: 'waiting_ci', currentStep: 'ci' });
+    const { unmount } = render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+    expect(screen.getByTestId('factory-run-indicator-spinner')).toBeInTheDocument();
+    unmount();
+
+    for (const state of ['failed', 'waiting_human', 'merged'] as const) {
+      mocks.run = runOf({ state });
+      const view = render(<FactoryRunIndicator projectId="p1" threadId="t1" />);
+      expect(screen.queryByTestId('factory-run-indicator-spinner')).toBeNull();
+      view.unmount();
+    }
+  });
+
   test('the icon names the step the run is on; its popover lists every step', () => {
     mocks.run = runOf();
     render(<FactoryRunIndicator projectId="p1" threadId="t1" />);

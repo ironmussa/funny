@@ -9,6 +9,7 @@ import {
   Pencil,
   GitFork,
   GitBranch,
+  Factory,
 } from 'lucide-react';
 import { useState, memo, useCallback, useLayoutEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -23,7 +24,13 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { HoverTimeMenu } from '@/components/ui/hover-time-menu';
+import { controlFactoryRun } from '@/data/factory/actions';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import {
+  threadActivityShortLabel,
+  useThreadActivity,
+  type ThreadActivityView,
+} from '@/hooks/use-thread-activity';
 import { api } from '@/lib/api';
 import { openThreadTerminal } from '@/lib/open-terminal-tab';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
@@ -91,11 +98,53 @@ function threadItemAreEqual(prev: ThreadItemProps, next: ThreadItemProps): boole
   return threadsVisuallyEqual(prev.thread, next.thread);
 }
 
+/** The tone of the label a row shows in place of its time while its factory run is active. */
+const ACTIVITY_TIME_TONE: Record<ThreadActivityView['activity'], string> = {
+  none: 'text-muted-foreground',
+  factory: 'text-status-info',
+  'factory-attention': 'text-status-warning',
+};
+
+/**
+ * "Stop factory run", while the run a thread belongs to works outside its
+ * agent (the agent's own Stop is gone then); nothing otherwise.
+ */
+function StopFactoryRunItem({
+  thread,
+  activity,
+}: {
+  thread: Thread;
+  activity: ThreadActivityView;
+}) {
+  const { t } = useTranslation();
+  const runId = activity.activity === 'factory' ? activity.run?.id : undefined;
+  if (!runId) return null;
+  return (
+    <>
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        data-testid={`thread-stop-factory-run-${thread.id}`}
+        onClick={(e) => {
+          e.stopPropagation();
+          void controlFactoryRun('stop', thread.projectId, runId).orTee((error) =>
+            toastError(error, 'factory'),
+          );
+        }}
+        className="text-status-error focus:text-status-error"
+      >
+        <Factory className="icon-sm" />
+        {t('factory.activity.stopRun', 'Stop factory run')}
+      </DropdownMenuItem>
+    </>
+  );
+}
+
 interface ThreadItemActionsProps {
   thread: Thread;
   displayTime: string;
   isBusy: boolean;
   isRunning: boolean;
+  activity: ThreadActivityView;
   onRename?: () => void;
   onCreateBranch: () => void;
   onArchive?: () => void;
@@ -107,6 +156,7 @@ function ThreadItemActions({
   displayTime,
   isBusy,
   isRunning,
+  activity,
   onRename,
   onCreateBranch,
   onArchive,
@@ -220,6 +270,7 @@ function ThreadItemActions({
               </DropdownMenuItem>
             </>
           )}
+          <StopFactoryRunItem thread={thread} activity={activity} />
           {onArchive && !isBusy && (
             <DropdownMenuItem
               onClick={(e) => {
@@ -310,6 +361,7 @@ function useStickyGitStatus(gitStatus?: GitStatusInfo) {
 interface ThreadItemTrailingProps {
   thread: Thread;
   displayTime: string;
+  activity: ThreadActivityView;
   hideActions: boolean;
   onRename?: () => void;
   onCreateBranch: () => void;
@@ -323,13 +375,20 @@ function ThreadItemTrailing({
   thread,
   ...actions
 }: ThreadItemTrailingProps) {
-  // Thread status (used for busy checks + dropdown gating)
+  // Thread status (used for busy checks + dropdown gating). A factory run
+  // working outside the agent keeps the thread busy: no archive meanwhile.
   const isRunning = thread.status === 'running';
-  const isBusy = isRunning || thread.status === 'setting_up';
+  const isBusy =
+    isRunning || thread.status === 'setting_up' || actions.activity.activity === 'factory';
   return (
     <div className="flex shrink-0 items-center gap-1.5 py-1 pr-1.5 pl-2">
       {hideActions ? (
-        <span className="text-muted-foreground h-4 min-w-10 text-right text-xs leading-4">
+        <span
+          className={cn(
+            'h-4 min-w-10 text-right text-xs leading-4',
+            ACTIVITY_TIME_TONE[actions.activity.activity],
+          )}
+        >
           {displayTime}
         </span>
       ) : (
@@ -365,12 +424,16 @@ function useThreadItemState({
   const createBranchDialog = useCreateBranchDialog(thread.id, thread.projectId);
   const effectiveGitStatus = useStickyGitStatus(gitStatus);
 
-  const displayTime = timeValue ?? timeAgo(thread.createdAt, t, now);
+  const activity = useThreadActivity(thread);
+  // While its factory run is active the row names the run's step ("ci") instead of a time.
+  const displayTime =
+    threadActivityShortLabel(t, activity) ?? timeValue ?? timeAgo(thread.createdAt, t, now);
   const threadHref = href ?? buildPath(getThreadRoute(thread));
   const rowHandlers = useThreadRowHandlers(thread.id, isSelected, threadHref, onSelect);
 
   return {
     displayTime,
+    activity,
     effectiveGitStatus,
     rowHandlers,
     rowClassName: isSelected
@@ -405,6 +468,7 @@ export const ThreadItem = memo(function ThreadItem({
 }: ThreadItemProps) {
   const {
     displayTime,
+    activity,
     effectiveGitStatus,
     rowHandlers,
     rowClassName,
@@ -459,6 +523,7 @@ export const ThreadItem = memo(function ThreadItem({
       <ThreadItemTrailing
         thread={thread}
         displayTime={displayTime}
+        activity={activity}
         hideActions={hideActions}
         onRename={handleRename}
         onCreateBranch={createBranchDialog.openDialog}

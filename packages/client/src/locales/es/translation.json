@@ -1715,6 +1715,10 @@
     "banner": {
       "title": "Factory · #{{issue}}"
     },
+    "activity": {
+      "tooltip": "Factory · #{{issue}} · {{state}}",
+      "stopRun": "Detener el factory run"
+    },
     "indicator": {
       "label": "Run del factory: {{step}}"
     }

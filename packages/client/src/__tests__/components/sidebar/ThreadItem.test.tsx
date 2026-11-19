@@ -3,6 +3,9 @@ import { act, fireEvent, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { ThreadItem } from '@/components/sidebar/ThreadItem';
+import { activeFactoryRunsQuery } from '@/data/factory/queries';
+import { getDataLayer } from '@/data/runtime';
+import type { FactoryRun } from '@/lib/api/factory';
 import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
 import { useThreadActiveToolStore } from '@/stores/thread-active-tool-store';
 
@@ -274,5 +277,92 @@ describe('ThreadItem', () => {
 
     act(() => useBrowserLiveThreadsStore.getState().markClosed('t-4'));
     expect(screen.queryByTestId('thread-browser-open-t-4')).not.toBeInTheDocument();
+  });
+  describe('a factory thread whose run works outside the agent', () => {
+    const run = (over: Partial<FactoryRun> = {}): FactoryRun => ({
+      id: 'run-1',
+      factoryId: 'f1',
+      issueNumber: 225,
+      prUrl: 'https://github.com/o/r/pull/359',
+      state: 'waiting_ci',
+      currentStep: 'ci',
+      threadIds: ['t-factory'],
+      startedAt: '2026-11-19T18:00:00.000Z',
+      completedAt: null,
+      source: 'manual',
+      flowName: 'issue-to-merge',
+      queueOrder: null,
+      waitReason: null,
+      flowSteps: ['implement', 'pull-request', 'ci', 'merge'],
+      failureReason: null,
+      ...over,
+    });
+    const seedActiveRuns = (runs: FactoryRun[]) =>
+      getDataLayer().queryClient.setQueryData(activeFactoryRunsQuery().queryKey, runs);
+    const renderThread = (over: Partial<Thread> = {}) =>
+      renderWithProviders(
+        <ThreadItem
+          thread={makeThread({
+            id: 't-factory',
+            projectId: 'p1',
+            isScratch: false,
+            status: 'completed',
+            source: 'factory',
+            ...over,
+          })}
+          projectPath="/repo"
+          isSelected={false}
+          onSelect={vi.fn()}
+          onArchive={vi.fn()}
+          timeValue="2m"
+        />,
+      );
+    const openMenu = () =>
+      fireEvent.pointerDown(screen.getByTestId('thread-item-more-t-factory'), {
+        button: 0,
+        ctrlKey: false,
+      });
+
+    test('shows it busy with the step instead of the time, and offers to stop the run', async () => {
+      seedActiveRuns([run()]);
+      renderThread();
+
+      expect(screen.getByTestId('thread-factory-activity-t-factory')).toHaveAttribute(
+        'data-activity',
+        'factory',
+      );
+      expect(screen.getByText('ci')).toBeInTheDocument();
+      expect(screen.queryByText('2m')).not.toBeInTheDocument();
+
+      openMenu();
+      expect(await screen.findByTestId('thread-stop-factory-run-t-factory')).toBeInTheDocument();
+      expect(screen.queryByText('sidebar.archive')).not.toBeInTheDocument();
+    });
+
+    test('a run waiting for the member asks for attention and can be archived', async () => {
+      seedActiveRuns([run({ state: 'waiting_human', currentStep: null })]);
+      renderThread();
+
+      expect(screen.getByTestId('thread-factory-activity-t-factory')).toHaveAttribute(
+        'data-activity',
+        'factory-attention',
+      );
+      openMenu();
+      expect(await screen.findByText('sidebar.archive')).toBeInTheDocument();
+      expect(screen.queryByTestId('thread-stop-factory-run-t-factory')).not.toBeInTheDocument();
+    });
+
+    test('a thread whose agent is running keeps its own status', () => {
+      seedActiveRuns([run({ state: 'fixing' })]);
+      renderThread({ status: 'running' });
+      expect(screen.queryByTestId('thread-factory-activity-t-factory')).not.toBeInTheDocument();
+    });
+
+    test('a thread that is not a factory thread never reads the runs', () => {
+      seedActiveRuns([run()]);
+      renderThread({ source: 'web' });
+      expect(screen.queryByTestId('thread-factory-activity-t-factory')).not.toBeInTheDocument();
+      expect(screen.getByText('2m')).toBeInTheDocument();
+    });
   });
 });

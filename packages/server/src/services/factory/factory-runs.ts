@@ -21,7 +21,7 @@ import { okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { db } from '../../db/index.js';
-import { factoryRuns } from '../../db/schema.js';
+import { factoryRuns, factorySettings } from '../../db/schema.js';
 
 const THREAD_IDS_SCHEMA = z.array(z.string());
 
@@ -410,6 +410,28 @@ export function createFactoryRunsRepository(
           .orderBy(desc(factoryRuns.startedAt)),
         storage,
       ).map((rows) => rows.map(toView));
+    },
+
+    /**
+     * The runs of every factory `userId` owns that have threads and have not
+     * ended: in flight, or parked waiting for the member. The thread lists read
+     * them to show a factory thread as busy while its run works outside the
+     * agent (CI, merge). Queued (`requested`) runs have no thread yet.
+     */
+    activeForOwner(userId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select({ run: factoryRuns })
+          .from(factoryRuns)
+          .innerJoin(factorySettings, eq(factorySettings.id, factoryRuns.factoryId))
+          .where(
+            and(
+              eq(factorySettings.userId, userId),
+              notInArray(factoryRuns.state, [...TERMINAL_STATES, ...WAITING_STATES]),
+            ),
+          ),
+        storage,
+      ).map((rows) => rows.map(({ run }) => toView(run)));
     },
 
     /** The non-terminal run for an issue, if any — the admission dedup check. */

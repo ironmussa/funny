@@ -151,6 +151,35 @@ describe('factory over tRPC', () => {
     expect((await mutate('vic', 'stopRun', { projectId: 'p1', runId: run.id })).status).toBe(403);
     expect((await mutate('alice', 'stopRun', { projectId: 'p1', runId: 'nope' })).status).toBe(404);
   });
+  test('activeRuns lists the caller own runs with threads that have not ended, across projects', async () => {
+    const { createFactorySettingsService } =
+      await import('../../services/factory/factory-settings.js');
+    const { createFactoryRunsRepository } = await import('../../services/factory/factory-runs.js');
+    const repo = createFactoryRunsRepository();
+    const factoryOf = async (userId: string, projectId: string) => {
+      await save(userId, { projectId, enabled: false });
+      return (await createFactorySettingsService().factoryId(userId, projectId))._unsafeUnwrap()!;
+    };
+    const alice = await factoryOf('alice', 'p1');
+    const bob = await factoryOf('bob', 'bob-project');
+    const seed = async (factoryId: string, issueNumber: number, state: string) =>
+      (await repo.start({ factoryId, issueNumber, state: state as any }))._unsafeUnwrap();
+
+    const ci = await seed(alice, 1, 'waiting_ci');
+    const parked = await seed(alice, 2, 'waiting_human');
+    await seed(alice, 3, 'merged');
+    await seed(alice, 4, 'failed');
+    await seed(alice, 5, 'requested');
+    await seed(bob, 6, 'working');
+
+    const listed = await query('alice', 'activeRuns', undefined);
+    expect(listed.status).toBe(200);
+    expect(listed.body.map((run: { id: string }) => run.id).sort()).toEqual(
+      [ci.id, parked.id].sort(),
+    );
+    expect((await query('carol', 'activeRuns', undefined)).body).toEqual([]);
+  });
+
   test('the mode is saved and read back, a new factory is manual, and a bad mode is refused', async () => {
     expect((await save('alice', { projectId: 'p1', enabled: true })).body).toMatchObject({
       mode: 'manual',

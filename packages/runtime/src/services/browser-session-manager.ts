@@ -716,17 +716,23 @@ class BrowserSessionManager {
 
     const previous = s.chromeSession;
     s.chromeSession = chromeSession;
-    await chromeSession.connect();
-    // Lock the page viewport so the screencast frame size matches the
-    // coordinate space the client uses to translate clicks.
-    await chromeSession.setViewport(s.viewport.width, s.viewport.height).catch((err: unknown) => {
-      log.warn('Failed to set viewport', {
-        namespace: NS,
-        sessionId: s.sessionId,
-        error: String(err),
+    try {
+      await chromeSession.connect();
+      // Lock the page viewport so the screencast frame size matches the
+      // coordinate space the client uses to translate clicks.
+      await chromeSession.setViewport(s.viewport.width, s.viewport.height).catch((err: unknown) => {
+        log.warn('Failed to set viewport', {
+          namespace: NS,
+          sessionId: s.sessionId,
+          error: String(err),
+        });
       });
-    });
-    if (previous) await previous.disconnect().catch(() => {});
+    } finally {
+      // Always release the client we replaced, even when the new connect
+      // throws — otherwise a failed re-attach (popup switch / tab restore)
+      // leaks the previous CDP WebSocket to Chromium.
+      if (previous) await previous.disconnect().catch(() => {});
+    }
   }
 
   /** Watch a tab's page and hold its audio at the session's setting. */

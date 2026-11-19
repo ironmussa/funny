@@ -121,10 +121,7 @@ function spawnPty(id, cwd, cols, rows, env, shellId) {
 
     activePtys.set(id, ptyProcess);
 
-    let dataCount = 0;
     ptyProcess.onData((data) => {
-      dataCount++;
-      console.error(`[pty-helper] onData #${dataCount} ptyId=${id} len=${data.length}`);
       send('pty:data', { ptyId: id, data });
     });
 

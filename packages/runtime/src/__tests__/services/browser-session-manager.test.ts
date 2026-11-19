@@ -148,6 +148,37 @@ describe('BrowserSessionManager lifecycle', () => {
     });
   });
 
+  test('concurrent opens for the same id create one tab and one session', async () => {
+    // Opening a tab awaits Chromium; make it slow so both opens race past the
+    // `sessions` map miss before either registers. Without serialisation the
+    // second open would create a second tab and orphan the first (issue #212).
+    const openTab = vi.spyOn(manager, 'openTab').mockImplementation(async () => {
+      await new Promise((r) => setTimeout(r, 20));
+      return {
+        host: { port: 9300, closeTab: vi.fn(async () => {}) },
+        tab: { page: {}, targetId: 't', ephemeralContext: null },
+      };
+    });
+    const startSession = vi.spyOn(manager, 'startSession').mockResolvedValue(undefined);
+    const navigate = vi.spyOn(manager, 'navigate').mockResolvedValue(undefined);
+    const emitReady = vi.spyOn(manager, 'emitReady').mockImplementation(() => {});
+
+    const [a, b] = await Promise.all([
+      browserSessionManager.open('u1', 'panel-9', 'https://example.com', { origin: 'panel' }),
+      browserSessionManager.open('u1', 'panel-9', 'https://example.com', { origin: 'panel' }),
+    ]);
+
+    expect(openTab).toHaveBeenCalledTimes(1);
+    expect(a).not.toBeNull();
+    expect(a).toBe(b);
+    expect(manager.sessions.size).toBe(1);
+
+    openTab.mockRestore();
+    startSession.mockRestore();
+    navigate.mockRestore();
+    emitReady.mockRestore();
+  });
+
   test('deleting a thread closes its session', async () => {
     addSession({ sessionId: 'thread:t1', threadId: 't1', owner: 'thread' });
     await browserSessionManager.closeForThread('u1', 't1');

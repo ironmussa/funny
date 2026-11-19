@@ -275,6 +275,8 @@ const PANEL_INPUT: Record<PointerOrKeyKind, PanelInputHandler> = {
 
 class BrowserSessionManager {
   private sessions = new Map<string, BrowserSession>();
+  /** In-flight first opens, keyed by session id — see `open()`. */
+  private opening = new Map<string, Promise<BrowserSession | null>>();
   private hosts = new Map<string, HostEntry>();
   private reaperTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -519,10 +521,40 @@ class BrowserSessionManager {
     opts: OpenSessionOptions = { origin: 'panel' },
   ): Promise<BrowserSession | null> {
     log.info('open() called', { namespace: NS, sessionId, userId, url, origin: opts.origin });
-    const threadId = opts.threadId ?? threadIdFromBrowserSessionId(sessionId);
 
     const existing = this.sessions.get(sessionId);
     if (existing) return this.reuseSession(existing, userId, url, opts.origin);
+
+    // Serialise concurrent first opens for the same session id. Opening a tab
+    // awaits Chromium, so without this two opens that both miss the map above
+    // each open a tab and the second `sessions.set` orphans the first tab
+    // (leaked, never closed). A concurrent open awaits the in-flight one and
+    // then reuses its session (navigate + (re)attach), as a late open would.
+    const inFlight = this.opening.get(sessionId);
+    if (inFlight) {
+      const created = await inFlight;
+      if (created) return this.reuseSession(created, userId, url, opts.origin);
+      // The in-flight open produced no session (e.g. a panel attach of a
+      // missing id): fall through and try to create one ourselves.
+    }
+
+    const creating = this.createSession(userId, sessionId, url, opts);
+    this.opening.set(sessionId, creating);
+    try {
+      return await creating;
+    } finally {
+      if (this.opening.get(sessionId) === creating) this.opening.delete(sessionId);
+    }
+  }
+
+  /** Create, register and start a brand-new session. Guarded by `opening`. */
+  private async createSession(
+    userId: string,
+    sessionId: string,
+    url: string,
+    opts: OpenSessionOptions,
+  ): Promise<BrowserSession | null> {
+    const threadId = opts.threadId ?? threadIdFromBrowserSessionId(sessionId);
 
     if (!url && opts.origin === 'panel') {
       this.emit({ userId, threadId }, 'browser-session:closed', { sessionId, reason: 'not_found' });
@@ -542,7 +574,6 @@ class BrowserSessionManager {
       tab,
       origin: opts.origin,
     });
-    // Register before connecting so a concurrent open for the same id reuses it.
     this.sessions.set(sessionId, session);
     this.startReaper();
     await this.startSession(session, url);

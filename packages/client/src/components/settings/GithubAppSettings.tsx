@@ -1,19 +1,22 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Check, ChevronsUpDown } from 'lucide-react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import {
+  Command,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { LoadingState } from '@/components/ui/loading-state';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { api } from '@/lib/api';
 import type { GithubAppAccount, GithubAppStatus } from '@/lib/api/github-app';
+import { cn } from '@/lib/utils';
 
 /** The connect form's choice: the personal account, an organization, or one typed by hand. */
 type Choice = 'user' | `org:${string}` | 'other';
@@ -209,8 +212,6 @@ function ConnectForm({
   onOrg: (org: string) => void;
   onConnect: () => void;
 }) {
-  const personal = accounts.find((a) => a.type === 'user');
-  const orgs = accounts.filter((a) => a.type === 'org');
   return (
     <div
       className="border-border/50 space-y-3 rounded-lg border p-4"
@@ -227,28 +228,7 @@ function ConnectForm({
         <li>You come back here, done.</li>
       </ol>
       <div className="flex flex-wrap items-center gap-2">
-        <Select value={choice} onValueChange={(v) => onChoice(v as Choice)}>
-          <SelectTrigger className="w-64" data-testid="github-app-target">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="user" data-testid="github-app-target-user">
-              {personal ? `${personal.login} (personal account)` : 'Personal account'}
-            </SelectItem>
-            {orgs.map((a) => (
-              <SelectItem
-                key={a.login}
-                value={`org:${a.login}`}
-                data-testid={`github-app-target-org-${a.login}`}
-              >
-                {a.login}
-              </SelectItem>
-            ))}
-            <SelectItem value="other" data-testid="github-app-target-other">
-              {orgs.length > 0 ? 'Another organization…' : 'An organization…'}
-            </SelectItem>
-          </SelectContent>
-        </Select>
+        <TargetCombobox accounts={accounts} choice={choice} onChoice={onChoice} onOrg={onOrg} />
         {choice === 'other' && (
           <Input
             className="w-56"
@@ -273,5 +253,141 @@ function ConnectForm({
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * What the target picker shows: its labels, the listed organizations, and
+ * whether the search names an organization that is not listed (offered as
+ * typed).
+ */
+function targetView(accounts: GithubAppAccount[], choice: Choice, search: string) {
+  const personal = accounts.find((a) => a.type === 'user');
+  const orgs = accounts.filter((a) => a.type === 'org');
+  const personalLabel = personal ? `${personal.login} (personal account)` : 'Personal account';
+  const otherLabel = orgs.length > 0 ? 'Another organization…' : 'An organization…';
+  const labels: Record<string, string> = { user: personalLabel, other: otherLabel };
+  const label = labels[choice] ?? choice.slice(4);
+  const typed = search.trim();
+  const typedIsListed = orgs.some((a) => a.login.toLowerCase() === typed.toLowerCase());
+  const offerTyped = typed !== '' && !typedIsListed && personal?.login !== typed;
+  return { orgs, personalLabel, otherLabel, label, typed, offerTyped };
+}
+
+/**
+ * Where to create the App: the personal account, one of the admin's
+ * organizations (searchable, an admin may have many), or another one typed by
+ * hand. A search that matches no listed organization offers to use it as typed.
+ */
+function TargetCombobox({
+  accounts,
+  choice,
+  onChoice,
+  onOrg,
+}: {
+  accounts: GithubAppAccount[];
+  choice: Choice;
+  onChoice: (choice: Choice) => void;
+  onOrg: (org: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState('');
+  const listId = useId();
+  const { orgs, personalLabel, otherLabel, label, typed, offerTyped } = targetView(
+    accounts,
+    choice,
+    search,
+  );
+
+  const pick = (next: Choice) => {
+    onChoice(next);
+    setOpen(false);
+    setSearch('');
+  };
+
+  return (
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        if (!next) setSearch('');
+      }}
+    >
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          aria-controls={listId}
+          className="w-64 justify-between"
+          data-testid="github-app-target"
+        >
+          <span className="truncate">{label}</span>
+          <ChevronsUpDown className="icon-xs ml-1 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-64 p-0" align="start">
+        <Command>
+          <CommandInput
+            placeholder="Search organizations…"
+            value={search}
+            onValueChange={setSearch}
+            data-testid="github-app-target-search"
+          />
+          <CommandList id={listId}>
+            <CommandGroup>
+              <TargetItem
+                value={personalLabel}
+                selected={choice === 'user'}
+                onSelect={() => pick('user')}
+                testId="github-app-target-user"
+              />
+              {orgs.map((a) => (
+                <TargetItem
+                  key={a.login}
+                  value={a.login}
+                  selected={choice === `org:${a.login}`}
+                  onSelect={() => pick(`org:${a.login}`)}
+                  testId={`github-app-target-org-${a.login}`}
+                />
+              ))}
+              <CommandItem
+                forceMount
+                value={`__other__ ${typed}`}
+                onSelect={() => {
+                  onOrg(offerTyped ? typed : '');
+                  pick('other');
+                }}
+                data-testid="github-app-target-other"
+              >
+                <Check
+                  className={cn('mr-2 h-3 w-3', choice === 'other' ? 'opacity-100' : 'opacity-0')}
+                />
+                {offerTyped ? `Use organization “${typed}”` : otherLabel}
+              </CommandItem>
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function TargetItem({
+  value,
+  selected,
+  onSelect,
+  testId,
+}: {
+  value: string;
+  selected: boolean;
+  onSelect: () => void;
+  testId: string;
+}) {
+  return (
+    <CommandItem value={value} onSelect={onSelect} data-testid={testId}>
+      <Check className={cn('mr-2 h-3 w-3', selected ? 'opacity-100' : 'opacity-0')} />
+      <span className="truncate">{value}</span>
+    </CommandItem>
   );
 }

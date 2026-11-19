@@ -183,6 +183,7 @@ export async function initBetterAuth(): Promise<void> {
         //   - sign-in is email+password only (no third-party SSO)
         //   - the MCP OAuth callback authenticates via a `state` token, not
         //     the user's session cookie
+        //   - the GitHub App manifest callback authenticates via its `state`
         //   - invite-link registration runs on its own public route
         // Strict eliminates the CSRF residual that Lax permits on top-level
         // GET navigations. If a future feature adds third-party SSO, this

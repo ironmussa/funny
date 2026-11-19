@@ -38,8 +38,10 @@ function setup(
   };
   let clock = Date.parse('2026-11-10T12:00:00Z');
   const conversions: string[] = [];
+  const admins = new Set(['admin-1', 'admin-2']);
   const deps = {
     store,
+    isAdmin: async (userId: string) => admins.has(userId),
     env: opts.env ?? {},
     api: 'https://api.example',
     now: () => clock,
@@ -82,9 +84,15 @@ function setup(
     );
     return app;
   };
+  // GitHub's redirect back is cross-site: the SameSite=Strict session cookie is
+  // not sent, so the callback runs with no session at all.
+  const anonymous = new Hono();
+  anonymous.route('/api/settings/github-app', routes as never);
   return {
     data,
     conversions,
+    admins,
+    anonymous,
     admin: appFor('admin-1', 'admin'),
     appFor,
     advance: (ms: number) => (clock += ms),
@@ -120,7 +128,6 @@ describe('GitHub App settings', () => {
     const user = appFor('u-1', 'user');
     expect((await status(user)).status).toBe(403);
     expect((await start(user)).status).toBe(403);
-    expect((await callback(user, 'x'.repeat(32))).status).toBe(403);
     expect((await accounts(user)).status).toBe(403);
     expect((await disconnect(user)).status).toBe(403);
   });
@@ -139,16 +146,16 @@ describe('GitHub App settings', () => {
     const manifest = JSON.parse(body.manifest);
     expect(manifest.redirect_url).toBe(`${ORIGIN}/api/settings/github-app/callback`);
     expect(manifest.setup_url).toBe(`${ORIGIN}/preferences/github-app?githubApp=installed`);
-    expect(manifest.hook_attributes.active).toBe(false);
+    expect(manifest.hook_attributes).toBeUndefined();
     expect(manifest.public).toBe(false);
     expect(manifest.default_permissions.contents).toBe('write');
     expect(manifest.default_permissions.administration).toBeUndefined();
   });
 
   test('the callback stores the App, sends the admin on to install it, and the status shows it', async () => {
-    const { admin, data } = setup();
+    const { admin, anonymous, data } = setup();
     const { state } = (await start(admin)).body;
-    const res = await callback(admin, state);
+    const res = await callback(anonymous, state);
     expect(res.status).toBe(302);
     expect(res.headers.get('location')).toBe(
       'https://github.com/apps/funny-acme/installations/new',
@@ -169,20 +176,22 @@ describe('GitHub App settings', () => {
     expect((await status(admin)).body).toMatchObject({ configured: false });
   });
 
-  test('an unknown, reused, foreign or expired state stores nothing and calls GitHub never', async () => {
-    const { admin, appFor, conversions, data, advance } = setup();
-    expect((await callback(admin, 'u'.repeat(32))).status).toBe(400);
+  test('an unknown, reused or expired state, or a demoted admin, stores nothing and calls GitHub never', async () => {
+    const { admin, admins, anonymous, conversions, data, advance } = setup();
+    expect((await callback(anonymous, 'u'.repeat(32))).status).toBe(400);
 
     const first = (await start(admin)).body.state;
-    expect((await callback(admin, first)).status).toBe(302);
-    expect((await callback(admin, first)).status).toBe(400);
+    expect((await callback(anonymous, first)).status).toBe(302);
+    expect((await callback(anonymous, first)).status).toBe(400);
 
-    const foreign = (await start(admin)).body.state;
-    expect((await callback(appFor('admin-2', 'admin'), foreign)).status).toBe(400);
+    const demoted = (await start(admin)).body.state;
+    admins.delete('admin-1');
+    expect((await callback(anonymous, demoted)).status).toBe(403);
+    admins.add('admin-1');
 
     const late = (await start(admin)).body.state;
     advance(11 * 60 * 1000);
-    expect((await callback(admin, late)).status).toBe(400);
+    expect((await callback(anonymous, late)).status).toBe(400);
 
     expect(conversions).toHaveLength(1);
     expect([...data.keys()].filter((k) => k.startsWith('github_app_manifest_state:'))).toEqual([]);

@@ -17,6 +17,8 @@ import { GithubAppSettings } from '@/components/settings/GithubAppSettings';
 describe('GithubAppSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // cmdk scrolls the active item into view; jsdom has no layout.
+    Element.prototype.scrollIntoView ??= () => {};
   });
 
   test('not connected: connects the listed personal account with one click', async () => {
@@ -51,6 +53,48 @@ describe('GithubAppSettings', () => {
     expect(mocks.startGithubAppManifest).toHaveBeenCalledWith({ target: 'user' });
     const form = document.querySelector('form[action^="https://github.com/settings/apps/new"]');
     expect(form?.querySelector('input[name="manifest"]')).not.toBeNull();
+    submit.mockRestore();
+  });
+
+  test('the target list is searchable and a typed name that is not listed can be used', async () => {
+    mocks.getGithubAppStatus.mockReturnValue(okAsync({ configured: false, source: 'none' }));
+    mocks.getGithubAppAccounts.mockReturnValue(
+      okAsync({
+        hasToken: true,
+        accounts: [
+          { login: 'octo', type: 'user' },
+          { login: 'acme', type: 'org' },
+          { login: 'globex', type: 'org' },
+        ],
+      }),
+    );
+    mocks.startGithubAppManifest.mockReturnValue(
+      okAsync({ action: 'https://github.com/organizations/x/settings/apps/new', manifest: '{}' }),
+    );
+    const submit = vi.spyOn(HTMLFormElement.prototype, 'submit').mockImplementation(() => {});
+    render(<GithubAppSettings />);
+
+    fireEvent.click(await screen.findByTestId('github-app-target'));
+    fireEvent.change(screen.getByTestId('github-app-target-search'), {
+      target: { value: 'glo' },
+    });
+    await waitFor(() => expect(screen.queryByTestId('github-app-target-org-acme')).toBeNull());
+    fireEvent.click(screen.getByTestId('github-app-target-org-globex'));
+    expect(screen.getByTestId('github-app-target')).toHaveTextContent('globex');
+
+    fireEvent.click(screen.getByTestId('github-app-target'));
+    fireEvent.change(screen.getByTestId('github-app-target-search'), {
+      target: { value: 'initech' },
+    });
+    const other = await screen.findByTestId('github-app-target-other');
+    expect(other).toHaveTextContent('Use organization “initech”');
+    fireEvent.click(other);
+    expect(screen.getByTestId('github-app-org')).toHaveValue('initech');
+
+    fireEvent.click(screen.getByTestId('github-app-connect'));
+    await waitFor(() =>
+      expect(mocks.startGithubAppManifest).toHaveBeenCalledWith({ target: 'org', org: 'initech' }),
+    );
     submit.mockRestore();
   });
 

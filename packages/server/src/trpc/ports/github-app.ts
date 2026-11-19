@@ -170,7 +170,8 @@ export function createGithubAppPort(
         url: origin,
         description:
           "Short-lived, single-repository tokens for funny sandbox threads (git and gh), so the owner's personal access token never enters a sandbox.",
-        hook_attributes: { url: origin, active: false },
+        // No `hook_attributes`: the App needs no webhook, and GitHub validates the
+        // hook URL even when inactive, refusing a localhost origin.
         redirect_url: `${origin}/api/settings/github-app/callback`,
         setup_url: `${origin}${RETURN_PAGE}?githubApp=installed`,
         public: false,

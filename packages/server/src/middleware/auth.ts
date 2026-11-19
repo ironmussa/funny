@@ -83,6 +83,10 @@ function publicPathStep(_c: Context<ServerEnv>, path: string): AuthStepResult {
   // MCP OAuth callback
   if (path === '/api/mcp/oauth/callback') return PROCEED;
 
+  // GitHub App manifest callback: GitHub's cross-site redirect carries no
+  // SameSite=Strict session cookie; the route authenticates by its `state`.
+  if (path === '/api/settings/github-app/callback') return PROCEED;
+
   return null;
 }
 

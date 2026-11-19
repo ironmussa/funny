@@ -33,6 +33,7 @@ export function TriCheckbox({
       className={cn(
         'flex items-center justify-center cursor-pointer rounded border transition-colors shrink-0',
         sizeClass,
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         state === 'checked'
           ? 'bg-primary border-primary text-primary-foreground'
           : state === 'indeterminate'
@@ -42,11 +43,14 @@ export function TriCheckbox({
       )}
       data-testid={testId}
     >
-      {state === 'indeterminate' ? (
-        <Minus className={cn(iconClass, 'stroke-3')} />
-      ) : state === 'checked' ? (
-        <Check className={iconClass} />
-      ) : null}
+      {
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+        state === 'indeterminate' ? (
+          <Minus className={cn(iconClass, 'stroke-3')} />
+        ) : state === 'checked' ? (
+          <Check className={iconClass} />
+        ) : null
+      }
     </button>
   );
 }

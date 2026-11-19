@@ -57,6 +57,7 @@ export function AnalyticsView() {
 
   // Auto-derive groupBy from timeRange so we don't need a separate selector
   const groupBy =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     timeRange === 'day'
       ? 'day'
       : timeRange === 'week'

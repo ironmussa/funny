@@ -23,6 +23,7 @@ import {
   getEditorLabel,
   isPathWithin,
   useCurrentProjectPath,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- plain utility function, not an Effect service constructor
   makeRelativePath,
 } from './utils';
 

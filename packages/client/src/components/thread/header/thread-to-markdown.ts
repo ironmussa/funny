@@ -13,6 +13,7 @@ export function threadToMarkdown(
 ): string {
   const lines: string[] = [];
   for (const msg of messages) {
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     const role = msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : 'System';
     if (msg.content?.trim()) {
       lines.push(`## ${role}\n\n${msg.content.trim()}\n`);

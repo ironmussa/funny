@@ -107,6 +107,7 @@ projectRoutes.post('/', async (c) => {
 
   if (result.isErr()) {
     const e = result.error;
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     const status = e.type === 'CONFLICT' ? 409 : e.type === 'BAD_REQUEST' ? 400 : 500;
     return c.json({ error: e.message }, status);
   }

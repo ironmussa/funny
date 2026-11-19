@@ -26,6 +26,7 @@ export function StatusCard({
 }: StatusCardProps): ReactElement {
   const theme = useGpuixUiTheme();
   const border =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     tone === 'danger'
       ? theme.colors.danger
       : tone === 'warning'
@@ -63,6 +64,7 @@ export function StatusCard({
         {status ? (
           <Badge
             variant={
+              // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
               tone === 'danger'
                 ? 'danger'
                 : tone === 'warning'

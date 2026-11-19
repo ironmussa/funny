@@ -58,6 +58,7 @@ describe('rollout-aware browser event sink', () => {
     const telemetry: BrowserSinkTelemetry[] = [];
     const sink = new SocketIoBrowserEventSink({ of: () => browser } as any, {
       selectRepresentation: (candidate) =>
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         candidate.id === 'binary'
           ? Representation.BROWSER_V1
           : candidate.id === 'shadow'
@@ -102,6 +103,7 @@ describe('rollout-aware browser event sink', () => {
     };
     const sink = new SocketIoBrowserEventSink({ of: () => browser } as any, {
       selectRepresentation: (candidate) =>
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         candidate.id === 'binary'
           ? Representation.BROWSER_V1
           : candidate.id === 'shadow'

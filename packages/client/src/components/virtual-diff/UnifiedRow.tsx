@@ -39,6 +39,7 @@ export const UnifiedRow = memo(function UnifiedRow({
   const bgStyle = getUnifiedRowBgStyle(line);
   const isConflictMarker = isConflictMarkerLine(line);
   const textClass = getUnifiedRowTextClass(line);
+  // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
   const prefix = line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ';
   const isChangeLine = line.type === 'add' || line.type === 'del';
   const displayText = getConflictMarkerDisplayText(line);

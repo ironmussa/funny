@@ -12,6 +12,7 @@ function PanelPlaceholder({
   tone?: 'left' | 'center' | 'right' | 'bottom' | 'browser';
 }) {
   const toneClass =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     tone === 'left'
       ? 'bg-sidebar text-sidebar-foreground'
       : tone === 'right'

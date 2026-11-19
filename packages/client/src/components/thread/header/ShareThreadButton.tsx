@@ -52,6 +52,7 @@ const LEVEL_HINT: Record<ShareLevel, string> = {
 
 /** Human label for a grant's level, shown next to a person in the access list. */
 function accessLabel(level: ShareLevel): string {
+  // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
   return `Can ${level === 'steer' ? 'edit' : level === 'comment' ? 'comment' : 'view'}`;
 }
 

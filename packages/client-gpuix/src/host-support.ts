@@ -56,6 +56,7 @@ export function detectNativeHostSupport(input: NativeHostInput): NativeHostSuppo
   const architecture = input.architecture as NativeHostArchitecture;
   const target = TARGETS[platform][architecture];
   const packageTarget =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     platform === 'darwin'
       ? `${platform}-${architecture}`
       : platform === 'win32'

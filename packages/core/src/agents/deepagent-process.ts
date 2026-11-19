@@ -322,6 +322,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
       numTurns = 1;
 
       const subtype: ResultSubtype =
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         promptResponse.stopReason === 'end_turn'
           ? 'success'
           : promptResponse.stopReason === 'cancelled'
@@ -634,6 +635,7 @@ export class DeepAgentProcess extends BaseAgentProcess {
           const planText = entries
             .map((e: any, i: number) => {
               const status =
+                // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
                 e.status === 'completed' ? '[x]' : e.status === 'in_progress' ? '[~]' : '[ ]';
               return `${status} ${i + 1}. ${e.title ?? e.description ?? 'Task'}`;
             })

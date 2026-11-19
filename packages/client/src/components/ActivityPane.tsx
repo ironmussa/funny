@@ -171,13 +171,16 @@ function InlineTodoList({
             data-testid={`activity-todo-${i}`}
             className="flex items-start gap-2"
           >
-            {todo.status === 'completed' ? (
-              <CircleCheck className="icon-sm text-status-success/80 mt-0.5 shrink-0" />
-            ) : todo.status === 'in_progress' ? (
-              <CircleDot className="icon-sm text-status-info mt-0.5 shrink-0" />
-            ) : (
-              <Circle className="icon-sm text-muted-foreground/50 mt-0.5 shrink-0" />
-            )}
+            {
+              // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+              todo.status === 'completed' ? (
+                <CircleCheck className="icon-sm text-status-success/80 mt-0.5 shrink-0" />
+              ) : todo.status === 'in_progress' ? (
+                <CircleDot className="icon-sm text-status-info mt-0.5 shrink-0" />
+              ) : (
+                <Circle className="icon-sm text-muted-foreground/50 mt-0.5 shrink-0" />
+              )
+            }
             <span
               className={cn(
                 'text-xs leading-relaxed',

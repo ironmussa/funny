@@ -258,6 +258,7 @@ export function FileTree({
   const renderRow = (row: TreeRow, index: number, style?: CSSProperties) => {
     if (row.kind === 'submodule-status') {
       const label =
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         row.state === 'loading'
           ? t('review.submoduleLoading', { defaultValue: 'Loading submodule files…' })
           : row.state === 'error'

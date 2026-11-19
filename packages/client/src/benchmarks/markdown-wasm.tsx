@@ -1,6 +1,7 @@
 import DOMPurify from 'dompurify';
 import { markdownToHtml } from 'satteri';
 
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- benchmark fixture factory, not an Effect service
 import { makeLongThread } from '../test-fixtures/long-thread-fixture';
 
 interface BenchmarkOptions {

@@ -15,6 +15,7 @@ const mockListHooks = vi.fn();
 function resultToResponse(c: any, result: any) {
   if (result.isErr()) {
     const error = result.error;
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     const status = error.type === 'BAD_REQUEST' ? 400 : error.type === 'NOT_FOUND' ? 404 : 500;
     return c.json({ error: error.message }, status);
   }

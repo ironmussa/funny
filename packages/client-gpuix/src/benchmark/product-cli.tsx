@@ -31,6 +31,7 @@ import type { NativeHeaders } from '../platform/transport';
 import { createProductBenchmarkAdapter, type ProductWorkloadObservation } from './product-adapter';
 import {
   PRODUCT_BENCHMARK_FILE_COUNT,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- benchmark fixture factory, not an Effect service
   makeProductBenchmarkFileTree,
   productBenchmarkStreamingContent,
 } from './product-fixture';

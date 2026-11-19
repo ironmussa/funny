@@ -133,6 +133,7 @@ export class GitHubTracker implements Tracker {
       number: item.number,
       title: item.title,
       state:
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         item.state?.toLowerCase() === 'OPEN'
           ? 'open'
           : item.state?.toLowerCase() === 'open'

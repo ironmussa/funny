@@ -123,6 +123,7 @@ describe('LLM proxy — per-sandbox limit', () => {
     const routes = createLlmProxyRoutes({
       resolveToken: (token) =>
         okAsync(
+          // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
           token === 'llmp_a'
             ? { userId: 'alice', threadId: 't-a' }
             : token === 'llmp_b'

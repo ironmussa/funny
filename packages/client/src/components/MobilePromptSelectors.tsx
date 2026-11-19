@@ -225,14 +225,17 @@ export function MobileModelSelect({
                   {group.providerLabel}
                   {group.disabledReason && (
                     <span className="block font-normal">
-                      {group.disabledReason === 'no-runner'
-                        ? t('prompt.mobileSelectors.connectRunner', 'Connect a runner')
-                        : group.disabledReason === 'sandbox-unsupported'
-                          ? t(
-                              'prompt.mobileSelectors.sandboxUnsupported',
-                              'Not available in sandboxes yet',
-                            )
-                          : t('prompt.mobileSelectors.notInstalled', 'Not installed on runner')}
+                      {
+                        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+                        group.disabledReason === 'no-runner'
+                          ? t('prompt.mobileSelectors.connectRunner', 'Connect a runner')
+                          : group.disabledReason === 'sandbox-unsupported'
+                            ? t(
+                                'prompt.mobileSelectors.sandboxUnsupported',
+                                'Not available in sandboxes yet',
+                              )
+                            : t('prompt.mobileSelectors.notInstalled', 'Not installed on runner')
+                      }
                     </span>
                   )}
                 </h3>

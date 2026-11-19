@@ -117,6 +117,7 @@ export function createProjectSandboxSettingsService(
     connections
       .providerFor(userId, connectionId)
       .mapErr((error): ProjectSandboxError =>
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         error.kind === 'not-found'
           ? { kind: 'not-found', message: 'Connection not found' }
           : error.kind === 'storage'

@@ -59,6 +59,7 @@ function formatAttachmentSize(size: number): string {
 }
 
 function attachmentKey(f: AttachedTextFile): string {
+  // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
   const id = f.mode === 'upload' ? f.path : f.mode === 'staged' ? f.stagedId : '';
   return `${f.name}-${f.size}-${f.mode}-${id}`;
 }

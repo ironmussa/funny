@@ -636,11 +636,14 @@ function SystemPromptSection({
           ))}
         </div>
         <p className="text-muted-foreground mt-1 text-[10px]">
-          {template.systemPromptMode === 'replace'
-            ? 'Replaces the default Deep Agent system prompt entirely.'
-            : template.systemPromptMode === 'append'
-              ? 'Added after the default system prompt.'
-              : 'Added before the default system prompt.'}
+          {
+            // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+            template.systemPromptMode === 'replace'
+              ? 'Replaces the default Deep Agent system prompt entirely.'
+              : template.systemPromptMode === 'append'
+                ? 'Added after the default system prompt.'
+                : 'Added before the default system prompt.'
+          }
         </p>
       </fieldset>
       <div>

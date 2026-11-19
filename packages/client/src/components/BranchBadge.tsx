@@ -33,6 +33,7 @@ export function BranchBadge({ branch, size = 'sm', className }: BranchBadgeProps
         <span
           className={cn(
             'inline-flex min-w-0 items-center gap-0.5 rounded bg-muted font-medium text-muted-foreground',
+            // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
             size === 'xs'
               ? 'text-[10px] leading-tight px-1 py-px'
               : size === 'sm'

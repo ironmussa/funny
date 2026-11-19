@@ -6,7 +6,9 @@
 
 import { runnerAccess } from '../../services/runner-access/index.js';
 import type { RunnerPresencePort, RunnerRequestPort } from '../../services/runner-ports.js';
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- composition root — wires concrete adapters by design
 import { makeCreateThread, type CreateThread } from './application/create-thread.js';
+// oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- composition root — wires concrete adapters by design
 import { makeForkThread, type ForkThread } from './application/fork-thread.js';
 import {
   threadRegistryAdapter,

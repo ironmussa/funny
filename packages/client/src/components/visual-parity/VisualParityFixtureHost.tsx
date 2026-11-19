@@ -74,6 +74,7 @@ export function VisualParityFixtureHost({ fixture }: { fixture: VisualParityFixt
                       ? referenceDark.colors.inverseText
                       : referenceDark.colors.text,
                   background:
+                    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
                     item.kind === 'user'
                       ? referenceDark.colors.inverseSurface
                       : item.kind === 'assistant'

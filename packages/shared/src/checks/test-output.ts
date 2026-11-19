@@ -434,6 +434,7 @@ const playwrightLine = readWith([
   [
     /^\s*(\d+) (passed|failed|skipped|flaky|did not run)(?: \(.+\))?$/,
     (c, m) => {
+      // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
       const field = m[2] === 'flaky' ? 'passed' : m[2] === 'did not run' ? 'skipped' : m[2];
       c.summary({ [field as TestState]: Number(m[1]) });
     },
@@ -501,6 +502,7 @@ const cargoLine = readWith([
   [
     /^test (\S+) \.\.\. (ok|FAILED|ignored)/,
     (c, m) => {
+      // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
       const state = m[2] === 'ok' ? 'passed' : m[2] === 'FAILED' ? 'failed' : 'skipped';
       c.test(state, m[1], { current: m[1] });
       if (m[2] === 'FAILED') c.fail({ name: m[1] }, false);

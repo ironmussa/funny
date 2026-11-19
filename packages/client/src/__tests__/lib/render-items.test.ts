@@ -610,6 +610,7 @@ describe('turn outcome timeline rows', () => {
 
     expect(
       items.map((item) =>
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         item.type === 'message' ? item.msg.id : item.type === 'thread-event' ? item.event.id : '',
       ),
     ).toEqual(['u1', 'a1', 'stop-1', 'a2']);
@@ -629,6 +630,7 @@ describe('turn outcome timeline rows', () => {
     ];
     const ids = (status?: string) =>
       buildGroupedRenderItems(messages, events, undefined, status).map((item) =>
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         item.type === 'message' ? item.msg.id : item.type === 'thread-event' ? item.event.id : '',
       );
 
@@ -654,6 +656,7 @@ describe('sandbox error cards (thread-sandboxes)', () => {
     ]);
     expect(
       items.map((item) =>
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         item.type === 'message' ? item.msg.id : item.type === 'thread-event' ? item.event.id : '',
       ),
     ).toEqual(['u1', 'a1', 'sbx-err']);

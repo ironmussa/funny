@@ -326,6 +326,7 @@ export function AutomationSettings() {
                         <span
                           className={cn(
                             'h-1.5 w-1.5 rounded-full shrink-0',
+                            // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
                             run.status === 'running'
                               ? 'bg-status-info animate-pulse'
                               : run.status === 'completed'

@@ -217,12 +217,14 @@ export function ChangesToolbar({
               (() => {
                 const prState = gitStatus.prState ?? 'OPEN';
                 const PrIcon =
+                  // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
                   prState === 'MERGED'
                     ? GitMerge
                     : prState === 'CLOSED'
                       ? GitPullRequestClosed
                       : GitPullRequest;
                 const prIconColor =
+                  // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
                   prState === 'MERGED'
                     ? 'text-status-violet'
                     : prState === 'CLOSED'

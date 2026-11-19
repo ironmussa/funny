@@ -20,6 +20,7 @@ export interface EndpointPolicy {
 export function createEndpointPolicy(environment: TransportEnvironment): EndpointPolicy {
   const localOrigin = `http://localhost:${environment.localServerPort}`;
   const primaryOrigin =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     environment.hostMode === 'native'
       ? (environment.nativeServerOrigin ?? localOrigin)
       : environment.hostMode === 'tauri'

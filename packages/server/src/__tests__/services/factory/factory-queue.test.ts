@@ -77,6 +77,7 @@ function fakeGithub(script: Script = {}): FactoryGithubPort & { merges: number }
     readDefaultBranchFile: () => okAsync(null),
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {
+      prState: () => okAsync('open' as const),
       ciState: () => okAsync({ kind: 'green' as const }),
       merge: () => {
         port.merges++;

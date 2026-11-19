@@ -55,6 +55,7 @@ import {
 } from './factory-flow-runs.js';
 import type { FactoryFlow, FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue, FactoryRepoReader } from './factory-github.js';
+import { prNumberOf } from './factory-pull-requests.js';
 import {
   createFactoryRunsRepository,
   IN_FLIGHT_STATES,
@@ -268,6 +269,7 @@ async function fire(id: string): Promise<void> {
   // Reached the repository as the enabler: nothing blocks the factory (until
   // the listing or a launch below says otherwise).
   await reportBlocked(factory.id, null);
+  await reconcileParked(factory, target.repo);
   await resumeRuns(factory, target.repo, target.mode);
   // A paused factory finishes its runs but admits nothing new; its queue waits.
   if (factory.enabled) await admitWork(factory, target.repo, target.mode);
@@ -630,6 +632,50 @@ async function isAdmissible(factoryId: string, issueNumber: number): Promise<boo
  * server restarted, or an earlier attempt to resume it stopped. The provider
  * replays the agent steps already recorded, so nothing starts twice.
  */
+/** Runs parked for the member: failed, or waiting for them (e.g. at a red CI). */
+const PARKED: ReadonlySet<FactoryRunView['state']> = new Set(['failed', 'waiting_human']);
+
+/**
+ * Close the parked runs whose pull request a person merged (or closed) outside
+ * the factory, e.g. after the run waited for them at a CI check that could not
+ * run: otherwise they stay "waiting for you" and hold their issue. Best effort:
+ * a pull request that cannot be read now is looked at again on the next tick.
+ */
+async function reconcileParked(factory: WatchedFactory, repo: string): Promise<void> {
+  if (!runs) return;
+  const all = await runs.list(factory.id);
+  if (all.isErr()) return;
+  for (const run of all.value) {
+    if (PARKED.has(run.state)) await reconcileRun(factory, repo, run);
+  }
+}
+
+/** Close one parked run when its pull request is merged or closed. */
+async function reconcileRun(
+  factory: WatchedFactory,
+  repo: string,
+  run: FactoryRunView,
+): Promise<void> {
+  const number = prNumberOf(run.prUrl);
+  if (number === null || !runs || !deps) return;
+  const pr = await deps.github.pullRequests.prState({
+    repo,
+    number,
+    userId: factory.userId,
+    projectId: factory.projectId,
+  });
+  if (pr.isErr() || pr.value === 'open') return;
+  const closed = await runs.closeParked(run.id, pr.value);
+  if (closed.isErr() || !closed.value) return;
+  log.info('Issue factory run closed: its pull request was finished outside the factory', {
+    namespace: 'factory',
+    factoryId: factory.id,
+    runId: run.id,
+    issue: run.issueNumber,
+    pullRequest: pr.value,
+  });
+}
+
 async function resumeRuns(factory: WatchedFactory, repo: string, mode: LaunchMode): Promise<void> {
   if (!runs || !flows || !deps) return;
   const inFlight = await runs.inFlight(factory.id);

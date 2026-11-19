@@ -55,6 +55,19 @@ function portFor(
 }
 
 describe('factory pull requests', () => {
+  test('reads whether the pull request is open, merged or closed, with a read token', async () => {
+    const stateOf = async (fields: Record<string, unknown>) =>
+      (
+        await portFor(
+          { 'GET /repos/o/r/pulls/7': { ...pull, ...fields } },
+          { level: 'read' },
+        ).prs.prState(pr)
+      )._unsafeUnwrap();
+    expect(await stateOf({ state: 'open', merged: false })).toBe('open');
+    expect(await stateOf({ state: 'closed', merged: true })).toBe('merged');
+    expect(await stateOf({ state: 'closed', merged: false })).toBe('closed');
+  });
+
   test('reports green, red and pending CI', async () => {
     expect((await portFor(checks('success')).prs.ciState(pr))._unsafeUnwrap()).toEqual({
       kind: 'green',

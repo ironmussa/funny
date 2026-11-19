@@ -79,6 +79,8 @@ interface GithubScript {
   blockers?: Record<number, IssueBlocker[] | 'unreadable'>;
   /** Issues GitHub reports as closed. */
   closed?: number[];
+  /** Each pull request's state, by number; an absent one is open. */
+  prStates?: Record<number, 'open' | 'merged' | 'closed'>;
 }
 
 /** Fake GitHub side: a fixed repo and issue list, plus a scripted pull request. */
@@ -117,6 +119,7 @@ function fakeGithub(
     findPullRequest: () =>
       okAsync(script.pr === false ? null : { number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {
+      prState: (pr: { number: number }) => okAsync(script.prStates?.[pr.number] ?? 'open'),
       ciState: () => okAsync(answers[Math.min(looks++, answers.length - 1)]!),
       merge: () => {
         port.merges++;
@@ -922,13 +925,14 @@ describe('factory operator controls', () => {
       issues?: FactoryIssue[];
       waitThread?: (id: string, signal: AbortSignal) => Promise<any>;
       checkAccess?: (userId: string, projectId: string) => Promise<boolean>;
+      github?: GithubScript;
     } = {},
   ) {
     const poll = fakePoll();
     const launcher = fakeLauncher();
     await startFactoryWatcher({
       ports,
-      github: fakeGithub('o/r', opts.issues ?? issue7),
+      github: fakeGithub('o/r', opts.issues ?? issue7, opts.github),
       createPoll: poll.createPoll,
       launch: launcher.launch,
       resolveRuntime,
@@ -955,6 +959,67 @@ describe('factory operator controls', () => {
       await createFactoryRunsRepository().start({ factoryId, issueNumber: 7, threadIds, state })
     )._unsafeUnwrap();
   }
+
+  /** A run parked waiting for the member with its pull request #9 open, as at a blocked CI. */
+  async function seedParkedWithPr(factoryId: string) {
+    const run = await seedRun(factoryId, 'waiting_human', ['t-1']);
+    await createFactoryRunsRepository().update(run.id, {
+      prUrl: 'https://github.com/o/r/pull/9',
+      currentStep: 'ci',
+      failureReason: 'Checks that need a person, not a code change: 0security - PR Security',
+    });
+    return run;
+  }
+
+  const runById = async (runId: string) =>
+    (await createFactoryRunsRepository().get(runId))._unsafeUnwrap()!;
+
+  // Run 5e77aded (issue #195): it waited at a CI check that could not run, a
+  // person merged its PR #349, and the run stayed "waiting for you".
+  test('a parked run whose pull request a person merged is closed as merged', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedParkedWithPr(factoryId);
+    const { poll } = await watch({ issues: [], github: { prStates: { 9: 'merged' } } });
+
+    await poll.ticks[0]!();
+
+    expect(await runById(run.id)).toMatchObject({
+      state: 'merged',
+      currentStep: null,
+      failureReason: null,
+    });
+  });
+
+  test('a parked run whose pull request was closed without a merge is stopped, saying so', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedParkedWithPr(factoryId);
+    const { poll } = await watch({ issues: [], github: { prStates: { 9: 'closed' } } });
+
+    await poll.ticks[0]!();
+
+    const closed = await runById(run.id);
+    expect(closed.state).toBe('stopped');
+    expect(closed.failureReason).toContain('closed without a merge');
+  });
+
+  test('a parked run whose pull request is still open keeps waiting for the member', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedParkedWithPr(factoryId);
+    const { poll } = await watch({ issues: [] });
+
+    await poll.ticks[0]!();
+
+    expect((await runById(run.id)).state).toBe('waiting_human');
+  });
+
+  test('closing a parked run is a compare-and-set: a run retried meanwhile is left alone', async () => {
+    const factoryId = await enableFactory();
+    const run = await seedRun(factoryId, 'queued', []);
+    const repo = createFactoryRunsRepository();
+
+    expect((await repo.closeParked(run.id, 'merged'))._unsafeUnwrap()).toBe(false);
+    expect((await runById(run.id)).state).toBe('queued');
+  });
 
   test('a paused factory finishes its run in flight but admits no new issue', async () => {
     const factoryId = await enableFactory();

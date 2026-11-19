@@ -65,12 +65,24 @@ export type FactoryMergeOutcome =
   /** Not merged: the repository allows no merge method, or it stopped being mergeable. */
   | { kind: 'not-mergeable'; reason: string };
 
+const PR_NUMBER = /\/pull\/(\d+)(?:$|[/?#])/;
+
+/** The number of a pull request from its URL, or null. */
+export function prNumberOf(url: string | null): number | null {
+  const number = url ? Number(PR_NUMBER.exec(url)?.[1]) : NaN;
+  return Number.isInteger(number) ? number : null;
+}
+
 export interface FactoryPullRequests {
   /** With `required`, only those checks count (see `PullRequestCi.ciState`). */
   ciState(
     pr: FactoryPullRequestRef,
     required?: readonly string[],
   ): ResultAsync<CiState, FactoryPullRequestError>;
+  /** Whether the pull request is still open, was merged, or was closed without a merge. */
+  prState(
+    pr: FactoryPullRequestRef,
+  ): ResultAsync<'open' | 'merged' | 'closed', FactoryPullRequestError>;
   /** Merges only when the checks are green; otherwise answers `not-green` without acting. */
   merge(
     pr: FactoryPullRequestRef,
@@ -149,6 +161,13 @@ export function createFactoryPullRequests(deps: FactoryPullRequestsDeps): Factor
   return {
     ciState(pr, required) {
       return pullRequestsFor(pr, 'read').ciState(pr.repo, pr.number, required).mapErr(callError);
+    },
+
+    prState(pr) {
+      return pullRequestsFor(pr, 'read')
+        .mergeState(pr.repo, pr.number)
+        .map((merge) => merge.state)
+        .mapErr(callError);
     },
 
     merge(pr, options = {}) {

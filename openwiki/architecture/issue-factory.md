@@ -65,6 +65,10 @@ project's settings (`components/general-settings-project/ProjectFactorySetting.t
    (a labelled issue is re-admitted up to 3 times; a sent one is not, use Retry); failed before
    any agent ran → a label run is dropped, a sent one goes back to `requested` in its place, and
    the reason is shown as the factory's `blockedReason`.
+5. **Finished outside the factory**: each tick looks at the parked runs (`waiting_human`, `failed`)
+   that have a PR. If a person merged it, the run becomes `merged`; if it was closed without a
+   merge, `stopped` with that reason. The write is a compare-and-set from the parked states
+   (`closeParked`), so a run retried in the meantime is left alone.
 
 Each run executes its own `flow_name` (resume, retry and take-over too); rows from before the
 queue fall back to the factory's flow.

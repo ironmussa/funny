@@ -213,6 +213,24 @@ function changesFor(input: UpdateRunInput): Partial<Row> | null {
 }
 
 /**
+ * Write `changes` to a run only while it is parked (failed, or waiting for the
+ * member): a compare-and-set. Resolves whether it was parked.
+ */
+function updateFromParked(
+  runId: string,
+  changes: Partial<Row>,
+): ResultAsync<boolean, FactoryRunsError> {
+  return ResultAsync.fromPromise(
+    db
+      .update(factoryRuns)
+      .set(changes)
+      .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...REOPENABLE_STATES])))
+      .returning({ id: factoryRuns.id }),
+    storage,
+  ).map((rows) => rows.length > 0);
+}
+
+/**
  * Move one run along a queue transition, only from the transition's stored
  * states (a compare-and-set). Resolves whether the run moved.
  */
@@ -517,6 +535,24 @@ export function createFactoryRunsRepository(
       ).map((rows) => rows.length > 0);
     },
 
+    /**
+     * Close a parked run (failed, or waiting for the member) whose pull request
+     * was merged or closed outside the factory: only from those states (a
+     * compare-and-set), so a run retried meanwhile is left alone. Resolves
+     * whether it closed.
+     */
+    closeParked(
+      runId: string,
+      outcome: 'merged' | 'closed',
+    ): ResultAsync<boolean, FactoryRunsError> {
+      const changes = changesFor(
+        outcome === 'merged'
+          ? { state: 'merged', currentStep: null, failureReason: null }
+          : { state: 'stopped', failureReason: 'Its pull request was closed without a merge.' },
+      )!;
+      return updateFromParked(runId, changes);
+    },
+
     /** One run by its id, or null. */
     get(runId: string): ResultAsync<FactoryRunView | null, FactoryRunsError> {
       return ResultAsync.fromPromise(
@@ -549,21 +585,14 @@ export function createFactoryRunsRepository(
      * is in flight (a storage error).
      */
     reopen(runId: string, threadIds: string[]): ResultAsync<boolean, FactoryRunsError> {
-      return ResultAsync.fromPromise(
-        db
-          .update(factoryRuns)
-          .set({
-            state: 'queued',
-            currentStep: REOPENED_STEP,
-            completedAt: null,
-            launchStartedAt: null,
-            threadIds: JSON.stringify(threadIds),
-            failureReason: null,
-          })
-          .where(and(eq(factoryRuns.id, runId), inArray(factoryRuns.state, [...REOPENABLE_STATES])))
-          .returning({ id: factoryRuns.id }),
-        storage,
-      ).map((rows) => rows.length > 0);
+      return updateFromParked(runId, {
+        state: 'queued',
+        currentStep: REOPENED_STEP,
+        completedAt: null,
+        launchStartedAt: null,
+        threadIds: JSON.stringify(threadIds),
+        failureReason: null,
+      });
     },
 
     /** Drop a run that never started (its launch failed before any agent ran). */

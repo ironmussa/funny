@@ -1692,6 +1692,9 @@
     "waitingCount_other": "{{count}} te esperan",
     "selectedCount_one": "{{count}} seleccionada",
     "selectedCount_other": "{{count}} seleccionadas",
-    "sendLimit": "Hasta {{max}} issues por envío"
+    "sendLimit": "Hasta {{max}} issues por envío",
+    "banner": {
+      "title": "Factory · #{{issue}}"
+    }
   }
 }

@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
 
 import { PipelineProgressBanner } from '@/components/PipelineProgressBanner';
+import { FactoryRunBanner } from '@/components/thread/FactoryRunBanner';
 import { type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { PromptTimeline } from '@/components/thread/PromptTimeline';
 import { ThreadConversation } from '@/components/thread/ThreadConversation';
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { isThreadSearchShortcut } from '@/lib/thread-search-shortcut';
+import { isFactoryThread } from '@/lib/thread-variant';
 import { useThreadMessages, type ThreadCore } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -75,6 +77,9 @@ export function ThreadChatView({ activeThread }: Props) {
   return (
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
       {activeThread.id && <PipelineProgressBanner threadId={activeThread.id} />}
+      {activeThread.id && activeThread.projectId && isFactoryThread(activeThread) && (
+        <FactoryRunBanner projectId={activeThread.projectId} threadId={activeThread.id} />
+      )}
       <div className="thread-container flex min-h-0 flex-1">
         <ThreadConversation
           streamRef={streamRef}

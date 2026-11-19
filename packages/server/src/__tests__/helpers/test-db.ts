@@ -352,7 +352,9 @@ export function createTestDb() {
       flow_name TEXT,
       queue_order INTEGER,
       wait_reason TEXT,
-      admitted_at TEXT
+      admitted_at TEXT,
+      flow_steps TEXT,
+      failure_reason TEXT
     )
   `);
   testDb.run(sql`

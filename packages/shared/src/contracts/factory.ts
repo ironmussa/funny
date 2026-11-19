@@ -102,6 +102,10 @@ export interface FactoryRun {
   queueOrder: number | null;
   /** Why a `requested` run is not admitted yet, or null. */
   waitReason: FactoryWaitReason | null;
+  /** The flow's step names in order, once its flow started; empty before (and on older runs). */
+  flowSteps: string[];
+  /** Why the run failed (the flow's error), or null. */
+  failureReason: string | null;
 }
 
 export type FactoryRunSource = 'manual' | 'label';

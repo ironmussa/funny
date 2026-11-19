@@ -325,6 +325,10 @@ export const factoryRuns = sqliteTable('factory_runs', {
   waitReason: text('wait_reason'),
   /** When the run left the queue (`requested` → `queued`). */
   admittedAt: text('admitted_at'),
+  /** JSON array of the flow's step names, in order: the run's step chain in the thread view. */
+  flowSteps: text('flow_steps'),
+  /** Why the run failed (the flow's error), or null; cleared when it is retried. */
+  failureReason: text('failure_reason'),
 });
 
 export const watchers = sqliteTable('watchers', {

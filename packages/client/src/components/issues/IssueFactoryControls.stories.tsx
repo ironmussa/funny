@@ -26,6 +26,8 @@ const run = (over: Partial<FactoryRun>): FactoryRun => ({
   flowName: 'issue-to-merge',
   queueOrder: null,
   waitReason: null,
+  flowSteps: [],
+  failureReason: null,
   ...over,
 });
 

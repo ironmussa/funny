@@ -355,6 +355,35 @@ describe('createAndStartThread', () => {
   });
 
   test.each([
+    {
+      name: 'no model: the project provider and model',
+      model: undefined,
+      want: ['gpt-5.6-sol', 'codex'],
+    },
+    {
+      name: 'a model without provider: a Claude model',
+      model: 'opus-5.5',
+      want: ['opus-5.5', 'claude'],
+    },
+  ])('resolves run defaults with $name', async ({ model, want }) => {
+    mocks.projects.getProject.mockResolvedValue({
+      ...baseProject,
+      defaultProvider: 'codex',
+      defaultModel: 'gpt-5.6-sol',
+    });
+    const result = await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'local',
+      prompt: 'Go',
+      ...(model ? { model } : {}),
+    });
+    expect(result.isOk()).toBe(true);
+    const args = mocks.startAgent.mock.calls.at(-1) as unknown[];
+    expect([args[3], args[8]]).toEqual(want);
+  });
+
+  test.each([
     { name: 'project', projectId: 'p-1', isScratch: false },
     { name: 'scratch', projectId: null, isScratch: true },
   ])('never logs the prompt text for a $name thread (#182)', async ({ projectId, isScratch }) => {

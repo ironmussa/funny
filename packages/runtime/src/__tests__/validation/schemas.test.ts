@@ -176,27 +176,17 @@ describe('createThreadSchema', () => {
     if (result.success) expect(result.data.source).toBe('factory');
   });
 
-  test('applies default model to "opus-4.8"', () => {
+  test('leaves provider, model and permissionMode unset when absent', () => {
+    // The service resolves them from the project's defaults first
+    // (`resolveRunDefaults`). A schema default here hid the project's choice:
+    // factory threads, which send no model, ran on DEFAULT_MODEL instead of the
+    // project's default model.
     const result = createThreadSchema.safeParse(validThread);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.model).toBe('opus-4.8');
-    }
-  });
-
-  test('applies default permissionMode to "autoEdit"', () => {
-    const result = createThreadSchema.safeParse(validThread);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.permissionMode).toBe('autoEdit');
-    }
-  });
-
-  test('applies default provider to "claude"', () => {
-    const result = createThreadSchema.safeParse(validThread);
-    expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.provider).toBe('claude');
+      expect(result.data.provider).toBeUndefined();
+      expect(result.data.model).toBeUndefined();
+      expect(result.data.permissionMode).toBeUndefined();
     }
   });
 
@@ -597,8 +587,9 @@ describe('validate', () => {
     });
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value.model).toBe('opus-4.8');
-      expect(result.value.permissionMode).toBe('autoEdit');
+      expect(result.value.source).toBe('web');
+      // Run settings stay unset: the service takes them from the project.
+      expect(result.value.model).toBeUndefined();
     }
   });
 

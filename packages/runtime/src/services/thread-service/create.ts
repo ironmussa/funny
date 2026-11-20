@@ -26,7 +26,7 @@ import type {
   ImageAttachment,
 } from '@funny/shared';
 import { addReferencedEntries, type ReferencedEntry } from '@funny/shared/attachments';
-import { DEFAULT_MODEL } from '@funny/shared/models';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
 import { ResultAsync } from 'neverthrow';
 
@@ -392,13 +392,18 @@ function titleSourceFor(params: CreateAndStartThreadParams): string {
   return params.title || stripReferencedFilesBlock(params.prompt) || params.prompt;
 }
 
-/** Resolve defaults: explicit value > project default > hardcoded fallback. */
+/**
+ * Resolve defaults: explicit value > project default > hardcoded fallback. A
+ * model sent without a provider is a DEFAULT_PROVIDER model, never paired with
+ * the project's (possibly different) provider.
+ */
 function resolveRunDefaults(
   params: CreateAndStartThreadParams,
   project: StartProject,
 ): ResolvedRunDefaults {
+  const projectProvider = params.model ? undefined : project.defaultProvider;
   return {
-    provider: (params.provider || project.defaultProvider || 'claude') as AgentProvider,
+    provider: (params.provider || projectProvider || DEFAULT_PROVIDER) as AgentProvider,
     model: (params.model || project.defaultModel || DEFAULT_MODEL) as AgentModel,
     permissionMode: (params.permissionMode ||
       project.defaultPermissionMode ||

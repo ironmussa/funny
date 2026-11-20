@@ -4,8 +4,7 @@ import { describe, test, expect, vi } from 'vitest';
 // xterm-utils eagerly imports the real xterm bundle at module load on non-Tauri
 // (`if (!isTauri) getXtermModules()`). Flag Tauri before importing so the unit
 // under test loads without pulling in the WebGL/canvas bundle under jsdom.
-// oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__ = {};
+Object.assign(window, { __TAURI_INTERNALS__: {} });
 const {
   flushPausedRender,
   refitAndRepaintVisibleTerminal,
@@ -35,6 +34,7 @@ function makeFakeTerminal({
   };
   const terminal = withInternals ? { _core: { _renderService: renderService } } : {};
   return {
+    // SAFETY: the utils under test touch only rows, refresh, write and the private render service.
     // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     terminal: {
       ...terminal,

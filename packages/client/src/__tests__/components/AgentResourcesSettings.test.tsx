@@ -22,7 +22,7 @@ vi.mock('@/stores/app-store', () => ({
 }));
 
 import { AgentResourcesSettings } from '@/components/AgentResourcesSettings';
-import { seedProjects } from '@/data/projects/testing';
+import { buildProject, seedProjects } from '@/data/projects/testing';
 
 const claudeSkill: AgentResource = {
   kind: 'skill',
@@ -42,7 +42,7 @@ const incompatible: AgentResource = {
 
 describe('AgentResourcesSettings', () => {
   beforeEach(() => {
-    seedProjects([{ id: 'p1', path: '/repo' } as never]);
+    seedProjects([buildProject({ id: 'p1', path: '/repo' })]);
     mockListAgentResources.mockReset();
   });
 

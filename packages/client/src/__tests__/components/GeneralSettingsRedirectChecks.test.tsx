@@ -1,9 +1,10 @@
+import type { Project } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
-import { okAsync } from 'neverthrow';
+import { ok } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { GeneralSettings } from '@/components/GeneralSettings';
-import { seedProjects } from '@/data/projects/testing';
+import { buildProject, seedProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 import { renderWithProviders } from '../helpers/render';
@@ -16,15 +17,22 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-const updateProject = vi.fn((_id: string, data: Record<string, unknown>) =>
-  okAsync({ id: 'p1', ...data }),
-);
+type UpdateProject = ReturnType<typeof useProjectStore.getState>['updateProject'];
 
-function renderWith(project: Record<string, unknown>) {
+const updateProject = vi.fn<UpdateProject>(async () => ok(buildProject({ id: 'p1' })));
+
+function renderWith(project: Partial<Project>) {
   seedProjects([
-    { id: 'p1', name: 'Proj', path: '/repo', role: 'owner', userId: 'u1', ...project } as never,
+    buildProject({
+      id: 'p1',
+      name: 'Proj',
+      path: '/repo',
+      role: 'owner',
+      userId: 'u1',
+      ...project,
+    }),
   ]);
-  useProjectStore.setState({ selectedProjectId: 'p1', updateProject: updateProject as never });
+  useProjectStore.setState({ selectedProjectId: 'p1', updateProject });
   return renderWithProviders(<GeneralSettings />);
 }
 

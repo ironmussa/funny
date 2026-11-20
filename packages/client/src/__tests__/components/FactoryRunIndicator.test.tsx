@@ -1,12 +1,19 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
+import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun } from '@/lib/api/factory';
 import { factoryRunSteps } from '@/lib/factory-run-labels';
 
-const mocks = vi.hoisted(() => ({
-  run: null as FactoryRun | null,
+interface IndicatorMocks {
+  run: FactoryRun | null;
+  canSteer: boolean;
+  control: Mock;
+}
+
+const mocks = vi.hoisted((): IndicatorMocks => ({
+  run: null,
   canSteer: true,
   control: vi.fn(),
 }));
@@ -28,24 +35,19 @@ import { FactoryRunIndicator } from '@/components/thread/FactoryRunIndicator';
 
 const STEPS = ['implement', 'pull-request', 'ci', 'merge'];
 
-const runOf = (over: Partial<FactoryRun> = {}): FactoryRun => ({
-  id: 'r1',
-  factoryId: 'f1',
-  issueNumber: 235,
-  prUrl: null,
-  state: 'working',
-  currentStep: 'implement',
-  threadIds: ['t1'],
-  startedAt: '2026-11-19T18:28:20.146Z',
-  completedAt: null,
-  source: 'manual',
-  flowName: 'issue-to-merge',
-  queueOrder: null,
-  waitReason: null,
-  flowSteps: STEPS,
-  failureReason: null,
-  ...over,
-});
+const runOf = (over: Partial<FactoryRun> = {}): FactoryRun =>
+  buildFactoryRun({
+    id: 'r1',
+    issueNumber: 235,
+    state: 'working',
+    currentStep: 'implement',
+    threadIds: ['t1'],
+    startedAt: '2026-11-19T18:28:20.146Z',
+    completedAt: null,
+    source: 'manual',
+    flowSteps: STEPS,
+    ...over,
+  });
 
 const statuses = () =>
   STEPS.map((name) => screen.getByTestId(`factory-run-step-${name}`).getAttribute('data-status'));

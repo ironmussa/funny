@@ -4,14 +4,20 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { WorktreesPanel } from '@/components/review-pane/panels/WorktreesPanel';
 import { buildSettingsItems, routableSettingsIds } from '@/components/settings/items';
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';
 
 import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
-const context = vi.hoisted(() => ({
-  remoteCheckProjectId: 'p2' as string | null,
+interface ReviewPaneContextMock {
+  remoteCheckProjectId: string | null;
+  viewerReadOnly: boolean;
+  basePath: string;
+}
+
+const context = vi.hoisted((): ReviewPaneContextMock => ({
+  remoteCheckProjectId: 'p2',
   viewerReadOnly: false,
   basePath: '/second/feature',
 }));
@@ -31,9 +37,9 @@ beforeEach(() => {
     withProjects({
       selectedProjectId: 'p1',
       projects: [
-        { id: 'p1', name: 'First', path: '/first' },
-        { id: 'p2', name: 'Second', path: '/second' },
-      ] as any,
+        buildProject({ id: 'p1', name: 'First', path: '/first' }),
+        buildProject({ id: 'p2', name: 'Second', path: '/second' }),
+      ],
     }),
   );
   vi.mocked(api.listWorktrees).mockReturnValue(
@@ -44,8 +50,10 @@ beforeEach(() => {
   vi.mocked(api.listBranches).mockReturnValue(
     okAsync({
       branches: ['main'],
+      remoteBranches: [],
       defaultBranch: 'main',
-    }) as ReturnType<typeof api.listBranches>,
+      currentBranch: null,
+    }),
   );
 });
 

@@ -4,7 +4,9 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { ThreadItem } from '@/components/sidebar/ThreadItem';
 import { activeFactoryRunsQuery } from '@/data/factory/queries';
+import { buildFactoryRun } from '@/data/factory/testing';
 import { getDataLayer } from '@/data/runtime';
+import { buildThread } from '@/data/threads/testing';
 import type { FactoryRun } from '@/lib/api/factory';
 import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
 import { useThreadActiveToolStore } from '@/stores/thread-active-tool-store';
@@ -21,21 +23,16 @@ vi.mock('react-i18next', () => ({
 }));
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id: 'scratch-1',
     projectId: '',
     isScratch: true,
     title: 'Try a regex',
     status: 'pending',
-    mode: 'local',
-    provider: 'claude',
-    permissionMode: 'autoEdit',
-    model: 'sonnet',
-    cost: 0,
     createdAt: '2026-07-14T00:00:00.000Z',
     updatedAt: '2026-07-14T00:00:00.000Z',
     ...overrides,
-  } as Thread;
+  });
 }
 
 describe('ThreadItem', () => {
@@ -279,24 +276,19 @@ describe('ThreadItem', () => {
     expect(screen.queryByTestId('thread-browser-open-t-4')).not.toBeInTheDocument();
   });
   describe('a factory thread whose run works outside the agent', () => {
-    const run = (over: Partial<FactoryRun> = {}): FactoryRun => ({
-      id: 'run-1',
-      factoryId: 'f1',
-      issueNumber: 225,
-      prUrl: 'https://github.com/o/r/pull/359',
-      state: 'waiting_ci',
-      currentStep: 'ci',
-      threadIds: ['t-factory'],
-      startedAt: '2026-11-19T18:00:00.000Z',
-      completedAt: null,
-      source: 'manual',
-      flowName: 'issue-to-merge',
-      queueOrder: null,
-      waitReason: null,
-      flowSteps: ['implement', 'pull-request', 'ci', 'merge'],
-      failureReason: null,
-      ...over,
-    });
+    const run = (over: Partial<FactoryRun> = {}): FactoryRun =>
+      buildFactoryRun({
+        issueNumber: 225,
+        prUrl: 'https://github.com/o/r/pull/359',
+        state: 'waiting_ci',
+        currentStep: 'ci',
+        threadIds: ['t-factory'],
+        startedAt: '2026-11-19T18:00:00.000Z',
+        completedAt: null,
+        source: 'manual',
+        flowSteps: ['implement', 'pull-request', 'ci', 'merge'],
+        ...over,
+      });
     const seedActiveRuns = (runs: FactoryRun[]) =>
       getDataLayer().queryClient.setQueryData(activeFactoryRunsQuery().queryKey, runs);
     const renderThread = (over: Partial<Thread> = {}) =>

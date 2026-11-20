@@ -1,12 +1,20 @@
+import type { Thread } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
+import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun } from '@/lib/api/factory';
 
-const mocks = vi.hoisted(() => ({
-  run: null as FactoryRun | null,
-  thread: { id: 't1', projectId: 'p1', source: 'factory' } as Record<string, unknown> | undefined,
+interface FailureCardMocks {
+  run: FactoryRun | null;
+  thread: Pick<Thread, 'id' | 'projectId' | 'source'> | undefined;
+  control: Mock;
+}
+
+const mocks = vi.hoisted((): FailureCardMocks => ({
+  run: null,
+  thread: { id: 't1', projectId: 'p1', source: 'factory' },
   control: vi.fn(),
 }));
 
@@ -26,24 +34,24 @@ vi.mock('react-i18next', () => ({
 
 import { FactoryRunFailureCard } from '@/components/thread/FactoryRunFailureCard';
 
-const runOf = (over: Partial<FactoryRun> = {}): FactoryRun => ({
-  id: 'r1',
-  factoryId: 'f1',
-  issueNumber: 224,
-  prUrl: 'https://github.com/o/r/pull/9',
-  state: 'waiting_human',
-  currentStep: 'ci',
-  threadIds: ['t1'],
-  startedAt: '2026-11-19T18:28:20.146Z',
-  completedAt: null,
-  source: 'manual',
-  flowName: 'issue-to-merge',
-  queueOrder: null,
-  waitReason: null,
-  flowSteps: ['implement', 'pull-request', 'ci', 'merge'],
-  failureReason: 'wait_ci[ci] failed: Checks that need a person',
-  ...over,
-});
+const runOf = (over: Partial<FactoryRun> = {}): FactoryRun =>
+  buildFactoryRun({
+    id: 'r1',
+    issueNumber: 224,
+    prUrl: 'https://github.com/o/r/pull/9',
+    state: 'waiting_human',
+    currentStep: 'ci',
+    threadIds: ['t1'],
+    startedAt: '2026-11-19T18:28:20.146Z',
+    completedAt: null,
+    source: 'manual',
+    flowName: 'issue-to-merge',
+    queueOrder: null,
+    waitReason: null,
+    flowSteps: ['implement', 'pull-request', 'ci', 'merge'],
+    failureReason: 'wait_ci[ci] failed: Checks that need a person',
+    ...over,
+  });
 
 beforeEach(() => {
   vi.clearAllMocks();

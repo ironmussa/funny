@@ -25,6 +25,7 @@ describe('expandedFileIcon', () => {
     expect(expandedFileIcon(summary('deleted'))).toBe(FileX);
     expect(expandedFileIcon(summary('renamed'))).toBe(FileCode);
     expect(expandedFileIcon(summary('conflicted'))).toBe(FileWarning);
+    // SAFETY: deliberately outside FileStatus, to cover a status a newer server may send.
     expect(expandedFileIcon(summary('unknown' as FileDiffSummary['status']))).toBe(FileCode);
   });
 });

@@ -68,8 +68,8 @@ describe('WatcherPanelButton', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     useAuthStore.setState({ isAuthenticated: false, isLoading: false, user: null });
-    useProjectStore.setState({ selectedProjectId: 'project-1' } as any);
-    useThreadStore.setState({ activeThread: null } as any);
+    useProjectStore.setState({ selectedProjectId: 'project-1' });
+    useThreadStore.setState({ activeThread: null });
     seedBackgroundActivity({});
   });
 

@@ -29,6 +29,7 @@ describe.each(['arrow', 'chips', 'plain'] as const)('PowerlineBar %s', (variant)
 
   test('allows a picker to use the styled segment as a native button', () => {
     const open = vi.fn();
+    const triggerProps = { onClick: open };
     render(
       <PowerlineBar
         variant={variant}
@@ -37,7 +38,7 @@ describe.each(['arrow', 'chips', 'plain'] as const)('PowerlineBar %s', (variant)
             key: 'branch',
             label: 'main',
             color: '#7CB9E8',
-            renderTrigger: (trigger) => cloneElement(trigger, { onClick: open } as object),
+            renderTrigger: (trigger) => cloneElement(trigger, triggerProps),
           },
         ]}
       />,

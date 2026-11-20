@@ -4,6 +4,8 @@ import { describe, expect, test } from 'vitest';
 
 import { useTurnEndHover } from '@/components/thread/use-turn-end-hover';
 
+import { expectInstance } from '../helpers/builders-components';
+
 function Harness() {
   const ref = useRef<HTMLDivElement>(null);
   useTurnEndHover(ref);
@@ -33,7 +35,7 @@ describe('useTurnEndHover', () => {
     expect(screen.getByTestId('bar-u1')).not.toHaveAttribute('data-hovered');
     expect(screen.getByTestId('bar-u2')).toHaveAttribute('data-hovered');
 
-    fireEvent.mouseLeave(container.firstElementChild as HTMLElement);
+    fireEvent.mouseLeave(expectInstance(container.firstElementChild, HTMLElement));
     expect(screen.getByTestId('bar-u2')).not.toHaveAttribute('data-hovered');
   });
 });

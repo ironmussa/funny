@@ -15,6 +15,7 @@ const baseProps = {
   compact: false,
   model: 'test-model',
   permissionMode: 'default',
+  // SAFETY: i18next's TFunction is branded; the component only calls t(key, fallback).
   t: ((key: string, fallback?: string) => fallback ?? key) as any,
   onSend: vi.fn(),
   onPermissionApprove: vi.fn(),

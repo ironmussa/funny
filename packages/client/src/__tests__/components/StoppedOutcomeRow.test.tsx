@@ -4,7 +4,8 @@ import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { VirtualRowContent } from '@/components/thread/MemoizedMessageList.renderers';
 import { getThreadsData } from '@/data/threads/store';
-import { useThreadStore, type ThreadWithMessages } from '@/stores/thread-store';
+import { buildThread, buildThreadWithMessages } from '@/data/threads/testing';
+import { useThreadStore } from '@/stores/thread-store';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 import { renderWithProviders } from '../helpers/render';
@@ -19,20 +20,10 @@ const stopEvent: ThreadEvent = {
     completedAt: '2026-01-01T00:10:00.000Z',
   }),
   createdAt: '2026-01-01T00:10:00.000Z',
-} as ThreadEvent;
+};
 
 function thread(status: Thread['status']): Thread {
-  return {
-    id: 't1',
-    projectId: 'p1',
-    title: 't1',
-    mode: 'local',
-    status,
-    stage: 'backlog',
-    cost: 0,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  } as Thread;
+  return buildThread({ title: 't1', status, stage: 'backlog' });
 }
 
 function renderStopRow() {
@@ -69,7 +60,7 @@ describe('StoppedOutcomeRow', () => {
     getThreadsData().upsertFresh([thread('running')]);
     useThreadStore.setState({
       threadDataById: {
-        t1: { ...thread('running'), messages: [], threadEvents: [stopEvent] } as ThreadWithMessages,
+        t1: { ...buildThreadWithMessages(thread('running')), threadEvents: [stopEvent] },
       },
     });
     renderStopRow();

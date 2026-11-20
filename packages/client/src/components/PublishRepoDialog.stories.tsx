@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -80,7 +80,7 @@ export const OrgsLoading: Story = {
     <PublishRepoTrigger
       label="Publish (orgs loading)"
       setupMocks={() => {
-        api.projectGetGhOrgs = () => new Promise(() => {}) as any;
+        api.projectGetGhOrgs = () => new ResultAsync(new Promise(() => {}));
       }}
     />
   ),

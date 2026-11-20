@@ -24,12 +24,13 @@ vi.mock('@/components/ui/tooltip', () => ({
   TooltipContent: ({ children }: { children: ReactNode }) => children,
 }));
 
-const file = {
+const file: FileDiffSummary = {
   path: 'src/example.ts',
   status: 'modified',
+  staged: false,
   additions: 2,
   deletions: 1,
-} as FileDiffSummary;
+};
 
 function renderPanel(overrides: Partial<ComponentProps<typeof ChangesFilesPanel>> = {}) {
   const props: ComponentProps<typeof ChangesFilesPanel> = {

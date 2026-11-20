@@ -1,9 +1,10 @@
+import type { Thread } from '@funny/shared';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { seedProjects } from '@/data/projects/testing';
-import { useThreadStore } from '@/stores/thread-store';
+import { buildProject, seedProjects } from '@/data/projects/testing';
+import { buildThread, seedProjectThreads } from '@/data/threads/testing';
 
 import { ThreadPickerDialog } from './ThreadPickerDialog';
 
@@ -12,27 +13,28 @@ import { ThreadPickerDialog } from './ThreadPickerDialog';
 /* ------------------------------------------------------------------ */
 
 const MOCK_PROJECTS = [
-  {
+  buildProject({
     id: 'proj-1',
     name: 'my-api-server',
     path: '/home/user/projects/api',
     userId: 'u1',
     createdAt: '2026-01-01T00:00:00Z',
     color: '#3b82f6',
-  },
-  {
+  }),
+  buildProject({
     id: 'proj-2',
     name: 'frontend-app',
     path: '/home/user/projects/frontend',
     userId: 'u1',
     createdAt: '2026-02-01T00:00:00Z',
     color: '#10b981',
-  },
+  }),
 ];
 
-const MOCK_THREADS: Record<string, any[]> = {
+const MOCK_THREADS: Record<string, Thread[]> = {
   'proj-1': [
-    {
+    buildThread({
+      projectId: 'proj-1',
       id: 'th-1',
       title: 'Fix authentication bug',
       status: 'completed',
@@ -41,30 +43,30 @@ const MOCK_THREADS: Record<string, any[]> = {
       createdAt: '2026-04-08T10:00:00Z',
       completedAt: '2026-04-08T14:00:00Z',
       archived: false,
-    },
-    {
+    }),
+    buildThread({
+      projectId: 'proj-1',
       id: 'th-2',
       title: 'Add rate limiting middleware',
       status: 'running',
       mode: 'worktree',
       branch: 'feat/rate-limit',
       createdAt: '2026-04-09T08:00:00Z',
-      completedAt: null,
       archived: false,
-    },
-    {
+    }),
+    buildThread({
+      projectId: 'proj-1',
       id: 'th-3',
       title: 'Refactor database queries',
       status: 'idle',
       mode: 'local',
-      branch: null,
       createdAt: '2026-04-07T12:00:00Z',
-      completedAt: null,
       archived: false,
-    },
+    }),
   ],
   'proj-2': [
-    {
+    buildThread({
+      projectId: 'proj-2',
       id: 'th-4',
       title: 'Dark mode support',
       status: 'completed',
@@ -73,17 +75,16 @@ const MOCK_THREADS: Record<string, any[]> = {
       createdAt: '2026-04-06T09:00:00Z',
       completedAt: '2026-04-07T16:00:00Z',
       archived: false,
-    },
-    {
+    }),
+    buildThread({
+      projectId: 'proj-2',
       id: 'th-5',
       title: 'Improve form validation',
-      status: 'error',
+      status: 'failed',
       mode: 'local',
-      branch: null,
       createdAt: '2026-04-05T11:00:00Z',
-      completedAt: null,
       archived: false,
-    },
+    }),
   ],
 };
 
@@ -98,7 +99,7 @@ function ThreadPickerTrigger({
 }: {
   label: string;
   excludeIds?: string[];
-  threads?: Record<string, any[]>;
+  threads?: Record<string, Thread[]>;
 }) {
   const [open, setOpen] = useState(false);
   return (
@@ -107,8 +108,8 @@ function ThreadPickerTrigger({
         variant="outline"
         data-testid="thread-picker-trigger"
         onClick={() => {
-          seedProjects(MOCK_PROJECTS as any);
-          useThreadStore.setState({ threadsByProject: threads ?? MOCK_THREADS } as any);
+          seedProjects(MOCK_PROJECTS);
+          seedProjectThreads(threads ?? MOCK_THREADS);
           setOpen(true);
         }}
       >

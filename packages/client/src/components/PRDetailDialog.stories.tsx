@@ -1,6 +1,6 @@
 import type { GitHubPR, PRCommit, PRFile } from '@funny/shared';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -358,8 +358,8 @@ export const Loading: Story = {
       projectId="proj-1"
       label="Open PR (loading)"
       setupMocks={() => {
-        api.githubPRFiles = () => new Promise(() => {}) as any;
-        api.githubPRCommits = () => new Promise(() => {}) as any;
+        api.githubPRFiles = () => new ResultAsync(new Promise(() => {}));
+        api.githubPRCommits = () => new ResultAsync(new Promise(() => {}));
       }}
     />
   ),

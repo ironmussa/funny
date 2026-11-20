@@ -1,6 +1,6 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { okAsync } from 'neverthrow';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -176,7 +176,7 @@ export const Loading: Story = {
     <IssuesTrigger
       label="View issues (loading)"
       setupMocks={() => {
-        api.githubIssuesEnriched = () => new Promise(() => {}) as any;
+        api.githubIssuesEnriched = () => new ResultAsync(new Promise(() => {}));
       }}
     />
   ),
@@ -189,12 +189,10 @@ export const Error: Story = {
       label="View issues (error)"
       setupMocks={() => {
         api.githubIssuesEnriched = () =>
-          Promise.resolve({
-            isOk: () => false,
-            isErr: () => true,
-            match: (_ok: any, errFn: any) =>
-              errFn({ message: 'GitHub API rate limit exceeded. Try again in 30 seconds.' }),
-          }) as any;
+          errAsync({
+            type: 'INTERNAL',
+            message: 'GitHub API rate limit exceeded. Try again in 30 seconds.',
+          });
       }}
     />
   ),

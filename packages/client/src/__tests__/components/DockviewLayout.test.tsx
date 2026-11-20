@@ -4,8 +4,13 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { DockviewLayout, type BottomTabSpec } from '@/components/DockviewLayout';
 
-const dockviewMock = vi.hoisted(() => ({
-  api: undefined as MockDockviewApi | undefined,
+interface DockviewMockState {
+  api: MockDockviewApi | undefined;
+  readyCalled: boolean;
+}
+
+const dockviewMock = vi.hoisted((): DockviewMockState => ({
+  api: undefined,
   readyCalled: false,
 }));
 
@@ -17,6 +22,7 @@ vi.mock('dockview-react', () => ({
   DockviewReact: (props: { onReady?: (event: DockviewReadyEvent) => void }) => {
     if (!dockviewMock.readyCalled) {
       dockviewMock.readyCalled = true;
+      // SAFETY: DockviewLayout reads only `event.api`, which the mock api covers.
       // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       props.onReady?.({ api: dockviewMock.api } as unknown as DockviewReadyEvent);
     }
@@ -86,7 +92,7 @@ function createGroup(id: string, height = 300): MockDockviewGroup {
 function createMockDockviewApi(): MockDockviewApi {
   const edgeGroups = new Map<string, MockDockviewGroup>();
   const api = {
-    panels: [] as MockDockviewPanel[],
+    panels: new Array<MockDockviewPanel>(),
     addPanel: vi.fn(
       (options: { id: string; title?: string; position?: any; initialHeight?: number }) => {
         let group: MockDockviewGroup | undefined;

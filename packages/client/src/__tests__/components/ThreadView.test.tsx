@@ -3,9 +3,11 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ThreadView } from '@/components/ThreadView';
 import { withProjects } from '@/data/projects/testing';
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useAppStore } from '@/stores/app-store';
 import { useThreadStore } from '@/stores/thread-store';
 
+import { buildMessage } from '../helpers/builders-components';
 import { renderWithProviders } from '../helpers/render';
 
 // ── IntersectionObserver polyfill for jsdom ─────────────────────
@@ -80,7 +82,7 @@ vi.mock('@/hooks/use-todo-panel', () => ({
 }));
 
 vi.mock('@/stores/settings-store', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
+  const actual = await importOriginal<typeof import('@/stores/settings-store')>();
   return {
     ...actual,
     useSettingsStore: Object.assign(() => ({ fontSize: 'default' }), {
@@ -166,14 +168,14 @@ describe('ThreadView', () => {
 
     expect(onReady).not.toHaveBeenCalled();
 
-    const thread = {
+    const thread = buildThreadWithMessages({
       id: 't1',
       projectId: 'p1',
       title: 'Test Thread',
       status: 'completed',
       cost: 0,
       messages: [],
-    } as any;
+    });
     act(() =>
       useThreadStore.setState({
         selectedThreadId: 't1',
@@ -206,22 +208,22 @@ describe('ThreadView', () => {
   test('shows known message metadata while the worktree is setting up', () => {
     useAppStore.setState({
       selectedThreadId: 't1',
-      activeThread: {
+      activeThread: buildThreadWithMessages({
         id: 't1',
         projectId: 'p1',
         status: 'setting_up',
         initialPrompt: 'Prepare feature',
-        model: 'gpt-5',
+        model: 'gpt-5.2',
         permissionMode: 'auto',
         createdAt: new Date().toISOString(),
         messages: [],
-        lastUserMessage: {
+        lastUserMessage: buildMessage({
           content: 'Prepare feature',
           model: 'gpt-6-astra',
           permissionMode: 'plan',
           effort: 'medium',
-        },
-      } as any,
+        }),
+      }),
     });
     renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
     expect(screen.getByTestId('thread-preparation-view')).toBeInTheDocument();
@@ -232,20 +234,20 @@ describe('ThreadView', () => {
   test('shows the user message images while the worktree is setting up', () => {
     useAppStore.setState({
       selectedThreadId: 't1',
-      activeThread: {
+      activeThread: buildThreadWithMessages({
         id: 't1',
         projectId: 'p1',
         status: 'setting_up',
         initialPrompt: 'What is in this screenshot?',
         createdAt: new Date().toISOString(),
         messages: [],
-        lastUserMessage: {
+        lastUserMessage: buildMessage({
           content: 'What is in this screenshot?',
           images: [
             { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'AAAA' } },
           ],
-        },
-      } as any,
+        }),
+      }),
     });
     renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
     expect(screen.getByRole('img', { name: 'Attachment 1' })).toHaveAttribute(
@@ -275,7 +277,7 @@ describe('ThreadView', () => {
   test('renders user and assistant messages from active thread', () => {
     useAppStore.setState({
       selectedThreadId: 't1',
-      activeThread: {
+      activeThread: buildThreadWithMessages({
         id: 't1',
         projectId: 'p1',
         title: 'Test Thread',
@@ -285,7 +287,7 @@ describe('ThreadView', () => {
           { id: 'm1', threadId: 't1', role: 'user', content: 'Hello agent', timestamp: '' },
           { id: 'm2', threadId: 't1', role: 'assistant', content: 'Hello human', timestamp: '' },
         ],
-      } as any,
+      }),
     });
 
     renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
@@ -298,7 +300,7 @@ describe('ThreadView', () => {
   test('shows tool call cards for messages with toolCalls', () => {
     useAppStore.setState({
       selectedThreadId: 't1',
-      activeThread: {
+      activeThread: buildThreadWithMessages({
         id: 't1',
         projectId: 'p1',
         title: 'Test Thread',
@@ -312,11 +314,17 @@ describe('ThreadView', () => {
             content: 'Let me read that file',
             timestamp: '',
             toolCalls: [
-              { id: 'tc1', name: 'Read', input: '{"file":"test.ts"}', output: 'file contents' },
+              {
+                id: 'tc1',
+                messageId: 'm1',
+                name: 'Read',
+                input: '{"file":"test.ts"}',
+                output: 'file contents',
+              },
             ],
           },
         ],
-      } as any,
+      }),
     });
 
     renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
@@ -328,14 +336,14 @@ describe('ThreadView', () => {
   test('shows running indicator when status is running', () => {
     useAppStore.setState({
       selectedThreadId: 't1',
-      activeThread: {
+      activeThread: buildThreadWithMessages({
         id: 't1',
         projectId: 'p1',
         title: 'Test Thread',
         status: 'running',
         cost: 0,
         messages: [],
-      } as any,
+      }),
     });
 
     renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
@@ -346,14 +354,15 @@ describe('ThreadView', () => {
     useAppStore.setState({
       selectedThreadId: 't1',
       activeThread: {
-        id: 't1',
-        projectId: 'p1',
-        title: 'Test Thread',
-        status: 'completed',
-        cost: 0.05,
-        messages: [],
+        ...buildThreadWithMessages({
+          id: 't1',
+          projectId: 'p1',
+          title: 'Test Thread',
+          status: 'completed',
+          cost: 0.05,
+        }),
         resultInfo: { status: 'completed', cost: 0.05, duration: 1200 },
-      } as any,
+      },
     });
 
     renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });
@@ -363,14 +372,14 @@ describe('ThreadView', () => {
   test('shows generic waiting actions when status is waiting without reason', () => {
     useAppStore.setState({
       selectedThreadId: 't1',
-      activeThread: {
+      activeThread: buildThreadWithMessages({
         id: 't1',
         projectId: 'p1',
         title: 'Test Thread',
         status: 'waiting',
         cost: 0,
         messages: [],
-      } as any,
+      }),
     });
 
     renderWithProviders(<ThreadView />, { route: '/projects/p1/threads/t1' });

@@ -5,7 +5,8 @@ import { MemoryRouter } from 'react-router-dom';
 import '@/i18n/config';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { seedGitStatus } from '@/data/git-status/testing';
-import { seedProjects } from '@/data/projects/testing';
+import { buildProject, seedProjects } from '@/data/projects/testing';
+import { buildThread } from '@/data/threads/testing';
 import { useAuthStore } from '@/stores/auth-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -19,39 +20,45 @@ function uid() {
 }
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
-  const id = overrides.id ?? uid();
-  return {
-    id,
+  return buildThread({
+    id: overrides.id ?? uid(),
     projectId: 'proj-1',
     userId: 'user-1',
     title: 'Refactor auth module',
     mode: 'worktree',
-    status: 'completed',
     stage: 'backlog',
-    provider: 'claude',
-    permissionMode: 'autoEdit',
-    model: 'sonnet',
     branch: 'feat/auth',
     baseBranch: 'master',
     cost: 0.12,
-    runtime: 'local',
-    source: 'web',
     createdAt: new Date(Date.now() - 60 * 60_000).toISOString(),
     updatedAt: new Date().toISOString(),
     completedAt: new Date(Date.now() - 55 * 60_000).toISOString(),
     ...overrides,
-  };
+  });
 }
 
 function makeProject(overrides: Partial<Project> = {}): Project {
-  return {
+  return buildProject({
     id: 'proj-1',
     name: 'funny',
     path: '/home/user/funny',
     userId: 'user-1',
     createdAt: new Date().toISOString(),
     ...overrides,
-  } as Project;
+  });
+}
+
+const STAGES: readonly ThreadStage[] = [
+  'backlog',
+  'planning',
+  'in_progress',
+  'review',
+  'done',
+  'archived',
+];
+
+function isStage(name: string): name is ThreadStage {
+  return STAGES.some((stage) => stage === name);
 }
 
 function seedStores(projects: Project[] = [makeProject()]) {
@@ -66,7 +73,7 @@ function seedStores(projects: Project[] = [makeProject()]) {
 
   seedProjects(projects);
 
-  const noop = (() => Promise.resolve()) as any;
+  const noop = () => Promise.resolve();
   useThreadStore.setState({
     updateThreadStage: noop,
     archiveThread: noop,
@@ -91,6 +98,7 @@ function makeThreadsForStages(stages: Partial<Record<ThreadStage, number>>): Thr
   };
 
   for (const [stage, count] of Object.entries(stages)) {
+    if (!isStage(stage)) continue;
     const stageTitles = titles[stage] ?? ['Thread'];
     for (let i = 0; i < (count ?? 0); i++) {
       const status =
@@ -102,7 +110,7 @@ function makeThreadsForStages(stages: Partial<Record<ThreadStage, number>>): Thr
       threads.push(
         makeThread({
           title: stageTitles[i % stageTitles.length],
-          stage: stage as ThreadStage,
+          stage,
           status,
           archived: stage === 'archived',
           branch: `feat/${stage}-${i}`,

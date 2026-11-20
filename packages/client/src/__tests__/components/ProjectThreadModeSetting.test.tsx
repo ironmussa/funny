@@ -1,14 +1,20 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  settings: null as null | {
+interface ThreadModeMocks {
+  settings: null | {
     projectId: string;
     connectionId: string;
     sizeId: string;
     mode: 'local' | 'worktree' | 'sandbox';
-  },
+  };
+  sandboxReads: number;
+  save: Mock;
+}
+
+const mocks = vi.hoisted((): ThreadModeMocks => ({
+  settings: null,
   sandboxReads: 0,
   save: vi.fn(),
 }));

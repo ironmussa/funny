@@ -1,4 +1,4 @@
-import type { AgentExecutionProfileResponse, Project } from '@funny/shared';
+import type { AgentExecutionProfileResponse } from '@funny/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -36,7 +36,7 @@ import {
   AgentExecutionProfilesSettings,
   ProjectAgentExecutionProfileSettings,
 } from '@/components/settings/AgentExecutionProfilesSettings';
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 const workProfile: AgentExecutionProfileResponse = {
@@ -62,7 +62,7 @@ describe('AgentExecutionProfilesSettings', () => {
     resetMocks();
     useProjectStore.setState(
       withProjects({
-        projects: [{ id: 'project-1', name: 'Project One' } as Project],
+        projects: [buildProject({ id: 'project-1', name: 'Project One' })],
         selectedProjectId: 'project-1',
       }),
     );

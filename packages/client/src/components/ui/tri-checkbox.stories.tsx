@@ -136,7 +136,7 @@ function FileListExampleStory() {
     <div className="border-sidebar-border bg-sidebar w-64 rounded-md border p-2">
       <div className="border-sidebar-border mb-2 flex items-center gap-2 border-b pb-2">
         <TriCheckbox
-          state={headerState as 'checked' | 'unchecked' | 'indeterminate'}
+          state={headerState}
           onToggle={toggleAll}
           data-testid="tri-select-all"
           aria-label="Select all files"

@@ -22,8 +22,8 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 
 function seedStores({
   activeSettingsPage = 'general',
-  selectedProjectId = 'proj-1' as string | null,
-} = {}) {
+  selectedProjectId = 'proj-1',
+}: { activeSettingsPage?: string | null; selectedProjectId?: string | null } = {}) {
   useProjectStore.setState(
     withProjects({
       projects: [
@@ -114,7 +114,7 @@ export const GeneralNoProject: Story = {
 /** No settings page selected — shows the "Select a setting" placeholder. */
 export const NoPageSelected: Story = {
   render: () => {
-    seedStores({ activeSettingsPage: null as any });
+    seedStores({ activeSettingsPage: null });
     useUIStore.setState({ activeSettingsPage: null });
     return (
       <Wrapper>

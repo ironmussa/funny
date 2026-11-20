@@ -6,9 +6,10 @@ import { Toaster } from 'sonner';
 
 import '@/i18n/config';
 import { seedProjectCurrentBranches, withProjects } from '@/data/projects/testing';
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
-import { useThreadStore, type ThreadWithMessages } from '@/stores/thread-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 import { PullRequestsTab } from './PullRequestsTab';
 
@@ -195,7 +196,7 @@ interface MockFetchOptions {
 function installMockFetch(opts: MockFetchOptions = {}) {
   const { prs = [], hang = false, error } = opts;
 
-  window.fetch = (async (input: RequestInfo | URL): Promise<Response> => {
+  window.fetch = async (input: RequestInfo | URL): Promise<Response> => {
     const url =
       typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 
@@ -220,7 +221,7 @@ function installMockFetch(opts: MockFetchOptions = {}) {
 
     // Catch-all: empty 200 so nothing throws.
     return json({});
-  }) as typeof window.fetch;
+  };
 }
 
 function restoreFetch() {
@@ -269,26 +270,18 @@ function seedProject(currentBranch = 'master') {
  */
 function seedThreadOnBranch(branch: string) {
   seedProject('master');
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-  const thread = {
+  const thread = buildThreadWithMessages({
     id: 'thread-1',
     projectId: PROJECT_ID,
     userId: 'user-1',
     title: 'add pull-requests story',
-    mode: 'local',
     status: 'completed',
     stage: 'done',
-    provider: 'claude',
-    permissionMode: 'autoEdit',
-    model: 'sonnet',
     branch,
     baseBranch: 'master',
-    runtime: 'local',
-    source: 'web',
     createdAt: hoursAgo(1),
     updatedAt: hoursAgo(1),
-    messages: [],
-  } as unknown as ThreadWithMessages;
+  });
   useThreadStore.setState({
     threadDataById: { [thread.id]: thread },
     selectedThreadId: thread.id,

@@ -6,8 +6,13 @@ import { MemoryRouter } from 'react-router-dom';
 
 import { TooltipProvider } from '@/components/ui/tooltip';
 import '@/i18n/config';
-import { withProjects } from '@/data/projects/testing';
-import { seedProjectThreads, withThreadIndex } from '@/data/threads/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
+import {
+  buildThread,
+  buildThreadWithMessages,
+  seedProjectThreads,
+  withThreadIndex,
+} from '@/data/threads/testing';
 import { api } from '@/lib/api';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -24,43 +29,36 @@ function uid() {
 }
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
-  const id = overrides.id ?? uid();
-  return {
-    id,
+  return buildThread({
+    id: overrides.id ?? uid(),
     projectId: 'proj-1',
     userId: 'user-1',
     title: 'Implement feature',
     mode: 'worktree',
     status: 'running',
-    stage: 'in_progress',
-    provider: 'claude',
-    permissionMode: 'autoEdit',
-    model: 'sonnet',
     branch: 'feat/work',
     baseBranch: 'master',
     cost: 0.08,
-    runtime: 'local',
-    source: 'web',
     createdAt: new Date(Date.now() - 5 * 60_000).toISOString(),
     updatedAt: new Date().toISOString(),
     ...overrides,
-  };
+  });
 }
 
 function makeProject(overrides: Partial<Project> = {}): Project {
-  return {
+  return buildProject({
     id: 'proj-1',
     name: 'funny',
     path: '/home/user/funny',
     userId: 'user-1',
     createdAt: new Date().toISOString(),
     ...overrides,
-  } as Project;
+  });
 }
 
 function seedStores({
   projects = [makeProject()],
-  threadsByProject = {} as Record<string, Thread[]>,
+  threadsByProject = {},
 }: {
   projects?: Project[];
   threadsByProject?: Record<string, Thread[]>;
@@ -79,7 +77,7 @@ function seedStores({
   seedProjectThreads(threadsByProject);
   useThreadStore.setState(
     withThreadIndex({
-      loadThreadsForProject: (() => Promise.resolve()) as any,
+      loadThreadsForProject: () => Promise.resolve(),
     }),
   );
 
@@ -295,11 +293,7 @@ function makeThreadWithMessages(
   thread: Thread,
   messages: (Message & { toolCalls?: ToolCall[] })[],
 ): ThreadWithMessages {
-  return {
-    ...thread,
-    messages,
-    hasMore: false,
-  } as ThreadWithMessages;
+  return buildThreadWithMessages({ ...thread, messages });
 }
 
 /**
@@ -308,11 +302,7 @@ function makeThreadWithMessages(
  */
 function mockGetThread(threadsById: Record<string, ThreadWithMessages>) {
   const original = api.getThread;
-  api.getThread = ((id: string) => {
-    const thread = threadsById[id];
-    if (thread) return okAsync(thread);
-    return okAsync({ id, messages: [] } as any);
-  }) as typeof api.getThread;
+  api.getThread = (id: string) => okAsync(threadsById[id] ?? buildThreadWithMessages({ id }));
   return () => {
     api.getThread = original;
   };

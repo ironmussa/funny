@@ -9,6 +9,7 @@ import {
 import { useTurnEndHover } from '@/components/thread/use-turn-end-hover';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
+import { buildRect, expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 
 vi.mock('react-i18next', () => ({
@@ -30,7 +31,7 @@ vi.mock('@/hooks/use-pretext', () => ({
 }));
 
 vi.mock('@/stores/settings-store', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
+  const actual = await importOriginal<typeof import('@/stores/settings-store')>();
   return {
     ...actual,
     useSettingsStore: Object.assign(
@@ -70,16 +71,28 @@ vi.mock('@/components/thread/WorkflowEventGroup', () => ({
   WorkflowEventGroup: () => null,
 }));
 
-const virtualizerMockState = vi.hoisted(() => ({
-  start: undefined as number | undefined,
+interface VirtualizerMockState {
+  start: number | undefined;
+  visibleCount: number;
+  scrollOffset: number;
+  instance: any;
+  lastOptions: any;
+  measureCalls: number;
+  resizeItemCalls: { index: number; size: number }[];
+  scrollToIndexCalls: { index: number; opts?: { align?: string } }[];
+  scrollToOffsetCalls: { offset: number; opts?: { align?: string } }[];
+}
+
+const virtualizerMockState = vi.hoisted((): VirtualizerMockState => ({
+  start: undefined,
   visibleCount: 12,
   scrollOffset: 0,
-  instance: null as any,
-  lastOptions: undefined as any,
+  instance: null,
+  lastOptions: undefined,
   measureCalls: 0,
-  resizeItemCalls: [] as { index: number; size: number }[],
-  scrollToIndexCalls: [] as { index: number; opts?: { align?: string } }[],
-  scrollToOffsetCalls: [] as { offset: number; opts?: { align?: string } }[],
+  resizeItemCalls: [],
+  scrollToIndexCalls: [],
+  scrollToOffsetCalls: [],
 }));
 
 vi.mock('@tanstack/react-virtual', () => ({
@@ -354,15 +367,15 @@ describe('MemoizedMessageList virtualization', () => {
     const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     rectSpy.mockImplementation(function (this: Element) {
       if (this.getAttribute('data-testid') === 'viewport') {
-        return { top: 0, bottom: 300, height: 300 } as DOMRect;
+        return buildRect({ top: 0, bottom: 300, height: 300 });
       }
       if (this instanceof HTMLElement && this.clientHeight === 300) {
-        return { top: 0, bottom: 300, height: 300 } as DOMRect;
+        return buildRect({ top: 0, bottom: 300, height: 300 });
       }
       if (this.getAttribute('data-section-msg-id') === 'm0') {
-        return { top: -80, bottom: 40, height: 120 } as DOMRect;
+        return buildRect({ top: -80, bottom: 40, height: 120 });
       }
-      return { top: 0, bottom: 0, height: 0 } as DOMRect;
+      return buildRect({ top: 0, bottom: 0, height: 0 });
     });
 
     try {
@@ -435,7 +448,7 @@ describe('MemoizedMessageList virtualization', () => {
         x: 0,
         y: 0,
         toJSON: () => ({}),
-      } as DOMRect;
+      };
     });
 
     try {
@@ -467,7 +480,7 @@ describe('MemoizedMessageList virtualization', () => {
         x: 0,
         y: 0,
         toJSON: () => ({}),
-      } as DOMRect;
+      };
     });
 
     try {
@@ -509,7 +522,7 @@ describe('MemoizedMessageList virtualization', () => {
         x: 0,
         y: 0,
         toJSON: () => ({}),
-      } as DOMRect;
+      };
     });
 
     try {
@@ -597,13 +610,13 @@ describe('MemoizedMessageList virtualization', () => {
     const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     rectSpy.mockImplementation(function (this: Element) {
       if (this.getAttribute('data-testid') === 'viewport') {
-        return { top: 0, bottom: 300, height: 300 } as DOMRect;
+        return buildRect({ top: 0, bottom: 300, height: 300 });
       }
       const rowKey = this.getAttribute('data-virtual-row-key');
-      if (rowKey === 'm0') return { top: -120, bottom: -20, height: 100 } as DOMRect;
-      if (rowKey === 'm1') return { top: 40, bottom: 160, height: 120 } as DOMRect;
-      if (rowKey === 'm2') return { top: 170, bottom: 290, height: 120 } as DOMRect;
-      return { top: 0, bottom: 0, height: 0 } as DOMRect;
+      if (rowKey === 'm0') return buildRect({ top: -120, bottom: -20, height: 100 });
+      if (rowKey === 'm1') return buildRect({ top: 40, bottom: 160, height: 120 });
+      if (rowKey === 'm2') return buildRect({ top: 170, bottom: 290, height: 120 });
+      return buildRect({ top: 0, bottom: 0, height: 0 });
     });
 
     try {
@@ -620,19 +633,19 @@ describe('MemoizedMessageList virtualization', () => {
       expect(anchor).toEqual({ key: 'm1', offsetFromViewportTop: 40 });
       if (!anchor) throw new Error('Expected a visible anchor');
 
-      (viewport as HTMLDivElement).scrollTop = 100;
+      viewport.scrollTop = 100;
       rectSpy.mockImplementation(function (this: Element) {
         if (this.getAttribute('data-testid') === 'viewport') {
-          return { top: 0, bottom: 300, height: 300 } as DOMRect;
+          return buildRect({ top: 0, bottom: 300, height: 300 });
         }
         if (this.getAttribute('data-virtual-row-key') === 'm1') {
-          return { top: 75, bottom: 195, height: 120 } as DOMRect;
+          return buildRect({ top: 75, bottom: 195, height: 120 });
         }
-        return { top: 0, bottom: 0, height: 0 } as DOMRect;
+        return buildRect({ top: 0, bottom: 0, height: 0 });
       });
 
       expect(listRef.current?.restoreScrollAnchor(anchor)).toBe(true);
-      expect((viewport as HTMLDivElement).scrollTop).toBe(135);
+      expect(viewport.scrollTop).toBe(135);
     } finally {
       rectSpy.mockRestore();
     }
@@ -645,9 +658,9 @@ describe('MemoizedMessageList virtualization', () => {
     const rectSpy = vi.spyOn(Element.prototype, 'getBoundingClientRect');
     rectSpy.mockImplementation(function (this: Element) {
       if (this.getAttribute('data-testid') === 'viewport') {
-        return { top: 0, bottom: 300, height: 300 } as DOMRect;
+        return buildRect({ top: 0, bottom: 300, height: 300 });
       }
-      return { top: 0, bottom: 0, height: 0 } as DOMRect;
+      return buildRect({ top: 0, bottom: 0, height: 0 });
     });
 
     try {
@@ -795,12 +808,11 @@ describe('MemoizedMessageList virtualization', () => {
 
     const row = document.createElement('div');
     row.dataset.virtualRowKey = 'm0';
-    row.getBoundingClientRect = vi.fn(() => ({ height: 10 }) as DOMRect);
+    row.getBoundingClientRect = vi.fn(() => buildRect({ height: 10 }));
 
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const height = virtualizerMockState.lastOptions.measureElement(row, {
       borderBoxSize: [{ blockSize: 88 }],
-    } as unknown as ResizeObserverEntry);
+    });
 
     expect(height).toBe(88);
     expect(row.getBoundingClientRect).not.toHaveBeenCalled();
@@ -819,8 +831,8 @@ describe('MemoizedMessageList virtualization', () => {
     );
 
     const rows = Array.from(viewport.querySelectorAll<HTMLElement>('[data-virtual-row-key]'));
-    rows[0]!.getBoundingClientRect = vi.fn(() => ({ height: 480 }) as DOMRect);
-    rows[1]!.getBoundingClientRect = vi.fn(() => ({ height: 96 }) as DOMRect);
+    rows[0]!.getBoundingClientRect = vi.fn(() => buildRect({ height: 480 }));
+    rows[1]!.getBoundingClientRect = vi.fn(() => buildRect({ height: 96 }));
     virtualizerMockState.measureCalls = 0;
     virtualizerMockState.resizeItemCalls = [];
 
@@ -875,26 +887,23 @@ describe('MemoizedMessageList virtualization', () => {
     await waitFor(() => expect(viewport.querySelector('[data-virtual-row-key="m0"]')).toBeTruthy());
 
     const row = viewport.querySelector<HTMLElement>('[data-virtual-row-key="m0"]')!;
-    const virtualContainer = row.parentElement as HTMLElement;
-    virtualContainer.getBoundingClientRect = vi.fn(
-      () =>
-        ({
-          top: 0,
-        }) as DOMRect,
+    const virtualContainer = expectInstance(row.parentElement, HTMLElement);
+    virtualContainer.getBoundingClientRect = vi.fn(() =>
+      buildRect({
+        top: 0,
+      }),
     );
-    row.getBoundingClientRect = vi.fn(
-      () =>
-        ({
-          bottom: 300,
-          height: 300,
-        }) as DOMRect,
+    row.getBoundingClientRect = vi.fn(() =>
+      buildRect({
+        bottom: 300,
+        height: 300,
+      }),
     );
 
     act(() => {
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       virtualizerMockState.lastOptions.measureElement(row, {
         borderBoxSize: [{ blockSize: 300 }],
-      } as unknown as ResizeObserverEntry);
+      });
     });
 
     await waitFor(() => expect(virtualContainer.style.height).toBe('300px'));
@@ -910,26 +919,23 @@ describe('MemoizedMessageList virtualization', () => {
     await waitFor(() => expect(viewport.querySelector('[data-virtual-row-key="m1"]')).toBeTruthy());
 
     const row = viewport.querySelector<HTMLElement>('[data-virtual-row-key="m1"]')!;
-    const virtualContainer = row.parentElement as HTMLElement;
-    virtualContainer.getBoundingClientRect = vi.fn(
-      () =>
-        ({
-          top: 0,
-        }) as DOMRect,
+    const virtualContainer = expectInstance(row.parentElement, HTMLElement);
+    virtualContainer.getBoundingClientRect = vi.fn(() =>
+      buildRect({
+        top: 0,
+      }),
     );
-    row.getBoundingClientRect = vi.fn(
-      () =>
-        ({
-          bottom: 160,
-          height: 40,
-        }) as DOMRect,
+    row.getBoundingClientRect = vi.fn(() =>
+      buildRect({
+        bottom: 160,
+        height: 40,
+      }),
     );
 
     act(() => {
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       virtualizerMockState.lastOptions.measureElement(row, {
         borderBoxSize: [{ blockSize: 40 }],
-      } as unknown as ResizeObserverEntry);
+      });
     });
 
     await waitFor(() => expect(virtualContainer.style.height).toBe('160px'));

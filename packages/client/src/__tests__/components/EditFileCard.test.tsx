@@ -1,11 +1,23 @@
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import { EditFileCard } from '@/components/tool-cards/EditFileCard';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-const intersectionObserverState = vi.hoisted(() => ({
-  callback: null as IntersectionObserverCallback | null,
+import {
+  buildIntersectionEntry,
+  buildIntersectionObserver,
+  expectInstance,
+} from '../helpers/builders-components';
+
+interface IntersectionObserverState {
+  callback: IntersectionObserverCallback | null;
+  observe: Mock;
+  disconnect: Mock;
+}
+
+const intersectionObserverState = vi.hoisted((): IntersectionObserverState => ({
+  callback: null,
   observe: vi.fn(),
   disconnect: vi.fn(),
 }));
@@ -107,15 +119,15 @@ describe('EditFileCard', () => {
     );
 
     const placeholder = screen.getByTestId('edit-file-inline-diff-placeholder');
-    const slot = placeholder.parentElement as HTMLElement;
+    const slot = expectInstance(placeholder.parentElement, HTMLElement);
     const reservedHeight = slot.style.height;
 
     expect(reservedHeight).toMatch(/^\d+px$/);
 
     await act(async () => {
       intersectionObserverState.callback?.(
-        [{ isIntersecting: true } as IntersectionObserverEntry],
-        {} as IntersectionObserver,
+        [buildIntersectionEntry({ isIntersecting: true })],
+        buildIntersectionObserver(),
       );
     });
 
@@ -222,8 +234,8 @@ describe('EditFileCard', () => {
 
     await act(async () => {
       intersectionObserverState.callback?.(
-        [{ isIntersecting: true } as IntersectionObserverEntry],
-        {} as IntersectionObserver,
+        [buildIntersectionEntry({ isIntersecting: true })],
+        buildIntersectionObserver(),
       );
     });
 
@@ -255,8 +267,8 @@ describe('EditFileCard', () => {
 
     await act(async () => {
       intersectionObserverState.callback?.(
-        [{ isIntersecting: true } as IntersectionObserverEntry],
-        {} as IntersectionObserver,
+        [buildIntersectionEntry({ isIntersecting: true })],
+        buildIntersectionObserver(),
       );
     });
 
@@ -300,8 +312,8 @@ describe('EditFileCard', () => {
 
     await act(async () => {
       intersectionObserverState.callback?.(
-        [{ isIntersecting: true } as IntersectionObserverEntry],
-        {} as IntersectionObserver,
+        [buildIntersectionEntry({ isIntersecting: true })],
+        buildIntersectionObserver(),
       );
     });
 

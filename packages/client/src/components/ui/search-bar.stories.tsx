@@ -58,7 +58,7 @@ function FindInTextDemo() {
   const [index, setIndex] = useState(0);
 
   const matches = useMemo(() => {
-    if (!query) return [] as number[];
+    if (!query) return [];
     const result: number[] = [];
     const t = caseSensitive ? text : text.toLowerCase();
     const q = caseSensitive ? query : query.toLowerCase();

@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { NewThreadInput } from '@/components/thread/NewThreadInput';
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -165,10 +165,12 @@ describe('NewThreadInput', () => {
       composePrefillPrompt: null,
       newThreadIssueContext: null,
       activeDesignId: null,
-    } as any);
+    });
     useProjectStore.setState(
       withProjects({
-        projects: [{ id: 'p1', name: 'My Project', path: '/repo', defaultMode: 'local' } as any],
+        projects: [
+          buildProject({ id: 'p1', name: 'My Project', path: '/repo', defaultMode: 'local' }),
+        ],
         selectedProjectId: 'p1',
       }),
     );
@@ -201,24 +203,24 @@ describe('NewThreadInput', () => {
   });
 
   test('uses the explicit new-thread project before the globally selected project', async () => {
-    useUIStore.setState({ newThreadProjectId: 'p2' } as any);
+    useUIStore.setState({ newThreadProjectId: 'p2' });
     useProjectStore.setState(
       withProjects({
         projects: [
-          {
+          buildProject({
             id: 'p1',
             name: 'Project One',
             path: '/repo-one',
             defaultMode: 'local',
             defaultProvider: 'codex',
-          } as any,
-          {
+          }),
+          buildProject({
             id: 'p2',
             name: 'Project Two',
             path: '/repo-two',
             defaultMode: 'local',
             defaultProvider: 'codex',
-          } as any,
+          }),
         ],
         selectedProjectId: 'p1',
       }),
@@ -233,8 +235,8 @@ describe('NewThreadInput', () => {
 
   test('shows issue context banner and allows dismiss', async () => {
     useUIStore.setState({
-      newThreadIssueContext: { title: 'Bug #42', prompt: 'Fix it' },
-    } as any);
+      newThreadIssueContext: { title: 'Bug #42', prompt: 'Fix it', branchName: 'issue-42' },
+    });
 
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
     await flushAsyncUpdates();
@@ -246,7 +248,7 @@ describe('NewThreadInput', () => {
   });
 
   test('uses compose prefill prompt once on mount', async () => {
-    useUIStore.setState({ composePrefillPrompt: 'Prefilled prompt' } as any);
+    useUIStore.setState({ composePrefillPrompt: 'Prefilled prompt' });
 
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
     await flushAsyncUpdates();
@@ -303,7 +305,7 @@ describe('NewThreadInput', () => {
   test('does NOT pin the loader for idle (backlog) submits', async () => {
     // Idle creates stay on this screen (no navigation), so the loader must not
     // stick — otherwise the compose form would be replaced by a stuck spinner.
-    useUIStore.setState({ newThreadIdleOnly: true } as any);
+    useUIStore.setState({ newThreadIdleOnly: true });
     mockCreateThread.mockResolvedValueOnce(true);
     renderWithProviders(<NewThreadInput projectIdOverride="p1" />);
 
@@ -411,13 +413,13 @@ describe('NewThreadInput', () => {
     useProjectStore.setState(
       withProjects({
         projects: [
-          {
+          buildProject({
             id: 'p1',
             name: 'My Project',
             path: '/repo',
             defaultMode: 'local',
             defaultProvider: 'codex',
-          } as any,
+          }),
         ],
         selectedProjectId: 'p1',
       }),

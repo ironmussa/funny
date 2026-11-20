@@ -28,7 +28,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-const gitActionOverrides = vi.hoisted(() => ({}) as Record<string, (...args: any[]) => unknown>);
+const gitActionOverrides = vi.hoisted((): Record<string, (...args: any[]) => unknown> => ({}));
 vi.mock('@/data/git-status/actions', async (importOriginal) => {
   const real = await importOriginal<Record<string, (...args: any[]) => unknown>>();
   const wrapped: Record<string, (...args: any[]) => unknown> = {};

@@ -1,8 +1,13 @@
+import type { Thread, ThreadRuntime } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const thread = vi.hoisted(() => ({ current: {} as Record<string, unknown> }));
+interface ThreadRef {
+  current: Partial<Thread>;
+}
+
+const thread = vi.hoisted((): ThreadRef => ({ current: {} }));
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({
@@ -22,16 +27,18 @@ import { useUIStore } from '@/stores/ui-store';
 
 import { renderWithProviders } from '../helpers/render';
 
-function open(runtime: string) {
+function open(runtime: ThreadRuntime) {
   thread.current = { id: 't-1', userId: 'alice', title: 'Fix login', runtime };
-  useAuthStore.setState({ user: { id: 'alice', username: 'alice' } } as never);
+  useAuthStore.setState({
+    user: { id: 'alice', username: 'alice', displayName: 'alice', role: 'user' },
+  });
   renderWithProviders(<ShareThreadButton threadId="t-1" projectId="p-1" />);
   fireEvent.click(screen.getByTestId('header-share-thread'));
 }
 
 describe('ShareThreadButton', () => {
   beforeEach(() => {
-    useUIStore.setState({ shareDialogOpen: false } as never);
+    useUIStore.setState({ shareDialogOpen: false });
   });
 
   test('warns that an editor reaches the repository through a sandbox agent', async () => {

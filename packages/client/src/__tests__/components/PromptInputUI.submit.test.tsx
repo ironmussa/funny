@@ -10,9 +10,11 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PromptInputUI, type PromptInputUIProps } from '@/components/PromptInputUI';
 import { seedTemplates } from '@/data/templates/testing';
+import { buildThread } from '@/data/threads/testing';
 import { systemApi } from '@/lib/api/system';
 import { threadsApi } from '@/lib/api/threads';
 
+import { buildAgentTemplate, expectInstance } from '../helpers/builders-components';
 import { renderWithProviders } from '../helpers/render';
 
 const executeCodexCommand = vi.fn();
@@ -111,9 +113,7 @@ const IMAGE = {
 };
 
 function renderUI(props: Partial<PromptInputUIProps> = {}) {
-  const onSubmit = (props.onSubmit ?? vi.fn()) as ReturnType<
-    typeof vi.fn<PromptInputUIProps['onSubmit']>
-  >;
+  const onSubmit = vi.mocked(props.onSubmit ?? vi.fn<PromptInputUIProps['onSubmit']>());
   renderWithProviders(
     <PromptInputUI
       unifiedModel="claude:opus"
@@ -126,7 +126,10 @@ function renderUI(props: Partial<PromptInputUIProps> = {}) {
       onSubmit={onSubmit}
     />,
   );
-  return { onSubmit, editor: screen.getByTestId('prompt-editor') as HTMLTextAreaElement };
+  return {
+    onSubmit,
+    editor: expectInstance(screen.getByTestId('prompt-editor'), HTMLTextAreaElement),
+  };
 }
 
 function type(editor: HTMLTextAreaElement, text: string) {
@@ -138,7 +141,7 @@ function submit(editor: HTMLTextAreaElement) {
 }
 
 async function attachTextFile(name: string, content: string) {
-  const input = screen.getByTestId('prompt-file-input') as HTMLInputElement;
+  const input = expectInstance(screen.getByTestId('prompt-file-input'), HTMLInputElement);
   const file = new File([content], name, { type: 'text/plain' });
   fireEvent.change(input, { target: { files: [file] } });
   await screen.findByTestId('prompt-attached-file-0');
@@ -153,7 +156,7 @@ beforeEach(() => {
       auth: 'connected',
       installable: true,
       login: null,
-    }) as any,
+    }),
   );
   seedTemplates([]);
 });
@@ -281,11 +284,11 @@ describe('PromptInputUI submit', () => {
   test('a binary file attached before the thread exists is staged and sent as stagedUploads', async () => {
     const stageUpload = vi
       .spyOn(threadsApi, 'stageUpload')
-      .mockReturnValue(okAsync({ stagedId: 'staged-1', name: 'spec.pdf', size: 4 }) as never);
+      .mockReturnValue(okAsync({ stagedId: 'staged-1', name: 'spec.pdf', size: 4 }));
     const uploadFile = vi.spyOn(threadsApi, 'uploadFile');
     const { onSubmit, editor } = renderUI({ isNewThread: true, projectId: 'p-1' });
 
-    const input = screen.getByTestId('prompt-file-input') as HTMLInputElement;
+    const input = expectInstance(screen.getByTestId('prompt-file-input'), HTMLInputElement);
     const pdf = new File([new Uint8Array([0x25, 0x50, 0x44, 0x46])], 'spec.pdf', {
       type: 'application/pdf',
     });
@@ -321,7 +324,7 @@ describe('PromptInputUI submit', () => {
 
   test('deep agent new thread sends template id and resolved variables', async () => {
     seedTemplates([
-      {
+      buildAgentTemplate({
         id: 'tpl1',
         name: 'Tpl',
         variables: [
@@ -329,7 +332,7 @@ describe('PromptInputUI submit', () => {
           { name: 'b', defaultValue: 'db' },
           { name: 'c' },
         ],
-      } as any,
+      }),
     ]);
     const { onSubmit, editor } = renderUI({
       isNewThread: true,
@@ -409,7 +412,7 @@ describe('PromptInputUI submit', () => {
 
   test('provider setup lookup errors are toasted and block submit', async () => {
     vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
-      errAsync({ message: 'offline' }) as any,
+      errAsync({ type: 'INTERNAL', message: 'offline' }),
     );
     const { onSubmit, editor } = renderUI({ projectId: 'p1' });
     type(editor, 'task');
@@ -420,7 +423,13 @@ describe('PromptInputUI submit', () => {
 
   test('bundled claude without configured auth opens provider setup', async () => {
     vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
-      okAsync({ provider: 'claude', state: 'bundled', auth: 'connected' }) as any,
+      okAsync({
+        provider: 'claude',
+        state: 'bundled',
+        auth: 'connected',
+        installable: false,
+        login: null,
+      }),
     );
     const { onSubmit, editor } = renderUI({ projectId: 'p1' });
     type(editor, 'task');
@@ -431,7 +440,13 @@ describe('PromptInputUI submit', () => {
 
   test('a new sandbox thread skips the project-runner provider check', async () => {
     vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
-      okAsync({ provider: 'claude', state: 'installed', auth: 'required' }) as any,
+      okAsync({
+        provider: 'claude',
+        state: 'installed',
+        auth: 'required',
+        installable: false,
+        login: null,
+      }),
     );
     const onCheckoutPreflight = vi.fn(async () => false);
     const { onSubmit, editor } = renderUI({
@@ -452,11 +467,17 @@ describe('PromptInputUI submit', () => {
 
   test('a follow-up on a sandbox thread skips the project-runner provider check', async () => {
     vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
-      okAsync({ provider: 'claude', state: 'installed', auth: 'required' }) as any,
+      okAsync({
+        provider: 'claude',
+        state: 'installed',
+        auth: 'required',
+        installable: false,
+        login: null,
+      }),
     );
     const { onSubmit, editor } = renderUI({
       projectId: 'p1',
-      powerlineThread: { id: 't1', runtime: 'sandbox' } as any,
+      powerlineThread: buildThread({ id: 't1', runtime: 'sandbox' }),
     });
     type(editor, 'next step');
     submit(editor);

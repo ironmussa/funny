@@ -9,7 +9,7 @@
 - [x] 1.5 Add the `ConcurrencyGate` port with an in-memory FIFO default, `resolveLimit` and `priority` hooks, `waiting_slot` state reported through `onStateChange`, and release on end / failure / cancel; verify with tests for limit 1 across two runs, different groups, cancellation while waiting, and release on failure
 - [x] 1.6 Add the `Journal` port with an in-memory default; skip recorded successes, evaluate conditions on recorded outputs, re-run an unfinished execution with `resume.recorded`; verify with resume tests for parallel branches and a loop's second visit
 - [x] 1.7 Add batch groups to the `ConcurrencyGate` (leader + up to `max - 1` members within `wait`, member outcomes settled by the leader and journaled under each member run, `requeued` members back in their place, cancelled members leave, unsettled members return on leader cancellation or loss) with the in-memory gate; verify with tests for a batch of three, a failed member, a requeued member, a cancelled member, a cancelled leader and leader loss
-- [ ] 1.8 Delete the level-by-level DAG mode and the sequential mode once 1.1–1.6 pass; update the package docs in `packages/pipelines` source comments (1.1 already replaced both modes behind `runPipeline`, since the old suite passed unchanged; what is left is `computeLevels`, now used only to validate the graph, and the package docs)
+- [x] 1.8 Delete the level-by-level DAG mode and the sequential mode once 1.1–1.6 pass; update the package docs in `packages/pipelines` source comments (both modes went in 1.1; 1.8 removed `computeLevels` and documented the package)
 
 ## 2. Workflow schema, validation and compiler
 

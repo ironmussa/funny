@@ -1,11 +1,13 @@
 /**
- * The ready-queue scheduler behind `runPipeline`.
+ * The ready-queue scheduler behind `runPipeline`. The graph and its rules
+ * are in `graph.ts`, one node task in `node-task.ts`, the journal side in
+ * `replay.ts`.
  *
  * Every pipeline is a graph. Each node has a state (`pending`, `running`,
  * `succeeded`, `failed`, `skipped`, `cancelled`), and the scheduler starts
  * every pending node whose dependencies have finished, in declaration order,
- * up to `maxConcurrency` at a time. A slow branch therefore never holds an
- * unrelated one, unlike the level-by-level mode this replaces.
+ * up to `maxConcurrency` at a time, so a slow branch never holds an
+ * unrelated one.
  *
  * - **Implicit chain.** When no node declares `dependsOn`, each node depends
  *   on the previous one, so a plain list runs in declaration order.
@@ -38,215 +40,33 @@
  * - **Failure.** A node failure with `onError: 'fail'` (the default) stops
  *   new nodes from starting and aborts the nodes still running in other
  *   branches; the scheduler waits for them to stop (up to `stopGraceMs`
- *   each) and reports the first failure. Run cancellation does the same. With `onError: 'continue'` the node is
- *   marked failed and the joins decide.
+ *   each) and reports the first failure. Run cancellation does the same.
+ *   With `onError: 'continue'` the node is marked failed and the joins decide.
  */
 
-import { Effect, Exit } from 'effect';
-
-import {
-  SUB_PIPELINE_PARENT_CB,
-  computeLevels,
-  type GuardFn,
-  type NodeRunInfo,
-  type PipelineDefinition,
-  type PipelineNode,
-  type PipelineOutcome,
-  type PipelineRunOptions,
-  type PipelineRunResult,
-  type PipelineStateChange,
-  type PipelineStateKind,
+import type {
+  PipelineDefinition,
+  PipelineOutcome,
+  PipelineRunOptions,
+  PipelineRunResult,
+  PipelineStateChange,
 } from './engine.js';
-import { defaultConcurrencyGate, type SlotGrant } from './gate.js';
+import { defaultConcurrencyGate, type ConcurrencyGate, type SlotGrant } from './gate.js';
 import {
-  executionKey,
-  latestByExecution,
-  type ExecutionStatus,
-  type JournalEntry,
-} from './journal.js';
-import { causeMessage, invoke, runSingleNode } from './node-runner.js';
-
-type NodeState = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled';
-
-interface GraphNode<T> {
-  readonly def: PipelineNode<T>;
-  /** Declaration index, used to keep starts and merges deterministic. */
-  readonly index: number;
-  readonly deps: GraphNode<T>[];
-  readonly dependents: GraphNode<T>[];
-  state: NodeState;
-  /** The context the node produced (its input when it was skipped). */
-  out?: T;
-  /** Skipped because its join could no longer be satisfied (an upstream failure). */
-  upstreamFailed?: boolean;
-  /** The dependencies whose results this node read when it started (or was skipped). */
-  readFrom?: ReadonlySet<GraphNode<T>>;
-  /** The innermost loop region the node belongs to. */
-  region?: Region<T>;
-  /** Set when a loop sent the run back to this node: what it reads on that visit. */
-  feedback?: T;
-}
-
-interface Region<T> {
-  readonly entry: GraphNode<T>;
-  /** The node that declares the loop. */
-  readonly exit: GraphNode<T>;
-  readonly members: ReadonlySet<GraphNode<T>>;
-  readonly until: GuardFn<T>;
-  readonly maxIterations: number;
-  /** The smallest region that strictly contains this one. */
-  parent?: Region<T>;
-  /** The current visit, from 1. */
-  visit: number;
-  /** True once the loop has exited; nodes outside it may then read its members. */
-  closed: boolean;
-}
-
-/** A loop before its region is computed. */
-interface LoopSpec<T> {
-  exit: GraphNode<T>;
-  backTo: string;
-  until: GuardFn<T>;
-  maxIterations: number;
-}
-
-/** What one node task reports back to the scheduler. */
-type TaskResult<T> =
-  | { kind: 'succeeded'; ctx: T; loop?: 'exit' | 'again' }
-  | { kind: 'skipped'; ctx: T }
-  | { kind: 'failed'; ctx: T; error: string }
-  | { kind: 'cancelled'; ctx?: T };
-
-interface Built<T> {
-  nodes: GraphNode<T>[];
-  regions: Region<T>[];
-}
-
-/** Build the graph, refusing cycles, unknown dependencies and loops that are not regions. */
-function buildGraph<T>(pipeline: PipelineDefinition<T>, maxIterations?: number): Built<T> {
-  const defs = pipeline.nodes;
-  const implicitChain = !defs.some((n) => n.dependsOn !== undefined);
-  const depNames = (n: PipelineNode<T>, i: number): string[] =>
-    implicitChain ? (i === 0 ? [] : [defs[i - 1].name]) : (n.dependsOn ?? []);
-
-  // Cycles and unknown dependencies throw here with the same messages as before.
-  computeLevels(defs.map((n, i) => ({ ...n, dependsOn: depNames(n, i) })));
-
-  const nodes: GraphNode<T>[] = defs.map((def, index) => ({
-    def,
-    index,
-    deps: [],
-    dependents: [],
-    state: 'pending',
-  }));
-  const byName = new Map(nodes.map((n) => [n.def.name, n]));
-  for (const [i, node] of nodes.entries()) {
-    for (const name of depNames(node.def, i)) {
-      const dep = byName.get(name)!;
-      node.deps.push(dep);
-      dep.dependents.push(node);
-    }
-  }
-
-  const specs: LoopSpec<T>[] = [];
-  for (const node of nodes) {
-    const loop = node.def.loop;
-    if (loop) {
-      specs.push({
-        exit: node,
-        backTo: loop.backTo,
-        until: loop.until,
-        maxIterations: loop.maxIterations ?? 10,
-      });
-    }
-  }
-  const legacy = pipeline.loop;
-  if (legacy && nodes.length > 0) {
-    const exit = nodes[nodes.length - 1];
-    if (exit.def.loop) {
-      throw new Error(
-        `"${exit.def.name}" declares a loop and is also the end of the pipeline loop`,
-      );
-    }
-    specs.push({
-      exit,
-      backTo: legacy.from,
-      until: legacy.until,
-      maxIterations: maxIterations ?? legacy.maxIterations ?? 10,
-    });
-  }
-  return { nodes, regions: buildRegions(specs, byName) };
-}
-
-/** Compute each loop's region, refuse overlaps, and link every node to its innermost region. */
-function buildRegions<T>(specs: LoopSpec<T>[], byName: Map<string, GraphNode<T>>): Region<T>[] {
-  const regions = specs.map((spec): Region<T> => {
-    const name = spec.exit.def.name;
-    const entry = byName.get(spec.backTo);
-    if (!entry) {
-      throw new Error(`The loop on "${name}" goes back to "${spec.backTo}", which is not a node`);
-    }
-    const members = regionBetween(entry, spec.exit);
-    if (!members) {
-      throw new Error(
-        `The loop on "${name}" goes back to "${spec.backTo}", which is not "${name}" or one of its dependencies, so the loop has no region`,
-      );
-    }
-    return {
-      entry,
-      exit: spec.exit,
-      members,
-      until: spec.until,
-      maxIterations: Math.max(1, spec.maxIterations),
-      visit: 1,
-      closed: false,
-    };
-  });
-
-  const contains = (outer: Region<T>, inner: Region<T>) =>
-    outer.members.size > inner.members.size &&
-    [...inner.members].every((m) => outer.members.has(m));
-  for (const [i, a] of regions.entries()) {
-    for (const b of regions.slice(i + 1)) {
-      const shared = [...a.members].some((m) => b.members.has(m));
-      if (shared && !contains(a, b) && !contains(b, a)) {
-        throw new Error(
-          `The loops on "${a.exit.def.name}" (back to "${a.entry.def.name}") and "${b.exit.def.name}" (back to "${b.entry.def.name}") overlap; loop regions must be nested or disjoint`,
-        );
-      }
-    }
-  }
-
-  // Smallest first, so the first region found containing something is the innermost.
-  const bySize = [...regions].sort((a, b) => a.members.size - b.members.size);
-  for (const r of bySize) r.parent = bySize.find((o) => contains(o, r));
-  for (const r of [...bySize].reverse()) for (const m of r.members) m.region = r;
-  return regions;
-}
-
-/** Every node on a path from `entry` to `exit`, both included, or null when there is none. */
-function regionBetween<T>(entry: GraphNode<T>, exit: GraphNode<T>): Set<GraphNode<T>> | null {
-  const ancestorsOfExit = new Set<GraphNode<T>>();
-  const up = [exit];
-  while (up.length > 0) {
-    const n = up.pop()!;
-    if (ancestorsOfExit.has(n)) continue;
-    ancestorsOfExit.add(n);
-    up.push(...n.deps);
-  }
-  if (!ancestorsOfExit.has(entry)) return null;
-  const members = new Set<GraphNode<T>>();
-  const down = [entry];
-  while (down.length > 0) {
-    const n = down.pop()!;
-    if (members.has(n) || !ancestorsOfExit.has(n)) continue;
-    members.add(n);
-    down.push(...n.dependents);
-  }
-  return members;
-}
-
-const finished = (s: NodeState) => s === 'succeeded' || s === 'skipped' || s === 'failed';
+  buildGraph,
+  contains,
+  finished,
+  joinDecision,
+  readable,
+  visitPath,
+  type Graph,
+  type GraphNode,
+  type Region,
+} from './graph.js';
+import { executionKey, latestByExecution, type JournalEntry } from './journal.js';
+import type { TaskParams, TaskResult } from './node-task.js';
+import { journaledNodeTask, replayNodeTask, replayOf } from './replay.js';
+import { SUB_PIPELINE_PARENT_CB } from './symbols.js';
 
 /** Default merge: fold each result's `outputs` map over the base, in order. */
 function defaultMerge<T>(base: T, results: T[]): T {
@@ -260,39 +80,22 @@ function defaultMerge<T>(base: T, results: T[]): T {
   return { ...base, outputs: merged };
 }
 
+const messageOf = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
 /** Run a pipeline as a graph. See the module comment for the rules. */
 export async function runGraph<T>(
   pipeline: PipelineDefinition<T>,
   initialCtx: T,
   opts: PipelineRunOptions<T>,
 ): Promise<PipelineRunResult<T>> {
-  const { signal, onStateChange } = opts;
-  const emit = (change: PipelineStateChange<T>) => onStateChange?.(change);
-  const merge = pipeline.mergeContexts ?? defaultMerge;
-  const concurrency = Math.max(1, Math.floor(opts.maxConcurrency ?? 8));
-
+  const onStateChange = opts.onStateChange;
   // Attach onStateChange to a copy of the context so sub-pipelines can
   // forward their events without mutating the caller's object.
   const initial = onStateChange
     ? ({ ...initialCtx, [SUB_PIPELINE_PARENT_CB]: onStateChange } as T)
     : initialCtx;
-
-  const gate = opts.gate ?? defaultConcurrencyGate;
-  const runId = opts.runId ?? crypto.randomUUID();
-  let built: Built<T>;
-  /** Each concurrency node's group, computed once from the initial context. */
-  const groups = new Map<string, string>();
-  try {
-    built = buildGraph(pipeline, opts.maxIterations);
-    for (const n of pipeline.nodes) {
-      const group = n.concurrency?.group;
-      if (group !== undefined) {
-        groups.set(n.name, typeof group === 'function' ? group(initialCtx) : group);
-      }
-    }
-  } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
-    emit({
+  const refuse = (error: string): PipelineRunResult<T> => {
+    onStateChange?.({
       kind: 'terminal',
       nodeName: pipeline.name,
       ctx: initial,
@@ -301,68 +104,124 @@ export async function runGraph<T>(
       outcome: 'failed',
     });
     return { outcome: 'failed', ctx: initial, error, iterations: 1 };
+  };
+
+  let graph: Graph<T>;
+  let groups: Map<string, string>;
+  try {
+    graph = buildGraph(pipeline, opts.maxIterations);
+    groups = groupsOf(pipeline, initialCtx);
+  } catch (err) {
+    return refuse(messageOf(err));
   }
-  const { nodes, regions } = built;
-  const journal = opts.journal;
-  let recorded = new Map<string, JournalEntry<T>>();
-  if (journal) {
-    try {
-      recorded = latestByExecution(await journal.load(runId));
-    } catch (err) {
-      const error = `Could not load the run's journal: ${err instanceof Error ? err.message : String(err)}`;
-      emit({
-        kind: 'terminal',
-        nodeName: pipeline.name,
-        ctx: initial,
-        iteration: 1,
-        error,
-        outcome: 'failed',
-      });
-      return { outcome: 'failed', ctx: initial, error, iterations: 1 };
+  const runId = opts.runId ?? crypto.randomUUID();
+  let recorded: Map<string, JournalEntry<T>>;
+  try {
+    recorded = latestByExecution((await opts.journal?.load(runId)) ?? []);
+  } catch (err) {
+    return refuse(`Could not load the run's journal: ${messageOf(err)}`);
+  }
+  return new GraphRun(pipeline, opts, { graph, groups, initial, runId, recorded }).run();
+}
+
+/** Each concurrency node's group, computed once from the initial context (never outputs). */
+function groupsOf<T>(pipeline: PipelineDefinition<T>, initialCtx: T): Map<string, string> {
+  const groups = new Map<string, string>();
+  for (const n of pipeline.nodes) {
+    const group = n.concurrency?.group;
+    if (group !== undefined)
+      groups.set(n.name, typeof group === 'function' ? group(initialCtx) : group);
+  }
+  return groups;
+}
+
+interface RunSetup<T> {
+  graph: Graph<T>;
+  groups: Map<string, string>;
+  /** The initial context, as nodes read it. */
+  initial: T;
+  runId: string;
+  /** The latest recorded attempt of each execution, by `executionKey`. */
+  recorded: Map<string, JournalEntry<T>>;
+}
+
+type Settled<T> = { node: GraphNode<T>; result: TaskResult<T> };
+
+/** One run of a graph: node states, running tasks, and how results move the run on. */
+class GraphRun<T> {
+  private readonly nodes: GraphNode<T>[];
+  private readonly regions: Region<T>[];
+  private readonly loopOf: Map<GraphNode<T>, Region<T>>;
+  private readonly concurrency: number;
+  private readonly gate: ConcurrencyGate;
+  private readonly merge: (base: T, results: T[]) => T;
+  private readonly running = new Map<GraphNode<T>, Promise<Settled<T>>>();
+  /** Each running node's own abort, so a failure can stop its siblings. */
+  private readonly controllers = new Map<GraphNode<T>, AbortController>();
+  private failure: { node: GraphNode<T>; error: string } | undefined;
+  private lastRan: GraphNode<T> | undefined;
+
+  constructor(
+    private readonly pipeline: PipelineDefinition<T>,
+    private readonly opts: PipelineRunOptions<T>,
+    private readonly setup: RunSetup<T>,
+  ) {
+    this.nodes = setup.graph.nodes;
+    this.regions = setup.graph.regions;
+    this.loopOf = new Map(this.regions.map((r) => [r.exit, r]));
+    this.concurrency = Math.max(1, Math.floor(opts.maxConcurrency ?? 8));
+    this.gate = opts.gate ?? defaultConcurrencyGate;
+    this.merge = pipeline.mergeContexts ?? defaultMerge;
+  }
+
+  async run(): Promise<PipelineRunResult<T>> {
+    this.launchReady();
+    while (this.running.size > 0) {
+      const { node, result } = await Promise.race(this.running.values());
+      this.running.delete(node);
+      this.controllers.delete(node);
+      this.apply(node, result);
+      this.launchReady();
+    }
+    return this.finish();
+  }
+
+  private emit(change: PipelineStateChange<T>) {
+    this.opts.onStateChange?.(change);
+  }
+
+  private get aborted() {
+    return this.opts.signal?.aborted === true;
+  }
+
+  // ── Starting nodes ────────────────────────────────────────
+
+  private launchReady() {
+    if (this.aborted || this.failure) return;
+    // A skip can settle further joins, so sweep until nothing changes.
+    while (this.sweep()) {
+      // sweep again
     }
   }
-  const iterations = () => Math.max(1, ...regions.map((r) => r.visit));
-  const loopOf = new Map(regions.map((r) => [r.exit, r]));
 
-  /** `region` and every region around it. */
-  const enclosing = (region: Region<T> | undefined): Region<T>[] => {
-    const out: Region<T>[] = [];
-    for (let r = region; r; r = r.parent) out.push(r);
-    return out;
-  };
-
-  /** Close the loop `node` declares, if any: nodes outside may now read its region. */
-  const closeLoopOf = (node: GraphNode<T>) => {
-    const r = loopOf.get(node);
-    if (r) r.closed = true;
-  };
-
-  /** Did `dep` fail, for a dependent's join (a node skipped by a failure counts)? */
-  const failedForJoin = (dep: GraphNode<T>) =>
-    dep.state === 'failed' || (dep.state === 'skipped' && dep.upstreamFailed === true);
-
-  /** What `node`'s trigger rule says now: start it, skip it, or wait. */
-  const joinDecision = (node: GraphNode<T>): 'start' | 'skip' | 'wait' => {
-    const done = node.deps.filter((d) => readable(node, d));
-    const allDone = done.length === node.deps.length;
-    switch (node.def.triggerRule ?? 'all_success') {
-      case 'all_done':
-        return allDone ? 'start' : 'wait';
-      case 'one_success':
-        if (node.deps.length === 0) return 'start';
-        if (done.some((d) => d.state === 'succeeded')) return 'start';
-        return allDone ? 'skip' : 'wait';
-      case 'all_success':
-        if (done.some(failedForJoin)) return 'skip';
-        return allDone ? 'start' : 'wait';
+  /** Start or skip every pending node whose join has decided; true if any was skipped. */
+  private sweep(): boolean {
+    let skipped = false;
+    for (const node of this.nodes) {
+      if (node.state !== 'pending') continue;
+      const decision = joinDecision(node);
+      if (decision === 'skip') {
+        this.skipByJoin(node);
+        skipped = true;
+      } else if (decision === 'start' && this.running.size < this.concurrency) {
+        this.startTask(node);
+      }
     }
-  };
+    return skipped;
+  }
 
-  /** May `node` read `dep`'s result now? Not while a loop around `dep` but not `node` is open. */
-  const readable = (node: GraphNode<T>, dep: GraphNode<T>) =>
-    finished(dep.state) && enclosing(dep.region).every((r) => r.closed || r.members.has(node));
-
-  const inputOf = (node: GraphNode<T>): T => {
+  /** The context `node` reads: its loop feedback, or what its finished dependencies produced. */
+  private inputOf(node: GraphNode<T>): T {
     if (node.feedback !== undefined) {
       // The feedback already carries what the entry read on its first visit.
       node.readFrom = new Set(node.deps);
@@ -371,177 +230,141 @@ export async function runGraph<T>(
     // A join may start (or skip) before every dependency finished: read those that did.
     const read = node.deps.filter((d) => readable(node, d) && d.out !== undefined);
     node.readFrom = new Set(read);
-    const results = read.map((d) => d.out as T);
-    if (results.length === 0) return initial;
+    return this.fold(read.map((d) => d.out as T));
+  }
+
+  /** One context from several results, in declaration order. */
+  private fold(results: T[]): T {
+    if (results.length === 0) return this.setup.initial;
     if (results.length === 1) return results[0];
-    return merge(results[0], results);
-  };
+    return this.merge(results[0], results);
+  }
 
   /** Skip `node` without running it, because its join can no longer be satisfied. */
-  const skipByJoin = (node: GraphNode<T>) => {
+  private skipByJoin(node: GraphNode<T>) {
     node.state = 'skipped';
     node.upstreamFailed = true;
-    node.out = inputOf(node);
-    emit({
-      kind: 'skipped',
-      nodeName: node.def.name,
-      ctx: node.out,
-      iteration: node.region?.visit ?? 1,
-    });
-    closeLoopOf(node);
-  };
-
-  /** The run's result context: the finished nodes whose result no finished node read. */
-  const resultCtx = (): T => {
-    const frontier = nodes.filter(
-      (n) =>
-        finished(n.state) &&
-        !n.dependents.some((d) => finished(d.state) && d.readFrom?.has(n) === true),
-    );
-    if (frontier.length === 0) return initial;
-    if (frontier.length === 1) return frontier[0].out as T;
-    const results = frontier.map((n) => n.out as T);
-    return merge(results[0], results);
-  };
-
-  const running = new Map<GraphNode<T>, Promise<{ node: GraphNode<T>; result: TaskResult<T> }>>();
-  /** Each running node's own abort, so a failure can stop its siblings. */
-  const controllers = new Map<GraphNode<T>, AbortController>();
-  let failure: { node: GraphNode<T>; error: string } | undefined;
-  let lastRan: GraphNode<T> | undefined;
-
-  /** How `node` asks for its concurrency slot, if it has a group. */
-  const slotFor = (node: GraphNode<T>, visit: string, input: T) => {
-    const concurrency = node.def.concurrency;
-    const group = groups.get(node.def.name);
-    if (!concurrency || group === undefined) return undefined;
-    const holder = `${runId}/${node.def.name}/${visit}`;
-    return (signal: AbortSignal, onWait: () => void) =>
-      gate.acquire({
-        group,
-        limit: concurrency.limit,
-        holder,
-        signal,
-        onWait,
-        batch: concurrency.batch && {
-          max: concurrency.batch.max,
-          waitMs: concurrency.batch.waitMs,
-        },
-        input,
-      });
-  };
-
-  /** The visits of the regions around `node`, outermost first ("1" outside loops). */
-  const visitPath = (node: GraphNode<T>) =>
-    enclosing(node.region)
-      .reverse()
-      .map((r) => r.visit)
-      .join('.') || '1';
-
-  const startTask = (node: GraphNode<T>) => {
-    node.state = 'running';
-    lastRan = node;
-    const controller = new AbortController();
-    controllers.set(node, controller);
-    const abort = () => controller.abort();
-    signal?.addEventListener('abort', abort, { once: true });
+    node.out = this.inputOf(node);
     const iteration = node.region?.visit ?? 1;
+    this.emit({ kind: 'skipped', nodeName: node.def.name, ctx: node.out, iteration });
+    this.closeLoopOf(node);
+  }
+
+  private startTask(node: GraphNode<T>) {
+    node.state = 'running';
+    this.lastRan = node;
+    const controller = new AbortController();
+    this.controllers.set(node, controller);
+    const abort = () => controller.abort();
+    const signal = this.opts.signal;
+    signal?.addEventListener('abort', abort, { once: true });
     const visit = visitPath(node);
-    const input = inputOf(node);
-    const params = {
+    const input = this.inputOf(node);
+    const params: TaskParams<T> = {
       signal: controller.signal,
-      emit,
-      iteration,
-      stopGraceMs: opts.stopGraceMs,
-      acquireSlot: slotFor(node, visit, input),
+      emit: (c) => this.emit(c),
+      iteration: node.region?.visit ?? 1,
+      stopGraceMs: this.opts.stopGraceMs,
+      acquireSlot: this.slotFor(node, visit, input),
       adoptBatchOutput: node.def.concurrency?.batch?.adopt,
-      loopRegion: loopOf.get(node),
+      loopRegion: this.loopOf.get(node),
     };
-    const previous = recorded.get(executionKey(node.def.name, visit));
-    const replay = previous && replayOf(node, previous);
-    const task = (
-      replay
-        ? replayNodeTask(node, replay, params)
-        : journaledNodeTask(node, input, params, visit, previous)
-    )
+    const task = this.taskFor(node, input, visit, params)
       .finally(() => signal?.removeEventListener('abort', abort))
       .then((result) => ({ node, result }));
-    running.set(node, task);
-  };
+    this.running.set(node, task);
+  }
 
-  /** Run `node` and record the execution, resuming `previous` if it never finished. */
-  const journaledNodeTask = async (
-    node: GraphNode<T>,
-    input: T,
-    params: Parameters<typeof runNodeTask<T>>[2],
-    visit: string,
-    previous: JournalEntry<T> | undefined,
-  ): Promise<TaskResult<T>> => {
-    const unfinished = previous?.status === 'running' || previous?.status === 'cancelled';
-    const resume =
-      unfinished && previous ? { recorded: previous as JournalEntry<unknown> } : undefined;
-    const entry: JournalEntry<T> = {
-      runId,
-      nodeId: node.def.name,
-      visit,
-      attempt: (previous?.attempt ?? 0) + 1,
-      status: 'running',
-      startedAt: Date.now(),
-    };
-    const write = async (patch: Partial<JournalEntry<T>>) => {
-      Object.assign(entry, patch);
-      await journal?.record({ ...entry });
-    };
-    try {
-      await write({});
-    } catch (err) {
-      return { kind: 'failed', ctx: input, error: journalError(err) };
+  /** Replay the recorded execution of `node`, or run it (resuming an unfinished one). */
+  private taskFor(node: GraphNode<T>, input: T, visit: string, params: TaskParams<T>) {
+    const { journal } = this.opts;
+    const { runId, recorded } = this.setup;
+    const previous = recorded.get(executionKey(node.def.name, visit));
+    const replay = previous && replayOf(node, previous);
+    if (replay) return replayNodeTask(node, replay, params);
+    return journaledNodeTask({ journal, runId, node, visit, previous }, input, params);
+  }
+
+  /** How `node` asks for its concurrency slot, if it has a group. */
+  private slotFor(node: GraphNode<T>, visit: string, input: T) {
+    const concurrency = node.def.concurrency;
+    const group = this.setup.groups.get(node.def.name);
+    if (!concurrency || group === undefined) return undefined;
+    const holder = `${this.setup.runId}/${node.def.name}/${visit}`;
+    const { limit, batch } = concurrency;
+    const policy = batch && { max: batch.max, waitMs: batch.waitMs };
+    return (signal: AbortSignal, onWait: () => void): Promise<SlotGrant> =>
+      this.gate.acquire({ group, limit, holder, signal, onWait, batch: policy, input });
+  }
+
+  // ── Results ───────────────────────────────────────────────
+
+  private apply(node: GraphNode<T>, result: TaskResult<T>) {
+    switch (result.kind) {
+      case 'cancelled':
+        // A node that finished its work before the abort keeps its result.
+        node.state = result.ctx !== undefined ? 'succeeded' : 'cancelled';
+        node.out = result.ctx;
+        return;
+      case 'failed':
+        this.fail(node, result.ctx, result.error);
+        return;
+      case 'skipped':
+        node.state = 'skipped';
+        node.out = result.ctx;
+        // A skipped loop node ends its loop, as the last node of a sequential loop did.
+        this.closeLoopOf(node);
+        return;
+      case 'succeeded':
+        this.succeeded(node, result);
     }
-    const result = await runNodeTask(node, input, {
-      ...params,
-      info: { visit, resume, checkpoint: (data) => write({ data }) },
+  }
+
+  private succeeded(node: GraphNode<T>, result: Extract<TaskResult<T>, { kind: 'succeeded' }>) {
+    const region = this.loopOf.get(node);
+    if (!region || result.loop !== 'again') {
+      node.state = 'succeeded';
+      node.out = result.ctx;
+      this.closeLoopOf(node);
+      return;
+    }
+    if (region.visit < region.maxIterations) {
+      this.loopAgain(region, result.ctx);
+      return;
+    }
+    const error = `loop exhausted: "${node.def.name}" ran ${region.maxIterations} visits and its until condition never held`;
+    this.emit({
+      kind: 'error',
+      nodeName: node.def.name,
+      ctx: result.ctx,
+      iteration: region.visit,
+      error,
     });
-    try {
-      await write(finishedEntry(result));
-    } catch (err) {
-      return { kind: 'failed', ctx: input, error: journalError(err) };
-    }
-    return result;
-  };
-
-  const launchReady = () => {
-    if (signal?.aborted || failure) return;
-    // A skip can settle further joins, so sweep until nothing changes.
-    for (let changed = true; changed;) {
-      changed = false;
-      for (const node of nodes) {
-        if (node.state !== 'pending') continue;
-        const decision = joinDecision(node);
-        if (decision === 'skip') {
-          skipByJoin(node);
-          changed = true;
-        } else if (decision === 'start' && running.size < concurrency) {
-          startTask(node);
-        }
-      }
-    }
-  };
+    this.fail(node, result.ctx, error);
+  }
 
   /** A node failed: fail the run, or with `onError: 'continue'` let the joins decide. */
-  const fail = (node: GraphNode<T>, ctx: T, error: string) => {
+  private fail(node: GraphNode<T>, ctx: T, error: string) {
     node.state = 'failed';
     node.out = ctx;
-    if ((node.def.onError ?? 'fail') === 'fail') {
-      failure ??= { node, error };
-      // The run has failed: stop the nodes still running in other branches.
-      for (const c of controllers.values()) c.abort();
+    if (node.def.onError === 'continue') {
+      // A failed loop node ends its loop: there is no result to check.
+      this.closeLoopOf(node);
+      return;
     }
-    // A failed loop node ends its loop: there is no result to check.
-    else closeLoopOf(node);
-  };
+    this.failure ??= { node, error };
+    // The run has failed: stop the nodes still running in other branches.
+    for (const c of this.controllers.values()) c.abort();
+  }
+
+  /** Close the loop `node` declares, if any: nodes outside may now read its region. */
+  private closeLoopOf(node: GraphNode<T>) {
+    const r = this.loopOf.get(node);
+    if (r) r.closed = true;
+  }
 
   /** Send the run back through `region`: its nodes go back to pending. */
-  const loopAgain = (region: Region<T>, ctx: T) => {
+  private loopAgain(region: Region<T>, ctx: T) {
     region.visit++;
     for (const m of region.members) {
       m.state = 'pending';
@@ -551,191 +374,37 @@ export async function runGraph<T>(
       m.feedback = undefined;
     }
     // Loops inside this one start over.
-    for (const r of regions) {
-      if (r !== region && r.members.size < region.members.size && region.members.has(r.exit)) {
+    for (const r of this.regions) {
+      if (contains(region, r)) {
         r.visit = 1;
         r.closed = false;
       }
     }
     region.entry.feedback = ctx;
-  };
-
-  const apply = (node: GraphNode<T>, result: TaskResult<T>) => {
-    switch (result.kind) {
-      case 'cancelled':
-        // A node that finished its work before the abort keeps its result.
-        if (result.ctx !== undefined) {
-          node.state = 'succeeded';
-          node.out = result.ctx;
-        } else {
-          node.state = 'cancelled';
-        }
-        return;
-      case 'failed':
-        fail(node, result.ctx, result.error);
-        return;
-      case 'skipped':
-        node.state = 'skipped';
-        node.out = result.ctx;
-        // A skipped loop node ends its loop, as the last node of a sequential loop did.
-        closeLoopOf(node);
-        return;
-      case 'succeeded': {
-        const region = loopOf.get(node);
-        if (!region || result.loop !== 'again') {
-          node.state = 'succeeded';
-          node.out = result.ctx;
-          closeLoopOf(node);
-          return;
-        }
-        if (region.visit >= region.maxIterations) {
-          const error = `loop exhausted: "${node.def.name}" ran ${region.maxIterations} visits and its until condition never held`;
-          emit({
-            kind: 'error',
-            nodeName: node.def.name,
-            ctx: result.ctx,
-            iteration: region.visit,
-            error,
-          });
-          fail(node, result.ctx, error);
-          return;
-        }
-        loopAgain(region, result.ctx);
-      }
-    }
-  };
-
-  launchReady();
-  while (running.size > 0) {
-    const { node, result } = await Promise.race(running.values());
-    running.delete(node);
-    controllers.delete(node);
-    apply(node, result);
-    launchReady();
   }
 
-  const ctx = resultCtx();
-  const terminal = (
-    outcome: PipelineOutcome,
-    nodeName: string,
-    error?: string,
-  ): PipelineRunResult<T> => {
-    emit({ kind: 'terminal', nodeName, ctx, iteration: iterations(), outcome, error });
-    const result: PipelineRunResult<T> = { outcome, ctx, iterations: iterations() };
-    if (error !== undefined) result.error = error;
-    return result;
-  };
+  // ── The end ───────────────────────────────────────────────
 
-  if (signal?.aborted) return terminal('cancelled', lastRan?.def.name ?? pipeline.name);
-  if (failure) return terminal('failed', failure.node.def.name, failure.error);
-  const last = nodes[nodes.length - 1];
-  return terminal('completed', last?.def.name ?? pipeline.name);
-}
-
-/** A recorded execution the run takes as it is, without running the node. */
-type Replay<T> =
-  | { kind: 'succeeded'; ctx: T }
-  | { kind: 'skipped'; ctx: T }
-  | { kind: 'failed'; ctx: T; error: string };
-
-/**
- * What to do with `node`'s recorded execution: replay it, or (undefined)
- * run the node again, resuming it when it never finished.
- */
-function replayOf<T>(node: GraphNode<T>, entry: JournalEntry<T>): Replay<T> | undefined {
-  if (entry.output === undefined) return undefined;
-  if (entry.status === 'succeeded') return { kind: 'succeeded', ctx: entry.output };
-  if (entry.status === 'skipped') return { kind: 'skipped', ctx: entry.output };
-  // A tolerated failure stays one, so the joins take the same path.
-  if (entry.status === 'failed' && node.def.onError === 'continue') {
-    return { kind: 'failed', ctx: entry.output, error: entry.error ?? 'failed' };
+  /** The run's result context: the finished nodes whose result no finished node read. */
+  private resultCtx(): T {
+    const readByFinished = (n: GraphNode<T>) =>
+      n.dependents.some((d) => finished(d.state) && d.readFrom?.has(n) === true);
+    const frontier = this.nodes.filter((n) => finished(n.state) && !readByFinished(n));
+    return this.fold(frontier.map((n) => n.out as T));
   }
-  return undefined;
-}
 
-/** The state change a replayed execution reports, as if it had just run. */
-const REPLAY_STATE_KIND = {
-  succeeded: 'completed',
-  skipped: 'skipped',
-  failed: 'error',
-} as const satisfies Record<Replay<unknown>['kind'], PipelineStateKind>;
-
-/** Take a recorded execution: report it, and evaluate the loop condition on its output. */
-async function replayNodeTask<T>(
-  node: GraphNode<T>,
-  replay: Replay<T>,
-  params: Parameters<typeof runNodeTask<T>>[2],
-): Promise<TaskResult<T>> {
-  const { emit, iteration } = params;
-  emit({
-    kind: REPLAY_STATE_KIND[replay.kind],
-    nodeName: node.def.name,
-    ctx: replay.ctx,
-    iteration,
-    error: replay.kind === 'failed' ? replay.error : undefined,
-  });
-  if (replay.kind !== 'succeeded') return replay;
-  return untilAfter(replay.ctx, params);
-}
-
-/** The finished part of a journal entry for a task result. */
-function finishedEntry<T>(result: TaskResult<T>): Partial<JournalEntry<T>> {
-  const finishedAt = Date.now();
-  const status: ExecutionStatus =
-    result.kind === 'cancelled'
-      ? result.ctx !== undefined
-        ? 'succeeded'
-        : 'cancelled'
-      : result.kind;
-  const patch: Partial<JournalEntry<T>> = { status, finishedAt };
-  if (result.ctx !== undefined) patch.output = result.ctx;
-  if (result.kind === 'failed') patch.error = result.error;
-  return patch;
-}
-
-const journalError = (err: unknown) =>
-  `Could not record the execution in the journal: ${err instanceof Error ? err.message : String(err)}`;
-
-/** Run one node, then evaluate its loop condition when it closes a loop region. */
-async function runNodeTask<T>(
-  node: GraphNode<T>,
-  input: T,
-  params: {
-    signal: AbortSignal;
-    emit: (c: PipelineStateChange<T>) => void;
-    iteration: number;
-    stopGraceMs?: number;
-    acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<SlotGrant>;
-    adoptBatchOutput?: (input: T, output: unknown) => T;
-    loopRegion?: Region<T>;
-    info?: Omit<NodeRunInfo, 'iteration'>;
-  },
-): Promise<TaskResult<T>> {
-  const res = await runSingleNode(node.def, input, params);
-  if (res.status === 'cancelled') {
-    // A synchronous node can commit its result and abort the run in the same
-    // call; keep that result (the node runner only adopts it in that case).
-    return res.committed ? { kind: 'cancelled', ctx: res.ctx } : { kind: 'cancelled' };
+  private finish(): PipelineRunResult<T> {
+    const ctx = this.resultCtx();
+    const iterations = Math.max(1, ...this.regions.map((r) => r.visit));
+    const terminal = (outcome: PipelineOutcome, nodeName: string, error?: string) => {
+      this.emit({ kind: 'terminal', nodeName, ctx, iteration: iterations, outcome, error });
+      const result: PipelineRunResult<T> = { outcome, ctx, iterations };
+      if (error !== undefined) result.error = error;
+      return result;
+    };
+    const name = this.pipeline.name;
+    if (this.aborted) return terminal('cancelled', this.lastRan?.def.name ?? name);
+    if (this.failure) return terminal('failed', this.failure.node.def.name, this.failure.error);
+    return terminal('completed', this.nodes.at(-1)?.def.name ?? name);
   }
-  if (res.status === 'error') return { kind: 'failed', ctx: res.ctx, error: res.error ?? 'failed' };
-  if (res.status === 'skipped') return { kind: 'skipped', ctx: res.ctx };
-  return untilAfter(res.ctx, params);
-}
-
-/** A node succeeded with `ctx`: evaluate its loop condition, if it declares a loop. */
-async function untilAfter<T>(
-  ctx: T,
-  params: { signal: AbortSignal; loopRegion?: Region<T> },
-): Promise<TaskResult<T>> {
-  const { signal, loopRegion } = params;
-  if (!loopRegion) return { kind: 'succeeded', ctx };
-  const condition = await Effect.runPromiseExit(
-    invoke(() => loopRegion.until(ctx)),
-    { signal },
-  );
-  if (signal.aborted) return { kind: 'cancelled', ctx };
-  if (Exit.isFailure(condition)) {
-    return { kind: 'failed', ctx, error: causeMessage(condition.cause) };
-  }
-  return { kind: 'succeeded', ctx, loop: condition.value ? 'exit' : 'again' };
 }

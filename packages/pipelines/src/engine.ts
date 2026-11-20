@@ -1,12 +1,12 @@
 /**
- * Lightweight, function-based pipeline engine.
+ * Pipeline types and builders, and the `runPipeline` entry point.
  *
- * Pipelines are sequences of named nodes. Each node is an async function
- * that receives context + AbortSignal and returns updated context.
- * Nodes can be conditionally skipped via guards.
- * Nodes form a graph through `dependsOn` (a plain list is a chain), and a
- * loop repeats a region of it for review→fix cycles. The scheduler that
- * runs the graph is in `scheduler.ts`.
+ * A pipeline is a graph of named nodes. Each node is a function that
+ * receives the context, an AbortSignal and its run info, and returns the
+ * updated context. Nodes form the graph through `dependsOn` (a plain list
+ * is a chain), may be skipped by a `when` guard, join by `triggerRule`,
+ * repeat a region with `loop`, and share limits across runs through
+ * `concurrency`. The scheduler that runs the graph is in `scheduler.ts`.
  *
  * Effect coordinates cancellation, retry waits, and node interruption.
  */
@@ -14,6 +14,7 @@
 import type { Batch, ConcurrencyGate } from './gate.js';
 import type { Journal, ResumeInfo } from './journal.js';
 import { runGraph } from './scheduler.js';
+import { SUB_PIPELINE_PARENT_CB } from './symbols.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -341,8 +342,7 @@ export function subPipeline<T>(
   return { name, execute, when: opts?.when };
 }
 
-/** Symbol used internally to pass parent onStateChange to sub-pipelines. */
-export const SUB_PIPELINE_PARENT_CB = Symbol.for('pipeline:parentStateChange');
+export { SUB_PIPELINE_PARENT_CB } from './symbols.js';
 
 /** Create a pipeline definition. */
 export function definePipeline<T>(def: PipelineDefinition<T>): PipelineDefinition<T> {
@@ -384,41 +384,4 @@ export function runPipeline<T>(
   opts: PipelineRunOptions<T> = {},
 ): Promise<PipelineRunResult<T>> {
   return runGraph(pipeline, initialCtx, opts);
-}
-
-// ── Topological levels (graph validation) ───────────────────
-
-/**
- * Group nodes into topological levels: level(n) = 0 when it has no
- * dependencies, otherwise 1 + max(level of its deps). All nodes in the same
- * level are mutually independent and safe to run concurrently. Declaration
- * order is preserved within each level so merges stay deterministic.
- *
- * Throws on cycles or references to unknown nodes.
- */
-export function computeLevels<T>(nodes: PipelineNode<T>[]): PipelineNode<T>[][] {
-  const byName = new Map(nodes.map((n) => [n.name, n]));
-  const levelOf = new Map<string, number>();
-
-  const resolve = (name: string, path: string[]): number => {
-    const cached = levelOf.get(name);
-    if (cached !== undefined) return cached;
-    if (path.includes(name)) {
-      throw new Error(`Cycle detected: ${[...path, name].join(' → ')}`);
-    }
-    const n = byName.get(name);
-    if (!n) throw new Error(`Node "${name}" referenced in dependsOn does not exist`);
-    const deps = n.dependsOn ?? [];
-    const level =
-      deps.length === 0 ? 0 : 1 + Math.max(...deps.map((d) => resolve(d, [...path, name])));
-    levelOf.set(name, level);
-    return level;
-  };
-
-  for (const n of nodes) resolve(n.name, []);
-
-  const maxLevel = levelOf.size === 0 ? -1 : Math.max(...levelOf.values());
-  const levels: PipelineNode<T>[][] = Array.from({ length: maxLevel + 1 }, () => []);
-  for (const n of nodes) levels[levelOf.get(n.name)!].push(n);
-  return levels;
 }

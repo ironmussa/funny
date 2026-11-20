@@ -4,9 +4,13 @@
  */
 import { describe, expect, test } from 'bun:test';
 
+import { EMPTY_FACTORY_RUN_METRICS } from '@funny/shared/contracts/factory';
 import { ok, okAsync } from 'neverthrow';
 
-import { createFactoryActionProvider } from '../../../services/factory/factory-action-provider.js';
+import {
+  countCiResult,
+  createFactoryActionProvider,
+} from '../../../services/factory/factory-action-provider.js';
 
 const scope = {
   runId: 'r1',
@@ -94,5 +98,86 @@ describe('factory action provider', () => {
     await provider.spawnAgent({ prompt: 'implement', cwd: '' });
     expect(prefixes).toEqual(['[Factory] #7 ']);
     expect(launches).toBe(0);
+  });
+});
+
+describe('factory action provider integration metrics', () => {
+  const PR = 'https://github.com/o/r/pull/5';
+  const failing = {
+    kind: 'failing' as const,
+    checks: [{ name: 'test', excerpt: 'boom' }],
+  } as never;
+
+  test('counts each CI verdict as a round and a red one as red, and stores the counters', async () => {
+    const recorded: unknown[] = [];
+    const looks = [failing, { kind: 'green' as const }];
+    const { provider } = providerWith({
+      prUrl: PR,
+      github: {
+        findPullRequest: () => okAsync(null),
+        pullRequests: {
+          prState: () => okAsync('open' as const),
+          ciState: () => okAsync(looks.shift()!),
+          merge: () =>
+            okAsync({ kind: 'merged' as const, method: 'squash' as const, branchDeleted: false }),
+        },
+      },
+      record: async (input) => {
+        if (input.metrics) recorded.push(input.metrics);
+      },
+    });
+    expect(await provider.waitCi({})).toMatchObject({ ok: false });
+    expect(await provider.waitCi({})).toMatchObject({ ok: true });
+    expect(recorded.at(-1)).toMatchObject({ ciRounds: 2, ciRed: 1, conflicts: 0 });
+  });
+
+  test('a resumed run keeps counting from its stored counters', async () => {
+    const recorded: unknown[] = [];
+    const { provider } = providerWith({
+      prUrl: PR,
+      metrics: {
+        ciRounds: 2,
+        ciRed: 1,
+        conflicts: 0,
+        ciBlocked: 0,
+        ciTimeouts: 0,
+        agentFixes: 1,
+      },
+      record: async (input) => {
+        if (input.metrics) recorded.push(input.metrics);
+      },
+    });
+    await provider.waitCi({});
+    expect(recorded.at(-1)).toMatchObject({ ciRounds: 3, ciRed: 1, agentFixes: 1 });
+  });
+
+  test('a follow-up once the pull request is open counts as an agent fix', async () => {
+    const recorded: unknown[] = [];
+    const { provider } = providerWith({
+      threadIds: ['A'],
+      prUrl: PR,
+      continuation: {
+        followUp: async () => ok(undefined),
+        completedAt: async () => null,
+        followedUpSince: async () => false,
+      },
+      record: async (input) => {
+        if (input.metrics) recorded.push(input.metrics);
+      },
+    });
+    await provider.spawnAgent({ prompt: 'implement', cwd: '' });
+    await provider.spawnAgent({ prompt: 'fix the checks', cwd: '' });
+    expect(recorded.at(-1)).toMatchObject({ agentFixes: 1, ciRounds: 0 });
+  });
+
+  test('a stop or an access error is not a CI round', () => {
+    const base = { ...EMPTY_FACTORY_RUN_METRICS };
+    expect(countCiResult(base, { ok: false, error: 'The run was stopped.' })).toBeNull();
+    expect(
+      countCiResult(base, { ok: false, error: 'no access', metadata: { kind: 'auth' } }),
+    ).toBeNull();
+    expect(
+      countCiResult(base, { ok: false, error: 'x', metadata: { verdict: 'conflict' } }),
+    ).toMatchObject({ ciRounds: 1, conflicts: 1 });
   });
 });

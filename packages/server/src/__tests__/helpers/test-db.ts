@@ -354,7 +354,8 @@ export function createTestDb() {
       wait_reason TEXT,
       admitted_at TEXT,
       flow_steps TEXT,
-      failure_reason TEXT
+      failure_reason TEXT,
+      metrics TEXT
     )
   `);
   testDb.run(sql`

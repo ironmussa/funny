@@ -1071,6 +1071,7 @@
     "dismiss": "Dismiss",
     "worktrees": "Worktrees",
     "createWorktree": "Create Worktree",
+    "refresh": "Refresh worktrees",
     "cancel": "Cancel",
     "branchName": "Branch name",
     "baseBranch": "Base branch",
@@ -1733,6 +1734,17 @@
     },
     "indicator": {
       "label": "Factory run: {{step}}"
+    },
+    "metrics": {
+      "title": "Integration, last {{days}} days",
+      "runs": "Runs",
+      "mergeRate": "Merged",
+      "medianQueue": "Median time in queue",
+      "medianToMerge": "Median time to merge",
+      "ciRounds": "CI rounds per run",
+      "redRate": "Red CI rounds",
+      "conflictRate": "Runs with a conflict",
+      "agentFixes": "Agent fixes per run"
     }
   }
 }

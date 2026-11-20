@@ -7,6 +7,7 @@ import {
   FolderOpen,
   ChevronUp,
   GitCommitHorizontal,
+  RefreshCw,
 } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { LabelBadge } from '@/components/ui/label-badge';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import {
@@ -262,6 +264,12 @@ export function WorktreeSettings({
     loadBranches();
   }, [loadWorktrees, loadBranches]);
 
+  /** Re-read worktrees and branches, e.g. after one was added or removed outside funny. */
+  const handleRefresh = () => {
+    void loadWorktrees();
+    void loadBranches();
+  };
+
   const handleCreate = async () => {
     const effectiveBase = baseBranch || branches[0];
     if (readOnly || !branchName.trim() || !project) return;
@@ -327,6 +335,22 @@ export function WorktreeSettings({
               {worktrees.length}
             </span>
           </h3>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleRefresh}
+                disabled={loading}
+                aria-label={t('worktreeSettings.refresh')}
+                className="text-muted-foreground shrink-0"
+                data-testid="worktree-settings-refresh"
+              >
+                <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('worktreeSettings.refresh')}</TooltipContent>
+          </Tooltip>
           {!readOnly && (
             <Button
               variant="ghost"
@@ -359,7 +383,8 @@ export function WorktreeSettings({
               />
             )}
 
-            {loading ? (
+            {/* A refresh keeps the list on screen; the button's icon shows it is loading. */}
+            {loading && worktrees.length === 0 ? (
               <LoadingState
                 testId="worktree-settings-loading"
                 label={t('worktreeSettings.loadingWorktrees')}

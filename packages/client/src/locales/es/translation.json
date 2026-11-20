@@ -1069,6 +1069,7 @@
     "dismiss": "Descartar",
     "worktrees": "Worktrees",
     "createWorktree": "Crear Worktree",
+    "refresh": "Actualizar worktrees",
     "cancel": "Cancelar",
     "branchName": "Nombre de la rama",
     "baseBranch": "Rama base",
@@ -1726,6 +1727,17 @@
     },
     "indicator": {
       "label": "Run del factory: {{step}}"
+    },
+    "metrics": {
+      "title": "Integración, últimos {{days}} días",
+      "runs": "Runs",
+      "mergeRate": "Mergeados",
+      "medianQueue": "Mediana en cola",
+      "medianToMerge": "Mediana hasta el merge",
+      "ciRounds": "Rondas de CI por run",
+      "redRate": "Rondas de CI en rojo",
+      "conflictRate": "Runs con conflicto",
+      "agentFixes": "Fixes del agente por run"
     }
   }
 }

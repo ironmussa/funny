@@ -32,6 +32,7 @@
   ],
   "entry": [
     "packages/runtime/src/services/checks/vitest-progress-reporter.mjs",
-    "packages/runtime/src/services/checks/run-cli.ts"
+    "packages/runtime/src/services/checks/run-cli.ts",
+    "scripts/guards/vitest-only.ts"
   ]
 }

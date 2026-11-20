@@ -128,11 +128,15 @@ is shared across runs, which concurrency groups already model.
 
 The executor reports every node execution to the host's `Journal` port:
 `{ runId, nodeId, visit, attempt, status, output?, error?, startedAt, finishedAt? }`, keyed by
-`(nodeId, visit, attempt)`. On start, the executor loads the journal: a `(nodeId, visit)` with
+`(nodeId, visit, attempt)`. `visit` is the path of the visits of every loop region around the
+node, outermost first (`"2.1"`), because an inner loop's visit number repeats each time the
+outer loop goes round; `attempt` counts how often the engine started that execution across
+resumes. A running node records what it needs to resume (the thread it started) with
+`checkpoint(data)`, since it has no output yet. On start, the executor loads the journal: a `(nodeId, visit)` with
 a `succeeded` entry is not executed again, its recorded output is used, and `when` / `until`
 are evaluated on recorded outputs, so the run follows the same path. A `running` entry without
 an end is executed with `resume: { recorded }` in its call, so the action can adopt the work
-it started (the factory adopts the thread recorded in the entry's output metadata instead of
+it started (the factory adopts the thread recorded in the entry's checkpoint data instead of
 matching titles). The server stores the journal in `workflow_node_executions`; other hosts
 keep it in memory (no resume, as today).
 

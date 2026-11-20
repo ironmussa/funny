@@ -1,6 +1,7 @@
 import type { Thread } from '@funny/shared';
 import { describe, test, expect } from 'vitest';
 
+import { buildThread } from '@/data/threads/testing';
 import {
   canDeleteWhileBusy,
   runsInSandbox,
@@ -21,16 +22,13 @@ import {
 } from '@/lib/thread-variant';
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id: 't-1',
     projectId: 'p-1',
     title: 'Test',
-    status: 'idle' as Thread['status'],
-    cost: 0,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
+    status: 'idle',
     ...overrides,
-  } as Thread;
+  });
 }
 
 describe('isScratch', () => {

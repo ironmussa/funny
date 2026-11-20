@@ -1,9 +1,11 @@
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, cleanup } from '@testing-library/react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { __resetVisualizerRegistry, getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';
+
+import { getByTestIdOfType } from '../helpers/builders-lib';
 
 beforeEach(() => {
   __resetVisualizerRegistry();
@@ -24,7 +26,7 @@ describe('built-in image visualizer', () => {
     render(
       createElement(Component, { source: '', src: '/api/files/raw?path=%2Fa.png', fill: true }),
     );
-    const img = screen.getByTestId('visualizer-image') as HTMLImageElement;
+    const img = getByTestIdOfType('visualizer-image', HTMLImageElement);
     expect(img.tagName).toBe('IMG');
     expect(new URL(img.src).searchParams.get('path')).toBe('/a.png');
   });

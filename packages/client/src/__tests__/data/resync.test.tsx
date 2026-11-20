@@ -9,6 +9,7 @@ import { commentsQuery } from '@/data/comments/store';
 import { resyncDataLayer } from '@/data/resync';
 import { getDataLayer } from '@/data/runtime';
 
+import { buildJob } from '../helpers/builders-lib';
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
 const jobsApi = vi.hoisted(() => ({ listJobs: vi.fn(), cancelJob: vi.fn() }));
@@ -16,7 +17,7 @@ vi.mock('@/lib/api/jobs', () => ({ jobsApi }));
 const threadsApi = vi.hoisted(() => ({ getThreadComments: vi.fn() }));
 vi.mock('@/lib/api/threads', () => ({ threadsApi }));
 
-const job = (status: Job['status']) => ({ id: 'j1', threadId: 't1', status }) as Job;
+const job = (status: Job['status']) => buildJob({ id: 'j1', threadId: 't1', status });
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -46,7 +47,7 @@ describe('resyncDataLayer', () => {
   });
 
   test('a per-thread cache nobody shows is marked stale, not refetched', async () => {
-    threadsApi.getThreadComments.mockReturnValue(okAsync([] as ThreadComment[]));
+    threadsApi.getThreadComments.mockReturnValue(okAsync<ThreadComment[]>([]));
     const { queryClient } = getDataLayer();
     await queryClient.fetchQuery(commentsQuery('closed-thread'));
     await resyncDataLayer();

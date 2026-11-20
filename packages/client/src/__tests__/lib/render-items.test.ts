@@ -1,4 +1,4 @@
-import type { ThreadEvent } from '@funny/shared';
+import type { ThreadEvent, ThreadEventType } from '@funny/shared';
 import { describe, test, expect } from 'vitest';
 
 import { GIT_TIMELINE_EVENT_TYPES } from '@/lib/git-timeline-events';
@@ -23,8 +23,14 @@ function makeToolCall(id: string, name: string, timestamp?: string) {
   return { id, name, input: '{}', timestamp: timestamp ?? '2024-01-01T00:00:00Z' };
 }
 
-function makeThreadEvent(id: string, type: string, createdAt: string) {
+function makeThreadEvent(id: string, type: ThreadEventType, createdAt: string): ThreadEvent {
   return { id, threadId: 'thread-1', type, data: '{}', createdAt };
+}
+
+/** A persisted event whose type `ThreadEventType` does not list (agent lifecycle, unknown). */
+function makeUnlistedThreadEvent(id: string, type: string, createdAt: string): ThreadEvent {
+  // SAFETY: the DB stores event types outside the union; these tests check they are dropped.
+  return { id, threadId: 'thread-1', type: type as ThreadEventType, data: '{}', createdAt };
 }
 
 // --- getItemTimestamp ---
@@ -151,7 +157,7 @@ describe('buildGroupedRenderItems', () => {
     for (const item of result) {
       if (item.type === 'toolcall-group') allGroups.push(item);
       if (item.type === 'toolcall-run') {
-        for (const sub of (item as any).items) {
+        for (const sub of item.items) {
           if (sub.type === 'toolcall-group') allGroups.push(sub);
         }
       }
@@ -172,7 +178,7 @@ describe('buildGroupedRenderItems', () => {
     for (const item of result) {
       if (item.type === 'toolcall-group') allGroups.push(item);
       if (item.type === 'toolcall-run') {
-        for (const sub of (item as any).items) {
+        for (const sub of item.items) {
           if (sub.type === 'toolcall-group') allGroups.push(sub);
         }
       }
@@ -192,7 +198,7 @@ describe('buildGroupedRenderItems', () => {
     for (const item of result) {
       if (item.type === 'toolcall-group') allGroups.push(item);
       if (item.type === 'toolcall-run') {
-        for (const sub of (item as any).items) {
+        for (const sub of item.items) {
           if (sub.type === 'toolcall-group') allGroups.push(sub);
         }
       }
@@ -210,7 +216,7 @@ describe('buildGroupedRenderItems', () => {
 
     const runs = result.filter((r) => r.type === 'toolcall-run');
     expect(runs).toHaveLength(1);
-    expect((runs[0] as any).items).toHaveLength(2);
+    expect(runs[0].items).toHaveLength(2);
   });
 
   test('deduplicates TodoWrite - keeps only last', () => {
@@ -224,9 +230,9 @@ describe('buildGroupedRenderItems', () => {
     const allToolCalls: any[] = [];
     for (const item of result) {
       if (item.type === 'toolcall') allToolCalls.push(item.tc);
-      if (item.type === 'toolcall-group') allToolCalls.push(...(item as any).calls);
+      if (item.type === 'toolcall-group') allToolCalls.push(...item.calls);
       if (item.type === 'toolcall-run') {
-        for (const sub of (item as any).items) {
+        for (const sub of item.items) {
           if (sub.type === 'toolcall') allToolCalls.push(sub.tc);
           if (sub.type === 'toolcall-group') allToolCalls.push(...sub.calls);
         }
@@ -241,30 +247,26 @@ describe('buildGroupedRenderItems', () => {
   test('excludes events without cards instead of leaving empty timeline rows', () => {
     const messages = [makeMessage('m1', 'Before'), makeMessage('m2', 'After')];
     const events = ['watcher:fired', 'unknown:event', 'workflow:started', 'git:changed'].map(
-      (type, index) => makeThreadEvent(`e${index}`, type, '2024-01-01T00:01:00Z'),
+      (type, index) => makeUnlistedThreadEvent(`e${index}`, type, '2024-01-01T00:01:00Z'),
     );
-    expect(buildGroupedRenderItems(messages, events as ThreadEvent[])).toEqual(
-      buildGroupedRenderItems(messages),
-    );
+    expect(buildGroupedRenderItems(messages, events)).toEqual(buildGroupedRenderItems(messages));
   });
 
   test('preserves every supported standalone git card', () => {
     const events = GIT_TIMELINE_EVENT_TYPES.map((type, index) =>
       makeThreadEvent(`e${index}`, type, '2024-01-01T00:01:00Z'),
     );
-    expect(buildGroupedRenderItems([], events as ThreadEvent[])).toEqual(
+    expect(buildGroupedRenderItems([], events)).toEqual(
       events.map((event) => ({ type: 'thread-event', event })),
     );
   });
 
   test('preserves workflow groups even when their events have no standalone card', () => {
-    const events = ['workflow:started', 'workflow:completed'].map((type, index) => ({
+    const events = (['workflow:started', 'workflow:completed'] as const).map((type, index) => ({
       ...makeThreadEvent(`e${index}`, type, '2024-01-01T00:01:00Z'),
       data: JSON.stringify({ workflowId: 'workflow-1' }),
     }));
-    expect(buildGroupedRenderItems([], events as ThreadEvent[])).toEqual([
-      { type: 'workflow-event-group', events },
-    ]);
+    expect(buildGroupedRenderItems([], events)).toEqual([{ type: 'workflow-event-group', events }]);
   });
 
   test('interleaves thread events chronologically when provided', () => {
@@ -274,7 +276,7 @@ describe('buildGroupedRenderItems', () => {
     ];
     const events = [makeThreadEvent('e1', 'git:commit', '2024-01-01T00:02:00Z')];
 
-    const result = buildGroupedRenderItems(messages, events as any);
+    const result = buildGroupedRenderItems(messages, events);
 
     expect(result).toHaveLength(3);
     expect(result[0].type).toBe('message');
@@ -288,14 +290,14 @@ describe('buildGroupedRenderItems', () => {
       makeMessage('m2', 'Assistant response', [], '2024-01-01T00:03:00Z'),
     ];
     const events = [
-      makeThreadEvent('e1', 'agent:status', '2024-01-01T00:01:10Z'),
-      makeThreadEvent('e2', 'agent:init', '2024-01-01T00:01:20Z'),
-      makeThreadEvent('e3', 'agent:message', '2024-01-01T00:02:00Z'),
-      makeThreadEvent('e4', 'agent:result', '2024-01-01T00:02:50Z'),
+      makeUnlistedThreadEvent('e1', 'agent:status', '2024-01-01T00:01:10Z'),
+      makeUnlistedThreadEvent('e2', 'agent:init', '2024-01-01T00:01:20Z'),
+      makeUnlistedThreadEvent('e3', 'agent:message', '2024-01-01T00:02:00Z'),
+      makeUnlistedThreadEvent('e4', 'agent:result', '2024-01-01T00:02:50Z'),
       makeThreadEvent('e5', 'git:commit', '2024-01-01T00:02:55Z'),
     ];
 
-    const result = buildGroupedRenderItems(messages, events as any);
+    const result = buildGroupedRenderItems(messages, events);
 
     expect(result.map(getItemKey)).toEqual(['m1', 'e5', 'm2']);
     expect(result.filter((item) => item.type === 'thread-event')).toHaveLength(1);
@@ -331,7 +333,7 @@ describe('buildGroupedRenderItems', () => {
     for (const item of result) {
       if (item.type === 'toolcall' && item.tc.name === 'ExitPlanMode') exitPlanTc = item.tc;
       if (item.type === 'toolcall-run') {
-        for (const sub of (item as any).items) {
+        for (const sub of item.items) {
           if (sub.type === 'toolcall' && sub.tc.name === 'ExitPlanMode') exitPlanTc = sub.tc;
         }
       }
@@ -378,9 +380,9 @@ describe('buildGroupedRenderItems', () => {
     const allIds: string[] = [];
     for (const item of result) {
       if (item.type === 'toolcall') allIds.push(item.tc.id);
-      if (item.type === 'toolcall-group') allIds.push(...(item as any).calls.map((c: any) => c.id));
+      if (item.type === 'toolcall-group') allIds.push(...item.calls.map((c) => c.id));
       if (item.type === 'toolcall-run') {
-        for (const sub of (item as any).items) {
+        for (const sub of item.items) {
           if (sub.type === 'toolcall') allIds.push(sub.tc.id);
           if (sub.type === 'toolcall-group') allIds.push(...sub.calls.map((c: any) => c.id));
         }
@@ -420,7 +422,7 @@ describe('buildGroupedRenderItems', () => {
     for (const item of result) {
       if (item.type === 'toolcall' && item.tc.name === 'Task') taskTc = item.tc;
       if (item.type === 'toolcall-run') {
-        for (const sub of (item as any).items) {
+        for (const sub of item.items) {
           if (sub.type === 'toolcall' && sub.tc.name === 'Task') taskTc = sub.tc;
         }
       }
@@ -446,7 +448,7 @@ describe('buildGroupedRenderItems', () => {
     for (const item of result) {
       if (item.type === 'toolcall' && item.tc.name === 'Read') readTc = item.tc;
       if (item.type === 'toolcall-run') {
-        for (const sub of (item as any).items) {
+        for (const sub of item.items) {
           if (sub.type === 'toolcall' && sub.tc.name === 'Read') readTc = sub.tc;
         }
       }
@@ -478,7 +480,7 @@ describe('buildGroupedRenderItems', () => {
     for (const item of result) {
       if (item.type === 'toolcall' && item.tc.name === 'Task') taskTc = item.tc;
       if (item.type === 'toolcall-run') {
-        for (const sub of (item as any).items) {
+        for (const sub of item.items) {
           if (sub.type === 'toolcall' && sub.tc.name === 'Task') taskTc = sub.tc;
         }
       }
@@ -509,7 +511,7 @@ describe('buildGroupedRenderItems', () => {
     for (const item of result) {
       if (item.type === 'toolcall' && item.tc.name === 'ExitPlanMode') exitPlanTc = item.tc;
       if (item.type === 'toolcall-run') {
-        for (const sub of (item as any).items) {
+        for (const sub of item.items) {
           if (sub.type === 'toolcall' && sub.tc.name === 'ExitPlanMode') exitPlanTc = sub.tc;
         }
       }
@@ -547,8 +549,8 @@ describe('buildRenderItemIdIndexMap', () => {
       {
         type: 'workflow-event-group',
         events: [
-          { id: 'wf1', threadId: 't1', type: 'git:stage', data: '{}', createdAt: '' } as any,
-          { id: 'wf2', threadId: 't1', type: 'git:commit', data: '{}', createdAt: '' } as any,
+          { id: 'wf1', threadId: 't1', type: 'git:stage', data: '{}', createdAt: '' },
+          { id: 'wf2', threadId: 't1', type: 'git:commit', data: '{}', createdAt: '' },
         ],
       },
     ];
@@ -588,14 +590,13 @@ describe('findNearestPrecedingUserMessageItem', () => {
 });
 
 describe('turn outcome timeline rows', () => {
-  const outcome = (id: string, status: string, createdAt: string) =>
-    ({
-      id,
-      threadId: 't1',
-      type: 'turn_outcome',
-      data: JSON.stringify({ userMessageId: 'u1', status, completedAt: createdAt }),
-      createdAt,
-    }) as any;
+  const outcome = (id: string, status: string, createdAt: string): ThreadEvent => ({
+    id,
+    threadId: 't1',
+    type: 'turn_outcome',
+    data: JSON.stringify({ userMessageId: 'u1', status, completedAt: createdAt }),
+    createdAt,
+  });
 
   test('places a stop where it happened so Continue never erases it', () => {
     const messages = [
@@ -645,14 +646,14 @@ describe('sandbox error cards (thread-sandboxes)', () => {
       { id: 'u1', role: 'user', content: 'Go on', timestamp: '2026-11-01T20:00:00.000Z' },
       { id: 'a1', role: 'assistant', content: 'Done', timestamp: '2026-11-01T20:00:10.000Z' },
     ];
-    const items = buildGroupedRenderItems(messages as any, [
+    const items = buildGroupedRenderItems(messages, [
       {
         id: 'sbx-err',
         threadId: 't1',
         type: 'sandbox:error',
         data: JSON.stringify({ phase: 'wake', message: 'disk expired' }),
         createdAt: '2026-11-01T20:30:00.000Z',
-      } as any,
+      },
     ]);
     expect(
       items.map((item) =>
@@ -718,10 +719,7 @@ describe('events outside the loaded message window', () => {
 
   test('applies the same window to thread events', () => {
     const events = [makeThreadEvent('e1', 'git:commit', '2024-01-01T08:00:00Z')];
-    const items = buildGroupedRenderItems(
-      messages,
-      ...clipped(events as ThreadEvent[], [], { hasOlder: true }),
-    );
+    const items = buildGroupedRenderItems(messages, ...clipped(events, [], { hasOlder: true }));
     expect(items.some((i) => i.type === 'thread-event')).toBe(false);
   });
 });

@@ -20,8 +20,7 @@ vi.mock('@/lib/client-logger', () => ({
 
 vi.mock('@/i18n/config', () => ({
   default: {
-    t: (...args: unknown[]) =>
-      tMock(...(args as [string, { defaultValue?: string; message?: string }])),
+    t: (key: string, opts?: { defaultValue?: string; message?: string }) => tMock(key, opts),
   },
 }));
 

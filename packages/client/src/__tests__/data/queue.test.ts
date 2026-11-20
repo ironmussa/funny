@@ -130,7 +130,7 @@ describe('queue list', () => {
   test('a failed fetch rejects and leaves the row to retry', async () => {
     applyQueueSummary('t1', 1, 'first');
     mockApi.listQueue.mockReturnValue(
-      errAsync({ type: 'INTERNAL', message: 'down' } as DomainError),
+      errAsync({ type: 'INTERNAL', message: 'down' } satisfies DomainError),
     );
 
     await expect(loadList()).rejects.toThrow('down');
@@ -146,7 +146,13 @@ describe('queue edits', () => {
   });
 
   test('a confirmed edit updates the message and the next preview', async () => {
-    mockApi.updateQueuedMessage.mockReturnValue(okAsync({ ok: true } as never));
+    mockApi.updateQueuedMessage.mockReturnValue(
+      okAsync({
+        ok: true,
+        queuedCount: 1,
+        message: { id: 'a', threadId: 't1', content: 'edited', sortOrder: 0, createdAt: '' },
+      }),
+    );
     await editQueuedMessage('t1', 'a', 'edited');
     expect(row()).toMatchObject({ next: 'edited' });
     expect(row()?.messages?.[0]?.content).toBe('edited');
@@ -168,7 +174,7 @@ describe('queue edits', () => {
   test('a failed edit leaves the row untouched', async () => {
     const before = row();
     mockApi.updateQueuedMessage.mockReturnValue(
-      errAsync({ type: 'INTERNAL', message: 'nope' } as DomainError),
+      errAsync({ type: 'INTERNAL', message: 'nope' } satisfies DomainError),
     );
     const result = await editQueuedMessage('t1', 'a', 'edited');
     expect(result.isErr()).toBe(true);

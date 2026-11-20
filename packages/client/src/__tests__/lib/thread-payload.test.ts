@@ -11,7 +11,7 @@ import {
 import { ALL_STANDARD_TOOLS } from '@/stores/settings-store';
 
 const defaultPermissions: Record<string, ToolPermission> = Object.fromEntries(
-  ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
+  ALL_STANDARD_TOOLS.map((tool): [string, ToolPermission] => [tool, 'allow']),
 );
 
 function baseInput(overrides: Partial<BuildInput> = {}): BuildInput {

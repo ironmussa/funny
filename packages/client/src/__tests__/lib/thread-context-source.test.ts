@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, test } from 'vitest';
 
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { threadContextHeaders, urlInThread } from '@/lib/api/_core';
 import { toRawFileSrc } from '@/lib/raw-file-src';
 import { openThreadId } from '@/lib/thread-context-source';
@@ -7,7 +8,7 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 function openThread(id: string | null) {
-  useThreadStore.setState({ activeThread: id ? ({ id, messages: [] } as any) : null });
+  useThreadStore.setState({ activeThread: id ? buildThreadWithMessages({ id }) : null });
 }
 
 afterEach(() => {

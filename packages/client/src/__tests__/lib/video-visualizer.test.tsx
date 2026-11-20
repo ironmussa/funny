@@ -1,9 +1,11 @@
-import { render, screen, cleanup } from '@testing-library/react';
+import { render, cleanup } from '@testing-library/react';
 import { createElement } from 'react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { __resetVisualizerRegistry, getVisualizerForFileExt } from '@/lib/visualizer-registry';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';
+
+import { getByTestIdOfType } from '../helpers/builders-lib';
 
 beforeEach(() => {
   __resetVisualizerRegistry();
@@ -24,7 +26,7 @@ describe('built-in video visualizer', () => {
     render(
       createElement(Component, { source: '', src: '/api/files/raw?path=%2Fa.mp4', fill: true }),
     );
-    const video = screen.getByTestId('visualizer-video') as HTMLVideoElement;
+    const video = getByTestIdOfType('visualizer-video', HTMLVideoElement);
     expect(video.tagName).toBe('VIDEO');
     expect(video).toHaveAttribute('controls');
     expect(new URL(video.src).searchParams.get('path')).toBe('/a.mp4');

@@ -14,8 +14,8 @@ function plugin(id: string, fences: string[]): VisualizerPlugin {
   return { id, version: '1.0.0', contributes: { fences }, Component: NOOP };
 }
 
-function jsonResponse(body: unknown, ok = true, status = 200): Response {
-  return { ok, status, json: async () => body } as Response;
+function jsonResponse(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status });
 }
 
 beforeEach(() => {
@@ -24,7 +24,7 @@ beforeEach(() => {
 
 describe('loadInstalledVisualizers', () => {
   test('fetches the manifest and registers each plugin via dynamic import', async () => {
-    const fetchFn = vi.fn(async () =>
+    const fetchFn = vi.fn<typeof fetch>(async () =>
       jsonResponse([
         { id: 'a', version: '1.0.0', entryUrl: '/extensions/a/index.mjs' },
         { id: 'b', version: '1.0.0', entryUrl: '/extensions/b/index.mjs' },
@@ -34,7 +34,7 @@ describe('loadInstalledVisualizers', () => {
       default: url.includes('/a/') ? plugin('ext-a', ['aaa']) : plugin('ext-b', ['bbb']),
     }));
 
-    await loadInstalledVisualizers(fetchFn as typeof fetch, importFn);
+    await loadInstalledVisualizers(fetchFn, importFn);
 
     expect(fetchFn).toHaveBeenCalledWith('/api/extensions');
     expect(getVisualizerForFence('aaa')?.id).toBe('ext-a');
@@ -42,7 +42,7 @@ describe('loadInstalledVisualizers', () => {
   });
 
   test('a single broken plugin does not block the others', async () => {
-    const fetchFn = vi.fn(async () =>
+    const fetchFn = vi.fn<typeof fetch>(async () =>
       jsonResponse([
         { id: 'good', version: '1.0.0', entryUrl: '/extensions/good/index.mjs' },
         { id: 'throws', version: '1.0.0', entryUrl: '/extensions/throws/index.mjs' },
@@ -55,29 +55,27 @@ describe('loadInstalledVisualizers', () => {
       return { default: plugin('good', ['ok']) };
     });
 
-    await loadInstalledVisualizers(fetchFn as typeof fetch, importFn);
+    await loadInstalledVisualizers(fetchFn, importFn);
 
     expect(getVisualizerForFence('ok')?.id).toBe('good');
   });
 
   test('a failed manifest fetch is swallowed (no throw, nothing registered)', async () => {
-    const fetchFn = vi.fn(async () => jsonResponse(null, false, 500));
+    const fetchFn = vi.fn<typeof fetch>(async () => jsonResponse(null, 500));
     const importFn = vi.fn();
 
-    await expect(
-      loadInstalledVisualizers(fetchFn as typeof fetch, importFn),
-    ).resolves.toBeUndefined();
+    await expect(loadInstalledVisualizers(fetchFn, importFn)).resolves.toBeUndefined();
     expect(importFn).not.toHaveBeenCalled();
   });
 
   test('an installed plugin can override a built-in fence', async () => {
     registerVisualizer(plugin('@funny/visualizer-mermaid', ['mermaid']));
-    const fetchFn = vi.fn(async () =>
+    const fetchFn = vi.fn<typeof fetch>(async () =>
       jsonResponse([{ id: 'x', version: '1.0.0', entryUrl: '/extensions/x/index.mjs' }]),
     );
     const importFn = vi.fn(async () => ({ default: plugin('third-party-mermaid', ['mermaid']) }));
 
-    await loadInstalledVisualizers(fetchFn as typeof fetch, importFn);
+    await loadInstalledVisualizers(fetchFn, importFn);
 
     expect(getVisualizerForFence('mermaid')?.id).toBe('third-party-mermaid');
   });

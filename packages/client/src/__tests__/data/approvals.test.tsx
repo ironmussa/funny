@@ -1,3 +1,7 @@
+import type {
+  WSPipelineApprovalRequestedData,
+  WSPipelineApprovalResolvedData,
+} from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -20,13 +24,19 @@ vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));
 
-const request = (approvalId: string, requestedAt: string) => ({
+const request = (approvalId: string, requestedAt: string): WSPipelineApprovalRequestedData => ({
   approvalId,
   gateId: 'g1',
   threadId: 't1',
   requestedAt,
   message: 'Ship it?',
   captureResponse: false,
+});
+const resolved = (approvalId: string): WSPipelineApprovalResolvedData => ({
+  approvalId,
+  gateId: 'g1',
+  threadId: 't1',
+  decision: 'approve',
 });
 const refused: DomainError = { type: 'INTERNAL', message: 'gate already closed' };
 
@@ -38,17 +48,17 @@ afterEach(() => resetTestDataLayer());
 
 describe('pipeline approvals', () => {
   test('requests queue oldest first; a resolve removes one; unknown resolves are no-ops', async () => {
-    applyApprovalRequested(request('b', '2026-01-02') as never);
-    applyApprovalRequested(request('a', '2026-01-01') as never);
-    applyApprovalResolved({ approvalId: 'missing', decision: 'approve' } as never);
+    applyApprovalRequested(request('b', '2026-01-02'));
+    applyApprovalRequested(request('a', '2026-01-01'));
+    applyApprovalResolved(resolved('missing'));
     const { result } = renderHook(() => usePendingApprovals());
     await waitFor(() => expect(result.current.map((a) => a.approvalId)).toEqual(['a', 'b']));
-    act(() => applyApprovalResolved({ approvalId: 'a', decision: 'approve' } as never));
+    act(() => applyApprovalResolved(resolved('a')));
     await waitFor(() => expect(result.current.map((a) => a.approvalId)).toEqual(['b']));
   });
 
   test('spec: approving hides the approval at once and keeps it hidden when confirmed', async () => {
-    applyApprovalRequested(request('a', '2026-01-01') as never);
+    applyApprovalRequested(request('a', '2026-01-01'));
     const gate = deferred<{ ok: boolean }>();
     api.respondToApproval.mockReturnValue(ResultAsync.fromSafePromise(gate.promise));
     const pending = respondToApproval('a', 'approve');
@@ -63,7 +73,7 @@ describe('pipeline approvals', () => {
   });
 
   test('spec: a refused rejection brings the approval back with the server error', async () => {
-    applyApprovalRequested(request('a', '2026-01-01') as never);
+    applyApprovalRequested(request('a', '2026-01-01'));
     api.respondToApproval.mockReturnValue(errAsync(refused));
     expect((await respondToApproval('a', 'reject', 'not yet')).isErr()).toBe(true);
     expect(getApprovalsData().read('a')?.submitError).toBe('gate already closed');

@@ -1,9 +1,9 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 // Mock fetch before importing the API, like api.test.ts.
-const mockFetch = vi.fn();
+const mockFetch = vi.fn<(input: string, init: RequestInit) => Promise<Response>>();
 vi.stubGlobal('fetch', mockFetch);
-delete (window as any).__TAURI_INTERNALS__;
+Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
 
 const { automationsApi } = await import('@/lib/api/automations');
 const { pipelinesApi } = await import('@/lib/api/pipelines');
@@ -34,7 +34,11 @@ function trpcError(
   );
 }
 
-const lastCall = () => mockFetch.mock.calls.at(-1) as [string, RequestInit];
+function lastCall(): [string, RequestInit] {
+  const call = mockFetch.mock.calls.at(-1);
+  if (!call) throw new Error('fetch was not called');
+  return call;
+}
 
 describe('tRPC procedure calls (automations)', () => {
   beforeEach(() => {
@@ -63,7 +67,7 @@ describe('tRPC procedure calls (automations)', () => {
     const [url, init] = lastCall();
     expect(url).toMatch(/\/api\/trpc\/automations\.update$/);
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({ id: 'a1', data: { enabled: false } });
+    expect(JSON.parse(String(init.body))).toEqual({ id: 'a1', data: { enabled: false } });
   });
 
   test('a procedure failure becomes the same DomainError a REST call produces', async () => {
@@ -202,7 +206,7 @@ describe('tRPC procedure calls (threads)', () => {
 
     const [url, init] = lastCall();
     expect(url).toMatch(/\/api\/trpc\/threads\.update$/);
-    expect(JSON.parse(init.body as string)).toEqual({ id: 't1', data: { archived: true } });
+    expect(JSON.parse(String(init.body))).toEqual({ id: 't1', data: { archived: true } });
   });
 
   test('agent operations stay REST: stopThread posts to the runner-proxied route', async () => {
@@ -229,7 +233,7 @@ describe('tRPC procedure calls (profile and settings)', () => {
     await profileApi.completeSetup();
     const [url, init] = lastCall();
     expect(url).toMatch(/\/api\/trpc\/profile\.update$/);
-    expect(JSON.parse(init.body as string)).toEqual({ setupCompleted: true });
+    expect(JSON.parse(String(init.body))).toEqual({ setupCompleted: true });
   });
 
   test('a non-admin reading SMTP gets the 403 as a FORBIDDEN DomainError', async () => {
@@ -257,7 +261,7 @@ describe('tRPC procedure calls (runners)', () => {
 
     const [url, init] = lastCall();
     expect(url).toMatch(/\/api\/trpc\/runners\.remove$/);
-    expect(JSON.parse(init.body as string)).toEqual({ runnerId: 'r1' });
+    expect(JSON.parse(String(init.body))).toEqual({ runnerId: 'r1' });
   });
 
   test("someone else's project's runner settings answer NOT_FOUND", async () => {
@@ -296,13 +300,13 @@ describe('tRPC procedure calls (personal tokens)', () => {
     let [url, init] = lastCall();
     expect(url).toMatch(/\/api\/trpc\/personalTokens\.create$/);
     expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body as string)).toEqual({ name: 'CI', days: 30 });
+    expect(JSON.parse(String(init.body))).toEqual({ name: 'CI', days: 30 });
 
     mockFetch.mockResolvedValueOnce(json({ result: { data: { ok: true } } }));
     await personalTokensApi.revokePersonalToken('k1');
     [url, init] = lastCall();
     expect(url).toMatch(/\/api\/trpc\/personalTokens\.revoke$/);
-    expect(JSON.parse(init.body as string)).toEqual({ id: 'k1' });
+    expect(JSON.parse(String(init.body))).toEqual({ id: 'k1' });
   });
 
   test("revoking someone else's token answers NOT_FOUND", async () => {

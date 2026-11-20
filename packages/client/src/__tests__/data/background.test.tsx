@@ -10,6 +10,7 @@ import { applyJobEvent, loadJobs, loadWatchers } from '@/data/background/loaders
 import { getJobsData, getWatchersData } from '@/data/background/store';
 import { seedBackgroundActivity } from '@/data/background/testing';
 
+import { buildJob, buildWatcher } from '../helpers/builders-lib';
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
 const api = vi.hoisted(() => ({
@@ -31,9 +32,9 @@ vi.mock('@/platform/client-composition', () => ({
 }));
 
 const job = (id: string, overrides: Partial<Job> = {}) =>
-  ({ id, threadId: 't1', status: 'running', ...overrides }) as Job;
+  buildJob({ id, threadId: 't1', status: 'running', ...overrides });
 const watcher = (id: string, overrides: Partial<Watcher> = {}) =>
-  ({ id, threadId: 't1', status: 'pending', ...overrides }) as Watcher;
+  buildWatcher({ id, threadId: 't1', status: 'pending', ...overrides });
 const failure: DomainError = { type: 'INTERNAL', message: 'boom' };
 
 beforeEach(() => {

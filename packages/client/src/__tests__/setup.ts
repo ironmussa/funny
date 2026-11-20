@@ -7,33 +7,39 @@ import { afterAll, vi } from 'vitest';
 // listing, external-session sync) runs deterministically under both real and
 // fake timers in tests, exercising the same code path as the browser.
 if (typeof globalThis.requestIdleCallback === 'undefined') {
-  globalThis.requestIdleCallback = ((cb: (deadline: IdleDeadline) => void) =>
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-    setTimeout(() => {
+  const idleTimers = new Map<number, ReturnType<typeof setTimeout>>();
+  let nextIdleId = 1;
+  globalThis.requestIdleCallback = (cb: IdleRequestCallback): number => {
+    const id = nextIdleId++;
+    const timer = setTimeout(() => {
+      idleTimers.delete(id);
       // A callback queued just before the test environment tears down (e.g.
       // TanStack DB's idle GC of a live query) must not run without a window.
       if (typeof window === 'undefined') return;
-      cb({ didTimeout: false, timeRemaining: () => 0 } as IdleDeadline);
-    }, 1) as unknown as number) as typeof globalThis.requestIdleCallback;
-  globalThis.cancelIdleCallback = ((id: number) =>
-    clearTimeout(id)) as typeof globalThis.cancelIdleCallback;
+      cb({ didTimeout: false, timeRemaining: () => 0 });
+    }, 1);
+    idleTimers.set(id, timer);
+    return id;
+  };
+  globalThis.cancelIdleCallback = (id: number): void => {
+    clearTimeout(idleTimers.get(id));
+    idleTimers.delete(id);
+  };
 }
 
 // Mock ResizeObserver (not available in jsdom/happy-dom)
 if (typeof globalThis.ResizeObserver === 'undefined') {
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
   globalThis.ResizeObserver = class ResizeObserver {
     observe() {}
     unobserve() {}
     disconnect() {}
-  } as unknown as typeof globalThis.ResizeObserver;
+  };
 }
 
 // jsdom has no canvas: its getContext() logs "Not implemented" and returns
 // null. Callers (VirtualDiff's width measurement, pretext warmup, Mermaid
 // export) already handle a null context, so return it without the error.
-HTMLCanvasElement.prototype.getContext = (() =>
-  null) as typeof HTMLCanvasElement.prototype.getContext;
+HTMLCanvasElement.prototype.getContext = () => null;
 
 // Mock window.matchMedia (used by settings-store, main.tsx)
 Object.defineProperty(window, 'matchMedia', {

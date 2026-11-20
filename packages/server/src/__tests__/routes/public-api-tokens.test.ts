@@ -17,8 +17,8 @@ import { Hono } from 'hono';
 
 import * as auditModule from '../../lib/audit.js';
 import type { ServerEnv } from '../../lib/types.js';
+import { seedProject } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject } from '../helpers/test-db.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -38,7 +38,7 @@ describe('personal API tokens', () => {
     const res = await api.request('http://server/api/v1/projects', {
       headers: authorization ? { authorization } : {},
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const create = async (userId: string, days?: number, now?: Date) =>
@@ -55,7 +55,7 @@ describe('personal API tokens', () => {
   beforeEach(() => {
     t.cleanup();
     t.db.run(sql`DELETE FROM personal_access_tokens`);
-    seedProject(t.db as any, { id: 'p1', userId: 'alice', name: 'Alpha', path: '/home/alice/p1' });
+    seedProject(t.db, { id: 'p1', userId: 'alice', name: 'Alpha', path: '/home/alice/p1' });
     audits = spyOn(auditModule, 'audit').mockImplementation(() => {});
   });
 
@@ -71,7 +71,7 @@ describe('personal API tokens', () => {
 
   test('only the hash is stored; the list shows a prefix, never the token', async () => {
     const { token, info } = await create('alice');
-    const rows = t.db.all(sql`SELECT * FROM personal_access_tokens`) as any[];
+    const rows = t.db.all(sql`SELECT * FROM personal_access_tokens`);
     expect(JSON.stringify(rows)).not.toContain(token);
     const listed = (await tokens.listPersonalAccessTokens('alice'))._unsafeUnwrap();
     expect(listed).toEqual([info]);

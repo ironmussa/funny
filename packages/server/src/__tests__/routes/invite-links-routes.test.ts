@@ -31,8 +31,8 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { eq } from 'drizzle-orm';
 
+import { seedInviteLink, seedOrgMember } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedInviteLink, seedOrgMember } from '../helpers/test-db.js';
 
 const VALID_PASSWORD = 'Password1234';
 const orgId = 'org-acme';
@@ -51,7 +51,7 @@ describe('Invite Links Routes (Integration)', () => {
     resetAuthMockUsers();
     await resetAuthMiddlewareCache();
     // Managing invite links requires an org admin/owner membership (M4).
-    seedOrgMember(t.db as any, { organizationId: orgId, userId: adminId, role: 'admin' });
+    seedOrgMember(t.db, { organizationId: orgId, userId: adminId, role: 'admin' });
   });
 
   async function getUseCount(linkId: string): Promise<string | undefined> {
@@ -72,14 +72,14 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('returns 404 for revoked link', async () => {
-      seedInviteLink(t.db as any, { token: 'revoked-token', revoked: '1' });
+      seedInviteLink(t.db, { token: 'revoked-token', revoked: '1' });
 
       const res = await t.requestAs(adminId).get('/api/invite-links/verify/revoked-token');
       expect(res.status).toBe(404);
     });
 
     test('returns 410 for expired link', async () => {
-      seedInviteLink(t.db as any, {
+      seedInviteLink(t.db, {
         token: 'expired-token',
         expiresAt: new Date(Date.now() - 60_000).toISOString(),
       });
@@ -90,7 +90,7 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('returns 410 when max uses reached', async () => {
-      seedInviteLink(t.db as any, {
+      seedInviteLink(t.db, {
         token: 'exhausted-token',
         maxUses: '1',
         useCount: '1',
@@ -104,7 +104,7 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('returns org info for a valid token', async () => {
-      seedInviteLink(t.db as any, {
+      seedInviteLink(t.db, {
         token: 'valid-token',
         organizationId: orgId,
         role: 'admin',
@@ -133,7 +133,7 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('returns 400 for weak password', async () => {
-      seedInviteLink(t.db as any, { token: 'register-token' });
+      seedInviteLink(t.db, { token: 'register-token' });
 
       const res = await t.requestAs(adminId).post('/api/invite-links/register', {
         token: 'register-token',
@@ -145,7 +145,7 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('registers a user and consumes an invite slot', async () => {
-      const link = seedInviteLink(t.db as any, {
+      const link = seedInviteLink(t.db, {
         token: 'register-ok',
         organizationId: orgId,
         maxUses: '2',
@@ -172,7 +172,7 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('returns 410 when the link is exhausted', async () => {
-      seedInviteLink(t.db as any, {
+      seedInviteLink(t.db, {
         token: 'one-shot',
         maxUses: '1',
         useCount: '1',
@@ -188,7 +188,7 @@ describe('Invite Links Routes (Integration)', () => {
 
     test('returns 500 and releases the slot when user creation fails', async () => {
       authMockState.createUserShouldFail = true;
-      const link = seedInviteLink(t.db as any, { token: 'create-fail' });
+      const link = seedInviteLink(t.db, { token: 'create-fail' });
 
       const res = await t.requestAs(adminId).post('/api/invite-links/register', {
         token: 'create-fail',
@@ -203,7 +203,7 @@ describe('Invite Links Routes (Integration)', () => {
 
     test('returns generic 400 when user creation throws', async () => {
       authMockState.createUserShouldThrow = true;
-      const link = seedInviteLink(t.db as any, { token: 'duplicate-user' });
+      const link = seedInviteLink(t.db, { token: 'duplicate-user' });
 
       const res = await t.requestAs(adminId).post('/api/invite-links/register', {
         token: 'duplicate-user',
@@ -245,8 +245,8 @@ describe('Invite Links Routes (Integration)', () => {
     const memberId = 'invite-member';
 
     beforeEach(() => {
-      seedOrgMember(t.db as any, { organizationId: orgId, userId: viewerId, role: 'viewer' });
-      seedOrgMember(t.db as any, { organizationId: orgId, userId: memberId, role: 'member' });
+      seedOrgMember(t.db, { organizationId: orgId, userId: viewerId, role: 'viewer' });
+      seedOrgMember(t.db, { organizationId: orgId, userId: memberId, role: 'member' });
     });
 
     test('an org viewer cannot create an invite link', async () => {
@@ -257,7 +257,7 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('a plain org member cannot create, list or revoke invite links', async () => {
-      seedInviteLink(t.db as any, { id: 'existing', organizationId: orgId, token: 'tok' });
+      seedInviteLink(t.db, { id: 'existing', organizationId: orgId, token: 'tok' });
       const as = t.requestAs(memberId, 'user', { orgId });
 
       expect((await as.post('/api/invite-links', { role: 'member' })).status).toBe(403);
@@ -297,18 +297,18 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('lists non-revoked links for the org', async () => {
-      seedInviteLink(t.db as any, {
+      seedInviteLink(t.db, {
         id: 'link-1',
         organizationId: orgId,
         token: 'listed-token',
       });
-      seedInviteLink(t.db as any, {
+      seedInviteLink(t.db, {
         id: 'link-2',
         organizationId: orgId,
         token: 'revoked-token',
         revoked: '1',
       });
-      seedInviteLink(t.db as any, {
+      seedInviteLink(t.db, {
         id: 'link-3',
         organizationId: 'other-org',
         token: 'other-org-token',
@@ -326,7 +326,7 @@ describe('Invite Links Routes (Integration)', () => {
 
   describe('DELETE /api/invite-links/:id (protected)', () => {
     test('revokes a link so it no longer appears in the list', async () => {
-      seedInviteLink(t.db as any, {
+      seedInviteLink(t.db, {
         id: 'to-revoke',
         organizationId: orgId,
         token: 'will-revoke',
@@ -350,7 +350,7 @@ describe('Invite Links Routes (Integration)', () => {
     });
 
     test('returns 404 when user is not found in auth', async () => {
-      seedInviteLink(t.db as any, { token: 'accept-token', organizationId: orgId });
+      seedInviteLink(t.db, { token: 'accept-token', organizationId: orgId });
 
       const res = await t.requestAs('missing-user').post('/api/invite-links/accept', {
         token: 'accept-token',
@@ -365,7 +365,7 @@ describe('Invite Links Routes (Integration)', () => {
         email: 'existing@test.com',
         name: 'Existing User',
       };
-      seedInviteLink(t.db as any, {
+      seedInviteLink(t.db, {
         token: 'accept-ok',
         organizationId: orgId,
         maxUses: '1',
@@ -386,7 +386,7 @@ describe('Invite Links Routes (Integration)', () => {
         name: 'Member User',
       };
       authMockState.addMemberError = 'User is already a member';
-      seedInviteLink(t.db as any, { token: 'already-member', organizationId: orgId });
+      seedInviteLink(t.db, { token: 'already-member', organizationId: orgId });
 
       const res = await t
         .requestAs('member-user')

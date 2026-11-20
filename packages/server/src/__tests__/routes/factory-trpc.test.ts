@@ -11,8 +11,9 @@ mockCoreGitRepoChecks();
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import type { FactoryRunState } from '../../services/factory/factory-runs.js';
+import { seedProject, seedProjectMember } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedProjectMember } from '../helpers/test-db.js';
 
 describe('factory over tRPC', () => {
   let t: TestApp;
@@ -27,7 +28,7 @@ describe('factory over tRPC', () => {
     const res = await t.app.request(`/api/trpc/factory.${path}${qs}`, {
       headers: headersFor(userId),
     });
-    return { status: res.status, body: ((await res.json()) as any).result?.data };
+    return { status: res.status, body: (await res.json()).result?.data };
   };
 
   const save = async (userId: string, input: unknown) => {
@@ -36,7 +37,7 @@ describe('factory over tRPC', () => {
       headers: headersFor(userId),
       body: JSON.stringify(input),
     });
-    return { status: res.status, body: ((await res.json()) as any).result?.data };
+    return { status: res.status, body: (await res.json()).result?.data };
   };
 
   beforeAll(async () => {
@@ -45,8 +46,8 @@ describe('factory over tRPC', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'alice', path: '/repo-a' });
-    seedProject(t.db as any, { id: 'bob-project', userId: 'bob', path: '/repo-b' });
+    seedProject(t.db, { id: 'p1', userId: 'alice', path: '/repo-a' });
+    seedProject(t.db, { id: 'bob-project', userId: 'bob', path: '/repo-b' });
   });
 
   test('settings are null until saved, then read back', async () => {
@@ -75,8 +76,8 @@ describe('factory over tRPC', () => {
   });
 
   test('a contributor may save; a viewer may read but not save; an outsider gets 404', async () => {
-    seedProjectMember(t.db as any, { projectId: 'bob-project', userId: 'alice', role: 'member' });
-    seedProjectMember(t.db as any, { projectId: 'bob-project', userId: 'vic', role: 'viewer' });
+    seedProjectMember(t.db, { projectId: 'bob-project', userId: 'alice', role: 'member' });
+    seedProjectMember(t.db, { projectId: 'bob-project', userId: 'vic', role: 'viewer' });
 
     expect((await save('alice', { projectId: 'bob-project', enabled: true })).status).toBe(200);
     expect((await query('vic', 'settings', { projectId: 'bob-project' })).status).toBe(200);
@@ -110,11 +111,11 @@ describe('factory over tRPC', () => {
       headers: headersFor(userId),
       body: JSON.stringify(input),
     });
-    const json = (await res.json()) as any;
+    const json = await res.json();
     return { status: res.status, body: json.result?.data, message: json.error?.message };
   };
 
-  async function seededRun(state: string) {
+  async function seededRun(state: FactoryRunState) {
     await save('alice', { projectId: 'p1', enabled: false });
     const { createFactorySettingsService } =
       await import('../../services/factory/factory-settings.js');
@@ -123,7 +124,7 @@ describe('factory over tRPC', () => {
       await createFactorySettingsService().factoryId('alice', 'p1')
     )._unsafeUnwrap()!;
     return (
-      await createFactoryRunsRepository().start({ factoryId, issueNumber: 7, state: state as any })
+      await createFactoryRunsRepository().start({ factoryId, issueNumber: 7, state })
     )._unsafeUnwrap();
   }
 
@@ -147,7 +148,7 @@ describe('factory over tRPC', () => {
   test("another user's run is not found, and a viewer cannot control runs", async () => {
     const run = await seededRun('working');
     expect((await mutate('bob', 'stopRun', { projectId: 'p1', runId: run.id })).status).toBe(404);
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
     expect((await mutate('vic', 'stopRun', { projectId: 'p1', runId: run.id })).status).toBe(403);
     expect((await mutate('alice', 'stopRun', { projectId: 'p1', runId: 'nope' })).status).toBe(404);
   });
@@ -162,8 +163,8 @@ describe('factory over tRPC', () => {
     };
     const alice = await factoryOf('alice', 'p1');
     const bob = await factoryOf('bob', 'bob-project');
-    const seed = async (factoryId: string, issueNumber: number, state: string) =>
-      (await repo.start({ factoryId, issueNumber, state: state as any }))._unsafeUnwrap();
+    const seed = async (factoryId: string, issueNumber: number, state: FactoryRunState) =>
+      (await repo.start({ factoryId, issueNumber, state }))._unsafeUnwrap();
 
     const ci = await seed(alice, 1, 'waiting_ci');
     const parked = await seed(alice, 2, 'waiting_human');
@@ -220,7 +221,7 @@ describe('factory over tRPC', () => {
   });
 
   test('a viewer may list flows but not send, clear or stop all', async () => {
-    seedProjectMember(t.db as any, { projectId: 'bob-project', userId: 'vic', role: 'viewer' });
+    seedProjectMember(t.db, { projectId: 'bob-project', userId: 'vic', role: 'viewer' });
     const flows = await query('vic', 'flows', { projectId: 'bob-project' });
     expect(flows.body).toEqual([
       { name: 'issue-to-merge', source: 'built-in' },

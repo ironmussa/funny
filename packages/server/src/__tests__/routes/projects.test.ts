@@ -21,13 +21,13 @@ process.env.FUNNY_PROJECT_ROOT = '/tmp';
 import { describe, test, expect, beforeAll, beforeEach, afterAll, spyOn } from 'bun:test';
 
 import * as runnerManager from '../../services/runner-manager.js';
-import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedOrgMember,
   seedProject,
   seedTeamProject,
   seedProjectMember,
-} from '../helpers/test-db.js';
+} from '../helpers/builders-routes.js';
+import { createTestApp, type TestApp } from '../helpers/test-app.js';
 
 describe.serial('Project Routes (Integration)', () => {
   let t: TestApp;
@@ -54,17 +54,17 @@ describe.serial('Project Routes (Integration)', () => {
 
   describe('GET /api/projects', () => {
     test('searches current database names and paths without exposing other users or spaces', async () => {
-      seedProject(t.db as any, { id: 'match-name', userId: 'user-1', name: 'Bróncos', path: '/a' });
-      seedProject(t.db as any, {
+      seedProject(t.db, { id: 'match-name', userId: 'user-1', name: 'Bróncos', path: '/a' });
+      seedProject(t.db, {
         id: 'match-path',
         userId: 'user-1',
         name: 'Repo',
         path: '/broncos',
       });
-      seedProject(t.db as any, { id: 'other', userId: 'user-1', name: 'Other', path: '/b' });
-      seedProject(t.db as any, { id: 'private', userId: 'user-2', name: 'Broncos', path: '/c' });
-      seedProject(t.db as any, { id: 'org', userId: 'user-1', name: 'Broncos', path: '/d' });
-      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'org' });
+      seedProject(t.db, { id: 'other', userId: 'user-1', name: 'Other', path: '/b' });
+      seedProject(t.db, { id: 'private', userId: 'user-2', name: 'Broncos', path: '/c' });
+      seedProject(t.db, { id: 'org', userId: 'user-1', name: 'Broncos', path: '/d' });
+      seedTeamProject(t.db, { teamId: 'org-1', projectId: 'org' });
 
       const res = await t.requestAs('user-1').get('/api/projects?personal=true&q=BRON');
       expect(res.status).toBe(200);
@@ -77,11 +77,11 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('search respects organization membership', async () => {
-      seedProject(t.db as any, { id: 'org-match', userId: 'user-1', name: 'Broncos', path: '/a' });
-      seedProject(t.db as any, { id: 'org-other', userId: 'user-1', name: 'Other', path: '/b' });
-      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'org-match' });
-      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'org-other' });
-      seedOrgMember(t.db as any, { organizationId: 'org-1', userId: 'user-1', role: 'member' });
+      seedProject(t.db, { id: 'org-match', userId: 'user-1', name: 'Broncos', path: '/a' });
+      seedProject(t.db, { id: 'org-other', userId: 'user-1', name: 'Other', path: '/b' });
+      seedTeamProject(t.db, { teamId: 'org-1', projectId: 'org-match' });
+      seedTeamProject(t.db, { teamId: 'org-1', projectId: 'org-other' });
+      seedOrgMember(t.db, { organizationId: 'org-1', userId: 'user-1', role: 'member' });
       const res = await t.requestAs('user-1').get('/api/projects?orgId=org-1&q=bron');
       expect(res.status).toBe(200);
       expect((await res.json()).map((p: { id: string }) => p.id)).toEqual(['org-match']);
@@ -97,8 +97,8 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('returns only projects owned by the requesting user', async () => {
-      seedProject(t.db as any, { id: 'p1', name: 'User1 Project', userId: 'user-1', path: '/a' });
-      seedProject(t.db as any, { id: 'p2', name: 'User2 Project', userId: 'user-2', path: '/b' });
+      seedProject(t.db, { id: 'p1', name: 'User1 Project', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p2', name: 'User2 Project', userId: 'user-2', path: '/b' });
 
       const res = await t.requestAs('user-1').get('/api/projects');
       expect(res.status).toBe(200);
@@ -108,19 +108,19 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('excludes org-linked projects from personal listing', async () => {
-      seedProject(t.db as any, {
+      seedProject(t.db, {
         id: 'p-personal',
         name: 'Personal',
         userId: 'user-1',
         path: '/a',
       });
-      seedProject(t.db as any, {
+      seedProject(t.db, {
         id: 'p-org',
         name: 'Org Project',
         userId: 'user-1',
         path: '/b',
       });
-      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'p-org' });
+      seedTeamProject(t.db, { teamId: 'org-1', projectId: 'p-org' });
 
       const res = await t.requestAs('user-1').get('/api/projects');
       const body = await res.json();
@@ -129,8 +129,8 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('user sees all their projects', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', name: 'P1', path: '/a' });
-      seedProject(t.db as any, { id: 'p2', userId: 'user-1', name: 'P2', path: '/b' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', name: 'P1', path: '/a' });
+      seedProject(t.db, { id: 'p2', userId: 'user-1', name: 'P2', path: '/b' });
 
       const res = await t.requestAs('user-1').get('/api/projects');
       const body = await res.json();
@@ -170,7 +170,7 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('returns 409 when project name already exists for user', async () => {
-      seedProject(t.db as any, { id: 'p1', name: 'Existing', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', name: 'Existing', userId: 'user-1', path: '/a' });
 
       const res = await t.requestAs('user-1').post('/api/projects', {
         name: 'Existing',
@@ -180,7 +180,7 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('allows same name for different users', async () => {
-      seedProject(t.db as any, { id: 'p1', name: 'Shared Name', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', name: 'Shared Name', userId: 'user-1', path: '/a' });
 
       const res = await t.requestAs('user-2').post('/api/projects', {
         name: 'Shared Name',
@@ -221,7 +221,7 @@ describe.serial('Project Routes (Integration)', () => {
 
   describe('DELETE /api/projects/:id', () => {
     test('deletes project and returns ok', async () => {
-      seedProject(t.db as any, { id: 'p1', name: 'To Delete', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', name: 'To Delete', userId: 'user-1', path: '/a' });
 
       const res = await t.requestAs('user-1').delete('/api/projects/p1');
       expect(res.status).toBe(200);
@@ -240,15 +240,15 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('returns 404 when a user without access tries to delete', async () => {
-      seedProject(t.db as any, { id: 'p1', name: 'Owned', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', name: 'Owned', userId: 'user-1', path: '/a' });
 
       const res = await t.requestAs('user-2').delete('/api/projects/p1');
       expect(res.status).toBe(404);
     });
 
     test('returns 403 when a project admin (not the owner) tries to delete', async () => {
-      seedProject(t.db as any, { id: 'p1', name: 'Owned', userId: 'user-1', path: '/a' });
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'user-2', role: 'admin' });
+      seedProject(t.db, { id: 'p1', name: 'Owned', userId: 'user-1', path: '/a' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'user-2', role: 'admin' });
 
       const res = await t.requestAs('user-2').delete('/api/projects/p1');
       expect(res.status).toBe(403);
@@ -264,7 +264,7 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('returns null when no project matches the URL', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       const res = await t
         .requestAs('user-1')
@@ -277,7 +277,7 @@ describe.serial('Project Routes (Integration)', () => {
 
     test('matches project by URL pattern', async () => {
       // Set urls through projects.update (urls is string[] — the repository stringifies it)
-      seedProject(t.db as any, { id: 'p1', name: 'My App', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', name: 'My App', userId: 'user-1', path: '/a' });
       await updateProject('user-1', 'p1', {
         urls: ['https://app.example.com', 'https://api.example.com'],
       });
@@ -293,7 +293,7 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('does not match other users projects', async () => {
-      seedProject(t.db as any, { id: 'p1', name: 'Their App', userId: 'user-2', path: '/a' });
+      seedProject(t.db, { id: 'p1', name: 'Their App', userId: 'user-2', path: '/a' });
       await updateProject('user-2', 'p1', {
         urls: ['https://private.example.com'],
       });
@@ -310,7 +310,7 @@ describe.serial('Project Routes (Integration)', () => {
 
   describe('Project settings persistence', () => {
     test('followUpMode is persisted and returned', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       // Use 'interrupt' — 'queue' is the default and gets omitted by toProject()
       await updateProject('user-1', 'p1', {
@@ -324,7 +324,7 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('defaultProvider, defaultModel, and defaultEffort are persisted', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       await updateProject('user-1', 'p1', {
         defaultProvider: 'claude',
@@ -341,7 +341,7 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('systemPrompt is persisted', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       await updateProject('user-1', 'p1', {
         systemPrompt: 'You are a helpful coding assistant',
@@ -354,7 +354,7 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('urls field is persisted as JSON array', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       const urls = ['https://app.example.com', 'https://api.example.com'];
       await updateProject('user-1', 'p1', { urls });
@@ -366,7 +366,7 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('defaultPermissionMode is persisted', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       await updateProject('user-1', 'p1', {
         defaultPermissionMode: 'plan',
@@ -413,14 +413,14 @@ describe.serial('Project Routes (Integration)', () => {
 
   describe('GET /api/projects — org listing', () => {
     test('returns team projects when orgId is active', async () => {
-      seedProject(t.db as any, {
+      seedProject(t.db, {
         id: 'p-team',
         userId: 'user-1',
         name: 'Team Repo',
         path: '/tmp/team',
       });
-      seedTeamProject(t.db as any, { teamId: 'org-acme', projectId: 'p-team' });
-      seedOrgMember(t.db as any, { organizationId: 'org-acme', userId: 'user-1' });
+      seedTeamProject(t.db, { teamId: 'org-acme', projectId: 'p-team' });
+      seedOrgMember(t.db, { organizationId: 'org-acme', userId: 'user-1' });
 
       const res = await t.requestAs('user-1', 'user', { orgId: 'org-acme' }).get('/api/projects');
       expect(res.status).toBe(200);
@@ -430,18 +430,18 @@ describe.serial('Project Routes (Integration)', () => {
     });
 
     test('?orgId= for an org the caller is not a member of → 403 (M2)', async () => {
-      seedProject(t.db as any, { id: 'p-victim', userId: 'victim', path: '/tmp/victim' });
-      seedTeamProject(t.db as any, { teamId: 'org-victim', projectId: 'p-victim' });
-      seedOrgMember(t.db as any, { organizationId: 'org-victim', userId: 'victim' });
+      seedProject(t.db, { id: 'p-victim', userId: 'victim', path: '/tmp/victim' });
+      seedTeamProject(t.db, { teamId: 'org-victim', projectId: 'p-victim' });
+      seedOrgMember(t.db, { organizationId: 'org-victim', userId: 'victim' });
 
       const res = await t.requestAs('user-1').get('/api/projects?orgId=org-victim');
       expect(res.status).toBe(403);
     });
 
     test('?orgId= is honored for an org the caller belongs to', async () => {
-      seedProject(t.db as any, { id: 'p-team', userId: 'owner-x', path: '/tmp/team' });
-      seedTeamProject(t.db as any, { teamId: 'org-acme', projectId: 'p-team' });
-      seedOrgMember(t.db as any, { organizationId: 'org-acme', userId: 'user-1' });
+      seedProject(t.db, { id: 'p-team', userId: 'owner-x', path: '/tmp/team' });
+      seedTeamProject(t.db, { teamId: 'org-acme', projectId: 'p-team' });
+      seedOrgMember(t.db, { organizationId: 'org-acme', userId: 'user-1' });
 
       const res = await t.requestAs('user-1').get('/api/projects?orgId=org-acme');
       expect(res.status).toBe(200);

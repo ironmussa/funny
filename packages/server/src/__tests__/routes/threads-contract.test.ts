@@ -10,9 +10,10 @@ process.env.RUNNER_AUTH_SECRET = 'test-secret';
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 
+import { seedMessage, seedProject, seedThread } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedMessage, seedProject, seedThread } from '../helpers/test-db.js';
 import { threadProcedures } from '../helpers/thread-procedures.js';
 
 /** Columns the server keeps to itself; the detail view exposes `initInfo` instead. */
@@ -29,12 +30,12 @@ describe('Thread routes follow the contract', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
   });
 
   describe('thread shape', () => {
     test('a listed thread has boolean flags and no null fields', async () => {
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
@@ -73,7 +74,7 @@ describe('Thread routes follow the contract', () => {
     });
 
     test('a scratch thread has an empty projectId, not null', async () => {
-      seedThread(t.db as any, { id: 's1', projectId: null, userId: 'user-1', isScratch: 1 });
+      seedThread(t.db, { id: 's1', projectId: null, userId: 'user-1', isScratch: 1 });
 
       const res = await threads().query('scratch');
       const [thread] = res.data.threads;
@@ -81,7 +82,7 @@ describe('Thread routes follow the contract', () => {
     });
 
     test('template variables arrive parsed, not as JSON text', async () => {
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
@@ -93,7 +94,7 @@ describe('Thread routes follow the contract', () => {
     });
 
     test('the detail view keeps its message window and initInfo, without the raw init columns', async () => {
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
@@ -119,7 +120,7 @@ describe('Thread routes follow the contract', () => {
     });
 
     test('an archived listing maps its threads too', async () => {
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', archived: 1 });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1', archived: 1 });
 
       const body = (await threads().query('archived')).data;
       expect(body).toMatchObject({ total: 1, page: 1, limit: 100 });
@@ -129,7 +130,7 @@ describe('Thread routes follow the contract', () => {
 
   describe('list paging', () => {
     test('clamps an out-of-range limit instead of refusing it', async () => {
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads().query('list', { projectId: 'p1', limit: '5000', offset: '-3' });
       expect(res.status).toBe(200);
@@ -137,7 +138,7 @@ describe('Thread routes follow the contract', () => {
     });
 
     test('falls back to the default page size for an unparsable limit', async () => {
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads().query('list', { projectId: 'p1', limit: 'lots' });
       expect(res.status).toBe(200);
@@ -147,7 +148,7 @@ describe('Thread routes follow the contract', () => {
 
   describe('update input', () => {
     test('refuses a value of the wrong type instead of writing it', async () => {
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Original' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Original' });
 
       for (const body of [
         { title: 123 },
@@ -164,7 +165,7 @@ describe('Thread routes follow the contract', () => {
     });
 
     test('still ignores keys outside the allow-list', async () => {
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads().mutate('update', {
         id: 't1',
@@ -175,7 +176,7 @@ describe('Thread routes follow the contract', () => {
     });
 
     test('answers 404 for someone else’s thread before looking at the body', async () => {
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-2' });
 
       const res = await threads().mutate('update', { id: 't1', data: { title: 123 } });
       expect(res.status).toBe(404);
@@ -185,8 +186,8 @@ describe('Thread routes follow the contract', () => {
   describe('messages', () => {
     /** A message with every optional column null, and a legacy tool call with no input. */
     function seedSparseMessage() {
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessage(t.db as any, {
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db, {
         id: 'm1',
         threadId: 't1',
         role: 'assistant',
@@ -203,7 +204,7 @@ describe('Thread routes follow the contract', () => {
       for (const key of ['model', 'permissionMode', 'effort', 'author', 'images']) {
         expect(message).not.toHaveProperty(key);
       }
-      const [toolCall] = message.toolCalls as Record<string, unknown>[];
+      const [toolCall] = z.array(z.looseObject({})).parse(message.toolCalls);
       // `input` is a string the client JSON.parses; a missing one reads as no arguments.
       expect(toolCall).toEqual({ id: 'tc1', messageId: 'm1', name: 'Read', input: '{}' });
     }

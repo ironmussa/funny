@@ -11,8 +11,8 @@ mockCoreGitRepoChecks();
 
 import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { seedProject } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject } from '../helpers/test-db.js';
 
 const headersFor = (userId: string) => ({
   'X-Test-User-Id': userId,
@@ -25,7 +25,7 @@ describe('designs, analytics and push over tRPC', () => {
   const query = async (userId: string, path: string, input?: unknown) => {
     const qs = input === undefined ? '' : `?input=${encodeURIComponent(JSON.stringify(input))}`;
     const res = await t.app.request(`/api/trpc/${path}${qs}`, { headers: headersFor(userId) });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const mutate = async (userId: string, path: string, input: unknown) => {
@@ -34,7 +34,7 @@ describe('designs, analytics and push over tRPC', () => {
       headers: headersFor(userId),
       body: JSON.stringify(input),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   beforeAll(async () => {
@@ -43,7 +43,7 @@ describe('designs, analytics and push over tRPC', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'owner', path: '/tmp/p1' });
+    seedProject(t.db, { id: 'p1', userId: 'owner', path: '/tmp/p1' });
   });
 
   describe('designs', () => {

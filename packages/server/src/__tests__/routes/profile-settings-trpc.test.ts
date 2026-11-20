@@ -36,8 +36,8 @@ afterAll(() => {
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { seedProject } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject } from '../helpers/test-db.js';
 
 type Role = 'user' | 'admin';
 
@@ -61,7 +61,7 @@ describe('profile and settings tRPC procedures', () => {
     const res = await t.app.request(`/api/trpc/${path}${qs}`, {
       headers: headersFor(userId, role),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const mutate = async (userId: string, path: string, input?: unknown, role: Role = 'user') => {
@@ -70,7 +70,7 @@ describe('profile and settings tRPC procedures', () => {
       headers: headersFor(userId, role),
       body: input === undefined ? undefined : JSON.stringify(input),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   beforeAll(async () => {
@@ -169,7 +169,7 @@ describe('profile and settings tRPC procedures', () => {
     });
 
     test('a project binding needs access to the project: 404 before validation', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
 
       const stranger = await query('user-2', 'settings.getProjectBinding', { projectId: 'p1' });
       expect(stranger.status).toBe(404);
@@ -206,7 +206,7 @@ describe('profile and settings tRPC procedures', () => {
     });
 
     test('binding another user’s profile to your project answers 404', async () => {
-      seedProject(t.db as any, { id: 'p2', userId: 'user-1', path: '/tmp/p2' });
+      seedProject(t.db, { id: 'p2', userId: 'user-1', path: '/tmp/p2' });
       const foreign = await mutate(
         'user-2',
         'settings.createAgentProfile',
@@ -299,7 +299,7 @@ describe('profile and settings tRPC procedures', () => {
       const rest = await t.requestAs('user-1').get('/api/profile/transcribe-token');
       const trpc = await query('user-1', 'profile.transcribeToken');
       expect(trpc.status).toBe(rest.status);
-      expect(trpc.body.error.message).toBe(((await rest.json()) as any).error);
+      expect(trpc.body.error.message).toBe((await rest.json()).error);
     });
   });
 });

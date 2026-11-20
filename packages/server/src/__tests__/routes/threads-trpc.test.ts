@@ -14,9 +14,9 @@ import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { sql } from 'drizzle-orm';
 
+import { seedMessage, seedProject, seedThread } from '../helpers/builders-routes.js';
 import { FakeBrowserEventSink } from '../helpers/runner-port-fakes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedMessage, seedProject, seedThread } from '../helpers/test-db.js';
 
 const headersFor = (userId: string) => ({
   'X-Test-User-Id': userId,
@@ -32,7 +32,7 @@ describe('threads tRPC procedures', () => {
     const res = await t.app.request(`/api/trpc/threads.${path}${qs}`, {
       headers: headersFor(userId),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const mutate = async (userId: string, path: string, input: unknown) => {
@@ -41,7 +41,7 @@ describe('threads tRPC procedures', () => {
       headers: headersFor(userId),
       body: JSON.stringify(input),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const shareWithUser2 = async (level: 'view' | 'steer') => {
@@ -64,14 +64,14 @@ describe('threads tRPC procedures', () => {
     browserEvents.publications.length = 0;
     t.db.run(sql`DELETE FROM thread_shares`);
     t.db.run(sql`DELETE FROM resource_grants`);
-    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'First' });
-    seedMessage(t.db as any, { id: 'm1', threadId: 't1', role: 'user', content: 'hello world' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'First' });
+    seedMessage(t.db, { id: 'm1', threadId: 't1', role: 'user', content: 'hello world' });
   });
 
   describe('reads', () => {
     test('list without input reads the defaults and returns only the caller’s threads', async () => {
-      seedThread(t.db as any, { id: 't2', projectId: 'p1', userId: 'user-2' });
+      seedThread(t.db, { id: 't2', projectId: 'p1', userId: 'user-2' });
       const res = await query('user-1', 'list');
       expect(res.status).toBe(200);
       expect(res.body.result.data.threads.map((th: any) => th.id)).toEqual(['t1']);

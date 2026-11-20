@@ -5,20 +5,37 @@
  * forwarded payload, effect ordering) so the extraction into
  * `modules/threads` can be verified as behavior-preserving.
  */
-import { describe, test, expect, beforeAll, beforeEach, afterEach, mock, spyOn } from 'bun:test';
+import {
+  describe,
+  test,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterEach,
+  mock,
+  spyOn,
+  type Mock,
+} from 'bun:test';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 import { SIGNATURE_HEADER } from '@funny/shared/auth/forwarded-identity';
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
+import { z } from 'zod';
 
 import * as runnerManager from '../../services/runner-manager.js';
 import type { RunnerRequest, RunnerResponse } from '../../services/runner-ports.js';
 import * as runnerResolver from '../../services/runner-resolver.js';
 import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
 import * as threadRegistry from '../../services/thread-registry.js';
+import {
+  buildProjectRunnerMatch,
+  runnerRequestJson,
+  seedProject,
+  seedRunner,
+  seedThread,
+} from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
 
 const tunnelFetch = mock(
   async (_runnerId: string, _request: RunnerRequest): Promise<RunnerResponse> => ({
@@ -35,12 +52,16 @@ function respondWith(status: number, body: string) {
 }
 
 function forwardedBody(call = 0): Record<string, unknown> {
-  return JSON.parse(tunnelFetch.mock.calls[call][1].body as string);
+  return runnerRequestJson(tunnelFetch.mock.calls[call][1], z.record(z.string(), z.unknown()));
 }
 
 describe('Thread creation — characterization', () => {
   let t: TestApp;
   const effects: string[] = [];
+  let findRunnerForProject: Mock<typeof runnerManager.findRunnerForProject>;
+  let resolveRunnerDetailed: Mock<typeof runnerResolver.resolveRunnerDetailed>;
+  let registerThread: Mock<typeof threadRegistry.registerThread>;
+  let cacheThreadRunner: Mock<typeof runnerResolver.cacheThreadRunner>;
 
   beforeAll(async () => {
     t = await createTestApp({
@@ -67,27 +88,31 @@ describe('Thread creation — characterization', () => {
     effects.length = 0;
     // Resolution is mocked below, but the authorized sink still certifies the
     // chosen runner against `runners` and `runner-scope`, so the rows must exist.
-    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-    seedRunner(t.db as any, { id: 'runner-1', userId: 'user-1', token: 'tok-1', hostname: 'r1' });
-    seedRunner(t.db as any, { id: '__default__', userId: 'user-1', token: 'tok-d', hostname: 'd' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+    seedRunner(t.db, { id: 'runner-1', userId: 'user-1', token: 'tok-1', hostname: 'r1' });
+    seedRunner(t.db, { id: '__default__', userId: 'user-1', token: 'tok-d', hostname: 'd' });
     tunnelFetch.mockReset();
     tunnelFetch.mockImplementation(async () => ({
       status: 201,
       headers: {},
       body: JSON.stringify({ id: 't-new', title: 'Runtime title', branch: 'runtime/branch' }),
     }));
-    spyOn(runnerManager, 'findRunnerForProject').mockImplementation(async () => {
-      effects.push('resolve');
-      return { runner: { runnerId: 'runner-1' } } as any;
-    });
-    spyOn(runnerResolver, 'resolveRunnerDetailed').mockImplementation(async () => {
-      effects.push('resolve');
-      return { ok: true, runnerId: 'runner-1' };
-    });
-    spyOn(threadRegistry, 'registerThread').mockImplementation(async () => {
+    findRunnerForProject = spyOn(runnerManager, 'findRunnerForProject').mockImplementation(
+      async () => {
+        effects.push('resolve');
+        return buildProjectRunnerMatch('runner-1');
+      },
+    );
+    resolveRunnerDetailed = spyOn(runnerResolver, 'resolveRunnerDetailed').mockImplementation(
+      async () => {
+        effects.push('resolve');
+        return { ok: true, runnerId: 'runner-1' };
+      },
+    );
+    registerThread = spyOn(threadRegistry, 'registerThread').mockImplementation(async () => {
       effects.push('register');
     });
-    spyOn(runnerResolver, 'cacheThreadRunner').mockImplementation(() => {
+    cacheThreadRunner = spyOn(runnerResolver, 'cacheThreadRunner').mockImplementation(() => {
       effects.push('cache');
     });
   });
@@ -120,7 +145,7 @@ describe('Thread creation — characterization', () => {
     test('answers with the persisted row as the contract Thread, not the runner payload', async () => {
       // The runner persists the thread through the data channel before it
       // replies; here the row is seeded to stand in for that write.
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't-new',
         projectId: 'p1',
         userId: 'user-1',
@@ -176,7 +201,7 @@ describe('Thread creation — characterization', () => {
       expect(headers['X-Runner-Auth']).toBe(deriveRunnerForwardingKey('test-secret', 'runner-1'));
       expect(headers[SIGNATURE_HEADER]).toBeTruthy();
       expect(runnerManager.findRunnerForProject).toHaveBeenCalledWith('p1', 'user-1');
-      expect((threadRegistry.registerThread as any).mock.calls[0][0].userId).toBe('user-1');
+      expect(registerThread.mock.calls[0][0].userId).toBe('user-1');
       expect(runnerResolver.cacheThreadRunner).toHaveBeenCalledWith('t-new', 'user-1', 'runner-1');
     });
 
@@ -211,7 +236,7 @@ describe('Thread creation — characterization', () => {
         expect.anything(),
       );
       expect(runnerManager.findRunnerForProject).not.toHaveBeenCalled();
-      const entry = (threadRegistry.registerThread as any).mock.calls[0][0];
+      const entry = registerThread.mock.calls[0][0];
       expect(entry.projectId).toBeNull();
       expect(entry.isScratch).toBe(true);
       expect(entry.mode).toBe('local');
@@ -219,9 +244,7 @@ describe('Thread creation — characterization', () => {
 
     test('scratch idle creation resolves with the idle path', async () => {
       await t.requestAs('user-1').post('/api/threads/idle', { isScratch: true });
-      expect((runnerResolver.resolveRunnerDetailed as any).mock.calls[0][0]).toBe(
-        '/api/threads/idle',
-      );
+      expect(resolveRunnerDetailed.mock.calls[0][0]).toBe('/api/threads/idle');
       expect(tunnelFetch.mock.calls[0][1].path).toBe('/api/threads/idle');
     });
 
@@ -311,8 +334,8 @@ describe('Thread creation — characterization', () => {
     });
 
     test('no project runner → 502 with project message, no remote call', async () => {
-      (runnerManager.findRunnerForProject as any).mockResolvedValueOnce(null);
-      (runnerResolver.resolveRunnerDetailed as any).mockResolvedValueOnce({
+      findRunnerForProject.mockResolvedValueOnce(null);
+      resolveRunnerDetailed.mockResolvedValueOnce({
         ok: false,
         reason: 'general-runner-offline',
       });
@@ -326,7 +349,7 @@ describe('Thread creation — characterization', () => {
     });
 
     test('no scratch runner → 502 with user message', async () => {
-      (runnerResolver.resolveRunnerDetailed as any).mockResolvedValueOnce({
+      resolveRunnerDetailed.mockResolvedValueOnce({
         ok: false,
         reason: 'general-runner-offline',
       });
@@ -339,7 +362,7 @@ describe('Thread creation — characterization', () => {
     });
 
     test('resolver exception is not converted into a creation failure (500)', async () => {
-      (runnerManager.findRunnerForProject as any).mockImplementationOnce(async () => {
+      findRunnerForProject.mockImplementationOnce(async () => {
         throw new Error('db down');
       });
       const res = await t.requestAs('user-1').post('/api/threads', { projectId: 'p1' });
@@ -406,7 +429,7 @@ describe('Thread creation — characterization', () => {
     test('top-level id is preferred over nested thread.id', async () => {
       respondWith(201, JSON.stringify({ id: 'top', thread: { id: 'nested' } }));
       await t.requestAs('user-1').post('/api/threads', { projectId: 'p1' });
-      expect((threadRegistry.registerThread as any).mock.calls[0][0].id).toBe('top');
+      expect(registerThread.mock.calls[0][0].id).toBe('top');
     });
 
     test('nested thread.id is used when top-level id is missing', async () => {
@@ -414,7 +437,7 @@ describe('Thread creation — characterization', () => {
       const res = await t.requestAs('user-1').post('/api/threads', { projectId: 'p1' });
       expect(res.status).toBe(201);
       expect(await res.json()).toEqual({ thread: { id: 'nested' } });
-      expect((threadRegistry.registerThread as any).mock.calls[0][0].id).toBe('nested');
+      expect(registerThread.mock.calls[0][0].id).toBe('nested');
       expect(runnerResolver.cacheThreadRunner).toHaveBeenCalledWith('nested', 'user-1', 'runner-1');
     });
 
@@ -435,7 +458,7 @@ describe('Thread creation — characterization', () => {
         mode: 'worktree',
         branch: 'body/branch',
       });
-      expect((threadRegistry.registerThread as any).mock.calls[0][0]).toEqual({
+      expect(registerThread.mock.calls[0][0]).toEqual({
         id: 't1',
         projectId: 'p1',
         runnerId: 'runner-1',
@@ -457,7 +480,7 @@ describe('Thread creation — characterization', () => {
         mode: false,
         branch: 'body/branch',
       });
-      expect((threadRegistry.registerThread as any).mock.calls[0][0]).toEqual({
+      expect(registerThread.mock.calls[0][0]).toEqual({
         id: 't1',
         projectId: 'p1',
         runnerId: 'runner-1',
@@ -471,9 +494,9 @@ describe('Thread creation — characterization', () => {
     });
 
     test('__default__ runner bypasses registration and cache', async () => {
-      (runnerManager.findRunnerForProject as any).mockImplementationOnce(async () => {
+      findRunnerForProject.mockImplementationOnce(async () => {
         effects.push('resolve');
-        return { runner: { runnerId: '__default__' } };
+        return buildProjectRunnerMatch('__default__');
       });
       const res = await t.requestAs('user-1').post('/api/threads', { projectId: 'p1' });
       expect(res.status).toBe(201);
@@ -482,7 +505,7 @@ describe('Thread creation — characterization', () => {
     });
 
     test('registry failure after remote success → 502, cache skipped', async () => {
-      (threadRegistry.registerThread as any).mockImplementationOnce(async () => {
+      registerThread.mockImplementationOnce(async () => {
         effects.push('register');
         throw new Error('constraint');
       });
@@ -494,7 +517,7 @@ describe('Thread creation — characterization', () => {
     });
 
     test('cache failure after registration → 502 Thread creation failed', async () => {
-      (runnerResolver.cacheThreadRunner as any).mockImplementationOnce(() => {
+      cacheThreadRunner.mockImplementationOnce(() => {
         effects.push('cache');
         throw new Error('cache');
       });

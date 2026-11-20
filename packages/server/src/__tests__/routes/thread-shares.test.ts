@@ -11,9 +11,9 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { sql } from 'drizzle-orm';
 
+import { seedProject, seedProjectMember, seedThread } from '../helpers/builders-routes.js';
 import { FakeBrowserEventSink } from '../helpers/runner-port-fakes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedProjectMember, seedThread } from '../helpers/test-db.js';
 import { threadProcedures } from '../helpers/thread-procedures.js';
 
 const OWNER = 'owner-1';
@@ -66,11 +66,11 @@ describe('Thread sharing (Integration)', () => {
     t.db.run(sql`DELETE FROM member`);
     t.db.run(sql`DELETE FROM organization`);
     t.db.run(sql`DELETE FROM "user"`);
-    seedProject(t.db as any, { id: 'p1', userId: OWNER, path: '/a' });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: OWNER });
+    seedProject(t.db, { id: 'p1', userId: OWNER, path: '/a' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: OWNER });
     // Owner + Ana are members of the thread's project; Bob is not.
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: OWNER, role: 'admin' });
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: ANA });
+    seedProjectMember(t.db, { projectId: 'p1', userId: OWNER, role: 'admin' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: ANA });
     seedIdentity(t);
   });
 

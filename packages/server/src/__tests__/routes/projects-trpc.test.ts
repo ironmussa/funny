@@ -12,8 +12,8 @@ mockCoreGitRepoChecks();
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { seedProject, seedProjectMember } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedProjectMember } from '../helpers/test-db.js';
 
 const headersFor = (userId: string) => ({
   'X-Test-User-Id': userId,
@@ -26,7 +26,7 @@ describe('projects over tRPC', () => {
   const query = async (userId: string, path: string, input?: unknown) => {
     const qs = input === undefined ? '' : `?input=${encodeURIComponent(JSON.stringify(input))}`;
     const res = await t.app.request(`/api/trpc/${path}${qs}`, { headers: headersFor(userId) });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const mutate = async (userId: string, path: string, input: unknown) => {
@@ -35,7 +35,7 @@ describe('projects over tRPC', () => {
       headers: headersFor(userId),
       body: JSON.stringify(input),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   beforeAll(async () => {
@@ -44,8 +44,8 @@ describe('projects over tRPC', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'owner', path: '/tmp/p1', name: 'Alpha' });
-    seedProject(t.db as any, { id: 'p2', userId: 'owner', path: '/tmp/p2', name: 'Beta' });
+    seedProject(t.db, { id: 'p1', userId: 'owner', path: '/tmp/p1', name: 'Alpha' });
+    seedProject(t.db, { id: 'p2', userId: 'owner', path: '/tmp/p2', name: 'Beta' });
   });
 
   test('list answers the same projects as GET /api/projects, search included', async () => {
@@ -71,7 +71,7 @@ describe('projects over tRPC', () => {
   });
 
   test('an admin collaborator updates shared fields but not owner-only ones', async () => {
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'ada', role: 'admin' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'ada', role: 'admin' });
 
     const renamed = await mutate('ada', 'projects.update', {
       projectId: 'p1',
@@ -96,7 +96,7 @@ describe('projects over tRPC', () => {
     });
     expect(missing.status).toBe(404);
 
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'member' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'member' });
     const member = await mutate('bob', 'projects.update', {
       projectId: 'p1',
       data: { name: 'Hijacked' },
@@ -111,7 +111,7 @@ describe('projects over tRPC', () => {
     { defaultPermissionMode: 'auto' },
   ]) {
     test(`update: a project admin cannot change ${Object.keys(data)[0]}`, async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'ada', role: 'admin' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'ada', role: 'admin' });
       const res = await mutate('ada', 'projects.update', { projectId: 'p1', data });
       expect(res.status).toBe(403);
 
@@ -133,7 +133,7 @@ describe('projects over tRPC', () => {
   });
 
   test('a plain member cannot add members, with the REST message', async () => {
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'member' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'member' });
     const res = await mutate('bob', 'projects.addMember', { projectId: 'p1', userId: 'alice' });
     expect(res.status).toBe(403);
     expect(res.body.error.message).toBe('Only project admins can add members');
@@ -156,8 +156,8 @@ describe('projects over tRPC', () => {
   });
 
   test('a member may remove themselves but not someone else', async () => {
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'member' });
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'carol', role: 'member' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'member' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'carol', role: 'member' });
 
     const other = await mutate('bob', 'projects.removeMember', {
       projectId: 'p1',
@@ -169,7 +169,7 @@ describe('projects over tRPC', () => {
   });
 
   test('setLocalPath refuses a relative path', async () => {
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'member' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'member' });
     const res = await mutate('bob', 'projects.setLocalPath', {
       projectId: 'p1',
       localPath: 'relative/dir',
@@ -201,7 +201,7 @@ describe('projects over tRPC', () => {
   });
 
   test('a plain member cannot edit startup commands', async () => {
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'member' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'member' });
     const res = await mutate('bob', 'projects.createCommand', {
       projectId: 'p1',
       label: 'x',
@@ -212,7 +212,7 @@ describe('projects over tRPC', () => {
   });
 
   test('remove is owner-only; reorder sets the order', async () => {
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'ada', role: 'admin' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'ada', role: 'admin' });
     expect((await mutate('ada', 'projects.remove', { projectId: 'p1' })).status).toBe(403);
 
     expect(

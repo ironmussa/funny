@@ -22,28 +22,30 @@ import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import { PUBLIC_IMAGE_MAX_BYTES } from '@funny/shared/contracts/public-v1';
 import { MODEL_REGISTRY } from '@funny/shared/models';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import type { ServerEnv } from '../../lib/types.js';
 import type { RunnerPresencePort, RunnerRequest } from '../../services/runner-ports.js';
-import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
+  runnerRequestJson,
   seedProject,
   seedProjectMember,
   seedRunner,
   seedRunnerProjectAssignment,
-} from '../helpers/test-db.js';
+} from '../helpers/builders-routes.js';
+import { createTestApp, type TestApp } from '../helpers/test-app.js';
 
 const RUNNER_OWNER: Record<string, string> = { 'r-alice': 'alice', 'r-bob': 'bob' };
 
 /** Fake runner transport: records every request, answers like a runner that created `t-new`. */
 function fakeRunners(online: string[]) {
   const sent: Array<{ runnerId: string; request: RunnerRequest }> = [];
-  const runnerPresence = {
+  const runnerPresence: RunnerPresencePort = {
     isAvailable: async (id: string) => online.includes(id),
     userHasAvailableRunner: async (uid: string) => online.some((id) => RUNNER_OWNER[id] === uid),
     userIdForRunner: async (id: string) => RUNNER_OWNER[id] ?? null,
     availableRunnerCount: async () => online.length,
-  } as RunnerPresencePort;
+  };
   const runnerRequests = {
     isAvailable: async (id: string) => online.includes(id),
     request: async (runnerId: string, request: RunnerRequest) => {
@@ -81,7 +83,7 @@ describe('public REST API v1: threads and models', () => {
       },
       env,
     );
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const create = (userId: string, body: Record<string, unknown>, online = ['r-alice', 'r-bob']) => {
@@ -93,7 +95,7 @@ describe('public REST API v1: threads and models', () => {
   };
 
   const sentBody = (sent: Array<{ request: RunnerRequest }>) =>
-    JSON.parse(sent[0].request.body as string);
+    runnerRequestJson(sent[0].request, z.looseObject({}));
 
   beforeAll(async () => {
     t = await createTestApp();
@@ -104,13 +106,13 @@ describe('public REST API v1: threads and models', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p-alice', userId: 'alice', name: 'A', path: '/home/alice/a' });
-    seedProject(t.db as any, { id: 'p-bob', userId: 'bob', name: 'B', path: '/home/bob/b' });
-    seedProjectMember(t.db as any, { projectId: 'p-bob', userId: 'carol', role: 'viewer' });
-    seedRunner(t.db as any, { id: 'r-alice', userId: 'alice', token: 'tok-a' });
-    seedRunner(t.db as any, { id: 'r-bob', userId: 'bob', token: 'tok-b' });
-    seedRunnerProjectAssignment(t.db as any, { runnerId: 'r-alice', projectId: 'p-alice' });
-    seedRunnerProjectAssignment(t.db as any, { runnerId: 'r-bob', projectId: 'p-bob' });
+    seedProject(t.db, { id: 'p-alice', userId: 'alice', name: 'A', path: '/home/alice/a' });
+    seedProject(t.db, { id: 'p-bob', userId: 'bob', name: 'B', path: '/home/bob/b' });
+    seedProjectMember(t.db, { projectId: 'p-bob', userId: 'carol', role: 'viewer' });
+    seedRunner(t.db, { id: 'r-alice', userId: 'alice', token: 'tok-a' });
+    seedRunner(t.db, { id: 'r-bob', userId: 'bob', token: 'tok-b' });
+    seedRunnerProjectAssignment(t.db, { runnerId: 'r-alice', projectId: 'p-alice' });
+    seedRunnerProjectAssignment(t.db, { runnerId: 'r-bob', projectId: 'p-bob' });
   });
 
   test('the OpenAPI document publishes POST /threads and GET /models', async () => {

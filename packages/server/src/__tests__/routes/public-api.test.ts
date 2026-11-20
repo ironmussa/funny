@@ -14,10 +14,17 @@ mockCoreGitRepoChecks();
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import type { ServerEnv } from '../../lib/types.js';
+import { seedProject, seedProjectMember } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedProjectMember } from '../helpers/test-db.js';
+
+/** What this suite reads off a procedure's `_def` (its tRPC type omits `meta` and `output`). */
+const procedureDefSchema = z.looseObject({
+  meta: z.looseObject({ openapi: z.looseObject({ path: z.unknown() }).optional() }).optional(),
+  output: z.unknown(),
+});
 
 describe('public REST API v1', () => {
   let t: TestApp;
@@ -28,7 +35,7 @@ describe('public REST API v1', () => {
     const res = await app.request(`http://server/api/v1${path}`, {
       headers: userId ? { 'x-test-token-owner': userId } : {},
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   beforeAll(async () => {
@@ -40,25 +47,25 @@ describe('public REST API v1', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, {
+    seedProject(t.db, {
       id: 'mine',
       userId: 'alice',
       name: 'Mine',
       path: '/home/alice/mine',
     });
-    seedProject(t.db as any, {
+    seedProject(t.db, {
       id: 'theirs',
       userId: 'bob',
       name: 'Theirs',
       path: '/home/bob/theirs',
     });
-    seedProject(t.db as any, {
+    seedProject(t.db, {
       id: 'bobs-shared',
       userId: 'bob',
       name: 'Shared',
       path: '/home/bob/s',
     });
-    seedProjectMember(t.db as any, { projectId: 'bobs-shared', userId: 'alice', role: 'member' });
+    seedProjectMember(t.db, { projectId: 'bobs-shared', userId: 'alice', role: 'member' });
   });
 
   test('the OpenAPI document lists only the published endpoints, behind a bearer token', async () => {
@@ -126,7 +133,7 @@ describe('public REST API v1', () => {
     const procedures = Object.entries(publicV1Router._def.procedures);
     expect(procedures.length).toBeGreaterThan(0);
     for (const [name, procedure] of procedures) {
-      const def = (procedure as any)._def;
+      const def = procedureDefSchema.parse(procedure._def);
       expect({ name, path: def.meta?.openapi?.path }).toMatchObject({
         path: expect.stringMatching(/^\//),
       });

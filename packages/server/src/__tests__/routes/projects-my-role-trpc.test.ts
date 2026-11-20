@@ -11,8 +11,8 @@ mockCoreGitRepoChecks();
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { seedProject, seedProjectMember } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedProjectMember } from '../helpers/test-db.js';
 
 describe('projects.myRole over tRPC', () => {
   let t: TestApp;
@@ -22,7 +22,7 @@ describe('projects.myRole over tRPC', () => {
     const res = await t.app.request(`/api/trpc/projects.myRole${qs}`, {
       headers: { 'X-Test-User-Id': userId },
     });
-    return { status: res.status, role: ((await res.json()) as any).result?.data?.role };
+    return { status: res.status, role: (await res.json()).result?.data?.role };
   };
 
   beforeAll(async () => {
@@ -31,9 +31,9 @@ describe('projects.myRole over tRPC', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'alice', path: '/repo-a' });
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'member' });
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'vic', role: 'viewer' });
+    seedProject(t.db, { id: 'p1', userId: 'alice', path: '/repo-a' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'member' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'vic', role: 'viewer' });
   });
 
   test('owner, contributor and viewer each get their role; an outsider gets 404', async () => {

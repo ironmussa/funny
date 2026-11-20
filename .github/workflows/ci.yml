@@ -135,9 +135,9 @@ jobs:
         if: matrix.shard == 'core'
         run: bun test scripts/__tests__/test-env.test.ts
 
-      - name: Test the suite runner's affected-package selection (pre-push)
+      - name: Test the suite runner's affected-package and test-impact selection
         if: matrix.shard == 'core'
-        run: bun test scripts/__tests__/run-tests.test.ts scripts/__tests__/pre-push.test.ts
+        run: bun test scripts/__tests__/run-tests.test.ts scripts/__tests__/pre-push.test.ts scripts/__tests__/test-impact.test.ts
 
       - name: Run tests (shared)
         if: matrix.shard == 'core'
@@ -161,6 +161,21 @@ jobs:
       - name: Run tests with coverage gate (server)
         if: matrix.shard == 'server'
         run: bun run --cwd packages/server test:coverage:gate
+
+      # Records which sources each server test file executes, for the pre-push
+      # hook's test selection (`bun scripts/test-impact.ts fetch` downloads it).
+      # Only on master: a map from a branch would describe code master lacks.
+      - name: Build test-impact map (server)
+        if: matrix.shard == 'server' && github.event_name == 'push'
+        run: bun scripts/test-impact.ts build packages/server --out test-impact/server.json --jobs 2
+
+      - name: Upload test-impact maps
+        if: matrix.shard == 'server' && github.event_name == 'push'
+        uses: actions/upload-artifact@v7
+        with:
+          name: test-impact-maps
+          path: test-impact/*.json
+          retention-days: 30
 
       # Same suite as `test`, plus coverage: one run instead of two.
       - name: Run tests with coverage (client)

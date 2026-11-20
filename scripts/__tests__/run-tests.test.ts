@@ -5,7 +5,9 @@ import { join } from 'node:path';
 
 import {
   discoverPackages,
+  type Narrowing,
   planTests,
+  runLabel,
   runTests,
   selectAffectedPackages,
   workersPerSuite,
@@ -150,6 +152,52 @@ describe('planTests', () => {
   });
 });
 
+describe('planTests with a test-impact narrower', () => {
+  beforeEach(() => {
+    pkg('server', '@x/server', { '@x/core': 'workspace:*' }, 'bun test --isolate');
+    pkg('web', '@x/web', { '@x/shared': 'workspace:*' }, 'vitest run');
+    mkdirSync(join(root, 'packages/shared/src'), { recursive: true });
+    writeFileSync(join(root, 'packages/shared/src/a.ts'), '');
+  });
+
+  const plan = (files: string[], narrowing: Narrowing, changedDeps?: Set<string>) => {
+    const asked: string[] = [];
+    const runs = planTests(files, discoverPackages(root), changedDeps, root, (p) => {
+      asked.push(p.name);
+      return narrowing;
+    });
+    return { asked, runs: Object.fromEntries(runs.map((run) => [run.pkg.name, run])) };
+  };
+
+  test('a bun test suite runs only the test files the map selects', () => {
+    const { asked, runs } = plan(['packages/shared/src/a.ts'], { tests: ['./src/a.test.ts'] });
+    expect(asked).toEqual(['@x/server']);
+    expect(runs['@x/server'].testFiles).toEqual(['./src/a.test.ts']);
+    expect(runLabel(runs['@x/server'])).toBe('@x/server (1 test files)');
+    // vitest and plain suites are not narrowed by the map.
+    expect(runs['@x/web'].related).not.toBeNull();
+    expect(runs['@x/shared'].testFiles).toBeUndefined();
+  });
+
+  test('a suite the map selects nothing in is dropped', () => {
+    const { runs } = plan(['packages/shared/src/a.ts'], { tests: [] });
+    expect(runs['@x/server']).toBeUndefined();
+    expect(runs['@x/core']).toBeDefined();
+  });
+
+  test('a suite the map cannot narrow runs whole with the reason', () => {
+    const { runs } = plan(['packages/shared/src/a.ts'], { whole: 'no test-impact map' });
+    expect(runs['@x/server'].testFiles).toBeUndefined();
+    expect(runs['@x/server'].note).toBe('no test-impact map');
+  });
+
+  test('suite inputs and changed dependencies bypass the narrower', () => {
+    expect(plan(['packages/server/bunfig.toml'], { tests: [] }).asked).toEqual([]);
+    const deps = plan(['bun.lock'], { tests: [] }, new Set(['hono']));
+    expect(deps.asked).toEqual([]);
+  });
+});
+
 describe('workersPerSuite', () => {
   test('splits the cores between the suites running at once', () => {
     expect(workersPerSuite(4, 20)).toBe(5);
@@ -203,6 +251,20 @@ describe('runTests', () => {
 
     expect(await runTests(suites, root, 2)).toBe(0);
     expect(await Bun.file(log).text()).toMatch(/^run --maxWorkers=\d+ --project unit/);
+  });
+
+  test('a narrowed bun test run appends the selected files to the test script', async () => {
+    pkg('server', '@x/server', {}, 'sh record.sh');
+    writeFileSync(join(root, 'packages/server/record.sh'), 'echo "$@" > args\n');
+    const server = discoverPackages(root).find((p) => p.name === '@x/server')!;
+    const code = await runTests(
+      [{ pkg: server, related: null, testFiles: ['./src/a.test.ts', "./src/it's.test.ts"] }],
+      root,
+    );
+    expect(code).toBe(0);
+    expect(await Bun.file(join(root, 'packages/server/args')).text()).toBe(
+      "./src/a.test.ts ./src/it's.test.ts\n",
+    );
   });
 
   test('a related run replaces `vitest run` with `vitest related` and passes the files', async () => {

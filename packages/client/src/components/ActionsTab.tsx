@@ -36,6 +36,7 @@ import {
   runDurationMs,
 } from '@/lib/github-actions';
 import {
+  listRowActionBusyClassName,
   listRowActionClassName,
   listRowClassName,
   listRowTitleClassName,
@@ -399,26 +400,35 @@ function RunRow({
                 onClick={() => void handleRerun()}
                 disabled={rerunning}
                 // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
-                className={listRowActionClassName}
+                className={cn(listRowActionClassName, rerunning && listRowActionBusyClassName)}
                 aria-label={t('review.actions.rerun', 'Re-run failed jobs')}
                 data-testid={`actions-run-rerun-${run.id}`}
               >
                 <RotateCcw className={cn('icon-sm', rerunning && 'animate-spin')} />
               </Button>
             </TooltipTrigger>
-            <TooltipContent>{t('review.actions.rerun', 'Re-run failed jobs')}</TooltipContent>
+            <TooltipContent side="left">
+              {t('review.actions.rerun', 'Re-run failed jobs')}
+            </TooltipContent>
           </Tooltip>
         )}
-        <a
-          href={run.html_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          aria-label={t('review.actions.openRun', 'Open run on GitHub')}
-          className={listRowActionClassName}
-          data-testid={`actions-run-open-${run.id}`}
-        >
-          <ExternalLink className="icon-sm" />
-        </a>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <a
+              href={run.html_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label={t('review.actions.openRun', 'Open run on GitHub')}
+              className={listRowActionClassName}
+              data-testid={`actions-run-open-${run.id}`}
+            >
+              <ExternalLink className="icon-sm" />
+            </a>
+          </TooltipTrigger>
+          <TooltipContent side="left">
+            {t('review.actions.openRun', 'Open run on GitHub')}
+          </TooltipContent>
+        </Tooltip>
       </div>
       <CollapsibleContent>
         {open && <RunJobs projectId={projectId} run={run} visible={visible} />}

@@ -15,6 +15,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import type { UseStashStateResult } from '@/hooks/use-stash-state';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import {
+  listRowActionBusyClassName,
   listRowActionClassName,
   listRowClassName,
   listRowTitleClassName,
@@ -353,7 +354,7 @@ function StashPopButton({
           size="icon-xs"
           aria-label={label}
           // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
-          className={cn(listRowActionClassName, busy && idx === '0' && 'opacity-100')}
+          className={cn(listRowActionClassName, busy && idx === '0' && listRowActionBusyClassName)}
           onClick={(e) => {
             e.stopPropagation();
             onPop();
@@ -393,12 +394,13 @@ function StashDropButton({
           variant="ghost"
           size="icon-xs"
           aria-label={t('review.dropStash', 'Discard stash')}
+          // oxlint-disable shadcn/require-static-classes -- listRowActionClassName and listRowActionBusyClassName are static constants from list-row-styles
           className={cn(
-            // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant
             listRowActionClassName,
             'hover:text-destructive',
-            dropping && 'opacity-100',
+            dropping && listRowActionBusyClassName,
           )}
+          // oxlint-enable shadcn/require-static-classes
           onClick={(e) => {
             e.stopPropagation();
             onRequestDrop(idx);

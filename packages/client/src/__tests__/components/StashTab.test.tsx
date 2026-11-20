@@ -3,7 +3,11 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { StashTab } from '@/components/review-pane/StashTab';
 import { stashBranch, type UseStashStateResult } from '@/hooks/use-stash-state';
-import { listRowActionClassName, listRowClassName } from '@/lib/list-row-styles';
+import {
+  listRowActionBusyClassName,
+  listRowActionClassName,
+  listRowClassName,
+} from '@/lib/list-row-styles';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -72,7 +76,24 @@ describe('StashTab rows', () => {
   test('keeps a running action visible while it works', () => {
     renderStash({ stashDropInProgress: '0' });
 
-    expect(screen.getByTestId('stash-drop-0')).toHaveClass('opacity-100');
+    const drop = screen.getByTestId('stash-drop-0');
+    expect(drop).toBeDisabled();
+    for (const cls of listRowActionBusyClassName.split(' ')) expect(drop).toHaveClass(cls);
+  });
+
+  test('a disabled action stays hidden until hover instead of showing dimmed', () => {
+    // The pop is disabled while an agent runs; the Button's `disabled:opacity-50`
+    // used to beat `opacity-0` and leave it on screen.
+    renderWithProviders(
+      <StashTab stash={stashState()} currentBranch="main" isAgentRunning onRequestDrop={vi.fn()} />,
+    );
+
+    for (const testId of ['stash-pop-0', 'stash-drop-0']) {
+      const action = screen.getByTestId(testId);
+      expect(action).toBeDisabled();
+      expect(action).toHaveClass('disabled:opacity-0', 'group-hover:disabled:opacity-50');
+      expect(action).not.toHaveClass('disabled:opacity-50');
+    }
   });
 });
 

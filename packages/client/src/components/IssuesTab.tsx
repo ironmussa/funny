@@ -451,9 +451,7 @@ function IssueRow({
               <Plus className="icon-sm" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="left">
-            <p>{t('issues.createThread', 'Create thread')}</p>
-          </TooltipContent>
+          <TooltipContent side="left">{t('issues.createThread', 'Create thread')}</TooltipContent>
         </Tooltip>
       )}
     </div>

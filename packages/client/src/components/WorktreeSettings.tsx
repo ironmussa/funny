@@ -26,6 +26,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import {
+  listRowActionBusyClassName,
   listRowActionClassName,
   listRowClassName,
   listRowTitleClassName,
@@ -102,22 +103,32 @@ function WorktreeCard({
         </div>
       </div>
       {!readOnly && !worktree.isMain && (
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={t('dialog.deleteWorktree')}
-          title={t('dialog.deleteWorktree')}
-          onClick={onRemove}
-          disabled={removing}
-          className={cn(
-            // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant
-            listRowActionClassName,
-            'hover:text-destructive',
-            removing && 'opacity-100',
-          )}
-        >
-          {removing ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={t('dialog.deleteWorktree')}
+              onClick={onRemove}
+              disabled={removing}
+              // oxlint-disable shadcn/require-static-classes -- listRowActionClassName and listRowActionBusyClassName are static constants from list-row-styles
+              className={cn(
+                listRowActionClassName,
+                'hover:text-destructive',
+                removing && listRowActionBusyClassName,
+              )}
+              // oxlint-enable shadcn/require-static-classes
+              data-testid={`worktree-delete-${worktree.branch}`}
+            >
+              {removing ? (
+                <Loader2 className="icon-sm animate-spin" />
+              ) : (
+                <Trash2 className="icon-sm" />
+              )}
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="left">{t('dialog.deleteWorktree')}</TooltipContent>
+        </Tooltip>
       )}
     </div>
   );

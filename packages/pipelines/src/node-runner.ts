@@ -6,7 +6,12 @@
 
 import { Cause, Effect, Exit, Result } from 'effect';
 
-import type { NodeRunInfo, PipelineNode, PipelineStateChange } from './engine.js';
+import type {
+  NodeRunInfo,
+  PipelineNode,
+  PipelineStateChange,
+  PipelineStateKind,
+} from './engine.js';
 import type { SlotGrant } from './gate.js';
 
 // Capture synchronous throws as well as rejected promises at the callback boundary.
@@ -17,7 +22,7 @@ export const invoke = <A>(fn: (signal: AbortSignal) => A | Promise<A>) =>
   });
 
 /** How long an aborted node may take to stop before the run stops waiting for it. */
-export const DEFAULT_STOP_GRACE_MS = 5_000;
+const DEFAULT_STOP_GRACE_MS = 5_000;
 
 /** Wait for `work` to settle, or for `ms` to pass. */
 async function settledWithin(work: Promise<unknown>, ms: number): Promise<void> {
@@ -47,6 +52,10 @@ async function releaseHeldSlot(
   );
 }
 
+/** Any promise-like value, not only a native Promise. */
+const isThenable = <T>(value: T | PromiseLike<T>): value is PromiseLike<T> =>
+  typeof (value as { then?: unknown } | null)?.then === 'function';
+
 /** The message of whatever an Effect failed with. */
 export function causeMessage(cause: Cause.Cause<unknown>): string {
   const squashed = Cause.squash(cause);
@@ -74,117 +83,168 @@ export interface SingleNodeResult<T> {
 export async function runSingleNode<T>(
   node: PipelineNode<T>,
   ctxIn: T,
-  params: {
-    signal?: AbortSignal;
-    emit: (c: PipelineStateChange<T>) => void;
-    iteration: number;
-    /** After an abort, how long to wait for the node's work to stop. */
-    stopGraceMs?: number;
-    /**
-     * Ask for a concurrency slot once the guard passes. Resolves with its
-     * release; `onWait` is called if the node has to wait for it.
-     */
-    acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<SlotGrant>;
-    /** A batch member's result context from the output its leader settled. */
-    adoptBatchOutput?: (input: T, output: unknown) => T;
-    /** The rest of what the node is told about its execution. */
-    info?: Omit<NodeRunInfo, 'iteration'>;
-  },
+  params: SingleNodeParams<T>,
 ): Promise<SingleNodeResult<T>> {
-  const { signal, emit, iteration } = params;
-  let ctx = ctxIn;
-  let committed = false;
+  if (params.signal?.aborted) return { ctx: ctxIn, status: 'cancelled' };
+  return new NodeExecution(node, ctxIn, params).run();
+}
+
+export interface SingleNodeParams<T> {
+  signal?: AbortSignal;
+  emit: (c: PipelineStateChange<T>) => void;
+  iteration: number;
+  /** After an abort, how long to wait for the node's work to stop. */
+  stopGraceMs?: number;
+  /**
+   * Ask for a concurrency slot once the guard passes. Resolves with the
+   * grant; `onWait` is called if the node has to wait for it.
+   */
+  acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<SlotGrant>;
+  /** A batch member's result context from the output its leader settled. */
+  adoptBatchOutput?: (input: T, output: unknown) => T;
+  /** The rest of what the node is told about its execution. */
+  info?: Omit<NodeRunInfo, 'iteration'>;
+}
+
+type Ending = 'skipped' | 'completed';
+
+/** One execution of a node, with the state its steps share. */
+class NodeExecution<T> {
+  private ctx: T;
+  /** A synchronous node returned its result: keep it even if the run was aborted. */
+  private committed = false;
   /** The node's last asynchronous execution, still running or not. */
-  let inFlight: Promise<unknown> | undefined;
+  private inFlight: Promise<unknown> | undefined;
   /** The slot request, released once the node's work has stopped, whatever the outcome. */
-  let slot: Promise<SlotGrant> | undefined;
-  const { acquireSlot } = params;
-  const runInfo: NodeRunInfo = {
-    visit: String(iteration),
-    checkpoint: async () => {},
-    ...params.info,
-    iteration,
-  };
-  if (signal?.aborted) return { ctx, status: 'cancelled' };
+  private slot: Promise<SlotGrant> | undefined;
+  private readonly runInfo: NodeRunInfo;
 
-  const execution = Effect.gen(function* () {
-    if (node.when && !(yield* invoke(() => node.when!(ctx)))) {
-      return 'skipped' as const;
+  constructor(
+    private readonly node: PipelineNode<T>,
+    ctxIn: T,
+    private readonly params: SingleNodeParams<T>,
+  ) {
+    this.ctx = ctxIn;
+    this.runInfo = {
+      visit: String(params.iteration),
+      checkpoint: async () => {},
+      ...params.info,
+      iteration: params.iteration,
+    };
+  }
+
+  async run(): Promise<SingleNodeResult<T>> {
+    const { signal } = this.params;
+    const exit = await Effect.runPromiseExit(this.execution(), { signal });
+    const grace = this.params.stopGraceMs ?? DEFAULT_STOP_GRACE_MS;
+    if (signal?.aborted) {
+      // Interruption stops waiting, not the work: give the node's own abort
+      // handling time to stop it, so the caller never sees it still running.
+      if (this.inFlight) await settledWithin(this.inFlight, grace);
+      await releaseHeldSlot(this.slot, grace);
+      return { ctx: this.ctx, status: 'cancelled', committed: this.committed };
     }
-    if (acquireSlot) {
+    await releaseHeldSlot(this.slot, grace);
+    if (Exit.isFailure(exit)) {
+      const error = causeMessage(exit.cause);
+      this.emit('error', error);
+      return { ctx: this.ctx, status: 'error', error };
+    }
+    this.emit(exit.value);
+    return { ctx: this.ctx, status: exit.value };
+  }
+
+  private emit(kind: PipelineStateKind, error?: string) {
+    const { node, ctx, params } = this;
+    params.emit({ kind, nodeName: node.name, ctx, iteration: params.iteration, error });
+  }
+
+  /** Guard, slot, then the node's attempts. */
+  private execution(): Effect.Effect<Ending, Error> {
+    return Effect.gen({ self: this }, function* () {
+      const when = this.node.when;
+      if (when && !(yield* invoke(() => when(this.ctx)))) return 'skipped' as const;
+      const settled = yield* this.takeSlot();
+      if (settled) return settled;
+      this.emit('entering');
+      return yield* this.attempts();
+    });
+  }
+
+  /**
+   * Wait for the node's slot, if it has a group. Ends the execution when a
+   * batch leader already settled this node; otherwise lets it run.
+   */
+  private takeSlot(): Effect.Effect<Ending | undefined, Error> {
+    const acquireSlot = this.params.acquireSlot;
+    if (!acquireSlot) return Effect.succeed(undefined);
+    return Effect.gen({ self: this }, function* () {
       const grant = yield* invoke((abortSignal) => {
-        slot = acquireSlot(abortSignal, () =>
-          emit({ kind: 'waiting_slot', nodeName: node.name, ctx, iteration }),
-        );
-        return slot;
+        this.slot = acquireSlot(abortSignal, () => this.emit('waiting_slot'));
+        return this.slot;
       });
-      if (grant.kind === 'settled') {
-        // A batch leader ran this node for us: take its outcome, without retries.
-        const { outcome } = grant;
-        if (outcome.status === 'failed') return yield* Effect.fail(new Error(outcome.error));
-        if (outcome.output !== undefined && params.adoptBatchOutput) {
-          ctx = params.adoptBatchOutput(ctx, outcome.output);
+      if (grant.kind === 'slot') {
+        this.runInfo.batch = grant.batch;
+        return undefined;
+      }
+      // A batch leader ran this node for us: take its outcome, without retries.
+      const { outcome } = grant;
+      if (outcome.status === 'failed') return yield* Effect.fail(new Error(outcome.error));
+      const adopt = this.params.adoptBatchOutput;
+      if (outcome.output !== undefined && adopt) this.ctx = adopt(this.ctx, outcome.output);
+      return 'completed' as const;
+    });
+  }
+
+  /** Execute the node, retrying as its `retry` config allows. */
+  private attempts(): Effect.Effect<Ending, Error> {
+    const retry = this.node.retry;
+    const max = retry?.maxAttempts;
+    const maxAttempts = Math.max(1, (typeof max === 'function' ? max(this.ctx) : max) ?? 1);
+    return Effect.gen({ self: this }, function* () {
+      for (let attempt = 1; ; attempt++) {
+        const result = yield* Effect.result(this.attempt());
+        if (Result.isSuccess(result)) {
+          this.ctx = result.success;
+          return 'completed' as const;
         }
-        return 'completed' as const;
+        const error = result.failure;
+        if (attempt >= maxAttempts || !(yield* this.prepareRetry(error, attempt))) {
+          return yield* Effect.fail(error);
+        }
       }
-      runInfo.batch = grant.batch;
-    }
-    emit({ kind: 'entering', nodeName: node.name, ctx, iteration });
-    const retry = node.retry;
-    const maxAttempts = retry
-      ? Math.max(
-          1,
-          typeof retry.maxAttempts === 'function' ? retry.maxAttempts(ctx) : retry.maxAttempts,
-        )
-      : 1;
+    });
+  }
 
-    for (let attempt = 1; ; attempt++) {
-      const result = yield* Effect.result(
-        invoke((abortSignal) => {
-          const next = node.execute(ctx, abortSignal, runInfo);
-          // A synchronous node can commit its result and request cancellation in
-          // the same call. Preserve that completed work, but never adopt a late
-          // Promise result after interruption.
-          if (!next || typeof (next as Promise<T>).then !== 'function') {
-            ctx = next as T;
-            committed = true;
-          } else {
-            inFlight = Promise.resolve(next).catch(() => undefined);
-          }
-          return next;
-        }),
-      );
-      if (Result.isSuccess(result)) {
-        ctx = result.success;
-        return 'completed' as const;
+  /** One call of the node's `execute`. */
+  private attempt(): Effect.Effect<T, Error> {
+    return invoke((abortSignal) => {
+      const next = this.node.execute(this.ctx, abortSignal, this.runInfo);
+      // A synchronous node can commit its result and request cancellation in
+      // the same call. Preserve that completed work, but never adopt a late
+      // Promise result after interruption.
+      if (isThenable(next)) {
+        this.inFlight = Promise.resolve(next).catch(() => undefined);
+      } else {
+        this.ctx = next;
+        this.committed = true;
       }
-      const error = result.failure;
-      if (!retry || attempt >= maxAttempts) return yield* Effect.fail(error);
-      if (retry.shouldRetry && !(yield* invoke(() => retry.shouldRetry!(error, ctx, attempt)))) {
-        return yield* Effect.fail(error);
-      }
-      if (retry.beforeRetry) {
-        ctx = yield* invoke(() => retry.beforeRetry!(error, ctx, attempt));
-      }
-      const delay = typeof retry.delayMs === 'function' ? retry.delayMs(ctx) : (retry.delayMs ?? 0);
+      return next;
+    });
+  }
+
+  /** After a failed attempt: whether to retry, after the hook and the delay. */
+  private prepareRetry(error: Error, attempt: number): Effect.Effect<boolean, Error> {
+    const retry = this.node.retry;
+    return Effect.gen({ self: this }, function* () {
+      if (!retry) return false;
+      const { shouldRetry, beforeRetry, delayMs } = retry;
+      if (shouldRetry && !(yield* invoke(() => shouldRetry(error, this.ctx, attempt))))
+        return false;
+      if (beforeRetry) this.ctx = yield* invoke(() => beforeRetry(error, this.ctx, attempt));
+      const delay = typeof delayMs === 'function' ? delayMs(this.ctx) : (delayMs ?? 0);
       if (delay > 0) yield* Effect.sleep(delay);
-    }
-  });
-
-  const exit = await Effect.runPromiseExit(execution, { signal });
-  if (signal?.aborted) {
-    // Interruption stops waiting, not the work: give the node's own abort
-    // handling time to stop it, so the caller never sees it still running.
-    if (inFlight) await settledWithin(inFlight, params.stopGraceMs ?? DEFAULT_STOP_GRACE_MS);
-    await releaseHeldSlot(slot, params.stopGraceMs ?? DEFAULT_STOP_GRACE_MS);
-    return { ctx, status: 'cancelled', committed };
+      return true;
+    });
   }
-  await releaseHeldSlot(slot, params.stopGraceMs ?? DEFAULT_STOP_GRACE_MS);
-  if (Exit.isFailure(exit)) {
-    const error = causeMessage(exit.cause);
-    emit({ kind: 'error', nodeName: node.name, ctx, iteration, error });
-    return { ctx, status: 'error', error };
-  }
-  emit({ kind: exit.value, nodeName: node.name, ctx, iteration });
-  return { ctx, status: exit.value };
 }

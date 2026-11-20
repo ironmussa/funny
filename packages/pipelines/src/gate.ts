@@ -216,24 +216,29 @@ export function createMemoryConcurrencyGate(options: MemoryGateOptions = {}): Co
     grantSlot(g, f.leader, f.token, f.members);
   };
 
+  /** Can the group's first waiter take a slot now? */
+  const hasRoom = (g: Group) =>
+    !g.forming && g.waiters.length > 0 && g.held.size < g.waiters[0].limit;
+
+  /** The first waiter leads a batch: gather members now, then until the batch fills or `waitMs` ends. */
+  const formBatch = (g: Group, leader: Waiter, policy: BatchPolicy, token: symbol) => {
+    const f: Forming = { leader, members: [], token };
+    leader.place = 'forming';
+    g.forming = f;
+    gather(g, f);
+    if (g.forming !== f) return;
+    if (policy.waitMs <= 0) start(g, f);
+    else f.timer = setTimeout(() => start(g, f), policy.waitMs);
+  };
+
   /** Grant slots to the first waiters while the group has room. */
   const pump = (g: Group) => {
-    while (!g.forming && g.waiters.length > 0 && g.held.size < g.waiters[0].limit) {
+    while (hasRoom(g)) {
       const w = g.waiters.shift()!;
       const token = Symbol(w.holder);
       g.held.add(token);
-      if (!w.batch) {
-        grantSlot(g, w, token);
-        continue;
-      }
-      const f: Forming = { leader: w, members: [], token };
-      w.place = 'forming';
-      g.forming = f;
-      gather(g, f);
-      if (g.forming === f) {
-        if (w.batch.waitMs <= 0) start(g, f);
-        else f.timer = setTimeout(() => start(g, f), w.batch.waitMs);
-      }
+      if (w.batch) formBatch(g, w, w.batch, token);
+      else grantSlot(g, w, token);
     }
     if (g.held.size === 0 && g.waiters.length === 0 && !g.forming) groups.delete(g.name);
   };

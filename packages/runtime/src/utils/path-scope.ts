@@ -213,6 +213,18 @@ export async function requirePickerPath(path: string): Promise<Response | null> 
 }
 
 /**
+ * True when the target is inside the project or one of its worktree bases,
+ * both lexically and after resolving symlinks.
+ */
+function isInProjectScope(lexicalTarget: string, realTarget: string, base: string): boolean {
+  const projectPath = normalize(resolve(base));
+  const scopes = [projectPath, ...getWorktreeBasePaths(projectPath).map((p) => normalize(p))];
+  return scopes.some(
+    (scope) => isUnder(lexicalTarget, scope) && isUnder(realTarget, realpathOrAnchor(scope)),
+  );
+}
+
+/**
  * 403 if `path` is not inside one of the caller's registered projects or
  * their worktree base. Use for endpoints that read/write repository contents.
  */
@@ -236,18 +248,7 @@ export async function requireProjectPath(path: string, userId: string): Promise<
     const bases = [project.path, (project as { localPath?: string }).localPath].filter(
       (b): b is string => !!b,
     );
-    for (const base of bases) {
-      const projectPath = normalize(resolve(base));
-      const realProjectPath = realpathOrAnchor(projectPath);
-      if (isUnder(lexicalTarget, projectPath) && isUnder(realTarget, realProjectPath)) return null;
-      for (const base of getWorktreeBasePaths(projectPath)) {
-        const worktreeBase = normalize(base);
-        const realWorktreeBase = realpathOrAnchor(worktreeBase);
-        if (isUnder(lexicalTarget, worktreeBase) && isUnder(realTarget, realWorktreeBase)) {
-          return null;
-        }
-      }
-    }
+    if (bases.some((base) => isInProjectScope(lexicalTarget, realTarget, base))) return null;
   }
 
   log.warn('Rejected path outside user projects', {

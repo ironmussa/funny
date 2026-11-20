@@ -2,9 +2,9 @@
 /**
  * Summarizes worktree preparation timings stored in Abbacchio.
  *
- *   bun scripts/analyze-worktree-setup.ts            # last 7 days
- *   bun scripts/analyze-worktree-setup.ts --days 30
- *   bun scripts/analyze-worktree-setup.ts --thread <threadId>
+ *   bun run profile:worktree-setup                      # last 7 days
+ *   bun run profile:worktree-setup -- --days 30
+ *   bun run profile:worktree-setup -- --thread <threadId>
  *
  * Reads the `worktree.prepare` spans (one per preparation) and their
  * `worktree.setup.step` children, recorded by
@@ -17,9 +17,7 @@
 
 const ENDPOINT = process.env.OTLP_ENDPOINT || 'http://localhost:4000';
 
-interface Row {
-  [column: string]: string | number | null;
-}
+type Row = Record<string, string | number | null>;
 
 async function sql(query: string): Promise<Row[]> {
   const res = await fetch(`${ENDPOINT}/api/sql`, {
@@ -28,7 +26,7 @@ async function sql(query: string): Promise<Row[]> {
     body: JSON.stringify({ sql: query }),
   });
   if (!res.ok) throw new Error(`Abbacchio ${res.status}: ${await res.text()}`);
-  const body = (await res.json()) as { rows?: Row[]; error?: string };
+  const body: { rows?: Row[]; error?: string } = await res.json();
   if (body.error) throw new Error(body.error);
   return body.rows ?? [];
 }
@@ -44,17 +42,20 @@ function safeId(value: string): string {
   return value;
 }
 
-const seconds = (ms: unknown) => (typeof ms === 'number' ? `${(ms / 1000).toFixed(1)}s` : '—');
+function seconds(ms: unknown): string {
+  return typeof ms === 'number' ? `${(ms / 1000).toFixed(1)}s` : '—';
+}
 
-async function main(): Promise<void> {
+/** SQL filter for the runs to read: one thread, or the last N days. */
+function runScope(): string {
   const thread = arg('--thread');
+  if (thread) return `json_extract(attributes, '$."thread.id"') = '${safeId(thread)}'`;
   const days = Number(arg('--days') ?? 7);
-  const since = Date.now() - days * 24 * 60 * 60 * 1000;
-  const scope = thread
-    ? `json_extract(attributes, '$."thread.id"') = '${safeId(thread)}'`
-    : `start_time_ms >= ${since}`;
+  return `start_time_ms >= ${Date.now() - days * 24 * 60 * 60 * 1000}`;
+}
 
-  const runs = await sql(`
+function readRuns(scope: string): Promise<Row[]> {
+  return sql(`
     SELECT trace_id,
            datetime(start_time_ms / 1000, 'unixepoch') AS started,
            json_extract(attributes, '$."thread.id"') AS thread_id,
@@ -68,25 +69,21 @@ async function main(): Promise<void> {
     WHERE name = 'worktree.prepare' AND channel = 'funny-runtime' AND ${scope}
     ORDER BY start_time_ms DESC
     LIMIT 50`);
+}
 
-  if (runs.length === 0) {
-    console.log(
-      'No worktree.prepare spans found. They are recorded from this change on: create a ' +
-        'worktree thread on a runner running this code, then run the script again.',
-    );
-    return;
-  }
-
+function printRuns(runs: Row[]): void {
   console.log(`Worktree preparations (${runs.length}, newest first)\n`);
   for (const r of runs) {
+    const root = r.root_configured ? 'yes' : 'no ';
     console.log(
       `${r.started}  ${String(r.thread_id).padEnd(22)} ${String(r.flow).padEnd(10)} ` +
-        `${String(r.outcome).padEnd(13)} root=${r.root_configured ? 'yes' : 'no '} ` +
-        `total=${seconds(r.total_ms)} checkout=${seconds(r.create_ms)} setup=${seconds(r.post_create_ms)}`,
+        `${String(r.outcome).padEnd(13)} root=${root} total=${seconds(r.total_ms)} ` +
+        `checkout=${seconds(r.create_ms)} setup=${seconds(r.post_create_ms)}`,
     );
   }
+}
 
-  const traceIds = runs.map((r) => `'${safeId(String(r.trace_id))}'`).join(',');
+async function printSteps(traceIds: string): Promise<void> {
   const steps = await sql(`
     SELECT json_extract(attributes, '$.step') AS step,
            COUNT(*) AS runs,
@@ -97,7 +94,6 @@ async function main(): Promise<void> {
     WHERE name = 'worktree.setup.step' AND trace_id IN (${traceIds})
     GROUP BY step
     ORDER BY avg_ms DESC`);
-
   console.log('\nSteps, slowest on average first\n');
   for (const s of steps) {
     const failures = Number(s.not_completed) > 0 ? `  (${s.not_completed} not completed)` : '';
@@ -106,7 +102,9 @@ async function main(): Promise<void> {
         `runs=${s.runs}${failures}`,
     );
   }
+}
 
+async function printRootComparison(traceIds: string): Promise<void> {
   const byRoot = await sql(`
     SELECT json_extract(attributes, '$."worktree.root_configured"') AS root_configured,
            COUNT(*) AS runs,
@@ -115,14 +113,27 @@ async function main(): Promise<void> {
     WHERE trace_id IN (${traceIds}) AND name = 'worktree.prepare'
       AND json_extract(attributes, '$.outcome') = 'ok'
     GROUP BY root_configured`);
-  if (byRoot.length > 1) {
-    console.log('\nFUNNY_WORKTREE_ROOT');
-    for (const b of byRoot) {
-      console.log(
-        `  ${b.root_configured ? 'set  ' : 'unset'}  avg=${seconds(b.avg_ms)} runs=${b.runs}`,
-      );
-    }
+  if (byRoot.length < 2) return;
+  console.log('\nFUNNY_WORKTREE_ROOT');
+  for (const b of byRoot) {
+    const label = b.root_configured ? 'set  ' : 'unset';
+    console.log(`  ${label}  avg=${seconds(b.avg_ms)} runs=${b.runs}`);
   }
+}
+
+async function main(): Promise<void> {
+  const runs = await readRuns(runScope());
+  if (runs.length === 0) {
+    console.log(
+      'No worktree.prepare spans found. Create a worktree thread on a runner running ' +
+        'this code, then run the script again.',
+    );
+    return;
+  }
+  printRuns(runs);
+  const traceIds = runs.map((r) => `'${safeId(String(r.trace_id))}'`).join(',');
+  await printSteps(traceIds);
+  await printRootComparison(traceIds);
 }
 
 await main();

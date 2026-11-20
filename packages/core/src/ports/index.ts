@@ -149,21 +149,23 @@ async function collectSiblingPorts(
 
   // Worktrees made before FUNNY_WORKTREE_ROOT was set still hold ports.
   for (const worktreeBase of getWorktreeBasePaths(projectPath)) {
-    if (!existsSync(worktreeBase)) continue;
-    try {
-      const entries = readdirSync(worktreeBase, { withFileTypes: true });
-      for (const entry of entries) {
-        if (!entry.isDirectory()) continue;
-        const siblingPath = resolve(worktreeBase, entry.name);
-        if (siblingPath === currentWorktreePath) continue;
-
-        const siblingPorts = readAllocatedPorts(siblingPath, envFiles);
-        for (const p of siblingPorts) ports.add(p);
-      }
-    } catch {
-      // Best-effort: if we can't read siblings, skip deduplication
+    for (const siblingPath of listSiblingWorktrees(worktreeBase, currentWorktreePath)) {
+      for (const p of readAllocatedPorts(siblingPath, envFiles)) ports.add(p);
     }
   }
 
   return ports;
+}
+
+/** The other worktree folders of a base. Best-effort: an unreadable base lists none. */
+function listSiblingWorktrees(worktreeBase: string, currentWorktreePath: string): string[] {
+  if (!existsSync(worktreeBase)) return [];
+  try {
+    return readdirSync(worktreeBase, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => resolve(worktreeBase, entry.name))
+      .filter((siblingPath) => siblingPath !== currentWorktreePath);
+  } catch {
+    return [];
+  }
 }

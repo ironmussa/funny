@@ -124,6 +124,13 @@ export function decodeUnicodeEscapes(str: string): string {
   return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
+/** True when the (normalised, lowercase) path is inside one of the project's worktree bases. */
+function isInWorktreeBase(normalisedPath: string, projectPath: string): boolean {
+  return getWorktreeBasePaths(projectPath).some((base) =>
+    normalisedPath.startsWith(base.replace(/\\/g, '/').toLowerCase() + '/'),
+  );
+}
+
 /**
  * Resolve a project from a worktree/working path by checking if any project's
  * path is a prefix of the given path.
@@ -144,13 +151,8 @@ async function resolveProjectId(workingPath: string): Promise<string | null> {
 
   // Second pass: inside one of the project's worktree bases (next to the
   // project, or under FUNNY_WORKTREE_ROOT where the folder name carries a hash).
-  for (const project of projects) {
-    const inBase = getWorktreeBasePaths(project.path).some((base) => {
-      const basePath = base.replace(/\\/g, '/').toLowerCase();
-      return normalised.startsWith(basePath + '/');
-    });
-    if (inBase) return project.id;
-  }
+  const byBase = projects.find((project) => isInWorktreeBase(normalised, project.path));
+  if (byBase) return byBase.id;
 
   // Third pass: worktree match — extract the repo name from the worktree path
   // Worktree paths look like: .../.funny-worktrees/<repo-name>/<branch-slug>/...

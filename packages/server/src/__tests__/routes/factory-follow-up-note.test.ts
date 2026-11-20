@@ -11,23 +11,25 @@ mockCoreGitRepoChecks();
 
 import { describe, expect, test } from 'bun:test';
 
+import type { ThreadSource } from '@funny/shared';
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
 import { noteFactoryOwnerFollowUp } from '../../routes/threads.js';
 import { forgetOwnerFollowUp, ownerFollowUpAt } from '../../services/factory/factory-follow-ups.js';
+import { buildThread } from '../helpers/builders-routes.js';
 
-function send(opts: { caller: string; source: string; runnerStatus: number }) {
+function send(opts: { caller: string; source: ThreadSource; runnerStatus: number }) {
   const app = new Hono<ServerEnv>();
   app.post(
     '/api/threads/:id/message',
     async (c, next) => {
       c.set('userId', opts.caller);
-      c.set('thread', { id: 't1', userId: 'alice', source: opts.source } as never);
+      c.set('thread', buildThread({ id: 't1', userId: 'alice', source: opts.source }));
       await next();
     },
     noteFactoryOwnerFollowUp,
-    (c) => c.json({}, opts.runnerStatus as 200),
+    () => Response.json({}, { status: opts.runnerStatus }),
   );
   return app.request('/api/threads/t1/message', { method: 'POST' });
 }

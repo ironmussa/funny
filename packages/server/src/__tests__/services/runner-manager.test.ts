@@ -6,6 +6,7 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { eq } from 'drizzle-orm';
 
+import { buildStartAgentPayload } from '../helpers/builders-services.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedRunner, seedRunnerProjectAssignment } from '../helpers/test-db.js';
 
@@ -50,7 +51,7 @@ describe('runner-manager service', () => {
     });
 
     test('backfills userId on legacy runner without owner', async () => {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'legacy-r',
         userId: null,
         hostname: 'legacy.host',
@@ -64,7 +65,7 @@ describe('runner-manager service', () => {
 
   describe('authenticateRunner', () => {
     test('returns runnerId for valid token', async () => {
-      seedRunner(t.db as any, { id: 'r-auth', token: 'runner_valid', userId: 'user-1' });
+      seedRunner(t.db, { id: 'r-auth', token: 'runner_valid', userId: 'user-1' });
       expect(await rm.authenticateRunner('runner_valid')).toBe('r-auth');
     });
 
@@ -75,7 +76,12 @@ describe('runner-manager service', () => {
 
   describe('handleHeartbeat', () => {
     test('marks runner busy when active threads are present', async () => {
-      seedRunner(t.db as any, { id: 'r-hb', token: 'tok-hb', userId: 'user-1', status: 'online' });
+      seedRunner(t.db, {
+        id: 'r-hb',
+        token: 'tok-hb',
+        userId: 'user-1',
+        status: 'online',
+      });
 
       const ok = await rm.handleHeartbeat('r-hb', { activeThreadIds: ['t1', 't2'] });
       expect(ok).toBe(true);
@@ -86,7 +92,7 @@ describe('runner-manager service', () => {
     });
 
     test('does not bring back a runner whose gRPC session dropped', async () => {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'r-gone',
         token: 'tok-gone',
         userId: 'user-1',
@@ -107,7 +113,7 @@ describe('runner-manager service', () => {
     });
 
     test('caches providers advertised on heartbeat', async () => {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'r-adv',
         token: 'tok-adv',
         userId: 'user-1',
@@ -135,7 +141,12 @@ describe('runner-manager service', () => {
     });
 
     test('caches the active built-in set advertised on heartbeat (lean-core)', async () => {
-      seedRunner(t.db as any, { id: 'r-lc', token: 'tok-lc', userId: 'user-lc', status: 'online' });
+      seedRunner(t.db, {
+        id: 'r-lc',
+        token: 'tok-lc',
+        userId: 'user-lc',
+        status: 'online',
+      });
 
       // Unknown until advertised → null (client must not filter the picker).
       expect(await rm.getActiveBuiltinsForUser('user-lc')).toBeNull();
@@ -152,7 +163,12 @@ describe('runner-manager service', () => {
     });
 
     test('caches the available-provider set advertised on heartbeat (model-picker-availability)', async () => {
-      seedRunner(t.db as any, { id: 'r-av', token: 'tok-av', userId: 'user-av', status: 'online' });
+      seedRunner(t.db, {
+        id: 'r-av',
+        token: 'tok-av',
+        userId: 'user-av',
+        status: 'online',
+      });
 
       // No runner advertisement yet → null (client must not gate / shows no-runner).
       expect(await rm.getAvailableProvidersForUser('user-av')).toBeNull();
@@ -179,7 +195,7 @@ describe('runner-manager service', () => {
     });
 
     test('returns null when all runners are stale/offline', async () => {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'r-off',
         userId: 'user-1',
         status: 'online',
@@ -189,7 +205,7 @@ describe('runner-manager service', () => {
     });
 
     test('does not return another users runner', async () => {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'r-other',
         userId: 'user-2',
         status: 'online',
@@ -200,7 +216,7 @@ describe('runner-manager service', () => {
 
     test('prefers online runner with fewer active threads', async () => {
       const now = new Date().toISOString();
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'r-busy',
         userId: 'user-1',
         token: 'tok-busy',
@@ -208,7 +224,7 @@ describe('runner-manager service', () => {
         activeThreadIds: '["t1","t2"]',
         lastHeartbeatAt: now,
       });
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'r-idle',
         userId: 'user-1',
         token: 'tok-idle',
@@ -223,14 +239,14 @@ describe('runner-manager service', () => {
 
   describe('findRunnerForProject', () => {
     test('returns assignment for online runner owned by user', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedRunner(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedRunner(t.db, {
         id: 'r1',
         userId: 'user-1',
         status: 'online',
         lastHeartbeatAt: new Date().toISOString(),
       });
-      seedRunnerProjectAssignment(t.db as any, {
+      seedRunnerProjectAssignment(t.db, {
         runnerId: 'r1',
         projectId: 'p1',
         localPath: '/home/user/p1',
@@ -242,14 +258,14 @@ describe('runner-manager service', () => {
     });
 
     test('returns null for cross-tenant project assignment', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedRunner(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedRunner(t.db, {
         id: 'r1',
         userId: 'user-1',
         status: 'online',
         lastHeartbeatAt: new Date().toISOString(),
       });
-      seedRunnerProjectAssignment(t.db as any, {
+      seedRunnerProjectAssignment(t.db, {
         runnerId: 'r1',
         projectId: 'p1',
         localPath: '/a',
@@ -264,8 +280,8 @@ describe('runner-manager service', () => {
       // findRunnerForProject returned null and the terminal failed with
       // "No runner available to handle terminal request" even though the
       // user's runner was online.
-      seedProject(t.db as any, { id: 'orphan', userId: 'user-1', path: '/home/user/orphan' });
-      seedRunner(t.db as any, {
+      seedProject(t.db, { id: 'orphan', userId: 'user-1', path: '/home/user/orphan' });
+      seedRunner(t.db, {
         id: 'r1',
         userId: 'user-1',
         status: 'online',
@@ -281,8 +297,8 @@ describe('runner-manager service', () => {
     test('orphaned project fallback never crosses tenants', async () => {
       // The online runner belongs to user-2; user-1 owns the project. The
       // fallback must NOT route user-1's terminal onto user-2's runner.
-      seedProject(t.db as any, { id: 'orphan', userId: 'user-1', path: '/home/user/orphan' });
-      seedRunner(t.db as any, {
+      seedProject(t.db, { id: 'orphan', userId: 'user-1', path: '/home/user/orphan' });
+      seedRunner(t.db, {
         id: 'r-other',
         userId: 'user-2',
         status: 'online',
@@ -293,8 +309,8 @@ describe('runner-manager service', () => {
     });
 
     test('orphaned project fallback returns null when the user has no online runner', async () => {
-      seedProject(t.db as any, { id: 'orphan', userId: 'user-1', path: '/home/user/orphan' });
-      seedRunner(t.db as any, {
+      seedProject(t.db, { id: 'orphan', userId: 'user-1', path: '/home/user/orphan' });
+      seedRunner(t.db, {
         id: 'r-stale',
         userId: 'user-1',
         status: 'online',
@@ -307,29 +323,35 @@ describe('runner-manager service', () => {
 
   describe('runner tasks', () => {
     test('two polls at once hand a task to only one of them', async () => {
-      seedRunner(t.db as any, { id: 'r-race', userId: 'user-1', token: 'tok-race' });
-      await rm.createRunnerTask('r-race', 't1', 'start_agent', { threadId: 't1' } as any);
+      seedRunner(t.db, { id: 'r-race', userId: 'user-1', token: 'tok-race' });
+      await rm.createRunnerTask('r-race', 't1', 'start_agent', buildStartAgentPayload());
 
       const polls = await Promise.all([rm.getPendingTasks('r-race'), rm.getPendingTasks('r-race')]);
       expect(polls.map((p) => p.length).sort()).toEqual([0, 1]);
     });
 
     test('a task that has a result keeps it', async () => {
-      seedRunner(t.db as any, { id: 'r-done', userId: 'user-1', token: 'tok-done' });
-      const task = await rm.createRunnerTask('r-done', 't1', 'start_agent', {
-        threadId: 't1',
-      } as any);
+      seedRunner(t.db, { id: 'r-done', userId: 'user-1', token: 'tok-done' });
+      const task = await rm.createRunnerTask(
+        'r-done',
+        't1',
+        'start_agent',
+        buildStartAgentPayload(),
+      );
       await rm.getPendingTasks('r-done');
       expect(await rm.completeTask('r-done', { taskId: task.taskId, success: true })).toBe(true);
       expect(await rm.completeTask('r-done', { taskId: task.taskId, success: false })).toBe(false);
     });
 
     test('createRunnerTask → getPendingTasks → completeTask', async () => {
-      seedRunner(t.db as any, { id: 'r-task', userId: 'user-1', token: 'tok-task' });
+      seedRunner(t.db, { id: 'r-task', userId: 'user-1', token: 'tok-task' });
 
-      const created = await rm.createRunnerTask('r-task', 't1', 'start_agent', {
-        threadId: 't1',
-      } as any);
+      const created = await rm.createRunnerTask(
+        'r-task',
+        't1',
+        'start_agent',
+        buildStartAgentPayload(),
+      );
       expect(created.taskId).toBeTruthy();
 
       const pending = await rm.getPendingTasks('r-task');
@@ -354,11 +376,14 @@ describe('runner-manager service', () => {
     });
 
     test('completeTask refuses a task belonging to another runner', async () => {
-      seedRunner(t.db as any, { id: 'r-owner', userId: 'user-1', token: 'tok-owner' });
-      seedRunner(t.db as any, { id: 'r-other', userId: 'user-2', token: 'tok-other' });
-      const created = await rm.createRunnerTask('r-owner', 't1', 'start_agent', {
-        threadId: 't1',
-      } as any);
+      seedRunner(t.db, { id: 'r-owner', userId: 'user-1', token: 'tok-owner' });
+      seedRunner(t.db, { id: 'r-other', userId: 'user-2', token: 'tok-other' });
+      const created = await rm.createRunnerTask(
+        'r-owner',
+        't1',
+        'start_agent',
+        buildStartAgentPayload(),
+      );
 
       expect(
         await rm.completeTask('r-other', {
@@ -381,8 +406,8 @@ describe('runner-manager service', () => {
 
   describe('assignProject', () => {
     test('upserts localPath on conflict', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', token: 'tok-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       await rm.assignProject('r1', { projectId: 'p1', localPath: '/old' });
       const updated = await rm.assignProject('r1', { projectId: 'p1', localPath: '/new' });
@@ -394,7 +419,7 @@ describe('runner-manager service', () => {
 
   describe('removeRunnerForUser', () => {
     test('deletes only when user owns the runner', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', token: 'tok-1' });
 
       expect(await rm.removeRunnerForUser('r1', 'user-2')).toBe(false);
       expect(await rm.getRunner('r1')).not.toBeNull();
@@ -406,7 +431,7 @@ describe('runner-manager service', () => {
 
   describe('purgeOfflineRunners', () => {
     test('removes stale offline runners', async () => {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'stale-off',
         userId: 'user-1',
         status: 'offline',
@@ -421,7 +446,12 @@ describe('runner-manager service', () => {
 
   describe('markRunnerOnline', () => {
     test('brings an offline runner back and keeps the load it reported', async () => {
-      seedRunner(t.db as any, { id: 'r-on', token: 'tok-on', userId: 'user-1', status: 'online' });
+      seedRunner(t.db, {
+        id: 'r-on',
+        token: 'tok-on',
+        userId: 'user-1',
+        status: 'online',
+      });
       await rm.handleHeartbeat('r-on', { activeThreadIds: ['t1'] });
       await rm.markRunnerOffline('r-on');
 
@@ -436,7 +466,7 @@ describe('runner-manager service', () => {
 
   describe('markRunnerOffline', () => {
     test('sets runner status to offline', async () => {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'r-live',
         userId: 'user-1',
         status: 'online',
@@ -450,8 +480,8 @@ describe('runner-manager service', () => {
 
   describe('listRunnersByUser', () => {
     test('returns only runners owned by the user', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'Mine', token: 't1' });
-      seedRunner(t.db as any, { id: 'r2', userId: 'user-2', name: 'Theirs', token: 't2' });
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', name: 'Mine', token: 't1' });
+      seedRunner(t.db, { id: 'r2', userId: 'user-2', name: 'Theirs', token: 't2' });
 
       const rows = await rm.listRunnersByUser('user-1');
       expect(rows).toHaveLength(1);

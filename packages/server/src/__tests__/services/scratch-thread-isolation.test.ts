@@ -27,7 +27,7 @@ function seedScratchThread(
       id: opts.id,
       // SQLite test schema marks project_id nullable; drizzle’s inferred type
       // still says non-null, hence the cast.
-      projectId: null as any,
+      projectId: null,
       userId: opts.userId,
       title: opts.title ?? 'scratch',
       mode: 'local',

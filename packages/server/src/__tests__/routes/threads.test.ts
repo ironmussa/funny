@@ -14,6 +14,7 @@ const threadViewerCalls: Array<{ threadId: string; event: Record<string, unknown
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { eq } from 'drizzle-orm';
+import { z } from 'zod';
 
 import type { BrowserEventSink } from '../../services/runner-ports.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
@@ -59,15 +60,15 @@ describe('Thread Routes (Integration)', () => {
 
   describe('threads.list', () => {
     test('returns threads filtered by projectId', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedProject(t.db as any, { id: 'p2', userId: 'user-1', path: '/b' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p2', userId: 'user-1', path: '/b' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         title: 'Thread 1',
         userId: 'user-1',
       });
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't2',
         projectId: 'p2',
         title: 'Thread 2',
@@ -82,9 +83,9 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('scopes threads to the requesting user', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Mine' });
-      seedThread(t.db as any, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Mine' });
+      seedThread(t.db, { id: 't2', projectId: 'p1', userId: 'user-2', title: 'Theirs' });
 
       const res = await threads('user-1').query('list', { projectId: 'p1' });
       const body = await res.json();
@@ -95,18 +96,18 @@ describe('Thread Routes (Integration)', () => {
     test("org mode lists only the caller's own and explicitly shared threads", async () => {
       // Regression: in org mode the list was scoped by org project only, so
       // every member saw every other member's threads (+ last message snippet).
-      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
-      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'p1' });
-      seedThread(t.db as any, { id: 't-mine', projectId: 'p1', userId: 'user-1' });
-      seedThread(t.db as any, { id: 't-private', projectId: 'p1', userId: 'user-2' });
-      seedThread(t.db as any, { id: 't-shared', projectId: 'p1', userId: 'user-2' });
-      seedMessage(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedTeamProject(t.db, { teamId: 'org-1', projectId: 'p1' });
+      seedThread(t.db, { id: 't-mine', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db, { id: 't-private', projectId: 'p1', userId: 'user-2' });
+      seedThread(t.db, { id: 't-shared', projectId: 'p1', userId: 'user-2' });
+      seedMessage(t.db, {
         id: 'm-private',
         threadId: 't-private',
         role: 'assistant',
         content: 'secret',
       });
-      (t.db as any)
+      t.db
         .insert(t.schema.threadShares)
         .values({
           threadId: 't-shared',
@@ -130,14 +131,14 @@ describe('Thread Routes (Integration)', () => {
 
   describe('threads.get', () => {
     test('returns thread with messages', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         title: 'Test Thread',
         userId: 'user-1',
       });
-      seedMessage(t.db as any, {
+      seedMessage(t.db, {
         id: 'msg1',
         threadId: 't1',
         role: 'user',
@@ -162,8 +163,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('threads.update', () => {
     test('updates thread title', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         title: 'Old Title',
@@ -182,8 +183,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('archives a thread (boolean to integer conversion)', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads('user-1').mutate('update', {
         id: 't1',
@@ -199,8 +200,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('pins a thread', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads('user-1').mutate('update', {
         id: 't1',
@@ -213,8 +214,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('updates stage', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads('user-1').mutate('update', {
         id: 't1',
@@ -238,8 +239,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('ignores non-allowed fields', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
@@ -270,8 +271,8 @@ describe('Thread Routes (Integration)', () => {
      * user's HOME, etc., bypassing path-scope checks.
      */
     test('PATCH refuses to set worktreePath even when supplied (CR-4)', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       // Attacker tries to PATCH the cwd to /etc — the field is not in the
       // allow-list so the update must NOT apply.
@@ -291,8 +292,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('threads.setPermissionMode', () => {
     test('persists the mode and relays the update to the owner', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
@@ -319,8 +320,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('rejects an unknown permission mode', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads('user-1').mutate('setPermissionMode', {
         id: 't1',
@@ -335,8 +336,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('threads.setStatus', () => {
     test('updates a valid status value', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads('user-1').mutate('setStatus', {
         id: 't1',
@@ -349,8 +350,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('rejects an invalid status with 400', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads('user-1').mutate('setStatus', { id: 't1', value: 'not-a-status' });
       expect(res.status).toBe(400);
@@ -359,16 +360,16 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns 400 when value is missing', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads('user-1').mutate('setStatus', { id: 't1', reason: 'no value' });
       expect(res.status).toBe(400);
     });
 
     test('returns 404 for someone else’s thread (cross-tenant guard)', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-2' });
 
       const res = await threads('user-1').mutate('setStatus', { id: 't1', value: 'running' });
       expect(res.status).toBe(404);
@@ -379,8 +380,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('threads.setStage', () => {
     test('updates a valid stage value', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads('user-1').mutate('setStage', {
         id: 't1',
@@ -393,8 +394,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('rejects an invalid stage with 400', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads('user-1').mutate('setStage', { id: 't1', value: 'shipped' });
       expect(res.status).toBe(400);
@@ -415,8 +416,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('DELETE /api/threads/:id', () => {
     test('deletes thread from DB', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await t.requestAs('user-1').delete('/api/threads/t1');
       expect(res.status).toBe(200);
@@ -433,8 +434,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('POST /api/threads/:id/comments', () => {
     test('creates a comment (201)', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await t.requestAs('user-1').post('/api/threads/t1/comments', {
         content: 'This is a comment',
@@ -450,12 +451,13 @@ describe('Thread Routes (Integration)', () => {
       const broadcast = threadViewerCalls.at(-1);
       expect(broadcast?.threadId).toBe('t1');
       expect(broadcast?.event.type).toBe('thread:comment');
-      expect((broadcast?.event.comment as any)?.id).toBe(body.id);
+      const comment = z.looseObject({ id: z.string() }).optional().parse(broadcast?.event.comment);
+      expect(comment?.id).toBe(body.id);
     });
 
     test('returns 400 when content is missing', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await t.requestAs('user-1').post('/api/threads/t1/comments', {});
       expect(res.status).toBe(400);
@@ -464,8 +466,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('GET /api/threads/:id/comments', () => {
     test('returns empty array when no comments', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await t.requestAs('user-1').get('/api/threads/t1/comments');
       expect(res.status).toBe(200);
@@ -474,8 +476,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns comments after creation', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       // Create two comments
       await t.requestAs('user-1').post('/api/threads/t1/comments', { content: 'First' });
@@ -489,8 +491,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('DELETE /api/threads/:id/comments/:commentId', () => {
     test('removes a comment', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       // Create then delete
       const createRes = await t.requestAs('user-1').post('/api/threads/t1/comments', {
@@ -515,10 +517,10 @@ describe('Thread Routes (Integration)', () => {
     test("cannot delete another thread's comment through a thread the caller owns", async () => {
       // Regression: the delete was keyed on commentId only, so the owner of t1
       // could delete any comment anywhere by pairing t1 with a foreign id.
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedProject(t.db as any, { id: 'p2', userId: 'user-2', path: '/b' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedThread(t.db as any, { id: 't2', projectId: 'p2', userId: 'user-2' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedProject(t.db, { id: 'p2', userId: 'user-2', path: '/b' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db, { id: 't2', projectId: 'p2', userId: 'user-2' });
 
       const createRes = await t.requestAs('user-2').post('/api/threads/t2/comments', {
         content: 'Victim comment',
@@ -538,8 +540,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('GET /api/threads/:id/queue', () => {
     test('returns empty queue', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await t.requestAs('user-1').get('/api/threads/t1/queue');
       expect(res.status).toBe(200);
@@ -548,9 +550,9 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns queued messages', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessageQueue(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db, {
         id: 'q1',
         threadId: 't1',
         content: 'Queued msg',
@@ -566,9 +568,9 @@ describe('Thread Routes (Integration)', () => {
 
   describe('DELETE /api/threads/:id/queue/:messageId', () => {
     test('cancels a queued message', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't1', content: 'Cancel me' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db, { id: 'q1', threadId: 't1', content: 'Cancel me' });
 
       const res = await t.requestAs('user-1').delete('/api/threads/t1/queue/q1');
       expect(res.status).toBe(200);
@@ -578,9 +580,9 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns 404 when caller does not own the thread (C1 IDOR)', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't1', content: 'Theirs' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db, { id: 'q1', threadId: 't1', content: 'Theirs' });
 
       const res = await t.requestAs('user-2').delete('/api/threads/t1/queue/q1');
       expect(res.status).toBe(404);
@@ -592,10 +594,10 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('does not cancel when messageId belongs to a different thread', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedThread(t.db as any, { id: 't2', projectId: 'p1', userId: 'user-1' });
-      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't2', content: 'In t2' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db, { id: 't2', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db, { id: 'q1', threadId: 't2', content: 'In t2' });
 
       const res = await t.requestAs('user-1').delete('/api/threads/t1/queue/q1');
       expect(res.status).toBe(200);
@@ -611,9 +613,9 @@ describe('Thread Routes (Integration)', () => {
 
   describe('PATCH /api/threads/:id/queue/:messageId', () => {
     test('updates queued message content', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't1', content: 'Original' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db, { id: 'q1', threadId: 't1', content: 'Original' });
 
       const res = await t.requestAs('user-1').patch('/api/threads/t1/queue/q1', {
         content: 'Updated content',
@@ -625,18 +627,18 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns 400 when content is missing', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db, { id: 'q1', threadId: 't1' });
 
       const res = await t.requestAs('user-1').patch('/api/threads/t1/queue/q1', {});
       expect(res.status).toBe(400);
     });
 
     test('returns 404 when caller does not own the thread (C1 IDOR)', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't1', content: 'Theirs' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db, { id: 'q1', threadId: 't1', content: 'Theirs' });
 
       const res = await t.requestAs('user-2').patch('/api/threads/t1/queue/q1', {
         content: 'pwned',
@@ -649,10 +651,10 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('does not update when messageId belongs to a different thread', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedThread(t.db as any, { id: 't2', projectId: 'p1', userId: 'user-1' });
-      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't2', content: 'In t2' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db, { id: 't2', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db, { id: 'q1', threadId: 't2', content: 'In t2' });
 
       const res = await t.requestAs('user-1').patch('/api/threads/t1/queue/q1', {
         content: 'pwned',
@@ -678,9 +680,9 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns matching thread IDs via LIKE search', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessage(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db, {
         id: 'msg1',
         threadId: 't1',
         role: 'assistant',
@@ -698,9 +700,9 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('matches accented message content when the query omits accents', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessage(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db, {
         id: 'msg1',
         threadId: 't1',
         role: 'assistant',
@@ -716,9 +718,9 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('does not return other users threads', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
-      seedMessage(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-2' });
+      seedMessage(t.db, {
         id: 'msg1',
         threadId: 't1',
         content: 'secret brown fox content',
@@ -732,18 +734,18 @@ describe('Thread Routes (Integration)', () => {
 
   describe('threads.scratch', () => {
     test('returns only the caller scratch threads', async () => {
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 's1',
         userId: 'user-1',
         isScratch: 1,
-        projectId: null as any,
+        projectId: null,
         title: 'My scratch',
       });
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 's2',
         userId: 'user-2',
         isScratch: 1,
-        projectId: null as any,
+        projectId: null,
         title: 'Their scratch',
       });
 
@@ -758,15 +760,15 @@ describe('Thread Routes (Integration)', () => {
   // The archived listing is served only over tRPC (`threads.archived`).
   describe('threads.archived', () => {
     test('lists archived threads for the caller', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
         title: 'Old work',
         archived: 1,
       });
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't2',
         projectId: 'p1',
         userId: 'user-1',
@@ -774,7 +776,7 @@ describe('Thread Routes (Integration)', () => {
         archived: 0,
       });
 
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't3',
         projectId: 'p1',
         userId: 'user-2',
@@ -794,10 +796,10 @@ describe('Thread Routes (Integration)', () => {
 
   describe('threads.messages', () => {
     test('returns paginated messages for the owner', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessage(t.db as any, { id: 'm1', threadId: 't1', content: 'One' });
-      seedMessage(t.db as any, { id: 'm2', threadId: 't1', content: 'Two' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db, { id: 'm1', threadId: 't1', content: 'One' });
+      seedMessage(t.db, { id: 'm2', threadId: 't1', content: 'Two' });
 
       const res = await threads('user-1').query('messages', { id: 't1' });
       expect(res.status).toBe(200);
@@ -806,8 +808,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns 404 for cross-tenant access', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-2' });
 
       const res = await threads('user-1').query('messages', { id: 't1' });
       expect(res.status).toBe(404);
@@ -816,9 +818,9 @@ describe('Thread Routes (Integration)', () => {
 
   describe('threads.searchMessages', () => {
     test('searches within a thread', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessage(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db, {
         id: 'm1',
         threadId: 't1',
         content: 'findme needle',
@@ -830,8 +832,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns empty results for blank query', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await threads('user-1').query('searchMessages', { id: 't1', q: '' });
       expect(res.status).toBe(200);
@@ -841,9 +843,9 @@ describe('Thread Routes (Integration)', () => {
 
   describe('GET /api/threads/:id/events', () => {
     test('returns persisted thread events for the owner', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedThreadEvent(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThreadEvent(t.db, {
         id: 'ev-1',
         threadId: 't1',
         eventType: 'workflow:step',
@@ -858,8 +860,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns 404 for cross-tenant access', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-2' });
 
       const res = await t.requestAs('user-1').get('/api/threads/t1/events');
       expect(res.status).toBe(404);
@@ -868,16 +870,16 @@ describe('Thread Routes (Integration)', () => {
 
   describe('GET /api/threads/:id/touched-files', () => {
     test('returns unique file paths from Write/Edit tool calls', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedMessage(t.db as any, { id: 'm1', threadId: 't1' });
-      seedToolCall(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessage(t.db, { id: 'm1', threadId: 't1' });
+      seedToolCall(t.db, {
         id: 'tc1',
         messageId: 'm1',
         name: 'Write',
         input: JSON.stringify({ file_path: 'src/a.ts' }),
       });
-      seedToolCall(t.db as any, {
+      seedToolCall(t.db, {
         id: 'tc2',
         messageId: 'm1',
         name: 'Edit',
@@ -918,8 +920,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('POST /api/threads/:id/workflow-event', () => {
     test('persists and acknowledges a workflow event', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await t.requestAs('user-1').post('/api/threads/t1/workflow-event', {
         type: 'workflow:notify',
@@ -935,8 +937,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('rejects non-workflow event types', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       const res = await t.requestAs('user-1').post('/api/threads/t1/workflow-event', {
         type: 'agent:result',
@@ -945,8 +947,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('returns 404 for cross-tenant post', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-2' });
 
       const res = await t.requestAs('user-1').post('/api/threads/t1/workflow-event', {
         type: 'workflow:notify',
@@ -957,8 +959,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('GET /api/threads/:id/comments — tenant isolation', () => {
     test('returns 404 for cross-tenant comment list', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-2' });
 
       const res = await t.requestAs('user-1').get('/api/threads/t1/comments');
       expect(res.status).toBe(404);
@@ -967,8 +969,8 @@ describe('Thread Routes (Integration)', () => {
 
   describe('PATCH /api/threads/:id/stage — history', () => {
     test('records stage history on valid transition', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't-history',
         projectId: 'p1',
         userId: 'user-1',
@@ -1000,8 +1002,8 @@ describe('Thread Routes (Integration)', () => {
     }
 
     test('records history and emits thread:stage-changed on a drag stage move', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't-move',
         projectId: 'p1',
         userId: 'user-1',
@@ -1033,8 +1035,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('archiving emits a transition to "archived" and records it', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't-arch',
         projectId: 'p1',
         userId: 'user-1',
@@ -1064,8 +1066,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('unarchiving a thread whose stage is already "archived" emits no stage move', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't-stuck',
         projectId: 'p1',
         userId: 'user-1',
@@ -1084,8 +1086,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('unarchiving emits a transition back from "archived"', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't-unarch',
         projectId: 'p1',
         userId: 'user-1',
@@ -1109,8 +1111,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('a no-op stage PATCH (same stage) records nothing and emits nothing', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't-same',
         projectId: 'p1',
         userId: 'user-1',
@@ -1132,8 +1134,8 @@ describe('Thread Routes (Integration)', () => {
     });
 
     test('a non-stage PATCH (title only) emits no stage event', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, {
         id: 't-title',
         projectId: 'p1',
         userId: 'user-1',

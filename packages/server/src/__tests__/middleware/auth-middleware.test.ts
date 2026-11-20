@@ -124,7 +124,7 @@ describe('authMiddleware (integration)', () => {
   });
 
   test('allows public invite verify without credentials', async () => {
-    seedInviteLink(t.db as any, { token: 'public-token', organizationId: 'org-acme' });
+    seedInviteLink(t.db, { token: 'public-token', organizationId: 'org-acme' });
 
     const res = await app.request('/api/invite-links/verify/public-token');
     expect(res.status).toBe(200);
@@ -173,7 +173,7 @@ describe('authMiddleware (integration)', () => {
   });
 
   test('accepts Bearer runner_ token and sets isRunner', async () => {
-    seedRunner(t.db as any, { id: 'r-bearer', token: 'runner_bearer_ok', userId: 'user-1' });
+    seedRunner(t.db, { id: 'r-bearer', token: 'runner_bearer_ok', userId: 'user-1' });
 
     const res = await app.request('/api/protected', {
       headers: { Authorization: 'Bearer runner_bearer_ok' },
@@ -219,8 +219,8 @@ describe('authMiddleware (integration)', () => {
   });
 
   test('a provisioning token registers once as the sandbox of its thread', async () => {
-    seedProject(t.db as any, { id: 'prov-p', userId: 'prov-user', path: '/tmp/prov' });
-    seedThread(t.db as any, { id: 'prov-t', projectId: 'prov-p', userId: 'prov-user' });
+    seedProject(t.db, { id: 'prov-p', userId: 'prov-user', path: '/tmp/prov' });
+    seedThread(t.db, { id: 'prov-t', projectId: 'prov-p', userId: 'prov-user' });
     const { issueThreadProvisionToken } = await import('../../services/runner-provision-tokens.js');
     const issued = await issueThreadProvisionToken({ userId: 'prov-user', threadId: 'prov-t' });
     if (issued.isErr()) throw new Error(issued.error.kind);

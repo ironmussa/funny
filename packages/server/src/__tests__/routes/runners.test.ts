@@ -109,7 +109,7 @@ describe('Runner Routes (Integration)', () => {
 
   describe('GET /api/runners', () => {
     test('a user (even an admin) is refused: users list over tRPC', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
 
       for (const res of [
         await t.requestAs('admin-user', 'admin').get('/api/runners'),
@@ -125,7 +125,7 @@ describe('Runner Routes (Integration)', () => {
 
   describe('GET /api/runners/:runnerId', () => {
     test('returns runner details', async () => {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'r1',
         userId: 'user-1',
         name: 'My Runner',
@@ -150,7 +150,7 @@ describe('Runner Routes (Integration)', () => {
 
   describe('DELETE /api/runners/:runnerId', () => {
     test('is refused for every user and the runner stays (removal is on tRPC)', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
 
       expect((await t.requestAs('user-1').delete('/api/runners/r1')).status).toBe(404);
       expect((await t.requestAs('admin-user', 'admin').delete('/api/runners/r1')).status).toBe(404);
@@ -162,8 +162,8 @@ describe('Runner Routes (Integration)', () => {
 
   describe('POST /api/runners/:runnerId/projects', () => {
     test('the runner assigns a project to itself (201)', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
 
       const res = await t.requestAsRunner('r1').post('/api/runners/r1/projects', {
         projectId: 'p1',
@@ -177,7 +177,7 @@ describe('Runner Routes (Integration)', () => {
     });
 
     test('returns 400 when required fields are missing', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
 
       const res = await t.requestAsRunner('r1').post('/api/runners/r1/projects', {
         projectId: 'p1',
@@ -196,9 +196,9 @@ describe('Runner Routes (Integration)', () => {
 
   describe('GET /api/runners/:runnerId/projects', () => {
     test('the runner lists its own project assignments', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedRunnerProjectAssignment(t.db as any, {
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedRunnerProjectAssignment(t.db, {
         runnerId: 'r1',
         projectId: 'p1',
         localPath: '/home/user/project',
@@ -219,9 +219,9 @@ describe('Runner Routes (Integration)', () => {
 
   describe('DELETE /api/runners/:runnerId/projects/:projectId', () => {
     test('the runner unassigns a project from itself', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedRunnerProjectAssignment(t.db as any, {
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', name: 'R1', token: 'tok-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedRunnerProjectAssignment(t.db, {
         runnerId: 'r1',
         projectId: 'p1',
         localPath: '/a',
@@ -239,9 +239,9 @@ describe('Runner Routes (Integration)', () => {
 
   describe('/api/runners/:runnerId/projects — users are refused (assignment is on tRPC)', () => {
     test('even the owner gets 404 and nothing is written', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedRunnerProjectAssignment(t.db as any, {
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', token: 'tok-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedRunnerProjectAssignment(t.db, {
         runnerId: 'r1',
         projectId: 'p1',
         localPath: '/a',
@@ -262,7 +262,7 @@ describe('Runner Routes (Integration)', () => {
 
   describe('POST /api/runners/heartbeat', () => {
     test('updates runner status for authenticated runner', async () => {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'r1',
         userId: 'user-1',
         token: 'tok-1',
@@ -297,10 +297,10 @@ describe('Runner Routes (Integration)', () => {
 
   describe('GET /api/runners/tasks', () => {
     test('returns pending tasks and marks them running', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedRunnerTask(t.db as any, {
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', token: 'tok-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedRunnerTask(t.db, {
         id: 'task-1',
         runnerId: 'r1',
         threadId: 't1',
@@ -320,8 +320,8 @@ describe('Runner Routes (Integration)', () => {
 
   describe('POST /api/runners/tasks/result', () => {
     test('marks a task completed', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1' });
-      seedRunnerTask(t.db as any, {
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', token: 'tok-1' });
+      seedRunnerTask(t.db, {
         id: 'task-1',
         runnerId: 'r1',
         status: 'running',
@@ -339,10 +339,10 @@ describe('Runner Routes (Integration)', () => {
 
   describe('Runner-authenticated callers are scoped to their own runner (H2)', () => {
     const seedTwoRunners = () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1', name: 'R1' });
-      seedRunner(t.db as any, { id: 'r2', userId: 'user-2', token: 'tok-2', name: 'R2' });
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-      seedRunnerProjectAssignment(t.db as any, {
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', token: 'tok-1', name: 'R1' });
+      seedRunner(t.db, { id: 'r2', userId: 'user-2', token: 'tok-2', name: 'R2' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedRunnerProjectAssignment(t.db, {
         runnerId: 'r1',
         projectId: 'p1',
         localPath: '/a',
@@ -397,7 +397,7 @@ describe('Runner Routes (Integration)', () => {
 
     test("a runner cannot complete another runner's task (404)", async () => {
       seedTwoRunners();
-      seedRunnerTask(t.db as any, { id: 'task-1', runnerId: 'r1', status: 'running' });
+      seedRunnerTask(t.db, { id: 'task-1', runnerId: 'r1', status: 'running' });
       const res = await t.requestAsRunner('r2').post('/api/runners/tasks/result', {
         taskId: 'task-1',
         success: false,
@@ -409,7 +409,7 @@ describe('Runner Routes (Integration)', () => {
 
   describe('GET /api/runners/:runnerId — tenant isolation', () => {
     test('returns 404 for non-owner non-admin', async () => {
-      seedRunner(t.db as any, { id: 'r1', userId: 'user-1', token: 'tok-1', name: 'R1' });
+      seedRunner(t.db, { id: 'r1', userId: 'user-1', token: 'tok-1', name: 'R1' });
 
       const res = await t.requestAs('user-2').get('/api/runners/r1');
       expect(res.status).toBe(404);

@@ -7,9 +7,8 @@ import { join } from 'node:path';
 import type { ApiPorts } from '@funny/api';
 import { Hono } from 'hono';
 
-function stub<T>(partial: Partial<T>): T {
-  return partial as T;
-}
+import type { ServerEnv, UserRole } from '../../lib/types.js';
+import { fakeFetch } from '../helpers/builders-routes.js';
 
 // The stored App's key is encrypted with the keyring: keep it out of ~/.funny.
 process.env.FUNNY_DATA_DIR = mkdtempSync(join(tmpdir(), 'funny-github-app-routes-'));
@@ -50,7 +49,7 @@ function setup(
     api: 'https://api.example',
     now: () => clock,
     githubToken: async () => opts.token ?? null,
-    fetch: (async (url: string, init?: RequestInit): Promise<Response> => {
+    fetch: fakeFetch(async (url, init) => {
       if (!url.includes('/app-manifests/')) {
         const auth = new Headers(init?.headers).get('authorization');
         return (
@@ -66,30 +65,32 @@ function setup(
           { status: 201 },
         )
       );
-    }) as typeof fetch,
+    }),
   };
   const routes = createGithubAppSettingsRoutes(deps);
-  const appFor = (userId: string, role: string) => {
-    const app = new Hono();
+  const appFor = (userId: string, role: UserRole) => {
+    const app = new Hono<ServerEnv>();
     app.use('*', async (c, next) => {
-      c.set('userId' as never, userId as never);
-      c.set('userRole' as never, role as never);
+      c.set('userId', userId);
+      c.set('userRole', role);
       await next();
     });
-    app.route('/api/settings/github-app', routes as never);
+    app.route('/api/settings/github-app', routes);
     // Status, accounts, the manifest start and disconnect are tRPC procedures.
-    mountTrpc(app as never, (c) =>
-      stub<ApiPorts>({
+    mountTrpc(app, (c) => {
+      const ports = {
         githubApp: createGithubAppPort(deps, c.req.header('origin')),
         authz: authzPort,
-      }),
-    );
+      };
+      // SAFETY: this suite only calls `githubApp.*` procedures, which reach no other port.
+      return ports as ApiPorts;
+    });
     return app;
   };
   // GitHub's redirect back is cross-site: the SameSite=Strict session cookie is
   // not sent, so the callback runs with no session at all.
-  const anonymous = new Hono();
-  anonymous.route('/api/settings/github-app', routes as never);
+  const anonymous = new Hono<ServerEnv>();
+  anonymous.route('/api/settings/github-app', routes);
   return {
     data,
     conversions,
@@ -102,26 +103,26 @@ function setup(
 }
 
 /** A `githubApp.<name>` query; answers `{ status, body }` with the procedure's data as body. */
-const query = async (app: Hono, name: string) => {
+const query = async (app: Hono<ServerEnv>, name: string) => {
   const res = await app.request(`http://server/api/trpc/githubApp.${name}`);
-  const json = (await res.json()) as any;
+  const json = await res.json();
   return { status: res.status, body: json.result?.data ?? json };
 };
-const mutate = async (app: Hono, name: string, input?: unknown) => {
+const mutate = async (app: Hono<ServerEnv>, name: string, input?: unknown) => {
   const res = await app.request(`http://server/api/trpc/githubApp.${name}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', origin: ORIGIN },
     body: input === undefined ? undefined : JSON.stringify(input),
   });
-  const json = (await res.json()) as any;
+  const json = await res.json();
   return { status: res.status, body: json.result?.data ?? json };
 };
-const status = (app: Hono) => query(app, 'status');
-const accounts = (app: Hono) => query(app, 'accounts');
-const start = (app: Hono, body: unknown = { target: 'org', org: 'acme' }) =>
+const status = (app: Hono<ServerEnv>) => query(app, 'status');
+const accounts = (app: Hono<ServerEnv>) => query(app, 'accounts');
+const start = (app: Hono<ServerEnv>, body: unknown = { target: 'org', org: 'acme' }) =>
   mutate(app, 'startManifest', body);
-const disconnect = (app: Hono) => mutate(app, 'disconnect');
-const callback = (app: Hono, state: string, code = 'abc') =>
+const disconnect = (app: Hono<ServerEnv>) => mutate(app, 'disconnect');
+const callback = (app: Hono<ServerEnv>, state: string, code = 'abc') =>
   app.request(`http://server/api/settings/github-app/callback?code=${code}&state=${state}`);
 
 describe('GitHub App settings', () => {

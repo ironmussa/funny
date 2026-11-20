@@ -114,6 +114,8 @@ export class MemoryOperationIdempotency implements OperationIdempotencyStore {
     if (existing) {
       if (existing.request !== request) return { kind: 'conflict' };
       this.replayCount += 1;
+      // SAFETY: an outcome is stored only by this method under a key that includes the
+      // operation kind, and each operation kind is always executed with the same `T`.
       return { kind: 'replayed', outcome: existing.outcome as T };
     }
     const outcome = await execute();
@@ -152,6 +154,11 @@ export interface ProductionGrpcFixtureOptions {
   }>;
 }
 
+/** A terminal event as `RunnerGrpcTerminalDispatcher` relays it to the user. */
+type RelayedTerminalEvent = Parameters<
+  ConstructorParameters<typeof RunnerGrpcTerminalDispatcher>[2]
+>[1];
+
 export interface ProductionGrpcFixture {
   endpoint: RunnerGrpcEndpoint;
   transport: GrpcTeamTransport;
@@ -159,7 +166,8 @@ export interface ProductionGrpcFixture {
   outbox: GrpcOperationOutbox;
   idempotency: MemoryOperationIdempotency;
   events: AcceptedAgentEvent[];
-  terminalEvents: WSEvent[];
+  /** Terminal events exactly as the dispatcher relays them to the user. */
+  terminalEvents: RelayedTerminalEvent[];
   tunnelDispatcher: RunnerGrpcTunnelDispatcher;
   terminalDispatcher: RunnerGrpcTerminalDispatcher;
   dispatchTunnel(input: {
@@ -193,7 +201,7 @@ export async function createProductionGrpcFixture(
     ...(options.port !== undefined ? { port: options.port } : undefined),
   };
   const sessions = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: config.heartbeatTimeoutMs });
-  const terminalEvents: WSEvent[] = [];
+  const terminalEvents: RelayedTerminalEvent[] = [];
   const events: AcceptedAgentEvent[] = [];
   const browserEvents = options.browserEvents ?? {
     publish: () => {},
@@ -206,7 +214,7 @@ export async function createProductionGrpcFixture(
   };
   const tunnelDispatcher = new RunnerGrpcTunnelDispatcher(config, sessions);
   const terminalDispatcher = new RunnerGrpcTerminalDispatcher(config, sessions, (userId, event) => {
-    terminalEvents.push(event as WSEvent);
+    terminalEvents.push(event);
     browserEvents.toUser(userId, event);
   });
   const idempotency = options.idempotency ?? new MemoryOperationIdempotency();

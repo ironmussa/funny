@@ -13,6 +13,7 @@ import {
 } from '../../services/grpc/terminal-handler.js';
 
 function stub<T>(partial: unknown): T {
+  // SAFETY: only for gRPC call doubles that provide the members the terminal handler uses.
   return partial as T;
 }
 
@@ -233,7 +234,11 @@ describe('runner gRPC terminal stream', () => {
     ]) {
       output(sequence, text);
     }
-    expect(relayed.map((event) => (event.data as { data: string }).data).join('')).toBe('abcde');
+    expect(
+      relayed
+        .map(({ data }) => (data instanceof Object && 'data' in data ? data.data : undefined))
+        .join(''),
+    ).toBe('abcde');
     sessions.closeAll();
   });
 

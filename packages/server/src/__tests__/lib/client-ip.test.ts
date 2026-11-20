@@ -7,8 +7,10 @@ import { callerAddress, clientIp } from '../../lib/client-ip.js';
 function probe(trustProxy: boolean) {
   const app = new Hono();
   app.get('*', (c) => c.json({ ip: clientIp(c, trustProxy) }));
-  return async (headers: Record<string, string>, env?: unknown) =>
-    ((await (await app.request('/', { headers }, env)).json()) as { ip: string | null }).ip;
+  return async (headers: Record<string, string>, env?: unknown) => {
+    const body: { ip: string | null } = await (await app.request('/', { headers }, env)).json();
+    return body.ip;
+  };
 }
 
 describe('clientIp', () => {

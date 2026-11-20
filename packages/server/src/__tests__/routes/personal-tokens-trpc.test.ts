@@ -25,7 +25,7 @@ describe('personal tokens over tRPC', () => {
 
   const query = async (userId: string, path: string) => {
     const res = await t.app.request(`/api/trpc/${path}`, { headers: headersFor(userId) });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const mutate = async (userId: string, path: string, input: unknown) => {
@@ -34,7 +34,7 @@ describe('personal tokens over tRPC', () => {
       headers: headersFor(userId),
       body: JSON.stringify(input),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   beforeAll(async () => {

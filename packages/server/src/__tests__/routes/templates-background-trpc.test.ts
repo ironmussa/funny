@@ -30,7 +30,7 @@ describe('agent templates, watchers and jobs over tRPC', () => {
   const query = async (userId: string, path: string, input?: unknown) => {
     const qs = input === undefined ? '' : `?input=${encodeURIComponent(JSON.stringify(input))}`;
     const res = await t.app.request(`/api/trpc/${path}${qs}`, { headers: headersFor(userId) });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const mutate = async (userId: string, path: string, input: unknown) => {
@@ -39,7 +39,7 @@ describe('agent templates, watchers and jobs over tRPC', () => {
       headers: headersFor(userId),
       body: JSON.stringify(input),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   beforeAll(async () => {
@@ -48,12 +48,12 @@ describe('agent templates, watchers and jobs over tRPC', () => {
 
   beforeEach(() => {
     t.cleanup();
-    (t.db as any).run(sql`DELETE FROM agent_templates`);
-    (t.db as any).run(sql`DELETE FROM watchers`);
-    (t.db as any).run(sql`DELETE FROM jobs`);
-    seedProject(t.db as any, { id: 'p1', userId: 'owner', path: '/tmp/p1' });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'owner' });
-    (t.db as any)
+    t.db.run(sql`DELETE FROM agent_templates`);
+    t.db.run(sql`DELETE FROM watchers`);
+    t.db.run(sql`DELETE FROM jobs`);
+    seedProject(t.db, { id: 'p1', userId: 'owner', path: '/tmp/p1' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'owner' });
+    t.db
       .insert(t.schema.agentTemplates)
       .values([
         {
@@ -181,7 +181,7 @@ describe('agent templates, watchers and jobs over tRPC', () => {
     });
 
     test('cancel stops a live watcher of the caller only; terminal ones stay', async () => {
-      (t.db as any)
+      t.db
         .insert(t.schema.watchers)
         .values([watcher('w-live', 'owner', 'pending'), watcher('w-done', 'owner', 'done')])
         .run();
@@ -197,7 +197,7 @@ describe('agent templates, watchers and jobs over tRPC', () => {
     });
 
     test('jobs.list returns only the caller’s jobs', async () => {
-      (t.db as any)
+      t.db
         .insert(t.schema.jobs)
         .values({
           id: 'j1',

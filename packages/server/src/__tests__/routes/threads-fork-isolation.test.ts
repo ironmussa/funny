@@ -59,9 +59,9 @@ describe('Thread fork — authorization and runner isolation', () => {
     __resetRunnerScopeCache();
     online.clear();
     tunnelFetch.mockClear();
-    spyOn(threadRegistry, 'registerThread').mockResolvedValue(undefined as any);
+    spyOn(threadRegistry, 'registerThread').mockResolvedValue(undefined);
     for (const [id, userId] of Object.entries(RUNNER_OWNERS)) {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id,
         userId,
         token: `tok-${id}`,
@@ -77,13 +77,13 @@ describe('Thread fork — authorization and runner isolation', () => {
 
   function seedSource(opts: { owner?: string; organizationId?: string } = {}) {
     const owner = opts.owner ?? 'user-1';
-    seedProject(t.db as any, {
+    seedProject(t.db, {
       id: 'p1',
       userId: owner,
       path: '/a',
       organizationId: opts.organizationId ?? undefined,
     });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: owner, title: 'Source' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: owner, title: 'Source' });
   }
 
   const runnersCalled = () => tunnelFetch.mock.calls.map((call) => call[0]);
@@ -134,9 +134,9 @@ describe('Thread fork — authorization and runner isolation', () => {
       for (const role of ['owner', 'admin', 'member']) {
         test(`org ${role} of the project's org cannot fork a colleague's thread`, async () => {
           seedSource({ organizationId: 'org-1' });
-          seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'p1' });
-          seedOrgMember(t.db as any, { organizationId: 'org-1', userId: 'user-1', role: 'owner' });
-          seedOrgMember(t.db as any, { organizationId: 'org-1', userId: 'user-2', role });
+          seedTeamProject(t.db, { teamId: 'org-1', projectId: 'p1' });
+          seedOrgMember(t.db, { organizationId: 'org-1', userId: 'user-1', role: 'owner' });
+          seedOrgMember(t.db, { organizationId: 'org-1', userId: 'user-2', role });
           online.add('u1-general').add('u2-general');
 
           const res = await t
@@ -157,16 +157,13 @@ describe('Thread fork — authorization and runner isolation', () => {
       });
 
       test('a foreign scratch thread is hidden (404, not 403)', async () => {
-        seedThread(
-          t.db as any,
-          {
-            id: 't1',
-            projectId: null as any,
-            userId: 'user-1',
-            title: 'Scratch',
-            isScratch: 1,
-          } as any,
-        );
+        seedThread(t.db, {
+          id: 't1',
+          projectId: null,
+          userId: 'user-1',
+          title: 'Scratch',
+          isScratch: 1,
+        });
         online.add('u1-general').add('u2-general');
 
         const res = await t.requestAs('user-2').post(`/api/threads/t1/${variant}`, {});

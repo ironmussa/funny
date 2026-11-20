@@ -45,7 +45,7 @@ describe('Loopback runner registration (security HI-13)', () => {
     );
     // Seed a user table row that the FUNNY_LOOPBACK_RUNNER_USERNAME branch
     // can resolve. Reuse the test app's DB connection.
-    (t.db as any).run(
+    t.db.run(
       sql`INSERT INTO "user" (id, name, email, email_verified, username, role, created_at, updated_at)
           VALUES ('user-loopback', 'Loopback User', 'lb@example', 1, 'allowed-runner', 'user', '2026-01-01', '2026-01-01')`,
     );
@@ -65,7 +65,7 @@ describe('Loopback runner registration (security HI-13)', () => {
       headers: { 'X-Runner-Auth': 'loopback-test-secret' },
     });
     expect(res.status).toBe(401);
-    const body = (await res.json()) as { error: string };
+    const body: { error: string } = await res.json();
     expect(body.error).toMatch(/X-Runner-Invite-Token|FUNNY_LOOPBACK_RUNNER_USERNAME/);
   });
 
@@ -76,7 +76,7 @@ describe('Loopback runner registration (security HI-13)', () => {
       headers: { 'X-Runner-Auth': 'loopback-test-secret' },
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { userId: string | null; isRunner: boolean };
+    const body: { userId: string | null; isRunner: boolean } = await res.json();
     expect(body.userId).toBe('user-loopback');
     expect(body.isRunner).toBe(true);
   });
@@ -102,7 +102,7 @@ describe('Loopback runner registration (security HI-13)', () => {
       headers: { 'X-Runner-Auth': 'loopback-test-secret' },
     });
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { isRunner: boolean };
+    const body: { isRunner: boolean } = await res.json();
     expect(body.isRunner).toBe(true);
   });
 });

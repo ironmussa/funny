@@ -1,12 +1,16 @@
 import { describe, expect, test } from 'bun:test';
 
 import { okAsync } from 'neverthrow';
+import { z } from 'zod';
 
 import { createLlmProxyRoutes } from '../../routes/llm-proxy.js';
 import {
   anthropicUpstreamHeaders,
   isAllowedAnthropicPath,
 } from '../../services/llm-proxy/anthropic-adapter.js';
+import { fakeFetch, readJson } from '../helpers/builders-routes.js';
+
+const anthropicErrorSchema = z.object({ error: z.object({ type: z.string() }) });
 
 const OAUTH = 'sk-ant-oat01-subscription';
 
@@ -22,8 +26,7 @@ function setup(opts: { credential?: string | null } = {}) {
           : opts.credential
         : null,
     upstream: 'https://anthropic.test',
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-    fetch: (async (url: string, init: RequestInit) => {
+    fetch: fakeFetch(async (url, init = {}) => {
       const body = init.body ? await new Response(init.body).text() : '';
       calls.push({ url, init, body });
       return new Response('event: message_start\ndata: {}\n\n', {
@@ -34,7 +37,7 @@ function setup(opts: { credential?: string | null } = {}) {
           'request-id': 'req_1',
         },
       });
-    }) as unknown as typeof fetch,
+    }),
   });
   const request = (path: string, headers: Record<string, string>, body = '{"model":"x"}') =>
     routes.request(`/anthropic${path}`, { method: 'POST', headers, body });
@@ -133,8 +136,7 @@ describe('LLM proxy — per-sandbox limit', () => {
         ),
       credentialFor: async () => OAUTH,
       upstream: 'https://anthropic.test',
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-      fetch: (async () => new Response('{}', { status: 200 })) as unknown as typeof fetch,
+      fetch: fakeFetch(async () => new Response('{}', { status: 200 })),
       perSandboxLimit: { windowMs: 60_000, max: 2 },
     });
     const send = (token: string) =>
@@ -149,9 +151,7 @@ describe('LLM proxy — per-sandbox limit', () => {
     const limited = await send('llmp_a');
     expect(limited.status).toBe(429);
     expect(limited.headers.get('retry-after')).toBe('60');
-    expect(((await limited.json()) as { error: { type: string } }).error.type).toBe(
-      'rate_limit_error',
-    );
+    expect((await readJson(limited, anthropicErrorSchema)).error.type).toBe('rate_limit_error');
     expect((await send('llmp_b')).status).toBe(200);
     // Invalid tokens are refused before they touch any sandbox's budget.
     expect((await send('llmp_bad')).status).toBe(401);

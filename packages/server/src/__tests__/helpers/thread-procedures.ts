@@ -15,8 +15,14 @@ export interface ProcedureAnswer {
   json(): Promise<any>;
 }
 
+/** The tRPC response envelope: `result.data` on success, `error.message` on failure. */
+interface TrpcEnvelope {
+  result?: { data?: unknown };
+  error?: { message?: string };
+}
+
 async function answerOf(res: Response): Promise<ProcedureAnswer> {
-  const body = (await res.json()) as any;
+  const body: TrpcEnvelope | null = await res.json();
   const data = body?.result?.data;
   const error: string | undefined = body?.error?.message;
   return {

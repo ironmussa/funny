@@ -18,7 +18,9 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
  */
 import { user } from '@funny/shared/db/schema-sqlite';
 import { sql } from 'drizzle-orm';
+import { z } from 'zod';
 
+import { idRowsSchema, readJson } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedOrgMember,
@@ -26,6 +28,19 @@ import {
   seedProjectMember,
   seedTeamProject,
 } from '../helpers/test-db.js';
+
+const membersResultSchema = z.object({
+  result: z.object({
+    data: z.object({
+      members: z.array(
+        z.looseObject({
+          userId: z.string(),
+          user: z.looseObject({ username: z.string(), name: z.string() }).nullish(),
+        }),
+      ),
+    }),
+  }),
+});
 
 describe('project collaborators', () => {
   let t: TestApp;
@@ -45,7 +60,7 @@ describe('project collaborators', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'owner', path: '/tmp/p1' });
+    seedProject(t.db, { id: 'p1', userId: 'owner', path: '/tmp/p1' });
   });
 
   const headersFor = (userId: string) => ({
@@ -90,13 +105,13 @@ describe('project collaborators', () => {
     });
 
     test('a plain member cannot add members → 403', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'member' });
       const res = await addMember('bob', { userId: 'alice' });
       expect(res.status).toBe(403);
     });
 
     test('an existing admin member (not owner) can add members → 200', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'admin-user', role: 'admin' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'admin-user', role: 'admin' });
       const res = await addMember('admin-user', { userId: 'alice' });
       expect(res.status).toBe(200);
     });
@@ -131,20 +146,20 @@ describe('project collaborators', () => {
 
   describe('Bug 2 — collaborator sees the shared project', () => {
     test('a member sees the project they were added to, flagged needsSetup', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'alice', role: 'member' });
 
       const res = await t.requestAs('alice').get('/api/projects');
       expect(res.status).toBe(200);
-      const projects = (await res.json()) as any[];
+      const projects = await readJson(res, idRowsSchema);
 
       const p1 = projects.find((p) => p.id === 'p1');
       expect(p1).toBeDefined();
-      expect(p1.isTeamProject).toBe(true);
-      expect(p1.needsSetup).toBe(true); // no local path configured yet
+      expect(p1?.isTeamProject).toBe(true);
+      expect(p1?.needsSetup).toBe(true); // no local path configured yet
     });
 
     test('member with a configured local path is not flagged needsSetup', async () => {
-      seedProjectMember(t.db as any, {
+      seedProjectMember(t.db, {
         projectId: 'p1',
         userId: 'alice',
         role: 'member',
@@ -152,29 +167,29 @@ describe('project collaborators', () => {
       });
 
       const res = await t.requestAs('alice').get('/api/projects');
-      const projects = (await res.json()) as any[];
+      const projects = await readJson(res, idRowsSchema);
       const p1 = projects.find((p) => p.id === 'p1');
-      expect(p1.needsSetup).toBe(false);
-      expect(p1.localPath).toBe('/home/alice/p1');
+      expect(p1?.needsSetup).toBe(false);
+      expect(p1?.localPath).toBe('/home/alice/p1');
     });
 
     test('a stranger does not see the project', async () => {
       const res = await t.requestAs('stranger').get('/api/projects');
-      const projects = (await res.json()) as any[];
+      const projects = await readJson(res, idRowsSchema);
       expect(projects.find((p) => p.id === 'p1')).toBeUndefined();
     });
 
     test('the owner is not double-listed via their seeded member row', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'owner', role: 'admin' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'owner', role: 'admin' });
       const res = await t.requestAs('owner').get('/api/projects');
-      const projects = (await res.json()) as any[];
+      const projects = await readJson(res, idRowsSchema);
       expect(projects.filter((p) => p.id === 'p1')).toHaveLength(1);
     });
   });
 
   describe('Bug 3 — collaborator can access sub-resources', () => {
     test('a member can list project commands → 200', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'alice', role: 'member' });
       const res = await listCommands('alice');
       expect(res.status).toBe(200);
     });
@@ -187,7 +202,7 @@ describe('project collaborators', () => {
 
   describe('2b — only project admins may edit shared config (startup commands)', () => {
     test('a plain member can READ commands but cannot create one → 403', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'alice', role: 'member' });
 
       const read = await listCommands('alice');
       expect(read.status).toBe(200);
@@ -202,7 +217,7 @@ describe('project collaborators', () => {
     });
 
     test('an admin member can create a command → 200', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'admin-user', role: 'admin' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'admin-user', role: 'admin' });
       const res = await createCommand('admin-user');
       expect(res.status).toBe(200);
     });
@@ -210,8 +225,8 @@ describe('project collaborators', () => {
 
   describe('2b — GET /api/projects exposes the caller role', () => {
     test('owner sees role "owner"; member sees their member role', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'admin' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'alice', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'admin' });
 
       const asOwner = await (await t.requestAs('owner').get('/api/projects')).json();
       expect(asOwner.find((p: any) => p.id === 'p1')?.role).toBe('owner');
@@ -226,7 +241,7 @@ describe('project collaborators', () => {
 
   describe('2b — member sets their local path (team mode, no server fs check)', () => {
     test('a member can save a local path that does not exist on the server → 200', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'alice', role: 'member' });
 
       // The path lives on the member's runner, not this server — the route must
       // not fs-check it (that always failed in team mode).
@@ -238,7 +253,7 @@ describe('project collaborators', () => {
     });
 
     test('rejects a non-absolute path → 400', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'alice', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'alice', role: 'member' });
       const res = await setLocalPath('alice', 'relative/path');
       expect(res.status).toBe(400);
     });
@@ -259,8 +274,8 @@ describe('project collaborators', () => {
 
   describe('projects shared with an org', () => {
     beforeEach(() => {
-      seedTeamProject(t.db as any, { teamId: 'org-1', projectId: 'p1' });
-      seedOrgMember(t.db as any, { organizationId: 'org-1', userId: 'carla', role: 'admin' });
+      seedTeamProject(t.db, { teamId: 'org-1', projectId: 'p1' });
+      seedOrgMember(t.db, { organizationId: 'org-1', userId: 'carla', role: 'admin' });
     });
 
     test('an org member can read the project’s commands and designs', async () => {
@@ -282,7 +297,7 @@ describe('project collaborators', () => {
     });
 
     test('setting a local path keeps the org member at viewer — no escalation (C3)', async () => {
-      seedOrgMember(t.db as any, { organizationId: 'org-1', userId: 'olga', role: 'member' });
+      seedOrgMember(t.db, { organizationId: 'org-1', userId: 'olga', role: 'member' });
 
       const res = await setLocalPath('olga', '/home/olga/p1');
       expect(res.status).toBe(200);
@@ -295,7 +310,7 @@ describe('project collaborators', () => {
     });
 
     test('a member of another org gets 404', async () => {
-      seedOrgMember(t.db as any, { organizationId: 'org-2', userId: 'daniel' });
+      seedOrgMember(t.db, { organizationId: 'org-2', userId: 'daniel' });
       expect((await listCommands('daniel')).status).toBe(404);
     });
   });
@@ -325,7 +340,7 @@ describe('project collaborators', () => {
   describe('projects.members — enriched with user display fields', () => {
     test('members carry their user name/username for the Collaborators UI', async () => {
       const now = new Date().toISOString();
-      (t.db as any)
+      t.db
         .insert(user)
         .values([
           {
@@ -339,11 +354,11 @@ describe('project collaborators', () => {
           },
         ])
         .run();
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'u-carol', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'u-carol', role: 'member' });
 
       const res = await query('owner', 'members', { projectId: 'p1' });
       expect(res.status).toBe(200);
-      const { members } = (await res.json()).result.data as { members: any[] };
+      const { members } = (await readJson(res, membersResultSchema)).result.data;
       const carol = members.find((m) => m.userId === 'u-carol');
       expect(carol?.user?.username).toBe('carol');
       expect(carol?.user?.name).toBe('Carol Danvers');
@@ -353,7 +368,7 @@ describe('project collaborators', () => {
   describe('GET /api/users/search', () => {
     const insertUsers = (rows: Array<{ id: string; name: string; username: string }>) => {
       const now = new Date().toISOString();
-      (t.db as any)
+      t.db
         .insert(user)
         .values(
           rows.map((r) => ({
@@ -369,7 +384,7 @@ describe('project collaborators', () => {
     };
 
     beforeEach(() => {
-      (t.db as any).run(sql`DELETE FROM "user"`);
+      t.db.run(sql`DELETE FROM "user"`);
       insertUsers([
         { id: 'u-alice', name: 'Alice Wonderland', username: 'alice' },
         { id: 'u-bob', name: 'Bob Builder', username: 'bob' },
@@ -378,11 +393,11 @@ describe('project collaborators', () => {
     });
 
     test('finds org co-members by username, name, or email', async () => {
-      seedOrgMember(t.db as any, { organizationId: 'org-s', userId: 'owner' });
-      seedOrgMember(t.db as any, { organizationId: 'org-s', userId: 'u-alice' });
+      seedOrgMember(t.db, { organizationId: 'org-s', userId: 'owner' });
+      seedOrgMember(t.db, { organizationId: 'org-s', userId: 'u-alice' });
 
       const byUsername = await t.requestAs('owner').get('/api/users/search?q=ali');
-      const rows = (await byUsername.json()) as any[];
+      const rows = await readJson(byUsername, idRowsSchema);
       expect(rows.map((r) => r.id)).toContain('u-alice');
       expect(rows.map((r) => r.id)).not.toContain('u-bob');
 
@@ -398,18 +413,18 @@ describe('project collaborators', () => {
     });
 
     test('finds co-members of a shared project', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'u-bob', role: 'member' });
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'u-alice', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'u-bob', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'u-alice', role: 'member' });
 
       const asOwner = await t.requestAs('owner').get('/api/users/search?q=bob');
-      expect(((await asOwner.json()) as any[]).map((r) => r.id)).toEqual(['u-bob']);
+      expect((await readJson(asOwner, idRowsSchema)).map((r) => r.id)).toEqual(['u-bob']);
       const asMember = await t.requestAs('u-bob').get('/api/users/search?q=alice');
-      expect(((await asMember.json()) as any[]).map((r) => r.id)).toEqual(['u-alice']);
+      expect((await readJson(asMember, idRowsSchema)).map((r) => r.id)).toEqual(['u-alice']);
     });
 
     test('global admins can search every user', async () => {
       const res = await t.requestAs('root', 'admin').get('/api/users/search?q=bob');
-      expect(((await res.json()) as any[]).map((r) => r.id)).toEqual(['u-bob']);
+      expect((await readJson(res, idRowsSchema)).map((r) => r.id)).toEqual(['u-bob']);
     });
 
     test('LIKE wildcards in the query are matched literally', async () => {
@@ -418,7 +433,7 @@ describe('project collaborators', () => {
       const anyChar = await t.requestAs('root', 'admin').get('/api/users/search?q=__');
       expect(await anyChar.json()).toEqual([]);
       const underscore = await t.requestAs('root', 'admin').get('/api/users/search?q=n_d');
-      expect(((await underscore.json()) as any[]).map((r) => r.id)).toEqual(['u-under']);
+      expect((await readJson(underscore, idRowsSchema)).map((r) => r.id)).toEqual(['u-under']);
     });
 
     test('empty and 1-char queries return an empty list', async () => {

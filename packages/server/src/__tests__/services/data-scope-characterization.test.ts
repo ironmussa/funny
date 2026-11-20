@@ -232,29 +232,25 @@ describe('assertRunnerDataScope characterization', () => {
       'runners',
       'projects',
     ]) {
-      (db as any).run(`DELETE FROM ${table}`);
+      db.run(`DELETE FROM ${table}`);
     }
     __resetRunnerScopeCache();
     __resetDataScopeCache();
     __resetDataOwnershipCache();
     const now = new Date().toISOString();
     for (const s of ['x', 'y'] as const) {
-      seedProject(db as any, { id: `p${s}`, userId: 'alice', path: `/${s}` });
-      seedThread(
-        db as any,
-        {
-          id: `t${s}`,
-          projectId: `p${s}`,
-          userId: 'alice',
-          externalRequestId: `ext-${s}`,
-          sessionId: `sess-${s}`,
-        } as any,
-      );
-      seedMessage(db as any, { id: `m${s}`, threadId: `t${s}` });
-      seedToolCall(db as any, { id: `tc${s}`, messageId: `m${s}` });
-      seedMessageQueue(db as any, { id: `q${s}`, threadId: `t${s}` });
-      (db as any)
-        .insert(schema.watchers)
+      seedProject(db, { id: `p${s}`, userId: 'alice', path: `/${s}` });
+      seedThread(db, {
+        id: `t${s}`,
+        projectId: `p${s}`,
+        userId: 'alice',
+        externalRequestId: `ext-${s}`,
+        sessionId: `sess-${s}`,
+      });
+      seedMessage(db, { id: `m${s}`, threadId: `t${s}` });
+      seedToolCall(db, { id: `tc${s}`, messageId: `m${s}` });
+      seedMessageQueue(db, { id: `q${s}`, threadId: `t${s}` });
+      db.insert(schema.watchers)
         .values({
           id: `w${s}`,
           threadId: `t${s}`,
@@ -266,8 +262,7 @@ describe('assertRunnerDataScope characterization', () => {
           updatedAt: now,
         })
         .run();
-      (db as any)
-        .insert(schema.jobs)
+      db.insert(schema.jobs)
         .values({
           id: `j${s}`,
           threadId: `t${s}`,
@@ -279,8 +274,7 @@ describe('assertRunnerDataScope characterization', () => {
           updatedAt: now,
         })
         .run();
-      (db as any)
-        .insert(schema.pendingPermissionRequests)
+      db.insert(schema.pendingPermissionRequests)
         .values({
           requestId: `pr${s}`,
           threadId: `t${s}`,
@@ -292,18 +286,15 @@ describe('assertRunnerDataScope characterization', () => {
         })
         .run();
     }
-    seedThread(
-      db as any,
-      {
-        id: 'ts',
-        projectId: null as any,
-        userId: 'alice',
-        isScratch: 1,
-      } as any,
-    );
-    seedMessage(db as any, { id: 'ms', threadId: 'ts' });
-    seedRunner(db as any, { id: 'laptop', userId: 'alice', token: 'tok-l', hostname: 'l' });
-    seedRunner(db as any, {
+    seedThread(db, {
+      id: 'ts',
+      projectId: null,
+      userId: 'alice',
+      isScratch: 1,
+    });
+    seedMessage(db, { id: 'ms', threadId: 'ts' });
+    seedRunner(db, { id: 'laptop', userId: 'alice', token: 'tok-l', hostname: 'l' });
+    seedRunner(db, {
       id: 'rx',
       userId: 'alice',
       token: 'tok-rx',

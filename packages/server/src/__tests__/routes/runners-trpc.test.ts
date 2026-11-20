@@ -23,6 +23,7 @@ import {
 } from '@funny/shared/auth/forwarded-identity';
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
+import type { RunnerRequestPort } from '../../services/runner-ports.js';
 import { __resetRunnerScopeCache, canRunnerAccessProject } from '../../services/runner-scope.js';
 import { stopProjectSessionsOnRunners } from '../../trpc/ports/project-runners.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
@@ -43,7 +44,7 @@ describe('runners over tRPC', () => {
     const res = await t.app.request(`/api/trpc/${path}${qs}`, {
       headers: headersFor(userId, role),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const mutate = async (userId: string, path: string, input: unknown, role?: 'admin') => {
@@ -52,21 +53,18 @@ describe('runners over tRPC', () => {
       headers: headersFor(userId, role),
       body: JSON.stringify(input),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   beforeAll(async () => {
     t = await createTestApp({
       runnerRequests: {
-        isAvailable: () => true,
-        request: async (
-          runnerId: string,
-          req: { path: string; headers: Record<string, string> },
-        ) => {
+        isAvailable: async () => true,
+        request: async (runnerId, req) => {
           sent.push({ runnerId, path: req.path, headers: req.headers });
           return { status: 200, headers: {}, body: '{}' };
         },
-      } as any,
+      },
     });
   });
 
@@ -90,16 +88,16 @@ describe('runners over tRPC', () => {
     t.cleanup();
     __resetRunnerScopeCache();
     sent.length = 0;
-    seedProject(t.db as any, { id: 'px', userId: 'alice' });
-    seedRunner(t.db as any, { id: 'laptop', userId: 'alice', token: 'tl', hostname: 'l' });
-    seedRunner(t.db as any, {
+    seedProject(t.db, { id: 'px', userId: 'alice' });
+    seedRunner(t.db, { id: 'laptop', userId: 'alice', token: 'tl', hostname: 'l' });
+    seedRunner(t.db, {
       id: 'rx',
       userId: 'alice',
       token: 'tx',
       hostname: 'rx',
       role: 'dedicated',
     });
-    seedRunner(t.db as any, { id: 'bob-r', userId: 'bob', token: 'tb', hostname: 'b' });
+    seedRunner(t.db, { id: 'bob-r', userId: 'bob', token: 'tb', hostname: 'b' });
   });
 
   describe('runners', () => {
@@ -163,7 +161,7 @@ describe('runners over tRPC', () => {
 
       const enroll = await import('../../services/runner-enrollment-service.js');
       const started = await enroll.startEnrollment({ hostname: 'new-box', os: 'linux', ip: '::1' });
-      const userCode = (started as any).userCode as string;
+      const { userCode } = started;
 
       const info = await query('alice', 'runners.enrollment', { userCode });
       expect(info.body.result.data.hostname).toBe('new-box');
@@ -203,7 +201,7 @@ describe('runners over tRPC', () => {
     });
 
     test('pinning a dedicated runner stops the agents on the runner that lost access', async () => {
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 'running-on-laptop',
         projectId: 'px',
         userId: 'alice',
@@ -233,30 +231,27 @@ describe('runners over tRPC', () => {
     });
 
     test('stop-sessions skips a runner the project owner does not own', async () => {
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 'on-bobs-runner',
         projectId: 'px',
         userId: 'alice',
         status: 'running',
         runnerId: 'bob-r',
       });
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 'on-laptop',
         projectId: 'px',
         userId: 'alice',
         status: 'running',
         runnerId: 'laptop',
       });
-      const requests = {
-        isAvailable: () => true,
-        request: async (
-          runnerId: string,
-          req: { path: string; headers: Record<string, string> },
-        ) => {
+      const requests: RunnerRequestPort = {
+        isAvailable: async () => true,
+        request: async (runnerId, req) => {
           sent.push({ runnerId, path: req.path, headers: req.headers });
           return { status: 200, headers: {}, body: '{}' };
         },
-      } as any;
+      };
       await stopProjectSessionsOnRunners({ requests }, 'px', ['bob-r', 'laptop']);
       expect(sent.map((s) => [s.runnerId, s.path])).toEqual([
         ['laptop', '/api/threads/on-laptop/stop'],

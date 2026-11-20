@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from 'bun:test';
 
+import { Server as BunEngine } from '@socket.io/bun-engine';
+
 import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
 import { setupBrowserNamespace } from '../../services/socketio/browser-namespace.js';
 import { bindSocketIOServer, closeSocketIOServer } from '../../services/socketio/state.js';
@@ -34,7 +36,7 @@ describe('setupBrowserNamespace', () => {
       }),
     });
 
-    bindSocketIOServer(ioWithClose as any, {} as any, { api: {} }, ['http://localhost:5173']);
+    bindSocketIOServer(ioWithClose, new BunEngine(), { api: {} }, ['http://localhost:5173']);
     setupBrowserNamespace(dependencies());
 
     let rejected: Error | undefined;
@@ -60,7 +62,7 @@ describe('setupBrowserNamespace', () => {
         on: () => {},
       }),
     });
-    bindSocketIOServer(ioWithClose as any, {} as any, { api: { getSession: async () => null } }, [
+    bindSocketIOServer(ioWithClose, new BunEngine(), { api: { getSession: async () => null } }, [
       'http://localhost:5173',
     ]);
     setupBrowserNamespace(dependencies());
@@ -99,9 +101,10 @@ describe('setupBrowserNamespace', () => {
       }),
     });
 
-    bindSocketIOServer(ioWithClose as any, {} as any, { api: {} }, ['http://localhost:5173']);
+    bindSocketIOServer(ioWithClose, new BunEngine(), { api: {} }, ['http://localhost:5173']);
     setupBrowserNamespace(dependencies());
 
+    // SAFETY: the namespace reads only conn.transport.name; the rest of engine.io's Transport is unused.
     const socket = createMockSocket({
       data: { userId: 'user-1' },
       conn: { transport: { name: 'websocket' } },
@@ -121,6 +124,7 @@ describe('setupBrowserNamespace', () => {
     expect(await presence.userHasAvailableRunner('user-1')).toBe(false);
 
     presence.activate('runner-1', { invalidate: () => {} }, 'user-1');
+    // SAFETY: the namespace reads only conn.transport.name; the rest of engine.io's Transport is unused.
     const second = createMockSocket({
       data: { userId: 'user-1' },
       conn: { transport: { name: 'websocket' } },

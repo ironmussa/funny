@@ -14,6 +14,11 @@ import {
 
 const created = new Date(0).toISOString();
 
+/** The thread row a wait reads, swapped by the test. */
+interface RecordSlot {
+  current: ThreadRecord | null;
+}
+
 function waitsOver(record: { current: ThreadRecord | null }, now = () => 0) {
   return createThreadWaits({
     readThread: async () => record.current,
@@ -29,7 +34,7 @@ function waitsOver(record: { current: ThreadRecord | null }, now = () => 0) {
 
 describe('factory thread waits', () => {
   test('the terminal signal resumes the step with the persisted status', async () => {
-    const record = { current: { status: 'running', createdAt: created } as ThreadRecord | null };
+    const record: RecordSlot = { current: { status: 'running', createdAt: created } };
     const wait = waitsOver(record)('t1', new AbortController().signal);
     await Bun.sleep(1);
     expect(isWaitingOn('t1')).toBe(true);
@@ -44,12 +49,12 @@ describe('factory thread waits', () => {
   test('a follow-up counts as done only once the thread finishes again', async () => {
     const before = '2026-11-16T10:00:00.000Z';
     // Still showing the previous run's completion: the follow-up has not run yet.
-    const record = {
+    const record: RecordSlot = {
       current: {
         status: 'completed',
         createdAt: created,
         completedAt: before,
-      } as ThreadRecord | null,
+      },
     };
     const wait = waitsOver(record)('t4', new AbortController().signal, {
       completedAt: before,
@@ -71,8 +76,8 @@ describe('factory thread waits', () => {
   test('a follow-up on a thread that finished days ago is not stale at once', async () => {
     const daysAgo = new Date(0).toISOString();
     const sentAt = new Date(5 * 24 * 60 * 60 * 1000).toISOString();
-    const record = {
-      current: { status: 'running', createdAt: daysAgo, completedAt: null } as ThreadRecord | null,
+    const record: RecordSlot = {
+      current: { status: 'running', createdAt: daysAgo, completedAt: null },
     };
     const controller = new AbortController();
     // "Now" is a minute after the follow-up was sent, days after the last finish.

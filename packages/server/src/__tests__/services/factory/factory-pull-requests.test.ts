@@ -9,6 +9,7 @@ import { errAsync, okAsync } from 'neverthrow';
 
 import { createFactoryPullRequests } from '../../../services/factory/factory-pull-requests.js';
 import type { AccessLevel, IssueError } from '../../../services/github-app/token-issuer.js';
+import { fakeFetch } from '../../helpers/builders-services.js';
 
 const pr = { repo: 'o/r', number: 7, branch: 'factory/7', userId: 'alice', projectId: 'p1' };
 const pull = {
@@ -20,13 +21,13 @@ const pull = {
 
 function fakeGithub(routes: Record<string, unknown>) {
   const calls: string[] = [];
-  const fetchImpl = (async (url: string, init?: RequestInit) => {
+  const fetchImpl = fakeFetch(async (url, init) => {
     const key = `${init?.method ?? 'GET'} ${url.replace('https://api.github.com', '')}`;
     calls.push(key);
     if (!(key in routes)) return new Response('not found', { status: 404 });
     const body = routes[key];
     return new Response(typeof body === 'string' ? body : JSON.stringify(body), { status: 200 });
-  }) as typeof fetch;
+  });
   return { calls, fetchImpl };
 }
 

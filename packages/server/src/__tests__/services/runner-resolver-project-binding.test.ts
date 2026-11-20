@@ -28,7 +28,7 @@ async function bindTestDb() {
   testDb = createTestDb();
   const { setConnection } = await import('../../db/index.js');
   setConnection({
-    db: testDb.db as any,
+    db: testDb.db,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
     mode: 'sqlite',
@@ -129,10 +129,10 @@ describe('dedicated runners stay inside their scope', () => {
     runner('rx', 'dedicated');
     seedThread(testDb.db, {
       id: 't-scratch',
-      projectId: null as any,
+      projectId: null,
       userId: 'alice',
       isScratch: 1,
-    } as any);
+    });
     expect(await resolve('/api/browse/list')).toBeNull();
     expect(await resolve('/api/threads/t-scratch/message')).toBeNull();
     expect(await findAnyRunnerForUser('alice')).toBeNull();

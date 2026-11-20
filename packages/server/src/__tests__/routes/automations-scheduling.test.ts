@@ -13,7 +13,11 @@ import {
   startAutomationScheduler,
   stopAutomationScheduler,
 } from '../../services/automation-scheduler.js';
-import type { StartThreadInput } from '../../services/runner-thread-launcher.js';
+import type {
+  StartThreadInput,
+  startThreadOnRunner,
+} from '../../services/runner-thread-launcher.js';
+import { unreachableRunnerRequests } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedAutomation, seedProject, seedThread } from '../helpers/test-db.js';
 
@@ -30,7 +34,7 @@ describe('automation procedures ↔ scheduler', () => {
         body: method === 'GET' ? undefined : JSON.stringify(input),
       },
     );
-    const body = (await res.json()) as any;
+    const body = await res.json();
     return { status: res.status, data: body.result?.data };
   };
   let launches: StartThreadInput[];
@@ -44,22 +48,23 @@ describe('automation procedures ↔ scheduler', () => {
 
   beforeEach(async () => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
-    seedProject(t.db as any, { id: 'p2', userId: 'user-2', path: '/tmp/p2' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
+    seedProject(t.db, { id: 'p2', userId: 'user-2', path: '/tmp/p2' });
     launches = [];
     runnerOnline = true;
+    const launch: typeof startThreadOnRunner = async (input) => {
+      launches.push(input);
+      if (!runnerOnline) {
+        return err({ kind: 'runner-unavailable', status: 502, message: 'No online runner' });
+      }
+      const threadId = `t-${launches.length}`;
+      seedThread(t.db, { id: threadId, projectId: 'p1', userId: input.userId });
+      return ok({ thread: { id: threadId }, threadId, runnerId: 'r1' });
+    };
     await startAutomationScheduler({
-      ports: { requests: {} as any },
+      ports: { requests: unreachableRunnerRequests() },
       createJob,
-      launch: (async (input: StartThreadInput) => {
-        launches.push(input);
-        if (!runnerOnline) {
-          return err({ kind: 'runner-unavailable', status: 502, message: 'No online runner' });
-        }
-        const threadId = `t-${launches.length}`;
-        seedThread(t.db as any, { id: threadId, projectId: 'p1', userId: input.userId });
-        return ok({ thread: { id: threadId }, threadId, runnerId: 'r1' });
-      }) as any,
+      launch,
     });
   });
 
@@ -99,7 +104,7 @@ describe('automation procedures ↔ scheduler', () => {
   });
 
   test("the owner's manual trigger starts a run on their runner", async () => {
-    seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1', enabled: 0 });
+    seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1', enabled: 0 });
 
     const res = await call('user-1', 'trigger', { id: 'a1' });
 
@@ -109,7 +114,7 @@ describe('automation procedures ↔ scheduler', () => {
   });
 
   test('another user triggering it → 404 and no dispatch', async () => {
-    seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+    seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
 
     const res = await call('user-2', 'trigger', { id: 'a1' });
 
@@ -118,7 +123,7 @@ describe('automation procedures ↔ scheduler', () => {
   });
 
   test('owner runner unavailable → 502, and the failed run is in the history', async () => {
-    seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+    seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
     runnerOnline = false;
 
     const res = await call('user-1', 'trigger', { id: 'a1' });

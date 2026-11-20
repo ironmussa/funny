@@ -38,8 +38,8 @@ describe('threadAccessPort', () => {
     t.cleanup();
     t.db.run(sql`DELETE FROM thread_shares`);
     t.db.run(sql`DELETE FROM resource_grants`);
-    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
   });
 
   test('the owner has every level', async () => {

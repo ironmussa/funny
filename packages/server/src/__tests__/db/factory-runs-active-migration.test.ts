@@ -15,7 +15,7 @@ describe('098_factory_runs_one_active_per_issue migration', () => {
     const { autoMigrate } = await import('../../db/migrate.js');
     await autoMigrate();
     const { db } = await import('../../db/index.js');
-    const run = (q: ReturnType<typeof sql>) => (db as any).run(q);
+    const run = (q: ReturnType<typeof sql>) => db.run(q);
 
     // Rewind to the pre-098 shape.
     run(sql`DROP INDEX factory_runs_one_active_per_issue`);
@@ -39,9 +39,9 @@ describe('098_factory_runs_one_active_per_issue migration', () => {
     await autoMigrate();
 
     const states = Object.fromEntries(
-      (
-        (db as any).all(sql`SELECT id, state FROM factory_runs`) as { id: string; state: string }[]
-      ).map((r) => [r.id, r.state]),
+      db
+        .all<{ id: string; state: string }>(sql`SELECT id, state FROM factory_runs`)
+        .map((r) => [r.id, r.state]),
     );
     expect(states).toEqual({ old: 'stopped', new: 'waiting_ci', done: 'failed', other: 'working' });
 

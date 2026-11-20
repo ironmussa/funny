@@ -2,21 +2,54 @@ import { describe, expect, test } from 'bun:test';
 
 import { FailureCode } from '@funny/shared/runner-v2/common';
 
+import { resolveRunnerGrpcConfig } from '../../services/grpc/config.js';
 import { GrpcRunnerRequestAdapter } from '../../services/grpc/runner-request-adapter.js';
-import { TunnelDispatchError } from '../../services/grpc/tunnel-handler.js';
+import { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
+import {
+  RunnerGrpcTunnelDispatcher,
+  TunnelDispatchError,
+  type TunnelDispatchRequest,
+  type TunnelExchange,
+} from '../../services/grpc/tunnel-handler.js';
 import { RunnerRequestTimeoutError } from '../../services/runner-ports.js';
 
-function adapterWith(
-  dispatch: (runnerId: string, request: any) => any,
-  isConnected = () => true,
-): GrpcRunnerRequestAdapter {
-  return new GrpcRunnerRequestAdapter({ isConnected, dispatch } as any);
+/** An exchange the test scripts; the tunnel id and a no-op cancel are filled in. */
+type ScriptedExchange = Omit<TunnelExchange, 'tunnelId' | 'cancel'> &
+  Partial<Pick<TunnelExchange, 'cancel'>>;
+
+type Script = (runnerId: string, request: TunnelDispatchRequest) => ScriptedExchange;
+
+/** A tunnel dispatcher whose connection state and exchanges the test scripts. */
+class ScriptedDispatcher extends RunnerGrpcTunnelDispatcher {
+  constructor(
+    private readonly script: Script,
+    private readonly connected: () => boolean,
+  ) {
+    super(
+      resolveRunnerGrpcConfig({ RUNNER_GRPC_ENABLED: 'true' }),
+      new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: 60_000 }),
+    );
+  }
+
+  override isConnected(): boolean {
+    return this.connected();
+  }
+
+  override dispatch(runnerId: string, request: TunnelDispatchRequest): TunnelExchange {
+    return { tunnelId: 'tunnel-1', cancel: () => {}, ...this.script(runnerId, request) };
+  }
+}
+
+function adapterWith(dispatch: Script, isConnected = () => true): GrpcRunnerRequestAdapter {
+  return new GrpcRunnerRequestAdapter(new ScriptedDispatcher(dispatch, isConnected));
 }
 
 describe('GrpcRunnerRequestAdapter', () => {
   test('rejects when no active gRPC tunnel exists', async () => {
     const adapter = adapterWith(
-      () => undefined,
+      () => {
+        throw new Error('dispatched without a tunnel');
+      },
       () => false,
     );
     await expect(
@@ -64,7 +97,7 @@ describe('GrpcRunnerRequestAdapter', () => {
   test('preserves binary uploads and base64-encodes binary responses', async () => {
     const upload = Uint8Array.from([0, 0xff, 0xfe, 0x80, 1]);
     const responseBytes = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0xff]);
-    let requestBody: Uint8Array | undefined;
+    let requestBody: TunnelDispatchRequest['body'];
     const adapter = adapterWith((_runnerId, request) => {
       requestBody = request.body;
       return {

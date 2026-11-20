@@ -77,7 +77,7 @@ beforeEach(async () => {
   testDb = createTestDb();
   const { setConnection } = await import('../../../db/index.js');
   setConnection({
-    db: testDb.db as any,
+    db: testDb.db,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
     mode: 'sqlite',
@@ -114,6 +114,12 @@ describe('runner resolution adapter (real resolver, two users)', () => {
   });
 });
 
+/** The body a runner request carries, as text (it may be sent as bytes). */
+function bodyText(request: RunnerRequest): string {
+  const body = request.body;
+  return body instanceof Uint8Array ? new TextDecoder().decode(body) : (body ?? '');
+}
+
 describe('remote creation adapter', () => {
   beforeEach(() => runner('r1', 'alice'));
 
@@ -143,7 +149,7 @@ describe('remote creation adapter', () => {
     expect(result).toEqual({ ok: true, thread: { id: 't1' } });
     expect(t.calls[0][0]).toBe('r1');
     expect(t.calls[0][1]).toMatchObject({ method: 'POST', path });
-    expect(JSON.parse(t.calls[0][1].body as string)).toEqual({
+    expect(JSON.parse(bodyText(t.calls[0][1]))).toEqual({
       projectId: 'p-shared',
       extra: true,
     });
@@ -224,7 +230,7 @@ describe('registry and cache adapters (real thread registry)', () => {
       .select()
       .from(testDb.schema.threads)
       .all()
-      .find((row: any) => row.id === id) as any;
+      .find((row) => row.id === id);
   }
 
   test('persists registration metadata with the runtime branch winning', async () => {

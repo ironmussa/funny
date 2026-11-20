@@ -35,9 +35,11 @@ describe('socketio bootstrap', () => {
       PORT: '3001',
       VITE_PORT: '5173',
       CORS_ORIGIN: 'http://localhost:5173,http://127.0.0.1:5173',
-    } as any);
+    });
     const { engine } = createSocketIOServer(auth, corsOrigins);
 
+    // SAFETY: a polling handshake never calls `server.upgrade`, the only use the
+    // engine makes of the Bun server here.
     const res = await engine.handleRequest(
       new Request('http://127.0.0.1:3001/socket.io/?EIO=4&transport=polling', {
         headers: { origin: 'http://localhost:3001' },

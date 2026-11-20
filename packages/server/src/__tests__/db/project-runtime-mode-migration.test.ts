@@ -14,7 +14,7 @@ describe('095_project_runtime_mode migration', () => {
     const { autoMigrate } = await import('../../db/migrate.js');
     await autoMigrate();
     const { db } = await import('../../db/index.js');
-    const run = (q: ReturnType<typeof sql>) => (db as any).run(q);
+    const run = (q: ReturnType<typeof sql>) => db.run(q);
 
     // Rewind to the pre-095 shape: drop `mode`, restore `enabled_by_default`.
     run(sql`ALTER TABLE project_sandbox_settings DROP COLUMN mode`);
@@ -44,10 +44,8 @@ describe('095_project_runtime_mode migration', () => {
     await autoMigrate();
 
     const mode = (projectId: string, userId: string) =>
-      (
-        (db as any).all(
-          sql`SELECT mode FROM project_sandbox_settings WHERE project_id = ${projectId} AND user_id = ${userId}`,
-        ) as { mode: string }[]
+      db.all<{ mode: string }>(
+        sql`SELECT mode FROM project_sandbox_settings WHERE project_id = ${projectId} AND user_id = ${userId}`,
       )[0].mode;
 
     expect(mode('wt', 'u1')).toBe('sandbox');

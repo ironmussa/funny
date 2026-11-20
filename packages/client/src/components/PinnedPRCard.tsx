@@ -32,7 +32,7 @@ import { AuthorBadge } from '@/components/AuthorBadge';
 import { MarkdownBody } from '@/components/MarkdownBody';
 import { PRBadge } from '@/components/PRBadge';
 import { getLastCommitAuthor } from '@/components/pull-requests/last-commit-author';
-import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
+import { PRCreateThreadButton } from '@/components/pull-requests/PRCreateThreadButton';
 import { PRMergeLine } from '@/components/pull-requests/PRMergeLine';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -778,7 +778,7 @@ export function PinnedPRCard({
             </DropdownMenu>
           )}
           {onCreateThreadForBranch && (
-            <PRActionsMenu
+            <PRCreateThreadButton
               prNumber={pr.number}
               branch={pr.head.ref}
               onCreateThread={onCreateThreadForBranch}

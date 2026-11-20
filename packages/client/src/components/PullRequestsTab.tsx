@@ -7,8 +7,8 @@ import { useTranslation } from 'react-i18next';
 import { BranchBadge } from '@/components/BranchBadge';
 import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
-import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
 import { PRCompactIdentity } from '@/components/pull-requests/PRCompactIdentity';
+import { PRCreateThreadButton } from '@/components/pull-requests/PRCreateThreadButton';
 import {
   PRFilterBar,
   EMPTY_PR_FILTERS,
@@ -116,7 +116,11 @@ function PullRequestRow({
           ) : null
         }
       />
-      <PRActionsMenu prNumber={pr.number} branch={pr.head.ref} onCreateThread={onCreateThread} />
+      <PRCreateThreadButton
+        prNumber={pr.number}
+        branch={pr.head.ref}
+        onCreateThread={onCreateThread}
+      />
     </div>
   );
 }

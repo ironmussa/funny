@@ -31,7 +31,8 @@
  *   needs it, while a node skipped by its `when` guard counts as done.
  * - **Concurrency groups.** A node with `concurrency` waits for a slot of its
  *   group from the run's `ConcurrencyGate` (shared across runs) after its
- *   guard passes, and gives it back once its work has stopped.
+ *   guard passes, and gives it back once its work has stopped. In a
+ *   batching group, a member's node takes the outcome its leader settled.
  * - **Journal.** With a `journal`, every execution is recorded, and a run
  *   that starts again replays what was recorded (see `journal.ts`).
  * - **Failure.** A node failure with `onError: 'fail'` (the default) stops
@@ -56,7 +57,7 @@ import {
   type PipelineStateChange,
   type PipelineStateKind,
 } from './engine.js';
-import { defaultConcurrencyGate } from './gate.js';
+import { defaultConcurrencyGate, type SlotGrant } from './gate.js';
 import {
   executionKey,
   latestByExecution,
@@ -410,13 +411,24 @@ export async function runGraph<T>(
   let lastRan: GraphNode<T> | undefined;
 
   /** How `node` asks for its concurrency slot, if it has a group. */
-  const slotFor = (node: GraphNode<T>, visit: string) => {
+  const slotFor = (node: GraphNode<T>, visit: string, input: T) => {
     const concurrency = node.def.concurrency;
     const group = groups.get(node.def.name);
     if (!concurrency || group === undefined) return undefined;
     const holder = `${runId}/${node.def.name}/${visit}`;
     return (signal: AbortSignal, onWait: () => void) =>
-      gate.acquire({ group, limit: concurrency.limit, holder, signal, onWait });
+      gate.acquire({
+        group,
+        limit: concurrency.limit,
+        holder,
+        signal,
+        onWait,
+        batch: concurrency.batch && {
+          max: concurrency.batch.max,
+          waitMs: concurrency.batch.waitMs,
+        },
+        input,
+      });
   };
 
   /** The visits of the regions around `node`, outermost first ("1" outside loops). */
@@ -441,7 +453,8 @@ export async function runGraph<T>(
       emit,
       iteration,
       stopGraceMs: opts.stopGraceMs,
-      acquireSlot: slotFor(node, visit),
+      acquireSlot: slotFor(node, visit, input),
+      adoptBatchOutput: node.def.concurrency?.batch?.adopt,
       loopRegion: loopOf.get(node),
     };
     const previous = recorded.get(executionKey(node.def.name, visit));
@@ -692,7 +705,8 @@ async function runNodeTask<T>(
     emit: (c: PipelineStateChange<T>) => void;
     iteration: number;
     stopGraceMs?: number;
-    acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<() => void>;
+    acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<SlotGrant>;
+    adoptBatchOutput?: (input: T, output: unknown) => T;
     loopRegion?: Region<T>;
     info?: Omit<NodeRunInfo, 'iteration'>;
   },

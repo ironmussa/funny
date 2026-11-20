@@ -41,6 +41,7 @@ export type {
   NodeLoop,
   NodeRunInfo,
   NodeConcurrency,
+  NodeBatch,
   PipelineLoop,
   PipelineDefinition,
   PipelineStateKind,
@@ -53,7 +54,19 @@ export type {
 
 // ── Concurrency groups ──────────────────────────────────────
 export { createMemoryConcurrencyGate, defaultConcurrencyGate } from './gate.js';
-export type { ConcurrencyGate, MemoryGateOptions, SlotRequest, SlotRelease } from './gate.js';
+export type {
+  Batch,
+  BatchMember,
+  BatchPolicy,
+  ConcurrencyGate,
+  MemberOutcome,
+  MemberState,
+  MemoryGateOptions,
+  SettledOutcome,
+  SlotGrant,
+  SlotRelease,
+  SlotRequest,
+} from './gate.js';
 
 // ── Execution journal ───────────────────────────────────────
 export { createMemoryJournal } from './journal.js';

@@ -11,7 +11,7 @@
  * Effect coordinates cancellation, retry waits, and node interruption.
  */
 
-import type { ConcurrencyGate } from './gate.js';
+import type { Batch, ConcurrencyGate } from './gate.js';
 import type { Journal, ResumeInfo } from './journal.js';
 import { runGraph } from './scheduler.js';
 
@@ -44,6 +44,11 @@ export interface NodeRunInfo {
   resume?: ResumeInfo;
   /** Record data about the work in progress (e.g. the thread started) in the journal. */
   checkpoint(data: unknown): Promise<void>;
+  /**
+   * Set when this node leads a batch: the other runs it executes for. Settle
+   * each member before the node ends; members left unsettled wait again.
+   */
+  batch?: Batch;
 }
 
 /**
@@ -141,6 +146,25 @@ export interface NodeConcurrency<T> {
   group: string | ((initial: T) => string);
   /** Executions of the group allowed at once. The gate may replace it. */
   limit: number;
+  /**
+   * Run the node once for several runs waiting on the group (limit 1). The
+   * leader's node gets `info.batch` and settles each member; a member's node
+   * does not execute and completes with the outcome settled for it.
+   */
+  batch?: NodeBatch<T>;
+}
+
+/** A batching concurrency group. See `NodeConcurrency.batch`. */
+export interface NodeBatch<T> {
+  /** Most runs in one batch, the leader included. */
+  max: number;
+  /** How long the leader waits for more members before it starts. */
+  waitMs: number;
+  /**
+   * A member's result context from the output its leader settled. Default:
+   * the member's input, unchanged.
+   */
+  adopt?: (input: T, output: unknown) => T;
 }
 
 /**

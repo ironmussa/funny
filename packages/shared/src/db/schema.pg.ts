@@ -363,6 +363,7 @@ export const factoryRuns = pgTable('factory_runs', {
  * server host is the issue factory, so rows hang off `factory_runs`.
  */
 // Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+// fallow-ignore-next-line code-duplication
 export const workflowNodeExecutions = pgTable(
   'workflow_node_executions',
   {
@@ -387,6 +388,7 @@ export const workflowNodeExecutions = pgTable(
  * holder (`<runId>/<nodeId>/<visit>`), renewed while the node runs and
  * expired when its server stops renewing it.
  */
+// fallow-ignore-next-line code-duplication
 export const workflowConcurrencyLeases = pgTable(
   'workflow_concurrency_leases',
   {
@@ -403,6 +405,7 @@ export const workflowConcurrencyLeases = pgTable(
  * waiter by `priority` then `requested_at` (D5). A batching group (D5b)
  * records the leader a waiter was gathered by and the outcome it settled.
  */
+// fallow-ignore-next-line code-duplication
 export const workflowConcurrencyWaiters = pgTable(
   'workflow_concurrency_waiters',
   {

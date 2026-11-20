@@ -24,7 +24,7 @@ import { z } from 'zod';
 import { db } from '../../db/index.js';
 import { workflowNodeExecutions } from '../../db/schema.js';
 
-export class JournalStorageError extends Error {
+class JournalStorageError extends Error {
   constructor(cause: unknown) {
     super(
       `Workflow journal storage failed: ${cause instanceof Error ? cause.message : String(cause)}`,

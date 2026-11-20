@@ -168,4 +168,18 @@ describe('ready-queue scheduler', () => {
     expect(result.ctx).toBe(1);
     expect(next).not.toHaveBeenCalled();
   });
+
+  test('a loop that starts after the first node returns the last node result', async () => {
+    const result = await runPipeline(
+      definePipeline<number>({
+        name: 'late-loop',
+        nodes: [node('setup', (n) => n + 10), node('step', (n) => n + 1)],
+        loop: { from: 'step', until: (n) => n >= 13 },
+      }),
+      0,
+    );
+    expect(result.outcome).toBe('completed');
+    expect(result.ctx).toBe(13);
+    expect(result.iterations).toBe(3);
+  });
 });

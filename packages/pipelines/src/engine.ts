@@ -79,7 +79,28 @@ export interface PipelineNode<T> {
    * without it (or with `dependsOn: []`) is a root and starts at once.
    */
   dependsOn?: string[];
+  /**
+   * How the node joins its dependencies. Default `all_success`.
+   * - `all_success`: no dependency failed (a skipped dependency counts as done).
+   * - `all_done`: every dependency finished, whatever its result.
+   * - `one_success`: at least one dependency succeeded; the node starts on the
+   *   first success without waiting for (or cancelling) the others.
+   * A node whose rule can no longer be satisfied is skipped, and a node it
+   * skips counts as failed for dependents with `all_success`.
+   */
+  triggerRule?: TriggerRule;
+  /**
+   * What a failure of this node does to the run. Default `fail`: the run
+   * fails. `continue`: the node is marked failed and the joins decide.
+   */
+  onError?: NodeOnError;
 }
+
+/** How a node joins its dependencies. See `PipelineNode.triggerRule`. */
+export type TriggerRule = 'all_success' | 'all_done' | 'one_success';
+
+/** What a node failure does to the run. See `PipelineNode.onError`. */
+export type NodeOnError = 'fail' | 'continue';
 
 /** Loop configuration — allows jumping back to a previous node. */
 export interface PipelineLoop<T> {
@@ -157,9 +178,9 @@ export interface PipelineRunResult<T> {
 export function node<T>(
   name: string,
   execute: NodeFn<T>,
-  opts?: { when?: GuardFn<T>; retry?: NodeRetryConfig<T>; dependsOn?: string[] },
+  opts?: Omit<PipelineNode<T>, 'name' | 'execute'>,
 ): PipelineNode<T> {
-  return { name, execute, when: opts?.when, retry: opts?.retry, dependsOn: opts?.dependsOn };
+  return { ...opts, name, execute };
 }
 
 /**

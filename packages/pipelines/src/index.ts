@@ -36,6 +36,8 @@ export type {
   GuardFn,
   NodeRetryConfig,
   PipelineNode,
+  TriggerRule,
+  NodeOnError,
   PipelineLoop,
   PipelineDefinition,
   PipelineStateKind,

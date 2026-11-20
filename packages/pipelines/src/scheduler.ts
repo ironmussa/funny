@@ -32,6 +32,8 @@
  * - **Concurrency groups.** A node with `concurrency` waits for a slot of its
  *   group from the run's `ConcurrencyGate` (shared across runs) after its
  *   guard passes, and gives it back once its work has stopped.
+ * - **Journal.** With a `journal`, every execution is recorded, and a run
+ *   that starts again replays what was recorded (see `journal.ts`).
  * - **Failure.** A node failure with `onError: 'fail'` (the default) stops
  *   new nodes from starting and aborts the nodes still running in other
  *   branches; the scheduler waits for them to stop (up to `stopGraceMs`
@@ -45,14 +47,22 @@ import {
   SUB_PIPELINE_PARENT_CB,
   computeLevels,
   type GuardFn,
+  type NodeRunInfo,
   type PipelineDefinition,
   type PipelineNode,
   type PipelineOutcome,
   type PipelineRunOptions,
   type PipelineRunResult,
   type PipelineStateChange,
+  type PipelineStateKind,
 } from './engine.js';
 import { defaultConcurrencyGate } from './gate.js';
+import {
+  executionKey,
+  latestByExecution,
+  type ExecutionStatus,
+  type JournalEntry,
+} from './journal.js';
 import { causeMessage, invoke, runSingleNode } from './node-runner.js';
 
 type NodeState = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled';
@@ -292,6 +302,24 @@ export async function runGraph<T>(
     return { outcome: 'failed', ctx: initial, error, iterations: 1 };
   }
   const { nodes, regions } = built;
+  const journal = opts.journal;
+  let recorded = new Map<string, JournalEntry<T>>();
+  if (journal) {
+    try {
+      recorded = latestByExecution(await journal.load(runId));
+    } catch (err) {
+      const error = `Could not load the run's journal: ${err instanceof Error ? err.message : String(err)}`;
+      emit({
+        kind: 'terminal',
+        nodeName: pipeline.name,
+        ctx: initial,
+        iteration: 1,
+        error,
+        outcome: 'failed',
+      });
+      return { outcome: 'failed', ctx: initial, error, iterations: 1 };
+    }
+  }
   const iterations = () => Math.max(1, ...regions.map((r) => r.visit));
   const loopOf = new Map(regions.map((r) => [r.exit, r]));
 
@@ -382,7 +410,7 @@ export async function runGraph<T>(
   let lastRan: GraphNode<T> | undefined;
 
   /** How `node` asks for its concurrency slot, if it has a group. */
-  const slotFor = (node: GraphNode<T>, visit: number) => {
+  const slotFor = (node: GraphNode<T>, visit: string) => {
     const concurrency = node.def.concurrency;
     const group = groups.get(node.def.name);
     if (!concurrency || group === undefined) return undefined;
@@ -390,6 +418,13 @@ export async function runGraph<T>(
     return (signal: AbortSignal, onWait: () => void) =>
       gate.acquire({ group, limit: concurrency.limit, holder, signal, onWait });
   };
+
+  /** The visits of the regions around `node`, outermost first ("1" outside loops). */
+  const visitPath = (node: GraphNode<T>) =>
+    enclosing(node.region)
+      .reverse()
+      .map((r) => r.visit)
+      .join('.') || '1';
 
   const startTask = (node: GraphNode<T>) => {
     node.state = 'running';
@@ -399,17 +434,66 @@ export async function runGraph<T>(
     const abort = () => controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
     const iteration = node.region?.visit ?? 1;
-    const task = runNodeTask(node, inputOf(node), {
+    const visit = visitPath(node);
+    const input = inputOf(node);
+    const params = {
       signal: controller.signal,
       emit,
       iteration,
       stopGraceMs: opts.stopGraceMs,
-      acquireSlot: slotFor(node, iteration),
+      acquireSlot: slotFor(node, visit),
       loopRegion: loopOf.get(node),
-    })
+    };
+    const previous = recorded.get(executionKey(node.def.name, visit));
+    const replay = previous && replayOf(node, previous);
+    const task = (
+      replay
+        ? replayNodeTask(node, replay, params)
+        : journaledNodeTask(node, input, params, visit, previous)
+    )
       .finally(() => signal?.removeEventListener('abort', abort))
       .then((result) => ({ node, result }));
     running.set(node, task);
+  };
+
+  /** Run `node` and record the execution, resuming `previous` if it never finished. */
+  const journaledNodeTask = async (
+    node: GraphNode<T>,
+    input: T,
+    params: Parameters<typeof runNodeTask<T>>[2],
+    visit: string,
+    previous: JournalEntry<T> | undefined,
+  ): Promise<TaskResult<T>> => {
+    const unfinished = previous?.status === 'running' || previous?.status === 'cancelled';
+    const resume =
+      unfinished && previous ? { recorded: previous as JournalEntry<unknown> } : undefined;
+    const entry: JournalEntry<T> = {
+      runId,
+      nodeId: node.def.name,
+      visit,
+      attempt: (previous?.attempt ?? 0) + 1,
+      status: 'running',
+      startedAt: Date.now(),
+    };
+    const write = async (patch: Partial<JournalEntry<T>>) => {
+      Object.assign(entry, patch);
+      await journal?.record({ ...entry });
+    };
+    try {
+      await write({});
+    } catch (err) {
+      return { kind: 'failed', ctx: input, error: journalError(err) };
+    }
+    const result = await runNodeTask(node, input, {
+      ...params,
+      info: { visit, resume, checkpoint: (data) => write({ data }) },
+    });
+    try {
+      await write(finishedEntry(result));
+    } catch (err) {
+      return { kind: 'failed', ctx: input, error: journalError(err) };
+    }
+    return result;
   };
 
   const launchReady = () => {
@@ -535,6 +619,70 @@ export async function runGraph<T>(
   return terminal('completed', last?.def.name ?? pipeline.name);
 }
 
+/** A recorded execution the run takes as it is, without running the node. */
+type Replay<T> =
+  | { kind: 'succeeded'; ctx: T }
+  | { kind: 'skipped'; ctx: T }
+  | { kind: 'failed'; ctx: T; error: string };
+
+/**
+ * What to do with `node`'s recorded execution: replay it, or (undefined)
+ * run the node again, resuming it when it never finished.
+ */
+function replayOf<T>(node: GraphNode<T>, entry: JournalEntry<T>): Replay<T> | undefined {
+  if (entry.output === undefined) return undefined;
+  if (entry.status === 'succeeded') return { kind: 'succeeded', ctx: entry.output };
+  if (entry.status === 'skipped') return { kind: 'skipped', ctx: entry.output };
+  // A tolerated failure stays one, so the joins take the same path.
+  if (entry.status === 'failed' && node.def.onError === 'continue') {
+    return { kind: 'failed', ctx: entry.output, error: entry.error ?? 'failed' };
+  }
+  return undefined;
+}
+
+/** The state change a replayed execution reports, as if it had just run. */
+const REPLAY_STATE_KIND = {
+  succeeded: 'completed',
+  skipped: 'skipped',
+  failed: 'error',
+} as const satisfies Record<Replay<unknown>['kind'], PipelineStateKind>;
+
+/** Take a recorded execution: report it, and evaluate the loop condition on its output. */
+async function replayNodeTask<T>(
+  node: GraphNode<T>,
+  replay: Replay<T>,
+  params: Parameters<typeof runNodeTask<T>>[2],
+): Promise<TaskResult<T>> {
+  const { emit, iteration } = params;
+  emit({
+    kind: REPLAY_STATE_KIND[replay.kind],
+    nodeName: node.def.name,
+    ctx: replay.ctx,
+    iteration,
+    error: replay.kind === 'failed' ? replay.error : undefined,
+  });
+  if (replay.kind !== 'succeeded') return replay;
+  return untilAfter(replay.ctx, params);
+}
+
+/** The finished part of a journal entry for a task result. */
+function finishedEntry<T>(result: TaskResult<T>): Partial<JournalEntry<T>> {
+  const finishedAt = Date.now();
+  const status: ExecutionStatus =
+    result.kind === 'cancelled'
+      ? result.ctx !== undefined
+        ? 'succeeded'
+        : 'cancelled'
+      : result.kind;
+  const patch: Partial<JournalEntry<T>> = { status, finishedAt };
+  if (result.ctx !== undefined) patch.output = result.ctx;
+  if (result.kind === 'failed') patch.error = result.error;
+  return patch;
+}
+
+const journalError = (err: unknown) =>
+  `Could not record the execution in the journal: ${err instanceof Error ? err.message : String(err)}`;
+
 /** Run one node, then evaluate its loop condition when it closes a loop region. */
 async function runNodeTask<T>(
   node: GraphNode<T>,
@@ -546,9 +694,9 @@ async function runNodeTask<T>(
     stopGraceMs?: number;
     acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<() => void>;
     loopRegion?: Region<T>;
+    info?: Omit<NodeRunInfo, 'iteration'>;
   },
 ): Promise<TaskResult<T>> {
-  const { signal, loopRegion } = params;
   const res = await runSingleNode(node.def, input, params);
   if (res.status === 'cancelled') {
     // A synchronous node can commit its result and abort the run in the same
@@ -557,15 +705,23 @@ async function runNodeTask<T>(
   }
   if (res.status === 'error') return { kind: 'failed', ctx: res.ctx, error: res.error ?? 'failed' };
   if (res.status === 'skipped') return { kind: 'skipped', ctx: res.ctx };
-  if (!loopRegion) return { kind: 'succeeded', ctx: res.ctx };
+  return untilAfter(res.ctx, params);
+}
 
+/** A node succeeded with `ctx`: evaluate its loop condition, if it declares a loop. */
+async function untilAfter<T>(
+  ctx: T,
+  params: { signal: AbortSignal; loopRegion?: Region<T> },
+): Promise<TaskResult<T>> {
+  const { signal, loopRegion } = params;
+  if (!loopRegion) return { kind: 'succeeded', ctx };
   const condition = await Effect.runPromiseExit(
-    invoke(() => loopRegion.until(res.ctx)),
+    invoke(() => loopRegion.until(ctx)),
     { signal },
   );
-  if (signal.aborted) return { kind: 'cancelled', ctx: res.ctx };
+  if (signal.aborted) return { kind: 'cancelled', ctx };
   if (Exit.isFailure(condition)) {
-    return { kind: 'failed', ctx: res.ctx, error: causeMessage(condition.cause) };
+    return { kind: 'failed', ctx, error: causeMessage(condition.cause) };
   }
-  return { kind: 'succeeded', ctx: res.ctx, loop: condition.value ? 'exit' : 'again' };
+  return { kind: 'succeeded', ctx, loop: condition.value ? 'exit' : 'again' };
 }

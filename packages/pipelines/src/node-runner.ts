@@ -6,7 +6,7 @@
 
 import { Cause, Effect, Exit, Result } from 'effect';
 
-import type { PipelineNode, PipelineStateChange } from './engine.js';
+import type { NodeRunInfo, PipelineNode, PipelineStateChange } from './engine.js';
 
 // Capture synchronous throws as well as rejected promises at the callback boundary.
 export const invoke = <A>(fn: (signal: AbortSignal) => A | Promise<A>) =>
@@ -82,6 +82,8 @@ export async function runSingleNode<T>(
      * release; `onWait` is called if the node has to wait for it.
      */
     acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<() => void>;
+    /** The rest of what the node is told about its execution. */
+    info?: Omit<NodeRunInfo, 'iteration'>;
   },
 ): Promise<SingleNodeResult<T>> {
   const { signal, emit, iteration } = params;
@@ -92,6 +94,12 @@ export async function runSingleNode<T>(
   /** The slot request, released once the node's work has stopped, whatever the outcome. */
   let slot: Promise<() => void> | undefined;
   const { acquireSlot } = params;
+  const runInfo: NodeRunInfo = {
+    visit: String(iteration),
+    checkpoint: async () => {},
+    ...params.info,
+    iteration,
+  };
   if (signal?.aborted) return { ctx, status: 'cancelled' };
 
   const execution = Effect.gen(function* () {
@@ -118,7 +126,7 @@ export async function runSingleNode<T>(
     for (let attempt = 1; ; attempt++) {
       const result = yield* Effect.result(
         invoke((abortSignal) => {
-          const next = node.execute(ctx, abortSignal, { iteration });
+          const next = node.execute(ctx, abortSignal, runInfo);
           // A synchronous node can commit its result and request cancellation in
           // the same call. Preserve that completed work, but never adopt a late
           // Promise result after interruption.

@@ -21,8 +21,15 @@
  * - **Cancellation.** Each node execution has its own `AbortSignal`, linked to
  *   the run's signal; aborting the run aborts every running node, and the
  *   scheduler waits for them to settle before it reports `cancelled`.
- * - **Failure.** A node failure stops new nodes from starting; the scheduler
- *   waits for the running ones to settle and reports the failure.
+ * - **Joins.** A node starts when its `triggerRule` (`all_success` by
+ *   default, `all_done`, `one_success`) is satisfied, and is skipped once it
+ *   can no longer be. A node skipped that way counts as failed for
+ *   `all_success` dependents, so a failure skips everything downstream that
+ *   needs it, while a node skipped by its `when` guard counts as done.
+ * - **Failure.** A node failure with `onError: 'fail'` (the default) stops
+ *   new nodes from starting; the scheduler waits for the running ones to
+ *   settle and reports the failure. With `onError: 'continue'` the node is
+ *   marked failed and the joins decide.
  */
 
 import { Effect, Exit } from 'effect';
@@ -51,6 +58,10 @@ interface GraphNode<T> {
   state: NodeState;
   /** The context the node produced (its input when it was skipped). */
   out?: T;
+  /** Skipped because its join could no longer be satisfied (an upstream failure). */
+  upstreamFailed?: boolean;
+  /** The dependencies whose results this node read when it started (or was skipped). */
+  readFrom?: ReadonlySet<GraphNode<T>>;
   /** The innermost loop region the node belongs to. */
   region?: Region<T>;
 }
@@ -202,22 +213,66 @@ export async function runGraph<T>(
   const { nodes, region } = built;
   const iterations = () => region?.visit ?? 1;
 
+  /** Did `dep` fail, for a dependent's join (a node skipped by a failure counts)? */
+  const failedForJoin = (dep: GraphNode<T>) =>
+    dep.state === 'failed' || (dep.state === 'skipped' && dep.upstreamFailed === true);
+
+  /** What `node`'s trigger rule says now: start it, skip it, or wait. */
+  const joinDecision = (node: GraphNode<T>): 'start' | 'skip' | 'wait' => {
+    const done = node.deps.filter((d) => readable(node, d));
+    const allDone = done.length === node.deps.length;
+    switch (node.def.triggerRule ?? 'all_success') {
+      case 'all_done':
+        return allDone ? 'start' : 'wait';
+      case 'one_success':
+        if (node.deps.length === 0) return 'start';
+        if (done.some((d) => d.state === 'succeeded')) return 'start';
+        return allDone ? 'skip' : 'wait';
+      case 'all_success':
+        if (done.some(failedForJoin)) return 'skip';
+        return allDone ? 'start' : 'wait';
+    }
+  };
+
   /** May `node` read `dep`'s result now? */
   const readable = (node: GraphNode<T>, dep: GraphNode<T>) =>
     finished(dep.state) && (!dep.region || dep.region.closed || dep.region === node.region);
 
   const inputOf = (node: GraphNode<T>): T => {
-    if (region && node === region.entry && region.visit > 1) return region.feedback as T;
-    if (node.deps.length === 0) return initial;
-    if (node.deps.length === 1) return node.deps[0].out as T;
-    const results = node.deps.map((d) => d.out as T);
+    if (region && node === region.entry && region.visit > 1) {
+      // The feedback already carries what the entry read on its first visit.
+      node.readFrom = new Set(node.deps);
+      return region.feedback as T;
+    }
+    // A join may start (or skip) before every dependency finished: read those that did.
+    const read = node.deps.filter((d) => readable(node, d) && d.out !== undefined);
+    node.readFrom = new Set(read);
+    const results = read.map((d) => d.out as T);
+    if (results.length === 0) return initial;
+    if (results.length === 1) return results[0];
     return merge(results[0], results);
   };
 
-  /** The run's result context: the finished nodes no finished node has read yet. */
+  /** Skip `node` without running it, because its join can no longer be satisfied. */
+  const skipByJoin = (node: GraphNode<T>) => {
+    node.state = 'skipped';
+    node.upstreamFailed = true;
+    node.out = inputOf(node);
+    emit({
+      kind: 'skipped',
+      nodeName: node.def.name,
+      ctx: node.out,
+      iteration: node.region?.visit ?? 1,
+    });
+    if (region && node === region.exit) region.closed = true;
+  };
+
+  /** The run's result context: the finished nodes whose result no finished node read. */
   const resultCtx = (): T => {
     const frontier = nodes.filter(
-      (n) => finished(n.state) && !n.dependents.some((d) => finished(d.state)),
+      (n) =>
+        finished(n.state) &&
+        !n.dependents.some((d) => finished(d.state) && d.readFrom?.has(n) === true),
     );
     if (frontier.length === 0) return initial;
     if (frontier.length === 1) return frontier[0].out as T;
@@ -249,10 +304,19 @@ export async function runGraph<T>(
 
   const launchReady = () => {
     if (signal?.aborted || failure) return;
-    for (const node of nodes) {
-      if (running.size >= concurrency) return;
-      if (node.state !== 'pending') continue;
-      if (node.deps.every((d) => readable(node, d))) startTask(node);
+    // A skip can settle further joins, so sweep until nothing changes.
+    for (let changed = true; changed;) {
+      changed = false;
+      for (const node of nodes) {
+        if (node.state !== 'pending') continue;
+        const decision = joinDecision(node);
+        if (decision === 'skip') {
+          skipByJoin(node);
+          changed = true;
+        } else if (decision === 'start' && running.size < concurrency) {
+          startTask(node);
+        }
+      }
     }
   };
 
@@ -270,7 +334,9 @@ export async function runGraph<T>(
       case 'failed':
         node.state = 'failed';
         node.out = result.ctx;
-        failure ??= { node, error: result.error };
+        if ((node.def.onError ?? 'fail') === 'fail') failure ??= { node, error: result.error };
+        // A failed exit node with `continue` ends its loop: there is no result to check.
+        else if (region && node === region.exit) region.closed = true;
         return;
       case 'skipped':
         node.state = 'skipped';
@@ -292,6 +358,8 @@ export async function runGraph<T>(
             for (const m of region.members) {
               m.state = 'pending';
               m.out = undefined;
+              m.upstreamFailed = undefined;
+              m.readFrom = undefined;
             }
           } else {
             region.closed = true;

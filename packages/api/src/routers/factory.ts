@@ -7,7 +7,7 @@ import {
 } from '@funny/shared/contracts/factory';
 
 import { unwrap } from '../failure.js';
-import { projectProcedure, router } from '../trpc.js';
+import { projectProcedure, protectedProcedure, router } from '../trpc.js';
 
 const SAVE_FORBIDDEN = 'Running an issue factory needs contributor access to the project';
 const CONTROL_FORBIDDEN = 'Controlling factory runs needs contributor access to the project';
@@ -32,6 +32,11 @@ export const factoryRouter = router({
     .query(async ({ ctx, input }) =>
       unwrap(await ctx.ports.factory.runs(ctx.userId, input.projectId)),
     ),
+  // The caller's own runs across projects (thread lists show their threads as
+  // busy). Scoped by factory owner, so it needs no project capability.
+  activeRuns: protectedProcedure.query(async ({ ctx }) =>
+    unwrap(await ctx.ports.factory.activeRuns(ctx.userId)),
+  ),
   // Stopping or retrying acts on the caller's own factory, which runs in their
   // name: the same `steer` as saving it.
   stopRun: projectProcedure('steer', CONTROL_FORBIDDEN)

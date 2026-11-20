@@ -5,12 +5,7 @@
  */
 
 import { validationErr, type DomainError } from '@funny/shared/errors';
-import {
-  DEFAULT_MODEL,
-  DEFAULT_PROVIDER,
-  DEFAULT_PERMISSION_MODE,
-  MODEL_REGISTRY,
-} from '@funny/shared/models';
+import { DEFAULT_PROVIDER, MODEL_REGISTRY } from '@funny/shared/models';
 import { getManifest } from '@funny/shared/provider-manifests';
 import { ok, err, type Result } from 'neverthrow';
 import { z } from 'zod';
@@ -242,9 +237,12 @@ export const createThreadSchema = z
     title: z.string().max(500).default(''),
     mode: threadModeSchema,
     runtime: threadRuntimeSchema.default('local'),
-    provider: agentProviderSchema.default(DEFAULT_PROVIDER as z.infer<typeof agentProviderSchema>),
-    model: agentModelSchema.default(DEFAULT_MODEL),
-    permissionMode: permissionModeSchema.default(DEFAULT_PERMISSION_MODE),
+    // No defaults: `resolveRunDefaults` falls back to the PROJECT's defaults
+    // before the global ones. A default here would always win and hide the
+    // project's choice (callers that send none, like the issue factory).
+    provider: agentProviderSchema.optional(),
+    model: agentModelSchema.optional(),
+    permissionMode: permissionModeSchema.optional(),
     effort: effortLevelSchema.optional(),
     source: threadSourceSchema.default('web'),
     baseBranch: optionalBaseBranchSchema,
@@ -258,7 +256,12 @@ export const createThreadSchema = z
     templateVariables: z.record(z.string(), z.string()).optional(),
   })
   .superRefine((data, ctx) => {
-    validateProviderModel(data, ctx);
+    // A model sent without a provider is a DEFAULT_PROVIDER model (the service
+    // resolves it the same way); with neither, both come from the project.
+    validateProviderModel(
+      { provider: data.provider ?? (data.model ? DEFAULT_PROVIDER : undefined), model: data.model },
+      ctx,
+    );
     if (data.isScratch && data.projectId != null) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,

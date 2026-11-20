@@ -13,8 +13,8 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { CommandHighlight } from '@/components/CommandHighlight';
-import '@/lib/monaco-setup';
 import { Button } from '@/components/ui/button';
+import '@/lib/monaco-setup';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
 import {
@@ -27,6 +27,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
+import { isLightTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
@@ -69,7 +70,7 @@ function ShellEditor({
 }) {
   const { resolvedTheme } = useTheme();
   const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
-  const monacoTheme = resolvedTheme === 'monochrome' ? 'vs' : 'funny-dark';
+  const monacoTheme = isLightTheme(resolvedTheme) ? 'vs' : 'funny-dark';
   const lineCount = Math.max(value.split('\n').length, 3);
   const height = Math.min(Math.max(lineCount * 22 + 16, 100), 400);
 

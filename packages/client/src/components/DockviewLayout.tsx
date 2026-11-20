@@ -23,6 +23,8 @@ import {
   useState,
 } from 'react';
 import { createPortal } from 'react-dom';
+
+import { isLightTheme } from '@/lib/theme';
 import 'dockview-react/dist/styles/dockview.css';
 
 import { useAnimatedPanelToggle } from './dockview/use-animated-panel-toggle';
@@ -1087,7 +1089,7 @@ export function DockviewLayout({
     if (panel && !panel.api.isActive) panel.api.setActive();
   }, [activeBottomTab]);
 
-  const theme = resolvedTheme === 'light' ? themeFunnyLight : themeFunnyDark;
+  const theme = isLightTheme(resolvedTheme) ? themeFunnyLight : themeFunnyDark;
 
   return (
     <>

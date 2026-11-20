@@ -79,6 +79,21 @@ const MOVING: ReadonlySet<FactoryRun['state']> = new Set([
 ]);
 
 /**
+ * Whether the run's pipeline stopped on an error: it failed, or it waits for
+ * the member after a failure (the flow's `on_failure` parked it).
+ */
+export function isFactoryRunFailed(run: Pick<FactoryRun, 'state' | 'failureReason'>): boolean {
+  return run.state === 'failed' || (run.state === 'waiting_human' && run.failureReason !== null);
+}
+
+/** The step the run failed at, when it failed at one. */
+export function factoryRunFailedStep(
+  run: Pick<FactoryRun, 'state' | 'currentStep' | 'flowSteps' | 'failureReason'>,
+): string | null {
+  return factoryRunSteps(run).find((step) => step.status === 'failed')?.name ?? null;
+}
+
+/**
  * Each step of the run's flow, with how far the run got: the steps before the
  * current one are done; the current one is in progress, or failed when the
  * run failed (or waits for the member after a failure) there. A run whose flow
@@ -91,8 +106,7 @@ export function factoryRunSteps(
   const names = run.flowSteps.length > 0 ? run.flowSteps : run.currentStep ? [run.currentStep] : [];
   const at = run.currentStep ? names.indexOf(run.currentStep) : -1;
   const flowEnded = run.state === 'merged' || (run.state === 'waiting_human' && at === -1);
-  const failedHere =
-    run.state === 'failed' || (run.state === 'waiting_human' && run.failureReason !== null);
+  const failedHere = isFactoryRunFailed(run);
   return names.map((name, index) => {
     if (flowEnded) return { name, status: 'done' };
     if (at === -1 || index > at) return { name, status: 'pending' };

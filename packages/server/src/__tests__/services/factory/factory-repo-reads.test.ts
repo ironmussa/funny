@@ -62,4 +62,16 @@ describe('factory repo reads', () => {
     });
     expect(calls).toHaveLength(1);
   });
+
+  test("a branch's pull request in any state is found newest first, merged or closed too", async () => {
+    const { reads } = readsOver({
+      '/repos/o/r/pulls?head=o%3Afactory%2Fissue-7&state=all': [
+        { number: 12, html_url: 'https://github.com/o/r/pull/12' },
+      ],
+    });
+    expect((await reads.findPullRequest('factory/issue-7', 'all'))._unsafeUnwrap()).toEqual({
+      number: 12,
+      url: 'https://github.com/o/r/pull/12',
+    });
+  });
 });

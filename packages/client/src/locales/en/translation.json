@@ -1722,6 +1722,15 @@
     "banner": {
       "title": "Factory · #{{issue}}"
     },
+    "failure": {
+      "titleAtStep": "The factory pipeline stopped at {{step}}",
+      "title": "The factory pipeline stopped on an error"
+    },
+    "activity": {
+      "tooltip": "Factory · #{{issue}} · {{state}}",
+      "failedTooltip": "Factory · #{{issue}} · Failed at {{step}}",
+      "stopRun": "Stop factory run"
+    },
     "indicator": {
       "label": "Factory run: {{step}}"
     }

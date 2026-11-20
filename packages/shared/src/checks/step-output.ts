@@ -9,7 +9,7 @@
 // error: message`), ruff (`file:line:col: F401 message`, or `F401 message`
 // then `--> file:line:col`), prettier --check (`[warn] file`), cargo
 // (`error[E…]: message` then `--> file:line:col`), funny's typecheck baseline check (`Running bun check
-// against 15 projects…`, then one line per project) and the test runner
+// against 15 projects…`, then one line per project, then `  file: TS…: message` per new error) and the test runner
 // (`▶ suite` / `✓ suite 1.2s` / `✗ suite`). Any other line only becomes the
 // step's `current` line, and the last few are kept for a step that fails
 // without reporting an issue of its own.
@@ -47,6 +47,8 @@ const TSC_PRETTY = /^(.+?):(\d+):(\d+) - (error|warning) (TS\d+: .+)$/;
 const MYPY = /^(.+?\.pyi?):(\d+)(?::(\d+))?: (error|warning): (.+)$/;
 const RUFF = /^(.+?\.pyi?):(\d+):(\d+): ([A-Z]+\d+ .+)$/;
 const PRETTIER = /^\[warn\] (\S+\.\w+)$/;
+/** funny's typecheck baseline check: `  file.ts: TS2769: message` (no line number). */
+const TS_BASELINE = /^\s+(\S+\.[cm]?[jt]sx?): (TS\d+: .+)$/;
 /** eslint stylish: a file on its own line, then indented `line:col  severity  message  rule`. */
 const STYLISH_FILE = /^((?:[A-Za-z]:)?[/\\.]?[^\s:]+\.\w+)$/;
 const STYLISH_ISSUE = /^\s+(\d+):(\d+)\s+(error|warning)\s+(.+?)(?:\s{2,}(\S+))?$/;
@@ -108,6 +110,8 @@ function lineIssue(line: string): Issue | null {
       message: ruff[4],
     };
   }
+  const baseline = TS_BASELINE.exec(line);
+  if (baseline) return { severity: 'error', file: baseline[1], message: baseline[2] };
   const prettier = PRETTIER.exec(line);
   return prettier ? { severity: 'warning', file: prettier[1], message: 'not formatted' } : null;
 }

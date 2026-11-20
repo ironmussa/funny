@@ -291,12 +291,12 @@ function parseRefs(decoration: string): {
  * (which doesn't return parents or refs) and goes straight to `git log`.
  */
 /**
- * Every branch and remote-tracking branch, as full ref names
- * (`refs/heads/x`, `refs/remotes/origin/x`); remote `HEAD` aliases are left out.
+ * Every branch and remote-tracking branch with the commit it points at; remote
+ * `HEAD` aliases are left out.
  */
-export function listBranchRefs(cwd: string): ResultAsync<string[], DomainError> {
+export function listBranchRefs(cwd: string): ResultAsync<BranchRefTip[], DomainError> {
   return ResultAsync.fromPromise(
-    gitRead(['for-each-ref', '--format=%(refname)', 'refs/heads', 'refs/remotes'], {
+    gitRead(['for-each-ref', '--format=%(refname)%09%(objectname)', 'refs/heads', 'refs/remotes'], {
       cwd,
       reject: false,
     }),
@@ -304,11 +304,19 @@ export function listBranchRefs(cwd: string): ResultAsync<string[], DomainError> 
   ).map((result) =>
     result.exitCode !== 0
       ? []
-      : result.stdout
-          .split('\n')
-          .map((line) => line.trim())
-          .filter((ref) => ref && !ref.endsWith('/HEAD')),
+      : result.stdout.split('\n').flatMap((line): BranchRefTip[] => {
+          const [ref, tip] = line.trim().split('\t');
+          return ref && tip && !ref.endsWith('/HEAD') ? [{ ref, tip }] : [];
+        }),
   );
+}
+
+/** A branch or remote-tracking ref and the commit it points at. */
+export interface BranchRefTip {
+  /** Full ref name, e.g. `refs/heads/feat/x` or `refs/remotes/origin/feat/x`. */
+  ref: string;
+  /** Hash of the commit the ref points at. */
+  tip: string;
 }
 
 /** A full branch / remote ref name, safe to pass as an `--exclude` pattern. */

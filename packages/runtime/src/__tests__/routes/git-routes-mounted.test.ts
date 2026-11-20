@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   getLog: vi.fn(),
   getGraphLog: vi.fn(),
   listBranchRefs: vi.fn(),
+  getDefaultBranch: vi.fn(),
   getPRForBranch: vi.fn(),
   getRebaseReflogEvents: vi.fn(),
   getUnpushedHashes: vi.fn(),
@@ -102,6 +103,7 @@ vi.mock('@funny/core/git', async (importOriginal) => {
     getLog: mocks.getLog,
     getGraphLog: mocks.getGraphLog,
     listBranchRefs: mocks.listBranchRefs,
+    getDefaultBranch: mocks.getDefaultBranch,
     getPRForBranch: mocks.getPRForBranch,
     getRebaseReflogEvents: mocks.getRebaseReflogEvents,
     getUnpushedHashes: mocks.getUnpushedHashes,
@@ -283,6 +285,7 @@ describe('gitRoutes (mounted)', () => {
     mocks.getPRForBranch.mockResolvedValue(null);
     mocks.getCachedPR.mockReturnValue(undefined);
     mocks.getLastKnownPR.mockReturnValue(undefined);
+    mocks.getDefaultBranch.mockReturnValue(okAsync('main'));
     mocks.schedulePRLookup.mockReset();
     mocks.emitPRUpdateForThread.mockReset();
     mocks.stashList.mockReturnValue(okAsync([{ index: 0, message: 'wip' }]));
@@ -1429,33 +1432,89 @@ describe('gitRoutes (mounted)', () => {
     });
   });
 
-  test('GET /api/git/project/:projectId/graph-log?hideMerged=true leaves out branches whose PR is merged', async () => {
-    mocks.listBranchRefs.mockReturnValueOnce(
-      okAsync([
-        'refs/heads/main',
-        'refs/heads/feat/done',
-        'refs/remotes/origin/feat/done',
-        'refs/heads/feat/wip',
-        'refs/heads/feat/unknown',
-      ]),
-    );
-    vi.mocked(getCachedPR).mockImplementation((_cwd, branch) => {
-      if (branch === 'feat/done') {
-        return { prNumber: 7, prUrl: 'https://github.com/o/r/pull/7', prState: 'MERGED' };
-      }
-      if (branch === 'feat/wip') {
-        return { prNumber: 8, prUrl: 'https://github.com/o/r/pull/8', prState: 'OPEN' };
-      }
-      return undefined;
+  describe('graph-log?hideMerged=true', () => {
+    const pr = (number: number, prState: string) => ({
+      prNumber: number,
+      prUrl: `https://github.com/o/r/pull/${number}`,
+      prState,
     });
-    const app = makeApp();
+    const excludedRefs = () => mocks.getGraphLog.mock.calls.at(-1)![1].excludeRefs;
+    const lookupFor = (branch: string) =>
+      mocks.schedulePRLookup.mock.calls.find(([opts]) => opts.branch === branch)![0];
 
-    await app.request('/api/git/project/p1/graph-log?hideMerged=true');
-    expect(mocks.getGraphLog).toHaveBeenCalledWith('/tmp/repo', {
-      limit: 51,
-      skip: 0,
-      all: true,
-      excludeRefs: ['refs/heads/feat/done', 'refs/remotes/origin/feat/done'],
+    test('leaves out every ref of a branch whose PR is merged', async () => {
+      mocks.listBranchRefs.mockReturnValueOnce(
+        okAsync([
+          { ref: 'refs/heads/main', tip: 'm1' },
+          { ref: 'refs/heads/feat/done', tip: 'd1' },
+          { ref: 'refs/remotes/origin/feat/done', tip: 'd1' },
+          { ref: 'refs/heads/feat/wip', tip: 'w1' },
+          { ref: 'refs/heads/feat/unknown', tip: 'u1' },
+        ]),
+      );
+      mocks.getLastKnownPR.mockImplementation((_cwd: string, branch: string) => {
+        if (branch === 'feat/done') return pr(7, 'MERGED');
+        if (branch === 'feat/wip') return pr(8, 'OPEN');
+        return undefined;
+      });
+
+      await makeApp().request('/api/git/project/p1/graph-log?hideMerged=true');
+      expect(mocks.getGraphLog).toHaveBeenCalledWith('/tmp/repo', {
+        limit: 51,
+        skip: 0,
+        all: true,
+        excludeRefs: ['refs/heads/feat/done', 'refs/remotes/origin/feat/done'],
+      });
+    });
+
+    test('keeps a merged branch hidden after its PR cache entry expires', async () => {
+      // The fresh cache (60 s) has nothing; only the last known answer does.
+      mocks.listBranchRefs.mockReturnValueOnce(
+        okAsync([{ ref: 'refs/heads/feat/done', tip: 'd1' }]),
+      );
+      mocks.getCachedPR.mockReturnValue(undefined);
+      mocks.getLastKnownPR.mockReturnValue(pr(7, 'MERGED'));
+
+      await makeApp().request('/api/git/project/p1/graph-log?hideMerged=true');
+      expect(excludedRefs()).toEqual(['refs/heads/feat/done']);
+    });
+
+    test('revalidates hidden branches and reloads the graph only when merged-ness changes', async () => {
+      mocks.listBranchRefs.mockReturnValueOnce(
+        okAsync([
+          { ref: 'refs/heads/feat/done', tip: 'd1' },
+          { ref: 'refs/heads/feat/new', tip: 'n1' },
+        ]),
+      );
+      mocks.getLastKnownPR.mockImplementation((_cwd: string, branch: string) =>
+        branch === 'feat/done' ? pr(7, 'MERGED') : undefined,
+      );
+      const emit = vi.spyOn(wsBroker, 'emitToUser').mockImplementation(() => {});
+
+      await makeApp().request('/api/git/project/p1/graph-log?hideMerged=true');
+
+      lookupFor('feat/done').onUpdate(pr(7, 'MERGED')); // still merged: nothing to reload
+      lookupFor('feat/new').onUpdate(pr(9, 'OPEN')); // still visible: nothing to reload
+      expect(emit).not.toHaveBeenCalled();
+      lookupFor('feat/new').onUpdate(pr(9, 'MERGED'));
+      expect(emit).toHaveBeenCalledWith('user-1', {
+        type: 'git:refs-updated',
+        threadId: '',
+        data: { projectId: 'p1', changed: ['history'] },
+      });
+      emit.mockRestore();
+    });
+
+    test('does not look up a branch whose PR answer is still fresh', async () => {
+      mocks.listBranchRefs.mockReturnValueOnce(
+        okAsync([{ ref: 'refs/heads/feat/done', tip: 'd1' }]),
+      );
+      mocks.getCachedPR.mockReturnValue(pr(7, 'MERGED'));
+      mocks.getLastKnownPR.mockReturnValue(pr(7, 'MERGED'));
+
+      await makeApp().request('/api/git/project/p1/graph-log?hideMerged=true');
+      expect(mocks.schedulePRLookup).not.toHaveBeenCalled();
+      expect(excludedRefs()).toEqual(['refs/heads/feat/done']);
     });
   });
 

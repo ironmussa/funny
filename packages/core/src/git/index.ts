@@ -107,6 +107,7 @@ export {
   getUnpulledHashes,
   type GitLogEntry,
   type GitGraphLogEntry,
+  type BranchRefTip,
   type GitRebaseCommitPair,
   type GitRebaseReflogEvent,
   type GitRebaseReflogStep,

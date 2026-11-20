@@ -7,6 +7,7 @@
 
 import {
   getLog,
+  getDefaultBranch,
   getGraphLog,
   listBranchRefs,
   getRebaseReflogEvents,
@@ -16,6 +17,7 @@ import {
   getCommitFileDiff,
   getUnpulledHashes,
   type BranchPRInfo,
+  type BranchRefTip,
   type GitGraphLogEntry,
   type GraphRef,
 } from '@funny/core/git';
@@ -314,20 +316,78 @@ function branchOfFullRef(ref: string): string | null {
   return remote ? remote[1] : null;
 }
 
+const isMergedPR = (pr: BranchPRInfo | null | undefined): boolean => pr?.prState === 'MERGED';
+
 /**
- * Refs whose branch has a merged PR (from the PR cache), to leave out of the
- * graph when the user hides merged branches. A branch not in the cache yet
- * stays visible; the PR enrichment of this response looks it up for next time.
+ * The refs to leave out of the graph when merged branches are hidden:
+ * - every ref of a branch whose PR is merged (a squash merge never joins the
+ *   base branch, so git alone would keep drawing it as an open lane);
+ * - a branch with no PR of its own that points at the same commit as a hidden
+ *   ref, e.g. a local branch the issue factory left at the commit it pushed
+ *   under another name.
+ * `prOf` answers `undefined` for a branch not looked up yet; such a branch
+ * stays visible. The base branch is never hidden.
  */
-async function mergedBranchRefs(c: Context<HonoEnv>, cwd: string): Promise<string[]> {
+export function refsToHide(
+  refs: readonly BranchRefTip[],
+  prOf: (branch: string) => BranchPRInfo | null | undefined,
+  baseBranch: string | null,
+): string[] {
+  const hidden = new Set<string>();
+  const hiddenTips = new Set<string>();
+  for (const { ref, tip } of refs) {
+    const branch = branchOfFullRef(ref);
+    if (branch === null || branch === baseBranch || !isMergedPR(prOf(branch))) continue;
+    hidden.add(ref);
+    hiddenTips.add(tip);
+  }
+  for (const { ref, tip } of refs) {
+    const branch = branchOfFullRef(ref);
+    if (branch === null || branch === baseBranch || !hiddenTips.has(tip)) continue;
+    if (prOf(branch) === null) hidden.add(ref);
+  }
+  return refs.flatMap(({ ref }) => (hidden.has(ref) ? [ref] : []));
+}
+
+/**
+ * Refs to leave out of the graph when the user hides merged branches. Uses the
+ * last known PR of each branch (like the PR badges), so a merged branch stays
+ * hidden after its cache entry expires. Every branch without a fresh answer is
+ * looked up in the background, hidden ones included (they are not in the graph,
+ * so the badge enrichment never sees them); when a lookup changes whether a
+ * branch counts as merged, the client is told to reload the graph.
+ */
+async function mergedBranchRefs(
+  c: Context<HonoEnv>,
+  cwd: string,
+  ghEnv: Record<string, string> | undefined,
+  audience: GraphPRAudience,
+): Promise<string[]> {
   const query = parseQuery(c, graphLogFilterSchema);
   if (query.isErr() || !query.value.hideMerged) return [];
-  const refs = await listBranchRefs(cwd);
+  const [refs, baseBranch] = await Promise.all([listBranchRefs(cwd), getDefaultBranch(cwd)]);
   if (refs.isErr()) return [];
-  return refs.value.filter((ref) => {
+  const served = new Map<string, BranchPRInfo | null | undefined>();
+  for (const { ref } of refs.value) {
     const branch = branchOfFullRef(ref);
-    return branch !== null && getCachedPR(cwd, branch)?.prState === 'MERGED';
-  });
+    if (branch === null || served.has(branch)) continue;
+    const known = getLastKnownPR(cwd, branch);
+    served.set(branch, known);
+    if (getCachedPR(cwd, branch) !== undefined) continue;
+    schedulePRLookup({
+      projectPath: cwd,
+      branch,
+      ghEnv,
+      onUpdate: (next) => {
+        if (isMergedPR(next) !== isMergedPR(known)) emitGraphPRChanged(audience);
+      },
+    });
+  }
+  return refsToHide(
+    refs.value,
+    (branch) => served.get(branch),
+    baseBranch.isOk() ? baseBranch.value : null,
+  );
 }
 
 // ─── Project-scoped routes ──────────────────────────────
@@ -365,7 +425,7 @@ logRoutes.get('/project/:projectId/graph-log', async (c) => {
   const all = c.req.query('all') !== 'false';
   const identity = await resolveIdentity(userId, projectId);
   const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-  const excludeRefs = await mergedBranchRefs(c, cwd);
+  const excludeRefs = await mergedBranchRefs(c, cwd, ghEnv, { userId, projectId, threadId: '' });
   const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.graph_log', { projectId }, () =>
       getGraphLog(cwd, { limit: limit + 1, skip, all, excludeRefs }),
@@ -503,7 +563,11 @@ logRoutes.get('/:threadId/graph-log', async (c) => {
   const all = c.req.query('all') !== 'false';
   const identity = await resolveThreadIdentity(userId, threadId);
   const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-  const excludeRefs = await mergedBranchRefs(c, cwd);
+  const excludeRefs = await mergedBranchRefs(c, cwd, ghEnv, {
+    userId,
+    projectId: threadResult.value.projectId,
+    threadId,
+  });
   const [result, unpushedSet, unpulledSet] = await Promise.all([
     fetchLogSpanned(c, 'git.graph_log', { threadId }, () =>
       getGraphLog(cwd, { limit: limit + 1, skip, all, excludeRefs }),

@@ -1,6 +1,7 @@
+import type { BranchPRInfo } from '@funny/core/git';
 import { describe, test, expect } from 'vitest';
 
-import { buildLogPayload, parseLogPagingFrom } from '../../routes/git/log.js';
+import { buildLogPayload, parseLogPagingFrom, refsToHide } from '../../routes/git/log.js';
 
 // These pure helpers back every project- and thread-scoped log endpoint. The
 // handlers over-read by one entry (`limit + 1`) to compute `hasMore` cheaply,
@@ -78,5 +79,56 @@ describe('buildLogPayload', () => {
       unpushedHashes: [],
       unpulledHashes: [],
     });
+  });
+});
+
+describe('refsToHide', () => {
+  const merged: BranchPRInfo = {
+    prNumber: 7,
+    prUrl: 'https://github.com/o/r/pull/7',
+    prState: 'MERGED',
+  };
+  const open: BranchPRInfo = {
+    prNumber: 8,
+    prUrl: 'https://github.com/o/r/pull/8',
+    prState: 'OPEN',
+  };
+  const prs: Record<string, BranchPRInfo | null> = {
+    'factory/issue-1': merged,
+    'feat/open': open,
+    'funny/factory-1-alias': null,
+    main: null,
+  };
+  const prOf = (branch: string) => prs[branch];
+
+  test('hides a branch without a PR of its own that points at a merged branch', () => {
+    const refs = [
+      { ref: 'refs/heads/factory/issue-1', tip: 'aaa' },
+      { ref: 'refs/heads/funny/factory-1-alias', tip: 'aaa' },
+    ];
+    expect(refsToHide(refs, prOf, 'main')).toEqual([
+      'refs/heads/factory/issue-1',
+      'refs/heads/funny/factory-1-alias',
+    ]);
+  });
+
+  test('keeps an alias at another commit, one with its own open PR, and one not looked up yet', () => {
+    const refs = [
+      { ref: 'refs/heads/factory/issue-1', tip: 'aaa' },
+      { ref: 'refs/heads/funny/factory-1-alias', tip: 'bbb' },
+      { ref: 'refs/heads/feat/open', tip: 'aaa' },
+      { ref: 'refs/heads/feat/never-looked-up', tip: 'aaa' },
+    ];
+    expect(refsToHide(refs, prOf, 'main')).toEqual(['refs/heads/factory/issue-1']);
+  });
+
+  test('never hides the base branch, even at the tip of a merged branch', () => {
+    // A fast-forward merge leaves the base branch at the merged branch's tip.
+    const refs = [
+      { ref: 'refs/heads/main', tip: 'aaa' },
+      { ref: 'refs/remotes/origin/main', tip: 'aaa' },
+      { ref: 'refs/heads/factory/issue-1', tip: 'aaa' },
+    ];
+    expect(refsToHide(refs, prOf, 'main')).toEqual(['refs/heads/factory/issue-1']);
   });
 });

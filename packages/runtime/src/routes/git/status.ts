@@ -368,10 +368,7 @@ function applyPR(status: any, pr: BranchPRInfo | null | undefined) {
 }
 
 function fulfilledStatuses(results: Array<PromiseSettledResult<any>>): any[] {
-  return results
-    .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
-    .map((r) => r.value)
-    .filter(Boolean);
+  return results.flatMap((r) => (r.status === 'fulfilled' && r.value ? [r.value] : []));
 }
 
 async function mergedThreadStatus(c: Context<HonoEnv>, projectPath: string, t: ProjectThread) {
@@ -565,6 +562,18 @@ statusRoutes.get('/project/:projectId/status', async (c) => {
   });
 });
 
+function statusWithPR(
+  baseStatus: Record<string, unknown>,
+  prInfo: { prNumber: number; prUrl: string; prState: string } | null | undefined,
+) {
+  return {
+    ...baseStatus,
+    prNumber: prInfo ? prInfo.prNumber : undefined,
+    prUrl: prInfo ? prInfo.prUrl : undefined,
+    prState: prInfo ? prInfo.prState : undefined,
+  };
+}
+
 // GET /api/git/:threadId/status
 statusRoutes.get('/:threadId/status', async (c) => {
   const threadId = c.req.param('threadId');
@@ -627,12 +636,7 @@ statusRoutes.get('/:threadId/status', async (c) => {
       });
     }
 
-    return c.json({
-      ...baseStatus,
-      ...(prInfo
-        ? { prNumber: prInfo.prNumber, prUrl: prInfo.prUrl, prState: prInfo.prState }
-        : {}),
-    });
+    return c.json(statusWithPR(baseStatus, prInfo));
   }
 
   const projectResult = await requireProject(thread.projectId, userId, orgId ?? undefined);
@@ -693,10 +697,7 @@ statusRoutes.get('/:threadId/status', async (c) => {
     });
   }
 
-  return c.json({
-    ...baseStatus,
-    ...(prInfo ? { prNumber: prInfo.prNumber, prUrl: prInfo.prUrl, prState: prInfo.prState } : {}),
-  });
+  return c.json(statusWithPR(baseStatus, prInfo));
 });
 
 function threadScopeKey(scope: Set<string> | null): string {

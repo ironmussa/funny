@@ -43,16 +43,15 @@ export function observeRunnerGrpc(observation: RunnerGrpcObservation): void {
   const logAttributes = {
     namespace: 'runner-grpc',
     ...metricAttributes,
-    ...(observation.runnerId ? { runnerId: observation.runnerId } : {}),
-    ...(observation.correlationId ? { correlationId: observation.correlationId } : {}),
-    ...(observation.sessionEpoch !== undefined
-      ? { sessionEpoch: String(observation.sessionEpoch) }
-      : {}),
-    ...(observation.reconnectReason ? { reconnectReason: observation.reconnectReason } : {}),
-    ...(observation.queueDepth !== undefined ? { queueDepth: observation.queueDepth } : {}),
-    ...(observation.receiptLag !== undefined ? { receiptLag: observation.receiptLag } : {}),
-    ...(observation.gapSize !== undefined ? { gapSize: observation.gapSize } : {}),
-    ...(observation.latencyMs !== undefined ? { latencyMs: observation.latencyMs } : {}),
+    runnerId: observation.runnerId ?? undefined,
+    correlationId: observation.correlationId ?? undefined,
+    sessionEpoch:
+      observation.sessionEpoch !== undefined ? String(observation.sessionEpoch) : undefined,
+    reconnectReason: observation.reconnectReason ?? undefined,
+    queueDepth: observation.queueDepth ?? undefined,
+    receiptLag: observation.receiptLag ?? undefined,
+    gapSize: observation.gapSize ?? undefined,
+    latencyMs: observation.latencyMs ?? undefined,
   };
 
   metric('runner.grpc.transport.events', 1, { attributes: metricAttributes });

@@ -259,7 +259,7 @@ function rogueAgent(seen: Record<string, unknown>): Turns {
         Bun.spawnSync(['git', ...args], {
           cwd: call.cwd,
           env: call.env,
-          ...(stdin === undefined ? {} : { stdin: Buffer.from(stdin) }),
+          stdin: stdin !== undefined ? Buffer.from(stdin) : undefined,
         });
       writeFileSync(join(call.cwd, 'rogue.txt'), 'pushed by the agent\n');
       run(['add', 'rogue.txt']);

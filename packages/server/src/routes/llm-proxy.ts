@@ -96,7 +96,8 @@ async function forwardUpstream(call: UpstreamCall): Promise<Response> {
     response = await doFetch(target, {
       method,
       headers: anthropicUpstreamHeaders(raw.headers, credential),
-      ...(hasBody ? { body: raw.body, duplex: 'half' } : {}),
+      body: hasBody ? raw.body : undefined,
+      duplex: hasBody ? 'half' : undefined,
       signal: raw.signal,
     } as RequestInit);
   } catch (error) {

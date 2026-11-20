@@ -42,20 +42,18 @@ function runnerBody(input: CreateThreadInput): Record<string, unknown> {
   return {
     projectId: input.projectId,
     prompt: input.prompt,
-    ...(input.title ? { title: input.title } : {}),
+    title: input.title ?? undefined,
     mode: input.mode,
-    ...(input.provider ? { provider: input.provider } : {}),
-    ...(input.model ? { model: input.model } : {}),
+    provider: input.provider ?? undefined,
+    model: input.model ?? undefined,
     permissionMode: input.permissionMode,
     source,
-    ...(input.images?.length
-      ? {
-          images: input.images.map((image) => ({
-            type: 'image',
-            source: { type: 'base64', media_type: image.mediaType, data: image.data },
-          })),
-        }
-      : {}),
+    images: input.images?.length
+      ? input.images.map((image) => ({
+          type: 'image',
+          source: { type: 'base64', media_type: image.mediaType, data: image.data },
+        }))
+      : undefined,
   };
 }
 

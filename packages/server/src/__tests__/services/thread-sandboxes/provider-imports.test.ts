@@ -14,9 +14,9 @@ const IMPORT_RE =
   /(?:\bfrom\s+|\bimport\s*\(\s*|^\s*import\s+|\bexport\s+\*\s+from\s+)['"]([^'"]+)['"]/gm;
 
 function providerImports(source: string): string[] {
-  return [...source.matchAll(IMPORT_RE)]
-    .map((m) => m[1])
-    .filter((spec) => /^@funny\/sandbox\/providers(?:\/|$)/.test(spec));
+  return [...source.matchAll(IMPORT_RE)].flatMap((m) =>
+    /^@funny\/sandbox\/providers(?:\/|$)/.test(m[1]) ? [m[1]] : [],
+  );
 }
 
 function productionFiles(dir: string, out: string[] = []): string[] {

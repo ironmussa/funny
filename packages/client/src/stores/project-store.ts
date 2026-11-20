@@ -294,10 +294,11 @@ function forgetProjectUiState(projectId: string): void {
   const { expandedProjects, selectedProjectId } = useProjectStore.getState();
   const nextExpanded = new Set(expandedProjects);
   nextExpanded.delete(projectId);
-  useProjectStore.setState({
+  const patch: { expandedProjects: Set<string>; selectedProjectId?: null } = {
     expandedProjects: nextExpanded,
-    ...(selectedProjectId === projectId ? { selectedProjectId: null } : {}),
-  });
+  };
+  if (selectedProjectId === projectId) patch.selectedProjectId = null;
+  useProjectStore.setState(patch);
   persistExpandedProjects(nextExpanded);
 }
 

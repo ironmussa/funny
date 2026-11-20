@@ -287,8 +287,8 @@ export function createPullRequestCi(github: RepoGithub): PullRequestCi {
         // none, every method is tried in order and GitHub decides.
         const known = MERGE_METHODS.some(([, setting]) => settings[setting] !== undefined);
         const methods = preferredFirst(
-          MERGE_METHODS.filter(([, setting]) => !known || settings[setting]).map(
-            ([method]) => method,
+          MERGE_METHODS.flatMap(([method, setting]) =>
+            !known || settings[setting] ? [method] : [],
           ),
           preferred,
         );

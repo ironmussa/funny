@@ -310,7 +310,7 @@ function newWSMessage(threadId: string, data: WSMessageData) {
     role: data.role as MessageRole,
     content: data.content,
     timestamp: data.timestamp ?? new Date().toISOString(),
-    ...(data.author ? { author: data.author } : {}),
+    author: data.author || undefined,
   };
 }
 
@@ -368,7 +368,7 @@ export function handleWSMessage(get: Get, set: Set, threadId: string, data: WSMe
           updated[existingIdx] = {
             ...updated[existingIdx],
             content: data.content,
-            ...(data.author ? { author: data.author } : {}),
+            author: data.author || undefined,
           };
           if (extraMessages.length) updated.splice(existingIdx, 0, ...extraMessages);
           return {
@@ -469,8 +469,8 @@ export function handleWSToolCall(
         name: data.name,
         input: JSON.stringify(data.input),
         timestamp: new Date().toISOString(),
-        ...(data.author ? { author: data.author } : {}),
-        ...(data.parentToolCallId ? { parentToolCallId: data.parentToolCallId } : {}),
+        author: data.author || undefined,
+        parentToolCallId: data.parentToolCallId || undefined,
       };
 
       // De-dup against any existing entry — WS retries can land twice.
@@ -619,8 +619,8 @@ export function handleWSStatus(
       ...t,
       status: newStatus,
       ...statusTimestamps,
-      ...(data.stage ? { stage: data.stage as any } : {}),
-      ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
+      stage: data.stage ? (data.stage as any) : t.stage,
+      permissionMode: data.permissionMode ? (data.permissionMode as any) : t.permissionMode,
     };
   });
 
@@ -677,8 +677,8 @@ export function handleWSStatus(
         pendingPermissionRequest: data.pendingPermissionRequest,
         permissionApprovalCapability,
         permissionRecoveryReason: data.permissionRecoveryReason,
-        ...(data.stage ? { stage: data.stage as any } : {}),
-        ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
+        stage: data.stage ? (data.stage as any) : t.stage,
+        permissionMode: data.permissionMode ? (data.permissionMode as any) : t.permissionMode,
       };
     }
     return {
@@ -690,9 +690,9 @@ export function handleWSStatus(
       pendingPermissionRequest: undefined,
       permissionRecoveryReason: undefined,
       permissionApprovalCapability,
-      ...(newStatus === 'stopped' || newStatus === 'interrupted' ? { resultInfo: undefined } : {}),
-      ...(data.stage ? { stage: data.stage as any } : {}),
-      ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
+      resultInfo: newStatus === 'stopped' || newStatus === 'interrupted' ? undefined : t.resultInfo,
+      stage: data.stage ? (data.stage as any) : t.stage,
+      permissionMode: data.permissionMode ? (data.permissionMode as any) : t.permissionMode,
     };
   });
 
@@ -777,7 +777,7 @@ function applyResultToRow(t: Thread, nextStatus: ThreadStatus, data: any): Threa
     status: nextStatus,
     cost: data.cost ?? t.cost,
     ...statusTimestamps,
-    ...(data.stage ? { stage: data.stage } : {}),
+    stage: data.stage ? data.stage : t.stage,
   };
 }
 
@@ -851,7 +851,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
         cost: data.cost ?? t.cost,
         waitingReason: data.waitingReason,
         pendingPermission: data.permissionRequest,
-        ...(data.stage ? { stage: data.stage } : {}),
+        stage: data.stage ? data.stage : t.stage,
       };
     }
     return {
@@ -867,7 +867,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
         duration: data.duration ?? 0,
         error: data.error,
       },
-      ...(data.stage ? { stage: data.stage } : {}),
+      stage: data.stage ? data.stage : t.stage,
     };
   });
 

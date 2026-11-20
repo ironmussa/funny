@@ -20,11 +20,11 @@ export function observeBrowserV1(observation: BrowserV1Observation): void {
     protocolVersion: 'browser.v1',
     event: observation.event,
     status: observation.status,
-    ...(observation.trafficClass ? { trafficClass: observation.trafficClass } : {}),
-    ...(observation.representation ? { representation: observation.representation } : {}),
-    ...(observation.transport ? { transport: observation.transport } : {}),
-    ...(observation.logicalType ? { logicalType: observation.logicalType } : {}),
-    ...(observation.reason ? { reason: observation.reason } : {}),
+    trafficClass: observation.trafficClass ?? undefined,
+    representation: observation.representation ?? undefined,
+    transport: observation.transport ?? undefined,
+    logicalType: observation.logicalType ?? undefined,
+    reason: observation.reason ?? undefined,
   };
   metric('browser.v1.transport.events', 1, { attributes });
   if (observation.payloadBytes !== undefined) {
@@ -46,9 +46,9 @@ export function observeBrowserV1(observation: BrowserV1Observation): void {
   const context = {
     namespace: 'browser-v1',
     ...attributes,
-    ...(observation.payloadBytes !== undefined ? { payloadBytes: observation.payloadBytes } : {}),
-    ...(observation.latencyMs !== undefined ? { latencyMs: observation.latencyMs } : {}),
-    ...(observation.queueDepth !== undefined ? { queueDepth: observation.queueDepth } : {}),
+    payloadBytes: observation.payloadBytes ?? undefined,
+    latencyMs: observation.latencyMs ?? undefined,
+    queueDepth: observation.queueDepth ?? undefined,
   };
   if (observation.status === 'ok') log.info('Browser transport observation', context);
   else log.warn('Browser transport observation', context);

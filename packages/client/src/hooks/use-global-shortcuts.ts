@@ -129,8 +129,10 @@ type SidebarThread = Thread;
 function visibleSidebarThreads(ids: string[]): SidebarThread[] {
   const { threadsById } = readThreadIndex();
   return ids
-    .map((id) => threadsById[id])
-    .filter((th): th is SidebarThread => !!th && !th.archived)
+    .flatMap((id) => {
+      const th = threadsById[id];
+      return th && !th.archived ? [th as SidebarThread] : [];
+    })
     .sort((a, b) => {
       if (a.pinned && !b.pinned) return -1;
       if (!a.pinned && b.pinned) return 1;

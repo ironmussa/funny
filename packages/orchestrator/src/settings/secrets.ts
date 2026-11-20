@@ -146,8 +146,10 @@ export function redactor(secrets: string[]): (text: string) => string {
   const values = secrets
     .filter((v) => v.length > 0)
     .flatMap((v) => [v, JSON.stringify(v).slice(1, -1), ...v.split('\n')])
-    .map((v) => v.trim())
-    .filter((v) => v.length >= 4 && !v.startsWith('-----'))
+    .flatMap((v) => {
+      const trimmed = v.trim();
+      return trimmed.length >= 4 && !trimmed.startsWith('-----') ? [trimmed] : [];
+    })
     .sort((a, b) => b.length - a.length);
   const unique = [...new Set(values)];
   return (text) => unique.reduce((out, value) => out.split(value).join('[redacted]'), text);

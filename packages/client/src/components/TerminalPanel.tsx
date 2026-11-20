@@ -329,7 +329,7 @@ export function WebTerminalTabContent({
         // For scratch tabs we route through the server's "any runner owned by
         // this user" branch — sending the synthetic '__scratch__' as projectId
         // would fail the server's project ownership lookup.
-        ...(scratchThreadId ? {} : { projectId }),
+        projectId: scratchThreadId ? undefined : projectId,
         label,
         rows,
         cols,

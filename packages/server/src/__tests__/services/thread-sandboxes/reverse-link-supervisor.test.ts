@@ -27,7 +27,7 @@ const KEY = Buffer.from('k'.repeat(32));
 
 function setup(opts: { ingress?: boolean } = {}) {
   const provider = createFakeSandboxProvider('fake-valid', {
-    ...(opts.ingress === false ? {} : { ingressBaseUrl: 'https://ingress.test' }),
+    ingressBaseUrl: opts.ingress === false ? undefined : 'https://ingress.test',
   });
   let linked: ReverseLinkedSandbox[] = [];
   const started: Array<{

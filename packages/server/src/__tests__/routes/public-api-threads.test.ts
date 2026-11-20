@@ -74,8 +74,8 @@ describe('public REST API v1: threads and models', () => {
       {
         method,
         headers: {
-          ...(userId ? { 'x-test-token-owner': userId } : {}),
-          ...(body ? { 'content-type': 'application/json' } : {}),
+          ...(userId ? { 'x-test-token-owner': userId } : undefined),
+          ...(body ? { 'content-type': 'application/json' } : undefined),
         },
         body: body ? JSON.stringify(body) : undefined,
       },

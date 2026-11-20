@@ -137,8 +137,10 @@ function readProject(cwd: string): Project {
     ...Object.keys(pkg?.devDependencies ?? {}),
   ]);
   const python = ['pyproject.toml', 'setup.cfg', 'pytest.ini', 'tox.ini']
-    .map((file) => readText(join(cwd, file)))
-    .filter((text): text is string => text !== null)
+    .flatMap((file) => {
+      const text = readText(join(cwd, file));
+      return text !== null ? [text] : [];
+    })
     .join('\n');
   return {
     cwd,
@@ -154,10 +156,7 @@ function readProject(cwd: string): Project {
 const quote = (arg: string) =>
   /^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replaceAll("'", `'\\''`)}'`;
 const args = (list: (string | undefined | false)[]) =>
-  list
-    .filter((arg): arg is string => Boolean(arg))
-    .map(quote)
-    .join(' ');
+  list.flatMap((arg) => (arg ? [quote(arg)] : [])).join(' ');
 
 /**
  * Files or directories the check runs on. A glob (`src/*.test.ts`) stays
@@ -470,9 +469,10 @@ function verifyPlan(project: Project, request: CheckRequest): CheckPlan | null {
   if (own) return own;
   const script = findScript(project, 'verify');
   if (script) return scriptPlan(project, 'verify', script, request);
-  const parts = (['lint', 'typecheck', 'test'] as const)
-    .map((kind) => kindPlan(project, { ...request, kind }))
-    .filter((part): part is CheckPlan => part !== null);
+  const parts = (['lint', 'typecheck', 'test'] as const).flatMap((kind) => {
+    const part = kindPlan(project, { ...request, kind });
+    return part !== null ? [part] : [];
+  });
   if (!parts.length) return null;
   return plan(
     project,
@@ -480,8 +480,8 @@ function verifyPlan(project: Project, request: CheckRequest): CheckPlan | null {
     parts.flatMap((part) => part.steps),
     {
       notes: parts.flatMap((part) => part.notes),
-      ...(parts.some((part) => part.vitest) ? { vitest: true } : {}),
-      ...(parts.some((part) => part.tscDiagnostics) ? { tscDiagnostics: true } : {}),
+      vitest: parts.some((part) => part.vitest) ? true : undefined,
+      tscDiagnostics: parts.some((part) => part.tscDiagnostics) ? true : undefined,
     },
   );
 }

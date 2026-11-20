@@ -107,7 +107,7 @@ export function createInstaboxApiFake(validKey = 'ibk_test_key'): InstaboxApiFak
         port,
         url: `https://${port}-${m.id.slice(2)}.instabox.test`,
         access,
-        ...(issued ? { token: `ibp_${counter}` } : {}),
+        token: issued ? `ibp_${counter}` : undefined,
       });
     },
     'POST snapshots': (m, _headers, body) => {

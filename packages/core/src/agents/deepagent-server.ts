@@ -209,11 +209,11 @@ async function main(): Promise<void> {
       description:
         'AI coding assistant with full filesystem access, shell execution, ' +
         'code search, task management, and subagent delegation capabilities.',
-      ...(model ? { model } : {}),
+      model: model || undefined,
       systemPrompt: systemPrompt || DEFAULT_SYSTEM_PROMPT,
       backend,
-      ...(skillPaths.length > 0 ? { skills: skillPaths } : {}),
-      ...(memoryPaths.length > 0 ? { memory: memoryPaths } : {}),
+      skills: skillPaths.length > 0 ? skillPaths : undefined,
+      memory: memoryPaths.length > 0 ? memoryPaths : undefined,
     },
     serverName: 'funny-deepagent',
     serverVersion: '1.0.0',

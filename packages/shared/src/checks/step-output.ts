@@ -94,7 +94,7 @@ function lineIssue(line: string): Issue | null {
       severity: mypy[4] as Issue['severity'],
       file: mypy[1],
       line: Number(mypy[2]),
-      ...(mypy[3] ? { column: Number(mypy[3]) } : {}),
+      column: mypy[3] ? Number(mypy[3]) : undefined,
       message: mypy[5],
     };
   }

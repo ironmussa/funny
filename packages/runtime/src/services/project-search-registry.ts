@@ -258,9 +258,7 @@ export class ProjectSearchRegistry {
       ...stats,
       backend: 'tgrep',
       entries,
-      ...(this.lastInitializationFailure
-        ? { lastInitializationFailure: this.lastInitializationFailure }
-        : {}),
+      lastInitializationFailure: this.lastInitializationFailure || undefined,
     };
   }
 

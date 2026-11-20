@@ -237,6 +237,7 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
   return parts;
 }
 
+// fallow-ignore-next-line complexity
 function UserMessageContent({
   content,
   fileMap,
@@ -288,12 +289,12 @@ function UserMessageContent({
           !expanded
             ? {
                 maxHeight: COLLAPSED_MAX_H,
-                ...(isOverflowing
-                  ? {
-                      WebkitMaskImage: 'linear-gradient(to bottom, black 55%, transparent)',
-                      maskImage: 'linear-gradient(to bottom, black 55%, transparent)',
-                    }
-                  : {}),
+                WebkitMaskImage: isOverflowing
+                  ? 'linear-gradient(to bottom, black 55%, transparent)'
+                  : undefined,
+                maskImage: isOverflowing
+                  ? 'linear-gradient(to bottom, black 55%, transparent)'
+                  : undefined,
               }
             : undefined
         }

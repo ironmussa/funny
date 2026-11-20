@@ -19,13 +19,13 @@ const IMPORT_RE =
 /** Provider imports of `file` (relative to the package `src`) that break the rule. */
 function providerImports(file: string, source: string): string[] {
   if (file.startsWith(PROVIDERS_DIR) || file === CATALOG) return [];
-  return [...source.matchAll(IMPORT_RE)]
-    .map((m) => m[1])
-    .filter((spec) =>
-      spec.startsWith('.')
-        ? `${normalize(join(dirname(file), spec)).replaceAll('\\', '/')}/`.startsWith(PROVIDERS_DIR)
-        : /^@funny\/sandbox\/providers(?:\/|$)/.test(spec),
-    );
+  return [...source.matchAll(IMPORT_RE)].flatMap((m) => {
+    const spec = m[1];
+    const isProvider = spec.startsWith('.')
+      ? `${normalize(join(dirname(file), spec)).replaceAll('\\', '/')}/`.startsWith(PROVIDERS_DIR)
+      : /^@funny\/sandbox\/providers(?:\/|$)/.test(spec);
+    return isProvider ? [spec] : [];
+  });
 }
 
 function productionFiles(dir: string, out: string[] = []): string[] {

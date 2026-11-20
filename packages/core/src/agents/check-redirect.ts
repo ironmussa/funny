@@ -32,8 +32,8 @@ export function checkRedirectReason(command: string): string | null {
   }
   const args = {
     kind: check.kind,
-    ...(check.scope.length ? { scope: check.scope } : {}),
-    ...(check.filter ? { filter: check.filter } : {}),
+    scope: check.scope.length ? check.scope : undefined,
+    filter: check.filter || undefined,
   };
   return (
     `${intro} Equivalent call (funny picks the project's command): ${JSON.stringify(args)}. To run ` +

@@ -58,7 +58,7 @@ export function createJsonApi(options: JsonApiOptions): JsonApi {
       method,
       headers: {
         ...options.authHeaders,
-        ...(opts.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(opts.body !== undefined && { 'Content-Type': 'application/json' }),
         ...opts.headers,
       },
       body: opts.body !== undefined ? JSON.stringify(opts.body) : undefined,

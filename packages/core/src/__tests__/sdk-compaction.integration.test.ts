@@ -108,7 +108,7 @@ suite('SDK slash-command pipeline (real SDK)', () => {
       permissionMode: 'bypassPermissions' as const,
       allowDangerouslySkipPermissions: true,
       systemPrompt: { type: 'preset' as const, preset: 'claude_code' as const },
-      ...(cli.kind === 'js' ? { executable: 'node' as const } : {}),
+      executable: cli.kind === 'js' ? ('node' as const) : undefined,
     };
 
     let initSlashCommands: string[] | undefined;

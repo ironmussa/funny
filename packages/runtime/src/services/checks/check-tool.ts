@@ -87,7 +87,7 @@ type Args = z.infer<z.ZodObject<typeof schema>>;
 
 const text = (body: string, isError = false): AgentToolResult => ({
   content: [{ type: 'text', text: body }],
-  ...(isError ? { isError: true } : {}),
+  isError: isError || undefined,
 });
 
 /** The thread's working directory (its worktree, project or scratch dir). */
@@ -163,9 +163,9 @@ async function runChecks(
   if (!cwd) return text('Could not resolve the thread working directory.', true);
   const request: CheckRequest = {
     kind: args.kind,
-    ...(args.scope?.length ? { scope: args.scope } : {}),
-    ...(args.filter ? { filter: args.filter } : {}),
-    ...(args.command ? { command: args.command } : {}),
+    scope: args.scope?.length ? args.scope : undefined,
+    filter: args.filter || undefined,
+    command: args.command || undefined,
   };
   const planned = planCheck(cwd, request);
   if (planned.isErr()) return text(planned.error.message, true);

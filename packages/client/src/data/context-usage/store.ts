@@ -52,7 +52,7 @@ export function applyContextUsageEvent(
       cumulativeInputTokens: data.cumulativeInputTokens,
       lastInputTokens: data.inputTokens,
       lastOutputTokens: data.outputTokens,
-      ...(breakdown ? { breakdown } : {}),
+      breakdown: breakdown || undefined,
     },
     layer,
   );

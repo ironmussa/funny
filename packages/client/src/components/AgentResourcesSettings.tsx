@@ -170,7 +170,7 @@ export function AgentResourcesSettings() {
         />
       ) : (
         <>
-          {KIND_ORDER.filter((k) => byKind.has(k)).map((kind) => {
+          {KIND_ORDER.flatMap((k) => (byKind.has(k) ? [k] : [])).map((kind) => {
             const Icon = KIND_META[kind].icon;
             const items = byKind.get(kind)!;
             return (

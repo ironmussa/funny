@@ -108,7 +108,7 @@ async function start(args: string[], io: OrchestratorIo): Promise<number> {
     for (const project of settings.value.projects) {
       log.info(`  ${project.repo} (${project.workspace})`, {
         path: project.path,
-        ...(project.auto_merge === undefined ? {} : { autoMerge: project.auto_merge }),
+        autoMerge: project.auto_merge,
       });
     }
     const factory = composeFactory(

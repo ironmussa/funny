@@ -332,9 +332,10 @@ function sessionWorkloads(session: SessionResult): Map<string, WorkloadResult> {
 
 function summarizeWorkloads(sessions: readonly SessionResult[]): WorkloadResult[] {
   return BENCHMARK_WORKLOAD_NAMES.map((name, workloadIndex) => {
-    const instances = sessions
-      .map((session) => sessionWorkloads(session).get(name))
-      .filter((workload): workload is WorkloadResult => Boolean(workload));
+    const instances = sessions.flatMap((session) => {
+      const workload = sessionWorkloads(session).get(name);
+      return workload ? [workload] : [];
+    });
     const samples = instances.flatMap((workload) => workload.samples);
     const groups = new Map<string, MetricSample[]>();
     for (const sample of samples) {
@@ -352,9 +353,10 @@ function summarizeWorkloads(sessions: readonly SessionResult[]): WorkloadResult[
         }),
       ),
       diagnostics: instances.at(-1)?.diagnostics ?? {},
-      ...(instances.length === sessions.length
-        ? {}
-        : { error: `Completed ${instances.length}/${sessions.length} sessions` }),
+      error:
+        instances.length === sessions.length
+          ? undefined
+          : `Completed ${instances.length}/${sessions.length} sessions`,
     };
   });
 }

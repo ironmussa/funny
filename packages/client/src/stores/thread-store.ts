@@ -1183,10 +1183,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       }
       const active = state.activeThread;
       const clearSelection = active?.projectId === projectId;
-      return {
-        ...patch,
-        ...(clearSelection ? { selectedThreadId: null, activeThread: null } : {}),
-      };
+      if (clearSelection) {
+        return { ...patch, selectedThreadId: null, activeThread: null };
+      }
+      return patch;
     });
   },
 
@@ -1376,7 +1376,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // setting_up → pending; any other status is left alone.
       status: transitionThreadStatus(threadId, { type: 'SETUP_COMPLETE' }, t.status, t.cost),
       branch: data.branch,
-      ...(data.worktreePath ? { worktreePath: data.worktreePath } : {}),
+      worktreePath: data.worktreePath || t.worktreePath,
     });
 
     patchThreadRow(threadId, setupDone);
@@ -1434,8 +1434,11 @@ useThreadStore.subscribe((state) => {
   // selectProject/fetchBranch. Mirror the payload into the map regardless (the
   // safety net), but leave selection to the in-flight selectThread.
   const selecting = getSelectingThreadId() !== null;
-  useThreadStore.setState({
+  const threadPatch: Record<string, unknown> = {
     threadDataById: { ...state.threadDataById, [at.id]: at },
-    ...(state.selectedThreadId === at.id || selecting ? {} : { selectedThreadId: at.id }),
-  });
+  };
+  if (!(state.selectedThreadId === at.id || selecting)) {
+    threadPatch.selectedThreadId = at.id;
+  }
+  useThreadStore.setState(threadPatch);
 });

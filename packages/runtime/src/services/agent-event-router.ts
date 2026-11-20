@@ -313,7 +313,7 @@ export class AgentEventRouter {
     this.emitWSToUser(threadId, userId, 'agent:error', { error: errorMessage });
     this.emitWSToUser(threadId, userId, 'agent:status', {
       status,
-      ...(lostPermissionContinuation ? { permissionRecoveryReason: 'runner_lost' as const } : {}),
+      permissionRecoveryReason: lostPermissionContinuation ? ('runner_lost' as const) : undefined,
     });
     await this.finishFailedRun(threadId, thread, status);
   }

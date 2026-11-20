@@ -128,8 +128,8 @@ export async function listFactoryFlows(deps: {
       .filter((name): name is string => !!name && FLOW_NAME.test(name))
       .filter((name) => !WORKSPACE_ONLY_FLOWS.has(name)),
   );
-  const builtIns = BUILT_IN_FACTORY_FLOWS.filter((name) => !fromRepo.has(name)).map(
-    (name): FactoryFlowChoice => ({ name, source: 'built-in' }),
+  const builtIns = BUILT_IN_FACTORY_FLOWS.flatMap((name): FactoryFlowChoice[] =>
+    fromRepo.has(name) ? [] : [{ name, source: 'built-in' }],
   );
   const repository = [...fromRepo]
     .sort()

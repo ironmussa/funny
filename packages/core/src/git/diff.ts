@@ -400,7 +400,7 @@ export function getDiff(cwd: string): ResultAsync<FileDiff[], DomainError> {
       }
 
       // Enrich submodules with nested dirty stats (see getDiffSummary).
-      const subIdx = diffs.map((d, i) => (d.kind === 'submodule' ? i : -1)).filter((i) => i >= 0);
+      const subIdx = diffs.flatMap((d, i) => (d.kind === 'submodule' ? [i] : []));
       if (subIdx.length > 0) {
         await Promise.all(
           subIdx.map(async (i) => {
@@ -650,9 +650,7 @@ async function computeDiffSummary(
 
   // 4. Enrich submodule entries with nested dirty stats so the UI can show
   // what changed inside each nested repo as a single aggregate pill.
-  const submoduleIndexes = files
-    .map((f, i) => (f.kind === 'submodule' ? i : -1))
-    .filter((i) => i >= 0);
+  const submoduleIndexes = files.flatMap((f, i) => (f.kind === 'submodule' ? [i] : []));
   if (submoduleIndexes.length > 0) {
     await Promise.all(
       submoduleIndexes.map(async (i) => {

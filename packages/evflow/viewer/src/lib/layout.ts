@@ -66,15 +66,14 @@ export function applyDagreLayout(
     return {
       ...node,
       position: { x, y },
-      ...(node.type === 'group'
-        ? {
-            style: {
+      style:
+        node.type === 'group'
+          ? {
               ...node.style,
               width: n.width + GROUP_PADDING,
               height: n.height + GROUP_PADDING,
-            },
-          }
-        : {}),
+            }
+          : node.style,
     };
   });
 }

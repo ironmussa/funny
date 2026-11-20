@@ -97,9 +97,9 @@ function changedWorkspaceSpecs(a: any, b: any): string[] {
 
 /** Names whose resolved entry was added, removed or changed. */
 function changedResolutions(a: Record<string, LockEntry>, b: Record<string, LockEntry>): string[] {
-  return [...keysOf(a, b)]
-    .filter((key) => !sameJson(a[key], b[key]))
-    .map((key) => entryName(key, b[key] ?? a[key]));
+  return [...keysOf(a, b)].flatMap((key) =>
+    !sameJson(a[key], b[key]) ? [entryName(key, b[key] ?? a[key])] : [],
+  );
 }
 
 /** Adds to `changed` every package depending on one in it, transitively. */

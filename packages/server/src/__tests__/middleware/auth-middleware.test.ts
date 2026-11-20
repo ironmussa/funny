@@ -82,7 +82,7 @@ function protectedApp() {
     return c.json({
       userId: c.get('userId') ?? null,
       isRunner: c.get('isRunner') ?? false,
-      ...(grant ? { threadId: grant.threadId } : {}),
+      threadId: grant ? grant.threadId : undefined,
     });
   });
   app.route('/api/invite-links', inviteLinkPublicRoutes);

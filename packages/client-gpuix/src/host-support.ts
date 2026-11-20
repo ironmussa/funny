@@ -76,6 +76,6 @@ export function currentNativeHostInput(): NativeHostInput {
   return {
     platform: process.platform,
     architecture: process.arch,
-    ...(process.platform === 'linux' ? { linuxLibc: glibc ? 'glibc' : 'unknown' } : {}),
+    linuxLibc: process.platform === 'linux' ? (glibc ? 'glibc' : 'unknown') : undefined,
   };
 }

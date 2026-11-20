@@ -213,7 +213,7 @@ export function createThreadSandboxService(deps: ThreadSandboxDeps) {
         provider.create({
           ownerKey: input.threadId,
           sizeId: row.sizeId,
-          ...(template ? { template } : {}),
+          template: template ?? undefined,
           env: {},
           lifetimeMs: deps.lifetimeMs ?? DEFAULT_SANDBOX_LIFETIME_MS,
           idempotencyKey: `${input.threadId}:${row.generation}`,

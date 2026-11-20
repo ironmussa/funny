@@ -208,12 +208,12 @@ function transcriptToMessages(transcript: ExternalClaudeTranscript): (Message & 
       threadId: `external-claude:${transcript.sessionId}`,
       role: message.role,
       content: message.content,
-      ...(message.images?.length ? { images: message.images } : {}),
-      ...(message.author ? { author: message.author } : {}),
+      images: message.images?.length ? message.images : undefined,
+      author: message.author || undefined,
       timestamp,
-      ...(message.toolCalls && message.toolCalls.length > 0
-        ? {
-            toolCalls: message.toolCalls.map((toolCall) => ({
+      toolCalls:
+        message.toolCalls && message.toolCalls.length > 0
+          ? message.toolCalls.map((toolCall) => ({
               id: toolCall.id,
               messageId: message.id,
               name: toolCall.name,
@@ -221,9 +221,8 @@ function transcriptToMessages(transcript: ExternalClaudeTranscript): (Message & 
               output: toolCall.output,
               author: toolCall.author,
               timestamp: toolCall.timestamp ?? timestamp,
-            })),
-          }
-        : {}),
+            }))
+          : undefined,
     };
   });
 }

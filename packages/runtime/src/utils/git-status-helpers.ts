@@ -42,6 +42,7 @@ export function computeBranchKey(thread: {
  * Shared by the debounced git-changed handler, the agent-completed handler,
  * and agent-message-handler's emitGitStatus method.
  */
+// fallow-ignore-next-line complexity
 export async function emitGitStatusForThread(
   opts: {
     threadId: string;
@@ -124,9 +125,9 @@ export async function emitGitStatusForThread(
           branchKey,
           state: ctx.deriveGitSyncState(summary),
           ...summary,
-          ...(prInfo
-            ? { prNumber: prInfo.prNumber, prUrl: prInfo.prUrl, prState: prInfo.prState }
-            : {}),
+          prNumber: prInfo ? prInfo.prNumber : undefined,
+          prUrl: prInfo ? prInfo.prUrl : undefined,
+          prState: prInfo ? prInfo.prState : undefined,
         },
       ],
     },

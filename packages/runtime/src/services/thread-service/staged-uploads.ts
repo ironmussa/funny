@@ -186,9 +186,9 @@ export function releaseStagedUploads(
     (async () => {
       const root = stagingRootFor(userId);
       await Promise.all(
-        stagedIds
-          .filter((id) => STAGED_ID_RE.test(id))
-          .map((id) => rm(join(root, id), { recursive: true, force: true })),
+        stagedIds.flatMap((id) =>
+          STAGED_ID_RE.test(id) ? [rm(join(root, id), { recursive: true, force: true })] : [],
+        ),
       );
     })(),
     (e) => internal(`Failed to release staged uploads: ${(e as Error).message}`),

@@ -58,13 +58,15 @@ export function createGithubRest(options: GithubRestOptions = {}): GithubRest {
       doFetch(`${api}${path}`, {
         method: init.method,
         body: init.body,
-        headers: {
-          accept: 'application/vnd.github+json',
-          'x-github-api-version': '2022-11-28',
-          'user-agent': userAgent,
-          authorization: init.auth,
-          ...(init.body ? { 'content-type': 'application/json' } : {}),
-        },
+        headers: Object.assign(
+          {
+            accept: 'application/vnd.github+json',
+            'x-github-api-version': '2022-11-28',
+            'user-agent': userAgent,
+            authorization: init.auth,
+          },
+          init.body ? { 'content-type': 'application/json' } : undefined,
+        ),
       }),
       (error) => githubAppError('github-error', `GitHub unreachable: ${String(error)}`),
     );

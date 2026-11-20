@@ -215,42 +215,38 @@ export function createFakeSandboxProvider(
         }),
       ),
 
-    ...(opts.writeFile
-      ? {
-          writeFile: (handle: SandboxHandle, path: string, content: string) =>
-            guard(() =>
-              find(handle).andThen((s) => {
-                if (s.state !== 'running') {
-                  return errAsync({
-                    kind: 'unavailable' as const,
-                    message: 'sandbox is not running',
-                  });
-                }
-                writtenFiles.push({ sandboxId: handle.sandboxId, path });
-                const write = opts.writeFile!;
-                return ResultAsync.fromPromise(
-                  Promise.resolve(write(handle.sandboxId, path, content)),
-                  (error): SandboxError => ({ kind: 'provider', message: String(error) }),
-                );
-              }),
-            ),
-        }
-      : {}),
+    writeFile: opts.writeFile
+      ? (handle: SandboxHandle, path: string, content: string) =>
+          guard(() =>
+            find(handle).andThen((s) => {
+              if (s.state !== 'running') {
+                return errAsync({
+                  kind: 'unavailable' as const,
+                  message: 'sandbox is not running',
+                });
+              }
+              writtenFiles.push({ sandboxId: handle.sandboxId, path });
+              const write = opts.writeFile!;
+              return ResultAsync.fromPromise(
+                Promise.resolve(write(handle.sandboxId, path, content)),
+                (error): SandboxError => ({ kind: 'provider', message: String(error) }),
+              );
+            }),
+          )
+      : undefined,
 
-    ...(opts.ingressBaseUrl
-      ? {
-          exposePort: (handle: SandboxHandle, port: number) =>
-            guard(() =>
-              find(handle).map((): SandboxIngress => {
-                exposedPorts.push({ sandboxId: handle.sandboxId, port });
-                return {
-                  url: `${opts.ingressBaseUrl}/${handle.sandboxId}/${port}`,
-                  headers: { 'x-fake-ingress': 'token' },
-                };
-              }),
-            ),
-        }
-      : {}),
+    exposePort: opts.ingressBaseUrl
+      ? (handle: SandboxHandle, port: number) =>
+          guard(() =>
+            find(handle).map((): SandboxIngress => {
+              exposedPorts.push({ sandboxId: handle.sandboxId, port });
+              return {
+                url: `${opts.ingressBaseUrl}/${handle.sandboxId}/${port}`,
+                headers: { 'x-fake-ingress': 'token' },
+              };
+            }),
+          )
+      : undefined,
 
     listTemplates: () =>
       guard(() =>

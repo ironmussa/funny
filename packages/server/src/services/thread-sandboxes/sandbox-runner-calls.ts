@@ -64,7 +64,7 @@ export function createSandboxRunnerCalls(ports: {
         path,
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
-        ...(deadlineAt !== undefined ? { deadlineAt } : {}),
+        deadlineAt: deadlineAt ?? undefined,
       },
     ).andThen((res) =>
       res.status >= 200 && res.status < 300
@@ -86,7 +86,7 @@ export function createSandboxRunnerCalls(ports: {
       return postToThreadRunner(
         input.userId,
         path,
-        { path: checkoutPath, repoUrl, ...(branch ? { branch } : {}) },
+        { path: checkoutPath, repoUrl, branch: branch ?? undefined },
         'checkout',
         Date.now() + CHECKOUT_TIMEOUT_MS,
       );

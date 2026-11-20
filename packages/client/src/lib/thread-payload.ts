@@ -200,9 +200,8 @@ export function buildThreadPayload(input: BuildInput): BuildResult {
         prompt,
         ...pickAttachments(opts, images),
         // `stage` only included when provided — server defaults to 'backlog'.
-        ...(input.stage ? { stage: input.stage } : {}),
-        // `designId` omitted when undefined — never sent as null.
-        ...(designId ? { designId } : {}),
+        stage: input.stage || undefined,
+        designId: designId || undefined,
       },
     };
   }
@@ -231,7 +230,7 @@ export function buildThreadPayload(input: BuildInput): BuildResult {
       symbolReferences: opts.symbolReferences,
       agentTemplateId: opts.agentTemplateId,
       templateVariables: opts.templateVariables,
-      ...(designId ? { designId } : {}),
+      designId: designId || undefined,
     },
   };
 }

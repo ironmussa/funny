@@ -190,7 +190,7 @@ export async function createProductionGrpcFixture(
   const config = {
     ...TEST_CONFIG,
     ...options.config,
-    ...(options.port === undefined ? {} : { port: options.port }),
+    ...(options.port !== undefined ? { port: options.port } : undefined),
   };
   const sessions = new RunnerGrpcSessionRegistry({ heartbeatTimeoutMs: config.heartbeatTimeoutMs });
   const terminalEvents: WSEvent[] = [];

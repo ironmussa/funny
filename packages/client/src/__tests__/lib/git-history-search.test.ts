@@ -71,9 +71,9 @@ describe('commitMatchesFilters', () => {
     ['push', ['local']],
   ] as const)('filters %s using the graph sync markers', (filter, expected) => {
     expect(
-      commits
-        .filter((commit) => commitMatchesFilters(commit, '', filter, unpushed, unpulled, inferred))
-        .map((commit) => commit.hash),
+      commits.flatMap((commit) =>
+        commitMatchesFilters(commit, '', filter, unpushed, unpulled, inferred) ? [commit.hash] : [],
+      ),
     ).toEqual(expected);
   });
 

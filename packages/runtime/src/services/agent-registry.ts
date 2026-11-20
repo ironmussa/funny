@@ -23,10 +23,10 @@ export function resolveAgent(
   if (!overrides) return base;
   return {
     ...base,
-    ...(overrides.model != null ? { model: overrides.model } : {}),
-    ...(overrides.provider != null ? { provider: overrides.provider } : {}),
-    ...(overrides.permissionMode != null ? { permissionMode: overrides.permissionMode } : {}),
-    ...(overrides.systemPrompt != null ? { systemPrompt: overrides.systemPrompt } : {}),
+    model: overrides.model ?? base.model,
+    provider: overrides.provider ?? base.provider,
+    permissionMode: overrides.permissionMode ?? base.permissionMode,
+    systemPrompt: overrides.systemPrompt ?? base.systemPrompt,
   };
 }
 

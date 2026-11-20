@@ -130,7 +130,7 @@ export function sandboxThreadLauncherFor(env: {
         threadId,
         data: {
           status: 'pending',
-          ...(thread.baseBranch ? { baseBranch: thread.baseBranch } : {}),
+          baseBranch: thread.baseBranch ?? undefined,
         },
       });
     },

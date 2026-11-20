@@ -100,9 +100,9 @@ export class RunnerGrpcTerminalDispatcher {
       state = state ?? {
         userId,
         cwd: String(event.data.cwd ?? ''),
-        ...(event.data.projectId ? { projectId: String(event.data.projectId) } : {}),
-        ...(event.data.label ? { label: String(event.data.label) } : {}),
-        ...(event.data.shell ? { shell: String(event.data.shell) } : {}),
+        projectId: event.data.projectId ? String(event.data.projectId) : undefined,
+        label: event.data.label ? String(event.data.label) : undefined,
+        shell: event.data.shell ? String(event.data.shell) : undefined,
         lastInputOrdinal: 0n,
         lastOutputSequence: 0n,
         outputDecoder: new TextDecoder(),
@@ -121,10 +121,10 @@ export class RunnerGrpcTerminalDispatcher {
           columns: event.data.cols ?? 80,
           rows: event.data.rows ?? 24,
           userId,
-          ...(event.data.shell ? { shell: event.data.shell } : {}),
-          ...(event.data.projectId ? { projectId: event.data.projectId } : {}),
-          ...(event.data.label ? { label: event.data.label } : {}),
-          ...(event.data.scratchThreadId ? { scratchThreadId: event.data.scratchThreadId } : {}),
+          shell: event.data.shell ?? undefined,
+          projectId: event.data.projectId ?? undefined,
+          label: event.data.label ?? undefined,
+          scratchThreadId: event.data.scratchThreadId ?? undefined,
         },
       });
       return;
@@ -183,9 +183,9 @@ export class RunnerGrpcTerminalDispatcher {
       sessions.push({
         ptyId: key.slice(prefix.length),
         cwd: state.cwd,
-        ...(state.projectId ? { projectId: state.projectId } : {}),
-        ...(state.label ? { label: state.label } : {}),
-        ...(state.shell ? { shell: state.shell } : {}),
+        projectId: state.projectId ?? undefined,
+        label: state.label ?? undefined,
+        shell: state.shell ?? undefined,
       });
     }
     return sessions;

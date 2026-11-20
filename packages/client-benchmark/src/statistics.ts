@@ -74,7 +74,7 @@ export function summarizeMetricSamples(
   if (samples.some((sample) => sample.metric !== metric || sample.unit !== unit)) {
     throw new Error('Metric samples must share one metric name and unit');
   }
-  const values = samples.filter((sample) => sample.valid).map((sample) => sample.value);
+  const values = samples.flatMap((sample) => (sample.valid ? [sample.value] : []));
   const timingValues = unit === 'ms' ? values : [];
   return {
     metric,

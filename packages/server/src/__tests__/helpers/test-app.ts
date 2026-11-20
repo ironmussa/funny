@@ -188,11 +188,14 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
     }
   };
 
-  const testHeaders = (userId: string, role: 'user' | 'admin', extras?: { orgId?: string }) => ({
-    'X-Test-User-Id': userId,
-    'X-Test-User-Role': role,
-    ...(extras?.orgId ? { 'X-Test-Org-Id': extras.orgId } : {}),
-  });
+  const testHeaders = (userId: string, role: 'user' | 'admin', extras?: { orgId?: string }) => {
+    const h: Record<string, string> = {
+      'X-Test-User-Id': userId,
+      'X-Test-User-Role': role,
+    };
+    if (extras?.orgId) h['X-Test-Org-Id'] = extras.orgId;
+    return h;
+  };
 
   const requestAs = (
     userId: string,

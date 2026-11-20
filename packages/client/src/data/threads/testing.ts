@@ -36,7 +36,10 @@ type IndexKey = (typeof INDEX_KEYS)[number];
 function replaceRows(data: ThreadsData, threadsById: Record<string, Thread>): void {
   const rows = Object.values(threadsById);
   const keep = new Set(rows.map((row) => row.id));
-  const stale = [...data.collection.keys()].map(String).filter((id) => !keep.has(id));
+  const stale = [...data.collection.keys()].flatMap((key) => {
+    const id = String(key);
+    return keep.has(id) ? [] : [id];
+  });
   if (stale.length) data.removeRows(stale);
   data.importRows(rows);
 }

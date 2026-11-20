@@ -267,7 +267,7 @@ export const gitApi = {
   stash: (threadId: string, files?: string[]) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/stash`, {
       method: 'POST',
-      ...(files?.length ? { body: JSON.stringify({ files }) } : {}),
+      body: files?.length ? JSON.stringify({ files }) : undefined,
     }),
   stashPop: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/stash/pop`, {
@@ -469,7 +469,7 @@ export const gitApi = {
   projectStash: (projectId: string, files?: string[]) =>
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/stash`, {
       method: 'POST',
-      ...(files?.length ? { body: JSON.stringify({ files }) } : {}),
+      body: files?.length ? JSON.stringify({ files }) : undefined,
     }),
   projectStashPop: (projectId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/stash/pop`, {

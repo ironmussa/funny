@@ -181,7 +181,7 @@ describe('runner gRPC WebSocket carrier — upgrade authentication', () => {
     new Request('http://x/api/runner-grpc/ws', {
       headers: {
         upgrade: 'websocket',
-        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(token && { authorization: `Bearer ${token}` }),
       },
     });
   /** Accepts every upgrade without opening a socket (slots stay reserved). */

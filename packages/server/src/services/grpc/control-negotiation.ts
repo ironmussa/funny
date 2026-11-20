@@ -116,14 +116,17 @@ function enabledCapabilities(
   supported: RunnerCapability[],
 ): RunnerCapability[] {
   const available = new Set(supported);
-  const normalized = offered
-    .map((capability) => {
-      if (typeof capability === 'number') return capability;
+  const normalized = offered.flatMap((capability) => {
+    let value: number;
+    if (typeof capability === 'number') {
+      value = capability;
+    } else {
       const generatedName = capability.replace(/^RUNNER_CAPABILITY_/, '');
-      const value = RunnerCapability[generatedName as keyof typeof RunnerCapability];
-      return typeof value === 'number' ? value : RunnerCapability.UNSPECIFIED;
-    })
-    .filter((capability): capability is RunnerCapability => Number.isInteger(capability));
+      const resolved = RunnerCapability[generatedName as keyof typeof RunnerCapability];
+      value = typeof resolved === 'number' ? resolved : RunnerCapability.UNSPECIFIED;
+    }
+    return Number.isInteger(value) ? [value as RunnerCapability] : [];
+  });
   return [...new Set(normalized)].filter(
     (capability) => capability !== RunnerCapability.UNSPECIFIED && available.has(capability),
   );
@@ -192,15 +195,13 @@ function writeFailure(
       code,
       message,
       retryable,
-      ...(details
+      details: details
         ? {
-            details: {
-              fields: Object.fromEntries(
-                Object.entries(details).map(([key, value]) => [key, { numberValue: value }]),
-              ),
-            },
+            fields: Object.fromEntries(
+              Object.entries(details).map(([key, value]) => [key, { numberValue: value }]),
+            ),
           }
-        : {}),
+        : undefined,
     },
   });
   call.end();

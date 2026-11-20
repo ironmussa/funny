@@ -209,18 +209,20 @@ function heldButton(buttons: number | undefined): MouseButton | undefined {
 function mouse(type: 'mouseMoved' | 'mousePressed' | 'mouseReleased'): PanelInputHandler {
   return (cs, input) => {
     const held = heldButton(input.buttons);
-    return cs.dispatchMouseEvent({
+    const event: Parameters<typeof cs.dispatchMouseEvent>[0] = {
       type,
       x: input.x ?? 0,
       y: input.y ?? 0,
       modifiers: input.modifiers ?? 0,
-      ...(input.buttons !== undefined ? { buttons: input.buttons } : {}),
-      ...(type === 'mouseMoved'
-        ? held
-          ? { button: held }
-          : {}
-        : { button: (input.button ?? 'left') as MouseButton, clickCount: input.clickCount ?? 1 }),
-    });
+      buttons: input.buttons !== undefined ? input.buttons : undefined,
+    };
+    if (type === 'mouseMoved') {
+      if (held) event.button = held;
+    } else {
+      event.button = (input.button ?? 'left') as MouseButton;
+      event.clickCount = input.clickCount ?? 1;
+    }
+    return cs.dispatchMouseEvent(event);
   };
 }
 
@@ -1159,7 +1161,7 @@ class BrowserSessionManager {
     this.emit(s, 'browser-session:closed', {
       sessionId,
       reason,
-      ...(closeId ? { closeId } : {}),
+      closeId: closeId || undefined,
     });
 
     this.scheduleHostShutdownIfUnused(s.userId);

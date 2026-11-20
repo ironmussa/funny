@@ -221,7 +221,7 @@ export class ChromeSession extends EventEmitter {
     if (!this.client) throw new Error('Not connected');
     const { data } = await this.client.Page.captureScreenshot({
       format,
-      ...(format === 'jpeg' && quality ? { quality } : {}),
+      quality: format === 'jpeg' && quality ? quality : undefined,
     });
     return data;
   }

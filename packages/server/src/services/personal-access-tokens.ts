@@ -38,8 +38,8 @@ const toInfo = (row: TokenRow): PersonalAccessTokenInfo => ({
   prefix: row.prefix,
   createdAt: row.createdAt,
   expiresAt: row.expiresAt,
-  ...(row.lastUsedAt ? { lastUsedAt: row.lastUsedAt } : {}),
-  ...(row.revokedAt ? { revokedAt: row.revokedAt } : {}),
+  lastUsedAt: row.lastUsedAt ?? undefined,
+  revokedAt: row.revokedAt ?? undefined,
 });
 
 const storageError = (error: unknown) => (error instanceof Error ? error.message : String(error));

@@ -107,11 +107,12 @@ export function runnerInstallEnv(
   build: RunnerBuild,
   options: { buildNative?: boolean } = {},
 ): Record<string, string> {
-  return {
+  const env: Record<string, string> = {
     FUNNY_REPO_URL: build.repoUrl,
     FUNNY_COMMIT: build.commit,
-    ...(options.buildNative ? { FUNNY_BUILD_NATIVE: '1' } : {}),
   };
+  if (options.buildNative) env.FUNNY_BUILD_NATIVE = '1';
+  return env;
 }
 
 const shellQuote = (value: string) => `'${value.replace(/'/g, `'\\''`)}'`;

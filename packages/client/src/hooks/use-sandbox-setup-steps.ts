@@ -45,7 +45,7 @@ export function sandboxSetupSteps(
             ? 'failed'
             : 'running'
           : 'pending',
-    ...(failed && index === current && info.error ? { error: info.error } : {}),
+    error: failed && index === current && info.error ? info.error : undefined,
   }));
 }
 

@@ -381,7 +381,7 @@ function admissionContext(
   return {
     reader: { repo, ownerId: factory.userId, projectId: factory.projectId },
     latestRuns,
-    queued: new Set(all.filter((run) => run.state === 'requested').map((run) => run.issueNumber)),
+    queued: new Set(all.flatMap((run) => (run.state === 'requested' ? [run.issueNumber] : []))),
     blockers: new Map(),
   };
 }

@@ -70,9 +70,8 @@ export function stepIo(
       const failed = (await Promise.allSettled(reports)).filter((r) => r.status === 'rejected');
       await writeExitMarker(spec.exitMarkerPath, {
         ...outcome,
-        ...(failed.length > 0
-          ? { eventFileError: String((failed[0] as PromiseRejectedResult).reason) }
-          : {}),
+        eventFileError:
+          failed.length > 0 ? String((failed[0] as PromiseRejectedResult).reason) : undefined,
         finishedAt: now().toISOString(),
       });
       return outcome;

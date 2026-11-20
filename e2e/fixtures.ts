@@ -196,18 +196,14 @@ function e2eAdminCredentials() {
 }
 
 function parseSetCookieHeaders(headers: Array<{ name: string; value: string }>, baseURL: string) {
-  return headers
-    .filter((header) => header.name.toLowerCase() === 'set-cookie')
-    .map((header) => {
-      const [pair] = header.value.split(';');
-      const eq = pair.indexOf('=');
-      return {
-        name: pair.slice(0, eq),
-        value: pair.slice(eq + 1),
-        url: baseURL,
-      };
-    })
-    .filter((cookie) => cookie.name && cookie.value);
+  return headers.flatMap((header) => {
+    if (header.name.toLowerCase() !== 'set-cookie') return [];
+    const [pair] = header.value.split(';');
+    const eq = pair.indexOf('=');
+    const name = pair.slice(0, eq);
+    const value = pair.slice(eq + 1);
+    return name && value ? [{ name, value, url: baseURL }] : [];
+  });
 }
 
 async function getAdminAuth(request: APIRequestContext, baseURL: string): Promise<CachedAuth> {

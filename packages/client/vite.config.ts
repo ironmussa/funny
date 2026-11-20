@@ -132,7 +132,7 @@ export default defineConfig(({ mode }) => {
     },
     build: {
       rollupOptions: {
-        ...(benchmarkInput ? { input: benchmarkInput } : {}),
+        input: benchmarkInput || undefined,
         output: {
           manualChunks(id: string) {
             if (id.includes('react-markdown') || id.includes('remark-gfm')) return 'markdown';

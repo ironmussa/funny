@@ -172,7 +172,7 @@ function check(
 ): Omit<CheckCommand, 'plain' | 'cwd'> {
   const names = TEST_NAME_FLAGS[tool];
   const filter = names ? flagValue(args, names) : undefined;
-  return { kind, tool, scope: positionals(args, VALUED, skip), ...(filter ? { filter } : {}) };
+  return { kind, tool, scope: positionals(args, VALUED, skip), filter: filter || undefined };
 }
 
 /** Words to drop before the tool: `npx`, `pnpm exec`, `uv run`, pnpm / yarn's `<pm> <bin>`. */

@@ -241,12 +241,13 @@ process.stdin.on('end', () => {
 
       const results = messages.filter((message) => message.type === 'result');
       expect(results).toHaveLength(1);
-      expect(results[0]).toMatchObject({
+      const expected: Record<string, unknown> = {
         subtype: error ? 'error_during_execution' : 'success',
         is_error: !!error,
         result: 'Partial answer',
-        ...(error ? { errors: [error] } : {}),
-      });
+      };
+      if (error) expected.errors = [error];
+      expect(results[0]).toMatchObject(expected);
       const errorCards = messages.filter(
         (message) =>
           message.type === 'assistant' &&
@@ -370,7 +371,7 @@ process.stdin.on('end', () => {
       item: { id: 'item_0', type: 'agent_message', text: '7' },
     });
 
-    const ids = messages.filter((m) => m.type === 'assistant').map((m) => m.message.id);
+    const ids = messages.flatMap((m) => (m.type === 'assistant' ? [m.message.id] : []));
     expect(ids).toHaveLength(2);
     // Both end in the reused SDK id but differ by turn namespace, so the
     // runtime persists two rows instead of overwriting the first reply.

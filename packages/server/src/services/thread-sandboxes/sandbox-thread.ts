@@ -248,7 +248,7 @@ function retryMessageBody(
   return {
     ...input,
     precedingPrompt: initialPrompt,
-    ...(initialImages?.length ? { precedingImages: initialImages } : {}),
+    precedingImages: initialImages?.length ? initialImages : undefined,
   };
 }
 

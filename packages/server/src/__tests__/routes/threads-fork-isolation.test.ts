@@ -81,7 +81,7 @@ describe('Thread fork — authorization and runner isolation', () => {
       id: 'p1',
       userId: owner,
       path: '/a',
-      ...(opts.organizationId ? { organizationId: opts.organizationId } : {}),
+      organizationId: opts.organizationId ?? undefined,
     });
     seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: owner, title: 'Source' });
   }

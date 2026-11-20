@@ -106,9 +106,9 @@ export function analyzeClientMemorySoak(samples: readonly ClientMemorySample[]):
     'terminal-open',
     'terminal-closed',
   ];
-  const phases = order
-    .filter((phase) => samples.some((sample) => sample.phase === phase))
-    .map((phase) => summarizePhase(phase, samples));
+  const phases = order.flatMap((phase) =>
+    samples.some((sample) => sample.phase === phase) ? [summarizePhase(phase, samples)] : [],
+  );
   const longEnough = phases.filter((phase) => phase.samples >= 6 && phase.durationMs >= 5 * 60_000);
   const browserRecovery = recovery(
     phases.find((phase) => phase.phase === 'browser-open'),

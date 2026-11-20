@@ -127,8 +127,8 @@ class RemoteThreadDataClient {
   ): Promise<any> {
     const response = await this.request('data:get_thread_with_messages', {
       threadId,
-      ...(messageLimit !== undefined ? { messageLimit } : {}),
-      ...(opts.messageProgress !== undefined ? { messageProgress: opts.messageProgress } : {}),
+      messageLimit: messageLimit ?? undefined,
+      messageProgress: opts.messageProgress ?? undefined,
     });
     return response?.thread ?? null;
   }
@@ -142,8 +142,8 @@ class RemoteThreadDataClient {
     const response = await this.request('data:get_thread_messages', {
       threadId: opts.threadId,
       limit: opts.limit,
-      ...(opts.cursor !== undefined ? { cursor: opts.cursor } : {}),
-      ...(opts.direction !== undefined ? { direction: opts.direction } : {}),
+      cursor: opts.cursor ?? undefined,
+      direction: opts.direction ?? undefined,
     });
     return {
       messages: Array.isArray(response?.messages) ? response.messages : [],

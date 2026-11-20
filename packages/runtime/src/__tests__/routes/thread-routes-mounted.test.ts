@@ -168,6 +168,21 @@ describe('threadRoutes (mounted)', () => {
     expect((await res.json()).id).toBe('new-1');
   });
 
+  test('POST / without a model leaves provider, model and permission mode to the project', async () => {
+    // The issue factory sends none: a route default (DEFAULT_MODEL) used to
+    // win over the project's default model in `resolveRunDefaults`.
+    const res = await makeApp().request('/api/threads', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ projectId: 'p1', mode: 'local', prompt: 'hello', source: 'factory' }),
+    });
+    expect(res.status).toBe(201);
+    const params = mocks.createAndStartThread.mock.calls.at(-1)![0];
+    expect(params.model).toBeUndefined();
+    expect(params.provider).toBeUndefined();
+    expect(params.permissionMode).toBeUndefined();
+  });
+
   test('POST / returns service error status from ThreadServiceError', async () => {
     mocks.createAndStartThread.mockResolvedValue(
       errAsync(new ThreadServiceError('project missing', 404)),

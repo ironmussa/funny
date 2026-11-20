@@ -13,6 +13,8 @@ import { createTestDb } from '../../helpers/test-db.js';
 let testDb: ReturnType<typeof createTestDb>;
 let clock = 1_000_000;
 const gates: LeaseGate[] = [];
+/** Requests a test leaves waiting: aborted after it, so they stop polling the next test's database. */
+const pending: AbortController[] = [];
 
 /** A gate as another server would have: same database, its own timers. */
 function server(opts: Parameters<typeof createLeaseGate>[0] = {}) {
@@ -34,12 +36,15 @@ beforeEach(async () => {
   });
 });
 
-afterEach(() => {
+afterEach(async () => {
+  for (const c of pending.splice(0)) c.abort();
   for (const g of gates.splice(0)) g.stop();
+  await new Promise((r) => setTimeout(r, 10));
 });
 
 const ask = (gate: LeaseGate, holder: string, opts: { limit?: number; group?: string } = {}) => {
   const controller = new AbortController();
+  pending.push(controller);
   let waited = false;
   const grant = gate.acquire({
     group: opts.group ?? 'merge-o/r',

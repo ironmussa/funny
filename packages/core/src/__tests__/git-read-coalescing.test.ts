@@ -17,8 +17,8 @@ function run(cwd: string, args: string[]): string {
   return executeSync('git', args, { cwd }).stdout.trim();
 }
 
-function initRepo(): string {
-  const repoPath = resolve(TMP, 'repo');
+function initRepo(name = 'repo'): string {
+  const repoPath = resolve(TMP, name);
   mkdirSync(repoPath, { recursive: true });
   run(repoPath, ['init', '-b', 'master']);
   run(repoPath, ['config', 'user.email', 'test@test.com']);
@@ -64,6 +64,24 @@ describe('git read coalescing', () => {
     await gitWrite(['commit', '-m', 'add new'], { cwd: repo });
     const clean = await unwrap(getStatusSummary(repo));
     expect(clean.dirtyFileCount).toBe(0);
+  });
+
+  test('a git write in another worktree does not invalidate this status cache', async () => {
+    const other = initRepo('other');
+    writeFileSync(resolve(repo, 'one.txt'), 'x\n');
+    const first = await unwrap(getStatusSummary(repo));
+    expect(first.dirtyFileCount).toBe(1);
+
+    // Another agent commits in its own worktree, and the runner fetches.
+    writeFileSync(resolve(other, 'theirs.txt'), 'x\n');
+    await gitWrite(['add', '-A'], { cwd: other });
+    await gitWrite(['commit', '-m', 'theirs'], { cwd: other });
+    writeFileSync(resolve(repo, 'two.txt'), 'x\n');
+
+    // Still inside the 1s TTL, so the cached summary is served instead of
+    // waiting for a new scan (which would count both files).
+    const second = await unwrap(getStatusSummary(repo));
+    expect(second).toBe(first);
   });
 
   test('concurrent shared diff summaries reuse one scan', async () => {

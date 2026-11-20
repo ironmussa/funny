@@ -86,6 +86,32 @@ describe('git process pools', () => {
     expect(getGitWriteGeneration()).toBeGreaterThan(before);
   });
 
+  test('a write only bumps the generation of its own directory', async () => {
+    const a = repo('a');
+    const b = repo('b');
+    const beforeA = getGitWriteGeneration(a);
+    const beforeB = getGitWriteGeneration(b);
+    await gitWrite(['config', 'user.name', 'x'], { cwd: a });
+    expect(getGitWriteGeneration(a)).toBeGreaterThan(beforeA);
+    expect(getGitWriteGeneration(b)).toBe(beforeB);
+  });
+
+  test('a write without a directory bumps every directory', async () => {
+    const a = repo('a');
+    const before = getGitWriteGeneration(a);
+    await gitNetwork(['--version']);
+    expect(getGitWriteGeneration(a)).toBeGreaterThan(before);
+  });
+
+  test('a fetch does not bump the write generation', async () => {
+    const remote = repo('fetch-remote');
+    const local = repo('fetch-local');
+    executeSync('git', ['remote', 'add', 'origin', remote], { cwd: local });
+    const before = getGitWriteGeneration(local);
+    await gitNetwork(['fetch', '--quiet', 'origin'], { cwd: local, reject: false });
+    expect(getGitWriteGeneration(local)).toBe(before);
+  });
+
   test('an unauthenticated fetch reports success even though it prints nothing', async () => {
     const remote = repo('remote');
     executeSync('git', ['commit', '-q', '--allow-empty', '-m', 'init'], {

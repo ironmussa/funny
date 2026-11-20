@@ -1,6 +1,6 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
-import { delimiter } from 'node:path';
+import { delimiter, resolve } from 'node:path';
 
 import { createConcurrencyLimiter, runAsync, waitFor } from '@funny/shared/async';
 import { processError, internal, type DomainError } from '@funny/shared/errors';
@@ -178,13 +178,17 @@ function serializeByDirectory<T>(cwd: string | undefined, work: () => Promise<T>
 }
 
 async function runTrackedWrite(args: string[], options: ProcessOptions): Promise<ProcessResult> {
+  // A fetch only moves remote-tracking refs: no working tree, index or local
+  // branch changes, so it invalidates nothing. Background fetches run every
+  // few seconds with several agents and used to empty every read cache.
+  if (args[0] === 'fetch') return executeRaw('git', args, options);
   // Bump on both sides of the write so a read that started before it ends,
   // or while it ran, is never reused afterwards by the read-side caches.
-  gitWriteGeneration++;
+  bumpWriteGeneration(options.cwd);
   try {
     return await executeRaw('git', args, options);
   } finally {
-    gitWriteGeneration++;
+    bumpWriteGeneration(options.cwd);
   }
 }
 
@@ -219,8 +223,9 @@ export async function gitWrite(
 
 /**
  * Execute a network git command (push, pull, fetch) through its own pool.
- * Like gitWrite it bumps the write generation, since it moves refs or the
- * working tree, but it never competes with local writes for a slot.
+ * Like gitWrite it bumps the write generation of `cwd` (push and pull move
+ * refs or the working tree; fetch does not count), but it never competes with
+ * local writes for a slot.
  */
 export async function gitNetwork(
   args: string[],
@@ -229,15 +234,37 @@ export async function gitNetwork(
   return networkPool(() => runTrackedWrite(args, options));
 }
 
-let gitWriteGeneration = 0;
+// Writes are counted per working directory: a commit in one worktree must not
+// invalidate the cached status of every other worktree on the runner (with
+// several agents that kept every read waiting for a fresh scan). A write with
+// no directory bumps the global counter, which every directory sees.
+let globalWriteGeneration = 0;
+const directoryWriteGenerations = new Map<string, number>();
+
+function bumpWriteGeneration(cwd: string | undefined): void {
+  if (!cwd) {
+    globalWriteGeneration++;
+    return;
+  }
+  const directory = resolve(cwd);
+  directoryWriteGenerations.set(directory, (directoryWriteGenerations.get(directory) ?? 0) + 1);
+}
 
 /**
- * Monotonic counter bumped around every `gitWrite`. Read-side caches record it
- * when a read starts and only reuse that read while it is unchanged, so a
- * result computed before a stage/commit/checkout is never served after it.
+ * Monotonic counter bumped around every local git write (and every network
+ * command but `fetch`) made in `cwd`, or anywhere when `cwd` is omitted.
+ * Read-side caches record it when a read starts and only reuse that read
+ * while it is unchanged, so a result computed before a stage/commit/checkout
+ * in that directory is never served after it. Changes another directory makes
+ * to shared refs are picked up by the caches' background revalidation.
  */
-export function getGitWriteGeneration(): number {
-  return gitWriteGeneration;
+export function getGitWriteGeneration(cwd?: string): number {
+  if (cwd === undefined) {
+    let total = globalWriteGeneration;
+    for (const generation of directoryWriteGenerations.values()) total += generation;
+    return total;
+  }
+  return globalWriteGeneration + (directoryWriteGenerations.get(resolve(cwd)) ?? 0);
 }
 
 /**

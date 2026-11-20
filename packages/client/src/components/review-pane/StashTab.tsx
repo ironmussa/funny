@@ -158,7 +158,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
               {t('review.stashDetailsDesc', 'Stash detail with file changes and diffs')}
             </DialogDescription>
             {selectedStashEntry && (
-              <div className="text-muted-foreground flex items-center gap-1.5 pt-1 text-[11px]">
+              <div className="text-muted-foreground text-compact flex items-center gap-1.5 pt-1">
                 <Archive className="icon-xs shrink-0" />
                 <code className="text-primary shrink-0 font-mono">{selectedStashEntry.index}</code>
                 <span className="shrink-0">{timeAgo(selectedStashEntry.createdAt, t, now)}</span>
@@ -303,9 +303,7 @@ function StashRow({
         <span className={cn(listRowTitleClassName, 'line-clamp-2 break-words')}>
           {entry.message}
         </span>
-        <span className="text-muted-foreground text-[10px]">
-          {timeAgo(entry.createdAt, t, now)}
-        </span>
+        <span className="text-muted-foreground text-2xs">{timeAgo(entry.createdAt, t, now)}</span>
       </div>
       <StashPopButton
         idx={idx}

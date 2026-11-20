@@ -92,9 +92,7 @@ function DetailTooltip({ label, children }: { label: string; children: ReactNode
   return (
     <Tooltip>
       <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent className="max-w-[min(36rem,calc(100vw-2rem))] font-mono break-all">
-        {label}
-      </TooltipContent>
+      <TooltipContent variant="mono">{label}</TooltipContent>
     </Tooltip>
   );
 }

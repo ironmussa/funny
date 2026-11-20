@@ -196,9 +196,7 @@ export function ChangedFilesSummary({
                   {f.path}
                 </button>
               </TooltipTrigger>
-              <TooltipContent className="max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all">
-                {f.path}
-              </TooltipContent>
+              <TooltipContent variant="mono">{f.path}</TooltipContent>
             </Tooltip>
             <DiffStats
               linesAdded={f.additions ?? 0}

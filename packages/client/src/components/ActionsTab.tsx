@@ -1,18 +1,18 @@
 import type { ActionJob, ActionRun, CICheck, PRDetail } from '@funny/shared';
-import {
-  ChevronRight,
-  CircleDashed,
-  ExternalLink,
-  GitPullRequest,
-  RefreshCw,
-  RotateCcw,
-} from 'lucide-react';
+import { ChevronRight, CircleDashed, ExternalLink, GitPullRequest, RotateCcw } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { BranchBadge } from '@/components/BranchBadge';
+import { CommitHash } from '@/components/CommitHash';
 import { CheckIcon, MergeStatus, ReviewDecisionBadge } from '@/components/PRSummaryCard';
+import {
+  TabToolbar,
+  TabToolbarExternalLink,
+  TabToolbarRefresh,
+  TabToolbarSpacer,
+} from '@/components/review-pane/TabToolbar';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -99,7 +99,12 @@ export function ActionsTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="actions-tab">
-      <div className="border-sidebar-border flex items-center gap-2 border-b px-3 py-1.5 text-xs">
+      <TabToolbar data-testid="actions-toolbar">
+        <TabToolbarRefresh
+          loading={loading}
+          onRefresh={handleRefresh}
+          data-testid="actions-refresh"
+        />
         <ToggleGroup
           type="single"
           size="sm"
@@ -124,14 +129,9 @@ export function ActionsTab({
             {t('review.actions.allBranches', 'All branches')}
           </ToggleGroupItem>
         </ToggleGroup>
-        <div className="min-w-0 flex-1" />
-        <ActionsToolbar
-          rateLimited={rateLimited}
-          loading={loading}
-          actionsUrl={repoActionsUrl(runs)}
-          onRefresh={handleRefresh}
-        />
-      </div>
+        <TabToolbarSpacer />
+        <ActionsToolbarEnd rateLimited={rateLimited} actionsUrl={repoActionsUrl(runs)} />
+      </TabToolbar>
 
       {prNumber ? (
         <PRChecksSection projectId={projectId} prNumber={prNumber} prUrl={prUrl} />
@@ -342,9 +342,7 @@ function RunRow({
   const [rerunning, setRerunning] = useState(false);
   const duration = runDurationMs(run);
   const meta = [`${run.name} #${run.run_number}`, run.event].filter(Boolean).join(' · ');
-  const tail = [run.head_sha.slice(0, 7), duration !== null ? formatActionDuration(duration) : null]
-    .filter(Boolean)
-    .join(' · ');
+  const durationLabel = duration !== null ? formatActionDuration(duration) : null;
 
   const handleRerun = async () => {
     setRerunning(true);
@@ -383,7 +381,8 @@ function RunRow({
                 {run.head_branch ? (
                   <BranchBadge branch={run.head_branch} size="xs" className="shrink-[2]" />
                 ) : null}
-                {tail ? <span className="shrink-0">{tail}</span> : null}
+                <CommitHash hash={run.head_sha} />
+                {durationLabel ? <span className="shrink-0">· {durationLabel}</span> : null}
               </span>
             </span>
           </button>
@@ -541,16 +540,12 @@ function JobLog({ projectId, jobId }: { projectId: string; jobId: number }) {
 
 // ── Toolbar ─────────────────────────────────────────────────
 
-function ActionsToolbar({
+function ActionsToolbarEnd({
   rateLimited,
-  loading,
   actionsUrl,
-  onRefresh,
 }: {
   rateLimited: boolean;
-  loading: boolean;
   actionsUrl: string | null;
-  onRefresh: () => void;
 }) {
   const { t } = useTranslation();
   return (
@@ -567,40 +562,12 @@ function ActionsToolbar({
           </TooltipContent>
         </Tooltip>
       )}
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onRefresh}
-            disabled={loading}
-            className="text-muted-foreground shrink-0"
-            data-testid="actions-refresh"
-          >
-            <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
-      </Tooltip>
       {actionsUrl && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              asChild
-              className="text-muted-foreground shrink-0"
-              data-testid="actions-open-github"
-            >
-              <a href={actionsUrl} target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="icon-base" />
-              </a>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {t('review.actions.openOnGithub', 'Open Actions on GitHub')}
-          </TooltipContent>
-        </Tooltip>
+        <TabToolbarExternalLink
+          href={actionsUrl}
+          label={t('review.actions.openOnGithub', 'Open Actions on GitHub')}
+          data-testid="actions-open-github"
+        />
       )}
     </>
   );

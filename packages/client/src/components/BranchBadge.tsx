@@ -16,7 +16,7 @@ interface BranchBadgeProps {
 }
 
 const sizeStyles = {
-  xs: { icon: ICON_SIZE['2xs'], text: 'text-[10px] leading-tight', chip: 'px-1 py-px' },
+  xs: { icon: ICON_SIZE['2xs'], text: 'text-2xs leading-tight', chip: 'px-1 py-px' },
   sm: { icon: ICON_SIZE.xs, text: 'text-xs', chip: 'px-1 py-px' },
   md: { icon: ICON_SIZE.sm, text: 'text-sm', chip: 'px-1.5 py-0.5' },
 };
@@ -50,9 +50,7 @@ export function BranchBadge({
           <span className="truncate">{branch}</span>
         </span>
       </TooltipTrigger>
-      <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
-        {branch}
-      </TooltipContent>
+      <TooltipContent variant="mono">{branch}</TooltipContent>
     </Tooltip>
   );
 }

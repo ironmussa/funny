@@ -34,6 +34,12 @@
   --font-mono: var(--font-mono);
   --font-mono-explorer: var(--font-mono-explorer);
 
+  /* Small text steps in rem, so they follow the font size setting (Settings > Appearance
+     sets the root font size). Use these instead of text-[9px] / text-[10px] / text-[11px]. */
+  --text-3xs: 0.5625rem;
+  --text-2xs: 0.625rem;
+  --text-compact: 0.6875rem;
+
   --color-border: hsl(var(--border));
   --color-input: hsl(var(--input));
   --color-ring: hsl(var(--ring));

@@ -1,4 +1,4 @@
-import { spawn, type ChildProcess } from 'child_process';
+import { ChildProcess, spawn } from 'child_process';
 
 import { killProcessTree } from '../agents/base-process.js';
 
@@ -77,6 +77,6 @@ describe('killProcessTree', () => {
   });
 
   maybe('is a no-op when the child has no pid', () => {
-    expect(() => killProcessTree({ pid: undefined } as ChildProcess)).not.toThrow();
+    expect(() => killProcessTree(new ChildProcess())).not.toThrow();
   });
 });

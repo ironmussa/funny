@@ -6,6 +6,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { HttpSchedulerClient } from '../../adapters/http-client.js';
 import { HttpEventStream, type EventStreamEvent } from '../../adapters/http-event-stream.js';
+import { fetchDouble } from '../test-helpers.js';
 
 interface PollResponse {
   events: EventStreamEvent[];
@@ -15,17 +16,14 @@ interface PollResponse {
 
 function makeStream(responses: PollResponse[], requests: URL[] = []): HttpEventStream {
   let i = 0;
-  const fakeFetch = Object.assign(
-    async (input: string | URL | Request) => {
-      requests.push(new URL(typeof input === 'string' ? input : input.toString()));
-      const next = responses[i++] ?? { events: [], nextSeq: 0 };
-      return new Response(JSON.stringify(next), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
-    },
-    { preconnect: (_url: string | URL) => {} },
-  ) as typeof fetch;
+  const fakeFetch = fetchDouble(async (input) => {
+    requests.push(new URL(typeof input === 'string' ? input : input.toString()));
+    const next = responses[i++] ?? { events: [], nextSeq: 0 };
+    return new Response(JSON.stringify(next), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  });
   const client = new HttpSchedulerClient({
     baseUrl: 'http://srv',
     authSecret: 's',
@@ -133,13 +131,10 @@ test('stop interrupts reconnect backoff instead of waiting for the next poll', a
   const client = new HttpSchedulerClient({
     baseUrl: 'http://srv',
     authSecret: 'test-secret',
-    fetch: Object.assign(
-      async () => {
-        attempted.resolve();
-        throw new Error('offline');
-      },
-      { preconnect: () => {} },
-    ) as typeof fetch,
+    fetch: fetchDouble(async () => {
+      attempted.resolve();
+      throw new Error('offline');
+    }),
   });
   const stream = new HttpEventStream({ client, errorBackoffMs: 60_000 });
   stream.start();

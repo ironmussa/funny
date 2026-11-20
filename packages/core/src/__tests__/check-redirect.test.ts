@@ -44,7 +44,7 @@ describe('checkRedirectReason', () => {
 
 describe('SDKClaudeProcess PreToolUse redirect', () => {
   const hook = (redirectChecks: boolean, toolName: string, command: string) =>
-    (new SDKClaudeProcess({ prompt: 'hi', cwd: '/tmp', redirectChecks }) as any).preToolUseHook(
+    new SDKClaudeProcess({ prompt: 'hi', cwd: '/tmp', redirectChecks })['preToolUseHook'](
       { tool_name: toolName, tool_input: { command } },
       'toolu_1',
       { signal: new AbortController().signal },

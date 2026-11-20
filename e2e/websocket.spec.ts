@@ -1,3 +1,4 @@
+import './browser-globals';
 import { test, expect, waitForSidebar, seedProject } from './fixtures';
 import { setupWSIntercept, injectWSEvent } from './mock-helpers';
 
@@ -23,7 +24,7 @@ test.describe('15. WebSocket & Real-Time', () => {
       return new Promise<boolean>((resolve) => {
         // Check if any WebSocket exists in the page
         const checkInterval = setInterval(() => {
-          const wsInstances = (window as any).__playwright_ws_instances;
+          const wsInstances = window.__playwright_ws_instances;
           if (wsInstances && wsInstances.length > 0) {
             clearInterval(checkInterval);
             resolve(true);
@@ -181,7 +182,7 @@ test.describe('15. WebSocket & Real-Time', () => {
 
     // Simulate WebSocket close
     await page.evaluate(() => {
-      const instances = (window as any).__playwright_ws_instances;
+      const instances = window.__playwright_ws_instances;
       if (instances && instances.length > 0) {
         instances[instances.length - 1].close();
       }
@@ -195,7 +196,7 @@ test.describe('15. WebSocket & Real-Time', () => {
 
     // A new WS instance should have been created (reconnection)
     const wsCount = await page.evaluate(() => {
-      return ((window as any).__playwright_ws_instances || []).length;
+      return (window.__playwright_ws_instances || []).length;
     });
     // Should have at least 2 instances (original + reconnect)
     expect(wsCount).toBeGreaterThanOrEqual(1);

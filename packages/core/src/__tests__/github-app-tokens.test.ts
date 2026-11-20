@@ -12,6 +12,7 @@ import {
   createInstallationTokenIssuer,
   ghCredentialHelper,
 } from '../github-app/index.js';
+import { fakeFetch } from './helpers/test-helpers.js';
 
 const { privateKey } = generateKeyPairSync('rsa', {
   modulusLength: 2048,
@@ -23,14 +24,13 @@ const app = { appId: '5690396', privateKey };
 describe('installation token issuer', () => {
   function setup(installed = true) {
     let clock = Date.parse('2026-11-10T12:00:00Z');
-    const calls: Array<{ url: string; auth: string; body?: any }> = [];
+    const calls: Array<{ url: string; auth: string | null; body?: any }> = [];
     let minted = 0;
-    const fetchFake = (async (url: string, init: RequestInit) => {
-      const headers = init.headers as Record<string, string>;
+    const fetchFake = fakeFetch(async (url, init) => {
       calls.push({
         url,
-        auth: headers.authorization,
-        body: init.body ? JSON.parse(String(init.body)) : undefined,
+        auth: new Headers(init?.headers).get('authorization'),
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
       });
       const json = (status: number, body: unknown) =>
         new Response(JSON.stringify(body), { status });
@@ -44,7 +44,7 @@ describe('installation token issuer', () => {
         });
       }
       return json(500, {});
-    }) as typeof fetch;
+    });
     const issuer = createInstallationTokenIssuer({
       fetch: fetchFake,
       api: 'https://api.example',

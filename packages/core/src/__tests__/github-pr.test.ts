@@ -8,7 +8,7 @@ vi.mock('../git/process.js', () => ({
 import { getPRForBranch, lookupPRForBranch } from '../git/github.js';
 import { execute } from '../git/process.js';
 
-const mockExecute = execute as ReturnType<typeof vi.fn>;
+const mockExecute = vi.mocked(execute);
 
 describe('getPRForBranch', () => {
   beforeEach(() => {

@@ -4,6 +4,7 @@
  * Tests the provider registry and factory pattern for creating agent processes.
  */
 import { describe, test, expect } from 'bun:test';
+import { EventEmitter } from 'events';
 
 import { GATEABLE_ACP_PROVIDER_IDS, opencodeManifest } from '@funny/shared/provider-manifests';
 
@@ -19,37 +20,30 @@ import {
   resolvePermissionApprovalCapability,
 } from '../agents/process-factory.js';
 import { SDKClaudeProcess } from '../agents/sdk-claude.js';
+import { expectInstance } from './helpers/test-helpers.js';
 
 // Minimal mock process class for testing
-class MockProcess implements IAgentProcess {
+class MockProcess extends EventEmitter implements IAgentProcess {
   readonly provider: string;
+  readonly exited = false;
   constructor(public opts: AgentProcessOptions) {
+    super();
     this.provider = opts.provider ?? 'mock';
   }
-  start() {
+  start(): void {}
+  kill(): Promise<void> {
     return Promise.resolve();
-  }
-  stop() {
-    return Promise.resolve();
-  }
-  sendMessage(_msg: string) {
-    return Promise.resolve();
-  }
-  on(_event: string, _handler: (...args: any[]) => void) {
-    return this;
-  }
-  off(_event: string, _handler: (...args: any[]) => void) {
-    return this;
   }
 }
 
-const baseOpts: AgentProcessOptions = {
+/** Valid process options plus a thread id the factory must pass through untouched. */
+const baseOpts = {
   threadId: 'test-thread',
-  projectPath: '/tmp/test',
+  cwd: '/tmp/test',
   prompt: 'test prompt',
   model: 'sonnet',
   permissionMode: 'autoEdit',
-};
+} satisfies AgentProcessOptions & { threadId: string };
 
 describe('process-factory', () => {
   test('creates a claude process by default', () => {
@@ -128,16 +122,16 @@ describe('process-factory', () => {
   test('falls back to SDKClaudeProcess for unknown providers', () => {
     const process = defaultProcessFactory.create({
       ...baseOpts,
-      provider: 'unknown-provider' as any,
+      provider: 'unknown-provider',
     });
     expect(process.constructor.name).toBe('SDKClaudeProcess');
   });
 
   test('registerProvider adds a new provider to the registry', () => {
     registerProvider('mock', MockProcess);
-    const process = defaultProcessFactory.create({ ...baseOpts, provider: 'mock' as any });
+    const process = defaultProcessFactory.create({ ...baseOpts, provider: 'mock' });
     expect(process.constructor.name).toBe('MockProcess');
-    expect((process as MockProcess).opts.threadId).toBe('test-thread');
+    expect(expectInstance(process, MockProcess).opts).toHaveProperty('threadId', 'test-thread');
   });
 
   test('resolves a runtime-registered manifest-bound provider with no cast (provider-manifest-loader seam)', () => {

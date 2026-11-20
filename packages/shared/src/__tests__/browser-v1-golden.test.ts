@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
 import { fromBinary, fromJson, toBinary, toJson } from '@bufbuild/protobuf';
-import type { JsonValue, Message } from '@bufbuild/protobuf';
+import type { Message } from '@bufbuild/protobuf';
 import type { GenMessage } from '@bufbuild/protobuf/codegenv2';
 
 import { StatusSchema } from '../generated/browser-v1/browser/v1/common_pb';
@@ -11,15 +11,13 @@ import { InteractiveEnvelopeSchema } from '../generated/browser-v1/browser/v1/in
 import { NegotiationRequestSchema } from '../generated/browser-v1/browser/v1/negotiation_pb';
 import { OperationRequestSchema } from '../generated/browser-v1/browser/v1/operations_pb';
 import { CarrierEnvelopeSchema } from '../generated/browser-v1/browser/v1/transport_pb';
+import { goldenFixturesSchema } from './helpers/golden-fixtures.js';
 
-const fixtures = (await Bun.file(
-  new URL('../../../../protocol/browser/v1/fixtures/golden.json', import.meta.url),
-).json()) as Array<{
-  name: string;
-  messageType: string;
-  protoJson: JsonValue;
-  wireHex: string;
-}>;
+const fixtures = goldenFixturesSchema.parse(
+  await Bun.file(
+    new URL('../../../../protocol/browser/v1/fixtures/golden.json', import.meta.url),
+  ).json(),
+);
 
 const schemas: Record<string, GenMessage<Message>> = {
   'browser.v1.Status': StatusSchema,

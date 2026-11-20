@@ -18,8 +18,8 @@ describe('deleteThread purges thread grants', () => {
   beforeEach(() => {
     deps = createTestDb();
     const { db, schema, dbAll, dbGet, dbRun } = deps;
-    const commentRepo = createCommentRepository({ db, schema, dbAll, dbRun } as any);
-    const stageHistoryRepo = createStageHistoryRepository({ db, schema, dbRun } as any);
+    const commentRepo = createCommentRepository({ db, schema, dbAll, dbRun });
+    const stageHistoryRepo = createStageHistoryRepository({ db, schema, dbRun });
     threadRepo = createThreadRepository({
       db,
       schema,
@@ -28,7 +28,7 @@ describe('deleteThread purges thread grants', () => {
       dbRun,
       commentRepo,
       stageHistoryRepo,
-    } as any);
+    });
     grants = createGrantRepository(deps);
     seedProject(db, { id: 'p1', userId: 'u1' });
     seedThread(db, { id: 't1', projectId: 'p1', userId: 'u1' });

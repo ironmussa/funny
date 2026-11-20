@@ -12,6 +12,8 @@
  * the update's kind/title/rawInput/locations before emitting the result.
  */
 
+import type { SessionUpdate } from '@agentclientprotocol/sdk/unstable';
+
 import { GeminiACPProcess } from '../agents/gemini-acp.js';
 import type { CLIMessage } from '../agents/types.js';
 
@@ -26,8 +28,8 @@ function makeProcess(): { proc: GeminiACPProcess; messages: CLIMessage[] } {
   return { proc, messages };
 }
 
-function translate(proc: GeminiACPProcess, update: unknown): void {
-  (proc as GeminiACPProcess & { translateUpdate: (u: unknown) => void }).translateUpdate(update);
+function translate(proc: GeminiACPProcess, update: SessionUpdate): void {
+  proc['translateUpdate'](update);
 }
 
 describe('GeminiACPProcess.translateUpdate (regression)', () => {

@@ -5,15 +5,23 @@ import {
   type FakeProviderOptions,
   type FakeSandboxProvider,
 } from '../providers/fake/fake-provider.js';
-import { runSandboxProviderContract } from '../testing/provider-contract.js';
+import {
+  runSandboxProviderContract,
+  type ProviderContractHarness,
+} from '../testing/provider-contract.js';
+import { createProviderDoubles } from './test-helpers.js';
 
-function harness(opts: FakeProviderOptions) {
+function harness(opts: FakeProviderOptions): ProviderContractHarness {
+  const fakes = createProviderDoubles<FakeSandboxProvider>();
+  const create = (credential: string) => {
+    const provider = createFakeSandboxProvider(credential, opts);
+    return fakes.track(provider, provider);
+  };
   return {
-    provider: () => createFakeSandboxProvider('fake-valid', opts),
-    providerWithBadCredential: () => createFakeSandboxProvider('nope', opts),
+    provider: () => create('fake-valid'),
+    providerWithBadCredential: () => create('nope'),
     knownVersion: '0.0.0-test',
-    expire: (p: unknown, handle: { sandboxId: string }) =>
-      (p as FakeSandboxProvider).expire(handle.sandboxId),
+    expire: (p, handle) => fakes.of(p).expire(handle.sandboxId),
   };
 }
 

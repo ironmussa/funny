@@ -11,8 +11,8 @@ let repo: ReturnType<typeof createThreadRepository>;
 beforeEach(() => {
   deps = createTestDb();
   const { db, schema, dbAll, dbGet, dbRun } = deps;
-  const commentRepo = createCommentRepository({ db, schema, dbAll, dbRun } as any);
-  const stageHistoryRepo = createStageHistoryRepository({ db, schema, dbRun } as any);
+  const commentRepo = createCommentRepository({ db, schema, dbAll, dbRun });
+  const stageHistoryRepo = createStageHistoryRepository({ db, schema, dbRun });
   repo = createThreadRepository({
     db,
     schema,
@@ -21,7 +21,7 @@ beforeEach(() => {
     dbRun,
     commentRepo,
     stageHistoryRepo,
-  } as any);
+  });
 
   seedProject(db, { id: 'p1', userId: 'u1' });
   seedProject(db, { id: 'p2', userId: 'u1' });

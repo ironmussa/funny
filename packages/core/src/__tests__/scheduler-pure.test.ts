@@ -35,7 +35,7 @@ function makeThread(over: Partial<Thread> & Pick<Thread, 'id' | 'userId' | 'crea
     runtime: 'local',
     updatedAt: over.createdAt,
     ...over,
-  } as Thread;
+  };
 }
 
 function emptyInput(over: Partial<EligibilityInput> = {}): EligibilityInput {

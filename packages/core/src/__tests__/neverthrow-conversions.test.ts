@@ -35,11 +35,11 @@ import { readProjectConfig } from '../ports/config-reader.js';
 import { setupWorktree, syncClaudeProjectAssets } from '../ports/index.js';
 import { allocatePorts } from '../ports/port-allocator.js';
 
-const mockExecute = execute as ReturnType<typeof vi.fn>;
-const mockExecuteShell = executeShell as ReturnType<typeof vi.fn>;
-const mockReadProjectConfig = readProjectConfig as ReturnType<typeof vi.fn>;
-const mockAllocatePorts = allocatePorts as ReturnType<typeof vi.fn>;
-const mockGetWorktreeBase = getWorktreeBase as ReturnType<typeof vi.fn>;
+const mockExecute = vi.mocked(execute);
+const mockExecuteShell = vi.mocked(executeShell);
+const mockReadProjectConfig = vi.mocked(readProjectConfig);
+const mockAllocatePorts = vi.mocked(allocatePorts);
+const mockGetWorktreeBase = vi.mocked(getWorktreeBase);
 
 describe('runHookCommand', () => {
   beforeEach(() => {
@@ -127,10 +127,10 @@ describe('setupWorktree', () => {
   });
 
   test('returns ok(result) with ports when config has portGroups', async () => {
-    const mockPorts = [{ name: 'web', port: 3000, envVars: ['PORT'] }];
+    const mockPorts = [{ groupName: 'web', port: 3000, envVars: ['PORT'] }];
 
     mockReadProjectConfig.mockReturnValue({
-      portGroups: [{ name: 'web', defaultPort: 3000, envVars: ['PORT'] }],
+      portGroups: [{ name: 'web', basePort: 3000, envVars: ['PORT'] }],
       envFiles: ['.env'],
     });
     mockGetWorktreeBase.mockReturnValue(okAsync('/worktrees'));
@@ -164,7 +164,7 @@ describe('setupWorktree', () => {
 
   test('returns err(DomainError) when port allocation throws', async () => {
     mockReadProjectConfig.mockReturnValue({
-      portGroups: [{ name: 'web', defaultPort: 3000, envVars: ['PORT'] }],
+      portGroups: [{ name: 'web', basePort: 3000, envVars: ['PORT'] }],
       envFiles: ['.env'],
     });
     mockGetWorktreeBase.mockReturnValue(okAsync('/worktrees'));

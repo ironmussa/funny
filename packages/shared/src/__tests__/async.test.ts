@@ -9,6 +9,7 @@ import {
   sleep,
   waitFor,
 } from '../async';
+import { expectInstance } from './helpers/assertions.js';
 
 describe('Effect async boundaries', () => {
   test('preserves original errors and does not start cancelled work', async () => {
@@ -354,7 +355,7 @@ describe('scheduleRepeating', () => {
     await waitUntil(() => runs >= 2);
     repeating.stop();
     await repeating.done;
-    expect((errors[0] as Error).message).toBe('sync 1');
+    expect(expectInstance(errors[0], Error).message).toBe('sync 1');
     expect(errors.length).toBeGreaterThanOrEqual(2);
   });
 

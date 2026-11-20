@@ -1,10 +1,6 @@
 import { BaseAgentProcess } from '../agents/base-process.js';
-import type {
-  ClaudeProcessOptions,
-  CLIMessage,
-  CLISystemMessage,
-  CLIResultMessage,
-} from '../agents/types.js';
+import type { ClaudeProcessOptions, CLIMessage } from '../agents/types.js';
+import { expectMessageOfType } from './helpers/test-helpers.js';
 
 // ── Concrete test implementation ────────────────────────────────
 
@@ -174,7 +170,7 @@ describe('BaseAgentProcess', () => {
       proc.callEmitInit('sess-123', ['Read', 'Edit'], 'claude-sonnet', '/project');
 
       expect(messages).toHaveLength(1);
-      const msg = messages[0] as CLISystemMessage;
+      const msg = expectMessageOfType(messages[0], 'system');
       expect(msg.type).toBe('system');
       expect(msg.subtype).toBe('init');
       expect(msg.session_id).toBe('sess-123');
@@ -189,7 +185,7 @@ describe('BaseAgentProcess', () => {
 
       proc.callEmitInit('sess-1', [], 'model', '/cwd');
 
-      const msg = messages[0] as CLISystemMessage;
+      const msg = expectMessageOfType(messages[0], 'system');
       expect(msg.tools).toEqual([]);
     });
   });
@@ -212,7 +208,7 @@ describe('BaseAgentProcess', () => {
       });
 
       expect(messages).toHaveLength(1);
-      const msg = messages[0] as CLIResultMessage;
+      const msg = expectMessageOfType(messages[0], 'result');
       expect(msg.type).toBe('result');
       expect(msg.subtype).toBe('success');
       expect(msg.is_error).toBe(false);
@@ -237,7 +233,7 @@ describe('BaseAgentProcess', () => {
         errors: ['Something failed'],
       });
 
-      const msg = messages[0] as CLIResultMessage;
+      const msg = expectMessageOfType(messages[0], 'result');
       expect(msg.is_error).toBe(true);
       expect(msg.subtype).toBe('error_during_execution');
       expect(msg.errors).toEqual(['Something failed']);
@@ -255,7 +251,7 @@ describe('BaseAgentProcess', () => {
         totalCost: 1.5,
       });
 
-      const msg = messages[0] as CLIResultMessage;
+      const msg = expectMessageOfType(messages[0], 'result');
       expect(msg.is_error).toBe(true);
       expect(msg.subtype).toBe('error_max_turns');
     });
@@ -272,7 +268,7 @@ describe('BaseAgentProcess', () => {
         totalCost: 0,
       });
 
-      const msg = messages[0] as CLIResultMessage;
+      const msg = expectMessageOfType(messages[0], 'result');
       expect(msg.errors).toBeUndefined();
     });
   });

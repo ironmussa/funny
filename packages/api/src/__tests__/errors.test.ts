@@ -10,28 +10,13 @@ import {
   type ApiPorts,
   type AutomationsPort,
 } from '../index.js';
+import { buildAutomation, portsWith, readTrpcBody } from './test-helpers.js';
 
-const automation = {
-  id: 'a1',
-  projectId: 'p1',
-  userId: 'u1',
-  name: 'Job',
-  prompt: 'p',
-  schedule: '0 * * * *',
-  provider: 'claude',
-  model: 'sonnet',
-  mode: 'local',
-  permissionMode: 'autoEdit',
-  enabled: true,
-  maxRunHistory: 20,
-  source: 'user',
-  createdAt: 'now',
-  updatedAt: 'now',
-} as const;
+const automation = buildAutomation();
 
-function portsWith(overrides: Partial<AutomationsPort>): ApiPorts {
+function automationPortsWith(overrides: Partial<AutomationsPort>): ApiPorts {
   const missing = async () => err(failure(500, 'not stubbed'));
-  return {
+  return portsWith({
     automations: {
       inbox: missing,
       list: missing,
@@ -44,7 +29,7 @@ function portsWith(overrides: Partial<AutomationsPort>): ApiPorts {
       triageRun: missing,
       ...overrides,
     },
-  } as ApiPorts;
+  });
 }
 
 async function call(
@@ -72,13 +57,13 @@ async function call(
       ports,
     }),
   });
-  return { status: res.status, body: (await res.json()) as any };
+  return { status: res.status, body: await readTrpcBody(res) };
 }
 
 describe('procedure errors', () => {
   test('a request without a user is refused 401 before the handler runs', async () => {
     let ran = false;
-    const ports = portsWith({
+    const ports = automationPortsWith({
       list: async () => {
         ran = true;
         return ok([]);
@@ -91,10 +76,10 @@ describe('procedure errors', () => {
 
   test('invalid input answers 400 with the first issue, and the handler does not run', async () => {
     let ran = false;
-    const ports = portsWith({
+    const ports = automationPortsWith({
       create: async () => {
         ran = true;
-        return ok(automation as any);
+        return ok(automation);
       },
     });
     const res = await call(ports, 'automations.create', {
@@ -102,7 +87,7 @@ describe('procedure errors', () => {
       input: { projectId: 'p1', name: '', prompt: 'x', schedule: '* * * * *' },
     });
     expect(res.status).toBe(400);
-    expect(res.body.error.message).toBe(
+    expect(res.body.error?.message).toBe(
       'Missing required fields: projectId, name, prompt, schedule',
     );
     expect(ran).toBe(false);
@@ -116,40 +101,40 @@ describe('procedure errors', () => {
     [422, 'UNPROCESSABLE_CONTENT'],
     [418, 'BAD_REQUEST'],
   ])('a port failure with status %d answers that status (%s)', async (status, code) => {
-    const ports = portsWith({ get: async () => err(failure(status, 'nope')) });
+    const ports = automationPortsWith({ get: async () => err(failure(status, 'nope')) });
     const res = await call(ports, 'automations.get', { input: { id: 'a1' } });
     expect(res.status).toBe(status === 418 ? 400 : status);
-    expect(res.body.error.message).toBe('nope');
-    expect(res.body.error.data.code).toBe(code);
+    expect(res.body.error?.message).toBe('nope');
+    expect(res.body.error?.data.code).toBe(code);
   });
 
   test('a friendly message reaches the client', async () => {
-    const ports = portsWith({
+    const ports = automationPortsWith({
       trigger: async () => err(failure(502, 'runner offline', 'Your runner is offline')),
     });
     const res = await call(ports, 'automations.trigger', { method: 'POST', input: { id: 'a1' } });
     expect(res.status).toBe(502);
-    expect(res.body.error.friendlyMessage).toBe('Your runner is offline');
+    expect(res.body.error?.friendlyMessage).toBe('Your runner is offline');
   });
 
   test('an unexpected throw is sanitized: no message details, no stack', async () => {
-    const ports = portsWith({
+    const ports = automationPortsWith({
       list: async () => {
         throw new Error('SELECT * FROM secrets failed at /srv/db.ts:42');
       },
     });
     const res = await call(ports, 'automations.list');
     expect(res.status).toBe(500);
-    expect(res.body.error.message).toBe('Internal server error');
+    expect(res.body.error?.message).toBe('Internal server error');
     expect(JSON.stringify(res.body)).not.toContain('secrets');
-    expect(res.body.error.data.stack).toBeUndefined();
+    expect(res.body.error?.data.stack).toBeUndefined();
   });
 
   test('success returns the port value', async () => {
-    const ports = portsWith({ list: async () => ok([automation as any]) });
+    const ports = automationPortsWith({ list: async () => ok([automation]) });
     const res = await call(ports, 'automations.list', { input: { projectId: 'p1' } });
     expect(res.status).toBe(200);
-    expect(res.body.result.data).toEqual([automation]);
+    expect(res.body.result?.data).toEqual([automation]);
   });
 });
 
@@ -163,6 +148,6 @@ describe('failureFromDomainError', () => {
     ['PROCESS_ERROR', 500],
     ['INTERNAL', 500],
   ] as const)('%s → %d', (type, status) => {
-    expect(failureFromDomainError({ type, message: 'm' } as any)).toEqual({ status, message: 'm' });
+    expect(failureFromDomainError({ type, message: 'm' })).toEqual({ status, message: 'm' });
   });
 });

@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { AgentContext, AgentRole } from '../agents/llm/agent-context.js';
 import { AgentExecutor } from '../agents/llm/agent-executor.js';
 import { ModelFactory } from '../agents/llm/model-factory.js';
+import { requestBodyText } from './helpers/test-helpers.js';
 
 const role: AgentRole = {
   name: 'review',
@@ -59,7 +60,7 @@ describe('external Chat Completions executor', () => {
     expect(fetchSpy.mock.calls[0][1]?.headers).toMatchObject({
       Authorization: 'Bearer client-key',
     });
-    const body = JSON.parse(fetchSpy.mock.calls[1][1]?.body as string);
+    const body = JSON.parse(requestBodyText(fetchSpy.mock.calls[1][1]?.body));
     expect(body.messages.map((m: { role: string }) => m.role)).toEqual([
       'system',
       'user',
@@ -95,7 +96,7 @@ describe('external Chat Completions executor', () => {
         }),
       );
     await new AgentExecutor('http://127.0.0.1:8317/v1', 'model').execute(role, context);
-    const body = JSON.parse(fetchSpy.mock.calls[1][1]?.body as string);
+    const body = JSON.parse(requestBodyText(fetchSpy.mock.calls[1][1]?.body));
     const toolMessage = body.messages[3];
     expect(toolMessage.tool_call_id).toBe('call-bad-args');
     expect(toolMessage.content).toMatch(/^Error executing read: read arguments: path: /);
@@ -168,7 +169,7 @@ describe('external Chat Completions executor', () => {
       },
       extraInstructions: '## Tool server instructions',
     });
-    const first = JSON.parse(fetchSpy.mock.calls[0][1]?.body as string);
+    const first = JSON.parse(requestBodyText(fetchSpy.mock.calls[0][1]?.body));
     expect(first.tools).toContainEqual({
       type: 'function',
       function: {
@@ -179,7 +180,7 @@ describe('external Chat Completions executor', () => {
     });
     expect(first.messages[0].content).toContain('## Tool server instructions');
     expect(calls).toEqual([{ key: 'k' }]);
-    const second = JSON.parse(fetchSpy.mock.calls[1][1]?.body as string);
+    const second = JSON.parse(requestBodyText(fetchSpy.mock.calls[1][1]?.body));
     expect(second.messages.at(-1)).toEqual({
       role: 'tool',
       tool_call_id: 'call-mcp',

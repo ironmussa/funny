@@ -40,7 +40,7 @@ function leaves(schema: z.ZodType, prefix = ''): string[] {
     } else break;
   }
   if (current.def?.type !== 'object') return [prefix];
-  return Object.entries(current.shape as Record<string, z.ZodType>).flatMap(([key, value]) =>
+  return Object.entries<z.ZodType>(current.shape).flatMap(([key, value]) =>
     leaves(value, prefix ? `${prefix}.${key}` : key),
   );
 }

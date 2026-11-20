@@ -6,7 +6,6 @@
  */
 
 import { createServer, type Server } from 'node:http';
-import type { AddressInfo } from 'node:net';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -15,6 +14,7 @@ import { z } from 'zod';
 
 import { connectMcpTools, mcpInstructionsBlock } from '../agents/mcp-tool-bridge.js';
 import { piToolsFromMcp } from '../agents/pi-sdk.js';
+import { listeningPort } from './helpers/test-helpers.js';
 
 let server: Server;
 let url = '';
@@ -41,7 +41,7 @@ beforeAll(async () => {
     await transport.handleRequest(req, res);
   });
   await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
-  url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/mcp`;
+  url = `http://127.0.0.1:${listeningPort(server)}/mcp`;
 });
 
 afterAll(() => new Promise<void>((resolve) => server.close(() => resolve())));

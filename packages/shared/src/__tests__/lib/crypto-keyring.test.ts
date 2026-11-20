@@ -21,7 +21,7 @@ import {
   createCrypto,
   fileKeyringSource,
   readOnlyKeyringSource,
-  type SerializedKeyring,
+  serializedKeyringSchema,
 } from '../../lib/crypto.js';
 
 const KEY_A = 'a'.repeat(64);
@@ -86,9 +86,9 @@ describe('fileKeyringSource', () => {
     await Bun.sleep(2);
     const id = crypto.rotateKey();
 
-    const stored = JSON.parse(
-      readFileSync(join(dir, 'encryption.keys.json'), 'utf-8'),
-    ) as SerializedKeyring;
+    const stored = serializedKeyringSchema.parse(
+      JSON.parse(readFileSync(join(dir, 'encryption.keys.json'), 'utf-8')),
+    );
     expect(stored.active).toBe(id);
     expect(Object.keys(stored.keys)).toHaveLength(2);
 

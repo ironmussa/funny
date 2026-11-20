@@ -33,7 +33,7 @@ describe('workflow harness', () => {
           name: 'tool-step',
           execute: async (ctx) => ({
             ...ctx,
-            value: (await ctx.tools.invoke('double', { value: 2 })) as number,
+            value: z.number().parse(await ctx.tools.invoke('double', { value: 2 })),
           }),
         },
         {

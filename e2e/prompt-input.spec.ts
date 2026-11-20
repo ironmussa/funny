@@ -24,13 +24,13 @@ test.describe('6. Prompt Input', () => {
     await expect(textarea).toBeVisible();
 
     // Get initial height
-    const initialHeight = await textarea.evaluate((el) => (el as HTMLElement).offsetHeight);
+    const initialHeight = await textarea.evaluate((el: HTMLElement) => el.offsetHeight);
 
     // Type multiple lines
     await textarea.fill('Line 1\nLine 2\nLine 3\nLine 4\nLine 5');
 
     // Height should increase (or stay same if min-height is enough)
-    const newHeight = await textarea.evaluate((el) => (el as HTMLElement).offsetHeight);
+    const newHeight = await textarea.evaluate((el: HTMLElement) => el.offsetHeight);
     expect(newHeight).toBeGreaterThanOrEqual(initialHeight);
   });
 

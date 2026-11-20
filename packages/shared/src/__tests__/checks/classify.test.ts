@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test';
 
-import { classifyCheckCommand, scriptKind } from '../../checks/classify';
+import {
+  classifyCheckCommand,
+  scriptKind,
+  type CheckKind,
+  type CheckTool,
+} from '../../checks/classify';
 
 const pick = (command: string) => {
   const check = classifyCheckCommand(command);
@@ -8,7 +13,7 @@ const pick = (command: string) => {
 };
 
 describe('classifyCheckCommand', () => {
-  test.each([
+  test.each<[string, CheckKind, CheckTool]>([
     ['npx vitest run', 'test', 'vitest'],
     ['bunx vitest run src/a.test.ts', 'test', 'vitest'],
     ['pnpm exec vitest', 'test', 'vitest'],
@@ -41,7 +46,7 @@ describe('classifyCheckCommand', () => {
     ['bun run --cwd packages/client test', 'test', 'script'],
     ['bun run steps verify', 'verify', 'script'],
   ])('%s → %s / %s', (command, kind, tool) => {
-    expect(pick(command)).toEqual({ kind, tool, plain: true } as never);
+    expect(pick(command)).toEqual({ kind, tool, plain: true });
   });
 
   test('a leading cd, env assignments and 2>&1 keep a command plain', () => {
@@ -151,7 +156,7 @@ describe('classifyCheckCommand', () => {
 });
 
 describe('scriptKind', () => {
-  test.each([
+  test.each<[string, CheckKind | null]>([
     ['test', 'test'],
     ['test:e2e', 'test'],
     ['e2e', 'test'],
@@ -166,6 +171,6 @@ describe('scriptKind', () => {
     ['start', null],
     ['db:push', null],
   ])('%s → %s', (name, kind) => {
-    expect(scriptKind(name)).toBe(kind as never);
+    expect(scriptKind(name)).toBe(kind);
   });
 });

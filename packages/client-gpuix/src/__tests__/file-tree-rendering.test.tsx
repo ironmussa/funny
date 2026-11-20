@@ -12,6 +12,7 @@ import { NativeFileTreeDock } from '../app';
 import { createNativeApplicationServices } from '../application';
 import { createNativeClientComposition } from '../platform/composition';
 import type { NativeHeaders } from '../platform/transport';
+import { buildMessage, buildProject, buildThread } from './helpers/fixtures';
 
 const directories: string[] = [];
 
@@ -46,14 +47,14 @@ describe('native file-tree rendering', () => {
       }),
     });
     const application = createNativeApplicationServices(composition);
-    const project = { id: 'p1', name: 'Project', path: directory } as never;
-    const thread = {
+    const project = buildProject({ id: 'p1', name: 'Project', path: directory });
+    const thread = buildThread({
       id: 't1',
       projectId: 'p1',
       title: 'Thread',
       mode: 'local',
       status: 'idle',
-    } as never;
+    });
     application.navigationState.getState().replaceProjects([project]);
     application.navigationState.getState().replaceProjectThreads('p1', [thread]);
     application.workspaceState.getState().selectThread('t1');
@@ -82,12 +83,12 @@ describe('native file-tree rendering', () => {
     flushSync(() => {
       application.workspaceState.getState().replaceInitialPage('t1', {
         messages: [
-          {
+          buildMessage({
             id: 'm1',
             threadId: 't1',
             role: 'assistant',
             content: 'Streaming content unrelated to the file tree',
-          } as never,
+          }),
         ],
         hasMore: false,
       });

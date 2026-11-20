@@ -5,12 +5,14 @@
  * non-synthesizing orphan updates, preamble buffering and history replay.
  */
 
+import type { SessionUpdate } from '@agentclientprotocol/sdk/unstable';
 import type { ProviderManifest, QuirkFlags } from '@funny/shared/provider-manifest';
 import { geminiManifest } from '@funny/shared/provider-manifests';
 import { describe, expect, test } from 'vitest';
 
 import { GenericACPProcess } from '../agents/generic-acp.js';
 import type { CLIMessage } from '../agents/types.js';
+import { contentBlocks } from './helpers/test-helpers.js';
 
 function makeProcess(quirks: QuirkFlags): { proc: GenericACPProcess; messages: CLIMessage[] } {
   const manifest: ProviderManifest = { ...geminiManifest, quirks };
@@ -23,17 +25,15 @@ function makeProcess(quirks: QuirkFlags): { proc: GenericACPProcess; messages: C
   return { proc, messages };
 }
 
-type TestAccess = {
-  translateUpdate: (u: unknown) => void;
-  replayingHistory: boolean;
-};
-
-function translate(proc: GenericACPProcess, update: unknown): void {
-  (proc as GenericACPProcess & TestAccess).translateUpdate(update);
+function translate(proc: GenericACPProcess, update: SessionUpdate): void {
+  proc['translateUpdate'](update);
 }
 
-function blocks(messages: CLIMessage[]): any[] {
-  return messages.flatMap((m) => ((m as any).message?.content ?? []) as any[]);
+/** Feeds an update that breaks the ACP schema on purpose (aliases, missing fields). */
+function translateOffSpec(proc: GenericACPProcess, update: unknown): void {
+  // SAFETY: deliberately off-spec input; translateUpdate checks each field at runtime
+  // and the tests assert that the invalid parts are skipped.
+  proc['translateUpdate'](update as SessionUpdate);
 }
 
 describe('GenericACPProcess.translateUpdate quirks', () => {
@@ -45,7 +45,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
       kind: 'switch_mode',
       title: 'Planning',
     });
-    translate(proc, {
+    translateOffSpec(proc, {
       sessionUpdate: 'plan',
       entries: [
         { content: 'one', status: 'completed' },
@@ -54,7 +54,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
       ],
     });
 
-    const all = blocks(messages);
+    const all = contentBlocks(messages);
     const expected = '[x] 1. one\n[~] 2. two\n[ ] 3. Task';
     expect(all).toContainEqual({ type: 'tool_result', tool_use_id: 'task-1', content: expected });
     expect(all).toContainEqual({ type: 'text', text: `**Plan:**\n${expected}` });
@@ -72,7 +72,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
       sessionUpdate: 'plan',
       entries: [{ content: 'a', status: 'in_progress', priority: 'high' }],
     });
-    const all = blocks(messages);
+    const all = contentBlocks(messages);
     expect(all[0]).toMatchObject({
       type: 'tool_use',
       name: 'TodoWrite',
@@ -86,7 +86,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
     for (const text of ['Done.', 'Next', ' step.', ' more']) {
       translate(proc, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text } });
     }
-    const last = blocks(messages).at(-1);
+    const last = contentBlocks(messages).at(-1);
     expect(last).toEqual({ type: 'text', text: 'Done.\n\nNext step. more' });
   });
 
@@ -97,7 +97,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
       content: { type: 'text', text: 'A.' },
     });
     translate(proc, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'B' } });
-    expect(blocks(messages).at(-1)).toEqual({ type: 'text', text: 'A.B' });
+    expect(contentBlocks(messages).at(-1)).toEqual({ type: 'text', text: 'A.B' });
   });
 
   test('stripFirstMessageBanner hides a banner-only chunk and strips it afterwards', () => {
@@ -111,7 +111,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
       sessionUpdate: 'agent_message_chunk',
       content: { type: 'text', text: 'hi' },
     });
-    expect(blocks(messages)).toEqual([{ type: 'text', text: 'hi' }]);
+    expect(contentBlocks(messages)).toEqual([{ type: 'text', text: 'hi' }]);
   });
 
   test('non-text message chunks are ignored', () => {
@@ -129,7 +129,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
 
   test('available_commands_update emits commands_changed with valid names only', () => {
     const { proc, messages } = makeProcess({});
-    translate(proc, {
+    translateOffSpec(proc, {
       sessionUpdate: 'available_commands_update',
       availableCommands: [{ name: 'review' }, { name: '' }, {}, { name: 'init' }],
     });
@@ -146,7 +146,9 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
       status: 'completed',
       rawOutput: 'out',
     });
-    expect(blocks(messages)).toEqual([{ type: 'tool_result', tool_use_id: 'x-1', content: 'out' }]);
+    expect(contentBlocks(messages)).toEqual([
+      { type: 'tool_result', tool_use_id: 'x-1', content: 'out' },
+    ]);
   });
 
   test('orphan non-terminal update without synth quirk emits nothing', () => {
@@ -178,7 +180,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
       sessionUpdate: 'agent_message_chunk',
       content: { type: 'text', text: 'ok' },
     });
-    const all = blocks(messages);
+    const all = contentBlocks(messages);
     expect(all[0]).toMatchObject({
       type: 'tool_use',
       name: 'Think',
@@ -195,7 +197,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
       kind: 'execute',
       title: '[current working directory /repo] (Check status)',
     });
-    expect(blocks(messages)[0]).toMatchObject({ type: 'tool_use', name: 'Bash' });
+    expect(contentBlocks(messages)[0]).toMatchObject({ type: 'tool_use', name: 'Bash' });
   });
 
   test('completed tool_call emits tool_use then tool_result in one go', () => {
@@ -214,7 +216,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
       kind: 'execute',
       title: 'ls',
     });
-    const all = blocks(messages);
+    const all = contentBlocks(messages);
     expect(all).toHaveLength(2);
     expect(all[0]).toMatchObject({ type: 'tool_use', id: 'b-1', input: { command: 'ls' } });
     expect(all[1]).toEqual({ type: 'tool_result', tool_use_id: 'b-1', content: 'boom' });
@@ -222,7 +224,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
 
   test('updates are ignored while replaying history', () => {
     const { proc, messages } = makeProcess({});
-    (proc as GenericACPProcess & TestAccess).replayingHistory = true;
+    proc['replayingHistory'] = true;
     translate(proc, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'x' } });
     expect(messages).toHaveLength(0);
   });

@@ -1,9 +1,10 @@
 import type { GitHubPR, PRFilterOptions } from '@funny/shared';
-import { ExternalLink, GitBranch, GitPullRequest, RefreshCw } from 'lucide-react';
+import { ExternalLink, GitPullRequest, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { BranchBadge } from '@/components/BranchBadge';
 import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 import { PRActionsMenu } from '@/components/pull-requests/PRActionsMenu';
@@ -286,16 +287,16 @@ function PullRequestsContent({
               className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground flex items-center gap-1.5 border-b px-3 py-1 text-[10px] font-medium tracking-wide uppercase"
               data-testid="prs-current-branch-header"
             >
-              <GitBranch className="size-3" />
-              <span className="truncate">
+              <span className="shrink-0">
                 {t('review.pullRequests.currentBranch', 'Current branch')}
-                {currentBranch ? (
-                  <>
-                    {' '}
-                    &middot; <bdi>{currentBranch}</bdi>
-                  </>
-                ) : null}
               </span>
+              {currentBranch ? (
+                <BranchBadge
+                  branch={currentBranch}
+                  size="xs"
+                  className="tracking-normal normal-case"
+                />
+              ) : null}
             </div>
             <div className="divide-sidebar-border flex flex-col divide-y">
               {currentBranchPRs.map(renderPRRow)}

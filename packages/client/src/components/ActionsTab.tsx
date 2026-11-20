@@ -11,6 +11,7 @@ import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { BranchBadge } from '@/components/BranchBadge';
 import { CheckIcon, MergeStatus, ReviewDecisionBadge } from '@/components/PRSummaryCard';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
@@ -113,7 +114,11 @@ export function ActionsTab({
             title={currentBranch}
             data-testid="actions-scope-branch"
           >
-            {currentBranch ?? t('review.actions.thisBranch', 'This branch')}
+            {currentBranch ? (
+              <BranchBadge branch={currentBranch} size="xs" variant="plain" />
+            ) : (
+              t('review.actions.thisBranch', 'This branch')
+            )}
           </ToggleGroupItem>
           <ToggleGroupItem value="all" className="h-6 px-2 text-xs" data-testid="actions-scope-all">
             {t('review.actions.allBranches', 'All branches')}
@@ -336,13 +341,10 @@ function RunRow({
   const [open, setOpen] = useState(false);
   const [rerunning, setRerunning] = useState(false);
   const duration = runDurationMs(run);
-  const meta = [
-    `${run.name} #${run.run_number}`,
-    run.event,
-    run.head_branch,
-    run.head_sha.slice(0, 7),
-    duration !== null ? formatActionDuration(duration) : null,
-  ].filter(Boolean);
+  const meta = [`${run.name} #${run.run_number}`, run.event].filter(Boolean).join(' · ');
+  const tail = [run.head_sha.slice(0, 7), duration !== null ? formatActionDuration(duration) : null]
+    .filter(Boolean)
+    .join(' · ');
 
   const handleRerun = async () => {
     setRerunning(true);
@@ -376,7 +378,13 @@ function RunRow({
               <span className={cn(listRowTitleClassName, 'truncate')} title={run.display_title}>
                 {run.display_title}
               </span>
-              <span className="text-muted-foreground truncate">{meta.join(' · ')}</span>
+              <span className="text-muted-foreground flex min-w-0 items-center gap-1">
+                <span className="shrink truncate">{meta}</span>
+                {run.head_branch ? (
+                  <BranchBadge branch={run.head_branch} size="xs" className="shrink-[2]" />
+                ) : null}
+                {tail ? <span className="shrink-0">{tail}</span> : null}
+              </span>
             </span>
           </button>
         </CollapsibleTrigger>

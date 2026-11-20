@@ -1,6 +1,7 @@
-import { Archive, ArchiveRestore, FileCode, GitBranch, Loader2, Trash2, X } from 'lucide-react';
+import { Archive, ArchiveRestore, FileCode, Loader2, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { BranchBadge } from '@/components/BranchBadge';
 import { FileTree } from '@/components/FileTree';
 import { ExpandedDiffView } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
@@ -108,10 +109,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                 data-testid={`stash-branch-group-${group.branch}`}
               >
                 <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 px-3 pt-2 pb-1 text-xs">
-                  <GitBranch className="icon-xs shrink-0" />
-                  <span className="truncate font-mono" title={group.branch}>
-                    {group.branch}
-                  </span>
+                  <BranchBadge branch={group.branch} variant="plain" />
                   <span className="shrink-0">({group.entries.length})</span>
                 </div>
                 <div className="divide-sidebar-border flex flex-col divide-y">

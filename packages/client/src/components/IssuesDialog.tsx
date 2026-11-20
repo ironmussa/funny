@@ -169,7 +169,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                     ) : null}
                     <div className="mt-0.5 flex flex-wrap items-center gap-2">
                       <span className="text-muted-foreground text-xs">#{issue.number}</span>
-                      <IssueBadges issue={issue} badgeClassName="h-4 text-[10px]" />
+                      <IssueBadges issue={issue} />
 
                       <span className="text-muted-foreground text-xs">
                         {timeAgo(issue.created_at, now)}

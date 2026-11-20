@@ -12,6 +12,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { BranchBadge } from '@/components/BranchBadge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -58,9 +59,12 @@ function WorktreeCard({
         <GitFork className="icon-sm text-status-info mt-0.5 shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={cn(listRowTitleClassName, 'min-w-0 break-words')}>
-              {worktree.branch}
-            </span>
+            <BranchBadge
+              branch={worktree.branch}
+              variant="plain"
+              className={cn(listRowTitleClassName, 'font-mono')}
+              data-testid={`worktree-branch-${worktree.branch}`}
+            />
             {worktree.isMain && (
               <LabelBadge
                 color="#7CB9E8"

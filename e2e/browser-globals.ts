@@ -4,14 +4,14 @@
  * they read. Import it for its types: `import './browser-globals';`.
  */
 
-export interface BrowserRect {
+interface BrowserRect {
   x: number;
   y: number;
   width: number;
   height: number;
 }
 
-export interface BrowserShiftSource {
+interface BrowserShiftSource {
   tag: string;
   className: string;
   testId: string | null;
@@ -19,7 +19,7 @@ export interface BrowserShiftSource {
   currentRect: BrowserRect | null;
 }
 
-export interface BrowserStartupWebVitals {
+interface BrowserStartupWebVitals {
   lcp: number | null;
   lcpElement: { tag: string; className: string; testId: string | null } | null;
   layoutShifts: Array<{

@@ -34,19 +34,6 @@ function isMessageOfType<T extends CLIMessageType>(
 
 type AssistantBlock = CLIAssistantMessage['message']['content'][number];
 
-/** The content blocks of every assistant message in `messages`, in order. */
-export function assistantBlocks(messages: readonly CLIMessage[]): AssistantBlock[] {
-  return messages.flatMap((m) => (m.type === 'assistant' ? m.message.content : []));
-}
-
-/** The content blocks of the assistant message at `index`, failing the test otherwise. */
-export function assistantContentAt(
-  messages: readonly CLIMessage[],
-  index: number,
-): AssistantBlock[] {
-  return expectMessageOfType(messages[index], 'assistant').message.content;
-}
-
 type UserBlock = CLIUserMessage['message']['content'][number];
 
 /** The content blocks of every assistant and user message in `messages`, in order. */

@@ -12,40 +12,42 @@ const pick = (command: string) => {
   return check && { kind: check.kind, tool: check.tool, plain: check.plain };
 };
 
+const PLAIN_CHECKS: Array<[string, CheckKind, CheckTool]> = [
+  ['npx vitest run', 'test', 'vitest'],
+  ['bunx vitest run src/a.test.ts', 'test', 'vitest'],
+  ['pnpm exec vitest', 'test', 'vitest'],
+  ['pnpm vitest run', 'test', 'vitest'],
+  ['./node_modules/.bin/vitest run', 'test', 'vitest'],
+  ['bun test packages/runtime', 'test', 'bun-test'],
+  ['npx jest src', 'test', 'jest'],
+  ['npx playwright test --project=chromium', 'test', 'playwright'],
+  ['uv run pytest tests/test_a.py', 'test', 'pytest'],
+  ['python -m pytest -k slow', 'test', 'pytest'],
+  ['cargo test -p native-git', 'test', 'cargo'],
+  ['go test ./...', 'test', 'go'],
+  ['bunx tsc --noEmit', 'typecheck', 'tsc'],
+  ['npx tsc -p packages/client', 'typecheck', 'tsc'],
+  ['uv run mypy src', 'typecheck', 'mypy'],
+  ['cargo check', 'typecheck', 'cargo'],
+  ['npx oxlint .', 'lint', 'oxlint'],
+  ['npx eslint . --max-warnings=0', 'lint', 'eslint'],
+  ['uvx ruff check src', 'lint', 'ruff'],
+  ['ruff format --check .', 'format', 'ruff'],
+  ['cargo clippy', 'lint', 'cargo'],
+  ['bunx oxfmt --check src', 'format', 'oxfmt'],
+  ['npx prettier --check .', 'format', 'prettier'],
+  ['bun run lint', 'lint', 'script'],
+  ['bun run typecheck', 'typecheck', 'script'],
+  ['npm test', 'test', 'script'],
+  ['npm run test:unit', 'test', 'script'],
+  ['pnpm lint', 'lint', 'script'],
+  ['yarn build', 'build', 'script'],
+  ['bun run --cwd packages/client test', 'test', 'script'],
+  ['bun run steps verify', 'verify', 'script'],
+];
+
 describe('classifyCheckCommand', () => {
-  test.each<[string, CheckKind, CheckTool]>([
-    ['npx vitest run', 'test', 'vitest'],
-    ['bunx vitest run src/a.test.ts', 'test', 'vitest'],
-    ['pnpm exec vitest', 'test', 'vitest'],
-    ['pnpm vitest run', 'test', 'vitest'],
-    ['./node_modules/.bin/vitest run', 'test', 'vitest'],
-    ['bun test packages/runtime', 'test', 'bun-test'],
-    ['npx jest src', 'test', 'jest'],
-    ['npx playwright test --project=chromium', 'test', 'playwright'],
-    ['uv run pytest tests/test_a.py', 'test', 'pytest'],
-    ['python -m pytest -k slow', 'test', 'pytest'],
-    ['cargo test -p native-git', 'test', 'cargo'],
-    ['go test ./...', 'test', 'go'],
-    ['bunx tsc --noEmit', 'typecheck', 'tsc'],
-    ['npx tsc -p packages/client', 'typecheck', 'tsc'],
-    ['uv run mypy src', 'typecheck', 'mypy'],
-    ['cargo check', 'typecheck', 'cargo'],
-    ['npx oxlint .', 'lint', 'oxlint'],
-    ['npx eslint . --max-warnings=0', 'lint', 'eslint'],
-    ['uvx ruff check src', 'lint', 'ruff'],
-    ['ruff format --check .', 'format', 'ruff'],
-    ['cargo clippy', 'lint', 'cargo'],
-    ['bunx oxfmt --check src', 'format', 'oxfmt'],
-    ['npx prettier --check .', 'format', 'prettier'],
-    ['bun run lint', 'lint', 'script'],
-    ['bun run typecheck', 'typecheck', 'script'],
-    ['npm test', 'test', 'script'],
-    ['npm run test:unit', 'test', 'script'],
-    ['pnpm lint', 'lint', 'script'],
-    ['yarn build', 'build', 'script'],
-    ['bun run --cwd packages/client test', 'test', 'script'],
-    ['bun run steps verify', 'verify', 'script'],
-  ])('%s → %s / %s', (command, kind, tool) => {
+  test.each(PLAIN_CHECKS)('%s → %s / %s', (command, kind, tool) => {
     expect(pick(command)).toEqual({ kind, tool, plain: true });
   });
 
@@ -155,22 +157,24 @@ describe('classifyCheckCommand', () => {
   });
 });
 
+const SCRIPT_KINDS: Array<[string, CheckKind | null]> = [
+  ['test', 'test'],
+  ['test:e2e', 'test'],
+  ['e2e', 'test'],
+  ['typecheck', 'typecheck'],
+  ['check-types', 'typecheck'],
+  ['lint', 'lint'],
+  ['lint:fix', 'lint'],
+  ['format', 'format'],
+  ['build', 'build'],
+  ['build:client', 'build'],
+  ['dev', null],
+  ['start', null],
+  ['db:push', null],
+];
+
 describe('scriptKind', () => {
-  test.each<[string, CheckKind | null]>([
-    ['test', 'test'],
-    ['test:e2e', 'test'],
-    ['e2e', 'test'],
-    ['typecheck', 'typecheck'],
-    ['check-types', 'typecheck'],
-    ['lint', 'lint'],
-    ['lint:fix', 'lint'],
-    ['format', 'format'],
-    ['build', 'build'],
-    ['build:client', 'build'],
-    ['dev', null],
-    ['start', null],
-    ['db:push', null],
-  ])('%s → %s', (name, kind) => {
+  test.each(SCRIPT_KINDS)('%s → %s', (name, kind) => {
     expect(scriptKind(name)).toBe(kind);
   });
 });

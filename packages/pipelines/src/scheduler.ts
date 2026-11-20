@@ -29,6 +29,9 @@
  *   can no longer be. A node skipped that way counts as failed for
  *   `all_success` dependents, so a failure skips everything downstream that
  *   needs it, while a node skipped by its `when` guard counts as done.
+ * - **Concurrency groups.** A node with `concurrency` waits for a slot of its
+ *   group from the run's `ConcurrencyGate` (shared across runs) after its
+ *   guard passes, and gives it back once its work has stopped.
  * - **Failure.** A node failure with `onError: 'fail'` (the default) stops
  *   new nodes from starting and aborts the nodes still running in other
  *   branches; the scheduler waits for them to stop (up to `stopGraceMs`
@@ -49,6 +52,7 @@ import {
   type PipelineRunResult,
   type PipelineStateChange,
 } from './engine.js';
+import { defaultConcurrencyGate } from './gate.js';
 import { causeMessage, invoke, runSingleNode } from './node-runner.js';
 
 type NodeState = 'pending' | 'running' | 'succeeded' | 'failed' | 'skipped' | 'cancelled';
@@ -262,9 +266,19 @@ export async function runGraph<T>(
     ? ({ ...initialCtx, [SUB_PIPELINE_PARENT_CB]: onStateChange } as T)
     : initialCtx;
 
+  const gate = opts.gate ?? defaultConcurrencyGate;
+  const runId = opts.runId ?? crypto.randomUUID();
   let built: Built<T>;
+  /** Each concurrency node's group, computed once from the initial context. */
+  const groups = new Map<string, string>();
   try {
     built = buildGraph(pipeline, opts.maxIterations);
+    for (const n of pipeline.nodes) {
+      const group = n.concurrency?.group;
+      if (group !== undefined) {
+        groups.set(n.name, typeof group === 'function' ? group(initialCtx) : group);
+      }
+    }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     emit({
@@ -367,6 +381,16 @@ export async function runGraph<T>(
   let failure: { node: GraphNode<T>; error: string } | undefined;
   let lastRan: GraphNode<T> | undefined;
 
+  /** How `node` asks for its concurrency slot, if it has a group. */
+  const slotFor = (node: GraphNode<T>, visit: number) => {
+    const concurrency = node.def.concurrency;
+    const group = groups.get(node.def.name);
+    if (!concurrency || group === undefined) return undefined;
+    const holder = `${runId}/${node.def.name}/${visit}`;
+    return (signal: AbortSignal, onWait: () => void) =>
+      gate.acquire({ group, limit: concurrency.limit, holder, signal, onWait });
+  };
+
   const startTask = (node: GraphNode<T>) => {
     node.state = 'running';
     lastRan = node;
@@ -380,6 +404,7 @@ export async function runGraph<T>(
       emit,
       iteration,
       stopGraceMs: opts.stopGraceMs,
+      acquireSlot: slotFor(node, iteration),
       loopRegion: loopOf.get(node),
     })
       .finally(() => signal?.removeEventListener('abort', abort))
@@ -519,6 +544,7 @@ async function runNodeTask<T>(
     emit: (c: PipelineStateChange<T>) => void;
     iteration: number;
     stopGraceMs?: number;
+    acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<() => void>;
     loopRegion?: Region<T>;
   },
 ): Promise<TaskResult<T>> {

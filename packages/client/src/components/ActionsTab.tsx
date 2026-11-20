@@ -105,26 +105,11 @@ export function ActionsTab({
           actionsUrl={repoActionsUrl(runs)}
           onRefresh={handleRefresh}
         />
-        <ToggleGroup
-          type="single"
-          size="sm"
-          value={branch ? 'branch' : 'all'}
-          onValueChange={(value) => value && setScope(value as Scope)}
-          className="h-6"
-        >
-          <ToggleGroupItem
-            value="branch"
-            disabled={!currentBranch}
-            className="h-6 max-w-40 truncate px-2 text-xs"
-            title={currentBranch}
-            data-testid="actions-scope-branch"
-          >
-            {currentBranch ?? t('review.actions.thisBranch', 'This branch')}
-          </ToggleGroupItem>
-          <ToggleGroupItem value="all" className="h-6 px-2 text-xs" data-testid="actions-scope-all">
-            {t('review.actions.allBranches', 'All branches')}
-          </ToggleGroupItem>
-        </ToggleGroup>
+        <ScopeToggle
+          scope={branch ? 'branch' : 'all'}
+          currentBranch={currentBranch}
+          onScopeChange={setScope}
+        />
         <div className="ml-auto flex shrink-0 items-center gap-2">
           {rateLimited && <RateLimitedNotice />}
           <ToolbarCount
@@ -538,6 +523,41 @@ function JobLog({ projectId, jobId }: { projectId: string; jobId: number }) {
 }
 
 // ── Toolbar ─────────────────────────────────────────────────
+
+/** Lists the runs of the pane's branch, or of every branch. */
+function ScopeToggle({
+  scope,
+  currentBranch,
+  onScopeChange,
+}: {
+  scope: Scope;
+  currentBranch?: string;
+  onScopeChange: (scope: Scope) => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <ToggleGroup
+      type="single"
+      size="sm"
+      value={scope}
+      onValueChange={(value) => value && onScopeChange(value as Scope)}
+      className="h-6"
+    >
+      <ToggleGroupItem
+        value="branch"
+        disabled={!currentBranch}
+        className="h-6 max-w-40 truncate px-2 text-xs"
+        title={currentBranch}
+        data-testid="actions-scope-branch"
+      >
+        {currentBranch ?? t('review.actions.thisBranch', 'This branch')}
+      </ToggleGroupItem>
+      <ToggleGroupItem value="all" className="h-6 px-2 text-xs" data-testid="actions-scope-all">
+        {t('review.actions.allBranches', 'All branches')}
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
 
 function RateLimitedNotice() {
   const { t } = useTranslation();

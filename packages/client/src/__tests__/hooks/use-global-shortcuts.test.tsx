@@ -1,4 +1,5 @@
 import { renderHook } from '@testing-library/react';
+import type { Terminal } from '@xterm/xterm';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
@@ -33,6 +34,13 @@ function renderShortcuts() {
   return renderHook(() => useGlobalShortcuts(vi.fn(), vi.fn(), vi.fn()), { wrapper });
 }
 
+/** Register a terminal whose only behaviour is `focus`, the one method the shortcut calls. */
+function registerTerminalStub(id: string, focus: () => void) {
+  const stub: Pick<Terminal, 'focus'> = { focus };
+  // SAFETY: the shortcut only calls `focus()` on the registered xterm Terminal; a real one needs a DOM renderer.
+  terminalRegistry.set(id, stub as Terminal);
+}
+
 function pressCtrlBacktick() {
   window.dispatchEvent(
     new KeyboardEvent('keydown', { key: '`', code: 'Backquote', ctrlKey: true }),
@@ -59,7 +67,7 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
 
   test('toggling the panel open places the caret in the active terminal', () => {
     const focus = vi.fn();
-    terminalRegistry.set('tab-1', { focus } as never);
+    registerTerminalStub('tab-1', focus);
     useTerminalStore.setState({
       tabs: [{ id: 'tab-1', label: 'Terminal 1', cwd: '/p1', alive: true, projectId: 'p1' }],
       activeTabId: 'tab-1',
@@ -113,7 +121,7 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
     expect(focus).not.toHaveBeenCalled();
 
     // xterm finishes creating and registers itself; the next retry tick focuses.
-    terminalRegistry.set('tab-1', { focus } as never);
+    registerTerminalStub('tab-1', focus);
     vi.advanceTimersByTime(120);
     expect(focus).toHaveBeenCalledTimes(1);
   });
@@ -130,7 +138,7 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
     pressCtrlBacktick();
 
     unmount();
-    terminalRegistry.set('tab-1', { focus } as never);
+    registerTerminalStub('tab-1', focus);
     vi.runAllTimers();
 
     expect(focus).not.toHaveBeenCalled();
@@ -148,14 +156,14 @@ describe('useGlobalShortcuts — Ctrl+` focuses the terminal on open', () => {
     pressCtrlBacktick(); // opens, starts retrying
     pressCtrlBacktick(); // closes again before the terminal registered
 
-    terminalRegistry.set('tab-1', { focus } as never);
+    registerTerminalStub('tab-1', focus);
     vi.advanceTimersByTime(500);
     expect(focus).not.toHaveBeenCalled();
   });
 
   test('toggling the panel closed does not steal focus into the terminal', () => {
     const focus = vi.fn();
-    terminalRegistry.set('tab-1', { focus } as never);
+    registerTerminalStub('tab-1', focus);
     useTerminalStore.setState({
       tabs: [{ id: 'tab-1', label: 'Terminal 1', cwd: '/p1', alive: true, projectId: 'p1' }],
       activeTabId: 'tab-1',

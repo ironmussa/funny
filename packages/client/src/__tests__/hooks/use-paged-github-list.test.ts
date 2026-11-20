@@ -13,10 +13,19 @@ import { type FetchGitHubListPage, usePagedGitHubList } from '@/hooks/use-paged-
 const page = (items: string[], nextCursor: string | null = null) =>
   okAsync({ items, hasMore: nextCursor !== null, nextCursor, owner: 'acme', repo: 'widget' });
 
+interface ListProps {
+  visible: boolean;
+  fetchPage: FetchGitHubListPage<string>;
+}
+
 function setup(initial: FetchGitHubListPage<string>) {
+  const initialProps: ListProps = {
+    visible: true,
+    fetchPage: initial,
+  };
   return renderHook(
     ({ visible, fetchPage }) => usePagedGitHubList({ visible, fetchPage, errorFallback: 'x' }),
-    { initialProps: { visible: true as boolean, fetchPage: initial } },
+    { initialProps },
   );
 }
 

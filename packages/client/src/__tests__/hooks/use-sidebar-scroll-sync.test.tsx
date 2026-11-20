@@ -8,7 +8,7 @@ import { useProjectStore } from '@/stores/project-store';
 
 // Spy on the scroll helper; keep the rest of utils real.
 vi.mock('@/lib/utils', async (orig) => {
-  const actual = (await orig()) as Record<string, unknown>;
+  const actual = await orig<typeof import('@/lib/utils')>();
   return { ...actual, scrollSidebarItemIntoView: vi.fn() };
 });
 import { scrollSidebarItemIntoView } from '@/lib/utils';
@@ -41,9 +41,9 @@ describe('useSidebarScrollSync — scroll target follows the URL', () => {
     useProjectStore.setState({
       expandedProjects: new Set(['p1']),
       revealNonce: 0,
-      revealIntent: 'auto',
+      revealIntent: 'nearest',
       toggleProject: vi.fn(),
-    } as any);
+    });
   });
 
   afterEach(() => {
@@ -65,7 +65,7 @@ describe('useSidebarScrollSync — scroll target follows the URL', () => {
 
     const calls = vi.mocked(scrollSidebarItemIntoView).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
-    const scrolledEl = calls[calls.length - 1][1] as HTMLElement;
+    const scrolledEl = calls[calls.length - 1][1];
     expect(scrolledEl.getAttribute('data-testid')).toBe('thread-item-t-b');
   });
 
@@ -82,7 +82,7 @@ describe('useSidebarScrollSync — scroll target follows the URL', () => {
     );
 
     const calls = vi.mocked(scrollSidebarItemIntoView).mock.calls;
-    const scrolledEl = calls[calls.length - 1][1] as HTMLElement;
+    const scrolledEl = calls[calls.length - 1][1];
     expect(scrolledEl.getAttribute('data-testid')).toBe('thread-item-t-a');
   });
 });

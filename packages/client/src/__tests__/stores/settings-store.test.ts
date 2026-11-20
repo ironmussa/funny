@@ -28,7 +28,7 @@ describe('SettingsStore', () => {
       defaultEditor: 'cursor',
       hiddenPromptModels: [],
       toolPermissions: Object.fromEntries(
-        ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
+        ALL_STANDARD_TOOLS.map((tool): [string, ToolPermission] => [tool, 'allow']),
       ),
     });
     vi.clearAllMocks();
@@ -39,7 +39,7 @@ describe('SettingsStore', () => {
   describe('deriveToolLists', () => {
     test('with all allow returns all in allowedTools', () => {
       const permissions: Record<string, ToolPermission> = Object.fromEntries(
-        ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
+        ALL_STANDARD_TOOLS.map((tool): [string, ToolPermission] => [tool, 'allow']),
       );
 
       const { allowedTools, disallowedTools } = deriveToolLists(permissions);
@@ -50,7 +50,7 @@ describe('SettingsStore', () => {
 
     test('with all deny returns all in disallowedTools', () => {
       const permissions: Record<string, ToolPermission> = Object.fromEntries(
-        ALL_STANDARD_TOOLS.map((tool) => [tool, 'deny' as ToolPermission]),
+        ALL_STANDARD_TOOLS.map((tool): [string, ToolPermission] => [tool, 'deny']),
       );
 
       const { allowedTools, disallowedTools } = deriveToolLists(permissions);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { buildThread } from '@/data/threads/testing';
 import { getLoadedSidebarResyncTargets, shouldResyncThreadsOnConnect } from '@/hooks/use-ws';
 
 /**
@@ -37,15 +38,15 @@ describe('getLoadedSidebarResyncTargets', () => {
       scratchThreadIds: ['waiting-scratch-thread'],
       sharedThreadIds: ['completed-shared-thread'],
       threadsById: {
-        'running-project-thread': { status: 'running' },
-        'completed-project-thread': { status: 'completed' },
-        'completed-other-project-thread': { status: 'completed' },
-        'waiting-scratch-thread': { status: 'waiting' },
-        'completed-shared-thread': { status: 'completed' },
+        'running-project-thread': buildThread({ status: 'running' }),
+        'completed-project-thread': buildThread({ status: 'completed' }),
+        'completed-other-project-thread': buildThread({ status: 'completed' }),
+        'waiting-scratch-thread': buildThread({ status: 'waiting' }),
+        'completed-shared-thread': buildThread({ status: 'completed' }),
       },
     };
 
-    expect(getLoadedSidebarResyncTargets(state as any)).toEqual({
+    expect(getLoadedSidebarResyncTargets(state)).toEqual({
       projectIds: ['p1'],
       scratch: true,
       shared: false,

@@ -74,7 +74,7 @@ vi.mock('@/stores/thread-ws-handlers', () => ({
 // internals reales para que `getSelectingThreadId` / `nextSelectGeneration`
 // se comporten exactamente como en producción.
 
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildThreadWithMessages, withThreadIndex } from '@/data/threads/testing';
 import { useThreadStore } from '@/stores/thread-store';
 import {
   setSelectingThreadId,
@@ -83,14 +83,8 @@ import {
 } from '@/stores/thread-store-internals';
 
 const threadA = {
-  id: 'thread-A',
-  projectId: 'proj-1',
-  title: 'A',
-  status: 'completed',
-  cost: 0,
-  messages: [],
+  ...buildThreadWithMessages({ id: 'thread-A', projectId: 'proj-1', title: 'A' }),
   threadEvents: [],
-  hasMore: false,
 };
 
 const threadB = {
@@ -123,8 +117,8 @@ describe('selectThread — stuck selectingThreadId (reproduces "invariant re-sel
     useThreadStore.setState(
       withThreadIndex({
         selectedThreadId: threadA.id,
-        activeThread: { ...threadA } as any,
-        threadDataById: { [threadA.id]: { ...threadA } as any },
+        activeThread: { ...threadA },
+        threadDataById: { [threadA.id]: { ...threadA } },
         threadsById: {},
         threadIdsByProject: {},
         scratchThreadIds: [],

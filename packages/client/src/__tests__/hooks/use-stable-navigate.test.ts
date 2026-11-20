@@ -16,8 +16,8 @@ describe('useStableNavigate', () => {
   });
 
   test('keeps its identity while invoking the latest committed navigate function', () => {
-    const initialNavigate = vi.fn() as NavigateFunction;
-    const nextNavigate = vi.fn() as NavigateFunction;
+    const initialNavigate = vi.fn<NavigateFunction>();
+    const nextNavigate = vi.fn<NavigateFunction>();
     mockUseNavigate.mockReturnValue(initialNavigate);
     const { result, rerender } = renderHook(() => useStableNavigate());
     const stableNavigate = result.current;

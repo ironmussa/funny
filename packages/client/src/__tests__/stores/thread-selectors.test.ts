@@ -1,5 +1,7 @@
+import type { ThreadStatus } from '@funny/shared';
 import { describe, test, expect } from 'vitest';
 
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import {
   selectLastMessage,
   selectFirstMessage,
@@ -7,28 +9,42 @@ import {
   selectIsTerminal,
 } from '@/stores/thread-selectors';
 
-const mockThread = {
-  messages: [
-    { id: 'm1', content: 'hello', toolCalls: [{ id: 'tc1' }] },
-    { id: 'm2', content: 'world', toolCalls: [] },
-  ],
+import { buildMessage, buildToolCall } from '../helpers/builders-stores';
+
+const firstMessage = buildMessage({
+  id: 'm1',
+  content: 'hello',
+  toolCalls: [buildToolCall({ id: 'tc1' })],
+});
+const lastMessage = buildMessage({ id: 'm2', content: 'world', toolCalls: [] });
+
+const mockThread = buildThreadWithMessages({
+  messages: [firstMessage, lastMessage],
   status: 'running',
-} as any;
+});
 
-const mockThreadSingleMessage = {
-  messages: [{ id: 'm1', content: 'only one', toolCalls: [{ id: 'tc1' }, { id: 'tc2' }] }],
+const mockThreadSingleMessage = buildThreadWithMessages({
+  messages: [
+    buildMessage({
+      id: 'm1',
+      content: 'only one',
+      toolCalls: [buildToolCall({ id: 'tc1' }), buildToolCall({ id: 'tc2' })],
+    }),
+  ],
   status: 'idle',
-} as any;
+});
 
-const mockThreadEmptyMessages = {
+const mockThreadEmptyMessages = buildThreadWithMessages({
   messages: [],
   status: 'idle',
-} as any;
+});
+
+const withStatus = (status: ThreadStatus) => ({ ...mockThread, status });
 
 describe('selectLastMessage', () => {
   test('returns last message from thread', () => {
     const result = selectLastMessage(mockThread);
-    expect(result).toEqual({ id: 'm2', content: 'world', toolCalls: [] });
+    expect(result).toEqual(lastMessage);
   });
 
   test('returns the only message when there is one', () => {
@@ -48,7 +64,7 @@ describe('selectLastMessage', () => {
 describe('selectFirstMessage', () => {
   test('returns first message from thread', () => {
     const result = selectFirstMessage(mockThread);
-    expect(result).toEqual({ id: 'm1', content: 'hello', toolCalls: [{ id: 'tc1' }] });
+    expect(result).toEqual(firstMessage);
   });
 
   test('returns undefined for null thread', () => {
@@ -80,19 +96,19 @@ describe('selectLastMessageToolCallCount', () => {
 
 describe('selectIsTerminal', () => {
   test('returns true for completed status', () => {
-    expect(selectIsTerminal({ ...mockThread, status: 'completed' } as any)).toBe(true);
+    expect(selectIsTerminal(withStatus('completed'))).toBe(true);
   });
 
   test('returns true for failed status', () => {
-    expect(selectIsTerminal({ ...mockThread, status: 'failed' } as any)).toBe(true);
+    expect(selectIsTerminal(withStatus('failed'))).toBe(true);
   });
 
   test('returns true for stopped status', () => {
-    expect(selectIsTerminal({ ...mockThread, status: 'stopped' } as any)).toBe(true);
+    expect(selectIsTerminal(withStatus('stopped'))).toBe(true);
   });
 
   test('returns true for interrupted status', () => {
-    expect(selectIsTerminal({ ...mockThread, status: 'interrupted' } as any)).toBe(true);
+    expect(selectIsTerminal(withStatus('interrupted'))).toBe(true);
   });
 
   test('returns false for running status', () => {
@@ -100,11 +116,14 @@ describe('selectIsTerminal', () => {
   });
 
   test('returns false for idle status', () => {
-    expect(selectIsTerminal({ ...mockThread, status: 'idle' } as any)).toBe(false);
+    expect(selectIsTerminal(withStatus('idle'))).toBe(false);
   });
 
   test('returns false for queued status', () => {
-    expect(selectIsTerminal({ ...mockThread, status: 'queued' } as any)).toBe(false);
+    const unknownStatus: string = 'queued';
+    // SAFETY: 'queued' is deliberately not a ThreadStatus; the test checks an unknown status is not terminal.
+    const queued = withStatus(unknownStatus as ThreadStatus);
+    expect(selectIsTerminal(queued)).toBe(false);
   });
 
   test('returns true for null thread', () => {

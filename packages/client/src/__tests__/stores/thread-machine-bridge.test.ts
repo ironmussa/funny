@@ -2,7 +2,10 @@ import type { ThreadWithMessages } from '@funny/shared';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { saveThreadScrollPosition } from '@/lib/thread-scroll-position';
+
+import { buildMessage } from '../helpers/builders-stores';
 
 const { mockGetThread, mockGetThreadEvents } = vi.hoisted(() => ({
   mockGetThread: vi.fn(),
@@ -25,51 +28,39 @@ const {
   transitionThreadStatus,
 } = await import('@/stores/thread-machine-bridge');
 
-function fakeThread(id: string): ThreadWithMessages {
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-  return {
-    id,
-    projectId: 'p1',
-    title: 't',
-    status: 'completed',
-    messages: [],
-  } as unknown as ThreadWithMessages;
-}
-
 function fakeThreadWindow(
   id: string,
   windowStart: number,
   count: number,
   total: number,
 ): ThreadWithMessages {
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-  return {
-    ...fakeThread(id),
+  return buildThreadWithMessages({
+    id,
     messages: Array.from({ length: count }, (_, index) => {
       const messageIndex = windowStart + index;
-      return {
+      return buildMessage({
         id: `m${messageIndex}`,
         threadId: id,
         role: 'assistant',
         content: `message ${messageIndex}`,
         timestamp: `2026-01-01T00:00:${String(messageIndex).padStart(2, '0')}.000Z`,
         toolCalls: [],
-      };
+      });
     }),
     total,
     windowStart,
     hasMore: windowStart > 0,
     hasMoreAfter: windowStart + count < total,
-  } as unknown as ThreadWithMessages;
+  });
 }
 
 function mockOk(threadId: string) {
-  mockGetThread.mockReturnValueOnce(okAsync(fakeThread(threadId)));
+  mockGetThread.mockReturnValueOnce(okAsync(buildThreadWithMessages({ id: threadId })));
   mockGetThreadEvents.mockReturnValueOnce(okAsync({ events: [] }));
 }
 
 function mockErr(threadId: string, message = 'fetch failed') {
-  mockGetThread.mockReturnValueOnce(errAsync({ message } as any));
+  mockGetThread.mockReturnValueOnce(errAsync({ message }));
   mockGetThreadEvents.mockReturnValueOnce(okAsync({ events: [] }));
   void threadId;
 }
@@ -230,11 +221,11 @@ describe('thread-machine-bridge — data actors', () => {
       const firstFetch = new Promise<ThreadWithMessages>((res) => {
         resolveFirst = res;
       });
-      mockGetThread.mockReturnValueOnce(ResultAsync.fromPromise(firstFetch, (e: any) => e as any));
+      mockGetThread.mockReturnValueOnce(ResultAsync.fromPromise(firstFetch, (e) => e));
       mockGetThreadEvents.mockReturnValueOnce(okAsync({ events: [] }));
 
       // Segundo fetch (después del re-LOAD): resuelve inmediato.
-      mockGetThread.mockReturnValueOnce(okAsync(fakeThread(id)));
+      mockGetThread.mockReturnValueOnce(okAsync(buildThreadWithMessages({ id })));
       mockGetThreadEvents.mockReturnValueOnce(okAsync({ events: [] }));
 
       const loadPromise = loadThreadData(id);
@@ -248,7 +239,7 @@ describe('thread-machine-bridge — data actors', () => {
       // Liberar el primer fetch — ya no debería importar (el invoke fue
       // descartado al transitar a `unloaded`), pero lo resolvemos para
       // confirmar que el fix no depende de que el primer fetch resuelva.
-      resolveFirst(fakeThread(id));
+      resolveFirst(buildThreadWithMessages({ id }));
 
       // Race contra un timeout de seguridad. Antes del fix, loadPromise
       // hangueaba para siempre y este test colgaba hasta el timeout de Vitest.

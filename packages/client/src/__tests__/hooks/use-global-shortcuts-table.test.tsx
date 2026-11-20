@@ -1,3 +1,4 @@
+import type { ThreadWithMessages } from '@funny/shared';
 import { renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
@@ -10,7 +11,7 @@ vi.mock('react-router-dom', async (importOriginal) => {
   return { ...actual, useNavigate: () => mockNavigate };
 });
 
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildThreadWithMessages, withThreadIndex } from '@/data/threads/testing';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadHistoryStore } from '@/stores/thread-history-store';
@@ -37,8 +38,8 @@ function press(init: KeyboardEventInit, target: EventTarget = window): KeyboardE
   return event;
 }
 
-function thread(id: string, projectId: string, extra: Record<string, unknown> = {}) {
-  return { id, projectId, createdAt: '2026-01-01T00:00:00Z', ...extra } as any;
+function thread(id: string, projectId: string, extra: Partial<ThreadWithMessages> = {}) {
+  return buildThreadWithMessages({ id, projectId, createdAt: '2026-01-01T00:00:00Z', ...extra });
 }
 
 describe('useGlobalShortcuts — shortcut table precedence and actions', () => {

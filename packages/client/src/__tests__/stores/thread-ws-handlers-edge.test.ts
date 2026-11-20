@@ -2,7 +2,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { getContextUsageStore } from '@/data/context-usage/store';
 import { seedContextUsage } from '@/data/context-usage/testing';
-import { attachThreadIndex } from '@/data/threads/testing';
+import {
+  attachThreadIndex,
+  buildThreadWithMessages,
+  type ThreadIndexFields,
+} from '@/data/threads/testing';
 import { loadContextUsage } from '@/lib/context-usage-storage';
 
 const { mockInvalidate, mockBuffer, mockMarkRead, mockToastError } = vi.hoisted(() => ({
@@ -13,7 +17,8 @@ const { mockInvalidate, mockBuffer, mockMarkRead, mockToastError } = vi.hoisted(
 }));
 
 const mockWsEventToMachine = vi.hoisted(() =>
-  vi.fn((_kind: string, data: any) => ({
+  // Returns null for an event the machine does not know, like the real mapper.
+  vi.fn((_kind: string, data: any): { type: string; status: string } | null => ({
     type: 'SET_STATUS',
     status: data.status,
   })),
@@ -59,25 +64,21 @@ import { toast } from 'sonner';
 
 const THREAD_ID = 'thread-edge';
 
-function makeState(overrides: Record<string, unknown> = {}) {
-  const activeThread = {
+/**
+ * The plain-object store the handlers drive: the thread index fields (seeded
+ * into the data layer) plus loosely shaped store fields the tests override.
+ */
+interface HandlerTestState extends ThreadIndexFields {
+  [field: string]: any;
+}
+
+function makeState(overrides: HandlerTestState = {}) {
+  const activeThread = buildThreadWithMessages({
     id: THREAD_ID,
-    projectId: 'p1',
     title: 'Edge case',
     status: 'running',
-    cost: 0,
-    messages: [],
-  };
-  const {
-    threadsById,
-    threadIdsByProject,
-    scratchThreadIds,
-    sharedThreadIds,
-    threadTotalByProject,
-    scratchThreadTotal,
-    sharedThreadTotal,
-    ...rest
-  } = {
+  });
+  const merged: HandlerTestState = {
     threadsById: { [THREAD_ID]: activeThread },
     threadIdsByProject: { p1: [THREAD_ID] },
     scratchThreadIds: [],
@@ -89,7 +90,17 @@ function makeState(overrides: Record<string, unknown> = {}) {
     setupProgressByThread: {},
     loadThreadsForProject: vi.fn(),
     ...overrides,
-  } as any;
+  };
+  const {
+    threadsById,
+    threadIdsByProject,
+    scratchThreadIds,
+    sharedThreadIds,
+    threadTotalByProject,
+    scratchThreadTotal,
+    sharedThreadTotal,
+    ...rest
+  } = merged;
   // Thread rows and lists live in the data layer: seed them there and expose
   // them on the plain state as live getters, so assertions read handler writes.
   return attachThreadIndex(rest, {
@@ -100,7 +111,7 @@ function makeState(overrides: Record<string, unknown> = {}) {
     threadTotalByProject,
     scratchThreadTotal,
     sharedThreadTotal,
-  }) as any;
+  });
 }
 
 function makeGetSet(state: any) {
@@ -219,7 +230,7 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
   });
 
   test('handleWSStatus no-ops when machine event is invalid', () => {
-    mockWsEventToMachine.mockReturnValueOnce(null as any);
+    mockWsEventToMachine.mockReturnValueOnce(null);
     const state = makeState();
     state.threadsById[THREAD_ID].status = 'idle';
     state.threadDataById[THREAD_ID].status = 'idle';
@@ -275,15 +286,13 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
   });
 
   test('handleWSResult marks active thread read and notifies on scratch completion', () => {
-    const scratchThread = {
+    const scratchThread = buildThreadWithMessages({
       id: 'scratch-x',
       projectId: '',
       isScratch: true,
       title: 'Quick idea',
       status: 'running',
-      cost: 0,
-      messages: [],
-    };
+    });
     const state = makeState({
       selectedThreadId: 'scratch-x',
       activeThread: scratchThread,
@@ -302,14 +311,12 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
 
   test('handleWSResult shows completion toast with truncated title for project threads', () => {
     const longTitle = 'This is a very long thread title that should truncate';
-    const thread = {
+    const thread = buildThreadWithMessages({
       id: THREAD_ID,
       projectId: 'p1',
       title: longTitle,
       status: 'running',
-      cost: 0,
-      messages: [],
-    };
+    });
     const state = makeState({
       threadsById: { [THREAD_ID]: thread },
       threadDataById: { [THREAD_ID]: thread },
@@ -326,14 +333,13 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
   });
 
   test('handleWSResult shows failed toast with known error reason', () => {
-    const thread = {
+    const thread = buildThreadWithMessages({
       id: THREAD_ID,
       projectId: 'p1',
       title: 'Budget run',
       status: 'running',
       cost: 0.5,
-      messages: [],
-    };
+    });
     const state = makeState({
       threadsById: { [THREAD_ID]: thread },
       threadDataById: { [THREAD_ID]: thread },

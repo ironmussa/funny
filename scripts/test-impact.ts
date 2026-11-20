@@ -105,32 +105,43 @@ export function bunTestFlags(script: string): string[] {
  * selects everything. Tests in `alwaysRun` are always selected.
  */
 export function selectTests(map: ImpactMap, changed: readonly string[]): Selection {
-  const all = Object.keys(map.tests).sort();
   const prefix = `${map.package}/`;
+  for (const file of changed) {
+    const reason = file.startsWith(prefix) ? unjudgeable(file) : null;
+    if (reason) return { kind: 'all', reason, tests: Object.keys(map.tests).sort() };
+  }
+  const bySource = testsBySource(map);
   const selected = new Set<string>(Object.keys(map.alwaysRun));
+  for (const file of changed) {
+    for (const test of testsFor(file, prefix, bySource)) selected.add(test);
+  }
+  return { kind: 'some', tests: [...selected].sort() };
+}
+
+/** The tests a change to `file` selects: itself if it is a test of the package, else its executors. */
+function testsFor(file: string, prefix: string, bySource: ReadonlyMap<string, string[]>): string[] {
+  if (!TEST_FILE.test(file)) return bySource.get(file) ?? [];
+  return file.startsWith(prefix) ? [file] : [];
+}
+
+/** Why the map cannot judge a change to `file` of its package, or null when it can. */
+function unjudgeable(file: string): string | null {
+  if (!CODE_FILE.test(file)) return `${file} is not code coverage can see`;
+  if (/\/(setup|preload)[^/]*\.[cm]?[jt]sx?$/.test(file)) return `${file} is a test setup file`;
+  return null;
+}
+
+/** Source file → the test files that executed it. */
+function testsBySource(map: ImpactMap): Map<string, string[]> {
   const bySource = new Map<string, string[]>();
   for (const [test, sources] of Object.entries(map.tests)) {
     for (const source of sources) {
-      const tests = bySource.get(source) ?? [];
-      tests.push(test);
-      bySource.set(source, tests);
+      const tests = bySource.get(source);
+      if (tests) tests.push(test);
+      else bySource.set(source, [test]);
     }
   }
-  for (const file of changed) {
-    const inPackage = file.startsWith(prefix);
-    if (inPackage && !CODE_FILE.test(file)) {
-      return { kind: 'all', reason: `${file} is not code coverage can see`, tests: all };
-    }
-    if (inPackage && /\/(setup|preload)[^/]*\.[cm]?[jt]sx?$/.test(file)) {
-      return { kind: 'all', reason: `${file} is a test setup file`, tests: all };
-    }
-    if (TEST_FILE.test(file)) {
-      if (inPackage) selected.add(file);
-      continue;
-    }
-    for (const test of bySource.get(file) ?? []) selected.add(test);
-  }
-  return { kind: 'some', tests: [...selected].sort() };
+  return bySource;
 }
 
 /** Whether `value` has the shape of an `ImpactMap`. */

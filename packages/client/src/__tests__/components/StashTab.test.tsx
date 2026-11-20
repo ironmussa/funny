@@ -1,4 +1,4 @@
-import { screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { StashTab } from '@/components/review-pane/StashTab';
@@ -25,6 +25,7 @@ function stashState(overrides: Partial<UseStashStateResult> = {}): UseStashState
     stashFiles: [],
     stashTreeFiles: [],
     stashFilesLoading: false,
+    stashListLoading: false,
     stashDialogFile: null,
     stashDialogDiff: null,
     stashDialogDiffLoading: false,
@@ -124,5 +125,28 @@ describe('stashBranch', () => {
     expect(stashBranch('On main: wip')).toBe('main');
     expect(stashBranch('WIP on feat/x: abc123 msg')).toBe('feat/x');
     expect(stashBranch('autostash')).toBeNull();
+  });
+});
+
+describe('StashTab toolbar', () => {
+  test('refresh re-reads the stash list and the count shows every stash', () => {
+    const refreshStashList = vi.fn(async () => {});
+    renderStash({ refreshStashList });
+
+    expect(screen.getByTestId('stash-count')).toHaveTextContent('review.toolbarCount.stashes:1');
+    fireEvent.click(screen.getByTestId('stash-refresh'));
+    expect(refreshStashList).toHaveBeenCalledTimes(1);
+  });
+
+  test('keeps the toolbar when there are no stashes', () => {
+    renderStash({ stashEntries: [], filteredStashEntries: [] });
+
+    expect(screen.getByTestId('stash-refresh')).toBeInTheDocument();
+    expect(screen.getByTestId('stash-count')).toHaveTextContent('review.toolbarCount.stashes:0');
+  });
+
+  test('disables refresh while the list loads', () => {
+    renderStash({ stashListLoading: true });
+    expect(screen.getByTestId('stash-refresh')).toBeDisabled();
   });
 });

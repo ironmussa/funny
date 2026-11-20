@@ -509,6 +509,20 @@
       "mergeTitle": "Merge into {{target}}",
       "createPRTitle": "Create Pull Request",
       "close": "Close"
+    },
+    "toolbarCount": {
+      "files_one": "{{count}} file",
+      "files_other": "{{count}} files",
+      "stashes_one": "{{count}} stash",
+      "stashes_other": "{{count}} stashes",
+      "worktrees_one": "{{count}} worktree",
+      "worktrees_other": "{{count}} worktrees",
+      "pullRequests_one": "{{count}} PR",
+      "pullRequests_other": "{{count}} PRs",
+      "issues_one": "{{count}} issue",
+      "issues_other": "{{count}} issues",
+      "runs_one": "{{count}} run",
+      "runs_other": "{{count}} runs"
     }
   },
   "newThread": {

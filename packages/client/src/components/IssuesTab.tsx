@@ -16,6 +16,7 @@ import {
   type IssueFactory,
 } from '@/components/issues/IssueFactoryControls';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
+import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -122,6 +123,7 @@ function IssuesContent({ visible }: IssuesTabProps) {
         state={state}
         onStateChange={setState}
         repoInfo={repoInfo}
+        count={list.items.length}
       />
       <IssuesBody
         projectId={projectId}
@@ -155,12 +157,14 @@ function IssuesToolbar({
   state,
   onStateChange,
   repoInfo,
+  count,
 }: {
   loading: boolean;
   onRefresh: () => void;
   state: IssueState;
   onStateChange: (state: IssueState) => void;
   repoInfo: { owner: string; repo: string } | null;
+  count: number;
 }) {
   const { t } = useTranslation();
   const stateLabel = (s: IssueState): string =>
@@ -183,22 +187,6 @@ function IssuesToolbar({
         </TooltipTrigger>
         <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
       </Tooltip>
-
-      <Select value={state} onValueChange={(v) => onStateChange(v as IssueState)}>
-        <SelectTrigger size="xs" className="w-auto gap-1" data-testid="issues-state-trigger">
-          <CircleDot className="icon-xs opacity-70" />
-          <span>{stateLabel(state)}</span>
-        </SelectTrigger>
-        <SelectContent>
-          {(['open', 'closed'] as IssueState[]).map((s) => (
-            <SelectItem key={s} value={s} className="text-xs" data-testid={`issues-filter-${s}`}>
-              {stateLabel(s)}
-            </SelectItem>
-          ))}
-        </SelectContent>
-      </Select>
-
-      <div className="min-w-0 flex-1" />
 
       {repoInfo && (
         <Tooltip>
@@ -225,6 +213,22 @@ function IssuesToolbar({
           </TooltipContent>
         </Tooltip>
       )}
+
+      <Select value={state} onValueChange={(v) => onStateChange(v as IssueState)}>
+        <SelectTrigger size="xs" className="w-auto gap-1" data-testid="issues-state-trigger">
+          <CircleDot className="icon-xs opacity-70" />
+          <span>{stateLabel(state)}</span>
+        </SelectTrigger>
+        <SelectContent>
+          {(['open', 'closed'] as IssueState[]).map((s) => (
+            <SelectItem key={s} value={s} className="text-xs" data-testid={`issues-filter-${s}`}>
+              {stateLabel(s)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+
+      <ToolbarCount label={t('review.toolbarCount.issues', { count })} testId="issues-count" />
     </div>
   );
 }

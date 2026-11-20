@@ -501,6 +501,20 @@
       "mergeTitle": "Mesclar em {{target}}",
       "createPRTitle": "Criar Pull Request",
       "close": "Fechar"
+    },
+    "toolbarCount": {
+      "files_one": "{{count}} arquivo",
+      "files_other": "{{count}} arquivos",
+      "stashes_one": "{{count}} stash",
+      "stashes_other": "{{count}} stashes",
+      "worktrees_one": "{{count}} worktree",
+      "worktrees_other": "{{count}} worktrees",
+      "pullRequests_one": "{{count}} PR",
+      "pullRequests_other": "{{count}} PRs",
+      "issues_one": "{{count}} issue",
+      "issues_other": "{{count}} issues",
+      "runs_one": "{{count}} execução",
+      "runs_other": "{{count}} execuções"
     }
   },
   "newThread": {

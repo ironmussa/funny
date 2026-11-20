@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { CheckIcon, MergeStatus, ReviewDecisionBadge } from '@/components/PRSummaryCard';
+import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -98,7 +99,12 @@ export function ActionsTab({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="actions-tab">
-      <div className="border-sidebar-border flex items-center gap-2 border-b px-3 py-1.5 text-xs">
+      <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1 text-xs">
+        <ActionsToolbar
+          loading={loading}
+          actionsUrl={repoActionsUrl(runs)}
+          onRefresh={handleRefresh}
+        />
         <ToggleGroup
           type="single"
           size="sm"
@@ -119,13 +125,13 @@ export function ActionsTab({
             {t('review.actions.allBranches', 'All branches')}
           </ToggleGroupItem>
         </ToggleGroup>
-        <div className="min-w-0 flex-1" />
-        <ActionsToolbar
-          rateLimited={rateLimited}
-          loading={loading}
-          actionsUrl={repoActionsUrl(runs)}
-          onRefresh={handleRefresh}
-        />
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          {rateLimited && <RateLimitedNotice />}
+          <ToolbarCount
+            label={t('review.toolbarCount.runs', { count: runs.length })}
+            testId="actions-count"
+          />
+        </div>
       </div>
 
       {prNumber ? (
@@ -533,13 +539,26 @@ function JobLog({ projectId, jobId }: { projectId: string; jobId: number }) {
 
 // ── Toolbar ─────────────────────────────────────────────────
 
+function RateLimitedNotice() {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      <TooltipTrigger>
+        <span className="text-status-warning">{t('review.ci.rateLimited', 'Rate limited')}</span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {t('review.ci.rateLimitedHint', 'GitHub API rate limit reached. Polling paused.')}
+      </TooltipContent>
+    </Tooltip>
+  );
+}
+
+/** Refresh first, then the link to the repository's Actions page. */
 function ActionsToolbar({
-  rateLimited,
   loading,
   actionsUrl,
   onRefresh,
 }: {
-  rateLimited: boolean;
   loading: boolean;
   actionsUrl: string | null;
   onRefresh: () => void;
@@ -547,18 +566,6 @@ function ActionsToolbar({
   const { t } = useTranslation();
   return (
     <>
-      {rateLimited && (
-        <Tooltip>
-          <TooltipTrigger>
-            <span className="text-status-warning">
-              {t('review.ci.rateLimited', 'Rate limited')}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            {t('review.ci.rateLimitedHint', 'GitHub API rate limit reached. Polling paused.')}
-          </TooltipContent>
-        </Tooltip>
-      )}
       <Tooltip>
         <TooltipTrigger asChild>
           <Button

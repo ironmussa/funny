@@ -507,6 +507,20 @@
       "mergeTitle": "Fusionar en {{target}}",
       "createPRTitle": "Crear Pull Request",
       "close": "Cerrar"
+    },
+    "toolbarCount": {
+      "files_one": "{{count}} archivo",
+      "files_other": "{{count}} archivos",
+      "stashes_one": "{{count}} stash",
+      "stashes_other": "{{count}} stashes",
+      "worktrees_one": "{{count}} worktree",
+      "worktrees_other": "{{count}} worktrees",
+      "pullRequests_one": "{{count}} PR",
+      "pullRequests_other": "{{count}} PRs",
+      "issues_one": "{{count}} issue",
+      "issues_other": "{{count}} issues",
+      "runs_one": "{{count}} ejecución",
+      "runs_other": "{{count}} ejecuciones"
     }
   },
   "newThread": {

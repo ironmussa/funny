@@ -78,4 +78,21 @@ describe('WorktreeSettings refresh', () => {
     expect(screen.queryByTestId('worktree-settings-loading')).not.toBeInTheDocument();
     expect(screen.getByTestId('worktree-settings-refresh')).toBeDisabled();
   });
+
+  test('puts refresh, then create, then the worktree count at the right end', async () => {
+    mockListWorktrees.mockReturnValueOnce(okAsync([main, feature]));
+    renderSettings();
+    await waitFor(() =>
+      expect(screen.getByTestId('worktree-settings-count')).toHaveTextContent(
+        'review.toolbarCount.worktrees:2',
+      ),
+    );
+
+    const toolbar = screen.getByTestId('worktree-settings-refresh').parentElement!;
+    expect([...toolbar.children].map((el) => el.getAttribute('data-testid'))).toEqual([
+      'worktree-settings-refresh',
+      'worktree-settings-create',
+      'worktree-settings-count',
+    ]);
+  });
 });

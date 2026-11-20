@@ -1,4 +1,13 @@
-import { Archive, ArchiveRestore, FileCode, GitBranch, Loader2, Trash2, X } from 'lucide-react';
+import {
+  Archive,
+  ArchiveRestore,
+  FileCode,
+  GitBranch,
+  Loader2,
+  RefreshCw,
+  Trash2,
+  X,
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { FileTree } from '@/components/FileTree';
@@ -20,6 +29,8 @@ import {
 } from '@/lib/list-row-styles';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
+
+import { ToolbarCount } from './ToolbarCount';
 
 interface StashTabProps {
   stash: UseStashStateResult;
@@ -52,8 +63,10 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
     setStashFileSearchCaseSensitive,
     stashPopInProgress,
     stashDropInProgress,
+    stashListLoading,
     handleStashPop,
     loadStashFileDiff,
+    refreshStashList,
   } = stash;
 
   const noStashesTitle = currentBranch
@@ -63,8 +76,21 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
       })
     : t('review.noStashes', 'No stashed changes');
 
+  const toolbar = (
+    <StashToolbar
+      loading={stashListLoading}
+      count={stashEntries.length}
+      onRefresh={() => void refreshStashList()}
+    />
+  );
+
   if (stashEntries.length === 0) {
-    return <EmptyState icon={Archive} title={noStashesTitle} />;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {toolbar}
+        <EmptyState icon={Archive} title={noStashesTitle} />
+      </div>
+    );
   }
 
   const rowProps = {
@@ -78,7 +104,8 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
   };
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {toolbar}
       <ScrollArea className="flex min-h-0 flex-1 flex-col">
         {filteredStashEntries.length > 0 ? (
           <div className="divide-sidebar-border flex flex-col divide-y">
@@ -254,7 +281,41 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
           )}
         </DialogContent>
       </Dialog>
-    </>
+    </div>
+  );
+}
+
+/** Refresh first, then the stash count at the right end. */
+function StashToolbar({
+  loading,
+  count,
+  onRefresh,
+}: {
+  loading: boolean;
+  count: number;
+  onRefresh: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="border-sidebar-border flex shrink-0 items-center gap-1 border-b px-2 py-1">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            onClick={onRefresh}
+            disabled={loading}
+            aria-label={t('common.refresh', 'Refresh')}
+            className="text-muted-foreground shrink-0"
+            data-testid="stash-refresh"
+          >
+            <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
+      </Tooltip>
+      <ToolbarCount label={t('review.toolbarCount.stashes', { count })} testId="stash-count" />
+    </div>
   );
 }
 

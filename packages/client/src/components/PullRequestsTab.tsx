@@ -14,6 +14,7 @@ import {
   hasActivePRFilters,
   type PRFilterState,
 } from '@/components/pull-requests/PRFilterBar';
+import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LabelBadge } from '@/components/ui/label-badge';
@@ -125,6 +126,7 @@ function PullRequestsToolbar({
   state,
   onStateChange,
   repoInfo,
+  count,
 }: {
   loading: boolean;
   onRefresh: () => void;
@@ -135,12 +137,13 @@ function PullRequestsToolbar({
   state: PRState;
   onStateChange: (state: PRState) => void;
   repoInfo: { owner: string; repo: string } | null;
+  count: number;
 }) {
   const { t } = useTranslation();
 
   return (
     <div
-      className="border-sidebar-border flex items-center gap-1.5 overflow-x-auto border-b px-2 py-1.5"
+      className="border-sidebar-border flex items-center gap-1 overflow-x-auto border-b px-2 py-1"
       data-testid="prs-toolbar"
     >
       <Tooltip>
@@ -158,20 +161,6 @@ function PullRequestsToolbar({
         </TooltipTrigger>
         <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
       </Tooltip>
-
-      <PRFilterBar
-        value={filters}
-        onChange={onFiltersChange}
-        options={filterOptions}
-        optionsLoading={filterOptionsLoading}
-        state={state}
-        onStateChange={onStateChange}
-        showState
-        showBorder={false}
-        className="min-w-max flex-nowrap"
-      />
-
-      <div className="min-w-0 flex-1" />
 
       {repoInfo ? (
         <Tooltip>
@@ -198,6 +187,20 @@ function PullRequestsToolbar({
           </TooltipContent>
         </Tooltip>
       ) : null}
+
+      <PRFilterBar
+        value={filters}
+        onChange={onFiltersChange}
+        options={filterOptions}
+        optionsLoading={filterOptionsLoading}
+        state={state}
+        onStateChange={onStateChange}
+        showState
+        showBorder={false}
+        className="min-w-max flex-nowrap"
+      />
+
+      <ToolbarCount label={t('review.toolbarCount.pullRequests', { count })} testId="prs-count" />
     </div>
   );
 }
@@ -546,6 +549,7 @@ function PullRequestsProjectContent({ visible }: PullRequestsTabProps) {
         state={state}
         onStateChange={list.setState}
         repoInfo={list.repoInfo}
+        count={list.items.length}
       />
 
       <PullRequestsContent

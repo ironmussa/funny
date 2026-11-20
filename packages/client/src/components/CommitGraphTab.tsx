@@ -34,6 +34,7 @@ import { useBranchActions } from '@/components/commit-graph/use-branch-actions';
 import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDialog';
 import { DiffStats } from '@/components/DiffStats';
 import { PRBadge } from '@/components/PRBadge';
+import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -1108,12 +1109,13 @@ function GraphToolbar({
         hasMoreAuthors={hasMoreAuthors}
         onLoadMoreAuthors={onLoadMoreAuthors}
       />
-      <span className="text-muted-foreground ml-auto text-[10px]">
-        {t('graph.commitCount', {
+      <ToolbarCount
+        label={t('graph.commitCount', {
           count: commitCount,
           defaultValue: `${commitCount} commits`,
         })}
-      </span>
+        testId="graph-count"
+      />
     </div>
   );
 }

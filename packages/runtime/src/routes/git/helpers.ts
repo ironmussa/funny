@@ -48,7 +48,9 @@ export function emitPRUpdateForThread(opts: {
     ...status,
     threadId,
     branchKey,
-    ...(pr ? { prNumber: pr.prNumber, prUrl: pr.prUrl, prState: pr.prState } : {}),
+    prNumber: pr ? pr.prNumber : undefined,
+    prUrl: pr ? pr.prUrl : undefined,
+    prState: pr ? pr.prState : undefined,
   };
   wsBroker.emitToUser(userId, {
     type: 'git:status',

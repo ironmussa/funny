@@ -111,7 +111,7 @@ const FIRE_AND_FORGET_FRAMES: Record<string, (extra: Record<string, unknown>) =>
   'browser-session:close': (extra) => ({
     case: 'close',
     reason: String(extra.reason ?? 'user'),
-    ...(typeof extra.closeId === 'string' ? { closeId: extra.closeId } : {}),
+    closeId: typeof extra.closeId === 'string' ? extra.closeId : undefined,
   }),
 };
 

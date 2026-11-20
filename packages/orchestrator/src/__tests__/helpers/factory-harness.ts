@@ -127,7 +127,7 @@ function fakeSandbox(
     stopPreservesDisk: keepsDisk,
     templates: ['0.0.0-test'],
     exec: commands.exec,
-    ...(writesFiles ? { writeFile: commands.writeFile } : {}),
+    writeFile: writesFiles ? commands.writeFile : undefined,
   });
   let nextCreateError: SandboxError | null = null;
   const sandbox: HarnessSandbox = {

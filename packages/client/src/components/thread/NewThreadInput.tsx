@@ -287,6 +287,7 @@ export function NewThreadInput({
           workflowParse.invocation.prompt ??
           `Run workflow ${workflowParse.invocation.workflowName}`;
         try {
+          // react-doctor-disable-line react-hooks-js/todo — pre-existing; React Compiler limitation
           const createResult = await api.createIdleThread({
             projectId: effectiveProjectId,
             title: workflowPrompt.slice(0, 200),
@@ -294,7 +295,7 @@ export function NewThreadInput({
             baseBranch: opts.baseBranch,
             prompt: workflowPrompt,
             images,
-            ...(activeDesignId ? { designId: activeDesignId } : {}),
+            designId: activeDesignId || undefined,
           });
 
           if (createResult.isErr()) {

@@ -36,10 +36,10 @@ function readyEvent(sessionId: string, ready: PayloadValue<'ready'>): BrowserSes
     data: {
       sessionId,
       url: ready.targetUrl,
-      ...(ready.viewport
-        ? { viewport: { width: ready.viewport.width, height: ready.viewport.height } }
-        : {}),
-      ...(controller ? { controller } : {}),
+      viewport: ready.viewport
+        ? { width: ready.viewport.width, height: ready.viewport.height }
+        : undefined,
+      controller: controller || undefined,
       audioMuted: ready.audioMuted,
     },
   };
@@ -68,7 +68,7 @@ function dialogEvent(
         ? {
             type: dialog.type,
             message: dialog.message,
-            ...(dialog.defaultValue !== undefined ? { defaultValue: dialog.defaultValue } : {}),
+            defaultValue: dialog.defaultValue !== undefined ? dialog.defaultValue : undefined,
           }
         : null,
     },
@@ -166,7 +166,7 @@ export function browserSessionEventFromV1(
         data: {
           sessionId,
           reason: payload.value.reason,
-          ...(payload.value.closeId ? { closeId: payload.value.closeId } : {}),
+          closeId: payload.value.closeId || undefined,
         },
       };
     case 'console':

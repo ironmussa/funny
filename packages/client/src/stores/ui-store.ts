@@ -778,14 +778,14 @@ export const useUIStore = create<UIState>((set) => ({
 // Reset transient UI panes whenever a thread is selected.
 // Registered via the listener API to avoid a thread-store ↔ ui-store import cycle.
 setThreadSelectListener((threadId) => {
-  useUIStore.setState({
+  const uiPatch: Record<string, unknown> = {
     newThreadProjectId: null,
     newThreadBaseBranch: null,
     allThreadsProjectId: null,
-    // Opening a thread ends any compose, so these go too: a scratch flag left
-    // behind made `/new` in a project thread start a scratch one. Clearing the
-    // selection (a view unmounting, a route change) must not end a compose
-    // that just started.
-    ...(threadId ? { newThreadIsScratch: false, newThreadIdleOnly: false } : {}),
-  });
+  };
+  if (threadId) {
+    uiPatch.newThreadIsScratch = false;
+    uiPatch.newThreadIdleOnly = false;
+  }
+  useUIStore.setState(uiPatch);
 });

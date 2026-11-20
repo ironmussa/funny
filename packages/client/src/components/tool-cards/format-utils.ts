@@ -49,7 +49,7 @@ function normalizeTodoItems(arr: unknown[]): TodoItem[] | null {
     todos.push({
       content,
       status,
-      ...(typeof e.activeForm === 'string' ? { activeForm: e.activeForm } : {}),
+      activeForm: typeof e.activeForm === 'string' ? e.activeForm : undefined,
     });
   }
   return todos.length > 0 ? todos : null;

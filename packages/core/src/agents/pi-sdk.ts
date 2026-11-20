@@ -138,9 +138,9 @@ export class PiSDKProcess extends BaseAgentProcess {
         modelRuntime,
         settingsManager,
         sessionManager,
-        ...(resourceLoader ? { resourceLoader } : {}),
-        ...(model ? { model } : {}),
-        ...(thinkingLevel ? { thinkingLevel } : {}),
+        resourceLoader: resourceLoader ?? undefined,
+        model: model ?? undefined,
+        thinkingLevel: thinkingLevel ?? undefined,
         ...piToolOptions(this.options.allowedTools, this.options.disallowedTools, this.mcpBridge),
       });
 

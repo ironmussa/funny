@@ -276,7 +276,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
     const msg: CLISystemMessage = {
       type: 'system',
       subtype: 'init',
-      ...(slashCommands ? { slashCommands } : {}),
+      slashCommands: slashCommands ?? undefined,
       session_id: sessionId,
       tools,
       model,
@@ -361,7 +361,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
       result: params.result,
       total_cost_usd: params.totalCost,
       session_id: params.sessionId,
-      ...(params.errors ? { errors: params.errors } : {}),
+      errors: params.errors ?? undefined,
     };
     this.emit('message', msg);
   }

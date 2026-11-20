@@ -66,7 +66,7 @@ export function buildSendMessagePayload(
     provider: opts.provider || undefined,
     model: opts.model || undefined,
     permissionMode: opts.mode || undefined,
-    ...(options.includeEffort !== false ? { effort: opts.effort || undefined } : {}),
+    ...(options.includeEffort !== false ? { effort: opts.effort || undefined } : undefined),
     allowedTools,
     disallowedTools,
     fileReferences: opts.fileReferences,

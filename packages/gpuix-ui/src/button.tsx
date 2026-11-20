@@ -104,6 +104,8 @@ export function createButtonStyle({
     opacity: disabled ? 0.55 : 1,
     ...themed,
     ...sizeStyle(theme, size),
+    // fallow-ignore-next-line added-suppression
+    // oxlint-disable-next-line anti-slop/no-conditional-empty-object-spread -- borderColor must not override themed/sizeStyle when unfocused; undefined would clear it
     ...(focused ? { borderColor: theme.colors.borderStrong } : {}),
     ...style,
   };

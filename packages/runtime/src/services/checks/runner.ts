@@ -409,7 +409,7 @@ export async function runCheck(plan: CheckPlan, options: RunCheckOptions): Promi
   return {
     exitCode: outcome.exitCode,
     durationMs: now() - started,
-    ...(stopped ? { stopped } : {}),
+    stopped: stopped || undefined,
     progress,
     tail: outcome.tail,
   };

@@ -99,7 +99,7 @@ export function MobileTemplateSelect({
           {t('prompt.mobileSelectors.noTemplate', 'No template')}
         </PromptSelectionOption>
         {groups
-          .filter((group) => group.items.length > 0)
+          .flatMap((group) => (group.items.length > 0 ? [group] : []))
           .map((group) => (
             <section key={group.label} aria-label={group.label}>
               <h3 className="text-muted-foreground px-4 py-2 text-sm font-semibold">

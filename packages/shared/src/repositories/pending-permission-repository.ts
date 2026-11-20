@@ -19,14 +19,14 @@ function serialize(row: any): PermissionRequestRecord {
     transport: row.transport,
     toolCallId: row.toolCallId,
     toolName: row.toolName,
-    ...(row.toolInput ? { toolInput: row.toolInput } : {}),
+    toolInput: row.toolInput || undefined,
     canAlwaysAllow: !!row.canAlwaysAllow,
     canDeny: !!row.canDeny,
     requestedAt: row.createdAt,
     status: row.status,
-    ...(row.resolvedDecision ? { resolvedDecision: row.resolvedDecision } : {}),
-    ...(row.resolvedAt ? { resolvedAt: row.resolvedAt } : {}),
-    ...(row.expiredAt ? { expiredAt: row.expiredAt } : {}),
+    resolvedDecision: row.resolvedDecision || undefined,
+    resolvedAt: row.resolvedAt || undefined,
+    expiredAt: row.expiredAt || undefined,
   } as PermissionRequestRecord;
 }
 

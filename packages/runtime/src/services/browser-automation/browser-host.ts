@@ -318,7 +318,7 @@ export class BrowserHost {
           profile === 'ephemeral'
             ? await this.browser.newContext({
                 viewport: null,
-                ...(this.userAgent ? { userAgent: this.userAgent } : {}),
+                userAgent: this.userAgent || undefined,
               })
             : null;
         const context = ephemeralContext ?? this.browser.contexts()[0];

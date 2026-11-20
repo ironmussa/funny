@@ -908,11 +908,10 @@ function McpServerForm({
     const server: McpServer = {
       name: name.trim(),
       type,
-      ...(type === 'stdio'
-        ? { command: command.trim(), args: args.length > 0 ? args : undefined }
-        : {}),
-      ...(type !== 'stdio' ? { url: url.trim() } : {}),
-      ...(Object.keys(env).length > 0 ? { env } : {}),
+      command: type === 'stdio' ? command.trim() : undefined,
+      args: type === 'stdio' && args.length > 0 ? args : undefined,
+      url: type !== 'stdio' ? url.trim() : undefined,
+      env: Object.keys(env).length > 0 ? env : undefined,
     };
     onSave(server);
   };

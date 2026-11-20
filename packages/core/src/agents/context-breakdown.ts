@@ -25,7 +25,7 @@ export function toContextBreakdown(
     maxTokens: usage.maxTokens,
     percentage: usage.percentage,
     categories: (usage.categories ?? []).map((c) => ({
-      ...(c.id ? { id: c.id } : {}),
+      id: c.id || undefined,
       name: c.name,
       tokens: c.tokens,
       kind: c.kind,

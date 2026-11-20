@@ -50,9 +50,9 @@ const PERMISSION_GATED_MCP_SERVERS: ReadonlySet<string> = new Set(['funny_browse
 
 /** `mcp__<server>__*` allow-list entries for every server that is not permission-gated. */
 export function mcpAutoAllowWildcards(serverNames: string[]): string[] {
-  return serverNames
-    .filter((name) => !PERMISSION_GATED_MCP_SERVERS.has(name))
-    .map((name) => `mcp__${name}__*`);
+  return serverNames.flatMap((name) =>
+    PERMISSION_GATED_MCP_SERVERS.has(name) ? [] : [`mcp__${name}__*`],
+  );
 }
 
 /**
@@ -319,7 +319,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       disallowedTools: mergeDisallowedTools(this.options.disallowedTools),
       // `executable` is the JS runtime used to run cli.js; the new native
       // binary is exec'd directly, so omit it in that case.
-      ...(cli.kind === 'js' ? { executable: 'node' as const } : {}),
+      executable: cli.kind === 'js' ? ('node' as const) : undefined,
       env: sdkEnv,
       systemPrompt: this.options.systemPrefix
         ? {
@@ -439,11 +439,11 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // above user/project settings. `fastModePerSessionOptIn` keeps it scoped to
     // this run instead of persisting to the user's settings file.
     if (this.options.fastMode) {
-      sdkOptions.settings = {
-        ...(typeof sdkOptions.settings === 'object' ? sdkOptions.settings : {}),
-        fastMode: true,
-        fastModePerSessionOptIn: true,
-      };
+      sdkOptions.settings = Object.assign(
+        {},
+        typeof sdkOptions.settings === 'object' ? sdkOptions.settings : undefined,
+        { fastMode: true, fastModePerSessionOptIn: true },
+      );
     }
 
     // Pass MCP servers (e.g., CDP browser tools) if provided
@@ -493,17 +493,16 @@ export class SDKClaudeProcess extends BaseAgentProcess {
           if (cliMsg) {
             dlog.debug('Translated to CLIMessage', {
               type: cliMsg.type,
-              ...(cliMsg.type === 'result'
-                ? { subtype: cliMsg.subtype, isError: cliMsg.is_error }
-                : {}),
-              ...(cliMsg.type === 'assistant'
-                ? {
-                    contentBlocks: cliMsg.message.content.length,
-                    toolUseBlocks: cliMsg.message.content
+              subtype: cliMsg.type === 'result' ? cliMsg.subtype : undefined,
+              isError: cliMsg.type === 'result' ? cliMsg.is_error : undefined,
+              contentBlocks:
+                cliMsg.type === 'assistant' ? cliMsg.message.content.length : undefined,
+              toolUseBlocks:
+                cliMsg.type === 'assistant'
+                  ? cliMsg.message.content
                       .filter((b: any) => b.type === 'tool_use')
-                      .map((b: any) => b.name),
-                  }
-                : {}),
+                      .map((b: any) => b.name)
+                  : undefined,
             });
             this.emit('message', cliMsg);
           }

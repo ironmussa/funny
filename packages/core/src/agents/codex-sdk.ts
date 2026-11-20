@@ -140,7 +140,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
       skipGitRepoCheck: true,
       modelReasoningEffort: normalizeEffort(this.options.effort),
       ...sandboxOptions,
-      ...(additionalDirectories.length ? { additionalDirectories } : {}),
+      additionalDirectories: additionalDirectories.length ? additionalDirectories : undefined,
     };
 
     this.thread = this.options.sessionId
@@ -234,6 +234,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
     });
   }
 
+  // fallow-ignore-next-line complexity
   private async runCommand(name: string, args: string, signal: AbortSignal): Promise<string> {
     if (!Object.hasOwn(CODEX_COMMANDS, name)) {
       throw new Error(
@@ -276,8 +277,8 @@ export class CodexSDKProcess extends BaseAgentProcess {
             .passthrough()
             .parse(
               await server.request(methods[name], {
-                ...(['skills', 'plugins'].includes(name) ? { cwds: [this.options.cwd] } : {}),
-                ...(cursor ? { cursor } : {}),
+                cwds: ['skills', 'plugins'].includes(name) ? [this.options.cwd] : undefined,
+                cursor: cursor ?? undefined,
               }),
             );
           pages.push(page);
@@ -294,23 +295,22 @@ export class CodexSDKProcess extends BaseAgentProcess {
           : [];
       const resumed = z.object({ thread: z.object({ id: z.string() }) }).parse(
         await server.request(this.activeSessionId ? 'thread/resume' : 'thread/start', {
-          ...(this.activeSessionId ? { threadId: this.activeSessionId } : {}),
+          threadId: this.activeSessionId ?? undefined,
           cwd: this.options.cwd,
           model: this.options.model,
           sandbox: sandbox.sandboxMode,
           approvalPolicy: sandbox.approvalPolicy,
           config: {
-            ...(this.options.effort
-              ? { model_reasoning_effort: normalizeEffort(this.options.effort) }
-              : {}),
-            ...(sandbox.sandboxMode === 'workspace-write'
-              ? {
-                  sandbox_workspace_write: {
+            model_reasoning_effort: this.options.effort
+              ? normalizeEffort(this.options.effort)
+              : undefined,
+            sandbox_workspace_write:
+              sandbox.sandboxMode === 'workspace-write'
+                ? {
                     network_access: sandbox.networkAccessEnabled ?? false,
                     writable_roots: roots,
-                  },
-                }
-              : {}),
+                  }
+                : undefined,
           },
         }),
       );
@@ -321,7 +321,8 @@ export class CodexSDKProcess extends BaseAgentProcess {
         name === 'compact' ? 'thread/compact/start' : 'review/start',
         {
           threadId,
-          ...(name === 'review' ? { target: codexReviewTarget(args), delivery: 'inline' } : {}),
+          target: name === 'review' ? codexReviewTarget(args) : undefined,
+          delivery: name === 'review' ? ('inline' as const) : undefined,
         },
       );
       // A newly started review session must also be used by subsequent SDK turns.
@@ -331,7 +332,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
         skipGitRepoCheck: true,
         modelReasoningEffort: normalizeEffort(this.options.effort),
         ...sandbox,
-        ...(roots.length ? { additionalDirectories: roots } : {}),
+        additionalDirectories: roots.length ? roots : undefined,
       });
       if (name === 'compact') {
         this.emit('message', {
@@ -538,7 +539,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
         else this.fileSnapshotsByPath.delete(snapshotPath);
         return [
           change.path,
-          { type: change.kind, ...(unifiedDiff ? { unified_diff: unifiedDiff } : {}) },
+          { type: change.kind, unified_diff: unifiedDiff ?? undefined },
         ] as const;
       }),
     );
@@ -620,7 +621,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
             type: 'tool_result',
             tool_use_id: toolUseId,
             content: output,
-            ...(isError ? { is_error: true } : {}),
+            is_error: isError ? true : undefined,
           },
         ],
       },

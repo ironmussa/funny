@@ -261,7 +261,7 @@ describe('Thread routes — runner proxy', () => {
         'Content-Type': 'application/json',
         'X-Test-User-Id': 'user-1',
         'X-Test-User-Role': 'user',
-        ...(orgId ? { 'X-Test-Org-Id': orgId } : {}),
+        ...(orgId && { 'X-Test-Org-Id': orgId }),
       },
       body: rawBody,
     });

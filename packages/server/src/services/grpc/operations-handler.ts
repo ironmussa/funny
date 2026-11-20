@@ -358,7 +358,7 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
   getGithubToken: (value, principalUserId) => ({
     type: 'data:get_github_token',
     userId: principalUserId,
-    ...(value.projectId ? { projectId: value.projectId } : {}),
+    projectId: value.projectId ?? undefined,
   }),
   getGithubAppToken: threadScoped('data:get_github_app_token'),
   getMinimaxApiKey: principalScoped('data:get_minimax_api_key'),
@@ -395,9 +395,8 @@ const LEGACY_MAPPERS: Record<OperationKind, LegacyMapper> = {
     payload: {
       id: value.watcherId,
       patch: decodeStruct(value.patch),
-      ...(value.expectedNextWakeAtMs !== undefined
-        ? { expectedNextWakeAt: Number(value.expectedNextWakeAtMs) }
-        : {}),
+      expectedNextWakeAt:
+        value.expectedNextWakeAtMs !== undefined ? Number(value.expectedNextWakeAtMs) : undefined,
     },
   }),
   watcherDeleteByThread: threadIdPayload('data:watcher_delete_by_thread'),
@@ -467,11 +466,11 @@ function success(epoch: bigint, correlationId: string, result: any): Record<stri
         messages: (result.messages ?? []).map(encodeStruct),
         hasMore: !!result.hasMore,
         hasMoreAfter: !!result.hasMoreAfter,
-        ...(result.total === undefined ? {} : { total: String(result.total) }),
-        ...(result.windowStart === undefined ? {} : { windowStart: String(result.windowStart) }),
-        ...(result.leadingUserMessage
-          ? { leadingUserMessage: encodeStruct(result.leadingUserMessage) }
-          : {}),
+        total: result.total !== undefined ? String(result.total) : undefined,
+        windowStart: result.windowStart !== undefined ? String(result.windowStart) : undefined,
+        leadingUserMessage: result.leadingUserMessage
+          ? encodeStruct(result.leadingUserMessage)
+          : undefined,
       },
     };
   } else if (
@@ -480,7 +479,7 @@ function success(epoch: bigint, correlationId: string, result: any): Record<stri
   ) {
     payload = { toolCall: result.toolCall ?? {} };
   } else if (result?.type?.startsWith('data:get_thread')) {
-    payload = { thread: { ...(result.thread ? { value: encodeStruct(result.thread) } : {}) } };
+    payload = { thread: { value: result.thread ? encodeStruct(result.thread) : undefined } };
   } else if (typeof result?.messageId === 'string') {
     payload = { insertedRecord: { id: result.messageId } };
   } else if (typeof result?.toolCallId === 'string') {

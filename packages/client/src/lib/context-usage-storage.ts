@@ -23,7 +23,7 @@ export function loadContextUsage(threadId: string): ContextUsage | undefined {
       cumulativeInputTokens: parsed.cumulativeInputTokens,
       lastInputTokens: parsed.lastInputTokens,
       lastOutputTokens: parsed.lastOutputTokens,
-      ...(parsed.breakdown ? { breakdown: parsed.breakdown } : {}),
+      breakdown: parsed.breakdown || undefined,
     };
   } catch (err) {
     log.warn('load failed', { threadId, error: String(err) });

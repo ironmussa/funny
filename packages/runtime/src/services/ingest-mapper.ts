@@ -434,7 +434,7 @@ async function onCompleted(event: IngestEvent): Promise<void> {
     status: 'completed',
     stage: 'review',
     completedAt: now,
-    ...(costUsd ? { cost: costUsd } : {}),
+    cost: costUsd || undefined,
   });
 
   emitWS(state, {
@@ -492,7 +492,7 @@ async function onFailed(event: IngestEvent): Promise<void> {
   await tm.updateThread(state.threadId, {
     status: 'failed',
     completedAt: now,
-    ...(costUsd ? { cost: costUsd } : {}),
+    cost: costUsd || undefined,
   });
 
   emitWS(state, {
@@ -734,7 +734,7 @@ async function handleCLIResult(
       duration: msg.duration_ms ?? 0,
       status: finalStatus,
       stage: 'review',
-      ...(finalStatus === 'failed' ? { errorReason: msg.subtype } : {}),
+      errorReason: finalStatus === 'failed' ? msg.subtype : undefined,
     },
   });
 

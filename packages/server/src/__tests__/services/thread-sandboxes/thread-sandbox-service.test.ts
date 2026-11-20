@@ -73,18 +73,18 @@ function setup(
   const files = opts.files;
   const provider = createFakeSandboxProvider('fake-valid', {
     templates: opts.templates ?? [],
-    ...(files
-      ? {
-          exec: (_id: string, command: string) => ({
-            exitCode: 0,
-            stdout: command === 'printf %s "$HOME"' ? '/home/user' : '',
-            stderr: '',
-          }),
-          writeFile: (_id: string, path: string, content: string) => {
-            files.set(path, content);
-          },
+    exec: files
+      ? (_id: string, command: string) => ({
+          exitCode: 0,
+          stdout: command === 'printf %s "$HOME"' ? '/home/user' : '',
+          stderr: '',
+        })
+      : undefined,
+    writeFile: files
+      ? (_id: string, path: string, content: string) => {
+          files.set(path, content);
         }
-      : {}),
+      : undefined,
   });
   const store = memoryStore();
   const issued: string[] = [];
@@ -111,7 +111,7 @@ function setup(
       opts.runnerConnects === false ? null : started() ? 'r-box' : null,
     presence: { isAvailable: async (id) => id === 'r-box' },
     requestCheckout: ({ threadId, path, repoUrl, branch }) => {
-      checkouts.push({ threadId, path, repoUrl, ...(branch ? { branch } : {}) });
+      checkouts.push({ threadId, path, repoUrl, branch: branch || undefined });
       return opts.checkoutFails ? errAsync('clone failed') : okAsync(undefined);
     },
     store,

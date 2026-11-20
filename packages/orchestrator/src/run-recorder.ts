@@ -54,9 +54,9 @@ export function createRunRecorder(deps: {
         state: run.state,
         issue_number: run.issueNumber,
         repo: run.repo,
-        ...(run.prUrl ? { pr_url: run.prUrl } : {}),
-        ...(run.reason ? { reason: run.reason } : {}),
-        ...(run.fixAttempts ? { fix_attempts: run.fixAttempts } : {}),
+        pr_url: run.prUrl || undefined,
+        reason: run.reason || undefined,
+        fix_attempts: run.fixAttempts || undefined,
       },
     };
     written = written
@@ -80,7 +80,7 @@ export function createRunRecorder(deps: {
       reportState(next);
       log.info(`Factory run ${run.id} ${state}`, {
         issue: `${run.repo}#${run.issueNumber}`,
-        ...(next.reason ? { reason: next.reason } : {}),
+        reason: next.reason || undefined,
       });
       return next;
     },

@@ -133,7 +133,7 @@ function requestKind(request: WireRequest): 'event' | 'gap' | undefined {
 function responseBase(epoch: bigint, scope?: EventScopeIdentity): Record<string, unknown> {
   return {
     session: { sessionEpoch: epoch.toString() },
-    ...(scope ? { scope } : {}),
+    scope: scope ?? undefined,
   };
 }
 
@@ -330,7 +330,7 @@ export function createEventsHandler(
           eventType: request.event.eventType,
           data: decodeStruct(request.event.data),
           durability: request.event.durability ?? 0,
-          ...(request.event.occurredAt ? { occurredAt: request.event.occurredAt } : {}),
+          occurredAt: request.event.occurredAt ?? undefined,
         };
         const result = await receipts.accept(
           {

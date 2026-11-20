@@ -245,25 +245,19 @@ export class RetrievalEngine {
     const now = new Date();
 
     return scored
-      .filter((s) => {
+      .flatMap((s) => {
         const f = s.fact;
-        if (f.confidence < options.minConfidence) return false;
-        if (!options.includeInvalidated && f.invalidAt !== null) return false;
+        if (f.confidence < options.minConfidence) return [];
+        if (!options.includeInvalidated && f.invalidAt !== null) return [];
 
         if (options.asOf) {
           const validFrom = new Date(f.validFrom);
-          if (options.asOf < validFrom) return false;
-          if (f.invalidAt && options.asOf >= new Date(f.invalidAt)) return false;
+          if (options.asOf < validFrom) return [];
+          if (f.invalidAt && options.asOf >= new Date(f.invalidAt)) return [];
         }
 
-        return true;
-      })
-      .map((s) => {
-        const decayScore = calculateDecayScore(s.fact, now);
-        return {
-          ...s,
-          score: s.score * (0.6 + 0.4 * decayScore),
-        };
+        const decayScore = calculateDecayScore(f, now);
+        return [{ ...s, score: s.score * (0.6 + 0.4 * decayScore) }];
       })
       .sort((a, b) => b.score - a.score)
       .map((s) => s.fact);

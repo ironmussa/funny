@@ -23,10 +23,10 @@ export async function nativeJsonRequest<T>(options: {
     method: options.method ?? 'GET',
     headers: {
       Accept: 'application/json',
-      ...(options.body === undefined ? {} : { 'Content-Type': 'application/json' }),
-      ...(options.clientOrigin ? { Origin: options.clientOrigin } : {}),
+      ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : undefined),
+      ...(options.clientOrigin ? { Origin: options.clientOrigin } : undefined),
     },
-    ...(options.body === undefined ? {} : { body: JSON.stringify(options.body) }),
+    body: options.body === undefined ? undefined : JSON.stringify(options.body),
   });
   const text = await response.text();
   let decoded: unknown = null;

@@ -24,8 +24,9 @@ export const projectsApi = {
     trpcCall(() =>
       procedures.list.query(
         {
-          ...(orgId ? { orgId } : orgId === null ? { personal: true } : {}),
-          ...(search !== undefined ? { q: search } : {}),
+          orgId: orgId || undefined,
+          personal: orgId === null ? true : undefined,
+          q: search !== undefined ? search : undefined,
         },
         { signal },
       ),

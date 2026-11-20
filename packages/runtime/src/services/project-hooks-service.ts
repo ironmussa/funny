@@ -240,6 +240,6 @@ export function reorderCommands(projectPath: string, hookType: HookType, newOrde
   const commands = readHookCommands(projectPath, hookType);
   if (!commands.length) return;
 
-  const reordered = newOrder.map((i) => commands[i]).filter(Boolean);
+  const reordered = newOrder.flatMap((i) => (commands[i] ? [commands[i]] : []));
   writeHookCommands(projectPath, hookType, reordered);
 }

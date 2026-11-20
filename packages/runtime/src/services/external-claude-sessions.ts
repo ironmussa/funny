@@ -515,9 +515,9 @@ function listProjectClaudeSessions(
   const homeDir = options.homeDir ?? homedir();
   const projects = options.projects ?? [];
   const runningBySessionId = new Map(
-    runningSessions
-      .filter((session) => session.sessionId)
-      .map((session) => [session.sessionId as string, session]),
+    runningSessions.flatMap((session) =>
+      session.sessionId ? [[session.sessionId, session] as const] : [],
+    ),
   );
   const sessionsById = new Map<string, ExternalClaudeSession>();
 

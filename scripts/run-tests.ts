@@ -107,7 +107,7 @@ export function discoverPackages(root = ROOT): TestPackage[] {
         name: (manifest.name as string | undefined) ?? dir,
         dir,
         hasTest: Boolean(testScript),
-        ...(testScript ? { testScript } : {}),
+        testScript: testScript || undefined,
         deps: names.map((name) => nameToDir.get(name)).filter((d): d is string => Boolean(d)),
         externalDeps: names.filter((name) => !nameToDir.has(name)),
       };
@@ -172,7 +172,7 @@ export function planTests(
   const changedDirs = new Set(packageFiles.map((file) => packageDirOf(file)!));
   // Dirs whose suites no import graph can narrow down.
   const wholeDirs = new Set(
-    packageFiles.filter((file) => SUITE_INPUT.test(file)).map((file) => packageDirOf(file)!),
+    packageFiles.flatMap((file) => (SUITE_INPUT.test(file) ? [packageDirOf(file)!] : [])),
   );
   for (const pkg of packages) {
     if (changedDeps && pkg.externalDeps.some((name) => changedDeps.has(name))) {
@@ -181,17 +181,20 @@ export function planTests(
     }
   }
 
-  const sources = packageFiles
-    .filter((file) => !SUITE_INPUT.test(file))
-    .map((file) => join(root, file))
-    .filter((path) => existsSync(path));
-  return testable
-    .filter((pkg) => reaches(pkg.dir, changedDirs, depsOf))
-    .map((pkg) =>
-      pkg.testScript && VITEST_RUN.test(pkg.testScript) && !reaches(pkg.dir, wholeDirs, depsOf)
-        ? { pkg, related: sources }
-        : whole(pkg),
-    );
+  const sources = packageFiles.flatMap((file) => {
+    if (SUITE_INPUT.test(file)) return [];
+    const path = join(root, file);
+    return existsSync(path) ? [path] : [];
+  });
+  return testable.flatMap((pkg) =>
+    reaches(pkg.dir, changedDirs, depsOf)
+      ? [
+          pkg.testScript && VITEST_RUN.test(pkg.testScript) && !reaches(pkg.dir, wholeDirs, depsOf)
+            ? { pkg, related: sources }
+            : whole(pkg),
+        ]
+      : [],
+  );
 }
 
 /** The packages `planTests` selects (whole or related). */

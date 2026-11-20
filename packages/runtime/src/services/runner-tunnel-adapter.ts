@@ -99,7 +99,7 @@ export class RunnerTunnelAdapter {
         new Request(`http://runner.local${state.path}`, {
           method: state.method,
           headers,
-          ...(body && state.method !== 'GET' && state.method !== 'HEAD' ? { body } : {}),
+          body: body && state.method !== 'GET' && state.method !== 'HEAD' ? body : undefined,
           signal: state.controller.signal,
         }),
         state.controller.signal,

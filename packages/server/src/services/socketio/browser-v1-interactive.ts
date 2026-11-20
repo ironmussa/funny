@@ -144,7 +144,7 @@ function legacyBrowserSessionEvent(message: BrowserSessionMessage, requestId?: s
         data: {
           ...base,
           reason: message.payload.value.reason,
-          ...(message.payload.value.closeId ? { closeId: message.payload.value.closeId } : {}),
+          closeId: message.payload.value.closeId ?? undefined,
         },
       };
     default:

@@ -351,8 +351,8 @@ function queueOperations(newId: () => string) {
             .returning({ id: factoryRuns.id });
           const ids = new Set(written.map((row) => row.id));
           return {
-            queued: rows.filter((row) => ids.has(row.id)).map(toView),
-            duplicates: rows.filter((row) => !ids.has(row.id)).map((row) => row.issueNumber),
+            queued: rows.flatMap((row) => (ids.has(row.id) ? [toView(row)] : [])),
+            duplicates: rows.flatMap((row) => (ids.has(row.id) ? [] : [row.issueNumber])),
           };
         })(),
         storage,

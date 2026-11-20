@@ -145,8 +145,8 @@ function registerResponse(
   return {
     runnerId,
     token,
-    ...(userId ? { ownerUserId: userId } : {}),
-    ...(rootSecret ? { forwardingKey: deriveRunnerForwardingKey(rootSecret, runnerId) } : {}),
+    ownerUserId: userId ?? undefined,
+    forwardingKey: rootSecret ? deriveRunnerForwardingKey(rootSecret, runnerId) : undefined,
   };
 }
 

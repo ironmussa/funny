@@ -320,11 +320,11 @@ export class SocketIoClientRealtimePort implements ClientRealtimePort {
 
   async recover(cursors: readonly Cursor[]): Promise<SubscriptionOutcome[]> {
     return Promise.all(
-      cursors
-        .filter((cursor): cursor is Cursor & { scope: ScopeReference } => !!cursor.scope)
-        .map((cursor) =>
-          this.subscribeScope({ scope: cursor.scope, cursor } as SubscriptionRequest),
-        ),
+      cursors.flatMap((cursor) =>
+        cursor.scope
+          ? [this.subscribeScope({ scope: cursor.scope, cursor } as SubscriptionRequest)]
+          : [],
+      ),
     );
   }
 

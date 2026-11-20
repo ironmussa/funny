@@ -195,7 +195,6 @@ app.get('/v1/facts', async (c) => {
     const pp = getMemory();
     const facts = await pp.search('', {
       type: type as any,
-      ...(includeInvalidated ? {} : {}),
     });
     return c.json({ facts: limit ? facts.slice(0, limit) : facts });
   } catch (e) {

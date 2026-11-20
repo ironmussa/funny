@@ -59,8 +59,8 @@ function selfTest(): void {
     'grantAgentMcpHttp(FUNNY_MCP_SERVER, ctx);',
   ];
   const bad = [
-    ...forbidden.filter((s) => findViolations(s).length === 0).map((s) => `missed: ${s}`),
-    ...allowed.filter((s) => findViolations(s).length > 0).map((s) => `flagged: ${s}`),
+    ...forbidden.flatMap((s) => (findViolations(s).length === 0 ? [`missed: ${s}`] : [])),
+    ...allowed.flatMap((s) => (findViolations(s).length > 0 ? [`flagged: ${s}`] : [])),
   ];
   if (bad.length) {
     console.error(`check-agent-neutral-tools self-test failed:\n${bad.join('\n')}`);
@@ -71,12 +71,11 @@ function selfTest(): void {
 
 function main(): void {
   if (process.argv.includes('--self-test')) return selfTest();
-  const violations = SCANNED.flatMap((dir) => sourceFiles(join(ROOT, dir)))
-    .map((file) => relative(ROOT, file))
-    .filter((rel) => !isTest(rel))
-    .flatMap((rel) =>
-      findViolations(readFileSync(join(ROOT, rel), 'utf8')).map((v) => `${rel}:${v}`),
-    );
+  const violations = SCANNED.flatMap((dir) => sourceFiles(join(ROOT, dir))).flatMap((file) => {
+    const rel = relative(ROOT, file);
+    if (isTest(rel)) return [];
+    return findViolations(readFileSync(join(ROOT, rel), 'utf8')).map((v) => `${rel}:${v}`);
+  });
   if (violations.length === 0) {
     console.log('✓ agent tools are agent-neutral (no createSdkMcpServer)');
     return;

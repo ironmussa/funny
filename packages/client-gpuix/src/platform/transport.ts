@@ -163,10 +163,10 @@ export class NativeTransportService implements TransportService {
           this.fetch(target.toString(), {
             method: request.method ?? 'GET',
             headers: {
-              ...(cookie ? { Cookie: cookie } : {}),
+              ...(cookie ? { Cookie: cookie } : undefined),
               ...request.headers,
             },
-            ...(request.body === undefined ? {} : { body: request.body }),
+            body: request.body === undefined ? undefined : request.body,
             signal: controller.signal,
           }),
         { signal: controller.signal },

@@ -629,7 +629,7 @@ export class AgentLifecycleManager {
     const permissionApprovalCapability = resolvePermissionApprovalCapability(provider);
     this.eventRouter.emitWSToUser(threadId, userId, 'agent:status', {
       status: 'running',
-      ...(permissionApprovalCapability ? { permissionApprovalCapability } : {}),
+      permissionApprovalCapability: permissionApprovalCapability || undefined,
     });
   }
 

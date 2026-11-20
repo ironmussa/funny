@@ -66,13 +66,10 @@ export async function registerThread(entry: {
       target: [threads.id],
       set: {
         runnerId: entry.runnerId,
-        ...(entry.title !== undefined ? { title: entry.title } : {}),
-        ...(entry.model !== undefined ? { model: entry.model } : {}),
-        ...(entry.mode !== undefined ? { mode: entry.mode } : {}),
-        // Only overwrite branch if we have a value — the runtime's
-        // data:create_thread may have already set the correct branch
-        // before this upsert runs.
-        ...(entry.branch ? { branch: entry.branch } : {}),
+        title: entry.title !== undefined ? entry.title : undefined,
+        model: entry.model !== undefined ? entry.model : undefined,
+        mode: entry.mode !== undefined ? entry.mode : undefined,
+        branch: entry.branch || undefined,
         updatedAt: now,
       },
     });

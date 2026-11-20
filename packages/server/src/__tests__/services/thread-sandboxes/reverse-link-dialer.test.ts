@@ -31,10 +31,7 @@ const until = async (check: () => boolean, ms = 2_000) => {
 };
 
 const text = (frames: Array<string | Uint8Array>) =>
-  frames
-    .filter((f): f is Uint8Array => typeof f !== 'string')
-    .map((f) => new TextDecoder().decode(f))
-    .join('');
+  frames.flatMap((f) => (typeof f !== 'string' ? [new TextDecoder().decode(f)] : [])).join('');
 
 /** A relay that records each spare with the request that opened it. */
 function startFakeRelay() {

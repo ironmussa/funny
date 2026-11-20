@@ -103,16 +103,18 @@ function withInlineFiles(files: readonly AttachedTextFile[], text: string): stri
  * a "use Read tool" note when the file exceeds the inline cap).
  */
 function collectUploadedRefs(files: readonly AttachedTextFile[]): FileRef[] {
-  return files
-    .filter((f): f is Extract<AttachedTextFile, { mode: 'upload' }> => f.mode === 'upload')
-    .map((f) => ({ path: f.path, type: 'file' as const }));
+  return files.flatMap((f) =>
+    f.mode === 'upload'
+      ? [{ path: (f as Extract<AttachedTextFile, { mode: 'upload' }>).path, type: 'file' as const }]
+      : [],
+  );
 }
 
 /** Staged files (attached before the thread existed): adopted on creation. */
 function collectStagedIds(files: readonly AttachedTextFile[]): string[] {
-  return files
-    .filter((f): f is Extract<AttachedTextFile, { mode: 'staged' }> => f.mode === 'staged')
-    .map((f) => f.stagedId);
+  return files.flatMap((f) =>
+    f.mode === 'staged' ? [(f as Extract<AttachedTextFile, { mode: 'staged' }>).stagedId] : [],
+  );
 }
 
 function nonEmpty<T>(items: T[]): T[] | undefined {
@@ -140,7 +142,7 @@ export function buildPromptPayload(
     symbolReferences: nonEmpty(serialized.symbolReferences),
     stagedUploads: nonEmpty(collectStagedIds(textFiles)),
     attachedFileNames: nonEmpty(
-      textFiles.filter((f) => f.mode === 'upload' || f.mode === 'staged').map((f) => f.name),
+      textFiles.flatMap((f) => (f.mode === 'upload' || f.mode === 'staged' ? [f.name] : [])),
     ),
   };
 }

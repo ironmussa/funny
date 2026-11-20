@@ -177,7 +177,7 @@ describe('threads tRPC procedures', () => {
       const res = await t.app.request(path, {
         method,
         headers: headersFor('user-1'),
-        ...(method === 'PATCH' ? { body: JSON.stringify({ pinned: true, value: 'running' }) } : {}),
+        body: method === 'PATCH' ? JSON.stringify({ pinned: true, value: 'running' }) : undefined,
       });
       expect(res.status).toBe(404);
       expect(await res.json()).toEqual({ error: 'Not found' });

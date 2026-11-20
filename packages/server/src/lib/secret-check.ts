@@ -60,10 +60,9 @@ export function findWeakSecrets(
       ['INGEST_WEBHOOK_SECRET', secrets.INGEST_WEBHOOK_SECRET],
       ['SCHEDULER_AUTH_SECRET', secrets.SCHEDULER_AUTH_SECRET],
     ] as const
-  )
-    .filter(
-      (entry): entry is [SecretName, string] =>
-        typeof entry[1] === 'string' && entry[1].length > 0 && entry[1].length < MIN_SECRET_LENGTH,
-    )
-    .map((entry) => entry[0]);
+  ).flatMap((entry) =>
+    typeof entry[1] === 'string' && entry[1].length > 0 && entry[1].length < MIN_SECRET_LENGTH
+      ? [entry[0]]
+      : [],
+  );
 }

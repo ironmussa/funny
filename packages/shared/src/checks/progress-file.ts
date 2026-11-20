@@ -87,7 +87,7 @@ export function openProgressFile<T extends { updatedAt: number }>(
     status: 'running',
     startedAt,
     updatedAt: startedAt,
-    ...(concurrency ? { concurrency } : {}),
+    concurrency: concurrency || undefined,
   };
   const file = new ThrottledJsonFile(path, build(head), (value, at) => (value.updatedAt = at), {
     intervalMs,

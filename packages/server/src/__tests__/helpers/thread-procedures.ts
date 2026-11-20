@@ -32,11 +32,11 @@ export function threadProcedures(
   userId: string,
   extras?: { orgId?: string },
 ) {
-  const headers = {
+  const headers: Record<string, string> = {
     'X-Test-User-Id': userId,
     'Content-Type': 'application/json',
-    ...(extras?.orgId ? { 'X-Test-Org-Id': extras.orgId } : {}),
   };
+  if (extras?.orgId) headers['X-Test-Org-Id'] = extras.orgId;
   return {
     async query(name: string, input?: unknown): Promise<ProcedureAnswer> {
       const qs = input === undefined ? '' : `?input=${encodeURIComponent(JSON.stringify(input))}`;

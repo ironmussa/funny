@@ -512,7 +512,7 @@ function buildRebaseEvent(steps: GitRebaseReflogStep[]): GitRebaseReflogEvent {
     [...steps].reverse().find((step) => step.action === 'finish' || step.action === 'abort') ??
     null;
   const uniqueCommitHashes = [
-    ...new Set(steps.filter((s) => s.action !== 'start').map((s) => s.hash)),
+    ...new Set(steps.flatMap((s) => (s.action !== 'start' ? [s.hash] : []))),
   ];
   const id = `${start?.selector ?? steps[0]?.selector ?? 'rebase'}..${finish?.selector ?? steps.at(-1)?.selector ?? 'open'}`;
   return {

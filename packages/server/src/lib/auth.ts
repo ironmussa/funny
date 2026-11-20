@@ -112,7 +112,7 @@ function resolveSessionCookieSecure(): { secure: boolean; useSecureCookies?: boo
   if (forceInsecure) {
     return {
       secure: false,
-      ...(httpsBase ? { useSecureCookies: false } : {}),
+      useSecureCookies: httpsBase ? false : undefined,
     };
   }
   if (forceSecure) {

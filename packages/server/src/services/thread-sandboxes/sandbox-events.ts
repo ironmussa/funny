@@ -49,7 +49,7 @@ export function sandboxErrorEventData(
   if (typeof error === 'string') return { phase, message: error };
   const kind = error.kind === 'sandbox' ? error.cause : error.kind;
   const hint = HINTS[kind];
-  return { phase, message: error.message, kind, ...(hint ? { hint } : {}) };
+  return { phase, message: error.message, kind, hint: hint ?? undefined };
 }
 
 interface BrowserEventsPort {

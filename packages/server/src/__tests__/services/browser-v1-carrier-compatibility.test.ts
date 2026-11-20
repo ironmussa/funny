@@ -237,12 +237,9 @@ describe('browser.v1 carrier transport compatibility', () => {
             }
             return decoded.envelope.payload.value;
           });
-          const terminalPayloads = messages
-            .filter((message) => message.payload.case === 'terminal')
-            .map((message) => {
-              if (message.payload.case !== 'terminal') throw new Error('Expected terminal');
-              return message.payload.value.payload;
-            });
+          const terminalPayloads = messages.flatMap((message) =>
+            message.payload.case === 'terminal' ? [message.payload.value.payload] : [],
+          );
           terminalPayloads.sort(
             (left, right) =>
               ['output', 'error', 'exit'].indexOf(left.case ?? '') -

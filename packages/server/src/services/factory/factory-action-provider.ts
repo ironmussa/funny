@@ -237,7 +237,7 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       mode: scope.mode,
       source: 'factory',
       prompt: prompted(opts),
-      ...(opts.model ? { model: opts.model } : {}),
+      model: opts.model ?? undefined,
     });
     const threadId = launched.isOk() ? launched.value.threadId : undefined;
     if (threadId) return { threadId: await recordThread(threadId) };

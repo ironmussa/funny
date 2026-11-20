@@ -85,9 +85,10 @@ function evaluateSwitch(web: BenchmarkResult, gpuix: BenchmarkResult): ScenarioV
 }
 
 function evaluateInteraction(gpuix: BenchmarkResult): ScenarioVerdict {
-  const ratios = ['scroll', 'streaming-update', 'input-present']
-    .map((workload) => summary(gpuix, workload, 'input-to-present')?.over16_67MsRatio)
-    .filter((value): value is number => value !== null && value !== undefined);
+  const ratios = ['scroll', 'streaming-update', 'input-present'].flatMap((workload) => {
+    const value = summary(gpuix, workload, 'input-to-present')?.over16_67MsRatio;
+    return value !== null && value !== undefined ? [value] : [];
+  });
   if (ratios.length !== 3) return missing('all GPUIX input-to-present budget ratios');
   const worst = Math.max(...ratios);
   return {

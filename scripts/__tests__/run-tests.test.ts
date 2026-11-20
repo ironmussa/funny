@@ -20,7 +20,7 @@ function pkg(dir: string, name: string, deps: Record<string, string> = {}, testS
     JSON.stringify({
       name,
       dependencies: deps,
-      ...(testScript ? { scripts: { test: testScript } } : {}),
+      scripts: testScript ? { test: testScript } : undefined,
     }),
   );
 }

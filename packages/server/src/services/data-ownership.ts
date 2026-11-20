@@ -183,9 +183,10 @@ function checkRowRefs({ data, payload }: OwnershipContext): Denial | null {
  */
 async function checkThread({ userId, data, payload }: OwnershipContext): Promise<Denial | null> {
   const threadIds = new Set(
-    [data?.threadId, payload?.threadId, payload?.row?.threadId]
-      .map(nonEmptyString)
-      .filter((v): v is string => v !== undefined),
+    [data?.threadId, payload?.threadId, payload?.row?.threadId].flatMap((v) => {
+      const s = nonEmptyString(v);
+      return s !== undefined ? [s] : [];
+    }),
   );
   for (const threadId of threadIds) {
     const row = await findThread(threadId);

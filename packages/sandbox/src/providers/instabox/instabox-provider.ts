@@ -349,14 +349,12 @@ export function createInstaboxProvider(
       return call('POST', '/v1/machines', {
         headers: { 'Idempotency-Key': req.idempotencyKey },
         body: {
-          ...(req.template ? { snapshotId: req.template.ref } : {}),
-          ...(size ? { vcpus: size.vcpu, memMiB: size.memoryGb * 1024 } : {}),
-          ...(Object.keys(req.env).length ? { env: req.env } : {}),
-          ...(config.autoSuspendAfterSeconds !== undefined
-            ? { autoSuspendAfterSeconds: config.autoSuspendAfterSeconds }
-            : {}),
-          // One-shot safety stop: the disk is kept and a start brings it back.
-          ...(req.lifetimeMs ? { archiveSeconds: deadlineSeconds(req.lifetimeMs) } : {}),
+          snapshotId: req.template ? req.template.ref : undefined,
+          vcpus: size ? size.vcpu : undefined,
+          memMiB: size ? size.memoryGb * 1024 : undefined,
+          env: Object.keys(req.env).length ? req.env : undefined,
+          autoSuspendAfterSeconds: config.autoSuspendAfterSeconds ?? undefined,
+          archiveSeconds: req.lifetimeMs ? deadlineSeconds(req.lifetimeMs) : undefined,
           metadata: { 'funny-thread': req.ownerKey },
         },
       }).andThen(machineHandle);

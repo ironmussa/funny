@@ -49,9 +49,8 @@ export default class ProgressReporter {
       name: testCase.fullName,
       state: STATES[result.state] ?? 'skipped',
       ms: testCase.diagnostic()?.duration ?? 0,
-      ...(result.state === 'failed'
-        ? { error: firstError(result.errors, testCase.module.moduleId) }
-        : {}),
+      error:
+        result.state === 'failed' ? firstError(result.errors, testCase.module.moduleId) : undefined,
     });
   }
 

@@ -17,6 +17,19 @@ import { ResultAsync, errAsync } from 'neverthrow';
 import { log } from '../lib/logger.js';
 import { safeFetchUserUrl } from '../lib/ssrf-guard.js';
 
+async function launcherPost(url: string, body: unknown): Promise<Response> {
+  const res = await safeFetchUserUrl(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const text = await res.text().catch(() => 'Unknown error');
+    throw new Error(`Launcher returned ${res.status}: ${text}`);
+  }
+  return res;
+}
+
 // ── Types ───────────────────────────────────────────────────────
 
 export interface LaunchContainerOptions {
@@ -71,25 +84,15 @@ export function launchContainer(
       // the host's IAM credentials. `safeFetchUserUrl` blocks that range
       // unconditionally while still allowing legitimate LAN launchers.
       return ResultAsync.fromPromise(
-        safeFetchUserUrl(`${launcherUrl}/start`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            containerName,
-            repoMode: 'clone',
-            repoUrl: remoteUrl,
-            repoRef: branch,
-            enableStreaming: false,
-            authMode: 'local',
-            ...(githubToken ? { gitToken: githubToken } : {}),
-          }),
-        }).then(async (res) => {
-          if (!res.ok) {
-            const text = await res.text().catch(() => 'Unknown error');
-            throw new Error(`Launcher returned ${res.status}: ${text}`);
-          }
-          return res.json();
-        }),
+        launcherPost(`${launcherUrl}/start`, {
+          containerName,
+          repoMode: 'clone',
+          repoUrl: remoteUrl,
+          repoRef: branch,
+          enableStreaming: false,
+          authMode: 'local',
+          gitToken: githubToken || undefined,
+        }).then((res) => res.json()),
         (error) => internal(`Failed to start container: ${error}`),
       ).andThen((response: any) => {
         const status = response.container;
@@ -122,16 +125,7 @@ export function stopContainer(options: StopContainerOptions): ResultAsync<void, 
 
   // Security HI-5: see launchContainer.
   return ResultAsync.fromPromise(
-    safeFetchUserUrl(`${launcherUrl}/stop`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ containerName, remove }),
-    }).then(async (res) => {
-      if (!res.ok) {
-        const text = await res.text().catch(() => 'Unknown error');
-        throw new Error(`Launcher returned ${res.status}: ${text}`);
-      }
-    }),
+    launcherPost(`${launcherUrl}/stop`, { containerName, remove }).then(() => {}),
     (error) => internal(`Failed to stop container: ${error}`),
   ).map(() => {
     log.info(`Container stopped: ${containerName}`, { namespace: 'podman' });

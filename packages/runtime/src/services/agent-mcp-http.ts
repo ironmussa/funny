@@ -156,7 +156,7 @@ export function grantAgentMcpHttp(
     type: 'http',
     url: `http://127.0.0.1:${port}/mcp/${spec.name}`,
     headers: { Authorization: `Bearer ${tokenFor(ctx)}` },
-    ...(spec.alwaysLoad ? { alwaysLoad: true as const } : {}),
+    alwaysLoad: spec.alwaysLoad ? (true as const) : undefined,
   };
 }
 

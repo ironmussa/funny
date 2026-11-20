@@ -392,7 +392,7 @@ export class AgentMessageHandler {
       transport: msg.transport,
       toolCallId: msg.toolCallId,
       toolName: msg.toolName,
-      ...(msg.toolInput ? { toolInput: msg.toolInput } : {}),
+      toolInput: msg.toolInput || undefined,
       canAlwaysAllow: msg.canAlwaysAllow,
       canDeny: msg.canDeny,
       requestedAt,
@@ -1077,7 +1077,7 @@ export class AgentMessageHandler {
     await this.threadManager.updateThread(threadId, {
       status: finalStatus,
       cost: msg.total_cost_usd,
-      ...(finalStatus !== 'waiting' ? { completedAt: new Date().toISOString() } : {}),
+      completedAt: finalStatus !== 'waiting' ? new Date().toISOString() : undefined,
     });
 
     // Auto-transition stage to 'review' when agent completes/fails
@@ -1127,11 +1127,11 @@ export class AgentMessageHandler {
       duration: msg.duration_ms,
       status: finalStatus,
       stage: threadWithStage?.stage,
-      ...(finalStatus === 'failed' ? resultErrorFields(msg, providerError) : {}),
-      ...(waitingReason ? { waitingReason } : {}),
-      ...(permReq
-        ? { permissionRequest: { toolName: permReq.toolName, toolInput: permReq.toolInput } }
-        : {}),
+      ...(finalStatus === 'failed' ? resultErrorFields(msg, providerError) : null),
+      waitingReason: waitingReason || undefined,
+      permissionRequest: permReq
+        ? { toolName: permReq.toolName, toolInput: permReq.toolInput }
+        : undefined,
     });
 
     if (permReq) {

@@ -73,10 +73,7 @@ async function connectRunner(relay: ReverseLinkRelay) {
 
 const text = (bytes: Iterable<number>) => new TextDecoder().decode(new Uint8Array([...bytes]));
 const binaryText = (frames: Array<string | Uint8Array>) =>
-  frames
-    .filter((f): f is Uint8Array => typeof f !== 'string')
-    .map((f) => text(f))
-    .join('');
+  frames.flatMap((f) => (typeof f !== 'string' ? [text(f)] : [])).join('');
 
 describe('reverse link relay', () => {
   test('a runner connection takes a spare, which is announced and then pipes both ways', async () => {

@@ -145,30 +145,30 @@ export function normalizeRunnerOperationValue(
         threadId: normalized.threadId,
         role: normalized.role,
         content: normalized.content,
-        ...(imagesJson == null ? {} : { imagesJson }),
-        ...(normalized.model == null ? {} : { model: normalized.model }),
-        ...(normalized.permissionMode == null ? {} : { permissionMode: normalized.permissionMode }),
-        ...(normalized.effort == null ? {} : { effort: normalized.effort }),
-        ...(normalized.author == null ? {} : { author: normalized.author }),
-        ...(normalized.timestamp == null ? {} : { timestamp: normalized.timestamp }),
+        imagesJson: imagesJson ?? undefined,
+        model: normalized.model ?? undefined,
+        permissionMode: normalized.permissionMode ?? undefined,
+        effort: normalized.effort ?? undefined,
+        author: normalized.author ?? undefined,
+        timestamp: normalized.timestamp ?? undefined,
       });
     }
     case 'createPermissionRule':
       return normalizeProtobufJson({
         projectPath: normalized.projectPath,
         toolName: normalized.toolName,
-        ...(normalized.pattern == null ? {} : { pattern: normalized.pattern }),
+        pattern: normalized.pattern ?? undefined,
         decision: normalized.decision,
       });
     case 'findPermissionRule':
       return normalizeProtobufJson({
         projectPath: normalized.projectPath,
         toolName: normalized.toolName,
-        ...(normalized.toolInput == null ? {} : { toolInput: normalized.toolInput }),
+        toolInput: normalized.toolInput ?? undefined,
       });
     case 'listPermissionRules':
       return normalizeProtobufJson({
-        ...(normalized.projectPath == null ? {} : { projectPath: normalized.projectPath }),
+        projectPath: normalized.projectPath ?? undefined,
       });
     default:
       return normalized;
@@ -321,9 +321,8 @@ const OPERATION_MAPPINGS: Record<RunnerOperationEventType, OperationMapping> = {
     (_input, payload) => ({
       watcherId: payload.id,
       patch: payload.patch,
-      ...(payload.expectedNextWakeAt !== undefined
-        ? { expectedNextWakeAtMs: String(payload.expectedNextWakeAt) }
-        : {}),
+      expectedNextWakeAtMs:
+        payload.expectedNextWakeAt !== undefined ? String(payload.expectedNextWakeAt) : undefined,
     }),
   ],
   'data:watcher_delete_by_thread': ['watcherDeleteByThread', payloadThreadId],
@@ -462,9 +461,9 @@ export class GrpcOperationsAdapter {
       this.send(correlationId, item.kind, item.value, item.idempotencyKey);
     }
     const liveKeys = new Set(
-      [...this.pending.values()]
-        .map((item) => item.idempotencyKey)
-        .filter((key): key is string => Boolean(key)),
+      [...this.pending.values()].flatMap((item) =>
+        item.idempotencyKey ? [item.idempotencyKey] : [],
+      ),
     );
     for (const item of this.outbox.pending()) {
       if (!liveKeys.has(item.idempotencyKey)) {
@@ -508,7 +507,7 @@ export class GrpcOperationsAdapter {
       metadata: {
         correlationId,
         deadline: new Date(Date.now() + OPERATION_TIMEOUT_MS).toISOString(),
-        ...(idempotencyKey ? { idempotencyKey } : {}),
+        ...(idempotencyKey ? { idempotencyKey } : undefined),
       },
       [kind]: normalizeRunnerOperationValue(kind, value as Record<string, any>),
     });

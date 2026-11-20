@@ -92,7 +92,7 @@ export function sendBrowserSessionRealtime(
         case: 'close',
         value: {
           reason: command.reason ?? 'user',
-          ...(command.closeId ? { closeId: command.closeId } : {}),
+          closeId: command.closeId || undefined,
         },
       };
       break;

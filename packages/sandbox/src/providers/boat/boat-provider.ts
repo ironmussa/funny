@@ -227,7 +227,7 @@ export function createBoatProvider(
         headers: { 'Idempotency-Key': req.idempotencyKey },
         body: {
           type: req.sizeId,
-          ...(req.template ? { from: req.template.ref } : {}),
+          from: req.template ? req.template.ref : undefined,
           env: req.env,
           name: `funny-${req.ownerKey}`,
           ttlSeconds: ttlSeconds(req.lifetimeMs) ?? null,
@@ -305,10 +305,12 @@ export function createBoatProvider(
     listTemplates: () =>
       call('GET', '/saved-snapshots').map((body): TemplateRef[] => {
         const items: any[] = body?.savedSnapshots ?? body?.snapshots ?? body?.items ?? [];
-        return items
-          .map((item) => String(item?.name ?? ''))
-          .filter((name) => name.startsWith(TEMPLATE_PREFIX))
-          .map((name) => ({ providerId: BOAT_PROVIDER_ID, ref: name }));
+        return items.flatMap((item) => {
+          const name = String(item?.name ?? '');
+          return name.startsWith(TEMPLATE_PREFIX)
+            ? [{ providerId: BOAT_PROVIDER_ID, ref: name }]
+            : [];
+        });
       }),
 
     deleteTemplate: (template) =>

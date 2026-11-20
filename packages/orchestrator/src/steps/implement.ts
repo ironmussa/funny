@@ -88,9 +88,9 @@ export async function runImplementStep(
         report(`workflow.step.${progress.status}`, {
           ...workflowEvent,
           step_name: stepId,
-          ...(progress.error ? { error: progress.error } : {}),
+          error: progress.error || undefined,
         }),
-      (source, path) => report('factory.workflow_selected', { source, ...(path ? { path } : {}) }),
+      (source, path) => report('factory.workflow_selected', { source, path: path || undefined }),
     );
   } catch (err) {
     // Whatever went wrong, the step still ends with an outcome and a marker.

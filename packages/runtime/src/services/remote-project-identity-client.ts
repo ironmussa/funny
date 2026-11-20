@@ -59,7 +59,7 @@ class RemoteProjectIdentityClient {
   /** Project token override when `projectId` has one, else the user's PAT. */
   async getGithubToken(userId: string, projectId?: string): Promise<string | null> {
     return (
-      (await this.request('data:get_github_token', { userId, ...(projectId ? { projectId } : {}) }))
+      (await this.request('data:get_github_token', { userId, projectId: projectId || undefined }))
         ?.token ?? null
     );
   }

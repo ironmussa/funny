@@ -117,16 +117,16 @@ function toPipelineConfig(row: any): PipelineConfig {
     precommitFixEnabled: !!row.precommitFixEnabled,
     precommitFixModel: row.precommitFixModel as AgentModel,
     precommitFixMaxIterations: row.precommitFixMaxIterations,
-    ...(row.reviewerPrompt ? { reviewerPrompt: row.reviewerPrompt } : {}),
-    ...(row.correctorPrompt ? { correctorPrompt: row.correctorPrompt } : {}),
-    ...(row.precommitFixerPrompt ? { precommitFixerPrompt: row.precommitFixerPrompt } : {}),
-    ...(row.commitMessagePrompt ? { commitMessagePrompt: row.commitMessagePrompt } : {}),
+    reviewerPrompt: row.reviewerPrompt || undefined,
+    correctorPrompt: row.correctorPrompt || undefined,
+    precommitFixerPrompt: row.precommitFixerPrompt || undefined,
+    commitMessagePrompt: row.commitMessagePrompt || undefined,
     testEnabled: !!row.testEnabled,
     testCommand: row.testCommand ?? undefined,
     testFixEnabled: !!row.testFixEnabled,
     testFixModel: (row.testFixModel as AgentModel) || 'sonnet',
     testFixMaxIterations: row.testFixMaxIterations ?? 3,
-    ...(row.testFixerPrompt ? { testFixerPrompt: row.testFixerPrompt } : {}),
+    testFixerPrompt: row.testFixerPrompt || undefined,
   };
 }
 
@@ -301,11 +301,11 @@ export async function startPipelineRun(opts: {
   // Resolve agent definitions for THIS run (model overrides, custom prompts).
   const reviewer = resolveAgent(BUILTIN_AGENTS.reviewer, {
     model: pipeline.reviewModel,
-    ...(pipeline.reviewerPrompt ? { systemPrompt: pipeline.reviewerPrompt } : {}),
+    systemPrompt: pipeline.reviewerPrompt || undefined,
   });
   const corrector = resolveAgent(BUILTIN_AGENTS.corrector, {
     model: pipeline.fixModel,
-    ...(pipeline.correctorPrompt ? { systemPrompt: pipeline.correctorPrompt } : {}),
+    systemPrompt: pipeline.correctorPrompt || undefined,
   });
 
   // Load and compile the YAML-defined code-review pipeline. The loader

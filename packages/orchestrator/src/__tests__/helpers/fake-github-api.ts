@@ -175,11 +175,8 @@ export function fakeGithubApi(options: {
   const repoRoutes: Route = (method, url, body) => {
     const rest = url.pathname.slice(`/repos/${options.repo}`.length);
     if (rest === '' && method === 'GET') {
-      return json(200, {
-        full_name: options.repo,
-        default_branch: options.defaultBranch ?? 'main',
-        ...(api.hideMergeSettings ? {} : repoSettings),
-      });
+      const base = { full_name: options.repo, default_branch: options.defaultBranch ?? 'main' };
+      return json(200, api.hideMergeSettings ? base : { ...base, ...repoSettings });
     }
     if (rest === '/issues' && method === 'GET') {
       const label = url.searchParams.get('labels');

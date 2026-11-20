@@ -65,10 +65,7 @@ ingestRoutes.post(
 
     try {
       const result = await handleIngestEvent(body);
-      return c.json(
-        { status: 'ok', ...(result.threadId ? { thread_id: result.threadId } : {}) },
-        200,
-      );
+      return c.json({ status: 'ok', thread_id: result.threadId || undefined }, 200);
     } catch (err: any) {
       log.error('Error processing ingest event', {
         namespace: 'ingest',

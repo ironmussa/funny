@@ -12,6 +12,7 @@
  */
 
 import type { ConcurrencyGate } from './gate.js';
+import type { Journal, ResumeInfo } from './journal.js';
 import { runGraph } from './scheduler.js';
 
 // ── Types ────────────────────────────────────────────────────
@@ -30,6 +31,19 @@ export interface NodeRunInfo {
    * (always 1 outside loops). Hosts expose it to templates as `LOOP_ITERATION`.
    */
   iteration: number;
+  /**
+   * The visits of every loop region around the node, outermost first, joined
+   * by dots ("1" outside loops). Identifies this execution in the journal.
+   */
+  visit: string;
+  /**
+   * Set when the run resumes an execution that started but never finished:
+   * what was recorded for it, including what it checkpointed, so the node can
+   * adopt the work it had started.
+   */
+  resume?: ResumeInfo;
+  /** Record data about the work in progress (e.g. the thread started) in the journal. */
+  checkpoint(data: unknown): Promise<void>;
 }
 
 /**
@@ -222,6 +236,11 @@ export interface PipelineRunOptions<T> {
    * every run of the process (`defaultConcurrencyGate`).
    */
   gate?: ConcurrencyGate;
+  /**
+   * Records node executions, and replays the recorded ones when the run
+   * starts (see `journal.ts`). Without one, nothing is recorded or resumed.
+   */
+  journal?: Journal<T>;
   /** Identifies the run in slot holders (`<runId>/<nodeId>/<visit>`). Default: a random id. */
   runId?: string;
   /** Override maxIterations of the pipeline-level `loop` (not of node loops). */

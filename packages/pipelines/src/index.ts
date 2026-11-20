@@ -55,6 +55,10 @@ export type {
 export { createMemoryConcurrencyGate, defaultConcurrencyGate } from './gate.js';
 export type { ConcurrencyGate, MemoryGateOptions, SlotRequest, SlotRelease } from './gate.js';
 
+// ── Execution journal ───────────────────────────────────────
+export { createMemoryJournal } from './journal.js';
+export type { ExecutionStatus, Journal, JournalEntry, ResumeInfo } from './journal.js';
+
 // ── Progress reporting types ────────────────────────────────
 export type {
   StepStatus,

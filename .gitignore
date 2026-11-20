@@ -56,3 +56,6 @@ fallow-viz.html
 
 # Local git worktrees created by funny
 .funny-worktrees/
+
+# FUSE placeholders for files deleted while still open (ntfs-3g mounts)
+.fuse_hidden*

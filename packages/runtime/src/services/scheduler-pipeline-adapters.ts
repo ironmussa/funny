@@ -127,6 +127,10 @@ export class YamlContextBuilder implements ContextBuilder<YamlPipelineContext> {
       outputs: {},
     };
   }
+
+  progressOf(ctx: YamlPipelineContext): ProgressReporter {
+    return ctx.progress;
+  }
 }
 
 class MultiplexProgressReporter implements ProgressReporter {

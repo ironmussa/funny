@@ -6,7 +6,9 @@ export type WorkflowNodeRunStatus =
   | 'completed'
   | 'skipped'
   | 'failed'
-  | 'waiting_approval';
+  | 'waiting_approval'
+  /** Waiting for a slot of its concurrency group (another run holds it). */
+  | 'waiting_slot';
 
 export interface WorkflowDiagnostic {
   path: string;

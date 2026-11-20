@@ -11,14 +11,11 @@ import {
   type ParsedNode,
   type ParsedWorkflow,
   type WorkflowGraph,
-  type WorkflowGraphNodeData,
 } from '@funny/workflows/browser';
 import {
   Background,
   Controls,
-  Handle,
   MiniMap,
-  Position,
   ReactFlow,
   ReactFlowProvider,
   addEdge,
@@ -26,16 +23,11 @@ import {
   useNodesState,
   type Connection,
   type Edge,
-  type Node,
-  type NodeProps,
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import {
   AlertCircle,
-  Circle,
-  CircleCheck,
   CircleDashed,
-  CircleX,
   GitBranch,
   Play,
   RefreshCw,
@@ -56,12 +48,7 @@ import { useAppStore } from '@/stores/app-store';
 import { useActiveThreadView } from '@/stores/thread-context';
 import { useWorkflowRunStore } from '@/stores/workflow-run-store';
 
-type WorkflowNodeData = WorkflowGraphNodeData &
-  Record<string, unknown> & {
-    runStatus?: string;
-    dimmed?: boolean;
-  };
-type WorkflowNode = Node<WorkflowNodeData, 'workflowNode'>;
+import { decorateGraph, WorkflowNodeView, type WorkflowNode } from './workflows/WorkflowNodeView';
 
 const nodeTypes = { workflowNode: WorkflowNodeView };
 
@@ -659,43 +646,6 @@ function SourcePanel({
   );
 }
 
-function WorkflowNodeView({ data }: NodeProps<WorkflowNode>) {
-  const status = data.runStatus;
-  const StatusIcon =
-    status === 'completed'
-      ? CircleCheck
-      : status === 'failed'
-        ? CircleX
-        : status === 'running' || status === 'waiting_approval'
-          ? CircleDashed
-          : status === 'skipped'
-            ? Circle
-            : Circle;
-
-  return (
-    <div
-      className={cn(
-        'border-border bg-background min-w-52 rounded-md border p-3 shadow-sm',
-        data.dimmed && 'opacity-35',
-        status === 'running' && 'border-status-info',
-        status === 'waiting_approval' && 'border-status-warning',
-        status === 'completed' && 'border-status-success',
-        status === 'failed' && 'border-status-error',
-      )}
-    >
-      <Handle type="target" position={Position.Left} />
-      <div className="flex items-start gap-2">
-        <StatusIcon className="mt-0.5 size-4 shrink-0" />
-        <div className="min-w-0">
-          <div className="truncate text-sm font-medium">{data.label}</div>
-          <div className="text-muted-foreground truncate text-xs">{data.actionType}</div>
-        </div>
-      </div>
-      <Handle type="source" position={Position.Right} />
-    </div>
-  );
-}
-
 function applyDefinition(
   definition: WorkflowDefinitionResponse,
   setters: {
@@ -730,28 +680,9 @@ function applyGraph(
   runStates: ReturnType<typeof useWorkflowRunStore.getState>['runs'][string] | undefined,
   filter: string,
 ) {
-  const normalized = filter.trim().toLowerCase();
-  setNodes(
-    (graph.nodes as WorkflowNode[]).map((node) => ({
-      ...node,
-      data: {
-        ...node.data,
-        runStatus: runStates?.[node.id]?.status,
-        dimmed:
-          normalized.length > 0 &&
-          !`${node.id} ${node.data.actionType}`.toLowerCase().includes(normalized),
-      },
-    })),
-  );
-  setEdges(
-    // SAFETY: both graph sources are built by workflowToGraph, whose edges carry `kind`.
-    (graph.edges as Array<Edge & { kind?: string }>).map(({ kind, ...edge }) => ({
-      ...edge,
-      // The label of a loop edge carries its max iterations, so match on the kind.
-      animated: kind === 'loop',
-      type: kind === 'loop' ? 'smoothstep' : undefined,
-    })),
-  );
+  const { nodes, edges } = decorateGraph(graph, runStates, filter);
+  setNodes(nodes);
+  setEdges(edges);
 }
 
 function actionOf(node: ParsedNode): { type: keyof ParsedNode; value: unknown } {

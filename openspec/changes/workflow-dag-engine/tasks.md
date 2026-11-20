@@ -33,7 +33,7 @@
 
 ## 5. Client and docs
 
-- [ ] 5.1 Run and flow views draw loop regions, joins, groups and the `waiting_slot` state with `data-testid`s; verify with component tests and a story
+- [x] 5.1 Run and flow views draw loop regions, joins, groups and the `waiting_slot` state with `data-testid`s; verify with component tests and a story (the workflows canvas; the factory's linear step list shows `waiting_slot` with the merge queue in `factory-integration`)
 - [ ] 5.2 Update the openwiki pipelines / automation page (graph semantics, loops, joins, groups, journal); verify its file references exist
 
 ## 6. Integration

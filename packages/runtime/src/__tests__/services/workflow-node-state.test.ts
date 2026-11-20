@@ -49,6 +49,28 @@ describe('RuntimeProgressReporter workflow node state', () => {
     );
   });
 
+  test('a node waiting for its concurrency group slot is emitted as waiting_slot', () => {
+    const reporter = new RuntimeProgressReporter({
+      userId: 'user-1',
+      threadId: 'thread-1',
+      runId: 'run-1',
+      workflowName: 'merge-queue',
+    });
+
+    reporter.onStepProgress('merge', {
+      status: 'pending',
+      metadata: { workflowStatus: 'waiting_slot' },
+    });
+
+    expect(emitToUser).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({
+        type: 'workflow:node_state',
+        data: expect.objectContaining({ nodeId: 'merge', status: 'waiting_slot' }),
+      }),
+    );
+  });
+
   test('emits skipped, failed, and repeated loop node states', () => {
     const reporter = new RuntimeProgressReporter({
       userId: 'user-1',

@@ -90,6 +90,13 @@ export interface ContextBuildMeta {
  */
 export interface ContextBuilder<C> {
   build(input: DispatchInput, progress: ProgressReporter, meta?: ContextBuildMeta): C;
+  /**
+   * The reporter a built context reports its steps through. The dispatcher
+   * reports there what the engine sees before a step runs (a node waiting for
+   * its concurrency group's slot). Without it, only the dispatcher's own
+   * reporter hears of it.
+   */
+  progressOf?(ctx: C): ProgressReporter;
 }
 
 export interface DispatcherLogger {
@@ -215,9 +222,21 @@ export class SchedulerPipelineDispatcher<C> {
       projectId: input.projectId,
     });
 
+    const stepReporter = this.contextBuilder.progressOf?.(ctx) ?? reporter;
     void runPipeline<C>(definition, ctx, {
+      runId: pipelineRunId,
       signal: controller.signal,
-      onStateChange: () => touch(),
+      onStateChange: (change) => {
+        touch();
+        // A node waiting for a slot has not started its action, so nothing
+        // else reports it.
+        if (change.kind === 'waiting_slot') {
+          stepReporter.onStepProgress(change.nodeName, {
+            status: 'pending',
+            metadata: { workflowStatus: 'waiting_slot' },
+          });
+        }
+      },
     })
       .then((result) => {
         if (result.outcome === 'completed') {

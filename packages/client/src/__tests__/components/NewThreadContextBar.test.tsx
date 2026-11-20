@@ -2,6 +2,7 @@ import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { okAsync, ResultAsync } from 'neverthrow';
 import { beforeEach, expect, test, vi } from 'vitest';
 
+import { PromptContextBar } from '@/components/prompt-input/PromptChrome';
 import { NewThreadContextBar } from '@/components/thread/NewThreadContextBar';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { seedProjects } from '@/data/projects/testing';
@@ -126,6 +127,23 @@ test('keeps the selected branch when checkout is cancelled', async () => {
   await waitFor(() => expect(ensureBranch).toHaveBeenCalledWith('one', 'develop'));
   expect(branchState.setSelectedBranch).not.toHaveBeenCalled();
   expect(screen.getByTestId('new-thread-branch-picker')).toHaveTextContent('main');
+});
+
+test('in worktree mode picks the base branch without checking it out', async () => {
+  render(
+    <TooltipProvider>
+      <PromptContextBar show createWorktree>
+        <NewThreadContextBar projectId="one" />
+      </PromptContextBar>
+    </TooltipProvider>,
+  );
+  fireEvent.click(screen.getByTestId('new-thread-branch-picker'));
+  const search = await screen.findByRole('textbox');
+  fireEvent.change(search, { target: { value: 'develop' } });
+  fireEvent.keyDown(search, { key: 'ArrowDown' });
+  fireEvent.keyDown(search, { key: 'Enter' });
+  await waitFor(() => expect(branchState.setSelectedBranch).toHaveBeenCalledWith('develop'));
+  expect(ensureBranch).not.toHaveBeenCalled();
 });
 
 test('omits the remote segment for a local-only project', async () => {

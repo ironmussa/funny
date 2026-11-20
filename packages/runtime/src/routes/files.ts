@@ -9,7 +9,7 @@ import { mkdir, readFile, writeFile, stat, realpath } from 'fs/promises';
 import { homedir, tmpdir } from 'os';
 import { basename, dirname, join, normalize, resolve, sep } from 'path';
 
-import { WORKTREE_DIR_NAME, getBlame, getFileHistory } from '@funny/core/git';
+import { getBlame, getFileHistory, getWorktreeBasePaths } from '@funny/core/git';
 import { MEDIA_SIG_PARAMS, verifyMediaUrl } from '@funny/shared/auth/media-url-signature';
 import { badRequest, internal, notFound } from '@funny/shared/errors';
 import { Hono, type Context } from 'hono';
@@ -82,14 +82,12 @@ async function resolveProjectScope(
   const projects = await getServices().projects.listProjects(userId);
   for (const project of projects) {
     const projectPath = normalize(resolve(project.path));
-    const worktreeBase = normalize(
-      resolve(dirname(projectPath), WORKTREE_DIR_NAME, basename(projectPath)),
-    );
-    const inProject =
-      normalizedTarget === projectPath || normalizedTarget.startsWith(projectPath + sep);
-    const inWorktree =
-      normalizedTarget === worktreeBase || normalizedTarget.startsWith(worktreeBase + sep);
-    if (inProject || inWorktree) return { projectPath, worktreeBase };
+    const bases = getWorktreeBasePaths(projectPath).map((base) => normalize(base));
+    const isUnder = (scope: string) =>
+      normalizedTarget === scope || normalizedTarget.startsWith(scope + sep);
+    const worktreeBase = bases.find(isUnder);
+    if (worktreeBase) return { projectPath, worktreeBase };
+    if (isUnder(projectPath)) return { projectPath, worktreeBase: bases[0] };
   }
 
   return null;

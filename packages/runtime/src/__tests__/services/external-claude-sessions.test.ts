@@ -13,6 +13,7 @@ import {
   syncExternalClaudeSessionThreads,
 } from '../../services/external-claude-sessions.js';
 import { resetServices, setServices } from '../../services/service-registry.js';
+import { buildProject, buildThreadRecord, createServiceProviderFake } from '../helpers/builders.js';
 
 const tempDirs: string[] = [];
 
@@ -163,18 +164,22 @@ describe('external Claude sessions', () => {
     const insertMessage = vi.fn(async () => 'message-1');
     const emitToUser = vi.fn();
 
-    setServices({
-      projects: {
-        listProjects: vi.fn(async () => [{ id: 'project-1', name: 'funny', path: cwd }]),
-      },
-      threads: {
-        getThreadByExternalRequestId: vi.fn(async () => undefined),
-        getThreadBySessionId: vi.fn(async () => undefined),
-        createThread,
-        insertMessage,
-      },
-      wsBroker: { emitToUser },
-    } as any);
+    setServices(
+      createServiceProviderFake({
+        projects: {
+          listProjects: vi.fn(async () => [
+            buildProject({ id: 'project-1', name: 'funny', path: cwd }),
+          ]),
+        },
+        threads: {
+          getThreadByExternalRequestId: vi.fn(async () => undefined),
+          getThreadBySessionId: vi.fn(async () => undefined),
+          createThread,
+          insertMessage,
+        },
+        wsBroker: { emitToUser },
+      }),
+    );
 
     const result = await syncExternalClaudeSessionThreads(
       { userId: 'user-1', projectId: 'project-1' },
@@ -234,18 +239,22 @@ describe('external Claude sessions', () => {
     );
     const createThread = vi.fn(async (_thread: Record<string, any>) => undefined);
 
-    setServices({
-      projects: {
-        listProjects: vi.fn(async () => [{ id: 'project-1', name: 'funny', path: cwd }]),
-      },
-      threads: {
-        getThreadByExternalRequestId: vi.fn(async () => undefined),
-        getThreadBySessionId: vi.fn(async () => undefined),
-        createThread,
-        insertMessage: vi.fn(),
-      },
-      wsBroker: { emitToUser: vi.fn() },
-    } as any);
+    setServices(
+      createServiceProviderFake({
+        projects: {
+          listProjects: vi.fn(async () => [
+            buildProject({ id: 'project-1', name: 'funny', path: cwd }),
+          ]),
+        },
+        threads: {
+          getThreadByExternalRequestId: vi.fn(async () => undefined),
+          getThreadBySessionId: vi.fn(async () => undefined),
+          createThread,
+          insertMessage: vi.fn(),
+        },
+        wsBroker: { emitToUser: vi.fn() },
+      }),
+    );
 
     const result = await syncExternalClaudeSessionThreads(
       { userId: 'user-1', projectId: 'project-1' },
@@ -265,17 +274,24 @@ describe('external Claude sessions', () => {
     const createThread = vi.fn();
     const insertMessage = vi.fn();
     const getThreadByExternalRequestId = vi.fn(async () => ({ id: 'duplicate' }));
-    setServices({
-      projects: { listProjects: vi.fn(async () => [{ id: 'project-1', path: cwd }]) },
-      threads: {
-        getThreadBySessionId: vi.fn(async () => original),
-        getThreadByExternalRequestId,
-        getThreadWithMessages: vi.fn(async () => ({ messages: [{ content: 'existing' }] })),
-        createThread,
-        insertMessage,
-      },
-      wsBroker: { emitToUser: vi.fn() },
-    } as any);
+    setServices(
+      createServiceProviderFake({
+        projects: {
+          listProjects: vi.fn(async () => [buildProject({ id: 'project-1', path: cwd })]),
+        },
+        threads: {
+          getThreadBySessionId: vi.fn(async () => original),
+          getThreadByExternalRequestId,
+          getThreadWithMessages: vi.fn(async () => ({
+            ...buildThreadRecord({ id: 'original' }),
+            messages: [{ content: 'existing' }],
+          })),
+          createThread,
+          insertMessage,
+        },
+        wsBroker: { emitToUser: vi.fn() },
+      }),
+    );
     for (let i = 0; i < 2; i++) {
       expect(
         await syncExternalClaudeSessionThreads(
@@ -332,21 +348,25 @@ describe('external Claude sessions', () => {
       .mockResolvedValueOnce('message-user')
       .mockResolvedValueOnce('message-assistant');
 
-    setServices({
-      projects: {
-        listProjects: vi.fn(async () => [{ id: 'project-1', name: 'funny', path: cwd }]),
-      },
-      threads: {
-        getThreadByExternalRequestId: vi.fn(async () => shell),
-        getThreadBySessionId: vi.fn(async () => undefined),
-        getThreadWithMessages: vi.fn(async () => ({ ...shell, messages: [] })),
-        createThread,
-        insertMessage,
-        insertToolCall: vi.fn(async () => 'tool-call-1'),
-        updateToolCallOutput: vi.fn(async () => undefined),
-      },
-      wsBroker: { emitToUser: vi.fn() },
-    } as any);
+    setServices(
+      createServiceProviderFake({
+        projects: {
+          listProjects: vi.fn(async () => [
+            buildProject({ id: 'project-1', name: 'funny', path: cwd }),
+          ]),
+        },
+        threads: {
+          getThreadByExternalRequestId: vi.fn(async () => shell),
+          getThreadBySessionId: vi.fn(async () => undefined),
+          getThreadWithMessages: vi.fn(async () => ({ ...shell, messages: [] })),
+          createThread,
+          insertMessage,
+          insertToolCall: vi.fn(async () => 'tool-call-1'),
+          updateToolCallOutput: vi.fn(async () => undefined),
+        },
+        wsBroker: { emitToUser: vi.fn() },
+      }),
+    );
 
     const result = await importExternalClaudeSession(
       { sessionId, userId: 'user-1', projectId: 'project-1' },

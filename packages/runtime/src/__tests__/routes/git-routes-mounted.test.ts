@@ -1,4 +1,5 @@
 import { statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 
 import { badRequest } from '@funny/shared/errors';
 import { Hono } from 'hono';
@@ -6,6 +7,10 @@ import { errAsync, okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { HonoEnv } from '../../types/hono-env.js';
+
+const realFs = await vi.importActual<typeof import('node:fs')>('node:fs');
+/** Real `Stats` for a directory, so the mocked statSync answers like the real one. */
+const DIRECTORY_STATS = realFs.statSync(tmpdir());
 
 const mocks = vi.hoisted(() => ({
   getThread: vi.fn(),
@@ -182,7 +187,7 @@ function makeApp() {
 
 describe('gitRoutes (mounted)', () => {
   beforeEach(() => {
-    vi.mocked(statSync).mockReturnValue({ isDirectory: () => true } as ReturnType<typeof statSync>);
+    vi.mocked(statSync).mockReturnValue(DIRECTORY_STATS);
     vi.clearAllMocks();
     mocks.stageFiles.mockReturnValue(okAsync(undefined));
     mocks.gitServiceStage.mockReturnValue(okAsync(undefined));

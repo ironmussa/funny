@@ -42,3 +42,7 @@ export const AllSizes: Story = {
     </div>
   ),
 };
+
+export const Plain: Story = {
+  args: { branch: 'feature/add-auth', variant: 'plain' },
+};

@@ -19,11 +19,11 @@ beforeAll(async () => {
 });
 
 function seed(contents: Record<string, string>) {
-  seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+  seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
   let n = 0;
   for (const [threadId, content] of Object.entries(contents)) {
-    seedThread(t.db as any, { id: threadId, projectId: 'p1', userId: 'user-1' });
-    seedMessage(t.db as any, {
+    seedThread(t.db, { id: threadId, projectId: 'p1', userId: 'user-1' });
+    seedMessage(t.db, {
       id: `m-${threadId}`,
       threadId,
       content,
@@ -35,12 +35,12 @@ function seed(contents: Record<string, string>) {
 /** Message ids the SQL prefilter lets through (what gets loaded into JS). */
 function prefiltered(query: string): string[] {
   const { schema, db } = t;
-  return (db as any)
+  return db
     .select({ id: schema.messages.id })
     .from(schema.messages)
     .where(repo.contentPrefilter(query))
     .all()
-    .map((r: { id: string }) => r.id)
+    .map((r) => r.id)
     .sort();
 }
 
@@ -83,8 +83,8 @@ describe('contentPrefilter (case-insensitive)', () => {
   test('keeps a message for every character that folds onto ASCII or is erased', () => {
     // Exhaustive: any such character inside an ASCII word must not hide the
     // word from SQL, since the JS check (normalizeSearchText) ignores it.
-    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
     const ids: string[] = [];
     const rows: (typeof t.schema.messages.$inferInsert)[] = [];
     for (let cp = 0x80; cp <= 0x10ffff; cp++) {
@@ -99,7 +99,7 @@ describe('contentPrefilter (case-insensitive)', () => {
       rows.push({ id, threadId: 't1', role: 'user', content, timestamp: '2026-01-01T00:00:00Z' });
     }
     for (let i = 0; i < rows.length; i += 500) {
-      (t.db as any)
+      t.db
         .insert(t.schema.messages)
         .values(rows.slice(i, i + 500))
         .run();
@@ -132,8 +132,8 @@ describe('search results', () => {
   });
 
   test('searchThreadMessages pages past the first batch without repeats', async () => {
-    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
     const rows = Array.from({ length: 1200 }, (_, i) => ({
       id: `m${String(i).padStart(4, '0')}`,
       threadId: 't1',
@@ -144,7 +144,7 @@ describe('search results', () => {
       timestamp: new Date(Date.UTC(2026, 0, 1, 0, 0, Math.floor(i / 7))).toISOString(),
     }));
     for (let i = 0; i < rows.length; i += 500) {
-      (t.db as any)
+      t.db
         .insert(t.schema.messages)
         .values(rows.slice(i, i + 500))
         .run();

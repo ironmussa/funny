@@ -11,13 +11,9 @@ import { getNativeGit } from '@funny/core/git';
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 
 import { startWatching, stopWatching } from '../../services/git-watcher-service.js';
-import type { RuntimeServiceProvider } from '../../services/service-provider.js';
 import { resetServices, setServices } from '../../services/service-registry.js';
-
-function stub<T>(p: Record<string, any>): T {
-  return p as T;
-}
 import { threadEventBus } from '../../services/thread-event-bus.js';
+import { buildThreadRecord, createServiceProviderFake } from '../helpers/builders.js';
 
 const nativeAvailable = getNativeGit() !== null;
 const TMP = resolve(tmpdir(), 'runtime-git-watcher-' + Date.now());
@@ -56,8 +52,8 @@ describe.skipIf(!nativeAvailable)('git watcher fingerprint filtering', () => {
 
     resetServices();
     setServices(
-      stub<RuntimeServiceProvider>({
-        threads: { getThread: async () => ({ baseBranch: 'master' }) },
+      createServiceProviderFake({
+        threads: { getThread: async () => buildThreadRecord({ baseBranch: 'master' }) },
       }),
     );
 

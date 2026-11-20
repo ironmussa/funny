@@ -193,7 +193,9 @@ describe('IssuesTab remote checks', () => {
     expect(screen.getByTestId('issue-detail-title')).toHaveTextContent('Crash on start');
     expect(await screen.findByTestId('issue-detail-comment-99')).toBeInTheDocument();
     expect(apiMock.githubIssueComments).toHaveBeenCalledWith('project-1', 7);
-  });
+    // The first dialog open loads MarkdownBody cold, which can pass 5 s when the
+    // pre-push runs many test files in parallel.
+  }, 15_000);
 });
 
 const issue = (number: number, state: 'open' | 'closed' = 'open') => ({
@@ -235,6 +237,8 @@ const factoryRun = (over: Partial<FactoryRun>): FactoryRun => ({
   waitReason: null,
   flowSteps: [],
   failureReason: null,
+  admittedAt: null,
+  metrics: { ciRounds: 0, ciRed: 0, conflicts: 0, ciBlocked: 0, ciTimeouts: 0, agentFixes: 0 },
   ...over,
 });
 

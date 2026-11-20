@@ -10,8 +10,9 @@ import { IdleReaper, loadIdleReaperConfig } from '../../services/idle-reaper.js'
  */
 function fakeOrch(sequences: string[][]) {
   let i = 0;
+  const reaped: string[] = [];
   return {
-    reaped: [] as string[],
+    reaped,
     getIdleCandidates(): string[] {
       const r = sequences[Math.min(i, sequences.length - 1)] ?? [];
       i++;

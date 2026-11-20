@@ -13,11 +13,13 @@ process.env.RUNNER_AUTH_SECRET = 'test-secret';
 import { MEDIA_SIG_PARAMS, verifyMediaUrl } from '@funny/shared/auth/media-url-signature';
 import { deriveRunnerForwardingKey, deriveRunnerMediaKey } from '@funny/shared/auth/runner-keys';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import type { ServerEnv } from '../../lib/types.js';
 import { mediaRoutes } from '../../routes/media.js';
 import * as runnerManager from '../../services/runner-manager.js';
 import * as runnerResolver from '../../services/runner-resolver.js';
+import { readJson } from '../helpers/builders-routes.js';
 
 function appAs(userId: string | null) {
   const app = new Hono<ServerEnv>();
@@ -44,10 +46,7 @@ describe('POST /api/media/sign', () => {
   });
 
   beforeEach(() => {
-    spyOn(runnerResolver, 'resolveRunner').mockResolvedValue({
-      runnerId: 'runner-1',
-      httpUrl: 'http://127.0.0.1:3003',
-    } as any);
+    spyOn(runnerResolver, 'resolveRunner').mockResolvedValue({ runnerId: 'runner-1' });
     spyOn(runnerManager, 'getRunnerPublicMediaUrl').mockResolvedValue(null);
   });
 
@@ -82,7 +81,7 @@ describe('POST /api/media/sign', () => {
 
     const res = await appAs('user-1').request(signReq({ path: '/p/x.png' }));
     expect(res.status).toBe(200);
-    const { url } = (await res.json()) as { url: string };
+    const { url } = await readJson(res, z.object({ url: z.string() }));
     expect(typeof url).toBe('string');
 
     const u = new URL(url);

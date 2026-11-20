@@ -19,18 +19,15 @@ import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 
 import { clearRunnerKeys, configureRunnerKeys } from '../../lib/runner-keys.js';
 import filesRoutes, { rawFileHeaders } from '../../routes/files.js';
-import type { RuntimeServiceProvider } from '../../services/service-provider.js';
 import { setServices, resetServices } from '../../services/service-registry.js';
-
-function stub<T>(p: Record<string, any>): T {
-  return p as T;
-}
+import type { HonoEnv } from '../../types/hono-env.js';
+import { buildProject, createServiceProviderFake } from '../helpers/builders.js';
 
 describe('files routes — symlink escape protection', () => {
   let projectDir: string;
   let outsideDir: string;
   let secretFile: string;
-  let app: Hono;
+  let app: Hono<HonoEnv>;
 
   beforeAll(() => {
     const tmp = mkdtempSync(join(tmpdir(), 'funny-files-test-'));
@@ -45,18 +42,20 @@ describe('files routes — symlink escape protection', () => {
     // A symlink inside the project that points OUTSIDE the project.
     symlinkSync(secretFile, join(projectDir, 'escape.txt'));
 
-    const fakeServices = stub<RuntimeServiceProvider>({
+    const fakeServices = createServiceProviderFake({
       projects: {
-        listProjects: async (_userId: string) => [{ id: 'p1', name: 'p', path: projectDir }],
+        listProjects: async (_userId: string) => [
+          buildProject({ id: 'p1', name: 'p', path: projectDir }),
+        ],
       },
     });
 
     resetServices();
     setServices(fakeServices);
 
-    app = new Hono();
+    app = new Hono<HonoEnv>();
     app.use('*', async (c, next) => {
-      c.set('userId' as never, 'user-1' as never);
+      c.set('userId', 'user-1');
       await next();
     });
     app.route('/', filesRoutes);
@@ -99,7 +98,7 @@ describe('files routes — symlink escape protection', () => {
     writeFileSync(inside, 'hello', 'utf-8');
     const res = await app.request(`/read?path=${encodeURIComponent(inside)}`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { content: string };
+    const body: { content: string } = await res.json();
     expect(body.content).toBe('hello');
   });
 });
@@ -110,7 +109,7 @@ describe('files routes — per-user temp assets scope', () => {
   const USER = 'user-1';
   let assetsRoot: string;
   let assetFile: string;
-  let app: Hono;
+  let app: Hono<HonoEnv>;
 
   beforeAll(() => {
     // Must match the canonical scope: <realpath(tmpdir)>/funny-<userId>.
@@ -119,7 +118,7 @@ describe('files routes — per-user temp assets scope', () => {
     assetFile = join(assetsRoot, 'render.png');
     writeFileSync(assetFile, 'PNGBYTES', 'utf-8');
 
-    const fakeServices = stub<RuntimeServiceProvider>({
+    const fakeServices = createServiceProviderFake({
       projects: {
         // No projects — proves the assets scope is independent of any project.
         listProjects: async (_userId: string) => [],
@@ -128,9 +127,9 @@ describe('files routes — per-user temp assets scope', () => {
     resetServices();
     setServices(fakeServices);
 
-    app = new Hono();
+    app = new Hono<HonoEnv>();
     app.use('*', async (c, next) => {
-      c.set('userId' as never, USER as never);
+      c.set('userId', USER);
       await next();
     });
     app.route('/', filesRoutes);
@@ -175,7 +174,7 @@ const nativeGitAvailable = getNativeGit() !== null;
 describe('files routes — git blame', () => {
   let repoDir: string;
   let outsideDir: string;
-  let app: Hono;
+  let app: Hono<HonoEnv>;
 
   const git = (cwd: string, ...args: string[]) =>
     execFileSync('git', args, {
@@ -246,18 +245,20 @@ describe('files routes — git blame', () => {
     writeFileSync(join(outsideDir, 'secret.txt'), 'TOP SECRET', 'utf-8');
     symlinkSync(join(outsideDir, 'secret.txt'), join(repoDir, 'escape.txt'));
 
-    const fakeServices = stub<RuntimeServiceProvider>({
+    const fakeServices = createServiceProviderFake({
       projects: {
-        listProjects: async (_userId: string) => [{ id: 'p1', name: 'repo', path: repoDir }],
+        listProjects: async (_userId: string) => [
+          buildProject({ id: 'p1', name: 'repo', path: repoDir }),
+        ],
       },
     });
 
     resetServices();
     setServices(fakeServices);
 
-    app = new Hono();
+    app = new Hono<HonoEnv>();
     app.use('*', async (c, next) => {
-      c.set('userId' as never, 'user-1' as never);
+      c.set('userId', 'user-1');
       await next();
     });
     app.route('/', filesRoutes);
@@ -278,10 +279,10 @@ describe('files routes — git blame', () => {
       const tracked = join(repoDir, 'tracked.ts');
       const res = await app.request(`/blame?path=${encodeURIComponent(tracked)}`);
       expect(res.status).toBe(200);
-      const body = (await res.json()) as {
+      const body: {
         hunks: Array<{ startLine: number; lineCount: number; author: string; commitHash: string }>;
         blamedLineCount: number;
-      };
+      } = await res.json();
       expect(body.blamedLineCount).toBe(3);
       expect(body.hunks.length).toBeGreaterThanOrEqual(1);
       // The whole file came from one commit, so the hunks cover lines 1..3.
@@ -302,13 +303,13 @@ describe('files routes — git blame', () => {
     const moved = join(repoDir, 'src', 'moved.ts');
     const res = await app.request(`/history?path=${encodeURIComponent(moved)}`);
     expect(res.status).toBe(200);
-    const body = (await res.json()) as Array<{
+    const body: Array<{
       author: string;
       message: string;
       status: string;
       path: string;
       previousPath: string | null;
-    }>;
+    }> = await res.json();
     expect(body.map((entry) => entry.author)).toEqual(['Jesus Mover', 'Jhonner Creator']);
     expect(body[0]).toMatchObject({
       message: 'move origin.ts',
@@ -334,7 +335,7 @@ describe('files routes — /raw-signed (transport C)', () => {
   let outsideDir: string;
   let insideFile: string;
   let outsideFile: string;
-  let app: Hono;
+  let app: Hono<HonoEnv>;
 
   function signedUrl(opts: {
     urlPath: string;
@@ -363,16 +364,18 @@ describe('files routes — /raw-signed (transport C)', () => {
     writeFileSync(insideFile, 'PNGBYTES', 'utf-8');
     writeFileSync(outsideFile, 'SECRET', 'utf-8');
 
-    const fakeServices = stub<RuntimeServiceProvider>({
+    const fakeServices = createServiceProviderFake({
       projects: {
-        listProjects: async (_userId: string) => [{ id: 'p1', name: 'p', path: projectDir }],
+        listProjects: async (_userId: string) => [
+          buildProject({ id: 'p1', name: 'p', path: projectDir }),
+        ],
       },
     });
     resetServices();
     setServices(fakeServices);
 
     // NO auth middleware here — /raw-signed authenticates via the signature alone.
-    app = new Hono();
+    app = new Hono<HonoEnv>();
     app.route('/', filesRoutes);
   });
 

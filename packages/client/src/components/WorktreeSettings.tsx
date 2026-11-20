@@ -7,11 +7,14 @@ import {
   FolderOpen,
   ChevronUp,
   GitCommitHorizontal,
+  RefreshCw,
 } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { BranchBadge } from '@/components/BranchBadge';
+import { CommitHash } from '@/components/CommitHash';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -19,6 +22,7 @@ import { Input } from '@/components/ui/input';
 import { LabelBadge } from '@/components/ui/label-badge';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjects } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import {
@@ -58,12 +62,15 @@ function WorktreeCard({
         <GitFork className="icon-sm text-status-info mt-0.5 shrink-0" />
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className={cn(listRowTitleClassName, 'min-w-0 break-words')}>
-              {worktree.branch}
-            </span>
+            <BranchBadge
+              branch={worktree.branch}
+              variant="plain"
+              className={cn(listRowTitleClassName, 'font-mono')}
+              data-testid={`worktree-branch-${worktree.branch}`}
+            />
             {worktree.isMain && (
               <LabelBadge
-                color="#7CB9E8"
+                tone="info"
                 title={t('worktreeSettings.mainDescription')}
                 data-testid="worktree-badge-main"
               >
@@ -72,7 +79,7 @@ function WorktreeCard({
             )}
             {active && (
               <LabelBadge
-                color="#A8D5A2"
+                tone="success"
                 title={t('worktreeSettings.activeDescription')}
                 data-testid="worktree-badge-active"
               >
@@ -80,19 +87,16 @@ function WorktreeCard({
               </LabelBadge>
             )}
           </div>
-          <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 text-[10px]">
+          <div className="text-muted-foreground text-2xs flex min-w-0 items-center gap-1.5">
             <FolderOpen className="icon-xs text-muted-foreground/70 shrink-0" />
             <span title={worktree.path} className="truncate font-mono">
               {worktree.path}
             </span>
           </div>
           {worktree.commit && (
-            <span
-              className="text-muted-foreground flex items-center gap-1.5 text-[10px]"
-              title={worktree.commit}
-            >
+            <span className="text-muted-foreground text-2xs flex items-center gap-1.5">
               <GitCommitHorizontal className="icon-xs shrink-0" />
-              <span className="font-mono">{worktree.commit.slice(0, 8)}</span>
+              <CommitHash hash={worktree.commit} />
             </span>
           )}
         </div>
@@ -260,6 +264,12 @@ export function WorktreeSettings({
     loadBranches();
   }, [loadWorktrees, loadBranches]);
 
+  /** Re-read worktrees and branches, e.g. after one was added or removed outside funny. */
+  const handleRefresh = () => {
+    void loadWorktrees();
+    void loadBranches();
+  };
+
   const handleCreate = async () => {
     const effectiveBase = baseBranch || branches[0];
     if (readOnly || !branchName.trim() || !project) return;
@@ -319,18 +329,34 @@ export function WorktreeSettings({
       {/* Worktree list */}
       <div className="flex min-h-0 flex-1 flex-col">
         <div className="border-sidebar-border flex shrink-0 items-center gap-1.5 border-b px-2 py-1.5">
-          <h3 className="text-muted-foreground flex min-w-0 flex-1 items-center gap-1.5 px-1 text-[11px]">
+          <h3 className="text-muted-foreground text-compact flex min-w-0 flex-1 items-center gap-1.5 px-1">
             {t('worktreeSettings.worktrees')}
-            <span className="bg-sidebar-accent rounded px-1.5 text-[10px] tabular-nums">
+            <span className="bg-sidebar-accent text-2xs rounded px-1.5 tabular-nums">
               {worktrees.length}
             </span>
           </h3>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={handleRefresh}
+                disabled={loading}
+                aria-label={t('worktreeSettings.refresh')}
+                className="text-muted-foreground shrink-0"
+                data-testid="worktree-settings-refresh"
+              >
+                <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('worktreeSettings.refresh')}</TooltipContent>
+          </Tooltip>
           {!readOnly && (
             <Button
               variant="ghost"
               size="sm"
               onClick={() => setShowCreate(!showCreate)}
-              className="text-muted-foreground h-6 shrink-0 px-2 text-[11px]"
+              className="text-muted-foreground text-compact h-6 shrink-0 px-2"
             >
               {showCreate ? (
                 <ChevronUp className="icon-xs mr-1" />
@@ -357,7 +383,8 @@ export function WorktreeSettings({
               />
             )}
 
-            {loading ? (
+            {/* A refresh keeps the list on screen; the button's icon shows it is loading. */}
+            {loading && worktrees.length === 0 ? (
               <LoadingState
                 testId="worktree-settings-loading"
                 label={t('worktreeSettings.loadingWorktrees')}

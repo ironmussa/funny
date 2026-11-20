@@ -76,7 +76,7 @@ function activeSocket(maxPendingOperations = 32) {
         maxPendingOperations,
       },
     },
-  } as any);
+  });
 }
 
 describe('browser.v1 operations carrier', () => {
@@ -160,7 +160,7 @@ describe('browser.v1 operations carrier', () => {
   test('requires negotiated assignment and does not disclose cross-user runners', async () => {
     const terminals = new FakeRunnerTerminalPort();
     terminals.available.add('runner-other');
-    const unnegotiated = createMockSocket({ data: {} } as any);
+    const unnegotiated = createMockSocket({ data: {} });
     const ownerLookup = mock(async () => 'user-2');
     const dependencies = {
       terminals,

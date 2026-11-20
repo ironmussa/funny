@@ -30,9 +30,7 @@ function withChipTooltip(content: ReactNode, title?: string) {
   return (
     <Tooltip>
       <TooltipTrigger asChild>{content}</TooltipTrigger>
-      <TooltipContent className="max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all">
-        {title}
-      </TooltipContent>
+      <TooltipContent variant="mono">{title}</TooltipContent>
     </Tooltip>
   );
 }

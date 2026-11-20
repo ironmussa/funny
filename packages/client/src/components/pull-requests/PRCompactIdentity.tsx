@@ -135,7 +135,7 @@ export function PRCompactIdentity({
           className="mt-0.5"
           data-testid={numberTestId}
         />
-        <div className="min-w-0 flex-1 text-[11px] leading-5 break-words">
+        <div className="text-compact min-w-0 flex-1 leading-5 break-words">
           {onTitleClick ? (
             <button
               type="button"
@@ -165,7 +165,7 @@ export function PRCompactIdentity({
 
       {hasMeta ? (
         <div
-          className="text-muted-foreground flex flex-wrap items-center gap-1.5 text-[10px]"
+          className="text-muted-foreground text-2xs flex flex-wrap items-center gap-1.5"
           data-testid={metaTestId}
         >
           {pr.updated_at ? (
@@ -187,7 +187,7 @@ export function PRCompactIdentity({
           {showDraftBadge && pr.draft ? (
             <>
               {pr.updated_at || lastCommitAuthor ? <span>&middot;</span> : null}
-              <Badge variant="outline" className="h-3.5 px-1 py-0 text-[9px] leading-none">
+              <Badge variant="outline" className="text-3xs h-3.5 px-1 py-0 leading-none">
                 {t('review.pullRequests.draft', 'Draft')}
               </Badge>
             </>

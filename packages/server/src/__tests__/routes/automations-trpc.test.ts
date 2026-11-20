@@ -32,7 +32,7 @@ describe('automations tRPC procedures', () => {
     const res = await t.app.request(`/api/trpc/automations.${path}${qs}`, {
       headers: headersFor(userId),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   const mutate = async (userId: string, path: string, input: unknown) => {
@@ -41,7 +41,7 @@ describe('automations tRPC procedures', () => {
       headers: headersFor(userId),
       body: JSON.stringify(input),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await res.json() };
   };
 
   beforeAll(async () => {
@@ -49,22 +49,22 @@ describe('automations tRPC procedures', () => {
     // Stands in for the runner proxy catch-all, registered after every route.
     t.app.all('/api/*', (c) => {
       proxied.push(c.req.path);
-      return c.json({ proxied: true }, 599 as never);
+      return Response.json({ proxied: true }, { status: 599 });
     });
   });
 
   beforeEach(() => {
     proxied = [];
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
-    seedProject(t.db as any, { id: 'p2', userId: 'user-2', path: '/tmp/p2' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
+    seedProject(t.db, { id: 'p2', userId: 'user-2', path: '/tmp/p2' });
   });
 
   describe('mount', () => {
     test('an unknown procedure answers tRPC 404 and never reaches the runner proxy', async () => {
       const res = await t.app.request('/api/trpc/nope.missing', { headers: headersFor('user-1') });
       expect(res.status).toBe(404);
-      expect(((await res.json()) as any).error.data.code).toBe('NOT_FOUND');
+      expect((await res.json()).error.data.code).toBe('NOT_FOUND');
       expect(proxied).toEqual([]);
     });
 
@@ -101,7 +101,7 @@ describe('automations tRPC procedures', () => {
     });
 
     test('a mutation cannot be sent as GET', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
       const res = await query('user-1', 'remove', { id: 'a1' });
       expect(res.status).toBe(405);
       expect((await query('user-1', 'get', { id: 'a1' })).status).toBe(200);
@@ -110,7 +110,7 @@ describe('automations tRPC procedures', () => {
 
   describe('tenant isolation', () => {
     test('another user’s automation looks absent (404) on every procedure', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
 
       expect((await query('user-2', 'get', { id: 'a1' })).status).toBe(404);
       expect((await query('user-2', 'runs', { id: 'a1' })).status).toBe(404);
@@ -123,8 +123,8 @@ describe('automations tRPC procedures', () => {
     });
 
     test('list returns only the caller’s automations', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
-      seedAutomation(t.db as any, { id: 'a2', projectId: 'p2', userId: 'user-2' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db, { id: 'a2', projectId: 'p2', userId: 'user-2' });
       const res = await query('user-1', 'list');
       expect(res.body.result.data.map((a: any) => a.id)).toEqual(['a1']);
     });
@@ -151,7 +151,7 @@ describe('automations tRPC procedures', () => {
     });
 
     test('unknown update fields are rejected (strict allow-list)', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
       const res = await mutate('user-1', 'update', { id: 'a1', data: { userId: 'user-2' } });
       expect(res.status).toBe(400);
     });
@@ -172,8 +172,8 @@ describe('automations tRPC procedures', () => {
       const updated = await mutate('user-1', 'update', { id, data: { enabled: false } });
       expect(updated.body.result.data.enabled).toBe(false);
 
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedAutomationRun(t.db as any, {
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedAutomationRun(t.db, {
         id: 'r1',
         automationId: id,
         threadId: 't1',
@@ -193,15 +193,15 @@ describe('automations tRPC procedures', () => {
 
   describe('ported from the removed REST route tests', () => {
     test('list filters by projectId', async () => {
-      seedProject(t.db as any, { id: 'p1b', userId: 'user-1', path: '/tmp/p1b' });
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
-      seedAutomation(t.db as any, { id: 'a2', projectId: 'p1b', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1b', userId: 'user-1', path: '/tmp/p1b' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db, { id: 'a2', projectId: 'p1b', userId: 'user-1' });
       const res = await query('user-1', 'list', { projectId: 'p1' });
       expect(res.body.result.data.map((a: any) => a.id)).toEqual(['a1']);
     });
 
     test('update rejects server-managed fields (id, nextRunAt, source) — C1', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
       for (const data of [{ id: 'a-new' }, { nextRunAt: '2000-01-01' }, { source: 'api' }]) {
         expect((await mutate('user-1', 'update', { id: 'a1', data })).status).toBe(400);
       }
@@ -210,21 +210,21 @@ describe('automations tRPC procedures', () => {
     });
 
     test('update refuses moving to a project the caller cannot access — C1', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
       const res = await mutate('user-1', 'update', { id: 'a1', data: { projectId: 'p2' } });
       expect(res.status).toBe(404);
       expect((await query('user-1', 'get', { id: 'a1' })).body.result.data.projectId).toBe('p1');
     });
 
     test('update allows moving to another project the caller owns', async () => {
-      seedProject(t.db as any, { id: 'p1b', userId: 'user-1', path: '/tmp/p1b' });
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1b', userId: 'user-1', path: '/tmp/p1b' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
       const res = await mutate('user-1', 'update', { id: 'a1', data: { projectId: 'p1b' } });
       expect(res.body.result.data.projectId).toBe('p1b');
     });
 
     test('a cross-tenant update or remove leaves the row untouched', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1', name: 'Mine' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1', name: 'Mine' });
       await mutate('user-2', 'update', { id: 'a1', data: { name: 'Hijacked' } });
       await mutate('user-2', 'remove', { id: 'a1' });
       expect((await query('user-1', 'get', { id: 'a1' })).body.result.data.name).toBe('Mine');
@@ -239,14 +239,14 @@ describe('automations tRPC procedures', () => {
     });
 
     test('inbox returns only the caller’s finished runs, with filters', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
-      seedAutomation(t.db as any, { id: 'a2', projectId: 'p2', userId: 'user-2' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedThread(t.db as any, { id: 't2', projectId: 'p2', userId: 'user-2' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db, { id: 'a2', projectId: 'p2', userId: 'user-2' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db, { id: 't2', projectId: 'p2', userId: 'user-2' });
       const run = { status: 'completed', triageStatus: 'pending' };
-      seedAutomationRun(t.db as any, { id: 'r1', automationId: 'a1', threadId: 't1', ...run });
-      seedAutomationRun(t.db as any, { id: 'r2', automationId: 'a2', threadId: 't2', ...run });
-      seedAutomationRun(t.db as any, {
+      seedAutomationRun(t.db, { id: 'r1', automationId: 'a1', threadId: 't1', ...run });
+      seedAutomationRun(t.db, { id: 'r2', automationId: 'a2', threadId: 't2', ...run });
+      seedAutomationRun(t.db, {
         id: 'r3',
         automationId: 'a1',
         threadId: 't1',
@@ -260,9 +260,9 @@ describe('automations tRPC procedures', () => {
     });
 
     test('responses are the contract types, not raw rows', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1', enabled: 1 });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Nightly' });
-      seedAutomationRun(t.db as any, {
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1', enabled: 1 });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Nightly' });
+      seedAutomationRun(t.db, {
         id: 'r1',
         automationId: 'a1',
         threadId: 't1',
@@ -291,7 +291,7 @@ describe('automations tRPC procedures', () => {
 
   describe('removed REST routes', () => {
     test('every former /api/automations route answers 404 without reaching a runner', async () => {
-      seedAutomation(t.db as any, { id: 'a1', projectId: 'p1', userId: 'user-1' });
+      seedAutomation(t.db, { id: 'a1', projectId: 'p1', userId: 'user-1' });
       const requests: Array<[string, string]> = [
         ['GET', '/api/automations'],
         ['GET', '/api/automations/inbox'],

@@ -4,6 +4,8 @@
  */
 import { describe, test, expect, beforeEach } from 'bun:test';
 
+import type { RunnerRegisterRequest } from '@funny/shared/runner-protocol';
+
 import { runners } from '../../db/schema.js';
 import { registerSandboxRunner } from '../../services/runner-manager.js';
 import {
@@ -15,6 +17,7 @@ import {
   sandboxRunnerIdForThread,
   sandboxThreadOfRunner,
 } from '../../services/runner-scope.js';
+import { present } from '../helpers/builders-services.js';
 import { createTestDb, seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
@@ -23,7 +26,7 @@ beforeEach(async () => {
   testDb = createTestDb();
   const { setConnection } = await import('../../db/index.js');
   setConnection({
-    db: testDb.db as any,
+    db: testDb.db,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
     mode: 'sqlite',
@@ -64,9 +67,12 @@ describe('provisioning tokens', () => {
 
   test('only a hash is stored', async () => {
     const token = await issue();
-    const raw = testDb.sqlite.query('SELECT token_hash FROM runner_provision_tokens').get() as {
-      token_hash: string;
-    };
+    const raw = present(
+      testDb.sqlite
+        .query<{ token_hash: string }, []>('SELECT token_hash FROM runner_provision_tokens')
+        .get(),
+      'the stored token',
+    );
     expect(raw.token_hash).not.toContain(token);
     expect(raw.token_hash).toMatch(/^[0-9a-f]{64}$/);
   });
@@ -92,14 +98,14 @@ describe('provisioning tokens', () => {
 });
 
 describe('registerSandboxRunner', () => {
-  const advertisement = {
+  const advertisement: RunnerRegisterRequest = {
     name: 'box-funny',
     hostname: 'shared-host',
     os: 'linux',
     providers: undefined,
     activeBuiltins: [],
     availableProviders: [],
-  } as any;
+  };
 
   test('creates a new sandbox runner bound to the thread, never reusing a hostname', async () => {
     seedRunner(testDb.db, {

@@ -9,7 +9,6 @@
 import { rmSync } from 'node:fs';
 
 import {
-  createWorktree,
   findWorktreeForBranch,
   removeWorktree,
   removeBranch,
@@ -17,7 +16,6 @@ import {
   git,
   isSafeGitRefArg,
 } from '@funny/core/git';
-import { setupWorktree } from '@funny/core/ports';
 import type { WSEvent, AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
 import { ResultAsync } from 'neverthrow';
@@ -40,14 +38,9 @@ import { scratchPathFor } from '../thread-context.js';
 import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
 import { wsBroker } from '../ws-broker.js';
-import {
-  ThreadServiceError,
-  createSetupProgressEmitter,
-  emitAgentFailed,
-  emitThreadUpdated,
-  slugifyTitle,
-} from './helpers.js';
+import { ThreadServiceError, emitAgentFailed, emitThreadUpdated, slugifyTitle } from './helpers.js';
 import { copyThreadUploads } from './staged-uploads.js';
+import { prepareWorktree } from './worktree-preparation.js';
 
 // ── Update Thread (stage transitions, archive) ──────────────────
 
@@ -222,34 +215,25 @@ async function autoStartIdleThread(
   if (needsWorktreeSetup) {
     // Deferred worktree setup: create worktree first, then start agent
     await tm.updateThread(threadId, { status: 'setting_up' });
-    const emitSetupProgress = createSetupProgressEmitter(thread.userId, threadId);
     emitThreadUpdated(thread.userId, threadId, { status: 'setting_up', stage: 'in_progress' });
 
     // Background: create worktree, run post-create, then start agent
     void (async () => {
       try {
-        const wtResult = await createWorktree(
+        const wtResult = await prepareWorktree({
           projectPath,
-          thread.branch!,
-          thread.baseBranch || undefined,
-          emitSetupProgress,
-        );
+          branchName: thread.branch!,
+          baseBranch: thread.baseBranch || undefined,
+          userId: thread.userId,
+          threadId,
+          flow: 'idle-start',
+        });
         if (wtResult.isErr()) {
           await tm.updateThread(threadId, { status: 'failed' });
           emitThreadUpdated(thread.userId, threadId, { status: 'failed' });
           return;
         }
         const wtPath = wtResult.value;
-
-        const setupResult = await setupWorktree(projectPath, wtPath, emitSetupProgress);
-        if (setupResult.isOk() && setupResult.value.postCreateErrors.length) {
-          log.warn('Worktree postCreate errors', {
-            threadId,
-            errors: setupResult.value.postCreateErrors,
-          });
-        } else if (setupResult.isErr()) {
-          log.warn('Failed to setup worktree', { threadId, error: setupResult.error.message });
-        }
 
         // Update thread with worktree info
         await tm.updateThread(threadId, { worktreePath: wtPath, status: 'pending' });
@@ -546,36 +530,23 @@ async function convertToWorktreeImpl(
   await tm.updateThread(threadId, { status: 'setting_up' });
   emitThreadUpdated(userId, threadId, { status: 'setting_up' });
 
-  const emitSetupProgress = createSetupProgressEmitter(userId, threadId);
-
   // Background: create worktree, run post-create commands, update thread
   void (async () => {
     try {
-      const wtResult = await createWorktree(
+      const wtResult = await prepareWorktree({
         projectPath,
         branchName,
-        resolvedBaseBranch,
-        emitSetupProgress,
-      );
+        baseBranch: resolvedBaseBranch,
+        userId,
+        threadId,
+        flow: 'convert',
+      });
       if (wtResult.isErr()) {
         await tm.updateThread(threadId, { status: 'failed' });
         emitThreadUpdated(userId, threadId, { status: 'failed' });
         return;
       }
       const wtPath = wtResult.value;
-
-      const setup = await setupWorktree(projectPath, wtPath, emitSetupProgress);
-      if (setup.isOk() && setup.value.postCreateErrors.length) {
-        log.warn('Worktree postCreate errors during convert', {
-          threadId,
-          errors: setup.value.postCreateErrors,
-        });
-      } else if (setup.isErr()) {
-        log.warn('Failed to setup worktree during convert', {
-          threadId,
-          error: setup.error.message,
-        });
-      }
 
       // Update thread: convert to worktree mode
       // Clear sessionId and flag context recovery so the next message

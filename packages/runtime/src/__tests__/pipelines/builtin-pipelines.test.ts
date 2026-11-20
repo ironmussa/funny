@@ -113,7 +113,7 @@ describe('built-in: commit', () => {
     expect(result.outcome).toBe('completed');
     expect(provider.spawnAgent).toHaveBeenCalledOnce();
     // The fixer prompt sees LAST_ERROR.
-    const prompt = (provider.spawnAgent as ReturnType<typeof vi.fn>).mock.calls[0][0].prompt;
+    const prompt = vi.mocked(provider.spawnAgent).mock.calls[0][0].prompt;
     expect(prompt).toContain('lint errors');
   });
 });
@@ -156,7 +156,7 @@ describe('built-in: code-review', () => {
     expect(sa).toHaveBeenCalledTimes(3); // 2 reviews + 1 fix
     expect(commit).toHaveBeenCalledOnce();
     // After the fix iteration, ctx.outputs.commit-fix.json.sha is exposed.
-    expect((result.ctx.outputs as Record<string, any>)['commit-fix']?.json?.sha).toBe('fix-sha');
+    expect(result.ctx.outputs['commit-fix']?.json?.sha).toBe('fix-sha');
   });
 
   test('reviewer is invoked with the reviewer agent', async () => {
@@ -319,7 +319,7 @@ describe('built-in: fusion', () => {
     expect(spawnAgent).toHaveBeenCalledTimes(4); // 3 panel + 1 judge
     expect(max.n).toBe(3); // all three proposers in flight at once
     // The synthesizer's output is the final pipeline output.
-    expect((result.ctx.outputs as Record<string, any>).synthesize.output).toBe('FINAL');
+    expect(result.ctx.outputs.synthesize.output).toBe('FINAL');
   });
 
   test('judge sees all three answers, anonymized as Respuesta 1/2/3', async () => {

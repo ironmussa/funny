@@ -76,7 +76,7 @@ describe('browser.v1 negotiation', () => {
   });
 
   test('acknowledges with binary and stores connection-local negotiation state', async () => {
-    const socket = createMockSocket({ data: {} } as any);
+    const socket = createMockSocket({ data: {} });
     setupBrowserV1Negotiation(socket, 'user-1');
 
     let response: Uint8Array | undefined;
@@ -94,7 +94,7 @@ describe('browser.v1 negotiation', () => {
   });
 
   test('returns a typed binary status for malformed input without activating state', async () => {
-    const socket = createMockSocket({ data: {} } as any);
+    const socket = createMockSocket({ data: {} });
     setupBrowserV1Negotiation(socket, 'user-1');
 
     let response: Uint8Array | undefined;

@@ -69,7 +69,10 @@ describe('Worktrees sidebar', () => {
     context.viewerReadOnly = true;
     renderWithProviders(<WorktreesPanel />);
     await screen.findByText('feature/test');
-    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    // Refreshing only reads, so it stays; creating and removing worktrees do not.
+    const buttons = screen.queryAllByRole('button');
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0]).toHaveAttribute('data-testid', 'worktree-settings-refresh');
   });
 
   test('does not load another project when the review target is absent', () => {

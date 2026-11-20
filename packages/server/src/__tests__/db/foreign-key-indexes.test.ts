@@ -6,25 +6,26 @@
  */
 import { beforeAll, describe, expect, test } from 'bun:test';
 
+import { installMemoryDatabase } from '../helpers/test-db.js';
+
 let raw: import('bun:sqlite').Database;
 
 beforeAll(async () => {
-  const { initDatabase, db } = await import('../../db/index.js');
-  await initDatabase({ sqlitePath: ':memory:' });
+  raw = await installMemoryDatabase();
   const { autoMigrate } = await import('../../db/migrate.js');
   await autoMigrate();
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing Drizzle ORM internal $client for raw SQLite PRAGMA queries
-  raw = (db as unknown as { $client: import('bun:sqlite').Database }).$client;
 });
 
 type Row = Record<string, unknown>;
 
 function leadingIndexColumns(table: string): string[] {
-  const indexes = raw.query(`PRAGMA index_list("${table}")`).all() as Row[];
+  const indexes = raw.query<Row, []>(`PRAGMA index_list("${table}")`).all();
   const leading = indexes
-    .map((i) => (raw.query(`PRAGMA index_info("${i.name}")`).all() as Row[])[0]?.name)
+    .map((i) => raw.query<Row, []>(`PRAGMA index_info("${i.name}")`).all()[0]?.name)
     .filter((c): c is string => typeof c === 'string');
-  const pk = (raw.query(`PRAGMA table_info("${table}")`).all() as Row[])
+  const pk = raw
+    .query<Row, []>(`PRAGMA table_info("${table}")`)
+    .all()
     .filter((c) => Number(c.pk) === 1)
     .map((c) => String(c.name));
   return [...leading, ...pk];
@@ -32,16 +33,17 @@ function leadingIndexColumns(table: string): string[] {
 
 describe('database schema', () => {
   test('every foreign key column is indexed', () => {
-    const tables = (
-      raw
-        .query(`SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`)
-        .all() as Row[]
-    ).map((r) => String(r.name));
+    const tables = raw
+      .query<Row, []>(
+        `SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'`,
+      )
+      .all()
+      .map((r) => String(r.name));
 
     const unindexed: string[] = [];
     for (const table of tables) {
       const covered = new Set(leadingIndexColumns(table));
-      for (const fk of raw.query(`PRAGMA foreign_key_list("${table}")`).all() as Row[]) {
+      for (const fk of raw.query<Row, []>(`PRAGMA foreign_key_list("${table}")`).all()) {
         if (!covered.has(String(fk.from))) unindexed.push(`${table}.${fk.from} -> ${fk.table}`);
       }
     }
@@ -50,9 +52,9 @@ describe('database schema', () => {
 
   test('thread lookups by session and external request use an index', () => {
     for (const column of ['session_id', 'external_request_id']) {
-      const plan = (
-        raw.query(`EXPLAIN QUERY PLAN SELECT * FROM threads WHERE ${column} = ?`).all('x') as Row[]
-      )
+      const plan = raw
+        .query<Row, [string]>(`EXPLAIN QUERY PLAN SELECT * FROM threads WHERE ${column} = ?`)
+        .all('x')
         .map((r) => String(r.detail))
         .join(' ');
       expect(plan).toContain('USING INDEX');

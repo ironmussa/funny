@@ -28,7 +28,16 @@ function toolNamed(name: string) {
     (x) => x.name === name,
   );
   if (!t) throw new Error(`${name} tool not registered`);
-  return { handler: (args: Record<string, unknown>) => t.run(args, undefined) as Promise<any> };
+  return {
+    /** Runs the tool; image blocks read as empty text (these tools only answer text). */
+    handler: async (args: Record<string, unknown>) => {
+      const result = await t.run(args, undefined);
+      return {
+        isError: result.isError,
+        content: result.content.map((block) => ({ text: block.type === 'text' ? block.text : '' })),
+      };
+    },
+  };
 }
 
 const spawnTool = () => toolNamed('funny_spawn_thread');

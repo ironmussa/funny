@@ -1,6 +1,8 @@
+import type { WSEvent } from '@funny/shared';
 import { EventDurability } from '@funny/shared/runner-v2/events';
 import { describe, expect, test, vi } from 'vitest';
 
+import { GrpcEventReplayStore } from '../../services/grpc-event-replay-store.js';
 import {
   RunnerEventPublisher,
   runnerEventDurability,
@@ -8,33 +10,33 @@ import {
 
 describe('RunnerEventPublisher', () => {
   test('classifies terminal, durable, and transient events', () => {
-    expect(runnerEventDurability({ type: 'agent:result' } as any)).toBe(EventDurability.TERMINAL);
-    expect(runnerEventDurability({ type: 'agent:status' } as any)).toBe(EventDurability.DURABLE);
-    expect(runnerEventDurability({ type: 'thread:update' } as any)).toBe(EventDurability.TRANSIENT);
+    expect(runnerEventDurability({ type: 'agent:result', threadId: 't', data: {} })).toBe(
+      EventDurability.TERMINAL,
+    );
+    expect(
+      runnerEventDurability({ type: 'agent:status', threadId: 't', data: { status: 'running' } }),
+    ).toBe(EventDurability.DURABLE);
+    expect(runnerEventDurability({ type: 'thread:updated', threadId: 't', data: {} })).toBe(
+      EventDurability.TRANSIENT,
+    );
   });
 
   test('publishes stored events and acknowledges contiguous receipts', () => {
     const send = vi.fn(() => true);
-    const acknowledge = vi.fn();
-    const store = {
-      resumeCursors: () => [],
-      append: (event: any) => ({
-        ...event,
-        sequence: 1n,
-        occurredAt: '2026-08-31T00:00:00.000Z',
-      }),
-      pendingScopes: () => [],
-      replay: vi.fn(),
-      acknowledge,
-      close: vi.fn(),
-    };
-    const publisher = new RunnerEventPublisher({ send }, store as any);
+    const store = new GrpcEventReplayStore(':memory:');
+    vi.spyOn(store, 'append').mockImplementation((event) => ({
+      ...event,
+      sequence: 1n,
+      occurredAt: '2026-08-31T00:00:00.000Z',
+    }));
+    const acknowledge = vi.spyOn(store, 'acknowledge').mockReturnValue(true);
+    const publisher = new RunnerEventPublisher({ send }, store);
 
     publisher.publish({
       type: 'agent:status',
       threadId: 'thread-1',
       data: { status: 'running' },
-    } as any);
+    });
     expect(send).toHaveBeenCalledWith('events', expect.objectContaining({ sequence: '1' }));
 
     publisher.receiveReceipt({
@@ -49,25 +51,26 @@ describe('RunnerEventPublisher', () => {
 
   test('unscoped browser-session events go out as user events once the server enables them', () => {
     const send = vi.fn(() => true);
-    const append = vi.fn();
-    const publisher = new RunnerEventPublisher({ send }, { append, close: vi.fn() } as any);
+    const store = new GrpcEventReplayStore(':memory:');
+    const append = vi.spyOn(store, 'append');
+    const publisher = new RunnerEventPublisher({ send }, store);
     const frame = {
       type: 'browser-session:frame',
       threadId: '',
-      data: { sessionId: 'thread:t1', data: 'abc' },
-    } as any;
+      data: { sessionId: 'thread:t1', data: 'abc', timestamp: 1 },
+    } satisfies WSEvent;
 
     publisher.publish(frame);
     expect(send).not.toHaveBeenCalled();
 
     publisher.setUserEventsEnabled(true);
     publisher.publish(frame);
-    publisher.publish({ type: 'thread:updated', threadId: '', data: {} } as any);
+    publisher.publish({ type: 'thread:updated', threadId: '', data: {} });
     expect(send).toHaveBeenCalledTimes(1);
     expect(send).toHaveBeenCalledWith('events', {
       userEvent: {
         eventType: 'browser-session:frame',
-        data: { sessionId: 'thread:t1', data: 'abc' },
+        data: { sessionId: 'thread:t1', data: 'abc', timestamp: 1 },
       },
     });
     // Never stored for replay.

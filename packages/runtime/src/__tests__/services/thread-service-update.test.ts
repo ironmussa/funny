@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
   },
   isAgentRunning: vi.fn(() => false),
   stopAgent: vi.fn(async () => undefined),
-  startAgent: vi.fn(async () => undefined),
+  startAgent: vi.fn(async (..._args: unknown[]) => undefined),
   cleanupThreadState: vi.fn(),
   createWorktree: vi.fn(),
   findWorktreeForBranch: vi.fn(),
@@ -63,6 +63,7 @@ vi.mock('../../services/agent-runner-control.js', () => ({
 vi.mock('@funny/core/git', async (importOriginal) => ({
   isSafeGitRefArg: (await importOriginal<typeof import('@funny/core/git')>()).isSafeGitRefArg,
   createWorktree: mocks.createWorktree,
+  configuredWorktreeRoot: () => null,
   findWorktreeForBranch: mocks.findWorktreeForBranch,
   removeWorktree: mocks.removeWorktree,
   removeBranch: mocks.removeBranch,
@@ -411,7 +412,7 @@ describe('updateThread — auto-start idle thread', () => {
       expect.stringContaining('<file path="src/a.ts" />'),
       '/repo',
     );
-    expect((mocks.startAgent.mock.calls[0] as unknown[])[1]).toBe('HYDRATED');
+    expect(mocks.startAgent.mock.calls[0][1]).toBe('HYDRATED');
     // Same checkout: nothing to copy.
     expect(mocks.copyThreadUploads).not.toHaveBeenCalled();
   });

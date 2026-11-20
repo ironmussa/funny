@@ -11,7 +11,7 @@ import { deriveOrderedThreads } from '@/data/threads/views';
  *
  *   useThreadStore.setState({ ...seedThreads({ p1: [t1] }), selectedThreadId: 't1' });
  */
-export function seedThreads(threadsByProject: Record<string, Thread[]>): Record<string, never> {
+export function seedThreads(threadsByProject: Record<string, Thread[]>): Record<never, never> {
   seedProjectThreads(threadsByProject);
   return {};
 }

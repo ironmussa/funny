@@ -7,6 +7,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { AgentMessageHandler } from '../../services/agent-message-handler.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
+import { buildThreadRecord, createThreadManagerFake } from '../helpers/builders.js';
 
 const THREAD_ID = 'thread-roundtrips';
 
@@ -15,7 +16,10 @@ function setup() {
   state.threadUserIds.set(THREAD_ID, 'user-1');
   let ids = 0;
   const tm = {
-    getThread: vi.fn(async () => ({ userId: 'user-1', projectId: 'p1', status: 'running' })),
+    ...createThreadManagerFake(),
+    getThread: vi.fn(async () =>
+      buildThreadRecord({ id: THREAD_ID, userId: 'user-1', projectId: 'p1', status: 'running' }),
+    ),
     updateThread: vi.fn(async () => undefined),
     insertMessage: vi.fn(async () => `msg-${++ids}`),
     updateMessage: vi.fn(async () => undefined),
@@ -27,8 +31,8 @@ function setup() {
   const emitted: any[] = [];
   const handler = new AgentMessageHandler(
     state,
-    tm as any,
-    { emit: vi.fn(), emitToUser: vi.fn((_u: string, e: any) => emitted.push(e)) } as any,
+    tm,
+    { emit: vi.fn(), emitToUser: vi.fn((_u: string, e: any) => emitted.push(e)) },
     () => undefined,
   );
   return { state, tm, handler, emitted };
@@ -44,14 +48,14 @@ function toolUse(
     type: 'assistant',
     hasStableMessageId: true,
     message: { id: cliMsgId, content: [{ type: 'tool_use', id, name, input }] },
-  } as CLIMessage;
+  };
 }
 
 function toolResult(toolUseId: string, content: string): CLIMessage {
   return {
     type: 'user',
-    message: { role: 'user', content: [{ type: 'tool_result', tool_use_id: toolUseId, content }] },
-  } as CLIMessage;
+    message: { content: [{ type: 'tool_result', tool_use_id: toolUseId, content }] },
+  };
 }
 
 describe('AgentMessageHandler — tool call round trips', () => {
@@ -64,7 +68,7 @@ describe('AgentMessageHandler — tool call round trips', () => {
     expect(tm.insertToolCall).toHaveBeenCalledTimes(1);
     expect(tm.findToolCall).not.toHaveBeenCalled();
     expect(tm.getToolCall).not.toHaveBeenCalled();
-    const toolCallId = (await tm.insertToolCall.mock.results[0].value) as string;
+    const toolCallId = await tm.insertToolCall.mock.results[0].value;
     expect(tm.updateToolCallOutput).toHaveBeenCalledWith(toolCallId, 'file contents');
     expect(emitted.map((e) => e.type)).toEqual(['agent:tool_call', 'agent:tool_output']);
   });
@@ -90,7 +94,7 @@ describe('AgentMessageHandler — tool call round trips', () => {
     const { state, tm, handler } = setup();
 
     await handler.handle(THREAD_ID, toolUse('cli-1', 'tu-ask', 'AskUserQuestion', { q: 1 }));
-    const askId = (await tm.insertToolCall.mock.results[0].value) as string;
+    const askId = await tm.insertToolCall.mock.results[0].value;
     tm.getToolCall.mockResolvedValueOnce({ name: 'AskUserQuestion', output: null });
     state.pendingUserInput.delete(THREAD_ID);
     await handler.handle(THREAD_ID, toolResult('tu-ask', 'the answer'));
@@ -107,7 +111,7 @@ describe('AgentMessageHandler — tool call round trips', () => {
     const { state, tm, handler } = setup();
 
     await handler.handle(THREAD_ID, toolUse('cli-1', 'tu-w', 'Bash', { command: 'rm x' }));
-    const id = (await tm.insertToolCall.mock.results[0].value) as string;
+    const id = await tm.insertToolCall.mock.results[0].value;
     tm.getToolCall.mockResolvedValueOnce({ name: 'Bash', input: '{"command":"rm x"}' });
 
     await handler.handle(THREAD_ID, toolResult('tu-w', 'Claude requested permissions to use Bash'));
@@ -123,10 +127,10 @@ describe('AgentMessageHandler — tool call round trips', () => {
     function withThread(pages: any[]) {
       const ctx = setup();
       const getThreadWithMessages = vi.fn(async () => pages.shift());
-      (ctx.tm as any).getThreadWithMessages = getThreadWithMessages;
+      ctx.tm.getThreadWithMessages = getThreadWithMessages;
       return { ...ctx, getThreadWithMessages };
     }
-    const load = (handler: AgentMessageHandler) => (handler as any).loadLatestTurn(THREAD_ID);
+    const load = (handler: AgentMessageHandler) => handler['loadLatestTurn'](THREAD_ID);
     const LIMIT = AgentMessageHandler.LATEST_TURN_WINDOW;
 
     test('loads only the newest window when it contains the latest user message', async () => {

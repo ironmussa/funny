@@ -44,7 +44,7 @@ beforeEach(() => {
     return [];
   });
   listCustomCommandResourcesForProvider.mockReset().mockReturnValue([]);
-  listMcpServers.mockReset().mockReturnValue(okAsync([] as McpServer[]));
+  listMcpServers.mockReset().mockReturnValue(okAsync<McpServer[]>([]));
 });
 
 describe('resolveAgentResources — skills', () => {

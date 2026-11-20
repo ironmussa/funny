@@ -3,10 +3,7 @@ import { describe, test, expect, vi } from 'vitest';
 
 import { AgentMessageHandler } from '../../services/agent-message-handler.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
-
-function stub<T>(p: Record<string, any>): T {
-  return p as T;
-}
+import { buildThreadRecord, createThreadManagerFake } from '../helpers/builders.js';
 
 const THREAD_ID = 'thread-provider-error';
 
@@ -24,13 +21,16 @@ function makeHandler() {
 
   const updates: Array<Record<string, unknown>> = [];
   let toolCallSeq = 0;
-  const threadManager = {
-    getThread: vi.fn(async () => ({
-      userId: 'user-1',
-      projectId: 'proj-1',
-      status: 'running',
-      stage: 'review',
-    })),
+  const threadManager = createThreadManagerFake({
+    getThread: vi.fn(async () =>
+      buildThreadRecord({
+        id: THREAD_ID,
+        userId: 'user-1',
+        projectId: 'proj-1',
+        status: 'running',
+        stage: 'review',
+      }),
+    ),
     insertMessage: vi.fn(async () => 'db-msg-1'),
     updateMessage: vi.fn(async () => undefined),
     findToolCall: vi.fn(async () => undefined),
@@ -40,19 +40,14 @@ function makeHandler() {
     updateThread: vi.fn(async (_id: string, patch: Record<string, unknown>) => {
       updates.push(patch);
     }),
-  };
+  });
 
-  const handler = new AgentMessageHandler(
-    state,
-    threadManager as any,
-    wsBroker as any,
-    () => undefined,
-  );
+  const handler = new AgentMessageHandler(state, threadManager, wsBroker, () => undefined);
   return { handler, state, emitted, updates, threadManager };
 }
 
 function providerErrorAssistant(): CLIMessage {
-  return stub<CLIMessage>({
+  return {
     type: 'assistant',
     message: {
       id: 'cli-err',
@@ -65,18 +60,18 @@ function providerErrorAssistant(): CLIMessage {
         },
       ],
     },
-  });
+  };
 }
 
 function textAssistant(text: string): CLIMessage {
-  return stub<CLIMessage>({
+  return {
     type: 'assistant',
     message: { id: 'cli-text', content: [{ type: 'text', text }] },
-  });
+  };
 }
 
 function successResult(): CLIMessage {
-  return stub<CLIMessage>({
+  return {
     type: 'result',
     subtype: 'success',
     is_error: false,
@@ -85,7 +80,7 @@ function successResult(): CLIMessage {
     result: 'done',
     total_cost_usd: 0.01,
     session_id: 'sess-1',
-  });
+  };
 }
 
 describe('AgentMessageHandler — provider error → failed', () => {

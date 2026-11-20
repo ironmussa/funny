@@ -28,6 +28,7 @@
  *   is nowhere on the server to run them (checks belong in the repository's CI).
  */
 
+import { EMPTY_FACTORY_RUN_METRICS, type FactoryRunMetrics } from '@funny/shared/contracts/factory';
 import type {
   ActionProvider,
   ActionResult,
@@ -35,8 +36,10 @@ import type {
   SpawnAgentOpts,
 } from '@funny/workflows/compiler';
 import type { Result } from 'neverthrow';
+import { z } from 'zod';
 
 import { log } from '../../lib/logger.js';
+import { metric } from '../../lib/telemetry.js';
 import type { StartedThread, StartThreadError } from '../runner-thread-launcher.js';
 import { createFactoryCiActions } from './factory-ci-actions.js';
 import type { FactoryGithubPort } from './factory-github.js';
@@ -68,6 +71,8 @@ export interface FactoryActionProviderDeps {
   threadIds: string[];
   /** The run's pull request, when an earlier attempt found it. */
   prUrl: string | null;
+  /** The run's integration counters so far (a resumed or retried run keeps counting). */
+  metrics?: FactoryRunMetrics;
   /**
    * Set when the run was interrupted while starting its next agent thread:
    * that step first looks for the thread it may have started.
@@ -124,6 +129,35 @@ function prompted(opts: SpawnAgentOpts): string {
     : opts.prompt;
 }
 
+/** The verdicts `wait_ci` reports in its result metadata (`factory-ci-actions.ts`). */
+const CI_VERDICT = z.enum(['green', 'no-checks', 'red', 'conflict', 'blocked', 'timeout']);
+
+/** The counter a `wait_ci` verdict adds to, besides the round itself; null for a pass. */
+const VERDICT_COUNTERS = {
+  green: null,
+  'no-checks': null,
+  red: 'ciRed',
+  conflict: 'conflicts',
+  blocked: 'ciBlocked',
+  timeout: 'ciTimeouts',
+} satisfies Record<z.infer<typeof CI_VERDICT>, keyof FactoryRunMetrics | null>;
+
+/**
+ * The counters after one `wait_ci` result. A stop or a GitHub access error is
+ * not a CI round (no verdict about the code), so it counts nothing.
+ */
+export function countCiResult(
+  metrics: FactoryRunMetrics,
+  result: ActionResult,
+): FactoryRunMetrics | null {
+  const verdict = CI_VERDICT.safeParse(result.metadata?.verdict);
+  if (!verdict.success) return null;
+  const next = { ...metrics, ciRounds: metrics.ciRounds + 1 };
+  const counter = VERDICT_COUNTERS[verdict.data];
+  if (counter) next[counter] += 1;
+  return next;
+}
+
 function outcomeResult(threadId: string, outcome: ThreadOutcome): ActionResult {
   if (outcome.status === 'completed') {
     return { ok: true, output: outcome.output, metadata: { threadId } };
@@ -141,6 +175,18 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
   let agentSteps = 0;
   let prUrl = deps.prUrl;
   let pendingLaunch = deps.launchStartedAt;
+  let metrics: FactoryRunMetrics = { ...EMPTY_FACTORY_RUN_METRICS, ...deps.metrics };
+
+  /** Add to the run's counters and store them with the run. */
+  async function count(next: FactoryRunMetrics | null, attributes: Record<string, string>) {
+    if (!next) return;
+    metrics = next;
+    metric('factory.integration_event', 1, {
+      type: 'sum',
+      attributes: { ...attributes, repo: scope.repo },
+    });
+    await deps.record({ metrics });
+  }
   const titlePrefix = `[Factory] #${scope.issueNumber} `;
   const title = `${titlePrefix}${scope.issueTitle}`.slice(0, 200);
 
@@ -209,6 +255,9 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
       await deps.record({ launchStartedAt: null });
       return { ok: false, error: `The agent could not continue: ${sent.error}` };
     }
+    // A follow-up once the pull request is open is a fix (CI or conflict), not new work.
+    if (prUrl)
+      await count({ ...metrics, agentFixes: metrics.agentFixes + 1 }, { event: 'agent_fix' });
     return { threadId: await recordThread(first), after: { completedAt: before, sentAt } };
   }
 
@@ -304,7 +353,10 @@ export function createFactoryActionProvider(deps: FactoryActionProviderDeps): Ac
 
     async waitCi(opts) {
       await deps.record({ state: 'waiting_ci' });
-      return ci.waitCi(opts);
+      const result = await ci.waitCi(opts);
+      const verdict = result.metadata?.verdict;
+      await count(countCiResult(metrics, result), { event: 'ci_round', verdict: String(verdict) });
+      return result;
     },
 
     merge: (opts) => ci.merge(opts),

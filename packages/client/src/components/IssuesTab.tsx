@@ -1,6 +1,6 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
 import { MAX_ISSUES_PER_SEND } from '@funny/shared/contracts/factory';
-import { CircleCheck, CircleDot, ExternalLink, MessageSquare, Plus, RefreshCw } from 'lucide-react';
+import { CircleCheck, CircleDot, MessageSquare, Plus } from 'lucide-react';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -16,6 +16,12 @@ import {
   type IssueFactory,
 } from '@/components/issues/IssueFactoryControls';
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
+import {
+  TabToolbar,
+  TabToolbarExternalLink,
+  TabToolbarRefresh,
+  TabToolbarSpacer,
+} from '@/components/review-pane/TabToolbar';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -167,22 +173,8 @@ function IssuesToolbar({
     s === 'open' ? t('issues.open', 'Open') : t('issues.closed', 'Closed');
 
   return (
-    <div className="border-sidebar-border flex items-center gap-1 border-b px-2 py-1">
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onRefresh}
-            disabled={loading}
-            className="text-muted-foreground shrink-0"
-            data-testid="issues-refresh"
-          >
-            <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
-      </Tooltip>
+    <TabToolbar data-testid="issues-toolbar">
+      <TabToolbarRefresh loading={loading} onRefresh={onRefresh} data-testid="issues-refresh" />
 
       <Select value={state} onValueChange={(v) => onStateChange(v as IssueState)}>
         <SelectTrigger size="xs" className="w-auto gap-1" data-testid="issues-state-trigger">
@@ -198,34 +190,16 @@ function IssuesToolbar({
         </SelectContent>
       </Select>
 
-      <div className="min-w-0 flex-1" />
+      <TabToolbarSpacer />
 
       {repoInfo && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              asChild
-              className="text-muted-foreground shrink-0"
-              data-testid="issues-open-github"
-            >
-              <a
-                href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues`}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={t('review.issues.openOnGithub', 'Open issues on GitHub')}
-              >
-                <ExternalLink className="icon-base" />
-              </a>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {t('issues.viewOnGithub', 'View on GitHub')}
-          </TooltipContent>
-        </Tooltip>
+        <TabToolbarExternalLink
+          href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues`}
+          label={t('review.issues.openOnGithub', 'Open issues on GitHub')}
+          data-testid="issues-open-github"
+        />
       )}
-    </div>
+    </TabToolbar>
   );
 }
 
@@ -434,7 +408,7 @@ function IssueRow({
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
-          <span className="text-muted-foreground text-[10px]">#{issue.number}</span>
+          <span className="text-muted-foreground text-2xs">#{issue.number}</span>
           {factoryRun && (
             <IssueFactoryStatus
               projectId={projectId}
@@ -442,15 +416,11 @@ function IssueRow({
               position={factory.queuePosition.get(issue.number)}
             />
           )}
-          <IssueBadges issue={issue} badgeClassName="h-3.5 text-[9px] leading-none" />
-          <span className="text-muted-foreground text-[10px]">
-            {timeAgo(issue.created_at, now)}
-          </span>
-          {issue.user && (
-            <span className="text-muted-foreground text-[10px]">{issue.user.login}</span>
-          )}
+          <IssueBadges issue={issue} />
+          <span className="text-muted-foreground text-2xs">{timeAgo(issue.created_at, now)}</span>
+          {issue.user && <span className="text-muted-foreground text-2xs">{issue.user.login}</span>}
           {issue.comments > 0 && (
-            <span className="text-muted-foreground flex items-center gap-0.5 text-[10px]">
+            <span className="text-muted-foreground text-2xs flex items-center gap-0.5">
               <MessageSquare className="icon-xs" />
               {issue.comments}
             </span>
@@ -458,7 +428,7 @@ function IssueRow({
         </div>
         {issue.body ? (
           <p
-            className="text-muted-foreground mt-1 line-clamp-3 text-[10px] whitespace-pre-wrap"
+            className="text-muted-foreground text-2xs mt-1 line-clamp-3 whitespace-pre-wrap"
             data-testid={`issue-body-${issue.number}`}
           >
             {issue.body}

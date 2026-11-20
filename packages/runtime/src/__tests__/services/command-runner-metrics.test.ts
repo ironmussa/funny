@@ -1,20 +1,27 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
+import { z } from 'zod';
 
-const mocks = vi.hoisted(() => ({
-  emitToUser: vi.fn(),
-  // Set per test to return canned `ps` output; null = pass through to the real execute.
-  psOverride: null as
-    | null
-    | ((args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>),
-  execute: vi.fn(),
-}));
+import type { IWSBroker } from '../../services/server-interfaces.js';
+
+type Execute = typeof import('@funny/core/git').execute;
+type PsOverride = (args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
+
+const mocks = vi.hoisted(() => {
+  const noOverride = (): PsOverride | null => null;
+  return {
+    emitToUser: vi.fn<IWSBroker['emitToUser']>(),
+    // Set per test to return canned `ps` output; null = pass through to the real execute.
+    psOverride: noOverride(),
+    execute: vi.fn<Execute>(),
+  };
+});
 
 vi.mock('@funny/core/git', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@funny/core/git')>();
-  mocks.execute.mockImplementation((command: string, args: string[], options?: unknown) =>
+  mocks.execute.mockImplementation((command, args, options) =>
     mocks.psOverride && command === 'ps'
       ? mocks.psOverride(args)
-      : actual.execute(command, args, options as Parameters<typeof actual.execute>[2]),
+      : actual.execute(command, args, options),
   );
   return { ...actual, execute: mocks.execute };
 });
@@ -82,19 +89,22 @@ describe('command metrics sampling', () => {
 
 const INTERVAL_MS = 10_000;
 
-type MetricsEvent = { commandId: string; memoryUsageKB: number };
+const metricsEventSchema = z.object({
+  type: z.literal('command:metrics'),
+  data: z.object({ commandId: z.string(), memoryUsageKB: z.unknown() }),
+});
+
+type MetricsEvent = z.infer<typeof metricsEventSchema>['data'];
 
 function metricsEvents(): MetricsEvent[] {
-  return mocks.emitToUser.mock.calls
-    .map(([, event]) => event as { type: string; data: MetricsEvent })
-    .filter((event) => event.type === 'command:metrics')
-    .map((event) => event.data);
+  return mocks.emitToUser.mock.calls.flatMap(([, event]) => {
+    const parsed = metricsEventSchema.safeParse(event);
+    return parsed.success ? [parsed.data.data] : [];
+  });
 }
 
 function psCalls(): string[][] {
-  return mocks.execute.mock.calls
-    .filter(([command]) => command === 'ps')
-    .map(([, args]) => args as string[]);
+  return mocks.execute.mock.calls.filter(([command]) => command === 'ps').map(([, args]) => args);
 }
 
 /** Canned `ps` output: every requested pid reports `kbFor(pid)`. */
@@ -251,8 +261,8 @@ describe.skipIf(process.platform === 'win32')('command metrics timer lifecycle',
   test('a failing metrics emit is logged, not left as an unhandled rejection', async () => {
     vi.useFakeTimers();
     cannedPs(() => 1234);
-    mocks.emitToUser.mockImplementation((_userId: string, event: { type: string }) => {
-      if (event.type === 'command:metrics') throw new Error('socket gone');
+    mocks.emitToUser.mockImplementation((_userId, event) => {
+      if (metricsEventSchema.safeParse(event).success) throw new Error('socket gone');
     });
     try {
       await start('cmd-metrics-emit-fail');

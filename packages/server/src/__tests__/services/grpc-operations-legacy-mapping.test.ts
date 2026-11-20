@@ -10,10 +10,23 @@ import type {
   RunnerGrpcCallContext,
 } from '../../services/grpc/runner-grpc-server.js';
 import type { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
+import type { OperationIdempotencyStore } from '../../services/operation-idempotency.js';
 
 function stub<T>(partial: unknown): T {
+  // SAFETY: only for gRPC call and session-registry doubles; each test's partial
+  // provides the members the operations handler uses (write/on, isActive).
   return partial as T;
 }
+
+/** A gRPC operations call: the handler listens for data and writes replies. */
+class FakeCall extends EventEmitter {
+  write: (message: unknown) => void = () => {};
+}
+
+/** No idempotency key reaches the store in these tests. */
+const unusedExecute: OperationIdempotencyStore['execute'] = async () => {
+  throw new Error('idempotency store not expected');
+};
 
 const struct = { fields: { a: { kind: 'stringValue', stringValue: 'x' } } };
 
@@ -56,13 +69,16 @@ const RICH_VALUE = {
   patch: struct,
 };
 
-type Outcome = { request?: Record<string, unknown>; failure?: { code: number; message: string } };
+type Outcome = {
+  request?: Record<string, unknown>;
+  failure?: { code: number; message: string; retryable?: boolean };
+};
 
 async function mapViaHandler(
   request: Record<string, unknown>,
   userId: string | null = 'user-1',
 ): Promise<Outcome> {
-  const call = new EventEmitter() as EventEmitter & { write: (message: unknown) => void };
+  const call = new FakeCall();
   let captured: Record<string, unknown> | undefined;
   const done = new Promise<Outcome>((resolve) => {
     call.write = (message: any) => {
@@ -78,12 +94,9 @@ async function mapViaHandler(
         return { success: true };
       },
       idempotency: {
-        execute: async (_input: unknown, run: () => Promise<unknown>) => ({
-          kind: 'executed',
-          outcome: await run(),
-        }),
+        execute: async (_input, run) => ({ kind: 'executed', outcome: await run() }),
         cleanupExpired: async () => 0,
-      } as any,
+      },
     },
   );
   const context: RunnerGrpcCallContext = {
@@ -336,14 +349,14 @@ describe('operations handler legacy request mapping', () => {
           code: FailureCode.INVALID_ARGUMENT,
           message: 'operation is not allowed',
           retryable: false,
-        } as any,
+        },
       });
     }
   });
 });
 
 async function respondVia(result: unknown): Promise<any> {
-  const call = new EventEmitter() as EventEmitter & { write: (message: unknown) => void };
+  const call = new FakeCall();
   const written = new Promise<any>((resolve) => {
     call.write = resolve;
   });
@@ -352,7 +365,7 @@ async function respondVia(result: unknown): Promise<any> {
     stub<RunnerGrpcSessionRegistry>({ isActive: () => true }),
     {
       execute: async () => result,
-      idempotency: { cleanupExpired: async () => 0 } as any,
+      idempotency: { execute: unusedExecute, cleanupExpired: async () => 0 },
     },
   );
   handler(stub<RunnerGrpcCall>(call), {

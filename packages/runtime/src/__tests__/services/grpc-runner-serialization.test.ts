@@ -1,4 +1,3 @@
-import type { DescMethodStreaming } from '@bufbuild/protobuf';
 import { RunnerTransportService } from '@funny/shared/runner-v2/control';
 import { describe, expect, test } from 'vitest';
 
@@ -6,8 +5,7 @@ import { grpcMethodDefinition } from '../../services/grpc-runner-client.js';
 
 describe('runner gRPC event serialization', () => {
   test('round-trips clone progress without a percentage through the real protobuf codec', () => {
-    const method = RunnerTransportService.methods.find((entry) => entry.localName === 'events');
-    const codec = grpcMethodDefinition(method as DescMethodStreaming);
+    const codec = grpcMethodDefinition(RunnerTransportService.method.events);
     const data = {
       cloneId: 'clone:123',
       phase: 'Cloning into repository...',

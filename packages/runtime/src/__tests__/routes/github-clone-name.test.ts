@@ -4,11 +4,7 @@ import { join } from 'path';
 
 import { Hono } from 'hono';
 import { ok } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-
-function stub<T>(p: Record<string, any>): T {
-  return p as T;
-}
+import { describe, test, expect, vi, beforeEach, afterEach, type MockInstance } from 'vitest';
 
 /**
  * Regression (#179): POST /clone validated `destinationPath` against the
@@ -68,7 +64,7 @@ function postClone(body: Record<string, unknown>) {
 
 describe('POST /clone directory name', () => {
   let parentDir: string;
-  let spawn: ReturnType<typeof vi.spyOn>;
+  let spawn: MockInstance<typeof Bun.spawn>;
 
   beforeEach(() => {
     parentDir = mkdtempSync(join(tmpdir(), 'funny-clone-name-'));
@@ -76,14 +72,16 @@ describe('POST /clone directory name', () => {
     mocks.createProject.mockResolvedValue(ok({ id: 'p-1', name: 'widget', path: '' }));
     mocks.requirePickerPath.mockReset();
     mocks.requirePickerPath.mockResolvedValue(null);
-    spawn = vi.spyOn(Bun, 'spawn').mockImplementation(() =>
-      stub<ReturnType<typeof Bun.spawn>>({
-        stdout: null,
-        stderr: null,
+    spawn = vi.spyOn(Bun, 'spawn').mockImplementation(() => {
+      const subprocess: Partial<ReturnType<typeof Bun.spawn>> = {
+        stdout: undefined,
+        stderr: undefined,
         exited: Promise.resolve(0),
         exitCode: 0,
-      }),
-    );
+      };
+      // SAFETY: the clone route reads only stdout, stderr, exited and exitCode of the subprocess.
+      return subprocess as ReturnType<typeof Bun.spawn>;
+    });
   });
 
   afterEach(() => {
@@ -142,7 +140,7 @@ describe('POST /clone directory name', () => {
     });
 
     expect(spawn).toHaveBeenCalledTimes(1);
-    expect((spawn.mock.calls[0][0] as string[]).at(-1)).toBe(join(parentDir, 'widget'));
+    expect(spawn.mock.calls[0][0].at(-1)).toBe(join(parentDir, 'widget'));
   });
 
   test('clones a plain name into the destination directory', async () => {
@@ -153,7 +151,7 @@ describe('POST /clone directory name', () => {
     });
 
     expect(spawn).toHaveBeenCalledTimes(1);
-    const args = spawn.mock.calls[0][0] as string[];
+    const args = spawn.mock.calls[0][0];
     expect(args.at(-1)).toBe(join(parentDir, 'my-widget'));
   });
 });

@@ -16,8 +16,7 @@ describe('handleError', () => {
   test('returns 400 with generic message for ProcessExecutionError', async () => {
     const error = new Error('git checkout failed');
     error.name = 'ProcessExecutionError';
-    (error as any).command = 'git checkout main';
-    (error as any).stderr = 'error: pathspec not found';
+    Object.assign(error, { command: 'git checkout main', stderr: 'error: pathspec not found' });
 
     const app = createApp(error);
     const res = await app.request('/test');

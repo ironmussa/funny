@@ -93,6 +93,8 @@ export interface FactoryRun {
   threadIds: string[];
   /** When the row was written: the send time for a sent issue. */
   startedAt: string;
+  /** When the run left the queue and its flow could start; null while `requested`. */
+  admittedAt: string | null;
   completedAt: string | null;
   /** How the issue came in: sent from funny, or found by the label (automatic mode). */
   source: FactoryRunSource;
@@ -106,7 +108,39 @@ export interface FactoryRun {
   flowSteps: string[];
   /** Why the run failed (the flow's error), or null. */
   failureReason: string | null;
+  /** How integrating the run's pull request went; zeros before its CI was looked at. */
+  metrics: FactoryRunMetrics;
 }
+
+/**
+ * Counters of one run's integration, written as the run goes. They measure
+ * how much integrating costs (CI rounds, conflicts, agent fixes) so a factory
+ * can be tuned. New counters are added here with a 0 default; stored rows
+ * without them read as 0.
+ */
+export interface FactoryRunMetrics {
+  /** `wait_ci` steps that reached a verdict (each one is a CI round). */
+  ciRounds: number;
+  /** Rounds that ended with failing checks. */
+  ciRed: number;
+  /** Rounds that ended with the pull request conflicting with its base branch. */
+  conflicts: number;
+  /** Rounds that ended with checks that could not run (they need a person). */
+  ciBlocked: number;
+  /** Rounds whose checks did not finish in time. */
+  ciTimeouts: number;
+  /** Agent follow-ups after the pull request was opened (fix steps). */
+  agentFixes: number;
+}
+
+export const EMPTY_FACTORY_RUN_METRICS: FactoryRunMetrics = {
+  ciRounds: 0,
+  ciRed: 0,
+  conflicts: 0,
+  ciBlocked: 0,
+  ciTimeouts: 0,
+  agentFixes: 0,
+};
 
 export type FactoryRunSource = 'manual' | 'label';
 

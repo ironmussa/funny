@@ -14,7 +14,11 @@
  * but neither in flight (nothing drives it) nor holding a concurrency slot.
  * Leaving the queue is a compare-and-set (`QUEUE_TRANSITIONS`).
  */
-import type { FactoryWaitReason } from '@funny/shared/contracts/factory';
+import {
+  EMPTY_FACTORY_RUN_METRICS,
+  type FactoryRunMetrics,
+  type FactoryWaitReason,
+} from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
 import {
   and,
@@ -38,6 +42,16 @@ import { factoryRuns, factorySettings } from '../../db/schema.js';
 const THREAD_IDS_SCHEMA = z.array(z.string());
 
 const STEP_NAMES_SCHEMA = z.array(z.string());
+
+/** Counters missing from an older row read as 0 (new counters need no migration). */
+const METRICS_SCHEMA = z.object({
+  ciRounds: z.number().int().nonnegative().default(0),
+  ciRed: z.number().int().nonnegative().default(0),
+  conflicts: z.number().int().nonnegative().default(0),
+  ciBlocked: z.number().int().nonnegative().default(0),
+  ciTimeouts: z.number().int().nonnegative().default(0),
+  agentFixes: z.number().int().nonnegative().default(0),
+});
 
 const WAIT_REASON_SCHEMA = z.object({
   kind: z.enum([
@@ -154,6 +168,8 @@ export interface FactoryRunView {
   /** When an agent thread started being launched and is not recorded yet. */
   launchStartedAt: string | null;
   startedAt: string;
+  /** When the run left the queue; null while `requested`. */
+  admittedAt: string | null;
   completedAt: string | null;
   source: FactoryRunSource;
   /** The flow the run executes; null on rows from before runs recorded their own. */
@@ -164,6 +180,8 @@ export interface FactoryRunView {
   flowSteps: string[];
   /** Why the run failed, or null. */
   failureReason: string | null;
+  /** How integrating its pull request went (CI rounds, conflicts, agent fixes). */
+  metrics: FactoryRunMetrics;
 }
 
 export type FactoryRunSource = 'manual' | 'label';
@@ -187,6 +205,7 @@ const toView = (row: Row): FactoryRunView => ({
   threadIds: parseThreadIds(row.threadIds),
   launchStartedAt: row.launchStartedAt ?? null,
   startedAt: row.startedAt,
+  admittedAt: row.admittedAt ?? null,
   completedAt: row.completedAt,
   source: row.source === 'manual' ? 'manual' : 'label',
   flowName: row.flowName ?? null,
@@ -194,6 +213,7 @@ const toView = (row: Row): FactoryRunView => ({
   waitReason: parseWaitReason(row.waitReason ?? null),
   flowSteps: parseStepNames(row.flowSteps ?? null),
   failureReason: row.failureReason ?? null,
+  metrics: parseMetrics(row.metrics ?? null),
 });
 
 function parseWaitReason(raw: string | null): FactoryWaitReason | null {
@@ -206,6 +226,12 @@ function parseThreadIds(raw: string | null): string[] {
   if (!raw) return [];
   const parsed = parseStoredJson(THREAD_IDS_SCHEMA, raw, 'factory_runs.thread_ids');
   return parsed.ok ? parsed.value : [];
+}
+
+function parseMetrics(raw: string | null): FactoryRunMetrics {
+  if (!raw) return { ...EMPTY_FACTORY_RUN_METRICS };
+  const parsed = parseStoredJson(METRICS_SCHEMA, raw, 'factory_runs.metrics');
+  return parsed.ok ? parsed.value : { ...EMPTY_FACTORY_RUN_METRICS };
 }
 
 function parseStepNames(raw: string | null): string[] {
@@ -233,11 +259,12 @@ export interface UpdateRunInput {
   launchStartedAt?: string | null;
   flowSteps?: string[];
   failureReason?: string | null;
+  metrics?: FactoryRunMetrics;
 }
 
 /** Update fields stored as they are, and the ones stored as JSON. */
 const PLAIN_FIELDS = ['currentStep', 'prUrl', 'launchStartedAt', 'failureReason'] as const;
-const JSON_FIELDS = ['threadIds', 'flowSteps'] as const;
+const JSON_FIELDS = ['threadIds', 'flowSteps', 'metrics'] as const;
 
 function changesFor(input: UpdateRunInput): Partial<Row> | null {
   const changes: Partial<Row> = {};
@@ -343,6 +370,7 @@ function queueOperations(newId: () => string) {
             admittedAt: null,
             flowSteps: null,
             failureReason: null,
+            metrics: null,
           }));
           const written = await db
             .insert(factoryRuns)
@@ -550,6 +578,7 @@ export function createFactoryRunsRepository(
         admittedAt: input.state === 'requested' ? null : new Date().toISOString(),
         flowSteps: null,
         failureReason: null,
+        metrics: null,
       };
       return ResultAsync.fromPromise(db.insert(factoryRuns).values(row), storage).map(() =>
         toView(row),

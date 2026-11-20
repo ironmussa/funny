@@ -17,6 +17,12 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 import { AgentEventRouter } from '../../services/agent-event-router.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
 import { threadEventBus, type AgentCompletedEvent } from '../../services/thread-event-bus.js';
+import { createOrchestrator, createMessageHandler } from '../helpers/builders-handlers.js';
+import {
+  buildThreadRecord,
+  createThreadManagerFake,
+  createWsBrokerFake,
+} from '../helpers/builders.js';
 
 // ── Mocks ────────────────────────────────────────────────────────
 
@@ -29,35 +35,38 @@ vi.mock('../../services/service-registry.js', () => ({
 function makeRouter(state: AgentStateTracker): AgentEventRouter {
   // The constructor calls subscribeOrchestrator / subscribeEventBus —
   // provide minimal mocks that satisfy those.
-  const orchestrator = { on: vi.fn() } as any;
-  const messageHandler = {} as any;
-  const threadManager = {
-    getThread: vi.fn(),
-    updateThread: vi.fn(),
+  const threadManager = createThreadManagerFake({
     getThreadWithMessages: vi.fn(async () => null),
-  } as any;
-  const wsBroker = { emit: vi.fn(), emitToUser: vi.fn() } as any;
-  return new AgentEventRouter(orchestrator, state, messageHandler, threadManager, wsBroker);
+  });
+  const wsBroker = createWsBrokerFake();
+  return new AgentEventRouter(
+    createOrchestrator(),
+    state,
+    createMessageHandler(state),
+    threadManager,
+    wsBroker,
+  );
 }
 
 function makeRecoveryRouter(state: AgentStateTracker) {
-  const orchestrator = { on: vi.fn() } as any;
-  const messageHandler = {} as any;
   const threadManager = {
-    getThread: vi.fn(async () => ({
-      id: 't-1',
-      projectId: 'p-1',
-      userId: 'u-1',
-      status: 'waiting',
-      cost: 0,
-    })),
+    ...createThreadManagerFake(),
+    getThread: vi.fn(async () =>
+      buildThreadRecord({ id: 't-1', projectId: 'p-1', userId: 'u-1', status: 'waiting', cost: 0 }),
+    ),
     updateThread: vi.fn(async () => undefined),
-    expirePendingPermissionRequest: vi.fn(async () => undefined),
+    expirePendingPermissionRequest: vi.fn(async (_requestId: string) => undefined),
     getThreadWithMessages: vi.fn(async () => null),
-  } as any;
-  const wsBroker = { emit: vi.fn(), emitToUser: vi.fn() } as any;
+  };
+  const wsBroker = createWsBrokerFake();
   return {
-    router: new AgentEventRouter(orchestrator, state, messageHandler, threadManager, wsBroker),
+    router: new AgentEventRouter(
+      createOrchestrator(),
+      state,
+      createMessageHandler(state),
+      threadManager,
+      wsBroker,
+    ),
     threadManager,
     wsBroker,
   };
@@ -132,7 +141,7 @@ describe('AgentEventRouter — lost structured permission recovery', () => {
     const { router, threadManager, wsBroker } = makeRecoveryRouter(state);
 
     try {
-      await (router as any).handleAgentFailure('t-1', 'ACP process exited');
+      await router['handleAgentFailure']('t-1', 'ACP process exited');
 
       expect(threadManager.expirePendingPermissionRequest).toHaveBeenCalledWith('request-1');
       expect(threadManager.updateThread).toHaveBeenCalledWith(
@@ -160,37 +169,39 @@ describe('AgentEventRouter — lost structured permission recovery', () => {
 
 describe('AgentEventRouter — changed-files summary on runs that end without a result', () => {
   function makeEndingRouter() {
-    const listeners = new Map<string, (...args: any[]) => void>();
-    const orchestrator = {
-      on: vi.fn((event: string, fn: (...args: any[]) => void) => listeners.set(event, fn)),
-    } as any;
-    const messageHandler = { persistChangedFilesSummary: vi.fn(async () => undefined) } as any;
-    const threadManager = {
-      getThread: vi.fn(async () => ({
-        id: 't-1',
-        projectId: 'p-1',
-        userId: 'u-1',
-        status: 'running',
-        cost: 0,
-      })),
+    const orchestrator = createOrchestrator();
+    const state = new AgentStateTracker();
+    const messageHandler = createMessageHandler(state);
+    const persistChangedFilesSummary = vi
+      .spyOn(messageHandler, 'persistChangedFilesSummary')
+      .mockResolvedValue(undefined);
+    const threadManager = createThreadManagerFake({
+      getThread: vi.fn(async () =>
+        buildThreadRecord({
+          id: 't-1',
+          projectId: 'p-1',
+          userId: 'u-1',
+          status: 'running',
+          cost: 0,
+        }),
+      ),
       updateThread: vi.fn(async () => undefined),
       getThreadWithMessages: vi.fn(async () => null),
-    } as any;
-    const wsBroker = { emit: vi.fn(), emitToUser: vi.fn() } as any;
+    });
     const router = new AgentEventRouter(
       orchestrator,
-      new AgentStateTracker(),
+      state,
       messageHandler,
       threadManager,
-      wsBroker,
+      createWsBrokerFake(),
     );
-    return { router, listeners, messageHandler };
+    return { router, orchestrator, messageHandler: { persistChangedFilesSummary } };
   }
 
   test('persists the summary when the run fails', async () => {
     const { router, messageHandler } = makeEndingRouter();
     try {
-      await (router as any).handleAgentFailure('t-1', 'process crashed');
+      await router['handleAgentFailure']('t-1', 'process crashed');
       expect(messageHandler.persistChangedFilesSummary).toHaveBeenCalledWith('t-1');
     } finally {
       router.destroy();
@@ -198,9 +209,9 @@ describe('AgentEventRouter — changed-files summary on runs that end without a 
   });
 
   test('persists the summary when the user stops the run', async () => {
-    const { router, listeners, messageHandler } = makeEndingRouter();
+    const { router, orchestrator, messageHandler } = makeEndingRouter();
     try {
-      listeners.get('agent:stopped')!('t-1');
+      orchestrator.emit('agent:stopped', 't-1');
       await vi.waitFor(() =>
         expect(messageHandler.persistChangedFilesSummary).toHaveBeenCalledWith('t-1'),
       );

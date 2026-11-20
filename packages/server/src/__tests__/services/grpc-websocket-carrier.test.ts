@@ -8,10 +8,12 @@ import {
   carrierTargetFor,
   createRunnerGrpcWebSocketCarrier,
   routeRunnerCarrier,
+  type CarrierWebSocketData,
   unauthenticatedCarrierPolicyFromEnv,
   withRunnerCarrier,
   type RunnerGrpcWebSocketCarrierOptions,
 } from '../../services/grpc/websocket-carrier.js';
+import { expectInstance } from '../helpers/builders-services.js';
 
 const VALID_TOKEN = 'runner-token-ok';
 const authenticate = async (token: string) => (token === VALID_TOKEN ? 'runner-1' : null);
@@ -43,12 +45,12 @@ function startEchoListener() {
 }
 
 function startServer(carrier: ReturnType<typeof createRunnerGrpcWebSocketCarrier>) {
-  const server = Bun.serve({
+  const server = Bun.serve<CarrierWebSocketData>({
     port: 0,
     hostname: '127.0.0.1',
     fetch(req, srv) {
       if (new URL(req.url).pathname === carrier.path) {
-        return carrier.upgrade(req, srv as any, srv.requestIP(req)?.address ?? '');
+        return carrier.upgrade(req, srv, srv.requestIP(req)?.address ?? '');
       }
       return new Response('not found', { status: 404 });
     },
@@ -63,6 +65,8 @@ function startServer(carrier: ReturnType<typeof createRunnerGrpcWebSocketCarrier
 }
 
 function openClient(port: number | undefined, path: string, token?: string): Promise<WebSocket> {
+  // SAFETY: Bun's WebSocket takes `{ headers }` as its second argument; the DOM
+  // typings in scope only describe the protocols form.
   const ws = token
     ? new WebSocket(`ws://127.0.0.1:${port}${path}`, {
         headers: { authorization: `Bearer ${token}` },
@@ -78,7 +82,7 @@ function openClient(port: number | undefined, path: string, token?: string): Pro
 
 function nextMessage(ws: WebSocket): Promise<Uint8Array> {
   return new Promise((resolve) => {
-    ws.onmessage = (event) => resolve(new Uint8Array(event.data as ArrayBuffer));
+    ws.onmessage = (event) => resolve(new Uint8Array(expectInstance(event.data, ArrayBuffer)));
   });
 }
 
@@ -149,6 +153,7 @@ describe('runner gRPC WebSocket carrier', () => {
       message: (_ws: unknown, _message: unknown) => calls.push('engine-message'),
       close: (_ws: unknown, _code: number, _reason: string) => calls.push('engine-close'),
     };
+    // SAFETY: withRunnerCarrier only calls the carrier's websocket handlers.
     const fakeCarrier = {
       websocket: {
         open: () => calls.push('carrier-open'),
@@ -167,7 +172,7 @@ describe('runner gRPC WebSocket carrier', () => {
     const other = new Request('http://x/api/projects');
     expect(routeRunnerCarrier(other, {}, null, '')).toBeNull();
     const carrierReq = new Request('http://x/api/runner-grpc/ws');
-    expect((routeRunnerCarrier(carrierReq, {}, null, '') as Response).status).toBe(404);
+    expect(expectInstance(routeRunnerCarrier(carrierReq, {}, null, ''), Response).status).toBe(404);
   });
 });
 

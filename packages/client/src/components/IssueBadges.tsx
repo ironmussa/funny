@@ -1,10 +1,8 @@
 import type { EnrichedGitHubIssue } from '@funny/shared';
-import { GitBranch } from 'lucide-react';
 
+import { BranchBadge } from '@/components/BranchBadge';
 import { PRBadge } from '@/components/PRBadge';
-import { Badge } from '@/components/ui/badge';
 import { LabelBadge } from '@/components/ui/label-badge';
-import { cn } from '@/lib/utils';
 
 function toPRBadgeState(state: string): 'OPEN' | 'MERGED' | 'CLOSED' {
   if (state === 'merged') return 'MERGED';
@@ -13,14 +11,7 @@ function toPRBadgeState(state: string): 'OPEN' | 'MERGED' | 'CLOSED' {
 }
 
 /** Label, linked-branch, and linked-PR badges shown in an issue's metadata row. */
-export function IssueBadges({
-  issue,
-  badgeClassName,
-}: {
-  issue: EnrichedGitHubIssue;
-  /** Size classes applied to every label and branch badge. */
-  badgeClassName: string;
-}) {
+export function IssueBadges({ issue }: { issue: EnrichedGitHubIssue }) {
   return (
     <>
       {issue.labels.map((label) => (
@@ -29,16 +20,12 @@ export function IssueBadges({
         </LabelBadge>
       ))}
       {issue.linkedBranch && (
-        <Badge
-          variant="outline"
-          className={cn(
-            'gap-0.5 border-status-success/30 px-1 text-status-success',
-            badgeClassName,
-          )}
-        >
-          <GitBranch className="size-2.5" />
-          <span className="max-w-[100px] truncate">{issue.linkedBranch}</span>
-        </Badge>
+        <BranchBadge
+          branch={issue.linkedBranch}
+          size="xs"
+          className="max-w-40"
+          data-testid={`issue-linked-branch-${issue.number}`}
+        />
       )}
       {issue.linkedPR && (
         <PRBadge

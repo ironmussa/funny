@@ -78,7 +78,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
   const app = new Hono<ServerEnv>();
   if (opts.runnerRequests || opts.runnerPresence || opts.browserEvents) {
     const request = app.request.bind(app);
-    app.request = ((input: RequestInfo | URL, init?: RequestInit, env?: ServerEnv['Bindings']) =>
+    app.request = (input: RequestInfo | URL, init?: RequestInit, env?: ServerEnv['Bindings']) =>
       request(
         input,
         init,
@@ -87,7 +87,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
           runnerPresence: opts.runnerPresence,
           browserEvents: opts.browserEvents,
         },
-      )) as typeof app.request;
+      );
   }
 
   app.use('*', async (c, next) => {
@@ -181,7 +181,7 @@ export async function createTestApp(opts: TestAppOptions = {}): Promise<TestApp>
     ];
     for (const table of tables) {
       try {
-        (db as any).run(sql.raw(`DELETE FROM ${table}`));
+        db.run(sql.raw(`DELETE FROM ${table}`));
       } catch {
         // Table may not exist — skip
       }

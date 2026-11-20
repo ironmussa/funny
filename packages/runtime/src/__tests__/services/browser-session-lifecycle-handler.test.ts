@@ -10,8 +10,9 @@ import {
   browserSessionThreadArchivedHandler,
   browserSessionThreadDeletedHandler,
 } from '../../services/handlers/browser-session-lifecycle-handler.js';
+import { createHandlerContext } from '../helpers/builders-handlers.js';
 
-const ctx = {} as any;
+const ctx = createHandlerContext();
 const lifecycle = { threadId: 't1', projectId: 'p1', userId: 'u1', worktreePath: null, cwd: '/x' };
 
 describe('browser session lifecycle handlers', () => {

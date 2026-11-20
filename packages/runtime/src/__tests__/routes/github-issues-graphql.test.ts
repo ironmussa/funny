@@ -103,6 +103,7 @@ describe('mapIssuesWithLinks', () => {
 
   test('skips search nodes that are not issues', () => {
     const d = data([issueNode(1)]);
+    // SAFETY: deliberately invalid node: GitHub search returns `{}` for a node it cannot show, which IssueNode does not model.
     d.search.nodes.push({} as never);
     expect(mapIssuesWithLinks(d).issues.map((i) => i.number)).toEqual([1]);
   });

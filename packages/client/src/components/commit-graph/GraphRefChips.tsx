@@ -255,7 +255,7 @@ function BranchChipStatus({
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="inline-flex shrink-0 items-center gap-0.5 rounded-full bg-black/15 px-1 py-px text-[9px] leading-none font-semibold"
+          className="text-3xs inline-flex shrink-0 items-center gap-0.5 rounded-full bg-black/15 px-1 py-px leading-none font-semibold"
           data-testid={`graph-branch-status-${ref.name}`}
         >
           <StatusIcon
@@ -288,9 +288,7 @@ function CopyableRefValue({
         <TooltipTrigger asChild>
           <span className="min-w-0 flex-1 truncate">{label}</span>
         </TooltipTrigger>
-        <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
-          {label}
-        </TooltipContent>
+        <TooltipContent variant="mono">{label}</TooltipContent>
       </Tooltip>
       {value ? (
         <Tooltip>
@@ -354,7 +352,7 @@ function BranchRefDetail({
   return (
     <div className="flex flex-col gap-3 text-xs" data-testid={`graph-branch-detail-${ref.name}`}>
       <div className="min-w-0">
-        <div className="text-muted-foreground text-[10px] font-medium uppercase">
+        <div className="text-muted-foreground text-2xs font-medium uppercase">
           {t('graph.branch', 'Branch')}
         </div>
         <div className="truncate font-mono font-semibold">{summary?.branch ?? ref.name}</div>
@@ -460,7 +458,7 @@ function GraphRefChip({
   return (
     <div
       className={cn(
-        'inline-flex h-[15px] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
+        'inline-flex h-[0.9375rem] max-w-full min-w-0 shrink-0 items-center gap-0.5 rounded-full px-1 py-px transition-[filter] hover:brightness-90',
         isMergedRef(ref) && 'opacity-60',
       )}
       style={{ backgroundColor: color, color: textColor }}
@@ -480,7 +478,7 @@ function GraphRefChip({
             {renderRefIcon(ref)}
             <span
               className={cn(
-                'truncate text-[10px] leading-tight font-medium whitespace-nowrap',
+                'truncate text-2xs leading-tight font-medium whitespace-nowrap',
                 ref.kind === 'local' && ref.isCurrent && 'font-bold',
               )}
             >

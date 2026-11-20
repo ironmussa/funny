@@ -10,9 +10,9 @@ vi.mock('../../services/service-registry.js', () => ({
 }));
 
 import { resolveActiveAgentProfile } from '../../services/agent-startup/agent-profile.js';
-import type { RuntimeThreadRecord } from '../../services/server-interfaces.js';
+import { buildThreadRecord } from '../helpers/builders.js';
 
-const thread = { projectId: 'project-1', userId: 'user-1' } as RuntimeThreadRecord;
+const thread = buildThreadRecord({ projectId: 'project-1', userId: 'user-1' });
 const profile = { id: 'profile-1', name: 'Work', provider: 'claude' };
 
 describe('agent startup profile', () => {

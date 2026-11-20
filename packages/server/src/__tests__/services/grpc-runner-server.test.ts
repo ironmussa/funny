@@ -65,10 +65,12 @@ function createClient(port: number): TestClient {
     oneofs: true,
     includeDirs: [protocolRoot],
   });
-  const root = grpc.loadPackageDefinition(definition) as grpc.GrpcObject;
-  const runner = root.runner as grpc.GrpcObject;
-  const v2 = runner.v2 as grpc.GrpcObject;
-  const Constructor = v2.RunnerTransportService as grpc.ServiceClientConstructor;
+  const root = grpc.loadPackageDefinition(definition);
+  // SAFETY: control.proto declares package `runner.v2` with service
+  // `RunnerTransportService`, so these lookups are namespaces and then a client constructor.
+  const Constructor = ((root.runner as grpc.GrpcObject).v2 as grpc.GrpcObject)
+    .RunnerTransportService as grpc.ServiceClientConstructor;
+  // SAFETY: gRPC adds the service's methods (TestClient) from the proto definition at runtime.
   // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- gRPC dynamically adds service methods from the proto definition
   return new Constructor(
     `127.0.0.1:${port}`,
@@ -888,10 +890,7 @@ describe('runner gRPC operations stream', () => {
       },
     });
     client = createClient(endpoint!.port);
-    const stream = client.operations(metadata('good-token')) as grpc.ClientDuplexStream<
-      Record<string, unknown>,
-      Record<string, unknown>
-    >;
+    const stream = client.operations(metadata('good-token'));
     const response = nextMessage(stream);
     stream.write(operationRequest({ getThread: { threadId: 'thread-1' } }));
 
@@ -1024,10 +1023,7 @@ describe('runner gRPC operations stream', () => {
       sessionRegistry: sessions,
     });
     client = createClient(endpoint!.port);
-    const stream = client.operations(metadata('good-token')) as grpc.ClientDuplexStream<
-      Record<string, unknown>,
-      Record<string, unknown>
-    >;
+    const stream = client.operations(metadata('good-token'));
 
     const stale = nextMessage(stream);
     stream.write(
@@ -1100,10 +1096,7 @@ describe('runner gRPC operations stream', () => {
       },
     });
     client = createClient(endpoint!.port);
-    const stream = client.operations(metadata('good-token')) as grpc.ClientDuplexStream<
-      Record<string, unknown>,
-      Record<string, unknown>
-    >;
+    const stream = client.operations(metadata('good-token'));
     const response = nextMessage(stream);
     stream.write(
       operationRequest(
@@ -1185,10 +1178,7 @@ describe('runner gRPC operations stream', () => {
       },
     });
     client = createClient(endpoint!.port);
-    const stream = client.operations(metadata('good-token')) as grpc.ClientDuplexStream<
-      Record<string, unknown>,
-      Record<string, unknown>
-    >;
+    const stream = client.operations(metadata('good-token'));
 
     const missingKey = nextMessage(stream);
     stream.write(operationRequest({ updateMessage: mutation }));
@@ -1282,10 +1272,7 @@ describe('runner gRPC operations stream', () => {
       },
     });
     client = createClient(endpoint!.port);
-    const stream = client.operations(metadata('good-token')) as grpc.ClientDuplexStream<
-      Record<string, unknown>,
-      Record<string, unknown>
-    >;
+    const stream = client.operations(metadata('good-token'));
     stream.write(operationRequest({ getThread: { threadId: 'thread-1' } }));
     const signal = await firstStarted.promise;
 
@@ -1333,10 +1320,7 @@ describe('runner gRPC operations stream', () => {
       },
     });
     client = createClient(endpoint!.port);
-    const stream = client.operations(metadata('good-token')) as grpc.ClientDuplexStream<
-      Record<string, unknown>,
-      Record<string, unknown>
-    >;
+    const stream = client.operations(metadata('good-token'));
     const response = nextMessage(stream);
     stream.write(
       operationRequest(

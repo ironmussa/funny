@@ -13,6 +13,7 @@ import { api } from '@/lib/api';
 import { formatRemoteUrl, remoteUrlToBrowseUrl } from '@/lib/git-remote-url';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 
+import { useComposerWorktreeMode } from '../prompt-input/PromptChrome';
 import { BranchPicker } from '../SearchablePicker';
 
 interface NewThreadContextBarProps {
@@ -43,19 +44,23 @@ export function NewThreadContextBar({ projectId }: NewThreadContextBarProps) {
   const currentBranch = useBranchPickerStore((s) => s.currentBranch);
 
   // ── Branch switch on selection (checkout so ReviewPane shows accurate data) ──
+  // In worktree mode the branch is only the new worktree's base: the project
+  // directory stays where it is, so there is nothing to check out (and dirty
+  // files there must not block the choice).
+  const worktreeMode = useComposerWorktreeMode();
   const { ensureBranch, branchSwitchDialog } = useBranchSwitch();
   const handleBranchChange = useCallback(
     async (branch: string) => {
       // Checkout first so the picker only moves once the branch is actually live.
       // ensureBranch is a no-op if already on the target branch, and returns
       // false if the user cancels the dirty-files dialog or the checkout fails.
-      if (projectId && branch !== currentBranch) {
+      if (!worktreeMode && projectId && branch !== currentBranch) {
         const ok = await ensureBranch(projectId, branch);
         if (!ok) return;
       }
       setSelectedBranch(branch);
     },
-    [setSelectedBranch, projectId, currentBranch, ensureBranch],
+    [setSelectedBranch, projectId, currentBranch, ensureBranch, worktreeMode],
   );
 
   // ── Remote URL ──

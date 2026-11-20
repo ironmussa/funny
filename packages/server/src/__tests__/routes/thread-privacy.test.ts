@@ -40,8 +40,8 @@ describe('thread privacy (no inheritance)', () => {
       sql`INSERT INTO "user" (id, name, email, created_at, updated_at)
           VALUES (${ORG_ADMIN}, 'Org Admin', ${`${ORG_ADMIN}@x.test`}, '2026-01-01', '2026-01-01')`,
     );
-    seedProject(t.db as any, { id: 'p1', userId: OWNER, organizationId: ORG });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: OWNER });
+    seedProject(t.db, { id: 'p1', userId: OWNER, organizationId: ORG });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: OWNER });
     t.db.run(
       sql`INSERT INTO member (id, organization_id, user_id, role, created_at)
           VALUES ('m1', ${ORG}, ${ORG_ADMIN}, 'admin', '2026-01-01')`,

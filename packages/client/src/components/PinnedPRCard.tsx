@@ -845,9 +845,7 @@ export function PinnedPRCard({
                       {filePath}
                     </div>
                   </TooltipTrigger>
-                  <TooltipContent className="max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all">
-                    {filePath}
-                  </TooltipContent>
+                  <TooltipContent variant="mono">{filePath}</TooltipContent>
                 </Tooltip>
                 {fileThreads.map((th) => {
                   const resolving = resolvingNodeId === th.node_id;

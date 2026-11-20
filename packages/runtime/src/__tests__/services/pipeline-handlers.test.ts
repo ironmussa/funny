@@ -60,7 +60,33 @@ vi.mock('../../services/git-workflow-service.js', () => ({
 
 import { isWorkflowActive } from '../../services/git-workflow-service.js';
 import { pipelineTriggerHandler } from '../../services/handlers/pipeline-trigger-handler.js';
-import { getPipelineForProject, startPipelineRun } from '../../services/pipeline-manager.js';
+import {
+  getPipelineForProject,
+  startPipelineRun,
+  type PipelineConfig,
+} from '../../services/pipeline-manager.js';
+import { createHandlerContext } from '../helpers/builders-handlers.js';
+
+function buildPipelineConfig(overrides: Partial<PipelineConfig> = {}): PipelineConfig {
+  return {
+    id: 'pipe-1',
+    projectId: 'proj-1',
+    userId: 'u-1',
+    name: 'Review',
+    enabled: true,
+    reviewModel: 'sonnet',
+    fixModel: 'sonnet',
+    maxIterations: 3,
+    precommitFixEnabled: false,
+    precommitFixModel: 'sonnet',
+    precommitFixMaxIterations: 3,
+    testEnabled: false,
+    testFixEnabled: false,
+    testFixModel: 'sonnet',
+    testFixMaxIterations: 3,
+    ...overrides,
+  };
+}
 
 // ── Tests ────────────────────────────────────────────────────
 
@@ -84,7 +110,7 @@ describe('pipelineTriggerHandler', () => {
           message: 'test',
           cwd: '/tmp',
         },
-        {} as any,
+        createHandlerContext(),
       ),
     ).resolves.toBeUndefined();
   });
@@ -105,12 +131,12 @@ describe('pipelineTriggerHandler workflow guard', () => {
 
   beforeEach(() => {
     vi.mocked(startPipelineRun).mockClear();
-    vi.mocked(getPipelineForProject).mockResolvedValue({ id: 'pipe-1' } as any);
+    vi.mocked(getPipelineForProject).mockResolvedValue(buildPipelineConfig({ id: 'pipe-1' }));
     vi.mocked(isWorkflowActive).mockReturnValue(false);
   });
 
   test('starts a pipeline run when no workflow is active', async () => {
-    await pipelineTriggerHandler.action(event, {} as any);
+    await pipelineTriggerHandler.action(event, createHandlerContext());
     expect(startPipelineRun).toHaveBeenCalledWith(
       expect.objectContaining({ threadId: 't-1', projectId: 'proj-1', commitSha: 'abc123' }),
     );
@@ -118,13 +144,13 @@ describe('pipelineTriggerHandler workflow guard', () => {
 
   test('skips when a workflow is active for the thread', async () => {
     vi.mocked(isWorkflowActive).mockImplementation((id) => id === 't-1');
-    await pipelineTriggerHandler.action(event, {} as any);
+    await pipelineTriggerHandler.action(event, createHandlerContext());
     expect(startPipelineRun).not.toHaveBeenCalled();
   });
 
   test('skips when a workflow is active for the project', async () => {
     vi.mocked(isWorkflowActive).mockImplementation((id) => id === 'proj-1');
-    await pipelineTriggerHandler.action(event, {} as any);
+    await pipelineTriggerHandler.action(event, createHandlerContext());
     expect(startPipelineRun).not.toHaveBeenCalled();
   });
 });

@@ -110,7 +110,9 @@ export function unionIds(lists: ReadonlyArray<readonly string[] | undefined>): s
   return ids;
 }
 
-const ACTIVITY_RUNNING = new Set(['running', 'waiting', 'pending']);
+// `setting_up` is the worktree / sandbox preparation before the agent starts;
+// the thread is already active from the user's first prompt.
+const ACTIVITY_RUNNING = new Set(['setting_up', 'running', 'waiting', 'pending']);
 const ACTIVITY_VISIBLE = new Set([
   ...ACTIVITY_RUNNING,
   'completed',

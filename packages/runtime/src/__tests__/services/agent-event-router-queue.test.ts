@@ -5,16 +5,21 @@
  * promise had settled, even if a later message was still being handled — the
  * next message then started concurrently, out of order.
  */
-import { EventEmitter } from 'node:events';
-
+import type { CLIMessage } from '@funny/core/agents';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { AgentEventRouter } from '../../services/agent-event-router.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
+import { createMessageHandler, createOrchestrator } from '../helpers/builders-handlers.js';
+import { createThreadManagerFake, createWsBrokerFake } from '../helpers/builders.js';
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: { getProject: vi.fn() } }),
 }));
+
+function assistantMessage(id: string): CLIMessage {
+  return { type: 'assistant', message: { id, content: [] } };
+}
 
 function deferred() {
   let resolve!: () => void;
@@ -31,34 +36,35 @@ describe('AgentEventRouter message queue', () => {
 
   test('a long-running handler is never overtaken, across cleanup ticks', async () => {
     vi.useFakeTimers();
-    const orchestrator = new EventEmitter();
+    const orchestrator = createOrchestrator();
     const gates = new Map<string, ReturnType<typeof deferred>>();
     const events: string[] = [];
-    const messageHandler = {
-      handle: async (_threadId: string, msg: { id: string }) => {
-        events.push(`start ${msg.id}`);
-        const gate = deferred();
-        gates.set(msg.id, gate);
-        await gate.promise;
-        events.push(`end ${msg.id}`);
-      },
-    };
+    const state = new AgentStateTracker();
+    const messageHandler = createMessageHandler(state);
+    vi.spyOn(messageHandler, 'handle').mockImplementation(async (_threadId, msg) => {
+      const id = msg.type === 'assistant' ? msg.message.id : msg.type;
+      events.push(`start ${id}`);
+      const gate = deferred();
+      gates.set(id, gate);
+      await gate.promise;
+      events.push(`end ${id}`);
+    });
     router = new AgentEventRouter(
-      orchestrator as any,
-      new AgentStateTracker(),
-      messageHandler as any,
-      { getThread: vi.fn(), updateThread: vi.fn() } as any,
-      { emit: vi.fn(), emitToUser: vi.fn() } as any,
+      orchestrator,
+      state,
+      messageHandler,
+      createThreadManagerFake(),
+      createWsBrokerFake(),
     );
 
-    orchestrator.emit('agent:message', 't1', { id: 'm1' });
+    orchestrator.emit('agent:message', 't1', assistantMessage('m1'));
     await vi.advanceTimersByTimeAsync(5 * 60_000);
     gates.get('m1')!.resolve();
     await vi.advanceTimersByTimeAsync(0);
 
-    orchestrator.emit('agent:message', 't1', { id: 'm2' });
+    orchestrator.emit('agent:message', 't1', assistantMessage('m2'));
     await vi.advanceTimersByTimeAsync(5 * 60_000);
-    orchestrator.emit('agent:message', 't1', { id: 'm3' });
+    orchestrator.emit('agent:message', 't1', assistantMessage('m3'));
     await vi.advanceTimersByTimeAsync(0);
 
     expect(events).toEqual(['start m1', 'end m1', 'start m2']);
@@ -68,6 +74,6 @@ describe('AgentEventRouter message queue', () => {
     await vi.advanceTimersByTimeAsync(0);
     expect(events).toEqual(['start m1', 'end m1', 'start m2', 'end m2', 'start m3', 'end m3']);
     // The queue entry is released once the thread goes idle (no timer needed).
-    expect((router as any).messageQueues.size).toBe(0);
+    expect(router['messageQueues'].size).toBe(0);
   });
 });

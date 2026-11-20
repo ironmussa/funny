@@ -148,14 +148,15 @@ describe('Markdown WebAssembly security policy', () => {
       const coep = source.match(/crossOriginEmbedderPolicy: '([^']+)'/)?.[1];
       expect(coop).toBe('same-origin');
       expect(coep).toBe('require-corp');
+      if (coop !== 'same-origin' || coep !== 'require-corp') throw new Error('unexpected policy');
 
       const app = new Hono();
       app.use(
         '*',
         secureHeaders({
           contentSecurityPolicy: { scriptSrc },
-          crossOriginOpenerPolicy: coop as 'same-origin',
-          crossOriginEmbedderPolicy: coep as 'require-corp',
+          crossOriginOpenerPolicy: coop,
+          crossOriginEmbedderPolicy: coep,
         }),
       );
       app.get('/', (c) => c.html('<!doctype html><title>Markdown</title>'));

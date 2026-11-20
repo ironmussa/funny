@@ -36,11 +36,11 @@ describe('Scheduler Routes (Integration)', () => {
     });
 
     test('returns only the caller’s active runs', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-a', path: '/a' });
-      seedThread(t.db as any, { id: 't-a', projectId: 'p1', userId: 'user-a' });
-      seedThread(t.db as any, { id: 't-b', projectId: 'p1', userId: 'user-b' });
-      seedSchedulerRun(t.db as any, { threadId: 't-a', userId: 'user-a' });
-      seedSchedulerRun(t.db as any, { threadId: 't-b', userId: 'user-b' });
+      seedProject(t.db, { id: 'p1', userId: 'user-a', path: '/a' });
+      seedThread(t.db, { id: 't-a', projectId: 'p1', userId: 'user-a' });
+      seedThread(t.db, { id: 't-b', projectId: 'p1', userId: 'user-b' });
+      seedSchedulerRun(t.db, { threadId: 't-a', userId: 'user-a' });
+      seedSchedulerRun(t.db, { threadId: 't-b', userId: 'user-b' });
 
       const res = await t.requestAs('user-a').get('/api/scheduler/runs');
       expect(res.status).toBe(200);

@@ -1,5 +1,7 @@
 import { describe, test, expect, vi, beforeAll, afterEach } from 'vitest';
 
+import { clearGlobal, readGlobal } from '../helpers/builders.js';
+
 const lifecycleMock = vi.hoisted(() => ({
   stopAllAgents: vi.fn(async () => undefined),
   extractActiveAgents: vi.fn(() => new Map<string, unknown>()),
@@ -17,9 +19,11 @@ const lifecycleMock = vi.hoisted(() => ({
   endRunSpan: vi.fn(),
 }));
 
-const shutdownCapture = vi.hoisted(() => ({
-  handler: null as null | ((mode: 'hotReload' | 'hard') => Promise<void>),
-}));
+interface ShutdownCapture {
+  handler: null | ((mode: 'hotReload' | 'hard') => Promise<void>);
+}
+
+const shutdownCapture = vi.hoisted((): ShutdownCapture => ({ handler: null }));
 
 vi.mock('../../services/shutdown-manager.js', () => ({
   shutdownManager: {
@@ -85,8 +89,8 @@ describe('AgentRunner shutdown handler', () => {
   });
 
   afterEach(() => {
-    delete (globalThis as any).__funnyActiveAgentSnapshot;
-    delete (globalThis as any).__funnyActiveAgents;
+    clearGlobal('__funnyActiveAgentSnapshot');
+    clearGlobal('__funnyActiveAgents');
     vi.clearAllMocks();
   });
 
@@ -101,8 +105,8 @@ describe('AgentRunner shutdown handler', () => {
 
     await shutdownCapture.handler!('hotReload');
 
-    expect((globalThis as any).__funnyActiveAgentSnapshot).toBe(snapshot);
-    expect((globalThis as any).__funnyActiveAgents).toBeUndefined();
+    expect(readGlobal('__funnyActiveAgentSnapshot')).toBe(snapshot);
+    expect(readGlobal('__funnyActiveAgents')).toBeUndefined();
     expect(lifecycleMock.stopAllAgents).not.toHaveBeenCalled();
   });
 
@@ -117,8 +121,8 @@ describe('AgentRunner shutdown handler', () => {
     await shutdownCapture.handler!('hotReload');
 
     expect(lifecycleMock.stopAllAgents).toHaveBeenCalled();
-    expect((globalThis as any).__funnyActiveAgentSnapshot).toBeUndefined();
-    expect((globalThis as any).__funnyActiveAgents).toBeUndefined();
+    expect(readGlobal('__funnyActiveAgentSnapshot')).toBeUndefined();
+    expect(readGlobal('__funnyActiveAgents')).toBeUndefined();
   });
 
   test('hard shutdown always stops all agents', async () => {
@@ -127,7 +131,7 @@ describe('AgentRunner shutdown handler', () => {
     await shutdownCapture.handler!('hard');
 
     expect(lifecycleMock.stopAllAgents).toHaveBeenCalled();
-    expect((globalThis as any).__funnyActiveAgentSnapshot).toBeUndefined();
-    expect((globalThis as any).__funnyActiveAgents).toBeUndefined();
+    expect(readGlobal('__funnyActiveAgentSnapshot')).toBeUndefined();
+    expect(readGlobal('__funnyActiveAgents')).toBeUndefined();
   });
 });

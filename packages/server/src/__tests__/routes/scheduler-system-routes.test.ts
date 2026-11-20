@@ -42,6 +42,7 @@ import {
 } from '@funny/shared/auth/forwarded-identity';
 import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import { Hono } from 'hono';
+import { z } from 'zod';
 
 import type { ServerEnv } from '../../lib/types.js';
 
@@ -87,24 +88,32 @@ const browserEvents: BrowserEventSink = {
 
 function systemApp() {
   const app = new Hono<ServerEnv>();
-  const request = app.request.bind(app);
-  app.request = ((input: RequestInfo | URL, init?: RequestInit, env?: ServerEnv['Bindings']) =>
-    request(
-      input,
-      init,
-      env ?? {
-        browserEvents,
-        runnerRequests: {
-          isAvailable: () => true,
-          request: (runnerId, request) => tunnelFetchImpl(runnerId, request as any) as any,
-        },
-        // Dispatch routes through the resolver, which only picks connected runners.
-        runnerPresence: { isAvailable: () => true } as any,
+  const env: ServerEnv['Bindings'] = {
+    browserEvents,
+    runnerRequests: {
+      isAvailable: async () => true,
+      request: async (runnerId, request) => {
+        const res = await tunnelFetchImpl(runnerId, {
+          method: request.method,
+          path: request.path,
+          headers: request.headers,
+          body: request.body == null ? null : z.string().parse(request.body),
+        });
+        return { status: res.status, headers: {}, body: res.body ?? '' };
       },
-    )) as typeof app.request;
+    },
+    // Dispatch routes through the resolver, which only picks connected runners.
+    // Owners come from the `runners` rows (`userIdForRunner` answers null).
+    runnerPresence: {
+      isAvailable: async () => true,
+      userHasAvailableRunner: async () => true,
+      userIdForRunner: async () => null,
+      availableRunnerCount: async () => 1,
+    },
+  };
   app.use('*', authMiddleware);
   app.route('/api/scheduler/system', schedulerSystemRoutes);
-  return app;
+  return { request: (path: string, init?: RequestInit) => app.request(path, init, env) };
 }
 
 function schedulerHeaders(extra: Record<string, string> = {}) {
@@ -116,7 +125,7 @@ function schedulerHeaders(extra: Record<string, string> = {}) {
 
 describe('Scheduler System Routes (Integration)', () => {
   let t: TestApp;
-  let app: Hono<ServerEnv>;
+  let app: ReturnType<typeof systemApp>;
 
   beforeAll(async () => {
     t = await createTestApp();
@@ -153,12 +162,12 @@ describe('Scheduler System Routes (Integration)', () => {
 
   describe('GET /api/scheduler/system/runs', () => {
     test('returns active runs across tenants', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-a', path: '/a' });
-      seedProject(t.db as any, { id: 'p2', userId: 'user-b', path: '/b' });
-      seedThread(t.db as any, { id: 't-a', projectId: 'p1', userId: 'user-a' });
-      seedThread(t.db as any, { id: 't-b', projectId: 'p2', userId: 'user-b' });
-      seedSchedulerRun(t.db as any, { threadId: 't-a', userId: 'user-a' });
-      seedSchedulerRun(t.db as any, { threadId: 't-b', userId: 'user-b' });
+      seedProject(t.db, { id: 'p1', userId: 'user-a', path: '/a' });
+      seedProject(t.db, { id: 'p2', userId: 'user-b', path: '/b' });
+      seedThread(t.db, { id: 't-a', projectId: 'p1', userId: 'user-a' });
+      seedThread(t.db, { id: 't-b', projectId: 'p2', userId: 'user-b' });
+      seedSchedulerRun(t.db, { threadId: 't-a', userId: 'user-a' });
+      seedSchedulerRun(t.db, { threadId: 't-b', userId: 'user-b' });
 
       const res = await app.request('/api/scheduler/system/runs', {
         headers: schedulerHeaders(),
@@ -173,10 +182,10 @@ describe('Scheduler System Routes (Integration)', () => {
 
   describe('GET /api/scheduler/system/dependencies', () => {
     test('returns dependency map for requested thread ids', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedThread(t.db as any, { id: 'blocker', projectId: 'p1', userId: 'user-1' });
-      seedThreadDependency(t.db as any, { threadId: 't1', blockedBy: 'blocker' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db, { id: 'blocker', projectId: 'p1', userId: 'user-1' });
+      seedThreadDependency(t.db, { threadId: 't1', blockedBy: 'blocker' });
 
       const res = await app.request('/api/scheduler/system/dependencies?threadIds=t1', {
         headers: schedulerHeaders(),
@@ -189,13 +198,13 @@ describe('Scheduler System Routes (Integration)', () => {
   describe('POST /api/scheduler/system/dispatch', () => {
     /** The thread the scheduler dispatches, owned by `user-1`. */
     function seedOwnedThread() {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
     }
 
     test('proxies to the thread owner runner and returns pipelineRunId', async () => {
       seedOwnedThread();
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'runner-1',
         userId: 'user-1',
         status: 'online',
@@ -268,8 +277,8 @@ describe('Scheduler System Routes (Integration)', () => {
 
     test('refuses a userId that does not own the thread, without contacting any runner', async () => {
       seedOwnedThread();
-      seedRunner(t.db as any, { id: 'runner-1', userId: 'user-1', token: 'tr1', hostname: 'r1' });
-      seedRunner(t.db as any, { id: 'runner-2', userId: 'user-2', token: 'tr2', hostname: 'r2' });
+      seedRunner(t.db, { id: 'runner-1', userId: 'user-1', token: 'tr1', hostname: 'r1' });
+      seedRunner(t.db, { id: 'runner-2', userId: 'user-2', token: 'tr2', hostname: 'r2' });
       tunnelFetchImpl = async () => {
         throw new Error('must not reach a runner');
       };
@@ -359,8 +368,8 @@ describe('Scheduler System Routes (Integration)', () => {
 
   describe('GET /api/scheduler/system/candidates', () => {
     test('returns eligible thread candidates', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
@@ -380,14 +389,14 @@ describe('Scheduler System Routes (Integration)', () => {
 
   describe('GET /api/scheduler/system/terminal-thread-ids', () => {
     test('returns terminal thread ids', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, {
         id: 't-done',
         projectId: 'p1',
         userId: 'user-1',
         stage: 'done',
       });
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't-run',
         projectId: 'p1',
         userId: 'user-1',
@@ -407,8 +416,8 @@ describe('Scheduler System Routes (Integration)', () => {
 
   describe('GET /api/scheduler/system/threads/:id', () => {
     test('returns thread snapshot by id', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Hello' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'Hello' });
 
       const res = await app.request('/api/scheduler/system/threads/t1', {
         headers: schedulerHeaders(),
@@ -420,9 +429,9 @@ describe('Scheduler System Routes (Integration)', () => {
 
   describe('GET /api/scheduler/system/runs/:threadId', () => {
     test('returns a single active run', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedSchedulerRun(t.db as any, { threadId: 't1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedSchedulerRun(t.db, { threadId: 't1', userId: 'user-1' });
 
       const res = await app.request('/api/scheduler/system/runs/t1', {
         headers: schedulerHeaders(),
@@ -449,8 +458,8 @@ describe('Scheduler System Routes (Integration)', () => {
     });
 
     test('returns due retry runs', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't-retry', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't-retry', projectId: 'p1', userId: 'user-1' });
       const past = Date.now() - 60_000;
       t.db
         .insert(t.schema.schedulerRuns)
@@ -479,8 +488,8 @@ describe('Scheduler System Routes (Integration)', () => {
 
   describe('POST /api/scheduler/system/runs (claim)', () => {
     test('claims a run for a thread', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't-claim', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't-claim', projectId: 'p1', userId: 'user-1' });
 
       const res = await app.request('/api/scheduler/system/runs', {
         method: 'POST',
@@ -501,8 +510,8 @@ describe('Scheduler System Routes (Integration)', () => {
     });
 
     test('refuses a userId that does not own the thread', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't-owned', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't-owned', projectId: 'p1', userId: 'user-1' });
 
       const res = await app.request('/api/scheduler/system/runs', {
         method: 'POST',
@@ -528,8 +537,8 @@ describe('Scheduler System Routes (Integration)', () => {
     });
 
     test('claims with the thread owner even if the body carries a different userId', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't-owner', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't-owner', projectId: 'p1', userId: 'user-1' });
 
       // A body userId that matches the owner is claimed under the owner's id.
       const res = await app.request('/api/scheduler/system/runs', {
@@ -542,9 +551,9 @@ describe('Scheduler System Routes (Integration)', () => {
     });
 
     test('returns 409 when run is already claimed', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't-dup', projectId: 'p1', userId: 'user-1' });
-      seedSchedulerRun(t.db as any, { threadId: 't-dup', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't-dup', projectId: 'p1', userId: 'user-1' });
+      seedSchedulerRun(t.db, { threadId: 't-dup', userId: 'user-1' });
 
       const res = await app.request('/api/scheduler/system/runs', {
         method: 'POST',
@@ -557,9 +566,9 @@ describe('Scheduler System Routes (Integration)', () => {
 
   describe('DELETE /api/scheduler/system/runs/:threadId', () => {
     test('releases a claimed run', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't-rel', projectId: 'p1', userId: 'user-1' });
-      seedSchedulerRun(t.db as any, { threadId: 't-rel', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't-rel', projectId: 'p1', userId: 'user-1' });
+      seedSchedulerRun(t.db, { threadId: 't-rel', userId: 'user-1' });
 
       const res = await app.request('/api/scheduler/system/runs/t-rel', {
         method: 'DELETE',
@@ -572,9 +581,9 @@ describe('Scheduler System Routes (Integration)', () => {
 
   describe('PATCH /api/scheduler/system/runs/:threadId', () => {
     test('updates pipelineRunId and retry metadata', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't-patch', projectId: 'p1', userId: 'user-1' });
-      seedSchedulerRun(t.db as any, { threadId: 't-patch', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't-patch', projectId: 'p1', userId: 'user-1' });
+      seedSchedulerRun(t.db, { threadId: 't-patch', userId: 'user-1' });
 
       const res = await app.request('/api/scheduler/system/runs/t-patch', {
         method: 'PATCH',
@@ -609,9 +618,9 @@ describe('Scheduler System Routes (Integration)', () => {
 
   describe('POST/DELETE /api/scheduler/system/dependencies', () => {
     test('adds and removes a dependency edge', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/p1' });
-      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
-      seedThread(t.db as any, { id: 'blocker', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/p1' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db, { id: 'blocker', projectId: 'p1', userId: 'user-1' });
 
       const addRes = await app.request('/api/scheduler/system/dependencies', {
         method: 'POST',
@@ -646,7 +655,7 @@ describe('Scheduler System Routes (Integration)', () => {
     });
 
     test('proxies cancel to the user runner', async () => {
-      seedRunner(t.db as any, {
+      seedRunner(t.db, {
         id: 'runner-1',
         userId: 'user-1',
         status: 'online',
@@ -669,12 +678,12 @@ describe('Scheduler System Routes (Integration)', () => {
     });
 
     test("routes cancel to the run's project dedicated runner, not the general one", async () => {
-      seedProject(t.db as any, { id: 'p-pinned', userId: 'user-1' });
-      seedThread(t.db as any, { id: 't-pinned', projectId: 'p-pinned', userId: 'user-1' });
-      seedPipeline(t.db as any, { id: 'pl-1', projectId: 'p-pinned', userId: 'user-1' });
-      seedPipelineRun(t.db as any, { id: 'pr-pinned', pipelineId: 'pl-1', threadId: 't-pinned' });
-      seedRunner(t.db as any, { id: 'laptop', userId: 'user-1', token: 'tl', hostname: 'l' });
-      seedRunner(t.db as any, {
+      seedProject(t.db, { id: 'p-pinned', userId: 'user-1' });
+      seedThread(t.db, { id: 't-pinned', projectId: 'p-pinned', userId: 'user-1' });
+      seedPipeline(t.db, { id: 'pl-1', projectId: 'p-pinned', userId: 'user-1' });
+      seedPipelineRun(t.db, { id: 'pr-pinned', pipelineId: 'pl-1', threadId: 't-pinned' });
+      seedRunner(t.db, { id: 'laptop', userId: 'user-1', token: 'tl', hostname: 'l' });
+      seedRunner(t.db, {
         id: 'rx',
         userId: 'user-1',
         token: 'tx',
@@ -699,11 +708,11 @@ describe('Scheduler System Routes (Integration)', () => {
     });
 
     test("does not cancel another user's run", async () => {
-      seedProject(t.db as any, { id: 'p-bob', userId: 'bob' });
-      seedThread(t.db as any, { id: 't-bob', projectId: 'p-bob', userId: 'bob' });
-      seedPipeline(t.db as any, { id: 'pl-bob', projectId: 'p-bob', userId: 'bob' });
-      seedPipelineRun(t.db as any, { id: 'pr-bob', pipelineId: 'pl-bob', threadId: 't-bob' });
-      seedRunner(t.db as any, { id: 'runner-1', userId: 'user-1', token: 'tr', hostname: 'r' });
+      seedProject(t.db, { id: 'p-bob', userId: 'bob' });
+      seedThread(t.db, { id: 't-bob', projectId: 'p-bob', userId: 'bob' });
+      seedPipeline(t.db, { id: 'pl-bob', projectId: 'p-bob', userId: 'bob' });
+      seedPipelineRun(t.db, { id: 'pr-bob', pipelineId: 'pl-bob', threadId: 't-bob' });
+      seedRunner(t.db, { id: 'runner-1', userId: 'user-1', token: 'tr', hostname: 'r' });
       tunnelFetchImpl = async () => {
         throw new Error('must not reach a runner');
       };

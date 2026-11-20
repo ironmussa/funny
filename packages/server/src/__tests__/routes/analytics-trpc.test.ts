@@ -20,7 +20,7 @@ describe('analytics over tRPC (integration)', () => {
     const res = await t.app.request(`/api/trpc/${path}${qs}`, {
       headers: { 'X-Test-User-Id': userId },
     });
-    const json = (await res.json()) as any;
+    const json = await res.json();
     return { status: res.status, body: json.result?.data };
   };
 
@@ -34,8 +34,8 @@ describe('analytics over tRPC (integration)', () => {
 
   describe('analytics.overview', () => {
     test('returns stage distribution and activity counts for the caller', async () => {
-      seedProject(t.db as any, { id: 'p1', userId, path: '/repo-a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId, path: '/repo-a' });
+      seedThread(t.db, {
         id: 't-planning',
         projectId: 'p1',
         userId,
@@ -44,7 +44,7 @@ describe('analytics over tRPC (integration)', () => {
         createdAt: recent,
         updatedAt: recent,
       });
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't-done',
         projectId: 'p1',
         userId,
@@ -55,13 +55,13 @@ describe('analytics over tRPC (integration)', () => {
         updatedAt: recent,
         completedAt: recent,
       });
-      seedStageHistory(t.db as any, {
+      seedStageHistory(t.db, {
         threadId: 't-planning',
         fromStage: 'backlog',
         toStage: 'planning',
         changedAt: recent,
       });
-      seedStageHistory(t.db as any, {
+      seedStageHistory(t.db, {
         threadId: 't-done',
         fromStage: 'review',
         toStage: 'done',
@@ -85,9 +85,9 @@ describe('analytics over tRPC (integration)', () => {
 
     test('stage distribution is scoped to the selected time range', async () => {
       const old = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-      seedProject(t.db as any, { id: 'p1', userId, path: '/repo-a' });
+      seedProject(t.db, { id: 'p1', userId, path: '/repo-a' });
       // In-range thread — should be counted
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't-recent',
         projectId: 'p1',
         userId,
@@ -96,7 +96,7 @@ describe('analytics over tRPC (integration)', () => {
         updatedAt: recent,
       });
       // Out-of-range thread — must be excluded from the distribution
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't-old',
         projectId: 'p1',
         userId,
@@ -104,7 +104,7 @@ describe('analytics over tRPC (integration)', () => {
         createdAt: old,
         updatedAt: old,
       });
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't-old-archived',
         projectId: 'p1',
         userId,
@@ -123,16 +123,16 @@ describe('analytics over tRPC (integration)', () => {
     });
 
     test('filters by projectId', async () => {
-      seedProject(t.db as any, { id: 'p1', userId, path: '/repo-a' });
-      seedProject(t.db as any, { id: 'p2', userId, path: '/repo-b' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId, path: '/repo-a' });
+      seedProject(t.db, { id: 'p2', userId, path: '/repo-b' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId,
         createdAt: recent,
         updatedAt: recent,
       });
-      seedThread(t.db as any, {
+      seedThread(t.db, {
         id: 't2',
         projectId: 'p2',
         userId,
@@ -146,8 +146,8 @@ describe('analytics over tRPC (integration)', () => {
     });
 
     test('does not include other users threads', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: 'other-user', path: '/other' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId: 'other-user', path: '/other' });
+      seedThread(t.db, {
         id: 't-other',
         projectId: 'p1',
         userId: 'other-user',
@@ -163,8 +163,8 @@ describe('analytics over tRPC (integration)', () => {
 
   describe('analytics.timeline', () => {
     test('returns bucketed series with default groupBy=day', async () => {
-      seedProject(t.db as any, { id: 'p1', userId, path: '/repo-a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId, path: '/repo-a' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId,
@@ -172,7 +172,7 @@ describe('analytics over tRPC (integration)', () => {
         updatedAt: recent,
         completedAt: recent,
       });
-      seedStageHistory(t.db as any, {
+      seedStageHistory(t.db, {
         threadId: 't1',
         fromStage: 'in_progress',
         toStage: 'review',
@@ -194,8 +194,8 @@ describe('analytics over tRPC (integration)', () => {
     });
 
     test('honors groupBy=week query param', async () => {
-      seedProject(t.db as any, { id: 'p1', userId, path: '/repo-a' });
-      seedThread(t.db as any, {
+      seedProject(t.db, { id: 'p1', userId, path: '/repo-a' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId,

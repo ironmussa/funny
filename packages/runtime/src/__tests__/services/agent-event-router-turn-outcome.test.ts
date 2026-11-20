@@ -6,6 +6,12 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { AgentEventRouter } from '../../services/agent-event-router.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
+import { createMessageHandler, createOrchestrator } from '../helpers/builders-handlers.js';
+import {
+  buildThreadRecord,
+  createThreadManagerFake,
+  createWsBrokerFake,
+} from '../helpers/builders.js';
 
 const saveThreadEvent = vi.hoisted(() => vi.fn(async () => undefined));
 vi.mock('../../services/service-registry.js', () => ({
@@ -23,16 +29,19 @@ describe('AgentEventRouter turn outcome', () => {
   });
 
   test('persists and broadcasts a stopped outcome for the latest user message', async () => {
-    const threadManager = {
-      getThread: vi.fn(),
-      updateThread: vi.fn(),
-      getThreadWithMessages: vi.fn(async () => ({ lastUserMessage: { id: 'msg-user-1' } })),
-    } as any;
-    const wsBroker = { emit: vi.fn(), emitToUser: vi.fn() } as any;
+    const threadManager = createThreadManagerFake({
+      getThreadWithMessages: vi.fn(async () => ({
+        ...buildThreadRecord({ id: 't-1' }),
+        messages: [],
+        lastUserMessage: { id: 'msg-user-1' },
+      })),
+    });
+    const wsBroker = createWsBrokerFake();
+    const state = new AgentStateTracker();
     router = new AgentEventRouter(
-      { on: vi.fn() } as any,
-      new AgentStateTracker(),
-      {} as any,
+      createOrchestrator(),
+      state,
+      createMessageHandler(state),
       threadManager,
       wsBroker,
     );

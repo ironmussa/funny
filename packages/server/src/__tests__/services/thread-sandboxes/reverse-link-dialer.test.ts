@@ -33,14 +33,17 @@ const until = async (check: () => boolean, ms = 2_000) => {
 const text = (frames: Array<string | Uint8Array>) =>
   frames.flatMap((f) => (typeof f !== 'string' ? [new TextDecoder().decode(f)] : [])).join('');
 
+/** What the fake relay keeps per socket. */
+interface RelayData {
+  frames: Array<string | Uint8Array>;
+  headers: Headers;
+  url: string;
+}
+
 /** A relay that records each spare with the request that opened it. */
 function startFakeRelay() {
-  const spares: Array<{
-    ws: ServerWebSocket<{ frames: Array<string | Uint8Array> }>;
-    headers: Headers;
-    url: string;
-  }> = [];
-  const server = Bun.serve<{ frames: Array<string | Uint8Array>; headers: Headers; url: string }>({
+  const spares: Array<{ ws: ServerWebSocket<RelayData>; headers: Headers; url: string }> = [];
+  const server = Bun.serve<RelayData>({
     hostname: '127.0.0.1',
     port: 0,
     fetch(req, srv) {
@@ -51,7 +54,7 @@ function startFakeRelay() {
     },
     websocket: {
       open(ws) {
-        spares.push({ ws: ws as any, headers: ws.data.headers, url: ws.data.url });
+        spares.push({ ws, headers: ws.data.headers, url: ws.data.url });
       },
       message(ws, message) {
         ws.data.frames.push(typeof message === 'string' ? message : new Uint8Array(message));

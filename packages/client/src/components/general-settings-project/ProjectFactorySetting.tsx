@@ -17,6 +17,7 @@ import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryMode, FactorySettings, SaveFactorySettingsInput } from '@/lib/api/factory';
 import { toastError } from '@/lib/toast-error';
 
+import { ProjectFactoryMetrics } from './ProjectFactoryMetrics';
 import { ProjectFactoryRuns } from './ProjectFactoryRuns';
 import { SegmentedControl, SettingRow } from './setting-primitives';
 
@@ -234,6 +235,7 @@ function ProjectFactorySettingRows({ projectId }: { projectId: string }) {
       )}
 
       {/* A paused factory still finishes its runs in flight: they stay listed. */}
+      {settings && <ProjectFactoryMetrics projectId={projectId} />}
       {settings && <ProjectFactoryRuns projectId={projectId} />}
     </>
   );

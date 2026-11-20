@@ -17,9 +17,11 @@ import { describe, test, expect } from 'bun:test';
 
 import * as pgSchema from '@funny/shared/db/schema-pg';
 import * as sqliteSchema from '@funny/shared/db/schema-sqlite';
-import { sql } from 'drizzle-orm';
+import { sql, type SQL } from 'drizzle-orm';
 import { getTableConfig as pgConfig, PgTable } from 'drizzle-orm/pg-core';
 import { getTableConfig as sqliteConfig, SQLiteTable } from 'drizzle-orm/sqlite-core';
+
+import type { AppDatabase } from '../../db/index.js';
 
 /**
  * Better Auth stores its booleans as integers on SQLite and as native booleans
@@ -107,6 +109,13 @@ function liveDrift(definition: ColumnLayout, live: Record<string, Set<string>>):
   return problems.sort();
 }
 
+/** The Postgres Drizzle handle: the one with `execute()` (the SQLite one has `all()`). */
+function isPgDatabase(
+  db: AppDatabase,
+): db is AppDatabase & { execute(query: SQL): Promise<unknown[]> } {
+  return 'execute' in db;
+}
+
 const { dbDialect } = await import('../../db/index.js');
 const sqliteLayout = layoutOf(sqliteSchema, 'sqlite');
 const pgLayout = layoutOf(pgSchema, 'pg');
@@ -128,9 +137,7 @@ describe('schema drift', () => {
 
       const live: Record<string, Set<string>> = {};
       for (const table of Object.keys(sqliteLayout)) {
-        const rows = (db as any).all(sql.raw(`PRAGMA table_info("${table}")`)) as {
-          name: string;
-        }[];
+        const rows = db.all<{ name: string }>(sql.raw(`PRAGMA table_info("${table}")`));
         live[table] = new Set(rows.map((r) => r.name));
       }
       expect(liveDrift(sqliteLayout, live)).toEqual([]);
@@ -146,12 +153,14 @@ describe('schema drift', () => {
       await autoMigrate();
       const { db, dbAll } = await import('../../db/index.js');
 
-      const rows = (await dbAll(
-        (db as any).execute(sql`
+      // `AppDatabase` is typed after SQLite; with DATABASE_URL set it is the Postgres handle.
+      if (!isPgDatabase(db)) throw new Error('expected the Postgres database');
+      const rows = await dbAll<{ table_name: string; column_name: string }>(
+        db.execute(sql`
           SELECT table_name, column_name FROM information_schema.columns
           WHERE table_schema = current_schema()
         `),
-      )) as { table_name: string; column_name: string }[];
+      );
       const live: Record<string, Set<string>> = {};
       for (const r of rows) (live[r.table_name] ??= new Set()).add(r.column_name);
       expect(liveDrift(pgLayout, live)).toEqual([]);

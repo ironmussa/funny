@@ -29,7 +29,7 @@ function ports(online: string[]) {
     userHasAvailableRunner: async (uid) => online.some((id) => RUNNER_OWNER[id] === uid),
     userIdForRunner: async (id) => RUNNER_OWNER[id] ?? null,
     availableRunnerCount: async () => online.length,
-  } as RunnerPresencePort;
+  };
   const requests = {
     isAvailable: async (id: string) => online.includes(id),
     request: async (runnerId: string, request: RunnerRequest) => {
@@ -55,11 +55,11 @@ describe('startThreadOnRunner', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'alice', path: '/repo' });
-    seedRunner(t.db as any, { id: 'r-alice', userId: 'alice', token: 'tok-a' });
-    seedRunner(t.db as any, { id: 'r-bob', userId: 'bob', token: 'tok-b' });
-    seedRunnerProjectAssignment(t.db as any, { runnerId: 'r-alice', projectId: 'p1' });
-    seedRunnerProjectAssignment(t.db as any, { runnerId: 'r-bob', projectId: 'p1' });
+    seedProject(t.db, { id: 'p1', userId: 'alice', path: '/repo' });
+    seedRunner(t.db, { id: 'r-alice', userId: 'alice', token: 'tok-a' });
+    seedRunner(t.db, { id: 'r-bob', userId: 'bob', token: 'tok-b' });
+    seedRunnerProjectAssignment(t.db, { runnerId: 'r-alice', projectId: 'p1' });
+    seedRunnerProjectAssignment(t.db, { runnerId: 'r-bob', projectId: 'p1' });
   });
 
   test("dispatches to the user's own runner", async () => {

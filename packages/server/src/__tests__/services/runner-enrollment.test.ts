@@ -133,7 +133,7 @@ describe('Runner Enrollment (device-link)', () => {
 
       expect(results.filter((r) => r.ok)).toHaveLength(1);
       expect(results.filter((r) => !r.ok)).toEqual([{ ok: false, reason: 'already_approved' }]);
-      const runners = t.db.select().from(t.schema.runners).all() as { hostname: string }[];
+      const runners = t.db.select().from(t.schema.runners).all();
       expect(runners.filter((r) => r.hostname === 'twice')).toHaveLength(1);
     });
 

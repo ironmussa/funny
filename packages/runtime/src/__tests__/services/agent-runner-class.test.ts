@@ -9,13 +9,14 @@ import type {
   CLISystemMessage,
   CLIUserMessage,
 } from '@funny/core/agents';
-import type { WSEvent } from '@funny/shared';
+import type { ResolvedAgentExecutionProfileResponse, WSEvent } from '@funny/shared';
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
 import { AgentRunner } from '../../services/agent-runner.js';
 import type { IThreadManager, IWSBroker } from '../../services/server-interfaces.js';
 import type { RuntimeServiceProvider } from '../../services/service-provider.js';
 import { setServices, resetServices } from '../../services/service-registry.js';
+import { buildProject, createServiceProviderFake } from '../helpers/builders.js';
 
 // ── Mock helpers ────────────────────────────────────────────────
 
@@ -182,84 +183,45 @@ function seedRunnerThread(
 }
 
 /**
- * Build a minimal RuntimeServiceProvider that delegates thread operations
- * back to the given mock thread manager and stubs everything else.
+ * Build a RuntimeServiceProvider that delegates thread operations back to the
+ * given mock thread manager and stubs everything else.
  */
 function createMockServiceProvider(
   tm: ReturnType<typeof createMockThreadManager>,
   ws: ReturnType<typeof createMockWSBroker>,
-  resolvedAgentProfile: any = { profile: null, env: {} },
+  resolvedAgentProfile: ResolvedAgentExecutionProfileResponse = { profile: null, env: {} },
 ): RuntimeServiceProvider {
-  const notImpl = () => {
-    throw new Error('not implemented in test');
-  };
-  return {
+  return createServiceProviderFake({
     threads: {
       getThread: (id: string) => Promise.resolve(tm.getThread(id)),
       getThreadWithMessages: (id: string) => Promise.resolve(tm.getThreadWithMessages(id)),
       updateThread: (id: string, u: Record<string, any>) => Promise.resolve(tm.updateThread(id, u)),
-      insertMessage: (d: any) => Promise.resolve(tm.insertMessage(d)),
-      updateMessage: (id: string, c: string) => Promise.resolve(tm.updateMessage(id, c)),
-      insertToolCall: (d: any) => Promise.resolve(tm.insertToolCall(d)),
+      insertMessage: (d) => Promise.resolve(tm.insertMessage(d)),
+      updateMessage: (id, c) => Promise.resolve(tm.updateMessage(id, c)),
+      insertToolCall: (d) => Promise.resolve(tm.insertToolCall(d)),
       updateToolCallOutput: (id: string, o: string) =>
         Promise.resolve(tm.updateToolCallOutput(id, o)),
       findToolCall: (mid: string, n: string, i: string) =>
         Promise.resolve(tm.findToolCall(mid, n, i)),
       getToolCall: (id: string) => Promise.resolve(tm.getToolCall(id)),
-      // Stubs for IThreadRepository methods not needed by startAgent:
-      listThreads: () => Promise.resolve({ threads: [], total: 0 }),
-      listArchivedThreads: () => Promise.resolve([]),
-      getThreadByExternalRequestId: () => Promise.resolve(undefined),
-      createThread: () => Promise.resolve({}),
-      deleteThread: () => Promise.resolve(),
-      markStaleThreadsInterrupted: () => Promise.resolve(),
-      markStaleExternalThreadsStopped: () => Promise.resolve(),
-      markAndListStaleThreads: () => Promise.resolve([]),
-      getThreadMessages: () => Promise.resolve({ messages: [], hasMore: false }),
-      insertComment: () => Promise.resolve({}),
-      listComments: () => Promise.resolve([]),
-      deleteComment: () => Promise.resolve(),
-      getCommentCounts: () => Promise.resolve({}),
-      searchThreadIdsByContent: () => Promise.resolve(new Map()),
-      findLastUnansweredInteractiveToolCall: () => Promise.resolve(undefined),
-    } as any,
+    },
     projects: {
       getProject: (id: string) =>
         Promise.resolve(
-          id === TEST_PROJECT_ID ? { id: TEST_PROJECT_ID, path: TEST_PROJECT_PATH } : undefined,
+          id === TEST_PROJECT_ID
+            ? buildProject({ id: TEST_PROJECT_ID, path: TEST_PROJECT_PATH })
+            : undefined,
         ),
-      listProjects: () => Promise.resolve([]),
-      listProjectsByOrg: () => Promise.resolve([]),
-      isProjectInOrg: () => Promise.resolve(false),
-      projectNameExists: () => Promise.resolve(false),
-      createProject: notImpl,
-      updateProject: notImpl,
-      deleteProject: notImpl,
-      addProjectToOrg: notImpl,
-      getMemberLocalPath: () => Promise.resolve(null),
-      resolveProjectPath: notImpl,
-      reorderProjects: notImpl,
-    } as any,
+    },
     profile: {
       getProviderKey: () => Promise.resolve(null),
       getGitIdentity: () => Promise.resolve(null),
-    } as any,
+    },
     agentProfiles: {
       resolveEffectiveProfile: () => Promise.resolve(resolvedAgentProfile),
     },
     wsBroker: ws,
-    // Remaining services stubbed as empty objects — not used by startAgent
-    pipelines: {} as any,
-    analytics: {} as any,
-    search: {} as any,
-    startupCommands: {} as any,
-    threadEvents: {} as any,
-    messageQueue: {} as any,
-    mcpOauth: {} as any,
-    stageHistory: {} as any,
-    watchers: {} as any,
-    jobs: {} as any,
-  };
+  });
 }
 
 // ── Tests ───────────────────────────────────────────────────────
@@ -276,7 +238,7 @@ describe('AgentRunner class', () => {
     resetServices();
     tmMock = createMockThreadManager();
     wsMock = createMockWSBroker();
-    lastProcess = null as any;
+    lastProcess = new MockClaudeProcess();
     lastProcessOptions = null;
     factory = {
       create(opts) {
@@ -968,7 +930,7 @@ describe('AgentRunner class', () => {
       expect(runner.isAgentRunning('t1')).toBe(false);
 
       const stopEvents = wsMock.events.filter(
-        (e) => e.type === 'agent:status' && (e.data as any).status === 'stopped',
+        (e) => e.type === 'agent:status' && e.data.status === 'stopped',
       );
       expect(stopEvents).toHaveLength(1);
     });

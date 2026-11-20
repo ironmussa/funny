@@ -30,7 +30,7 @@ function runCli(env: Record<string, string>) {
 function appliedMigrations(): number {
   const sqlite = new Database(join(dataDir, 'data.db'), { readonly: true });
   try {
-    return (sqlite.query('SELECT COUNT(*) AS c FROM _migrations').get() as { c: number }).c;
+    return sqlite.query<{ c: number }, []>('SELECT COUNT(*) AS c FROM _migrations').get()?.c ?? 0;
   } finally {
     sqlite.close();
   }

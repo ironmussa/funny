@@ -1,6 +1,7 @@
-import { Archive, ArchiveRestore, FileCode, GitBranch, Loader2, Trash2, X } from 'lucide-react';
+import { Archive, ArchiveRestore, FileCode, Loader2, Trash2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { BranchBadge } from '@/components/BranchBadge';
 import { FileTree } from '@/components/FileTree';
 import { ExpandedDiffView } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
@@ -108,10 +109,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                 data-testid={`stash-branch-group-${group.branch}`}
               >
                 <div className="text-muted-foreground flex min-w-0 items-center gap-1.5 px-3 pt-2 pb-1 text-xs">
-                  <GitBranch className="icon-xs shrink-0" />
-                  <span className="truncate font-mono" title={group.branch}>
-                    {group.branch}
-                  </span>
+                  <BranchBadge branch={group.branch} variant="plain" />
                   <span className="shrink-0">({group.entries.length})</span>
                 </div>
                 <div className="divide-sidebar-border flex flex-col divide-y">
@@ -160,7 +158,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
               {t('review.stashDetailsDesc', 'Stash detail with file changes and diffs')}
             </DialogDescription>
             {selectedStashEntry && (
-              <div className="text-muted-foreground flex items-center gap-1.5 pt-1 text-[11px]">
+              <div className="text-muted-foreground text-compact flex items-center gap-1.5 pt-1">
                 <Archive className="icon-xs shrink-0" />
                 <code className="text-primary shrink-0 font-mono">{selectedStashEntry.index}</code>
                 <span className="shrink-0">{timeAgo(selectedStashEntry.createdAt, t, now)}</span>
@@ -305,9 +303,7 @@ function StashRow({
         <span className={cn(listRowTitleClassName, 'line-clamp-2 break-words')}>
           {entry.message}
         </span>
-        <span className="text-muted-foreground text-[10px]">
-          {timeAgo(entry.createdAt, t, now)}
-        </span>
+        <span className="text-muted-foreground text-2xs">{timeAgo(entry.createdAt, t, now)}</span>
       </div>
       <StashPopButton
         idx={idx}

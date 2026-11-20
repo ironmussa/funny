@@ -57,12 +57,17 @@ describe('worktree-manager', () => {
   describe('listWorktrees parsing', () => {
     // Test the parsing logic independently with raw porcelain output
     function parseWorktreeList(output: string, basePath: string) {
-      const entries: { path: string; branch: string; commit: string }[] = [];
-      let current: Record<string, string> = {};
+      type Entry = { path: string; branch?: string; commit?: string };
+      const entries: Entry[] = [];
+      let current: Partial<Entry> = {};
+      const flush = () => {
+        const { path } = current;
+        if (path) entries.push({ ...current, path });
+      };
 
       for (const line of output.split('\n')) {
         if (line.startsWith('worktree ')) {
-          if (current.path) entries.push(current as any);
+          flush();
           current = { path: line.slice('worktree '.length) };
         } else if (line.startsWith('HEAD ')) {
           current.commit = line.slice('HEAD '.length);
@@ -70,7 +75,7 @@ describe('worktree-manager', () => {
           current.branch = line.slice('branch refs/heads/'.length);
         }
       }
-      if (current.path) entries.push(current as any);
+      flush();
 
       return entries.filter((w) => w.path.startsWith(basePath));
     }

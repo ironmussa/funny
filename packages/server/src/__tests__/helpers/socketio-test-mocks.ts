@@ -42,6 +42,8 @@ export function createMockSocket(overrides: Partial<MockSocket> = {}): MockSocke
     },
   };
 
+  // SAFETY: tests only call the members implemented above (`id`, `data`, `on`, `emit`)
+  // and the overrides; the rest of socket.io's Socket class is never reached.
   return Object.assign(socket, overrides) as MockSocket;
 }
 

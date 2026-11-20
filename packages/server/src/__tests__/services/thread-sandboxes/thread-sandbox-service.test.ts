@@ -1,10 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { resolveRunnerBuild, createRunnerTemplateManager } from '@funny/sandbox';
+import { resolveRunnerBuild, createRunnerTemplateManager, type SandboxError } from '@funny/sandbox';
 import { createFakeSandboxProvider, type FakeSandboxProvider } from '@funny/sandbox/providers/fake';
 import { expectOk } from '@funny/sandbox/testing';
 import { REVERSE_LINK_LOOPBACK_PORT } from '@funny/shared/reverse-link';
-import { nextSandboxState, type SandboxState } from '@funny/shared/sandbox-machine';
+import { nextSandboxState } from '@funny/shared/sandbox-machine';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 
 import { hashLlmProxyToken } from '../../../services/llm-proxy/llm-proxy-tokens.js';
@@ -17,6 +17,7 @@ import type {
   ThreadSandboxRow,
   ThreadSandboxStore,
 } from '../../../services/thread-sandboxes/thread-sandbox-store.js';
+import { sandboxStateOf } from '../../helpers/builders-services.js';
 
 const build = expectOk(resolveRunnerBuild({ FUNNY_BUILD_COMMIT: 'c'.repeat(40) }));
 
@@ -37,9 +38,9 @@ function memoryStore(): ThreadSandboxStore & { rows: Map<string, ThreadSandboxRo
     // Same rule as the SQL store: only states that accept the event move.
     transition: (threadId, event, patch = {}) => {
       const row = rows.get(threadId);
-      const next = row ? nextSandboxState(row.state as SandboxState, event) : null;
+      const next = row ? nextSandboxState(sandboxStateOf(row.state), event) : null;
       if (!row || !next) {
-        return okAsync({ applied: false, current: (row?.state as SandboxState) ?? null });
+        return okAsync({ applied: false, current: row ? sandboxStateOf(row.state) : null });
       }
       rows.set(threadId, { ...row, ...patch, state: next });
       return okAsync({ applied: true, state: next });
@@ -465,18 +466,16 @@ describe('resilience: transient retries, release, abandon, recover', () => {
     const fake = createFakeSandboxProvider('fake-valid', { templates: [build.version] });
     const failing: Partial<Record<Flaky, number>> = {};
     const calls: Record<Flaky, number> = { create: 0, stop: 0, destroy: 0, exec: 0 };
-    const flaky = <F extends (...args: never[]) => ResultAsync<unknown, unknown>>(
-      name: Flaky,
-      call: F,
-    ): F =>
-      ((...args: never[]) => {
+    const flaky =
+      <A extends unknown[], T>(name: Flaky, call: (...args: A) => ResultAsync<T, SandboxError>) =>
+      (...args: A): ResultAsync<T, SandboxError> => {
         calls[name] += 1;
         if ((failing[name] ?? 0) > 0) {
           failing[name]! -= 1;
           return errAsync({ kind: 'unavailable', message: `${name} down`, retryAfterMs: 7 });
         }
         return call(...args);
-      }) as F;
+      };
     const provider: FakeSandboxProvider = {
       ...fake,
       create: flaky('create', fake.create),

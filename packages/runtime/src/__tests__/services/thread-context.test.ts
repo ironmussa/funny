@@ -14,7 +14,7 @@ describe('resolveThreadCwd', () => {
         userId: 'u-1',
         mode: 'local',
         worktreePath: undefined,
-      } as any,
+      },
       null,
     );
     expect(result.isOk()).toBe(true);
@@ -29,7 +29,7 @@ describe('resolveThreadCwd', () => {
         userId: 'u-1',
         mode: 'local',
         worktreePath: undefined,
-      } as any,
+      },
       { path: '/repo/foo' },
     );
     expect(result.isOk()).toBe(true);
@@ -44,7 +44,7 @@ describe('resolveThreadCwd', () => {
         userId: 'u-1',
         mode: 'worktree',
         worktreePath: '/repo/foo-bar/t-3',
-      } as any,
+      },
       { path: '/repo/foo' },
     );
     expect(result.isOk()).toBe(true);
@@ -59,7 +59,7 @@ describe('resolveThreadCwd', () => {
         userId: 'u-1',
         mode: 'local',
         worktreePath: undefined,
-      } as any,
+      },
       null,
     );
     expect(result.isErr()).toBe(true);
@@ -74,7 +74,7 @@ describe('resolveThreadCwd', () => {
         userId: 'u-1',
         mode: 'worktree',
         worktreePath: undefined,
-      } as any,
+      },
       { path: '/repo/foo' },
     );
     expect(result.isErr()).toBe(true);

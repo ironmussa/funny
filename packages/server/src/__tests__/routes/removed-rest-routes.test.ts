@@ -32,16 +32,16 @@ describe('removed REST routes are refused, not proxied', () => {
     // Stands in for the runner proxy catch-all, mounted last like in app.ts.
     t.app.all('/api/*', (c) => {
       proxied.push(`${c.req.method} ${c.req.path}`);
-      return c.json({ proxied: true }, 299 as any);
+      return Response.json({ proxied: true }, { status: 299 });
     });
   });
 
   beforeEach(() => {
     t.cleanup();
     proxied.length = 0;
-    seedProject(t.db as any, { id: 'p1', userId: 'owner', path: '/tmp/p1' });
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'member', role: 'member' });
-    seedRunner(t.db as any, { id: 'r1', userId: 'owner', token: 'tok-1', hostname: 'h' });
+    seedProject(t.db, { id: 'p1', userId: 'owner', path: '/tmp/p1' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'member', role: 'member' });
+    seedRunner(t.db, { id: 'r1', userId: 'owner', token: 'tok-1', hostname: 'h' });
   });
 
   const send = (userId: string, method: string, path: string) =>

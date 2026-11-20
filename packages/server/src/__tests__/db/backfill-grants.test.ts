@@ -9,6 +9,7 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
  * legacy model.
  */
 import { createAuthorizer } from '@funny/shared/auth/authorizer';
+import { dbAll, dbRun } from '@funny/shared/db/connection';
 import { createGrantRepository } from '@funny/shared/repositories';
 import { eq, sql } from 'drizzle-orm';
 
@@ -22,7 +23,7 @@ describe('resource_grants backfill', () => {
   beforeAll(async () => {
     t = await createTestApp();
     const mod = await import('../../db/migrate.js');
-    backfill = () => mod.backfillResourceGrants((q) => Promise.resolve(t.db.run(q as any)));
+    backfill = () => mod.backfillResourceGrants((q) => Promise.resolve(t.db.run(q)));
   });
 
   beforeEach(() => {
@@ -30,19 +31,14 @@ describe('resource_grants backfill', () => {
   });
 
   function grants() {
-    return createGrantRepository({
-      db: t.db,
-      schema: t.schema,
-      dbAll: (q: any) => Promise.resolve(t.db.all(q)),
-      dbRun: (q: any) => Promise.resolve(t.db.run(q)),
-    } as any);
+    return createGrantRepository({ db: t.db, schema: t.schema, dbAll, dbRun });
   }
 
   test('maps legacy project_members and thread_shares to canonical roles', async () => {
-    seedProject(t.db as any, { id: 'p1', userId: 'owner-1' });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'owner-1' });
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'ana', role: 'member' });
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'bob', role: 'admin' });
+    seedProject(t.db, { id: 'p1', userId: 'owner-1' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'owner-1' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'ana', role: 'member' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'bob', role: 'admin' });
     t.db.run(
       sql`INSERT INTO thread_shares (thread_id, shared_with_user_id, shared_by_user_id, level, created_at)
           VALUES ('t1', 'ana', 'owner-1', 'view', '2026-01-01'),
@@ -59,24 +55,20 @@ describe('resource_grants backfill', () => {
   });
 
   test('denormalizes team_projects into projects.organization_id', async () => {
-    seedProject(t.db as any, { id: 'p1', userId: 'owner-1' });
+    seedProject(t.db, { id: 'p1', userId: 'owner-1' });
     t.db.run(
       sql`INSERT INTO team_projects (team_id, project_id, created_at) VALUES ('org-9', 'p1', '2026-01-01')`,
     );
 
     await backfill();
 
-    const proj = t.db
-      .select()
-      .from(t.schema.projects)
-      .where(eq(t.schema.projects.id, 'p1'))
-      .get() as any;
-    expect(proj.organizationId).toBe('org-9');
+    const proj = t.db.select().from(t.schema.projects).where(eq(t.schema.projects.id, 'p1')).get();
+    expect(proj?.organizationId).toBe('org-9');
   });
 
   test('is idempotent and preserves Phase-4 dual-written grants', async () => {
-    seedProject(t.db as any, { id: 'p1', userId: 'owner-1' });
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'ana', role: 'admin' });
+    seedProject(t.db, { id: 'p1', userId: 'owner-1' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'ana', role: 'admin' });
     // A grant already written by the Phase 4 dual-write (different role on purpose).
     await grants().upsertGrant({
       subjectId: 'ana',
@@ -97,8 +89,8 @@ describe('resource_grants backfill', () => {
 
   test('deleteProject purges the project grant AND its threads grants (no orphans)', async () => {
     const pr = await import('../../services/project-repository.js');
-    seedProject(t.db as any, { id: 'p1', userId: 'owner-1' });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'owner-1' });
+    seedProject(t.db, { id: 'p1', userId: 'owner-1' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'owner-1' });
     const g = grants();
     await g.upsertGrant({
       subjectId: 'ana',
@@ -122,9 +114,9 @@ describe('resource_grants backfill', () => {
   });
 
   test('authorizer over backfilled data: explicit grants only, NO inheritance (golden)', async () => {
-    seedProject(t.db as any, { id: 'p1', userId: 'owner-1' });
-    seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'owner-1' });
-    seedProjectMember(t.db as any, { projectId: 'p1', userId: 'ana', role: 'member' });
+    seedProject(t.db, { id: 'p1', userId: 'owner-1' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'owner-1' });
+    seedProjectMember(t.db, { projectId: 'p1', userId: 'ana', role: 'member' });
     // ana also holds an explicit thread share (editor).
     t.db.run(
       sql`INSERT INTO thread_shares (thread_id, shared_with_user_id, shared_by_user_id, level, created_at)
@@ -138,14 +130,14 @@ describe('resource_grants backfill', () => {
     const g = grants();
 
     const authz = createAuthorizer({
-      getGrantRole: (s, type, id) => g.getGrantRole(s, type as any, id),
+      getGrantRole: (s, type, id) => g.getGrantRole(s, type, id),
       getOrgRole: async () => null,
       loadThreadMeta: async (id) => {
-        const r = t.db.all(sql`SELECT user_id FROM threads WHERE id = ${id}`) as any[];
+        const r = t.db.all<{ user_id: string }>(sql`SELECT user_id FROM threads WHERE id = ${id}`);
         return r.length ? { ownerId: r[0].user_id } : null;
       },
       loadProjectMeta: async (id) => {
-        const r = t.db.all(sql`SELECT user_id FROM projects WHERE id = ${id}`) as any[];
+        const r = t.db.all<{ user_id: string }>(sql`SELECT user_id FROM projects WHERE id = ${id}`);
         return r.length ? { ownerId: r[0].user_id } : null;
       },
     });

@@ -58,27 +58,24 @@ describe('dedicated runner data scope', () => {
       'runners',
       'projects',
     ]) {
-      (db as any).run(`DELETE FROM ${table}`);
+      db.run(`DELETE FROM ${table}`);
     }
     __resetRunnerScopeCache();
     __resetDataScopeCache();
     __resetDataOwnershipCache();
-    seedProject(db as any, { id: 'px', userId: 'alice', path: '/x' });
-    seedProject(db as any, { id: 'py', userId: 'alice', path: '/y' });
-    seedThread(db as any, { id: 'tx', projectId: 'px', userId: 'alice' });
-    seedThread(db as any, { id: 'ty', projectId: 'py', userId: 'alice' });
-    seedThread(
-      db as any,
-      {
-        id: 'ts',
-        projectId: null as any,
-        userId: 'alice',
-        isScratch: 1,
-      } as any,
-    );
-    seedMessage(db as any, { id: 'my', threadId: 'ty' });
-    seedRunner(db as any, { id: 'laptop', userId: 'alice', token: 'tok-l', hostname: 'l' });
-    seedRunner(db as any, {
+    seedProject(db, { id: 'px', userId: 'alice', path: '/x' });
+    seedProject(db, { id: 'py', userId: 'alice', path: '/y' });
+    seedThread(db, { id: 'tx', projectId: 'px', userId: 'alice' });
+    seedThread(db, { id: 'ty', projectId: 'py', userId: 'alice' });
+    seedThread(db, {
+      id: 'ts',
+      projectId: null,
+      userId: 'alice',
+      isScratch: 1,
+    });
+    seedMessage(db, { id: 'my', threadId: 'ty' });
+    seedRunner(db, { id: 'laptop', userId: 'alice', token: 'tok-l', hostname: 'l' });
+    seedRunner(db, {
       id: 'rx',
       userId: 'alice',
       token: 'tok-rx',
@@ -153,7 +150,7 @@ describe('dedicated runner data scope', () => {
   });
 
   test('agent events: only own-user threads inside the runner scope', async () => {
-    seedThread(db as any, { id: 'bob-t', projectId: 'px', userId: 'bob' });
+    seedThread(db, { id: 'bob-t', projectId: 'px', userId: 'bob' });
     expect(await canRunnerActOnThread('rx', 'alice', 'tx')).toBe(true);
     expect(await canRunnerActOnThread('rx', 'alice', 'ty')).toBe(false);
     expect(await canRunnerActOnThread('rx', 'alice', 'ts')).toBe(false);

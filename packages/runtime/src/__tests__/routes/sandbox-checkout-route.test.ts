@@ -32,18 +32,19 @@ vi.mock('../../services/sandbox-github-auth.js', () => ({
 }));
 
 const { sandboxCheckoutRoutes } = await import('../../routes/sandbox-checkout.js');
+import type { HonoEnv } from '../../types/hono-env.js';
 
 const PROJECT_PATH = '/home/funny/work/repo';
 const REPO = 'https://github.com/ironmussa/funny.git';
 
 function makeApp() {
-  const app = new Hono();
+  const app = new Hono<HonoEnv>();
   app.use('*', async (c, next) => {
-    c.set('userId' as never, 'user-1' as never);
-    c.set('organizationId' as never, null as never);
+    c.set('userId', 'user-1');
+    c.set('organizationId', null);
     await next();
   });
-  app.route('/api/threads', sandboxCheckoutRoutes as never);
+  app.route('/api/threads', sandboxCheckoutRoutes);
   return app;
 }
 

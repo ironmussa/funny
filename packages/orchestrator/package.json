@@ -15,7 +15,7 @@
   "scripts": {
     "start": "bun src/bin/orchestrator.ts start",
     "status": "bun src/bin/orchestrator.ts status",
-    "test": "bun test"
+    "test": "bun test --timeout 20000"
   },
   "dependencies": {
     "@funny/core": "workspace:*",

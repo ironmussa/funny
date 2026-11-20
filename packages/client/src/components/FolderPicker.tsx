@@ -282,9 +282,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                       {crumb.label}
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent className="max-w-[min(32rem,calc(100vw-2rem))] font-mono break-all">
-                    {crumb.path}
-                  </TooltipContent>
+                  <TooltipContent variant="mono">{crumb.path}</TooltipContent>
                 </Tooltip>
               </div>
             ))}
@@ -323,7 +321,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                     {root.replace(':\\', '')}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent className="font-mono">{root}</TooltipContent>
+                <TooltipContent variant="mono">{root}</TooltipContent>
               </Tooltip>
             ))}
           </div>

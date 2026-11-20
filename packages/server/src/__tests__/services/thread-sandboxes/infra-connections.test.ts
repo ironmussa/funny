@@ -10,6 +10,7 @@ import type { ServerEnv } from '../../../lib/types.js';
 import { createInfraRoutes } from '../../../routes/infra.js';
 import { createInfraConnectionService } from '../../../services/thread-sandboxes/infra-connections.js';
 import { sqlThreadSandboxStore } from '../../../services/thread-sandboxes/thread-sandbox-store.js';
+import { present } from '../../helpers/builders-services.js';
 import { createTestDb, seedProject, seedThread } from '../../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
@@ -19,7 +20,7 @@ beforeEach(async () => {
   testDb = createTestDb();
   const { setConnection } = await import('../../../db/index.js');
   setConnection({
-    db: testDb.db as any,
+    db: testDb.db,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
     mode: 'sqlite',
@@ -41,9 +42,12 @@ describe('infra connection service', () => {
     });
     expect(JSON.stringify(view)).not.toContain('fake-valid');
 
-    const stored = testDb.sqlite.query('SELECT credential_enc FROM infra_connections').get() as {
-      credential_enc: string;
-    };
+    const stored = present(
+      testDb.sqlite
+        .query<{ credential_enc: string }, []>('SELECT credential_enc FROM infra_connections')
+        .get(),
+      'the stored connection',
+    );
     expect(stored.credential_enc).not.toContain('fake-valid');
 
     const { provider } = expectOk(await service.providerFor('alice', view.id));

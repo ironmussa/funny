@@ -3,6 +3,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { AgentMessageHandler } from '../../services/agent-message-handler.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
+import { buildThreadRecord, createThreadManagerFake } from '../helpers/builders.js';
 
 const THREAD_ID = 'thread-streaming';
 
@@ -11,7 +12,7 @@ function assistant(id: string, text: string): CLIMessage {
     type: 'assistant',
     hasStableMessageId: true,
     message: { id, content: [{ type: 'text', text }] },
-  } as CLIMessage;
+  };
 }
 
 describe('AgentMessageHandler — streamed assistant updates', () => {
@@ -32,22 +33,29 @@ describe('AgentMessageHandler — streamed assistant updates', () => {
       state.completedEmitted.add(threadId);
       if (known) state.cliToDbMsgId.set(threadId, new Map([['item', 'db-1']]));
       const emitted: any[] = [];
-      const thread = { userId: 'user-1', projectId: 'proj-1', status, stage: 'review' };
+      const thread = buildThreadRecord({
+        id: threadId,
+        userId: 'user-1',
+        projectId: 'proj-1',
+        status,
+        stage: 'review',
+      });
       const threadManager = {
+        ...createThreadManagerFake(),
         getThread: vi.fn(async () => thread),
-        updateThread: vi.fn(async (_id: string, patch: Record<string, unknown>) =>
-          Object.assign(thread, patch),
-        ),
+        updateThread: vi.fn(async (_id: string, patch: Record<string, unknown>) => {
+          Object.assign(thread, patch);
+        }),
         insertMessage: vi.fn(async () => 'db-1'),
         updateMessage: vi.fn(async () => undefined),
       };
       const handler = new AgentMessageHandler(
         state,
-        threadManager as any,
+        threadManager,
         {
           emit: vi.fn(),
           emitToUser: vi.fn((_user: string, event: any) => emitted.push(event)),
-        } as any,
+        },
         () => undefined,
       );
 
@@ -72,7 +80,7 @@ describe('AgentMessageHandler — streamed assistant updates', () => {
           num_turns: 1,
           total_cost_usd: 0.01,
           session_id: 'session',
-        } as CLIMessage);
+        });
         expect(thread.status).toBe('completed');
         expect(emitted.filter((event) => event.type === 'agent:result')).toHaveLength(1);
       }
@@ -85,17 +93,18 @@ describe('AgentMessageHandler — streamed assistant updates', () => {
     const emitted: any[] = [];
     let messageNumber = 0;
     const threadManager = {
-      getThread: vi.fn(async () => ({ userId: 'user-1' })),
+      ...createThreadManagerFake(),
+      getThread: vi.fn(async () => buildThreadRecord({ id: THREAD_ID, userId: 'user-1' })),
       insertMessage: vi.fn(async () => `db-${++messageNumber}`),
       updateMessage: vi.fn(async () => undefined),
     };
     const handler = new AgentMessageHandler(
       state,
-      threadManager as any,
+      threadManager,
       {
         emit: vi.fn(),
         emitToUser: vi.fn((_userId: string, event: any) => emitted.push(event)),
-      } as any,
+      },
       () => undefined,
     );
 

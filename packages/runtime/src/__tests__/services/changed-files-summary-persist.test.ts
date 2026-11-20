@@ -1,11 +1,18 @@
 import { ok } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
+import type { IThreadEventService } from '../../services/server-interfaces.js';
+
 const mocks = vi.hoisted(() => ({
   getDiffSummary: vi.fn(),
   getIgnoredFileStats: vi.fn(),
-  saveThreadEvent: vi.fn(async () => undefined),
+  saveThreadEvent: vi.fn<IThreadEventService['saveThreadEvent']>(async () => undefined),
 }));
+
+/** The (threadId, type, data) of the n-th persisted thread event. */
+function savedEvent(n = 0): [string, string, any] {
+  return mocks.saveThreadEvent.mock.calls[n];
+}
 
 vi.mock('@funny/core/git', () => ({
   getDiffSummary: mocks.getDiffSummary,
@@ -39,9 +46,9 @@ function makeHandler(threadWithMessages: any) {
     emit: (e: any) => wsEvents.push(e),
     emitToUser: (_uid: string, e: any) => wsEvents.push(e),
   };
-  const getProject = vi.fn(async () => ({ id: 'p1', path: '/repo' }));
+  const getProject = vi.fn(() => ({ id: 'p1', path: '/repo' }));
   const state = new AgentStateTracker();
-  const handler = new AgentMessageHandler(state, threadManager, wsBroker, getProject as any);
+  const handler = new AgentMessageHandler(state, threadManager, wsBroker, getProject);
   return { handler, wsEvents, state };
 }
 
@@ -84,10 +91,10 @@ describe('AgentMessageHandler.persistChangedFilesSummary', () => {
       messages: session('u1', '/repo/src/a.ts'),
     });
 
-    await (handler as any).persistChangedFilesSummary('t1');
+    await handler.persistChangedFilesSummary('t1');
 
     expect(mocks.saveThreadEvent).toHaveBeenCalledTimes(1);
-    const [threadId, type, data]: any = mocks.saveThreadEvent.mock.calls[0] as any;
+    const [threadId, type, data] = savedEvent();
     expect(type).toBe('changed_files_summary');
     expect(threadId).toBe('t1');
     expect(data.userMessageId).toBe('u1');
@@ -112,13 +119,13 @@ describe('AgentMessageHandler.persistChangedFilesSummary', () => {
       messages: session('u1', '/repo/openspec/changes/x/tasks.md'),
     });
 
-    await (handler as any).persistChangedFilesSummary('t1');
+    await handler.persistChangedFilesSummary('t1');
 
     // The ignored subset is the only stat-less path we ask about.
     expect(mocks.getIgnoredFileStats).toHaveBeenCalledWith('/repo', [
       'openspec/changes/x/tasks.md',
     ]);
-    const [, , data]: any = mocks.saveThreadEvent.mock.calls[0] as any;
+    const [, , data] = savedEvent();
     expect(data.files[0]).toMatchObject({
       path: 'openspec/changes/x/tasks.md',
       additions: 12,
@@ -135,7 +142,7 @@ describe('AgentMessageHandler.persistChangedFilesSummary', () => {
       messages: session('u1', '/repo/src/a.ts'),
     });
 
-    await (handler as any).persistChangedFilesSummary('t1');
+    await handler.persistChangedFilesSummary('t1');
 
     expect(mocks.getDiffSummary).not.toHaveBeenCalled();
     expect(mocks.saveThreadEvent).not.toHaveBeenCalled();
@@ -150,7 +157,7 @@ describe('AgentMessageHandler.persistChangedFilesSummary', () => {
       messages: [{ id: 'u1', role: 'user', content: 'hi', toolCalls: [] }],
     });
 
-    await (handler as any).persistChangedFilesSummary('t1');
+    await handler.persistChangedFilesSummary('t1');
 
     expect(mocks.saveThreadEvent).not.toHaveBeenCalled();
   });
@@ -188,7 +195,7 @@ describe('AgentMessageHandler.persistChangedFilesSummary', () => {
 
     await handler.persistChangedFilesSummary('t1');
 
-    const [, , data]: any = mocks.saveThreadEvent.mock.calls[0] as any;
+    const [, , data] = savedEvent();
     expect(data.files.map((f: any) => f.path)).toEqual(['src/script.ts']);
   });
 

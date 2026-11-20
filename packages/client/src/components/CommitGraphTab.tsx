@@ -34,6 +34,11 @@ import { useBranchActions } from '@/components/commit-graph/use-branch-actions';
 import { CommitDetailDialog } from '@/components/commit-history/CommitDetailDialog';
 import { DiffStats } from '@/components/DiffStats';
 import { PRBadge } from '@/components/PRBadge';
+import {
+  TabToolbar,
+  TabToolbarRefresh,
+  TabToolbarSpacer,
+} from '@/components/review-pane/TabToolbar';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -134,10 +139,10 @@ function hasDistinctCommitterIdentity(entry: GraphEntry): boolean {
 
 const PAGE_SIZE = 80;
 // The title/meta text is rendered with the SAME Tailwind classes as the History
-// list (`text-xs` + `text-[10px]`) so the font is identical across every
+// list (`text-xs` + `text-2xs`) so the font is identical across every
 // Review-pane tab. These px values are only used to *estimate* row heights for
 // the virtualizer — `text-xs` resolves to ~10.5px at the app's 14px rem base,
-// and `text-[10px]` is an absolute 10px.
+// and `text-2xs` is an absolute 10px.
 const TITLE_PX = 10.5;
 const META_PX = 10;
 const REBASE_LINK_RAIL_WIDTH = LANE_WIDTH;
@@ -1084,17 +1089,8 @@ function GraphToolbar({
 }) {
   const { t } = useTranslation();
   return (
-    <div className="border-sidebar-border bg-background flex flex-wrap items-center gap-1 border-b px-2 py-1">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="text-muted-foreground"
-        onClick={onRefresh}
-        disabled={logLoading}
-        data-testid="graph-refresh"
-      >
-        <RefreshCw className={cn('icon-base', logLoading && 'animate-spin')} />
-      </Button>
+    <TabToolbar wrap data-testid="graph-toolbar">
+      <TabToolbarRefresh loading={logLoading} onRefresh={onRefresh} data-testid="graph-refresh" />
       <HistoryFilters
         branchScope={branchScope}
         onBranchScopeChange={onBranchScopeChange}
@@ -1108,13 +1104,14 @@ function GraphToolbar({
         hasMoreAuthors={hasMoreAuthors}
         onLoadMoreAuthors={onLoadMoreAuthors}
       />
-      <span className="text-muted-foreground ml-auto text-[10px]">
+      <TabToolbarSpacer />
+      <span className="text-muted-foreground text-2xs">
         {t('graph.commitCount', {
           count: commitCount,
           defaultValue: `${commitCount} commits`,
         })}
       </span>
-    </div>
+    </TabToolbar>
   );
 }
 
@@ -1334,9 +1331,7 @@ function ParentBranchList({
               <span>{middleTruncate(branch, PARENT_BRANCH_LABEL_MAX_CHARS)}</span>
             </li>
           </TooltipTrigger>
-          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
-            {branch}
-          </TooltipContent>
+          <TooltipContent variant="mono">{branch}</TooltipContent>
         </Tooltip>
       ))}
     </ul>
@@ -1768,7 +1763,7 @@ function GraphCommitRow({
             hover, so the two share one cell instead of each reserving width. */}
         <HoverTimeMenu
           time={commitTime}
-          timeClassName="text-muted-foreground text-[10px]"
+          timeClassName="text-muted-foreground text-2xs"
           open={menuOpen}
           className="min-w-12 self-center"
         >
@@ -1849,7 +1844,7 @@ function RebaseEventDialog({
 
                   {commitPairs.length > 0 && (
                     <div className="border-sidebar-border mt-4 border-t pt-3">
-                      <div className="text-muted-foreground mb-2 text-[10px] font-medium uppercase">
+                      <div className="text-muted-foreground text-2xs mb-2 font-medium uppercase">
                         {t('graph.rebaseCommitPairs', 'Rewritten commits')}
                       </div>
                       <div className="flex flex-col gap-1.5">
@@ -1869,7 +1864,7 @@ function RebaseEventDialog({
                   )}
 
                   <div className="border-sidebar-border mt-4 border-t pt-3">
-                    <div className="text-muted-foreground mb-2 text-[10px] font-medium uppercase">
+                    <div className="text-muted-foreground text-2xs mb-2 font-medium uppercase">
                       {t('graph.rebaseSteps', 'Reflog steps')}
                     </div>
                     <div className="flex flex-col gap-1.5">

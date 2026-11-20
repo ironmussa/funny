@@ -1,8 +1,12 @@
-import type { CLIMessage } from '@funny/core/agents';
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { AgentMessageHandler } from '../../services/agent-message-handler.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
+import {
+  buildThreadRecord,
+  createThreadManagerFake,
+  createWsBrokerFake,
+} from '../helpers/builders.js';
 
 const THREAD_ID = 'thread-long-run';
 
@@ -19,13 +23,13 @@ describe('AgentStateTracker — long-running agents', () => {
     let n = 0;
     const handler = new AgentMessageHandler(
       state,
-      {
-        getThread: vi.fn(async () => ({ userId: 'user-1', status: 'running' })),
+      createThreadManagerFake({
+        getThread: vi.fn(async () => buildThreadRecord({ userId: 'user-1', status: 'running' })),
         updateThread: vi.fn(async () => undefined),
         insertMessage: vi.fn(async () => `db-${++n + 1}`),
         updateMessage: vi.fn(async () => undefined),
-      } as any,
-      { emit: vi.fn(), emitToUser: vi.fn() } as any,
+      }),
+      createWsBrokerFake(),
       () => undefined,
     );
 
@@ -36,7 +40,7 @@ describe('AgentStateTracker — long-running agents', () => {
         type: 'assistant',
         hasStableMessageId: true,
         message: { id: `cli-${minute}`, content: [{ type: 'text', text: 'working' }] },
-      } as CLIMessage);
+      });
       state.sweepStale();
     }
 

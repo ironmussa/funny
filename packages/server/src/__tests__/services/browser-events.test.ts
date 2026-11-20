@@ -9,6 +9,7 @@ import {
   setIO,
 } from '../../services/browser-events.js';
 import { browserV1ResourceStore } from '../../services/socketio/browser-v1-resource-store.js';
+import { serverWithNamespace } from '../helpers/builders-services.js';
 import { FakeBrowserEventSink } from '../helpers/runner-port-fakes.js';
 
 describe('browser-events Socket.IO delivery', () => {
@@ -27,7 +28,7 @@ describe('browser-events Socket.IO delivery', () => {
       emit: (event: string) => calls.push({ room: '*', event }),
       to: (room: string) => ({ emit: (event: string) => calls.push({ room, event }) }),
     };
-    setIO({ of: () => browser } as any);
+    setIO(serverWithNamespace(browser));
   });
 
   test('continues delivering browser room events', () => {
@@ -75,12 +76,12 @@ describe('browser-events Socket.IO delivery', () => {
       data: {},
       emit: (type: string, event: unknown) => wire.push(JSON.stringify({ type, event })),
     };
-    setIO({
-      of: () => ({
+    setIO(
+      serverWithNamespace({
         sockets: new Map([['socket-1', socket]]),
         adapter: { rooms: new Map([['user:alice', new Set(['socket-1'])]]) },
       }),
-    } as any);
+    );
 
     const event = {
       type: 'pty:data',

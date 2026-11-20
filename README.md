@@ -552,15 +552,17 @@ run `bun run dev` as usual, or prefix any command with `PORTLESS=0`.
 
 ## Git Worktrees
 
-Worktrees are created in `.funny-worktrees/` adjacent to your project:
+By default, worktrees are created in `.funny-worktrees/` next to your project. Set `FUNNY_WORKTREE_ROOT` on the runner to put new ones under `<root>/.funny-worktrees/<project>-<hash>/` instead. This helps when the project lives on a slow disk (an NTFS/FUSE mount, a network share). Worktrees created before the setting keep working.
+
+The default layout:
 
 ```
-/your-project/
+/code/your-project/
 ├── .git/
 ├── src/
 └── ...
 
-/your-project-worktrees/
+/code/.funny-worktrees/your-project/
 ├── feature-branch-1/
 ├── feature-branch-2/
 └── ...

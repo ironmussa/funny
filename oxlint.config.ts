@@ -214,6 +214,10 @@ const existing = {
     {
       files: ['**/__tests__/**', '**/*.test.*', '**/*.spec.*'],
       rules: {
+        // Tests cast fixtures and mocks to the type under test on purpose; a
+        // `SAFETY:` note on each cast says nothing the test does not already show.
+        // Production code keeps the rule.
+        'anti-slop/require-safety-comment-for-type-assertion': 'off',
         'no-constant-condition': 'off',
         'no-constant-binary-expression': 'off',
         'max-lines': 'off',

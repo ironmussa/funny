@@ -10,14 +10,12 @@ import { mkdir, stat } from 'fs/promises';
 import { join } from 'path';
 
 import {
-  createWorktree,
   findWorktreeForBranch,
   getCurrentBranch,
   git,
   isContainedPath,
   isRegisteredWorktreePath,
 } from '@funny/core/git';
-import { setupWorktree } from '@funny/core/ports';
 import type {
   WSEvent,
   AgentProvider,
@@ -49,7 +47,6 @@ import * as tm from '../thread-manager.js';
 import { wsBroker } from '../ws-broker.js';
 import {
   ThreadServiceError,
-  createSetupProgressEmitter,
   emitThreadUpdated,
   slugifyTitle,
   releaseStagedUploadsOnSuccess,
@@ -62,6 +59,7 @@ import {
   formatShellEscapeOutput,
 } from './shell-escape.js';
 import { copyThreadUploads } from './staged-uploads.js';
+import { prepareWorktree } from './worktree-preparation.js';
 
 /**
  * Pre-merge "always allow" permission rules into the agent's allowedTools so
@@ -561,41 +559,26 @@ async function setupWorktreeAndStartAgent(
   branchName: string,
 ): Promise<void> {
   const { params, threadId, projectPath } = ctx;
-  const emitSetupProgress = createSetupProgressEmitter(params.userId, threadId);
   try {
-    const wtResult = await createWorktree(
+    const wtResult = await prepareWorktree({
       projectPath,
       branchName,
-      ctx.resolvedBaseBranch,
-      emitSetupProgress,
-    );
+      baseBranch: ctx.resolvedBaseBranch,
+      userId: params.userId,
+      threadId,
+      flow: 'create',
+    });
     if (wtResult.isErr()) {
       await markThreadFailed(params.userId, threadId);
       return;
     }
     const wtPath = wtResult.value;
 
-    logWorktreeSetupResult(threadId, await setupWorktree(projectPath, wtPath, emitSetupProgress));
     await markWorktreeReady(params.userId, threadId, branchName, wtPath);
     await startAgentInNewWorktree(ctx, wtPath);
   } catch (err) {
     log.error('Background worktree setup failed', { threadId, error: String(err) });
     await markThreadFailed(params.userId, threadId);
-  }
-}
-
-/** Post-create setup problems are logged but never block the thread. */
-function logWorktreeSetupResult(
-  threadId: string,
-  setupResult: Awaited<ReturnType<typeof setupWorktree>>,
-): void {
-  if (setupResult.isErr()) {
-    log.warn('Failed to setup worktree', { threadId, error: setupResult.error.message });
-    return;
-  }
-  const { postCreateErrors } = setupResult.value;
-  if (postCreateErrors.length) {
-    log.warn('Worktree postCreate errors', { threadId, errors: postCreateErrors });
   }
 }
 

@@ -2,7 +2,6 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { okAsync } from 'neverthrow';
 import { vi, describe, test, expect, beforeEach } from 'vitest';
 
 vi.mock('../git/process.js', () => ({
@@ -24,13 +23,13 @@ vi.mock('../ports/env-writer.js', () => ({
   readAllocatedPorts: vi.fn(),
 }));
 vi.mock('../git/worktree.js', () => ({
-  getWorktreeBase: vi.fn(),
+  getWorktreeBasePaths: vi.fn(),
 }));
 
 import { runHookCommand } from '../git/commit.js';
 // Must import after mocks
 import { execute, executeShell } from '../git/process.js';
-import { getWorktreeBase } from '../git/worktree.js';
+import { getWorktreeBasePaths } from '../git/worktree.js';
 import { readProjectConfig } from '../ports/config-reader.js';
 import { setupWorktree, syncClaudeProjectAssets } from '../ports/index.js';
 import { allocatePorts } from '../ports/port-allocator.js';
@@ -39,7 +38,7 @@ const mockExecute = execute as ReturnType<typeof vi.fn>;
 const mockExecuteShell = executeShell as ReturnType<typeof vi.fn>;
 const mockReadProjectConfig = readProjectConfig as ReturnType<typeof vi.fn>;
 const mockAllocatePorts = allocatePorts as ReturnType<typeof vi.fn>;
-const mockGetWorktreeBase = getWorktreeBase as ReturnType<typeof vi.fn>;
+const mockGetWorktreeBasePaths = getWorktreeBasePaths as ReturnType<typeof vi.fn>;
 
 describe('runHookCommand', () => {
   beforeEach(() => {
@@ -133,7 +132,7 @@ describe('setupWorktree', () => {
       portGroups: [{ name: 'web', defaultPort: 3000, envVars: ['PORT'] }],
       envFiles: ['.env'],
     });
-    mockGetWorktreeBase.mockReturnValue(okAsync('/worktrees'));
+    mockGetWorktreeBasePaths.mockReturnValue(['/worktrees']);
     mockAllocatePorts.mockResolvedValue(mockPorts);
 
     const result = await setupWorktree('/project', '/worktree');
@@ -167,7 +166,7 @@ describe('setupWorktree', () => {
       portGroups: [{ name: 'web', defaultPort: 3000, envVars: ['PORT'] }],
       envFiles: ['.env'],
     });
-    mockGetWorktreeBase.mockReturnValue(okAsync('/worktrees'));
+    mockGetWorktreeBasePaths.mockReturnValue(['/worktrees']);
     mockAllocatePorts.mockRejectedValue(new Error('No ports available'));
 
     const result = await setupWorktree('/project', '/worktree');

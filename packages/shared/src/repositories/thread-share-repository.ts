@@ -83,6 +83,7 @@ export function createThreadShareRepository(deps: ThreadShareRepositoryDeps) {
     );
     if (rows.length === 0) return null;
     const level = (rows[0] as { level?: string }).level;
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     return level === 'steer' ? 'steer' : level === 'comment' ? 'comment' : 'view';
   }
 

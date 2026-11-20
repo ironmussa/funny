@@ -60,6 +60,7 @@ function taskLines(result: CheckRunResult): { lines: string[]; issues: number } 
   const { steps, issues } = result.progress.progress;
   const lines = steps.map(
     (step) =>
+      // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
       `${step.status === 'passed' ? '✓' : step.status === 'failed' ? '✗' : '·'} ${step.name}: ${step.errors} errors, ${step.warnings} warnings${checked(step)}`,
   );
   for (const issue of issues.slice(0, ISSUE_LIMIT)) {

@@ -124,6 +124,7 @@ export class RuntimeActionProvider implements ActionProvider {
       // Resolve model and permission mode: explicit opts > agent definition > defaults
       const effectiveMode = agentOpts.mode ?? agentOpts.agent?.permissionMode ?? 'autoEdit';
       const permissionMode: PermissionMode =
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         effectiveMode === 'plan' ? 'plan' : effectiveMode === 'autoEdit' ? 'autoEdit' : 'autoEdit';
 
       // Resolve tool boundaries: explicit opts > agent definition > undefined.

@@ -128,6 +128,7 @@ export function prStates(state: 'open' | 'closed' | 'all'): string[] | null {
  */
 export function prOrder(sort: string, direction: string): { field: string; direction: string } {
   const field =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     sort === 'updated' ? 'UPDATED_AT' : sort === 'popularity' ? 'COMMENTS' : 'CREATED_AT';
   return { field, direction: direction === 'asc' ? 'ASC' : 'DESC' };
 }

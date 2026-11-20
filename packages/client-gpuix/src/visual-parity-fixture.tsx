@@ -63,20 +63,23 @@ export function GpuixVisualParityFixtureHost({
                 testId={`parity-conversation-${item.id}`}
                 compact={compact}
               >
-                {item.kind === 'user' ? (
-                  <UserMessageCard>
-                    <text>{item.content}</text>
-                  </UserMessageCard>
-                ) : item.kind === 'assistant' ? (
-                  <AssistantMessage source={item.content} />
-                ) : (
-                  <StatusCard
-                    title={item.title ?? item.kind}
-                    detail={item.content}
-                    status={item.status}
-                    tone={item.kind === 'permission' ? 'warning' : 'neutral'}
-                  />
-                )}
+                {
+                  // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+                  item.kind === 'user' ? (
+                    <UserMessageCard>
+                      <text>{item.content}</text>
+                    </UserMessageCard>
+                  ) : item.kind === 'assistant' ? (
+                    <AssistantMessage source={item.content} />
+                  ) : (
+                    <StatusCard
+                      title={item.title ?? item.kind}
+                      detail={item.content}
+                      status={item.status}
+                      tone={item.kind === 'permission' ? 'warning' : 'neutral'}
+                    />
+                  )
+                }
               </ConversationRow>
             ))}
           </virtual-list>

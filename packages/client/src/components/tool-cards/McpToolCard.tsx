@@ -51,10 +51,13 @@ function plainOutputPreview(output: string): string | null {
 /** Text a result carries (text parts and resource URIs), for copy and recordings. */
 function resultTextOf(result: McpResult | null, output: string | undefined): string {
   if (!result) return output ?? '';
-  return result.parts
-    .map((p) => (p.kind === 'text' ? p.text : p.kind === 'resource' ? p.uri : ''))
-    .filter(Boolean)
-    .join('\n\n');
+  return (
+    result.parts
+      // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+      .map((p) => (p.kind === 'text' ? p.text : p.kind === 'resource' ? p.uri : ''))
+      .filter(Boolean)
+      .join('\n\n')
+  );
 }
 
 /**

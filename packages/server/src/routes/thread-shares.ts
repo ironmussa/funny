@@ -89,6 +89,7 @@ shareRoutes.post('/:id/shares', requireThreadOwner, async (c) => {
   // comment + follow-ups / edit). Anything else (incl. omitted) falls back to
   // the safe default 'view'. Maps to canonical viewer/commenter/contributor.
   const level: 'view' | 'comment' | 'steer' =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     body.level === 'steer' ? 'steer' : body.level === 'comment' ? 'comment' : 'view';
   if (targetUserId === ownerId) {
     return c.json({ error: 'Cannot share a thread with yourself', code: 'share-self' }, 400);
@@ -148,6 +149,7 @@ shareRoutes.get('/:id/shares', requireThreadOwner, async (c) => {
       threadId: s.threadId,
       sharedWithUserId: s.sharedWithUserId,
       sharedByUserId: s.sharedByUserId,
+      // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
       level: s.level === 'steer' ? 'steer' : s.level === 'comment' ? 'comment' : 'view',
       createdAt: s.createdAt,
       user: byId.get(s.sharedWithUserId) ?? null,

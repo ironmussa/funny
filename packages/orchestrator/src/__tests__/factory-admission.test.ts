@@ -82,10 +82,15 @@ describe('admission', () => {
     for (const n of [1, 2, 3, 4]) ready(n);
     let working = 0;
     let most = 0;
+    // Each of the first two runs holds its turn until the other is working
+    // too, so the overlap does not depend on timing under load. With a broken
+    // limit of 1 the second never arrives, the wait times out and `most` is 1.
+    const overlap = Promise.withResolvers<void>();
     const slow: Turns = () => [
       async (call) => {
         most = Math.max(most, ++working);
-        await new Promise((r) => setTimeout(r, 20));
+        if (working >= 2) overlap.resolve();
+        await Promise.race([overlap.promise, new Promise((r) => setTimeout(r, 2_000))]);
         working--;
         return writesHello(call);
       },

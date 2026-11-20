@@ -317,6 +317,7 @@ function tailLog(logPath: string, maxLines = 50): string {
 function renderCompletion(job: Job): string {
   const name = job.label ? `"${job.label}"` : `job ${job.id}`;
   const verdict =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     job.status === 'exited'
       ? 'finished successfully (exit 0)'
       : job.status === 'failed'

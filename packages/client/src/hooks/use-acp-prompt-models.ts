@@ -72,6 +72,7 @@ export function useAcpPromptModels(baseUnifiedModelGroups: ModelGroup[]): ModelG
         }
       } else if (st?.status === 'error') {
         const hint =
+          // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
           st.reason === 'auth_required'
             ? tr(`${provider}AuthRequired`, `${provider}: configurar (autenticar en el runner)`)
             : st.reason === 'sdk_missing'

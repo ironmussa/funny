@@ -106,6 +106,7 @@ export function ReviewDialogs({
                 : t('review.undoLastCommit', 'Undo last commit')
         }
         description={
+          // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
           confirmDialog?.type === 'revert'
             ? t('review.revertConfirm', { paths: confirmDialog?.path })
             : confirmDialog?.type === 'discard-all'

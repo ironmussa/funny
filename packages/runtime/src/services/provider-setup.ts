@@ -137,6 +137,7 @@ export async function checkProviderAuth(
   if (!binary) return 'unknown';
   // These CLIs document status exit codes. Other agents complete auth interactively;
   // never claim a credential file or an installed executable is a valid session.
+  // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
   const args = id === 'claude' ? ['auth', 'status'] : id === 'codex' ? ['login', 'status'] : null;
   if (!args) return 'unknown';
   return new Promise((resolve) => {
@@ -149,6 +150,7 @@ export async function checkProviderAuth(
       });
       child.once('error', () => resolve('unknown'));
       child.once('close', (code) =>
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         resolve(code === 0 ? 'connected' : code === 1 ? 'required' : 'unknown'),
       );
     } catch {

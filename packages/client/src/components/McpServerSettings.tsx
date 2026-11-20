@@ -141,6 +141,7 @@ function McpProtocolBadge({ type }: { type: McpServerType }) {
       data-testid={`mcp-protocol-badge-${type}`}
       className={cn(
         'rounded-md border-transparent uppercase tracking-wider',
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         type === 'http'
           ? 'bg-status-info/10 text-status-info/80'
           : type === 'sse'

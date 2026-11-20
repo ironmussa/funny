@@ -412,6 +412,7 @@ export function useReviewActions({
       if (!filePath || !hasGitContext) return;
 
       const resolutionLabel =
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         resolution === 'ours' ? 'current' : resolution === 'theirs' ? 'incoming' : 'both';
       const result = effectiveThreadId
         ? await gitApi.resolveConflict(effectiveThreadId, filePath, blockId, resolution)

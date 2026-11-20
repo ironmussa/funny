@@ -9,6 +9,7 @@ import {
   BENCHMARK_WORKLOAD_NAMES,
   BENCHMARK_CAPABILITY_SCHEMA_VERSION,
   encodeBenchmarkMessage,
+  // oxlint-disable-next-line anti-slop-effect/no-service-constructor-imports -- benchmark fixture factory, not an Effect service
   makeRendererBenchmarkFixtures,
   parseBenchmarkEvent,
   parseBenchmarkResult,

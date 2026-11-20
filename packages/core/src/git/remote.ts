@@ -92,6 +92,7 @@ export function pull(
   identity?: GitIdentityOptions,
 ): ResultAsync<string, DomainError> {
   const args =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     strategy === 'rebase'
       ? ['pull', '--rebase']
       : strategy === 'merge'

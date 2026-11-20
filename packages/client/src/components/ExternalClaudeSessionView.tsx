@@ -75,58 +75,61 @@ export function ExternalClaudeSessionView({ sessionId }: { sessionId: string }) 
 
   return (
     <div className="bg-background flex h-full min-h-0 w-full flex-col overflow-hidden">
-      {state.status === 'loading' ? (
-        <LoadingState
-          className="min-h-0 flex-1"
-          testId="external-claude-loading"
-          label={t('externalClaude.loading')}
-        />
-      ) : state.status === 'error' ? (
-        <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-          <div className="max-w-md text-center">
-            <h2 className="text-sm font-semibold">{t('externalClaude.notFound')}</h2>
-            <p className="text-muted-foreground mt-2 text-sm">{state.message}</p>
-          </div>
-        </div>
-      ) : (
-        <>
-          <ExternalClaudeHeader transcript={state.transcript} projectName={project?.name} />
-          <MessageStream
-            ref={streamRef}
-            threadId={`external-claude:${state.transcript.sessionId}`}
-            status="running"
-            messages={messages}
-            threadEvents={[]}
-            compactionEvents={[]}
-            initInfo={{
-              tools: [],
-              cwd: state.transcript.cwd ?? '',
-              model: 'Claude Code',
-            }}
-            isExternal
-            model="Claude Code"
-            permissionMode=""
-            onSend={handleSend}
+      {
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+        state.status === 'loading' ? (
+          <LoadingState
             className="min-h-0 flex-1"
-            footer={
-              <PromptInput
-                onSubmit={handleSend}
-                running={false}
-                placeholder={t('externalClaude.promptPlaceholder', 'Continue in Claude Code...')}
-                threadOverride={{
-                  provider: 'claude',
-                  model: null,
-                  permissionMode: 'auto',
-                  branch: state.transcript.gitBranch,
-                  baseBranch: state.transcript.gitBranch,
-                  worktreePath: state.transcript.cwd,
-                  projectId: project?.id,
-                }}
-              />
-            }
+            testId="external-claude-loading"
+            label={t('externalClaude.loading')}
           />
-        </>
-      )}
+        ) : state.status === 'error' ? (
+          <div className="flex min-h-0 flex-1 items-center justify-center p-6">
+            <div className="max-w-md text-center">
+              <h2 className="text-sm font-semibold">{t('externalClaude.notFound')}</h2>
+              <p className="text-muted-foreground mt-2 text-sm">{state.message}</p>
+            </div>
+          </div>
+        ) : (
+          <>
+            <ExternalClaudeHeader transcript={state.transcript} projectName={project?.name} />
+            <MessageStream
+              ref={streamRef}
+              threadId={`external-claude:${state.transcript.sessionId}`}
+              status="running"
+              messages={messages}
+              threadEvents={[]}
+              compactionEvents={[]}
+              initInfo={{
+                tools: [],
+                cwd: state.transcript.cwd ?? '',
+                model: 'Claude Code',
+              }}
+              isExternal
+              model="Claude Code"
+              permissionMode=""
+              onSend={handleSend}
+              className="min-h-0 flex-1"
+              footer={
+                <PromptInput
+                  onSubmit={handleSend}
+                  running={false}
+                  placeholder={t('externalClaude.promptPlaceholder', 'Continue in Claude Code...')}
+                  threadOverride={{
+                    provider: 'claude',
+                    model: null,
+                    permissionMode: 'auto',
+                    branch: state.transcript.gitBranch,
+                    baseBranch: state.transcript.gitBranch,
+                    worktreePath: state.transcript.cwd,
+                    projectId: project?.id,
+                  }}
+                />
+              }
+            />
+          </>
+        )
+      }
     </div>
   );
 }

@@ -401,6 +401,7 @@ function terminalPublication(
   const terminalId = typeof data.ptyId === 'string' ? data.ptyId : '';
   if (!terminalId) return null;
   const payload =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     type === 'pty:data'
       ? {
           case: 'output' as const,

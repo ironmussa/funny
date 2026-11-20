@@ -426,6 +426,7 @@ export function setupBrowserV1Operations(
           observeBrowserV1({
             event: 'operation',
             status:
+              // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
               outcome.outcome.case === 'success'
                 ? 'ok'
                 : outcome.outcome.case === 'status'

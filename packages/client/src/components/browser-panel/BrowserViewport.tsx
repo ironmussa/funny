@@ -223,6 +223,7 @@ function useBrowserInputHandlers(
       kind: 'mouseDown',
       x,
       y,
+      // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
       button: e.button === 2 ? 'right' : e.button === 1 ? 'middle' : 'left',
       clickCount: e.detail || 1,
       modifiers: buildModifiers(e),
@@ -236,6 +237,7 @@ function useBrowserInputHandlers(
       kind: 'mouseUp',
       x,
       y,
+      // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
       button: e.button === 2 ? 'right' : e.button === 1 ? 'middle' : 'left',
       clickCount: e.detail || 1,
       modifiers: buildModifiers(e),

@@ -31,8 +31,10 @@ const ANTI_SLOP_EFFECT_ERROR = [
   'no-manual-effect-error-tag',
   'no-manual-tag-comparison',
   'no-manual-tagged-construction',
+  'no-service-constructor-imports',
+  'prefer-effect-match',
 ];
-const ANTI_SLOP_EFFECT_WARN = ['no-service-constructor-imports', 'prefer-effect-match'];
+const ANTI_SLOP_EFFECT_WARN: string[] = [];
 const SHADCN_ERROR = ['no-raw-colors', 'no-unknown-classes', 'require-static-classes'];
 const SHADCN_WARN = ['no-restyle', 'no-inline-styles'];
 // Off: the font-size rule in CLAUDE.md requires arbitrary values such as

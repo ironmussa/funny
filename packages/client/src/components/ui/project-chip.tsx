@@ -118,6 +118,7 @@ export function ProjectChip({ name, color, size = 'default', className }: Projec
     <span
       className={cn(
         'rounded inline-block truncate font-medium',
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         size === 'xs'
           ? 'text-[9px] leading-tight px-1 py-px'
           : size === 'sm'

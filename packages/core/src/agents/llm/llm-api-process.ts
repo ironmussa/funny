@@ -94,6 +94,7 @@ export class LLMApiProcess extends BaseAgentProcess {
       totalCost = this.estimateCost(agentResult);
 
       const subtype: ResultSubtype =
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         agentResult.status === 'error'
           ? 'error_during_execution'
           : agentResult.status === 'timeout'

@@ -410,6 +410,7 @@ export const VirtualDiff = memo(function VirtualDiff({
 
     // Calculate available text width per column
     const gutterPx = viewMode === 'unified' ? 88 + 16 + 16 : 54 + 16;
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     const cols = viewMode === 'three-pane' ? 3 : viewMode === 'split' ? 2 : 1;
     const textWidth = diffContainerWidth / cols - gutterPx;
     if (textWidth <= 0) return null;
@@ -730,96 +731,103 @@ export const VirtualDiff = memo(function VirtualDiff({
                     transform: `translateY(${vItem.start}px)`,
                   }}
                 >
-                  {row.type === 'conflict-actions' ? (
-                    <ConflictActionBar block={row.block} onResolve={onResolveConflict} />
-                  ) : row.type === 'hunk' ? (
-                    <div
-                      className={cn(
-                        'flex select-none items-center bg-accent font-mono text-(length:--diff-font-size) text-muted-foreground px-1',
-                      )}
-                      style={{ height: rowHeight }}
-                    >
-                      {selectable && row.hunkStartIdx != null ? (
-                        (() => {
-                          const indices = hunkLineMap.get(row.hunkStartIdx!) ?? [];
-                          const count = indices.filter((idx) => selectedLines?.has(idx)).length;
-                          const allChecked = indices.length > 0 && count === indices.length;
-                          const isPartial = count > 0 && count < indices.length;
-                          return (
-                            <span className="flex w-5 shrink-0 items-center justify-center">
-                              <TriCheckbox
-                                state={
-                                  isPartial ? 'indeterminate' : allChecked ? 'checked' : 'unchecked'
-                                }
-                                onToggle={() => {
-                                  if (indices.length > 0) onHunkToggle?.(indices);
-                                }}
-                                data-testid={`diff-hunk-checkbox-${row.hunkStartIdx}`}
-                              />
-                            </span>
-                          );
-                        })()
-                      ) : selectable ? (
-                        <span className="w-5 shrink-0" />
-                      ) : null}
-                      <span className={cn(gutterWidth, 'shrink-0')} />
-                      <span className="truncate">{row.text}</span>
-                    </div>
-                  ) : row.type === 'fold' ? (
-                    <button
-                      type="button"
-                      className={cn(
-                        'flex w-full select-none items-center bg-muted/50 font-mono text-(length:--diff-font-size) text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
-                      )}
-                      style={{ height: rowHeight }}
-                      onClick={() => toggleFold(row.sectionIdx)}
-                      data-testid="diff-fold-toggle"
-                    >
-                      {selectable && <span className="w-5 shrink-0" />}
-                      <span className={cn(gutterWidth, 'shrink-0')} />
-                      <span className="truncate">
-                        @@ -{row.oldStart},{row.lineCount} +{row.newStart},{row.lineCount} @@ ·{' '}
-                        {row.lineCount} lines hidden
-                      </span>
-                    </button>
-                  ) : row.type === 'three-pane-triple' ? (
-                    <ThreePaneRow
-                      left={row.triple.left}
-                      center={row.triple.center}
-                      right={row.triple.right}
-                      lang={highlightLang}
-                      wrap={wordWrap}
-                      searchQuery={searchQuery}
-                      searchCaseSensitive={searchCaseSensitive}
-                      matchOffset={searchMatchData?.prefixSum[vItem.index]}
-                      currentMatchIdx={currentMatchIndex}
-                    />
-                  ) : row.type === 'split-pair' ? (
-                    <SplitRow
-                      left={row.pair.left}
-                      right={row.pair.right}
-                      lang={highlightLang}
-                      wrap={wordWrap}
-                      searchQuery={searchQuery}
-                      searchCaseSensitive={searchCaseSensitive}
-                      matchOffset={searchMatchData?.prefixSum[vItem.index]}
-                      currentMatchIdx={currentMatchIndex}
-                    />
-                  ) : (
-                    <UnifiedRow
-                      line={row.line}
-                      lineIdx={row.lineIdx}
-                      lang={highlightLang}
-                      wrap={wordWrap}
-                      searchQuery={searchQuery}
-                      searchCaseSensitive={searchCaseSensitive}
-                      matchOffset={searchMatchData?.prefixSum[vItem.index]}
-                      currentMatchIdx={currentMatchIndex}
-                      selectable={selectable}
-                      selected={selectable ? selectedLines?.has(row.lineIdx) : undefined}
-                      onToggle={onLineToggle}
-                    />
-                  )}
+                  {
+                    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+                    row.type === 'conflict-actions' ? (
+                      <ConflictActionBar block={row.block} onResolve={onResolveConflict} />
+                    ) : row.type === 'hunk' ? (
+                      <div
+                        className={cn(
+                          'flex select-none items-center bg-accent font-mono text-(length:--diff-font-size) text-muted-foreground px-1',
+                        )}
+                        style={{ height: rowHeight }}
+                      >
+                        {selectable && row.hunkStartIdx != null ? (
+                          (() => {
+                            const indices = hunkLineMap.get(row.hunkStartIdx!) ?? [];
+                            const count = indices.filter((idx) => selectedLines?.has(idx)).length;
+                            const allChecked = indices.length > 0 && count === indices.length;
+                            const isPartial = count > 0 && count < indices.length;
+                            return (
+                              <span className="flex w-5 shrink-0 items-center justify-center">
+                                <TriCheckbox
+                                  state={
+                                    isPartial
+                                      ? 'indeterminate'
+                                      : allChecked
+                                        ? 'checked'
+                                        : 'unchecked'
+                                  }
+                                  onToggle={() => {
+                                    if (indices.length > 0) onHunkToggle?.(indices);
+                                  }}
+                                  data-testid={`diff-hunk-checkbox-${row.hunkStartIdx}`}
+                                />
+                              </span>
+                            );
+                          })()
+                        ) : selectable ? (
+                          <span className="w-5 shrink-0" />
+                        ) : null}
+                        <span className={cn(gutterWidth, 'shrink-0')} />
+                        <span className="truncate">{row.text}</span>
+                      </div>
+                    ) : row.type === 'fold' ? (
+                      <button
+                        type="button"
+                        className={cn(
+                          'flex w-full select-none items-center bg-muted/50 font-mono text-(length:--diff-font-size) text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground px-1',
+                        )}
+                        style={{ height: rowHeight }}
+                        onClick={() => toggleFold(row.sectionIdx)}
+                        data-testid="diff-fold-toggle"
+                      >
+                        {selectable && <span className="w-5 shrink-0" />}
+                        <span className={cn(gutterWidth, 'shrink-0')} />
+                        <span className="truncate">
+                          @@ -{row.oldStart},{row.lineCount} +{row.newStart},{row.lineCount} @@ ·{' '}
+                          {row.lineCount} lines hidden
+                        </span>
+                      </button>
+                    ) : row.type === 'three-pane-triple' ? (
+                      <ThreePaneRow
+                        left={row.triple.left}
+                        center={row.triple.center}
+                        right={row.triple.right}
+                        lang={highlightLang}
+                        wrap={wordWrap}
+                        searchQuery={searchQuery}
+                        searchCaseSensitive={searchCaseSensitive}
+                        matchOffset={searchMatchData?.prefixSum[vItem.index]}
+                        currentMatchIdx={currentMatchIndex}
+                      />
+                    ) : row.type === 'split-pair' ? (
+                      <SplitRow
+                        left={row.pair.left}
+                        right={row.pair.right}
+                        lang={highlightLang}
+                        wrap={wordWrap}
+                        searchQuery={searchQuery}
+                        searchCaseSensitive={searchCaseSensitive}
+                        matchOffset={searchMatchData?.prefixSum[vItem.index]}
+                        currentMatchIdx={currentMatchIndex}
+                      />
+                    ) : (
+                      <UnifiedRow
+                        line={row.line}
+                        lineIdx={row.lineIdx}
+                        lang={highlightLang}
+                        wrap={wordWrap}
+                        searchQuery={searchQuery}
+                        searchCaseSensitive={searchCaseSensitive}
+                        matchOffset={searchMatchData?.prefixSum[vItem.index]}
+                        currentMatchIdx={currentMatchIndex}
+                        selectable={selectable}
+                        selected={selectable ? selectedLines?.has(row.lineIdx) : undefined}
+                        onToggle={onLineToggle}
+                      />
+                    )
+                  }
                 </div>
               );
             })}

@@ -69,6 +69,7 @@ export function PRBadge({
   const config = SIZE_CLASS[size];
 
   const tooltipLabel =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     prState === 'OPEN'
       ? t('thread.prOpen', { number: prNumber, defaultValue: `PR #${prNumber}` })
       : prState === 'MERGED'

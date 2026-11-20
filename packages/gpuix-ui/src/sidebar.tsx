@@ -147,6 +147,7 @@ export function StatusPin({
 }: { status?: ThreadItemStatus; style?: StyleDesc } & Omit<DivProps, 'style'>): ReactElement {
   const theme = useGpuixUiTheme();
   const color =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     status === 'failed'
       ? theme.colors.danger
       : status === 'running'
@@ -159,6 +160,7 @@ export function StatusPin({
               ? theme.colors.success
               : theme.colors.muted;
   const iconName: IconName | null =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     status === 'completed'
       ? 'circle-check'
       : status === 'waiting'

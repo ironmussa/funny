@@ -16,6 +16,7 @@ export interface BadgeProps extends Omit<NativeDivProps, 'style'> {
 export function Badge({ variant = 'neutral', style, ...props }: BadgeProps): ReactElement {
   const theme = useGpuixUiTheme();
   const color =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     variant === 'accent'
       ? theme.colors.borderStrong
       : variant === 'success'

@@ -22,6 +22,7 @@ export function FilterDropdown({ label, options, selected, onToggle, counts, tes
   const activeCount = selected.size;
   const listRef = useRef<HTMLDivElement>(null);
   const triggerLabel =
+    // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
     activeCount === 0
       ? label
       : activeCount === 1

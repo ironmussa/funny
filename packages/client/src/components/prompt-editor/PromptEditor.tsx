@@ -437,13 +437,16 @@ function SuggestionPopup({
         )}
       >
         <div className="text-muted-foreground px-3 py-2 text-xs">
-          {type === 'file'
-            ? t('prompt.noFilesMatch', 'No files match')
-            : type === 'symbol'
-              ? t('prompt.noSymbolsMatch', 'No symbols match')
-              : type === 'workflow'
-                ? t('prompt.noWorkflowsMatch', 'No workflows match')
-                : t('skills.noSkillsFound', 'No skills found')}
+          {
+            // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
+            type === 'file'
+              ? t('prompt.noFilesMatch', 'No files match')
+              : type === 'symbol'
+                ? t('prompt.noSymbolsMatch', 'No symbols match')
+                : type === 'workflow'
+                  ? t('prompt.noWorkflowsMatch', 'No workflows match')
+                  : t('skills.noSkillsFound', 'No skills found')
+          }
         </div>
       </div>,
       document.body,
@@ -465,6 +468,7 @@ function SuggestionPopup({
           type="button"
           key={`${item.type}:${item.id}`}
           data-testid={
+            // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
             type === 'symbol'
               ? `symbol-item-${item.id}`
               : type === 'file'
@@ -504,6 +508,7 @@ function SuggestionPopup({
           <div className="min-w-0">
             <HighlightText
               text={
+                // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
                 type === 'slash'
                   ? `/${item.label}`
                   : type === 'workflow'

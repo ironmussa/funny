@@ -106,6 +106,7 @@ describe('cursor-as-external provider parity (§5)', () => {
     // structural content (ids are random per emission).
     const shape = (msgs: CLIMessage[]) =>
       msgs.map((m) =>
+        // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         m.type === 'assistant'
           ? m.message.content.map((c: any) => ({ t: c.type, name: c.name, input: c.input }))
           : m.type === 'user'

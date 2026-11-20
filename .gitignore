@@ -53,3 +53,6 @@ packages/runner-protocol-rust/target/
 
 # Generated fallow dependency map
 fallow-viz.html
+
+# Local git worktrees created by funny
+.funny-worktrees/

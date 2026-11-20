@@ -174,6 +174,40 @@ describe('TaskProgressBlock', () => {
     expect(tail.querySelector('script')).toBeNull();
   });
 
+  test('lists the issues of a failed step that reported them instead of its raw output', async () => {
+    const base = progress();
+    apiMock.readFile.mockResolvedValue(
+      respond(
+        progress({
+          status: 'failed',
+          steps: [
+            {
+              ...base.steps[0],
+              status: 'failed',
+              errors: 1,
+              tail: ['  src/a.ts: TS2769: No overload matches this call.', 'exit 1'],
+            },
+          ],
+          issues: [
+            {
+              step: 'check-typecheck',
+              severity: 'error',
+              file: 'src/a.ts',
+              message: 'TS2769: No overload matches this call.',
+            },
+          ],
+        }),
+      ),
+    );
+    renderWithProviders(<TaskProgressBlock path={PATH} />);
+    await flush();
+
+    expect(screen.queryByTestId('task-progress-tail-check-typecheck')).toBeNull();
+    expect(screen.getByTestId('task-progress-issues')).toHaveTextContent(
+      'src/a.ts TS2769: No overload matches this call.',
+    );
+  });
+
   test('polls while running and stops once the task finishes', async () => {
     apiMock.readFile
       .mockResolvedValueOnce(respond(progress()))

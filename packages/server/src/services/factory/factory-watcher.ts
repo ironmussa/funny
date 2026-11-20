@@ -58,6 +58,7 @@ import type { FactoryGithubPort, FactoryIssue, FactoryRepoReader } from './facto
 import { prNumberOf } from './factory-pull-requests.js';
 import {
   createFactoryRunsRepository,
+  factoryRunBranch,
   IN_FLIGHT_STATES,
   type FactoryRunState,
   type FactoryRunView,
@@ -275,7 +276,6 @@ async function fire(id: string): Promise<void> {
   if (factory.enabled) await admitWork(factory, target.repo, target.mode);
 }
 
-/** An enabled factory, or a paused one with runs still in flight. */
 /** Last reason written per factory, so a steady state writes nothing each tick. */
 const blockedReasons = new Map<string, string | null>();
 
@@ -292,10 +292,16 @@ async function reportBlocked(factoryId: string, reason: string | null): Promise<
   );
 }
 
+/**
+ * An enabled factory, or a paused one with runs still in flight or a parked run
+ * whose pull request a person may still merge or close (see `reconcileParked`).
+ */
 async function hasWork(factory: WatchedFactory): Promise<boolean> {
   if (factory.enabled) return true;
   const active = await runs!.countActive(factory.id);
-  return active.isErr() || active.value > 0;
+  if (active.isErr() || active.value > 0) return true;
+  const awaiting = await runs!.awaitingPullRequest(factory.id);
+  return awaiting.isErr() || awaiting.value.length > 0;
 }
 
 /** Where a factory's runs execute now, or why they cannot. */
@@ -628,26 +634,36 @@ async function isAdmissible(factoryId: string, issueNumber: number): Promise<boo
 }
 
 /**
- * Resume every run in flight whose flow is not running in this process — the
- * server restarted, or an earlier attempt to resume it stopped. The provider
- * replays the agent steps already recorded, so nothing starts twice.
- */
-/** Runs parked for the member: failed, or waiting for them (e.g. at a red CI). */
-const PARKED: ReadonlySet<FactoryRunView['state']> = new Set(['failed', 'waiting_human']);
-
-/**
  * Close the parked runs whose pull request a person merged (or closed) outside
  * the factory, e.g. after the run waited for them at a CI check that could not
- * run: otherwise they stay "waiting for you" and hold their issue. Best effort:
- * a pull request that cannot be read now is looked at again on the next tick.
+ * run: otherwise they stay "waiting for you" and hold their issue. Works for any
+ * flow: a run with no recorded pull request (its flow has no `create_pr` step)
+ * is looked up by its branch. Best effort: a pull request that cannot be read
+ * now is looked at again on the next tick.
  */
 async function reconcileParked(factory: WatchedFactory, repo: string): Promise<void> {
   if (!runs) return;
-  const all = await runs.list(factory.id);
-  if (all.isErr()) return;
-  for (const run of all.value) {
-    if (PARKED.has(run.state)) await reconcileRun(factory, repo, run);
-  }
+  const parked = await runs.awaitingPullRequest(factory.id);
+  if (parked.isErr()) return;
+  for (const run of parked.value) await reconcileRun(factory, repo, run);
+}
+
+/** The run's pull request number: the recorded one, else the one on its branch (then recorded). */
+async function pullRequestOf(
+  factory: WatchedFactory,
+  repo: string,
+  run: FactoryRunView,
+): Promise<number | null> {
+  const recorded = prNumberOf(run.prUrl);
+  if (recorded !== null || !runs || !deps) return recorded;
+  const found = await deps.github.findPullRequest(
+    { repo, ownerId: factory.userId, projectId: factory.projectId },
+    factoryRunBranch(run),
+    'all',
+  );
+  if (found.isErr() || !found.value) return null;
+  const saved = await runs.recordParkedPr(run.id, found.value.url);
+  return saved.isOk() && saved.value ? found.value.number : null;
 }
 
 /** Close one parked run when its pull request is merged or closed. */
@@ -656,7 +672,7 @@ async function reconcileRun(
   repo: string,
   run: FactoryRunView,
 ): Promise<void> {
-  const number = prNumberOf(run.prUrl);
+  const number = await pullRequestOf(factory, repo, run);
   if (number === null || !runs || !deps) return;
   const pr = await deps.github.pullRequests.prState({
     repo,
@@ -676,6 +692,11 @@ async function reconcileRun(
   });
 }
 
+/**
+ * Resume every run in flight whose flow is not running in this process — the
+ * server restarted, or an earlier attempt to resume it stopped. The provider
+ * replays the agent steps already recorded, so nothing starts twice.
+ */
 async function resumeRuns(factory: WatchedFactory, repo: string, mode: LaunchMode): Promise<void> {
   if (!runs || !flows || !deps) return;
   const inFlight = await runs.inFlight(factory.id);

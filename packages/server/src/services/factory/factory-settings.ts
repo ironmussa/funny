@@ -19,6 +19,7 @@ import { errAsync, ResultAsync } from 'neverthrow';
 import { db } from '../../db/index.js';
 import { factoryRuns, factorySettings } from '../../db/schema.js';
 import { requireProjectAccess } from '../project-access.js';
+import { awaitsPullRequest } from './factory-runs.js';
 
 export interface FactorySettingsView {
   projectId: string;
@@ -171,7 +172,10 @@ export async function getWatchedFactory(id: string): Promise<WatchedFactory | nu
   return row ? toEnabled(row) : null;
 }
 
-/** Enabled factories plus paused ones with runs in flight: what the watcher polls at startup. */
+/**
+ * Enabled factories plus paused ones with runs in flight or a parked run whose
+ * pull request may still close: what the watcher polls at startup.
+ */
 export async function listWatchedFactories(inFlightStates: string[]): Promise<WatchedFactory[]> {
   const rows = await db
     .select()
@@ -189,6 +193,13 @@ export async function listWatchedFactories(inFlightStates: string[]): Promise<Wa
                 inArray(factoryRuns.state, inFlightStates),
               ),
             ),
+        ),
+        // Paused, with a parked run a person may still merge or close.
+        exists(
+          db
+            .select({ id: factoryRuns.id })
+            .from(factoryRuns)
+            .where(and(eq(factoryRuns.factoryId, factorySettings.id), awaitsPullRequest())),
         ),
       ),
     );

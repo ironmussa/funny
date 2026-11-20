@@ -49,6 +49,7 @@ import {
 import { loadFactoryFlow, type FactoryFlow, type FactoryFlowError } from './factory-flow.js';
 import type { FactoryGithubPort, FactoryIssue } from './factory-github.js';
 import {
+  factoryRunBranch,
   REOPENED_STEP,
   type createFactoryRunsRepository,
   type FactoryRunView,
@@ -161,10 +162,6 @@ async function findLaunchedThread(
 
 /** Whether a started run has an agent working (or is done), or never started one. */
 export type FactoryRunStart = 'started' | 'not-started';
-
-/** The branch a run's agent pushes and opens its pull request from. */
-const runBranch = (run: FactoryRunView): string =>
-  `factory/issue-${run.issueNumber}-${run.id.slice(0, 8)}`;
 
 /** A run a retry or take-over put back in flight (it has a history). */
 const wasReopened = (job: FactoryRunJob) => job.run.currentStep === REOPENED_STEP;
@@ -343,7 +340,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       mode: job.mode,
       issueNumber: job.issue.number,
       issueTitle: job.issue.title,
-      branch: runBranch(job.run),
+      branch: factoryRunBranch(job.run),
     };
     const provider = createFactoryActionProvider({
       scope,

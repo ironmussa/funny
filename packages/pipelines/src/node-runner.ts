@@ -25,6 +25,25 @@ async function settledWithin(work: Promise<unknown>, ms: number): Promise<void> 
   clearTimeout(timer);
 }
 
+/**
+ * Release a slot once its request settles. Reading the release from the
+ * request itself (not from where the node saw it) also covers a grant that
+ * landed just as the node was interrupted.
+ */
+async function releaseHeldSlot(
+  slot: Promise<() => void> | undefined,
+  graceMs: number,
+): Promise<void> {
+  if (!slot) return;
+  await settledWithin(
+    slot.then(
+      (release) => release(),
+      () => undefined,
+    ),
+    graceMs,
+  );
+}
+
 /** The message of whatever an Effect failed with. */
 export function causeMessage(cause: Cause.Cause<unknown>): string {
   const squashed = Cause.squash(cause);
@@ -58,6 +77,11 @@ export async function runSingleNode<T>(
     iteration: number;
     /** After an abort, how long to wait for the node's work to stop. */
     stopGraceMs?: number;
+    /**
+     * Ask for a concurrency slot once the guard passes. Resolves with its
+     * release; `onWait` is called if the node has to wait for it.
+     */
+    acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<() => void>;
   },
 ): Promise<SingleNodeResult<T>> {
   const { signal, emit, iteration } = params;
@@ -65,11 +89,22 @@ export async function runSingleNode<T>(
   let committed = false;
   /** The node's last asynchronous execution, still running or not. */
   let inFlight: Promise<unknown> | undefined;
+  /** The slot request, released once the node's work has stopped, whatever the outcome. */
+  let slot: Promise<() => void> | undefined;
+  const { acquireSlot } = params;
   if (signal?.aborted) return { ctx, status: 'cancelled' };
 
   const execution = Effect.gen(function* () {
     if (node.when && !(yield* invoke(() => node.when!(ctx)))) {
       return 'skipped' as const;
+    }
+    if (acquireSlot) {
+      yield* invoke((abortSignal) => {
+        slot = acquireSlot(abortSignal, () =>
+          emit({ kind: 'waiting_slot', nodeName: node.name, ctx, iteration }),
+        );
+        return slot;
+      });
     }
     emit({ kind: 'entering', nodeName: node.name, ctx, iteration });
     const retry = node.retry;
@@ -118,8 +153,10 @@ export async function runSingleNode<T>(
     // Interruption stops waiting, not the work: give the node's own abort
     // handling time to stop it, so the caller never sees it still running.
     if (inFlight) await settledWithin(inFlight, params.stopGraceMs ?? DEFAULT_STOP_GRACE_MS);
+    await releaseHeldSlot(slot, params.stopGraceMs ?? DEFAULT_STOP_GRACE_MS);
     return { ctx, status: 'cancelled', committed };
   }
+  await releaseHeldSlot(slot, params.stopGraceMs ?? DEFAULT_STOP_GRACE_MS);
   if (Exit.isFailure(exit)) {
     const error = causeMessage(exit.cause);
     emit({ kind: 'error', nodeName: node.name, ctx, iteration, error });

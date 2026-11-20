@@ -11,6 +11,7 @@
  * Effect coordinates cancellation, retry waits, and node interruption.
  */
 
+import type { ConcurrencyGate } from './gate.js';
 import { runGraph } from './scheduler.js';
 
 // ── Types ────────────────────────────────────────────────────
@@ -108,6 +109,24 @@ export interface PipelineNode<T> {
    * to this one. Checked after this node succeeds; see `NodeLoop`.
    */
   loop?: NodeLoop<T>;
+  /**
+   * Limit how many executions of nodes in `group` run at once, across every
+   * run that shares the gate (`PipelineRunOptions.gate`). The node waits for
+   * a slot after its `when` guard passes, reported as `waiting_slot`, and
+   * holds it until its work has stopped (retries included).
+   */
+  concurrency?: NodeConcurrency<T>;
+}
+
+/** A node's concurrency group. See `PipelineNode.concurrency`. */
+export interface NodeConcurrency<T> {
+  /**
+   * The group. A function receives the run's initial context, never node
+   * outputs, so a resumed run asks for the same group.
+   */
+  group: string | ((initial: T) => string);
+  /** Executions of the group allowed at once. The gate may replace it. */
+  limit: number;
 }
 
 /**
@@ -166,7 +185,13 @@ export interface PipelineDefinition<T> {
 }
 
 /** State change notification types. */
-export type PipelineStateKind = 'entering' | 'completed' | 'skipped' | 'error' | 'terminal';
+export type PipelineStateKind =
+  | 'waiting_slot'
+  | 'entering'
+  | 'completed'
+  | 'skipped'
+  | 'error'
+  | 'terminal';
 
 /** Emitted when a node changes state. */
 export interface PipelineStateChange<T> {
@@ -192,6 +217,13 @@ export interface PipelineRunOptions<T> {
    * A node that honors its signal stops sooner. Default: 5000.
    */
   stopGraceMs?: number;
+  /**
+   * Grants concurrency-group slots. Default: one in-memory gate shared by
+   * every run of the process (`defaultConcurrencyGate`).
+   */
+  gate?: ConcurrencyGate;
+  /** Identifies the run in slot holders (`<runId>/<nodeId>/<visit>`). Default: a random id. */
+  runId?: string;
   /** Override maxIterations of the pipeline-level `loop` (not of node loops). */
   maxIterations?: number;
   /**

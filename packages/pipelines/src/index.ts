@@ -40,6 +40,7 @@ export type {
   NodeOnError,
   NodeLoop,
   NodeRunInfo,
+  NodeConcurrency,
   PipelineLoop,
   PipelineDefinition,
   PipelineStateKind,
@@ -49,6 +50,10 @@ export type {
   PipelineOutcome,
   PipelineRunResult,
 } from './engine.js';
+
+// ── Concurrency groups ──────────────────────────────────────
+export { createMemoryConcurrencyGate, defaultConcurrencyGate } from './gate.js';
+export type { ConcurrencyGate, MemoryGateOptions, SlotRequest, SlotRelease } from './gate.js';
 
 // ── Progress reporting types ────────────────────────────────
 export type {

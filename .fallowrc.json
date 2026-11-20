@@ -3,7 +3,7 @@
   "workspaces": {
     "patterns": ["packages/evflow/viewer"]
   },
-  "ignorePatterns": ["packages/client/vendor/**"],
+  "ignorePatterns": ["packages/client/vendor/**", "tools/oxlint/anti-slop/**"],
   "ignoreDependencies": [
     "@agentclientprotocol/sdk",
     "@anthropic-ai/claude-agent-sdk",
@@ -26,7 +26,9 @@
     "@storybook/addon-docs",
     "@storybook/addon-onboarding",
     "@chromatic-com/storybook",
-    "@funny/native-git-*"
+    "@funny/native-git-*",
+    "@shadcn/lint",
+    "@oxlint/plugins"
   ],
   "entry": [
     "packages/runtime/src/services/checks/vitest-progress-reporter.mjs",

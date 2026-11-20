@@ -89,6 +89,7 @@ describe('runMigrations — applied lookup', () => {
     const lookups: string[] = [];
     const spy = new Proxy(db, {
       get(target, prop, receiver) {
+        // oxlint-disable-next-line anti-slop/no-reflect-get -- a Proxy get trap forwards the read.
         const value = Reflect.get(target, prop, receiver);
         if ((prop === 'get' || prop === 'all') && typeof value === 'function') {
           return (query: any) => {

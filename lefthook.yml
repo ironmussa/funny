@@ -32,6 +32,13 @@ pre-commit:
             glob: '**/*.{ts,tsx,js,jsx}'
             run: bunx oxlint {staged_files}
 
+          # React Doctor on the staged client files. `--scope lines` reports only
+          # issues on the changed lines, so findings already in a file never
+          # block a commit that touches it. Warnings do not block; errors do.
+          - name: react-doctor
+            glob: 'packages/client/**/*.{ts,tsx,js,jsx}'
+            run: ./node_modules/.bin/react-doctor --staged --scope lines --project packages/client --yes --no-score --no-supply-chain --blocking error --no-color
+
           - name: conflict-markers
             run: |
               files=$(grep -lE '^<{7} |^={7}$|^>{7} ' {staged_files} || true)
@@ -56,6 +63,8 @@ pre-commit:
               - 'packages/reviewbot/**'
               - 'packages/memory/benchmark/**'
               - 'packages/server/build.ts'
+              # Vendored anti-slop: 'debugger' there is a rule keyword, not a statement.
+              - 'tools/oxlint/anti-slop/**'
             run: |
               matches=$(grep -Hn 'console\.log\|debugger' {staged_files} || true)
               if [ -n "$matches" ]; then
@@ -97,6 +106,14 @@ pre-push:
     # is being pushed.
     - name: affected-tests
       script: affected-tests.sh
+      runner: sh
+      use_stdin: true
+
+    # fallow audit of the pushed commits (.lefthook/pre-push/fallow-audit.sh):
+    # fails only on findings those commits introduce. Runs in the git hook so
+    # every agent and every human push gets it.
+    - name: fallow-audit
+      script: fallow-audit.sh
       runner: sh
       use_stdin: true
 

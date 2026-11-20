@@ -6,7 +6,16 @@
  * that extend the generic @funny/pipelines engine.
  */
 
-import type { ProgressReporter } from '@funny/pipelines';
+import type { NodeRunInfo, ProgressReporter } from '@funny/pipelines';
+
+/**
+ * The engine execution an action runs in: its loop visit, what was recorded
+ * when the run resumes an unfinished execution (`resume`), `checkpoint` to
+ * record work in progress (the thread an agent step started), and the
+ * batch when the node leads one. Set when the action runs in a compiled
+ * workflow.
+ */
+export type ActionExecution = NodeRunInfo;
 import type { AgentDefinition } from '@funny/shared';
 
 // ── Action results ──────────────────────────────────────────
@@ -57,6 +66,8 @@ export interface SpawnAgentOpts {
    * Tools deny-list for this spawn. Falls back to `agent.disallowedTools`.
    */
   disallowedTools?: string[];
+  /** The execution this spawn belongs to: adopt `resume.recorded` work, `checkpoint` new work. */
+  execution?: ActionExecution;
 }
 
 export interface RunCommandOpts {
@@ -147,6 +158,8 @@ export interface MergeOpts {
   deleteBranch?: boolean;
   /** Enable auto-merge instead of merging directly. */
   auto?: boolean;
+  /** The execution this merge belongs to; `execution.batch` is set when it leads a batch. */
+  execution?: ActionExecution;
 }
 
 // ── Approval (human-in-the-loop) ────────────────────────────

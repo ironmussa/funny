@@ -242,7 +242,7 @@ nodes:
     expect(provider.notify).toHaveBeenCalledWith(expect.objectContaining({ message: 'fixing' }));
   });
 
-  test('on_error: continue swallows failures and lets the pipeline finish', async () => {
+  test('on_error: continue fails the node, and the run goes on by the joins', async () => {
     const provider = mockProvider({
       createPr: vi.fn().mockResolvedValue({ ok: false, error: 'gh: not logged in' }),
     });
@@ -254,14 +254,22 @@ nodes:
     create_pr:
       title: t
 
+  - id: needs-pr
+    depends_on: [pr]
+    notify:
+      message: skipped
+
   - id: done
     depends_on: [pr]
+    trigger_rule: all_done
     notify:
       message: continued
     `);
 
     const result = await runPipeline(pipeline, ctxOf(provider));
     expect(result.outcome).toBe('completed');
+    // The default join skips a dependent of the failed node; all_done runs it.
+    expect(provider.notify).toHaveBeenCalledTimes(1);
     expect(provider.notify).toHaveBeenCalledWith(expect.objectContaining({ message: 'continued' }));
   });
 
@@ -484,7 +492,7 @@ nodes:
       );
     });
 
-    test('on_error: continue lets the judge proceed when a proposer fails (quorum)', async () => {
+    test('on_error: continue plus all_done lets the judge proceed when a proposer fails (quorum)', async () => {
       const spawnAgent = vi.fn(async (args: { prompt: string }) => {
         if (args.prompt.startsWith('B:')) return { ok: false, error: 'B died' };
         return { ok: true, output: `out:${args.prompt}` };
@@ -505,6 +513,7 @@ nodes:
     spawn_agent: { prompt: "C:{{question}}" }
   - id: judge
     depends_on: [proposer-a, proposer-b, proposer-c]
+    trigger_rule: all_done
     spawn_agent:
       prompt: "{{proposer-a.output}}|{{proposer-b.output}}|{{proposer-c.output}}"
       `);
@@ -512,7 +521,7 @@ nodes:
       const result = await runPipeline(pipeline, ctxOf(provider, { question: 'q' }));
 
       expect(result.outcome).toBe('completed');
-      // B's output is empty (swallowed), A and C present.
+      // B failed (empty output), A and C present; all_done lets the judge run.
       expect(spawnAgent).toHaveBeenLastCalledWith(
         expect.objectContaining({ prompt: 'out:A:q||out:C:q' }),
       );

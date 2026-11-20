@@ -4,20 +4,18 @@
  * Takes a `ParsedWorkflow` (validated YAML from `@funny/workflows`)
  * and produces a `PipelineDefinition` runnable by the existing engine.
  *
- * Phase 1 scope:
- *   - Topological sort over `depends_on` (each node depends on a subset
- *     of earlier nodes; output is a linear sequence)
- *   - Cycle detection
- *   - Per-pipeline single loop (one node may declare `loop:`); multiple
- *     loops will be supported when the engine becomes a DAG (Phase 3)
- *   - Action binding: each YAML action key maps to one ActionProvider call
- *   - Mustache interpolation of every string field at execution time
+ * Each YAML node becomes one engine node with the same graph fields:
+ *   - `depends_on` → `dependsOn`, `trigger_rule` → `triggerRule`
+ *   - `on_error: continue` → `onError: 'continue'` (the node fails and its
+ *     dependents follow their trigger rule); `retry` → the engine's retry
+ *   - `loop` → a loop on that node (several loops, nested or disjoint)
+ *   - `concurrency` → a concurrency group rendered from the run's inputs
+ *   - Action binding: each YAML action key maps to one ActionProvider call;
+ *     agent and merge actions get the execution (`resume`, `checkpoint`,
+ *     and the batch when leading one)
+ *   - Mustache interpolation of every string field at execution time, with
+ *     `LOOP_ITERATION` (the innermost loop's visit) in scope
  *   - JSONata evaluation of `when` and `until`
- *
- * Out of scope here (deferred to Phase 3):
- *   - Parallel branches (multiple roots in the DAG)
- *   - Per-node loops (only one global loop allowed for now)
- *   - `trigger_rule` (none_failed_min_one_success, etc.)
  */
 
 import {
@@ -29,7 +27,9 @@ import {
   node as engineNode,
   runPipeline,
   type CompiledPredicate,
+  type NodeConcurrency,
   type NodeRetryConfig,
+  type NodeRunInfo,
   type PipelineDefinition,
   type PipelineNode,
   type TemplateScope,
@@ -65,6 +65,12 @@ export class YamlCompileError extends Error {
 export interface YamlPipelineContext extends PipelineContext {
   inputs: Record<string, unknown>;
   outputs: Record<string, NodeOutput>;
+  /**
+   * The execution of the node being dispatched (set only while its action
+   * runs, never carried to later nodes): its loop visit, resume data,
+   * checkpoint and batch.
+   */
+  execution?: NodeRunInfo;
 }
 
 export interface NodeOutput {
@@ -111,18 +117,6 @@ export function compileYamlPipeline(
   options: CompileOptions = {},
 ): PipelineDefinition<YamlPipelineContext> {
   const ordered = topologicalSort(parsed);
-
-  const loopNodes = ordered.filter((n) => n.loop !== undefined);
-  if (loopNodes.length > 1) {
-    throw new YamlCompileError(
-      `Multiple per-node loops not supported until DAG engine lands (Phase 3). Found loops on: ${loopNodes
-        .map((n) => n.id)
-        .join(', ')}`,
-      parsed.name,
-    );
-  }
-  const loopNode = loopNodes[0];
-
   const engineNodes: PipelineNode<YamlPipelineContext>[] = ordered.map((yamlNode) =>
     buildEngineNode(yamlNode, parsed, options),
   );
@@ -130,19 +124,10 @@ export function compileYamlPipeline(
   return definePipeline<YamlPipelineContext>({
     name: parsed.name,
     nodes: engineNodes,
-    loop: loopNode
-      ? {
-          from: loopNode.loop!.back_to ?? loopNode.id,
-          // The engine accepts async GuardFn — JSONata always returns a
-          // Promise even for sync expressions, so we wire async-end-to-end.
-          until: makePredicate(loopNode.loop!.until, parsed.name),
-          maxIterations: loopNode.loop!.max_iterations,
-        }
-      : undefined,
-    // DAG merge: each node writes only its own `outputs[id]`, so folding the
-    // outputs map of every node that completed in a level is collision-free.
-    // Other ctx fields (inputs, cwd, provider, progress) are level-invariant,
-    // so taking them from the base is correct. Declaration order keeps the
+    // Join merge: each node writes only its own `outputs[id]`, so folding the
+    // outputs of a node's dependencies is collision-free. Other ctx fields
+    // (inputs, cwd, provider, progress) are the same in every branch, so
+    // taking them from the base is correct. Declaration order keeps the
     // merge deterministic regardless of which node finished first.
     mergeContexts: (base, results) => ({
       ...base,
@@ -188,71 +173,87 @@ function buildEngineNode(
   parsed: ParsedWorkflow,
   options: CompileOptions,
 ): PipelineNode<YamlPipelineContext> {
+  const graphFields = {
+    dependsOn: yamlNode.depends_on,
+    triggerRule: yamlNode.trigger_rule,
+    onError: yamlNode.on_error === 'continue' ? ('continue' as const) : ('fail' as const),
+    loop: compileLoop(yamlNode, parsed),
+    concurrency: compileConcurrency(yamlNode),
+  };
+  const when = yamlNode.when ? makePredicate(yamlNode.when, parsed.name) : undefined;
+
   // Approval has its own helper that already wires WS + capture_response.
   if (yamlNode.approval) {
-    // approvalNode() doesn't take dependsOn, so attach it to the built node
-    // — the engine reads it off the PipelineNode for DAG level computation.
     return {
       ...approvalNode<YamlPipelineContext>(yamlNode.id, {
         message: (ctx) => render(yamlNode.approval!.message, scopeOf(ctx)),
         captureResponse: yamlNode.approval.capture_response ?? false,
         timeoutMs: yamlNode.approval.timeout_ms,
-        when: yamlNode.when ? makePredicate(yamlNode.when, parsed.name) : undefined,
+        when,
       }),
-      dependsOn: yamlNode.depends_on,
+      ...graphFields,
     };
   }
 
-  const retry = compileRetry(yamlNode, parsed, options);
-  const onError = yamlNode.on_error;
-
-  // Edge case: if both `retry` and `on_error: continue` are set, retry
-  // takes precedence — the engine handles all retry attempts; if every
-  // attempt fails, the pipeline fails. The "swallow final error" semantic
-  // would require engine-level support (per-node `continueOnFinalError`)
-  // and isn't implemented yet. Without retry, `on_error: continue` works
-  // as documented — the dispatch error is swallowed and downstream nodes
-  // see an empty output for this node.
-  const swallowOnContinue = onError === 'continue' && !retry;
-
   return engineNode<YamlPipelineContext>(
     yamlNode.id,
-    async (ctx) => {
+    async (ctx, _signal, info) => {
       ctx.progress.onStepProgress(yamlNode.id, { status: 'running' });
-
       try {
-        const output = await dispatch(yamlNode, ctx, parsed, options);
+        const output = await dispatch(yamlNode, { ...ctx, execution: info }, parsed, options);
         ctx.progress.onStepProgress(yamlNode.id, { status: 'completed' });
-        return {
-          ...ctx,
-          outputs: { ...ctx.outputs, [yamlNode.id]: output },
-        };
+        return { ...ctx, outputs: { ...ctx.outputs, [yamlNode.id]: output } };
       } catch (err) {
+        // Rethrow so the engine applies `retry`, then `on_error`.
         const message = err instanceof Error ? err.message : String(err);
-        if (swallowOnContinue) {
-          ctx.progress.onStepProgress(yamlNode.id, {
-            status: 'completed',
-            metadata: { warning: message },
-          });
-          return {
-            ...ctx,
-            outputs: {
-              ...ctx.outputs,
-              [yamlNode.id]: { output: undefined, error: message },
-            },
-          };
-        }
-        // Re-throw so the engine's retry loop (if any) can catch it.
         ctx.progress.onStepProgress(yamlNode.id, { status: 'failed', error: message });
         throw err;
       }
     },
-    {
-      when: yamlNode.when ? makePredicate(yamlNode.when, parsed.name) : undefined,
-      retry,
-      dependsOn: yamlNode.depends_on,
-    },
+    { when, retry: compileRetry(yamlNode, parsed, options), ...graphFields },
   );
+}
+
+/** A YAML `loop` as an engine loop on the node. */
+function compileLoop(yamlNode: ParsedNode, parsed: ParsedWorkflow) {
+  const loop = yamlNode.loop;
+  if (!loop) return undefined;
+  return {
+    backTo: loop.back_to ?? yamlNode.id,
+    // JSONata always returns a Promise, so the guard is async end to end.
+    until: makePredicate(loop.until, parsed.name),
+    maxIterations: loop.max_iterations,
+  };
+}
+
+/** A YAML `concurrency` as an engine concurrency group, rendered from the run's inputs. */
+function compileConcurrency(
+  yamlNode: ParsedNode,
+): NodeConcurrency<YamlPipelineContext> | undefined {
+  const concurrency = yamlNode.concurrency;
+  if (!concurrency) return undefined;
+  const { group, limit, batch } = concurrency;
+  return {
+    // Inputs both flat (`{{repo}}`, as elsewhere) and under `inputs.`.
+    group: (initial) => render(group, { ...initial.inputs, inputs: initial.inputs }),
+    limit,
+    batch: batch && {
+      max: batch.max,
+      waitMs: batch.wait,
+      adopt: (input, output) => ({
+        ...input,
+        outputs: { ...input.outputs, [yamlNode.id]: asNodeOutput(output) },
+      }),
+    },
+  };
+}
+
+/** The output a batch leader settled for a member, as this node's output. */
+function asNodeOutput(output: unknown): NodeOutput {
+  if (output !== null && typeof output === 'object' && 'output' in output) {
+    return output as NodeOutput;
+  }
+  return { output };
 }
 
 // ── Action dispatch ─────────────────────────────────────────
@@ -314,6 +315,7 @@ async function dispatchGithubNode(
       method: opts.method,
       deleteBranch: opts.delete_branch,
       auto: opts.auto,
+      execution: ctx.execution,
     });
     if (!result.ok) throw new Error(`merge[${yamlNode.id}] failed: ${result.error}`);
     return { output: result.output ?? '', json: result.metadata };
@@ -343,6 +345,7 @@ async function dispatch(
       mode: coercePermissionMode(opts.permission_mode),
       allowedTools: opts.allowed_tools,
       disallowedTools: opts.denied_tools,
+      execution: ctx.execution,
     });
     if (!result.ok) throw new Error(`spawn_agent[${yamlNode.id}] failed: ${result.error}`);
 
@@ -516,7 +519,9 @@ function resolveThreadId(ctx: YamlPipelineContext): string {
 
 function scopeOf(ctx: YamlPipelineContext): TemplateScope {
   // Flat shape so YAML can write `{{branch}}` (input) and `{{review.output.verdict}}` (node output).
-  return { ...ctx.inputs, ...ctx.outputs };
+  const scope: TemplateScope = { ...ctx.inputs, ...ctx.outputs };
+  if (ctx.execution) scope.LOOP_ITERATION = ctx.execution.iteration;
+  return scope;
 }
 
 function render(template: string, scope: TemplateScope): string {

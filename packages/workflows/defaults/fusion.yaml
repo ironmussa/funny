@@ -28,8 +28,9 @@ inputs:
 
 nodes:
   # ── Panel (level 0 — runs concurrently) ──────────────────────
-  # `on_error: continue` makes the panel fault-tolerant: a dead proposer
-  # becomes an empty output and the judge still proceeds with a quorum.
+  # `on_error: continue` makes the panel fault-tolerant: a dead proposer is
+  # marked failed with an empty output, and the judge (`trigger_rule:
+  # all_done`) still proceeds with whatever quorum answered.
   - id: proposer-a
     on_error: continue
     spawn_agent:
@@ -54,6 +55,7 @@ nodes:
   # pick a single winner.
   - id: synthesize
     depends_on: [proposer-a, proposer-b, proposer-c]
+    trigger_rule: all_done
     spawn_agent:
       model: opus
       prompt: |

@@ -78,7 +78,11 @@ function loopIssues(workflow: CheckedWorkflow, ids: Set<string>): string[] {
 }
 
 /** The nodes on a path from `from` to `to` (both included), or null when `from` is not an ancestor. */
-function regionOf(from: string, to: string, depsOf: Map<string, string[]>): Set<string> | null {
+export function regionOf(
+  from: string,
+  to: string,
+  depsOf: Map<string, string[]>,
+): Set<string> | null {
   const ancestors = new Set<string>();
   const stack = [to];
   while (stack.length > 0) {

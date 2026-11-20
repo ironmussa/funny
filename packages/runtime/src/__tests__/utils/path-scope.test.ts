@@ -16,11 +16,10 @@ import { beforeAll, afterAll, beforeEach, describe, expect, test, vi } from 'vit
 // Mock $HOME so the picker scope check operates against a sandboxed dir
 // where we can plant symlinks at will. Compute the path inline inside the
 // hoisted callback — top-level imports (resolve/tmpdir) aren't visible at
-// hoist time. `require()` works because the test file is CJS-bridged by
-// vitest.
-const { FAKE_HOME } = vi.hoisted(() => {
-  const pathMod = require('path') as typeof import('path');
-  const osMod = require('os') as typeof import('os');
+// hoist time. The callback imports `path` and the real `os` itself.
+const { FAKE_HOME } = await vi.hoisted(async () => {
+  const pathMod = await import('path');
+  const osMod = await vi.importActual<typeof import('os')>('os');
   return { FAKE_HOME: pathMod.resolve(osMod.tmpdir(), 'funny-path-scope-test-' + Date.now()) };
 });
 

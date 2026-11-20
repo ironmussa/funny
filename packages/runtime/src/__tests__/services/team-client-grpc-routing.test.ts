@@ -1,18 +1,24 @@
 import type { WSEvent } from '@funny/shared';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const h = vi.hoisted(() => ({
-  start: vi.fn(),
-  shutdown: vi.fn(),
-  publish: vi.fn(),
-  request: vi.fn(async (eventType: string) =>
-    eventType === 'data:get_builtin_providers' ? null : { success: true },
-  ),
-  grpcOptions: undefined as
-    | { endpoint?: string; onDisconnected?: (error?: Error) => void }
-    | undefined,
-  brokerHandler: undefined as ((event: WSEvent) => void) | undefined,
-}));
+interface GrpcOptions {
+  endpoint?: string;
+  onDisconnected?: (error?: Error) => void;
+}
+
+const h = vi.hoisted(() => {
+  const unset = <T>(): T | undefined => undefined;
+  return {
+    start: vi.fn(),
+    shutdown: vi.fn(),
+    publish: vi.fn(),
+    request: vi.fn(async (eventType: string) =>
+      eventType === 'data:get_builtin_providers' ? null : { success: true },
+    ),
+    grpcOptions: unset<GrpcOptions>(),
+    brokerHandler: unset<(event: WSEvent) => void>(),
+  };
+});
 
 const originalFetch = globalThis.fetch;
 
@@ -110,7 +116,7 @@ describe('team-client gRPC routing', () => {
       payload: { threadId: 'thread-1', eventType: 'agent:state', data: { active: true } },
     });
 
-    const event = { type: 'agent:result', threadId: 'thread-1', data: { text: 'done' } } as WSEvent;
+    const event: WSEvent = { type: 'agent:result', threadId: 'thread-1', data: { result: 'done' } };
     h.brokerHandler?.(event);
     expect(h.publish).toHaveBeenCalledWith(event);
   });

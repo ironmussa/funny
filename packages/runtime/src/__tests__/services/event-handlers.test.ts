@@ -32,29 +32,12 @@ import { stageTransitionOnAgentStartHandler } from '../../services/handlers/stag
 import { threadDeletedWsHandler } from '../../services/handlers/thread-deleted-ws-handler.js';
 import { threadStageChangedWsHandler } from '../../services/handlers/thread-stage-changed-ws-handler.js';
 import type { HandlerServiceContext } from '../../services/handlers/types.js';
+import { createHandlerContext, nonTerminalStatus } from '../helpers/builders-handlers.js';
 
 const { emitGitStatusForThread, threadEventBus } = mocks;
 
 function makeCtx(overrides: Partial<HandlerServiceContext> = {}): HandlerServiceContext {
-  return {
-    getThread: vi.fn(async () => undefined),
-    getProject: vi.fn(async () => undefined),
-    dequeueMessage: vi.fn(async () => null),
-    enqueueMessage: vi.fn(async () => ({})),
-    queueCount: vi.fn(async () => 0),
-    peekMessage: vi.fn(async () => null),
-    startAgent: vi.fn(async () => undefined),
-    emitToUser: vi.fn(),
-    broadcast: vi.fn(),
-    log: vi.fn(),
-    updateThread: vi.fn(async () => undefined),
-    insertComment: vi.fn(async () => undefined),
-    getGitStatusSummary: vi.fn() as any,
-    deriveGitSyncState: vi.fn() as any,
-    invalidateGitStatusCache: vi.fn(),
-    saveThreadEvent: vi.fn(async () => undefined),
-    ...overrides,
-  };
+  return createHandlerContext(overrides);
 }
 
 describe('commentHandler', () => {
@@ -110,7 +93,7 @@ describe('commentHandler', () => {
         userId: 'u-1',
         worktreePath: null,
         cwd: '/tmp',
-        status: 'running' as any,
+        status: nonTerminalStatus('running'),
         cost: 0,
       },
       ctx,
@@ -210,7 +193,7 @@ describe('stageTransitionOnAgentStartHandler', () => {
       ),
     ).toBe(true);
 
-    (ctx.getThread as ReturnType<typeof vi.fn>).mockResolvedValue({
+    vi.mocked(ctx.getThread).mockResolvedValue({
       id: 't-1',
       projectId: 'p-1',
       userId: 'u-1',
@@ -224,7 +207,7 @@ describe('stageTransitionOnAgentStartHandler', () => {
       ),
     ).toBe(false);
 
-    (ctx.getThread as ReturnType<typeof vi.fn>).mockResolvedValue({
+    vi.mocked(ctx.getThread).mockResolvedValue({
       id: 't-1',
       projectId: 'p-1',
       userId: 'u-1',
@@ -379,7 +362,7 @@ describe('registerAllHandlers', () => {
     );
     expect(commentRegistration).toBeDefined();
 
-    const wrappedListener = commentRegistration![1] as (payload: unknown) => Promise<void>;
+    const wrappedListener: (payload: unknown) => Promise<void> = commentRegistration![1];
     await expect(
       wrappedListener({
         threadId: 't-1',

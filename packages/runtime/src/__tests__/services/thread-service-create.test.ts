@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   threadEventBus: {
     emit: vi.fn(),
   },
-  startAgent: vi.fn(async () => undefined),
+  startAgent: vi.fn(async (..._args: unknown[]) => undefined),
   getCurrentBranch: vi.fn(),
   createWorktree: vi.fn(),
   setupWorktree: vi.fn(),
@@ -384,10 +384,10 @@ describe('createAndStartThread', () => {
       prompt: 'Go',
       model,
       provider,
-    } as Parameters<typeof createAndStartThread>[0]);
+    });
     expect(result.isOk()).toBe(true);
-    const args = mocks.startAgent.mock.calls.at(-1) as unknown[];
-    expect([args[3], args[8]]).toEqual(want);
+    const args = mocks.startAgent.mock.lastCall;
+    expect([args?.[3], args?.[8]]).toEqual(want);
   });
 
   test.each([
@@ -624,7 +624,7 @@ describe('createAndStartThread', () => {
       });
 
       expect(result.isOk()).toBe(true);
-      const cwd = mocks.adoptStagedUploads.mock.calls[0][0].cwd as string;
+      const cwd: string = mocks.adoptStagedUploads.mock.calls[0][0].cwd;
       expect(cwd).toMatch(/[\\/]\.funny[\\/]scratch[\\/]u-1[\\/]fixed-thread-id$/);
       expect(mocks.mkdir).toHaveBeenCalledWith(cwd, { recursive: true });
     });

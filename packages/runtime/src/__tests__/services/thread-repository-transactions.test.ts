@@ -33,14 +33,26 @@ describe('thread-repository transactions', () => {
     `);
   }
 
-  function getThread(id: string) {
-    return testDb.db.all(sql`SELECT * FROM threads WHERE id = ${id}`)[0] as any;
+  interface ThreadRow {
+    id: string;
+    stage: string;
+    status: string;
   }
 
-  function getStageHistory(threadId: string) {
-    return testDb.db.all(
+  interface StageHistoryRow {
+    thread_id: string;
+    from_stage: string | null;
+    to_stage: string;
+  }
+
+  function getThread(id: string): ThreadRow {
+    return testDb.db.all<ThreadRow>(sql`SELECT * FROM threads WHERE id = ${id}`)[0];
+  }
+
+  function getStageHistory(threadId: string): StageHistoryRow[] {
+    return testDb.db.all<StageHistoryRow>(
       sql`SELECT * FROM stage_history WHERE thread_id = ${threadId} ORDER BY changed_at`,
-    ) as any[];
+    );
   }
 
   // ── createThread atomicity ──────────────────────────────────
@@ -96,7 +108,7 @@ describe('thread-repository transactions', () => {
     test('stage change + history are atomic', () => {
       testDb.db.transaction((tx) => {
         // Read current stage
-        const current = tx.all(sql`SELECT stage FROM threads WHERE id = 't1'`)[0] as any;
+        const [current] = tx.all<{ stage: string }>(sql`SELECT stage FROM threads WHERE id = 't1'`);
         expect(current.stage).toBe('backlog');
 
         // Record stage history

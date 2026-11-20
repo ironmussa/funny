@@ -86,7 +86,7 @@ function singleSpawnPipeline(): PipelineDefinition<YamlPipelineContext> {
     nodes: [
       node<YamlPipelineContext>('dispatch', async (ctx) => {
         const result = await ctx.provider.spawnAgent({
-          prompt: ctx.inputs.prompt as string,
+          prompt: String(ctx.inputs.prompt),
           cwd: ctx.cwd,
         });
         if (!result.ok) throw new Error(result.error ?? 'spawn failed');

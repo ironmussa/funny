@@ -74,6 +74,7 @@ import {
   initTeamMode,
   shutdownTeamMode,
 } from '../../services/team-client.js';
+import { buildProject } from '../helpers/builders.js';
 
 describe('team-client', () => {
   beforeEach(() => {
@@ -107,13 +108,15 @@ describe('team-client', () => {
 
   test('assignProjectToRunner is a no-op without runner registration', async () => {
     await expect(
-      assignProjectToRunner({
-        id: 'p1',
-        name: 'Proj',
-        path: '/tmp',
-        userId: 'u1',
-        createdAt: new Date().toISOString(),
-      } as any),
+      assignProjectToRunner(
+        buildProject({
+          id: 'p1',
+          name: 'Proj',
+          path: '/tmp',
+          userId: 'u1',
+          createdAt: new Date().toISOString(),
+        }),
+      ),
     ).resolves.toBeUndefined();
   });
 

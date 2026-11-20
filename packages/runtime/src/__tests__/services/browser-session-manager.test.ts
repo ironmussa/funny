@@ -12,36 +12,24 @@ vi.mock('../../lib/logger.js', () => ({
 }));
 vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mocks.emitToUser } }));
 
-import { RefGenerations } from '../../services/browser-automation/snapshot-refs.js';
-import { browserSessionManager } from '../../services/browser-session-manager.js';
+import {
+  browserSessionManager,
+  type BrowserSession,
+} from '../../services/browser-session-manager.js';
+import {
+  buildBrowserSession,
+  buildBrowserTab,
+  fakeBrowserHost,
+  stubChromeSession,
+} from '../helpers/builders-agents.js';
 
-const manager = browserSessionManager as any;
+const manager = browserSessionManager;
+const sessions = manager['sessions'];
 const MIN = 60_000;
 
-function addSession(overrides: Record<string, unknown>) {
-  const s = {
-    sessionId: 'panel-1',
-    userId: 'u1',
-    threadId: null,
-    owner: 'panel',
-    profile: 'persistent',
-    url: 'about:blank',
-    host: { port: 9300, closeTab: vi.fn(async () => {}) },
-    tab: { page: {}, targetId: 't', ephemeralContext: null },
-    backgroundTabs: [],
-    chromeSession: { disconnect: vi.fn(async () => {}) },
-    viewport: { width: 1920, height: 1080 },
-    lastHeartbeat: 0,
-    panelAttached: true,
-    lastAgentActivity: 0,
-    controller: 'agent',
-    refs: new RefGenerations(),
-    pendingDialogReports: [],
-    consoleErrors: [],
-    queue: Promise.resolve(),
-    ...overrides,
-  };
-  manager.sessions.set(s.sessionId, s);
+function addSession(overrides: Partial<BrowserSession>) {
+  const s = buildBrowserSession(overrides);
+  sessions.set(s.sessionId, s);
   return s;
 }
 
@@ -49,11 +37,11 @@ describe('BrowserSessionManager lifecycle', () => {
   let close: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
-    manager.sessions.clear();
+    sessions.clear();
     mocks.emitToUser.mockClear();
     close?.mockRestore();
-    close = vi.spyOn(manager, 'close').mockImplementation(async (id: unknown) => {
-      manager.sessions.delete(id);
+    close = vi.spyOn(manager, 'close').mockImplementation(async (id: string) => {
+      sessions.delete(id);
     });
   });
 
@@ -66,7 +54,7 @@ describe('BrowserSessionManager lifecycle', () => {
   test('foreign input is dropped', async () => {
     const s = addSession({ sessionId: 'panel-1', userId: 'u1' });
     const dispatchMouseEvent = vi.fn();
-    s.chromeSession = { dispatchMouseEvent } as any;
+    s.chromeSession = stubChromeSession({ dispatchMouseEvent });
     await browserSessionManager.dispatchInput('u2', 'panel-1', {
       sessionId: 'panel-1',
       kind: 'mouseDown',
@@ -152,16 +140,19 @@ describe('BrowserSessionManager lifecycle', () => {
     // Opening a tab awaits Chromium; make it slow so both opens race past the
     // `sessions` map miss before either registers. Without serialisation the
     // second open would create a second tab and orphan the first (issue #212).
-    const openTab = vi.spyOn(manager, 'openTab').mockImplementation(async () => {
+    // openTab / startSession / emitReady are private, so they are replaced as own
+    // properties (shadowing the prototype) and restored by deleting them.
+    const openTab = vi.fn(async () => {
       await new Promise((r) => setTimeout(r, 20));
       return {
-        host: { port: 9300, closeTab: vi.fn(async () => {}) },
-        tab: { page: {}, targetId: 't', ephemeralContext: null },
+        host: fakeBrowserHost({ port: 9300, closeTab: vi.fn(async () => {}) }),
+        tab: buildBrowserTab(),
       };
     });
-    const startSession = vi.spyOn(manager, 'startSession').mockResolvedValue(undefined);
+    manager['openTab'] = openTab;
+    manager['startSession'] = vi.fn(async () => undefined);
     const navigate = vi.spyOn(manager, 'navigate').mockResolvedValue(undefined);
-    const emitReady = vi.spyOn(manager, 'emitReady').mockImplementation(() => {});
+    manager['emitReady'] = vi.fn();
 
     const [a, b] = await Promise.all([
       browserSessionManager.open('u1', 'panel-9', 'https://example.com', { origin: 'panel' }),
@@ -171,12 +162,12 @@ describe('BrowserSessionManager lifecycle', () => {
     expect(openTab).toHaveBeenCalledTimes(1);
     expect(a).not.toBeNull();
     expect(a).toBe(b);
-    expect(manager.sessions.size).toBe(1);
+    expect(sessions.size).toBe(1);
 
-    openTab.mockRestore();
-    startSession.mockRestore();
+    Reflect.deleteProperty(manager, 'openTab');
+    Reflect.deleteProperty(manager, 'startSession');
     navigate.mockRestore();
-    emitReady.mockRestore();
+    Reflect.deleteProperty(manager, 'emitReady');
   });
 
   test('deleting a thread closes its session', async () => {
@@ -188,11 +179,11 @@ describe('BrowserSessionManager lifecycle', () => {
   test('runExclusive serialises work on a session', async () => {
     const s = addSession({});
     const order: string[] = [];
-    const slow = browserSessionManager.runExclusive(s as any, async () => {
+    const slow = browserSessionManager.runExclusive(s, async () => {
       await new Promise((r) => setTimeout(r, 20));
       order.push('slow');
     });
-    const fast = browserSessionManager.runExclusive(s as any, async () => {
+    const fast = browserSessionManager.runExclusive(s, async () => {
       order.push('fast');
     });
     await Promise.all([slow, fast]);

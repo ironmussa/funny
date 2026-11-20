@@ -17,6 +17,7 @@ vi.mock('../../lib/logger.js', () => ({
 }));
 
 import { recoverThreadContext } from '../../services/agent-startup/recover-context.js';
+import { createThreadManagerFake } from '../helpers/builders.js';
 
 describe('recoverThreadContext', () => {
   beforeEach(() => {
@@ -45,7 +46,7 @@ describe('recoverThreadContext', () => {
         contextRecoveryReason: 'forked',
         mergedAt: null,
       },
-      threadManager: mocks.threadManager as any,
+      threadManager: createThreadManagerFake(mocks.threadManager),
     });
 
     expect(result).toEqual({

@@ -75,8 +75,8 @@ function makeCtx(overrides: Partial<HandlerServiceContext> = {}): HandlerService
     log: vi.fn(),
     updateThread: vi.fn(),
     insertComment: vi.fn(),
-    getGitStatusSummary: vi.fn() as any,
-    deriveGitSyncState: vi.fn() as any,
+    getGitStatusSummary: vi.fn(),
+    deriveGitSyncState: vi.fn(),
     invalidateGitStatusCache: vi.fn(),
     saveThreadEvent: vi.fn(async () => {}),
     ...overrides,
@@ -124,8 +124,8 @@ describe('agentCompletedQueueHandler', () => {
 
       expect(ctx.dequeueMessage).toHaveBeenCalledWith('t-1');
       expect(ctx.startAgent).toHaveBeenCalledTimes(1);
-      expect((ctx.startAgent as any).mock.calls[0][1]).toBe('Forced follow-up');
-      expect((ctx.startAgent as any).mock.calls[0][2]).toBe('/test');
+      expect(vi.mocked(ctx.startAgent).mock.calls[0][1]).toBe('Forced follow-up');
+      expect(vi.mocked(ctx.startAgent).mock.calls[0][2]).toBe('/test');
     },
   );
 
@@ -183,7 +183,7 @@ describe('agentCompletedQueueHandler', () => {
     await agentCompletedQueueHandler.action(makeEvent({ projectId: '' }), ctx);
 
     expect(ctx.startAgent).toHaveBeenCalledTimes(1);
-    const [, prompt, cwd] = (ctx.startAgent as any).mock.calls[0];
+    const [, prompt, cwd] = vi.mocked(ctx.startAgent).mock.calls[0];
     expect(prompt).toBe('Scratch follow-up');
     expect(cwd).toBe(scratchPathFor('u-1', 't-1'));
   });
@@ -245,7 +245,7 @@ describe('agentCompletedQueueHandler', () => {
 
     // cwd (3rd arg) should be worktreePath, not project.path
     expect(ctx.startAgent).toHaveBeenCalled();
-    const callArgs = (ctx.startAgent as ReturnType<typeof vi.fn>).mock.calls[0];
+    const callArgs = vi.mocked(ctx.startAgent).mock.calls[0];
     expect(callArgs[2]).toBe('/tmp/worktree-1');
   });
 

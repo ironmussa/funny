@@ -3,6 +3,8 @@ import { describe, test, expect, vi } from 'vitest';
 
 import { AgentMessageHandler } from '../../services/agent-message-handler.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
+import { wireMessage } from '../helpers/builders-handlers.js';
+import { buildThreadRecord, createThreadManagerFake } from '../helpers/builders.js';
 
 const THREAD_ID = 'thread-compact';
 
@@ -18,30 +20,37 @@ function makeHandler() {
       emitted.push({ type: event.type, data: event.data });
     }),
   };
-  const threadManager = {
-    getThread: vi.fn(async () => ({ userId: 'user-1' })),
+  const threadManager = createThreadManagerFake({
+    getThread: vi.fn(async () => buildThreadRecord({ id: THREAD_ID, userId: 'user-1' })),
     insertMessage: vi.fn(async () => 'db-msg-1'),
     updateMessage: vi.fn(async () => undefined),
-  };
+  });
 
-  const handler = new AgentMessageHandler(
-    state,
-    threadManager as any,
-    wsBroker as any,
-    () => undefined,
-  );
+  const handler = new AgentMessageHandler(state, threadManager, wsBroker, () => undefined);
   return { handler, state, emitted, wsBroker };
 }
 
-function stub<T>(p: Record<string, any>): T {
-  return p as T;
+interface ClaudeUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation_input_tokens: number;
 }
 
-function assistantMsg(content: any[], usage: Record<string, number>): CLIMessage {
-  return stub<CLIMessage>({
-    type: 'assistant',
-    message: { id: 'cli-1', content, usage },
-  });
+type AssistantContent = Extract<CLIMessage, { type: 'assistant' }>['message']['content'];
+
+function assistantMsg(content: AssistantContent, usage: ClaudeUsage): CLIMessage {
+  return { type: 'assistant', message: { id: 'cli-1', content, usage } };
+}
+
+/** The Claude SDK's compaction-summary block, which `CLIMessage` does not model. */
+function compactionSummaryMsg(usage: ClaudeUsage): CLIMessage {
+  return wireMessage(
+    JSON.stringify({
+      type: 'assistant',
+      message: { id: 'cli-1', content: [{ type: 'compaction', content: 'summary…' }], usage },
+    }),
+  );
 }
 
 describe('AgentMessageHandler — compaction summary usage', () => {
@@ -53,7 +62,7 @@ describe('AgentMessageHandler — compaction summary usage', () => {
     // the compact_boundary reset and freeze the ring at the old value.
     await handler.handle(
       THREAD_ID,
-      assistantMsg([{ type: 'compaction', content: 'summary…' }], {
+      compactionSummaryMsg({
         input_tokens: 4,
         cache_read_input_tokens: 174_000,
         cache_creation_input_tokens: 1_000,

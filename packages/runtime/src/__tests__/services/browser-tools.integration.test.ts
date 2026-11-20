@@ -274,7 +274,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     emitToUser.mockClear();
 
     await browserSessionManager.open(ctx.userId, sessionId, '');
-    const sent = emitToUser.mock.calls.map(([, event]) => event as { type: string; data: unknown });
+    const sent = emitToUser.mock.calls.map(([, event]) => event);
     expect(sent).toContainEqual(
       expect.objectContaining({
         type: 'browser-session:controller',
@@ -306,10 +306,10 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     const lastFrameSize = async () => {
       emitToUser.mockClear();
       await new Promise((r) => setTimeout(r, 800));
-      const frames = emitToUser.mock.calls
-        .map(([, event]) => event as { type: string; data: { sessionId: string; data: string } })
-        .filter((e) => e.type === 'browser-session:frame' && e.data.sessionId === sessionId);
-      return frames.length ? jpegSize(frames.at(-1)!.data.data) : null;
+      const frames = emitToUser.mock.calls.flatMap(([, e]) =>
+        e.type === 'browser-session:frame' && e.data.sessionId === sessionId ? [e.data.data] : [],
+      );
+      return frames.length ? jpegSize(frames.at(-1)!) : null;
     };
 
     // Headless Chrome's UI used to eat ~143px: frames came out 1920×937 and
@@ -471,11 +471,13 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     expect(session.audioMuted).toBe(true);
     const mutedState = () =>
       Promise.all(
-        session.tab.page
-          .frames()
-          .map((frame) =>
-            frame.evaluate(() => (document.querySelector('audio') as HTMLAudioElement).muted),
-          ),
+        session.tab.page.frames().map((frame) =>
+          frame.evaluate(() => {
+            const el = document.querySelector('audio');
+            if (!el) throw new Error('no <audio> element');
+            return el.muted;
+          }),
+        ),
       );
     const input = (muted: boolean) =>
       browserSessionManager.dispatchInput(ctx.userId, sessionId, {
@@ -523,7 +525,8 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     await expect
       .poll(() =>
         stray.evaluate(() => {
-          const el = document.querySelector('audio') as HTMLAudioElement;
+          const el = document.querySelector('audio');
+          if (!el) throw new Error('no <audio> element');
           void el.play().catch(() => {});
           return el.muted;
         }),

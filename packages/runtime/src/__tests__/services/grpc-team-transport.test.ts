@@ -308,8 +308,12 @@ describe('GrpcTeamTransport', () => {
     adapter.start();
     activate(wire);
 
-    adapter.publish({ type: 'agent:init', threadId: 'thread-1', data: {} } as any);
-    adapter.publish({ type: 'agent:result', threadId: 'thread-1', data: { text: 'done' } } as any);
+    adapter.publish({
+      type: 'agent:init',
+      threadId: 'thread-1',
+      data: { tools: [], cwd: '/repo', model: 'sonnet' },
+    });
+    adapter.publish({ type: 'agent:result', threadId: 'thread-1', data: { result: 'done' } });
     const events = wire.streams.get('events')!;
     expect(events.writes.map((frame) => frame.sequence)).toEqual(['1', '2']);
     expect(events.writes[1]).toMatchObject({

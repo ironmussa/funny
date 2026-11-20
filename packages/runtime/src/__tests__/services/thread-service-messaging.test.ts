@@ -123,6 +123,7 @@ import {
 } from '../../services/thread-service/messaging.js';
 import { wsBroker } from '../../services/ws-broker.js';
 import { augmentPromptWithFiles, hydrateReferencedFiles } from '../../utils/file-mentions.js';
+import { buildPermissionRule } from '../helpers/builders-services.js';
 
 describe('respondPermissionRequest', () => {
   beforeEach(() => {
@@ -183,7 +184,7 @@ describe('respondPermissionRequest', () => {
       toolName: 'Bash',
       toolInput: 'git status',
     });
-    vi.mocked(createPermissionRule).mockResolvedValue(null as any);
+    vi.mocked(createPermissionRule).mockResolvedValue(null);
 
     const result = await respondPermissionRequest({
       threadId: 't-permission',
@@ -204,7 +205,7 @@ describe('respondPermissionRequest', () => {
       toolName: 'Bash',
       toolInput: 'git status',
     });
-    vi.mocked(createPermissionRule).mockResolvedValue({ id: 'rule-1' } as any);
+    vi.mocked(createPermissionRule).mockResolvedValue(buildPermissionRule({ id: 'rule-1' }));
     vi.mocked(respondToPermission).mockResolvedValue(true);
 
     const result = await respondPermissionRequest({
@@ -299,7 +300,7 @@ describe('respondPermissionRequest', () => {
       worktreePath: '/wt/one',
     });
     vi.mocked(getPendingPermission).mockReturnValue({ toolName: 'Edit', toolInput: 'x' });
-    vi.mocked(createPermissionRule).mockResolvedValue({ id: 'rule-1' } as any);
+    vi.mocked(createPermissionRule).mockResolvedValue(buildPermissionRule({ id: 'rule-1' }));
     vi.mocked(respondToPermission).mockResolvedValue(true);
     const result = await respondPermissionRequest({
       threadId: 't-permission',
@@ -585,7 +586,7 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(result.isOk()).toBe(true);
     expect(mocks.tm.insertMessage).not.toHaveBeenCalled();
     expect(mocks.tm.updateMessage).toHaveBeenCalledWith('msg-draft', expect.any(Object));
-    expect((vi.mocked(startAgent).mock.calls[0] as unknown[])[5]).toEqual(images);
+    expect(vi.mocked(startAgent).mock.calls[0][5]).toEqual(images);
   });
 
   test('sets title from prompt when idle thread has no initialPrompt (live view draft)', async () => {
@@ -1239,11 +1240,12 @@ describe('sendMessage — queue and interactive tool flows', () => {
       id: 'tc-plan',
       name: 'ExitPlanMode',
     });
-    mocks.tm.updateThread.mockImplementation(async (...args: unknown[]) => {
-      const updates = args[1] as { permissionMode?: string } | undefined;
-      if (updates?.permissionMode === 'autoEdit') throw new Error('db down');
-      return undefined;
-    });
+    mocks.tm.updateThread.mockImplementation(
+      async (_id?: string, updates?: { permissionMode?: string }) => {
+        if (updates?.permissionMode === 'autoEdit') throw new Error('db down');
+        return undefined;
+      },
+    );
 
     let result;
     try {
@@ -1258,7 +1260,7 @@ describe('sendMessage — queue and interactive tool flows', () => {
     }
 
     expect(result.isOk()).toBe(true);
-    const call = vi.mocked(startAgent).mock.calls.at(-1) as unknown[] | undefined;
+    const call = vi.mocked(startAgent).mock.calls.at(-1);
     expect(call?.[4]).toBe('autoEdit');
     expect(call?.[10]).toBe(true); // message already persisted
   });
@@ -1571,7 +1573,7 @@ describe('approveToolCall', () => {
 
   test('merges always-allow permission rules into approved tool restart', async () => {
     vi.mocked(listPermissionRules).mockResolvedValue([
-      { toolName: 'Read', decision: 'allow' } as any,
+      buildPermissionRule({ toolName: 'Read', decision: 'allow' }),
     ]);
 
     const result = await approveToolCall({

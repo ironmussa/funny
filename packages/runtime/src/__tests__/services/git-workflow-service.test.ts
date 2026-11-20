@@ -25,7 +25,7 @@ describe('executeWorkflow', () => {
       userId: 'u1',
       cwd: '/tmp',
       action: 'push',
-    } as Parameters<typeof executeWorkflow>[0]);
+    });
 
     // Without this the client's buttons waited for an end that never came.
     await vi.waitFor(() =>

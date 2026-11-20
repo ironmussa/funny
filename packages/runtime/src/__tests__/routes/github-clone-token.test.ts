@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import type { WSEvent } from '@funny/shared';
 import { processError } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { errAsync, ok, okAsync } from 'neverthrow';
@@ -19,7 +20,7 @@ const TOKEN = 'ghp_secret_token';
 const mocks = vi.hoisted(() => ({
   cloneRepository: vi.fn(),
   createProject: vi.fn(),
-  emitToUser: vi.fn(),
+  emitToUser: vi.fn<(userId: string, event: WSEvent) => void>(),
 }));
 
 vi.mock('@funny/core/git', async (importOriginal) => ({
@@ -55,6 +56,7 @@ vi.mock('../../lib/logger.js', () => ({
 
 import { repoRoutes } from '../../routes/github/repos.js';
 import type { HonoEnv } from '../../types/hono-env.js';
+import { eventOfType } from '../helpers/builders-routes.js';
 
 const CLONE_URL = 'https://github.com/acme/widget.git';
 
@@ -109,7 +111,7 @@ describe('POST /clone credentials', () => {
     await postClone(parentDir);
 
     const phases = mocks.emitToUser.mock.calls.map(
-      (call) => (call[1] as { data: { phase: string; percent?: number } }).data,
+      (call) => eventOfType(call[1], 'clone:progress')?.data,
     );
     expect(phases).toContainEqual(
       expect.objectContaining({ phase: 'Receiving objects:  45% (9/20)', percent: 45 }),
@@ -124,9 +126,8 @@ describe('POST /clone credentials', () => {
     const res = await postClone(parentDir);
 
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error: string }).error).toBe(
-      'Clone failed: fatal: repository not found',
-    );
+    const body: { error: string } = await res.json();
+    expect(body.error).toBe('Clone failed: fatal: repository not found');
     expect(mocks.createProject).not.toHaveBeenCalled();
   });
 });

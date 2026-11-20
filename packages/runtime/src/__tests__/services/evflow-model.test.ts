@@ -95,11 +95,11 @@ describe('Runtime evflow model', () => {
     expect(parsed.slices).toBeDefined();
 
     // elements is an object keyed by name, not an array
-    const elements = Object.values(parsed.elements) as any[];
-    const commands = elements.filter((e: any) => e.kind === 'command');
-    const events = elements.filter((e: any) => e.kind === 'event');
-    const automations = elements.filter((e: any) => e.kind === 'automation');
-    const readModels = elements.filter((e: any) => e.kind === 'readModel');
+    const elements: Array<{ kind?: string }> = Object.values(parsed.elements);
+    const commands = elements.filter((e) => e.kind === 'command');
+    const events = elements.filter((e) => e.kind === 'event');
+    const automations = elements.filter((e) => e.kind === 'automation');
+    const readModels = elements.filter((e) => e.kind === 'readModel');
 
     expect(commands.length).toBeGreaterThanOrEqual(15);
     expect(events.length).toBeGreaterThanOrEqual(16); // At least 16 ThreadEventMap events + PTY events

@@ -1,5 +1,6 @@
 import type { WSEvent } from '@funny/shared';
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
+import type { ServerWebSocket } from 'bun';
+import { describe, test, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
@@ -25,17 +26,34 @@ import { metric } from '../../lib/telemetry.js';
  */
 
 /** Helper: create a mock ServerWebSocket */
-function makeMockWs(overrides: Record<string, any> = {}) {
-  return {
-    send: vi.fn(),
-    ping: vi.fn(),
+interface MockWs extends ServerWebSocket<unknown> {
+  send: Mock<ServerWebSocket<unknown>['send']>;
+  ping: Mock<ServerWebSocket<unknown>['ping']>;
+}
+
+function makeMockWs(overrides: { send?: Mock<ServerWebSocket<unknown>['send']> } = {}): MockWs {
+  const ws: Pick<MockWs, 'send' | 'ping'> = {
+    send: vi.fn<ServerWebSocket<unknown>['send']>(() => 0),
+    ping: vi.fn<ServerWebSocket<unknown>['ping']>(() => 0),
     ...overrides,
-  } as any;
+  };
+  // SAFETY: the broker only calls send() and ping() on a client socket; the rest of Bun's ServerWebSocket is never touched.
+  return ws as MockWs;
 }
 
 /** Helper: create a minimal WSEvent */
-function makeEvent(type = 'agent:message', threadId = 'thread-1'): WSEvent {
-  return { type, threadId } as any;
+function makeEvent(
+  type: 'agent:message' | 'agent:status' | 'agent:result' = 'agent:message',
+  threadId = 'thread-1',
+): WSEvent {
+  switch (type) {
+    case 'agent:message':
+      return { type, threadId, data: { role: 'assistant', content: '' } };
+    case 'agent:status':
+      return { type, threadId, data: { status: 'running' } };
+    case 'agent:result':
+      return { type, threadId, data: {} };
+  }
 }
 
 /** Helper: create a string of a given byte size (ASCII so 1 char = 1 byte) */
@@ -43,16 +61,17 @@ function makePayloadEvent(byteSize: number): WSEvent {
   // We will rely on JSON.stringify(event) to produce the payload.
   // The overhead of JSON.stringify({ type: '...', threadId: '...', data: '...' }) is ~40 bytes.
   // We pad `data` to reach the target size.
-  const overhead = Buffer.byteLength(
-    JSON.stringify({ type: 'agent:message', threadId: 't', data: '' }),
-    'utf8',
-  );
-  const padding = 'x'.repeat(Math.max(0, byteSize - overhead));
-  return { type: 'agent:message', threadId: 't', data: padding } as any;
+  const event = (content: string): WSEvent => ({
+    type: 'agent:message',
+    threadId: 't',
+    data: { role: 'assistant', content },
+  });
+  const overhead = Buffer.byteLength(JSON.stringify(event('')), 'utf8');
+  return event('x'.repeat(Math.max(0, byteSize - overhead)));
 }
 
 describe('WSBroker', () => {
-  let broker: any;
+  let broker: (typeof import('../../services/ws-broker.js'))['wsBroker'];
 
   beforeEach(async () => {
     vi.useFakeTimers();
@@ -66,7 +85,7 @@ describe('WSBroker', () => {
     // Clean up any lingering ping timers
     broker.stopPing();
     // Remove all clients so the singleton is clean for next test
-    for (const ws of Array.from((broker as any).clients.keys())) {
+    for (const ws of Array.from(broker['clients'].keys())) {
       broker.removeClient(ws);
     }
     vi.useRealTimers();
@@ -128,17 +147,17 @@ describe('WSBroker', () => {
   describe('ping/pong heartbeat', () => {
     test('startPing starts the interval and stopPing clears it', () => {
       broker.startPing();
-      expect((broker as any).pingTimer).not.toBeNull();
+      expect(broker['pingTimer']).not.toBeNull();
 
       broker.stopPing();
-      expect((broker as any).pingTimer).toBeNull();
+      expect(broker['pingTimer']).toBeNull();
     });
 
     test('startPing is idempotent — calling twice does not create a second timer', () => {
       broker.startPing();
-      const timer1 = (broker as any).pingTimer;
+      const timer1 = broker['pingTimer'];
       broker.startPing();
-      const timer2 = (broker as any).pingTimer;
+      const timer2 = broker['pingTimer'];
       expect(timer1).toBe(timer2);
     });
 
@@ -148,11 +167,11 @@ describe('WSBroker', () => {
 
       // Advance so one ping fires, incrementing missedPongs to 1
       vi.advanceTimersByTime(30_000);
-      expect((broker as any).missedPongs.get(ws)).toBe(1);
+      expect(broker['missedPongs'].get(ws)).toBe(1);
 
       // handlePong should reset it
       broker.handlePong(ws);
-      expect((broker as any).missedPongs.get(ws)).toBe(0);
+      expect(broker['missedPongs'].get(ws)).toBe(0);
     });
 
     test('after MAX_MISSED_PONGS (2) missed pongs, client is removed', () => {
@@ -179,11 +198,11 @@ describe('WSBroker', () => {
     });
 
     test('ping auto-starts when first client connects', () => {
-      expect((broker as any).pingTimer).toBeNull();
+      expect(broker['pingTimer']).toBeNull();
 
       const ws = makeMockWs();
       broker.addClient(ws, 'user-1');
-      expect((broker as any).pingTimer).not.toBeNull();
+      expect(broker['pingTimer']).not.toBeNull();
     });
 
     test('ping auto-stops when last client disconnects', () => {
@@ -191,15 +210,15 @@ describe('WSBroker', () => {
       const ws2 = makeMockWs();
       broker.addClient(ws1, 'user-1');
       broker.addClient(ws2, 'user-2');
-      expect((broker as any).pingTimer).not.toBeNull();
+      expect(broker['pingTimer']).not.toBeNull();
 
       broker.removeClient(ws1);
       // Still one client, ping should continue
-      expect((broker as any).pingTimer).not.toBeNull();
+      expect(broker['pingTimer']).not.toBeNull();
 
       broker.removeClient(ws2);
       // No clients left, ping should stop
-      expect((broker as any).pingTimer).toBeNull();
+      expect(broker['pingTimer']).toBeNull();
     });
   });
 
@@ -245,7 +264,7 @@ describe('WSBroker', () => {
       expect(ws1.send).toHaveBeenCalledTimes(1);
       expect(ws2.send).not.toHaveBeenCalled();
 
-      const parsed = JSON.parse(ws1.send.mock.calls[0][0]);
+      const parsed = JSON.parse(String(ws1.send.mock.calls[0][0]));
       expect(parsed).toEqual(event);
     });
 
@@ -315,7 +334,7 @@ describe('WSBroker', () => {
         type: 'pty:data',
         threadId: '',
         data: { ptyId: 'p1', data: bytes },
-      } as any;
+      } satisfies WSEvent;
 
       broker.emitToUser('user-X', event);
 
@@ -337,7 +356,7 @@ describe('WSBroker', () => {
         type: 'pty:data',
         threadId: '',
         data: { ptyId: 'p1', data: bytes },
-      } as any;
+      } satisfies WSEvent;
 
       const listener = vi.fn();
       broker.onEvent(listener);

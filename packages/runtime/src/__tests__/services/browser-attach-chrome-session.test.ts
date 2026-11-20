@@ -26,19 +26,26 @@ vi.mock('@funny/core/chrome', () => ({
   },
 }));
 
+import type { ChromeSession } from '@funny/core/chrome';
+
 import { browserSessionManager } from '../../services/browser-session-manager.js';
+import {
+  buildBrowserSession,
+  fakeBrowserHost,
+  stubChromeSession,
+} from '../helpers/builders-agents.js';
 
-const manager = browserSessionManager as any;
+const manager = browserSessionManager;
 
-function sessionWith(previous: { disconnect: ReturnType<typeof vi.fn> } | null) {
-  return {
+function sessionWith(previous: ChromeSession | null) {
+  return buildBrowserSession({
     sessionId: 'panel-1',
     userId: 'u1',
-    host: { port: 9300 },
+    host: fakeBrowserHost({ port: 9300 }),
     viewport: { width: 1920, height: 1080 },
     chromeSession: previous,
     recorder: null,
-  };
+  });
 }
 
 describe('attachChromeSession releases the replaced CDP client', () => {
@@ -50,10 +57,10 @@ describe('attachChromeSession releases the replaced CDP client', () => {
 
   test('disconnects the previous client when the new connect throws', async () => {
     mocks.connect.mockRejectedValueOnce(new Error('connect failed'));
-    const previous = { disconnect: vi.fn(async () => {}) };
+    const previous = stubChromeSession({ disconnect: vi.fn(async () => {}) });
     const s = sessionWith(previous);
 
-    await expect(manager.attachChromeSession(s, 'target-1')).rejects.toThrow('connect failed');
+    await expect(manager['attachChromeSession'](s, 'target-1')).rejects.toThrow('connect failed');
 
     expect(previous.disconnect).toHaveBeenCalledTimes(1);
     // The new (failed) client has replaced the previous one on the session.
@@ -62,10 +69,10 @@ describe('attachChromeSession releases the replaced CDP client', () => {
 
   test('disconnects the previous client after a successful re-attach', async () => {
     mocks.connect.mockResolvedValueOnce(undefined);
-    const previous = { disconnect: vi.fn(async () => {}) };
+    const previous = stubChromeSession({ disconnect: vi.fn(async () => {}) });
     const s = sessionWith(previous);
 
-    await manager.attachChromeSession(s, 'target-2');
+    await manager['attachChromeSession'](s, 'target-2');
 
     expect(mocks.connect).toHaveBeenCalledTimes(1);
     expect(previous.disconnect).toHaveBeenCalledTimes(1);
@@ -76,6 +83,6 @@ describe('attachChromeSession releases the replaced CDP client', () => {
     mocks.connect.mockResolvedValueOnce(undefined);
     const s = sessionWith(null);
 
-    await expect(manager.attachChromeSession(s, 'target-3')).resolves.toBeUndefined();
+    await expect(manager['attachChromeSession'](s, 'target-3')).resolves.toBeUndefined();
   });
 });

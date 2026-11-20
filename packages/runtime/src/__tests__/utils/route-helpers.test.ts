@@ -43,6 +43,7 @@ import {
   isSteerGrantFor,
   ensureThreadCwd,
 } from '../../utils/route-helpers.js';
+import { buildThreadRecord } from '../helpers/builders.js';
 
 describe('route-helpers', () => {
   beforeEach(() => {
@@ -355,14 +356,24 @@ describe('thread working directory', () => {
   });
 
   test('a collaborator gets their own checkout, not the owner’s path', async () => {
-    const thread = { id: 't-1', userId: 'owner', projectId: 'p-1', mode: 'local' } as any;
+    const thread = buildThreadRecord({
+      id: 't-1',
+      userId: 'owner',
+      projectId: 'p-1',
+      mode: 'local',
+    });
     mocks.resolveProjectPath.mockResolvedValue(ok('/home/collab/repo'));
 
     expect((await ensureThreadCwd(thread, 'collab'))._unsafeUnwrap()).toBe('/home/collab/repo');
   });
 
   test('falls back to the project path, and never creates it', async () => {
-    const thread = { id: 't-1', userId: 'owner', projectId: 'p-1', mode: 'local' } as any;
+    const thread = buildThreadRecord({
+      id: 't-1',
+      userId: 'owner',
+      projectId: 'p-1',
+      mode: 'local',
+    });
     mocks.getProject.mockResolvedValue({ id: 'p-1', userId: 'owner', path: '/does/not/exist' });
 
     expect((await ensureThreadCwd(thread, 'owner'))._unsafeUnwrap()).toBe('/does/not/exist');
@@ -370,19 +381,24 @@ describe('thread working directory', () => {
   });
 
   test('a worktree thread uses its worktree', async () => {
-    const thread = {
+    const thread = buildThreadRecord({
       id: 't-1',
       userId: 'owner',
       projectId: 'p-1',
       mode: 'worktree',
       worktreePath: '/wt',
-    } as any;
+    });
 
     expect((await ensureThreadCwd(thread, 'owner'))._unsafeUnwrap()).toBe('/wt');
   });
 
   test('a project thread whose project is gone → NOT_FOUND', async () => {
-    const thread = { id: 't-1', userId: 'owner', projectId: 'p-gone', mode: 'local' } as any;
+    const thread = buildThreadRecord({
+      id: 't-1',
+      userId: 'owner',
+      projectId: 'p-gone',
+      mode: 'local',
+    });
     mocks.getProject.mockResolvedValue(undefined);
 
     expect((await ensureThreadCwd(thread, 'owner'))._unsafeUnwrapErr().type).toBe('NOT_FOUND');

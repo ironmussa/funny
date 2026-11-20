@@ -1154,13 +1154,12 @@ describe('ThreadManager', () => {
       }
 
       if (search) {
-        filters.push(
-          or(
-            like(testDb.schema.threads.title, `%${safeSearch}%`),
-            like(testDb.schema.threads.branch, `%${safeSearch}%`),
-            like(testDb.schema.threads.status, `%${safeSearch}%`),
-          ) as any,
+        const searchFilter = or(
+          like(testDb.schema.threads.title, `%${safeSearch}%`),
+          like(testDb.schema.threads.branch, `%${safeSearch}%`),
+          like(testDb.schema.threads.status, `%${safeSearch}%`),
         );
+        if (searchFilter) filters.push(searchFilter);
       }
 
       const conditions = and(...filters);

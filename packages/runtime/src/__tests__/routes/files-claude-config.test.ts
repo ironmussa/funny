@@ -8,9 +8,9 @@ import { join } from 'path';
 import { Hono } from 'hono';
 import { afterAll, beforeAll, describe, expect, test, vi } from 'vitest';
 
-const { FAKE_HOME } = vi.hoisted(() => {
-  const pathMod = require('path') as typeof import('path');
-  const osMod = require('os') as typeof import('os');
+const { FAKE_HOME } = await vi.hoisted(async () => {
+  const pathMod = await import('path');
+  const osMod = await vi.importActual<typeof import('os')>('os');
   return { FAKE_HOME: pathMod.join(osMod.tmpdir(), `funny-claude-files-${Date.now()}`) };
 });
 
@@ -20,30 +20,27 @@ vi.mock('os', async () => {
 });
 
 import filesRoutes from '../../routes/files.js';
-import type { RuntimeServiceProvider } from '../../services/service-provider.js';
 import { resetServices, setServices } from '../../services/service-registry.js';
-
-function stub<T>(p: Record<string, any>): T {
-  return p as T;
-}
+import type { HonoEnv } from '../../types/hono-env.js';
+import { createServiceProviderFake } from '../helpers/builders.js';
 
 describe('files routes — Claude home config', () => {
   let settingsPath: string;
-  let app: Hono;
+  let app: Hono<HonoEnv>;
 
   beforeAll(() => {
     settingsPath = join(FAKE_HOME, '.claude', 'settings.json');
 
-    const fakeServices = stub<RuntimeServiceProvider>({
+    const fakeServices = createServiceProviderFake({
       projects: { listProjects: async (_userId: string) => [] },
     });
 
     resetServices();
     setServices(fakeServices);
 
-    app = new Hono();
+    app = new Hono<HonoEnv>();
     app.use('*', async (c, next) => {
-      c.set('userId' as never, 'user-1' as never);
+      c.set('userId', 'user-1');
       await next();
     });
     app.route('/', filesRoutes);
@@ -70,7 +67,7 @@ describe('files routes — Claude home config', () => {
 
     const readRes = await app.request(`/read?path=${encodeURIComponent(settingsPath)}`);
     expect(readRes.status).toBe(200);
-    const body = (await readRes.json()) as { content: string };
+    const body: { content: string } = await readRes.json();
     expect(body.content).toBe(content);
   });
 

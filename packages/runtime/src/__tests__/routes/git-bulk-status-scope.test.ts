@@ -44,6 +44,7 @@ vi.mock('../../routes/git/helpers.js', async (importOriginal) => {
 
 import { statusRoutes } from '../../routes/git/status.js';
 import { gitStatusCache } from '../../services/git-runtime-service.js';
+import type { HonoEnv } from '../../types/hono-env.js';
 
 const SUMMARY = {
   dirtyFileCount: 0,
@@ -59,9 +60,9 @@ function thread(id: string, extra: Record<string, unknown> = {}) {
   return { id, projectId: 'p1', mode: 'local', branch: 'master', baseBranch: 'master', ...extra };
 }
 
-const app = new Hono();
+const app = new Hono<HonoEnv>();
 app.use('*', async (c, next) => {
-  c.set('userId' as never, 'u1' as never);
+  c.set('userId', 'u1');
   await next();
 });
 app.route('/', statusRoutes);
@@ -69,7 +70,7 @@ app.route('/', statusRoutes);
 async function statusIds(url: string): Promise<string[]> {
   const res = await app.request(url);
   expect(res.status).toBe(200);
-  const body = (await res.json()) as { statuses: Array<{ threadId: string }> };
+  const body: { statuses: Array<{ threadId: string }> } = await res.json();
   return body.statuses.map((s) => s.threadId).sort();
 }
 

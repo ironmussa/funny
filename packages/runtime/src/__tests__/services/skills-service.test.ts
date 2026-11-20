@@ -1,5 +1,13 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
+/** The part of a `Dirent` the skills scan reads. */
+interface DirEntry {
+  name: string;
+  isDirectory(): boolean;
+  isSymbolicLink(): boolean;
+  isFile?(): boolean;
+}
+
 // Mock fs so removeSkill's filesystem calls are observable and never touch disk.
 const { rmSync, unlinkSync, existsSync, readFileSync, readdirSync, writeFileSync } = vi.hoisted(
   () => ({
@@ -7,7 +15,7 @@ const { rmSync, unlinkSync, existsSync, readFileSync, readdirSync, writeFileSync
     unlinkSync: vi.fn(),
     existsSync: vi.fn(() => false),
     readFileSync: vi.fn(() => '{}'),
-    readdirSync: vi.fn(() => []),
+    readdirSync: vi.fn<(path?: string) => DirEntry[]>(() => []),
     writeFileSync: vi.fn(),
   }),
 );
@@ -60,7 +68,7 @@ describe('listProjectCommands', () => {
             isSymbolicLink: () => false,
             isFile: () => true,
           },
-        ] as any;
+        ];
       }
       if (path?.endsWith('/.claude/commands/opsx')) {
         return [
@@ -70,7 +78,7 @@ describe('listProjectCommands', () => {
             isSymbolicLink: () => false,
             isFile: () => true,
           },
-        ] as any;
+        ];
       }
       return [];
     });
@@ -120,10 +128,10 @@ describe('listCodexSkillResources', () => {
     readdirSync.mockImplementation((p?: string) => {
       const s = String(p);
       if (s.endsWith('/.codex/skills')) {
-        return [{ name: '.system', isDirectory: () => true, isSymbolicLink: () => false }] as any;
+        return [{ name: '.system', isDirectory: () => true, isSymbolicLink: () => false }];
       }
       if (s.endsWith('/.codex/skills/.system')) {
-        return [{ name: 'imagegen', isDirectory: () => true, isSymbolicLink: () => false }] as any;
+        return [{ name: 'imagegen', isDirectory: () => true, isSymbolicLink: () => false }];
       }
       return [];
     });
@@ -161,9 +169,7 @@ describe('listCodexSkillResources', () => {
     readdirSync.mockImplementation((p?: string) => {
       const s = String(p);
       if (s.endsWith('/.agents/skills')) {
-        return [
-          { name: 'react-doctor', isDirectory: () => true, isSymbolicLink: () => false },
-        ] as any;
+        return [{ name: 'react-doctor', isDirectory: () => true, isSymbolicLink: () => false }];
       }
       return [];
     });
@@ -194,9 +200,7 @@ describe('listCodexSkillResources', () => {
       const s = String(p);
       // Only the project root has a skill; home root is empty.
       if (s === '/repo/.codex/skills') {
-        return [
-          { name: 'proj-skill', isDirectory: () => true, isSymbolicLink: () => false },
-        ] as any;
+        return [{ name: 'proj-skill', isDirectory: () => true, isSymbolicLink: () => false }];
       }
       return [];
     });
@@ -225,9 +229,7 @@ describe('listCodexSkillResources', () => {
     });
     readdirSync.mockImplementation((p?: string) => {
       if (p === '/repo/.agents/skills') {
-        return [
-          { name: 'repo-skill', isDirectory: () => true, isSymbolicLink: () => false },
-        ] as any;
+        return [{ name: 'repo-skill', isDirectory: () => true, isSymbolicLink: () => false }];
       }
       return [];
     });

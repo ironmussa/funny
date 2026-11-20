@@ -66,6 +66,7 @@ import {
   gitResetSoftTelemetryHandler,
 } from '../../services/handlers/telemetry-handler.js';
 import type { HandlerServiceContext } from '../../services/handlers/types.js';
+import { nonTerminalStatus } from '../helpers/builders-handlers.js';
 
 function makeCtx(overrides: Partial<HandlerServiceContext> = {}): HandlerServiceContext {
   return {
@@ -81,8 +82,8 @@ function makeCtx(overrides: Partial<HandlerServiceContext> = {}): HandlerService
     log: vi.fn(),
     updateThread: vi.fn(async () => undefined),
     insertComment: vi.fn(async () => undefined),
-    getGitStatusSummary: vi.fn() as any,
-    deriveGitSyncState: vi.fn() as any,
+    getGitStatusSummary: vi.fn(),
+    deriveGitSyncState: vi.fn(),
     invalidateGitStatusCache: vi.fn(),
     saveThreadEvent: vi.fn(async () => undefined),
     ...overrides,
@@ -183,7 +184,7 @@ describe('gitWatcherLifecycleHandlers', () => {
         userId: 'u-1',
         worktreePath: null,
         cwd: '/repo',
-        status: 'waiting' as any,
+        status: nonTerminalStatus('waiting'),
         cost: 0,
       },
       makeCtx(),

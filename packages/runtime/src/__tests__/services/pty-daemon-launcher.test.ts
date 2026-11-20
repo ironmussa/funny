@@ -11,10 +11,10 @@ import { join } from 'path';
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const dataDir = vi.hoisted(() => {
-  const { mkdtempSync } = require('fs') as typeof import('fs');
-  const { tmpdir } = require('os') as typeof import('os');
-  const { join } = require('path') as typeof import('path');
+const dataDir = await vi.hoisted(async () => {
+  const { mkdtempSync } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const { join } = await import('node:path');
   return mkdtempSync(join(tmpdir(), 'pty-daemon-launcher-'));
 });
 
@@ -50,7 +50,7 @@ beforeEach(() => {
   writeFileSync(join(dataDir, 'pty-daemon.pid'), String(FAKE_PID));
   writeFileSync(join(dataDir, 'pty.sock'), '');
   alive = true;
-  vi.spyOn(process, 'kill').mockImplementation(((pid: number, signal?: string | number) => {
+  vi.spyOn(process, 'kill').mockImplementation((pid, signal) => {
     if (pid !== FAKE_PID) throw new Error('unexpected pid');
     if (signal === 0 || signal === undefined) {
       if (!alive) throw new Error('ESRCH');
@@ -58,8 +58,10 @@ beforeEach(() => {
     }
     alive = false;
     return true;
-  }) as typeof process.kill);
+  });
   socket = { write: vi.fn(), end: vi.fn() };
+  // SAFETY: the launcher only calls `Bun.connect({ unix, socket })` and uses `write` / `end`
+  // on the socket, which FakeSocket provides; a full Bun Socket cannot be built in a test.
   // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Bun.connect has complex overloads; simplified mock callback type is incompatible
   vi.spyOn(Bun, 'connect').mockImplementation(((opts: { socket: SocketHandlers }) => {
     handlers = opts.socket;

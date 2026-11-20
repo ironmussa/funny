@@ -1,6 +1,7 @@
 import { TERMINAL_SESSION_UNAVAILABLE } from '@funny/shared/socket-events';
 import { describe, expect, test, vi } from 'vitest';
 
+import { GrpcTerminalReplayStore } from '../../services/grpc-terminal-replay-store.js';
 import { RunnerTerminalAdapter } from '../../services/runner-terminal-adapter.js';
 
 describe('RunnerTerminalAdapter', () => {
@@ -8,13 +9,15 @@ describe('RunnerTerminalAdapter', () => {
     const send = vi.fn((_name: 'terminal', _message: Record<string, any>) => true);
     const handle = vi.fn();
     let outputSequence = 0n;
-    const store = {
-      acceptInput: vi.fn(() => true),
-      append: (_terminalId: string, data: Uint8Array) => ({ sequence: ++outputSequence, data }),
-      replay: () => ({ kind: 'ok', outputs: [] }),
-      close: vi.fn(),
-    };
-    const adapter = new RunnerTerminalAdapter({ send }, store as any, handle);
+    const store = new GrpcTerminalReplayStore();
+    vi.spyOn(store, 'acceptInput').mockReturnValue(true);
+    vi.spyOn(store, 'append').mockImplementation((_terminalId, data) => ({
+      sequence: ++outputSequence,
+      data,
+    }));
+    vi.spyOn(store, 'replay').mockReturnValue({ kind: 'replay', outputs: [], latestSequence: 0n });
+    vi.spyOn(store, 'close').mockReturnValue(true);
+    const adapter = new RunnerTerminalAdapter({ send }, store, handle);
     adapter.setMaxFrameBytes(3);
 
     adapter.receive({
@@ -31,7 +34,7 @@ describe('RunnerTerminalAdapter', () => {
       expect.any(Function),
     );
 
-    adapter.publish({ type: 'pty:data', data: { ptyId: 'pty-1', data: 'hello' } } as any);
+    adapter.publish({ type: 'pty:data', threadId: '', data: { ptyId: 'pty-1', data: 'hello' } });
     const outputFrames = send.mock.calls.filter(([, message]) => message.output);
     expect(outputFrames).toHaveLength(2);
     expect(outputFrames.map(([, message]) => message.output.sequence)).toEqual(['1', '2']);
@@ -40,13 +43,16 @@ describe('RunnerTerminalAdapter', () => {
   test('emits a replay gap before restore when history was pruned', () => {
     const send = vi.fn((_name: 'terminal', _message: Record<string, any>) => true);
     const handle = vi.fn();
-    const store = {
-      acceptInput: () => true,
-      append: vi.fn(),
-      replay: () => ({ kind: 'gap', earliestAvailableSequence: 7n }),
-      close: vi.fn(),
-    };
-    const adapter = new RunnerTerminalAdapter({ send }, store as any, handle);
+    const store = new GrpcTerminalReplayStore();
+    vi.spyOn(store, 'acceptInput').mockReturnValue(true);
+    vi.spyOn(store, 'append');
+    vi.spyOn(store, 'replay').mockReturnValue({
+      kind: 'gap',
+      earliestAvailableSequence: 7n,
+      latestSequence: 7n,
+    });
+    vi.spyOn(store, 'close').mockReturnValue(true);
+    const adapter = new RunnerTerminalAdapter({ send }, store, handle);
     adapter.receive({ terminalId: 'pty-1', open: { userId: 'user-1' } });
     adapter.receive({ terminalId: 'pty-1', resume: { lastSeenOutputSequence: '2' } });
 
@@ -59,16 +65,16 @@ describe('RunnerTerminalAdapter', () => {
   test('replay-only resume replays lost output without a screen snapshot', () => {
     const send = vi.fn((_name: 'terminal', _message: Record<string, any>) => true);
     const handle = vi.fn();
-    const store = {
-      acceptInput: () => true,
-      append: vi.fn(),
-      replay: () => ({
-        kind: 'replay',
-        outputs: [{ sequence: 3n, data: Uint8Array.from([111, 107]) }],
-      }),
-      close: vi.fn(),
-    };
-    const adapter = new RunnerTerminalAdapter({ send }, store as any, handle);
+    const store = new GrpcTerminalReplayStore();
+    vi.spyOn(store, 'acceptInput').mockReturnValue(true);
+    vi.spyOn(store, 'append');
+    vi.spyOn(store, 'replay').mockReturnValue({
+      kind: 'replay',
+      outputs: [{ sequence: 3n, data: Uint8Array.from([111, 107]) }],
+      latestSequence: 3n,
+    });
+    vi.spyOn(store, 'close').mockReturnValue(true);
+    const adapter = new RunnerTerminalAdapter({ send }, store, handle);
     adapter.receive({ terminalId: 'pty-1', open: { userId: 'user-1' } });
     handle.mockClear();
 

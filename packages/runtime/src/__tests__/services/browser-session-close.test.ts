@@ -10,10 +10,10 @@ import { browserSessionManager } from '../../services/browser-session-manager.js
 
 describe('BrowserSessionManager fire-and-forget close', () => {
   test('a failing close is logged instead of silently swallowed', async () => {
-    const manager = browserSessionManager as any;
+    const manager = browserSessionManager;
     const close = vi.spyOn(manager, 'close').mockRejectedValueOnce(new Error('kill EPERM'));
 
-    manager.closeAndLog('session-1', 'heartbeat');
+    manager['closeAndLog']('session-1', 'heartbeat');
     await vi.waitFor(() => expect(mocks.warn).toHaveBeenCalled());
 
     expect(close).toHaveBeenCalledWith('session-1', 'heartbeat');

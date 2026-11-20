@@ -39,14 +39,19 @@ const until = async (check: () => boolean, ms = 2_000) => {
 
 /** A spare the way the server opens it; `frames` records what the relay sends. */
 function openSpare(relay: ReverseLinkRelay, secret = SECRET) {
-  const ws = new WebSocket(`ws://127.0.0.1:${relay.ingressPort}${REVERSE_LINK_PATH}`, {
+  const options = {
     headers: { [REVERSE_LINK_SECRET_HEADER]: secret },
-  } as any);
+  } satisfies Bun.WebSocketOptions;
+  // SAFETY: Bun's WebSocket takes `{ headers }` (checked above against Bun.WebSocketOptions);
+  // the DOM constructor type this tsconfig resolves lists only the protocols overload.
+  const ws = new WebSocket(
+    `ws://127.0.0.1:${relay.ingressPort}${REVERSE_LINK_PATH}`,
+    options as never,
+  );
   ws.binaryType = 'arraybuffer';
   const frames: Array<string | Uint8Array> = [];
   let closed = false;
-  ws.onmessage = (e) =>
-    frames.push(typeof e.data === 'string' ? e.data : new Uint8Array(e.data as ArrayBuffer));
+  ws.onmessage = (e) => frames.push(typeof e.data === 'string' ? e.data : new Uint8Array(e.data));
   ws.onclose = () => (closed = true);
   cleanups.push(() => ws.close());
   return { ws, frames, isClosed: () => closed };

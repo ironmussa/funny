@@ -13,14 +13,14 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 // AND vi.mock calls above top-level statements, so a bare assignment to
 // process.env would run AFTER the middleware's module-scope reads. The
 // vi.hoisted callback runs before import resolution.
-vi.hoisted(() => {
+await vi.hoisted(async () => {
   process.env.TEAM_SERVER_URL = 'http://server.test';
   process.env.WS_TUNNEL_ONLY = 'false';
   // Polyfill Bun.CryptoHasher — the middleware uses it for the cookie hash
   // key, but vitest runs under Node so the global doesn't exist.
-  const cryptoMod = require('crypto') as typeof import('crypto');
-  if (typeof (globalThis as any).Bun === 'undefined') {
-    (globalThis as any).Bun = {
+  const cryptoMod = await import('crypto');
+  if (!('Bun' in globalThis)) {
+    Reflect.set(globalThis, 'Bun', {
       CryptoHasher: class {
         private hasher: ReturnType<typeof cryptoMod.createHash>;
         constructor(algo: string) {
@@ -34,7 +34,7 @@ vi.hoisted(() => {
           return this.hasher.digest(encoding);
         }
       },
-    };
+    });
   }
 });
 

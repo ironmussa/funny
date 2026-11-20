@@ -46,7 +46,7 @@ function createAdminApp(user: { id: string; role?: string }) {
   const app = new Hono<HonoEnv>();
   app.use('*', async (c, next) => {
     c.set('userId', user.id);
-    c.set('userRole', user.role as any);
+    if (user.role !== undefined) c.set('userRole', user.role);
     await next();
   });
   app.use('/api/admin/*', requireAdmin);

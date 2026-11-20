@@ -56,15 +56,15 @@ describe('Worktree Routes', () => {
     mockInvalidateSearch.mockReset();
     mockRequireProject.mockReset();
 
-    mockListWorktrees.mockReturnValue(ok([{ path: '/tmp/wt1', branch: 'feature/x' }]) as any);
-    mockCreateWorktree.mockReturnValue(ok('/tmp/wt-new') as any);
-    mockRemoveWorktree.mockReturnValue(okAsync(undefined) as any);
+    mockListWorktrees.mockReturnValue(ok([{ path: '/tmp/wt1', branch: 'feature/x' }]));
+    mockCreateWorktree.mockReturnValue(ok('/tmp/wt-new'));
+    mockRemoveWorktree.mockReturnValue(okAsync(undefined));
     mockGetStatusSummary.mockReturnValue(
-      okAsync({ unpushedCommitCount: 0, dirtyFileCount: 0, hasRemoteBranch: true }) as any,
+      okAsync({ unpushedCommitCount: 0, dirtyFileCount: 0, hasRemoteBranch: true }),
     );
     mockCheckWorktreePathInProject.mockReturnValue(null); // null = passes containment
     mockInvalidateSearch.mockReturnValue(okAsync(false));
-    mockRequireProject.mockReturnValue(ok({ id: 'p1', path: '/tmp/project', name: 'Test' }) as any);
+    mockRequireProject.mockReturnValue(ok({ id: 'p1', path: '/tmp/project', name: 'Test' }));
 
     app = new Hono();
     app.route('/worktrees', worktreeRoutes);
@@ -83,9 +83,7 @@ describe('Worktree Routes', () => {
   });
 
   test('GET /worktrees returns 404 when project not found', async () => {
-    mockRequireProject.mockReturnValue(
-      err({ type: 'NOT_FOUND', message: 'Project not found' }) as any,
-    );
+    mockRequireProject.mockReturnValue(err({ type: 'NOT_FOUND', message: 'Project not found' }));
     const res = await app.request('/worktrees?projectId=nonexistent');
     expect(res.status).toBe(404);
   });
@@ -107,9 +105,7 @@ describe('Worktree Routes', () => {
   });
 
   test('POST /worktrees returns 404 when project not found', async () => {
-    mockRequireProject.mockReturnValue(
-      err({ type: 'NOT_FOUND', message: 'Project not found' }) as any,
-    );
+    mockRequireProject.mockReturnValue(err({ type: 'NOT_FOUND', message: 'Project not found' }));
     const res = await app.request('/worktrees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -153,7 +149,7 @@ describe('Worktree Routes', () => {
       err({
         type: 'BAD_REQUEST',
         message: "worktreePath is not one of the project's worktree directories",
-      }) as any,
+      }),
     );
     const res = await app.request('/worktrees', {
       method: 'DELETE',

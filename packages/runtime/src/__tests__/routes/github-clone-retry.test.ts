@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import type { WSEvent } from '@funny/shared';
 import { internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err, ok, okAsync } from 'neverthrow';
@@ -19,9 +20,9 @@ const mocks = vi.hoisted(() => ({
   createProject: vi.fn(),
   projectNameExists: vi.fn(async () => false),
   rm: vi.fn(async () => undefined),
-  warn: vi.fn(),
+  warn: vi.fn<(message: string, meta?: { attempt?: number }) => void>(),
   error: vi.fn(),
-  emitToUser: vi.fn(),
+  emitToUser: vi.fn<(userId: string, event: WSEvent) => void>(),
   cloneRepository: vi.fn(),
 }));
 
@@ -63,6 +64,7 @@ vi.mock('fs/promises', async (importOriginal) => ({
 
 import { repoRoutes } from '../../routes/github/repos.js';
 import type { HonoEnv } from '../../types/hono-env.js';
+import { eventOfType } from '../helpers/builders-routes.js';
 
 const USER = 'user-1';
 const CLONE_URL = 'https://github.com/acme/widget.git';
@@ -91,7 +93,7 @@ function attemptWarnings() {
 
 function lastProgressPhase(): string | undefined {
   const calls = mocks.emitToUser.mock.calls;
-  return (calls.at(-1)?.[1] as { data: { phase: string } } | undefined)?.data.phase;
+  return eventOfType(calls.at(-1)?.[1], 'clone:progress')?.data.phase;
 }
 
 describe('POST /clone createProject retry', () => {
@@ -146,7 +148,7 @@ describe('POST /clone createProject retry', () => {
     expect(await res.json()).toEqual(project);
     expect(mocks.rm).not.toHaveBeenCalled();
     expect(attemptWarnings()).toHaveLength(2);
-    expect(attemptWarnings().map((c) => (c[1] as { attempt: number }).attempt)).toEqual([1, 2]);
+    expect(attemptWarnings().map((c) => c[1]?.attempt)).toEqual([1, 2]);
   });
 
   test('gives up after 3 thrown failures, removes the clone dir and returns an error', async () => {
@@ -158,7 +160,8 @@ describe('POST /clone createProject retry', () => {
 
     // processError → PROCESS_ERROR → 400 in result-response.ts
     expect(res.status).toBe(400);
-    expect(((await res.json()) as { error: string }).error).toBe('Clone failed: data channel down');
+    const body: { error: string } = await res.json();
+    expect(body.error).toBe('Clone failed: data channel down');
     expect(mocks.createProject).toHaveBeenCalledTimes(3);
     expect(mocks.rm).toHaveBeenCalledTimes(1);
     expect(mocks.rm).toHaveBeenCalledWith(clonePath, {
@@ -166,7 +169,7 @@ describe('POST /clone createProject retry', () => {
       force: true,
     });
     expect(attemptWarnings()).toHaveLength(3);
-    expect(attemptWarnings().map((c) => (c[1] as { attempt: number }).attempt)).toEqual([1, 2, 3]);
+    expect(attemptWarnings().map((c) => c[1]?.attempt)).toEqual([1, 2, 3]);
     expect(mocks.error).toHaveBeenCalledWith(
       'createProject failed after successful clone',
       expect.objectContaining({ clonePath, attempts: 3 }),
@@ -182,7 +185,8 @@ describe('POST /clone createProject retry', () => {
     const res = await pending;
 
     expect(res.status).toBe(500);
-    expect(((await res.json()) as { error: string }).error).toContain('Project already registered');
+    const body: { error: string } = await res.json();
+    expect(body.error).toContain('Project already registered');
     expect(mocks.createProject).toHaveBeenCalledTimes(1);
     expect(attemptWarnings()).toHaveLength(0);
     expect(mocks.rm).toHaveBeenCalledWith(clonePath, {

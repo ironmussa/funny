@@ -7,7 +7,8 @@ vi.mock('@funny/core/git', () => ({
 }));
 
 import { getCurrentBranch } from '@funny/core/git';
-import { ok } from 'neverthrow';
+import type { GitSyncState } from '@funny/shared';
+import { ok, okAsync } from 'neverthrow';
 
 import type { HandlerServiceContext } from '../../services/handlers/types.js';
 import { computeBranchKey, emitGitStatusForThread } from '../../utils/git-status-helpers.js';
@@ -17,6 +18,7 @@ function makeCtx(overrides: Partial<HandlerServiceContext> = {}): HandlerService
     getThread: vi.fn(async () => ({
       id: 't-1',
       projectId: 'p-1',
+      userId: 'u-1',
       mode: 'local',
       branch: 'main',
       worktreePath: null,
@@ -24,17 +26,18 @@ function makeCtx(overrides: Partial<HandlerServiceContext> = {}): HandlerService
       mergedAt: null,
     })),
     getProject: vi.fn(async () => ({ id: 'p-1', path: '/repo' })),
-    getGitStatusSummary: vi.fn(async () =>
-      ok({
-        branch: 'main',
-        ahead: 0,
-        behind: 0,
-        staged: [],
-        unstaged: [],
-        untracked: [],
+    getGitStatusSummary: vi.fn(() =>
+      okAsync({
+        dirtyFileCount: 0,
+        unpushedCommitCount: 0,
+        unpulledCommitCount: 0,
+        hasRemoteBranch: true,
+        isMergedIntoBase: false,
+        linesAdded: 0,
+        linesDeleted: 0,
       }),
     ),
-    deriveGitSyncState: vi.fn(() => 'clean'),
+    deriveGitSyncState: vi.fn((): GitSyncState => 'clean'),
     invalidateGitStatusCache: vi.fn(),
     emitToUser: vi.fn(),
     updateThread: vi.fn(async () => undefined),
@@ -48,7 +51,7 @@ function makeCtx(overrides: Partial<HandlerServiceContext> = {}): HandlerService
     insertComment: vi.fn(),
     saveThreadEvent: vi.fn(),
     ...overrides,
-  } as HandlerServiceContext;
+  };
 }
 
 describe('computeBranchKey', () => {

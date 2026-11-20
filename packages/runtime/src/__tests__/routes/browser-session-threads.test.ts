@@ -7,14 +7,15 @@ vi.mock('../../services/browser-session-manager.js', () => ({
 }));
 
 const { browserSessionRoutes } = await import('../../routes/browser-session.js');
+import type { HonoEnv } from '../../types/hono-env.js';
 
 function appAs(userId: string) {
-  const app = new Hono<{ Variables: { userId: string } }>();
+  const app = new Hono<HonoEnv>();
   app.use('*', async (c, next) => {
     c.set('userId', userId);
     await next();
   });
-  app.route('/api/browser-session', browserSessionRoutes as never);
+  app.route('/api/browser-session', browserSessionRoutes);
   return app;
 }
 

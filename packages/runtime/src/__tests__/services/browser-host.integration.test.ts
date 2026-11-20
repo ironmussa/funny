@@ -28,6 +28,8 @@ function unwrap<T, E>(result: Result<T, E>): T {
 
 const binary = await resolveChromiumBinary().catch(() => null);
 const describeWithChromium = binary && existsSync(binary) ? describe : describe.skip;
+/** The suites below only run when `binary` resolved, so the fallback is never launched. */
+const chromiumBinary = binary ?? '';
 
 describeWithChromium('BrowserHost (real Chromium)', () => {
   let profileDir: string;
@@ -36,7 +38,7 @@ describeWithChromium('BrowserHost (real Chromium)', () => {
   beforeAll(async () => {
     profileDir = mkdtempSync(join(tmpdir(), 'funny-host-test-'));
     const result = await BrowserHost.launch({
-      binary: binary as string,
+      binary: chromiumBinary,
       profileDir: join(profileDir, 'default'),
       port: 9390 + Math.floor(Math.random() * 50),
       windowWidth: 800,
@@ -87,7 +89,7 @@ describeWithChromium('BrowserHost after an abrupt stop (real Chromium)', () => {
     const launch = async () =>
       unwrap(
         await BrowserHost.launch({
-          binary: binary as string,
+          binary: chromiumBinary,
           profileDir: join(profileDir, 'default'),
           port: 9440 + Math.floor(Math.random() * 50),
           windowWidth: 800,
@@ -102,10 +104,9 @@ describeWithChromium('BrowserHost after an abrupt stop (real Chromium)', () => {
       // Let Chromium write its session file, then stop it the way a runner
       // restart does: no clean shutdown.
       await new Promise((resolve) => setTimeout(resolve, 2_500));
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing private `proc` to simulate unclean kill in test
-      (first as unknown as { proc: { kill(signal: string): void } }).proc.kill('SIGKILL');
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing private `exited` to await process exit in test
-      await (first as unknown as { exited: Promise<void> }).exited;
+      // `proc` and `exited` are private: kill the process the way a crash would.
+      first['proc'].kill('SIGKILL');
+      await first['exited'];
 
       const second = await launch();
       // Give a session restore time to open its tabs.

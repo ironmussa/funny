@@ -178,7 +178,7 @@ nodes:
 
     await runPipeline(pipeline, ctxOf(provider));
 
-    const calls = (provider.notify as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = vi.mocked(provider.notify).mock.calls;
     expect(calls.map((c) => c[0].message)).toEqual(['a', 'b', 'c']);
   });
 
@@ -543,9 +543,9 @@ nodes:
       expect(result.outcome).toBe('failed');
       expect(result.error).toMatch(/B exploded/);
       // judge must NOT have run (its level never started).
-      const judgeCalled = (spawnAgent as ReturnType<typeof vi.fn>).mock.calls.some((c) =>
-        String(c[0].prompt).includes('|'),
-      );
+      const judgeCalled = vi
+        .mocked(spawnAgent)
+        .mock.calls.some((c) => String(c[0].prompt).includes('|'));
       expect(judgeCalled).toBe(false);
     });
   });

@@ -89,10 +89,10 @@ describe('RunnerEnrollmentClient', () => {
   });
 
   test('a sandbox runner registers with its provisioning token, without device-link', async () => {
-    const sentHeaders: Array<Record<string, string>> = [];
+    const sentHeaders: Array<HeadersInit | undefined> = [];
     const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
       if (String(input).endsWith('/register')) {
-        sentHeaders.push(init?.headers as Record<string, string>);
+        sentHeaders.push(init?.headers);
         return Response.json({ runnerId: 'runner-box', token: 'token-box', ownerUserId: 'alice' });
       }
       return Response.json({ ok: true });
@@ -141,7 +141,7 @@ describe('RunnerEnrollmentClient', () => {
       if (String(input).endsWith('/register')) return new Response('unauthorized', { status: 401 });
       return Response.json({ ok: true });
     });
-    deps.loadCredentials = vi.fn(() => persisted as any);
+    deps.loadCredentials = vi.fn(() => persisted);
     deps.saveCredentials = (value) => {
       persisted = value;
       deps.saved.push(value);

@@ -12,12 +12,12 @@
 import { Hono } from 'hono';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-vi.hoisted(() => {
+await vi.hoisted(async () => {
   process.env.TEAM_SERVER_URL = 'http://server.test';
   process.env.WS_TUNNEL_ONLY = 'false';
-  const cryptoMod = require('crypto') as typeof import('crypto');
-  if (typeof (globalThis as any).Bun === 'undefined') {
-    (globalThis as any).Bun = {
+  const cryptoMod = await import('crypto');
+  if (!('Bun' in globalThis)) {
+    Reflect.set(globalThis, 'Bun', {
       CryptoHasher: class {
         private hasher: ReturnType<typeof cryptoMod.createHash>;
         constructor(algo: string) {
@@ -31,7 +31,7 @@ vi.hoisted(() => {
           return this.hasher.digest(encoding);
         }
       },
-    };
+    });
   }
 });
 

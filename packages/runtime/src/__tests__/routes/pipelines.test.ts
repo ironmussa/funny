@@ -136,7 +136,7 @@ describe('pipeline approval routes', () => {
 
       const res = await app.request('/pipelines/approvals/pending', { method: 'GET' });
       expect(res.status).toBe(200);
-      const body = (await res.json()) as { pending: Array<{ approvalId: string }> };
+      const body: { pending: Array<{ approvalId: string }> } = await res.json();
       const ids = body.pending.map((p) => p.approvalId);
       expect(ids).toContain(myId);
       expect(ids).not.toContain(otherId);

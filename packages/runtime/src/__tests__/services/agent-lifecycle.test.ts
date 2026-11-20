@@ -1,4 +1,5 @@
-import type { ResolvedAgentExecutionProfileResponse } from '@funny/shared';
+import type { IAgentProcess, ProcessOptionsSnapshot, StartAgentOptions } from '@funny/core/agents';
+import type { Project, ResolvedAgentExecutionProfileResponse } from '@funny/shared';
 import { err, ok } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
@@ -6,7 +7,7 @@ const noResolvedProfile: ResolvedAgentExecutionProfileResponse = { profile: null
 
 const mocks = vi.hoisted(() => ({
   orchestrator: {
-    startAgent: vi.fn(async (_opts?: Record<string, unknown>) => undefined),
+    startAgent: vi.fn(async (_opts: StartAgentOptions) => undefined),
     stopAgent: vi.fn(async () => undefined),
     stopAll: vi.fn(async () => undefined),
     isRunning: vi.fn(() => false),
@@ -14,10 +15,10 @@ const mocks = vi.hoisted(() => ({
     adoptProcess: vi.fn(),
     extractActiveAgents: vi.fn(() => new Map()),
     extractActiveAgentSnapshot: vi.fn(() => ({
-      agents: new Map(),
-      resultReceived: new Set(),
-      lastActivityAt: new Map(),
-      lastOptions: new Map(),
+      agents: new Map<string, IAgentProcess>(),
+      resultReceived: new Set<string>(),
+      lastActivityAt: new Map<string, number>(),
+      lastOptions: new Map<string, ProcessOptionsSnapshot>(),
     })),
   },
   threadManager: {
@@ -166,25 +167,60 @@ vi.mock('../../services/browser-automation/open-url-bridge.js', () => ({
   browserOpenEnv: () => ({}),
 }));
 
+import { AgentOrchestrator } from '@funny/core/agents';
+
 import { log } from '../../lib/logger.js';
+import { AgentEventRouter } from '../../services/agent-event-router.js';
 import { AgentLifecycleManager } from '../../services/agent-lifecycle.js';
+import { AgentMessageHandler } from '../../services/agent-message-handler.js';
+import { AgentStateTracker } from '../../services/agent-state.js';
+import type { RuntimeThreadRecord } from '../../services/server-interfaces.js';
 import { scratchPathFor } from '../../services/thread-context.js';
 import { cleanupThreadActor } from '../../services/thread-status-machine.js';
+import { expectDefined, FakeAgentProcess, stubMethods } from '../helpers/builders-agents.js';
+import {
+  clearGlobal,
+  createThreadManagerFake,
+  createWsBrokerFake,
+  readGlobal,
+  writeGlobal,
+} from '../helpers/builders.js';
 
+/** Real collaborators whose methods the tests observe are replaced by `mocks`. */
 function createManager(): AgentLifecycleManager {
-  return new AgentLifecycleManager(
-    mocks.orchestrator as never,
-    mocks.threadManager as never,
-    mocks.state as never,
-    mocks.eventRouter as never,
+  const orchestrator = stubMethods(
+    new AgentOrchestrator({
+      create: () => {
+        throw new Error('the orchestrator is stubbed; no process is spawned');
+      },
+    }),
+    mocks.orchestrator,
   );
+  const threadManager = createThreadManagerFake(mocks.threadManager);
+  const state = stubMethods(new AgentStateTracker(), mocks.state);
+  const wsBroker = createWsBrokerFake();
+  const eventRouter = stubMethods(
+    new AgentEventRouter(
+      orchestrator,
+      state,
+      new AgentMessageHandler(state, threadManager, wsBroker),
+      threadManager,
+      wsBroker,
+    ),
+    mocks.eventRouter,
+  );
+  return new AgentLifecycleManager(orchestrator, threadManager, state, eventRouter);
+}
+
+function lastStartAgentCall(): StartAgentOptions {
+  return expectDefined(mocks.orchestrator.startAgent.mock.calls.at(-1)?.[0]);
 }
 
 function seedProjectThread(
-  overrides: Record<string, unknown> = {},
-  projectOverrides: Record<string, unknown> = {},
+  overrides: Partial<RuntimeThreadRecord> = {},
+  projectOverrides: Partial<Project> = {},
 ) {
-  const threadId = (overrides.id as string) ?? 'thread-1';
+  const threadId = overrides.id ?? 'thread-1';
   const thread = {
     id: threadId,
     userId: 'user-1',
@@ -202,19 +238,19 @@ function seedProjectThread(
     systemPrompt: null,
     ...projectOverrides,
   });
-  mocks.resolveThreadCwd.mockImplementation((_thread, project) =>
-    ok((project as { path: string } | null)?.path ?? '/tmp/repo'),
+  mocks.resolveThreadCwd.mockImplementation((_thread, project: { path: string } | null) =>
+    ok(project?.path ?? '/tmp/repo'),
   );
   return thread;
 }
 
 async function startWithStatus(
   status: string,
-  overrides: Record<string, unknown> = {},
+  overrides: Partial<RuntimeThreadRecord> = {},
   provider: 'claude' | 'deepagent' | 'gemini' | 'codex' = 'claude',
-  projectOverrides: Record<string, unknown> = {},
+  projectOverrides: Partial<Project> = {},
 ) {
-  const threadId = (overrides.id as string) ?? `thread-${status}-${provider}`;
+  const threadId = overrides.id ?? `thread-${status}-${provider}`;
   cleanupThreadActor(threadId);
   seedProjectThread({ id: threadId, status, ...overrides }, projectOverrides);
   const manager = createManager();
@@ -229,16 +265,15 @@ async function startWithStatus(
     undefined,
     provider,
   );
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-  return mocks.orchestrator.startAgent.mock.calls.at(-1)?.[0] as unknown as Record<string, unknown>;
+  return lastStartAgentCall();
 }
 
 describe('AgentLifecycleManager', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     cleanupThreadActor('thread-1');
-    delete (globalThis as { __funnyActiveAgentSnapshot?: unknown }).__funnyActiveAgentSnapshot;
-    delete (globalThis as { __funnyActiveAgents?: unknown }).__funnyActiveAgents;
+    clearGlobal('__funnyActiveAgentSnapshot');
+    clearGlobal('__funnyActiveAgents');
     mocks.orchestrator.startAgent.mockResolvedValue(undefined);
     mocks.remoteGetAgentTemplate.mockResolvedValue(undefined);
     mocks.getProviderKey.mockResolvedValue(undefined);
@@ -250,14 +285,14 @@ describe('AgentLifecycleManager', () => {
       spanId: 'span-1',
       end: mocks.spanEnd,
     });
-    mocks.resolveThreadCwd.mockImplementation((_thread, project) =>
-      ok((project as { path: string } | null)?.path ?? '/tmp/repo'),
+    mocks.resolveThreadCwd.mockImplementation((_thread, project: { path: string } | null) =>
+      ok(project?.path ?? '/tmp/repo'),
     );
   });
 
   afterEach(() => {
-    delete (globalThis as { __funnyActiveAgentSnapshot?: unknown }).__funnyActiveAgentSnapshot;
-    delete (globalThis as { __funnyActiveAgents?: unknown }).__funnyActiveAgents;
+    clearGlobal('__funnyActiveAgentSnapshot');
+    clearGlobal('__funnyActiveAgents');
   });
 
   describe('endRunSpan', () => {
@@ -266,8 +301,11 @@ describe('AgentLifecycleManager', () => {
       manager.getRunSpans().set('thread-1', {
         traceId: 'trace-1',
         spanId: 'span-1',
+        name: 'agent.run',
+        attributes: {},
+        durationMs: 0,
         end: mocks.spanEnd,
-      } as never);
+      });
 
       manager.endRunSpan('thread-1', 'error', 'boom');
 
@@ -438,7 +476,7 @@ describe('AgentLifecycleManager', () => {
 
       const call = await startWithStatus('pending', { id: 'thread-profile-other' }, 'gemini');
 
-      expect((call.env as Record<string, string> | undefined)?.CLAUDE_CONFIG_DIR).toBeUndefined();
+      expect(call.env?.CLAUDE_CONFIG_DIR).toBeUndefined();
       expect(mocks.threadManager.updateThread).toHaveBeenCalledWith('thread-profile-other', {
         agentProfileId: null,
         agentProfileName: null,
@@ -692,17 +730,13 @@ describe('AgentLifecycleManager', () => {
 
       await manager.startAgent('thread-1', `look at this\n${secret}`, '/tmp/repo');
 
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-      const calls = vi.mocked(log.info).mock.calls as unknown as [
-        string,
-        Record<string, unknown>,
-      ][];
+      const calls: unknown[][] = vi.mocked(log.info).mock.calls;
       const call = calls.find(([message]) => message === 'startAgent called');
       expect(call).toBeDefined();
-      const meta = call![1];
+      const meta = call?.[1];
       expect(JSON.stringify(meta)).not.toContain('SECRET-FILE-CONTENTS');
       expect(meta).not.toHaveProperty('promptFull');
-      expect(meta.promptLength).toBe(`look at this\n${secret}`.length);
+      expect(meta).toHaveProperty('promptLength', `look at this\n${secret}`.length);
     });
   });
 
@@ -883,7 +917,7 @@ describe('AgentLifecycleManager', () => {
           openai: 'openai-key',
           minimax: 'minimax-key',
         };
-        return keys[keyId as string];
+        return keyId === undefined ? undefined : keys[keyId];
       });
 
       const call = await startWithStatus('pending', { id: 'thread-env-deepagent' }, 'deepagent');
@@ -946,11 +980,7 @@ describe('AgentLifecycleManager', () => {
 
       await manager.startAgent('thread-no-user', 'hello', '/tmp/repo');
 
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-      const call = mocks.orchestrator.startAgent.mock.calls.at(-1)?.[0] as unknown as Record<
-        string,
-        unknown
-      >;
+      const call = lastStartAgentCall();
       expect(call.env).toBeUndefined();
       expect(call.permissionRuleLookup).toBeUndefined();
       expect(mocks.getProviderKey).not.toHaveBeenCalled();
@@ -960,10 +990,7 @@ describe('AgentLifecycleManager', () => {
       mocks.findPermissionRule.mockResolvedValue({ decision: 'allow' });
 
       const call = await startWithStatus('pending', { id: 'thread-perm-allow' });
-      const lookup = call.permissionRuleLookup as (query: {
-        toolName: string;
-        toolInput?: string;
-      }) => Promise<{ decision: string } | null>;
+      const lookup = expectDefined(call.permissionRuleLookup);
 
       await expect(lookup({ toolName: 'Bash', toolInput: 'ls -la' })).resolves.toEqual({
         decision: 'allow',
@@ -985,9 +1012,7 @@ describe('AgentLifecycleManager', () => {
         mode: 'worktree',
         worktreePath: '/tmp/repo/.worktrees/feature',
       });
-      const lookup = call.permissionRuleLookup as (query: {
-        toolName: string;
-      }) => Promise<{ decision: string } | null>;
+      const lookup = expectDefined(call.permissionRuleLookup);
 
       await lookup({ toolName: 'Write' });
 
@@ -1003,7 +1028,7 @@ describe('AgentLifecycleManager', () => {
       mocks.findPermissionRule.mockRejectedValue(new Error('tunnel down'));
 
       const call = await startWithStatus('pending', { id: 'thread-perm-fail' });
-      const lookup = call.permissionRuleLookup as (query: { toolName: string }) => Promise<null>;
+      const lookup = expectDefined(call.permissionRuleLookup);
 
       await expect(lookup({ toolName: 'Read' })).resolves.toBeNull();
       expect(log.warn).toHaveBeenCalledWith(
@@ -1021,11 +1046,7 @@ describe('AgentLifecycleManager', () => {
       mocks.runSensitivePathBypass.mockResolvedValue({ output: 'written' });
 
       const call = await startWithStatus('pending', { id: 'thread-bypass' });
-      const bypass = call.bypassExecutor as (query: {
-        toolName: string;
-        toolInput: unknown;
-        cwd?: string;
-      }) => Promise<{ output: string }>;
+      const bypass = expectDefined(call.bypassExecutor);
 
       await expect(
         bypass({ toolName: 'Write', toolInput: { file_path: '/home/.claude/settings.json' } }),
@@ -1078,12 +1099,12 @@ describe('AgentLifecycleManager', () => {
 
   describe('extractActiveAgents', () => {
     test('delegates to orchestrator', () => {
-      const active = new Map([['t-1', { threadId: 't-1' }]]);
+      const active = new Map([['t-1', new FakeAgentProcess('t-1')]]);
       mocks.orchestrator.extractActiveAgentSnapshot.mockReturnValue({
         agents: active,
-        resultReceived: new Set(),
-        lastActivityAt: new Map(),
-        lastOptions: new Map(),
+        resultReceived: new Set<string>(),
+        lastActivityAt: new Map<string, number>(),
+        lastOptions: new Map<string, ProcessOptionsSnapshot>(),
       });
 
       const manager = createManager();
@@ -1092,10 +1113,10 @@ describe('AgentLifecycleManager', () => {
 
     test('extractActiveAgentSnapshot delegates to orchestrator', () => {
       const snapshot = {
-        agents: new Map([['t-1', { threadId: 't-1' }]]),
+        agents: new Map([['t-1', new FakeAgentProcess('t-1')]]),
         resultReceived: new Set(['t-1']),
         lastActivityAt: new Map([['t-1', 123]]),
-        lastOptions: new Map(),
+        lastOptions: new Map<string, ProcessOptionsSnapshot>(),
       };
       mocks.orchestrator.extractActiveAgentSnapshot.mockReturnValue(snapshot);
 
@@ -1151,12 +1172,12 @@ describe('AgentLifecycleManager', () => {
   describe('adoptSurvivingProcesses', () => {
     test('adopts non-exited processes from snapshot on construction', () => {
       const proc = { exited: false };
-      (globalThis as { __funnyActiveAgentSnapshot?: unknown }).__funnyActiveAgentSnapshot = {
+      writeGlobal('__funnyActiveAgentSnapshot', {
         agents: new Map([['t-survive', proc]]),
         resultReceived: new Set(['t-survive']),
         lastActivityAt: new Map([['t-survive', 123]]),
         lastOptions: new Map([['t-survive', { provider: 'codex' }]]),
-      };
+      });
 
       createManager();
 
@@ -1165,17 +1186,13 @@ describe('AgentLifecycleManager', () => {
         lastActivityAt: 123,
         lastOptions: { provider: 'codex' },
       });
-      expect(
-        (globalThis as { __funnyActiveAgentSnapshot?: unknown }).__funnyActiveAgentSnapshot,
-      ).toBeUndefined();
-      expect((globalThis as { __funnyActiveAgents?: unknown }).__funnyActiveAgents).toBeUndefined();
+      expect(readGlobal('__funnyActiveAgentSnapshot')).toBeUndefined();
+      expect(readGlobal('__funnyActiveAgents')).toBeUndefined();
     });
 
     test('adopts legacy non-exited processes from globalThis on construction', () => {
       const proc = { exited: false };
-      (globalThis as { __funnyActiveAgents?: Map<string, unknown> }).__funnyActiveAgents = new Map([
-        ['t-survive', proc],
-      ]);
+      writeGlobal('__funnyActiveAgents', new Map([['t-survive', proc]]));
 
       createManager();
 
@@ -1191,9 +1208,7 @@ describe('AgentLifecycleManager', () => {
         id: 't-dead',
         status: 'running',
       });
-      (globalThis as { __funnyActiveAgents?: Map<string, unknown> }).__funnyActiveAgents = new Map([
-        ['t-dead', { exited: true }],
-      ]);
+      writeGlobal('__funnyActiveAgents', new Map([['t-dead', { exited: true }]]));
 
       createManager();
       await new Promise((r) => setTimeout(r, 0));

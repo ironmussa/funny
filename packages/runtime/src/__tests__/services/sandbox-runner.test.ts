@@ -2,12 +2,23 @@
  * sandbox-runner.ts — an agent profile's machine paths do not apply on a
  * sandbox runner (a laptop CLAUDE_CONFIG_DIR made every resume fail there).
  */
+import type {
+  AgentExecutionProfileResponse,
+  ResolvedAgentExecutionProfileResponse,
+} from '@funny/shared';
 import { describe, expect, test } from 'vitest';
 
 import { isSandboxRunner, profileForThisRunner } from '../../services/sandbox-runner.js';
 
-const profile = { id: 'p1', name: 'argenis', provider: 'claude' } as any;
-const resolved = {
+const profile: AgentExecutionProfileResponse = {
+  id: 'p1',
+  name: 'argenis',
+  provider: 'claude',
+  config: { claude: { configDir: '/home/me/.claude-me' } },
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+const resolved: ResolvedAgentExecutionProfileResponse = {
   profile,
   env: { CLAUDE_CONFIG_DIR: '/home/me/.claude-me', EXTRA: 'kept' },
 };

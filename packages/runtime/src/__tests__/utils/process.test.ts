@@ -1,6 +1,8 @@
 import { ProcessExecutionError, execute, executeSync, executeWithLogging } from '@funny/core/git';
 import { describe, test, expect } from 'vitest';
 
+import { expectInstance } from '../helpers/builders.js';
+
 describe('ProcessExecutionError', () => {
   test('sets all properties correctly', () => {
     const err = new ProcessExecutionError(
@@ -40,8 +42,7 @@ describe('execute (async)', () => {
       await execute('node', ['-e', 'process.exit(1)']);
       expect.unreachable('Should have thrown');
     } catch (err) {
-      expect(err).toBeInstanceOf(ProcessExecutionError);
-      expect((err as ProcessExecutionError).exitCode).toBe(1);
+      expect(expectInstance(err, ProcessExecutionError).exitCode).toBe(1);
     }
   });
 

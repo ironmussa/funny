@@ -3,7 +3,7 @@
  * are rejected for both IP literals and resolved hostnames.
  */
 
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 
 vi.mock('dns/promises', () => ({
   lookup: vi.fn(),
@@ -168,11 +168,11 @@ describe('safeFetchUserUrl (security HI-5)', () => {
 });
 
 describe('safeFetch DNS rebinding pinning (security HI-6)', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: Mock<(url: string, init?: RequestInit) => Promise<Response>>;
 
   beforeEach(() => {
     mockLookup.mockReset();
-    fetchMock = vi.fn(async () => new Response('ok'));
+    fetchMock = vi.fn(async (_url: string, _init?: RequestInit) => new Response('ok'));
     vi.stubGlobal('fetch', fetchMock);
   });
 
@@ -187,9 +187,9 @@ describe('safeFetch DNS rebinding pinning (security HI-6)', () => {
     await safeFetch('http://example.com:8080/path?q=1', { headers: { Accept: 'text/plain' } });
 
     expect(fetchMock).toHaveBeenCalledOnce();
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('http://93.184.216.34:8080/path?q=1');
-    const headers = new Headers(init.headers);
+    const headers = new Headers(init?.headers);
     expect(headers.get('Host')).toBe('example.com:8080');
     expect(headers.get('Accept')).toBe('text/plain');
   });
@@ -208,8 +208,8 @@ describe('safeFetch DNS rebinding pinning (security HI-6)', () => {
     await safeFetchUserUrl('http://launcher.example.test/start');
 
     expect(fetchMock).toHaveBeenCalledOnce();
-    const [url, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe('http://192.168.1.50/start');
-    expect(new Headers(init.headers).get('Host')).toBe('launcher.example.test');
+    expect(new Headers(init?.headers).get('Host')).toBe('launcher.example.test');
   });
 });

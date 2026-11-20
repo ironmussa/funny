@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import { FRESH_TTL_MS, _resetGithubCache } from '../../routes/github/github-cache.js';
 import { githubApiFetch } from '../../routes/github/helpers.js';
@@ -16,7 +16,7 @@ function ghResponse(
 }
 
 describe('githubApiFetch caching', () => {
-  let fetchMock: ReturnType<typeof vi.fn>;
+  let fetchMock: Mock<(url: string, init?: RequestInit) => Promise<Response>>;
   /** Responses returned, in order, for calls to api.github.com. */
   let ghQueue: Response[];
 
@@ -33,7 +33,7 @@ describe('githubApiFetch caching', () => {
     _resetGithubCache();
     vi.useFakeTimers();
     ghQueue = [];
-    fetchMock = vi.fn(async (url: string) => {
+    fetchMock = vi.fn(async (url: string, _init?: RequestInit) => {
       if (!String(url).includes('api.github.com')) return new Response('{}', { status: 200 });
       const next = ghQueue.shift();
       if (!next) throw new Error(`unexpected GitHub call: ${url}`);
@@ -73,7 +73,7 @@ describe('githubApiFetch caching', () => {
 
     const calls = githubCalls();
     expect(calls).toHaveLength(2);
-    const conditionalHeaders = calls[1][1].headers as Headers;
+    const conditionalHeaders = new Headers(calls[1][1]?.headers);
     expect(conditionalHeaders.get('If-None-Match')).toBe('W/"abc"');
     expect(await res.json()).toEqual([{ number: 1 }]);
   });

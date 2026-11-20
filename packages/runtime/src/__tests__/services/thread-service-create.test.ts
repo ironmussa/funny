@@ -106,6 +106,7 @@ vi.mock('../../services/thread-service/shell-escape.js', async (importOriginal) 
 vi.mock('@funny/core/git', () => ({
   getCurrentBranch: mocks.getCurrentBranch,
   createWorktree: mocks.createWorktree,
+  configuredWorktreeRoot: () => null,
   git: mocks.git,
   findWorktreeForBranch: mocks.findWorktreeForBranch,
   isRegisteredWorktreePath: mocks.isRegisteredWorktreePath,

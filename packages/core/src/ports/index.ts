@@ -5,7 +5,7 @@ import { internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
 import { executeShell } from '../git/process.js';
-import { getWorktreeBase } from '../git/worktree.js';
+import { getWorktreeBasePaths } from '../git/worktree.js';
 import { readProjectConfig } from './config-reader.js';
 import { copyAndOverrideEnv, readAllocatedPorts } from './env-writer.js';
 import { allocatePorts } from './port-allocator.js';
@@ -147,24 +147,22 @@ async function collectSiblingPorts(
 ): Promise<Set<number>> {
   const ports = new Set<number>();
 
-  const worktreeBaseResult = await getWorktreeBase(projectPath);
-  if (worktreeBaseResult.isErr()) return ports;
-  const worktreeBase = worktreeBaseResult.value;
+  // Worktrees made before FUNNY_WORKTREE_ROOT was set still hold ports.
+  for (const worktreeBase of getWorktreeBasePaths(projectPath)) {
+    if (!existsSync(worktreeBase)) continue;
+    try {
+      const entries = readdirSync(worktreeBase, { withFileTypes: true });
+      for (const entry of entries) {
+        if (!entry.isDirectory()) continue;
+        const siblingPath = resolve(worktreeBase, entry.name);
+        if (siblingPath === currentWorktreePath) continue;
 
-  if (!existsSync(worktreeBase)) return ports;
-
-  try {
-    const entries = readdirSync(worktreeBase, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const siblingPath = resolve(worktreeBase, entry.name);
-      if (siblingPath === currentWorktreePath) continue;
-
-      const siblingPorts = readAllocatedPorts(siblingPath, envFiles);
-      for (const p of siblingPorts) ports.add(p);
+        const siblingPorts = readAllocatedPorts(siblingPath, envFiles);
+        for (const p of siblingPorts) ports.add(p);
+      }
+    } catch {
+      // Best-effort: if we can't read siblings, skip deduplication
     }
-  } catch {
-    // Best-effort: if we can't read siblings, skip deduplication
   }
 
   return ports;

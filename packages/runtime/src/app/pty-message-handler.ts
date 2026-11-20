@@ -1,7 +1,7 @@
 import { mkdirSync } from 'node:fs';
-import { basename, dirname, resolve, sep } from 'path';
+import { resolve, sep } from 'path';
 
-import { WORKTREE_DIR_NAME } from '@funny/core/git';
+import { getWorktreeBasePaths } from '@funny/core/git';
 
 import { log } from '../lib/logger.js';
 import * as ptyManager from '../services/pty-manager.js';
@@ -13,7 +13,7 @@ import { requireWorkingDirectory } from '../utils/working-directory.js';
 /**
  * Routes incoming PTY-related WS messages (spawn / write / resize / kill /
  * signal / restore) to the PTY manager. Pulled out of app.ts so the
- * bootstrap file doesn't import path utilities, WORKTREE_DIR_NAME, or
+ * bootstrap file doesn't import path utilities, worktree bases, or
  * pty-manager directly.
  *
  * Note: `pty:list` is handled out-of-band as an ack-based RPC on the runner
@@ -152,8 +152,7 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
     userProjects.some((p) => {
       const projectPath = resolve(p.path);
       if (isUnder(resolvedCwd, projectPath)) return true;
-      const worktreeBase = resolve(dirname(projectPath), WORKTREE_DIR_NAME, basename(projectPath));
-      return isUnder(resolvedCwd, worktreeBase);
+      return getWorktreeBasePaths(projectPath).some((base) => isUnder(resolvedCwd, base));
     });
 
   const denyAccess = () => {

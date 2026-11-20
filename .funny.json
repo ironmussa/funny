@@ -14,6 +14,6 @@
   ],
   "postCreate": [
     "bun install",
-    "cp -n /opt/funny/packages/native-git/*.node packages/native-git/ 2>/dev/null || true"
+    "cp -n \"$(git rev-parse --path-format=absolute --git-common-dir)/../packages/native-git/\"*.node packages/native-git/ 2>/dev/null || cp -n /opt/funny/packages/native-git/*.node packages/native-git/ 2>/dev/null || true"
   ]
 }

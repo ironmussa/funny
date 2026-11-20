@@ -18,7 +18,7 @@ import { realpathSync } from 'fs';
 import { homedir, platform } from 'os';
 import { basename, dirname, normalize, resolve, sep } from 'path';
 
-import { WORKTREE_DIR_NAME } from '@funny/core/git';
+import { getWorktreeBasePaths } from '@funny/core/git';
 
 import { log } from '../lib/logger.js';
 import { getServices } from '../services/service-registry.js';
@@ -240,12 +240,12 @@ export async function requireProjectPath(path: string, userId: string): Promise<
       const projectPath = normalize(resolve(base));
       const realProjectPath = realpathOrAnchor(projectPath);
       if (isUnder(lexicalTarget, projectPath) && isUnder(realTarget, realProjectPath)) return null;
-      const worktreeBase = normalize(
-        resolve(dirname(projectPath), WORKTREE_DIR_NAME, basename(projectPath)),
-      );
-      const realWorktreeBase = realpathOrAnchor(worktreeBase);
-      if (isUnder(lexicalTarget, worktreeBase) && isUnder(realTarget, realWorktreeBase)) {
-        return null;
+      for (const base of getWorktreeBasePaths(projectPath)) {
+        const worktreeBase = normalize(base);
+        const realWorktreeBase = realpathOrAnchor(worktreeBase);
+        if (isUnder(lexicalTarget, worktreeBase) && isUnder(realTarget, realWorktreeBase)) {
+          return null;
+        }
       }
     }
   }

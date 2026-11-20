@@ -73,7 +73,7 @@ function renderTimeline(messages: any[], threadStatus?: ThreadStatus): Rendered[
     return {
       text: button.textContent ?? '',
       completed: label.className.includes('line-through'),
-      inProgress: label.className.includes('text-blue-400'),
+      inProgress: label.className.includes('text-status-info'),
       args: onScroll.mock.calls[i],
     };
   });

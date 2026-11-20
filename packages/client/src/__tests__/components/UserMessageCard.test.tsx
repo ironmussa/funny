@@ -312,7 +312,7 @@ describe('UserMessageCard', () => {
       fireEvent.click(copyButton);
     });
 
-    expect(copyButton.querySelector('.lucide-check')).toHaveClass('text-green-600');
+    expect(copyButton.querySelector('.lucide-check')).toHaveClass('text-status-success');
     expect(writeText).toHaveBeenCalledWith('Copy this text');
     expect(vi.mocked(toast.success)).toHaveBeenCalledWith('Copied');
     await waitFor(() => expect(copyButton).toHaveAccessibleName('Copy content'), { timeout: 3000 });

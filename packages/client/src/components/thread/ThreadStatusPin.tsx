@@ -211,10 +211,11 @@ function ThreadActivityIcon({
 }) {
   const { t } = useTranslation();
   if (view.activity === 'none') return null;
-  const { icon: Icon, className } = ACTIVITY_GLYPH[view.activity];
+  const activityCfg = ACTIVITY_GLYPH[view.activity];
+  const ActivityIcon = activityCfg.icon;
   const glyph = (
-    <Icon
-      className={cn('icon-sm', className)}
+    <ActivityIcon
+      className={cn('icon-sm', activityCfg.className)}
       data-testid={`thread-factory-activity-${threadId}`}
       data-activity={view.activity}
     />

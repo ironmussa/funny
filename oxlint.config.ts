@@ -5,6 +5,8 @@ import gdp from '@gdp-ts/core/lint/oxlint';
 // repo has no findings left for it; the others stay 'warn' until their cleanup
 // lands, and move to ERROR_* then.
 const ANTI_SLOP_ERROR = [
+  'no-array-filter-map',
+  'no-conditional-empty-object-spread',
   'no-reduce-accumulator-copy',
   'no-reflect-apply',
   'no-reflect-get',
@@ -12,9 +14,7 @@ const ANTI_SLOP_ERROR = [
   'no-widen-then-assert',
 ];
 const ANTI_SLOP_WARN = [
-  'no-array-filter-map',
   'no-chained-type-assertions',
-  'no-conditional-empty-object-spread',
   'no-known-value-widening',
   'no-object-parameters',
   'no-runtime-typeof',

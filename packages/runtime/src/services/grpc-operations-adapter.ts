@@ -507,7 +507,7 @@ export class GrpcOperationsAdapter {
       metadata: {
         correlationId,
         deadline: new Date(Date.now() + OPERATION_TIMEOUT_MS).toISOString(),
-        idempotencyKey: idempotencyKey || undefined,
+        ...(idempotencyKey ? { idempotencyKey } : undefined),
       },
       [kind]: normalizeRunnerOperationValue(kind, value as Record<string, any>),
     });

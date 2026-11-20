@@ -1929,6 +1929,17 @@ describe('thread store actions on the threads collection', () => {
     expect(useThreadStore.getState().selectedThreadId).toBe('t1');
   });
 
+  test('a delete answered NOT_FOUND counts as done and does not resurrect the row', async () => {
+    // Regression: two overlapping deletes; the loser got 404 and rolled the row back.
+    mockDeleteThread.mockReturnValue(
+      errAsync({ type: 'NOT_FOUND', message: 'Thread not found' } as const),
+    );
+    await useThreadStore.getState().deleteThread('t1', 'p1');
+    expect(readThreadIndex().threadsById.t1).toBeUndefined();
+    expect(readThreadIndex().threadIdsByProject.p1).toEqual([]);
+    expect(useThreadStore.getState().selectedThreadId).toBeNull();
+  });
+
   test('a confirmed delete drops the row, its list entry and the selection', async () => {
     mockDeleteThread.mockReturnValue(okAsync(undefined));
     await useThreadStore.getState().deleteThread('t1', 'p1');

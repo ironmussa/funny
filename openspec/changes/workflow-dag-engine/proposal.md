@@ -39,6 +39,11 @@ as soon as two branches run at once.
   declares it, not after the last node of the flow. Built-in flows are unaffected (their only
   loop is on the last node); repository flows with a loop on a middle node change behaviour.
   The level-by-level DAG mode and the sequential fallback are removed.
+- **BREAKING (workflow semantics):** a node with `on_error: continue` that fails is marked
+  failed, and its dependents follow their `trigger_rule`: with the default `all_success` they
+  are skipped. Before, the failure became an empty output and every dependent ran. Flows that
+  relied on that (the built-in `fusion` judge and `code-quality`'s final notice) now declare
+  `trigger_rule: all_done`; repository flows that relied on it need the same.
 
 ## Capabilities
 

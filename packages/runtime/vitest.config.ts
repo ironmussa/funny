@@ -71,6 +71,7 @@ export default defineConfig({
       '@funny/shared': path.join(shared, 'types.ts'),
       '@funny/evflow': path.join(evflow, 'index.ts'),
       '@funny/pipelines/engine': path.join(pipelines, 'engine.ts'),
+      '@funny/pipelines/templates': path.join(pipelines, 'yaml', 'interpolate.ts'),
       '@funny/pipelines/pipelines/code-review.pipeline': path.join(
         pipelines,
         'pipelines/code-review.pipeline.ts',

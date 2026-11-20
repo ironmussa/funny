@@ -76,6 +76,8 @@ nodes:
   # ── 6. Notify completion ──────────────────────────────
   - id: done
     depends_on: [pr]
+    # Notify even when the PR could not be created.
+    trigger_rule: all_done
     notify:
       message: 'Pipeline complete. Branch {{branch}} pushed.'
       level: info

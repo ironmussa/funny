@@ -25,6 +25,7 @@ export const factoryApi = {
   getSettings: (projectId: string) => trpcCall(() => procedures.settings.query({ projectId })),
   saveSettings: (data: SaveFactorySettingsInput) => trpcCall(() => procedures.save.mutate(data)),
   listRuns: (projectId: string) => trpcCall(() => procedures.runs.query({ projectId })),
+  listActiveRuns: () => trpcCall(() => procedures.activeRuns.query()),
   stopRun: (projectId: string, runId: string) =>
     trpcCall(() => procedures.stopRun.mutate({ projectId, runId })),
   retryRun: (projectId: string, runId: string) =>

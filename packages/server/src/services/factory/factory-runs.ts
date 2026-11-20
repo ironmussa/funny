@@ -33,7 +33,7 @@ import { okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
 import { db } from '../../db/index.js';
-import { factoryRuns } from '../../db/schema.js';
+import { factoryRuns, factorySettings } from '../../db/schema.js';
 
 const THREAD_IDS_SCHEMA = z.array(z.string());
 
@@ -109,6 +109,13 @@ export const REOPENED_STEP = 'retrying';
 
 /** States a run can be retried or taken over from. */
 const REOPENABLE_STATES = ['failed', 'waiting_human'] as const satisfies FactoryRunState[];
+
+/**
+ * How long a failed run keeps showing on its thread in the thread lists. The
+ * failure stays in the thread view and the project's run list after that; the
+ * window only bounds what every list poll reads.
+ */
+const FAILED_RUN_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
 
 /** The branch a run's agent pushes and opens its pull request from. */
 export const factoryRunBranch = (run: Pick<FactoryRunView, 'id' | 'issueNumber'>): string =>
@@ -448,6 +455,36 @@ export function createFactoryRunsRepository(
           .orderBy(desc(factoryRuns.startedAt)),
         storage,
       ).map((rows) => rows.map(toView));
+    },
+
+    /**
+     * The runs of every factory `userId` owns that the thread lists show on
+     * their threads: not ended (in flight, or parked waiting for the member),
+     * or failed within `FAILED_RUN_WINDOW_MS`. A thread shows busy while its run
+     * works outside the agent (CI, merge), and the error icon once it failed.
+     * Queued (`requested`) runs have no thread yet.
+     */
+    activeForOwner(
+      userId: string,
+      now: number = Date.now(),
+    ): ResultAsync<FactoryRunView[], FactoryRunsError> {
+      const failedSince = new Date(now - FAILED_RUN_WINDOW_MS).toISOString();
+      return ResultAsync.fromPromise(
+        db
+          .select({ run: factoryRuns })
+          .from(factoryRuns)
+          .innerJoin(factorySettings, eq(factorySettings.id, factoryRuns.factoryId))
+          .where(
+            and(
+              eq(factorySettings.userId, userId),
+              or(
+                notInArray(factoryRuns.state, [...TERMINAL_STATES, ...WAITING_STATES]),
+                and(eq(factoryRuns.state, 'failed'), gte(factoryRuns.completedAt, failedSince)),
+              ),
+            ),
+          ),
+        storage,
+      ).map((rows) => rows.map(({ run }) => toView(run)));
     },
 
     /** The non-terminal run for an issue, if any — the admission dedup check. */

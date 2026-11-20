@@ -9,24 +9,19 @@
 import { Check, Circle, Factory, Loader2, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { FactoryRunControls } from '@/components/thread/FactoryRunControls';
 import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { controlFactoryRun } from '@/data/factory/actions';
 import { useFactoryRunForThread } from '@/data/factory/hooks';
-import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryRun } from '@/lib/api/factory';
 import {
-  ENDED_FACTORY_STATES,
   factoryRunStateLabel,
   factoryRunStateVariant,
   factoryRunSteps,
   type FactoryStepStatus,
 } from '@/lib/factory-run-labels';
-import { toastError } from '@/lib/toast-error';
+import { isFactoryRunInFlight } from '@/lib/thread-activity';
 import { cn } from '@/lib/utils';
-
-const RETRYABLE = new Set<FactoryRun['state']>(['failed', 'waiting_human']);
 
 const STEP_ICON: Record<FactoryStepStatus, typeof Check> = {
   done: Check,
@@ -89,16 +84,13 @@ export function FactoryRunIndicator({
 }) {
   const { t } = useTranslation();
   const run = useFactoryRunForThread(projectId, threadId);
-  const canSteer = useCanSteerProject(projectId);
   if (!run) return null;
 
-  const control = (action: 'stop' | 'retry') =>
-    void controlFactoryRun(action, projectId, run.id).orTee((error) =>
-      toastError(error, 'factory'),
-    );
   const failed = run.state === 'failed' || run.failureReason !== null;
   const stateLabel = factoryRunStateLabel(t, run.state);
   const label = triggerLabel(run) ?? stateLabel;
+  // The run is still working, also after its agent finished (waiting for CI, merging).
+  const inFlight = !failed && isFactoryRunInFlight(run.state);
 
   return (
     <Popover>
@@ -112,7 +104,14 @@ export function FactoryRunIndicator({
           aria-label={t('factory.indicator.label', 'Factory run: {{step}}', { step: label })}
           data-testid="factory-run-indicator"
         >
-          <Factory className="icon-xs" />
+          {inFlight ? (
+            <Loader2
+              className="icon-xs text-status-info animate-spin"
+              data-testid="factory-run-indicator-spinner"
+            />
+          ) : (
+            <Factory className="icon-xs" />
+          )}
           <span className="max-w-32 truncate">{label}</span>
         </button>
       </PopoverTrigger>
@@ -142,36 +141,12 @@ export function FactoryRunIndicator({
               {run.failureReason}
             </p>
           )}
-          <div className="flex items-center gap-1">
-            {run.prUrl && (
-              <Button asChild size="xs" variant="link" data-testid="factory-run-pr">
-                <a href={run.prUrl} target="_blank" rel="noreferrer">
-                  {t('factory.pullRequest', 'PR')}
-                </a>
-              </Button>
-            )}
-            <span className="ml-auto flex items-center gap-1">
-              {canSteer && RETRYABLE.has(run.state) && (
-                <Button
-                  size="xs"
-                  variant="outline"
-                  data-testid="factory-run-retry"
-                  onClick={() => control('retry')}
-                >
-                  {t('factory.retry', 'Retry')}
-                </Button>
-              )}
-              {canSteer && !ENDED_FACTORY_STATES.has(run.state) && (
-                <Button
-                  size="xs"
-                  variant="ghost"
-                  data-testid="factory-run-stop"
-                  onClick={() => control('stop')}
-                >
-                  {t('factory.stop', 'Stop')}
-                </Button>
-              )}
-            </span>
+          <div className="flex items-center justify-end gap-1">
+            <FactoryRunControls
+              projectId={projectId}
+              run={run}
+              testId={(button) => `factory-run-${button}`}
+            />
           </div>
         </div>
       </PopoverContent>

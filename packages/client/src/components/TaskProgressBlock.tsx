@@ -90,7 +90,11 @@ function StepDetail({ step, t }: { step: TaskStep; t: TFunction }) {
       </span>
     );
   }
-  if (step.status === 'failed' && step.tail.length > 0) return <StepTail step={step} t={t} />;
+  // The tail is for a step that failed without reporting issues; reported ones show in the issue list.
+  const reportedIssues = step.errors + step.warnings > 0;
+  if (step.status === 'failed' && step.tail.length > 0 && !reportedIssues) {
+    return <StepTail step={step} t={t} />;
+  }
   return null;
 }
 

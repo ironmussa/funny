@@ -10,9 +10,12 @@
  * written to `factory_runs` (`currentStep`, `threadIds`, the PR, the state).
  *
  * A run's flow lives in this process while its threads run. After a restart
- * (or a launch interrupted by one) the watcher starts it again: the provider
- * replays the agent steps whose threads are recorded, so no work is started
- * twice and a finished thread is not waited on again.
+ * (or a launch interrupted by one) the watcher starts it again, and no work is
+ * started twice nor a finished thread waited on again: the engine's journal
+ * (`workflow_node_executions`, change workflow-dag-engine) replays the steps
+ * that finished and hands an unfinished one what it checkpointed. A run
+ * without journal rows (from before the journal, or reopened by a retry or a
+ * take-over) replays its recorded threads by call order instead, once.
  *
  * How a run ends:
  * - the flow completes → `waiting_human`, unless it merged (`merged`);
@@ -29,6 +32,7 @@
  */
 
 import { nullReporter, runPipeline } from '@funny/pipelines';
+import type { NodeOutput, YamlPipelineContext } from '@funny/workflows/compiler';
 import { and, asc, eq, gte, like } from 'drizzle-orm';
 import type { Result } from 'neverthrow';
 
@@ -41,6 +45,11 @@ import type {
   StartThreadInput,
 } from '../runner-thread-launcher.js';
 import { sendPush } from '../web-push.js';
+import {
+  createWorkflowJournalRepository,
+  databaseJournal,
+  type JournalCodec,
+} from '../workflow-engine/journal-repository.js';
 import {
   createFactoryActionProvider,
   type FactoryRunScope,
@@ -176,9 +185,20 @@ const failureReason = (error: string | undefined): string => error?.trim() || 'T
  */
 const flowOf = (job: FactoryRunJob): string => job.run.flowName ?? job.factory.flowName;
 
+/**
+ * The journal keeps the flow's step outputs; the rest of the context (the
+ * provider, the progress reporter, the inputs) is this attempt's, rebuilt by
+ * the server that resumes the run.
+ */
+const journalCodec = (live: YamlPipelineContext): JournalCodec<YamlPipelineContext> => ({
+  encode: (ctx) => ctx.outputs,
+  decode: (stored) => ({ ...live, outputs: stored as Record<string, NodeOutput> }),
+});
+
 export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
   const active = new Map<string, AbortController>();
   const waitThread = deps.waitThread ?? createThreadWaits();
+  const journalRows = createWorkflowJournalRepository();
 
   const loadFlow =
     deps.loadFlow ??
@@ -332,6 +352,17 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
     // The thread view draws the run's step chain from these.
     await record({ flowSteps: flow.value.pipeline.nodes.map((node) => node.name) });
 
+    // A run with journal rows resumes through them; one without replays `threadIds`.
+    const journaled = await journalRows.load(job.run.id);
+    if (journaled.isErr()) {
+      log.warn('Issue factory run journal could not be read', {
+        namespace: 'factory',
+        runId: job.run.id,
+        error: journaled.error.message,
+      });
+      return trace.agentsRan ? 'started' : 'not-started';
+    }
+
     const scope: FactoryRunScope = {
       runId: job.run.id,
       userId: job.factory.userId,
@@ -362,32 +393,32 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       github: deps.github,
       record,
       signal: controller.signal,
+      legacyReplay: journaled.value.length === 0,
     });
 
-    const result = await runPipeline(
-      flow.value.pipeline,
-      {
-        provider,
-        progress: nullReporter,
-        cwd: '',
-        inputs: {
-          repo: job.repo,
-          issue_number: String(job.issue.number),
-          issue_title: job.issue.title,
-          issue_url: job.issue.url,
-          branch: scope.branch,
-        },
-        outputs: {},
+    const context: YamlPipelineContext = {
+      provider,
+      progress: nullReporter,
+      cwd: '',
+      inputs: {
+        repo: job.repo,
+        issue_number: String(job.issue.number),
+        issue_title: job.issue.title,
+        issue_url: job.issue.url,
+        branch: scope.branch,
       },
-      {
-        signal: controller.signal,
-        onStateChange: (change) => {
-          if (change.kind !== 'entering') return;
-          trace.step = change.nodeName;
-          void record({ currentStep: change.nodeName });
-        },
+      outputs: {},
+    };
+    const result = await runPipeline(flow.value.pipeline, context, {
+      signal: controller.signal,
+      runId: job.run.id,
+      journal: databaseJournal(journalRows, journalCodec(context)),
+      onStateChange: (change) => {
+        if (change.kind !== 'entering') return;
+        trace.step = change.nodeName;
+        void record({ currentStep: change.nodeName });
       },
-    );
+    });
     // A stop or a shutdown fails the step in flight; that is not the flow failing.
     const outcome = controller.signal.aborted ? 'cancelled' : result.outcome;
     await settle(job, outcome, trace, result.error);

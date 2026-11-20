@@ -34,6 +34,7 @@ import {
   stopFactoryWatcher,
 } from '../../../services/factory/factory-watcher.js';
 import type { StartThreadInput } from '../../../services/runner-thread-launcher.js';
+import { createWorkflowJournalRepository } from '../../../services/workflow-engine/journal-repository.js';
 import {
   launchedThread,
   runnerOffline,
@@ -804,6 +805,46 @@ describe('factory flow', () => {
 
     await eventually(factoryId, (r) => r.state === 'merged');
     expect(launcher.calls).toHaveLength(0);
+  });
+
+  test('a resumed run adopts through the journal the thread its implement step checkpointed', async () => {
+    // The implement step started t-impl and checkpointed it; the server then
+    // stopped before recording the thread in the run (no thread_ids, no marker).
+    const factoryId = await seedInFlightRun([]);
+    const [seeded] = (await createFactoryRunsRepository().list(factoryId))._unsafeUnwrap();
+    await createWorkflowJournalRepository().record({
+      runId: seeded!.id,
+      nodeId: 'implement',
+      visit: '1',
+      attempt: 1,
+      status: 'running',
+      data: { phase: 'thread', threadId: 't-impl' },
+      startedAt: Date.now(),
+    });
+    seedThread(testDb.db, { id: 't-impl', projectId: 'p1', userId: 'alice', status: 'completed' });
+    const poll = fakePoll();
+    const launcher = fakeLauncher();
+    await startFactoryWatcher({
+      ports,
+      github: fakeGithub('o/r', []),
+      createPoll: poll.createPoll,
+      launch: launcher.launch,
+      resolveRuntime,
+    });
+
+    await poll.ticks[0]!();
+
+    const run = await eventually(factoryId, (r) => r.state === 'merged');
+    expect(launcher.calls).toHaveLength(0);
+    expect(run.threadIds).toEqual(['t-impl']);
+    const implement = (await createWorkflowJournalRepository().load(seeded!.id))
+      ._unsafeUnwrap()
+      .filter((e) => e.nodeId === 'implement')
+      .map((e) => [e.attempt, e.status]);
+    expect(implement).toEqual([
+      [1, 'running'],
+      [2, 'succeeded'],
+    ]);
   });
 
   test('a resumed run adopts the thread an interrupted launch started', async () => {

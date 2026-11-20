@@ -52,9 +52,10 @@ vi.mock('@/stores/project-store', () => {
   return { useProjectStore };
 });
 
+const { mockRemoveWorktree } = vi.hoisted(() => ({ mockRemoveWorktree: vi.fn() }));
 vi.mock('@/lib/api', () => ({
   api: {
-    removeWorktree: vi.fn(),
+    removeWorktree: mockRemoveWorktree,
   },
 }));
 
@@ -182,6 +183,42 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
     });
 
     expect(mockNavigate).not.toHaveBeenCalled();
+    expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1');
+  });
+
+  test('deletes a worktree thread in one request, without a separate worktree removal', async () => {
+    // Regression: a prior DELETE /worktrees held the row on screen for the whole
+    // (slow) removal; a second click raced it and the first delete then 404ed.
+    const threadId = 'wt1';
+    useThreadStore.setState(
+      withThreadIndex({
+        selectedThreadId: null,
+        threadsById: {
+          [threadId]: {
+            id: threadId,
+            projectId: 'p1',
+            title: 'hola',
+            status: 'completed',
+            mode: 'worktree',
+            branch: 'funny/hola',
+            worktreePath: '/tmp/.funny-worktrees/funny/funny-hola',
+          },
+        },
+        threadIdsByProject: { p1: [threadId] },
+      } as any),
+    );
+
+    const { result } = renderHook(() => useSidebarActions());
+
+    act(() => {
+      result.current.handleDeleteThreadFromList(threadId, 'p1', 'hola', true);
+    });
+
+    await act(async () => {
+      await result.current.handleDeleteThreadConfirm();
+    });
+
+    expect(mockRemoveWorktree).not.toHaveBeenCalled();
     expect(mockDeleteThread).toHaveBeenCalledWith(threadId, 'p1');
   });
 });

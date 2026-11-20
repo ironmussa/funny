@@ -10,7 +10,6 @@ import type {
 } from '@/components/sidebar/SidebarDialogs';
 import { readThreadRow } from '@/data/threads/read';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
-import { api } from '@/lib/api';
 import { isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { goToThread } from '@/navigation/go-to-thread';
@@ -21,7 +20,7 @@ import { useThreadStore } from '@/stores/thread-store';
  * Owns the sidebar's destructive-action confirmation state and all the row
  * handlers (select/archive/delete/rename/pin) that ProjectItem and ThreadList
  * receive as props. Bundling them in a hook keeps Sidebar.tsx free of the
- * `toast` and `api` dependencies.
+ * `toast` dependency.
  */
 export function useSidebarActions() {
   const { t } = useTranslation();
@@ -59,54 +58,41 @@ export function useSidebarActions() {
     })().finally(() => setActionLoading(false));
   }, [archiveConfirm, archiveThread, t, navigate]);
 
-  const handleDeleteThreadConfirm = useCallback(
-    async (options?: { deleteBranch?: boolean }) => {
-      if (!deleteThreadConfirm) return;
-      const {
-        threadId,
-        projectId,
-        title,
-        worktreePath,
-        branchName,
-        isScratch: confirmScratch,
-      } = deleteThreadConfirm;
-      const thread = readThreadRow(threadId);
-      const scratch = confirmScratch ?? isScratch(thread);
-      const wasSelected = useThreadStore.getState().selectedThreadId === threadId;
+  const handleDeleteThreadConfirm = useCallback(async () => {
+    if (!deleteThreadConfirm) return;
+    const { threadId, projectId, title, isScratch: confirmScratch } = deleteThreadConfirm;
+    const thread = readThreadRow(threadId);
+    const scratch = confirmScratch ?? isScratch(thread);
+    const wasSelected = useThreadStore.getState().selectedThreadId === threadId;
 
-      // Close the modal up-front. deleteThread is already optimistic (sync UI
-      // updates + fire-and-forget API), so showing a loading spinner mid-exit
-      // animation makes the button content swap during the fade-out and reads
-      // as a flicker.
-      setDeleteThreadConfirm(null);
+    // Close the modal up-front. deleteThread is already optimistic (sync UI
+    // updates + fire-and-forget API), so showing a loading spinner mid-exit
+    // animation makes the button content swap during the fade-out and reads
+    // as a flicker.
+    setDeleteThreadConfirm(null);
 
-      // Leave the deleted thread's URL before optimistic store removal. While
-      // the URL still points at /scratch/:id (or a project thread route),
-      // useRouteSync's invariant guard sees selectedThreadId cleared and tries
-      // to re-load the thread — which trips the circuit breaker once enough
-      // follow-up requests fail.
-      if (wasSelected) {
-        navigate(buildPath(scratch || !projectId ? '/' : `/projects/${projectId}`));
-      }
+    // Leave the deleted thread's URL before optimistic store removal. While
+    // the URL still points at /scratch/:id (or a project thread route),
+    // useRouteSync's invariant guard sees selectedThreadId cleared and tries
+    // to re-load the thread — which trips the circuit breaker once enough
+    // follow-up requests fail.
+    if (wasSelected) {
+      navigate(buildPath(scratch || !projectId ? '/' : `/projects/${projectId}`));
+    }
 
-      if (scratch) {
-        await deleteScratchThread(threadId);
-        toast.success(t('toast.threadDeleted', { title }));
-        return;
-      }
-
-      if (options?.deleteBranch && worktreePath && branchName) {
-        await api.removeWorktree(projectId, worktreePath, {
-          branchName,
-          deleteBranch: true,
-        });
-      }
-
-      await deleteThread(threadId, projectId);
+    if (scratch) {
+      await deleteScratchThread(threadId);
       toast.success(t('toast.threadDeleted', { title }));
-    },
-    [deleteThreadConfirm, deleteThread, deleteScratchThread, t, navigate],
-  );
+      return;
+    }
+
+    // No separate worktree removal here: the runtime's thread delete removes
+    // the worktree and branch itself. A prior `DELETE /worktrees` kept the
+    // row visible for the whole (slow, on NTFS tens of seconds) removal, so
+    // a second click raced it and the first delete came back as a 404.
+    await deleteThread(threadId, projectId);
+    toast.success(t('toast.threadDeleted', { title }));
+  }, [deleteThreadConfirm, deleteThread, deleteScratchThread, t, navigate]);
 
   const handleRenameProjectConfirm = useCallback(async () => {
     if (!renameProjectState) return;

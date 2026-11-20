@@ -186,7 +186,10 @@ async function runDelete(
 
   if (stopFirst) await api.stopThread(threadId);
   const result = await api.deleteThread(threadId);
-  if (result.isErr()) {
+  // NOT_FOUND means the thread is already gone (a concurrent delete won the
+  // race): the goal of the write is met, so rolling back would resurrect a
+  // row the server no longer has.
+  if (result.isErr() && result.error.type !== 'NOT_FOUND') {
     tx?.rollback();
     notifyFailure(threadId, 'delete', result.error);
     return err(result.error);

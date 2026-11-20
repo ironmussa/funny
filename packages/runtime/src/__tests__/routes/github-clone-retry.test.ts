@@ -13,7 +13,8 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
  * backoff) because the runner→server data channel can be transiently
  * saturated right after a slow clone. Only thrown errors are retried; a
  * neverthrow `err(...)` is a definitive answer. When registration ultimately
- * fails, the freshly cloned directory must be removed.
+ * fails, the freshly cloned directory must be removed. The route answers 202
+ * when the clone starts; the outcome is the last `clone:progress` event.
  */
 
 const mocks = vi.hoisted(() => ({
@@ -91,9 +92,9 @@ function attemptWarnings() {
   return mocks.warn.mock.calls.filter((call) => call[0] === 'createProject attempt failed');
 }
 
-function lastProgressPhase(): string | undefined {
+function lastProgress() {
   const calls = mocks.emitToUser.mock.calls;
-  return eventOfType(calls.at(-1)?.[1], 'clone:progress')?.data.phase;
+  return eventOfType(calls.at(-1)?.[1], 'clone:progress')?.data;
 }
 
 describe('POST /clone createProject retry', () => {
@@ -144,8 +145,9 @@ describe('POST /clone createProject retry', () => {
     expect(mocks.createProject).toHaveBeenCalledTimes(3);
 
     const res = await pending;
-    expect(res.status).toBe(201);
-    expect(await res.json()).toEqual(project);
+    expect(res.status).toBe(202);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lastProgress()).toMatchObject({ status: 'done', projectId: 'p-1' });
     expect(mocks.rm).not.toHaveBeenCalled();
     expect(attemptWarnings()).toHaveLength(2);
     expect(attemptWarnings().map((c) => c[1]?.attempt)).toEqual([1, 2]);
@@ -158,10 +160,8 @@ describe('POST /clone createProject retry', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     const res = await pending;
 
-    // processError → PROCESS_ERROR → 400 in result-response.ts
-    expect(res.status).toBe(400);
-    const body: { error: string } = await res.json();
-    expect(body.error).toBe('Clone failed: data channel down');
+    expect(res.status).toBe(202);
+    expect(lastProgress()).toMatchObject({ status: 'failed', error: 'data channel down' });
     expect(mocks.createProject).toHaveBeenCalledTimes(3);
     expect(mocks.rm).toHaveBeenCalledTimes(1);
     expect(mocks.rm).toHaveBeenCalledWith(clonePath, {
@@ -174,7 +174,10 @@ describe('POST /clone createProject retry', () => {
       'createProject failed after successful clone',
       expect.objectContaining({ clonePath, attempts: 3 }),
     );
-    expect(lastProgressPhase()).toBe('Clone failed');
+    expect(mocks.error).toHaveBeenCalledWith(
+      'Clone failed',
+      expect.objectContaining({ clonePath, stage: 'create-project' }),
+    );
   });
 
   test('does not retry a neverthrow err() result, but still cleans up', async () => {
@@ -184,15 +187,14 @@ describe('POST /clone createProject retry', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     const res = await pending;
 
-    expect(res.status).toBe(500);
-    const body: { error: string } = await res.json();
-    expect(body.error).toContain('Project already registered');
+    expect(res.status).toBe(202);
+    expect(lastProgress()?.status).toBe('failed');
+    expect(lastProgress()?.error).toContain('Project already registered');
     expect(mocks.createProject).toHaveBeenCalledTimes(1);
     expect(attemptWarnings()).toHaveLength(0);
     expect(mocks.rm).toHaveBeenCalledWith(clonePath, {
       recursive: true,
       force: true,
     });
-    expect(lastProgressPhase()).toBe('Clone failed');
   });
 });

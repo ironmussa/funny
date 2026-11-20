@@ -1108,6 +1108,10 @@ export interface WSCloneProgressData {
   cloneId: string;
   phase: string;
   percent?: number;
+  /** `done` and `failed` are the clone's last event. */
+  status?: 'running' | 'done' | 'failed';
+  /** The created project, on the `done` event. */
+  projectId?: string;
   error?: string;
 }
 

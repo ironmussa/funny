@@ -1,4 +1,4 @@
-import type { GitHubRepo } from '@funny/shared';
+import type { GitHubRepo, WSCloneProgressData } from '@funny/shared';
 import { SiGithub } from '@icons-pack/react-simple-icons';
 import {
   Copy,
@@ -11,7 +11,7 @@ import {
   LogOut,
   Settings,
 } from 'lucide-react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useEffectEvent, useRef, useCallback } from 'react';
 import { Trans, useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -104,10 +104,34 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
   const [clonePercent, setClonePercent] = useState<number | undefined>(undefined);
   const [phaseChanged, setPhaseChanged] = useState(false);
   const prevPhaseRef = useRef('');
+  /** The clone this view started; events of any other clone are ignored. */
+  const activeCloneIdRef = useRef<string | null>(null);
+
+  // The runner answers as soon as the clone starts; its last `clone:progress`
+  // event says whether the project was created.
+  const finishClone = useEffectEvent(async (data: WSCloneProgressData) => {
+    activeCloneIdRef.current = null;
+    setIsCloning(false);
+    if (data.status === 'failed') {
+      log.warn('clone failed', { cloneId: data.cloneId, error: data.error });
+      toast.error(t('github.clone.failed', { error: data.error ?? '' }));
+      setView('clone-config');
+      return;
+    }
+    toast.success(t('github.clone.success'));
+    await loadProjects();
+    setAddProjectOpen(false);
+    if (data.projectId) navigate(buildPath(`/projects/${data.projectId}`));
+  });
 
   useEffect(() => {
     const handler = (e: Event) => {
-      const data = (e as CustomEvent).detail;
+      const data = (e as CustomEvent<WSCloneProgressData>).detail;
+      if (!activeCloneIdRef.current || data.cloneId !== activeCloneIdRef.current) return;
+      if (data.status === 'done' || data.status === 'failed') {
+        void finishClone(data);
+        return;
+      }
       if (data.phase) {
         const newPhase = data.phase.replace(/:.*$/, '').trim();
         const oldPhase = prevPhaseRef.current;
@@ -336,18 +360,22 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
     setClonePercent(undefined);
     setView('cloning');
 
-    const result = await api.cloneRepo(selectedRepo.clone_url, destinationPath, projectName);
+    // Chosen here, so events that arrive before the response still match.
+    const cloneId = crypto.randomUUID();
+    activeCloneIdRef.current = cloneId;
+    const result = await api.cloneRepo(
+      selectedRepo.clone_url,
+      destinationPath,
+      projectName,
+      cloneId,
+    );
     if (result.isErr()) {
+      activeCloneIdRef.current = null;
       toastError(result.error, 'cloneRepo');
       setIsCloning(false);
       setView('clone-config');
-      return;
     }
-
-    toast.success(t('github.clone.success'));
-    await loadProjects();
-    setAddProjectOpen(false);
-    navigate(buildPath(`/projects/${result.value.id}`));
+    // Success and failure arrive as the clone's last `clone:progress` event.
   };
 
   // ── Disconnect ─────────────────────────────────
@@ -646,6 +674,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
           </label>
           <Input
             id="clone-project-name"
+            data-testid="clone-config-project-name"
             value={projectName}
             onChange={(e) => setProjectName(e.target.value)}
           />
@@ -659,12 +688,18 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
           <div className="flex gap-2">
             <Input
               id="clone-destination-path"
+              data-testid="clone-config-destination"
               className="flex-1"
               placeholder={t('github.clone.destinationDesc')}
               value={destinationPath}
               onChange={(e) => setDestinationPath(e.target.value)}
             />
-            <Button variant="outline" size="sm" onClick={() => setFolderPickerOpen(true)}>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="clone-config-browse"
+              onClick={() => setFolderPickerOpen(true)}
+            >
               <FolderOpen className="icon-base" />
             </Button>
           </div>
@@ -672,11 +707,17 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
 
         {/* Actions */}
         <div className="flex gap-2 pt-2">
-          <Button variant="outline" className="flex-1" onClick={() => setView('repos')}>
+          <Button
+            variant="outline"
+            className="flex-1"
+            data-testid="clone-config-cancel"
+            onClick={() => setView('repos')}
+          >
             {t('common.cancel')}
           </Button>
           <Button
             className="flex-1"
+            data-testid="clone-config-submit"
             onClick={handleClone}
             disabled={!destinationPath || !projectName}
           >

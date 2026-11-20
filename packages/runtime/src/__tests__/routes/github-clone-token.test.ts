@@ -5,7 +5,7 @@ import { join } from 'path';
 import type { WSEvent } from '@funny/shared';
 import { processError } from '@funny/shared/errors';
 import { Hono } from 'hono';
-import { errAsync, ok, okAsync } from 'neverthrow';
+import { errAsync, ok, okAsync, ResultAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 /**
@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => ({
   cloneRepository: vi.fn(),
   createProject: vi.fn(),
   emitToUser: vi.fn<(userId: string, event: WSEvent) => void>(),
+  logError: vi.fn(),
 }));
 
 vi.mock('@funny/core/git', async (importOriginal) => ({
@@ -51,7 +52,7 @@ vi.mock('../../services/ws-broker.js', () => ({
 }));
 
 vi.mock('../../lib/logger.js', () => ({
-  log: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
+  log: { warn: vi.fn(), error: mocks.logError, info: vi.fn(), debug: vi.fn() },
 }));
 
 import { repoRoutes } from '../../routes/github/repos.js';
@@ -60,7 +61,21 @@ import { eventOfType } from '../helpers/builders-routes.js';
 
 const CLONE_URL = 'https://github.com/acme/widget.git';
 
-function postClone(destinationPath: string) {
+function progressEvents() {
+  return mocks.emitToUser.mock.calls
+    .map((call) => eventOfType(call[1], 'clone:progress'))
+    .filter((event) => event !== undefined);
+}
+
+/** The clone's last event (`done` or `failed`), once the background job ends. */
+async function outcome() {
+  await vi.waitFor(() =>
+    expect(progressEvents().some((e) => e.data.status !== 'running')).toBe(true),
+  );
+  return progressEvents().at(-1)!.data;
+}
+
+function postClone(destinationPath: string, extra: Record<string, unknown> = {}) {
   const a = new Hono<HonoEnv>();
   a.use('*', async (c, next) => {
     c.set('userId', 'user-1');
@@ -70,7 +85,7 @@ function postClone(destinationPath: string) {
   return a.request('/gh/clone', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cloneUrl: CLONE_URL, destinationPath }),
+    body: JSON.stringify({ cloneUrl: CLONE_URL, destinationPath, ...extra }),
   });
 }
 
@@ -83,6 +98,7 @@ describe('POST /clone credentials', () => {
     mocks.createProject.mockReset();
     mocks.createProject.mockResolvedValue(ok({ id: 'p-1', name: 'widget', path: '' }));
     mocks.emitToUser.mockClear();
+    mocks.logError.mockClear();
   });
 
   afterEach(() => {
@@ -94,7 +110,8 @@ describe('POST /clone credentials', () => {
 
     const res = await postClone(parentDir);
 
-    expect(res.status).toBe(201);
+    expect(res.status).toBe(202);
+    expect(await outcome()).toMatchObject({ status: 'done', projectId: 'p-1' });
     expect(mocks.cloneRepository).toHaveBeenCalledTimes(1);
     const [url, destination, options] = mocks.cloneRepository.mock.calls[0];
     expect(url).toBe(CLONE_URL);
@@ -109,6 +126,7 @@ describe('POST /clone credentials', () => {
     });
 
     await postClone(parentDir);
+    await outcome();
 
     const phases = mocks.emitToUser.mock.calls.map(
       (call) => eventOfType(call[1], 'clone:progress')?.data,
@@ -118,16 +136,105 @@ describe('POST /clone credentials', () => {
     );
   });
 
-  test('answers git stderr when the clone fails, without creating the project', async () => {
+  test('reports and logs git stderr when the clone fails, without creating the project', async () => {
     mocks.cloneRepository.mockReturnValue(
       errAsync(processError('fatal: repository not found', 128, 'fatal: repository not found')),
     );
 
     const res = await postClone(parentDir);
 
-    expect(res.status).toBe(400);
-    const body: { error: string } = await res.json();
-    expect(body.error).toBe('Clone failed: fatal: repository not found');
+    expect(res.status).toBe(202);
+    expect(await outcome()).toMatchObject({
+      status: 'failed',
+      error: 'fatal: repository not found',
+    });
     expect(mocks.createProject).not.toHaveBeenCalled();
+    expect(mocks.logError).toHaveBeenCalledWith(
+      'Clone failed',
+      expect.objectContaining({
+        clonePath: join(parentDir, 'widget'),
+        error: 'fatal: repository not found',
+        exitCode: 128,
+      }),
+    );
+  });
+});
+
+/**
+ * Regression: a large repository took longer than the 30 s the server waits
+ * for a runner response, so the browser got a 504 while git kept cloning and
+ * a retry hit "Directory already exists". The route now answers when the clone
+ * starts and reports the outcome as `clone:progress` events.
+ */
+describe('POST /clone runs in the background', () => {
+  let parentDir: string;
+
+  beforeEach(() => {
+    parentDir = mkdtempSync(join(tmpdir(), 'funny-clone-async-'));
+    mocks.cloneRepository.mockReset();
+    mocks.createProject.mockReset();
+    mocks.createProject.mockResolvedValue(ok({ id: 'p-1', name: 'widget', path: '' }));
+    mocks.emitToUser.mockClear();
+  });
+
+  afterEach(() => {
+    rmSync(parentDir, { recursive: true, force: true });
+  });
+
+  /** A clone that runs until `finish` is called, like a large repository. */
+  function slowClone() {
+    let finish!: () => void;
+    const done = new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    mocks.cloneRepository.mockReturnValue(ResultAsync.fromSafePromise(done.then(() => undefined)));
+    return { finish };
+  }
+
+  test('answers 202 with the client cloneId before git finishes', async () => {
+    const clone = slowClone();
+
+    const res = await postClone(parentDir, { cloneId: 'abc-123' });
+
+    expect(res.status).toBe(202);
+    expect(await res.json()).toEqual({ cloneId: 'abc-123' });
+    expect(mocks.createProject).not.toHaveBeenCalled();
+
+    clone.finish();
+    const last = await outcome();
+    expect(last).toMatchObject({ cloneId: 'abc-123', status: 'done', projectId: 'p-1' });
+    expect(progressEvents().every((e) => e.threadId === 'clone:abc-123')).toBe(true);
+  });
+
+  test('generates a cloneId when the client sends none', async () => {
+    mocks.cloneRepository.mockReturnValue(okAsync(undefined));
+
+    const res = await postClone(parentDir);
+
+    const { cloneId } = (await res.json()) as { cloneId: string };
+    expect(cloneId).toMatch(/^[\w-]+$/);
+    expect((await outcome()).cloneId).toBe(cloneId);
+  });
+
+  test('refuses a second clone into the same directory while the first runs', async () => {
+    const clone = slowClone();
+    await postClone(parentDir);
+
+    const second = await postClone(parentDir);
+    expect(second.status).toBe(409);
+    expect(mocks.cloneRepository).toHaveBeenCalledTimes(1);
+
+    clone.finish();
+    await outcome();
+    // Finished: the directory is free again (it does not exist on disk here).
+    mocks.cloneRepository.mockReturnValue(okAsync(undefined));
+    expect((await postClone(parentDir)).status).toBe(202);
+  });
+
+  test('rejects a cloneId that is not a plain token', async () => {
+    const res = await postClone(parentDir, { cloneId: '../x' });
+
+    expect(res.status).toBe(400);
+    expect(mocks.cloneRepository).not.toHaveBeenCalled();
   });
 });

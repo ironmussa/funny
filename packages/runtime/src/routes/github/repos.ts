@@ -23,6 +23,13 @@ import { readPaging, readRepoSort } from './query.js';
 export const repoRoutes = new Hono<HonoEnv>();
 
 /**
+ * Clone directories with a clone still running. A large repository takes
+ * minutes, so the route answers before git finishes; this refuses a second
+ * clone into the same directory meanwhile.
+ */
+const clonesInFlight = new Set<string>();
+
+/**
  * Security (#179): the clone goes into `join(parentDir, name)`, so the name
  * (given, or taken from the URL) must be one path segment: no separator on
  * either platform, not `.` or `..`, no NUL.
@@ -156,6 +163,9 @@ async function resolveCloneTarget(
   const clonePathDenied = await requirePickerPath(clonePath);
   if (clonePathDenied) return clonePathDenied;
 
+  if (clonesInFlight.has(clonePath)) {
+    return resultToResponse(c, err(conflict(`A clone into ${clonePath} is already running`)));
+  }
   if (existsSync(clonePath)) {
     return resultToResponse(c, err(badRequest(`Directory already exists: ${clonePath}`)));
   }
@@ -163,8 +173,158 @@ async function resolveCloneTarget(
   return { repoName, clonePath };
 }
 
-// ── POST /clone — clone a repo and create project ──────────
+// ── POST /clone — start a clone that creates the project when done ──
 
+const MAX_CREATE_ATTEMPTS = 3;
+
+/** Unregisters a failed clone's directory, logging (not throwing) a failed removal. */
+async function removeCloneDir(clonePath: string): Promise<void> {
+  await rm(clonePath, { recursive: true, force: true }).catch((rmErr) => {
+    log.warn('Failed to clean up clone directory after a failed clone', {
+      namespace: 'github-routes',
+      clonePath,
+      error: rmErr?.message ?? String(rmErr),
+    });
+  });
+}
+
+/**
+ * Registers the cloned directory as a project. The data channel to the server
+ * can be transiently saturated, or reconnecting, right after a slow clone, so
+ * a thrown failure is retried; a neverthrow `err` is a definitive answer.
+ * Answers the project id, or the error message.
+ */
+async function registerClonedProject(
+  repoName: string,
+  clonePath: string,
+  userId: string,
+): Promise<{ projectId: string } | { error: string }> {
+  try {
+    const result = await retryAsync(
+      async (_signal, attempt) => {
+        try {
+          return await getServices().projects.createProject(repoName, clonePath, userId);
+        } catch (error: any) {
+          log.warn('createProject attempt failed', {
+            namespace: 'github-routes',
+            attempt,
+            maxAttempts: MAX_CREATE_ATTEMPTS,
+            clonePath,
+            error: error?.message ?? String(error),
+          });
+          throw error;
+        }
+      },
+      { times: MAX_CREATE_ATTEMPTS - 1, delayMs: (retry) => 1_000 * retry },
+    );
+    if (result.isErr()) return { error: result.error.message };
+    return { projectId: result.value.id };
+  } catch (error: any) {
+    log.error('createProject failed after successful clone', {
+      namespace: 'github-routes',
+      clonePath,
+      attempts: MAX_CREATE_ATTEMPTS,
+      error: error?.message ?? String(error),
+    });
+    return { error: error?.message ?? 'Failed to register project after clone' };
+  }
+}
+
+interface CloneJob {
+  cloneId: string;
+  cloneUrl: string;
+  clonePath: string;
+  repoName: string;
+  userId: string;
+}
+
+/**
+ * Runs the clone and registers the project, reporting every step as a
+ * `clone:progress` event. The last event has `status: 'done'` with the
+ * project id, or `status: 'failed'` with the error. Never rejects.
+ */
+async function runClone(job: CloneJob): Promise<void> {
+  const { cloneId, cloneUrl, clonePath, repoName, userId } = job;
+  const emitProgress = (data: Omit<WSCloneProgressData, 'cloneId'>) => {
+    wsBroker.emitToUser(userId, {
+      type: 'clone:progress',
+      threadId: `clone:${cloneId}`,
+      data: { cloneId, ...data },
+    });
+  };
+  const fail = (error: string, extra: Record<string, unknown> = {}) => {
+    log.error('Clone failed', {
+      namespace: 'github-routes',
+      cloneId,
+      clonePath,
+      repoName,
+      error,
+      ...extra,
+    });
+    emitProgress({ phase: 'Clone failed', percent: 0, status: 'failed', error });
+  };
+
+  try {
+    // The token travels in git's environment, scoped to https://github.com/,
+    // never in the clone URL (argv, `.git/config`).
+    const resolved = await resolveGithubToken(userId);
+    const startedAt = Date.now();
+    emitProgress({ phase: 'Starting clone...', percent: 0, status: 'running' });
+    const cloned = await cloneRepository(cloneUrl, clonePath, {
+      githubToken: resolved?.token ?? null,
+      onProgress: (rawLine) => {
+        // funny never puts the token in the URL, but a pasted URL may carry one.
+        const line = redactGithubToken(rawLine);
+        // Parse percentage from git output like "Receiving objects:  45% (123/456)"
+        const pctMatch = line.match(/(\d+)%/);
+        emitProgress({
+          phase: line,
+          percent: pctMatch ? Number.parseInt(pctMatch[1], 10) : undefined,
+          status: 'running',
+        });
+      },
+    });
+    if (cloned.isErr()) {
+      const failure = cloned.error;
+      const isProcess = failure.type === 'PROCESS_ERROR';
+      const detail = redactGithubToken((isProcess && failure.stderr?.trim()) || failure.message);
+      fail(detail, {
+        exitCode: (isProcess && failure.exitCode) || 1,
+        durationMs: Date.now() - startedAt,
+      });
+      return;
+    }
+    log.info('Clone finished', {
+      namespace: 'github-routes',
+      cloneId,
+      clonePath,
+      durationMs: Date.now() - startedAt,
+    });
+    emitProgress({ phase: 'Creating project...', percent: 100, status: 'running' });
+
+    const registered = await registerClonedProject(repoName, clonePath, userId);
+    if ('error' in registered) {
+      await removeCloneDir(clonePath);
+      fail(registered.error, { stage: 'create-project' });
+      return;
+    }
+    emitProgress({
+      phase: 'Clone complete',
+      percent: 100,
+      status: 'done',
+      projectId: registered.projectId,
+    });
+  } catch (error: any) {
+    fail(error?.message ?? String(error));
+  }
+}
+
+/**
+ * Starts the clone and answers 202 with its id at once: a large repository
+ * takes longer than the server waits for a runner response, so the outcome
+ * arrives as `clone:progress` events instead. The client may pick the id, so
+ * it can match events that arrive before this response.
+ */
 repoRoutes.post('/clone', async (c) => {
   const userId = c.get('userId') as string;
   const raw = await c.req.json();
@@ -185,108 +345,11 @@ repoRoutes.post('/clone', async (c) => {
     );
   }
 
-  // The token travels in git's environment, scoped to https://github.com/,
-  // never in the clone URL (argv, `.git/config`).
-  const resolved = await resolveGithubToken(userId);
-  const token = resolved?.token ?? null;
+  const cloneId = parsed.value.cloneId ?? crypto.randomUUID();
+  clonesInFlight.add(clonePath);
+  void runClone({ cloneId, cloneUrl, clonePath, repoName, userId }).finally(() =>
+    clonesInFlight.delete(clonePath),
+  );
 
-  // Clone ID for WebSocket progress events
-  const cloneId = `clone:${Date.now()}`;
-
-  const emitProgress = (data: Omit<WSCloneProgressData, 'cloneId'>) => {
-    wsBroker.emitToUser(userId, {
-      type: 'clone:progress',
-      threadId: cloneId,
-      data: { cloneId, ...data },
-    });
-  };
-
-  emitProgress({ phase: 'Starting clone...', percent: 0 });
-  const cloned = await cloneRepository(cloneUrl, clonePath, {
-    githubToken: token,
-    onProgress: (rawLine) => {
-      // funny never puts the token in the URL, but a pasted URL may carry one.
-      const line = redactGithubToken(rawLine);
-      // Parse percentage from git output like "Receiving objects:  45% (123/456)"
-      const pctMatch = line.match(/(\d+)%/);
-      emitProgress({
-        phase: line,
-        percent: pctMatch ? Number.parseInt(pctMatch[1], 10) : undefined,
-      });
-    },
-  });
-  if (cloned.isErr()) {
-    const failure = cloned.error;
-    const isProcess = failure.type === 'PROCESS_ERROR';
-    const detail = redactGithubToken((isProcess && failure.stderr?.trim()) || failure.message);
-    const exitCode = (isProcess && failure.exitCode) || 1;
-    emitProgress({ phase: 'Clone failed', percent: 0, error: detail });
-    return resultToResponse(c, err(processError(`Clone failed: ${detail}`, exitCode, detail)));
-  }
-  emitProgress({ phase: 'Clone complete', percent: 100 });
-
-  // Create the project. The data channel to the server (Socket.IO) can be
-  // transiently saturated or in the middle of a reconnect right after a slow
-  // git clone, which causes `data:create_project` to time out even though a
-  // retry a second later succeeds. Retry a few times before giving up.
-  const MAX_ATTEMPTS = 3;
-  let result;
-  let lastError: any = null;
-  try {
-    result = await retryAsync(
-      async (_signal, attempt) => {
-        try {
-          return await getServices().projects.createProject(repoName, clonePath, userId);
-        } catch (error: any) {
-          log.warn('createProject attempt failed', {
-            namespace: 'github-routes',
-            attempt,
-            maxAttempts: MAX_ATTEMPTS,
-            clonePath,
-            error: error?.message ?? String(error),
-          });
-          throw error;
-        }
-      },
-      { times: MAX_ATTEMPTS - 1, delayMs: (retry) => 1_000 * retry },
-    );
-  } catch (error: any) {
-    lastError = error;
-  }
-
-  if (lastError) {
-    log.error('createProject failed after successful clone', {
-      namespace: 'github-routes',
-      clonePath,
-      attempts: MAX_ATTEMPTS,
-      error: lastError?.message ?? String(lastError),
-    });
-    await rm(clonePath, { recursive: true, force: true }).catch((rmErr) => {
-      log.warn('Failed to clean up clone directory after createProject error', {
-        namespace: 'github-routes',
-        clonePath,
-        error: rmErr?.message ?? String(rmErr),
-      });
-    });
-    const msg = lastError?.message ?? 'Failed to register project after clone';
-    emitProgress({ phase: 'Clone failed', percent: 0, error: msg });
-    return resultToResponse(c, err(processError(`Clone failed: ${msg}`, 1, msg)));
-  }
-
-  if (!result || result.isErr()) {
-    const errMsg = result?.isErr() ? result.error.message : 'Unknown error';
-    await rm(clonePath, { recursive: true, force: true }).catch((rmErr) => {
-      log.warn('Failed to clean up clone directory after createProject error', {
-        namespace: 'github-routes',
-        clonePath,
-        error: rmErr?.message ?? String(rmErr),
-      });
-    });
-    emitProgress({ phase: 'Clone failed', percent: 0, error: errMsg });
-    return result
-      ? resultToResponse(c, result)
-      : resultToResponse(c, err(processError(`Clone failed: ${errMsg}`, 1, errMsg)));
-  }
-
-  return c.json(result.value, 201);
+  return c.json({ cloneId }, 202);
 });

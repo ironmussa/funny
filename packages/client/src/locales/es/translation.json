@@ -1437,7 +1437,8 @@
       "projectName": "Nombre del proyecto",
       "cloneAndCreate": "Clonar y Crear Proyecto",
       "cloning": "Clonando {{repo}}...",
-      "success": "Repositorio clonado y proyecto creado!"
+      "success": "Repositorio clonado y proyecto creado!",
+      "failed": "No se pudo clonar: {{error}}"
     }
   },
   "todoPanel": {

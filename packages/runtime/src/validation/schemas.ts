@@ -567,6 +567,11 @@ export const cloneRepoSchema = z.object({
     ),
   destinationPath: z.string().min(1, 'Destination path is required'),
   name: z.string().optional(),
+  /** Client-chosen id for the clone's `clone:progress` events. */
+  cloneId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{1,64}$/, 'cloneId must be 1-64 letters, digits, - or _')
+    .optional(),
 });
 
 export const githubPollSchema = z.object({

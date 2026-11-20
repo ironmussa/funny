@@ -1,4 +1,4 @@
-import type { GitHubRepo, Project } from '@funny/shared';
+import type { GitHubRepo } from '@funny/shared';
 
 import { request } from './_core';
 
@@ -52,10 +52,11 @@ export const githubApi = {
     const qs = p.toString();
     return request<{ repos: GitHubRepo[]; hasMore: boolean }>(`/github/repos${qs ? `?${qs}` : ''}`);
   },
-  cloneRepo: (cloneUrl: string, destinationPath: string, name?: string) =>
-    request<Project>('/github/clone', {
+  /** Starts the clone; its outcome arrives as `clone:progress` events with this id. */
+  cloneRepo: (cloneUrl: string, destinationPath: string, name: string, cloneId: string) =>
+    request<{ cloneId: string }>('/github/clone', {
       method: 'POST',
-      body: JSON.stringify({ cloneUrl, destinationPath, name }),
+      body: JSON.stringify({ cloneUrl, destinationPath, name, cloneId }),
     }),
   githubIssues: (
     projectId: string,

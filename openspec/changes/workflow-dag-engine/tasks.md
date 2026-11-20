@@ -2,14 +2,14 @@
 
 ## 1. Executor in `@funny/pipelines`
 
-- [ ] 1.1 Implement the ready-queue scheduler behind `runPipeline` (node states, Effect fibers with per-node `AbortSignal`, run `maxConcurrency`, implicit chain when no node has `dependsOn`, context built from transitive dependencies); verify by running the existing `pipelines` test suite unchanged plus new tests for "a slow branch does not hold another" and declaration-order flows
+- [x] 1.1 Implement the ready-queue scheduler behind `runPipeline` (node states, Effect fibers with per-node `AbortSignal`, run `maxConcurrency`, implicit chain when no node has `dependsOn`, context built from transitive dependencies); verify by running the existing `pipelines` test suite unchanged plus new tests for "a slow branch does not hold another" and declaration-order flows
 - [ ] 1.2 Add join rules (`all_success`, `all_done`, `one_success`) and skip propagation; verify with one test per spec scenario
 - [ ] 1.3 Add loop regions (region computation, reset and visit counter, outside nodes wait, `until` after the declaring node, "loop exhausted", `LOOP_ITERATION`); verify with tests for a single loop, nested loops, exhaustion, and the `code-review` built-in behaving as before
 - [ ] 1.4 Failure handling across branches (`on_error: fail` cancels running siblings and waits for them; `continue` lets joins decide; run cancellation interrupts every fiber); verify with cancellation tests that assert signals aborted and no fiber left running
 - [ ] 1.5 Add the `ConcurrencyGate` port with an in-memory FIFO default, `resolveLimit` and `priority` hooks, `waiting_slot` state reported through `onStateChange`, and release on end / failure / cancel; verify with tests for limit 1 across two runs, different groups, cancellation while waiting, and release on failure
 - [ ] 1.6 Add the `Journal` port with an in-memory default; skip recorded successes, evaluate conditions on recorded outputs, re-run an unfinished execution with `resume.recorded`; verify with resume tests for parallel branches and a loop's second visit
 - [ ] 1.7 Add batch groups to the `ConcurrencyGate` (leader + up to `max - 1` members within `wait`, member outcomes settled by the leader and journaled under each member run, `requeued` members back in their place, cancelled members leave, unsettled members return on leader cancellation or loss) with the in-memory gate; verify with tests for a batch of three, a failed member, a requeued member, a cancelled member, a cancelled leader and leader loss
-- [ ] 1.8 Delete the level-by-level DAG mode and the sequential mode once 1.1–1.6 pass; update the package docs in `packages/pipelines` source comments
+- [ ] 1.8 Delete the level-by-level DAG mode and the sequential mode once 1.1–1.6 pass; update the package docs in `packages/pipelines` source comments (1.1 already replaced both modes behind `runPipeline`, since the old suite passed unchanged; what is left is `computeLevels`, now used only to validate the graph, and the package docs)
 
 ## 2. Workflow schema, validation and compiler
 

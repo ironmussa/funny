@@ -245,10 +245,12 @@ interface CloneJob {
  */
 async function runClone(job: CloneJob): Promise<void> {
   const { cloneId, cloneUrl, clonePath, repoName, userId } = job;
+  // No thread: the event travels as an unscoped user event (runner-protocol
+  // `isRunnerUserEventType`), matched by `cloneId` in the browser.
   const emitProgress = (data: Omit<WSCloneProgressData, 'cloneId'>) => {
     wsBroker.emitToUser(userId, {
       type: 'clone:progress',
-      threadId: `clone:${cloneId}`,
+      threadId: '',
       data: { cloneId, ...data },
     });
   };

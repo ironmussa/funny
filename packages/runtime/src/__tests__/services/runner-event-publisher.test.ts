@@ -76,4 +76,28 @@ describe('RunnerEventPublisher', () => {
     // Never stored for replay.
     expect(append).not.toHaveBeenCalled();
   });
+
+  // Regression: clone progress went out thread-scoped as `clone:<id>`, which
+  // the server refused, so the clone view never showed progress or finished.
+  test('clone progress goes out as a user event, not a thread event', () => {
+    const send = vi.fn(() => true);
+    const store = new GrpcEventReplayStore(':memory:');
+    const append = vi.spyOn(store, 'append');
+    const publisher = new RunnerEventPublisher({ send }, store);
+    publisher.setUserEventsEnabled(true);
+
+    publisher.publish({
+      type: 'clone:progress',
+      threadId: '',
+      data: { cloneId: 'c-1', phase: 'Clone complete', status: 'done', projectId: 'p-1' },
+    });
+
+    expect(send).toHaveBeenCalledWith('events', {
+      userEvent: {
+        eventType: 'clone:progress',
+        data: { cloneId: 'c-1', phase: 'Clone complete', status: 'done', projectId: 'p-1' },
+      },
+    });
+    expect(append).not.toHaveBeenCalled();
+  });
 });

@@ -42,9 +42,11 @@ export const RUNNER_GRPC_WS_MAX_BUFFERED_BYTES = 16 * 1024 * 1024;
 /**
  * Event types a runner may send as an unscoped `UserEvent` (relayed only to
  * the runner owner's browser sessions, never persisted). Both ends enforce it.
+ * `clone:progress` belongs to no thread: as a thread-scoped event the server
+ * refused it (no thread `clone:<id>`), so the clone view never got progress.
  */
 export function isRunnerUserEventType(type: string): boolean {
-  return type.startsWith('browser-session:');
+  return type.startsWith('browser-session:') || type === 'clone:progress';
 }
 
 /**

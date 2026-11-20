@@ -203,7 +203,8 @@ describe('POST /clone runs in the background', () => {
     clone.finish();
     const last = await outcome();
     expect(last).toMatchObject({ cloneId: 'abc-123', status: 'done', projectId: 'p-1' });
-    expect(progressEvents().every((e) => e.threadId === 'clone:abc-123')).toBe(true);
+    // Unscoped: a thread-scoped event for `clone:<id>` is refused by the server.
+    expect(progressEvents().every((e) => e.threadId === '')).toBe(true);
   });
 
   test('generates a cloneId when the client sends none', async () => {

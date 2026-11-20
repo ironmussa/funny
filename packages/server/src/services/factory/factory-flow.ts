@@ -10,11 +10,22 @@
  * means a pull request cannot change the flow that would merge it. A
  * repository copy that does not parse is an error, never a silent fallback to
  * the built-in.
+ *
+ * The factory adds one rule to the engine's (change workflow-dag-engine, D7):
+ * every agent step after the first continues the run's one thread, and a
+ * thread runs one agent turn at a time, so two agent steps cannot be in
+ * parallel branches (`agentStepIssues`).
  */
 
 import type { GithubCallError } from '@funny/core/github-app';
 import type { PipelineDefinition } from '@funny/pipelines';
-import { formatParseError, loadWorkflowCatalog, parseWorkflowYaml } from '@funny/workflows';
+import {
+  formatParseError,
+  loadWorkflowCatalog,
+  parseWorkflowYaml,
+  type ParsedWorkflow,
+  type WorkflowIssue,
+} from '@funny/workflows';
 import { compileYamlPipeline, type YamlPipelineContext } from '@funny/workflows/compiler';
 import { err, ok, type Result } from 'neverthrow';
 
@@ -40,12 +51,53 @@ export interface FactoryFlow {
   pipeline: PipelineDefinition<YamlPipelineContext>;
 }
 
+type FlowNode = ParsedWorkflow['nodes'][number];
+
+/** Whether the node runs an agent on the run's thread (its action or a fixer it may spawn). */
+function runsAgent(node: FlowNode): boolean {
+  return !!(node.spawn_agent || node.retry?.before_retry || node.approval?.on_reject);
+}
+
+/** Every node `id` depends on, directly or not. */
+function ancestorsOf(id: string, depsOf: Map<string, string[]>): Set<string> {
+  const seen = new Set<string>();
+  const stack = [...(depsOf.get(id) ?? [])];
+  for (let dep = stack.pop(); dep !== undefined; dep = stack.pop()) {
+    if (seen.has(dep)) continue;
+    seen.add(dep);
+    stack.push(...(depsOf.get(dep) ?? []));
+  }
+  return seen;
+}
+
+/**
+ * Two agent steps neither of which depends on the other (directly or not)
+ * could run at once and both drive the run's one thread: refused, naming both.
+ */
+export function agentStepIssues(workflow: ParsedWorkflow): WorkflowIssue[] {
+  const depsOf = new Map(workflow.nodes.map((n) => [n.id, n.depends_on]));
+  const agents = workflow.nodes
+    .map((node, index) => ({ node, index, ancestors: ancestorsOf(node.id, depsOf) }))
+    .filter(({ node }) => runsAgent(node));
+  const issues: WorkflowIssue[] = [];
+  for (const [i, a] of agents.entries()) {
+    for (const b of agents.slice(i + 1)) {
+      if (a.ancestors.has(b.node.id) || b.ancestors.has(a.node.id)) continue;
+      issues.push({
+        path: `nodes.${b.index}`,
+        message: `Agent steps "${a.node.id}" and "${b.node.id}" are in parallel branches, but a factory run has one agent thread that runs one turn at a time. Make one depend on the other.`,
+      });
+    }
+  }
+  return issues;
+}
+
 function compile(
   yaml: string,
   origin: string,
   source: FactoryFlow['source'],
 ): Result<FactoryFlow, FactoryFlowError> {
-  const parsed = parseWorkflowYaml(yaml, origin);
+  const parsed = parseWorkflowYaml(yaml, origin, { validate: agentStepIssues });
   if (!parsed.ok) return err({ kind: 'invalid', message: formatParseError(parsed.error) });
   try {
     return ok({

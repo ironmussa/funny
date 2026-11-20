@@ -233,6 +233,14 @@ describe('selectActivityThreads', () => {
     expect(threads.map((t) => t.id)).toEqual(['old-running', 'c5', 'c4', 'c3', 'c2']);
   });
 
+  test('a thread still setting up its worktree is listed from its first prompt', () => {
+    const rows = [
+      thread('older', { status: 'completed', completedAt: '2026-02-01T00:00:00.000Z' }),
+      thread('preparing', { status: 'setting_up', createdAt: '2026-03-01T00:00:00.000Z' }),
+    ];
+    expect(selectActivityThreads(rows).threads.map((t) => t.id)).toEqual(['preparing', 'older']);
+  });
+
   test('spec: archiving through any path removes it from Activity and adds it to the archived column', async () => {
     mockApi.listThreads.mockReturnValue(
       okAsync({ threads: [thread('t1', { status: 'completed', stage: 'review' })], total: 1 }),

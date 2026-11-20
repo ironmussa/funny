@@ -31,6 +31,17 @@ Creating a thread spans the server and the runtime.
 - **Server** (`packages/server/src/modules/threads/`) normalizes the request and enforces scratch invariants before any I/O. Errors are checked in this order: `scratch-thread-cannot-have-project`, then `scratch-thread-must-be-local`, then `projectId is required`. The server then resolves **the authenticated user's own** runner. There is never a fallback to another user's runner. It forwards the payload with a signed identity (unknown fields pass through unchanged), registers the returned thread in the central DB, and caches the thread→runner route. The runtime's branch value wins over the request's branch. The legacy `__default__` runner skips registration and caching.
 - **Runtime** (`packages/runtime/src/services/thread-service/`) does the actual creation: DB row via the data channel, worktree/branch, and agent start.
 
+### Worktree preparation
+
+A new worktree thread is answered at once in `setting_up`. Its first prompt is already stored, and the sidebar Activity list shows it. The worktree is prepared in the background, then the thread moves to `pending` and the agent starts. Every flow that gives a thread a new worktree (new thread, idle thread started later, convert to worktree) calls `prepareWorktree` (`thread-service/worktree-preparation.ts`). It runs the checkout (`createWorktree`), then `setupWorktree`: ports, `.env` copies and the `.funny.json` `postCreate` commands, which are best-effort.
+
+- **Location.** By default, `<parent>/.funny-worktrees/<project>/`, next to the project. With `FUNNY_WORKTREE_ROOT` set on the runner, new worktrees go to `<root>/.funny-worktrees/<project>-<hash of the project path>/`. The hash keeps two same-named projects apart, because `pruneOrphanWorktrees` deletes every folder of a base that the project's git does not register. Worktrees made before the setting stay valid: containment checks, prune, port de-duplication, file and PTY scopes all use `getWorktreeBasePaths` (current base plus the sibling one). Use it when projects live on a slow mount (NTFS over FUSE, a network share): the checkout and `bun install` then run on a local disk, and Bun hardlinks from its cache instead of copying every file.
+- **Telemetry** (Abbacchio, channel `funny-runtime`). One trace per preparation:
+  - The `worktree.prepare` span has attributes `flow`, `outcome`, `worktree.root_configured`, `create.ms`, `post_create.ms` and `post_create.errors`.
+  - Its children are the `worktree.create` and `worktree.post_create` phase spans, plus one `worktree.setup.step` span per progress step (`step` = `worktree:create`, `ports`, `cmd:bun install`, …).
+  - The histograms `worktree.prepare.duration` and `worktree.setup.step.duration` are in ms.
+  - Summarize them with `bun scripts/analyze-worktree-setup.ts`.
+
 Remote creation and registration are not atomic. If the registry write fails after the runner succeeds, the request returns `502 Thread creation failed` and is not retried. The use case is `makeCreateThread` (public API in `modules/threads/index.ts`). Production wiring is `composeCreateThread` in `modules/threads/composition.ts`. See the [architecture overview](../architecture/overview.md#server-feature-module-pilot-modulesthreads).
 
 ## Thread fork flow

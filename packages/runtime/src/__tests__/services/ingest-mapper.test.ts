@@ -49,7 +49,9 @@ vi.mock('../../services/shutdown-manager.js', () => ({
   ShutdownPhase: { SERVICES: 'services' },
 }));
 
-vi.mock('@funny/core/git', () => ({
+vi.mock('@funny/core/git', async (importOriginal) => ({
+  getWorktreeBasePaths: (await importOriginal<typeof import('@funny/core/git')>())
+    .getWorktreeBasePaths,
   getCurrentBranch: mocks.getCurrentBranch,
   getRemoteUrl: mocks.getRemoteUrl,
 }));

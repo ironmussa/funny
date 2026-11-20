@@ -1,6 +1,8 @@
+import { createHash } from 'crypto';
 import { existsSync, readFileSync, realpathSync } from 'fs';
 import { mkdir, rm, stat } from 'fs/promises';
-import { resolve, dirname, basename, normalize, join } from 'path';
+import { homedir } from 'os';
+import { resolve, dirname, basename, normalize, join, isAbsolute } from 'path';
 
 import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
@@ -83,10 +85,61 @@ async function forgetSafeDirectory(dirPath: string): Promise<void> {
 
 export const WORKTREE_DIR_NAME = '.funny-worktrees';
 
-/** Compute the worktree base path without creating the directory. */
-export function getWorktreeBasePath(projectPath: string): string {
-  const projectName = basename(projectPath);
-  return resolve(dirname(projectPath), WORKTREE_DIR_NAME, projectName);
+/**
+ * Runner setting: the directory that holds every project's worktrees, instead
+ * of a `.funny-worktrees` folder next to each project. Point it at a fast local
+ * disk when projects live on a slow mount (an NTFS/FUSE drive, a network
+ * share): the checkout and `bun install` then run there, and the package
+ * manager can hardlink from its cache instead of copying every file.
+ */
+export const WORKTREE_ROOT_ENV = 'FUNNY_WORKTREE_ROOT';
+
+type WorktreeEnv = Readonly<Record<string, string | undefined>>;
+
+/** The configured worktree root, or null when unset or not absolute. */
+export function configuredWorktreeRoot(env: WorktreeEnv = process.env): string | null {
+  const raw = env[WORKTREE_ROOT_ENV]?.trim();
+  if (!raw) return null;
+  const expanded = raw === '~' || raw.startsWith('~/') ? join(homedir(), raw.slice(1)) : raw;
+  return isAbsolute(expanded) ? resolve(expanded) : null;
+}
+
+/** The base next to the project: `<parent>/.funny-worktrees/<project>`. */
+function siblingWorktreeBasePath(projectPath: string): string {
+  return resolve(dirname(projectPath), WORKTREE_DIR_NAME, basename(projectPath));
+}
+
+/**
+ * The base under the configured root. Several projects share that root, so the
+ * folder carries a hash of the project path: two projects with the same name
+ * must never share a base (`pruneOrphanWorktrees` deletes every folder of the
+ * base that the project's git does not register).
+ */
+function rootWorktreeBasePath(root: string, projectPath: string): string {
+  const absolute = resolve(projectPath);
+  const hash = createHash('sha256').update(absolute).digest('hex').slice(0, 8);
+  return resolve(root, WORKTREE_DIR_NAME, `${basename(absolute)}-${hash}`);
+}
+
+/** Where new worktrees of the project are created (the directory may not exist yet). */
+export function getWorktreeBasePath(projectPath: string, env: WorktreeEnv = process.env): string {
+  const root = configuredWorktreeRoot(env);
+  return root ? rootWorktreeBasePath(root, projectPath) : siblingWorktreeBasePath(projectPath);
+}
+
+/**
+ * Every base that may hold worktrees of the project: the current one first,
+ * then the base next to the project. Worktrees created before
+ * `FUNNY_WORKTREE_ROOT` was set stay valid, so path checks, cleanup and port
+ * de-duplication must consider both.
+ */
+export function getWorktreeBasePaths(
+  projectPath: string,
+  env: WorktreeEnv = process.env,
+): string[] {
+  const current = getWorktreeBasePath(projectPath, env);
+  const sibling = siblingWorktreeBasePath(projectPath);
+  return current === sibling ? [current] : [current, sibling];
 }
 
 export function getWorktreeBase(projectPath: string): ResultAsync<string, DomainError> {
@@ -419,16 +472,16 @@ function assertWorktreeInProjectBase(
   if (worktreePath.startsWith('-')) {
     return badRequest('worktreePath must not start with "-"');
   }
-  const base = getWorktreeBasePath(projectPath);
-  let realBase: string;
+  const realBases = getWorktreeBasePaths(projectPath).map((base) => {
+    try {
+      return realpathSync(base);
+    } catch {
+      // Base hasn't been created yet — fall back to the lexical path. No
+      // worktrees can exist below it in that state anyway.
+      return resolve(base);
+    }
+  });
   let realTarget: string;
-  try {
-    realBase = realpathSync(base);
-  } catch {
-    // Base hasn't been created yet — fall back to the lexical path. No
-    // worktrees can exist below it in that state anyway.
-    realBase = resolve(base);
-  }
   try {
     realTarget = realpathSync(worktreePath);
   } catch {
@@ -439,7 +492,9 @@ function assertWorktreeInProjectBase(
   // A worktree is always a direct child of the base (`createWorktree` strips
   // slashes from its directory name). The base itself or anything deeper
   // would make the `rm -rf` fallback delete other worktrees (issue #178).
-  const isWorktreeDir = dirname(realTarget) === realBase && realTarget !== realBase;
+  const isWorktreeDir = realBases.some(
+    (realBase) => dirname(realTarget) === realBase && realTarget !== realBase,
+  );
   if (!isWorktreeDir) {
     return badRequest(
       `worktreePath is not one of the project's worktree directories (project: ${projectPath})`,
@@ -602,6 +657,29 @@ export async function getLastGitActivity(worktreePath: string): Promise<number |
  * Preview a worktree creation without actually creating it.
  * Returns the sanitized directory name, branch name, path, and whether it already exists.
  */
+/** Remove the folders of a worktree base that git no longer registers. */
+async function pruneUnregisteredDirs(base: string, registeredPaths: Set<string>): Promise<number> {
+  let pruned = 0;
+  try {
+    const { readdir } = await import('fs/promises');
+    const entries = await readdir(base, { withFileTypes: true });
+    for (const entry of entries) {
+      if (!entry.isDirectory()) continue;
+      const dirPath = normalize(resolve(base, entry.name));
+      if (registeredPaths.has(dirPath)) continue;
+      try {
+        await rm(dirPath, { recursive: true, force: true });
+        pruned++;
+      } catch {
+        // Best-effort cleanup
+      }
+    }
+  } catch {
+    // Base directory unreadable — nothing to prune
+  }
+  return pruned;
+}
+
 /**
  * Prune orphan worktrees for a given project path.
  * Runs `git worktree prune` to clean up stale bookkeeping entries,
@@ -614,8 +692,8 @@ export function pruneOrphanWorktrees(projectPath: string): ResultAsync<number, D
       // Run git worktree prune to clean stale entries
       await gitWrite(['worktree', 'prune'], { cwd: projectPath, reject: false });
 
-      const base = getWorktreeBasePath(projectPath);
-      if (!existsSync(base)) return 0;
+      const bases = getWorktreeBasePaths(projectPath).filter((base) => existsSync(base));
+      if (bases.length === 0) return 0;
 
       // List registered worktrees
       const listResult = await readWorktreeEntries(projectPath);
@@ -624,27 +702,8 @@ export function pruneOrphanWorktrees(projectPath: string): ResultAsync<number, D
       if (listResult.isErr()) return 0;
       const registeredPaths = new Set<string>(listResult.value.map((w) => normalize(w.path)));
 
-      // Check for orphan directories under the worktree base
       let pruned = 0;
-      try {
-        const { readdir } = await import('fs/promises');
-        const entries = await readdir(base, { withFileTypes: true });
-        for (const entry of entries) {
-          if (!entry.isDirectory()) continue;
-          const dirPath = normalize(resolve(base, entry.name));
-          if (!registeredPaths.has(dirPath)) {
-            try {
-              await rm(dirPath, { recursive: true, force: true });
-              pruned++;
-            } catch {
-              // Best-effort cleanup
-            }
-          }
-        }
-      } catch {
-        // Base directory unreadable — nothing to prune
-      }
-
+      for (const base of bases) pruned += await pruneUnregisteredDirs(base, registeredPaths);
       return pruned;
     })(),
     (error) => internal(String(error)),

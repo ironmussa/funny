@@ -1,5 +1,5 @@
 import type { GitHubPR, PRFilterOptions } from '@funny/shared';
-import { ExternalLink, GitPullRequest, RefreshCw } from 'lucide-react';
+import { GitPullRequest, RefreshCw } from 'lucide-react';
 import type { ReactNode } from 'react';
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -15,12 +15,17 @@ import {
   hasActivePRFilters,
   type PRFilterState,
 } from '@/components/pull-requests/PRFilterBar';
+import {
+  TabToolbar,
+  TabToolbarExternalLink,
+  TabToolbarRefresh,
+  TabToolbarSpacer,
+} from '@/components/review-pane/TabToolbar';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LabelBadge } from '@/components/ui/label-badge';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { applyPRMetadata } from '@/data/git-status/actions';
 import { useProjectCurrentBranch } from '@/data/projects/hooks';
 import { usePRDetail } from '@/data/pull-requests/hooks';
@@ -30,7 +35,7 @@ import { usePagedGitHubList, type FetchGitHubListPage } from '@/hooks/use-paged-
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { listRowClassName } from '@/lib/list-row-styles';
-import { cn, resolveThreadBranch } from '@/lib/utils';
+import { resolveThreadBranch } from '@/lib/utils';
 import {
   useThreadId,
   useThreadBranch,
@@ -140,25 +145,8 @@ function PullRequestsToolbar({
   const { t } = useTranslation();
 
   return (
-    <div
-      className="border-sidebar-border flex items-center gap-1.5 overflow-x-auto border-b px-2 py-1.5"
-      data-testid="prs-toolbar"
-    >
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            onClick={onRefresh}
-            disabled={loading}
-            className="text-muted-foreground shrink-0"
-            data-testid="prs-refresh"
-          >
-            <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">{t('common.refresh', 'Refresh')}</TooltipContent>
-      </Tooltip>
+    <TabToolbar data-testid="prs-toolbar">
+      <TabToolbarRefresh loading={loading} onRefresh={onRefresh} data-testid="prs-refresh" />
 
       <PRFilterBar
         value={filters}
@@ -172,34 +160,16 @@ function PullRequestsToolbar({
         className="min-w-max flex-nowrap"
       />
 
-      <div className="min-w-0 flex-1" />
+      <TabToolbarSpacer />
 
       {repoInfo ? (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              asChild
-              className="text-muted-foreground shrink-0"
-              data-testid="prs-open-github"
-            >
-              <a
-                href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/pulls`}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label={t('review.pullRequests.openOnGithub', 'Open pull requests on GitHub')}
-              >
-                <ExternalLink className="icon-base" />
-              </a>
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="bottom">
-            {t('review.pullRequests.openOnGithub', 'Open on GitHub')}
-          </TooltipContent>
-        </Tooltip>
+        <TabToolbarExternalLink
+          href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/pulls`}
+          label={t('review.pullRequests.openOnGithub', 'Open pull requests on GitHub')}
+          data-testid="prs-open-github"
+        />
       ) : null}
-    </div>
+    </TabToolbar>
   );
 }
 
@@ -284,7 +254,7 @@ function PullRequestsContent({
         {currentBranchPRs.length > 0 ? (
           <>
             <div
-              className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground flex items-center gap-1.5 border-b px-3 py-1 text-[10px] font-medium tracking-wide uppercase"
+              className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground text-2xs flex items-center gap-1.5 border-b px-3 py-1 font-medium tracking-wide uppercase"
               data-testid="prs-current-branch-header"
             >
               <span className="shrink-0">
@@ -307,7 +277,7 @@ function PullRequestsContent({
           <>
             {currentBranchPRs.length > 0 ? (
               <div
-                className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground border-b px-3 py-1 text-[10px] font-medium tracking-wide uppercase"
+                className="border-sidebar-border bg-sidebar-accent/30 text-muted-foreground text-2xs border-b px-3 py-1 font-medium tracking-wide uppercase"
                 data-testid="prs-other-header"
               >
                 {t('review.pullRequests.otherPRs', 'Other pull requests')}

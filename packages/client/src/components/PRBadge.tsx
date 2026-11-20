@@ -26,11 +26,11 @@ const SIZE_CLASS = {
     icon: 'h-3 w-3',
   },
   compact: {
-    badge: 'h-[15px] px-1 text-[10px]',
+    badge: 'h-[0.9375rem] px-1 text-2xs',
     icon: 'h-2.5 w-2.5',
   },
   xxs: {
-    badge: 'h-4 px-1 text-[10px]',
+    badge: 'h-4 px-1 text-2xs',
     icon: 'h-2.5 w-2.5',
   },
 } as const;

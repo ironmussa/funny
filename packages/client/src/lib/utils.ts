@@ -1,5 +1,12 @@
 import { type ClassValue, clsx } from 'clsx';
-import { twMerge } from 'tailwind-merge';
+import { extendTailwindMerge } from 'tailwind-merge';
+
+// The small text steps defined in globals.css (`--text-3xs`, `--text-2xs`, `--text-compact`)
+// are font sizes; without this, tailwind-merge reads `text-2xs` as a color and drops the
+// real text color next to it.
+const twMerge = extendTailwindMerge({
+  extend: { theme: { text: ['3xs', '2xs', 'compact'] } },
+});
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));

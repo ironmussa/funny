@@ -35,6 +35,16 @@ describe('cn utility', () => {
     expect(cn('text-red-500', 'text-blue-500')).toBe('text-blue-500');
   });
 
+  test('keeps the text color next to a small text step', () => {
+    expect(cn('text-muted-foreground', 'text-2xs')).toBe('text-muted-foreground text-2xs');
+    expect(cn('text-compact', 'text-foreground')).toBe('text-compact text-foreground');
+  });
+
+  test('small text steps replace other font sizes', () => {
+    expect(cn('text-xs', 'text-2xs')).toBe('text-2xs');
+    expect(cn('text-3xs', 'text-compact')).toBe('text-compact');
+  });
+
   test('preserves non-conflicting classes', () => {
     expect(cn('p-4', 'mt-2', 'flex')).toBe('p-4 mt-2 flex');
   });

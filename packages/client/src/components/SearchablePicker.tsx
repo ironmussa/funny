@@ -76,9 +76,7 @@ function DefaultPickerTrigger({
           <TooltipTrigger asChild>
             <span className="truncate font-mono">{displayValue}</span>
           </TooltipTrigger>
-          <TooltipContent className="max-w-[min(28rem,calc(100vw-2rem))] font-mono break-all">
-            {title}
-          </TooltipContent>
+          <TooltipContent variant="mono">{title}</TooltipContent>
         </Tooltip>
       ) : (
         <span className="truncate font-mono">{displayValue}</span>

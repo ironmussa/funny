@@ -12,10 +12,12 @@ whatever the flow says. An agent SHALL receive another role's result only as the
 result the server stored, and SHALL NOT be given another agent's thread.
 
 #### Scenario: The reviewer cannot write
+
 - **WHEN** a repository flow sets `permission_mode: autoEdit` on its `review` step
 - **THEN** the flow is refused when it loads, naming the step and the field
 
 #### Scenario: The reviewer does not see the implementer's thread
+
 - **WHEN** the review step of a run starts
 - **THEN** its prompt contains the run's contract, the commit to review and the pull request,
   and no message from the implementer's thread
@@ -30,11 +32,13 @@ SHALL NOT be merged and SHALL park in `waiting_human`, and an incident SHALL esc
 person.
 
 #### Scenario: A review answers in prose
+
 - **WHEN** a review's final message has no valid result, twice
 - **THEN** the run parks in `waiting_human` with the reason "review gave no verdict" and the
   pull request is not merged
 
 #### Scenario: A triage answers in prose
+
 - **WHEN** a triage's final message has no valid result, twice
 - **THEN** the implementer starts without a contract and the run row shows "no contract"
 
@@ -49,15 +53,18 @@ one comment on the issue from a fixed template, with at most five questions or p
 holding no concurrency slot.
 
 #### Scenario: An ambiguous issue
+
 - **WHEN** triage answers `needs_info` with two questions
 - **THEN** the issue gets one comment listing the two questions, the run is in `needs_info`,
   and the factory's free slots do not count it
 
 #### Scenario: Triage text cannot mention people
+
 - **WHEN** a triage question contains `@someone` and a link
 - **THEN** the posted comment contains the question without the mention and without the link
 
 #### Scenario: A clear issue
+
 - **WHEN** triage answers `ready`
 - **THEN** the implementer's first prompt includes the contract's acceptance criteria and the
   run row shows the contract
@@ -69,10 +76,12 @@ the triage, on the factory's next tick with a free slot, and SHALL let a member 
 `needs_info` run SHALL keep its issue from being admitted into a second run.
 
 #### Scenario: The author answers
+
 - **WHEN** the issue gets a new comment after a run went to `needs_info`
 - **THEN** on a later tick with a free slot the run is triaged again
 
 #### Scenario: The label does not start a second run
+
 - **WHEN** an issue with a `needs_info` run still carries the factory's label
 - **THEN** no second run is created for it
 
@@ -85,6 +94,7 @@ contract, with a reason naming the run it waits for. A run without a contract SH
 paths nor wait for them.
 
 #### Scenario: Two issues touch the same file
+
 - **WHEN** run #12 is working with likely path `src/db/migrate.ts` and run #13's triage lists
   the same path
 - **THEN** run #13 waits with the reason "paths overlap #12" and starts after #12 leaves those
@@ -100,11 +110,13 @@ factory-configured sensitive path, or the contract lists a risk hint, and `low` 
 agent result SHALL lower the risk class.
 
 #### Scenario: A skipped test
+
 - **WHEN** a CI fix adds `.skip` to a test and the checks turn green
 - **THEN** the run's risk class is `high`, the reviewer receives the finding, and the run row
   shows it
 
 #### Scenario: A small change in ordinary code
+
 - **WHEN** a 60-line change touches no sensitive path and weakens no test
 - **THEN** its risk class is `low`
 
@@ -119,14 +131,17 @@ the checks and the review SHALL run again on the new head commit, up to the revi
 run SHALL park in `waiting_human`.
 
 #### Scenario: Findings are fixed and reviewed again
+
 - **WHEN** the review of commit A fails with a high finding and the implementer pushes commit B
 - **THEN** the checks run on B and a new review thread judges B
 
 #### Scenario: A push after a pass
+
 - **WHEN** a review passed commit A and a new commit B is pushed to the branch
 - **THEN** the pass does not allow merging B
 
 #### Scenario: Rounds run out
+
 - **WHEN** the review fails with a critical finding on the last allowed round
 - **THEN** the run parks in `waiting_human` and nothing is merged
 
@@ -139,11 +154,13 @@ pass and failure for a fail. Without that permission the factory settings SHALL 
 installation must accept the new permission to publish the status.
 
 #### Scenario: A pass is visible on GitHub
+
 - **WHEN** a review passes commit A on an installation with status write permission
 - **THEN** the pull request has a review comment with the verdict and commit A has a successful
   `funny/review` status
 
 #### Scenario: An installation without the new permission
+
 - **WHEN** the installation has not accepted status write permission
 - **THEN** the verdict is posted as a review comment only and the settings show the notice
 
@@ -160,11 +177,13 @@ run whose issue is blocked by another run's issue SHALL follow that run. Each me
 its own run's GitHub access.
 
 #### Scenario: Two runs green on an old base
+
 - **WHEN** runs #12 and #13 have green checks on the same old base and #12 merges first
 - **THEN** #13 is brought up to date with the new base and merged only after its checks are
   green on it
 
 #### Scenario: Removed from GitHub's merge queue
+
 - **WHEN** GitHub's merge queue removes a run's pull request because its checks failed
 - **THEN** the failure is sent to the implementer as a CI fix and the run re-enters the lane
   after its checks and review pass
@@ -178,15 +197,18 @@ branch) SHALL NOT be changeable, whatever the flow or the settings say. The fact
 of runs in flight SHALL keep bounding how many runs it admits.
 
 #### Scenario: Fewer reviewers than implementers
+
 - **WHEN** a factory sets the `review` limit to 1 and two runs reach `review`
 - **THEN** one is reviewed while the other waits for the slot, and implementers of other runs
   keep working
 
 #### Scenario: The merge limit cannot be raised
+
 - **WHEN** a member saves a limit of 2 for `merge`
 - **THEN** the save is refused and merges stay one at a time per repository
 
 #### Scenario: A repository flow without a merge limit
+
 - **WHEN** a repository flow's `merge` node declares no concurrency
 - **THEN** its runs still merge one at a time per repository
 
@@ -200,11 +222,13 @@ history no longer contains the last reviewed commit, the system SHALL park the r
 `waiting_human` and SHALL NOT merge it.
 
 #### Scenario: Conflict after another merge
+
 - **WHEN** #12 merged and #13's update conflicts in `src/app.ts`
 - **THEN** #13's implementer gets a follow-up with the conflict and #12's diff, and #13 goes
   through checks and review again
 
 #### Scenario: Force push
+
 - **WHEN** the implementer rewrites the branch so it no longer contains the reviewed commit
 - **THEN** the run parks in `waiting_human` with the reason "branch history rewritten"
 
@@ -219,11 +243,13 @@ affected enabler. Revert pull requests SHALL NOT be merged automatically. The in
 close, and admissions resume, when the base branch is green again or a member closes it.
 
 #### Scenario: A merge breaks the base branch
+
 - **WHEN** the base branch turns red an hour after #12 merged and the sentinel names #12
 - **THEN** a revert pull request for #12 is opened, #12's enabler is notified, and no factory on
   the repository admits issues until the base branch is green
 
 #### Scenario: Red long after any factory merge
+
 - **WHEN** the base branch turns red three days after the last factory merge
 - **THEN** no incident is opened
 
@@ -241,20 +267,24 @@ whose required checks are not green. A run whose review is missing or not passin
 class is not allowed, SHALL park in `waiting_human` with that reason.
 
 #### Scenario: A green PR is merged and the run completes
+
 - **WHEN** a `merge` step runs on a PR whose head commit passed review, whose risk class is
   `low`, and whose checks are green on the current base
 - **THEN** the PR is merged (or GitHub's merge queue merges it) and the run is marked merged
 
 #### Scenario: Merge is refused when checks are not green
+
 - **WHEN** a `merge` step runs on a PR whose required checks are not green
 - **THEN** the step does not merge and the run does not reach the merged state
 
 #### Scenario: A high-risk change waits for a person
+
 - **WHEN** a `merge` step runs on a reviewed PR whose risk class is `high` and the factory
   allows only `low_risk`
 - **THEN** the run parks in `waiting_human` with the reason "high risk" and the PR is not merged
 
 #### Scenario: An unreviewed PR in a flow without a review step
+
 - **WHEN** a repository flow has no `review` step and its `merge` step does not set
   `require_review: false`
 - **THEN** the run parks in `waiting_human` with the reason "no review" and the PR is not

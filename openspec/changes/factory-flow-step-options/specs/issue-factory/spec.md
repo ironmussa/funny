@@ -14,14 +14,17 @@ it. A step that continues the implementing thread SHALL carry its options on the
 message; the first step SHALL carry them on the new thread.
 
 #### Scenario: A fix step runs on a different model than the implementation
+
 - **WHEN** a flow's implement step sets `model: opus` and its `before_retry` sets `model: sonnet`, and CI fails
 - **THEN** the fix runs on the implementing thread with `sonnet`, and the implementation ran with `opus`
 
 #### Scenario: Options do not leak to the next step
+
 - **WHEN** a flow sets `defaults: { model: sonnet }`, a middle agent step sets `model: opus`, and a later agent step sets no model
 - **THEN** the later step runs with `sonnet`
 
 #### Scenario: Tool restrictions are applied
+
 - **WHEN** an agent step sets `denied_tools: [WebFetch]`
 - **THEN** that step's agent runs without `WebFetch`
 
@@ -37,18 +40,22 @@ missing flow does. A flow that the factory used to accept and that sets only fie
 applies SHALL keep loading.
 
 #### Scenario: An unsupported permission mode is refused
+
 - **WHEN** a repository's `issue-to-merge.yaml` sets `permission_mode: ask` on its implement step
 - **THEN** the run fails before starting a thread with a message naming the step `implement` and the field `permission_mode`
 
 #### Scenario: An unknown agent field is refused
+
 - **WHEN** an agent step sets `output_format`
 - **THEN** the flow is refused with a message naming the step and `output_format`
 
 #### Scenario: A tool list on a provider that cannot apply it is refused
+
 - **WHEN** an agent step sets `provider: codex` and `denied_tools: [Bash]`
 - **THEN** the flow is refused with a message naming the step, `denied_tools` and the provider
 
 #### Scenario: Today's built-in flows still load
+
 - **WHEN** the factory loads the built-in `issue-to-merge` or `issue-to-pr`
 - **THEN** the flow loads without error
 
@@ -62,14 +69,17 @@ ignored and reported by flow validation. Overrides SHALL apply to runs admitted 
 are saved and to steps that have not started yet.
 
 #### Scenario: A member picks a cheaper model for the CI fix
+
 - **WHEN** a member sets the override `ci.before_retry → model: haiku` and a later run's CI fails
 - **THEN** the fix step runs with `haiku` even though the flow file says another model
 
 #### Scenario: A permission mode cannot be overridden from settings
+
 - **WHEN** a client sends a step override that carries a permission mode
 - **THEN** the settings save is refused with a validation error
 
 #### Scenario: A viewer cannot change overrides
+
 - **WHEN** a project member without `steer` saves step overrides
 - **THEN** the save is refused with 403
 
@@ -83,14 +93,17 @@ implementing thread. The new thread SHALL be recorded with the run, stopped with
 replayed (not started again) when the run resumes.
 
 #### Scenario: A review on another provider
+
 - **WHEN** a flow's `review` step sets `thread: new`, `provider: codex` and `permission_mode: plan`, and the next step continues the implementing thread with `{{review.output}}`
 - **THEN** the review runs on its own thread with `codex`, and the follow-up on the implementing thread receives the review's final message
 
 #### Scenario: A writing step on its own thread is refused
+
 - **WHEN** a flow sets `thread: new` on a step whose resolved permission mode is `autoEdit`
 - **THEN** the flow is refused with a message naming the step
 
 #### Scenario: A resumed run does not start the review again
+
 - **WHEN** the server restarts while a run's `thread: new` step has a recorded thread
 - **THEN** the resumed run waits on that recorded thread and does not start another
 
@@ -104,14 +117,17 @@ naming the path. A step that sets both `prompt` and `prompt_file`, or neither, S
 The file's text SHALL be templated exactly like an inline prompt.
 
 #### Scenario: A shared implement prompt
+
 - **WHEN** a repository's `issue-to-pr.yaml` and `issue-to-merge.yaml` both set `prompt_file: prompts/implement.md`
 - **THEN** both runs send the text of `.funny/workflows/prompts/implement.md` from the default branch, with its variables filled in
 
 #### Scenario: A prompt file on the working branch is ignored
+
 - **WHEN** a run's working branch edits `.funny/workflows/prompts/implement.md`
 - **THEN** the run uses the default branch's version
 
 #### Scenario: A path escaping the workflows directory is refused
+
 - **WHEN** a step sets `prompt_file: ../../secrets.txt`
 - **THEN** the flow fails to load with a message naming the path, and no thread starts
 
@@ -124,10 +140,12 @@ and each agent step's provider, model, effort and permission mode. A resumed or 
 SHALL keep the source it recorded when it started.
 
 #### Scenario: The run row shows a repository flow
+
 - **WHEN** a run executes `.funny/workflows/issue-to-merge.yaml` read at commit `abc1234`
 - **THEN** the run row shows `issue-to-merge`, `repository`, `abc1234`, and the options of each agent step it ran
 
 #### Scenario: A built-in flow is labelled
+
 - **WHEN** a run executes the built-in `issue-to-pr`
 - **THEN** the run row shows the source `built-in` and no commit
 
@@ -141,14 +159,17 @@ resolved options and thread. It SHALL also list step overrides that name no step
 Validation SHALL NOT start a thread or touch the repository.
 
 #### Scenario: A broken repository flow is reported
+
 - **WHEN** a member validates a factory whose repository flow has a YAML syntax error
 - **THEN** validation answers the parse error with its location, and no run or thread is created
 
 #### Scenario: A valid flow is summarized
+
 - **WHEN** a member validates the built-in `issue-to-merge`
 - **THEN** validation lists its steps with their kinds, and for each agent step its resolved options and whether it continues the implementing thread
 
 #### Scenario: A stale override is reported
+
 - **WHEN** the factory has an override for step `review` and the validated flow has no step `review`
 - **THEN** the summary lists the `review` override as unused
 
@@ -160,10 +181,12 @@ branch and open the pull request, and look again. If there is still no pull requ
 SHALL fail as it does today.
 
 #### Scenario: The agent forgot to open the pull request
+
 - **WHEN** the implement step completes, the branch exists, and there is no open pull request from it
 - **THEN** the implementing thread receives a follow-up asking it to open one, and the run continues to CI when it does
 
 #### Scenario: Still no pull request after the follow-up
+
 - **WHEN** the follow-up completes and there is still no open pull request from the branch
 - **THEN** the run fails with the "the agent did not open one" reason
 
@@ -175,6 +198,7 @@ the failed job step when the CI provider reports one, and a bounded tail of its 
 size SHALL stay bounded.
 
 #### Scenario: A failing GitHub Actions job
+
 - **WHEN** a GitHub Actions check fails in its `Run tests` step
 - **THEN** the fix step's context names the head commit, the check, the step `Run tests`, a link to the check, and the end of its log
 
@@ -190,9 +214,11 @@ exhausted without green, the run SHALL reach a non-merged terminal or waiting st
 merging.
 
 #### Scenario: A red check triggers a fix and re-check
+
 - **WHEN** `wait_ci` reports red and the retry limit is not exhausted
 - **THEN** the flow runs its fix step with the failing-check context and re-runs `wait_ci`
 
 #### Scenario: Exhausted retries do not merge
+
 - **WHEN** the fix loop reaches its retry limit without green checks
 - **THEN** the run stops before `merge` in a non-merged state that surfaces the failure

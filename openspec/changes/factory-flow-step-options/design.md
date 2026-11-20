@@ -26,12 +26,14 @@
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One resolution rule for a step's agent options, applied identically by runs and by
   Validate flow.
 - No option written in a flow is ever dropped silently by the factory.
 - Keep the implementing thread as the single writer to the run's branch.
 
 **Non-Goals:**
+
 - Supporting these options in the orchestrator's or runtime pipeline's providers (they keep
   their current behaviour; the schema change is additive for them).
 - A visual flow editor or editing flow files from the UI (`add-workflow-visual-editor` covers
@@ -55,7 +57,7 @@ Model / provider validity uses the same `validateProviderModel` rule as the runt
 shared model registry, so the loader refuses an invalid pair instead of the runner answering 400
 mid-run.
 
-*Alternative:* send only the fields a step sets and let the thread keep the rest. Rejected: the
+_Alternative:_ send only the fields a step sets and let the thread keep the rest. Rejected: the
 runtime persists them, so step N's model would silently become step N+1's.
 
 ### D2. Factory-specific validation is a separate pass after parsing
@@ -73,7 +75,7 @@ provider without tool-policy support; `thread: new` not resolving to `plan`; `th
 the first agent step (there is no implementing thread to keep).
 
 Tool-policy support is a small table in the factory (`claude`, `pi`) rather than a new provider
-manifest field. *Alternative:* add `supportsToolPolicy` to provider manifests. Deferred: a
+manifest field. _Alternative:_ add `supportsToolPolicy` to provider manifests. Deferred: a
 manifest field is the better home once a second consumer needs it; the table has a test that
 fails if a listed provider's process stops reading `disallowedTools`.
 
@@ -103,7 +105,7 @@ the diff with `git fetch origin <branch> && git diff origin/<default>...origin/<
 works in local, worktree (separate worktree, no branch checkout conflict) and sandbox modes.
 `plan` mode keeps it from editing.
 
-*Alternative:* let any step run on a new thread. Rejected for v1: two threads writing one
+_Alternative:_ let any step run on a new thread. Rejected for v1: two threads writing one
 branch race on push and break the "the agent keeps its context" property of the fix loop.
 
 ### D5. Prompt files are resolved before compilation
@@ -190,6 +192,6 @@ actionable error. Reads only.
 2. Ship workflow schema + factory validation + option passing together, so no release accepts
    a field it then drops.
 3. Ship prompt files and the new built-ins, then the UI.
-Rollback: the columns are nullable and unused by older code; repository flows using
-`prompt_file`, `thread` or `defaults` fail to load on an older server with a parse error naming
-the field.
+   Rollback: the columns are nullable and unused by older code; repository flows using
+   `prompt_file`, `thread` or `defaults` fail to load on an older server with a parse error naming
+   the field.

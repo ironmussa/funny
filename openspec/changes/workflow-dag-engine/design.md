@@ -21,6 +21,7 @@ See proposal.md (Why). Current state:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - One executor for every graph shape, with the same entry point (`runPipeline`).
 - Loops, joins and cross-run limits are declared in the flow and enforced by the engine or by
   a host port, never by convention in prompts.
@@ -28,6 +29,7 @@ See proposal.md (Why). Current state:
   parallel.
 
 **Non-Goals:**
+
 - Dynamic fan-out inside a run (map over a list). Fan-out across issues is the factory's runs.
 - Arbitrary back edges outside loops (`goto`).
 - Cross-host concurrency groups for the runtime, orchestrator or harness (in-memory there).
@@ -44,7 +46,7 @@ their order). Each node writes only `outputs[<id>]`; the context a node sees is 
 inputs plus the outputs of its transitive dependencies, so finish order cannot change what a
 node reads. `mergeContexts` stays for hosts with a custom context shape.
 
-*Alternative:* keep levels and add loops. Rejected: a slow branch would hold unrelated
+_Alternative:_ keep levels and add loops. Rejected: a slow branch would hold unrelated
 branches, and loops over levels have no clear region.
 
 ### D2. Join rules
@@ -95,7 +97,7 @@ the group and the requester is first among waiters (`workflow_concurrency_waiter
 `requested_at`). A held lease is renewed every 30 s and expires after 2 min without renewal, so
 a crashed server frees its slots; a resumed run asks again for the slot of a node it was running.
 
-*Alternative:* limits in each host's own code (today's `maxConcurrent`). Rejected: every new
+_Alternative:_ limits in each host's own code (today's `maxConcurrent`). Rejected: every new
 limit would be a new mechanism, and flows could not declare them.
 
 ### D5b. Batch groups: one execution for several runs
@@ -119,7 +121,7 @@ too.
 This is how the factory's merge queue tests and merges several pull requests at once
 (`factory-integration`).
 
-*Alternative:* a separate "collector" node type. Rejected: batching is a property of how a node
+_Alternative:_ a separate "collector" node type. Rejected: batching is a property of how a node
 is shared across runs, which concurrency groups already model.
 
 ### D6. The journal and resume
@@ -172,4 +174,4 @@ journal state, including `waiting_slot`.
 3. Server: journal and lease tables, factory resume through the journal (migrate in-flight
    runs: a run without journal rows resumes through `thread_ids` once, then writes journal rows).
 4. Graph view.
-Rollback: the old executor stays in the repository until step 3 has shipped.
+   Rollback: the old executor stays in the repository until step 3 has shipped.

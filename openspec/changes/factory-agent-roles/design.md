@@ -24,6 +24,7 @@ See proposal.md (Why). The relevant current state:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - Each agent role has a fixed input, permission set, lifetime and result schema, enforced by
   the server, not by the prompt.
 - Nothing reaches the default branch without an independent verdict on the exact commit and
@@ -32,6 +33,7 @@ See proposal.md (Why). The relevant current state:
 - Everything new is a stored state with compare-and-set transitions; restarts resume.
 
 **Non-Goals:**
+
 - A long-lived "merge agent" or any agent holding merge permission.
 - A separate test-writing agent (the deterministic test-weakening check comes first; a flow can
   add a `thread: new` step later).
@@ -70,7 +72,7 @@ visit. `ci` keeps its own `retry.before_retry` fix. The two loop regions start a
 are nested. Because a repository flow can draw its own loops, `merge` never trusts the path
 that led to it: it re-verifies every precondition on entry (D8).
 
-*Alternative:* `spawn_agent` with `output_format` and conventions. Rejected: a repository flow
+_Alternative:_ `spawn_agent` with `output_format` and conventions. Rejected: a repository flow
 could drop `plan` or feed the implementer's thread to the reviewer, and the gate would still
 look like a gate.
 
@@ -84,17 +86,17 @@ without a contract, flagged `contract: none`); reviewer and sentinel fail closed
 escalate). The review result carries the `sha` it reviewed; a mismatch with the commit the
 server asked about is invalid.
 
-*Alternative:* runtime structured output. Rejected for now: it differs per provider (Claude SDK,
+_Alternative:_ runtime structured output. Rejected for now: it differs per provider (Claude SDK,
 Codex, ACP), and the server would still validate.
 
 ### D3. Inputs per role (what each agent does NOT see is the point)
 
-| Role | Gets | Never gets |
-|---|---|---|
-| Triage | issue URL, read-only checkout of the default branch, paths of runs in flight | other threads |
-| Implementer | issue URL, the contract, its own history, then CI failures / findings / conflict diffs as follow-ups | the reviewer's thread |
-| Reviewer | the contract, the commit to review (fetches `origin/<branch>` at that SHA and diffs against the merge base), the PR body, the test-weakening report, the factory's recent and in-flight PRs with their paths | the implementer's thread |
-| Sentinel | the factory merges since the last green default-branch commit (SHA, PR, contract), the failing checks and log tails | any run thread |
+| Role        | Gets                                                                                                                                                                                                         | Never gets               |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+| Triage      | issue URL, read-only checkout of the default branch, paths of runs in flight                                                                                                                                 | other threads            |
+| Implementer | issue URL, the contract, its own history, then CI failures / findings / conflict diffs as follow-ups                                                                                                         | the reviewer's thread    |
+| Reviewer    | the contract, the commit to review (fetches `origin/<branch>` at that SHA and diffs against the merge base), the PR body, the test-weakening report, the factory's recent and in-flight PRs with their paths | the implementer's thread |
+| Sentinel    | the factory merges since the last green default-branch commit (SHA, PR, contract), the failing checks and log tails                                                                                          | any run thread           |
 
 Issue text is never inlined in a prompt (unchanged rule); the contract is model output and is
 inlined, which is acceptable: it was produced by a read-only agent and the reviewer judges
@@ -125,7 +127,7 @@ issue, the watcher triages it first (triage needs a slot), then the run waits in
 `wait_reason = 'paths overlap #N'`, keeping its contract so it is not triaged twice. Runs without
 a contract do not reserve and are not held.
 
-*Alternative:* hard locks on paths. Rejected: `likely_paths` is a prediction; a soft hold that
+_Alternative:_ hard locks on paths. Rejected: `likely_paths` is a prediction; a soft hold that
 the merge lane backs up is enough.
 
 ### D6. Test-weakening check and risk class (deterministic, server)
@@ -166,6 +168,7 @@ nodes: a `pass` for the current head SHA (unless `require_review: false`), the r
 against `auto_merge` (else `waiting_human`), and that the branch still contains the last
 reviewed commit. Then it integrates in one of two modes, chosen by reading the base branch's
 rules:
+
 - **GitHub merge queue required:** the server enqueues the pull request and watches it; removed
   from the queue with failing checks → the failure goes to the implementer (CI-fix path);
   merged → `merged`.
@@ -181,7 +184,7 @@ with a run whose issue is blocked by another run's issue after it. The group is 
 factory on that repository: ordering crosses users, but each merge uses its own run's
 enabler-capped token, so no identity crosses.
 
-*Alternative:* a dedicated lane table with a head slot. Rejected once the engine has
+_Alternative:_ a dedicated lane table with a head slot. Rejected once the engine has
 concurrency groups: it would be a second mechanism for the same rule.
 
 `factory-integration` turns this lane into funny's own merge queue: the group gets
@@ -273,8 +276,8 @@ comments only; the factory settings show "accept the new App permission to publi
    behind `require_review: false` in the built-ins; then flip the built-ins to the gate.
 3. Ship the merge group (after `workflow-dag-engine`) and conflict handling; then the sentinel.
 4. Update the App manifest permission; installations accept it at their pace.
-Rollback: the built-ins can set `require_review: false` and the merge group can be removed from the
-built-ins; new columns are nullable.
+   Rollback: the built-ins can set `require_review: false` and the merge group can be removed from the
+   built-ins; new columns are nullable.
 
 ## Open Questions
 

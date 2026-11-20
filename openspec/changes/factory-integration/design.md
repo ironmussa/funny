@@ -24,6 +24,7 @@ See proposal.md (Why). The state this design starts from:
 ## Goals / Non-Goals
 
 **Goals:**
+
 - A batch of ready pull requests reaches the default branch in about one CI run when it is green,
   and the default branch only ever receives commits that were tested on the base they land on.
 - An LLM is asked to resolve a conflict only when a deterministic step (structural merge,
@@ -31,6 +32,7 @@ See proposal.md (Why). The state this design starts from:
 - No dependency on GitHub's merge queue feature; delegation only where a repository forces it.
 
 **Non-Goals:**
+
 - Speculative testing of several queue prefixes at once (v2, after the metrics show batch
   failure rates and CI cost).
 - Queues partitioned by affected targets (two independent queues per repository).
@@ -50,7 +52,7 @@ to go through it, including the App's; the `merge` node then delegates to it as
 (D2). The choice is read from the rules each time a batch starts, so enabling the requirement
 later switches the repository over.
 
-*Alternative:* always use GitHub's merge queue and only help repositories enable it. Rejected:
+_Alternative:_ always use GitHub's merge queue and only help repositories enable it. Rejected:
 it needs an organization repository and a plan that has it, the repository's CI must listen to
 `merge_group`, and it gives funny no say in batch composition or order.
 
@@ -108,7 +110,7 @@ rebuilds without the member. The same holds for the leader's own run: when it is
 node settles its own member as cancelled, requeues the others and ends; the next leader builds a
 new batch. The batch belongs to its row, not to the run that happens to lead it.
 
-*Alternative:* serial update-branch per pull request (today's plan). Kept as the behaviour of a
+_Alternative:_ serial update-branch per pull request (today's plan). Kept as the behaviour of a
 batch of one; batching is what removes one CI run per pull request.
 
 ### D3. What lands is what was tested
@@ -141,7 +143,7 @@ as `factory-agent-roles` D8) and the readiness check (D12) says so and recommend
 the rule off (the queue already guarantees that what lands was tested on its base) or requiring
 GitHub's merge queue, which then takes over by D1. The queue never bypasses a rule.
 
-*Alternative:* fast-forward the default branch to the tested batch commit. Rejected for v1: it
+_Alternative:_ fast-forward the default branch to the tested batch commit. Rejected for v1: it
 needs push rights around the pull request rules and would drop the squash history the repository
 uses.
 
@@ -206,13 +208,14 @@ recorded too. Nothing is written to the repository's config. `rerere`'s cache st
 common git dir: worktree runs of one repository on a runner share it with each other and with the
 user's checkout; sandboxes do not share it.
 
-*Alternative:* GitHub's update-branch. Rejected as the first step: it has no merge drivers, so it
+_Alternative:_ GitHub's update-branch. Rejected as the first step: it has no merge drivers, so it
 turns resolvable conflicts into agent work.
 
 ### D6. `run_command` in factory flows
 
 The factory accepts `run_command` steps (option (a) of the discussion: any command written in the
 flow, not a fixed list). Limits, enforced by the factory, not the flow:
+
 - the command runs only in the run's own worktree or sandbox, on the enabler's runner, with the
   environment the run's agent has — never on the server;
 - the flow is read only from the default branch (unchanged rule), so commands passed review;
@@ -225,7 +228,7 @@ flow, not a fixed list). Limits, enforced by the factory, not the flow:
 The implementer agent can already run any command in that worktree; this makes deterministic
 steps possible without an LLM and adds no reach the run did not have.
 
-*Alternative:* only a fixed list (integration merge and declared regenerators). Rejected: it would
+_Alternative:_ only a fixed list (integration merge and declared regenerators). Rejected: it would
 need a new list entry for every codemod, while the trust boundary is the same.
 
 ### D7. Declared regenerators
@@ -246,6 +249,7 @@ gets any remaining conflict while it still has the context, instead of at merge 
 Early integration runs outside the flow: the engine has no way to restart a running node from
 outside, and it does not need one. `integrate` and an agent never touch the same worktree at
 once, so the server takes a per-run workspace lock that agent steps also hold:
+
 - an agent step is active (implementing, addressing, or a `run_command`): the run gets
   `integration_pending_at` (a column, not a run state) and the server integrates when the step
   releases the lock, before the next node starts;
@@ -277,6 +281,7 @@ merging, the stacked run parks in `waiting_human`.
 Stacking with squash merges needs three rules, or every stacked run conflicts with its own
 blocker (the base gets one squashed commit, the stacked branch holds the blocker's original
 commits):
+
 - each push to the blocker's branch triggers early integration (D8) of the runs stacked on it,
   merging the blocker's branch in; a stacked run enters the queue only when it contains the
   blocker's merged head, so both sides of the later merge with the base carry the same change;
@@ -347,7 +352,7 @@ batches that needed bisection. `factory.integration_event` gets the matching eve
 2. `run_command` and regenerators behind the flow loader's validation.
 3. The queue with batch size 1 (equivalent to today's plan), then batches and bisection.
 4. Early integration, stacked pull requests and queue order; readiness panel; metrics.
-Rollback: `batch.max: 1` reproduces the serial lane; `dependencies: wait` keeps today's admission.
+   Rollback: `batch.max: 1` reproduces the serial lane; `dependencies: wait` keeps today's admission.
 
 ## Open Questions
 

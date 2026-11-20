@@ -6,6 +6,7 @@
  * timeout and cancellation.
  */
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
+import { createServer, type Server, type Socket } from 'net';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -95,6 +96,49 @@ describe('cloneRepository', () => {
     const result = await cloneRepository(source, destination, { signal: controller.signal });
 
     expect(result.isErr()).toBe(true);
+  });
+});
+
+/**
+ * Regression: the clone had a 10-minute limit on the whole run, so a healthy
+ * 1.5 GB clone was killed mid-download and git deleted its directory. Only a
+ * clone that stops reporting progress is ended now.
+ */
+describe('cloneRepository stall timeout', () => {
+  let server: Server | undefined;
+  const sockets: Socket[] = [];
+  afterEach(async () => {
+    for (const socket of sockets.splice(0)) socket.destroy();
+    await new Promise<void>((resolve) => (server ? server.close(() => resolve()) : resolve()));
+    server = undefined;
+  });
+
+  /** An HTTP "remote" that accepts the connection and never answers. */
+  async function silentRemote(): Promise<string> {
+    server = createServer((socket) => sockets.push(socket));
+    await new Promise<void>((resolve) => server!.listen(0, '127.0.0.1', resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('no port');
+    return `http://127.0.0.1:${address.port}/acme/widget.git`;
+  }
+
+  test('ends a clone that reports no progress', async () => {
+    const url = await silentRemote();
+    const destination = join(tempDir('funny-clone-dst-'), 'widget');
+
+    const result = await cloneRepository(url, destination, { stallTimeout: 500 });
+
+    expect(result.isErr()).toBe(true);
+    expect(result.isErr() && result.error.message).toMatch(/Clone stalled/);
+  }, 15_000);
+
+  test('a clone that keeps reporting progress is not cut off', async () => {
+    const source = sourceRepo();
+    const destination = join(tempDir('funny-clone-dst-'), 'widget');
+
+    const result = await cloneRepository(source, destination, { stallTimeout: 5_000 });
+
+    expect(result.isOk()).toBe(true);
   });
 });
 

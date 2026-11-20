@@ -12,6 +12,7 @@
  * See: openspec/changes/scratch-threads/design.md (D3, D7).
  */
 
+import { existsSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -85,6 +86,21 @@ export function canDoGitOps(thread: { isScratch?: boolean }): boolean {
  */
 export function runsInSandbox(thread: { runtime?: string | null }): boolean {
   return thread.runtime === 'sandbox';
+}
+
+/**
+ * Returns true for a worktree thread whose checkout is gone: its recorded
+ * `worktreePath` has no `.git` entry, because the worktree was removed outside
+ * funny (`git worktree remove`, a deleted folder). A folder that something
+ * recreated without `.git` counts as gone too: git would walk up to the
+ * mount point and answer "not a git repository".
+ */
+export function isWorktreeCheckoutMissing(
+  thread: { mode?: string | null; worktreePath?: string | null },
+  exists: (path: string) => boolean = existsSync,
+): boolean {
+  if (thread.mode !== 'worktree' || !thread.worktreePath) return false;
+  return !exists(join(thread.worktreePath, '.git'));
 }
 
 /**

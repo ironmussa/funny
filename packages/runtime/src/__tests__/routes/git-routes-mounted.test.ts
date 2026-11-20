@@ -1,4 +1,4 @@
-import { statSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
 import { badRequest } from '@funny/shared/errors';
@@ -329,6 +329,63 @@ describe('gitRoutes (mounted)', () => {
       expect(mocks.getLog).not.toHaveBeenCalled();
     },
   );
+
+  test('scratch guard returns 400 for scratch threads (:threadId path)', async () => {
+    mocks.getThread.mockResolvedValue({ id: 't-scratch', isScratch: true, userId: 'user-1' });
+    const app = makeApp();
+
+    const res = await app.request('/api/git/t-scratch/log');
+
+    expect(res.status).toBe(400);
+    expect((await res.json()).code).toBe('git-not-allowed-for-scratch');
+    expect(mocks.getLog).not.toHaveBeenCalled();
+  });
+
+  describe('worktree removed outside funny', () => {
+    const removedWorktree = {
+      id: 't-gone',
+      isScratch: false,
+      userId: 'user-1',
+      projectId: 'p1',
+      mode: 'worktree',
+      worktreePath: '/wt/gone',
+    };
+
+    beforeEach(() => {
+      mocks.getThread.mockResolvedValue(removedWorktree);
+      vi.mocked(existsSync).mockImplementation((path) => String(path) !== '/wt/gone/.git');
+    });
+
+    test.each(['log', 'graph-log', 'diff/summary', 'status'])(
+      'GET /api/git/:threadId/%s answers 409 worktree-missing',
+      async (route) => {
+        const res = await makeApp().request(`/api/git/t-gone/${route}`);
+
+        expect(res.status).toBe(409);
+        const body = await res.json();
+        expect(body.code).toBe('worktree-missing');
+        expect(body.error).toContain('/wt/gone');
+        expect(mocks.gitRead).not.toHaveBeenCalled();
+        expect(mocks.getLog).not.toHaveBeenCalled();
+      },
+    );
+
+    test('a project route with ?threadId= answers 409 worktree-missing', async () => {
+      const res = await makeApp().request('/api/git/project/p1/log?threadId=t-gone');
+
+      expect(res.status).toBe(409);
+      expect((await res.json()).code).toBe('worktree-missing');
+    });
+
+    test('a worktree whose .git is present passes through', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      mocks.getThread.mockResolvedValue({ ...removedWorktree, worktreePath: '/wt/thread' });
+
+      const res = await makeApp().request('/api/git/t-gone/diff');
+
+      expect(res.status).toBe(200);
+    });
+  });
 
   test('scratch guard returns 400 for scratch threads (threadId query)', async () => {
     mocks.getThread.mockResolvedValue({

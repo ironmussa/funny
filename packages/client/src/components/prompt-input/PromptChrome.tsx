@@ -1,4 +1,5 @@
 /** Small presentational pieces around the PromptInputUI prompt box. */
+import { createContext, useContext } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -15,6 +16,17 @@ interface PromptContextBarProps {
 }
 
 const noop = () => {};
+
+/**
+ * Whether the composer's worktree switch is on. The context bar's children
+ * (the branch picker) read it: in worktree mode a picked branch is only the
+ * base of the new worktree, so it must not be checked out in the project.
+ */
+const ComposerWorktreeModeContext = createContext(false);
+
+export function useComposerWorktreeMode(): boolean {
+  return useContext(ComposerWorktreeModeContext);
+}
 
 /**
  * Top context bar — project / repo / branch + worktree switch. Sits visually
@@ -34,7 +46,11 @@ export function PromptContextBar({
       className="text-muted-foreground mb-3 flex min-h-6 items-center gap-2 px-1 text-sm"
       data-testid="new-thread-context-bar"
     >
-      <div className="no-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto">{children}</div>
+      <div className="no-scrollbar flex min-w-0 items-center gap-2 overflow-x-auto">
+        <ComposerWorktreeModeContext.Provider value={createWorktree}>
+          {children}
+        </ComposerWorktreeModeContext.Provider>
+      </div>
       <label className="flex shrink-0 cursor-pointer items-center gap-1.5">
         <Switch
           data-testid="prompt-worktree-switch"

@@ -116,6 +116,7 @@ vi.mock('@funny/core/ports', () => ({
   setupWorktree: mocks.setupWorktree,
 }));
 
+import { getDefaultModel } from '@funny/shared/models';
 import { ok, err, okAsync, errAsync } from 'neverthrow';
 
 // Released on success; the create/send flows await it.
@@ -357,7 +358,6 @@ describe('createAndStartThread', () => {
   test.each([
     {
       name: 'no model: the project provider and model',
-      model: undefined,
       want: ['gpt-5.6-sol', 'codex'],
     },
     {
@@ -365,7 +365,17 @@ describe('createAndStartThread', () => {
       model: 'opus-5.5',
       want: ['opus-5.5', 'claude'],
     },
-  ])('resolves run defaults with $name', async ({ model, want }) => {
+    {
+      name: 'the project provider without model: the project model',
+      provider: 'codex',
+      want: ['gpt-5.6-sol', 'codex'],
+    },
+    {
+      name: 'another provider without model: that provider default model',
+      provider: 'claude',
+      want: [getDefaultModel('claude'), 'claude'],
+    },
+  ])('resolves run defaults with $name', async ({ model, provider, want }) => {
     mocks.projects.getProject.mockResolvedValue({
       ...baseProject,
       defaultProvider: 'codex',
@@ -377,6 +387,7 @@ describe('createAndStartThread', () => {
       mode: 'local',
       prompt: 'Go',
       ...(model ? { model } : {}),
+      ...(provider ? { provider } : {}),
     });
     expect(result.isOk()).toBe(true);
     const args = mocks.startAgent.mock.calls.at(-1) as unknown[];

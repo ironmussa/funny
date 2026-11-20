@@ -1,4 +1,4 @@
-import type { Thread } from '@funny/shared';
+import type { Thread, ThreadWithMessages } from '@funny/shared';
 
 import type { DataLayer } from '../data-layer';
 import { getDataLayer } from '../runtime';
@@ -129,4 +129,37 @@ export function seedProjectThreads(threadsByProject: Record<string, Thread[]>): 
     for (const thread of threads) threadsById[thread.id] = thread;
   }
   seedThreadIndex({ threadsById, threadIdsByProject });
+}
+
+/**
+ * A complete `Thread` for tests and stories: every required field has a
+ * plausible default, so a fixture names only what it is about and needs no
+ * cast. Overrides win.
+ */
+export function buildThread(overrides: Partial<Thread> = {}): Thread {
+  return {
+    id: 't1',
+    projectId: 'p1',
+    userId: 'u1',
+    title: 'Thread',
+    mode: 'local',
+    status: 'completed',
+    stage: 'in_progress',
+    provider: 'claude',
+    permissionMode: 'autoEdit',
+    model: 'sonnet',
+    cost: 0,
+    source: 'web',
+    runtime: 'local',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+/** A loaded thread payload (`buildThread` plus its messages), no messages by default. */
+export function buildThreadWithMessages(
+  overrides: Partial<ThreadWithMessages> = {},
+): ThreadWithMessages {
+  return { ...buildThread(overrides), messages: [], hasMore: false, ...overrides };
 }

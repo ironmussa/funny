@@ -1,4 +1,4 @@
-import type { Thread } from '@funny/shared';
+import type { AgentModel, Message, PermissionMode } from '@funny/shared';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
@@ -127,7 +127,7 @@ vi.mock('@/stores/thread-store-internals', () => ({
 
 import { readThreadIndex } from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildThread, buildThreadWithMessages, withThreadIndex } from '@/data/threads/testing';
 import { prefetchThreadData } from '@/stores/thread-machine-bridge';
 import { useThreadStore } from '@/stores/thread-store';
 import {
@@ -144,18 +144,7 @@ import { handleWSCompactBoundary } from '@/stores/thread-ws-handlers';
 import { deferred } from '../helpers/data-layer-harness';
 import { seedThreads } from '../helpers/seed-thread-state';
 
-const baseThread = {
-  id: 't1',
-  projectId: 'p1',
-  title: 'thread',
-  mode: 'local',
-  status: 'completed',
-  cost: 0,
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-  hasMore: false,
-  messages: [],
-};
+const baseThread = buildThreadWithMessages({ title: 'thread' });
 
 describe('thread store actions', () => {
   beforeEach(() => {
@@ -197,7 +186,10 @@ describe('thread store actions', () => {
     test('passes options to api.sendMessage', async () => {
       mockSendMessage.mockReturnValue(okAsync({ ok: true }));
 
-      const options = { model: 'sonnet' as any, permissionMode: 'auto' as any };
+      const options = {
+        model: 'sonnet',
+        permissionMode: 'auto',
+      } satisfies { model: AgentModel; permissionMode: PermissionMode };
       const result = await useThreadStore.getState().sendMessage('thread-2', 'build it', options);
 
       expect(result).toBe(true);
@@ -273,25 +265,15 @@ describe('thread store actions', () => {
   });
 
   describe('refreshActiveThread (WS-disconnect resync)', () => {
-    const baseThread = {
-      id: 't1',
-      projectId: 'p1',
-      title: 'thread',
-      mode: 'local',
-      status: 'running',
-      cost: 0,
-      createdAt: '2026-01-01T00:00:00.000Z',
-      updatedAt: '2026-01-01T00:00:00.000Z',
-      hasMore: false,
-    };
+    const baseThread = buildThread({ title: 'thread', status: 'running' });
 
     const setActiveThread = (messages: any[]) => {
-      const thread = { ...(baseThread as any), messages };
+      const thread = { ...baseThread, messages };
       useThreadStore.setState({
         selectedThreadId: thread.id,
         threadDataById: { [thread.id]: thread },
         activeThread: thread,
-      } as any);
+      });
     };
 
     beforeEach(() => {
@@ -576,17 +558,13 @@ describe('thread store actions', () => {
     });
 
     test('updates the sidebar row status when a terminal result was missed', async () => {
-      const runningThread = {
-        ...(baseThread as any),
-        status: 'running',
-        messages: [],
-      };
+      const runningThread = buildThreadWithMessages({ ...baseThread, status: 'running' });
       useThreadStore.setState({
         ...seedThreads({ p1: [runningThread] }),
         selectedThreadId: 't1',
         threadDataById: { t1: runningThread },
         activeThread: runningThread,
-      } as any);
+      });
 
       mockGetThread.mockReturnValue(
         okAsync({
@@ -631,9 +609,9 @@ describe('thread store actions', () => {
     test('appends paginated threads without duplicating ids', async () => {
       useThreadStore.setState(
         withThreadIndex({
-          ...seedThreads({ p1: [{ ...baseThread, id: 't1' } as any] }),
+          ...seedThreads({ p1: [{ ...baseThread, id: 't1' }] }),
           threadTotalByProject: { p1: 2 },
-        } as any),
+        }),
       );
       mockListThreads.mockReturnValue(
         okAsync({ threads: [{ ...baseThread, id: 't2', title: 'Page 2' }], total: 2 }),
@@ -655,12 +633,12 @@ describe('thread store actions', () => {
       const payload = { ...baseThread, messages: [] };
       useThreadStore.setState(
         withThreadIndex({
-          ...seedThreads({ p1: [baseThread as any] }),
+          ...seedThreads({ p1: [baseThread] }),
           threadTotalByProject: { p1: 1 },
           selectedThreadId: 't1',
-          activeThread: payload as any,
-          threadDataById: { t1: payload as any },
-        } as any),
+          activeThread: payload,
+          threadDataById: { t1: payload },
+        }),
       );
 
       await useThreadStore.getState().deleteThread('t1', 'p1');
@@ -675,9 +653,9 @@ describe('thread store actions', () => {
     test('stops running threads before delete', async () => {
       useThreadStore.setState(
         withThreadIndex({
-          ...seedThreads({ p1: [{ ...baseThread, status: 'running' } as any] }),
+          ...seedThreads({ p1: [{ ...baseThread, status: 'running' }] }),
           threadTotalByProject: { p1: 1 },
-        } as any),
+        }),
       );
 
       await useThreadStore.getState().deleteThread('t1', 'p1');
@@ -702,12 +680,12 @@ describe('thread store actions', () => {
       };
       useThreadStore.setState(
         withThreadIndex({
-          threadsById: { s1: scratch as any },
+          threadsById: { s1: scratch },
           scratchThreadIds: ['s1'],
           scratchThreadTotal: 1,
           threadIdsByProject: {},
           threadTotalByProject: {},
-        } as any),
+        }),
       );
 
       await useThreadStore.getState().deleteScratchThread('s1');
@@ -731,9 +709,9 @@ describe('thread store actions', () => {
     test('clears selection when passed null', async () => {
       useThreadStore.setState({
         selectedThreadId: 't1',
-        activeThread: { ...baseThread, messages: [] } as any,
-        threadDataById: { t1: { ...baseThread, messages: [] } as any },
-      } as any);
+        activeThread: { ...baseThread, messages: [] },
+        threadDataById: { t1: { ...baseThread, messages: [] } },
+      });
 
       await useThreadStore.getState().selectThread(null);
 
@@ -745,9 +723,9 @@ describe('thread store actions', () => {
     test('hydrates thread payload on successful select', async () => {
       useThreadStore.setState(
         withThreadIndex({
-          ...seedThreads({ p1: [baseThread as any] }),
+          ...seedThreads({ p1: [baseThread] }),
           threadTotalByProject: { p1: 1 },
-        } as any),
+        }),
       );
 
       await useThreadStore.getState().selectThread('t1');
@@ -761,8 +739,8 @@ describe('thread store actions', () => {
     test('clears selection when hydration fails', async () => {
       mockLoadThreadData.mockRejectedValueOnce(new Error('network'));
       useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
-      } as any);
+        ...seedThreads({ p1: [baseThread] }),
+      });
 
       await useThreadStore.getState().selectThread('t1');
 
@@ -787,14 +765,14 @@ describe('thread store actions', () => {
       vi.mocked(getAndClearWSBuffer).mockImplementation((id: string) => {
         const events = buffers.get(id);
         buffers.delete(id);
-        return events as any;
+        return events;
       });
 
       try {
         const tB = { ...baseThread, id: 't2' };
         useThreadStore.setState({
-          ...seedThreads({ p1: [baseThread as any, tB as any] }),
-        } as any);
+          ...seedThreads({ p1: [baseThread, tB] }),
+        });
 
         const firstA = deferred<any>();
         const loadB = deferred<any>();
@@ -900,15 +878,15 @@ describe('thread store actions', () => {
       };
       useThreadStore.setState(
         withThreadIndex({
-          threadsById: { s0: existing as any },
+          threadsById: { s0: existing },
           scratchThreadIds: ['s0'],
           scratchThreadTotal: 1,
           threadIdsByProject: {},
           threadTotalByProject: {},
-        } as any),
+        }),
       );
 
-      useThreadStore.getState().addScratchThread(incoming as any);
+      useThreadStore.getState().addScratchThread(incoming);
 
       expect(readThreadIndex().scratchThreadIds).toEqual(['s1', 's0']);
       expect(readThreadIndex().threadsById.s1.title).toBe('New scratch');
@@ -918,8 +896,8 @@ describe('thread store actions', () => {
   describe('archiveThread', () => {
     test('optimistically archives and keeps archived on success', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
-      } as any);
+        ...seedThreads({ p1: [baseThread] }),
+      });
       mockArchiveThread.mockReturnValue(okAsync({ ok: true }));
 
       await useThreadStore.getState().archiveThread('t1', 'p1');
@@ -930,8 +908,8 @@ describe('thread store actions', () => {
 
     test('rolls back archived flag when api fails', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
-      } as any);
+        ...seedThreads({ p1: [baseThread] }),
+      });
       mockArchiveThread.mockReturnValue(errAsync(new Error('nope')));
 
       await useThreadStore.getState().archiveThread('t1', 'p1');
@@ -943,8 +921,8 @@ describe('thread store actions', () => {
   describe('renameThread', () => {
     test('updates title optimistically and keeps it on success', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
-      } as any);
+        ...seedThreads({ p1: [baseThread] }),
+      });
       mockRenameThread.mockReturnValue(okAsync({ ok: true }));
 
       await useThreadStore.getState().renameThread('t1', 'p1', 'Renamed');
@@ -954,8 +932,8 @@ describe('thread store actions', () => {
 
     test('rolls back title when api fails', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
-      } as any);
+        ...seedThreads({ p1: [baseThread] }),
+      });
       mockRenameThread.mockReturnValue(errAsync(new Error('nope')));
 
       await useThreadStore.getState().renameThread('t1', 'p1', 'Renamed');
@@ -967,8 +945,8 @@ describe('thread store actions', () => {
   describe('pinThread', () => {
     test('pins thread optimistically', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
-      } as any);
+        ...seedThreads({ p1: [baseThread] }),
+      });
       mockPinThread.mockReturnValue(okAsync({ ok: true }));
 
       await useThreadStore.getState().pinThread('t1', 'p1', true);
@@ -978,8 +956,8 @@ describe('thread store actions', () => {
 
     test('rolls back pin when api fails', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [{ ...baseThread, pinned: false } as any] }),
-      } as any);
+        ...seedThreads({ p1: [{ ...baseThread, pinned: false }] }),
+      });
       mockPinThread.mockReturnValue(errAsync(new Error('nope')));
 
       await useThreadStore.getState().pinThread('t1', 'p1', true);
@@ -991,8 +969,8 @@ describe('thread store actions', () => {
   describe('unarchiveThread', () => {
     test('unarchives and updates stage on success', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [{ ...baseThread, archived: true, stage: 'backlog' } as any] }),
-      } as any);
+        ...seedThreads({ p1: [{ ...baseThread, archived: true, stage: 'backlog' }] }),
+      });
       mockArchiveThread.mockReturnValue(okAsync({ ok: true }));
       mockUpdateThreadStage.mockReturnValue(okAsync({ ok: true }));
 
@@ -1004,8 +982,8 @@ describe('thread store actions', () => {
 
     test('rolls back when archive api fails', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [{ ...baseThread, archived: true, stage: 'backlog' } as any] }),
-      } as any);
+        ...seedThreads({ p1: [{ ...baseThread, archived: true, stage: 'backlog' }] }),
+      });
       mockArchiveThread.mockReturnValue(errAsync(new Error('fail')));
 
       await useThreadStore.getState().unarchiveThread('t1', 'p1', 'planning');
@@ -1017,8 +995,8 @@ describe('thread store actions', () => {
   describe('updateThreadStage', () => {
     test('updates stage optimistically and keeps it on success', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
-      } as any);
+        ...seedThreads({ p1: [baseThread] }),
+      });
       mockUpdateThreadStage.mockReturnValue(okAsync({ ok: true }));
 
       await useThreadStore.getState().updateThreadStage('t1', 'p1', 'in_progress');
@@ -1028,8 +1006,8 @@ describe('thread store actions', () => {
 
     test('rolls back stage when api fails', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [{ ...baseThread, stage: 'backlog' } as any] }),
-      } as any);
+        ...seedThreads({ p1: [{ ...baseThread, stage: 'backlog' }] }),
+      });
       mockUpdateThreadStage.mockReturnValue(errAsync(new Error('fail')));
 
       await useThreadStore.getState().updateThreadStage('t1', 'p1', 'in_progress');
@@ -1048,10 +1026,10 @@ describe('thread store actions', () => {
               initialPrompt: 'do the thing',
               model: 'sonnet',
               permissionMode: 'autoEdit',
-            } as any,
+            },
           ],
         }),
-      } as any);
+      });
       mockSendMessage.mockReturnValue(okAsync({ ok: true }));
       mockUpdateThreadStage.mockClear();
 
@@ -1069,8 +1047,8 @@ describe('thread store actions', () => {
   describe('updateThreadPermissionMode', () => {
     test('updates the cached thread immediately and persists the selection', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [{ ...baseThread, permissionMode: 'ask' } as any] }),
-      } as any);
+        ...seedThreads({ p1: [{ ...baseThread, permissionMode: 'ask' }] }),
+      });
       mockUpdateThreadPermissionMode.mockReturnValue(okAsync({ ok: true }));
 
       const result = await useThreadStore.getState().updateThreadPermissionMode('t1', 'plan');
@@ -1082,8 +1060,8 @@ describe('thread store actions', () => {
 
     test('restores the previous mode if the persistence request fails', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [{ ...baseThread, permissionMode: 'ask' } as any] }),
-      } as any);
+        ...seedThreads({ p1: [{ ...baseThread, permissionMode: 'ask' }] }),
+      });
       mockUpdateThreadPermissionMode.mockReturnValue(errAsync(new Error('network error')));
 
       const result = await useThreadStore.getState().updateThreadPermissionMode('t1', 'plan');
@@ -1096,8 +1074,8 @@ describe('thread store actions', () => {
   describe('loadMoreThreads', () => {
     test('appends additional threads to project bucket', async () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
-      } as any);
+        ...seedThreads({ p1: [baseThread] }),
+      });
       const t2 = { ...baseThread, id: 't2', title: 'second' };
       mockListThreads.mockReturnValue(okAsync({ threads: [t2], total: 2 }));
 
@@ -1112,11 +1090,11 @@ describe('thread store actions', () => {
     test('stops running thread, removes from store, and clears selection', async () => {
       const running = { ...baseThread, status: 'running' as const };
       useThreadStore.setState({
-        ...seedThreads({ p1: [running as any] }),
+        ...seedThreads({ p1: [running] }),
         selectedThreadId: 't1',
-        activeThread: running as any,
-        threadDataById: { t1: running as any },
-      } as any);
+        activeThread: running,
+        threadDataById: { t1: running },
+      });
       mockStopThread.mockReturnValue(okAsync({ ok: true }));
 
       await useThreadStore.getState().deleteThread('t1', 'p1');
@@ -1140,13 +1118,13 @@ describe('thread store actions', () => {
       };
       useThreadStore.setState(
         withThreadIndex({
-          threadsById: { s1: scratch as any },
+          threadsById: { s1: scratch },
           scratchThreadIds: ['s1'],
           scratchThreadTotal: 1,
           threadIdsByProject: {},
           threadTotalByProject: {},
-          threadDataById: { s1: scratch as any },
-        } as any),
+          threadDataById: { s1: scratch },
+        }),
       );
 
       await useThreadStore.getState().deleteScratchThread('s1');
@@ -1160,11 +1138,11 @@ describe('thread store actions', () => {
     test('appends user message and transitions status on hydrated thread', () => {
       const idle = { ...baseThread, status: 'idle' as const, messages: [] };
       useThreadStore.setState({
-        ...seedThreads({ p1: [idle as any] }),
+        ...seedThreads({ p1: [idle] }),
         selectedThreadId: 't1',
-        activeThread: idle as any,
-        threadDataById: { t1: idle as any },
-      } as any);
+        activeThread: idle,
+        threadDataById: { t1: idle },
+      });
 
       useThreadStore.getState().appendOptimisticMessage('t1', 'hello world');
 
@@ -1188,9 +1166,9 @@ describe('thread store actions', () => {
       };
       const idle = { ...baseThread, status: 'idle' as const, messages: [draft] };
       useThreadStore.setState({
-        ...seedThreads({ p1: [idle as any] }),
-        threadDataById: { t1: idle as any },
-      } as any);
+        ...seedThreads({ p1: [idle] }),
+        threadDataById: { t1: idle },
+      });
 
       useThreadStore.getState().appendOptimisticMessage('t1', 'final prompt');
 
@@ -1202,10 +1180,10 @@ describe('thread store actions', () => {
 
   describe('handleWSWorktreeSetup', () => {
     test('a finished step that runs again is a new attempt', () => {
-      const step = (status: string) =>
+      const step = (status: 'running' | 'completed' | 'failed') =>
         useThreadStore
           .getState()
-          .handleWSWorktreeSetup('t1', { step: 'clone', label: 'Clone', status } as any);
+          .handleWSWorktreeSetup('t1', { step: 'clone', label: 'Clone', status });
       const stored = () => useThreadStore.getState().setupProgressByThread.t1[0];
 
       step('running');
@@ -1231,9 +1209,9 @@ describe('thread store actions', () => {
     };
     const seedWaiting = () =>
       useThreadStore.setState({
-        ...seedThreads({ p1: [waiting as any] }),
-        threadDataById: { t1: waiting as any },
-      } as any);
+        ...seedThreads({ p1: [waiting] }),
+        threadDataById: { t1: waiting },
+      });
 
     test('a send that started nothing puts the thread back as it was', () => {
       seedWaiting();
@@ -1310,8 +1288,8 @@ describe('thread store actions', () => {
         lastUserMessage: userMsg,
       };
       useThreadStore.setState({
-        threadDataById: { t1: thread as any },
-      } as any);
+        threadDataById: { t1: thread },
+      });
 
       useThreadStore.getState().rollbackOptimisticMessage('t1');
 
@@ -1322,11 +1300,11 @@ describe('thread store actions', () => {
   describe('clearProjectThreads', () => {
     test('clears bucket, payloads, and selection when active thread belongs to project', () => {
       useThreadStore.setState({
-        ...seedThreads({ p1: [baseThread as any] }),
+        ...seedThreads({ p1: [baseThread] }),
         selectedThreadId: 't1',
-        activeThread: baseThread as any,
-        threadDataById: { t1: baseThread as any },
-      } as any);
+        activeThread: baseThread,
+        threadDataById: { t1: baseThread },
+      });
 
       useThreadStore.getState().clearProjectThreads('p1');
 
@@ -1356,7 +1334,7 @@ describe('thread store actions', () => {
     test('evicts payload after unregister when not selected', async () => {
       const fetched = { ...baseThread, title: 'Live column' };
       mockGetThread.mockReturnValue(okAsync(fetched));
-      useThreadStore.setState({ selectedThreadId: null, activeThread: null } as any);
+      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
 
       await useThreadStore.getState().registerLiveThread('t1');
       expect(useThreadStore.getState().threadDataById.t1).toBeDefined();
@@ -1384,9 +1362,9 @@ describe('thread store actions', () => {
       };
       useThreadStore.setState({
         selectedThreadId: 't1',
-        activeThread: thread as any,
-        threadDataById: { t1: thread as any },
-      } as any);
+        activeThread: thread,
+        threadDataById: { t1: thread },
+      });
       mockGetThreadMessages.mockReturnValue(
         okAsync({
           messages: [
@@ -1426,9 +1404,9 @@ describe('thread store actions', () => {
       };
       useThreadStore.setState({
         selectedThreadId: 't1',
-        activeThread: thread as any,
-        threadDataById: { t1: thread as any },
-      } as any);
+        activeThread: thread,
+        threadDataById: { t1: thread },
+      });
       mockGetThreadMessages.mockReturnValue(errAsync(new Error('network')));
 
       await useThreadStore.getState().loadOlderMessages();
@@ -1454,9 +1432,9 @@ describe('thread store actions', () => {
       };
       useThreadStore.setState({
         selectedThreadId: 't1',
-        activeThread: thread as any,
-        threadDataById: { t1: thread as any },
-      } as any);
+        activeThread: thread,
+        threadDataById: { t1: thread },
+      });
       mockGetThreadMessages.mockReturnValue(
         okAsync({
           messages: [
@@ -1499,7 +1477,7 @@ describe('thread store actions', () => {
         content: 'done',
         timestamp: '2026-01-01T00:00:00.000Z',
       };
-      const optimistic = {
+      const optimistic: Message = {
         id: 'optimistic-1111',
         threadId: 't1',
         role: 'user' as const,
@@ -1517,9 +1495,9 @@ describe('thread store actions', () => {
       };
       useThreadStore.setState({
         selectedThreadId: 't1',
-        activeThread: thread as any,
-        threadDataById: { t1: thread as any },
-      } as any);
+        activeThread: thread,
+        threadDataById: { t1: thread },
+      });
       mockGetThreadMessages.mockReturnValue(
         okAsync({
           messages: [
@@ -1574,9 +1552,9 @@ describe('thread store actions', () => {
       };
       useThreadStore.setState({
         selectedThreadId: 't1',
-        activeThread: thread as any,
-        threadDataById: { t1: thread as any },
-      } as any);
+        activeThread: thread,
+        threadDataById: { t1: thread },
+      });
       mockGetThreadMessages.mockReturnValue(
         okAsync({
           messages: [
@@ -1614,7 +1592,7 @@ describe('thread store actions', () => {
         hasMore: true,
         messages: [msg('m5', '2026-01-05T00:00:00.000Z')],
       };
-      useThreadStore.setState({ threadDataById: { t1: thread as any } } as any);
+      useThreadStore.setState({ threadDataById: { t1: thread } });
 
       const found = await useThreadStore.getState().loadMessagesUntil('t1', 'm5');
 
@@ -1629,7 +1607,7 @@ describe('thread store actions', () => {
         loadingMore: false,
         messages: [msg('m5', '2026-01-05T00:00:00.000Z')],
       };
-      useThreadStore.setState({ threadDataById: { t1: thread as any } } as any);
+      useThreadStore.setState({ threadDataById: { t1: thread } });
       mockGetThreadMessages
         .mockReturnValueOnce(
           okAsync({ messages: [msg('m4', '2026-01-04T00:00:00.000Z')], hasMore: true }),
@@ -1660,7 +1638,7 @@ describe('thread store actions', () => {
         loadingMore: false,
         messages: [msg('m5', '2026-01-05T00:00:00.000Z')],
       };
-      useThreadStore.setState({ threadDataById: { t1: thread as any } } as any);
+      useThreadStore.setState({ threadDataById: { t1: thread } });
       mockGetThreadMessages.mockReturnValue(
         okAsync({ messages: [msg('m4', '2026-01-04T00:00:00.000Z')], hasMore: false }),
       );
@@ -1678,7 +1656,7 @@ describe('thread store actions', () => {
         loadingMore: false,
         messages: [msg('m5', '2026-01-05T00:00:00.000Z')],
       };
-      useThreadStore.setState({ threadDataById: { t1: thread as any } } as any);
+      useThreadStore.setState({ threadDataById: { t1: thread } });
       mockGetThreadMessages.mockReturnValue(errAsync(new Error('network')));
 
       const found = await useThreadStore.getState().loadMessagesUntil('t1', 'm1');
@@ -1704,9 +1682,9 @@ describe('thread store actions', () => {
       };
       useThreadStore.setState({
         selectedThreadId: 't1',
-        activeThread: thread as any,
-        threadDataById: { t1: thread as any },
-      } as any);
+        activeThread: thread,
+        threadDataById: { t1: thread },
+      });
       mockGetThread.mockReturnValue(
         okAsync({
           ...thread,
@@ -1753,9 +1731,9 @@ describe('thread store actions', () => {
       const t2 = { ...baseThread, id: 't2', projectId: 'p2', title: 'other' };
       useThreadStore.setState(
         withThreadIndex({
-          ...seedThreads({ p1: [baseThread as any], p2: [t2 as any] }),
+          ...seedThreads({ p1: [baseThread], p2: [t2] }),
           threadTotalByProject: { p1: 1, p2: 1 },
-        } as any),
+        }),
       );
       mockListThreads.mockImplementation((pid: string) => {
         if (pid === 'p1') return okAsync({ threads: [baseThread], total: 1 });
@@ -1805,8 +1783,8 @@ describe('thread store actions', () => {
   describe('prefetchThread', () => {
     test('no-ops for empty id and active thread', () => {
       useThreadStore.setState({
-        activeThread: { ...baseThread, id: 't1' } as any,
-      } as any);
+        activeThread: { ...baseThread, id: 't1' },
+      });
 
       useThreadStore.getState().prefetchThread('');
       useThreadStore.getState().prefetchThread('t1');
@@ -1815,7 +1793,7 @@ describe('thread store actions', () => {
     });
 
     test('delegates to prefetchThreadData for inactive threads', () => {
-      useThreadStore.setState({ activeThread: null } as any);
+      useThreadStore.setState({ activeThread: null });
 
       useThreadStore.getState().prefetchThread('t2');
 
@@ -1831,13 +1809,13 @@ describe('thread store actions', () => {
         branch: 'old-branch',
       };
       useThreadStore.setState({
-        ...seedThreads({ p1: [thread as any] }),
-        threadDataById: { t1: thread as any },
+        ...seedThreads({ p1: [thread] }),
+        threadDataById: { t1: thread },
         setupProgressByThread: {
           t1: [{ id: 'clone', label: 'Clone', status: 'running' as const }],
         },
         loadThreadsForProject: vi.fn(),
-      } as any);
+      });
 
       useThreadStore.getState().handleWSWorktreeSetupComplete('t1', {
         branch: 'feat/worktree',
@@ -1855,8 +1833,7 @@ describe('thread store actions', () => {
 // fields are read from it. These cover the spec
 // scenarios end-to-end through the real store.
 describe('thread store actions on the threads collection', () => {
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-  const t1 = { ...baseThread, stage: 'backlog' } as unknown as Thread;
+  const t1 = buildThread({ ...baseThread, stage: 'backlog' });
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -1866,8 +1843,8 @@ describe('thread store actions on the threads collection', () => {
         scratchThreadIds: [],
         threadTotalByProject: { p1: 1 },
         selectedThreadId: 't1',
-        threadDataById: { t1: { ...baseThread } as any },
-        activeThread: { ...baseThread } as any,
+        threadDataById: { t1: { ...baseThread } },
+        activeThread: { ...baseThread },
       }),
     );
   });

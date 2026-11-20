@@ -355,6 +355,77 @@ export const factoryRuns = pgTable('factory_runs', {
   metrics: text('metrics'),
 });
 
+/**
+ * The workflow engine's journal on the server (change workflow-dag-engine,
+ * D6): one row per node execution of a run, keyed by node, visit path and
+ * attempt. A run that starts again replays its rows instead of repeating
+ * recorded work. `output` and `data` are JSON; times are epoch-ms. The only
+ * server host is the issue factory, so rows hang off `factory_runs`.
+ */
+// Dialect mirror: schema.pg.ts and schema.sqlite.ts must declare the same columns.
+export const workflowNodeExecutions = pgTable(
+  'workflow_node_executions',
+  {
+    runId: text('run_id')
+      .notNull()
+      .references(() => factoryRuns.id, { onDelete: 'cascade' }),
+    nodeId: text('node_id').notNull(),
+    visit: text('visit').notNull(),
+    attempt: integer('attempt').notNull(),
+    status: text('status').notNull(),
+    output: text('output'),
+    error: text('error'),
+    data: text('data'),
+    startedAt: bigint('started_at', { mode: 'number' }).notNull(),
+    finishedAt: bigint('finished_at', { mode: 'number' }),
+  },
+  (t) => [primaryKey({ columns: [t.runId, t.nodeId, t.visit, t.attempt] })],
+);
+
+/**
+ * Concurrency-group slots shared across server instances (D5): a lease per
+ * holder (`<runId>/<nodeId>/<visit>`), renewed while the node runs and
+ * expired when its server stops renewing it.
+ */
+export const workflowConcurrencyLeases = pgTable(
+  'workflow_concurrency_leases',
+  {
+    groupKey: text('group_key').notNull(),
+    holder: text('holder').notNull(),
+    expiresAt: bigint('expires_at', { mode: 'number' }).notNull(),
+    acquiredAt: bigint('acquired_at', { mode: 'number' }).notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.groupKey, t.holder] })],
+);
+
+/**
+ * Requests waiting for a concurrency-group slot, granted to the first
+ * waiter by `priority` then `requested_at` (D5). A batching group (D5b)
+ * records the leader a waiter was gathered by and the outcome it settled.
+ */
+export const workflowConcurrencyWaiters = pgTable(
+  'workflow_concurrency_waiters',
+  {
+    groupKey: text('group_key').notNull(),
+    holder: text('holder').notNull(),
+    /** The limit this waiter's node declares (the host may have replaced it). */
+    slotLimit: integer('slot_limit').notNull(),
+    priority: integer('priority').notNull().default(0),
+    requestedAt: bigint('requested_at', { mode: 'number' }).notNull(),
+    /** Renewed while the waiting server is alive; an expired waiter is dropped. */
+    expiresAt: bigint('expires_at', { mode: 'number' }).notNull(),
+    batchMax: integer('batch_max'),
+    batchWaitMs: integer('batch_wait_ms'),
+    /** JSON: the waiter's input to the node, for a batch leader. */
+    input: text('input'),
+    /** The leader holder that gathered this waiter into its batch, or null. */
+    leader: text('leader'),
+    /** JSON `SettledOutcome` the leader settled, or null while pending. */
+    outcome: text('outcome'),
+  },
+  (t) => [primaryKey({ columns: [t.groupKey, t.holder] })],
+);
+
 export const watchers = pgTable('watchers', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')

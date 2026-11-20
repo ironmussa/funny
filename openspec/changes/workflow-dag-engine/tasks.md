@@ -20,7 +20,7 @@
 
 ## 3. Server host
 
-- [ ] 3.1 Migration: `workflow_node_executions` and `workflow_concurrency_leases` / `workflow_concurrency_waiters` in `server/src/db/migrate.ts` and both schemas; verify with the migrate test and `bun run db:push` on a scratch DB
+- [x] 3.1 Migration: `workflow_node_executions` and `workflow_concurrency_leases` / `workflow_concurrency_waiters` in `server/src/db/migrate.ts` and both schemas; verify with the migrate test and `bun run db:push` on a scratch DB
 - [ ] 3.2 Database journal (record, load per run, delete with the run); verify with repository tests
 - [ ] 3.3 Lease gate (transactional grant to the first waiter under the limit, 30 s renewal, 2 min expiry, release); add the lease and execution machines to `docs/architecture/state-machines.md`; verify with tests for two server instances competing, expiry after a missed renewal, and ordering by `priority`
 - [ ] 3.4 Batch membership in the server lease gate (members recorded with the leader lease, returned to waiters when it expires); verify with two-instance tests for leader loss and settle-once

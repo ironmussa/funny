@@ -8,6 +8,7 @@ import {
   selectThreadViewerShareLevel,
   selectThreadWorkspaceData,
 } from '../thread-render-selectors';
+import { buildProject, buildThread } from './helpers/fixtures';
 
 describe('native thread render selectors', () => {
   test('keeps run and permission references stable across streaming content', () => {
@@ -50,14 +51,14 @@ describe('native thread render selectors', () => {
 
   test('reacts to share-access changes without reading the whole navigation store', () => {
     const store = createThreadNavigationStore();
-    store.getState().replaceProjects([{ id: 'p1', name: 'Project' } as never]);
+    store.getState().replaceProjects([buildProject({ id: 'p1', name: 'Project' })]);
     store
       .getState()
       .replaceProjectThreads('p1', [
-        { id: 't1', projectId: 'p1', viewerShareLevel: 'read' } as never,
+        buildThread({ id: 't1', projectId: 'p1', viewerShareLevel: 'view' }),
       ]);
 
-    expect(selectThreadViewerShareLevel(store.getState(), 't1')).toBe('read');
+    expect(selectThreadViewerShareLevel(store.getState(), 't1')).toBe('view');
     store.getState().patchThread('t1', { viewerShareLevel: 'steer' });
     expect(selectThreadViewerShareLevel(store.getState(), 't1')).toBe('steer');
   });

@@ -15,6 +15,7 @@
  *     tool_use+tool_result pair on the next non-thought event.
  */
 
+import type { SessionUpdate } from '@agentclientprotocol/sdk/unstable';
 import { describe, expect, test } from 'vitest';
 
 import { CursorACPProcess } from '../agents/cursor-acp.js';
@@ -31,14 +32,8 @@ function makeProcess(): { proc: CursorACPProcess; messages: CLIMessage[] } {
   return { proc, messages };
 }
 
-type TestAccess = {
-  translateUpdate: (u: unknown) => void;
-  emitAcpPromptResponseUsage: (u: unknown) => void;
-  replayingHistory: boolean;
-};
-
-function translate(proc: CursorACPProcess, update: unknown): void {
-  (proc as CursorACPProcess & TestAccess).translateUpdate(update);
+function translate(proc: CursorACPProcess, update: SessionUpdate): void {
+  proc['translateUpdate'](update);
 }
 
 describe('CursorACPProcess.translateUpdate', () => {
@@ -530,7 +525,7 @@ describe('CursorACPProcess context usage', () => {
   test('emitAcpPromptResponseUsage maps ACP camelCase usage fields', () => {
     const { proc, messages } = makeProcess();
 
-    (proc as CursorACPProcess & TestAccess).emitAcpPromptResponseUsage({
+    proc['emitAcpPromptResponseUsage']({
       inputTokens: 100,
       outputTokens: 20,
       cachedReadTokens: 5_000,
@@ -551,7 +546,7 @@ describe('CursorACPProcess context usage', () => {
   test('usage_update is still emitted while replaying session history', () => {
     const { proc, messages } = makeProcess();
 
-    (proc as CursorACPProcess & TestAccess).replayingHistory = true;
+    proc['replayingHistory'] = true;
 
     translate(proc, {
       sessionUpdate: 'agent_message_chunk',

@@ -4,46 +4,62 @@
 
 import { describe, expect, test } from 'bun:test';
 
-import type { Thread } from '@funny/shared';
-
-import type { HttpSchedulerClient } from '../../adapters/http-client.js';
+import { HttpSchedulerClient } from '../../adapters/http-client.js';
 import { HttpDispatcher } from '../../adapters/http-dispatcher.js';
-import type { EventStreamEvent, HttpEventStream } from '../../adapters/http-event-stream.js';
+import { HttpEventStream, type EventStreamEvent } from '../../adapters/http-event-stream.js';
+import type { SchedulerLogger } from '../../service.js';
+import { buildThread, fetchDouble } from '../test-helpers.js';
 
-type Handler = (event: EventStreamEvent) => void;
+/** What the server's `/dispatch` and `/cancel` answer; `undefined` is an empty 204. */
+interface DispatchReplyBody {
+  ok: boolean;
+  pipelineRunId?: string;
+  error?: { message?: string };
+}
+type DispatchReply = DispatchReplyBody | undefined;
 
-/** In-memory stand-in for HttpEventStream: `emit` reaches current subscribers only. */
+/**
+ * A real HttpEventStream that is never started: `emit` hands an event to the
+ * stream's own dispatch, so it reaches current subscribers only.
+ */
 function fakeStream() {
-  const handlers = new Map<string, Set<Handler>>();
+  const stream = new HttpEventStream({ client: schedulerClient(async () => undefined) });
   return {
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with minimal surface
-    stream: {
-      subscribe(threadId: string, handler: Handler) {
-        const set = handlers.get(threadId) ?? new Set<Handler>();
-        set.add(handler);
-        handlers.set(threadId, set);
-        return () => set.delete(handler);
-      },
-    } as unknown as HttpEventStream,
-    emit(threadId: string, payload: Record<string, unknown>) {
+    stream,
+    emit(threadId: string, payload: EventStreamEvent['payload']) {
       const event: EventStreamEvent = { seq: 1, kind: 'agent_terminal', threadId, ts: 1, payload };
-      for (const handler of handlers.get(threadId) ?? []) handler(event);
+      stream['dispatch'](event);
     },
-    subscriberCount: (threadId: string) => handlers.get(threadId)?.size ?? 0,
+    subscriberCount: (threadId: string) => stream['handlers'].get(threadId)?.size ?? 0,
   };
 }
 
-const log = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} };
-const thread = { id: 't1', userId: 'u1', title: 'do it' } as Thread;
+/** A real client whose fetch answers every POST with `post(path)`'s JSON (path below the system prefix). */
+function schedulerClient(post: (path: string) => Promise<DispatchReply>): HttpSchedulerClient {
+  return new HttpSchedulerClient({
+    baseUrl: 'http://srv',
+    authSecret: 's',
+    fetch: fetchDouble(async (input) => {
+      const url = new URL(input instanceof Request ? input.url : input);
+      const result = await post(url.pathname.replace('/api/scheduler/system', ''));
+      return new Response(result === undefined ? null : JSON.stringify(result), {
+        status: result === undefined ? 204 : 200,
+      });
+    }),
+  });
+}
+
+const log: SchedulerLogger = { info: () => {}, warn: () => {}, error: () => {} };
+const thread = buildThread({ id: 't1', userId: 'u1', title: 'do it' });
 
 function dispatcher(
   events: ReturnType<typeof fakeStream>,
-  post: (path: string) => Promise<unknown>,
+  post: (path: string) => Promise<DispatchReply>,
 ) {
   return new HttpDispatcher({
-    client: { post } as HttpSchedulerClient,
+    client: schedulerClient(post),
     eventStream: events.stream,
-    log: log as never,
+    log,
   });
 }
 

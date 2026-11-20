@@ -14,36 +14,39 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import type { SessionUpdate } from '@agentclientprotocol/sdk/unstable';
 import { PROVIDER_MANIFEST_SCHEMA_VERSION } from '@funny/shared/provider-manifest-schema';
 import { ACP_MANIFESTS } from '@funny/shared/provider-manifests';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { CursorACPProcess } from '../agents/cursor-acp.js';
+import { GenericACPProcess } from '../agents/generic-acp.js';
+import type { AgentProcessOptions, IAgentProcess } from '../agents/interfaces.js';
 import { defaultProcessFactory } from '../agents/process-factory.js';
 import {
   clearRunnerManifestsForTests,
   loadProviderExtensions,
 } from '../agents/provider-extensions.js';
 import type { CLIMessage } from '../agents/types.js';
+import { expectInstance } from './helpers/test-helpers.js';
 
 let dir: string;
 
 const baseOpts = {
-  threadId: 't',
-  projectPath: '/tmp',
   prompt: 'hi',
+  cwd: '/tmp',
   model: 'default',
   permissionMode: 'autoEdit',
-} as any;
+} satisfies AgentProcessOptions;
 
-function capture(proc: { on: (e: string, h: (m: CLIMessage) => void) => unknown }): CLIMessage[] {
+function capture(proc: IAgentProcess): CLIMessage[] {
   const out: CLIMessage[] = [];
   proc.on('message', (m: CLIMessage) => out.push(m));
   return out;
 }
 
-function translate(proc: unknown, update: unknown): void {
-  (proc as { translateUpdate: (u: unknown) => void }).translateUpdate(update);
+function translate(proc: GenericACPProcess, update: SessionUpdate): void {
+  proc['translateUpdate'](update);
 }
 
 beforeEach(() => {
@@ -77,14 +80,17 @@ describe('cursor-as-external provider parity (§5)', () => {
     expect(res.loaded.map((l) => l.id)).toEqual(['cursor-ext']);
 
     // Resolve the external provider from the registry (no in-tree class for it).
-    const external = defaultProcessFactory.create({ ...baseOpts, provider: 'cursor-ext' });
+    const external = expectInstance(
+      defaultProcessFactory.create({ ...baseOpts, provider: 'cursor-ext' }),
+      GenericACPProcess,
+    );
     const builtin = new CursorACPProcess({ ...baseOpts });
 
-    const extMsgs = capture(external as any);
-    const biMsgs = capture(builtin as any);
+    const extMsgs = capture(external);
+    const biMsgs = capture(builtin);
 
     // The diff-block edit recovery — one of cursor's signature quirks.
-    const update = {
+    const update: SessionUpdate = {
       sessionUpdate: 'tool_call_update',
       toolCallId: 'edit-1',
       status: 'completed',
@@ -119,8 +125,9 @@ describe('cursor-as-external provider parity (§5)', () => {
 
     const extUse = extMsgs.find((m) => m.type === 'assistant');
     if (!extUse || extUse.type !== 'assistant') throw new Error('unreachable');
-    const block = extUse.message.content[0] as any;
+    const block = extUse.message.content[0];
     expect(block).toMatchObject({ type: 'tool_use', name: 'Edit' });
+    if (block?.type !== 'tool_use') throw new Error('expected a tool_use block');
     expect(block.input).toMatchObject({
       file_path: '/repo/src/sample.ts',
       old_string: 'a',

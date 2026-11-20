@@ -73,7 +73,8 @@ export function sandboxExec(root: string, steps: InProcessStepOptions): SandboxE
       const [, , work, step, specPath] = start;
       const cwd = /cd '([^']+)'\s*$/.exec(start[1])?.[1] ?? dir;
       void runStepInProcess(steps, {
-        step: step as 'implement' | 'fix',
+        // START_STEP only matches `implement` or `fix`.
+        step: step === 'fix' ? 'fix' : 'implement',
         spec: JSON.parse(readFileSync(specPath, 'utf8')),
         cwd,
         env: stepEnv(work, dir),

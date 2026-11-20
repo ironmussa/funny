@@ -1,10 +1,11 @@
-import type { GitStatusInfo, Project, Thread } from '@funny/shared';
+import type { Thread } from '@funny/shared';
 import { act, fireEvent, screen } from '@testing-library/react';
 import { beforeEach, expect, test, vi } from 'vitest';
 
 import { ThreadListView } from '@/components/mobile/ThreadListView';
 import { seedGitStatus } from '@/data/git-status/testing';
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
+import { buildThread } from '@/data/threads/testing';
 import { useAppStore } from '@/stores/app-store';
 
 import { mockT } from '../helpers/mock-i18n';
@@ -40,7 +41,7 @@ vi.mock('@tanstack/react-virtual', () => ({
   }),
 }));
 
-const { threads } = vi.hoisted(() => ({ threads: [] as Thread[] }));
+const { threads } = vi.hoisted(() => ({ threads: new Array<Thread>() }));
 vi.mock('@/lib/thread-selectors', () => ({ useThreadsForProject: () => threads }));
 
 const ensureStatus = vi.hoisted(() => vi.fn());
@@ -49,21 +50,22 @@ vi.mock('@/data/git-status/actions', async (importOriginal) => ({
   ensureStatusForThreads: ensureStatus,
 }));
 beforeEach(() => {
-  threads.splice(0, threads.length, {
-    id: 'thread-1',
-    projectId: 'project-1',
-    title: 'Hola',
-    status: 'completed',
-    mode: 'local',
-    branch: 'main',
-    provider: 'claude-sdk',
-    cost: 0,
-    createdAt: new Date(Date.now() - 3600000).toISOString(),
-    lastAssistantMessage: 'Resumen del trabajo realizado',
-  } as Thread);
+  threads.splice(
+    0,
+    threads.length,
+    buildThread({
+      id: 'thread-1',
+      projectId: 'project-1',
+      title: 'Hola',
+      branch: 'main',
+      provider: 'claude-sdk',
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+      lastAssistantMessage: 'Resumen del trabajo realizado',
+    }),
+  );
   useAppStore.setState(
     withProjects({
-      projects: [{ id: 'project-1', name: 'goliiive-cashless', path: '/repo' } as Project],
+      projects: [buildProject({ id: 'project-1', name: 'goliiive-cashless', path: '/repo' })],
       loadThreadsForProject: vi.fn(),
     }),
   );
@@ -109,7 +111,7 @@ test('shows desktop metadata on mobile and updates the git state when git status
           unpulledCommitCount: 0,
           hasRemoteBranch: true,
           isMergedIntoBase: false,
-        } as GitStatusInfo,
+        },
       },
       threadToBranchKey: { 'thread-1': 'project-1:main' },
     }),

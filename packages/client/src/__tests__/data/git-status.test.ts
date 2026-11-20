@@ -31,7 +31,7 @@ import {
   setGitStatusScope,
 } from '@/data/git-status/store';
 import { seedGitStatus } from '@/data/git-status/testing';
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildThread, withThreadIndex } from '@/data/threads/testing';
 import { gitApi } from '@/lib/api/git';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -63,7 +63,7 @@ describe('git status data', () => {
       withThreadIndex({
         threadsById: {},
         threadIdsByProject: {},
-      } as any),
+      }),
     );
     vi.clearAllMocks();
   });
@@ -95,7 +95,7 @@ describe('git status data', () => {
         unpushedCommitCount: 0,
       });
 
-      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [s1, s2] }) as any);
+      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [s1, s2] }));
 
       await fetchForProject('p1');
 
@@ -110,7 +110,7 @@ describe('git status data', () => {
       const s1 = makeStatus({ threadId: 't1', branchKey: 'p1:main', state: 'dirty' });
       const s2 = makeStatus({ threadId: 't2', branchKey: 'p1:main', state: 'dirty' });
 
-      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [s1, s2] }) as any);
+      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [s1, s2] }));
 
       await fetchForProject('p1');
 
@@ -124,7 +124,7 @@ describe('git status data', () => {
 
     test('handles API errors gracefully', async () => {
       const error: DomainError = { type: 'INTERNAL', message: 'Server error' };
-      mockApi.getGitStatuses.mockReturnValueOnce(errAsync(error) as any);
+      mockApi.getGitStatuses.mockReturnValueOnce(errAsync(error));
 
       // Should not throw
       await fetchForProject('p1');
@@ -144,13 +144,7 @@ describe('git status data', () => {
 
       mockApi.getGitStatuses.mockImplementation(() => {
         // Return a ResultAsync that waits on the gate before resolving
-        return {
-          isOk: () => true,
-          isErr: () => false,
-          value: { statuses: [s1] },
-          then: (onFulfilled: any, onRejected?: any) =>
-            gate.then(() => okAsync({ statuses: [s1] })).then(onFulfilled, onRejected),
-        } as any;
+        return ResultAsync.fromSafePromise(gate.then(() => ({ statuses: [s1] })));
       });
 
       // Fire two concurrent fetches for the same project
@@ -167,7 +161,7 @@ describe('git status data', () => {
 
     test('a failure is reused for the freshness period like a result', async () => {
       const error: DomainError = { type: 'INTERNAL', message: 'fail' };
-      mockApi.getGitStatuses.mockReturnValue(errAsync(error) as any);
+      mockApi.getGitStatuses.mockReturnValue(errAsync(error));
 
       await fetchForProject('p1');
       await fetchForProject('p1');
@@ -186,7 +180,7 @@ describe('git status data', () => {
         unpushedCommitCount: 3,
       });
 
-      mockApi.getGitStatus.mockReturnValueOnce(okAsync(s1) as any);
+      mockApi.getGitStatus.mockReturnValueOnce(okAsync(s1));
 
       await fetchForThread('t1');
 
@@ -197,7 +191,7 @@ describe('git status data', () => {
 
     test('handles API errors gracefully', async () => {
       const error: DomainError = { type: 'NOT_FOUND', message: 'Thread not found' };
-      mockApi.getGitStatus.mockReturnValueOnce(errAsync(error) as any);
+      mockApi.getGitStatus.mockReturnValueOnce(errAsync(error));
 
       // Should not throw
       await fetchForThread('t1');
@@ -207,7 +201,7 @@ describe('git status data', () => {
 
     test('deduplicates concurrent calls for the same thread', async () => {
       const s1 = makeStatus({ threadId: 't1', branchKey: 'p1:main' });
-      mockApi.getGitStatus.mockReturnValue(okAsync(s1) as any);
+      mockApi.getGitStatus.mockReturnValue(okAsync(s1));
 
       const p1 = fetchForThread('t1');
       const p2 = fetchForThread('t1');
@@ -220,7 +214,7 @@ describe('git status data', () => {
 
     test('shares cooldown for threads on the same branch', async () => {
       const s1 = makeStatus({ threadId: 't1', branchKey: 'p1:main' });
-      mockApi.getGitStatus.mockReturnValue(okAsync(s1) as any);
+      mockApi.getGitStatus.mockReturnValue(okAsync(s1));
 
       // First call for t1 populates the branchKey mapping
       await fetchForThread('t1');
@@ -241,9 +235,9 @@ describe('git status data', () => {
       useThreadStore.setState(
         withThreadIndex({
           threadsById: {
-            scratch1: { id: 'scratch1', isScratch: true, projectId: '' } as any,
+            scratch1: buildThread({ id: 'scratch1', isScratch: true, projectId: '' }),
           },
-        } as any),
+        }),
       );
 
       await fetchForThread('scratch1');
@@ -255,15 +249,15 @@ describe('git status data', () => {
       useThreadStore.setState(
         withThreadIndex({
           threadsById: {
-            box1: {
+            box1: buildThread({
               id: 'box1',
               projectId: 'p1',
               runtime: 'sandbox',
               status: 'failed',
-              sessionId: null,
-            } as any,
+              sessionId: undefined,
+            }),
           },
-        } as any),
+        }),
       );
 
       await fetchForThread('box1');
@@ -453,14 +447,10 @@ describe('git status data', () => {
       const bulkGate = new Promise<void>((r) => {
         releaseBulk = r;
       });
-      mockApi.getGitStatuses.mockImplementation(
-        () =>
-          ({
-            then: (onFulfilled: any, onRejected?: any) =>
-              bulkGate.then(() => okAsync({ statuses: [staleBulk] })).then(onFulfilled, onRejected),
-          }) as any,
+      mockApi.getGitStatuses.mockImplementation(() =>
+        ResultAsync.fromSafePromise(bulkGate.then(() => ({ statuses: [staleBulk] }))),
       );
-      mockApi.getGitStatus.mockReturnValueOnce(okAsync(freshForced) as any);
+      mockApi.getGitStatus.mockReturnValueOnce(okAsync(freshForced));
 
       // Dispatch bulk first (token N), then the forced single (token N+1).
       const bulkP = fetchForProject('p1');
@@ -480,14 +470,10 @@ describe('git status data', () => {
       // Guard must not freeze the slice: a later-dispatched fetch wins.
       mockApi.getGitStatus
         .mockReturnValueOnce(
-          okAsync(
-            makeStatus({ threadId: 't1', branchKey: 'p1:main', unpulledCommitCount: 0 }),
-          ) as any,
+          okAsync(makeStatus({ threadId: 't1', branchKey: 'p1:main', unpulledCommitCount: 0 })),
         )
         .mockReturnValueOnce(
-          okAsync(
-            makeStatus({ threadId: 't1', branchKey: 'p1:main', unpulledCommitCount: 4 }),
-          ) as any,
+          okAsync(makeStatus({ threadId: 't1', branchKey: 'p1:main', unpulledCommitCount: 4 })),
         );
 
       await fetchForThread('t1', true);
@@ -578,16 +564,21 @@ describe('git status data', () => {
   // ── 7. fetchProjectStatus ─────────────────────────────────
   describe('fetchProjectStatus', () => {
     test('stores project-level git status', async () => {
-      mockApi.projectGitStatus.mockReturnValueOnce(
-        okAsync({
-          branch: 'main',
-          ahead: 0,
-          behind: 0,
-          staged: [],
-          unstaged: [],
-          untracked: [],
-        }) as any,
-      );
+      const { threadId: _threadId, ...projectStatus } = makeStatus({
+        threadId: '',
+        branchKey: 'p1:main',
+      });
+      // The legacy project-status fields ride along on a complete status.
+      const response = {
+        ...projectStatus,
+        branch: 'main',
+        ahead: 0,
+        behind: 0,
+        staged: [],
+        unstaged: [],
+        untracked: [],
+      };
+      mockApi.projectGitStatus.mockReturnValueOnce(okAsync(response));
 
       await fetchProjectStatus('p1');
 
@@ -621,7 +612,7 @@ describe('git status data', () => {
         },
       });
       mockApi.getGitStatuses.mockReturnValue(
-        okAsync({ statuses: [makeStatus({ threadId: 't2', branchKey: 'p1:feat' })] }) as any,
+        okAsync({ statuses: [makeStatus({ threadId: 't2', branchKey: 'p1:feat' })] }),
       );
 
       ensureStatusForThreads([
@@ -638,7 +629,7 @@ describe('git status data', () => {
     });
 
     test('fetches each distinct project at most once', async () => {
-      mockApi.getGitStatuses.mockReturnValue(okAsync({ statuses: [] }) as any);
+      mockApi.getGitStatuses.mockReturnValue(okAsync({ statuses: [] }));
 
       ensureStatusForThreads([
         { id: 'a1', projectId: 'p1', mode: 'worktree', branch: 'feat-a', worktreePath: '/wt/a' },
@@ -654,7 +645,7 @@ describe('git status data', () => {
     });
 
     test('skips scratch threads', () => {
-      ensureStatusForThreads([{ id: 'scratch1', projectId: '', isScratch: true } as any]);
+      ensureStatusForThreads([buildThread({ id: 'scratch1', projectId: '', isScratch: true })]);
 
       expect(mockApi.getGitStatuses).not.toHaveBeenCalled();
     });
@@ -663,7 +654,7 @@ describe('git status data', () => {
   // ── 8b. Thread scope ──────────────────────────────────────
   describe('thread scope', () => {
     beforeEach(() => {
-      mockApi.getGitStatuses.mockReturnValue(okAsync({ statuses: [] }) as any);
+      mockApi.getGitStatuses.mockReturnValue(okAsync({ statuses: [] }));
     });
 
     test('requests only the union of registered visible threads', async () => {
@@ -725,8 +716,8 @@ describe('git status data', () => {
   // ── 9. invalidateCooldownsForKeys ─────────────────────────
   describe('invalidateCooldownsForKeys', () => {
     test('clears project cooldown when a branch key in that project is invalidated', async () => {
-      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [] }) as any);
-      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [] }) as any);
+      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [] }));
+      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [] }));
 
       await fetchForProject('p1');
       expect(mockApi.getGitStatuses).toHaveBeenCalledTimes(1);
@@ -760,7 +751,7 @@ describe('git status data', () => {
 
       // Bulk dispatched first, resolves last.
       const bulk = deferredOk<{ statuses: GitStatusInfo[] }>();
-      mockApi.getGitStatuses.mockReturnValueOnce(bulk.result as any);
+      mockApi.getGitStatuses.mockReturnValueOnce(bulk.result);
 
       // Forced single fetch dispatched second, resolves immediately, behind=0.
       const fresh = makeStatus({
@@ -771,7 +762,7 @@ describe('git status data', () => {
         unpushedCommitCount: 0,
         unpulledCommitCount: 0,
       });
-      mockApi.getGitStatus.mockReturnValueOnce(okAsync(fresh) as any);
+      mockApi.getGitStatus.mockReturnValueOnce(okAsync(fresh));
 
       // Dispatch order: bulk (seq 1) then forced (seq 2).
       const bulkPromise = fetchForProject('p1');
@@ -799,7 +790,7 @@ describe('git status data', () => {
       // WS events carry the newest token, so they win over an older in-flight
       // HTTP response that resolves afterwards.
       const bulk = deferredOk<{ statuses: GitStatusInfo[] }>();
-      mockApi.getGitStatuses.mockReturnValueOnce(bulk.result as any);
+      mockApi.getGitStatuses.mockReturnValueOnce(bulk.result);
 
       const bulkPromise = fetchForProject('p1');
 
@@ -827,11 +818,11 @@ describe('git status data', () => {
     test('a forced fetch aborts the request in flight and asks again', async () => {
       let firstSignal: AbortSignal | undefined;
       mockApi.getGitStatuses
-        .mockImplementationOnce(((_pid: string, signal: AbortSignal) => {
+        .mockImplementationOnce((_pid: string, signal?: AbortSignal) => {
           firstSignal = signal;
-          return ResultAsync.fromSafePromise(new Promise(() => {}));
-        }) as any)
-        .mockReturnValueOnce(okAsync({ statuses: [] }) as any);
+          return ResultAsync.fromSafePromise(new Promise<{ statuses: GitStatusInfo[] }>(() => {}));
+        })
+        .mockReturnValueOnce(okAsync({ statuses: [] }));
 
       void fetchForProject('p1');
       await vi.waitFor(() => expect(firstSignal).toBeDefined());

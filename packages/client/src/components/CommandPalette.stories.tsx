@@ -2,7 +2,7 @@ import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 import { CommandPalette } from './CommandPalette';
@@ -12,27 +12,27 @@ import { CommandPalette } from './CommandPalette';
 /* ------------------------------------------------------------------ */
 
 const MOCK_PROJECTS = [
-  {
+  buildProject({
     id: 'proj-1',
     name: 'my-api-server',
     path: '/home/user/projects/my-api-server',
     userId: 'u1',
     createdAt: '2026-01-01T00:00:00Z',
-  },
-  {
+  }),
+  buildProject({
     id: 'proj-2',
     name: 'frontend-app',
     path: '/home/user/projects/frontend-app',
     userId: 'u1',
     createdAt: '2026-02-01T00:00:00Z',
-  },
-  {
+  }),
+  buildProject({
     id: 'proj-3',
     name: 'shared-utils',
     path: '/home/user/projects/shared-utils',
     userId: 'u1',
     createdAt: '2026-03-01T00:00:00Z',
-  },
+  }),
 ];
 
 /* ------------------------------------------------------------------ */
@@ -53,7 +53,7 @@ function CommandPaletteTrigger({
         variant="outline"
         data-testid="command-palette-trigger"
         onClick={() => {
-          useProjectStore.setState(withProjects({ projects: projects as any }));
+          useProjectStore.setState(withProjects({ projects }));
           setOpen(true);
         }}
       >

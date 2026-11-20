@@ -154,7 +154,7 @@ describe('browser-session:closed', () => {
     attachingTo(SESSION);
     useBrowserPanelStore.setState({ sessionStatus: 'ready', sessionThreadId: 't1' });
     await useBrowserPanelStore.getState().endBrowserSession();
-    const ownCloseId = clientCalls.close.mock.calls[0]?.[2] as string;
+    const ownCloseId: string = clientCalls.close.mock.calls[0]?.[2];
     expect(ownCloseId).toBeTruthy();
 
     attachingTo(SESSION);

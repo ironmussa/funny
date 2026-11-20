@@ -3,14 +3,16 @@ import { describe, expect, test } from 'bun:test';
 import type { SandboxError } from '../contract.js';
 import { boatTemplateName, createBoatProvider } from '../providers/boat/boat-provider.js';
 import { expectOk, runSandboxProviderContract } from '../testing/provider-contract.js';
-import { createBoatApiFake } from './boat-api-fake.js';
+import { createBoatApiFake, type BoatApiFake } from './boat-api-fake.js';
+import { createProviderDoubles } from './test-helpers.js';
 
 const BASE = { apiBaseUrl: 'https://boat.test/api/v1' };
 
 // One fake API per provider so every contract test starts clean.
+const boatApis = createProviderDoubles<BoatApiFake>();
 const providerWith = (key: string) => {
   const api = createBoatApiFake();
-  return Object.assign(
+  const provider = Object.assign(
     createBoatProvider(key, BASE, {
       fetch: api.fetch,
       sleep: async () => {},
@@ -18,13 +20,14 @@ const providerWith = (key: string) => {
     }),
     { api },
   );
+  return boatApis.track(provider, api);
 };
 
 runSandboxProviderContract('boat (emulated API)', {
   provider: () => providerWith('boat_test_key'),
   providerWithBadCredential: () => providerWith('boat_wrong'),
   knownVersion: '0.0.0-test',
-  expire: (provider, handle) => (provider as any).api.expire(handle.sandboxId),
+  expire: (provider, handle) => boatApis.of(provider).expire(handle.sandboxId),
 });
 
 describe('boat adapter specifics', () => {

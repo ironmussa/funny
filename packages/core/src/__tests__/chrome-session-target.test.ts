@@ -13,7 +13,7 @@ const mocks = vi.hoisted(() => {
   );
   const client = new Proxy(
     { on: vi.fn() },
-    { get: (target, key) => (key in target ? (target as any)[key] : stubDomain) },
+    { get: (target, key) => (key === 'on' ? target.on : stubDomain) },
   );
   const CDP = Object.assign(
     vi.fn((opts: unknown) => {

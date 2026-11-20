@@ -1,8 +1,10 @@
-import type { ThreadEvent as DomainThreadEvent, ThreadWithMessages } from '@funny/shared';
+import type { ThreadWithMessages } from '@funny/shared';
+import type { DomainError } from '@funny/shared/errors';
 import { okAsync, errAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { createActor, fromPromise, waitFor } from 'xstate';
 
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { api } from '@/lib/api';
 import { threadDataMachine, type ThreadDataSnapshot } from '@/machines/thread-data-machine';
 
@@ -25,15 +27,8 @@ vi.mock('@/lib/client-logger', () => ({
 
 function snapshot(thread: Partial<ThreadWithMessages> = {}): ThreadDataSnapshot {
   return {
-    thread: {
-      id: 't1',
-      projectId: 'p1',
-      title: 'thread',
-      status: 'completed',
-      messages: [],
-      ...thread,
-    } as ThreadWithMessages,
-    events: [] as DomainThreadEvent[],
+    thread: buildThreadWithMessages({ title: 'thread', ...thread }),
+    events: [],
   };
 }
 
@@ -244,29 +239,31 @@ describe('threadDataMachine', () => {
     // created without messages. Opening one via Activity / direct URL / Kanban
     // must hydrate the transcript — previously only the sidebar click did,
     // leaving the thread rendering just "Task completed" with no content.
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-    const shellThread = {
-      id: 't1',
-      projectId: 'p1',
+    const shellThread = buildThreadWithMessages({
       title: 'external shell',
-      status: 'completed',
       createdBy: 'external',
       sessionId: 'session-1',
       externalRequestId: 'claude:session-1',
-      messages: [],
-    } as unknown as ThreadWithMessages;
+    });
 
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-    const hydratedThread = {
+    const hydratedThread: ThreadWithMessages = {
       ...shellThread,
-      messages: [{ id: 'm1', role: 'user', content: 'hola' }],
-    } as unknown as ThreadWithMessages;
+      messages: [
+        {
+          id: 'm1',
+          threadId: 't1',
+          role: 'user',
+          content: 'hola',
+          timestamp: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+    };
 
     beforeEach(() => {
       vi.clearAllMocks();
-      vi.mocked(api.getThreadEvents).mockReturnValue(okAsync({ events: [] }) as any);
+      vi.mocked(api.getThreadEvents).mockReturnValue(okAsync({ events: [] }));
       vi.mocked(api.importExternalClaudeSession).mockReturnValue(
-        okAsync({ imported: true, thread: { id: 't1' } }) as any,
+        okAsync({ imported: true, thread: { id: 't1' } }),
       );
     });
 
@@ -279,8 +276,8 @@ describe('threadDataMachine', () => {
 
     test('imports and refetches when shell has no messages', async () => {
       vi.mocked(api.getThread)
-        .mockReturnValueOnce(okAsync(shellThread) as any)
-        .mockReturnValueOnce(okAsync(hydratedThread) as any);
+        .mockReturnValueOnce(okAsync(shellThread))
+        .mockReturnValueOnce(okAsync(hydratedThread));
 
       const actor = startRealActor();
       const final = await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
@@ -294,7 +291,7 @@ describe('threadDataMachine', () => {
     });
 
     test('does not import when the shell already has messages', async () => {
-      vi.mocked(api.getThread).mockReturnValue(okAsync(hydratedThread) as any);
+      vi.mocked(api.getThread).mockReturnValue(okAsync(hydratedThread));
 
       const actor = startRealActor();
       await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
@@ -305,15 +302,8 @@ describe('threadDataMachine', () => {
     });
 
     test('does not import for normal (non-shell) threads without messages', async () => {
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-      const normalThread = {
-        id: 't1',
-        projectId: 'p1',
-        title: 'normal',
-        status: 'completed',
-        messages: [],
-      } as unknown as ThreadWithMessages;
-      vi.mocked(api.getThread).mockReturnValue(okAsync(normalThread) as any);
+      const normalThread = buildThreadWithMessages({ title: 'normal' });
+      vi.mocked(api.getThread).mockReturnValue(okAsync(normalThread));
 
       const actor = startRealActor();
       await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
@@ -323,9 +313,9 @@ describe('threadDataMachine', () => {
     });
 
     test('still loads the shell when the import fails', async () => {
-      vi.mocked(api.getThread).mockReturnValue(okAsync(shellThread) as any);
+      vi.mocked(api.getThread).mockReturnValue(okAsync(shellThread));
       vi.mocked(api.importExternalClaudeSession).mockReturnValue(
-        errAsync(new Error('runner offline')) as any,
+        errAsync({ type: 'INTERNAL', message: 'runner offline' } satisfies DomainError),
       );
 
       const actor = startRealActor();

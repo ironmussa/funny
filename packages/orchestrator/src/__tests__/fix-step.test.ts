@@ -16,6 +16,7 @@ import { join } from 'path';
 
 import { runFixStep, type FixStepSpec } from '../steps/fix.js';
 import { fakeAgents, type FakeAgentTurn } from './helpers/step-fakes.js';
+import { exitStatusOf } from './helpers/test-helpers.js';
 
 const AUTHOR = { name: 'Factory Owner', email: 'owner@example.com' };
 const BRANCH = 'factory/issue-7';
@@ -40,7 +41,7 @@ function gitStatus(cwd: string, ...args: string[]): number {
     execFileSync('git', args, { cwd, stdio: 'ignore', env: cleanGitEnv() });
     return 0;
   } catch (error) {
-    return (error as { status?: number }).status ?? 1;
+    return exitStatusOf(error) ?? 1;
   }
 }
 

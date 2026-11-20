@@ -1,11 +1,10 @@
-import type { Thread } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { SchedulerView } from '@/components/SchedulerView';
-import { seedProjectThreads } from '@/data/threads/testing';
+import { buildThread, seedProjectThreads } from '@/data/threads/testing';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 import { renderWithProviders } from '../helpers/render';
@@ -30,7 +29,7 @@ const run = (threadId: string, lastEventAtMs: number) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   installTestDataLayer();
-  seedProjectThreads({ p1: [{ id: 't1', projectId: 'p1', title: 'Fix login' } as Thread] });
+  seedProjectThreads({ p1: [buildThread({ id: 't1', projectId: 'p1', title: 'Fix login' })] });
 });
 afterEach(() => resetTestDataLayer());
 

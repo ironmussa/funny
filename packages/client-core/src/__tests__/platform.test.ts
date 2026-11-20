@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { InvalidClientPlatformError, validateClientPlatform } from '../platform';
 import { createInMemoryPlatform } from '../testing/in-memory-platform';
+import { expectInstance } from './test-helpers';
 
 describe('client platform', () => {
   test('reports every missing capability and method', () => {
@@ -20,7 +21,7 @@ describe('client platform', () => {
         transport: { request() {} },
       });
     } catch (error) {
-      expect((error as InvalidClientPlatformError).missing).toEqual([
+      expect(expectInstance(error, InvalidClientPlatformError).missing).toEqual([
         'storage.write',
         'storage.remove',
         'storage.subscribe',

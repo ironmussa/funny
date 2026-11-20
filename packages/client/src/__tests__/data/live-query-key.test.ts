@@ -6,12 +6,12 @@ import { createDataLayer } from '@/data/data-layer';
 import { liveQueryKey } from '@/data/live-query-key';
 import { replaceDataLayer } from '@/data/runtime';
 import { useThreadById } from '@/data/threads/hooks';
-import { seedProjectThreads } from '@/data/threads/testing';
+import { buildThread, seedProjectThreads } from '@/data/threads/testing';
 
 import { resetTestDataLayer } from '../helpers/data-layer-harness';
 
 function makeThread(id: string, title: string): Thread {
-  return {
+  return buildThread({
     id,
     projectId: 'p1',
     title,
@@ -19,7 +19,7 @@ function makeThread(id: string, title: string): Thread {
     cost: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
-  } as Thread;
+  });
 }
 
 describe('liveQueryKey', () => {

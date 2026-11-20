@@ -1,6 +1,7 @@
 import type { Thread } from '@funny/shared';
 import { describe, test, expect } from 'vitest';
 
+import { buildThread } from '@/data/threads/testing';
 import { arraysEqual, threadsVisuallyEqual } from '@/lib/shallow-compare';
 
 // ── arraysEqual ──────────────────────────────────────────────────
@@ -52,7 +53,7 @@ describe('arraysEqual', () => {
 
 /** Helper to build a minimal Thread-shaped object. */
 function makeThread(overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id: 't1',
     projectId: 'p1',
     userId: 'u1',
@@ -64,11 +65,11 @@ function makeThread(overrides: Partial<Thread> = {}): Thread {
     permissionMode: 'plan',
     model: 'sonnet',
     cost: 0,
-    source: 'user',
+    source: 'web',
     runtime: 'local',
     createdAt: '2024-01-01T00:00:00Z',
     ...overrides,
-  } as Thread;
+  });
 }
 
 describe('threadsVisuallyEqual', () => {

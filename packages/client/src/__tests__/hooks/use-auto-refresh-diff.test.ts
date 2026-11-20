@@ -1,9 +1,14 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-const reviewPaneState = vi.hoisted(() => ({
+interface ReviewPaneMockState {
+  dirtySignal: number;
+  dirtyThreadId: string | undefined;
+}
+
+const reviewPaneState = vi.hoisted((): ReviewPaneMockState => ({
   dirtySignal: 0,
-  dirtyThreadId: undefined as string | undefined,
+  dirtyThreadId: undefined,
 }));
 
 vi.mock('@/stores/review-pane-store', () => ({

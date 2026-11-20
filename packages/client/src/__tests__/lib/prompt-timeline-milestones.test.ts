@@ -2,8 +2,13 @@ import { describe, expect, test } from 'vitest';
 
 import { buildPromptMilestones, type TimelineMessage } from '@/lib/prompt-timeline-milestones';
 
-const msg = (m: Partial<TimelineMessage> & { id: string }): TimelineMessage =>
-  ({ role: 'user', content: '', timestamp: `2026-01-01T00:00:0${m.id.length}Z`, ...m }) as any;
+const msg = (m: Partial<TimelineMessage> & { id: string }): TimelineMessage => ({
+  threadId: 't1',
+  role: 'user',
+  content: '',
+  timestamp: `2026-01-01T00:00:0${m.id.length}Z`,
+  ...m,
+});
 
 describe('buildPromptMilestones', () => {
   test('returns no milestones without messages', () => {
@@ -20,9 +25,10 @@ describe('buildPromptMilestones', () => {
         toolCalls: [
           {
             id: 'tw1',
+            messageId: 'm',
             name: 'TodoWrite',
             input: JSON.stringify({ todos: [{ content: 'A', status: 'pending' }] }),
-          } as any,
+          },
         ],
       }),
       msg({
@@ -32,6 +38,7 @@ describe('buildPromptMilestones', () => {
         toolCalls: [
           {
             id: 'tw2',
+            messageId: 'm',
             name: 'TodoWrite',
             input: JSON.stringify({
               todos: [
@@ -39,12 +46,13 @@ describe('buildPromptMilestones', () => {
                 { content: 'B', activeForm: 'Doing B', status: 'in_progress' },
               ],
             }),
-          } as any,
+          },
           {
             id: 'q',
+            messageId: 'm',
             name: 'AskUserQuestion',
             input: JSON.stringify({ questions: [{ header: 'no question text' }] }),
-          } as any,
+          },
         ],
       }),
     ];

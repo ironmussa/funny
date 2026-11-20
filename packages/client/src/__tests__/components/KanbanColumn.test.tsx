@@ -3,6 +3,7 @@ import { act, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { KanbanColumn } from '@/components/kanban/KanbanColumn';
+import { buildThread } from '@/data/threads/testing';
 
 vi.mock('@atlaskit/pragmatic-drag-and-drop-auto-scroll/element', () => ({
   autoScrollForElements: () => vi.fn(),
@@ -19,10 +20,9 @@ vi.mock('@/components/kanban/KanbanCard', () => ({
   ),
 }));
 
-const threads = Array.from({ length: 45 }, (_, index) => ({
-  id: `thread-${index}`,
-  projectId: 'project-1',
-})) as Thread[];
+const threads = Array.from({ length: 45 }, (_, index) =>
+  buildThread({ id: `thread-${index}`, projectId: 'project-1' }),
+);
 
 const baseProps = {
   stage: 'backlog' as const,

@@ -19,6 +19,18 @@ import {
 } from '@/platform/web/browser-transport';
 import { installBrowserCircuitConnectivity } from '@/platform/web/circuit-connectivity';
 
+/** A complete `Storage` over `getItem`; writes are no-ops unless given. */
+function storageStub(methods: Pick<Storage, 'getItem'> & Partial<Storage>): Storage {
+  return {
+    length: 0,
+    clear: () => undefined,
+    key: () => null,
+    setItem: () => undefined,
+    removeItem: () => undefined,
+    ...methods,
+  };
+}
+
 const diagnostics = () => {
   const values: ClientDiagnostic[] = [];
   return { values, service: { report: (value: ClientDiagnostic) => values.push(value) } };
@@ -59,12 +71,15 @@ describe('web client platform', () => {
     const stored = new Map([['funny:settings', '{"theme":"one-dark"}']]);
     let onStorage: ((event: StorageEvent) => void) | undefined;
     const stop = vi.fn();
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-    const storage = {
+    const storage = storageStub({
       getItem: (key: string) => stored.get(key) ?? null,
-      setItem: (key: string, value: string) => stored.set(key, value),
-      removeItem: (key: string) => stored.delete(key),
-    } as unknown as Storage;
+      setItem: (key: string, value: string) => {
+        stored.set(key, value);
+      },
+      removeItem: (key: string) => {
+        stored.delete(key);
+      },
+    });
     const log = diagnostics();
     const service = createBrowserStorageService(
       {
@@ -81,6 +96,8 @@ describe('web client platform', () => {
 
     expect(service.read('funny:settings')).toBe('{"theme":"one-dark"}');
     service.write('funny:settings', '{"theme":"dracula"}');
+    // SAFETY: the service reads only storageArea, key and newValue; jsdom's
+    // StorageEvent constructor refuses a storageArea that is not its own Storage.
     onStorage?.({
       storageArea: storage,
       key: 'funny:settings',
@@ -95,12 +112,11 @@ describe('web client platform', () => {
 
     const denied = createBrowserStorageService(
       {
-        // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-        storage: {
+        storage: storageStub({
           getItem: () => {
             throw new Error('denied');
           },
-        } as unknown as Storage,
+        }),
         addStorageListener: () => () => undefined,
       },
       log.service,
@@ -182,6 +198,7 @@ describe('web client platform', () => {
     expect(response.status).toBe(200);
     expect(response.headers['x-test']).toBe('yes');
     expect(await response.text()).toBe('ok');
+    // SAFETY: an empty capability set is the invalid input under test.
     expect(() => createClientComposition({} as never)).toThrow(/missing capabilities/);
   });
 
@@ -234,6 +251,7 @@ describe('web client platform', () => {
 
   test('keeps browser connectivity listeners at the web edge and disposes them', () => {
     const listeners = new Map<string, EventListener>();
+    // SAFETY: installBrowserCircuitConnectivity only calls add/removeEventListener.
     // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const win = {
       addEventListener: (name: string, listener: EventListener) => listeners.set(name, listener),
@@ -241,6 +259,7 @@ describe('web client platform', () => {
     } as unknown as Window;
     const recordFailure = vi.fn();
     const retryNow = vi.fn(async () => undefined);
+    // SAFETY: the connectivity hook reads only state, recordFailure and retryNow.
     const store = {
       getState: () => ({ state: 'open', recordFailure, retryNow }),
     } as never;

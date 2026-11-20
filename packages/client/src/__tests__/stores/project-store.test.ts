@@ -1,7 +1,11 @@
-import type { Project } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { okAsync, errAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
+
+/** The thread rows the mocked bridge treats as loaded, keyed by project. */
+interface LoadedThreadsRef {
+  current: Record<string, unknown[]>;
+}
 
 // ── Shared mock state that we can reassign per test ──────────────────
 const {
@@ -13,28 +17,31 @@ const {
   mockThreadsApi,
   mockBatchUpdateThreads,
   mockFetchGitStatusForProject,
-} = vi.hoisted(() => ({
-  mockLoadThreadsForProject: vi.fn().mockResolvedValue(undefined),
-  mockClearProjectThreads: vi.fn(),
-  mockThreadsByProject: { current: {} as Record<string, unknown[]> },
-  mockFetchForProject: vi.fn(),
-  mockProjectsApi: {
-    listProjects: vi.fn(),
-    listBranches: vi
-      .fn()
-      .mockReturnValue(Promise.resolve({ isOk: () => false, isErr: () => true })),
-    renameProject: vi.fn(),
-    updateProject: vi.fn(),
-    deleteProject: vi.fn(),
-    reorderProjects: vi.fn(),
-    setProjectLocalPath: vi.fn(),
-  },
-  mockThreadsApi: {
-    listThreads: vi.fn(),
-  },
-  mockBatchUpdateThreads: vi.fn(),
-  mockFetchGitStatusForProject: vi.fn(),
-}));
+} = vi.hoisted(() => {
+  const mockThreadsByProject: LoadedThreadsRef = { current: {} };
+  return {
+    mockLoadThreadsForProject: vi.fn().mockResolvedValue(undefined),
+    mockClearProjectThreads: vi.fn(),
+    mockThreadsByProject,
+    mockFetchForProject: vi.fn(),
+    mockProjectsApi: {
+      listProjects: vi.fn(),
+      listBranches: vi
+        .fn()
+        .mockReturnValue(Promise.resolve({ isOk: () => false, isErr: () => true })),
+      renameProject: vi.fn(),
+      updateProject: vi.fn(),
+      deleteProject: vi.fn(),
+      reorderProjects: vi.fn(),
+      setProjectLocalPath: vi.fn(),
+    },
+    mockThreadsApi: {
+      listThreads: vi.fn(),
+    },
+    mockBatchUpdateThreads: vi.fn(),
+    mockFetchGitStatusForProject: vi.fn(),
+  };
+});
 
 // Mock the API barrel (for any leftover consumers) and the specific sub-modules
 // the store now imports directly.
@@ -63,22 +70,10 @@ vi.mock('@/data/git-status/actions', () => ({
 
 import { readProjectCurrentBranch } from '@/data/projects/branches';
 import { readProjects } from '@/data/projects/read';
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 const mockApi = mockProjectsApi;
-
-function makeProject(overrides: Partial<Project> = {}): Project {
-  return {
-    id: 'p1',
-    name: 'Project 1',
-    path: '/tmp/p1',
-    userId: 'u1',
-    sortOrder: 0,
-    createdAt: '2024-01-01',
-    ...overrides,
-  };
-}
 
 describe('ProjectStore', () => {
   beforeEach(() => {
@@ -92,9 +87,7 @@ describe('ProjectStore', () => {
     );
     vi.clearAllMocks();
     mockThreadsByProject.current = {};
-    mockThreadsApi.listThreads.mockReturnValue(
-      okAsync({ threads: [], total: 0, hasMore: false }) as any,
-    );
+    mockThreadsApi.listThreads.mockReturnValue(okAsync({ threads: [], total: 0, hasMore: false }));
   });
 
   describe('Initial state', () => {
@@ -114,10 +107,10 @@ describe('ProjectStore', () => {
   describe('loadProjects', () => {
     test('fetches and sets projects, sets initialized=true', async () => {
       const projects = [
-        makeProject({ id: 'p1', name: 'Project 1' }),
-        makeProject({ id: 'p2', name: 'Project 2', sortOrder: 1 }),
+        buildProject({ id: 'p1', name: 'Project 1' }),
+        buildProject({ id: 'p2', name: 'Project 2', sortOrder: 1 }),
       ];
-      mockApi.listProjects.mockReturnValueOnce(okAsync(projects) as any);
+      mockApi.listProjects.mockReturnValueOnce(okAsync(projects));
 
       await useProjectStore.getState().loadProjects();
 
@@ -128,8 +121,8 @@ describe('ProjectStore', () => {
 
     test('loads only the active project threads during startup', async () => {
       window.history.pushState({}, '', '/projects/p2/threads/t1');
-      const projects = [makeProject({ id: 'p1' }), makeProject({ id: 'p2' })];
-      mockApi.listProjects.mockReturnValueOnce(okAsync(projects) as any);
+      const projects = [buildProject({ id: 'p1' }), buildProject({ id: 'p2' })];
+      mockApi.listProjects.mockReturnValueOnce(okAsync(projects));
 
       await useProjectStore.getState().loadProjects();
 
@@ -141,8 +134,8 @@ describe('ProjectStore', () => {
     test('defers persisted expanded projects until idle', async () => {
       window.history.pushState({}, '', '/projects/p1/threads/t1');
       useProjectStore.setState({ expandedProjects: new Set(['p2']) });
-      const projects = [makeProject({ id: 'p1' }), makeProject({ id: 'p2' })];
-      mockApi.listProjects.mockReturnValueOnce(okAsync(projects) as any);
+      const projects = [buildProject({ id: 'p1' }), buildProject({ id: 'p2' })];
+      mockApi.listProjects.mockReturnValueOnce(okAsync(projects));
 
       await useProjectStore.getState().loadProjects();
       expect(mockLoadThreadsForProject).toHaveBeenCalledWith('p1');
@@ -155,11 +148,11 @@ describe('ProjectStore', () => {
       // Active project from the URL is p2, which is NOT first in the array.
       window.history.pushState({}, '', '/projects/p2/threads/t1');
       const projects = [
-        makeProject({ id: 'p1' }),
-        makeProject({ id: 'p2' }),
-        makeProject({ id: 'p3' }),
+        buildProject({ id: 'p1' }),
+        buildProject({ id: 'p2' }),
+        buildProject({ id: 'p3' }),
       ];
-      mockApi.listProjects.mockReturnValueOnce(okAsync(projects) as any);
+      mockApi.listProjects.mockReturnValueOnce(okAsync(projects));
       await useProjectStore.getState().loadProjects();
 
       expect(mockLoadThreadsForProject.mock.calls[0][0]).toBe('p2');
@@ -171,11 +164,11 @@ describe('ProjectStore', () => {
       window.history.pushState({}, '', '/projects/p2/threads/t1');
       useProjectStore.setState({ expandedProjects: new Set(['p3']) });
       const projects = [
-        makeProject({ id: 'p1' }),
-        makeProject({ id: 'p2' }),
-        makeProject({ id: 'p3' }),
+        buildProject({ id: 'p1' }),
+        buildProject({ id: 'p2' }),
+        buildProject({ id: 'p3' }),
       ];
-      mockApi.listProjects.mockReturnValueOnce(okAsync(projects) as any);
+      mockApi.listProjects.mockReturnValueOnce(okAsync(projects));
 
       await useProjectStore.getState().loadProjects();
       await new Promise((resolve) => setTimeout(resolve, 250));
@@ -189,7 +182,7 @@ describe('ProjectStore', () => {
 
     test('handles API errors gracefully', async () => {
       const error: DomainError = { type: 'INTERNAL', message: 'Server error' };
-      mockApi.listProjects.mockReturnValueOnce(errAsync(error) as any);
+      mockApi.listProjects.mockReturnValueOnce(errAsync(error));
 
       await useProjectStore.getState().loadProjects();
 
@@ -272,7 +265,7 @@ describe('ProjectStore', () => {
       mockApi.listBranches.mockReturnValueOnce(
         new Promise((r) => {
           resolveList = r;
-        }) as any,
+        }),
       );
 
       // selectProject-style fetch begins; the branch listing is still in flight.
@@ -293,7 +286,7 @@ describe('ProjectStore', () => {
     test('applies fetchBranch result when no checkout intervenes', async () => {
       const pid = 'race-p2';
       mockApi.listBranches.mockReturnValueOnce(
-        Promise.resolve({ isErr: () => false, value: { currentBranch: 'main' } }) as any,
+        Promise.resolve({ isErr: () => false, value: { currentBranch: 'main' } }),
       );
 
       await useProjectStore.getState().fetchBranch(pid);
@@ -308,7 +301,7 @@ describe('ProjectStore', () => {
 
       mockApi.listBranches.mockClear();
       mockApi.listBranches.mockReturnValueOnce(
-        Promise.resolve({ isErr: () => false, value: { currentBranch: 'feat/y' } }) as any,
+        Promise.resolve({ isErr: () => false, value: { currentBranch: 'feat/y' } }),
       );
       await useProjectStore.getState().fetchBranch(pid);
 
@@ -320,10 +313,10 @@ describe('ProjectStore', () => {
 
   describe('renameProject', () => {
     test('updates the project in the list', async () => {
-      const original = makeProject({ id: 'p1', name: 'Old Name' });
-      const renamed = makeProject({ id: 'p1', name: 'New Name' });
+      const original = buildProject({ id: 'p1', name: 'Old Name' });
+      const renamed = buildProject({ id: 'p1', name: 'New Name' });
       useProjectStore.setState(withProjects({ projects: [original] }));
-      mockApi.renameProject.mockReturnValueOnce(okAsync(renamed) as any);
+      mockApi.renameProject.mockReturnValueOnce(okAsync(renamed));
 
       await useProjectStore.getState().renameProject('p1', 'New Name');
 
@@ -332,10 +325,10 @@ describe('ProjectStore', () => {
     });
 
     test('handles API errors (no update)', async () => {
-      const original = makeProject({ id: 'p1', name: 'Old Name' });
+      const original = buildProject({ id: 'p1', name: 'Old Name' });
       useProjectStore.setState(withProjects({ projects: [original] }));
       const error: DomainError = { type: 'NOT_FOUND', message: 'Not found' };
-      mockApi.renameProject.mockReturnValueOnce(errAsync(error) as any);
+      mockApi.renameProject.mockReturnValueOnce(errAsync(error));
 
       await useProjectStore.getState().renameProject('p1', 'New Name');
 
@@ -345,10 +338,10 @@ describe('ProjectStore', () => {
 
   describe('updateProject', () => {
     test('updates the project in the list', async () => {
-      const original = makeProject({ id: 'p1', name: 'Project', color: undefined });
-      const updated = makeProject({ id: 'p1', name: 'Project', color: '#ff0000' });
+      const original = buildProject({ id: 'p1', name: 'Project', color: undefined });
+      const updated = buildProject({ id: 'p1', name: 'Project', color: '#ff0000' });
       useProjectStore.setState(withProjects({ projects: [original] }));
-      mockApi.updateProject.mockReturnValueOnce(okAsync(updated) as any);
+      mockApi.updateProject.mockReturnValueOnce(okAsync(updated));
 
       await useProjectStore.getState().updateProject('p1', { color: '#ff0000' });
 
@@ -358,15 +351,15 @@ describe('ProjectStore', () => {
 
   describe('deleteProject', () => {
     test('removes project from list', async () => {
-      const p1 = makeProject({ id: 'p1' });
-      const p2 = makeProject({ id: 'p2', name: 'Project 2' });
+      const p1 = buildProject({ id: 'p1' });
+      const p2 = buildProject({ id: 'p2', name: 'Project 2' });
       useProjectStore.setState(
         withProjects({
           projects: [p1, p2],
           expandedProjects: new Set(['p1']),
         }),
       );
-      mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined) as any);
+      mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined));
 
       await useProjectStore.getState().deleteProject('p1');
 
@@ -377,7 +370,7 @@ describe('ProjectStore', () => {
     });
 
     test('clears selectedProjectId if deleted project was selected', async () => {
-      const p1 = makeProject({ id: 'p1' });
+      const p1 = buildProject({ id: 'p1' });
       useProjectStore.setState(
         withProjects({
           projects: [p1],
@@ -385,7 +378,7 @@ describe('ProjectStore', () => {
           expandedProjects: new Set(['p1']),
         }),
       );
-      mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined) as any);
+      mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined));
 
       await useProjectStore.getState().deleteProject('p1');
 
@@ -393,8 +386,8 @@ describe('ProjectStore', () => {
     });
 
     test('does not clear selectedProjectId if different project was selected', async () => {
-      const p1 = makeProject({ id: 'p1' });
-      const p2 = makeProject({ id: 'p2', name: 'Project 2' });
+      const p1 = buildProject({ id: 'p1' });
+      const p2 = buildProject({ id: 'p2', name: 'Project 2' });
       useProjectStore.setState(
         withProjects({
           projects: [p1, p2],
@@ -402,7 +395,7 @@ describe('ProjectStore', () => {
           expandedProjects: new Set(['p1']),
         }),
       );
-      mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined) as any);
+      mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined));
 
       await useProjectStore.getState().deleteProject('p1');
 
@@ -410,9 +403,9 @@ describe('ProjectStore', () => {
     });
 
     test('clears project threads via thread store', async () => {
-      const p1 = makeProject({ id: 'p1' });
+      const p1 = buildProject({ id: 'p1' });
       useProjectStore.setState(withProjects({ projects: [p1] }));
-      mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined) as any);
+      mockApi.deleteProject.mockReturnValueOnce(okAsync(undefined));
 
       await useProjectStore.getState().deleteProject('p1');
 
@@ -420,10 +413,10 @@ describe('ProjectStore', () => {
     });
 
     test('does not remove project on API error', async () => {
-      const p1 = makeProject({ id: 'p1' });
+      const p1 = buildProject({ id: 'p1' });
       useProjectStore.setState(withProjects({ projects: [p1] }));
       const error: DomainError = { type: 'INTERNAL', message: 'Server error' };
-      mockApi.deleteProject.mockReturnValueOnce(errAsync(error) as any);
+      mockApi.deleteProject.mockReturnValueOnce(errAsync(error));
 
       await useProjectStore.getState().deleteProject('p1');
 
@@ -433,11 +426,11 @@ describe('ProjectStore', () => {
 
   describe('reorderProjects', () => {
     test('optimistically reorders projects', async () => {
-      const p1 = makeProject({ id: 'p1', name: 'First', sortOrder: 0 });
-      const p2 = makeProject({ id: 'p2', name: 'Second', sortOrder: 1 });
-      const p3 = makeProject({ id: 'p3', name: 'Third', sortOrder: 2 });
+      const p1 = buildProject({ id: 'p1', name: 'First', sortOrder: 0 });
+      const p2 = buildProject({ id: 'p2', name: 'Second', sortOrder: 1 });
+      const p3 = buildProject({ id: 'p3', name: 'Third', sortOrder: 2 });
       useProjectStore.setState(withProjects({ projects: [p1, p2, p3] }));
-      mockApi.reorderProjects.mockReturnValueOnce(okAsync(undefined) as any);
+      mockApi.reorderProjects.mockReturnValueOnce(okAsync(undefined));
 
       await useProjectStore.getState().reorderProjects(['p3', 'p1', 'p2']);
 
@@ -445,12 +438,12 @@ describe('ProjectStore', () => {
     });
 
     test('reverts on API failure', async () => {
-      const p1 = makeProject({ id: 'p1', name: 'First', sortOrder: 0 });
-      const p2 = makeProject({ id: 'p2', name: 'Second', sortOrder: 1 });
-      const p3 = makeProject({ id: 'p3', name: 'Third', sortOrder: 2 });
+      const p1 = buildProject({ id: 'p1', name: 'First', sortOrder: 0 });
+      const p2 = buildProject({ id: 'p2', name: 'Second', sortOrder: 1 });
+      const p3 = buildProject({ id: 'p3', name: 'Third', sortOrder: 2 });
       useProjectStore.setState(withProjects({ projects: [p1, p2, p3] }));
       const error: DomainError = { type: 'INTERNAL', message: 'Server error' };
-      mockApi.reorderProjects.mockReturnValueOnce(errAsync(error) as any);
+      mockApi.reorderProjects.mockReturnValueOnce(errAsync(error));
 
       await useProjectStore.getState().reorderProjects(['p3', 'p1', 'p2']);
 

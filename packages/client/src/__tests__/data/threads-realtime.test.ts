@@ -6,6 +6,7 @@ import { createDataLayer } from '@/data/data-layer';
 import { replaceDataLayer } from '@/data/runtime';
 import { readThreadIndex } from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
+import { buildThread } from '@/data/threads/testing';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
@@ -24,7 +25,7 @@ const mockApi = vi.hoisted(() => ({
 vi.mock('@/lib/api', () => ({ api: mockApi }));
 
 function thread(id: string, overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id,
     projectId: 'p1',
     title: id,
@@ -35,7 +36,7 @@ function thread(id: string, overrides: Partial<Thread> = {}): Thread {
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
-  } as Thread;
+  });
 }
 
 beforeEach(async () => {

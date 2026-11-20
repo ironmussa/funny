@@ -3,6 +3,11 @@ import { describe, test, expect } from 'bun:test';
 import { parseFlow, parseStringSequence } from '../flow.js';
 import type { ElementRef, ElementKind } from '../types.js';
 
+/** The strings array a tagged template passes its tag, as `flow\`...\`` would receive it. */
+function templateParts(...parts: string[]): TemplateStringsArray {
+  return Object.assign([...parts], { raw: [...parts] });
+}
+
 function ref(name: string, kind: ElementKind = 'command'): ElementRef {
   return { name, kind, toString: () => name };
 }
@@ -12,9 +17,7 @@ describe('parseFlow (tagged template literal)', () => {
     const a = ref('AddItem', 'command');
     const b = ref('ItemAdded', 'event');
     // Simulate: flow`${a} -> ${b}`
-    const strings = Object.assign(['', ' -> ', ''], {
-      raw: ['', ' -> ', ''],
-    }) as TemplateStringsArray;
+    const strings = templateParts('', ' -> ', '');
     const result = parseFlow(strings, [a, b]);
     expect(result).toEqual([
       { name: 'AddItem', kind: 'command' },
@@ -26,9 +29,7 @@ describe('parseFlow (tagged template literal)', () => {
     const a = ref('A', 'command');
     const b = ref('B', 'event');
     const c = ref('C', 'readModel');
-    const strings = Object.assign(['', ' -> ', ' -> ', ''], {
-      raw: ['', ' -> ', ' -> ', ''],
-    }) as TemplateStringsArray;
+    const strings = templateParts('', ' -> ', ' -> ', '');
     const result = parseFlow(strings, [a, b, c]);
     expect(result).toHaveLength(3);
     expect(result[2]).toEqual({ name: 'C', kind: 'readModel' });
@@ -37,22 +38,20 @@ describe('parseFlow (tagged template literal)', () => {
   test('handles whitespace around elements', () => {
     const a = ref('A', 'command');
     const b = ref('B', 'event');
-    const strings = Object.assign(['\n  ', ' -> ', '  \n'], {
-      raw: ['\n  ', ' -> ', '  \n'],
-    }) as TemplateStringsArray;
+    const strings = templateParts('\n  ', ' -> ', '  \n');
     const result = parseFlow(strings, [a, b]);
     expect(result).toHaveLength(2);
   });
 
   test('handles single element without arrows', () => {
     const a = ref('OnlyOne', 'command');
-    const strings = Object.assign(['', ''], { raw: ['', ''] }) as TemplateStringsArray;
+    const strings = templateParts('', '');
     const result = parseFlow(strings, [a]);
     expect(result).toEqual([{ name: 'OnlyOne', kind: 'command' }]);
   });
 
   test('returns empty for no elements', () => {
-    const strings = Object.assign([''], { raw: [''] }) as TemplateStringsArray;
+    const strings = templateParts('');
     const result = parseFlow(strings, []);
     expect(result).toEqual([]);
   });
@@ -60,17 +59,15 @@ describe('parseFlow (tagged template literal)', () => {
   test('throws on text between elements instead of arrow', () => {
     const a = ref('A', 'command');
     const b = ref('B', 'event');
-    const strings = Object.assign(['', ' then ', ''], {
-      raw: ['', ' then ', ''],
-    }) as TemplateStringsArray;
+    const strings = templateParts('', ' then ', '');
     expect(() => parseFlow(strings, [a, b])).toThrow('expected "->"');
   });
 
   test('throws on non-ElementRef values', () => {
-    const strings = Object.assign(['', ' -> ', ''], {
-      raw: ['', ' -> ', ''],
-    }) as TemplateStringsArray;
-    expect(() => parseFlow(strings, ['hello' as any, 42 as any])).toThrow('ElementRef');
+    const strings = templateParts('', ' -> ', '');
+    // SAFETY: deliberately invalid input; parseFlow must reject non-ElementRef values at runtime.
+    const notRefs = ['hello', 42] as never[];
+    expect(() => parseFlow(strings, notRefs)).toThrow('ElementRef');
   });
 });
 

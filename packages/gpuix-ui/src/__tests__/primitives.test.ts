@@ -6,6 +6,10 @@ import { createButtonStyle } from '../button';
 import { eventValue } from '../input';
 import { darkTheme } from '../theme';
 
+function inputEvent(overrides: Partial<EventPayload> = {}): EventPayload {
+  return { elementId: 1, eventType: 'input', ...overrides };
+}
+
 describe('gpuix-ui primitives', () => {
   test('resolves explicit button variants, focus, and disabled state', () => {
     const style = createButtonStyle({
@@ -24,7 +28,7 @@ describe('gpuix-ui primitives', () => {
   });
 
   test('normalizes native input events to string values', () => {
-    expect(eventValue({ value: 'Ada' } as EventPayload)).toBe('Ada');
-    expect(eventValue({} as EventPayload)).toBe('');
+    expect(eventValue(inputEvent({ value: 'Ada' }))).toBe('Ada');
+    expect(eventValue(inputEvent())).toBe('');
   });
 });

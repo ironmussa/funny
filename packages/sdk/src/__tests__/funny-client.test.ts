@@ -5,6 +5,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import { FunnyClient, FunnyClientError } from '../funny-client.js';
+import { fetchDouble } from './test-helpers.js';
 
 interface FakeRequest {
   url: string;
@@ -18,7 +19,7 @@ function makeFetch(impl: (req: FakeRequest) => Response | Promise<Response>): {
   calls: FakeRequest[];
 } {
   const calls: FakeRequest[] = [];
-  const fakeFetch = (async (input, init) => {
+  const fakeFetch = fetchDouble(async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString();
     const req: FakeRequest = {
       url,
@@ -28,7 +29,7 @@ function makeFetch(impl: (req: FakeRequest) => Response | Promise<Response>): {
     };
     calls.push(req);
     return impl(req);
-  }) as typeof fetch;
+  });
   return { fetch: fakeFetch, calls };
 }
 
@@ -78,7 +79,7 @@ describe('FunnyClient', () => {
     expect(calls[0].headers['content-type']).toBe('application/json');
     expect(calls[0].headers['x-webhook-secret']).toBe('wh-secret');
 
-    const body = JSON.parse(calls[0].body ?? '{}') as Record<string, unknown>;
+    const body: Record<string, unknown> = JSON.parse(calls[0].body ?? '{}');
     expect(body.event_type).toBe('pipeline.accepted');
     expect(body.request_id).toBe('req-1');
     expect(body.data).toEqual({
@@ -125,7 +126,7 @@ describe('FunnyClient', () => {
     });
     await client.message('req-2', 'Step done', { threadId: 'thread-9' });
 
-    const body = JSON.parse(calls[0].body ?? '{}') as Record<string, unknown>;
+    const body: Record<string, unknown> = JSON.parse(calls[0].body ?? '{}');
     expect(body.event_type).toBe('pipeline.message');
     expect(body.thread_id).toBe('thread-9');
     expect(body.data).toEqual({ content: 'Step done' });
@@ -143,10 +144,10 @@ describe('FunnyClient', () => {
     });
     await client.cliText('req-3', 'msg-1', 'Working...');
 
-    const body = JSON.parse(calls[0].body ?? '{}') as {
+    const body: {
       event_type: string;
       data: { cli_message: Record<string, unknown> };
-    };
+    } = JSON.parse(calls[0].body ?? '{}');
     expect(body.event_type).toBe('pipeline.cli_message');
     expect(body.data.cli_message).toEqual({
       type: 'assistant',
@@ -169,7 +170,7 @@ describe('FunnyClient', () => {
     });
     await client.emit('workflow.started', 'req-4', { step: 1 }, { threadId: 't-4' });
 
-    const body = JSON.parse(calls[0].body ?? '{}') as Record<string, unknown>;
+    const body: Record<string, unknown> = JSON.parse(calls[0].body ?? '{}');
     expect(body.event_type).toBe('workflow.started');
     expect(body.thread_id).toBe('t-4');
     expect(body.data).toEqual({ step: 1 });

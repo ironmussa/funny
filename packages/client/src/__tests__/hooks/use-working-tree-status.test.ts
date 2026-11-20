@@ -5,8 +5,9 @@ import { useWorkingTreeStatus } from '@/hooks/use-working-tree-status';
 
 const { useGitStatusForThreadMock, fetchForThread, fetchProjectStatus, storeState } = vi.hoisted(
   () => {
+    const statusByProject: Record<string, unknown> = {};
     const storeState = {
-      statusByProject: {} as Record<string, unknown>,
+      statusByProject,
       fetchForThread: vi.fn(),
       fetchProjectStatus: vi.fn(),
     };

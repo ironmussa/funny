@@ -3,9 +3,11 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { DiffMinimap } from '@/components/virtual-diff/DiffMinimap';
 
+import { buildResizeEntry } from '../helpers/builders-components';
+
 const resizeObservers: TestResizeObserver[] = [];
 
-class TestResizeObserver {
+class TestResizeObserver implements ResizeObserver {
   constructor(private readonly callback: ResizeObserverCallback) {
     resizeObservers.push(this);
   }
@@ -15,7 +17,7 @@ class TestResizeObserver {
   unobserve() {}
 
   resize(height: number) {
-    this.callback([{ contentRect: { height } } as ResizeObserverEntry], this as ResizeObserver);
+    this.callback([buildResizeEntry(height)], this);
   }
 }
 
@@ -38,7 +40,7 @@ describe('DiffMinimap', () => {
     const scrollTo = vi.fn(({ top }: ScrollToOptions) => {
       scrollElement.scrollTop = top ?? scrollElement.scrollTop;
     });
-    scrollElement.scrollTo = scrollTo as typeof scrollElement.scrollTo;
+    Object.defineProperty(scrollElement, 'scrollTo', { configurable: true, value: scrollTo });
 
     render(
       <DiffMinimap

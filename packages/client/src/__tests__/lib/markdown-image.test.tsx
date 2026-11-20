@@ -8,6 +8,8 @@ import { __resetVisualizerRegistry } from '@/lib/visualizer-registry';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 import { registerBuiltinVisualizers } from '@/visualizers/builtin';
 
+import { getByTestIdOfType } from '../helpers/builders-lib';
+
 const Img = baseMarkdownComponents.img;
 
 afterEach(() => {
@@ -20,7 +22,7 @@ afterEach(() => {
 describe('markdown img', () => {
   test('rewrites a local file path through /api/files/raw', () => {
     render(createElement(Img, { src: '/home/u/out.png', alt: 'shot' }));
-    const img = screen.getByTestId('markdown-image') as HTMLImageElement;
+    const img = getByTestIdOfType('markdown-image', HTMLImageElement);
     // jsdom resolves to an absolute URL; assert the pathname+query, not the origin.
     const url = new URL(img.src);
     expect(url.pathname).toBe('/api/files/raw');
@@ -30,16 +32,12 @@ describe('markdown img', () => {
 
   test('passes a web URL through untouched and renders it in the image card', () => {
     render(createElement(Img, { src: 'https://x.com/a.png', alt: 'remote' }));
-    expect((screen.getByTestId('markdown-image') as HTMLImageElement).src).toBe(
-      'https://x.com/a.png',
-    );
+    expect(getByTestIdOfType('markdown-image', HTMLImageElement).src).toBe('https://x.com/a.png');
     // External images also get the rich card; Expand opens the same thread
     // lightbox used by prompt image attachments.
     fireEvent.click(screen.getByTestId('markdown-image-expand'));
     expect(screen.getByTestId('image-lightbox')).toBeInTheDocument();
-    expect((screen.getByTestId('lightbox-image') as HTMLImageElement).src).toBe(
-      'https://x.com/a.png',
-    );
+    expect(getByTestIdOfType('lightbox-image', HTMLImageElement).src).toBe('https://x.com/a.png');
     expect(useMediaPreviewStore.getState().isOpen).toBe(false);
   });
 
@@ -47,7 +45,7 @@ describe('markdown img', () => {
     render(createElement(Img, { src: '/abs/diagram.png', alt: 'd' }));
     fireEvent.click(screen.getByTestId('markdown-image-expand'));
     expect(screen.getByTestId('image-lightbox')).toBeInTheDocument();
-    const url = new URL((screen.getByTestId('lightbox-image') as HTMLImageElement).src);
+    const url = new URL(getByTestIdOfType('lightbox-image', HTMLImageElement).src);
     expect(url.pathname).toBe('/api/files/raw');
     expect(url.searchParams.get('path')).toBe('/abs/diagram.png');
     expect(useMediaPreviewStore.getState().isOpen).toBe(false);
@@ -56,11 +54,15 @@ describe('markdown img', () => {
   test('a failed local image swaps the broken <img> for the media error widget', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn().mockResolvedValue({
-        ok: false,
-        status: 403,
-        json: async () => ({ error: 'Access denied: path is outside the allowed directories.' }),
-      } as Response),
+      vi
+        .fn()
+        .mockImplementation(
+          async () =>
+            new Response(
+              JSON.stringify({ error: 'Access denied: path is outside the allowed directories.' }),
+              { status: 403 },
+            ),
+        ),
     );
     render(createElement(Img, { src: '/home/u/out.png', alt: 'shot' }));
     fireEvent.error(screen.getByTestId('markdown-image'));
@@ -84,7 +86,7 @@ describe('markdown img', () => {
     registerBuiltinVisualizers();
     const { container } = render(createElement(Img, { src: '/abs/clip.mp4', alt: 'demo' }));
     expect(screen.getByTestId('markdown-binary-visualizer')).toBeTruthy();
-    const video = screen.getByTestId('visualizer-video') as HTMLVideoElement;
+    const video = getByTestIdOfType('visualizer-video', HTMLVideoElement);
     expect(new URL(video.src).searchParams.get('path')).toBe('/abs/clip.mp4');
     expect(container.querySelector('img')).toBeNull();
   });
@@ -115,7 +117,7 @@ describe('markdown img', () => {
     );
     const source = document.querySelector('img')?.getAttribute('src');
     render(createElement(Img, { src: source ?? undefined, alt: 'shot' }));
-    const img = screen.getByTestId('markdown-image') as HTMLImageElement;
+    const img = getByTestIdOfType('markdown-image', HTMLImageElement);
     expect(new URL(img.src).searchParams.get('path')).toBe('/home/u/out.png');
   });
 });

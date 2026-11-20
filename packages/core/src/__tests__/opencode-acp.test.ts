@@ -8,6 +8,7 @@
  * buffered reasoning (Think), plan→TodoWrite, and usage.
  */
 
+import type { SessionUpdate } from '@agentclientprotocol/sdk/unstable';
 import { describe, expect, test } from 'vitest';
 
 import { OpenCodeACPProcess } from '../agents/opencode-acp.js';
@@ -24,8 +25,8 @@ function makeProcess(): { proc: OpenCodeACPProcess; messages: CLIMessage[] } {
   return { proc, messages };
 }
 
-function translate(proc: OpenCodeACPProcess, update: unknown): void {
-  (proc as OpenCodeACPProcess & { translateUpdate: (u: unknown) => void }).translateUpdate(update);
+function translate(proc: OpenCodeACPProcess, update: SessionUpdate): void {
+  proc['translateUpdate'](update);
 }
 
 describe('OpenCodeACPProcess.translateUpdate', () => {

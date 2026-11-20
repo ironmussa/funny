@@ -1,15 +1,23 @@
 import { fireEvent, render, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  connections: [] as Array<{ id: string; provider: string; label: string }>,
-  settings: null as null | {
+interface SandboxMocks {
+  connections: Array<{ id: string; provider: string; label: string }>;
+  settings: null | {
     projectId: string;
     connectionId: string;
     sizeId: string;
     mode: 'local' | 'worktree' | 'sandbox';
-  },
+  };
+  save: Mock;
+  clear: Mock;
+  navigate: Mock;
+}
+
+const mocks = vi.hoisted((): SandboxMocks => ({
+  connections: [],
+  settings: null,
   save: vi.fn(),
   clear: vi.fn(),
   navigate: vi.fn(),

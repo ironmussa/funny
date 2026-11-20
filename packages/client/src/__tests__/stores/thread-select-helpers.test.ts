@@ -1,13 +1,16 @@
 import type { Thread } from '@funny/shared';
 import { describe, expect, test } from 'vitest';
 
+import { buildThread } from '@/data/threads/testing';
 import { deriveWaitingState } from '@/stores/thread-select-helpers';
 
-function waitingThread(toolCallName: string) {
+function waitingThread(
+  toolCallName: string,
+): Thread & { messages: { toolCalls: { name: string }[] }[] } {
   return {
-    status: 'waiting',
+    ...buildThread({ status: 'waiting' }),
     messages: [{ toolCalls: [{ name: toolCallName }] }],
-  } as Thread & { messages: { toolCalls: { name: string }[] }[] };
+  };
 }
 
 describe('deriveWaitingState', () => {

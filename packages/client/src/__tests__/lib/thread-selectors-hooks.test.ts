@@ -1,7 +1,7 @@
 import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, test } from 'vitest';
 
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildThread, withThreadIndex } from '@/data/threads/testing';
 import {
   useScratchThreads,
   useThreadById,
@@ -11,15 +11,7 @@ import {
 import { useThreadStore } from '@/stores/thread-store';
 
 function makeThread(id: string, projectId = 'p1') {
-  return {
-    id,
-    projectId,
-    title: id,
-    status: 'idle' as const,
-    cost: 0,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  };
+  return buildThread({ id, projectId, title: id, status: 'idle' });
 }
 
 describe('thread-selectors hooks', () => {
@@ -35,7 +27,7 @@ describe('thread-selectors hooks', () => {
         threadDataById: {},
         activeThread: null,
         setupProgressByThread: {},
-      } as any),
+      }),
     );
   });
 
@@ -48,8 +40,8 @@ describe('thread-selectors hooks', () => {
     const t1 = makeThread('t1');
     useThreadStore.setState(
       withThreadIndex({
-        threadsById: { t1: t1 as any },
-      } as any),
+        threadsById: { t1: t1 },
+      }),
     );
 
     const { result } = renderHook(() => useThreadById('t1'));
@@ -61,9 +53,9 @@ describe('thread-selectors hooks', () => {
     const t2 = makeThread('t2');
     useThreadStore.setState(
       withThreadIndex({
-        threadsById: { t1: t1 as any, t2: t2 as any },
+        threadsById: { t1: t1, t2: t2 },
         threadIdsByProject: { p1: ['t1', 't2'] },
-      } as any),
+      }),
     );
 
     const { result } = renderHook(() => useThreadsForProject('p1'));
@@ -74,9 +66,9 @@ describe('thread-selectors hooks', () => {
     const s1 = { ...makeThread('s1', ''), isScratch: true };
     useThreadStore.setState(
       withThreadIndex({
-        threadsById: { s1: s1 as any },
+        threadsById: { s1: s1 },
         scratchThreadIds: ['s1'],
-      } as any),
+      }),
     );
 
     const { result } = renderHook(() => useScratchThreads());
@@ -89,9 +81,9 @@ describe('thread-selectors hooks', () => {
     const t2 = makeThread('t2', 'p2');
     useThreadStore.setState(
       withThreadIndex({
-        threadsById: { t1: t1 as any, t2: t2 as any },
+        threadsById: { t1: t1, t2: t2 },
         threadIdsByProject: { p1: ['t1'], p2: ['t2'] },
-      } as any),
+      }),
     );
 
     const { result } = renderHook(() => useThreadsByProject());

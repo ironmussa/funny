@@ -11,6 +11,7 @@ import { PermissionCard, SelectedThreadHeader, ThreadControls } from '../app';
 import { createNativeApplicationServices } from '../application';
 import { createNativeClientComposition } from '../platform/composition';
 import type { NativeHeaders } from '../platform/transport';
+import { buildProject, buildThread } from './helpers/fixtures';
 
 const directories: string[] = [];
 const noop = () => undefined;
@@ -48,10 +49,10 @@ describe('native streaming render isolation', () => {
     const application = createNativeApplicationServices(composition);
     application.navigationState
       .getState()
-      .replaceProjects([{ id: 'p1', name: 'Project' } as never]);
+      .replaceProjects([buildProject({ id: 'p1', name: 'Project' })]);
     application.navigationState
       .getState()
-      .replaceProjectThreads('p1', [{ id: 't1', projectId: 'p1', title: 'Thread' } as never]);
+      .replaceProjectThreads('p1', [buildThread({ id: 't1', projectId: 'p1', title: 'Thread' })]);
     application.workspaceState.getState().replaceInitialPage('t1', {
       messages: [],
       hasMore: false,

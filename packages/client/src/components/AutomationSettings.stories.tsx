@@ -37,7 +37,7 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   };
 }
 
-function seedStores({ automations = [] as Automation[] } = {}) {
+function seedStores({ automations = [] }: { automations?: Automation[] } = {}) {
   useAppStore.setState({ selectedProjectId: 'proj-1' });
   seedAutomations({ automations });
 }

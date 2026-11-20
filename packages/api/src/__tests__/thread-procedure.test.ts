@@ -1,13 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { Thread } from '@funny/shared';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { z } from 'zod';
 
-import type { ApiPorts, ThreadAccessLevel } from '../ports.js';
+import type { ThreadAccessLevel } from '../ports.js';
 import { router, threadProcedure } from '../trpc.js';
+import { buildThread, portsWith, readTrpcBody } from './test-helpers.js';
 
-const thread = { id: 't1', userId: 'owner' } as Thread;
+const thread = buildThread({ id: 't1', userId: 'owner' });
 
 const testRouter = router({
   rename: threadProcedure('owner')
@@ -20,14 +20,14 @@ const testRouter = router({
 
 function setup() {
   const calls: Array<[ThreadAccessLevel, string, string]> = [];
-  const ports = {
+  const ports = portsWith({
     threadAccess: {
       authorize: async (level: ThreadAccessLevel, threadId: string, userId: string) => {
         calls.push([level, threadId, userId]);
         return threadId === 't1' && userId === 'owner' ? thread : null;
       },
     },
-  } as ApiPorts;
+  });
 
   const call = async (userId: string | null, path: string, input: unknown, method = 'POST') => {
     const qs = method === 'GET' ? `?input=${encodeURIComponent(JSON.stringify(input))}` : '';
@@ -41,7 +41,7 @@ function setup() {
       }),
       createContext: () => ({ userId, userRole: 'user', organizationId: null, ports }),
     });
-    return { status: res.status, body: (await res.json()) as any };
+    return { status: res.status, body: await readTrpcBody(res) };
   };
   return { call, calls };
 }
@@ -51,7 +51,7 @@ describe('threadProcedure', () => {
     const { call, calls } = setup();
     const res = await call('owner', 'rename', { id: 't1', title: 'New' });
     expect(res.status).toBe(200);
-    expect(res.body.result.data).toEqual({ thread: 't1', title: 'New' });
+    expect(res.body.result?.data).toEqual({ thread: 't1', title: 'New' });
     expect(calls).toEqual([['owner', 't1', 'owner']]);
 
     await call('owner', 'read', { id: 't1' }, 'GET');
@@ -61,13 +61,13 @@ describe('threadProcedure', () => {
   test('another user’s thread answers 404 Thread not found', async () => {
     const res = await setup().call('intruder', 'rename', { id: 't1', title: 'x' });
     expect(res.status).toBe(404);
-    expect(res.body.error.message).toBe('Thread not found');
+    expect(res.body.error?.message).toBe('Thread not found');
   });
 
   test('a missing thread looks the same as an inaccessible one', async () => {
     const res = await setup().call('owner', 'rename', { id: 'nope', title: 'x' });
     expect(res.status).toBe(404);
-    expect(res.body.error.message).toBe('Thread not found');
+    expect(res.body.error?.message).toBe('Thread not found');
   });
 
   test('404 wins over invalid input', async () => {
@@ -78,7 +78,7 @@ describe('threadProcedure', () => {
   test('an authorized caller with invalid input gets 400', async () => {
     const res = await setup().call('owner', 'rename', { id: 't1', title: '' });
     expect(res.status).toBe(400);
-    expect(res.body.error.message).toBe('title required');
+    expect(res.body.error?.message).toBe('title required');
   });
 
   test('input without a thread id answers 404 without asking the port', async () => {

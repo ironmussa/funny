@@ -20,14 +20,14 @@ function thread(overrides: Partial<Thread> & Pick<Thread, 'id'>): Thread {
     stage: 'in_progress',
     provider: 'codex',
     permissionMode: 'ask',
-    model: 'gpt-5',
+    model: 'gpt-6.1-sol',
     cost: 0,
     source: 'web',
     runtime: 'local',
     createdAt: '2026-08-30T10:00:00.000Z',
     updatedAt: '2026-08-30T10:00:00.000Z',
     ...overrides,
-  } as Thread;
+  };
 }
 
 describe('native sidebar model', () => {

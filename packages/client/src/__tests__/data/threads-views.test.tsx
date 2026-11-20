@@ -14,6 +14,7 @@ import {
 import { setSourceMembers } from '@/data/threads/list-meta';
 import { addScratchThread, loadProjectThreads } from '@/data/threads/loaders';
 import { getThreadsData } from '@/data/threads/store';
+import { buildThread } from '@/data/threads/testing';
 import {
   boardThreadIds,
   deriveOrderedThreads,
@@ -34,7 +35,7 @@ vi.mock('@/platform/client-composition', () => ({
 }));
 
 function thread(id: string, overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id,
     projectId: 'p1',
     title: id,
@@ -45,13 +46,20 @@ function thread(id: string, overrides: Partial<Thread> = {}): Thread {
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
-  } as Thread;
+  });
 }
 
+const STAGES = [
+  'backlog',
+  'planning',
+  'in_progress',
+  'review',
+  'done',
+  'archived',
+] as const satisfies readonly ThreadStage[];
+
 function columnsContaining(columns: Record<ThreadStage, Thread[]>, id: string): ThreadStage[] {
-  return (Object.keys(columns) as ThreadStage[]).filter((stage) =>
-    columns[stage].some((t) => t.id === id),
-  );
+  return STAGES.filter((stage) => columns[stage].some((t) => t.id === id));
 }
 
 beforeEach(() => {
@@ -67,6 +75,7 @@ describe('groupThreadsByStage', () => {
       thread('new', { stage: 'review', createdAt: '2026-02-01T00:00:00.000Z' }),
       thread('pinned', { stage: 'review', pinned: true, createdAt: '2025-01-01T00:00:00.000Z' }),
       thread('arch', { stage: 'review', archived: true }),
+      // SAFETY: a legacy row without a stage is the input under test; Thread types it as required.
       // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       thread('none', { stage: undefined as unknown as ThreadStage }),
     ]);

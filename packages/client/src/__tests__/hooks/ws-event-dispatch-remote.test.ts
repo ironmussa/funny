@@ -31,7 +31,7 @@ describe('ws-event-dispatch — remote WebSocket', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     MockWebSocket.instances = [];
-    vi.stubGlobal('WebSocket', MockWebSocket as any);
+    vi.stubGlobal('WebSocket', MockWebSocket);
     setWSStopped(false);
   });
 
@@ -65,19 +65,21 @@ describe('ws-event-dispatch — remote WebSocket', () => {
   test('handleRawMessage dispatches parsed events from remote socket', async () => {
     const calls: Array<{ tid: string; data: unknown }> = [];
     useThreadStore.setState({
-      handleWSInit: ((tid: string, data: unknown) => {
+      handleWSInit: (tid, data) => {
         calls.push({ tid, data });
-      }) as any,
+      },
     });
 
     connectRemoteWS('http://localhost:9000');
-    MockWebSocket.instances[0].onmessage?.({
-      data: JSON.stringify({
-        type: 'agent:init',
-        threadId: 'remote-1',
-        data: { model: 'sonnet' },
+    MockWebSocket.instances[0].onmessage?.(
+      new MessageEvent('message', {
+        data: JSON.stringify({
+          type: 'agent:init',
+          threadId: 'remote-1',
+          data: { model: 'sonnet' },
+        }),
       }),
-    } as MessageEvent);
+    );
 
     await vi.waitFor(() => {
       expect(calls).toEqual([{ tid: 'remote-1', data: { model: 'sonnet' } }]);

@@ -10,7 +10,7 @@ const mocks = vi.hoisted(() => ({
   renameInfraConnection: vi.fn(),
   fetch: vi.fn(),
   storeState: {
-    connections: [] as Array<Record<string, unknown>>,
+    connections: new Array<Record<string, unknown>>(),
     loading: false,
   },
 }));

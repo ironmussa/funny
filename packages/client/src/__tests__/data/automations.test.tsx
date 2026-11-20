@@ -1,4 +1,4 @@
-import type { Automation, AutomationRun, InboxItem, Thread } from '@funny/shared';
+import type { Automation, AutomationRun, InboxItem } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
@@ -15,8 +15,9 @@ import { useAutomationInbox, useProjectAutomations } from '@/data/automations/ho
 import { loadAutomations, loadInbox } from '@/data/automations/loaders';
 import { getAutomationsData, getInboxData } from '@/data/automations/store';
 import { seedAutomations } from '@/data/automations/testing';
-import { seedProjectThreads } from '@/data/threads/testing';
+import { buildThread, seedProjectThreads } from '@/data/threads/testing';
 
+import { buildAutomation } from '../helpers/builders-lib';
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
 const api = vi.hoisted(() => ({
@@ -37,7 +38,7 @@ vi.mock('@/platform/client-composition', () => ({
 }));
 
 const automation = (id: string, overrides: Partial<Automation> = {}) =>
-  ({ id, projectId: 'p1', name: id, enabled: true, ...overrides }) as Automation;
+  buildAutomation({ id, projectId: 'p1', name: id, enabled: true, ...overrides });
 const run = (id: string, overrides: Partial<AutomationRun> = {}): AutomationRun => ({
   id,
   automationId: 'a1',
@@ -48,8 +49,9 @@ const run = (id: string, overrides: Partial<AutomationRun> = {}): AutomationRun 
   completedAt: '2026-01-01T00:01:00.000Z',
   ...overrides,
 });
-const thread = { id: 't1', projectId: 'p1', title: 'run' } as Thread;
+const thread = buildThread({ id: 't1', projectId: 'p1', title: 'run' });
 const item = (r: AutomationRun): InboxItem => ({ run: r, automation: automation('a1'), thread });
+const newAutomation = { projectId: 'p1', name: 'new', prompt: 'Check', schedule: '0 9 * * *' };
 const failure: DomainError = { type: 'INTERNAL', message: 'boom' };
 
 beforeEach(() => {
@@ -71,12 +73,12 @@ describe('automations', () => {
   test('a created automation goes to the top of its project; a failed one toasts', async () => {
     seedAutomations({ automations: [automation('a1')] });
     api.createAutomation.mockReturnValueOnce(okAsync(automation('new')));
-    await createAutomation({ projectId: 'p1' } as never);
+    await createAutomation(newAutomation);
     const { result } = renderHook(() => useProjectAutomations('p1'));
     await waitFor(() => expect(result.current.map((a) => a.id)).toEqual(['new', 'a1']));
 
     api.createAutomation.mockReturnValueOnce(errAsync(failure));
-    expect((await createAutomation({ projectId: 'p1' } as never)).isErr()).toBe(true);
+    expect((await createAutomation(newAutomation)).isErr()).toBe(true);
     expect(effects.emit).toHaveBeenCalledWith(expect.objectContaining({ level: 'error' }));
   });
 

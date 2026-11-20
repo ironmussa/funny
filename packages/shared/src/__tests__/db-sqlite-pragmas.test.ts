@@ -1,9 +1,11 @@
+import { Database } from 'bun:sqlite';
 import { afterEach, describe, expect, test } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { createSqliteProvider } from '../db/adapters/sqlite.js';
+import { expectInstance } from './helpers/assertions.js';
 
 describe('createSqliteProvider pragmas', () => {
   let dir: string | undefined;
@@ -15,9 +17,9 @@ describe('createSqliteProvider pragmas', () => {
   test('uses WAL with synchronous=FULL, a 64 MiB cache and in-memory temp storage', async () => {
     dir = mkdtempSync(join(tmpdir(), 'funny-sqlite-pragmas-'));
     const provider = createSqliteProvider({ path: join(dir, 'data.db') });
-    const raw = provider.rawDriver as import('bun:sqlite').Database;
+    const raw = expectInstance(provider.rawDriver, Database);
     const pragma = (name: string) =>
-      Object.values(raw.query(`PRAGMA ${name}`).get() as Record<string, unknown>)[0];
+      Object.values(raw.query<Record<string, unknown>, []>(`PRAGMA ${name}`).get() ?? {})[0];
     try {
       expect(pragma('journal_mode')).toBe('wal');
       // FULL: acknowledged runner event receipts must survive power loss.

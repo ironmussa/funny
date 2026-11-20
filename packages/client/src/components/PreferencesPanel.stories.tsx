@@ -17,7 +17,9 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-function seedStores({ activePreferencesPage = 'general' as string } = {}) {
+function seedStores({
+  activePreferencesPage = 'general',
+}: { activePreferencesPage?: string } = {}) {
   useUIStore.setState({
     generalSettingsOpen: true,
     activePreferencesPage,

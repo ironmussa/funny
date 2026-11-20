@@ -6,8 +6,17 @@ import {
   findProviderAuthError,
   ProviderAuthRecovery,
 } from '@/components/thread/ProviderAuthRecovery';
+import { buildThreadWithMessages } from '@/data/threads/testing';
 
-const state = vi.hoisted(() => ({ threadDataById: {} as Record<string, unknown> }));
+import { buildMessage } from '../helpers/builders-components';
+
+interface ThreadStoreState {
+  threadDataById: Record<string, ThreadWithMessages>;
+}
+
+const state = vi.hoisted((): ThreadStoreState => ({
+  threadDataById: {},
+}));
 vi.mock('@/stores/thread-store', () => ({
   useThreadStore: (select: (s: typeof state) => unknown) => select(state),
 }));
@@ -26,20 +35,25 @@ vi.mock('@/components/ProviderSetupDialog', () => ({
 
 afterEach(cleanup);
 const failure = (error: string) =>
-  ({
+  buildThreadWithMessages({
     id: 't1',
     provider: 'claude',
     projectId: 'p1',
     messages: [
-      { id: 'u1', role: 'user', timestamp: '2026-01-01T00:00:00Z' },
+      buildMessage({ id: 'u1', role: 'user', timestamp: '2026-01-01T00:00:00Z' }),
       {
-        id: 'a1',
-        role: 'assistant',
-        timestamp: '2026-01-01T00:00:01Z',
-        toolCalls: [{ id: 'error1', name: 'ProviderError', input: JSON.stringify({ error }) }],
+        ...buildMessage({ id: 'a1', role: 'assistant', timestamp: '2026-01-01T00:00:01Z' }),
+        toolCalls: [
+          {
+            id: 'error1',
+            messageId: 'a1',
+            name: 'ProviderError',
+            input: JSON.stringify({ error }),
+          },
+        ],
       },
     ],
-  }) as ThreadWithMessages;
+  });
 const expired = 'Failed to authenticate: OAuth session expired and could not be refreshed';
 
 describe('provider authentication recovery', () => {

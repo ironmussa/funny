@@ -15,7 +15,7 @@ function Wrapper({ children }: { children: React.ReactNode }) {
   );
 }
 
-function seedStores({ selectedProjectId = 'proj-1' as string | null } = {}) {
+function seedStores({ selectedProjectId = 'proj-1' }: { selectedProjectId?: string | null } = {}) {
   useProjectStore.setState(
     withProjects({
       projects: [

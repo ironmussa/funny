@@ -13,7 +13,7 @@ vi.mock('react-i18next', () => ({
     t: (key: string, fallbackOrOpts?: string | Record<string, any>) => {
       if (typeof fallbackOrOpts === 'string') return fallbackOrOpts;
       const opts = fallbackOrOpts ?? {};
-      const tmpl = (opts.defaultValue as string) ?? key;
+      const tmpl = opts.defaultValue ?? key;
       return tmpl.replace('{{count}}', String(opts.count ?? ''));
     },
     i18n: { language: 'en' },

@@ -123,14 +123,14 @@ describe('toACPMcpServers', () => {
       good: { command: 'mcp-good' },
       bad: null,
       stringy: 'not-an-object',
-    } as any);
+    });
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ name: 'good' });
   });
 
   test('args defaults to [] when not an array', () => {
     const out = toACPMcpServers({
-      svc: { command: 'mcp-svc', args: 'not-an-array' as string[] },
+      svc: { command: 'mcp-svc', args: 'not-an-array' },
     });
     expect(out[0]).toMatchObject({ args: [] });
   });

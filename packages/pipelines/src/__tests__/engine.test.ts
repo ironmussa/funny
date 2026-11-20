@@ -492,7 +492,7 @@ describe('Pipeline Engine', () => {
         init(),
       );
       // Declaration order [a, b] ⇒ b's value wins on the shared key.
-      expect((result.ctx.outputs as Record<string, unknown>).last).toBe('b');
+      expect(result.ctx.outputs.last).toBe('b');
     });
 
     test('a node failure fails the pipeline after its level settles', async () => {

@@ -7,6 +7,7 @@
  */
 
 import type { FakeClock } from './fake-clock.js';
+import { fetchDouble } from './test-helpers.js';
 
 export interface FakeIssue {
   number: number;
@@ -343,12 +344,13 @@ export function fakeGithubApi(options: {
   };
 
   const methodAllowed = (method: string) => {
-    const setting = {
-      squash: 'allow_squash_merge',
-      merge: 'allow_merge_commit',
-      rebase: 'allow_rebase_merge',
-    }[method.toLowerCase()] as keyof FakeRepoSettings;
-    return repoSettings[setting];
+    const settingByMethod = new Map<string, keyof FakeRepoSettings>([
+      ['squash', 'allow_squash_merge'],
+      ['merge', 'allow_merge_commit'],
+      ['rebase', 'allow_rebase_merge'],
+    ]);
+    const setting = settingByMethod.get(method.toLowerCase());
+    return setting === undefined ? undefined : repoSettings[setting];
   };
 
   /** `PUT /pulls/:n/merge`: merged only when the branch protections are met. */
@@ -472,17 +474,16 @@ export function fakeGithubApi(options: {
 
   const hangs: Array<{ method: string; pathEnd: string }> = [];
   const hung: string[] = [];
-  const fetchFake = (async (input: string | URL | Request, init: RequestInit = {}) => {
+  const fetchFake = fetchDouble(async (input: string | URL | Request, init: RequestInit = {}) => {
     const url = new URL(String(input instanceof Request ? input.url : input));
     const method = init.method ?? 'GET';
     if (hangs.some((x) => x.method === method && url.pathname.endsWith(x.pathEnd))) {
       hung.push(`${method} ${url.pathname}`);
       return new Promise<Response>(() => {});
     }
-    const headers = (init.headers ?? {}) as Record<string, string>;
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
-    return handle(init.method ?? 'GET', url, headers.authorization ?? '', body);
-  }) as typeof fetch;
+    return handle(method, url, new Headers(init.headers).get('authorization') ?? '', body);
+  });
 
   const api: FakeGithubApi = {
     installed: true,

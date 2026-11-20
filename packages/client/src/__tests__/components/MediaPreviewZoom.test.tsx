@@ -3,6 +3,8 @@ import { afterEach, describe, expect, test } from 'vitest';
 
 import { MediaPreview } from '@/components/MediaPreview';
 
+import { expectInstance } from '../helpers/builders-components';
+
 afterEach(cleanup);
 
 describe('MediaPreview image zoom controls', () => {
@@ -32,7 +34,7 @@ describe('MediaPreview image zoom controls', () => {
     const { container } = render(
       <MediaPreview src="/api/files/raw?path=%2Fa.png" name="a.png" kind="image" />,
     );
-    const img = container.querySelector('img') as HTMLImageElement;
+    const img = expectInstance(container.querySelector('img'), HTMLImageElement);
 
     // Zoom in so pan is enabled.
     fireEvent.click(screen.getByTestId('image-zoom-in'));

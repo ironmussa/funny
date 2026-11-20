@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test';
 
 import { StateMachine, TransitionError } from '../domain/state-machine.js';
+import { expectInstance } from './helpers/test-helpers.js';
 
 // ── StateMachine generic tests ──────────────────────────────────
 
@@ -33,8 +34,7 @@ describe('StateMachine', () => {
     try {
       sm.transition('done');
     } catch (err) {
-      expect(err).toBeInstanceOf(TransitionError);
-      const te = err as TransitionError;
+      const te = expectInstance(err, TransitionError);
       expect(te.from).toBe('idle');
       expect(te.to).toBe('done');
       expect(te.label).toBe('test-label');

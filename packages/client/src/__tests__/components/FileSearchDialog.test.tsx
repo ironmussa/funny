@@ -2,7 +2,8 @@ import { fireEvent, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { FileSearchDialog } from '@/components/FileSearchDialog';
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -50,10 +51,10 @@ describe('FileSearchDialog', () => {
     useProjectStore.setState(
       withProjects({
         selectedProjectId: 'project-1',
-        projects: [{ id: 'project-1', path: '/repo' }],
-      } as never),
+        projects: [buildProject({ id: 'project-1', path: '/repo' })],
+      }),
     );
-    useThreadStore.setState({ activeThread: null, threadDataById: {} } as never);
+    useThreadStore.setState({ activeThread: null, threadDataById: {} });
     useInternalEditorStore.setState({ openFile });
     mocks.rankedSearch.mockReturnValue({
       response: {
@@ -123,18 +124,14 @@ describe('FileSearchDialog', () => {
 
   test('uses the server-resolved scratch base path when opening a result', () => {
     const scratchThread = {
-      id: 'scratch-1',
-      isScratch: true,
-      projectId: null,
-      worktreePath: null,
-      messages: [],
+      ...buildThreadWithMessages({ id: 'scratch-1', isScratch: true, projectId: '' }),
       threadEvents: [],
       compactionEvents: [],
     };
     useThreadStore.setState({
       activeThread: scratchThread,
       threadDataById: { 'scratch-1': scratchThread },
-    } as never);
+    });
     mocks.rankedSearch.mockReturnValue({
       response: {
         matches: [{ path: 'notes/todo.md', indices: [6, 7, 8] }],

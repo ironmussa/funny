@@ -13,6 +13,7 @@ import {
   getAskModeTools,
   isModelForProvider,
   getAttachmentLimits,
+  type AgentModel,
 } from '../models.js';
 
 test('exports the default follow-up mode used by database schemas', () => {
@@ -72,11 +73,14 @@ describe('resolveModelId', () => {
     });
 
     test('throws on unknown claude model', () => {
-      expect(() => resolveModelId('claude', 'o3' as any)).toThrow('Unknown Claude model: o3');
+      // SAFETY: 'o3' is deliberately not an AgentModel; the test covers an unknown model id.
+      expect(() => resolveModelId('claude', 'o3' as AgentModel)).toThrow(
+        'Unknown Claude model: o3',
+      );
     });
 
     test('throws on codex model passed to claude', () => {
-      expect(() => resolveModelId('claude', 'gpt-5.4' as any)).toThrow('Unknown Claude model');
+      expect(() => resolveModelId('claude', 'gpt-5.4')).toThrow('Unknown Claude model');
     });
   });
 
@@ -120,11 +124,11 @@ describe('resolveModelId', () => {
     });
 
     test('throws on unknown codex model', () => {
-      expect(() => resolveModelId('codex', 'sonnet' as any)).toThrow('Unknown Codex model: sonnet');
+      expect(() => resolveModelId('codex', 'sonnet')).toThrow('Unknown Codex model: sonnet');
     });
 
     test('throws on claude model passed to codex', () => {
-      expect(() => resolveModelId('codex', 'haiku' as any)).toThrow('Unknown Codex model');
+      expect(() => resolveModelId('codex', 'haiku')).toThrow('Unknown Codex model');
     });
   });
 
@@ -142,7 +146,7 @@ describe('resolveModelId', () => {
     });
 
     test('throws on unknown gemini model', () => {
-      expect(() => resolveModelId('gemini', 'sonnet' as any)).toThrow('Unknown Gemini model');
+      expect(() => resolveModelId('gemini', 'sonnet')).toThrow('Unknown Gemini model');
     });
   });
 
@@ -172,9 +176,7 @@ describe('resolveModelId', () => {
     });
 
     test('throws on unknown deepagent model', () => {
-      expect(() => resolveModelId('deepagent', 'sonnet' as any)).toThrow(
-        'Unknown Deep Agent model',
-      );
+      expect(() => resolveModelId('deepagent', 'sonnet')).toThrow('Unknown Deep Agent model');
     });
 
     // Regression test: LangChain's initChatModel cannot infer providers from
@@ -208,21 +210,18 @@ describe('resolveModelId', () => {
 
   describe('llm-api provider', () => {
     test('passes model ID through directly', () => {
-      expect(resolveModelId('llm-api', 'any-model-id' as any)).toBe('any-model-id');
+      // SAFETY: llm-api accepts any provider model id, which AgentModel does not list.
+      expect(resolveModelId('llm-api', 'any-model-id' as AgentModel)).toBe('any-model-id');
     });
   });
 
   describe('unknown provider', () => {
     test('throws on completely unknown provider', () => {
-      expect(() => resolveModelId('fake' as any, 'sonnet' as any)).toThrow(
-        'Unknown provider: fake',
-      );
+      expect(() => resolveModelId('fake', 'sonnet')).toThrow('Unknown provider: fake');
     });
 
     test('throws on external provider', () => {
-      expect(() => resolveModelId('external' as any, 'sonnet' as any)).toThrow(
-        'Unknown provider: external',
-      );
+      expect(() => resolveModelId('external', 'sonnet')).toThrow('Unknown provider: external');
     });
   });
 });
@@ -247,7 +246,7 @@ describe('getDefaultModel', () => {
   });
 
   test('throws on unknown provider', () => {
-    expect(() => getDefaultModel('fake' as any)).toThrow('Unknown provider: fake');
+    expect(() => getDefaultModel('fake')).toThrow('Unknown provider: fake');
   });
 });
 
@@ -315,7 +314,7 @@ describe('getProviderModels', () => {
   });
 
   test('throws on unknown provider', () => {
-    expect(() => getProviderModels('unknown' as any)).toThrow('Unknown provider');
+    expect(() => getProviderModels('unknown')).toThrow('Unknown provider');
   });
 });
 
@@ -360,7 +359,7 @@ describe('resolvePermissionMode', () => {
 
   describe('unknown provider', () => {
     test('returns undefined for unknown provider', () => {
-      expect(resolvePermissionMode('external' as any, 'plan')).toBeUndefined();
+      expect(resolvePermissionMode('external', 'plan')).toBeUndefined();
     });
   });
 });
@@ -407,7 +406,7 @@ describe('getDefaultAllowedTools', () => {
   });
 
   test('unknown provider returns an empty array', () => {
-    expect(getDefaultAllowedTools('anything' as any)).toEqual([]);
+    expect(getDefaultAllowedTools('anything')).toEqual([]);
   });
 
   test('returned array is a copy (not a reference to the internal array)', () => {
@@ -476,8 +475,8 @@ describe('isModelForProvider', () => {
 
   describe('unknown provider', () => {
     test('returns false for any model', () => {
-      expect(isModelForProvider('external' as any, 'sonnet')).toBe(false);
-      expect(isModelForProvider('unknown' as any, 'gpt-5.4')).toBe(false);
+      expect(isModelForProvider('external', 'sonnet')).toBe(false);
+      expect(isModelForProvider('unknown', 'gpt-5.4')).toBe(false);
     });
   });
 });
@@ -509,7 +508,7 @@ describe('getProviderModelsWithLabels', () => {
   });
 
   test('returns empty array for unknown provider', () => {
-    expect(getProviderModelsWithLabels('fake' as any)).toEqual([]);
+    expect(getProviderModelsWithLabels('fake')).toEqual([]);
   });
 });
 

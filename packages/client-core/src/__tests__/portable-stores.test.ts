@@ -77,14 +77,14 @@ describe('portable client stores', () => {
     const timers = new Map<number, () => void>();
     let nextTimer = 1;
     let probeResult = true;
-    const store = createCircuitBreakerStore({
+    const store = createCircuitBreakerStore<number>({
       probe: async () => probeResult,
       setTimer(callback) {
         const id = nextTimer++;
         timers.set(id, callback);
         return id;
       },
-      clearTimer: (timer) => timers.delete(timer as number),
+      clearTimer: (timer) => timers.delete(timer),
       failureThreshold: 2,
     });
     store.getState().recordFailure();

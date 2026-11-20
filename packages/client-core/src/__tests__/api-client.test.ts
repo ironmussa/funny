@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { createApiClient, type ApiClientDependencies, type ApiClientError } from '../api-client';
 import { createEndpointPolicy } from '../endpoint-policy';
+import type { CircuitState } from '../stores/circuit-breaker';
 import { createInMemoryPlatform } from '../testing/in-memory-platform';
 
 function response(status: number, body: unknown) {
@@ -9,11 +10,21 @@ function response(status: number, body: unknown) {
   return { status, ok: status >= 200 && status < 300, headers: {}, text: async () => text };
 }
 
+interface CircuitCounters {
+  state: CircuitState;
+  failures: number;
+  successes: number;
+}
+
 function createDependencies(
   request: NonNullable<Parameters<typeof createInMemoryPlatform>[0]>['request'],
 ) {
   const host = createInMemoryPlatform({ request });
-  const circuit = { state: 'closed' as 'closed' | 'open' | 'half-open', failures: 0, successes: 0 };
+  const circuit: CircuitCounters = {
+    state: 'closed',
+    failures: 0,
+    successes: 0,
+  };
   const time = { now: 100 };
   const unauthorized: string[] = [];
   const failures: Parameters<

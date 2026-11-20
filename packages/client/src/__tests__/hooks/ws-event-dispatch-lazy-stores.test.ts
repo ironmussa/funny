@@ -7,7 +7,7 @@ import { getJobsData, getWatchersData } from '@/data/background/store';
 import { getCommentsData } from '@/data/comments/store';
 import { getSchedulerData } from '@/data/scheduler/store';
 import { readThreadIndex } from '@/data/threads/read';
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildThread, withThreadIndex } from '@/data/threads/testing';
 import { clearWSDispatchState, dispatchRealtimeEvent } from '@/hooks/ws-event-dispatch';
 import { useNativeGitStore } from '@/stores/native-git-store';
 import { usePipelineStore } from '@/stores/pipeline-store';
@@ -160,7 +160,7 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
   test('comment events update the comments and the thread badge in the same tick', () => {
     useThreadStore.setState(
       withThreadIndex({
-        threadsById: { t1: { id: 't1', projectId: 'p1', commentCount: 1 } as any },
+        threadsById: { t1: buildThread({ commentCount: 1 }) },
       }),
     );
 

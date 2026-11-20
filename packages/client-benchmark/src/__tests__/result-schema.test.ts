@@ -7,7 +7,7 @@ import {
 } from '../capabilities';
 import { BENCHMARK_RESULT_SCHEMA_VERSION, parseBenchmarkResult } from '../result-schema';
 
-function validResult(): unknown {
+function validResult() {
   return {
     schemaVersion: BENCHMARK_RESULT_SCHEMA_VERSION,
     runId: 'run-1',
@@ -67,15 +67,16 @@ describe('benchmark result schema', () => {
   test('rejects incompatible schema versions', () => {
     expect(() =>
       parseBenchmarkResult({
-        ...(validResult() as Record<string, unknown>),
+        ...validResult(),
         schemaVersion: BENCHMARK_RESULT_SCHEMA_VERSION + 1,
       }),
     ).toThrow('Invalid benchmark result');
   });
 
   test('rejects missing required provenance', () => {
-    const value = validResult() as { environment: Record<string, unknown> };
-    delete value.environment.gitRevision;
-    expect(() => parseBenchmarkResult(value)).toThrow('gitRevision');
+    const value = validResult();
+    const environment: Partial<typeof value.environment> = { ...value.environment };
+    delete environment.gitRevision;
+    expect(() => parseBenchmarkResult({ ...value, environment })).toThrow('gitRevision');
   });
 });

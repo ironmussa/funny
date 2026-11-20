@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { z } from 'zod';
+
 import {
   assertEnvelopeBinding,
   connectorHealthResultSchema,
@@ -32,6 +34,11 @@ import {
   type RemoteOperation,
   type UnsignedRemoteExecutionRequest,
 } from '../remote-connector-protocol';
+
+const connectorFixturesSchema = z.object({
+  negotiationRequests: z.array(z.unknown()),
+  negotiationResults: z.array(z.unknown()),
+});
 
 const timestamp = '2026-07-23T12:00:00.000Z';
 const laterTimestamp = '2026-07-23T12:01:00.000Z';
@@ -572,15 +579,14 @@ describe('remote Connector protocol', () => {
   });
 
   test('canonical Connector fixtures conform to the shared schemas', () => {
-    const fixtures = JSON.parse(
-      readFileSync(
-        join(import.meta.dir, '..', '__fixtures__', 'remote-connector-protocol-v1.json'),
-        'utf8',
+    const fixtures = connectorFixturesSchema.parse(
+      JSON.parse(
+        readFileSync(
+          join(import.meta.dir, '..', '__fixtures__', 'remote-connector-protocol-v1.json'),
+          'utf8',
+        ),
       ),
-    ) as {
-      negotiationRequests: unknown[];
-      negotiationResults: unknown[];
-    };
+    );
     for (const request of fixtures.negotiationRequests) {
       expect(connectorNegotiationRequestSchema.safeParse(request).success).toBe(true);
     }

@@ -8,6 +8,7 @@ import { useTurnEndHover } from '@/components/thread/use-turn-end-hover';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { makeLongThread } from '@/test-fixtures/long-thread-fixture';
 
+import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 
 vi.mock('react-i18next', () => ({
@@ -26,7 +27,7 @@ vi.mock('@/hooks/use-pretext', () => ({
 }));
 
 vi.mock('@/stores/settings-store', async (importOriginal) => {
-  const actual = (await importOriginal()) as Record<string, unknown>;
+  const actual = await importOriginal<typeof import('@/stores/settings-store')>();
   return {
     ...actual,
     useSettingsStore: Object.assign(
@@ -133,7 +134,7 @@ describe('FrozenMessageList', () => {
     // locking from first paint; the `auto` intrinsic size retains measured
     // heights after a row has rendered.
     rows.forEach((row) => {
-      const el = row as HTMLElement;
+      const el = expectInstance(row, HTMLElement);
       if (el.hasAttribute('data-section-msg-id')) return; // sticky user rows
       expect(el.style.contentVisibility).toBe('auto');
       expect(el.style.containIntrinsicSize).toContain('auto');

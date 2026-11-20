@@ -23,7 +23,11 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 function seedStores({
   selectedProjectId = 'proj-1',
   activeSettingsPage = 'general',
-  role = 'admin' as 'admin' | 'user',
+  role = 'admin',
+}: {
+  selectedProjectId?: string | null;
+  activeSettingsPage?: string;
+  role?: 'admin' | 'user';
 } = {}) {
   useProjectStore.setState(
     withProjects({
@@ -80,7 +84,7 @@ export const ProjectSettings: Story = {
 /** Global settings panel (no project selected). Shows archived-threads + admin items. */
 export const GlobalSettings: Story = {
   render: () => {
-    seedStores({ selectedProjectId: null as any, activeSettingsPage: 'general', role: 'admin' });
+    seedStores({ selectedProjectId: null, activeSettingsPage: 'general', role: 'admin' });
     useProjectStore.setState({ selectedProjectId: null });
     return (
       <Wrapper>

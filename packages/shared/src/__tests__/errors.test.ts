@@ -8,9 +8,9 @@ import {
   processError,
   conflict,
   internal,
-  type DomainError,
   type DomainErrorType,
 } from '../errors.js';
+import { expectErrorType } from './helpers/assertions.js';
 
 // ── Simple factory functions ────────────────────────────────────
 
@@ -110,7 +110,7 @@ describe('processError', () => {
   });
 
   test('exitCode and stderr are undefined when omitted', () => {
-    const err = processError('oops') as Extract<DomainError, { type: 'PROCESS_ERROR' }>;
+    const err = expectErrorType(processError('oops'), 'PROCESS_ERROR');
     expect(err.exitCode).toBeUndefined();
     expect(err.stderr).toBeUndefined();
   });

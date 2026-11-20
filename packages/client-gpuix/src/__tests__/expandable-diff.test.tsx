@@ -3,6 +3,7 @@ import { describe, expect, test } from 'bun:test';
 import { createTestRoot, hasNativeTestRenderer } from '@gpuix/react/testing';
 
 import { ExpandableNativeDiff, NATIVE_DIFF_INITIAL_MAX_LINES, areMessageRowsEqual } from '../app';
+import { buildMessage } from './helpers/fixtures';
 
 function patchWithContextLines(count: number): string {
   const lines = Array.from({ length: count }, (_, index) => ` context ${index}`);
@@ -85,17 +86,17 @@ describe('expandable native diff', () => {
   });
 
   test('keeps unrelated message rows memoized while expansion stays local', () => {
-    const message = {
+    const message = buildMessage({
       id: 'm1',
       threadId: 't1',
       role: 'assistant',
       content: patchWithContextLines(NATIVE_DIFF_INITIAL_MAX_LINES + 5),
-    } as const;
+    });
 
     expect(
       areMessageRowsEqual(
-        { message: message as never, messageId: message.id, richContent: true },
-        { message: message as never, messageId: message.id, richContent: true },
+        { message, messageId: message.id, richContent: true },
+        { message, messageId: message.id, richContent: true },
       ),
     ).toBeTrue();
   });

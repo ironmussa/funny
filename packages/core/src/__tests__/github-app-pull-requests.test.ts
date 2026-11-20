@@ -2,11 +2,12 @@ import { errAsync, okAsync } from 'neverthrow';
 import { describe, expect, test } from 'vitest';
 
 import { createPullRequestCi, createRepoGithub } from '../github-app/index.js';
+import { fakeFetch } from './helpers/test-helpers.js';
 
 /** A fetch that answers GitHub paths from a table; records what was called. */
 function fakeGithub(routes: Record<string, unknown>) {
   const calls: Array<{ method: string; path: string; auth: string | null }> = [];
-  const fetchImpl = (async (url: string, init?: RequestInit) => {
+  const fetchImpl = fakeFetch(async (url, init) => {
     const path = url.replace('https://api.github.com', '');
     const method = init?.method ?? 'GET';
     const auth = new Headers(init?.headers).get('authorization');
@@ -17,7 +18,7 @@ function fakeGithub(routes: Record<string, unknown>) {
     return typeof body === 'string'
       ? new Response(body, { status: 200 })
       : new Response(JSON.stringify(body), { status: 200 });
-  }) as typeof fetch;
+  });
   return { calls, fetchImpl };
 }
 

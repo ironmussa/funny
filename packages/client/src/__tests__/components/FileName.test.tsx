@@ -4,13 +4,15 @@ import { describe, expect, it } from 'vitest';
 import { FileName } from '@/components/ui/file-name';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
+import { expectInstance } from '../helpers/builders-components';
+
 function renderName(props: Parameters<typeof FileName>[0]) {
   const { container } = render(
     <TooltipProvider delayDuration={0}>
       <FileName {...props} />
     </TooltipProvider>,
   );
-  return container.firstElementChild as HTMLElement;
+  return expectInstance(container.firstElementChild, HTMLElement);
 }
 
 describe('FileName', () => {

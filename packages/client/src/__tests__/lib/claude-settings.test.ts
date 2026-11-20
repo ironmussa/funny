@@ -14,9 +14,8 @@ describe('claude-settings', () => {
   });
 
   test('CLAUDE_SETTINGS_DEFAULT includes ENABLE_CLAUDEAI_MCP_SERVERS=false', () => {
-    const parsed = JSON.parse(CLAUDE_SETTINGS_DEFAULT) as {
-      env: { ENABLE_CLAUDEAI_MCP_SERVERS: string };
-    };
+    const parsed: { env: { ENABLE_CLAUDEAI_MCP_SERVERS: string } } =
+      JSON.parse(CLAUDE_SETTINGS_DEFAULT);
     expect(parsed.env.ENABLE_CLAUDEAI_MCP_SERVERS).toBe('false');
   });
 });

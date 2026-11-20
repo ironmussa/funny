@@ -94,20 +94,30 @@ class SteerableMockProcess extends MockProcess {
 
 // ── Helpers ─────────────────────────────────────────────────────
 
-function createFactory(
-  ProcessClass: typeof MockProcess = MockProcess,
-): IAgentProcessFactory & { lastProcess: MockProcess; processes: MockProcess[] } {
-  const state = {
-    lastProcess: null! as MockProcess,
-    processes: [] as MockProcess[],
-    create(opts: AgentProcessOptions): IAgentProcess {
-      const proc = new ProcessClass(opts);
-      state.lastProcess = proc;
-      state.processes.push(proc);
-      return proc;
-    },
-  };
-  return state;
+/** A process factory that records every process it creates, typed by its process class. */
+class MockProcessFactory<P extends MockProcess> implements IAgentProcessFactory {
+  readonly processes: P[] = [];
+
+  constructor(private readonly ProcessClass: new (opts: AgentProcessOptions) => P) {}
+
+  /** The most recent process; fails the test when none was created yet. */
+  get lastProcess(): P {
+    const last = this.processes.at(-1);
+    if (!last) throw new Error('the factory has not created a process yet');
+    return last;
+  }
+
+  create(opts: AgentProcessOptions): IAgentProcess {
+    const proc = new this.ProcessClass(opts);
+    this.processes.push(proc);
+    return proc;
+  }
+}
+
+function createFactory<P extends MockProcess>(
+  ProcessClass: new (opts: AgentProcessOptions) => P,
+): MockProcessFactory<P> {
+  return new MockProcessFactory(ProcessClass);
 }
 
 function baseOpts(overrides?: Record<string, any>) {
@@ -188,10 +198,10 @@ describe('buildEffectivePrompt', () => {
 
 describe('AgentOrchestrator', () => {
   let orchestrator: AgentOrchestrator;
-  let factory: ReturnType<typeof createFactory>;
+  let factory: MockProcessFactory<MockProcess>;
 
   beforeEach(() => {
-    factory = createFactory();
+    factory = createFactory(MockProcess);
     orchestrator = new AgentOrchestrator(factory);
   });
 
@@ -331,7 +341,7 @@ describe('AgentOrchestrator', () => {
   // ── Steering (live multi-turn) ─────────────────────────────────
 
   describe('steering', () => {
-    let steerFactory: ReturnType<typeof createFactory>;
+    let steerFactory: MockProcessFactory<SteerableMockProcess>;
     let orch: AgentOrchestrator;
 
     beforeEach(() => {
@@ -341,7 +351,7 @@ describe('AgentOrchestrator', () => {
 
     test('steer redirects the live turn via steerPrompt without respawning', async () => {
       await orch.startAgent(baseOpts({ steerable: true }));
-      const proc = steerFactory.lastProcess as SteerableMockProcess;
+      const proc = steerFactory.lastProcess;
 
       await orch.startAgent(baseOpts({ steerable: true, steer: true, prompt: 'redirect' }));
 
@@ -354,7 +364,7 @@ describe('AgentOrchestrator', () => {
 
     test('non-steer follow-up warm-continues the live session via sendPrompt', async () => {
       await orch.startAgent(baseOpts({ steerable: true }));
-      const proc = steerFactory.lastProcess as SteerableMockProcess;
+      const proc = steerFactory.lastProcess;
 
       await orch.startAgent(baseOpts({ steerable: true, prompt: 'follow up' }));
 
@@ -365,7 +375,7 @@ describe('AgentOrchestrator', () => {
 
     test('incompatible options force a respawn instead of steering', async () => {
       await orch.startAgent(baseOpts({ steerable: true }));
-      const first = steerFactory.lastProcess as SteerableMockProcess;
+      const first = steerFactory.lastProcess;
 
       // Switching model breaks the reuse-compatibility snapshot.
       await orch.startAgent(baseOpts({ steerable: true, steer: true, model: 'haiku' }));
@@ -415,7 +425,7 @@ describe('AgentOrchestrator', () => {
     test('a run restarted within the cleanup delay keeps its own result', async () => {
       const unexpectedExits: string[] = [];
       orchestrator.on('agent:unexpected-exit', (id) => unexpectedExits.push(id));
-      const result = {
+      const result: CLIMessage = {
         type: 'result',
         subtype: 'success',
         is_error: false,
@@ -423,7 +433,7 @@ describe('AgentOrchestrator', () => {
         num_turns: 1,
         total_cost_usd: 0,
         session_id: 'sess-1',
-      } as CLIMessage;
+      };
 
       await orchestrator.startAgent(baseOpts());
       factory.lastProcess.simulateMessage(result);
@@ -781,7 +791,15 @@ describe('AgentOrchestrator', () => {
 
   describe('idle reaping', () => {
     const POLICY: IdleReapPolicy = { defaultIdleMs: 10_000, claudeIdleMs: 0 };
-    const result = () => ({ type: 'result', subtype: 'success' }) as CLIMessage;
+    const result = (): CLIMessage => ({
+      type: 'result',
+      subtype: 'success',
+      is_error: false,
+      duration_ms: 0,
+      num_turns: 1,
+      total_cost_usd: 0,
+      session_id: 'sess-idle',
+    });
 
     test('3.1 reaps an idle, turn-terminal non-claude agent past the window', async () => {
       await orchestrator.startAgent(baseOpts({ provider: 'codex', model: 'gpt-5.5' }));
@@ -797,7 +815,10 @@ describe('AgentOrchestrator', () => {
 
     test('3.2 never reaps a mid-turn agent (no terminal result)', async () => {
       await orchestrator.startAgent(baseOpts({ provider: 'codex', model: 'gpt-5.5' }));
-      factory.lastProcess.simulateMessage({ type: 'assistant' } as CLIMessage);
+      factory.lastProcess.simulateMessage({
+        type: 'assistant',
+        message: { id: 'msg-mid-turn', content: [] },
+      });
 
       expect(orchestrator.getIdleCandidates(Date.now() + 1_000_000, POLICY)).toEqual([]);
     });
@@ -825,7 +846,7 @@ describe('AgentOrchestrator', () => {
     });
 
     test('3.5 adopted process is seeded as active and not reaped immediately', async () => {
-      const proc = new MockProcess(baseOpts({ provider: 'codex' }) as any);
+      const proc = new MockProcess(baseOpts({ provider: 'codex' }));
       orchestrator.adoptProcess('t-adopt', proc);
       proc.simulateMessage(result());
 

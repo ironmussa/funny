@@ -37,7 +37,9 @@ describe('AgentTemplateSettings accessibility', () => {
   beforeEach(() => {
     duplicateTemplate.mockReset();
     duplicateTemplate.mockReturnValue(okAsync(template));
-    useAuthStore.setState({ user: { id: 'user-1' } as never });
+    useAuthStore.setState({
+      user: { id: 'user-1', username: 'user-1', displayName: 'User', role: 'user' },
+    });
     seedTemplates([template]);
   });
 

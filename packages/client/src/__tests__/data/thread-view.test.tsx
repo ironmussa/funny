@@ -7,6 +7,7 @@ import { setSourceMembers } from '@/data/threads/list-meta';
 import { adoptThreadDetail } from '@/data/threads/loaders';
 import { isThreadListed, readThreadRow } from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
+import { buildThread, buildThreadWithMessages } from '@/data/threads/testing';
 import { ThreadProvider, useActiveThreadView, useThreadCore } from '@/stores/thread-context';
 import { patchThreadRow } from '@/stores/thread-row-writes';
 import { useThreadStore, type ThreadWithMessages } from '@/stores/thread-store';
@@ -15,7 +16,7 @@ import { mergeThreadView, readActiveThreadView } from '@/stores/thread-view';
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
 function thread(id: string, overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id,
     projectId: 'p1',
     title: id,
@@ -26,11 +27,11 @@ function thread(id: string, overrides: Partial<Thread> = {}): Thread {
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
-  } as Thread;
+  });
 }
 
 function payload(id: string, overrides: Partial<ThreadWithMessages> = {}): ThreadWithMessages {
-  return { ...thread(id), messages: [], ...overrides } as ThreadWithMessages;
+  return { ...thread(id), messages: [], ...overrides };
 }
 
 function openThread(entry: ThreadWithMessages): void {
@@ -97,11 +98,7 @@ describe('detail view reads row fields from the collection', () => {
 
 describe('adoptThreadDetail', () => {
   test('a thread opened by URL gets a row without joining any list', () => {
-    adoptThreadDetail({
-      ...thread('deep', { title: 'Deep link' }),
-      messages: [],
-      hasMore: false,
-    } as Thread);
+    adoptThreadDetail(buildThreadWithMessages(thread('deep', { title: 'Deep link' })));
     const row = readThreadRow('deep');
     expect(row?.title).toBe('Deep link');
     expect(row && 'messages' in row).toBe(false);

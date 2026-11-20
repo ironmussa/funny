@@ -5,6 +5,7 @@ import { join } from 'path';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { CLIMessage } from '../agents/types.js';
+import { firstContentBlock, firstTextAt } from './helpers/test-helpers.js';
 
 const { availableModels } = vi.hoisted(() => ({
   availableModels: [
@@ -59,53 +60,53 @@ describe('PiSDKProcess event translation', () => {
   test('translates text deltas into accumulated assistant text', () => {
     const { proc, messages } = makeProcess();
 
-    (proc as any).handleSessionEvent({
+    proc['handleSessionEvent']({
       type: 'message_update',
       assistantMessageEvent: { type: 'text_delta', delta: 'Hola' },
     });
-    (proc as any).handleSessionEvent({
+    proc['handleSessionEvent']({
       type: 'message_update',
       assistantMessageEvent: { type: 'text_delta', delta: ' mundo' },
     });
 
     expect(messages).toHaveLength(2);
-    expect((messages[1] as any).message.content[0].text).toBe('Hola mundo');
+    expect(firstTextAt(messages, 1)).toBe('Hola mundo');
   });
 
   test('translates thinking deltas into a Think tool card before text', () => {
     const { proc, messages } = makeProcess();
 
-    (proc as any).handleSessionEvent({
+    proc['handleSessionEvent']({
       type: 'message_update',
       assistantMessageEvent: { type: 'thinking_delta', delta: 'Plan breve' },
     });
-    (proc as any).handleSessionEvent({
+    proc['handleSessionEvent']({
       type: 'message_update',
       assistantMessageEvent: { type: 'text_delta', delta: 'Listo' },
     });
 
-    expect((messages[0] as any).message.content[0]).toMatchObject({
+    expect(firstContentBlock(messages, 0)).toMatchObject({
       type: 'tool_use',
       name: 'Think',
       input: { content: 'Plan breve' },
     });
-    expect((messages[1] as any).message.content[0]).toMatchObject({
+    expect(firstContentBlock(messages, 1)).toMatchObject({
       type: 'tool_result',
       content: 'Plan breve',
     });
-    expect((messages[2] as any).message.content[0].text).toBe('Listo');
+    expect(firstTextAt(messages, 2)).toBe('Listo');
   });
 
   test('translates tool start/end into tool_use and tool_result', () => {
     const { proc, messages } = makeProcess();
 
-    (proc as any).handleSessionEvent({
+    proc['handleSessionEvent']({
       type: 'tool_execution_start',
       toolCallId: 'tool-1',
       toolName: 'read',
       args: { path: 'README.md' },
     });
-    (proc as any).handleSessionEvent({
+    proc['handleSessionEvent']({
       type: 'tool_execution_end',
       toolCallId: 'tool-1',
       toolName: 'read',
@@ -113,13 +114,13 @@ describe('PiSDKProcess event translation', () => {
       isError: false,
     });
 
-    expect((messages[0] as any).message.content[0]).toMatchObject({
+    expect(firstContentBlock(messages, 0)).toMatchObject({
       type: 'tool_use',
       id: 'tool-1',
       name: 'Read',
       input: { path: 'README.md', file_path: 'README.md' },
     });
-    expect((messages[1] as any).message.content[0]).toMatchObject({
+    expect(firstContentBlock(messages, 1)).toMatchObject({
       type: 'tool_result',
       tool_use_id: 'tool-1',
       content: 'contents',
@@ -129,7 +130,7 @@ describe('PiSDKProcess event translation', () => {
   test('normalizes codex-style shell tool calls for client tool cards', () => {
     const { proc, messages } = makeProcess();
 
-    (proc as any).handleSessionEvent({
+    proc['handleSessionEvent']({
       type: 'message_update',
       assistantMessageEvent: {
         type: 'toolcall_end',
@@ -144,7 +145,7 @@ describe('PiSDKProcess event translation', () => {
       },
     });
 
-    expect((messages[0] as any).message.content[0]).toMatchObject({
+    expect(firstContentBlock(messages, 0)).toMatchObject({
       type: 'tool_use',
       id: 'shell-1',
       name: 'Bash',

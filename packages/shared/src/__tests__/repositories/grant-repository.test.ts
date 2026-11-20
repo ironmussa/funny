@@ -8,7 +8,7 @@ import { createTestDb } from '../helpers/test-db.js';
 
 function makeRepo() {
   const { db, schema, dbAll, dbRun } = createTestDb();
-  return createGrantRepository({ db, schema, dbAll, dbRun } as any);
+  return createGrantRepository({ db, schema, dbAll, dbRun });
 }
 
 describe('grant-repository', () => {

@@ -4,6 +4,8 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { FrozenMessage } from '@/components/thread/FrozenMessage';
 
+import { buildIntersectionEntry } from '../helpers/builders-components';
+
 // Track live Sätteri mounts so we can prove the fiber tree is dropped
 // when frozen (the memory goal), rather than relying on DOM text (the captured
 // static HTML legitimately still contains the rendered markup).
@@ -42,7 +44,7 @@ class MockIntersectionObserver {
 function setIntersecting(isIntersecting: boolean) {
   for (const o of observers) {
     for (const target of o.targets) {
-      o.cb([{ target, isIntersecting } as IntersectionObserverEntry], o.self);
+      o.cb([buildIntersectionEntry({ target, isIntersecting })], o.self);
     }
   }
 }

@@ -14,8 +14,8 @@ function makeDb() {
 
 const silentLogger = { info: () => {}, error: () => {} };
 
-function appliedNames(db: any): string[] {
-  const rows = db.all(sql`SELECT name FROM _migrations ORDER BY name`) as { name: string }[];
+function appliedNames(db: ReturnType<typeof makeDb>): string[] {
+  const rows = db.all<{ name: string }>(sql`SELECT name FROM _migrations ORDER BY name`);
   return rows.map((r) => r.name);
 }
 
@@ -66,7 +66,7 @@ describe('runMigrations — half-applied guard', () => {
     await runMigrations(db, [migration], silentLogger, 'test');
     expect(appliedNames(db)).toContain('001_two_columns');
 
-    const cols = (db.all(sql`PRAGMA table_info(t)`) as { name: string }[]).map((c) => c.name);
+    const cols = db.all<{ name: string }>(sql`PRAGMA table_info(t)`).map((c) => c.name);
     expect(cols).toContain('a');
     expect(cols).toContain('b');
   });

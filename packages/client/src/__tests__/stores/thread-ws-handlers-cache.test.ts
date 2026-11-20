@@ -14,7 +14,12 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { getContextUsageStore } from '@/data/context-usage/store';
 import { seedContextUsage } from '@/data/context-usage/testing';
-import { attachThreadIndex } from '@/data/threads/testing';
+import {
+  attachThreadIndex,
+  buildThreadWithMessages,
+  type ThreadIndexFields,
+} from '@/data/threads/testing';
+import type { AgentInitInfo } from '@/stores/thread-types';
 
 const { mockInvalidate, mockBuffer } = vi.hoisted(() => ({
   mockInvalidate: vi.fn(),
@@ -63,25 +68,21 @@ const { useThreadActiveToolStore } = await import('@/stores/thread-active-tool-s
 
 const THREAD_ID = 'thread-active';
 
-function makeState(overrides: Record<string, unknown> = {}) {
-  const activeThread = {
+/**
+ * The plain-object store the handlers drive: the thread index fields (seeded
+ * into the data layer) plus loosely shaped store fields the tests override.
+ */
+interface HandlerTestState extends ThreadIndexFields {
+  [field: string]: any;
+}
+
+function makeState(overrides: HandlerTestState = {}) {
+  const activeThread = buildThreadWithMessages({
     id: THREAD_ID,
-    projectId: 'p1',
     title: 't',
     status: 'running',
-    cost: 0,
-    messages: [],
-  };
-  const {
-    threadsById,
-    threadIdsByProject,
-    scratchThreadIds,
-    sharedThreadIds,
-    threadTotalByProject,
-    scratchThreadTotal,
-    sharedThreadTotal,
-    ...rest
-  } = {
+  });
+  const merged: HandlerTestState = {
     threadsById: { [THREAD_ID]: activeThread },
     threadIdsByProject: { p1: [THREAD_ID] },
     scratchThreadIds: [],
@@ -93,7 +94,17 @@ function makeState(overrides: Record<string, unknown> = {}) {
     setupProgressByThread: {},
     loadThreadsForProject: vi.fn(),
     ...overrides,
-  } as any;
+  };
+  const {
+    threadsById,
+    threadIdsByProject,
+    scratchThreadIds,
+    sharedThreadIds,
+    threadTotalByProject,
+    scratchThreadTotal,
+    sharedThreadTotal,
+    ...rest
+  } = merged;
   // Thread rows and lists live in the data layer: seed them there and expose
   // them on the plain state as live getters, so assertions read handler writes.
   return attachThreadIndex(rest, {
@@ -104,7 +115,7 @@ function makeState(overrides: Record<string, unknown> = {}) {
     threadTotalByProject,
     scratchThreadTotal,
     sharedThreadTotal,
-  }) as any;
+  });
 }
 
 function makeGetSet(state: any) {
@@ -142,14 +153,12 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
 
   test('updates sidebar snippet for assistant messages on unknown hydrated payload', () => {
     const otherId = 'thread-sidebar-only';
-    const otherThread = {
+    const otherThread = buildThreadWithMessages({
       id: otherId,
       projectId: 'p1',
       title: 'Side',
       status: 'running',
-      cost: 0,
-      messages: [],
-    };
+    });
     const state = makeState({
       selectedThreadId: null,
       activeThread: null,
@@ -168,11 +177,11 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
   });
 
   test('handleWSInit patches initInfo into hydrated thread payload', () => {
-    const initInfo = { model: 'claude-sonnet-4-6', permissionMode: 'autoEdit' };
+    const initInfo: AgentInitInfo = { tools: [], cwd: '/repo', model: 'claude-sonnet-4-6' };
     const state = makeState();
     const { get, set } = makeGetSet(state);
 
-    handleWSInit(get, set, THREAD_ID, initInfo as any);
+    handleWSInit(get, set, THREAD_ID, initInfo);
 
     expect(state.threadDataById[THREAD_ID].initInfo).toEqual(initInfo);
   });
@@ -362,15 +371,13 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
   });
 
   test('handleWSStatus updates a scratch thread via threadsById', () => {
-    const scratchThread = {
+    const scratchThread = buildThreadWithMessages({
       id: 'scratch-1',
       projectId: '',
       isScratch: true,
       title: 'hola',
       status: 'idle',
-      cost: 0,
-      messages: [],
-    };
+    });
     const state = makeState({
       activeThread: null,
       selectedThreadId: null,
@@ -387,16 +394,14 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
   });
 
   test('handleWSMessage updates lastAssistantMessage on a scratch thread', () => {
-    const scratchThread = {
+    const scratchThread = buildThreadWithMessages({
       id: 'scratch-3',
       projectId: '',
       isScratch: true,
       title: 'hola',
       status: 'running',
-      cost: 0,
-      messages: [],
       lastAssistantMessage: '¡Hola que te puedo ayudar...',
-    };
+    });
     const state = makeState({
       activeThread: null,
       selectedThreadId: null,
@@ -768,15 +773,13 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
   });
 
   test('handleWSResult updates a scratch thread via threadsById', () => {
-    const scratchThread = {
+    const scratchThread = buildThreadWithMessages({
       id: 'scratch-2',
       projectId: '',
       isScratch: true,
       title: 'hola',
       status: 'running',
-      cost: 0,
-      messages: [],
-    };
+    });
     const state = makeState({
       activeThread: null,
       selectedThreadId: null,

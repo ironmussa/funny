@@ -2,6 +2,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ArchivedThreadsSettings } from '@/components/ArchivedThreadsSettings';
+import { withProjects } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
 
 const listArchivedThreads = vi.hoisted(() => vi.fn());
@@ -37,7 +38,7 @@ const okPage = (page: number) => ({
 describe('ArchivedThreadsSettings pagination', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    useAppStore.setState({ projects: [], selectedProjectId: null } as never);
+    useAppStore.setState(withProjects({ projects: [], selectedProjectId: null }));
     listArchivedThreads.mockImplementation(({ page }: { page: number }) =>
       Promise.resolve(okPage(page)),
     );

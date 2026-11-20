@@ -29,8 +29,14 @@ vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));
 
-const comment = (id: string, createdAt: string, threadId = 't1') =>
-  ({ id, threadId, userId: 'u1', source: 'user', content: id, createdAt }) as ThreadComment;
+const comment = (id: string, createdAt: string, threadId = 't1'): ThreadComment => ({
+  id,
+  threadId,
+  userId: 'u1',
+  source: 'user',
+  content: id,
+  createdAt,
+});
 const failure: DomainError = { type: 'INTERNAL', message: 'boom' };
 
 beforeEach(() => {

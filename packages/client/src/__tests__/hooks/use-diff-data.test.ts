@@ -79,6 +79,11 @@ beforeEach(() => {
   gitApiMock.getFileDiff.mockReturnValue(okAsync({ diff: 'fresh diff' }));
 });
 
+/** Props of the harness when a test changes the checked-out branch. */
+interface BranchProps {
+  currentBranch?: string;
+}
+
 describe('useDiffData', () => {
   test('reloads the selected file diff on refresh even when the path is already cached', async () => {
     const { result } = renderHook(() => useDiffHarness());
@@ -107,7 +112,7 @@ describe('useDiffData', () => {
     gitApiMock.getFileDiff.mockReturnValue(
       new Promise((resolve) => {
         resolveDiff = () => resolve(ok({ diff: 'fresh diff' }));
-      }) as never,
+      }),
     );
 
     const { result } = renderHook(() =>
@@ -234,14 +239,15 @@ describe('useDiffData', () => {
         }),
       );
 
+    const noBranch: BranchProps = { currentBranch: undefined };
     const { result, rerender } = renderHook(
-      (props: { currentBranch?: string }) =>
+      (props: BranchProps) =>
         useDiffHarness({
           initialSummaries: [],
           initialSelectedFile: null,
           currentBranch: props.currentBranch,
         }),
-      { initialProps: { currentBranch: undefined as string | undefined } },
+      { initialProps: noBranch },
     );
 
     await waitFor(() => {

@@ -9,6 +9,7 @@ import {
 } from '@/lib/thread-scroll-position';
 import { useSettingsStore } from '@/stores/settings-store';
 
+import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 
 class MockIntersectionObserver {
@@ -25,15 +26,28 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-const memoizedMessageListLifecycle = vi.hoisted(() => ({
+interface MessageListLifecycle {
+  mounts: number;
+  unmounts: number;
+  captureScrollAnchorCalls: number;
+  restoreScrollAnchorCalls: number;
+  captureVisibleAnchorCalls: number;
+  remeasureCalls: number;
+  restoredAnchors: unknown[];
+  visibleAnchor: { key: string; offsetFromViewportTop: number } | null;
+  restoreScrollAnchorResult: boolean;
+  hasHiddenItems: boolean;
+}
+
+const memoizedMessageListLifecycle = vi.hoisted((): MessageListLifecycle => ({
   mounts: 0,
   unmounts: 0,
   captureScrollAnchorCalls: 0,
   restoreScrollAnchorCalls: 0,
   captureVisibleAnchorCalls: 0,
   remeasureCalls: 0,
-  restoredAnchors: [] as any[],
-  visibleAnchor: null as { key: string; offsetFromViewportTop: number } | null,
+  restoredAnchors: [],
+  visibleAnchor: null,
   restoreScrollAnchorResult: true,
   hasHiddenItems: false,
 }));
@@ -169,8 +183,7 @@ describe('MessageStream sticky bottom', () => {
     vi.useFakeTimers();
     vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-      return setTimeout(() => cb(performance.now()), 0) as unknown as number;
+      return setTimeout(() => cb(performance.now()), 0);
     });
     vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));
     window.localStorage.clear();
@@ -200,7 +213,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
 
     act(() => {
       vi.runOnlyPendingTimers();
@@ -222,7 +235,9 @@ describe('MessageStream sticky bottom', () => {
     act(() => {
       vi.runOnlyPendingTimers();
     });
-    const children = Array.from((container.firstElementChild as HTMLDivElement).children);
+    const children = Array.from(
+      expectInstance(container.firstElementChild, HTMLDivElement).children,
+    );
 
     expect(children[0]).not.toHaveClass('grow');
     expect(children.at(-2)).toHaveClass('grow');
@@ -266,7 +281,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     const viewportObserver = observers.find((observer) => observer.targets.has(viewport));
     expect(viewportObserver).toBeDefined();
     act(() => {
@@ -350,7 +365,7 @@ describe('MessageStream sticky bottom', () => {
         isExternal
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -393,7 +408,7 @@ describe('MessageStream sticky bottom', () => {
         isExternal
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -438,7 +453,7 @@ describe('MessageStream sticky bottom', () => {
         isExternal
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -482,7 +497,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -539,7 +554,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -677,7 +692,7 @@ describe('MessageStream sticky bottom', () => {
         }}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -719,7 +734,7 @@ describe('MessageStream sticky bottom', () => {
         }}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -758,7 +773,7 @@ describe('MessageStream sticky bottom', () => {
         }}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -794,7 +809,7 @@ describe('MessageStream sticky bottom', () => {
         }}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -829,7 +844,7 @@ describe('MessageStream sticky bottom', () => {
         pagination={pagination}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     // A window of grouped tool-call cards that does not fill the viewport:
     // no scroll event can ever fire, so only the underflow fill can load more.
     setScrollMetrics(viewport, {
@@ -890,7 +905,7 @@ describe('MessageStream sticky bottom', () => {
         }}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => 2000,
       clientHeight: () => 500,
@@ -925,7 +940,7 @@ describe('MessageStream sticky bottom', () => {
         }}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -993,7 +1008,7 @@ describe('MessageStream sticky bottom', () => {
         }}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -1061,7 +1076,7 @@ describe('MessageStream sticky bottom', () => {
         }}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -1120,7 +1135,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -1176,7 +1191,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -1235,7 +1250,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -1296,7 +1311,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -1352,7 +1367,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => scrollHeight,
       clientHeight: () => 500,
@@ -1413,7 +1428,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => 2000,
       clientHeight: () => 500,
@@ -1442,7 +1457,7 @@ describe('MessageStream sticky bottom', () => {
         onSend={() => {}}
       />,
     );
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     setScrollMetrics(viewport, {
       scrollHeight: () => 2000,
       clientHeight: () => 500,

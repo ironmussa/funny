@@ -145,7 +145,7 @@ describe('useReviewState reset effect', () => {
     const { rerender } = renderHook(
       (branch: string | undefined) => useReviewState(baseArgs(branch)),
       {
-        initialProps: undefined as string | undefined,
+        initialProps: undefined,
       },
     );
 
@@ -172,7 +172,7 @@ describe('useReviewState reset effect', () => {
     const { rerender } = renderHook(
       (tab: 'changes' | 'graph') => useReviewState(baseArgs('main', tab)),
       {
-        initialProps: 'graph' as 'changes' | 'graph',
+        initialProps: 'graph',
       },
     );
 

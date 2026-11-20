@@ -2,7 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { describe, expect, test, vi } from 'vitest';
 
 import { ThreadChatView } from '@/components/thread/ThreadChatView';
-import type { ThreadCore } from '@/stores/thread-context';
+import { buildThread } from '@/data/threads/testing';
 
 vi.mock('@/components/PipelineProgressBanner', () => ({
   PipelineProgressBanner: () => null,
@@ -38,7 +38,7 @@ vi.mock('@/stores/ui-store', () => ({
 
 describe('ThreadChatView in-thread search', () => {
   test('Escape closes an open search when focus is elsewhere in the thread', () => {
-    render(<ThreadChatView activeThread={{ id: 'thread-1', status: 'idle' } as ThreadCore} />);
+    render(<ThreadChatView activeThread={buildThread({ id: 'thread-1', status: 'idle' })} />);
 
     const threadContent = screen.getByTestId('thread-content');
     fireEvent.keyDown(threadContent, { key: 'f', ctrlKey: true });

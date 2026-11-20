@@ -13,7 +13,7 @@ function tempDir(): string {
 }
 
 function git(args: string[], cwd: string, env: Record<string, string | undefined>): string {
-  const proc = Bun.spawnSync(['git', ...args], { cwd, env: env as Record<string, string> });
+  const proc = Bun.spawnSync(['git', ...args], { cwd, env });
   return proc.stdout.toString().trim();
 }
 

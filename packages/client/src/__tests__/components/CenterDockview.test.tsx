@@ -1,11 +1,16 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import { CenterDockview } from '@/components/CenterDockview';
 import type { RightTabSpec } from '@/components/DockviewLayout';
 
-const dockviewMock = vi.hoisted(() => ({
-  api: undefined as MockDockviewApi | undefined,
+interface DockviewMockState {
+  api: MockDockviewApi | undefined;
+  readyCalled: boolean;
+}
+
+const dockviewMock = vi.hoisted((): DockviewMockState => ({
+  api: undefined,
   readyCalled: false,
 }));
 
@@ -70,7 +75,7 @@ type MockDockviewPanel = {
 
 type MockDockviewApi = {
   panels: MockDockviewPanel[];
-  addPanel: ReturnType<typeof vi.fn>;
+  addPanel: Mock<(...args: any[]) => any>;
   getPanel: ReturnType<typeof vi.fn>;
   onDidActivePanelChange: ReturnType<typeof vi.fn>;
   onDidLayoutChange: ReturnType<typeof vi.fn>;
@@ -88,7 +93,7 @@ function createMockDockviewApi(): MockDockviewApi {
   };
 
   const api = {
-    panels: [] as MockDockviewPanel[],
+    panels: new Array<MockDockviewPanel>(),
     addPanel: vi.fn(
       (options: {
         id: string;
@@ -140,7 +145,6 @@ function createMockDockviewApi(): MockDockviewApi {
   return api;
 }
 
-/** The mock's `addPanel` is typed as a bare `Mock`, which TS won't call directly. */
 function addPanelTo(
   api: MockDockviewApi,
   options: {
@@ -150,7 +154,7 @@ function addPanelTo(
     position?: { direction?: string; referencePanel?: string };
   },
 ) {
-  (api.addPanel as (o: typeof options) => void)(options);
+  api.addPanel(options);
 }
 
 function reviewTabs(): RightTabSpec[] {

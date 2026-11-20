@@ -1,9 +1,10 @@
 import { act, render, renderHook, screen, fireEvent } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const state = vi.hoisted(() => ({
-  byProject: {} as Record<string, { mode: 'local' | 'worktree' | 'sandbox' } | undefined>,
-}));
+const state = vi.hoisted(() => {
+  const byProject: Record<string, { mode: 'local' | 'worktree' | 'sandbox' } | undefined> = {};
+  return { byProject };
+});
 
 vi.mock('@/data/runner/hooks', () => ({
   useProjectSandbox: (projectId: string | null | undefined) => {

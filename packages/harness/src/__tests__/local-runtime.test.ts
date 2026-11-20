@@ -119,7 +119,7 @@ describe('local runtime adapter', () => {
           return {
             kind: 'process',
             cwd: '/workspace',
-            spawnClaudeCodeProcess: () => ({}) as any,
+            spawnClaudeCodeProcess: () => ({}),
           };
         },
       },

@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useProjectStore } from '@/stores/project-store';
 import { getUrlThreadId, useThreadStore } from '@/stores/thread-store';
@@ -20,8 +21,8 @@ function wrapperFor(route: string) {
 // to test here is that useRouteSync mirrors the URL thread id into the store.
 describe('useRouteSync — URL thread id mirror', () => {
   beforeEach(() => {
-    useProjectStore.setState({ initialized: true } as any);
-    useThreadStore.setState({ selectThread: vi.fn().mockResolvedValue(undefined) } as any);
+    useProjectStore.setState({ initialized: true });
+    useThreadStore.setState({ selectThread: vi.fn().mockResolvedValue(undefined) });
   });
   afterEach(() => vi.restoreAllMocks());
 
@@ -44,15 +45,15 @@ describe('useRouteSync — URL thread id mirror', () => {
     const selectThread = vi.fn().mockResolvedValue(undefined);
     const selectProject = vi.fn();
     useThreadStore.setState({
-      activeThread: { id: 'T123' },
+      activeThread: buildThreadWithMessages({ id: 'T123' }),
       selectedThreadId: 'T123',
       selectThread,
-    } as any);
+    });
     useProjectStore.setState({
       initialized: true,
       selectedProjectId: 'p1',
       selectProject,
-    } as any);
+    });
 
     renderHook(() => useRouteSync(), { wrapper: wrapperFor('/external/claude/session-1') });
 
@@ -67,7 +68,7 @@ describe('useRouteSync — URL thread id mirror', () => {
       initialized: true,
       selectedProjectId: null,
       selectProject,
-    } as any);
+    });
     useUIStore.setState({
       settingsOpen: true,
       activeSettingsPage: 'workflows',

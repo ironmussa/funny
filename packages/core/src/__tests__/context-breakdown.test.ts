@@ -32,8 +32,10 @@ function usage(
       { name: 'mcp__fallow__trace', serverName: 'fallow', tokens: 3_000 },
     ],
     agents: [],
+    isAutoCompactEnabled: true,
+    apiUsage: null,
     ...overrides,
-  } as SDKControlGetContextUsageResponse;
+  };
 }
 
 describe('toContextBreakdown', () => {

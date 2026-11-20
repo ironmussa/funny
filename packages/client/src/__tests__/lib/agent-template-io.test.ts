@@ -11,18 +11,18 @@ function makeTemplate(overrides: Partial<AgentTemplate> = {}): AgentTemplate {
     description: 'desc',
     icon: 'bot',
     color: 'blue',
-    model: 'sonnet',
+    model: 'deepagent-gemini-2.5-flash',
     systemPromptMode: 'append',
     systemPrompt: 'Be helpful',
     disallowedTools: [],
     mcpServers: [],
-    builtinSkillsDisabled: false,
+    builtinSkillsDisabled: [],
     customSkillPaths: [],
     agentName: 'helper',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
-  } as AgentTemplate;
+  };
 }
 
 describe('parseTemplateFromJson', () => {
@@ -55,9 +55,8 @@ describe('exportTemplate', () => {
   });
 
   test('downloads sanitized JSON for the template', () => {
-    const click = vi.fn();
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-    const anchor = { href: '', download: '', click } as unknown as HTMLAnchorElement;
+    const anchor = document.createElement('a');
+    const click = vi.spyOn(anchor, 'click').mockImplementation(() => {});
     const createElementSpy = vi.spyOn(document, 'createElement').mockReturnValue(anchor);
 
     exportTemplate(makeTemplate({ name: 'My Cool Template!' }));

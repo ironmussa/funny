@@ -1,9 +1,15 @@
+import type { ThreadEvent, ThreadEventType } from '@funny/shared';
 import { describe, expect, test } from 'vitest';
 
 import { turnOutcomesFromEvents } from '@/lib/turn-outcomes-from-events';
 
-const event = (id: string, type: string, data: unknown) =>
-  ({ id, threadId: 't1', type, data: JSON.stringify(data), createdAt: '' }) as any;
+const event = (id: string, type: ThreadEventType, data: unknown): ThreadEvent => ({
+  id,
+  threadId: 't1',
+  type,
+  data: JSON.stringify(data),
+  createdAt: '',
+});
 
 describe('turnOutcomesFromEvents', () => {
   test('maps each turn to how its run ended, last event winning', () => {

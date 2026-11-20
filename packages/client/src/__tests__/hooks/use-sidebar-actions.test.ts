@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildThread, withThreadIndex } from '@/data/threads/testing';
 import { useSidebarActions } from '@/hooks/use-sidebar-actions';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -74,7 +74,7 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
         archiveThread: mockArchiveThread,
         renameThread: mockRenameThread,
         pinThread: mockPinThread,
-      } as any),
+      }),
     );
   });
 
@@ -84,16 +84,15 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
       withThreadIndex({
         selectedThreadId: scratchId,
         threadsById: {
-          [scratchId]: {
+          [scratchId]: buildThread({
             id: scratchId,
             projectId: '',
             title: 'hola',
             isScratch: true,
-            status: 'completed',
-          },
+          }),
         },
         scratchThreadIds: [scratchId],
-      } as any),
+      }),
     );
 
     const { result } = renderHook(() => useSidebarActions());
@@ -123,15 +122,10 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
       withThreadIndex({
         selectedThreadId: threadId,
         threadsById: {
-          [threadId]: {
-            id: threadId,
-            projectId: 'p1',
-            title: 'Fix bug',
-            status: 'completed',
-          },
+          [threadId]: buildThread({ id: threadId, title: 'Fix bug' }),
         },
         threadIdsByProject: { p1: [threadId] },
-      } as any),
+      }),
     );
 
     const { result } = renderHook(() => useSidebarActions());
@@ -161,15 +155,10 @@ describe('useSidebarActions — delete selected thread from Activity', () => {
       withThreadIndex({
         selectedThreadId: 'other',
         threadsById: {
-          [threadId]: {
-            id: threadId,
-            projectId: 'p1',
-            title: 'Other',
-            status: 'completed',
-          },
+          [threadId]: buildThread({ id: threadId, title: 'Other' }),
         },
         threadIdsByProject: { p1: [threadId] },
-      } as any),
+      }),
     );
 
     const { result } = renderHook(() => useSidebarActions());
@@ -239,7 +228,7 @@ describe('useSidebarActions — archive, pin, and select', () => {
         renameThread: mockRenameThread,
         pinThread: mockPinThread,
         selectThread: vi.fn(),
-      } as any),
+      }),
     );
   });
 
@@ -248,9 +237,9 @@ describe('useSidebarActions — archive, pin, and select', () => {
       withThreadIndex({
         selectedThreadId: 't1',
         threadsById: {
-          t1: { id: 't1', projectId: 'p1', title: 'Fix', status: 'completed', mode: 'local' },
+          t1: buildThread({ title: 'Fix' }),
         },
-      } as any),
+      }),
     );
 
     const { result } = renderHook(() => useSidebarActions());
@@ -281,16 +270,9 @@ describe('useSidebarActions — archive, pin, and select', () => {
     useThreadStore.setState(
       withThreadIndex({
         threadsById: {
-          t1: {
-            id: 't1',
-            projectId: 'p1',
-            title: 'Thread',
-            branch: 'deleted-branch',
-            status: 'completed',
-            mode: 'local',
-          },
+          t1: buildThread({ title: 'Thread', branch: 'deleted-branch' }),
         },
-      } as any),
+      }),
     );
 
     const { result } = renderHook(() => useSidebarActions());

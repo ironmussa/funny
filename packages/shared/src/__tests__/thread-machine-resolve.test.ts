@@ -1,9 +1,9 @@
 import { describe, test, expect } from 'bun:test';
 
 import type { ThreadStatus } from '../primitives.js';
-import { resolveThreadTransition, threadMachine } from '../thread-machine.js';
+import { isThreadStatus, resolveThreadTransition, threadMachine } from '../thread-machine.js';
 
-const STATUSES = Object.keys(threadMachine.states) as ThreadStatus[];
+const STATUSES = Object.keys(threadMachine.states).filter(isThreadStatus);
 
 describe('resolveThreadTransition', () => {
   test('is computed from the status it is given', () => {
@@ -50,6 +50,7 @@ describe('resolveThreadTransition', () => {
   });
 
   test('a row without a known status is treated as pending', () => {
+    // SAFETY: deliberately not a ThreadStatus; a row without a status is the input under test.
     // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- intentional: test behavior with an impossible runtime value
     const noStatus = undefined as unknown as ThreadStatus;
     expect(resolveThreadTransition(noStatus, { type: 'START' }).status).toBe('running');

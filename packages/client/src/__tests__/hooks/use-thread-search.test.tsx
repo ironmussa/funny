@@ -21,10 +21,15 @@ afterEach(() => {
 });
 
 function setup() {
-  const streamRef = {
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-    current: { scrollViewport: viewport, expandToItem: vi.fn() } as unknown as MessageStreamHandle,
+  const handle: MessageStreamHandle = {
+    scrollToBottom: vi.fn(),
+    scrollViewport: viewport,
+    expandToItem: vi.fn(),
+    hasHiddenItems: () => false,
+    captureScrollAnchor: vi.fn(),
+    restoreScrollAnchor: vi.fn(),
   };
+  const streamRef = { current: handle };
   return renderHook(() => useThreadSearchState(streamRef, 'thread'));
 }
 

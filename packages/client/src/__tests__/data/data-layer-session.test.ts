@@ -1,3 +1,4 @@
+import type { SafeUser } from '@funny/shared';
 import { afterEach, describe, expect, test } from 'vitest';
 
 import { getDataLayer } from '@/data/runtime';
@@ -6,10 +7,7 @@ import { useAuthStore } from '@/stores/auth-store';
 
 import { resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const user = (id: string) =>
-  ({ id, username: id, displayName: id, role: 'user' }) as ReturnType<
-    typeof useAuthStore.getState
-  >['user'];
+const user = (id: string): SafeUser => ({ id, username: id, displayName: id, role: 'user' });
 
 let unbind: (() => void) | null = null;
 afterEach(() => {

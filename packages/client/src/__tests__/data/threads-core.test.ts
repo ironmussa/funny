@@ -8,9 +8,10 @@ import {
   type FieldFences,
 } from '@/data/threads/merge';
 import { compareThreadsForList, threadActivityTime } from '@/data/threads/order';
+import { buildThread } from '@/data/threads/testing';
 
 function thread(id: string, overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id,
     projectId: 'p1',
     title: id,
@@ -21,7 +22,7 @@ function thread(id: string, overrides: Partial<Thread> = {}): Thread {
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
-  } as Thread;
+  });
 }
 
 describe('thread order (parity with the server list query)', () => {

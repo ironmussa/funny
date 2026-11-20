@@ -308,7 +308,7 @@ export function DiffHeaderControls({
 
 function CopyIcon({ loading, copied }: { loading: boolean; copied: boolean }) {
   if (loading) return <Loader2 className="icon-base animate-spin" />;
-  if (copied) return <Check className="icon-base copy-feedback-icon text-green-600" />;
+  if (copied) return <Check className="icon-base copy-feedback-icon text-status-success" />;
   return <Copy className="icon-base copy-feedback-icon" />;
 }
 

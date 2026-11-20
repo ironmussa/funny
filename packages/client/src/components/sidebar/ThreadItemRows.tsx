@@ -36,7 +36,7 @@ function CreatedByIcon({ createdBy }: { createdBy?: string | null }) {
 function RuntimeBadge({ thread }: { thread: Thread }) {
   if (thread.runtime === 'remote') {
     return (
-      <span className="shrink-0 rounded bg-violet-500/15 px-1 py-0.5 text-[10px] leading-none font-medium text-violet-500">
+      <span className="bg-status-violet/15 text-status-violet shrink-0 rounded px-1 py-0.5 text-[10px] leading-none font-medium">
         Remote
       </span>
     );

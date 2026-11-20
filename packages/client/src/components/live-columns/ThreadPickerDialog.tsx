@@ -54,6 +54,7 @@ export function ThreadPickerDialog({
         <CommandEmpty>{t('live.noThreads', 'No threads')}</CommandEmpty>
         <CommandGroup heading={t('live.pickThreadTitle', 'Load an existing thread')}>
           {threads.map((thread) => {
+            /* oxlint-disable shadcn/require-static-classes -- statusConfig has 24 thread-status entries; inlining would be unreadable */
             const { icon: Icon, className } = statusConfig[thread.status] ?? statusConfig.idle;
             const inGrid = gridThreadIds?.has(thread.id);
             return (
@@ -64,6 +65,7 @@ export function ThreadPickerDialog({
                 onSelect={() => commit(thread.id)}
               >
                 <Icon className={cn('size-3.5 shrink-0', className)} />
+                {/* oxlint-enable shadcn/require-static-classes */}
                 {thread.title ? (
                   <ThreadTitle
                     as="span"

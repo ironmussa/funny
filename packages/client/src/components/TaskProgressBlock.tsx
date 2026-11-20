@@ -149,7 +149,7 @@ function IssueList({ issues, total, t }: { issues: TaskIssue[]; total: number; t
               <Icon
                 className={cn(
                   'mt-0.5 size-3.5 shrink-0',
-                  issue.severity === 'error' ? TONE.failed : TONE.skipped,
+                  issue.severity === 'error' ? 'text-status-error' : 'text-status-warning',
                 )}
                 aria-hidden
               />

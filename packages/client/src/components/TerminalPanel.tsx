@@ -853,7 +853,7 @@ export function CommandTabContent({
                 {t('terminal.memory')}: {(metrics.memoryUsageKB / 1024).toFixed(1)} MB
               </span>
               {metrics.restartCount > 0 && (
-                <span className="text-yellow-500">
+                <span className="text-status-warning">
                   {t('terminal.restarts')}: {metrics.restartCount}
                 </span>
               )}
@@ -1215,7 +1215,7 @@ function DraggableTerminalTab({
         >
           {tab.hasBell && !active && (
             <span
-              className="size-1.5 animate-pulse rounded-full bg-yellow-500"
+              className="bg-status-warning size-1.5 animate-pulse rounded-full"
               data-testid={`terminal-tab-bell-${tab.id}`}
             />
           )}

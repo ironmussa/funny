@@ -31,12 +31,35 @@ import { useProjectStore } from '@/stores/project-store';
 
 const log = createClientLogger('project-collaborators');
 
-const ROLE_COLORS: Record<string, string> = {
-  owner: 'bg-purple-500/15 text-purple-700 dark:text-purple-400',
-  admin: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  member: 'bg-green-500/15 text-green-700 dark:text-green-400',
-  viewer: 'bg-muted text-muted-foreground',
-};
+/** A member's role badge, tinted per role with the theme's status tokens. */
+function RoleBadge({ role }: { role: string }) {
+  switch (role) {
+    case 'owner':
+      return (
+        <Badge variant="secondary" className="bg-status-violet/15 text-status-violet">
+          {role}
+        </Badge>
+      );
+    case 'admin':
+      return (
+        <Badge variant="secondary" className="bg-status-info/15 text-status-info">
+          {role}
+        </Badge>
+      );
+    case 'member':
+      return (
+        <Badge variant="secondary" className="bg-status-success/15 text-status-success">
+          {role}
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="secondary" className="bg-muted text-muted-foreground">
+          {role}
+        </Badge>
+      );
+  }
+}
 
 /** Assignable project roles (owner is the creator, not assignable here). */
 const PROJECT_ROLES: { value: ProjectMemberRole; label: string; hint: string }[] = [
@@ -247,12 +270,7 @@ export function ProjectCollaborators() {
                       {isSelf && <span className="text-muted-foreground ml-1 text-xs">(you)</span>}
                     </p>
                     {isOwner || isSelf ? (
-                      <Badge
-                        variant="secondary"
-                        className={ROLE_COLORS[isOwner ? 'owner' : m.role] ?? ''}
-                      >
-                        {isOwner ? 'owner' : m.role}
-                      </Badge>
+                      <RoleBadge role={isOwner ? 'owner' : m.role} />
                     ) : (
                       <Select
                         value={
@@ -280,7 +298,7 @@ export function ProjectCollaborators() {
                     {!m.localPath && !isOwner && (
                       <Badge
                         variant="secondary"
-                        className="bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                        className="bg-status-warning/15 text-status-warning"
                       >
                         needs setup
                       </Badge>

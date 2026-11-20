@@ -325,7 +325,11 @@ export function FileTree({
               <HighlightText
                 text={row.label}
                 query={searchQuery}
-                className={cn('min-w-0 flex-1 truncate font-mono-explorer', fontSize)}
+                className={cn(
+                  'min-w-0 flex-1 truncate font-mono-explorer',
+                  // oxlint-disable-next-line shadcn/require-static-classes -- fontSize is a Tailwind class prop
+                  fontSize,
+                )}
               />
             ) : (
               <span className={cn('min-w-0 flex-1 truncate font-mono-explorer', fontSize)}>
@@ -485,7 +489,7 @@ export function FileTree({
         >
           {isSubmodule ? (
             <GitBranch
-              className="size-4 shrink-0 text-purple-500 dark:text-purple-400"
+              className="text-status-violet size-4 shrink-0"
               data-testid={`${testIdPrefix}-submodule-icon-${f.path}`}
             />
           ) : (
@@ -498,7 +502,11 @@ export function FileTree({
             name={fileName}
             query={searchQuery}
             preserveExtension={!isSubmodule}
-            className={cn('font-mono-explorer', fontSize)}
+            className={cn(
+              'font-mono-explorer',
+              // oxlint-disable-next-line shadcn/require-static-classes -- fontSize is a Tailwind class prop
+              fontSize,
+            )}
           />
           {isSubmodule && (
             <SubmoduleBadge

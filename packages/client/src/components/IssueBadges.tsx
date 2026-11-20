@@ -31,7 +31,10 @@ export function IssueBadges({
       {issue.linkedBranch && (
         <Badge
           variant="outline"
-          className={cn('gap-0.5 border-emerald-500/30 px-1 text-emerald-500', badgeClassName)}
+          className={cn(
+            'gap-0.5 border-status-success/30 px-1 text-status-success',
+            badgeClassName,
+          )}
         >
           <GitBranch className="size-2.5" />
           <span className="max-w-[100px] truncate">{issue.linkedBranch}</span>

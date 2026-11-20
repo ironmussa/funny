@@ -20,11 +20,11 @@ export function CompactionEventCard({ event }: { event: CompactionEvent }) {
     <div
       className={cn(
         'rounded-lg border px-3 py-2 text-xs flex items-center gap-2',
-        'border-amber-500/20 bg-amber-500/5',
+        'border-status-warning/20 bg-status-warning/5',
       )}
     >
-      <Minimize2 className="icon-sm shrink-0 text-amber-600" />
-      <span className="shrink-0 font-medium text-amber-600">Context compacted</span>
+      <Minimize2 className="icon-sm text-status-warning shrink-0" />
+      <span className="text-status-warning shrink-0 font-medium">Context compacted</span>
       <span className="text-muted-foreground">
         {tokenK}K tokens → summarized ({event.trigger})
       </span>

@@ -302,7 +302,7 @@ export function AcceptInvitePage({ token }: Props) {
         {/* Success */}
         {step === 'success' && (
           <>
-            <CheckCircle2 className="mx-auto size-8 text-green-500" />
+            <CheckCircle2 className="text-status-success mx-auto size-8" />
             <h2 className="text-foreground text-lg font-semibold">You're in!</h2>
             <p className="text-muted-foreground text-sm">
               You've successfully joined <span className="font-medium">{orgName}</span>.
@@ -316,7 +316,7 @@ export function AcceptInvitePage({ token }: Props) {
         {/* Already a member */}
         {step === 'already' && (
           <>
-            <CheckCircle2 className="mx-auto size-8 text-blue-500" />
+            <CheckCircle2 className="text-status-info mx-auto size-8" />
             <h2 className="text-foreground text-lg font-semibold">Already a member</h2>
             <p className="text-muted-foreground text-sm">
               You're already a member of <span className="font-medium">{orgName}</span>.

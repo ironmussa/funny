@@ -24,9 +24,9 @@ const STEP_STYLE = {
   },
   completed: {
     Icon: Check,
-    icon: 'size-6 text-emerald-500',
-    label: 'text-emerald-500',
-    dot: 'bg-emerald-500',
+    icon: 'size-6 text-status-success',
+    label: 'text-status-success',
+    dot: 'bg-status-success',
   },
   failed: {
     Icon: X,
@@ -58,7 +58,7 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
 
   const stepElapsed = getStepElapsed(focalStep.id);
   const style = STEP_STYLE[focalStep.status];
-  const Icon = style.Icon;
+  const StepIcon = style.Icon;
 
   return (
     <div
@@ -79,7 +79,7 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
           >
             {/* Icon */}
             <div className="shrink-0">
-              <Icon className={style.icon} />
+              <StepIcon className={style.icon} />
             </div>
 
             {/* Label */}

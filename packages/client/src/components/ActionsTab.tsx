@@ -281,12 +281,12 @@ function CISummaryCounts({ detail, total }: { detail: PRDetail; total: number })
         total,
       })}
       {detail.checks_failed > 0 && (
-        <span className="ml-1.5 text-red-400">
+        <span className="text-status-error ml-1.5">
           {t('review.ci.failedCount', '{{count}} failed', { count: detail.checks_failed })}
         </span>
       )}
       {detail.checks_pending > 0 && (
-        <span className="ml-1.5 text-yellow-400">
+        <span className="text-status-pending ml-1.5">
           {t('review.ci.pendingCount', '{{count}} pending', { count: detail.checks_pending })}
         </span>
       )}
@@ -391,6 +391,7 @@ function RunRow({
                 size="icon-xs"
                 onClick={() => void handleRerun()}
                 disabled={rerunning}
+                // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
                 className={listRowActionClassName}
                 aria-label={t('review.actions.rerun', 'Re-run failed jobs')}
                 data-testid={`actions-run-rerun-${run.id}`}
@@ -549,7 +550,9 @@ function ActionsToolbar({
       {rateLimited && (
         <Tooltip>
           <TooltipTrigger>
-            <span className="text-yellow-500">{t('review.ci.rateLimited', 'Rate limited')}</span>
+            <span className="text-status-warning">
+              {t('review.ci.rateLimited', 'Rate limited')}
+            </span>
           </TooltipTrigger>
           <TooltipContent>
             {t('review.ci.rateLimitedHint', 'GitHub API rate limit reached. Polling paused.')}

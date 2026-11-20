@@ -13,10 +13,8 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { buttonVariants } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { api } from '@/lib/api';
-import { cn } from '@/lib/utils';
 
 export interface WorktreeDeleteTarget {
   threadId: string;
@@ -133,7 +131,7 @@ function WorktreeDeleteDialogInstance({
                 </Alert>
               )}
               {status.unpushedCommitCount === 0 && status.dirtyFileCount === 0 && (
-                <div className="flex items-center gap-2 py-1 text-xs text-emerald-500">
+                <div className="text-status-success flex items-center gap-2 py-1 text-xs">
                   <CheckCircle2 className="size-3.5" />
                   {t('dialog.noUnpushedCommits')}
                 </div>
@@ -178,7 +176,7 @@ function WorktreeDeleteDialogInstance({
           </AlertDialogCancel>
           <AlertDialogAction
             data-testid="worktree-delete-confirm"
-            className={cn(buttonVariants({ variant: 'destructive' }))}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             onClick={handleConfirm}
             disabled={loading}
           >

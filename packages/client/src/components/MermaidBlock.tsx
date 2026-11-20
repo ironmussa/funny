@@ -512,7 +512,7 @@ function ToolbarButton({
 
 function CopyFeedbackIcon({ copied, icon: Icon }: { copied: boolean; icon: typeof Code }) {
   return copied ? (
-    <Check className="icon-base copy-feedback-icon text-green-600" />
+    <Check className="icon-base copy-feedback-icon text-status-success" />
   ) : (
     <Icon className="icon-base copy-feedback-icon" />
   );

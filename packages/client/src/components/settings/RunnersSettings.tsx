@@ -45,8 +45,8 @@ import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 function statusColor(status: RunnerInfo['status']) {
-  if (status === 'online') return 'text-green-500';
-  if (status === 'busy') return 'text-yellow-500';
+  if (status === 'online') return 'text-status-success';
+  if (status === 'busy') return 'text-status-warning';
   return 'text-muted-foreground';
 }
 
@@ -210,7 +210,14 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
         data-testid={`runner-item-${runner.runnerId}`}
       >
         {/* Status dot */}
-        <Circle className={cn('size-2 shrink-0 fill-current', statusColor(runner.status))} />
+        <Circle
+          className={cn(
+            'size-2 shrink-0 fill-current',
+            runner.status === 'online' && 'text-status-success',
+            runner.status === 'busy' && 'text-status-warning',
+            runner.status !== 'online' && runner.status !== 'busy' && 'text-muted-foreground',
+          )}
+        />
 
         {/* Name + meta */}
         <div className="min-w-0 flex-1">
@@ -219,7 +226,12 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
             <span className="text-xs">{osEmoji(runner.os)}</span>
             <Badge
               variant="outline"
-              className={cn('h-4 px-1.5 text-[10px]', statusColor(runner.status))}
+              className={cn(
+                'h-4 px-1.5 text-[10px]',
+                runner.status === 'online' && 'text-status-success',
+                runner.status === 'busy' && 'text-status-warning',
+                runner.status !== 'online' && runner.status !== 'busy' && 'text-muted-foreground',
+              )}
             >
               {statusLabel(runner.status)}
             </Badge>

@@ -296,7 +296,7 @@ export function ShareThreadButton({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  className="text-muted-foreground hover:text-status-danger h-7 w-7 shrink-0"
+                  className="text-muted-foreground hover:text-status-error h-7 w-7 shrink-0"
                   disabled={busy}
                   onClick={() => revoke(s.sharedWithUserId)}
                   data-testid={`share-revoke-${s.sharedWithUserId}`}
@@ -318,7 +318,7 @@ export function ShareThreadButton({
             data-testid="share-copy-link"
           >
             {copied ? (
-              <Check className="copy-feedback-icon h-4 w-4 text-green-600" />
+              <Check className="copy-feedback-icon text-status-success h-4 w-4" />
             ) : (
               <Link2 className="copy-feedback-icon h-4 w-4" />
             )}

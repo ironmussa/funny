@@ -238,7 +238,7 @@ export function OrganizationManagement() {
                     {isActive && (
                       <Badge
                         variant="secondary"
-                        className="bg-green-500/15 text-green-700 dark:text-green-400"
+                        className="bg-status-success/15 text-status-success dark:text-status-success"
                       >
                         Active
                       </Badge>

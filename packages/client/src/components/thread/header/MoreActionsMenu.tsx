@@ -120,7 +120,7 @@ function MenuItems({
                         <Icon className="icon-base mr-2" />
                         {t(stageConfig[stage].labelKey)}
                         {stage === threadStage && (
-                          <Check className="icon-base ml-auto pl-1 text-green-600" />
+                          <Check className="icon-base text-status-success ml-auto pl-1" />
                         )}
                       </DropdownMenuItem>
                     );
@@ -168,7 +168,7 @@ function MenuItems({
         className="cursor-pointer"
       >
         {copiedText ? (
-          <Check className="icon-base copy-feedback-icon mr-2 text-green-600" />
+          <Check className="icon-base copy-feedback-icon text-status-success mr-2" />
         ) : (
           <Copy className="icon-base copy-feedback-icon mr-2" />
         )}
@@ -181,7 +181,7 @@ function MenuItems({
         className="cursor-pointer"
       >
         {copiedTools ? (
-          <Check className="icon-base copy-feedback-icon mr-2 text-green-600" />
+          <Check className="icon-base copy-feedback-icon text-status-success mr-2" />
         ) : (
           <ClipboardList className="icon-base copy-feedback-icon mr-2" />
         )}

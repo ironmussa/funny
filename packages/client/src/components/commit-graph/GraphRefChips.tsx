@@ -310,7 +310,7 @@ function CopyableRefValue({
               data-testid={`graph-branch-copy-${kind}-${value}`}
             >
               {copied ? (
-                <Check className="icon-2xs copy-feedback-icon text-green-600" />
+                <Check className="icon-2xs copy-feedback-icon text-status-success" />
               ) : (
                 <Copy className="icon-2xs copy-feedback-icon" />
               )}

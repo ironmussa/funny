@@ -12,14 +12,17 @@ import {
 
 describe('cn utility', () => {
   test('merges class names', () => {
+    // oxlint-disable-next-line shadcn/no-unknown-classes -- test fixture: not a real class
     expect(cn('foo', 'bar')).toBe('foo bar');
   });
 
   test('handles conditional classes', () => {
+    // oxlint-disable-next-line shadcn/no-unknown-classes -- test fixture: not a real class
     expect(cn('base', false && 'hidden', 'visible')).toBe('base visible');
   });
 
   test('handles undefined and null', () => {
+    // oxlint-disable-next-line shadcn/no-unknown-classes -- test fixture: not a real class
     expect(cn('base', undefined, null, 'end')).toBe('base end');
   });
 
@@ -28,6 +31,7 @@ describe('cn utility', () => {
   });
 
   test('merges tailwind color conflicts', () => {
+    // oxlint-disable-next-line shadcn/no-raw-colors -- test fixture: verifying tailwind-merge behavior
     expect(cn('text-red-500', 'text-blue-500')).toBe('text-blue-500');
   });
 
@@ -36,6 +40,7 @@ describe('cn utility', () => {
   });
 
   test('handles array inputs', () => {
+    // oxlint-disable-next-line shadcn/no-unknown-classes -- test fixture: not a real class
     expect(cn(['foo', 'bar'])).toBe('foo bar');
   });
 
@@ -48,6 +53,7 @@ describe('cn utility', () => {
   });
 
   test('combines all forms', () => {
+    // oxlint-disable-next-line shadcn/no-unknown-classes -- test fixture: not a real class
     const result = cn('base', ['arr1', 'arr2'], { conditional: true }, undefined);
     expect(result).toContain('base');
     expect(result).toContain('arr1');

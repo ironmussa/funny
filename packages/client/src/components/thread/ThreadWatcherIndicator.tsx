@@ -67,7 +67,7 @@ export function ThreadWatcherIndicator({ threadId }: { threadId: string }) {
           data-testid={`thread-watcher-indicator-${threadId}`}
         >
           {/* icon-sm to match the thread status icon in ThreadStatusPin */}
-          <AlarmClock className={cn('icon-sm', 'text-amber-500')} />
+          <AlarmClock className={cn('icon-sm', 'text-status-warning')} />
         </span>
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">

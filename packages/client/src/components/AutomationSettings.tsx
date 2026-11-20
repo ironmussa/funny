@@ -223,7 +223,7 @@ export function AutomationSettings() {
                   </span>
                   {a.source === 'config' && (
                     <span
-                      className="shrink-0 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-xs text-blue-500"
+                      className="bg-status-info/15 text-status-info shrink-0 rounded-full px-1.5 py-0.5 text-xs"
                       data-testid={`automation-config-badge-${a.id}`}
                     >
                       .funny.json

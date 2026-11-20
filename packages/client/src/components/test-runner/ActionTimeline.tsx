@@ -14,10 +14,10 @@ interface ActionTimelineProps {
 
 const CATEGORY_COLORS: Record<string, string> = {
   'pw:api': 'bg-blue-400',
-  expect: 'bg-green-500',
+  expect: 'bg-status-success',
   'test.step': 'bg-purple-400',
-  hook: 'bg-gray-400',
-  fixture: 'bg-gray-400',
+  hook: 'bg-muted-foreground',
+  fixture: 'bg-muted-foreground',
 };
 
 function formatTimeLabel(ms: number): string {
@@ -75,7 +75,7 @@ export function ActionTimeline({
           const isActive = origIndex === activeIndex;
           const colorClass = action.error
             ? 'bg-destructive'
-            : (CATEGORY_COLORS[action.category] ?? 'bg-gray-400');
+            : (CATEGORY_COLORS[action.category] ?? 'bg-muted-foreground');
 
           const tooltipLabel = `${action.title} (${formatTimeLabel(dur)})`;
 

@@ -20,6 +20,7 @@ import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
+import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 
 interface Member {
@@ -38,10 +39,10 @@ const ROLE_OPTIONS: { value: TeamRole; label: string }[] = [
 ];
 
 const ROLE_COLORS: Record<TeamRole, string> = {
-  owner: 'bg-amber-500/15 text-amber-700 dark:text-amber-400',
-  admin: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  member: 'bg-green-500/15 text-green-700 dark:text-green-400',
-  viewer: 'bg-gray-500/15 text-gray-700 dark:text-gray-400',
+  owner: 'bg-status-warning/15 text-status-warning',
+  admin: 'bg-status-info/15 text-status-info',
+  member: 'bg-status-success/15 text-status-success',
+  viewer: 'bg-muted text-muted-foreground',
 };
 
 /** Better Auth org plugin only supports these roles for invitations */
@@ -246,7 +247,7 @@ export function TeamMembers() {
         <div className="px-4 py-3.5">
           {smtpConfigured === false && (
             <div
-              className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+              className="border-status-warning/30 bg-status-warning/10 text-status-warning mb-3 flex items-start gap-2 rounded-md border px-3 py-2 text-xs"
               data-testid="team-invite-smtp-warning"
             >
               <MailWarning className="icon-sm mt-0.5 shrink-0" />
@@ -353,8 +354,8 @@ export function TeamMembers() {
                           variant="secondary"
                           className={
                             isActive
-                              ? 'bg-green-500/15 text-green-700 dark:text-green-400'
-                              : 'bg-red-500/15 text-red-700 dark:text-red-400'
+                              ? 'bg-status-success/15 text-status-success'
+                              : 'bg-status-error/15 text-status-error'
                           }
                         >
                           {isExpired ? 'expired' : isMaxed ? 'maxed' : link.role}
@@ -375,7 +376,7 @@ export function TeamMembers() {
                       tooltip={t('common.copyLink')}
                     >
                       {copiedId === link.id ? (
-                        <Check className="icon-sm text-green-500" />
+                        <Check className="icon-sm text-status-success" />
                       ) : (
                         <Copy className="icon-sm" />
                       )}
@@ -420,7 +421,10 @@ export function TeamMembers() {
                   </p>
                   <Badge
                     variant="secondary"
-                    className={ROLE_COLORS[member.role]}
+                    className={cn(
+                      // oxlint-disable-next-line shadcn/require-static-classes -- ROLE_COLORS values are static literals
+                      ROLE_COLORS[member.role],
+                    )}
                     data-testid={`team-member-role-badge-${member.userId}`}
                   >
                     {member.role}

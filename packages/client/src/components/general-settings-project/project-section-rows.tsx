@@ -312,7 +312,7 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
             href="https://github.com/Ataraxy-Labs/weave"
             target="_blank"
             rel="noopener noreferrer"
-            className="text-xs text-blue-500 hover:underline"
+            className="text-status-info text-xs hover:underline"
             data-testid="settings-weave-install-link"
           >
             {t('settings.weaveInstall', 'Install')}
@@ -332,7 +332,7 @@ export function WeaveStatusSetting({ projectId }: { projectId: string }) {
           data-testid="settings-weave-status"
           className={cn(
             'text-xs',
-            status.status === 'active' ? 'text-green-500' : 'text-muted-foreground',
+            status.status === 'active' ? 'text-status-success' : 'text-muted-foreground',
           )}
         >
           {status.status === 'active'

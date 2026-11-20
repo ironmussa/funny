@@ -380,9 +380,9 @@ function IssuesList({
 /** Open (green dot) or closed (purple check). */
 function IssueStateIcon({ state, className }: { state: string; className?: string }) {
   return state === 'open' ? (
-    <CircleDot className={cn(className, 'text-green-500')} />
+    <CircleDot className={cn(className, 'text-status-success')} />
   ) : (
-    <CircleCheck className={cn(className, 'text-purple-500')} />
+    <CircleCheck className={cn(className, 'text-status-violet')} />
   );
 }
 
@@ -473,6 +473,7 @@ function IssueRow({
               variant="ghost"
               size="icon-xs"
               aria-label={t('issues.createThread', 'Create thread')}
+              // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
               className={listRowActionClassName}
               onClick={() => onCreateThread(issue)}
               data-testid={`issue-create-thread-${issue.number}`}

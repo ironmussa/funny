@@ -30,7 +30,7 @@ function ActionIcon({ action }: { action: WSTestActionData }) {
   if (action.error) return <XCircle className={cn(cls, 'text-destructive')} />;
   if (action.category === 'expect') {
     return action.endTime ? (
-      <CheckCircle2 className={cn(cls, 'text-green-500')} />
+      <CheckCircle2 className={cn(cls, 'text-status-success')} />
     ) : (
       <Loader2 className={cn(cls, 'animate-spin text-muted-foreground')} />
     );
@@ -38,10 +38,10 @@ function ActionIcon({ action }: { action: WSTestActionData }) {
 
   const title = action.title.toLowerCase();
   if (title.includes('goto') || title.includes('navigate')) {
-    return <Navigation className={cn(cls, 'text-blue-400')} />;
+    return <Navigation className={cn(cls, 'text-status-info')} />;
   }
   if (title.includes('fill') || title.includes('type') || title.includes('press')) {
-    return <PenLine className={cn(cls, 'text-amber-400')} />;
+    return <PenLine className={cn(cls, 'text-status-warning')} />;
   }
   if (
     title.includes('click') ||
@@ -49,7 +49,7 @@ function ActionIcon({ action }: { action: WSTestActionData }) {
     title.includes('check') ||
     title.includes('uncheck')
   ) {
-    return <MousePointerClick className={cn(cls, 'text-purple-400')} />;
+    return <MousePointerClick className={cn(cls, 'text-status-violet')} />;
   }
 
   // Default: generic step dot

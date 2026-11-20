@@ -61,7 +61,7 @@ export function PlanCard({
             tooltip={copied ? t('common.copied') : t('common.copy')}
           >
             {copied ? (
-              <Check className="icon-xs text-green-500" />
+              <Check className="icon-xs text-status-success" />
             ) : (
               <Copy className="icon-xs text-muted-foreground" />
             )}
@@ -75,7 +75,7 @@ export function PlanCard({
         viewportProps={{ className: 'max-h-[50vh] scroll-fade-none' }}
       >
         <div className="px-4 py-3">
-          <div className="prose prose-xs prose-invert prose-headings:text-foreground prose-headings:font-semibold prose-h1:text-xs prose-h1:mb-1.5 prose-h1:mt-0 prose-h2:text-xs prose-h2:mb-1 prose-h2:mt-2.5 prose-h3:text-sm prose-h3:mb-1 prose-h3:mt-2 prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5 prose-li:text-sm prose-li:text-muted-foreground prose-li:leading-relaxed prose-li:my-0 prose-ul:my-0.5 prose-ol:my-0.5 prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-pre:my-1 prose-strong:text-foreground max-w-none">
+          <div className="prose max-w-none">
             <Suspense
               fallback={
                 <pre className="text-muted-foreground font-mono text-xs leading-relaxed break-all whitespace-pre-wrap">

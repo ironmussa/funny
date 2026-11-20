@@ -35,7 +35,11 @@ export function ContextUsageRing({
   const remainingTokens = showTokens ? Math.max(0, maxTokens - usedTokens) : 0;
 
   const color =
-    clamped > 80 ? 'stroke-red-500' : clamped > 60 ? 'stroke-amber-500' : 'stroke-muted-foreground';
+    clamped > 80
+      ? 'stroke-status-error'
+      : clamped > 60
+        ? 'stroke-status-warning'
+        : 'stroke-muted-foreground';
 
   return (
     <HoverCard openDelay={150} closeDelay={50}>

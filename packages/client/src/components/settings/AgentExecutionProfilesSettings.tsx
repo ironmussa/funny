@@ -546,7 +546,7 @@ function ClaudeAuthCommand({ configDir, className }: { configDir: string; classN
           data-testid="agent-profile-copy-auth-command"
         >
           {copied ? (
-            <Check className="icon-sm copy-feedback-icon text-green-600" />
+            <Check className="icon-sm copy-feedback-icon text-status-success" />
           ) : (
             <Copy className="icon-sm copy-feedback-icon" />
           )}

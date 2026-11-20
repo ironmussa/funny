@@ -109,7 +109,7 @@ export function ThreadStatusPin({
             className={cn('absolute inset-0 flex items-center justify-center', hideOnHover)}
             data-testid={`thread-unread-dot-${thread.id}`}
           >
-            <span className="block size-2 rounded-full bg-blue-500" />
+            <span className="bg-status-info block size-2 rounded-full" />
           </span>
         ) : (
           <span className={cn('absolute inset-0 flex items-center justify-center', hideOnHover)}>
@@ -160,7 +160,7 @@ function ThreadStatusIcon({
   const glyph =
     displayStatus === 'stopped' ? (
       <span
-        className="block size-2 rounded-full bg-red-500"
+        className="bg-status-error block size-2 rounded-full"
         data-testid={`thread-stopped-dot-${threadId}`}
       />
     ) : (
@@ -211,10 +211,11 @@ function ThreadActivityIcon({
 }) {
   const { t } = useTranslation();
   if (view.activity === 'none') return null;
-  const { icon: Icon, className } = ACTIVITY_GLYPH[view.activity];
+  const activityCfg = ACTIVITY_GLYPH[view.activity];
+  const ActivityIcon = activityCfg.icon;
   const glyph = (
-    <Icon
-      className={cn('icon-sm', className)}
+    <ActivityIcon
+      className={cn('icon-sm', activityCfg.className)}
       data-testid={`thread-factory-activity-${threadId}`}
       data-activity={view.activity}
     />

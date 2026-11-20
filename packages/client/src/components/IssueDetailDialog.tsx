@@ -81,9 +81,9 @@ export function IssueDetailDialog({
       >
         <div className="border-border flex shrink-0 items-start gap-2 border-b px-4 py-3">
           {issue.state === 'open' ? (
-            <CircleDot className="icon-base mt-1 shrink-0 text-green-500" />
+            <CircleDot className="icon-base text-status-success mt-1 shrink-0" />
           ) : (
-            <CircleCheck className="icon-base mt-1 shrink-0 text-purple-500" />
+            <CircleCheck className="icon-base text-status-violet mt-1 shrink-0" />
           )}
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <DialogTitle

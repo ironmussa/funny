@@ -84,7 +84,7 @@ function CopyButton({ text }: { text: string }) {
       aria-label="Copy code"
     >
       {copied ? (
-        <Check className="icon-base copy-feedback-icon text-green-600" />
+        <Check className="icon-base copy-feedback-icon text-status-success" />
       ) : (
         <Copy className="icon-base copy-feedback-icon" />
       )}

@@ -178,7 +178,7 @@ function VideoPreview({
         setFailed(true);
         onError?.(new Error(`Failed to load video: ${src}`));
       }}
-      className="max-h-[70vh] w-full bg-gray-950"
+      className="bg-primary max-h-[70vh] w-full"
     >
       {name && <track kind="metadata" label={name} />}
       Your browser does not support the video element.

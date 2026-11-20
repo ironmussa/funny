@@ -109,13 +109,17 @@ describe('AvailableMcpServers', () => {
 
     const healthyBadge = await screen.findByTestId('available-mcp-healthy-http');
     expect(healthyBadge).not.toHaveClass(
-      'border-amber-500/50',
-      'bg-amber-500/10',
-      'text-amber-300',
+      'border-status-warning/50',
+      'bg-status-warning/10',
+      'text-status-warning',
     );
 
     const badge = await screen.findByTestId('available-mcp-linear-server');
-    expect(badge).toHaveClass('border-amber-500/50', 'bg-amber-500/10', 'text-amber-300');
+    expect(badge).toHaveClass(
+      'border-status-warning/50',
+      'bg-status-warning/10',
+      'text-status-warning',
+    );
 
     fireEvent.pointerMove(badge);
     fireEvent.focus(badge);

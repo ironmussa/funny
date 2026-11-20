@@ -32,7 +32,7 @@ export function CopyButton({ content }: { content: string }) {
       data-testid="message-copy"
     >
       {copied ? (
-        <Check className="icon-sm copy-feedback-icon text-green-600" />
+        <Check className="icon-sm copy-feedback-icon text-status-success" />
       ) : (
         <Copy className="icon-sm copy-feedback-icon" />
       )}

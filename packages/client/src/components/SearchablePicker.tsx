@@ -405,7 +405,11 @@ function SearchablePickerContent({
       <PopoverContent
         side={side}
         align={align}
-        className={cn(width, 'p-0 flex flex-col overflow-hidden')}
+        className={cn(
+          // oxlint-disable-next-line shadcn/require-static-classes -- width is a Tailwind class prop from the caller
+          width,
+          'p-0 flex flex-col overflow-hidden',
+        )}
         style={{ maxHeight: 'min(70vh, 520px)' }}
         onOpenAutoFocus={(e) => {
           e.preventDefault();

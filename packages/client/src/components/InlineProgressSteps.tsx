@@ -39,7 +39,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
             )}
           >
             <div className="mt-0.5 shrink-0">
-              {step.status === 'completed' && <Check className="icon-base text-emerald-500" />}
+              {step.status === 'completed' && <Check className="icon-base text-status-success" />}
               {step.status === 'running' && (
                 <Loader2 className="icon-base text-primary animate-spin" />
               )}

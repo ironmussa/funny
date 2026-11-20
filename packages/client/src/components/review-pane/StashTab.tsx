@@ -356,6 +356,7 @@ function StashPopButton({
           variant="ghost"
           size="icon-xs"
           aria-label={label}
+          // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
           className={cn(listRowActionClassName, busy && idx === '0' && 'opacity-100')}
           onClick={(e) => {
             e.stopPropagation();
@@ -397,6 +398,7 @@ function StashDropButton({
           size="icon-xs"
           aria-label={t('review.dropStash', 'Discard stash')}
           className={cn(
+            // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant
             listRowActionClassName,
             'hover:text-destructive',
             dropping && 'opacity-100',

@@ -529,7 +529,7 @@ export function MonacoEditorDialog({
                 aria-label={t('editor.copy', 'Copy')}
               >
                 {copied ? (
-                  <Check className="icon-base copy-feedback-icon text-green-600" />
+                  <Check className="icon-base copy-feedback-icon text-status-success" />
                 ) : (
                   <Copy className="icon-base copy-feedback-icon" />
                 )}

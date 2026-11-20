@@ -48,7 +48,7 @@ export function ReviewChangesTabContent({
     <div className="flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col">
         {truncatedInfo.truncated && (
-          <div className="border-sidebar-border border-b bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-600 dark:text-yellow-400">
+          <div className="border-sidebar-border bg-status-warning/10 text-status-warning dark:text-status-warning border-b px-3 py-1.5 text-xs">
             {t('review.truncatedWarning', {
               shown: summaries.length,
               total: truncatedInfo.total,

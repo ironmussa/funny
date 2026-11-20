@@ -619,8 +619,11 @@ export function PinnedPRCard({
 
   const renderReview = (rv: PRReview) => {
     const stateBadge: Record<PRReview['state'], { label: string; cls: string }> = {
-      APPROVED: { label: 'Approved', cls: 'text-green-600 border-green-600/40' },
-      CHANGES_REQUESTED: { label: 'Changes requested', cls: 'text-red-600 border-red-600/40' },
+      APPROVED: { label: 'Approved', cls: 'text-status-success border-status-success/40' },
+      CHANGES_REQUESTED: {
+        label: 'Changes requested',
+        cls: 'text-status-error border-status-error/40',
+      },
       COMMENTED: { label: 'Commented', cls: 'text-muted-foreground' },
       DISMISSED: { label: 'Dismissed', cls: 'text-muted-foreground' },
       PENDING: { label: 'Pending', cls: 'text-muted-foreground' },
@@ -634,7 +637,16 @@ export function PinnedPRCard({
       >
         <div className="flex items-center gap-1.5 text-xs">
           <AuthorBadge name={rv.author} avatarUrl={rv.author_avatar_url} size="xs" />
-          <Badge variant="outline" className={cn('h-3.5 px-1 text-[9px]', s.cls)}>
+          <Badge
+            variant="outline"
+            className={cn(
+              'h-3.5 px-1 text-[9px]',
+              rv.state === 'APPROVED' && 'text-status-success border-status-success/40',
+              rv.state === 'CHANGES_REQUESTED' && 'text-status-error border-status-error/40',
+              (rv.state === 'COMMENTED' || rv.state === 'DISMISSED' || rv.state === 'PENDING') &&
+                'text-muted-foreground',
+            )}
+          >
             {s.label}
           </Badge>
           <span className="text-muted-foreground">{timeAgo(rv.submitted_at, now)}</span>
@@ -852,7 +864,7 @@ export function PinnedPRCard({
                     >
                       <div className="text-muted-foreground flex items-center gap-1.5 text-[10px]">
                         {th.is_resolved ? (
-                          <CheckCircle2 className="size-3 text-green-600" />
+                          <CheckCircle2 className="text-status-success size-3" />
                         ) : (
                           <CircleDot className="size-3" />
                         )}

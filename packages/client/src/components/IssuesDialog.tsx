@@ -104,7 +104,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
             className="h-7 text-xs"
             data-testid="issues-filter-open"
           >
-            <CircleDot className="icon-xs mr-1 text-green-500" />
+            <CircleDot className="icon-xs text-status-success mr-1" />
             {t('issues.open')}
           </Button>
           <Button
@@ -114,7 +114,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
             className="h-7 text-xs"
             data-testid="issues-filter-closed"
           >
-            <CircleCheck className="icon-xs mr-1 text-purple-500" />
+            <CircleCheck className="icon-xs text-status-violet mr-1" />
             {t('issues.closed')}
           </Button>
         </div>
@@ -144,9 +144,9 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                   data-testid={`issue-item-${issue.number}`}
                 >
                   {issue.state === 'open' ? (
-                    <CircleDot className="icon-base mt-0.5 shrink-0 text-green-500" />
+                    <CircleDot className="icon-base text-status-success mt-0.5 shrink-0" />
                   ) : (
-                    <CircleCheck className="icon-base mt-0.5 shrink-0 text-purple-500" />
+                    <CircleCheck className="icon-base text-status-violet mt-0.5 shrink-0" />
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-1.5">

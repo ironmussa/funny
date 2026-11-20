@@ -81,7 +81,7 @@ function VideoVisualizer({ src, fill }: VisualizerProps) {
       src={src}
       data-testid="visualizer-video"
       onError={() => setFailedSrc(src)}
-      className={cn('w-full bg-gray-950 object-contain', fill ? 'h-full' : 'max-h-[70vh] rounded')}
+      className={cn('w-full bg-primary object-contain', fill ? 'h-full' : 'max-h-[70vh] rounded')}
     >
       Your browser does not support the video element.
     </video>

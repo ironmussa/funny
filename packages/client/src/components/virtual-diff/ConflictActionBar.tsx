@@ -19,7 +19,7 @@ export const ConflictActionBar = memo(function ConflictActionBar({
     >
       <span className="text-muted-foreground mr-1 font-medium">Conflict {block.id + 1}:</span>
       <button
-        className="rounded px-1.5 py-0.5 text-[10px] font-medium text-blue-400 transition-colors hover:bg-blue-500/20 hover:text-blue-300"
+        className="text-status-info hover:bg-status-info/20 hover:text-status-info rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors"
         onClick={() => onResolve(block.id, 'ours')}
         data-testid={`conflict-accept-current-${block.id}`}
       >
@@ -27,7 +27,7 @@ export const ConflictActionBar = memo(function ConflictActionBar({
       </button>
       <span className="text-muted-foreground/40">|</span>
       <button
-        className="rounded px-1.5 py-0.5 text-[10px] font-medium text-orange-400 transition-colors hover:bg-orange-500/20 hover:text-orange-300"
+        className="text-status-interrupted hover:bg-status-interrupted/20 hover:text-status-interrupted rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors"
         onClick={() => onResolve(block.id, 'theirs')}
         data-testid={`conflict-accept-incoming-${block.id}`}
       >
@@ -35,7 +35,7 @@ export const ConflictActionBar = memo(function ConflictActionBar({
       </button>
       <span className="text-muted-foreground/40">|</span>
       <button
-        className="rounded px-1.5 py-0.5 text-[10px] font-medium text-emerald-400 transition-colors hover:bg-emerald-500/20 hover:text-emerald-300"
+        className="text-status-success hover:bg-status-success/20 hover:text-status-success rounded px-1.5 py-0.5 text-[10px] font-medium transition-colors"
         onClick={() => onResolve(block.id, 'both')}
         data-testid={`conflict-accept-both-${block.id}`}
       >

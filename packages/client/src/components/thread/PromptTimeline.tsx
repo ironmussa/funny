@@ -221,9 +221,15 @@ function TimelineMilestone({
       {/* Vertical line + dot/icon */}
       <div className="flex w-4 shrink-0 flex-col items-center">
         {milestone.inProgress ? (
-          <Loader2 className="icon-sm mt-0.5 shrink-0 animate-spin text-blue-400" />
+          <Loader2 className="icon-sm text-status-info mt-0.5 shrink-0 animate-spin" />
         ) : Icon ? (
-          <Icon className={cn('icon-sm shrink-0 mt-0.5', colors.icon)} />
+          <Icon
+            className={cn(
+              'icon-sm shrink-0 mt-0.5',
+              // oxlint-disable-next-line shadcn/require-static-classes -- colors.icon comes from a static MILESTONE_COLORS map
+              colors.icon,
+            )}
+          />
         ) : (
           <div
             className={cn(
@@ -256,7 +262,7 @@ function TimelineMilestone({
               className={cn(
                 'text-[11px] leading-snug line-clamp-2 transition-colors',
                 milestone.inProgress
-                  ? 'text-blue-400 font-medium'
+                  ? 'text-status-info font-medium'
                   : milestone.type !== 'prompt'
                     ? colors.text
                     : isActive

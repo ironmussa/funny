@@ -51,7 +51,13 @@ function StepList({ run }: { run: FactoryRun }) {
             data-testid={`factory-run-step-${step.name}`}
             data-status={step.status}
           >
-            <Icon className={cn('icon-xs shrink-0', STEP_TONE[step.status])} />
+            <Icon
+              className={cn(
+                'icon-xs shrink-0',
+                // oxlint-disable-next-line shadcn/require-static-classes -- STEP_TONE values are static literals
+                STEP_TONE[step.status],
+              )}
+            />
             <span
               className={cn(
                 'truncate',

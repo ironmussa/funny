@@ -167,7 +167,7 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
             disabled={!hasCommands}
           >
             <div className="flex min-w-0 items-center gap-3">
-              <Puzzle className="icon-base shrink-0 text-purple-500" />
+              <Puzzle className="icon-base text-status-violet shrink-0" />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium">{plugin.name}</span>

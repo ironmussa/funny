@@ -150,7 +150,7 @@ describe('concurrency groups', () => {
     const gate = {
       acquire: vi.fn(async (r: { group: string; holder: string; limit: number }) => {
         requests.push({ group: r.group, holder: r.holder, limit: r.limit });
-        return () => {};
+        return { kind: 'slot' as const, release: () => {} };
       }),
     };
     await runPipeline(

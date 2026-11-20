@@ -7,6 +7,7 @@
 import { Cause, Effect, Exit, Result } from 'effect';
 
 import type { NodeRunInfo, PipelineNode, PipelineStateChange } from './engine.js';
+import type { SlotGrant } from './gate.js';
 
 // Capture synchronous throws as well as rejected promises at the callback boundary.
 export const invoke = <A>(fn: (signal: AbortSignal) => A | Promise<A>) =>
@@ -31,13 +32,15 @@ async function settledWithin(work: Promise<unknown>, ms: number): Promise<void> 
  * landed just as the node was interrupted.
  */
 async function releaseHeldSlot(
-  slot: Promise<() => void> | undefined,
+  slot: Promise<SlotGrant> | undefined,
   graceMs: number,
 ): Promise<void> {
   if (!slot) return;
   await settledWithin(
     slot.then(
-      (release) => release(),
+      (grant) => {
+        if (grant.kind === 'slot') grant.release();
+      },
       () => undefined,
     ),
     graceMs,
@@ -81,7 +84,9 @@ export async function runSingleNode<T>(
      * Ask for a concurrency slot once the guard passes. Resolves with its
      * release; `onWait` is called if the node has to wait for it.
      */
-    acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<() => void>;
+    acquireSlot?: (signal: AbortSignal, onWait: () => void) => Promise<SlotGrant>;
+    /** A batch member's result context from the output its leader settled. */
+    adoptBatchOutput?: (input: T, output: unknown) => T;
     /** The rest of what the node is told about its execution. */
     info?: Omit<NodeRunInfo, 'iteration'>;
   },
@@ -92,7 +97,7 @@ export async function runSingleNode<T>(
   /** The node's last asynchronous execution, still running or not. */
   let inFlight: Promise<unknown> | undefined;
   /** The slot request, released once the node's work has stopped, whatever the outcome. */
-  let slot: Promise<() => void> | undefined;
+  let slot: Promise<SlotGrant> | undefined;
   const { acquireSlot } = params;
   const runInfo: NodeRunInfo = {
     visit: String(iteration),
@@ -107,12 +112,22 @@ export async function runSingleNode<T>(
       return 'skipped' as const;
     }
     if (acquireSlot) {
-      yield* invoke((abortSignal) => {
+      const grant = yield* invoke((abortSignal) => {
         slot = acquireSlot(abortSignal, () =>
           emit({ kind: 'waiting_slot', nodeName: node.name, ctx, iteration }),
         );
         return slot;
       });
+      if (grant.kind === 'settled') {
+        // A batch leader ran this node for us: take its outcome, without retries.
+        const { outcome } = grant;
+        if (outcome.status === 'failed') return yield* Effect.fail(new Error(outcome.error));
+        if (outcome.output !== undefined && params.adoptBatchOutput) {
+          ctx = params.adoptBatchOutput(ctx, outcome.output);
+        }
+        return 'completed' as const;
+      }
+      runInfo.batch = grant.batch;
     }
     emit({ kind: 'entering', nodeName: node.name, ctx, iteration });
     const retry = node.retry;

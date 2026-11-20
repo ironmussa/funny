@@ -84,7 +84,7 @@ export function setupMiddleware(app: Hono<HonoEnv>, { clientPort, corsOrigin }: 
               'https://tauri.localhost',
             ];
             if (allowed.includes(origin)) return origin;
-            return false as unknown as string;
+            return undefined;
           },
       credentials: true,
     }),

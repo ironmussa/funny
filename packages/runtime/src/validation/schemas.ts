@@ -215,7 +215,7 @@ export const updateProjectSchema = z
 const effortLevelSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 
 /** Tool policy + attachments accepted by every request that runs the agent. */
-const agentRunInputShape = {
+const agentRunInputFields = {
   allowedTools: z.array(z.string()).optional(),
   disallowedTools: z.array(z.string()).optional(),
   fileReferences: z.array(fileReferenceSchema).max(20).optional(),
@@ -248,7 +248,7 @@ export const createThreadSchema = z
     baseBranch: optionalBaseBranchSchema,
     prompt: z.string().min(1, 'prompt is required').max(500_000),
     images: z.array(imageAttachmentSchema).max(10).optional(),
-    ...agentRunInputShape,
+    ...agentRunInputFields,
     worktreePath: z.string().optional(),
     parentThreadId: z.string().optional(),
     designId: z.string().optional(),
@@ -307,7 +307,7 @@ export const sendMessageSchema = z
     permissionMode: permissionModeSchema.optional(),
     effort: effortLevelSchema.optional(),
     images: z.array(imageAttachmentSchema).optional(),
-    ...agentRunInputShape,
+    ...agentRunInputFields,
     baseBranch: optionalBaseBranchSchema,
     forceQueue: z.boolean().optional(),
     /** A never-answered earlier prompt the agent sees before `content` (sandbox retry). */

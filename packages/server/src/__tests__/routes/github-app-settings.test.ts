@@ -7,6 +7,10 @@ import { join } from 'node:path';
 import type { ApiPorts } from '@funny/api';
 import { Hono } from 'hono';
 
+function stub<T>(partial: Partial<T>): T {
+  return partial as T;
+}
+
 // The stored App's key is encrypted with the keyring: keep it out of ~/.funny.
 process.env.FUNNY_DATA_DIR = mkdtempSync(join(tmpdir(), 'funny-github-app-routes-'));
 
@@ -46,7 +50,7 @@ function setup(
     api: 'https://api.example',
     now: () => clock,
     githubToken: async () => opts.token ?? null,
-    fetch: (async (url: string, init?: RequestInit) => {
+    fetch: (async (url: string, init?: RequestInit): Promise<Response> => {
       if (!url.includes('/app-manifests/')) {
         const auth = new Headers(init?.headers).get('authorization');
         return (
@@ -62,7 +66,7 @@ function setup(
           { status: 201 },
         )
       );
-    }) as unknown as typeof fetch,
+    }) as typeof fetch,
   };
   const routes = createGithubAppSettingsRoutes(deps);
   const appFor = (userId: string, role: string) => {
@@ -74,13 +78,11 @@ function setup(
     });
     app.route('/api/settings/github-app', routes as never);
     // Status, accounts, the manifest start and disconnect are tRPC procedures.
-    mountTrpc(
-      app as never,
-      (c) =>
-        ({
-          githubApp: createGithubAppPort(deps, c.req.header('origin')),
-          authz: authzPort,
-        }) as unknown as ApiPorts,
+    mountTrpc(app as never, (c) =>
+      stub<ApiPorts>({
+        githubApp: createGithubAppPort(deps, c.req.header('origin')),
+        authz: authzPort,
+      }),
     );
     return app;
   };

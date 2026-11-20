@@ -23,8 +23,13 @@ function makeProcess(quirks: QuirkFlags): { proc: GenericACPProcess; messages: C
   return { proc, messages };
 }
 
+type TestAccess = {
+  translateUpdate: (u: unknown) => void;
+  replayingHistory: boolean;
+};
+
 function translate(proc: GenericACPProcess, update: unknown): void {
-  (proc as unknown as { translateUpdate: (u: unknown) => void }).translateUpdate(update);
+  (proc as GenericACPProcess & TestAccess).translateUpdate(update);
 }
 
 function blocks(messages: CLIMessage[]): any[] {
@@ -217,7 +222,7 @@ describe('GenericACPProcess.translateUpdate quirks', () => {
 
   test('updates are ignored while replaying history', () => {
     const { proc, messages } = makeProcess({});
-    (proc as unknown as { replayingHistory: boolean }).replayingHistory = true;
+    (proc as GenericACPProcess & TestAccess).replayingHistory = true;
     translate(proc, { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'x' } });
     expect(messages).toHaveLength(0);
   });

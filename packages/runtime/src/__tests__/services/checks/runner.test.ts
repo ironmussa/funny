@@ -92,7 +92,7 @@ describe('runCheck', () => {
   });
 
   test('reporter event lines count tests and stay out of the tail', async () => {
-    const event = (body: object) => `${TEST_EVENT_PREFIX}${JSON.stringify(body)}`;
+    const event = (body: Record<string, unknown>) => `${TEST_EVENT_PREFIX}${JSON.stringify(body)}`;
     const run = plan('test', [
       {
         output: [

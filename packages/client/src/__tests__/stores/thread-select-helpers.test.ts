@@ -7,7 +7,7 @@ function waitingThread(toolCallName: string) {
   return {
     status: 'waiting',
     messages: [{ toolCalls: [{ name: toolCallName }] }],
-  } as unknown as Thread & { messages: { toolCalls: { name: string }[] }[] };
+  } as Thread & { messages: { toolCalls: { name: string }[] }[] };
 }
 
 describe('deriveWaitingState', () => {

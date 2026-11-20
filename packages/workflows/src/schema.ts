@@ -245,7 +245,7 @@ const inputDef = z
   })
   .strict();
 
-const pipelineNodeShape = z
+const pipelineNodeFields = z
   .object({
     id: z.string().regex(/^[a-z][a-z0-9-]*$/, {
       message: 'Node id must be lowercase, start with a letter, and contain only [a-z0-9-]',
@@ -283,7 +283,7 @@ const pipelineNodeShape = z
   })
   .strict();
 
-const pipelineNode = pipelineNodeShape.superRefine((val, ctx) => {
+const pipelineNode = pipelineNodeFields.superRefine((val, ctx) => {
   const present = ACTION_KEYS.filter((k) => (val as Record<string, unknown>)[k] !== undefined);
   if (present.length === 0) {
     ctx.addIssue({

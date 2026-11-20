@@ -15,6 +15,10 @@ import {
   TunnelDispatchError,
 } from '../../services/grpc/tunnel-handler.js';
 
+function stub<T>(partial: unknown): T {
+  return partial as T;
+}
+
 class FakeCall extends EventEmitter {
   readonly writes: Array<Record<string, any>> = [];
 
@@ -40,7 +44,7 @@ function setup(overrides: Partial<ReturnType<typeof resolveRunnerGrpcConfig>> = 
   const epoch = sessions.activate('runner-1', { invalidate: () => {} });
   const dispatcher = new RunnerGrpcTunnelDispatcher(config, sessions);
   const call = new FakeCall();
-  createTunnelHandler(config, sessions, { dispatcher })(call as unknown as RunnerGrpcCall, context);
+  createTunnelHandler(config, sessions, { dispatcher })(stub<RunnerGrpcCall>(call), context);
   call.emit('data', { session: { sessionEpoch: String(epoch) }, ready: {} });
   return { call, dispatcher, epoch, sessions };
 }

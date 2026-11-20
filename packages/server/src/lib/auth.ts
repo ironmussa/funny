@@ -155,6 +155,7 @@ export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
  */
 export async function initBetterAuth(): Promise<void> {
   const cookieOpts = resolveSessionCookieSecure();
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Better Auth plugin overloads widen the return type beyond the base signature
   _auth = betterAuth({
     database: buildDatabaseConfig(),
     baseURL: process.env.BETTER_AUTH_BASE_URL || `http://localhost:${PORT}`,

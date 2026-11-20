@@ -1215,7 +1215,7 @@ describe('data-handler handleDataMessageWithAck', () => {
     });
 
     afterAll(() => {
-      setIO(null as unknown as Parameters<typeof setIO>[0]);
+      setIO(null!);
     });
 
     test('persisting a terminal status relays thread:updated to the owner', async () => {

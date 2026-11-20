@@ -171,6 +171,7 @@ describe('createThread use case', () => {
       intent: 'normal',
       payload: { projectId: 'p1', title: 'Body', model: 'opus', mode: 3, branch: 'body' },
     });
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     expect(f.registrations[0]).toEqual({
       id: 'top',
       projectId: 'p1',

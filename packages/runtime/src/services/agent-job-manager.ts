@@ -288,10 +288,7 @@ async function wakeAgentWithCompletion(job: Job, prompt: string): Promise<void> 
   const project = thread.projectId
     ? await getServices().projects.getProject(thread.projectId)
     : null;
-  const cwdResult = resolveThreadCwd(
-    thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-    project ? { path: project.path } : null,
-  );
+  const cwdResult = resolveThreadCwd(thread, project ? { path: project.path } : null);
   if (cwdResult.isErr()) throw new Error(cwdResult.error.message);
 
   await startAgent(

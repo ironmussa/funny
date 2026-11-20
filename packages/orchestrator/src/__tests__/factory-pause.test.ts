@@ -39,7 +39,7 @@ beforeEach(() => {
 });
 afterEach(() => h.cleanup());
 
-function settings(extra: object = {}): Partial<FactorySettings> {
+function settings(extra: Record<string, unknown> = {}): Partial<FactorySettings> {
   const parsed = factorySettingsSchema.parse({
     github: { login: LOGIN, author: { name: 'Octo Owner', email: 'octo@example.com' } },
     model: 'sonnet',

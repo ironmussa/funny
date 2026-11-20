@@ -27,7 +27,7 @@ function setup() {
         return threadId === 't1' && userId === 'owner' ? thread : null;
       },
     },
-  } as unknown as ApiPorts;
+  } as ApiPorts;
 
   const call = async (userId: string | null, path: string, input: unknown, method = 'POST') => {
     const qs = method === 'GET' ? `?input=${encodeURIComponent(JSON.stringify(input))}` : '';

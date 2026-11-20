@@ -1855,6 +1855,7 @@ describe('thread store actions', () => {
 // fields are read from it. These cover the spec
 // scenarios end-to-end through the real store.
 describe('thread store actions on the threads collection', () => {
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
   const t1 = { ...baseThread, stage: 'backlog' } as unknown as Thread;
 
   beforeEach(() => {

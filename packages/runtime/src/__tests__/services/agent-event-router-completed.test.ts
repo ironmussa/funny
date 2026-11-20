@@ -73,7 +73,7 @@ describe('AgentEventRouter.emitAgentCompleted — idempotency (bug 3b)', () => {
   beforeEach(() => {
     state = new AgentStateTracker();
     router = makeRouter(state);
-    handler = vi.fn() as unknown as (event: AgentCompletedEvent) => void;
+    handler = vi.fn<(event: AgentCompletedEvent) => void>();
     threadEventBus.on('agent:completed', handler);
   });
 

@@ -22,6 +22,7 @@ function setup(opts: { credential?: string | null } = {}) {
           : opts.credential
         : null,
     upstream: 'https://anthropic.test',
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     fetch: (async (url: string, init: RequestInit) => {
       const body = init.body ? await new Response(init.body).text() : '';
       calls.push({ url, init, body });
@@ -131,6 +132,7 @@ describe('LLM proxy — per-sandbox limit', () => {
         ),
       credentialFor: async () => OAUTH,
       upstream: 'https://anthropic.test',
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       fetch: (async () => new Response('{}', { status: 200 })) as unknown as typeof fetch,
       perSandboxLimit: { windowMs: 60_000, max: 2 },
     });

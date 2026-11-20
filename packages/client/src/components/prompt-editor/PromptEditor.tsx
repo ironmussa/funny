@@ -712,6 +712,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           // re-applies the stale range and deletes the text after the chip.
           const item = suggestionItemsRef.current[suggestionIndexRef.current];
           if (item) {
+            // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
             suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
           }
           return true;
@@ -1248,6 +1249,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         for (const item of Array.from(items)) {
           if (item.type.startsWith('image/')) {
             event.preventDefault();
+            // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
             onPaste?.(event as unknown as ClipboardEvent);
             return true;
           }
@@ -1461,6 +1463,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   // ── Handle suggestion item selection from the popup ──
   const handleSuggestionSelect = useCallback((item: SuggestionItem) => {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
     suggestionCommandRef.current?.(item as unknown as Record<string, unknown>);
   }, []);
 

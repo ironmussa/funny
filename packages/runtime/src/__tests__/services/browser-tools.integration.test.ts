@@ -433,7 +433,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     const emitToUser = vi.mocked(wsBroker.emitToUser);
     const pointers = () =>
       emitToUser.mock.calls
-        .map(([, event]) => event as unknown as { type: string; data: Record<string, unknown> })
+        .map(([, event]) => event)
         .filter((event) => event.type === 'browser-session:pointer')
         .map((event) => event.data);
 
@@ -458,7 +458,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
 
     unwrap(await browserAct(ctx, { action: 'click', ref: submit }));
     const urls = emitToUser.mock.calls
-      .map(([, event]) => event as unknown as { type: string; data: { url?: string } })
+      .map(([, event]) => event)
       .filter((event) => event.type === 'browser-session:navigated')
       .map((event) => event.data.url);
     expect(urls).toContainEqual(expect.stringContaining(`${base}/done`));
@@ -494,7 +494,7 @@ describeWithChromium('agent browser tools (real Chromium)', () => {
     expect(await mutedState()).toEqual([false, false]);
     expect(
       emitToUser.mock.calls
-        .map(([, event]) => event as unknown as { type: string; data: { muted?: boolean } })
+        .map(([, event]) => event)
         .filter((event) => event.type === 'browser-session:audio')
         .map((event) => event.data.muted),
     ).toEqual([false, true, false]);

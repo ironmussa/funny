@@ -34,7 +34,7 @@ describe('dialog state reset on a new opening', () => {
 
   test('clears the branch deletion option after reopening', async () => {
     worktreeStatus.mockResolvedValue({
-      match: (onSuccess: (status: object) => void) =>
+      match: (onSuccess: (status: Record<string, unknown>) => void) =>
         onSuccess({ unpushedCommitCount: 0, dirtyFileCount: 0, hasRemoteBranch: true }),
     });
     const onConfirm = vi.fn();

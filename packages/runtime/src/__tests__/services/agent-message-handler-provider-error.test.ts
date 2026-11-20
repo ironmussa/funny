@@ -4,6 +4,10 @@ import { describe, test, expect, vi } from 'vitest';
 import { AgentMessageHandler } from '../../services/agent-message-handler.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
 
+function stub<T>(p: Record<string, any>): T {
+  return p as T;
+}
+
 const THREAD_ID = 'thread-provider-error';
 
 function makeHandler() {
@@ -48,7 +52,7 @@ function makeHandler() {
 }
 
 function providerErrorAssistant(): CLIMessage {
-  return {
+  return stub<CLIMessage>({
     type: 'assistant',
     message: {
       id: 'cli-err',
@@ -61,18 +65,18 @@ function providerErrorAssistant(): CLIMessage {
         },
       ],
     },
-  } as unknown as CLIMessage;
+  });
 }
 
 function textAssistant(text: string): CLIMessage {
-  return {
+  return stub<CLIMessage>({
     type: 'assistant',
     message: { id: 'cli-text', content: [{ type: 'text', text }] },
-  } as unknown as CLIMessage;
+  });
 }
 
 function successResult(): CLIMessage {
-  return {
+  return stub<CLIMessage>({
     type: 'result',
     subtype: 'success',
     is_error: false,
@@ -81,7 +85,7 @@ function successResult(): CLIMessage {
     result: 'done',
     total_cost_usd: 0.01,
     session_id: 'sess-1',
-  } as unknown as CLIMessage;
+  });
 }
 
 describe('AgentMessageHandler — provider error → failed', () => {

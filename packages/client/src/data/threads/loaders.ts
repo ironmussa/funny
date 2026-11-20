@@ -223,7 +223,7 @@ const DETAIL_PAYLOAD_KEYS = new Set([
 function threadRowOfDetail(detail: Thread): Thread {
   return Object.fromEntries(
     Object.entries(detail).filter(([key]) => !DETAIL_PAYLOAD_KEYS.has(key)),
-  ) as unknown as Thread;
+  ) as Thread;
 }
 
 /**

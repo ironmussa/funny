@@ -169,6 +169,7 @@ describe('MessageStream sticky bottom', () => {
     vi.useFakeTimers();
     vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
     vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       return setTimeout(() => cb(performance.now()), 0) as unknown as number;
     });
     vi.stubGlobal('cancelAnimationFrame', (id: number) => clearTimeout(id));

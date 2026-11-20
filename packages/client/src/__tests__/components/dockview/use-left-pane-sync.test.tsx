@@ -25,6 +25,7 @@ function makeGroup(initiallyCollapsed: boolean): EdgeGroupMock {
 }
 
 function makeApi(group: EdgeGroupMock | null): DockviewApi {
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
   return {
     getEdgeGroup: vi.fn((side: string) => (side === 'left' ? group : null)),
   } as unknown as DockviewApi;

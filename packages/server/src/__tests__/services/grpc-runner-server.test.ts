@@ -69,6 +69,7 @@ function createClient(port: number): TestClient {
   const runner = root.runner as grpc.GrpcObject;
   const v2 = runner.v2 as grpc.GrpcObject;
   const Constructor = v2.RunnerTransportService as grpc.ServiceClientConstructor;
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- gRPC dynamically adds service methods from the proto definition
   return new Constructor(
     `127.0.0.1:${port}`,
     grpc.credentials.createInsecure(),

@@ -17,6 +17,7 @@ vi.mock('dockview-react', () => ({
   DockviewReact: (props: { onReady?: (event: DockviewReadyEvent) => void }) => {
     if (!dockviewMock.readyCalled) {
       dockviewMock.readyCalled = true;
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       props.onReady?.({ api: dockviewMock.api } as unknown as DockviewReadyEvent);
     }
     return <div data-testid="mock-dockview" />;

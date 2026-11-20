@@ -2,7 +2,7 @@ import { describe, expect, test } from 'vitest';
 
 import { renderMarkdownToSafeHtml } from '@/lib/satteri-markdown';
 
-function semanticShape(html: string) {
+function semanticLayout(html: string) {
   const document = new DOMParser().parseFromString(html, 'text/html');
   return {
     anchors: Array.from(document.querySelectorAll('a')).map((link) => link.getAttribute('href')),
@@ -76,7 +76,7 @@ describe('Sätteri semantic markdown features', () => {
     ];
 
     for (const { markdown, expected } of cases) {
-      expect(semanticShape(await renderMarkdownToSafeHtml(markdown))).toEqual(expected);
+      expect(semanticLayout(await renderMarkdownToSafeHtml(markdown))).toEqual(expected);
     }
   });
 });

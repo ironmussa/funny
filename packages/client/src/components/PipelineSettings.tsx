@@ -183,6 +183,7 @@ export function PipelineSettings() {
   // Save prompt on blur
   const handlePromptBlur = (field: string, value: string) => {
     if (!pipeline) return;
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
     const currentValue = (pipeline as unknown as Record<string, unknown>)[field] ?? '';
     if (value !== currentValue) {
       saveField({ [field]: value || null });

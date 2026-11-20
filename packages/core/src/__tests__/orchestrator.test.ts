@@ -98,7 +98,7 @@ function createFactory(
   ProcessClass: typeof MockProcess = MockProcess,
 ): IAgentProcessFactory & { lastProcess: MockProcess; processes: MockProcess[] } {
   const state = {
-    lastProcess: null as any as MockProcess,
+    lastProcess: null! as MockProcess,
     processes: [] as MockProcess[],
     create(opts: AgentProcessOptions): IAgentProcess {
       const proc = new ProcessClass(opts);
@@ -274,7 +274,7 @@ describe('AgentOrchestrator', () => {
       await orchestrator.startAgent(baseOpts({ prompt: 'second' }));
 
       // The old process can exit after the replacement is already active.
-      first.simulateExit(undefined as unknown as number | null);
+      first.simulateExit(null);
       first.simulateMessage({
         type: 'result',
         subtype: 'success',
@@ -781,7 +781,7 @@ describe('AgentOrchestrator', () => {
 
   describe('idle reaping', () => {
     const POLICY: IdleReapPolicy = { defaultIdleMs: 10_000, claudeIdleMs: 0 };
-    const result = () => ({ type: 'result', subtype: 'success' }) as unknown as CLIMessage;
+    const result = () => ({ type: 'result', subtype: 'success' }) as CLIMessage;
 
     test('3.1 reaps an idle, turn-terminal non-claude agent past the window', async () => {
       await orchestrator.startAgent(baseOpts({ provider: 'codex', model: 'gpt-5.5' }));
@@ -797,7 +797,7 @@ describe('AgentOrchestrator', () => {
 
     test('3.2 never reaps a mid-turn agent (no terminal result)', async () => {
       await orchestrator.startAgent(baseOpts({ provider: 'codex', model: 'gpt-5.5' }));
-      factory.lastProcess.simulateMessage({ type: 'assistant' } as unknown as CLIMessage);
+      factory.lastProcess.simulateMessage({ type: 'assistant' } as CLIMessage);
 
       expect(orchestrator.getIdleCandidates(Date.now() + 1_000_000, POLICY)).toEqual([]);
     });

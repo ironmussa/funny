@@ -130,7 +130,7 @@ describe('toACPMcpServers', () => {
 
   test('args defaults to [] when not an array', () => {
     const out = toACPMcpServers({
-      svc: { command: 'mcp-svc', args: 'not-an-array' as unknown as string[] },
+      svc: { command: 'mcp-svc', args: 'not-an-array' as string[] },
     });
     expect(out[0]).toMatchObject({ args: [] });
   });

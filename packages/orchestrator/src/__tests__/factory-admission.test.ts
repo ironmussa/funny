@@ -37,7 +37,7 @@ async function tick(f: { tick(): Promise<void>; idle(): Promise<void> }) {
 
 const ready = (
   number: number,
-  extra: Parameters<FactoryHarness['github']['addIssue']>[0] | object = {},
+  extra: Partial<Parameters<FactoryHarness['github']['addIssue']>[0]> = {},
 ) =>
   h.github.addIssue({
     number,

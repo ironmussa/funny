@@ -195,7 +195,7 @@ describe('ME-11 — runtime + server share the same envelope format', () => {
     // a legacy key is seeded. Here we just assert that 3-part input takes
     // the legacy branch (returns null due to missing key, not due to
     // shape rejection).
-    const legacyShape = `${'00'.repeat(12)}:${'00'.repeat(16)}:${'00'.repeat(20)}`;
-    expect(decrypt(legacyShape)).toBeNull(); // null = no legacy key, not shape error
+    const legacyFormat = `${'00'.repeat(12)}:${'00'.repeat(16)}:${'00'.repeat(20)}`;
+    expect(decrypt(legacyFormat)).toBeNull(); // null = no legacy key, not format error
   });
 });

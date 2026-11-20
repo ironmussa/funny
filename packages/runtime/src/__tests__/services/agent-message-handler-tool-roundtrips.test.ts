@@ -34,7 +34,12 @@ function setup() {
   return { state, tm, handler, emitted };
 }
 
-function toolUse(cliMsgId: string, id: string, name: string, input: object = {}): CLIMessage {
+function toolUse(
+  cliMsgId: string,
+  id: string,
+  name: string,
+  input: Record<string, unknown> = {},
+): CLIMessage {
   return {
     type: 'assistant',
     hasStableMessageId: true,

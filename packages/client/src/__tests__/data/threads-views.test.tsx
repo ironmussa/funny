@@ -67,6 +67,7 @@ describe('groupThreadsByStage', () => {
       thread('new', { stage: 'review', createdAt: '2026-02-01T00:00:00.000Z' }),
       thread('pinned', { stage: 'review', pinned: true, createdAt: '2025-01-01T00:00:00.000Z' }),
       thread('arch', { stage: 'review', archived: true }),
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       thread('none', { stage: undefined as unknown as ThreadStage }),
     ]);
     expect(columns.review.map((t) => t.id)).toEqual(['pinned', 'new', 'old']);

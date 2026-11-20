@@ -56,6 +56,7 @@ export interface FunnyPluginSdkApi {
 export type FunnyHostApi = FunnyPluginSdkApi;
 
 function pluginSdkApi(): FunnyPluginSdkApi {
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing host-injected global on globalThis
   const g = globalThis as unknown as Record<string, FunnyPluginSdkApi | undefined>;
   const api = g['__FUNNY_PLUGIN_SDK__'] ?? g['__FUNNY_HOST__'];
   if (!api) {

@@ -12,12 +12,20 @@ import {
   RunnerGrpcTerminalDispatcher,
 } from '../../services/grpc/terminal-handler.js';
 
+function stub<T>(partial: unknown): T {
+  return partial as T;
+}
+
 class FakeCall extends EventEmitter {
   readonly writes: Array<Record<string, any>> = [];
 
   write(frame: Record<string, unknown>): boolean {
     this.writes.push(frame);
     return true;
+  }
+
+  asGrpcCall(): RunnerGrpcCall {
+    return stub<RunnerGrpcCall>(this);
   }
 }
 
@@ -41,10 +49,7 @@ function setup() {
     relayed.push(event);
   });
   const call = new FakeCall();
-  createTerminalHandler(config, sessions, { dispatcher })(
-    call as unknown as RunnerGrpcCall,
-    context,
-  );
+  createTerminalHandler(config, sessions, { dispatcher })(call.asGrpcCall(), context);
   call.emit('data', { session: { sessionEpoch: String(epoch) }, ready: {} });
   return { call, dispatcher, epoch, relayed, sessions };
 }
@@ -141,7 +146,7 @@ describe('runner gRPC terminal stream', () => {
       { ...resolveRunnerGrpcConfig({ RUNNER_GRPC_ENABLED: 'true' }), heartbeatTimeoutMs: 60_000 },
       sessions,
       { dispatcher },
-    )(replacement as unknown as RunnerGrpcCall, context);
+    )(replacement.asGrpcCall(), context);
     replacement.emit('data', { session: { sessionEpoch: String(epoch) }, ready: {} });
     dispatcher.dispatch('runner-1', 'user-1', {
       type: 'pty:reconnect',
@@ -249,7 +254,7 @@ describe('runner gRPC terminal stream', () => {
       { ...resolveRunnerGrpcConfig({ RUNNER_GRPC_ENABLED: 'true' }), heartbeatTimeoutMs: 60_000 },
       sessions,
       { dispatcher },
-    )(replacement as unknown as RunnerGrpcCall, context);
+    )(replacement.asGrpcCall(), context);
     replacement.emit('data', { session: { sessionEpoch: String(epoch) }, ready: {} });
 
     expect(replacement.writes).toEqual([

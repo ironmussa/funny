@@ -89,7 +89,7 @@ function activeProjectId(): string | null {
 
 function openCommandPalette(e: KeyboardEvent, ctx: ShortcutContext): void {
   consume(e);
-  (window as unknown as { __paletteOpenTs?: number }).__paletteOpenTs = performance.now();
+  (window as { __paletteOpenTs?: number }).__paletteOpenTs = performance.now();
   log.info('shortcut.command_palette');
   ctx.toggleCommandPalette();
 }
@@ -423,7 +423,7 @@ export function useGlobalShortcuts(
   const navigate = useNavigate();
 
   useEffect(() => {
-    const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
+    const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
     const focusTimeouts = new Set<ReturnType<typeof setTimeout>>();
     const scheduleFocus = (callback: () => void) => {
       const timeout = setTimeout(() => {

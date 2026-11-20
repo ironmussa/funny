@@ -280,7 +280,7 @@ describe('createOutputParser files', () => {
       },
     ]);
 
-    const event = (body: object) => `${TEST_EVENT_PREFIX}${JSON.stringify(body)}`;
+    const event = (body: Record<string, unknown>) => `${TEST_EVENT_PREFIX}${JSON.stringify(body)}`;
     const events = feed(
       [
         event({ e: 'file', file: 'src/a.test.ts' }),

@@ -117,7 +117,7 @@ const sessions = new Map<string, DaemonSession>();
 const clients = new Set<import('bun').Socket>();
 let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
-function broadcast(msg: object): void {
+function broadcast(msg: Record<string, unknown>): void {
   const line = JSON.stringify(msg) + '\n';
   for (const client of clients) {
     try {
@@ -128,7 +128,7 @@ function broadcast(msg: object): void {
   }
 }
 
-function sendTo(socket: import('bun').Socket, msg: object): void {
+function sendTo(socket: import('bun').Socket, msg: Record<string, unknown>): void {
   try {
     socket.write(JSON.stringify(msg) + '\n');
   } catch {

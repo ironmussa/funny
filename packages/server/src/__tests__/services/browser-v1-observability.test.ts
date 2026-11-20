@@ -27,6 +27,7 @@ describe('browser.v1 transport observability', () => {
 
     expect(addMetric).toHaveBeenCalledTimes(2);
     expect(addHistogram).toHaveBeenCalledTimes(2);
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const logged = (warn.mock.calls as unknown as Array<[string, Record<string, unknown>]>)[0]?.[1];
     expect(logged).toMatchObject({
       protocolVersion: 'browser.v1',

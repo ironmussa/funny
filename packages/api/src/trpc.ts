@@ -29,23 +29,24 @@ function firstIssueMessage(cause: unknown): string | undefined {
 const t = initTRPC.context<ApiContext>().create({
   // Never put stack traces in responses, whatever NODE_ENV says.
   isDev: false,
-  errorFormatter({ shape, error }) {
+  // oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- tRPC errorFormatter API names this key `shape`
+  errorFormatter({ shape: base, error }) {
     const cause = error.cause;
     if (cause instanceof ApiFailureCause) {
       return cause.failure.friendlyMessage === undefined
-        ? shape
-        : { ...shape, friendlyMessage: cause.failure.friendlyMessage };
+        ? base
+        : { ...base, friendlyMessage: cause.failure.friendlyMessage };
     }
     if (error.code === 'BAD_REQUEST') {
       // Same text the REST routes answer: the first validation issue.
       const message = firstIssueMessage(cause);
-      return message === undefined ? shape : { ...shape, message };
+      return message === undefined ? base : { ...base, message };
     }
     if (error.code === 'INTERNAL_SERVER_ERROR') {
       // An unexpected throw: the server logs it (`onError`), the client gets no details.
-      return { ...shape, message: 'Internal server error' };
+      return { ...base, message: 'Internal server error' };
     }
-    return shape;
+    return base;
   },
 });
 

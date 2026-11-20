@@ -14,6 +14,7 @@ import { getSourceObjectToken, type LiveQueryKey } from '@tanstack/db';
  */
 export function liveQueryKey(
   name: string,
+  // oxlint-disable-next-line anti-slop/no-object-parameters -- upstream getSourceObjectToken declares `source: object`
   collection: object,
   ...params: readonly unknown[]
 ): LiveQueryKey {

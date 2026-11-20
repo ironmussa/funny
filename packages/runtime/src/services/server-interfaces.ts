@@ -31,6 +31,7 @@ export interface RuntimeThreadRecord {
   projectId: string;
   userId: string;
   sessionId: string | null;
+  isScratch?: boolean;
   status?: string | null;
   stage?: string | null;
   mode?: string | null;

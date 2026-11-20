@@ -104,7 +104,7 @@ describe('cursor-as-external provider parity (§5)', () => {
 
     // Both produce a synthetic Edit tool_use + a tool_result. Compare the
     // structural content (ids are random per emission).
-    const shape = (msgs: CLIMessage[]) =>
+    const messageLayout = (msgs: CLIMessage[]) =>
       msgs.map((m) =>
         m.type === 'assistant'
           ? m.message.content.map((c: any) => ({ t: c.type, name: c.name, input: c.input }))
@@ -114,7 +114,7 @@ describe('cursor-as-external provider parity (§5)', () => {
       );
 
     expect(extMsgs.length).toBeGreaterThan(0);
-    expect(shape(extMsgs)).toEqual(shape(biMsgs));
+    expect(messageLayout(extMsgs)).toEqual(messageLayout(biMsgs));
 
     const extUse = extMsgs.find((m) => m.type === 'assistant');
     if (!extUse || extUse.type !== 'assistant') throw new Error('unreachable');

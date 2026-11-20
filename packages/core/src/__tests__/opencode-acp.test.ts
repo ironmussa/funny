@@ -25,8 +25,7 @@ function makeProcess(): { proc: OpenCodeACPProcess; messages: CLIMessage[] } {
 }
 
 function translate(proc: OpenCodeACPProcess, update: unknown): void {
-  // translateUpdate is private; tests reach in deliberately.
-  (proc as unknown as { translateUpdate: (u: unknown) => void }).translateUpdate(update);
+  (proc as OpenCodeACPProcess & { translateUpdate: (u: unknown) => void }).translateUpdate(update);
 }
 
 describe('OpenCodeACPProcess.translateUpdate', () => {

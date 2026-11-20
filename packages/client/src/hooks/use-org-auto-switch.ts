@@ -36,6 +36,7 @@ async function switchToOrg(orgSlug: string, navigate: NavigateFunction) {
 
 async function switchToPersonal() {
   try {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Better Auth expects string but null clears the org
     await authClient.organization.setActive({ organizationId: null as unknown as string });
     useAuthStore.getState().setActiveOrg(null, null, null);
     resetThreadStore();

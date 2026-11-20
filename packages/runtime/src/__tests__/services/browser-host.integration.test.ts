@@ -102,7 +102,9 @@ describeWithChromium('BrowserHost after an abrupt stop (real Chromium)', () => {
       // Let Chromium write its session file, then stop it the way a runner
       // restart does: no clean shutdown.
       await new Promise((resolve) => setTimeout(resolve, 2_500));
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing private `proc` to simulate unclean kill in test
       (first as unknown as { proc: { kill(signal: string): void } }).proc.kill('SIGKILL');
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing private `exited` to await process exit in test
       await (first as unknown as { exited: Promise<void> }).exited;
 
       const second = await launch();

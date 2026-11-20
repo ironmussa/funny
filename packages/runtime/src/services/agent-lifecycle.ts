@@ -545,6 +545,7 @@ export class AgentLifecycleManager {
     project: StartProject,
   ): Promise<string | null> {
     const cwdResult = resolveThreadCwd(
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
       thread as unknown as Thread,
       project ? { path: project.path } : null,
     );
@@ -568,6 +569,7 @@ export class AgentLifecycleManager {
     project: StartProject,
     cwd: string,
   ): Promise<void> {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
     const variant = thread as unknown as Thread;
     if (thread.mode === 'worktree' && project?.path && cwd !== project.path) {
       syncWorktreeProjectAssets(threadId, project.path, cwd);

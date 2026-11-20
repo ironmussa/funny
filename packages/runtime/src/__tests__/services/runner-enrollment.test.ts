@@ -29,7 +29,6 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 describe('runner-enrollment client', () => {
-  const originalFetch = global.fetch;
   let stdoutSpy: ReturnType<typeof vi.spyOn>;
 
   beforeEach(() => {
@@ -40,34 +39,37 @@ describe('runner-enrollment client', () => {
   afterEach(() => {
     vi.useRealTimers();
     stdoutSpy.mockRestore();
-    global.fetch = originalFetch;
+    vi.unstubAllGlobals();
   });
 
   test('starts, polls until approved, returns delivered credentials', async () => {
     let pollCount = 0;
-    global.fetch = vi.fn(async (input: any) => {
-      const url = String(input);
-      if (url.endsWith('/api/runners/enroll/start')) {
-        return jsonResponse(201, {
-          userCode: 'WXYZ-1234',
-          pollToken: 'rpt_test',
-          expiresIn: 900,
-          interval: 1,
-        });
-      }
-      if (url.endsWith('/api/runners/enroll/poll')) {
-        pollCount++;
-        if (pollCount < 2) return jsonResponse(200, { status: 'pending' });
-        return jsonResponse(200, {
-          status: 'approved',
-          runnerId: 'runner-abc',
-          token: 'runner_secrettoken',
-          forwardingKey: 'runner-key',
-          ownerUserId: 'owner-1',
-        });
-      }
-      throw new Error(`unexpected fetch: ${url}`);
-    }) as unknown as typeof fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/api/runners/enroll/start')) {
+          return jsonResponse(201, {
+            userCode: 'WXYZ-1234',
+            pollToken: 'rpt_test',
+            expiresIn: 900,
+            interval: 1,
+          });
+        }
+        if (url.endsWith('/api/runners/enroll/poll')) {
+          pollCount++;
+          if (pollCount < 2) return jsonResponse(200, { status: 'pending' });
+          return jsonResponse(200, {
+            status: 'approved',
+            runnerId: 'runner-abc',
+            token: 'runner_secrettoken',
+            forwardingKey: 'runner-key',
+            ownerUserId: 'owner-1',
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
 
     const promise = enrollRunner('http://server.test');
     // Drive the internal sleeps (two 1s poll intervals) to completion.
@@ -88,30 +90,33 @@ describe('runner-enrollment client', () => {
 
   test('restarts enrollment with a fresh code when one expires (404)', async () => {
     let startCount = 0;
-    global.fetch = vi.fn(async (input: any) => {
-      const url = String(input);
-      if (url.endsWith('/api/runners/enroll/start')) {
-        startCount++;
-        return jsonResponse(201, {
-          userCode: startCount === 1 ? 'AAAA-1111' : 'BBBB-2222',
-          pollToken: `rpt_${startCount}`,
-          expiresIn: 900,
-          interval: 1,
-        });
-      }
-      if (url.endsWith('/api/runners/enroll/poll')) {
-        // First enrollment expires (404); second is approved.
-        if (startCount === 1) return new Response('expired', { status: 404 });
-        return jsonResponse(200, {
-          status: 'approved',
-          runnerId: 'runner-xyz',
-          token: 'runner_tok',
-          forwardingKey: 's',
-          ownerUserId: 'o',
-        });
-      }
-      throw new Error(`unexpected fetch: ${url}`);
-    }) as unknown as typeof fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        if (url.endsWith('/api/runners/enroll/start')) {
+          startCount++;
+          return jsonResponse(201, {
+            userCode: startCount === 1 ? 'AAAA-1111' : 'BBBB-2222',
+            pollToken: `rpt_${startCount}`,
+            expiresIn: 900,
+            interval: 1,
+          });
+        }
+        if (url.endsWith('/api/runners/enroll/poll')) {
+          // First enrollment expires (404); second is approved.
+          if (startCount === 1) return new Response('expired', { status: 404 });
+          return jsonResponse(200, {
+            status: 'approved',
+            runnerId: 'runner-xyz',
+            token: 'runner_tok',
+            forwardingKey: 's',
+            ownerUserId: 'o',
+          });
+        }
+        throw new Error(`unexpected fetch: ${url}`);
+      }),
+    );
 
     const promise = enrollRunner('http://server.test');
     await vi.advanceTimersByTimeAsync(5000);

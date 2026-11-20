@@ -482,7 +482,7 @@ export function fakeGithubApi(options: {
     const headers = (init.headers ?? {}) as Record<string, string>;
     const body = init.body ? JSON.parse(String(init.body)) : undefined;
     return handle(init.method ?? 'GET', url, headers.authorization ?? '', body);
-  }) as unknown as typeof fetch;
+  }) as typeof fetch;
 
   const api: FakeGithubApi = {
     installed: true,

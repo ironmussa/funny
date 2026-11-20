@@ -70,6 +70,7 @@ export class AgentEventRouter {
     await getServices().threadEvents.saveThreadEvent(
       event.threadId,
       'turn_outcome',
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
       data as unknown as Record<string, unknown>,
     );
     this.emitWSToUser(event.threadId, event.userId, 'thread:event', {

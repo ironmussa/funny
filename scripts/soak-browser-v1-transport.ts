@@ -1,4 +1,5 @@
-import { create, type MessageInitShape } from '@bufbuild/protobuf';
+// oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- third-party type from @bufbuild/protobuf
+import { create, type MessageInitShape as MessageInit } from '@bufbuild/protobuf';
 
 import {
   BROWSER_V1_SCHEMA_FINGERPRINT,
@@ -17,7 +18,7 @@ import { CarrierEnvelopeSchema } from '../packages/shared/src/generated/browser-
 const thresholds = await Bun.file(
   new URL('../protocol/browser/v1/acceptance.json', import.meta.url),
 ).json();
-const carrier = (payload: MessageInitShape<typeof CarrierEnvelopeSchema>['payload']) =>
+const carrier = (payload: MessageInit<typeof CarrierEnvelopeSchema>['payload']) =>
   create(CarrierEnvelopeSchema, {
     generatedSchemaFingerprint: BROWSER_V1_SCHEMA_FINGERPRINT,
     payload,

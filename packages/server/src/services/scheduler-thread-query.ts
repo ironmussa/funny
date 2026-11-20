@@ -51,8 +51,8 @@ export function createThreadQuery(deps: ThreadQueryDeps): ThreadQueryAdapter {
 
       const filters = [
         eq(schema.threads.schedulerManaged, 1),
-        inArray(schema.threads.stage, ELIGIBLE_STAGES as unknown as string[]),
-        notInArray(schema.threads.status, RUNNING_STATUSES as unknown as string[]),
+        inArray(schema.threads.stage, [...ELIGIBLE_STAGES]),
+        notInArray(schema.threads.status, [...RUNNING_STATUSES]),
         eq(schema.threads.archived, 0),
       ];
       if (claimedIds.length > 0) {
@@ -75,10 +75,7 @@ export function createThreadQuery(deps: ThreadQueryDeps): ThreadQueryAdapter {
           .select({ id: schema.threads.id })
           .from(schema.threads)
           .where(
-            or(
-              inArray(schema.threads.stage, TERMINAL_STAGES as unknown as string[]),
-              eq(schema.threads.archived, 1),
-            ),
+            or(inArray(schema.threads.stage, [...TERMINAL_STAGES]), eq(schema.threads.archived, 1)),
           ),
       );
       return new Set(rows.map((r) => r.id));

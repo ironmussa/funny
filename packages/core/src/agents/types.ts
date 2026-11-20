@@ -61,6 +61,7 @@ export interface CLIUserMessage {
       type: 'tool_result';
       tool_use_id: string;
       content: string;
+      is_error?: boolean;
     }>;
   };
 }

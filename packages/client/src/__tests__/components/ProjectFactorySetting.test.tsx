@@ -59,7 +59,9 @@ beforeEach(() => {
   mocks.runs = [];
   mocks.control.mockImplementation(() => okAsync({}));
   mocks.empty.mockImplementation(() => okAsync({ cleared: 0, stopped: 0 }));
-  mocks.save.mockImplementation((input: object) => okAsync({ ...configured(), ...input }));
+  mocks.save.mockImplementation((input: Record<string, unknown>) =>
+    okAsync({ ...configured(), ...input }),
+  );
 });
 
 describe('ProjectFactorySetting', () => {

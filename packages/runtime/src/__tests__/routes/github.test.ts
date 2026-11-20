@@ -1,6 +1,10 @@
 import { Hono } from 'hono';
 import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
+function stub<T>(p: Record<string, any>): T {
+  return p as T;
+}
+
 import { _resetGithubCache } from '../../routes/github/github-cache.js';
 import { fetchRepoIssues, parseGithubOwnerRepo } from '../../routes/github/helpers.js';
 import { prRoutes } from '../../routes/github/prs.js';
@@ -100,12 +104,12 @@ describe('GitHub Routes', () => {
       vi.stubGlobal('fetch', async (url: string) => {
         calls.push(url);
         const { ok, body } = impl(url);
-        return {
+        return stub<Response>({
           ok,
-          headers: { get: () => null },
+          headers: { get: () => null } as any,
           json: async () => body,
           text: async () => JSON.stringify(body),
-        } as unknown as Response;
+        });
       });
       return calls;
     }

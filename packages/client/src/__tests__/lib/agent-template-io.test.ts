@@ -56,6 +56,7 @@ describe('exportTemplate', () => {
 
   test('downloads sanitized JSON for the template', () => {
     const click = vi.fn();
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const anchor = { href: '', download: '', click } as unknown as HTMLAnchorElement;
     const createElementSpy = vi.spyOn(document, 'createElement').mockReturnValue(anchor);
 

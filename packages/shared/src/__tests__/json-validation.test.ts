@@ -25,10 +25,10 @@ describe('json-validation', () => {
     expect(invalidJson.ok).toBe(false);
     if (!invalidJson.ok) expect(invalidJson.error).toContain('invalid JSON');
 
-    const invalidShape = parseStoredJson(profileSchema, '{"providerKeys":{"github":42}}');
-    expect(invalidShape.ok).toBe(false);
-    if (!invalidShape.ok)
-      expect(invalidShape.issues[0]).toMatchObject({
+    const invalidPayload = parseStoredJson(profileSchema, '{"providerKeys":{"github":42}}');
+    expect(invalidPayload.ok).toBe(false);
+    if (!invalidPayload.ok)
+      expect(invalidPayload.issues[0]).toMatchObject({
         path: 'providerKeys.github',
       });
   });

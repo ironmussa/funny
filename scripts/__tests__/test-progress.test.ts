@@ -76,7 +76,8 @@ describe('createOutputParser', () => {
   test('reporter events give files, running files and slow entries', () => {
     let clock = 100;
     const parse = createOutputParser(() => clock);
-    const event = (body: object) => parse(`${TEST_EVENT_PREFIX}${JSON.stringify(body)}`);
+    const event = (body: Record<string, unknown>) =>
+      parse(`${TEST_EVENT_PREFIX}${JSON.stringify(body)}`);
     event({ e: 'run', files: 3 });
     event({ e: 'file', file: 'src/a.test.ts' });
     clock = 200;
@@ -95,7 +96,7 @@ describe('createOutputParser', () => {
   });
 
   test('with reporter events, vitest file lines are not counted twice', () => {
-    const event = (body: object) => `${TEST_EVENT_PREFIX}${JSON.stringify(body)}`;
+    const event = (body: Record<string, unknown>) => `${TEST_EVENT_PREFIX}${JSON.stringify(body)}`;
     expect(
       feed([
         event({ e: 'test', file: 'src/a.test.ts', name: 'x', state: 'passed', ms: 1 }),

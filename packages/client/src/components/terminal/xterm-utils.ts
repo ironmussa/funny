@@ -5,8 +5,7 @@ import { metric } from '@/lib/telemetry';
 
 const log = createClientLogger('terminal/webgl');
 
-export const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown })
-  .__TAURI_INTERNALS__;
+export const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 
 let xtermModulesPromise: Promise<{
   Terminal: typeof import('@xterm/xterm').Terminal;
@@ -104,7 +103,7 @@ export function attachWebglRenderer(
  */
 export function flushPausedRender(terminal: import('@xterm/xterm').Terminal): void {
   const renderService = (
-    terminal as unknown as {
+    terminal as {
       _core?: {
         _renderService?: {
           _isPaused?: boolean;

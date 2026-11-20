@@ -169,10 +169,7 @@ async function sendMessageImpl(rawParams: SendMessageParams): Promise<SendMessag
   const project = thread.projectId
     ? await getServices().projects.getProject(thread.projectId)
     : null;
-  const cwdResult = resolveThreadCwd(
-    thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-    project ? { path: project.path } : null,
-  );
+  const cwdResult = resolveThreadCwd(thread, project ? { path: project.path } : null);
   if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
   const cwd = cwdResult.value;
   let params = await withStagedUploads(rawParams, rawParams.threadId, cwd);
@@ -873,10 +870,7 @@ async function resolveWorkdir(thread: ThreadRecord): Promise<string> {
   const project = thread.projectId
     ? await getServices().projects.getProject(thread.projectId)
     : null;
-  const cwdResult = resolveThreadCwd(
-    thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-    project ? { path: project.path } : null,
-  );
+  const cwdResult = resolveThreadCwd(thread, project ? { path: project.path } : null);
   if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
   return cwdResult.value;
 }

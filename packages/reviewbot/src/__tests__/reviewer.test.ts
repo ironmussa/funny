@@ -72,7 +72,7 @@ function createMockProcessFactory() {
   };
 }
 
-function setMockLLMResponse(jsonResponse: object): void {
+function setMockLLMResponse(jsonResponse: Record<string, unknown>): void {
   const json = JSON.stringify(jsonResponse, null, 2);
   mockProcessMessages = [
     {

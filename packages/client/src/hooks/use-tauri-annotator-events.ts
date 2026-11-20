@@ -4,8 +4,8 @@ import { toast } from 'sonner';
 
 import { useUIStore } from '@/stores/ui-store';
 
-const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
-const isPreviewWindow = !!(window as unknown as { __PREVIEW_MODE__: unknown }).__PREVIEW_MODE__;
+const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
+const isPreviewWindow = !!(window as { __PREVIEW_MODE__?: unknown }).__PREVIEW_MODE__;
 
 interface AnnotatorCapturePayload {
   markdown: string;

@@ -63,7 +63,7 @@ describe('useSidebarScrollSync — scroll target follows the URL', () => {
       { wrapper: wrapperFor('/projects/p1/threads/t-b') },
     );
 
-    const calls = (scrollSidebarItemIntoView as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = vi.mocked(scrollSidebarItemIntoView).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
     const scrolledEl = calls[calls.length - 1][1] as HTMLElement;
     expect(scrolledEl.getAttribute('data-testid')).toBe('thread-item-t-b');
@@ -81,7 +81,7 @@ describe('useSidebarScrollSync — scroll target follows the URL', () => {
       { wrapper: wrapperFor('/projects/p1/threads/t-a') },
     );
 
-    const calls = (scrollSidebarItemIntoView as unknown as ReturnType<typeof vi.fn>).mock.calls;
+    const calls = vi.mocked(scrollSidebarItemIntoView).mock.calls;
     const scrolledEl = calls[calls.length - 1][1] as HTMLElement;
     expect(scrolledEl.getAttribute('data-testid')).toBe('thread-item-t-a');
   });

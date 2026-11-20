@@ -247,6 +247,7 @@ export function shouldAdjustScrollPositionOnItemSizeChange<
   // adjustments for scrollToIndex/scrollToOffset, but avoid first-measurement
   // scrollTop writes while the user is actively scrolling by hand.
   const isProgrammaticScroll = Boolean(
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
     (instance as unknown as { scrollState?: unknown }).scrollState,
   );
   const isFirstMeasurement = !instance.itemSizeCache.has(item.key);

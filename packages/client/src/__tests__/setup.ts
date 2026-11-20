@@ -8,6 +8,7 @@ import { afterAll, vi } from 'vitest';
 // fake timers in tests, exercising the same code path as the browser.
 if (typeof globalThis.requestIdleCallback === 'undefined') {
   globalThis.requestIdleCallback = ((cb: (deadline: IdleDeadline) => void) =>
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     setTimeout(() => {
       // A callback queued just before the test environment tears down (e.g.
       // TanStack DB's idle GC of a live query) must not run without a window.
@@ -20,6 +21,7 @@ if (typeof globalThis.requestIdleCallback === 'undefined') {
 
 // Mock ResizeObserver (not available in jsdom/happy-dom)
 if (typeof globalThis.ResizeObserver === 'undefined') {
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
   globalThis.ResizeObserver = class ResizeObserver {
     observe() {}
     unobserve() {}

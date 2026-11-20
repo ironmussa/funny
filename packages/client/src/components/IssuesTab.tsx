@@ -442,7 +442,7 @@ function IssueRow({
               position={factory.queuePosition.get(issue.number)}
             />
           )}
-          <IssueBadges issue={issue} badgeClassName="h-3.5 text-[9px] leading-none" />
+          <IssueBadges issue={issue} />
           <span className="text-muted-foreground text-[10px]">
             {timeAgo(issue.created_at, now)}
           </span>

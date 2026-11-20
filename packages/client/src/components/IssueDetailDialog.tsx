@@ -106,7 +106,7 @@ export function IssueDetailDialog({
                   />
                 )}
                 <span>{timeAgo(issue.created_at, t, now)}</span>
-                <IssueBadges issue={issue} badgeClassName="h-4 text-xs leading-none" />
+                <IssueBadges issue={issue} />
               </div>
             </DialogDescription>
           </div>

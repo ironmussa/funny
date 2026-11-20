@@ -186,6 +186,12 @@ export type OnStateChange<T> = (change: PipelineStateChange<T>) => void;
 export interface PipelineRunOptions<T> {
   signal?: AbortSignal;
   onStateChange?: OnStateChange<T>;
+  /**
+   * After a node is aborted (the run was cancelled, or another branch failed
+   * it), how long to wait for its work to stop before the run ends anyway.
+   * A node that honors its signal stops sooner. Default: 5000.
+   */
+  stopGraceMs?: number;
   /** Override maxIterations of the pipeline-level `loop` (not of node loops). */
   maxIterations?: number;
   /**

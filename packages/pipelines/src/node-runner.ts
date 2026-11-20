@@ -15,6 +15,16 @@ export const invoke = <A>(fn: (signal: AbortSignal) => A | Promise<A>) =>
     catch: (error) => (error instanceof Error ? error : new Error(String(error))),
   });
 
+/** How long an aborted node may take to stop before the run stops waiting for it. */
+export const DEFAULT_STOP_GRACE_MS = 5_000;
+
+/** Wait for `work` to settle, or for `ms` to pass. */
+async function settledWithin(work: Promise<unknown>, ms: number): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  await Promise.race([work, new Promise<void>((r) => (timer = setTimeout(r, ms)))]);
+  clearTimeout(timer);
+}
+
 /** The message of whatever an Effect failed with. */
 export function causeMessage(cause: Cause.Cause<unknown>): string {
   const squashed = Cause.squash(cause);
@@ -42,11 +52,19 @@ export interface SingleNodeResult<T> {
 export async function runSingleNode<T>(
   node: PipelineNode<T>,
   ctxIn: T,
-  params: { signal?: AbortSignal; emit: (c: PipelineStateChange<T>) => void; iteration: number },
+  params: {
+    signal?: AbortSignal;
+    emit: (c: PipelineStateChange<T>) => void;
+    iteration: number;
+    /** After an abort, how long to wait for the node's work to stop. */
+    stopGraceMs?: number;
+  },
 ): Promise<SingleNodeResult<T>> {
   const { signal, emit, iteration } = params;
   let ctx = ctxIn;
   let committed = false;
+  /** The node's last asynchronous execution, still running or not. */
+  let inFlight: Promise<unknown> | undefined;
   if (signal?.aborted) return { ctx, status: 'cancelled' };
 
   const execution = Effect.gen(function* () {
@@ -72,6 +90,8 @@ export async function runSingleNode<T>(
           if (!next || typeof (next as Promise<T>).then !== 'function') {
             ctx = next as T;
             committed = true;
+          } else {
+            inFlight = Promise.resolve(next).catch(() => undefined);
           }
           return next;
         }),
@@ -94,7 +114,12 @@ export async function runSingleNode<T>(
   });
 
   const exit = await Effect.runPromiseExit(execution, { signal });
-  if (signal?.aborted) return { ctx, status: 'cancelled', committed };
+  if (signal?.aborted) {
+    // Interruption stops waiting, not the work: give the node's own abort
+    // handling time to stop it, so the caller never sees it still running.
+    if (inFlight) await settledWithin(inFlight, params.stopGraceMs ?? DEFAULT_STOP_GRACE_MS);
+    return { ctx, status: 'cancelled', committed };
+  }
   if (Exit.isFailure(exit)) {
     const error = causeMessage(exit.cause);
     emit({ kind: 'error', nodeName: node.name, ctx, iteration, error });

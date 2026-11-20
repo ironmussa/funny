@@ -1,6 +1,7 @@
 import { AbbacchioProvider } from '@abbacchio/browser-transport/react';
 import { getTelemetryIdentity } from '@funny/shared/lib/telemetry-identity';
 
+import { THEME_CLASSES, THEMES } from './lib/theme';
 import { clientComposition } from './platform/client-composition';
 import { prefetchInitialThread } from './platform/prefetch-initial-thread';
 import { preloadThreadView } from './platform/thread-view-loader';
@@ -268,26 +269,8 @@ root.render(
       attribute="class"
       defaultTheme="one-dark"
       disableTransitionOnChange
-      themes={[
-        'one-dark',
-        'dracula',
-        'github-dark',
-        'night-owl',
-        'catppuccin',
-        'sunrise',
-        'monochrome',
-        'monochrome-dark',
-      ]}
-      value={{
-        'one-dark': 'theme-one-dark',
-        dracula: 'theme-dracula',
-        'github-dark': 'theme-github-dark',
-        'night-owl': 'theme-night-owl',
-        catppuccin: 'theme-catppuccin',
-        sunrise: 'theme-sunrise',
-        monochrome: 'theme-monochrome',
-        'monochrome-dark': 'theme-monochrome-dark',
-      }}
+      themes={[...THEMES]}
+      value={THEME_CLASSES}
     >
       <AbbacchioProvider
         {...getTelemetryIdentity('funny-client')}

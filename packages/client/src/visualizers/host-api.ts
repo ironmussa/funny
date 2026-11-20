@@ -1,6 +1,7 @@
 import type { FunnyPluginSdkApi } from '@funny/plugin-sdk';
 import { useTheme } from 'next-themes';
 
+import { isLightTheme } from '@/lib/theme';
 import { PROSE_FONT_SIZE_PX, useSettingsStore } from '@/stores/settings-store';
 
 /**
@@ -16,7 +17,7 @@ export const pluginSdkApi: FunnyPluginSdkApi = {
   useFunnyTheme(): 'light' | 'dark' {
     const { resolvedTheme } = useTheme();
     // funny ships a few named themes; collapse them to light/dark for plugins.
-    return resolvedTheme === 'light' || resolvedTheme === 'monochrome' ? 'light' : 'dark';
+    return isLightTheme(resolvedTheme) ? 'light' : 'dark';
   },
   useFunnyFontSize(): number {
     return PROSE_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];

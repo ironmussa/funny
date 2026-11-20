@@ -66,15 +66,15 @@ function pushRanges(stdin: string, cwd: string, defaultBase: string): PushRange[
   return ranges;
 }
 
-/**
- * Files changed across every ref in the pre-push `stdin`, or null when a range
- * cannot be resolved (the caller then runs everything). Deletions add nothing.
- */
 /** The pushed commits in the pre-push `stdin`, or null when a range cannot be resolved. */
 export function pushedHeads(stdin: string, cwd = process.cwd(), defaultBase = DEFAULT_BASE) {
   return pushRanges(stdin, cwd, defaultBase)?.map((range) => range.head) ?? null;
 }
 
+/**
+ * Files changed across every ref in the pre-push `stdin`, or null when a range
+ * cannot be resolved (the caller then runs everything). Deletions add nothing.
+ */
 export function changedFiles(stdin: string, cwd = process.cwd(), defaultBase = DEFAULT_BASE) {
   const ranges = pushRanges(stdin, cwd, defaultBase);
   return ranges && [...new Set(ranges.flatMap((range) => range.files))];

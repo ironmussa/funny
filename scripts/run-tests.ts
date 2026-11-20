@@ -19,11 +19,11 @@ import { join } from 'node:path';
 
 import { createOutputParser, isEventLine } from '../packages/shared/src/checks';
 import { collectOutput } from './progress-io';
+import { testSuiteEnv } from './test-env';
 import { BUN_TEST, type Narrowing, narrowPackage } from './test-impact';
+import { ProgressFile } from './test-progress';
 
 export type { Narrowing };
-import { testSuiteEnv } from './test-env';
-import { ProgressFile } from './test-progress';
 
 export interface TestPackage {
   name: string;

@@ -31,6 +31,9 @@ export interface RepoIssue {
 }
 
 /** An open pull request found by its head branch. */
+/** Which pull requests of a branch to look at: the open one, or any (newest first). */
+export type PullRequestLookup = 'open' | 'all';
+
 export interface FactoryPullRequestFound {
   number: number;
   url: string;
@@ -117,10 +120,17 @@ export function createFactoryRepoReads(repo: string, github: RepoGithub) {
         );
     },
 
-    /** The open pull request whose head is `branch` in the repository itself, or null. */
-    findPullRequest(branch: string): ResultAsync<FactoryPullRequestFound | null, GithubCallError> {
+    /**
+     * The pull request whose head is `branch` in the repository itself, or null:
+     * the open one by default, or the newest in any state (`'all'`, which also
+     * finds one already merged or closed).
+     */
+    findPullRequest(
+      branch: string,
+      state: PullRequestLookup = 'open',
+    ): ResultAsync<FactoryPullRequestFound | null, GithubCallError> {
       const owner = repo.split('/')[0];
-      const query = new URLSearchParams({ head: `${owner}:${branch}`, state: 'open' });
+      const query = new URLSearchParams({ head: `${owner}:${branch}`, state });
       return github
         .json<Array<{ number: number; html_url: string }>>(
           repo,

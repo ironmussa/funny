@@ -16,7 +16,19 @@
  */
 import type { FactoryWaitReason } from '@funny/shared/contracts/factory';
 import { parseStoredJson } from '@funny/shared/json-validation';
-import { and, asc, desc, eq, gte, inArray, like, notInArray, or } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNotNull,
+  like,
+  notInArray,
+  or,
+  type SQL,
+} from 'drizzle-orm';
 import { okAsync, ResultAsync } from 'neverthrow';
 import { z } from 'zod';
 
@@ -104,6 +116,32 @@ const REOPENABLE_STATES = ['failed', 'waiting_human'] as const satisfies Factory
  * window only bounds what every list poll reads.
  */
 const FAILED_RUN_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/** The branch a run's agent pushes and opens its pull request from. */
+export const factoryRunBranch = (run: Pick<FactoryRunView, 'id' | 'issueNumber'>): string =>
+  `factory/issue-${run.issueNumber}-${run.id.slice(0, 8)}`;
+
+/**
+ * How long after parking a run without a recorded pull request the watcher
+ * still looks for one on its branch. A flow without a `create_pr` step never
+ * records one, so the branch is the only way to see a person merged it; the
+ * window keeps old failures from being looked up on every tick forever.
+ */
+const BRANCH_LOOKUP_WINDOW_MS = 14 * 24 * 60 * 60 * 1000;
+
+/**
+ * Parked runs (failed, or waiting for the member) whose pull request may still
+ * be merged or closed outside the factory: one is recorded, or the run parked
+ * recently enough to look for one on its branch. A paused factory keeps polling
+ * while it has such a run.
+ */
+export function awaitsPullRequest(now: number = Date.now()): SQL {
+  const since = new Date(now - BRANCH_LOOKUP_WINDOW_MS).toISOString();
+  return and(
+    inArray(factoryRuns.state, [...REOPENABLE_STATES]),
+    or(isNotNull(factoryRuns.prUrl), gte(factoryRuns.completedAt, since)),
+  )!;
+}
 
 export interface FactoryRunView {
   id: string;
@@ -588,6 +626,25 @@ export function createFactoryRunsRepository(
           : { state: 'stopped', failureReason: 'Its pull request was closed without a merge.' },
       )!;
       return updateFromParked(runId, changes);
+    },
+
+    /** The parked runs of a factory that may still close by their pull request (`awaitsPullRequest`). */
+    awaitingPullRequest(factoryId: string): ResultAsync<FactoryRunView[], FactoryRunsError> {
+      return ResultAsync.fromPromise(
+        db
+          .select()
+          .from(factoryRuns)
+          .where(and(eq(factoryRuns.factoryId, factoryId), awaitsPullRequest())),
+        storage,
+      ).map((rows) => rows.map(toView));
+    },
+
+    /**
+     * Record the pull request found on a parked run's branch (its flow had no
+     * `create_pr` step), only while it is still parked: a compare-and-set.
+     */
+    recordParkedPr(runId: string, prUrl: string): ResultAsync<boolean, FactoryRunsError> {
+      return updateFromParked(runId, { prUrl });
     },
 
     /** One run by its id, or null. */

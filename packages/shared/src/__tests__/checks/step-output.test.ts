@@ -168,6 +168,34 @@ describe('createStepParser formats', () => {
     expect(issues).toEqual([]);
   });
 
+  test("funny's typecheck baseline: one issue per new error", () => {
+    const { report, issues } = feed(
+      [
+        '✗ 2 NEW typecheck error(s) since baseline:',
+        '',
+        "  packages/server/src/a.test.ts: TS2769: No overload matches this call. / Type 'string' is not assignable to type 'RunnerId'.",
+        "  packages/core/src/b.ts: TS2352: Conversion of type 'X' to type 'Y' may be a mistake.",
+        '',
+        '  If these errors are intentional, refresh the baseline:',
+        '    bun run typecheck:refresh',
+      ].join('\n'),
+    );
+    expect(report.errors).toBe(2);
+    expect(issues).toMatchObject([
+      {
+        severity: 'error',
+        file: 'packages/server/src/a.test.ts',
+        message:
+          "TS2769: No overload matches this call. / Type 'string' is not assignable to type 'RunnerId'.",
+      },
+      {
+        severity: 'error',
+        file: 'packages/core/src/b.ts',
+        message: "TS2352: Conversion of type 'X' to type 'Y' may be a mistake.",
+      },
+    ]);
+  });
+
   test('tsc -b --diagnostics: the projects add up', () => {
     const { report } = feed('Files: 10\nLines: 100\nFiles: 5\nLines: 50');
     expect(report).toMatchObject({ files: 15, lines: 150 });

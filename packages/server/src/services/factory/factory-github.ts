@@ -30,6 +30,7 @@ import { createFactoryPullRequests, type FactoryPullRequests } from './factory-p
 import {
   createFactoryRepoReads,
   type FactoryPullRequestFound,
+  type PullRequestLookup,
   type RepoIssue,
 } from './factory-repo-reads.js';
 
@@ -85,10 +86,14 @@ export interface FactoryGithubPort {
     reader: FactoryRepoReader,
     path: string,
   ): ResultAsync<string | null, GithubCallError>;
-  /** The open pull request whose head is `branch` in the repository itself, or null. */
+  /**
+   * The pull request whose head is `branch` in the repository itself, or null:
+   * the open one unless `state` is `'all'` (the newest, merged or closed too).
+   */
   findPullRequest(
     reader: FactoryRepoReader,
     branch: string,
+    state?: PullRequestLookup,
   ): ResultAsync<FactoryPullRequestFound | null, GithubCallError>;
   /** CI state and merge of a run's pull request (`wait_ci` / `merge`). */
   pullRequests: FactoryPullRequests;
@@ -200,7 +205,7 @@ export function createFactoryGithub(
     issueBlockers: (reader, issueNumber) => reads(reader).blockers(issueNumber),
     listDefaultBranchDir: (reader, path) => reads(reader).listDefaultBranchDir(path),
     readDefaultBranchFile: (reader, path) => reads(reader).readDefaultBranchFile(path),
-    findPullRequest: (reader, branch) => reads(reader).findPullRequest(branch),
+    findPullRequest: (reader, branch, state) => reads(reader).findPullRequest(branch, state),
 
     pullRequests: createFactoryPullRequests({ issue, ownerToken, fetch: fetchImpl }),
   };

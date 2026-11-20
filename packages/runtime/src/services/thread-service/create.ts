@@ -26,7 +26,7 @@ import type {
   ImageAttachment,
 } from '@funny/shared';
 import { addReferencedEntries, type ReferencedEntry } from '@funny/shared/attachments';
-import { DEFAULT_MODEL } from '@funny/shared/models';
+import { DEFAULT_MODEL, DEFAULT_PROVIDER, getDefaultModel } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
 import { ResultAsync } from 'neverthrow';
 
@@ -392,14 +392,24 @@ function titleSourceFor(params: CreateAndStartThreadParams): string {
   return params.title || stripReferencedFilesBlock(params.prompt) || params.prompt;
 }
 
-/** Resolve defaults: explicit value > project default > hardcoded fallback. */
+/**
+ * Resolve defaults: explicit value > project default > hardcoded fallback.
+ * Provider and model always come as a pair: a model sent without a provider is
+ * a DEFAULT_PROVIDER model, and a provider sent without a model gets the
+ * project's model only when the project uses that provider (else the
+ * provider's own default model).
+ */
 function resolveRunDefaults(
   params: CreateAndStartThreadParams,
   project: StartProject,
 ): ResolvedRunDefaults {
+  const projectProvider = (project.defaultProvider || DEFAULT_PROVIDER) as AgentProvider;
+  const provider = (params.provider ||
+    (params.model ? DEFAULT_PROVIDER : projectProvider)) as AgentProvider;
+  const projectModel = provider === projectProvider ? project.defaultModel : undefined;
   return {
-    provider: (params.provider || project.defaultProvider || 'claude') as AgentProvider,
-    model: (params.model || project.defaultModel || DEFAULT_MODEL) as AgentModel,
+    provider,
+    model: (params.model || projectModel || getDefaultModel(provider)) as AgentModel,
     permissionMode: (params.permissionMode ||
       project.defaultPermissionMode ||
       'autoEdit') as PermissionMode,

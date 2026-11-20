@@ -2,11 +2,13 @@ import { CircleCheck, Info, LoaderCircle, OctagonX, TriangleAlert } from 'lucide
 import { useTheme } from 'next-themes';
 import { Toaster as Sonner } from 'sonner';
 
+import { isLightTheme } from '@/lib/theme';
+
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const { resolvedTheme } = useTheme();
-  const sonnerTheme = resolvedTheme === 'monochrome' ? 'light' : 'dark';
+  const sonnerTheme = isLightTheme(resolvedTheme) ? 'light' : 'dark';
 
   return (
     <Sonner

@@ -116,6 +116,7 @@ vi.mock('@funny/core/ports', () => ({
   setupWorktree: mocks.setupWorktree,
 }));
 
+import { DEFAULT_MODEL } from '@funny/shared/models';
 import { ok, err, okAsync, errAsync } from 'neverthrow';
 
 // Released on success; the create/send flows await it.
@@ -352,6 +353,40 @@ describe('createAndStartThread', () => {
       undefined,
       undefined,
     );
+  });
+
+  test.each([
+    {
+      name: 'no model: the project provider and model',
+      want: ['gpt-5.6-sol', 'codex'],
+    },
+    {
+      name: 'a model without provider: a Claude model',
+      model: 'opus-5.5',
+      want: ['opus-5.5', 'claude'],
+    },
+    {
+      name: "another provider without model: that provider's default model",
+      provider: 'claude',
+      want: [DEFAULT_MODEL, 'claude'],
+    },
+  ])('resolves run defaults with $name', async ({ model, provider, want }) => {
+    mocks.projects.getProject.mockResolvedValue({
+      ...baseProject,
+      defaultProvider: 'codex',
+      defaultModel: 'gpt-5.6-sol',
+    });
+    const result = await createAndStartThread({
+      projectId: 'p-1',
+      userId: 'u-1',
+      mode: 'local',
+      prompt: 'Go',
+      model,
+      provider,
+    } as Parameters<typeof createAndStartThread>[0]);
+    expect(result.isOk()).toBe(true);
+    const args = mocks.startAgent.mock.calls.at(-1) as unknown[];
+    expect([args[3], args[8]]).toEqual(want);
   });
 
   test.each([

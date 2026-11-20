@@ -17,6 +17,7 @@ import { LoadingState } from '@/components/ui/loading-state';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { remarkPlugins } from '@/lib/markdown-components';
 import { parsePlanSections, type PlanSection } from '@/lib/parse-plan-sections';
+import { isLightTheme } from '@/lib/theme';
 import { cn } from '@/lib/utils';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 
@@ -209,7 +210,7 @@ export function PlanReviewDialog({
   const sections = useMemo(() => parsePlanSections(activePlan), [activePlan]);
   const hasSections = sections.length > 1 || (sections.length === 1 && sections[0].level > 0);
 
-  const monacoTheme = resolvedTheme === 'monochrome' ? 'vs' : 'funny-dark';
+  const monacoTheme = isLightTheme(resolvedTheme) ? 'vs' : 'funny-dark';
 
   // ── Active section tracking via scroll ──
   const [trackedActiveSectionId, setTrackedActiveSectionId] = useState<number | null>(null);

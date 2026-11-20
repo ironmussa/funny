@@ -38,6 +38,8 @@ export type {
   PipelineNode,
   TriggerRule,
   NodeOnError,
+  NodeLoop,
+  NodeRunInfo,
   PipelineLoop,
   PipelineDefinition,
   PipelineStateKind,

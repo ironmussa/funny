@@ -13,11 +13,14 @@
  *   reads the initial context, a node with one dependency reads that
  *   dependency's result, and a node with several reads `mergeContexts` of
  *   them in declaration order. Finish order never changes what a node reads.
- * - **Loop region.** `loop` repeats the nodes on a path from `loop.from` to
- *   the last declared node. When that node succeeds and `until` is false, the
- *   region's nodes go back to `pending` and `loop.from` reads the last node's
- *   result. A node outside the region that depends on a node inside it waits
- *   until the loop exits.
+ * - **Loop regions.** A node X with `loop` repeats the nodes on a path from
+ *   `loop.backTo` to X (the pipeline-level `loop` is the same thing on the
+ *   last declared node). When X succeeds and `until` is false, the region's
+ *   nodes go back to `pending`, its visit number goes up, and `backTo` reads
+ *   X's result. Loops nested inside it start over at visit 1. A node outside
+ *   a region that depends on a node inside it waits until the loop exits.
+ *   After `maxIterations` visits X fails with "loop exhausted". Regions must
+ *   be nested or disjoint; overlapping ones are refused before any node runs.
  * - **Cancellation.** Each node execution has its own `AbortSignal`, linked to
  *   the run's signal; aborting the run aborts every running node, and the
  *   scheduler waits for them to settle before it reports `cancelled`.
@@ -64,20 +67,31 @@ interface GraphNode<T> {
   readFrom?: ReadonlySet<GraphNode<T>>;
   /** The innermost loop region the node belongs to. */
   region?: Region<T>;
+  /** Set when a loop sent the run back to this node: what it reads on that visit. */
+  feedback?: T;
 }
 
 interface Region<T> {
   readonly entry: GraphNode<T>;
+  /** The node that declares the loop. */
   readonly exit: GraphNode<T>;
   readonly members: ReadonlySet<GraphNode<T>>;
   readonly until: GuardFn<T>;
   readonly maxIterations: number;
+  /** The smallest region that strictly contains this one. */
+  parent?: Region<T>;
   /** The current visit, from 1. */
   visit: number;
   /** True once the loop has exited; nodes outside it may then read its members. */
   closed: boolean;
-  /** The exit node's result from the previous visit, read by the entry node. */
-  feedback?: T;
+}
+
+/** A loop before its region is computed. */
+interface LoopSpec<T> {
+  exit: GraphNode<T>;
+  backTo: string;
+  until: GuardFn<T>;
+  maxIterations: number;
 }
 
 /** What one node task reports back to the scheduler. */
@@ -89,7 +103,7 @@ type TaskResult<T> =
 
 interface Built<T> {
   nodes: GraphNode<T>[];
-  region?: Region<T>;
+  regions: Region<T>[];
 }
 
 /** Build the graph, refusing cycles, unknown dependencies and loops that are not regions. */
@@ -118,28 +132,80 @@ function buildGraph<T>(pipeline: PipelineDefinition<T>, maxIterations?: number):
     }
   }
 
-  const loop = pipeline.loop;
-  if (!loop || nodes.length === 0) return { nodes };
-  const entry = byName.get(loop.from);
-  if (!entry) throw new Error(`loop.from "${loop.from}" does not match any node name`);
-  const exit = nodes[nodes.length - 1];
-  const members = regionBetween(entry, exit);
-  if (!members) {
-    throw new Error(
-      `loop.from "${loop.from}" is not "${exit.def.name}" or one of its dependencies, so the loop has no region`,
-    );
+  const specs: LoopSpec<T>[] = [];
+  for (const node of nodes) {
+    const loop = node.def.loop;
+    if (loop) {
+      specs.push({
+        exit: node,
+        backTo: loop.backTo,
+        until: loop.until,
+        maxIterations: loop.maxIterations ?? 10,
+      });
+    }
   }
-  const region: Region<T> = {
-    entry,
-    exit,
-    members,
-    until: loop.until,
-    maxIterations: maxIterations ?? loop.maxIterations ?? 10,
-    visit: 1,
-    closed: false,
-  };
-  for (const m of members) m.region = region;
-  return { nodes, region };
+  const legacy = pipeline.loop;
+  if (legacy && nodes.length > 0) {
+    const exit = nodes[nodes.length - 1];
+    if (exit.def.loop) {
+      throw new Error(
+        `"${exit.def.name}" declares a loop and is also the end of the pipeline loop`,
+      );
+    }
+    specs.push({
+      exit,
+      backTo: legacy.from,
+      until: legacy.until,
+      maxIterations: maxIterations ?? legacy.maxIterations ?? 10,
+    });
+  }
+  return { nodes, regions: buildRegions(specs, byName) };
+}
+
+/** Compute each loop's region, refuse overlaps, and link every node to its innermost region. */
+function buildRegions<T>(specs: LoopSpec<T>[], byName: Map<string, GraphNode<T>>): Region<T>[] {
+  const regions = specs.map((spec): Region<T> => {
+    const name = spec.exit.def.name;
+    const entry = byName.get(spec.backTo);
+    if (!entry) {
+      throw new Error(`The loop on "${name}" goes back to "${spec.backTo}", which is not a node`);
+    }
+    const members = regionBetween(entry, spec.exit);
+    if (!members) {
+      throw new Error(
+        `The loop on "${name}" goes back to "${spec.backTo}", which is not "${name}" or one of its dependencies, so the loop has no region`,
+      );
+    }
+    return {
+      entry,
+      exit: spec.exit,
+      members,
+      until: spec.until,
+      maxIterations: Math.max(1, spec.maxIterations),
+      visit: 1,
+      closed: false,
+    };
+  });
+
+  const contains = (outer: Region<T>, inner: Region<T>) =>
+    outer.members.size > inner.members.size &&
+    [...inner.members].every((m) => outer.members.has(m));
+  for (const [i, a] of regions.entries()) {
+    for (const b of regions.slice(i + 1)) {
+      const shared = [...a.members].some((m) => b.members.has(m));
+      if (shared && !contains(a, b) && !contains(b, a)) {
+        throw new Error(
+          `The loops on "${a.exit.def.name}" (back to "${a.entry.def.name}") and "${b.exit.def.name}" (back to "${b.entry.def.name}") overlap; loop regions must be nested or disjoint`,
+        );
+      }
+    }
+  }
+
+  // Smallest first, so the first region found containing something is the innermost.
+  const bySize = [...regions].sort((a, b) => a.members.size - b.members.size);
+  for (const r of bySize) r.parent = bySize.find((o) => contains(o, r));
+  for (const r of [...bySize].reverse()) for (const m of r.members) m.region = r;
+  return regions;
 }
 
 /** Every node on a path from `entry` to `exit`, both included, or null when there is none. */
@@ -210,8 +276,22 @@ export async function runGraph<T>(
     });
     return { outcome: 'failed', ctx: initial, error, iterations: 1 };
   }
-  const { nodes, region } = built;
-  const iterations = () => region?.visit ?? 1;
+  const { nodes, regions } = built;
+  const iterations = () => Math.max(1, ...regions.map((r) => r.visit));
+  const loopOf = new Map(regions.map((r) => [r.exit, r]));
+
+  /** `region` and every region around it. */
+  const enclosing = (region: Region<T> | undefined): Region<T>[] => {
+    const out: Region<T>[] = [];
+    for (let r = region; r; r = r.parent) out.push(r);
+    return out;
+  };
+
+  /** Close the loop `node` declares, if any: nodes outside may now read its region. */
+  const closeLoopOf = (node: GraphNode<T>) => {
+    const r = loopOf.get(node);
+    if (r) r.closed = true;
+  };
 
   /** Did `dep` fail, for a dependent's join (a node skipped by a failure counts)? */
   const failedForJoin = (dep: GraphNode<T>) =>
@@ -234,15 +314,15 @@ export async function runGraph<T>(
     }
   };
 
-  /** May `node` read `dep`'s result now? */
+  /** May `node` read `dep`'s result now? Not while a loop around `dep` but not `node` is open. */
   const readable = (node: GraphNode<T>, dep: GraphNode<T>) =>
-    finished(dep.state) && (!dep.region || dep.region.closed || dep.region === node.region);
+    finished(dep.state) && enclosing(dep.region).every((r) => r.closed || r.members.has(node));
 
   const inputOf = (node: GraphNode<T>): T => {
-    if (region && node === region.entry && region.visit > 1) {
+    if (node.feedback !== undefined) {
       // The feedback already carries what the entry read on its first visit.
       node.readFrom = new Set(node.deps);
-      return region.feedback as T;
+      return node.feedback;
     }
     // A join may start (or skip) before every dependency finished: read those that did.
     const read = node.deps.filter((d) => readable(node, d) && d.out !== undefined);
@@ -264,7 +344,7 @@ export async function runGraph<T>(
       ctx: node.out,
       iteration: node.region?.visit ?? 1,
     });
-    if (region && node === region.exit) region.closed = true;
+    closeLoopOf(node);
   };
 
   /** The run's result context: the finished nodes whose result no finished node read. */
@@ -295,7 +375,7 @@ export async function runGraph<T>(
       signal: controller.signal,
       emit,
       iteration,
-      loopRegion: region && node === region.exit ? region : undefined,
+      loopRegion: loopOf.get(node),
     })
       .finally(() => signal?.removeEventListener('abort', abort))
       .then((result) => ({ node, result }));
@@ -320,6 +400,35 @@ export async function runGraph<T>(
     }
   };
 
+  /** A node failed: fail the run, or with `onError: 'continue'` let the joins decide. */
+  const fail = (node: GraphNode<T>, ctx: T, error: string) => {
+    node.state = 'failed';
+    node.out = ctx;
+    if ((node.def.onError ?? 'fail') === 'fail') failure ??= { node, error };
+    // A failed loop node ends its loop: there is no result to check.
+    else closeLoopOf(node);
+  };
+
+  /** Send the run back through `region`: its nodes go back to pending. */
+  const loopAgain = (region: Region<T>, ctx: T) => {
+    region.visit++;
+    for (const m of region.members) {
+      m.state = 'pending';
+      m.out = undefined;
+      m.upstreamFailed = undefined;
+      m.readFrom = undefined;
+      m.feedback = undefined;
+    }
+    // Loops inside this one start over.
+    for (const r of regions) {
+      if (r !== region && r.members.size < region.members.size && region.members.has(r.exit)) {
+        r.visit = 1;
+        r.closed = false;
+      }
+    }
+    region.entry.feedback = ctx;
+  };
+
   const apply = (node: GraphNode<T>, result: TaskResult<T>) => {
     switch (result.kind) {
       case 'cancelled':
@@ -332,39 +441,36 @@ export async function runGraph<T>(
         }
         return;
       case 'failed':
-        node.state = 'failed';
-        node.out = result.ctx;
-        if ((node.def.onError ?? 'fail') === 'fail') failure ??= { node, error: result.error };
-        // A failed exit node with `continue` ends its loop: there is no result to check.
-        else if (region && node === region.exit) region.closed = true;
+        fail(node, result.ctx, result.error);
         return;
       case 'skipped':
         node.state = 'skipped';
         node.out = result.ctx;
-        // A skipped exit node ends its loop, as the last node of a sequential loop did.
-        if (region && node === region.exit) region.closed = true;
+        // A skipped loop node ends its loop, as the last node of a sequential loop did.
+        closeLoopOf(node);
         return;
-      case 'succeeded':
-        node.state = 'succeeded';
-        node.out = result.ctx;
-        if (region && node === region.exit) {
-          if (result.loop === 'again') {
-            if (region.visit >= region.maxIterations) {
-              failure ??= { node, error: `Max iterations reached (${region.maxIterations})` };
-              return;
-            }
-            region.visit++;
-            region.feedback = result.ctx;
-            for (const m of region.members) {
-              m.state = 'pending';
-              m.out = undefined;
-              m.upstreamFailed = undefined;
-              m.readFrom = undefined;
-            }
-          } else {
-            region.closed = true;
-          }
+      case 'succeeded': {
+        const region = loopOf.get(node);
+        if (!region || result.loop !== 'again') {
+          node.state = 'succeeded';
+          node.out = result.ctx;
+          closeLoopOf(node);
+          return;
         }
+        if (region.visit >= region.maxIterations) {
+          const error = `loop exhausted: "${node.def.name}" ran ${region.maxIterations} visits and its until condition never held`;
+          emit({
+            kind: 'error',
+            nodeName: node.def.name,
+            ctx: result.ctx,
+            iteration: region.visit,
+            error,
+          });
+          fail(node, result.ctx, error);
+          return;
+        }
+        loopAgain(region, result.ctx);
+      }
     }
   };
 

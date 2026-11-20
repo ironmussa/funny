@@ -364,6 +364,46 @@ export function createTestDb() {
     ON factory_runs (factory_id, issue_number)
     WHERE state NOT IN ('merged', 'failed', 'stopped')
   `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS workflow_node_executions (
+      run_id TEXT NOT NULL REFERENCES factory_runs(id) ON DELETE CASCADE,
+      node_id TEXT NOT NULL,
+      visit TEXT NOT NULL,
+      attempt INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      output TEXT,
+      error TEXT,
+      data TEXT,
+      started_at INTEGER NOT NULL,
+      finished_at INTEGER,
+      PRIMARY KEY (run_id, node_id, visit, attempt)
+    )
+  `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS workflow_concurrency_leases (
+      group_key TEXT NOT NULL,
+      holder TEXT NOT NULL,
+      expires_at INTEGER NOT NULL,
+      acquired_at INTEGER NOT NULL,
+      PRIMARY KEY (group_key, holder)
+    )
+  `);
+  testDb.run(sql`
+    CREATE TABLE IF NOT EXISTS workflow_concurrency_waiters (
+      group_key TEXT NOT NULL,
+      holder TEXT NOT NULL,
+      slot_limit INTEGER NOT NULL,
+      priority INTEGER NOT NULL DEFAULT 0,
+      requested_at INTEGER NOT NULL,
+      expires_at INTEGER NOT NULL,
+      batch_max INTEGER,
+      batch_wait_ms INTEGER,
+      input TEXT,
+      leader TEXT,
+      outcome TEXT,
+      PRIMARY KEY (group_key, holder)
+    )
+  `);
 
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS runner_provision_tokens (

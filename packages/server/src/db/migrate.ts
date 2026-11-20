@@ -2066,6 +2066,60 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'metrics', 'TEXT');
     },
   },
+  {
+    // workflow-dag-engine: the engine's journal (one row per node execution,
+    // replayed when a run resumes; deleted with its factory run) and
+    // concurrency-group leases and waiters
+    // shared across server instances. Epoch-ms columns are BIGINT on Postgres.
+    name: '103_workflow_journal_and_leases',
+    async up() {
+      const epoch = sql.raw(ctx().dialect === 'pg' ? 'BIGINT' : 'INTEGER');
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS workflow_node_executions (
+          run_id TEXT NOT NULL REFERENCES factory_runs(id) ON DELETE CASCADE,
+          node_id TEXT NOT NULL,
+          visit TEXT NOT NULL,
+          attempt INTEGER NOT NULL,
+          status TEXT NOT NULL,
+          output TEXT,
+          error TEXT,
+          data TEXT,
+          started_at ${epoch} NOT NULL,
+          finished_at ${epoch},
+          PRIMARY KEY (run_id, node_id, visit, attempt)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS workflow_concurrency_leases (
+          group_key TEXT NOT NULL,
+          holder TEXT NOT NULL,
+          expires_at ${epoch} NOT NULL,
+          acquired_at ${epoch} NOT NULL,
+          PRIMARY KEY (group_key, holder)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS workflow_concurrency_waiters (
+          group_key TEXT NOT NULL,
+          holder TEXT NOT NULL,
+          slot_limit INTEGER NOT NULL,
+          priority INTEGER NOT NULL DEFAULT 0,
+          requested_at ${epoch} NOT NULL,
+          expires_at ${epoch} NOT NULL,
+          batch_max INTEGER,
+          batch_wait_ms INTEGER,
+          input TEXT,
+          leader TEXT,
+          outcome TEXT,
+          PRIMARY KEY (group_key, holder)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_workflow_waiters_order
+        ON workflow_concurrency_waiters (group_key, priority, requested_at)
+      `);
+    },
+  },
 ];
 
 /**

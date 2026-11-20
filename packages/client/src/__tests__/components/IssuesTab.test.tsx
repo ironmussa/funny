@@ -11,6 +11,10 @@ import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
+// These tests render the whole tab and its dialogs; under the full parallel suite
+// (pre-push) a different one ran a little past the 5 s default on each run.
+vi.setConfig({ testTimeout: 15_000 });
+
 const apiMock = vi.hoisted(() => ({
   projectGetRemoteUrl: vi.fn(),
   githubIssuesEnriched: vi.fn(),

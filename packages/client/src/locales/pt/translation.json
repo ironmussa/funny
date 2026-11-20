@@ -1055,6 +1055,7 @@
     "dismiss": "Dispensar",
     "worktrees": "Worktrees",
     "createWorktree": "Criar Worktree",
+    "refresh": "Atualizar worktrees",
     "cancel": "Cancelar",
     "branchName": "Nome da branch",
     "baseBranch": "Branch base",

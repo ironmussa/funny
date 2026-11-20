@@ -1071,6 +1071,7 @@
     "dismiss": "Dismiss",
     "worktrees": "Worktrees",
     "createWorktree": "Create Worktree",
+    "refresh": "Refresh worktrees",
     "cancel": "Cancel",
     "branchName": "Branch name",
     "baseBranch": "Base branch",

@@ -1069,6 +1069,7 @@
     "dismiss": "Descartar",
     "worktrees": "Worktrees",
     "createWorktree": "Crear Worktree",
+    "refresh": "Actualizar worktrees",
     "cancel": "Cancelar",
     "branchName": "Nombre de la rama",
     "baseBranch": "Rama base",

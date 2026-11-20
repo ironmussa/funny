@@ -224,10 +224,10 @@ export function ChangesToolbar({
                       : GitPullRequest;
                 const prIconColor =
                   prState === 'MERGED'
-                    ? 'text-purple-500'
+                    ? 'text-status-violet'
                     : prState === 'CLOSED'
-                      ? 'text-red-500'
-                      : 'text-green-500';
+                      ? 'text-status-error'
+                      : 'text-status-success';
                 return (
                   <Button
                     variant="ghost"

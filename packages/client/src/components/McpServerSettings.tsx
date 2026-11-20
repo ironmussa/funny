@@ -212,9 +212,9 @@ function InstalledServerCard({
         isDisabled
           ? 'border-border/30 opacity-60'
           : server.status === 'needs_auth'
-            ? 'border-amber-500/50'
+            ? 'border-status-warning/50'
             : server.status === 'error'
-              ? 'border-red-500/50'
+              ? 'border-status-error/50'
               : undefined,
       )}
     >
@@ -233,7 +233,7 @@ function InstalledServerCard({
             {!isDisabled && server.status === 'error' && (
               <McpStatusBadge
                 testId={`mcp-status-error-${server.name}`}
-                className="bg-red-500/15 text-red-400"
+                className="bg-status-error/15 text-status-error"
               >
                 <XCircle className="icon-2xs" />
                 {t('mcp.failed')}
@@ -290,7 +290,7 @@ function InstalledServerCard({
               size="sm"
               onClick={onAuthenticate}
               disabled={authenticating || settingToken}
-              className="h-6 border-amber-500/30 px-2 text-xs text-amber-400 hover:bg-amber-500/10"
+              className="border-status-warning/30 text-status-warning hover:bg-status-warning/10 h-6 px-2 text-xs"
               data-testid={`mcp-oauth-${server.name}`}
             >
               {authenticating ? (

@@ -39,12 +39,12 @@ export function DiffCommentThread({ thread, className }: DiffCommentThreadProps)
         {thread.line && <span>line {thread.line}</span>}
         <div className="flex-1" />
         {thread.is_resolved && (
-          <span className="flex items-center gap-0.5 text-green-400">
+          <span className="text-status-success flex items-center gap-0.5">
             <CheckCircle2 className="size-3" /> Resolved
           </span>
         )}
         {thread.is_outdated && (
-          <span className="flex items-center gap-0.5 text-yellow-400">
+          <span className="text-status-warning flex items-center gap-0.5">
             <Clock className="size-3" /> Outdated
           </span>
         )}

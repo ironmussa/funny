@@ -31,7 +31,8 @@ export function AuthorBadge({
   className,
   children,
 }: AuthorBadgeProps) {
-  const { avatar: avatarSize, text: fallbackText } = SIZE_CLASSES[size];
+  const avatarSize = size === 'xs' ? 'h-3.5 w-3.5' : 'h-4 w-4';
+  const fallbackText = size === 'xs' ? 'text-[8px]' : 'text-[9px]';
   const [emailUrl, setEmailUrl] = useState<string | null>(() =>
     email ? (emailUrlCache.get(email) ?? null) : null,
   );

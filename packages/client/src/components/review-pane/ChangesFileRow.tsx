@@ -233,7 +233,7 @@ function FileRowSummary({ file: f, fileSearch }: { file: FileDiffSummary; fileSe
     <>
       {isSubmodule ? (
         <GitBranch
-          className="icon-base shrink-0 text-purple-500 dark:text-purple-400"
+          className="icon-base text-status-violet dark:text-status-violet shrink-0"
           data-testid={`review-submodule-icon-${f.path}`}
         />
       ) : (

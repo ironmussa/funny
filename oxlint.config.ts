@@ -33,13 +33,8 @@ const ANTI_SLOP_EFFECT_ERROR = [
   'no-manual-tagged-construction',
 ];
 const ANTI_SLOP_EFFECT_WARN = ['no-service-constructor-imports', 'prefer-effect-match'];
-const SHADCN_WARN = [
-  'no-restyle',
-  'no-raw-colors',
-  'no-inline-styles',
-  'no-unknown-classes',
-  'require-static-classes',
-];
+const SHADCN_ERROR = ['no-raw-colors', 'no-unknown-classes', 'require-static-classes'];
+const SHADCN_WARN = ['no-restyle', 'no-inline-styles'];
 // Off: the font-size rule in CLAUDE.md requires arbitrary values such as
 // `text-[length:var(--diff-font-size)]`.
 const SHADCN_OFF = ['no-arbitrary-values'];
@@ -197,6 +192,7 @@ const existing = {
     {
       files: ['packages/client/src/**/*.{ts,tsx}'],
       rules: {
+        ...severity('shadcn', SHADCN_ERROR, 'error'),
         ...severity('shadcn', SHADCN_WARN, 'warn'),
         ...severity('shadcn', SHADCN_OFF, 'off'),
       },
@@ -204,7 +200,7 @@ const existing = {
     {
       // The shadcn/ui primitives themselves define the component styles.
       files: ['packages/client/src/components/ui/**'],
-      rules: severity('shadcn', [...SHADCN_WARN, ...SHADCN_OFF], 'off'),
+      rules: severity('shadcn', [...SHADCN_ERROR, ...SHADCN_WARN, ...SHADCN_OFF], 'off'),
     },
     {
       files: ['**/__tests__/**', '**/*.test.*', '**/*.spec.*'],

@@ -104,9 +104,9 @@ export function SystemSettings() {
                   className={cn(
                     'h-5 px-2 text-[10px]',
                     isActive
-                      ? 'border-green-500/30 text-green-500'
+                      ? 'border-status-success/30 text-status-success'
                       : nativeGit.disabled
-                        ? 'border-yellow-500/30 text-yellow-500'
+                        ? 'border-status-warning/30 text-status-warning'
                         : 'border-muted-foreground/30 text-muted-foreground',
                   )}
                   data-testid="system-native-git-status"
@@ -140,7 +140,7 @@ export function SystemSettings() {
               <div className="flex items-center gap-2">
                 <span className="w-16 font-medium">Rust</span>
                 {nativeGit.rustAvailable ? (
-                  <span className="flex items-center gap-1 text-green-500">
+                  <span className="text-status-success flex items-center gap-1">
                     <CircleCheck className="size-3" />
                     {nativeGit.rustVersion}
                   </span>
@@ -158,7 +158,7 @@ export function SystemSettings() {
           {nativeGit && !isActive && !isBuilding && !buildSucceeded && (
             <div className="mt-4">
               {nativeGit.disabled ? (
-                <p className="text-xs text-yellow-500">
+                <p className="text-status-warning text-xs">
                   Native git is disabled via{' '}
                   <code className="bg-muted rounded px-1 py-0.5">FUNNY_DISABLE_NATIVE_GIT=1</code>.
                   Remove this environment variable and restart funny to enable it.
@@ -198,7 +198,7 @@ export function SystemSettings() {
           {isBuilding && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center gap-2">
-                <Circle className="size-3 animate-pulse fill-yellow-500 text-yellow-500" />
+                <Circle className="fill-status-warning text-status-warning size-3 animate-pulse" />
                 <span className="text-xs font-medium">Building…</span>
               </div>
             </div>
@@ -207,7 +207,7 @@ export function SystemSettings() {
           {/* Build result */}
           {buildSucceeded && (
             <div className="mt-4 space-y-2">
-              <div className="flex items-center gap-2 text-green-500">
+              <div className="text-status-success flex items-center gap-2">
                 <CircleCheck className="size-3.5" />
                 <span className="text-xs font-medium">Build successful!</span>
               </div>
@@ -290,7 +290,7 @@ function BuildIdentityCard() {
             {BUILD_INFO.dirty && (
               <Badge
                 variant="outline"
-                className="h-5 border-yellow-500/30 px-2 text-[10px] text-yellow-500"
+                className="border-status-warning/30 text-status-warning h-5 px-2 text-[10px]"
               >
                 dirty
               </Badge>
@@ -298,7 +298,7 @@ function BuildIdentityCard() {
           </div>
           <Button variant="ghost" size="sm" onClick={copy} data-testid="system-build-copy">
             {copied ? (
-              <CircleCheck className="icon-sm text-green-500" />
+              <CircleCheck className="icon-sm text-status-success" />
             ) : (
               <Copy className="icon-sm" />
             )}

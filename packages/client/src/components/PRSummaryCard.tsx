@@ -32,22 +32,22 @@ interface PRSummaryCardProps {
 /** Status icon of a check, workflow run, job or step (anything with a status and conclusion). */
 export function CheckIcon({ check }: { check: Pick<CICheck, 'status' | 'conclusion'> }) {
   if (check.status !== 'completed') {
-    return <Loader2 className="icon-sm shrink-0 animate-spin text-yellow-500" />;
+    return <Loader2 className="icon-sm text-status-pending shrink-0 animate-spin" />;
   }
   switch (check.conclusion) {
     case 'success':
     case 'neutral':
     case 'skipped':
-      return <CheckCircle2 className="size-3.5 shrink-0 text-green-500" />;
+      return <CheckCircle2 className="text-status-success size-3.5 shrink-0" />;
     case 'failure':
     case 'timed_out':
     case 'startup_failure':
     case 'action_required':
-      return <XCircle className="size-3.5 shrink-0 text-red-500" />;
+      return <XCircle className="text-status-error size-3.5 shrink-0" />;
     case 'cancelled':
       return <Circle className="text-muted-foreground size-3.5 shrink-0" />;
     default:
-      return <Clock className="size-3.5 shrink-0 text-yellow-500" />;
+      return <Clock className="text-status-pending size-3.5 shrink-0" />;
   }
 }
 
@@ -97,7 +97,7 @@ export function PRSummaryCard({
           rateLimited ? (
             <Tooltip>
               <TooltipTrigger>
-                <span className="shrink-0 text-[11px] text-yellow-500">Rate limited</span>
+                <span className="text-status-warning shrink-0 text-[11px]">Rate limited</span>
               </TooltipTrigger>
               <TooltipContent>GitHub API rate limit reached. Polling paused.</TooltipContent>
             </Tooltip>
@@ -140,10 +140,10 @@ function PRChecksSection({ detail }: { detail: PRDetail }) {
           <span>
             CI Checks ({detail.checks_passed}/{totalChecks} passed)
             {detail.checks_failed > 0 && (
-              <span className="ml-1 text-red-400">{detail.checks_failed} failed</span>
+              <span className="text-status-error ml-1">{detail.checks_failed} failed</span>
             )}
             {detail.checks_pending > 0 && (
-              <span className="ml-1 text-yellow-400">{detail.checks_pending} pending</span>
+              <span className="text-status-pending ml-1">{detail.checks_pending} pending</span>
             )}
           </span>
         </CollapsibleTrigger>

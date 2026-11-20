@@ -677,10 +677,10 @@ function WorkflowNodeView({ data }: NodeProps<WorkflowNode>) {
       className={cn(
         'border-border bg-background min-w-52 rounded-md border p-3 shadow-sm',
         data.dimmed && 'opacity-35',
-        status === 'running' && 'border-blue-500',
-        status === 'waiting_approval' && 'border-amber-500',
-        status === 'completed' && 'border-emerald-500',
-        status === 'failed' && 'border-red-500',
+        status === 'running' && 'border-status-info',
+        status === 'waiting_approval' && 'border-status-warning',
+        status === 'completed' && 'border-status-success',
+        status === 'failed' && 'border-status-error',
       )}
     >
       <Handle type="target" position={Position.Left} />

@@ -163,7 +163,7 @@ function WaitingStatus(props: WaitingStatusProps) {
     <>
       {waitingReason === 'question' && (
         <StatusBlock className="text-status-warning/80 flex items-center gap-2 text-xs">
-          <Clock className="size-3.5 text-yellow-400" />
+          <Clock className="text-status-warning size-3.5" />
           {t('thread.waitingForResponse')}
         </StatusBlock>
       )}

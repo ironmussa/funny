@@ -109,8 +109,8 @@ export function ExtensionsSettings() {
         with full access to your session — install only extensions you trust.
       </p>
 
-      <div className="settings-card mb-4 flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3">
-        <AlertTriangle className="icon-base mt-0.5 shrink-0 text-amber-500" />
+      <div className="settings-card border-status-warning/30 bg-status-warning/5 mb-4 flex items-start gap-2 p-3">
+        <AlertTriangle className="icon-base text-status-warning mt-0.5 shrink-0" />
         <span className="text-muted-foreground text-sm">
           Installing an extension runs its code inside your authenticated session, like installing
           an npm package. There is no sandbox.

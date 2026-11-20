@@ -143,7 +143,10 @@ export function AvailableMcpServers({
                   size="xs"
                   data-testid={`available-mcp-${server.name}`}
                   aria-label={needsAuth ? `${server.name}: ${t('mcp.needsAuth')}` : server.name}
-                  className={cn(needsAuth && 'border-amber-500/50 bg-amber-500/10 text-amber-300')}
+                  className={cn(
+                    needsAuth &&
+                      'border-status-warning/50 bg-status-warning/10 text-status-warning',
+                  )}
                 >
                   {needsAuth && <ShieldAlert aria-hidden="true" />}
                   {server.name}
@@ -179,14 +182,16 @@ export function AvailableMcpServers({
                   )}
                   <div className="grid grid-cols-[74px_minmax(0,1fr)] gap-2">
                     <dt className="text-muted-foreground">{t('mcp.tooltip.status', 'Status')}</dt>
-                    <dd className={cn('text-foreground truncate', needsAuth && 'text-amber-700')}>
+                    <dd
+                      className={cn('text-foreground truncate', needsAuth && 'text-status-warning')}
+                    >
                       {statusLabel}
                     </dd>
                   </div>
                 </dl>
                 {needsAuth && (
-                  <div className="mt-2 rounded border border-amber-500/30 bg-amber-50 px-2 py-1.5">
-                    <p className="text-amber-800">{t('mcp.authHint')}</p>
+                  <div className="border-status-warning/30 bg-status-warning/10 mt-2 rounded border px-2 py-1.5">
+                    <p className="text-status-warning">{t('mcp.authHint')}</p>
                   </div>
                 )}
               </TooltipContent>

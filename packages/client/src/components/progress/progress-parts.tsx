@@ -12,21 +12,33 @@ export type ProgressStatus = 'queued' | 'running' | 'passed' | 'failed';
 
 /** Result colors, as in vitest / jest: pass green, fail red, skip / warn yellow-amber. */
 export const TONE = {
-  passed: 'text-green-500',
-  failed: 'text-red-500',
-  skipped: 'text-amber-500',
+  passed: 'text-status-success',
+  failed: 'text-status-error',
+  skipped: 'text-status-warning',
 } as const;
 
-const STATUS_ICON: Record<ProgressStatus, { icon: typeof Circle; className: string }> = {
-  queued: { icon: Circle, className: 'text-muted-foreground' },
-  running: { icon: Loader2, className: 'animate-spin text-primary' },
-  passed: { icon: CheckCircle2, className: TONE.passed },
-  failed: { icon: XCircle, className: TONE.failed },
+const STATUS_ICON: Record<ProgressStatus, typeof Circle> = {
+  queued: Circle,
+  running: Loader2,
+  passed: CheckCircle2,
+  failed: XCircle,
 };
 
 export function StatusIcon({ status, className }: { status: ProgressStatus; className?: string }) {
-  const { icon: Icon, className: tone } = STATUS_ICON[status];
-  return <Icon className={cn('size-3.5 shrink-0', tone, className)} aria-hidden />;
+  const Icon = STATUS_ICON[status];
+  return (
+    <Icon
+      className={cn(
+        'size-3.5 shrink-0',
+        status === 'queued' && 'text-muted-foreground',
+        status === 'running' && 'animate-spin text-primary',
+        status === 'passed' && TONE.passed,
+        status === 'failed' && TONE.failed,
+        className,
+      )}
+      aria-hidden
+    />
+  );
 }
 
 export function formatDuration(ms: number, t: TFunction): string {

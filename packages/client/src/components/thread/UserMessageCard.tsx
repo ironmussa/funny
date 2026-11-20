@@ -482,7 +482,7 @@ export function UserMessageCard({
               }
             >
               {copied ? (
-                <Check className="icon-xs copy-feedback-icon text-green-600" />
+                <Check className="icon-xs copy-feedback-icon text-status-success" />
               ) : (
                 <Copy className="icon-xs copy-feedback-icon" />
               )}

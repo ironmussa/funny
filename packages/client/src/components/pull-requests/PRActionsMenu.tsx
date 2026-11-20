@@ -26,6 +26,7 @@ export function PRActionsMenu({ prNumber, branch, onCreateThread }: PRActionsMen
         <Button
           variant="ghost"
           size="icon-xs"
+          // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant from list-row-styles
           className={listRowActionClassName}
           aria-label={t('review.pullRequests.actions', 'Pull request actions')}
           data-testid={`pr-actions-${prNumber}`}

@@ -476,7 +476,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
           </code>
           <Button variant="outline" size="sm" onClick={() => copyCode(userCode)}>
             {codeCopied ? (
-              <Check className="icon-base copy-feedback-icon text-green-600" />
+              <Check className="icon-base copy-feedback-icon text-status-success" />
             ) : (
               <Copy className="icon-base copy-feedback-icon" />
             )}

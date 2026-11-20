@@ -35,7 +35,7 @@ function StatusBadge({ status }: { status: RunStatus }) {
   }
   if (status === 'retry-queued') {
     return (
-      <Badge variant="outline" className="gap-1 border-amber-500/40 text-amber-600">
+      <Badge variant="outline" className="border-status-warning/40 text-status-warning gap-1">
         <Hourglass className="icon-2xs" /> retry-queued
       </Badge>
     );

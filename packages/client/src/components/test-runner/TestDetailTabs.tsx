@@ -100,9 +100,9 @@ function DetailTooltip({ label, children }: { label: string; children: ReactNode
 }
 
 const CONSOLE_LEVEL_STYLES: Record<string, string> = {
-  error: 'text-red-500',
-  warn: 'text-yellow-500',
-  info: 'text-blue-400',
+  error: 'text-status-error',
+  warn: 'text-status-warning',
+  info: 'text-status-info',
   debug: 'text-muted-foreground',
   trace: 'text-muted-foreground',
   log: '',
@@ -274,7 +274,7 @@ function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
         <div>
           {keyedEntries.map(({ key, value: entry }) => (
             <div key={key} className="border-border/30 border-b px-3 py-2">
-              <div className="flex items-start gap-2 text-red-500">
+              <div className="text-status-error flex items-start gap-2">
                 <AlertTriangle className="mt-0.5 size-3 shrink-0" />
                 <span className="break-all whitespace-pre-wrap">{entry.message}</span>
               </div>
@@ -416,8 +416,8 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
                   className={cn(
                     'block w-full cursor-pointer truncate border-b border-border/20 px-3 py-1 text-left hover:bg-muted/30',
                     entry.id === selectedId && 'bg-primary/10 text-primary',
-                    entry.failed && 'text-red-500',
-                    entry.status && entry.status >= 400 && 'text-red-500',
+                    entry.failed && 'text-status-error',
+                    entry.status && entry.status >= 400 && 'text-status-error',
                   )}
                   data-testid={`network-row-${entry.id}`}
                 >
@@ -454,8 +454,8 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
                     tabIndex={0}
                     className={cn(
                       'cursor-pointer border-b border-border/20 hover:bg-muted/30',
-                      entry.failed && 'text-red-500',
-                      entry.status && entry.status >= 400 && 'text-red-500',
+                      entry.failed && 'text-status-error',
+                      entry.status && entry.status >= 400 && 'text-status-error',
                     )}
                     data-testid={`network-row-${entry.id}`}
                   >
@@ -526,9 +526,9 @@ function StatusBadge({
   return (
     <span
       className={cn(
-        status >= 200 && status < 300 && 'text-green-500',
-        status >= 300 && status < 400 && 'text-yellow-500',
-        status >= 400 && 'text-red-500',
+        status >= 200 && status < 300 && 'text-status-success',
+        status >= 300 && status < 400 && 'text-status-warning',
+        status >= 400 && 'text-status-error',
       )}
     >
       {status}
@@ -861,9 +861,9 @@ function HeaderRow({
           <span
             className={cn(
               'mr-1.5 inline-block size-2 rounded-full',
-              statusDot >= 200 && statusDot < 300 && 'bg-green-500',
-              statusDot >= 300 && statusDot < 400 && 'bg-yellow-500',
-              statusDot >= 400 && 'bg-red-500',
+              statusDot >= 200 && statusDot < 300 && 'bg-status-success',
+              statusDot >= 300 && statusDot < 400 && 'bg-status-warning',
+              statusDot >= 400 && 'bg-status-error',
               !statusDot && 'bg-muted-foreground',
             )}
           />

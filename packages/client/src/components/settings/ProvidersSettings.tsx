@@ -128,8 +128,8 @@ export function ProvidersSettings() {
         binary.
       </p>
 
-      <div className="settings-card mb-4 flex items-start gap-2 border-amber-500/30 bg-amber-500/5 p-3">
-        <AlertTriangle className="icon-base mt-0.5 shrink-0 text-amber-500" />
+      <div className="settings-card border-status-warning/30 bg-status-warning/5 mb-4 flex items-start gap-2 p-3">
+        <AlertTriangle className="icon-base text-status-warning mt-0.5 shrink-0" />
         <span className="text-muted-foreground text-sm">
           Installing a provider lets funny spawn the binary it declares on your runner. Install only
           providers you trust.

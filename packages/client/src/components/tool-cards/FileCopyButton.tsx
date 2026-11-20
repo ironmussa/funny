@@ -31,7 +31,7 @@ export function FileCopyButton({
           className="text-muted-foreground hover:text-foreground"
         >
           {copied ? (
-            <Check className="icon-sm copy-feedback-icon text-green-600" />
+            <Check className="icon-sm copy-feedback-icon text-status-success" />
           ) : (
             <Copy className="icon-sm copy-feedback-icon" />
           )}

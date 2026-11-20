@@ -21,19 +21,19 @@ export function ReviewDecisionBadge({ decision }: { decision: string | null }) {
   switch (decision) {
     case 'APPROVED':
       return (
-        <span className="flex items-center gap-1 text-[11px] text-green-400">
+        <span className="text-status-success flex items-center gap-1 text-[11px]">
           <CheckCircle2 className="size-3.5" /> Approved
         </span>
       );
     case 'CHANGES_REQUESTED':
       return (
-        <span className="flex items-center gap-1 text-[11px] text-red-400">
+        <span className="text-status-error flex items-center gap-1 text-[11px]">
           <AlertCircle className="size-3.5" /> Changes requested
         </span>
       );
     case 'REVIEW_REQUIRED':
       return (
-        <span className="flex items-center gap-1 text-[11px] text-yellow-400">
+        <span className="text-status-pending flex items-center gap-1 text-[11px]">
           <Clock className="size-3.5" /> Review required
         </span>
       );
@@ -47,13 +47,13 @@ export function MergeStatus({ mergeable, merged }: { mergeable: string; merged: 
   switch (mergeable) {
     case 'mergeable':
       return (
-        <span className="flex items-center gap-1 text-[11px] text-green-400">
+        <span className="text-status-success flex items-center gap-1 text-[11px]">
           <GitMerge className="size-3.5" /> Ready to merge
         </span>
       );
     case 'conflicting':
       return (
-        <span className="flex items-center gap-1 text-[11px] text-red-400">
+        <span className="text-status-error flex items-center gap-1 text-[11px]">
           <AlertCircle className="size-3.5" /> Merge conflicts
         </span>
       );

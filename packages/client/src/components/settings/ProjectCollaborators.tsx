@@ -26,15 +26,16 @@ import { useProjectById } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import type { ProjectMemberEntry, ProjectMemberRole, UserSearchResult } from '@/lib/api/projects';
 import { createClientLogger } from '@/lib/client-logger';
+import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
 const log = createClientLogger('project-collaborators');
 
 const ROLE_COLORS: Record<string, string> = {
-  owner: 'bg-purple-500/15 text-purple-700 dark:text-purple-400',
-  admin: 'bg-blue-500/15 text-blue-700 dark:text-blue-400',
-  member: 'bg-green-500/15 text-green-700 dark:text-green-400',
+  owner: 'bg-status-violet/15 text-status-violet',
+  admin: 'bg-status-info/15 text-status-info',
+  member: 'bg-status-success/15 text-status-success',
   viewer: 'bg-muted text-muted-foreground',
 };
 
@@ -249,7 +250,14 @@ export function ProjectCollaborators() {
                     {isOwner || isSelf ? (
                       <Badge
                         variant="secondary"
-                        className={ROLE_COLORS[isOwner ? 'owner' : m.role] ?? ''}
+                        className={cn(
+                          isOwner && 'bg-status-violet/15 text-status-violet',
+                          !isOwner && m.role === 'admin' && 'bg-status-info/15 text-status-info',
+                          !isOwner &&
+                            m.role === 'member' &&
+                            'bg-status-success/15 text-status-success',
+                          !isOwner && m.role === 'viewer' && 'bg-muted text-muted-foreground',
+                        )}
                       >
                         {isOwner ? 'owner' : m.role}
                       </Badge>
@@ -280,7 +288,7 @@ export function ProjectCollaborators() {
                     {!m.localPath && !isOwner && (
                       <Badge
                         variant="secondary"
-                        className="bg-amber-500/15 text-amber-700 dark:text-amber-400"
+                        className="bg-status-warning/15 text-status-warning dark:text-status-warning"
                       >
                         needs setup
                       </Badge>

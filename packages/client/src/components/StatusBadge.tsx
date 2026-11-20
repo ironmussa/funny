@@ -35,6 +35,7 @@ export function StatusBadge({
         title={statusLabels[displayStatus]}
         className="inline-flex shrink-0 items-center"
       >
+        {/* oxlint-disable-next-line shadcn/require-static-classes -- statusConfig has 24 status entries; inlining would be unreadable */}
         <Icon aria-hidden="true" className={cn('size-3.5 shrink-0', cfg.className)} />
       </span>
     );
@@ -47,6 +48,7 @@ export function StatusBadge({
         colorClass,
       )}
     >
+      {/* oxlint-disable-next-line shadcn/require-static-classes -- statusConfig has 24 status entries; inlining would be unreadable */}
       <Icon className={cn('size-3 shrink-0', cfg.className)} />
       {statusLabels[displayStatus]}
     </span>

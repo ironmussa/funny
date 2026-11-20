@@ -420,10 +420,10 @@ export function NewThreadInput({
       <div className="w-full max-w-3xl">
         {issueContext && (
           <div
-            className="mb-1.5 flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1 text-xs"
+            className="border-status-success/20 bg-status-success/5 mb-1.5 flex items-center gap-1.5 rounded-md border px-2 py-1 text-xs"
             data-testid="issue-context-banner"
           >
-            <CircleDot className="size-3.5 shrink-0 text-emerald-500" />
+            <CircleDot className="text-status-success size-3.5 shrink-0" />
             <span className="text-muted-foreground truncate">
               {t('issues.creatingFromIssue', { title: issueContext.title })}
             </span>

@@ -106,6 +106,7 @@ function WorktreeCard({
           onClick={onRemove}
           disabled={removing}
           className={cn(
+            // oxlint-disable-next-line shadcn/require-static-classes -- listRowActionClassName is a static constant
             listRowActionClassName,
             'hover:text-destructive',
             removing && 'opacity-100',

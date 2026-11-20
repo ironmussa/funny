@@ -69,13 +69,13 @@ function buildTree(files: TestFile[]): TreeNode[] {
 function StatusDot({ status }: { status: TestFileStatus | undefined }) {
   switch (status) {
     case 'running':
-      return <Loader2 className="icon-xs animate-spin text-blue-500" />;
+      return <Loader2 className="icon-xs text-status-info animate-spin" />;
     case 'passed':
-      return <CheckCircle2 className="icon-xs text-green-500" />;
+      return <CheckCircle2 className="icon-xs text-status-success" />;
     case 'failed':
-      return <XCircle className="icon-xs text-red-500" />;
+      return <XCircle className="icon-xs text-status-error" />;
     case 'stopped':
-      return <Circle className="icon-xs text-yellow-500" />;
+      return <Circle className="icon-xs text-status-warning" />;
     default:
       return <Circle className="icon-xs text-muted-foreground/30" />;
   }

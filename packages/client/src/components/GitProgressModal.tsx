@@ -139,7 +139,7 @@ export function SubItemsList({
           )}
         >
           <div className="shrink-0">
-            {item.status === 'completed' && <Check className="icon-xs text-emerald-500" />}
+            {item.status === 'completed' && <Check className="icon-xs text-status-success" />}
             {item.status === 'running' && <ArrowRight className="icon-xs text-primary" />}
             {item.status === 'failed' && <X className="icon-xs text-destructive" />}
             {item.status === 'pending' && <Minus className="icon-xs text-muted-foreground/30" />}
@@ -213,7 +213,9 @@ export function GitProgressModal({
                 )}
               >
                 <div className="mt-0.5 shrink-0">
-                  {step.status === 'completed' && <Check className="icon-base text-emerald-500" />}
+                  {step.status === 'completed' && (
+                    <Check className="icon-base text-status-success" />
+                  )}
                   {step.status === 'running' && (
                     <Loader2 className="icon-base text-primary animate-spin" />
                   )}

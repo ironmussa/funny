@@ -23,7 +23,7 @@ export function SubmoduleBadge({
     <Tooltip>
       <TooltipTrigger asChild>
         <span
-          className="shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] tracking-wide text-purple-600 uppercase dark:text-purple-300"
+          className="border-status-violet/40 bg-status-violet/10 text-status-violet shrink-0 rounded-sm border px-1 text-[10px] tracking-wide uppercase"
           data-testid={testId}
         >
           {nested && nested.dirtyFileCount > 0

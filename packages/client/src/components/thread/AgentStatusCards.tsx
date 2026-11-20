@@ -141,7 +141,13 @@ export function AgentResultCard({
       )}
     >
       <div className="flex flex-wrap items-center gap-3">
-        <Icon className={cn('icon-base shrink-0', style.text)} />
+        <Icon
+          className={cn(
+            'icon-base shrink-0',
+            // oxlint-disable-next-line shadcn/require-static-classes -- style.text comes from a static RESULT_STYLE map
+            style.text,
+          )}
+        />
         <span className={cn('font-medium', style.text)}>
           {hasTime ? (
             <Trans i18nKey={RESULT_LABEL_AT[status]} components={{ time }} />

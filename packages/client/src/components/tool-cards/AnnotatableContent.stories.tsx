@@ -88,7 +88,7 @@ const DUMMY_ARGS = {
 };
 
 const SAMPLE_TEXT = (
-  <div className="prose prose-xs prose-invert max-w-none">
+  <div className="prose max-w-none">
     <h2>Authentication Refactor</h2>
     <p>
       Extract token validation into a shared utility module. This allows both the middleware and the

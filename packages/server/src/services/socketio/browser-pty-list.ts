@@ -29,7 +29,7 @@ export function setupBrowserPtyListRpc(
   const access = dependencies.runnerAccess ?? runnerAccess;
   registerSocketRpc<PtyListResponse>(socket, BROWSER_PTY_LIST_EVENT, {
     handler: async (_ctx, ack) => {
-      if (isRateLimited(socket.id)) {
+      if (isRateLimited(socket.id, 100, 10_000, BROWSER_PTY_LIST_EVENT)) {
         ack({ status: 'error', sessions: [], error: 'rate-limited' });
         return;
       }

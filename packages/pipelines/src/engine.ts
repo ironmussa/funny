@@ -20,7 +20,16 @@ import { runGraph } from './scheduler.js';
  * Async implementations must honor the signal and release owned resources on abort.
  * Effect can interrupt the wait, but cannot stop side effects in an uncooperative callback.
  */
-export type NodeFn<T> = (ctx: T, signal: AbortSignal) => T | Promise<T>;
+export type NodeFn<T> = (ctx: T, signal: AbortSignal, info: NodeRunInfo) => T | Promise<T>;
+
+/** What the engine tells a node about the execution it is running. */
+export interface NodeRunInfo {
+  /**
+   * The visit of the innermost loop region the node belongs to, from 1
+   * (always 1 outside loops). Hosts expose it to templates as `LOOP_ITERATION`.
+   */
+  iteration: number;
+}
 
 /**
  * A guard function: returns true to run the node, false to skip.
@@ -94,6 +103,28 @@ export interface PipelineNode<T> {
    * fails. `continue`: the node is marked failed and the joins decide.
    */
   onError?: NodeOnError;
+  /**
+   * Repeat a region after this node: every node on a path from `loop.backTo`
+   * to this one. Checked after this node succeeds; see `NodeLoop`.
+   */
+  loop?: NodeLoop<T>;
+}
+
+/**
+ * A loop declared on a node X. When X succeeds and `until` is false, the
+ * region (the nodes on a path from `backTo` to X, both included) runs again,
+ * and `backTo` reads X's result. Nodes outside the region that depend on it
+ * wait until the loop exits. Once X has run `maxIterations` visits with
+ * `until` still false, X fails with "loop exhausted" and its `onError`
+ * applies. The regions of a pipeline must be nested or disjoint.
+ */
+export interface NodeLoop<T> {
+  /** The first node of the region: X itself or one of its dependencies. */
+  backTo: string;
+  /** Return true to exit the loop. */
+  until: GuardFn<T>;
+  /** Visits before the loop is exhausted. Default: 10. */
+  maxIterations?: number;
 }
 
 /** How a node joins its dependencies. See `PipelineNode.triggerRule`. */
@@ -102,7 +133,10 @@ export type TriggerRule = 'all_success' | 'all_done' | 'one_success';
 /** What a node failure does to the run. See `PipelineNode.onError`. */
 export type NodeOnError = 'fail' | 'continue';
 
-/** Loop configuration — allows jumping back to a previous node. */
+/**
+ * Pipeline-level loop: a region from `from` to the last declared node.
+ * Equivalent to a `NodeLoop` on the last node; kept for existing callers.
+ */
 export interface PipelineLoop<T> {
   /** Name of the node to jump back to. */
   from: string;
@@ -152,7 +186,7 @@ export type OnStateChange<T> = (change: PipelineStateChange<T>) => void;
 export interface PipelineRunOptions<T> {
   signal?: AbortSignal;
   onStateChange?: OnStateChange<T>;
-  /** Override maxIterations from the loop config. */
+  /** Override maxIterations of the pipeline-level `loop` (not of node loops). */
   maxIterations?: number;
   /**
    * Max nodes of this run in flight at once. Default: 8.

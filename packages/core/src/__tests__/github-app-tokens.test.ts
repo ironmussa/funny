@@ -140,6 +140,32 @@ describe('GitHub token writer with a caller-chosen gh config directory', () => {
   });
 
   test('renews for the key it was started with and reports failed renewals', async () => {
+    // Drive the renewal loop off an injected clock instead of wall time: the
+    // original real-timer version (a 200ms sleep racing two renewals plus a
+    // failed one) flaked on loaded CI runners. `advance` wakes the loop's fake
+    // sleeps; only the failing renewal's short exponential backoff still runs in
+    // real time, which the generous poll budget below absorbs.
+    let now = Date.parse('2026-11-10T12:00:00Z');
+    const sleepers: Array<{ at: number; wake: () => void }> = [];
+    const clock = {
+      now: () => now,
+      sleep: (ms: number) => new Promise<void>((wake) => sleepers.push({ at: now + ms, wake })),
+    };
+    const advance = (ms: number) => {
+      now += ms;
+      for (const s of sleepers.splice(0)) {
+        if (s.at <= now) s.wake();
+        else sleepers.push(s);
+      }
+    };
+    /** Advance the clock an hour at a time until the predicate holds. */
+    const advanceUntil = async (predicate: () => boolean) => {
+      for (let i = 0; i < 200 && !predicate(); i++) {
+        advance(60 * 60 * 1000);
+        await sleep(5);
+      }
+    };
+
     const ghConfigDir = temp();
     const asked: string[] = [];
     const failures: string[] = [];
@@ -147,9 +173,7 @@ describe('GitHub token writer with a caller-chosen gh config directory', () => {
     const writer = createGithubTokenWriter<string>({
       ghConfigDir,
       configureGit: async () => ok(undefined),
-      renewBeforeExpiryMs: 30,
-      minDelayMs: 5,
-      retryAfterFailureMs: 10_000,
+      clock,
       retryBaseMs: 1,
       fetchToken: async (key) => {
         asked.push(key);
@@ -157,19 +181,24 @@ describe('GitHub token writer with a caller-chosen gh config directory', () => {
         return n <= 2
           ? ok({
               token: `ghs_${n}`,
-              expiresAt: new Date(Date.now() + 60).toISOString(),
+              expiresAt: new Date(now + 60 * 60 * 1000).toISOString(),
               repo: 'a/b',
             })
           : err('App not installed');
       },
       onRenewalFailed: (key) => failures.push(key),
     });
+    const hosts = () => readFileSync(join(ghConfigDir, 'hosts.yml'), 'utf8');
     const first = (await writer.ensure('run-1'))._unsafeUnwrap();
     writer.startRefresh('run-1', first.expiresAt);
-    await sleep(200);
+
+    // First renewal succeeds (ghs_2); the second fails and is reported.
+    await advanceUntil(() => hosts().includes('ghs_2'));
+    await advanceUntil(() => failures.length > 0);
     await writer.stop();
+
     expect(new Set(asked)).toEqual(new Set(['run-1']));
-    expect(readFileSync(join(ghConfigDir, 'hosts.yml'), 'utf8')).toContain('ghs_2');
+    expect(hosts()).toContain('ghs_2');
     expect(failures).toEqual(['run-1']);
   });
 });

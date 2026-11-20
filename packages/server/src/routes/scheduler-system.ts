@@ -218,10 +218,45 @@ schedulerSystemRoutes.post('/runs', async (c) => {
     return c.json({ error: 'threadId and userId required' }, 400);
   }
   const body = parsed.data;
+
+  // The stored userId decides who sees the run (listActiveRunsByUser). Derive
+  // it from the thread OWNER, read from the DB, the way /dispatch does: answer
+  // 404 for a missing thread and refuse a mismatch before claiming, so the
+  // brain's body cannot smuggle a run onto another tenant (runner-request-
+  // isolation).
+  const thread = (await dbGet(
+    db
+      .select({ userId: schema.threads.userId })
+      .from(schema.threads)
+      .where(eq(schema.threads.id, body.threadId)),
+  )) as { userId: string } | undefined;
+  if (!thread) {
+    return c.json({ error: `thread ${body.threadId} not found` }, 404);
+  }
+  if (thread.userId !== body.userId) {
+    log.warn('Scheduler claim refused — userId does not own the thread', {
+      namespace: NS,
+      threadId: body.threadId,
+      requestedUserId: body.userId,
+      ownerId: thread.userId,
+    });
+    audit({
+      action: 'authz.cross_tenant_refused',
+      actorId: body.userId,
+      detail: 'Scheduler claim refused — userId does not own the thread',
+      meta: {
+        source: 'scheduler-system:runs',
+        threadId: body.threadId,
+        ownerId: thread.userId,
+      },
+    });
+    return c.json({ error: 'userId does not own the thread' }, 403);
+  }
+
   try {
     const row = await runRepo.claim({
       threadId: body.threadId,
-      userId: body.userId,
+      userId: thread.userId,
       now: typeof body.now === 'number' ? body.now : undefined,
     });
     return c.json({ run: row }, 201);

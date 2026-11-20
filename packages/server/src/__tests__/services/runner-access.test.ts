@@ -78,7 +78,7 @@ function runner(
 async function certified(actor: RunnerActor, target: RunnerTarget) {
   const result = await withRunnerFor(actor, target, presence, async (a, r, proof) => ({
     actor: a.value.userId,
-    runner: r.value as string,
+    runner: String(r.value),
     kind: proof.kind,
   }));
   return result.isOk() ? result.value : result.error;
@@ -91,7 +91,7 @@ beforeEach(async () => {
   testDb = createTestDb();
   const { setConnection } = await import('../../db/index.js');
   setConnection({
-    db: testDb.db as any,
+    db: testDb.db,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
     mode: 'sqlite',
@@ -253,7 +253,7 @@ async function oauthRoute(state: string | undefined) {
   let ran = 0;
   const result = await withOAuthCallbackRunner(state, presence, async (r, proof) => {
     ran += 1;
-    return { runner: r.value as string, kind: proof.kind };
+    return { runner: String(r.value), kind: proof.kind };
   });
   return { result: result.isOk() ? result.value : result.error, ran };
 }
@@ -272,9 +272,8 @@ describe('OAuth callback state key — stable across restarts and instances', ()
     const state = await boundState(alice, 'r-alice');
     // A non-literal specifier: the query makes Bun load a fresh module instance.
     const freshInstance = '../../services/runner-access/oauth-callback-state.ts?instance=restarted';
-    const restarted = (await import(
-      freshInstance
-    )) as typeof import('../../services/runner-access/oauth-callback-state.js');
+    const restarted: typeof import('../../services/runner-access/oauth-callback-state.js') =
+      await import(freshInstance);
     expect(restarted.verifyOAuthCallbackState(state)).toEqual({
       userId: 'alice',
       runnerId: 'r-alice',

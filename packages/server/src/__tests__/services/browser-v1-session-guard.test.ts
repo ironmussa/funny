@@ -6,11 +6,14 @@ import { StatusCode } from '@funny/shared/browser-v1/common';
 import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 
 import { setupBrowserV1SessionGuard } from '../../services/socketio/browser-v1-session-guard.js';
+import { expectInstance } from '../helpers/builders-services.js';
 import { createMockSocket } from '../helpers/socketio-test-mocks.js';
 
 describe('browser.v1 session revocation guard', () => {
   test('keeps the authenticated principal active while the session matches', async () => {
     const disconnect = mock(() => {});
+    // SAFETY: the guard reads only the handshake cookie header and calls disconnect();
+    // a full socket.io Handshake is not needed.
     const socket = createMockSocket({
       data: { browserV1: { principalUserId: 'user-1' } },
       handshake: { headers: { cookie: 'session=valid' } },
@@ -29,6 +32,8 @@ describe('browser.v1 session revocation guard', () => {
   test('disconnects revoked or identity-substituted sessions with a typed outcome', async () => {
     for (const session of [null, { user: { id: 'user-2' } }]) {
       const disconnect = mock(() => {});
+      // SAFETY: the guard reads only the handshake cookie header and calls disconnect();
+      // a full socket.io Handshake is not needed.
       const socket = createMockSocket({
         data: { browserV1: { principalUserId: 'user-1' } },
         handshake: { headers: { cookie: 'session=revoked' } },
@@ -44,7 +49,7 @@ describe('browser.v1 session revocation guard', () => {
       const control = socket.emitted.find(
         ({ event }) => event === BROWSER_V1_CARRIER_EVENTS.control,
       );
-      const decoded = fromBinary(CarrierEnvelopeSchema, control?.data as Uint8Array);
+      const decoded = fromBinary(CarrierEnvelopeSchema, expectInstance(control?.data, Uint8Array));
       expect(decoded.payload).toMatchObject({
         case: 'control',
         value: { payload: { case: 'status', value: { code: StatusCode.REVOKED } } },
@@ -55,6 +60,8 @@ describe('browser.v1 session revocation guard', () => {
 
   test('does not disclose typed protocol state before browser.v1 activation', async () => {
     const disconnect = mock(() => {});
+    // SAFETY: the guard reads only the handshake cookie header and calls disconnect();
+    // a full socket.io Handshake is not needed.
     const socket = createMockSocket({
       data: {},
       handshake: { headers: {} },

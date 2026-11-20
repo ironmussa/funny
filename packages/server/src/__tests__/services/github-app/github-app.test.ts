@@ -6,6 +6,8 @@ import { join } from 'node:path';
 
 import { okAsync } from 'neverthrow';
 
+import { fakeFetch } from '../../helpers/builders-services.js';
+
 // The stored App's key is encrypted with the keyring: keep it out of ~/.funny.
 process.env.FUNNY_DATA_DIR = mkdtempSync(join(tmpdir(), 'funny-github-app-test-'));
 
@@ -112,15 +114,14 @@ describe('GitHub App token issuer', () => {
     opts: { permissions?: Record<string, boolean>; ownerStatus?: number; installed?: boolean } = {},
   ) {
     let clock = T0.getTime();
-    const calls: Array<{ url: string; method: string; auth: string; body?: any }> = [];
+    const calls: Array<{ url: string; method: string; auth: string | undefined; body?: any }> = [];
     let minted = 0;
-    const fetchFake = (async (url: string, init: RequestInit): Promise<Response> => {
-      const headers = init.headers as Record<string, string>;
+    const fetchFake = fakeFetch(async (url, init) => {
       const call = {
         url,
-        method: init.method ?? 'GET',
-        auth: headers.authorization,
-        body: init.body ? JSON.parse(String(init.body)) : undefined,
+        method: init?.method ?? 'GET',
+        auth: new Headers(init?.headers).get('authorization') ?? undefined,
+        body: init?.body ? JSON.parse(String(init.body)) : undefined,
       };
       calls.push(call);
       const json = (status: number, body: unknown) =>
@@ -140,7 +141,7 @@ describe('GitHub App token issuer', () => {
         });
       }
       return json(500, {});
-    }) as typeof fetch;
+    });
     const issuer = createGithubAppTokenIssuer({
       app: () =>
         okAsync({

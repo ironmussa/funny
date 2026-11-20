@@ -16,7 +16,7 @@ sqlite.exec(
 // module mocks), breaking any suite that calls `setConnection` on the real module.
 function useTestConnection() {
   setConnection({
-    db: db as any,
+    db,
     schema: testDb.schema,
     sqlite,
     mode: 'sqlite',
@@ -116,7 +116,7 @@ test('completed scratch threads send without connected browsers; other users and
   expect(send).not.toHaveBeenCalled();
   await pushAgentResult('alice', event);
   expect(send).toHaveBeenCalledTimes(1);
-  expect(JSON.parse(send.mock.calls[0][1] as string)).toMatchObject({
+  expect(JSON.parse(String(send.mock.calls[0][1]))).toMatchObject({
     url: '/scratch/scratch-1',
     body: 'Agent finished',
   });

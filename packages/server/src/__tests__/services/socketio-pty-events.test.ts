@@ -24,8 +24,7 @@ const REQUIRED_PTY_EVENTS = [
 describe('socketio PTY event forwarding', () => {
   test('shared contract lists every runtime PTY forward event', () => {
     const missing = REQUIRED_PTY_EVENTS.filter(
-      (event) =>
-        !BROWSER_PTY_FORWARD_EVENTS.includes(event as (typeof BROWSER_PTY_FORWARD_EVENTS)[number]),
+      (event) => !BROWSER_PTY_FORWARD_EVENTS.some((forwarded) => forwarded === event),
     );
     expect(missing).toEqual([]);
   });

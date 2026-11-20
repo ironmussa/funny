@@ -13,6 +13,7 @@ import { __resetDataScopeCache } from '../../services/data-scope.js';
 import { SqlOperationIdempotencyStore } from '../../services/grpc/operation-idempotency.js';
 import { upsertProfile } from '../../services/profile-service.js';
 import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
+import { seedDbFor, type SeedDb } from '../helpers/builders-services.js';
 import { createMockIo } from '../helpers/socketio-test-mocks.js';
 import {
   seedProject,
@@ -26,6 +27,7 @@ import {
 
 describe('data-handler handleDataMessageWithAck', () => {
   let db: (typeof import('../../db/index.js'))['db'];
+  let seedDb: SeedDb;
   let schema: typeof import('../../db/schema.js');
 
   beforeAll(async () => {
@@ -35,6 +37,7 @@ describe('data-handler handleDataMessageWithAck', () => {
     await autoMigrate();
     const dbModule = await import('../../db/index.js');
     db = dbModule.db;
+    seedDb = seedDbFor(db);
     schema = await import('../../db/schema.js');
   });
 
@@ -63,7 +66,7 @@ describe('data-handler handleDataMessageWithAck', () => {
     ];
     for (const table of tables) {
       try {
-        (db as any).run(`DELETE FROM ${table}`);
+        db.run(`DELETE FROM ${table}`);
       } catch {
         // ignore
       }
@@ -72,9 +75,9 @@ describe('data-handler handleDataMessageWithAck', () => {
     __resetDataScopeCache();
     __resetDataOwnershipCache();
     // The authenticated runner sending every request below (a general runner).
-    seedRunner(db as any, { id: 'runner-1', userId: 'user-1', token: 'token-runner-1' });
-    seedProject(db as any, { id: 'p1', userId: 'user-1', path: '/tmp/repo' });
-    seedThread(db as any, {
+    seedRunner(seedDb, { id: 'runner-1', userId: 'user-1', token: 'token-runner-1' });
+    seedProject(seedDb, { id: 'p1', userId: 'user-1', path: '/tmp/repo' });
+    seedThread(seedDb, {
       id: 't1',
       projectId: 'p1',
       userId: 'user-1',
@@ -160,7 +163,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects get_thread for another user thread', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't2',
       projectId: 'p1',
       userId: 'user-2',
@@ -180,7 +183,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('get_thread_by_external_request_id returns an owned thread', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't-external',
       projectId: 'p1',
       userId: 'user-1',
@@ -209,7 +212,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects get_thread_by_external_request_id for another user thread', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't-external-other',
       projectId: 'p1',
       userId: 'user-2',
@@ -229,7 +232,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('get_thread_by_session_id returns an owned thread', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't-session',
       projectId: 'p1',
       userId: 'user-1',
@@ -246,7 +249,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects get_thread_by_session_id for another user thread', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't-session-other',
       projectId: 'p1',
       userId: 'user-2',
@@ -278,13 +281,13 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('update_message requires message ownership', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't2',
       projectId: 'p1',
       userId: 'user-2',
       title: 'Theirs',
     });
-    seedMessage(db as any, { id: 'm2', threadId: 't2', content: 'secret' });
+    seedMessage(seedDb, { id: 'm2', threadId: 't2', content: 'secret' });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:update_message',
@@ -300,7 +303,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('persistent fire-and-forget mutation returns a replayable acknowledgement', async () => {
-    seedMessage(db as any, { id: 'm1', threadId: 't1', content: 'before' });
+    seedMessage(seedDb, { id: 'm1', threadId: 't1', content: 'before' });
     const store = new SqlOperationIdempotencyStore({ retentionMs: 60_000 });
     const input = {
       runnerId: 'runner-1',
@@ -405,7 +408,7 @@ describe('data-handler handleDataMessageWithAck', () => {
 
   test('get_startup_command does not return command from another project', async () => {
     const now = new Date().toISOString();
-    seedProject(db as any, { id: 'p2', userId: 'user-1', path: '/tmp/repo-2' });
+    seedProject(seedDb, { id: 'p2', userId: 'user-1', path: '/tmp/repo-2' });
     db.insert(schema.startupCommands)
       .values({
         id: 'cmd-dev',
@@ -428,12 +431,12 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('mark_and_list_stale_threads marks running threads interrupted', async () => {
-    seedRunner(db as any, {
+    seedRunner(seedDb, {
       id: 'runner-2',
       userId: 'user-2',
       token: 'token-runner-2',
     });
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 'stale-1',
       projectId: 'p1',
       userId: 'user-1',
@@ -441,7 +444,7 @@ describe('data-handler handleDataMessageWithAck', () => {
       runnerId: 'runner-1',
       provider: 'claude',
     });
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 'stale-2',
       projectId: 'p1',
       userId: 'user-1',
@@ -449,7 +452,7 @@ describe('data-handler handleDataMessageWithAck', () => {
       runnerId: 'runner-1',
       provider: 'claude',
     });
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 'external-run',
       projectId: 'p1',
       userId: 'user-1',
@@ -457,7 +460,7 @@ describe('data-handler handleDataMessageWithAck', () => {
       runnerId: 'runner-1',
       provider: 'external',
     });
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 'other-runner',
       projectId: 'p1',
       userId: 'user-1',
@@ -496,7 +499,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('insert_tool_call persists and returns toolCallId', async () => {
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm1',
       threadId: 't1',
       role: 'assistant',
@@ -525,9 +528,9 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('insert_tool_call rejects a message owned by another user', async () => {
-    seedProject(db as any, { id: 'p2', userId: 'user-2', path: '/tmp/other' });
-    seedThread(db as any, { id: 't2', projectId: 'p2', userId: 'user-2' });
-    seedMessage(db as any, { id: 'foreign-message', threadId: 't2' });
+    seedProject(seedDb, { id: 'p2', userId: 'user-2', path: '/tmp/other' });
+    seedThread(seedDb, { id: 't2', projectId: 'p2', userId: 'user-2' });
+    seedMessage(seedDb, { id: 'foreign-message', threadId: 't2' });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:insert_tool_call',
@@ -545,8 +548,8 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('resolve_pending_permission rejects a request belonging to another user', async () => {
-    seedProject(db as any, { id: 'p2', userId: 'user-2', path: '/tmp/other' });
-    seedThread(db as any, { id: 't2', projectId: 'p2', userId: 'user-2' });
+    seedProject(seedDb, { id: 'p2', userId: 'user-2', path: '/tmp/other' });
+    seedThread(seedDb, { id: 't2', projectId: 'p2', userId: 'user-2' });
     await db.insert(schema.pendingPermissionRequests).values({
       requestId: 'permission-2',
       threadId: 't2',
@@ -576,8 +579,8 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('get_tool_call returns tool call for owner', async () => {
-    seedMessage(db as any, { id: 'm1', threadId: 't1' });
-    seedToolCall(db as any, { id: 'tc-1', messageId: 'm1', name: 'Write' });
+    seedMessage(seedDb, { id: 'm1', threadId: 't1' });
+    seedToolCall(seedDb, { id: 'tc-1', messageId: 'm1', name: 'Write' });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:get_tool_call',
@@ -591,8 +594,8 @@ describe('data-handler handleDataMessageWithAck', () => {
 
   test('find_tool_call returns matching tool call by messageId, name, and input', async () => {
     const input = JSON.stringify({ file: 'src/a.ts' });
-    seedMessage(db as any, { id: 'm1', threadId: 't1' });
-    seedToolCall(db as any, {
+    seedMessage(seedDb, { id: 'm1', threadId: 't1' });
+    seedToolCall(seedDb, {
       id: 'tc-find',
       messageId: 'm1',
       name: 'Read',
@@ -609,8 +612,8 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('find_tool_call returns null when no match', async () => {
-    seedMessage(db as any, { id: 'm1', threadId: 't1' });
-    seedToolCall(db as any, {
+    seedMessage(seedDb, { id: 'm1', threadId: 't1' });
+    seedToolCall(seedDb, {
       id: 'tc-1',
       messageId: 'm1',
       name: 'Read',
@@ -627,13 +630,13 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects find_tool_call for cross-tenant message', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't2',
       projectId: 'p1',
       userId: 'user-2',
       title: 'Theirs',
     });
-    seedMessage(db as any, { id: 'm2', threadId: 't2' });
+    seedMessage(seedDb, { id: 'm2', threadId: 't2' });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:find_tool_call',
@@ -648,23 +651,23 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('find_last_unanswered_interactive_tool_call returns latest unanswered', async () => {
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm-old',
       threadId: 't1',
       timestamp: '2026-01-01T00:00:00.000Z',
     });
-    seedToolCall(db as any, {
+    seedToolCall(seedDb, {
       id: 'tc-old',
       messageId: 'm-old',
       name: 'AskUserQuestion',
       output: null,
     });
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm-new',
       threadId: 't1',
       timestamp: '2026-01-02T00:00:00.000Z',
     });
-    seedToolCall(db as any, {
+    seedToolCall(seedDb, {
       id: 'tc-new',
       messageId: 'm-new',
       name: 'ExitPlanMode',
@@ -682,8 +685,8 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('find_last_unanswered_interactive_tool_call returns null when all answered', async () => {
-    seedMessage(db as any, { id: 'm1', threadId: 't1' });
-    seedToolCall(db as any, {
+    seedMessage(seedDb, { id: 'm1', threadId: 't1' });
+    seedToolCall(seedDb, {
       id: 'tc-1',
       messageId: 'm1',
       name: 'AskUserQuestion',
@@ -700,7 +703,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects find_last_unanswered_interactive_tool_call for foreign thread', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't2',
       projectId: 'p1',
       userId: 'user-2',
@@ -720,14 +723,14 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects get_tool_call for cross-tenant tool call', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't2',
       projectId: 'p1',
       userId: 'user-2',
       title: 'Theirs',
     });
-    seedMessage(db as any, { id: 'm2', threadId: 't2' });
-    seedToolCall(db as any, { id: 'tc-2', messageId: 'm2' });
+    seedMessage(seedDb, { id: 'm2', threadId: 't2' });
+    seedToolCall(seedDb, { id: 'tc-2', messageId: 'm2' });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:get_tool_call',
@@ -742,8 +745,8 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('update_tool_call_output persists output for owned tool call', async () => {
-    seedMessage(db as any, { id: 'm1', threadId: 't1' });
-    seedToolCall(db as any, { id: 'tc-1', messageId: 'm1', output: null });
+    seedMessage(seedDb, { id: 'm1', threadId: 't1' });
+    seedToolCall(seedDb, { id: 'tc-1', messageId: 'm1', output: null });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:update_tool_call_output',
@@ -843,7 +846,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('delete_thread removes thread owned by runner user', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't-del',
       projectId: 'p1',
       userId: 'user-1',
@@ -862,7 +865,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects delete_thread for another user', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't2',
       projectId: 'p1',
       userId: 'user-2',
@@ -882,19 +885,19 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('delete_messages_after removes messages after anchor', async () => {
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm1',
       threadId: 't1',
       content: 'one',
       timestamp: '2024-01-01T00:00:00.000Z',
     });
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm2',
       threadId: 't1',
       content: 'two',
       timestamp: '2024-01-01T00:00:01.000Z',
     });
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm3',
       threadId: 't1',
       content: 'three',
@@ -1078,13 +1081,13 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('list_projects returns only projects owned by userId', async () => {
-    seedProject(db as any, {
+    seedProject(seedDb, {
       id: 'p2',
       userId: 'user-1',
       name: 'Mine B',
       path: '/b',
     });
-    seedProject(db as any, {
+    seedProject(seedDb, {
       id: 'p3',
       userId: 'user-2',
       name: 'Theirs',
@@ -1113,7 +1116,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects get_project for foreign project', async () => {
-    seedProject(db as any, {
+    seedProject(seedDb, {
       id: 'p-foreign',
       userId: 'user-2',
       path: '/other',
@@ -1175,7 +1178,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('update_thread cannot reassign the thread to another owner or project', async () => {
-    seedProject(db as any, { id: 'victim-project', userId: 'victim-user', path: '/tmp/victim' });
+    seedProject(seedDb, { id: 'victim-project', userId: 'victim-user', path: '/tmp/victim' });
     const before = await db.select().from(schema.threads).where(eq(schema.threads.id, 't1')).get();
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:update_thread',
@@ -1304,7 +1307,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects update_thread for another user thread', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't2',
       projectId: 'p1',
       userId: 'user-2',
@@ -1325,7 +1328,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('list_project_threads returns non-archived threads for owned project', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't-active',
       projectId: 'p1',
       userId: 'user-1',
@@ -1335,20 +1338,20 @@ describe('data-handler handleDataMessageWithAck', () => {
       branch: 'feature/sidebar-diffs',
       baseBranch: 'main',
     });
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't-archived',
       projectId: 'p1',
       userId: 'user-1',
       archived: 1,
       title: 'Old',
     });
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't-foreign',
       projectId: 'p1',
       userId: 'user-2',
       archived: 0,
     });
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't-scratch',
       projectId: 'p1',
       userId: 'user-1',
@@ -1378,13 +1381,13 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('get_thread_messages returns paginated messages for owner', async () => {
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm1',
       threadId: 't1',
       content: 'first',
       timestamp: '2024-01-01T00:00:00.000Z',
     });
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm2',
       threadId: 't1',
       content: 'second',
@@ -1403,7 +1406,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects get_thread_messages for foreign thread', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't2',
       projectId: 'p1',
       userId: 'user-2',
@@ -1423,19 +1426,19 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('search_threads finds messages by text, scoped to the runner user', async () => {
-    seedThread(db as any, {
+    seedThread(seedDb, {
       id: 't2',
       projectId: 'p1',
       userId: 'user-2',
       title: 'Theirs',
     });
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm-mine',
       threadId: 't1',
       content: 'deploy the pipeline today',
       timestamp: '2026-01-01T00:00:00.000Z',
     });
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm-theirs',
       threadId: 't2',
       content: 'deploy the pipeline now',
@@ -1456,13 +1459,13 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('search_threads filters by time range', async () => {
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm-old',
       threadId: 't1',
       content: 'old note',
       timestamp: '2025-01-01T00:00:00.000Z',
     });
-    seedMessage(db as any, {
+    seedMessage(seedDb, {
       id: 'm-new',
       threadId: 't1',
       content: 'new note',
@@ -1512,7 +1515,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('search_threads returns empty when no filter is provided', async () => {
-    seedMessage(db as any, { id: 'm1', threadId: 't1', content: 'whatever' });
+    seedMessage(seedDb, { id: 'm1', threadId: 't1', content: 'whatever' });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:search_threads',
@@ -1537,12 +1540,12 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('resolve_project_path returns member local path for shared project', async () => {
-    seedProject(db as any, {
+    seedProject(seedDb, {
       id: 'p-shared',
       userId: 'user-2',
       path: '/owner/path',
     });
-    seedProjectMember(db as any, {
+    seedProjectMember(seedDb, {
       projectId: 'p-shared',
       userId: 'user-1',
       localPath: '/member/checkout',
@@ -1562,7 +1565,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('rejects resolve_project_path for foreign project', async () => {
-    seedProject(db as any, {
+    seedProject(seedDb, {
       id: 'p-foreign',
       userId: 'user-2',
       path: '/other',
@@ -1582,7 +1585,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   });
 
   test('get_thread_with_messages returns thread and messages', async () => {
-    seedMessage(db as any, { id: 'm1', threadId: 't1', content: 'hello' });
+    seedMessage(seedDb, { id: 'm1', threadId: 't1', content: 'hello' });
 
     const res = await handleDataMessageWithAck('runner-1', 'user-1', {
       type: 'data:get_thread_with_messages',
@@ -1726,13 +1729,13 @@ describe('data-handler handleDataMessageWithAck', () => {
     });
 
     test('rejects cancel_queued_message for cross-tenant queue row', async () => {
-      seedThread(db as any, {
+      seedThread(seedDb, {
         id: 't2',
         projectId: 'p1',
         userId: 'user-2',
         title: 'Theirs',
       });
-      const row = seedMessageQueue(db as any, {
+      const row = seedMessageQueue(seedDb, {
         id: 'q-foreign',
         threadId: 't2',
         content: 'secret',
@@ -1761,7 +1764,7 @@ describe('data-handler handleDataMessageWithAck', () => {
   describe('data:search_threads', () => {
     test('matches by text and only within the runner-user threads', async () => {
       // Owned thread/messages.
-      seedMessage(db as any, {
+      seedMessage(seedDb, {
         id: 'm-own-1',
         threadId: 't1',
         role: 'user',
@@ -1769,13 +1772,13 @@ describe('data-handler handleDataMessageWithAck', () => {
         timestamp: '2026-06-10T12:00:00Z',
       });
       // Foreign user's thread with the same term — must NOT leak.
-      seedThread(db as any, {
+      seedThread(seedDb, {
         id: 't-foreign',
         projectId: 'p1',
         userId: 'user-2',
         title: 'Other',
       });
-      seedMessage(db as any, {
+      seedMessage(seedDb, {
         id: 'm-foreign-1',
         threadId: 't-foreign',
         role: 'user',
@@ -1796,7 +1799,7 @@ describe('data-handler handleDataMessageWithAck', () => {
     });
 
     test('filters by author and time range', async () => {
-      seedMessage(db as any, {
+      seedMessage(seedDb, {
         id: 'm-old',
         threadId: 't1',
         role: 'user',
@@ -1804,7 +1807,7 @@ describe('data-handler handleDataMessageWithAck', () => {
         content: 'old note',
         timestamp: '2026-05-01T00:00:00Z',
       });
-      seedMessage(db as any, {
+      seedMessage(seedDb, {
         id: 'm-new-argenis',
         threadId: 't1',
         role: 'user',
@@ -1812,7 +1815,7 @@ describe('data-handler handleDataMessageWithAck', () => {
         content: 'recent note',
         timestamp: '2026-06-10T00:00:00Z',
       });
-      seedMessage(db as any, {
+      seedMessage(seedDb, {
         id: 'm-new-other',
         threadId: 't1',
         role: 'assistant',
@@ -1832,7 +1835,7 @@ describe('data-handler handleDataMessageWithAck', () => {
     });
 
     test('returns [] when no filter is given (never dumps full history)', async () => {
-      seedMessage(db as any, {
+      seedMessage(seedDb, {
         id: 'm-x',
         threadId: 't1',
         content: 'anything',
@@ -1863,7 +1866,7 @@ describe('data-handler handleDataMessageWithAck', () => {
       updatedAt: now(),
       ...overrides,
     });
-    const jobRow = (overrides: Record<string, unknown> = {}) => ({
+    const jobRow = (overrides: Partial<(typeof schema)['jobs']['$inferInsert']> = {}) => ({
       id: 'j-1',
       threadId: 't1',
       command: 'sleep 1',
@@ -1882,7 +1885,7 @@ describe('data-handler handleDataMessageWithAck', () => {
     beforeEach(() => {
       // A thread owned by another tenant, inside a project this runner may
       // reach, so ONLY the ownership check stands between the forgery and it.
-      seedThread(db as any, { id: 't-victim', projectId: 'p1', userId: 'user-2', title: 'V' });
+      seedThread(seedDb, { id: 't-victim', projectId: 'p1', userId: 'user-2', title: 'V' });
     });
 
     const allWatchers = () => db.select().from(schema.watchers).all();
@@ -1999,7 +2002,7 @@ describe('data-handler handleDataMessageWithAck', () => {
 
     test('job_update / job_get on another user job are refused', async () => {
       db.insert(schema.jobs)
-        .values({ ...jobRow({ id: 'j-victim', threadId: 't-victim' }), userId: 'user-2' } as any)
+        .values({ ...jobRow({ id: 'j-victim', threadId: 't-victim' }), userId: 'user-2' })
         .run();
       const upd = await handleDataMessageWithAck('runner-1', 'user-1', {
         type: 'data:job_update',
@@ -2022,7 +2025,7 @@ describe('data-handler handleDataMessageWithAck', () => {
     });
 
     test('list_projects without a userId returns only the runner owner projects', async () => {
-      seedProject(db as any, { id: 'p-other', userId: 'user-2', name: 'Theirs', path: '/o' });
+      seedProject(seedDb, { id: 'p-other', userId: 'user-2', name: 'Theirs', path: '/o' });
       const res = await handleDataMessageWithAck('runner-1', 'user-1', {
         type: 'data:list_projects',
       });
@@ -2031,7 +2034,7 @@ describe('data-handler handleDataMessageWithAck', () => {
     });
 
     test('listProjects("") lists nothing (no "all projects" mode)', async () => {
-      seedProject(db as any, { id: 'p-other', userId: 'user-2', name: 'Theirs', path: '/o' });
+      seedProject(seedDb, { id: 'p-other', userId: 'user-2', name: 'Theirs', path: '/o' });
       const { listProjects } = await import('../../services/project-repository.js');
       expect(await listProjects('')).toEqual([]);
     });

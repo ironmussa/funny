@@ -37,7 +37,7 @@ describe('sqlThreadSandboxStore', () => {
     const testDb = createTestDb();
     const { setConnection } = await import('../../../db/index.js');
     setConnection({
-      db: testDb.db as any,
+      db: testDb.db,
       schema: testDb.schema,
       sqlite: testDb.sqlite,
       mode: 'sqlite',

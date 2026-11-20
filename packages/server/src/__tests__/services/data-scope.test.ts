@@ -20,6 +20,7 @@ import {
   setProjectDedicatedRunner,
   setProjectGithubToken,
 } from '../../services/runner-scope.js';
+import { seedDbFor, type SeedDb } from '../helpers/builders-services.js';
 import { seedMessage, seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
 
 const FORBIDDEN = { type: 'data:ack', success: false, error: 'Forbidden' };
@@ -39,6 +40,7 @@ describe('DATA_SCOPE_RULES coverage', () => {
 
 describe('dedicated runner data scope', () => {
   let db: (typeof import('../../db/index.js'))['db'];
+  let seedDb: SeedDb;
 
   beforeAll(async () => {
     const { initDatabase } = await import('../../db/index.js');
@@ -46,6 +48,7 @@ describe('dedicated runner data scope', () => {
     const { autoMigrate } = await import('../../db/migrate.js');
     await autoMigrate();
     db = (await import('../../db/index.js')).db;
+    seedDb = seedDbFor(db);
   });
 
   beforeEach(async () => {
@@ -58,27 +61,24 @@ describe('dedicated runner data scope', () => {
       'runners',
       'projects',
     ]) {
-      (db as any).run(`DELETE FROM ${table}`);
+      db.run(`DELETE FROM ${table}`);
     }
     __resetRunnerScopeCache();
     __resetDataScopeCache();
     __resetDataOwnershipCache();
-    seedProject(db as any, { id: 'px', userId: 'alice', path: '/x' });
-    seedProject(db as any, { id: 'py', userId: 'alice', path: '/y' });
-    seedThread(db as any, { id: 'tx', projectId: 'px', userId: 'alice' });
-    seedThread(db as any, { id: 'ty', projectId: 'py', userId: 'alice' });
-    seedThread(
-      db as any,
-      {
-        id: 'ts',
-        projectId: null as any,
-        userId: 'alice',
-        isScratch: 1,
-      } as any,
-    );
-    seedMessage(db as any, { id: 'my', threadId: 'ty' });
-    seedRunner(db as any, { id: 'laptop', userId: 'alice', token: 'tok-l', hostname: 'l' });
-    seedRunner(db as any, {
+    seedProject(seedDb, { id: 'px', userId: 'alice', path: '/x' });
+    seedProject(seedDb, { id: 'py', userId: 'alice', path: '/y' });
+    seedThread(seedDb, { id: 'tx', projectId: 'px', userId: 'alice' });
+    seedThread(seedDb, { id: 'ty', projectId: 'py', userId: 'alice' });
+    seedThread(seedDb, {
+      id: 'ts',
+      projectId: null,
+      userId: 'alice',
+      isScratch: 1,
+    });
+    seedMessage(seedDb, { id: 'my', threadId: 'ty' });
+    seedRunner(seedDb, { id: 'laptop', userId: 'alice', token: 'tok-l', hostname: 'l' });
+    seedRunner(seedDb, {
       id: 'rx',
       userId: 'alice',
       token: 'tok-rx',
@@ -153,7 +153,7 @@ describe('dedicated runner data scope', () => {
   });
 
   test('agent events: only own-user threads inside the runner scope', async () => {
-    seedThread(db as any, { id: 'bob-t', projectId: 'px', userId: 'bob' });
+    seedThread(seedDb, { id: 'bob-t', projectId: 'px', userId: 'bob' });
     expect(await canRunnerActOnThread('rx', 'alice', 'tx')).toBe(true);
     expect(await canRunnerActOnThread('rx', 'alice', 'ty')).toBe(false);
     expect(await canRunnerActOnThread('rx', 'alice', 'ts')).toBe(false);

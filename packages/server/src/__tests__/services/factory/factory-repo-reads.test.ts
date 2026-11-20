@@ -10,15 +10,16 @@ import { createRepoGithub } from '@funny/core/github-app';
 import { okAsync } from 'neverthrow';
 
 import { createFactoryRepoReads } from '../../../services/factory/factory-repo-reads.js';
+import { fakeFetch } from '../../helpers/builders-services.js';
 
 function readsOver(routes: Record<string, unknown>) {
   const calls: string[] = [];
-  const fetchImpl = (async (url: string) => {
+  const fetchImpl = fakeFetch(async (url) => {
     const key = url.replace('https://api.github.com', '');
     calls.push(key);
     if (!(key in routes)) return new Response('not found', { status: 404 });
     return new Response(JSON.stringify(routes[key]), { status: 200 });
-  }) as typeof fetch;
+  });
   const github = createRepoGithub({ tokenFor: () => okAsync('tok'), fetch: fetchImpl });
   return { reads: createFactoryRepoReads('o/r', github), calls };
 }

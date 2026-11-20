@@ -17,6 +17,7 @@ import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import type { RunnerPresencePort, RunnerRequest } from '../../services/runner-ports.js';
 import { startThreadOnRunner } from '../../services/runner-thread-launcher.js';
+import { seedDbFor } from '../helpers/builders-services.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedRunner, seedRunnerProjectAssignment } from '../helpers/test-db.js';
 
@@ -29,7 +30,7 @@ function ports(online: string[]) {
     userHasAvailableRunner: async (uid) => online.some((id) => RUNNER_OWNER[id] === uid),
     userIdForRunner: async (id) => RUNNER_OWNER[id] ?? null,
     availableRunnerCount: async () => online.length,
-  } as RunnerPresencePort;
+  };
   const requests = {
     isAvailable: async (id: string) => online.includes(id),
     request: async (runnerId: string, request: RunnerRequest) => {
@@ -55,11 +56,11 @@ describe('startThreadOnRunner', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'alice', path: '/repo' });
-    seedRunner(t.db as any, { id: 'r-alice', userId: 'alice', token: 'tok-a' });
-    seedRunner(t.db as any, { id: 'r-bob', userId: 'bob', token: 'tok-b' });
-    seedRunnerProjectAssignment(t.db as any, { runnerId: 'r-alice', projectId: 'p1' });
-    seedRunnerProjectAssignment(t.db as any, { runnerId: 'r-bob', projectId: 'p1' });
+    seedProject(seedDbFor(t.db), { id: 'p1', userId: 'alice', path: '/repo' });
+    seedRunner(seedDbFor(t.db), { id: 'r-alice', userId: 'alice', token: 'tok-a' });
+    seedRunner(seedDbFor(t.db), { id: 'r-bob', userId: 'bob', token: 'tok-b' });
+    seedRunnerProjectAssignment(seedDbFor(t.db), { runnerId: 'r-alice', projectId: 'p1' });
+    seedRunnerProjectAssignment(seedDbFor(t.db), { runnerId: 'r-bob', projectId: 'p1' });
   });
 
   test("dispatches to the user's own runner", async () => {

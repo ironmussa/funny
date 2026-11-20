@@ -16,6 +16,7 @@ import {
 } from '../../services/grpc/tunnel-handler.js';
 
 function stub<T>(partial: unknown): T {
+  // SAFETY: only for gRPC call doubles (FakeCall) that provide the members the tunnel handler uses.
   return partial as T;
 }
 

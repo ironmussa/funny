@@ -15,6 +15,7 @@ import {
   SocketIoBrowserEventSink,
   type BrowserSinkTelemetry,
 } from '../../services/socketio/browser-event-sink.js';
+import { serverWithNamespace } from '../helpers/builders-services.js';
 
 function typedEvent() {
   return create(ApplicationEventSchema, {
@@ -56,7 +57,7 @@ describe('rollout-aware browser event sink', () => {
       adapter: { rooms: new Map([['user:user-1', new Set(sockets.keys())]]) },
     };
     const telemetry: BrowserSinkTelemetry[] = [];
-    const sink = new SocketIoBrowserEventSink({ of: () => browser } as any, {
+    const sink = new SocketIoBrowserEventSink(serverWithNamespace(browser), {
       selectRepresentation: (candidate) =>
         // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         candidate.id === 'binary'
@@ -101,7 +102,7 @@ describe('rollout-aware browser event sink', () => {
       sockets,
       adapter: { rooms: new Map([['user:user-1', new Set(sockets.keys())]]) },
     };
-    const sink = new SocketIoBrowserEventSink({ of: () => browser } as any, {
+    const sink = new SocketIoBrowserEventSink(serverWithNamespace(browser), {
       selectRepresentation: (candidate) =>
         // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         candidate.id === 'binary'
@@ -143,7 +144,7 @@ describe('rollout-aware browser event sink', () => {
       adapter: { rooms: new Map([['user:user-1', new Set(sockets.keys())]]) },
       in: () => ({ socketsLeave: (rooms: string[]) => socketsLeave.push(rooms) }),
     };
-    const sink = new SocketIoBrowserEventSink({ of: () => browser } as any);
+    const sink = new SocketIoBrowserEventSink(serverWithNamespace(browser));
 
     sink.evictFromThread('user-1', 'thread-1');
 
@@ -198,20 +199,19 @@ describe('rollout-aware browser event sink', () => {
   });
 
   test('bounds a slow binary consumer and reports resource exhaustion', () => {
-    const slow = socket('slow') as ReturnType<typeof socket> & {
-      conn: { transport: { writable: boolean; once: () => void } };
-      once: () => void;
+    const slow = {
+      ...socket('slow'),
+      data: { browserV1: { assignments: { events: Representation.BROWSER_V1 } } },
+      conn: { transport: { writable: false, once: () => {} } },
+      once: () => {},
     };
-    slow.data = { browserV1: { assignments: { events: Representation.BROWSER_V1 } } };
-    slow.conn = { transport: { writable: false, once: () => {} } };
-    slow.once = () => {};
     const sockets = new Map([[slow.id, slow]]);
     const browser = {
       sockets,
       adapter: { rooms: new Map([['user:user-1', new Set(sockets.keys())]]) },
     };
     const telemetry: BrowserSinkTelemetry[] = [];
-    const sink = new SocketIoBrowserEventSink({ of: () => browser } as any, {
+    const sink = new SocketIoBrowserEventSink(serverWithNamespace(browser), {
       telemetry: (event) => telemetry.push(event),
     });
     const publication = {

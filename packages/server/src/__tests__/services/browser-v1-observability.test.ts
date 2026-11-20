@@ -12,7 +12,10 @@ describe('browser.v1 transport observability', () => {
     const addMetric = spyOn(telemetry, 'addMetric').mockImplementation(() => undefined);
     const addHistogram = spyOn(telemetry, 'addHistogram').mockImplementation(() => undefined);
 
+    // Fields outside the observation type, which a caller could still pass.
+    const unlisted = { credential: 'secret', payload: { private: true } };
     observeBrowserV1({
+      ...unlisted,
       event: 'queue',
       status: 'rejected',
       trafficClass: 'terminal',
@@ -21,14 +24,13 @@ describe('browser.v1 transport observability', () => {
       payloadBytes: 2048,
       latencyMs: 9,
       queueDepth: 256,
-      credential: 'secret',
-      payload: { private: true },
-    } as Parameters<typeof observeBrowserV1>[0]);
+    });
 
     expect(addMetric).toHaveBeenCalledTimes(2);
     expect(addHistogram).toHaveBeenCalledTimes(2);
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-    const logged = (warn.mock.calls as unknown as Array<[string, Record<string, unknown>]>)[0]?.[1];
+    // winston's typings name only the one-argument overload; the logger passes (message, meta).
+    const call: readonly unknown[] = warn.mock.calls[0] ?? [];
+    const logged = call[1];
     expect(logged).toMatchObject({
       protocolVersion: 'browser.v1',
       trafficClass: 'terminal',

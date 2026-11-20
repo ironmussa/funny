@@ -68,6 +68,8 @@ function decodeOutcome(wire: Uint8Array) {
 function socketFixture(idempotency?: BrowserV1IdempotencyStore) {
   const joined: string[] = [];
   const left: string[] = [];
+  // SAFETY: the carrier only calls join/leave and to(room).emit(); a full socket.io
+  // BroadcastOperator is not needed.
   const socket = createMockSocket({
     data: {
       browserV1: {

@@ -7,7 +7,7 @@
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 
 import type { IssueBlocker } from '@funny/core/github-app';
-import { err, errAsync, ok, okAsync } from 'neverthrow';
+import { errAsync, okAsync } from 'neverthrow';
 
 import type { FactoryGithubPort, FactoryIssue } from '../../../services/factory/factory-github.js';
 import { createFactoryQueue } from '../../../services/factory/factory-queue.js';
@@ -22,6 +22,12 @@ import {
   stopFactoryWatcher,
 } from '../../../services/factory/factory-watcher.js';
 import type { StartThreadInput } from '../../../services/runner-thread-launcher.js';
+import {
+  launchedThread,
+  runnerOffline,
+  unusedRunnerPorts,
+  type LaunchResult,
+} from '../../helpers/builders-services.js';
 import { createTestDb, seedProject } from '../../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
@@ -43,8 +49,11 @@ interface Script {
   noToken?: boolean;
 }
 
-function fakeGithub(script: Script = {}): FactoryGithubPort & { merges: number } {
-  const port = {
+/** The fake GitHub port, with the merges the test reads back. */
+type FakeGithub = FactoryGithubPort & { merges: number };
+
+function fakeGithub(script: Script = {}): FakeGithub {
+  const port: FakeGithub = {
     merges: 0,
     resolveRepo: async () => (script.noRepo ? null : 'o/r'),
     listReadyIssues: () => okAsync(script.labelled ?? []),
@@ -85,7 +94,7 @@ function fakeGithub(script: Script = {}): FactoryGithubPort & { merges: number }
       },
     },
   };
-  return port as FactoryGithubPort & { merges: number };
+  return port;
 }
 
 function fakePoll() {
@@ -99,13 +108,11 @@ function fakePoll() {
 
 function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
   const calls: StartThreadInput[] = [];
-  const launch = async (input: StartThreadInput) => {
+  const launch = async (input: StartThreadInput): Promise<LaunchResult> => {
     calls.push(input);
-    return result === 'ok'
-      ? ok({ thread: { id: `t-${calls.length}` }, threadId: `t-${calls.length}`, runnerId: 'r1' })
-      : err({ kind: 'runner-unavailable' as const, status: 502 as const, message: 'offline' });
+    return result === 'ok' ? launchedThread(`t-${calls.length}`) : runnerOffline('offline');
   };
-  return { calls, launch: launch as any, issues: () => calls.map(issueOf) };
+  return { calls, launch, issues: () => calls.map(issueOf) };
 }
 
 /** The issue number a launched agent works on (its title is `[Factory] #N …`). */
@@ -152,7 +159,7 @@ async function setUp(
   const launcher = opts.launcher ?? fakeLauncher();
   const github = fakeGithub(opts.script);
   await startFactoryWatcher({
-    ports: { requests: {} as any },
+    ports: unusedRunnerPorts(),
     github,
     createPoll: poll.createPoll,
     launch: launcher.launch,
@@ -189,7 +196,7 @@ beforeEach(async () => {
   testDb = createTestDb();
   const { setConnection } = await import('../../../db/index.js');
   setConnection({
-    db: testDb.db as any,
+    db: testDb.db,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
     mode: 'sqlite',

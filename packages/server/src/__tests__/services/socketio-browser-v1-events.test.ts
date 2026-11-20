@@ -39,6 +39,7 @@ import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
 import { BrowserV1EventRetention } from '../../services/socketio/browser-v1-event-retention.js';
 import { setupBrowserV1Events } from '../../services/socketio/browser-v1-events.js';
 import { __resetPresenceForTests } from '../../services/socketio/thread-presence.js';
+import { expectInstance } from '../helpers/builders-services.js';
 import { createMockSocket } from '../helpers/socketio-test-mocks.js';
 
 function requestWire(scope: ScopeReference, sequence?: bigint) {
@@ -76,6 +77,8 @@ function decodeEventEnvelope(wire: Uint8Array) {
 
 function socketFixture(retention: BrowserV1EventRetention) {
   const joined: string[] = [];
+  // SAFETY: the carrier only calls join/leave and to(room).emit(); a full socket.io
+  // BroadcastOperator is not needed.
   const socket = createMockSocket({
     data: {
       browserV1: {
@@ -141,7 +144,7 @@ describe('browser.v1 event subscriptions', () => {
     const replay = fixture.socket.emitted.find(
       ({ event }) => event === BROWSER_V1_CARRIER_EVENTS.event,
     );
-    expect(decodeEventEnvelope(replay?.data as Uint8Array)).toMatchObject({
+    expect(decodeEventEnvelope(expectInstance(replay?.data, Uint8Array))).toMatchObject({
       case: 'event',
       value: { metadata: { eventId: 'event-2', sequence: 2n } },
     });

@@ -23,6 +23,7 @@ import type { RunnerTarget } from '../../services/runner-access/index.js';
 import { setupBrowserPtyListRpc } from '../../services/socketio/browser-pty-list.js';
 import { setupBrowserPtyHandlers } from '../../services/socketio/browser-pty.js';
 import { setupBrowserSessionHandlers } from '../../services/socketio/browser-session.js';
+import { bodyText } from '../helpers/builders-services.js';
 import { fakeRunnerAccess } from '../helpers/runner-access-fakes.js';
 import { FakeRunnerRequestPort, FakeRunnerTerminalPort } from '../helpers/runner-port-fakes.js';
 import { createMockSocket } from '../helpers/socketio-test-mocks.js';
@@ -86,7 +87,7 @@ describe('browser-session sink', () => {
     const { runnerId, request } = f.requests.requests[0]!;
     expect(runnerId).toBe('runner-1');
     expect(request).toMatchObject({ method: 'POST', path: '/api/browser-session/command' });
-    expect(JSON.parse(request.body as string)).toEqual({
+    expect(JSON.parse(bodyText(request.body))).toEqual({
       type: 'browser-session:navigate',
       data: { sessionId: 's1', url: 'https://x.test' },
     });
@@ -246,7 +247,7 @@ describe('browser pty:list sink — sandbox terminals', () => {
       cwd: '/repo',
     });
     let response: { status?: string; sessions?: Array<{ ptyId: string }> } = {};
-    await f.socket.triggerRpc('pty:list', {}, (value) => (response = value as typeof response));
+    await f.socket.triggerRpc<typeof response>('pty:list', {}, (value) => (response = value));
 
     expect(response.status).toBe('ok');
     expect(response.sessions?.map((session) => session.ptyId).sort()).toEqual(['pty-a', 'pty-sb']);

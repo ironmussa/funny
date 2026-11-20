@@ -3,6 +3,7 @@
  */
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
+import { seedDbFor } from '../helpers/builders-services.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedProjectMember } from '../helpers/test-db.js';
 
@@ -17,7 +18,7 @@ describe('project-manager service', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
+    seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
   });
 
   describe('addMember / listMembers / isProjectMember', () => {
@@ -42,7 +43,7 @@ describe('project-manager service', () => {
     test('dual-writes a unified project grant with the canonical role', async () => {
       const { createGrantRepository } = await import('@funny/shared/repositories');
       const { db, dbAll, dbRun, schema } = await import('../../db/index.js');
-      const grants = createGrantRepository({ db, schema, dbAll, dbRun } as any);
+      const grants = createGrantRepository({ db, schema, dbAll, dbRun });
 
       await pm.addMember('p1', 'user-2', 'member'); // legacy 'member' → canonical 'contributor'
       expect(await grants.getGrantRole('user-2', 'project', 'p1')).toBe('contributor');
@@ -57,7 +58,7 @@ describe('project-manager service', () => {
 
   describe('removeMember', () => {
     test('removes an existing member', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'user-2', role: 'member' });
+      seedProjectMember(seedDbFor(t.db), { projectId: 'p1', userId: 'user-2', role: 'member' });
 
       await pm.removeMember('p1', 'user-2');
       expect(await pm.isProjectMember('p1', 'user-2')).toBe(false);
@@ -66,7 +67,7 @@ describe('project-manager service', () => {
 
   describe('setMemberLocalPath / getMemberLocalPath', () => {
     test('updates localPath for an existing member', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'user-1', role: 'admin' });
+      seedProjectMember(seedDbFor(t.db), { projectId: 'p1', userId: 'user-1', role: 'admin' });
 
       await pm.setMemberLocalPath('p1', 'user-1', '/home/user/p1');
       expect(await pm.getMemberLocalPath('p1', 'user-1')).toBe('/home/user/p1');
@@ -87,7 +88,7 @@ describe('project-manager service', () => {
     });
 
     test('updating the path keeps an existing role unchanged', async () => {
-      seedProjectMember(t.db as any, { projectId: 'p1', userId: 'user-4', role: 'viewer' });
+      seedProjectMember(seedDbFor(t.db), { projectId: 'p1', userId: 'user-4', role: 'viewer' });
 
       await pm.setMemberLocalPath('p1', 'user-4', '/home/user/p4');
 

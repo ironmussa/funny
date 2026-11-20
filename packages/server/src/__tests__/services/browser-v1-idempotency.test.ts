@@ -52,6 +52,8 @@ describe('browser.v1 idempotency', () => {
         return { kind: 'replayed' as const, outcome: storedOutcome };
       },
     };
+    // SAFETY: the durable store only calls `execute`, with serialized string outcomes,
+    // which is the one member this fake implements.
     const store = new DurableBrowserV1IdempotencyStore(sql as SqlOperationIdempotencyStore);
     let executions = 0;
     const input = {

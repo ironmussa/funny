@@ -16,6 +16,7 @@ import {
   BrowserV1AtMostOnceInputStore,
   setupBrowserV1Interactive,
 } from '../../services/socketio/browser-v1-interactive.js';
+import { bodyText } from '../helpers/builders-services.js';
 import { fakeRunnerAccess } from '../helpers/runner-access-fakes.js';
 import { FakeRunnerRequestPort, FakeRunnerTerminalPort } from '../helpers/runner-port-fakes.js';
 import { createMockSocket } from '../helpers/socketio-test-mocks.js';
@@ -53,7 +54,7 @@ function fixture(projectOwner = 'user-1', inputOrdinals = new BrowserV1AtMostOnc
         },
       },
     },
-  } as any);
+  });
   setupBrowserV1Interactive(socket, 'user-1', {
     terminals,
     requests,
@@ -305,7 +306,7 @@ describe('browser.v1 terminal interactive carrier', () => {
 
       expect(requests.requests).toHaveLength(5);
       expect(
-        requests.requests.map(({ request }) => JSON.parse(request.body as string).type),
+        requests.requests.map(({ request }) => JSON.parse(bodyText(request.body)).type),
       ).toEqual([
         'browser-session:open',
         'browser-session:navigate',
@@ -314,12 +315,12 @@ describe('browser.v1 terminal interactive carrier', () => {
         'browser-session:close',
       ]);
       // The close's id travels to the runner, which echoes it in `closed`.
-      expect(JSON.parse(requests.requests[4]!.request.body as string).data).toMatchObject({
+      expect(JSON.parse(bodyText(requests.requests[4]!.request.body)).data).toMatchObject({
         sessionId: 'browser-1',
         reason: 'user',
         closeId: 'c-1',
       });
-      expect(JSON.parse(requests.requests[2]!.request.body as string).data).toMatchObject({
+      expect(JSON.parse(bodyText(requests.requests[2]!.request.body)).data).toMatchObject({
         sessionId: 'browser-1',
         type: 'click',
         x: 10,

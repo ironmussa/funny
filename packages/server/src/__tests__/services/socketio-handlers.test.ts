@@ -1,7 +1,10 @@
 import { afterEach, describe, expect, test } from 'bun:test';
 
 import { setupBrowserPtyListRpc } from '../../services/socketio/browser-pty-list.js';
-import { setupBrowserPtyHandlers } from '../../services/socketio/browser-pty.js';
+import {
+  setupBrowserPtyHandlers,
+  type BrowserPtyDependencies,
+} from '../../services/socketio/browser-pty.js';
 import { setupBrowserSessionHandlers } from '../../services/socketio/browser-session.js';
 import { fakeRunnerAccess } from '../helpers/runner-access-fakes.js';
 import { createMockSocket } from '../helpers/socketio-test-mocks.js';
@@ -10,7 +13,10 @@ afterEach(() => {
   delete process.env.RUNNER_AUTH_SECRET;
 });
 
-function runnerDependencies(overrides: Record<string, unknown> = {}) {
+/** The runner-side ports of the browser PTY, PTY list and browser-session handlers. */
+function runnerDependencies(
+  overrides: Partial<BrowserPtyDependencies> = {},
+): BrowserPtyDependencies {
   return {
     runnerAccess: fakeRunnerAccess({
       runnerFor: () => 'runner-1',
@@ -18,7 +24,7 @@ function runnerDependencies(overrides: Record<string, unknown> = {}) {
     }),
     getProjectOwnerId: async () => 'user-1',
     ...overrides,
-  } as any;
+  };
 }
 
 describe('browser Socket.IO to runner gRPC handlers', () => {
@@ -26,10 +32,11 @@ describe('browser Socket.IO to runner gRPC handlers', () => {
     const dispatched: unknown[] = [];
     const dependencies = runnerDependencies({
       terminals: {
-        isAvailable: () => true,
-        dispatch: (runnerId: string, userId: string, event: unknown) =>
-          dispatched.push({ runnerId, userId, event }),
-        listSessions: () => [],
+        isAvailable: async () => true,
+        dispatch: async (runnerId, userId, event) => {
+          dispatched.push({ runnerId, userId, event });
+        },
+        listSessions: async () => [],
       },
     });
     const socket = createMockSocket();
@@ -49,9 +56,9 @@ describe('browser Socket.IO to runner gRPC handlers', () => {
   test('pty:spawn reports unavailable instead of falling back', async () => {
     const dependencies = runnerDependencies({
       terminals: {
-        isAvailable: () => false,
-        dispatch: () => {},
-        listSessions: () => [],
+        isAvailable: async () => false,
+        dispatch: async () => {},
+        listSessions: async () => [],
       },
     });
     const socket = createMockSocket();
@@ -68,9 +75,9 @@ describe('browser Socket.IO to runner gRPC handlers', () => {
   test('pty:list reads the gRPC terminal registry', async () => {
     const dependencies = runnerDependencies({
       terminals: {
-        isAvailable: () => true,
-        dispatch: () => {},
-        listSessions: () => [{ ptyId: 'pty-a', cwd: '/tmp' }],
+        isAvailable: async () => true,
+        dispatch: async () => {},
+        listSessions: async () => [{ ptyId: 'pty-a', cwd: '/tmp' }],
       },
     });
     const socket = createMockSocket();
@@ -88,7 +95,7 @@ describe('browser Socket.IO to runner gRPC handlers', () => {
     const requests: any[] = [];
     const dependencies = runnerDependencies({
       requests: {
-        isAvailable: () => true,
+        isAvailable: async () => true,
         request: async (_runnerId: string, request: unknown) => {
           requests.push(request);
           return { status: 202, headers: {}, body: '' };

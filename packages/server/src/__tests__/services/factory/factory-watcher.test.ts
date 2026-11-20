@@ -35,6 +35,12 @@ import {
 } from '../../../services/factory/factory-watcher.js';
 import type { StartThreadInput } from '../../../services/runner-thread-launcher.js';
 import {
+  launchedThread,
+  runnerOffline,
+  unusedRunnerPorts,
+  type LaunchResult,
+} from '../../helpers/builders-services.js';
+import {
   createTestDb,
   seedMessage,
   seedProject,
@@ -44,7 +50,7 @@ import {
 
 let testDb: ReturnType<typeof createTestDb>;
 
-const ports = { requests: {} as any };
+const ports = unusedRunnerPorts();
 
 /** Fake poll: captures each factory's tick so the test can fire it. */
 function fakePoll() {
@@ -59,13 +65,11 @@ function fakePoll() {
 /** Fake launcher recording calls; succeeds with a thread id per call. */
 function fakeLauncher(result: 'ok' | 'offline' = 'ok') {
   const calls: StartThreadInput[] = [];
-  const launch = async (input: StartThreadInput) => {
+  const launch = async (input: StartThreadInput): Promise<LaunchResult> => {
     calls.push(input);
-    return result === 'ok'
-      ? ok({ thread: { id: `t-${calls.length}` }, threadId: `t-${calls.length}`, runnerId: 'r1' })
-      : err({ kind: 'runner-unavailable' as const, status: 502 as const, message: 'offline' });
+    return result === 'ok' ? launchedThread(`t-${calls.length}`) : runnerOffline('offline');
   };
-  return { calls, launch: launch as any };
+  return { calls, launch };
 }
 
 interface GithubScript {
@@ -87,21 +91,24 @@ interface GithubScript {
 }
 
 /** Fake GitHub side: a fixed repo and issue list, plus a scripted pull request. */
+/** The fake GitHub port, with what the test reads back. */
+type FakeGithub = FactoryGithubPort & {
+  fileReads: string[];
+  merges: number;
+  prLookups: Array<{ branch: string; state: string }>;
+};
+
 function fakeGithub(
   repo: string | null,
   issues: FactoryIssue[],
   script: GithubScript = {},
-): FactoryGithubPort & {
-  fileReads: string[];
-  merges: number;
-  prLookups: Array<{ branch: string; state: string }>;
-} {
-  const answers = ([] as CiState[]).concat(script.ci ?? { kind: 'green' });
+): FakeGithub {
+  const answers: CiState[] = [script.ci ?? { kind: 'green' }].flat();
   let looks = 0;
-  const port = {
-    fileReads: [] as string[],
+  const port: FakeGithub = {
+    fileReads: [],
     merges: 0,
-    prLookups: [] as Array<{ branch: string; state: string }>,
+    prLookups: [],
     resolveRepo: async () => repo,
     listReadyIssues: () => okAsync(issues),
     getIssue: (_reader: unknown, number: number) =>
@@ -119,7 +126,7 @@ function fakeGithub(
         ? errAsync({ message: 'GitHub answered 500', status: 500 })
         : okAsync(blockers);
     },
-    listDefaultBranchDir: () => okAsync([] as string[]),
+    listDefaultBranchDir: () => okAsync([]),
     readDefaultBranchFile: (_reader: unknown, path: string) => {
       port.fileReads.push(path);
       return okAsync(script.files?.[path] ?? null);
@@ -193,7 +200,7 @@ beforeEach(async () => {
   testDb = createTestDb();
   const { setConnection } = await import('../../../db/index.js');
   setConnection({
-    db: testDb.db as any,
+    db: testDb.db,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
     mode: 'sqlite',
@@ -376,16 +383,16 @@ describe('factory watcher', () => {
     let release!: () => void;
     const gate = new Promise<void>((resolve) => (release = resolve));
     const calls: StartThreadInput[] = [];
-    const slowLaunch = async (input: StartThreadInput) => {
+    const slowLaunch = async (input: StartThreadInput): Promise<LaunchResult> => {
       calls.push(input);
       await gate;
-      return ok({ thread: { id: 't-1' }, threadId: 't-1', runnerId: 'r1' });
+      return launchedThread('t-1');
     };
     await startFactoryWatcher({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
-      launch: slowLaunch as any,
+      launch: slowLaunch,
       resolveRuntime,
       waitThread: pendingThreads,
     });
@@ -402,17 +409,17 @@ describe('factory watcher', () => {
     const factoryId = await enableFactory();
     const poll = fakePoll();
     let seenDuringLaunch: unknown = 'unset';
-    const launch = async () => {
+    const launch = async (): Promise<LaunchResult> => {
       seenDuringLaunch = (
         await createFactoryRunsRepository().activeByIssue(factoryId, 7)
       )._unsafeUnwrap()?.state;
-      return ok({ thread: { id: 't-1' }, threadId: 't-1', runnerId: 'r1' });
+      return launchedThread('t-1');
     };
     await startFactoryWatcher({
       ports,
       github: fakeGithub('acme/repo', [{ number: 7, title: 'Fix it', url: 'u/7' }]),
       createPoll: poll.createPoll,
-      launch: launch as any,
+      launch,
       resolveRuntime,
       waitThread: pendingThreads,
     });

@@ -11,9 +11,9 @@ import {
   type RetryableSandboxThread,
 } from '../../../services/thread-sandboxes/sandbox-thread.js';
 import type { ProvisionError } from '../../../services/thread-sandboxes/thread-sandbox-service.js';
-import type { ThreadSandboxRow } from '../../../services/thread-sandboxes/thread-sandbox-store.js';
+import { buildThreadSandboxRow } from '../../helpers/builders-services.js';
 
-const provisioned = { threadId: 't-new', runnerId: 'r-box' } as ThreadSandboxRow;
+const provisioned = buildThreadSandboxRow({ threadId: 't-new', runnerId: 'r-box' });
 
 function setup(
   opts: {

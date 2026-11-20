@@ -22,7 +22,8 @@ async function freshInstance(): Promise<RunnerScope> {
   // A distinct query string is a separate module instance (separate caches)
   // over the same `db` module — what a second server process looks like.
   const specifier = `../../services/runner-scope.ts?instance=${++instanceCounter}`;
-  return (await import(specifier)) as RunnerScope;
+  const instance: RunnerScope = await import(specifier);
+  return instance;
 }
 
 function runner(id: string, role: 'general' | 'dedicated') {
@@ -41,7 +42,7 @@ beforeEach(async () => {
   testDb = createTestDb();
   const { setConnection } = await import('../../db/index.js');
   setConnection({
-    db: testDb.db as any,
+    db: testDb.db,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
     mode: 'sqlite',

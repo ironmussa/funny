@@ -23,7 +23,7 @@ function providerWith(over: Partial<Parameters<typeof createFactoryActionProvide
   const waited: string[] = [];
   const deps = {
     scope,
-    threadIds: [] as string[],
+    threadIds: new Array<string>(),
     prUrl: null,
     launchStartedAt: null,
     findLaunched: async () => null,

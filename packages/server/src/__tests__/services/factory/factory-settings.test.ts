@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test';
 
 import { createFactoryRunsRepository } from '../../../services/factory/factory-runs.js';
 import { createFactorySettingsService } from '../../../services/factory/factory-settings.js';
+import { present } from '../../helpers/builders-services.js';
 import { createTestDb, seedProject, seedProjectMember } from '../../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
@@ -13,7 +14,7 @@ beforeEach(async () => {
   ids = 0;
   const { setConnection } = await import('../../../db/index.js');
   setConnection({
-    db: testDb.db as any,
+    db: testDb.db,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
     mode: 'sqlite',
@@ -47,9 +48,10 @@ describe('factory settings service', () => {
     (await svc.save('alice', 'p1', { enabled: false, maxConcurrent: 5 }))._unsafeUnwrap();
     const read = (await svc.get('alice', 'p1'))._unsafeUnwrap();
     expect(read).toMatchObject({ enabled: false, maxConcurrent: 5 });
-    const rows = testDb.sqlite.query('SELECT COUNT(*) AS n FROM factory_settings').get() as {
-      n: number;
-    };
+    const rows = present(
+      testDb.sqlite.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM factory_settings').get(),
+      'a count',
+    );
     expect(rows.n).toBe(1);
   });
 
@@ -70,9 +72,10 @@ describe('factory settings service', () => {
     expect((await svc.get('alice', 'bob-project'))._unsafeUnwrap()).toBeNull();
     const saved = await svc.save('alice', 'bob-project', { enabled: true });
     expect(saved.isErr() && saved.error.kind).toBe('forbidden');
-    const rows = testDb.sqlite.query('SELECT COUNT(*) AS n FROM factory_settings').get() as {
-      n: number;
-    };
+    const rows = present(
+      testDb.sqlite.query<{ n: number }, []>('SELECT COUNT(*) AS n FROM factory_settings').get(),
+      'a count',
+    );
     expect(rows.n).toBe(0);
   });
 
@@ -100,8 +103,10 @@ describe('factory runs repository', () => {
 
   const makeFactory = async (): Promise<string> => {
     (await settings().save('alice', 'p1', { enabled: true }))._unsafeUnwrap();
-    return (testDb.sqlite.query('SELECT id FROM factory_settings LIMIT 1').get() as { id: string })
-      .id;
+    return present(
+      testDb.sqlite.query<{ id: string }, []>('SELECT id FROM factory_settings LIMIT 1').get(),
+      'a factory',
+    ).id;
   };
 
   test('one active run per issue; terminal frees the issue', async () => {

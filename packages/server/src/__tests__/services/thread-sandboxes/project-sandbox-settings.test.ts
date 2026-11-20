@@ -9,6 +9,7 @@ import type { ServerEnv } from '../../../lib/types.js';
 import { createInfraRoutes } from '../../../routes/infra.js';
 import { createInfraConnectionService } from '../../../services/thread-sandboxes/infra-connections.js';
 import { createProjectSandboxSettingsService } from '../../../services/thread-sandboxes/project-sandbox-settings.js';
+import { present } from '../../helpers/builders-services.js';
 import { createTestDb, seedProject, seedProjectMember } from '../../helpers/test-db.js';
 
 let testDb: ReturnType<typeof createTestDb>;
@@ -18,7 +19,7 @@ beforeEach(async () => {
   testDb = createTestDb();
   const { setConnection } = await import('../../../db/index.js');
   setConnection({
-    db: testDb.db as any,
+    db: testDb.db,
     schema: testDb.schema,
     sqlite: testDb.sqlite,
     mode: 'sqlite',
@@ -85,11 +86,12 @@ describe('project sandbox settings service', () => {
       await settings.save('alice', 'p1', { mode: 'sandbox', connectionId, sizeId: 'small' }),
     );
     expect(expectOk(await settings.get('alice', 'p1'))?.sizeId).toBe('small');
-    const rows = testDb.sqlite
-      .query('SELECT COUNT(*) AS n FROM project_sandbox_settings')
-      .get() as {
-      n: number;
-    };
+    const rows = present(
+      testDb.sqlite
+        .query<{ n: number }, []>('SELECT COUNT(*) AS n FROM project_sandbox_settings')
+        .get(),
+      'a count',
+    );
     expect(rows.n).toBe(1);
   });
 

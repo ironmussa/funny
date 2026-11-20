@@ -10,6 +10,7 @@ import {
   assertDataOwnership,
   forgetThreadOwnership,
 } from '../../services/data-ownership.js';
+import { seedDbFor, type SeedDb } from '../helpers/builders-services.js';
 import {
   seedMessage,
   seedMessageQueue,
@@ -24,6 +25,7 @@ const deny = (reason: string) => ({ ok: false as const, reason });
 
 describe('assertDataOwnership', () => {
   let db: (typeof import('../../db/index.js'))['db'];
+  let seedDb: SeedDb;
   let schema: typeof import('../../db/schema.js');
 
   beforeAll(async () => {
@@ -32,6 +34,7 @@ describe('assertDataOwnership', () => {
     const { autoMigrate } = await import('../../db/migrate.js');
     await autoMigrate();
     db = (await import('../../db/index.js')).db;
+    seedDb = seedDbFor(db);
     schema = await import('../../db/schema.js');
   });
 
@@ -49,21 +52,21 @@ describe('assertDataOwnership', () => {
       'projects',
     ]) {
       try {
-        (db as any).run(`DELETE FROM ${table}`);
+        db.run(`DELETE FROM ${table}`);
       } catch {
         // ignore
       }
     }
-    seedProject(db as any, { id: 'p1', userId: 'u1', path: '/tmp/p1' });
-    seedProject(db as any, { id: 'p2', userId: 'u2', path: '/tmp/p2' });
-    seedThread(db as any, { id: 't1', projectId: 'p1', userId: 'u1' });
-    seedThread(db as any, { id: 't2', projectId: 'p2', userId: 'u2' });
-    seedMessage(db as any, { id: 'm1', threadId: 't1' });
-    seedMessage(db as any, { id: 'm2', threadId: 't2' });
-    seedToolCall(db as any, { id: 'tc1', messageId: 'm1' });
-    seedToolCall(db as any, { id: 'tc2', messageId: 'm2' });
-    seedMessageQueue(db as any, { id: 'q1', threadId: 't1' });
-    seedMessageQueue(db as any, { id: 'q2', threadId: 't2' });
+    seedProject(seedDb, { id: 'p1', userId: 'u1', path: '/tmp/p1' });
+    seedProject(seedDb, { id: 'p2', userId: 'u2', path: '/tmp/p2' });
+    seedThread(seedDb, { id: 't1', projectId: 'p1', userId: 'u1' });
+    seedThread(seedDb, { id: 't2', projectId: 'p2', userId: 'u2' });
+    seedMessage(seedDb, { id: 'm1', threadId: 't1' });
+    seedMessage(seedDb, { id: 'm2', threadId: 't2' });
+    seedToolCall(seedDb, { id: 'tc1', messageId: 'm1' });
+    seedToolCall(seedDb, { id: 'tc2', messageId: 'm2' });
+    seedMessageQueue(seedDb, { id: 'q1', threadId: 't1' });
+    seedMessageQueue(seedDb, { id: 'q2', threadId: 't2' });
   });
 
   afterAll(async () => {
@@ -77,17 +80,17 @@ describe('assertDataOwnership', () => {
     test('a missing thread is not cached, so it is allowed once it exists', async () => {
       const msg = { type: 'data:get_thread', threadId: 't-new' };
       expect(await check(msg)).toEqual(deny('thread t-new not found'));
-      seedThread(db as any, { id: 't-new', projectId: 'p1', userId: 'u1' });
+      seedThread(seedDb, { id: 't-new', projectId: 'p1', userId: 'u1' });
       expect(await check(msg)).toEqual(OK);
     });
 
     test('a forgotten (deleted) thread reads as not found again', async () => {
       const msg = { type: 'data:get_thread', threadId: 't1' };
       expect(await check(msg)).toEqual(OK);
-      (db as any).run(`DELETE FROM tool_calls`);
-      (db as any).run(`DELETE FROM messages`);
-      (db as any).run(`DELETE FROM message_queue WHERE thread_id = 't1'`);
-      (db as any).run(`DELETE FROM threads WHERE id = 't1'`);
+      db.run(`DELETE FROM tool_calls`);
+      db.run(`DELETE FROM messages`);
+      db.run(`DELETE FROM message_queue WHERE thread_id = 't1'`);
+      db.run(`DELETE FROM threads WHERE id = 't1'`);
       forgetThreadOwnership('t1');
       expect(await check(msg)).toEqual(deny('thread t1 not found'));
     });
@@ -107,7 +110,7 @@ describe('assertDataOwnership', () => {
       expect(await check(msg)).toEqual(OK);
       // Change the owner behind the cache (only possible directly in the DB):
       // a fresh read would now refuse, so OK proves the cached fact was used.
-      (db as any).run(`UPDATE threads SET user_id = 'someone-else' WHERE id = 't1'`);
+      db.run(`UPDATE threads SET user_id = 'someone-else' WHERE id = 't1'`);
       expect(await check(msg)).toEqual(OK);
     });
   });
@@ -204,11 +207,11 @@ describe('assertDataOwnership', () => {
     beforeEach(async () => {
       await db
         .update(schema.threads)
-        .set({ externalRequestId: 'ext-2', sessionId: 'sess-2' } as any)
+        .set({ externalRequestId: 'ext-2', sessionId: 'sess-2' })
         .where((await import('drizzle-orm')).eq(schema.threads.id, 't2'));
       await db
         .update(schema.threads)
-        .set({ externalRequestId: 'ext-1', sessionId: 'sess-1' } as any)
+        .set({ externalRequestId: 'ext-1', sessionId: 'sess-1' })
         .where((await import('drizzle-orm')).eq(schema.threads.id, 't1'));
     });
 
@@ -261,7 +264,7 @@ describe('assertDataOwnership', () => {
     });
 
     test('foreign project passes for a project member', async () => {
-      seedProjectMember(db as any, { projectId: 'p2', userId: 'u1' });
+      seedProjectMember(seedDb, { projectId: 'p2', userId: 'u1' });
       expect(await check({ type: 'data:get_project', projectId: 'p2' })).toEqual(OK);
     });
 
@@ -340,11 +343,11 @@ describe('assertDataOwnership', () => {
     });
 
     test('orphaned tool call is refused', async () => {
-      (db as any).run('PRAGMA foreign_keys = OFF');
+      db.run('PRAGMA foreign_keys = OFF');
       try {
-        seedToolCall(db as any, { id: 'tc-orphan', messageId: 'no-such-message' });
+        seedToolCall(seedDb, { id: 'tc-orphan', messageId: 'no-such-message' });
       } finally {
-        (db as any).run('PRAGMA foreign_keys = ON');
+        db.run('PRAGMA foreign_keys = ON');
       }
       expect(await check({ type: 'data:get_tool_call', toolCallId: 'tc-orphan' })).toEqual(
         deny('tool call tc-orphan orphaned'),
@@ -391,7 +394,7 @@ describe('assertDataOwnership', () => {
           nextWakeAt: 0,
           createdAt: now,
           updatedAt: now,
-        } as any);
+        });
         await db.insert(schema.jobs).values({
           id: id.replace('w', 'j'),
           threadId,
@@ -401,7 +404,7 @@ describe('assertDataOwnership', () => {
           exitPath: '/tmp/e',
           startedAt: now,
           updatedAt: now,
-        } as any);
+        });
       }
     });
 

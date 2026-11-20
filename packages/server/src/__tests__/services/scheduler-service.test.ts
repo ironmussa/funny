@@ -56,14 +56,16 @@ interface MockHandle extends DispatchHandle {
   aborted: boolean;
 }
 
-function makeMockDispatcher(): Dispatcher & {
+type MockDispatcher = Dispatcher & {
   handles: MockHandle[];
   nextResult: DispatchResult | null;
-} {
+};
+
+function makeMockDispatcher(): MockDispatcher {
   const handles: MockHandle[] = [];
-  const dispatcher = {
+  const dispatcher: MockDispatcher = {
     handles,
-    nextResult: null as DispatchResult | null,
+    nextResult: null,
     async dispatch(_thread: Thread): Promise<DispatchResult> {
       if (dispatcher.nextResult) {
         const r = dispatcher.nextResult;
@@ -103,13 +105,13 @@ let dispatcher: ReturnType<typeof makeMockDispatcher>;
 beforeEach(() => {
   testDb = createTestDb();
   runRepo = createSchedulerRunRepository({
-    db: testDb.db as any,
-    schema: testDb.schema as any,
+    db: testDb.db,
+    schema: testDb.schema,
     dbAll,
     dbGet,
     dbRun,
   });
-  threadQuery = createThreadQuery({ db: testDb.db as any, schema: testDb.schema as any });
+  threadQuery = createThreadQuery({ db: testDb.db, schema: testDb.schema });
   emitter = makeEmitter();
   dispatcher = makeMockDispatcher();
   seedProject(testDb.db, { id: 'p1', userId: 'user-1' });

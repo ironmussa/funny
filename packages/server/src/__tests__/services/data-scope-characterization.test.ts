@@ -19,6 +19,7 @@ import {
   type DataScopeDecision,
 } from '../../services/data-scope.js';
 import { __resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
+import { seedDbFor, type SeedDb } from '../helpers/builders-services.js';
 import {
   seedMessage,
   seedMessageQueue,
@@ -208,6 +209,7 @@ const IGNORED_REFERENCES: Array<[string, any]> = [
 
 describe('assertRunnerDataScope characterization', () => {
   let db: (typeof import('../../db/index.js'))['db'];
+  let seedDb: SeedDb;
 
   beforeAll(async () => {
     const { initDatabase } = await import('../../db/index.js');
@@ -215,6 +217,7 @@ describe('assertRunnerDataScope characterization', () => {
     const { autoMigrate } = await import('../../db/migrate.js');
     await autoMigrate();
     db = (await import('../../db/index.js')).db;
+    seedDb = seedDbFor(db);
   });
 
   beforeEach(async () => {
@@ -232,29 +235,25 @@ describe('assertRunnerDataScope characterization', () => {
       'runners',
       'projects',
     ]) {
-      (db as any).run(`DELETE FROM ${table}`);
+      db.run(`DELETE FROM ${table}`);
     }
     __resetRunnerScopeCache();
     __resetDataScopeCache();
     __resetDataOwnershipCache();
     const now = new Date().toISOString();
     for (const s of ['x', 'y'] as const) {
-      seedProject(db as any, { id: `p${s}`, userId: 'alice', path: `/${s}` });
-      seedThread(
-        db as any,
-        {
-          id: `t${s}`,
-          projectId: `p${s}`,
-          userId: 'alice',
-          externalRequestId: `ext-${s}`,
-          sessionId: `sess-${s}`,
-        } as any,
-      );
-      seedMessage(db as any, { id: `m${s}`, threadId: `t${s}` });
-      seedToolCall(db as any, { id: `tc${s}`, messageId: `m${s}` });
-      seedMessageQueue(db as any, { id: `q${s}`, threadId: `t${s}` });
-      (db as any)
-        .insert(schema.watchers)
+      seedProject(seedDb, { id: `p${s}`, userId: 'alice', path: `/${s}` });
+      seedThread(seedDb, {
+        id: `t${s}`,
+        projectId: `p${s}`,
+        userId: 'alice',
+        externalRequestId: `ext-${s}`,
+        sessionId: `sess-${s}`,
+      });
+      seedMessage(seedDb, { id: `m${s}`, threadId: `t${s}` });
+      seedToolCall(seedDb, { id: `tc${s}`, messageId: `m${s}` });
+      seedMessageQueue(seedDb, { id: `q${s}`, threadId: `t${s}` });
+      db.insert(schema.watchers)
         .values({
           id: `w${s}`,
           threadId: `t${s}`,
@@ -266,8 +265,7 @@ describe('assertRunnerDataScope characterization', () => {
           updatedAt: now,
         })
         .run();
-      (db as any)
-        .insert(schema.jobs)
+      db.insert(schema.jobs)
         .values({
           id: `j${s}`,
           threadId: `t${s}`,
@@ -279,8 +277,7 @@ describe('assertRunnerDataScope characterization', () => {
           updatedAt: now,
         })
         .run();
-      (db as any)
-        .insert(schema.pendingPermissionRequests)
+      db.insert(schema.pendingPermissionRequests)
         .values({
           requestId: `pr${s}`,
           threadId: `t${s}`,
@@ -292,18 +289,15 @@ describe('assertRunnerDataScope characterization', () => {
         })
         .run();
     }
-    seedThread(
-      db as any,
-      {
-        id: 'ts',
-        projectId: null as any,
-        userId: 'alice',
-        isScratch: 1,
-      } as any,
-    );
-    seedMessage(db as any, { id: 'ms', threadId: 'ts' });
-    seedRunner(db as any, { id: 'laptop', userId: 'alice', token: 'tok-l', hostname: 'l' });
-    seedRunner(db as any, {
+    seedThread(seedDb, {
+      id: 'ts',
+      projectId: null,
+      userId: 'alice',
+      isScratch: 1,
+    });
+    seedMessage(seedDb, { id: 'ms', threadId: 'ts' });
+    seedRunner(seedDb, { id: 'laptop', userId: 'alice', token: 'tok-l', hostname: 'l' });
+    seedRunner(seedDb, {
       id: 'rx',
       userId: 'alice',
       token: 'tok-rx',

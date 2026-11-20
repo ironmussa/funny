@@ -13,6 +13,7 @@ import { RunnerRequestTimeoutError } from '../../services/runner-ports.js';
 import { SocketIoBrowserEventSink } from '../../services/socketio/browser-event-sink.js';
 import { setupBrowserPtyHandlers } from '../../services/socketio/browser-pty.js';
 import { setupBrowserSessionHandlers } from '../../services/socketio/browser-session.js';
+import { markerEvent } from '../helpers/builders-services.js';
 import { fakeRunnerAccess } from '../helpers/runner-access-fakes.js';
 import {
   createProductionGrpcFixture,
@@ -123,11 +124,7 @@ describe('production TypeScript runner gRPC adapters', () => {
       browserEvents: new SocketIoBrowserEventSink(io),
     });
 
-    fixture.transport.publish({
-      type: 'agent:result',
-      threadId: 'thread-shared',
-      data: { text: 'done' },
-    } as any);
+    fixture.transport.publish(markerEvent('agent:result', 'thread-shared', { text: 'done' }));
     await waitFor(
       () => capture.userRoomEmits.length === 2,
       'event was not delivered to browser rooms',
@@ -162,28 +159,28 @@ describe('production TypeScript runner gRPC adapters', () => {
       evictFromThread: () => {},
     };
     fixture = await createProductionGrpcFixture({
-      browserEvents: sink as any,
+      browserEvents: sink,
       authorizeThread: async (threadId) => threadId === 'own-thread',
     });
 
     // Not a user-event type: dropped by the runner (and by the server).
-    fixture.transport.publish({ type: 'thread:updated', threadId: '', data: {} } as any);
+    fixture.transport.publish({ type: 'thread:updated', threadId: '', data: {} });
     // A thread this runner may not act on: dropped by the server.
     fixture.transport.publish({
       type: 'browser-session:agent-opened',
       threadId: '',
       data: { sessionId: 'thread:foreign', threadId: 'foreign-thread', url: 'https://x.test' },
-    } as any);
+    });
     fixture.transport.publish({
       type: 'browser-session:agent-opened',
       threadId: '',
       data: { sessionId: 'thread:own', threadId: 'own-thread', url: 'https://example.com' },
-    } as any);
+    });
     fixture.transport.publish({
       type: 'browser-session:ready',
       threadId: '',
       data: { sessionId: 'panel-1', url: 'https://example.com' },
-    } as any);
+    });
 
     await waitFor(() => published.length === 2, 'browser-session events were not relayed');
     await Bun.sleep(100);
@@ -264,16 +261,12 @@ describe('production TypeScript runner gRPC adapters', () => {
       });
     }
 
-    fixture.transports.get('runner-a')!.publish({
-      type: 'agent:result',
-      threadId: 'thread-a',
-      data: { runner: 'runner-a' },
-    } as any);
-    fixture.transports.get('runner-b')!.publish({
-      type: 'agent:result',
-      threadId: 'thread-b',
-      data: { runner: 'runner-b' },
-    } as any);
+    fixture.transports
+      .get('runner-a')!
+      .publish(markerEvent('agent:result', 'thread-a', { runner: 'runner-a' }));
+    fixture.transports
+      .get('runner-b')!
+      .publish(markerEvent('agent:result', 'thread-b', { runner: 'runner-b' }));
     await waitFor(
       () =>
         capture.userRoomEmits.filter(({ event }) => event === 'pty:data').length === 2 &&
@@ -468,8 +461,8 @@ describe('production TypeScript runner gRPC adapters', () => {
       await waitFor(
         () =>
           fixture!.terminalEvents.some(
-            (event) =>
-              (event.data as Record<string, unknown> | undefined)?.data === 'winner-terminal-ok',
+            ({ data }) =>
+              data instanceof Object && 'data' in data && data.data === 'winner-terminal-ok',
           ),
         'terminal did not remain usable after replacement',
       );
@@ -493,11 +486,7 @@ describe('production TypeScript runner gRPC adapters', () => {
       project: { id: 'project-1', name: 'Vertical project' },
     });
 
-    fixture.transport.publish({
-      type: 'agent:result',
-      threadId: 'thread-1',
-      data: { text: 'done' },
-    } as any);
+    fixture.transport.publish(markerEvent('agent:result', 'thread-1', { text: 'done' }));
     await waitFor(() => fixture!.events.length === 1, 'event was not accepted');
     expect(fixture.events[0]).toMatchObject({
       eventType: 'agent:result',

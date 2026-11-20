@@ -4,7 +4,7 @@ import { resolveCorsOrigins } from '../../lib/cors-origins.js';
 
 describe('resolveCorsOrigins', () => {
   test('allows both localhost and 127.0.0.1 for dev and built server ports', () => {
-    expect(resolveCorsOrigins({ VITE_PORT: '5173', PORT: '3001' } as any)).toEqual([
+    expect(resolveCorsOrigins({ VITE_PORT: '5173', PORT: '3001' })).toEqual([
       'http://localhost:5173',
       'http://127.0.0.1:5173',
       'https://localhost:5173',
@@ -20,7 +20,7 @@ describe('resolveCorsOrigins', () => {
         VITE_PORT: '5173',
         PORT: '3001',
         CORS_ORIGIN: 'https://app.example.com, http://localhost:5173 ',
-      } as any),
+      }),
     ).toEqual([
       'http://localhost:5173',
       'http://127.0.0.1:5173',

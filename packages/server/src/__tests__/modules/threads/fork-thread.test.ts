@@ -17,6 +17,7 @@ import type { OwnershipForkSource } from '../../../modules/threads/domain/fork-i
 import {
   authenticatedUserId,
   authorizedThreadId,
+  createdThreadId,
   resolvedRunnerId,
 } from '../../../modules/threads/domain/ids.js';
 import { threadOwnedBy } from '../../../modules/threads/domain/proofs/thread-owned-by.js';
@@ -110,9 +111,9 @@ describe('forkThread use case', () => {
     const result = await authorizedFork(f.ports)({ actor, variant, source, body: '{"a":1}' });
     expect(result._unsafeUnwrap()).toEqual({
       thread: bodyFor(variant, { id: 't-new' }),
-      threadId: 't-new',
-      runnerId: 'runner-1',
-    } as any);
+      threadId: createdThreadId('t-new'),
+      runnerId: resolvedRunnerId('runner-1'),
+    });
     expect(f.effects).toEqual(['resolve', 'remote', 'register', 'cache']);
     expect(f.resolveCalls).toEqual([{ actor, projectId: 'p1' }]);
     expect(f.remoteCalls).toEqual([
@@ -170,7 +171,8 @@ describe('forkThread use case', () => {
     const result = await authorizedFork(f.ports)({ actor, variant: 'fork', source, body: '{}' });
     const failure = result._unsafeUnwrapErr();
     expect(failure.kind).toBe('fork-failed');
-    expect((failure as any).cause).toBeInstanceOf(Error);
+    if (failure.kind !== 'fork-failed') throw new Error(`unexpected ${failure.kind}`);
+    expect(failure.cause).toBeInstanceOf(Error);
     expect(f.effects).toEqual([...effects]);
   });
 
@@ -178,8 +180,8 @@ describe('forkThread use case', () => {
     test('fork reads the new thread at the top level', async () => {
       const f = fakes({ response: { ok: true, thread: { id: 't-top', title: 'Top' } } });
       const result = await authorizedFork(f.ports)({ actor, variant: 'fork', source, body: '{}' });
-      expect(result._unsafeUnwrap().threadId).toBe('t-top' as any);
-      expect(f.registrations[0].id).toBe('t-top' as any);
+      expect(result._unsafeUnwrap().threadId).toBe(createdThreadId('t-top'));
+      expect(f.registrations[0].id).toBe(createdThreadId('t-top'));
     });
 
     test('fork-and-rewind reads the new thread under `thread` and returns the whole body', async () => {
@@ -193,9 +195,9 @@ describe('forkThread use case', () => {
       });
       expect(result._unsafeUnwrap()).toEqual({
         thread: body,
-        threadId: 't-nested',
-        runnerId: 'runner-1',
-      } as any);
+        threadId: createdThreadId('t-nested'),
+        runnerId: resolvedRunnerId('runner-1'),
+      });
       expect(f.registrations[0]).toMatchObject({ id: 't-nested', title: 'Nested' });
     });
 
@@ -219,8 +221,8 @@ describe('forkThread use case', () => {
         expect(result._unsafeUnwrap()).toEqual({
           thread: null,
           threadId: undefined,
-          runnerId: 'runner-1',
-        } as any);
+          runnerId: resolvedRunnerId('runner-1'),
+        });
         expect(f.effects).toEqual(['resolve', 'remote']);
       },
     );
@@ -236,7 +238,7 @@ describe('forkThread use case', () => {
   test('__default__ runner forks remotely but neither registers nor caches', async () => {
     const f = fakes({ runnerId: '__default__' });
     const result = await authorizedFork(f.ports)({ actor, variant: 'fork', source, body: '{}' });
-    expect(result._unsafeUnwrap().runnerId).toBe('__default__' as any);
+    expect(result._unsafeUnwrap().runnerId).toBe(resolvedRunnerId('__default__'));
     expect(f.effects).toEqual(['resolve', 'remote']);
   });
 
@@ -263,16 +265,16 @@ describe('forkThread use case', () => {
       });
       expect(f.registrations).toEqual([
         {
-          id: 't-new',
+          id: createdThreadId('t-new'),
           projectId: 'p1',
-          runnerId: 'runner-1',
-          userId: 'user-1',
+          runnerId: resolvedRunnerId('runner-1'),
+          userId: authenticatedUserId('user-1'),
           title: 'RT title',
           model: 'opus',
           mode: 'worktree',
           branch: 'rt/branch',
           isScratch: false,
-        } as any,
+        },
       ]);
     },
   );

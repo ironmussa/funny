@@ -20,6 +20,7 @@ import { Hono } from 'hono';
 import type { ServerEnv } from '../../lib/types.js';
 import { createProxyToRunner, type ProxyTransport } from '../../middleware/proxy.js';
 import { fakeRunnerAccess } from '../helpers/runner-access-fakes.js';
+import { buildThread } from '../helpers/thread-fixture.js';
 
 const OWNER = 'owner-1';
 const STEERER = 'cleo-4';
@@ -62,7 +63,7 @@ function makeApp(currentUser: string, thread?: { id: string; userId: string }) {
   const app = new Hono<ServerEnv>();
   app.use('*', async (c, next) => {
     c.set('userId', currentUser);
-    if (thread) c.set('thread', thread as any);
+    if (thread) c.set('thread', buildThread(thread));
     await next();
   });
   app.all('/api/threads/:id/message', createProxyToRunner(transport));

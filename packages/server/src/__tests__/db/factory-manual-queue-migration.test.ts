@@ -14,8 +14,8 @@ describe('100_factory_manual_queue migration', () => {
     const { autoMigrate } = await import('../../db/migrate.js');
     await autoMigrate();
     const { db } = await import('../../db/index.js');
-    const run = (q: ReturnType<typeof sql>) => (db as any).run(q);
-    const all = <T>(q: ReturnType<typeof sql>) => (db as any).all(q) as T[];
+    const run = (q: ReturnType<typeof sql>) => db.run(q);
+    const all = <T>(q: ReturnType<typeof sql>) => db.all<T>(q);
 
     // Rewind to the pre-100 shape.
     for (const column of ['source', 'flow_name', 'queue_order', 'wait_reason', 'admitted_at']) {

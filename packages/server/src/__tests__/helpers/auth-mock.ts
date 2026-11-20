@@ -5,17 +5,27 @@
  * must share state and base handlers or later files silently override earlier mocks.
  */
 
-export const authMockState = {
+interface AuthMockState {
+  hasPermission: boolean;
+  permissionCheckThrows: boolean;
+  createUserShouldFail: boolean;
+  createUserShouldThrow: boolean;
+  addMemberError: string | null;
+  orgs: Record<string, { id: string; name: string }>;
+  users: Record<string, { id: string; email: string; name: string }>;
+}
+
+export const authMockState: AuthMockState = {
   hasPermission: true,
   permissionCheckThrows: false,
   createUserShouldFail: false,
   createUserShouldThrow: false,
-  addMemberError: null as string | null,
+  addMemberError: null,
   orgs: {
     'org-acme': { id: 'org-acme', name: 'Acme Corp' },
     'org-1': { id: 'org-1', name: 'Acme Team' },
-  } as Record<string, { id: string; name: string }>,
-  users: {} as Record<string, { id: string; email: string; name: string }>,
+  },
+  users: {},
 };
 
 export function resetAuthMockUsers(): void {
@@ -41,7 +51,7 @@ export function createAuthApiMock(
     createUser: async ({
       body,
     }: {
-      body: Record<string, unknown> & { data?: { username?: string } };
+      body: { email: string; name: string; data?: { username?: string } };
     }) => {
       if (authMockState.createUserShouldThrow) {
         throw new Error('duplicate username');
@@ -52,8 +62,8 @@ export function createAuthApiMock(
       const username = body.data?.username ?? 'user';
       const user = {
         id: `user-${username}`,
-        email: body.email as string,
-        name: body.name as string,
+        email: body.email,
+        name: body.name,
       };
       authMockState.users[user.id] = user;
       return { user };

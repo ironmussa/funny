@@ -5,7 +5,7 @@
 import { Database } from 'bun:sqlite';
 
 import { sql } from 'drizzle-orm';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
+import { drizzle, type BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
 import * as schema from '../../db/schema.js';
 
@@ -491,10 +491,30 @@ export function createTestDb() {
   return { db: testDb, sqlite, schema };
 }
 
+/**
+ * Install a fresh in-memory SQLite database as the server's `db`, as
+ * `initDatabase({ sqlitePath: ':memory:' })` does, and return its raw
+ * `bun:sqlite` handle for PRAGMA and plain SQL. Run `autoMigrate()` after it.
+ */
+export async function installMemoryDatabase(): Promise<Database> {
+  const { createSqliteDatabase } = await import('@funny/shared/db/connection');
+  const { setConnection } = await import('../../db/index.js');
+  const connection = createSqliteDatabase({ mode: 'sqlite', path: ':memory:' });
+  setConnection(connection);
+  if (!connection.sqlite) throw new Error('the SQLite connection has no raw driver');
+  return connection.sqlite;
+}
+
 // ── Seed helpers ────────────────────────────────────────────
 
+/**
+ * Any Drizzle SQLite handle over the server schema: the `createTestDb()` handle
+ * or the app singleton (`TestApp.db`).
+ */
+type SeedDb = BunSQLiteDatabase<typeof schema>;
+
 export function seedProject(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: Partial<typeof schema.projects.$inferInsert> = {},
 ) {
   const project = {
@@ -512,7 +532,7 @@ export function seedProject(
 }
 
 export function seedThread(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: Partial<typeof schema.threads.$inferInsert> = {},
 ) {
   const thread = {
@@ -532,7 +552,7 @@ export function seedThread(
 }
 
 export function seedPipeline(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: Partial<typeof schema.pipelines.$inferInsert> = {},
 ) {
   const now = new Date().toISOString();
@@ -551,7 +571,7 @@ export function seedPipeline(
 }
 
 export function seedRunner(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: Partial<typeof schema.runners.$inferInsert> = {},
 ) {
   const now = new Date().toISOString();
@@ -572,7 +592,7 @@ export function seedRunner(
 }
 
 export function seedRunnerProjectAssignment(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: {
     runnerId?: string;
     projectId?: string;
@@ -590,7 +610,7 @@ export function seedRunnerProjectAssignment(
 }
 
 export function seedTeamProject(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: { teamId?: string; projectId?: string } = {},
 ) {
   const tp = {
@@ -603,7 +623,7 @@ export function seedTeamProject(
 }
 
 export function seedMessage(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: Partial<typeof schema.messages.$inferInsert> = {},
 ) {
   const message = {
@@ -619,7 +639,7 @@ export function seedMessage(
 }
 
 export function seedThreadEvent(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: {
     id?: string;
     threadId?: string;
@@ -640,7 +660,7 @@ export function seedThreadEvent(
 }
 
 export function seedProjectMember(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: {
     projectId?: string;
     userId?: string;
@@ -664,14 +684,14 @@ export function seedProjectMember(
  * rows its foreign keys need when missing.
  */
 export function seedOrgMember(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: { organizationId?: string; userId?: string; role?: string } = {},
 ) {
   const organizationId = overrides.organizationId ?? 'org-1';
   const userId = overrides.userId ?? 'user-1';
   const now = new Date().toISOString();
   db.insert(schema.organization)
-    .values({ id: organizationId, name: organizationId, createdAt: now } as any)
+    .values({ id: organizationId, name: organizationId, createdAt: now })
     .onConflictDoNothing()
     .run();
   db.insert(schema.user)
@@ -682,7 +702,7 @@ export function seedOrgMember(
       emailVerified: false,
       createdAt: now,
       updatedAt: now,
-    } as any)
+    })
     .onConflictDoNothing()
     .run();
   const row = {
@@ -692,14 +712,12 @@ export function seedOrgMember(
     role: overrides.role ?? 'member',
     createdAt: now,
   };
-  db.insert(schema.member)
-    .values(row as any)
-    .run();
+  db.insert(schema.member).values(row).run();
   return row;
 }
 
 export function seedResourceGrant(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: {
     subjectId?: string;
     resourceType?: string;
@@ -721,7 +739,7 @@ export function seedResourceGrant(
 }
 
 export function seedMessageQueue(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: {
     id?: string;
     threadId?: string;
@@ -741,7 +759,7 @@ export function seedMessageQueue(
 }
 
 export function seedStageHistory(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: {
     id?: string;
     threadId?: string;
@@ -762,7 +780,7 @@ export function seedStageHistory(
 }
 
 export function seedInviteLink(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: Partial<typeof schema.inviteLinks.$inferInsert> = {},
 ) {
   const link = {
@@ -783,7 +801,7 @@ export function seedInviteLink(
 }
 
 export function seedSchedulerRun(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: {
     threadId?: string;
     userId?: string;
@@ -810,7 +828,7 @@ export function seedSchedulerRun(
 }
 
 export function seedAutomation(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: Partial<typeof schema.automations.$inferInsert> = {},
 ) {
   const now = new Date().toISOString();
@@ -831,7 +849,7 @@ export function seedAutomation(
 }
 
 export function seedAutomationRun(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: Partial<typeof schema.automationRuns.$inferInsert> = {},
 ) {
   const now = new Date().toISOString();
@@ -850,7 +868,7 @@ export function seedAutomationRun(
 }
 
 export function seedPipelineRun(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: Partial<typeof schema.pipelineRuns.$inferInsert> = {},
 ) {
   const now = new Date().toISOString();
@@ -867,7 +885,7 @@ export function seedPipelineRun(
 }
 
 export function seedThreadDependency(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: { threadId?: string; blockedBy?: string } = {},
 ) {
   const row = {
@@ -879,7 +897,7 @@ export function seedThreadDependency(
 }
 
 export function seedToolCall(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: {
     id?: string;
     messageId?: string;
@@ -900,7 +918,7 @@ export function seedToolCall(
 }
 
 export function seedRunnerTask(
-  db: ReturnType<typeof createTestDb>['db'],
+  db: SeedDb,
   overrides: {
     id?: string;
     runnerId?: string;

@@ -20,13 +20,14 @@ import {
   type GetShareLevel,
   type HasShare,
 } from '../../middleware/thread-access.js';
+import { buildThread } from '../helpers/thread-fixture.js';
 
 const OWNER = 'owner-1';
 const SHAREE = 'ana-2'; // holds a `view` grant
 const STEERER = 'cleo-4'; // holds a `steer` grant
 const STRANGER = 'bob-3'; // no grant
 
-const threadFixture = { id: 't1', userId: OWNER, projectId: 'p1' } as any;
+const threadFixture = buildThread({ id: 't1', userId: OWNER, projectId: 'p1' });
 
 /** Fake share lookups: SHAREE has view, STEERER has steer, nobody else. */
 const hasShare: HasShare = async (threadId, userId) =>

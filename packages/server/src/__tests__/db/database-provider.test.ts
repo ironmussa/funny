@@ -28,8 +28,14 @@ function fakeProvider(name: string, dialect: DbDialect = 'sqlite') {
   return { provider, transactions };
 }
 
-// oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing test-injected `marker` property on the fake DB provider
-const marker = () => (database.db as unknown as { marker: string }).marker;
+/** The `db` proxy as these tests see it: an `AppDatabase` that may carry the fake's `marker`. */
+type MarkedDatabase = database.AppDatabase & { marker?: string };
+
+/** The active fake provider's `marker`, read through the `db` proxy. */
+function marker(): string | undefined {
+  const db: MarkedDatabase = database.db;
+  return db.marker;
+}
 
 afterEach(() => database.resetDatabaseForTests());
 

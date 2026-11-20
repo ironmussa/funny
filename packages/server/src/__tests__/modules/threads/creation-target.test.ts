@@ -72,9 +72,9 @@ describe('normalizeCreationRequest', () => {
 
 describe('branded identifiers', () => {
   test('brands are erased at runtime', () => {
-    expect(authenticatedUserId('u') as string).toBe('u');
-    expect(resolvedRunnerId('r') as string).toBe('r');
-    expect(createdThreadId('t') as string).toBe('t');
+    expect<string>(authenticatedUserId('u')).toBe('u');
+    expect<string>(resolvedRunnerId('r')).toBe('r');
+    expect<string>(createdThreadId('t')).toBe('t');
   });
 
   test('identifiers are not interchangeable (checked by `bun run typecheck`)', () => {
@@ -91,6 +91,6 @@ describe('branded identifiers', () => {
     // @ts-expect-error — a plain string is not a UserId
     takesUser('raw');
 
-    expect(takesUser(user) as string).toBe('u');
+    expect<string>(takesUser(user)).toBe('u');
   });
 });

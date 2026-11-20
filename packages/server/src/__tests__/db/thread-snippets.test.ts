@@ -3,16 +3,15 @@
  */
 import { beforeAll, describe, expect, test } from 'bun:test';
 
+import { installMemoryDatabase } from '../helpers/test-db.js';
+
 let raw: import('bun:sqlite').Database;
 let listThreads: (opts: { userId: string; limit?: number }) => Promise<{ threads: any[] }>;
 
 beforeAll(async () => {
-  const { initDatabase, db } = await import('../../db/index.js');
-  await initDatabase({ sqlitePath: ':memory:' });
+  raw = await installMemoryDatabase();
   const { autoMigrate } = await import('../../db/migrate.js');
   await autoMigrate();
-  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing Drizzle ORM internal $client for raw SQLite test queries
-  raw = (db as unknown as { $client: import('bun:sqlite').Database }).$client;
   const { repos } = await import('../../db/repos.js');
   listThreads = (opts) => repos.threads().listThreads(opts);
 });

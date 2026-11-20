@@ -12,7 +12,11 @@ import type {
   ThreadRegistration,
 } from '../../../modules/threads/application/ports.js';
 import type { CreationTarget } from '../../../modules/threads/domain/creation-target.js';
-import { authenticatedUserId, resolvedRunnerId } from '../../../modules/threads/domain/ids.js';
+import {
+  authenticatedUserId,
+  createdThreadId,
+  resolvedRunnerId,
+} from '../../../modules/threads/domain/ids.js';
 
 interface FakeOptions {
   runnerId?: string | null;
@@ -80,9 +84,9 @@ describe('createThread use case', () => {
     const result = await makeCreateThread(f.ports)({ actor, intent, payload: { projectId: 'p1' } });
     expect(result._unsafeUnwrap()).toEqual({
       thread: { id: 't1', branch: 'rt/b' },
-      threadId: 't1',
-      runnerId: 'runner-1',
-    } as any);
+      threadId: createdThreadId('t1'),
+      runnerId: resolvedRunnerId('runner-1'),
+    });
     expect(f.effects).toEqual(['resolve', 'remote', 'register', 'cache']);
     expect(f.resolveCalls[0].intent).toBe(intent);
     expect(f.remoteCalls[0].intent).toBe(intent);
@@ -171,18 +175,17 @@ describe('createThread use case', () => {
       intent: 'normal',
       payload: { projectId: 'p1', title: 'Body', model: 'opus', mode: 3, branch: 'body' },
     });
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     expect(f.registrations[0]).toEqual({
-      id: 'top',
+      id: createdThreadId('top'),
       projectId: 'p1',
-      runnerId: 'runner-1',
-      userId: 'user-1',
+      runnerId: resolvedRunnerId('runner-1'),
+      userId: authenticatedUserId('user-1'),
       title: 'Body',
       model: 'opus',
       mode: undefined,
       branch: 'rt',
       isScratch: false,
-    } as unknown as ThreadRegistration);
+    } satisfies ThreadRegistration);
   });
 
   test('metadata fallback: nested id, runtime title, body branch', async () => {
@@ -223,7 +226,7 @@ describe('createThread use case', () => {
     ['registry throws', { registerError: new Error('x') }, ['resolve', 'remote', 'register']],
     ['cache throws', { cacheError: new Error('x') }, ['resolve', 'remote', 'register', 'cache']],
   ] as const)('%s → creation-failed with partial effects', async (_name, opts, effects) => {
-    const f = fakes(opts as FakeOptions);
+    const f = fakes(opts);
     const result = await makeCreateThread(f.ports)({
       actor,
       intent: 'normal',

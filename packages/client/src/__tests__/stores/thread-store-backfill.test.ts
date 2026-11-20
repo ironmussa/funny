@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useThreadStore } from '@/stores/thread-store';
 import { setSelectingThreadId } from '@/stores/thread-store-internals';
 
@@ -18,7 +19,7 @@ describe('back-fill subscriber: selectedThreadId realignment', () => {
       selectedThreadId: null,
       activeThread: null,
       threadDataById: {},
-    } as any);
+    });
   });
 
   afterEach(() => {
@@ -27,12 +28,12 @@ describe('back-fill subscriber: selectedThreadId realignment', () => {
 
   test('does NOT realign selectedThreadId while a selectThread is in flight', () => {
     // route-sync wants the URL's thread selected…
-    useThreadStore.setState({ selectedThreadId: 'url-thread' } as any);
+    useThreadStore.setState({ selectedThreadId: 'url-thread' });
     // …and a selectThread for it is in flight.
     setSelectingThreadId('url-thread');
 
     // A direct activeThread write drifts to a different thread (not in the map).
-    useThreadStore.setState({ activeThread: { id: 'stale-thread', messages: [] } } as any);
+    useThreadStore.setState({ activeThread: buildThreadWithMessages({ id: 'stale-thread' }) });
 
     const state = useThreadStore.getState();
     // Selection stays put — the in-flight selectThread owns it.
@@ -42,10 +43,10 @@ describe('back-fill subscriber: selectedThreadId realignment', () => {
   });
 
   test('still realigns selectedThreadId when no selection is in flight', () => {
-    useThreadStore.setState({ selectedThreadId: 'old-thread' } as any);
+    useThreadStore.setState({ selectedThreadId: 'old-thread' });
     // No selectThread in flight (getSelectingThreadId() === null).
 
-    useThreadStore.setState({ activeThread: { id: 'new-thread', messages: [] } } as any);
+    useThreadStore.setState({ activeThread: buildThreadWithMessages({ id: 'new-thread' }) });
 
     const state = useThreadStore.getState();
     // Legacy safety net: align selection to the directly-written activeThread.

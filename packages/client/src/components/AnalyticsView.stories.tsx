@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import { MemoryRouter } from 'react-router-dom';
 
 import '@/i18n/config';
@@ -121,8 +121,8 @@ export const Loading: Story = {
   render: () => {
     seedStores();
     // Return promises that never resolve to keep loading state
-    api.analyticsOverview = () => new Promise(() => {}) as any;
-    api.analyticsTimeline = () => new Promise(() => {}) as any;
+    api.analyticsOverview = () => new ResultAsync(new Promise(() => {}));
+    api.analyticsTimeline = () => new ResultAsync(new Promise(() => {}));
     return <AnalyticsView />;
   },
 };

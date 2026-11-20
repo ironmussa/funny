@@ -1,7 +1,10 @@
 import { describe, expect, test } from 'vitest';
 
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { resolveTerminalScope } from '@/hooks/use-terminal-scope';
 import { SCRATCH_TERMINAL_SCOPE_ID } from '@/stores/terminal-store';
+
+import { buildMessage } from '../helpers/builders-stores';
 
 const regularThread = {
   id: 'grid-thread',
@@ -107,14 +110,13 @@ describe('useTerminalScope subscriptions', () => {
     const { act, renderHook } = await import('@testing-library/react');
     const { useTerminalScope } = await import('@/hooks/use-terminal-scope');
     const { useThreadStore } = await import('@/stores/thread-store');
-    const base = {
+    const base = buildThreadWithMessages({
       id: 'active-thread',
       projectId: 'p1',
       isScratch: false,
       worktreePath: '/worktrees/active-thread',
-      messages: [] as any[],
-    };
-    act(() => useThreadStore.setState({ activeThread: base as any }));
+    });
+    act(() => useThreadStore.setState({ activeThread: base }));
 
     let renders = 0;
     const { result } = renderHook(() => {
@@ -126,14 +128,14 @@ describe('useTerminalScope subscriptions', () => {
 
     act(() =>
       useThreadStore.setState({
-        activeThread: { ...base, messages: [{ id: 'm1', content: 'streamed' }] } as any,
+        activeThread: { ...base, messages: [buildMessage({ id: 'm1', content: 'streamed' })] },
       }),
     );
     expect(renders).toBe(before);
 
     act(() =>
       useThreadStore.setState({
-        activeThread: { ...base, worktreePath: '/worktrees/moved' } as any,
+        activeThread: { ...base, worktreePath: '/worktrees/moved' },
       }),
     );
     expect(renders).toBe(before + 1);

@@ -3,12 +3,17 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ExpandedDiffDialog, ExpandedDiffView } from '@/components/tool-cards/ExpandedDiffDialog';
 
+import { buildReviewThread } from '../helpers/builders-components';
 import { renderWithProviders } from '../helpers/render';
 
 const viewport = vi.hoisted(() => ({ mobile: false }));
 vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => viewport.mobile }));
 
-const diffProps = vi.hoisted(() => ({ current: null as Record<string, any> | null }));
+interface DiffPropsRef {
+  current: Record<string, any> | null;
+}
+
+const diffProps = vi.hoisted((): DiffPropsRef => ({ current: null }));
 
 vi.mock('@/components/VirtualDiff', () => ({
   VirtualDiff: (props: { 'data-testid'?: string; viewMode?: string }) => {
@@ -191,8 +196,8 @@ test('dialog search shortcuts, toolbar toggles and review threads', () => {
       newValue="b"
       baseLine={7}
       prReviewThreads={[
-        { id: 't1', path: 'src/a.ts', comments: [] } as any,
-        { id: 't2', path: 'src/a.ts', comments: [] } as any,
+        buildReviewThread({ id: 1, path: 'src/a.ts' }),
+        buildReviewThread({ id: 2, path: 'src/a.ts' }),
       ]}
     />,
   );
@@ -224,7 +229,7 @@ describe('ExpandedDiffView behavior', () => {
     '+new two',
   ].join('\n');
 
-  const selectedArray = () => [...(diffProps.current!.selectedLines as Set<number>)].sort();
+  const selectedArray = (): number[] => [...diffProps.current!.selectedLines].sort();
 
   test('line selection: toggle, hunk, drag and select/deselect signals', () => {
     const onSelectionStateChange = vi.fn();
@@ -375,8 +380,8 @@ describe('ExpandedDiffView behavior', () => {
         oldValue="a"
         newValue="b"
         prReviewThreads={[
-          { id: 't1', path: 'src/a.ts', comments: [] } as any,
-          { id: 't2', path: 'src/other.ts', comments: [] } as any,
+          buildReviewThread({ id: 1, path: 'src/a.ts' }),
+          buildReviewThread({ id: 2, path: 'src/other.ts' }),
         ]}
       />,
     );

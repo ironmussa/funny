@@ -8,6 +8,7 @@ import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
 import { PromptInputUI } from '@/components/PromptInputUI';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { buildThread } from '@/data/threads/testing';
 import { cn } from '@/lib/utils';
 
 const defaultModes = [
@@ -88,13 +89,13 @@ export const FollowUp: Story = {
     isNewThread: false,
     followUpSelectedBranch: 'main',
     onFollowUpSelectedBranchChange: fn(),
-    powerlineThread: {
+    powerlineThread: buildThread({
       id: 'thread-1',
       mode: 'worktree',
       branch: 'feature/dark-mode',
       baseBranch: 'main',
       worktreePath: '/home/user/projects/my-app-worktrees/feature-dark-mode',
-    } as ComponentProps<typeof PromptInputUI>['powerlineThread'],
+    }),
     powerlineProjectName: 'my-app',
     powerlineProjectPath: '/home/user/projects/my-app',
   },

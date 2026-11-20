@@ -1,7 +1,8 @@
 import { describe, test, expect, vi } from 'vitest';
+import { createStore } from 'zustand/vanilla';
 
 import * as projectsRead from '@/data/projects/read';
-import { seedProjects } from '@/data/projects/testing';
+import { buildProject, seedProjects } from '@/data/projects/testing';
 import { setSourceMembers } from '@/data/threads/list-meta';
 import * as threadsRead from '@/data/threads/read';
 import { getThreadsData } from '@/data/threads/store';
@@ -11,27 +12,9 @@ import { getThreadsData } from '@/data/threads/store';
  * so the lazy refs (_projectStoreRef, _threadStoreRef) start as null.
  */
 
-function createMockStore<T extends Record<string, any>>(initialState: T) {
-  let state = { ...initialState };
-  return {
-    getState: () => state,
-    setState: (partial: Partial<T>) => {
-      state = { ...state, ...partial };
-    },
-    subscribe: vi.fn(),
-    destroy: vi.fn(),
-  };
-}
-
-function makeProject(p: { id: string; path: string }) {
-  return {
-    id: p.id,
-    name: p.id,
-    path: p.path,
-    userId: 'user-1',
-    sortOrder: 0,
-    createdAt: '2024-01-01T00:00:00Z',
-  };
+/** A real vanilla store holding just the fields a test needs, as `StoreApi<T>`. */
+function createMockStore<T extends object>(initialState: T) {
+  return createStore<T>()(() => ({ ...initialState }));
 }
 
 // We need a fresh module for each test to reset the internal refs.
@@ -81,11 +64,11 @@ describe('store-bridge', () => {
 
       const loadThreadsForProject = vi.fn();
       const threadStore = createMockStore({
-        threadIdsByProject: {} as Record<string, string[]>,
+        threadIdsByProject: {},
         loadThreadsForProject,
       });
 
-      bridge.registerThreadStore(threadStore as any);
+      bridge.registerThreadStore(threadStore);
       bridge.ensureThreadsLoaded('p1');
 
       expect(loadThreadsForProject).toHaveBeenCalledWith('p1');
@@ -98,7 +81,7 @@ describe('store-bridge', () => {
       const loadThreadsForProject = vi.fn();
       const threadStore = createMockStore({ loadThreadsForProject });
 
-      bridge.registerThreadStore(threadStore as any);
+      bridge.registerThreadStore(threadStore);
       bridge.ensureThreadsLoaded('p1');
 
       expect(loadThreadsForProject).not.toHaveBeenCalled();
@@ -112,7 +95,7 @@ describe('store-bridge', () => {
         clearProjectThreads,
       });
 
-      bridge.registerThreadStore(threadStore as any);
+      bridge.registerThreadStore(threadStore);
       bridge.clearProjectThreads('p1');
 
       expect(clearProjectThreads).toHaveBeenCalledWith('p1');
@@ -125,7 +108,7 @@ describe('store-bridge', () => {
         expandedProjects: new Set<string>(),
       });
 
-      bridge.registerProjectStore(projectStore as any);
+      bridge.registerProjectStore(projectStore);
       bridge.expandProject('p1');
 
       const state = projectStore.getState();
@@ -140,7 +123,7 @@ describe('store-bridge', () => {
       });
 
       const setStateSpy = vi.spyOn(projectStore, 'setState');
-      bridge.registerProjectStore(projectStore as any);
+      bridge.registerProjectStore(projectStore);
       bridge.expandProject('p1');
 
       expect(setStateSpy).not.toHaveBeenCalled();
@@ -150,10 +133,10 @@ describe('store-bridge', () => {
       const bridge = await freshBridge();
 
       const projectStore = createMockStore({
-        selectedProjectId: null as string | null,
+        selectedProjectId: null,
       });
 
-      bridge.registerProjectStore(projectStore as any);
+      bridge.registerProjectStore(projectStore);
       bridge.selectProject('p1');
 
       expect(projectStore.getState().selectedProjectId).toBe('p1');
@@ -164,10 +147,10 @@ describe('store-bridge', () => {
       // Regression: project rows moved to the data layer; reading them off the
       // project store threw "Cannot read properties of undefined (reading 'find')".
       seedProjects([
-        makeProject({ id: 'p1', path: '/home/user/project-a' }),
-        makeProject({ id: 'p2', path: '/home/user/project-b' }),
+        buildProject({ id: 'p1', name: 'p1', path: '/home/user/project-a' }),
+        buildProject({ id: 'p2', name: 'p2', path: '/home/user/project-b' }),
       ]);
-      bridge.registerProjectStore(createMockStore({ selectedProjectId: null }) as any);
+      bridge.registerProjectStore(createMockStore({ selectedProjectId: null }));
 
       expect(bridge.getProjectPath('p1')).toBe('/home/user/project-a');
       expect(bridge.getProjectPath('p2')).toBe('/home/user/project-b');
@@ -175,7 +158,7 @@ describe('store-bridge', () => {
 
     test('getProjectPath returns undefined for unknown project', async () => {
       const bridge = await freshBridge();
-      seedProjects([makeProject({ id: 'p1', path: '/home/user/project-a' })]);
+      seedProjects([buildProject({ id: 'p1', name: 'p1', path: '/home/user/project-a' })]);
 
       expect(bridge.getProjectPath('unknown')).toBeUndefined();
     });

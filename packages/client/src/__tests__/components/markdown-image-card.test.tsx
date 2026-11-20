@@ -5,6 +5,8 @@ import { afterEach, describe, expect, test } from 'vitest';
 import { MarkdownImageCard } from '@/components/MarkdownImageCard';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 
+import { expectInstance } from '../helpers/builders-components';
+
 afterEach(() => {
   cleanup();
   useMediaPreviewStore.getState().close();
@@ -42,7 +44,7 @@ describe('MarkdownImageCard', () => {
     renderCard('https://x.test/y.png');
     fireEvent.click(screen.getByTestId('markdown-image'));
     expect(screen.getByTestId('image-lightbox')).toBeInTheDocument();
-    expect((screen.getByTestId('lightbox-image') as HTMLImageElement).src).toBe(
+    expect(expectInstance(screen.getByTestId('lightbox-image'), HTMLImageElement).src).toBe(
       'https://x.test/y.png',
     );
     expect(useMediaPreviewStore.getState().isOpen).toBe(false);
@@ -52,7 +54,7 @@ describe('MarkdownImageCard', () => {
     renderCard('https://x.test/y.png');
     fireEvent.click(screen.getByTestId('markdown-image-expand'));
     expect(screen.getByTestId('image-lightbox')).toBeInTheDocument();
-    expect((screen.getByTestId('lightbox-image') as HTMLImageElement).src).toBe(
+    expect(expectInstance(screen.getByTestId('lightbox-image'), HTMLImageElement).src).toBe(
       'https://x.test/y.png',
     );
     expect(useMediaPreviewStore.getState().isOpen).toBe(false);

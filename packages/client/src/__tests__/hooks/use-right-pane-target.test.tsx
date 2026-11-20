@@ -1,42 +1,21 @@
 import { act, renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, test } from 'vitest';
 
-import { withThreadIndex } from '@/data/threads/testing';
+import { seedProjects } from '@/data/projects/testing';
+import { buildThread, withThreadIndex } from '@/data/threads/testing';
 import { useRightPaneProjectId, useRightPaneThreadId } from '@/hooks/use-right-pane-target';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
-
-function makeThread(id: string, projectId: string) {
-  return {
-    id,
-    projectId,
-    title: id,
-    status: 'idle' as const,
-    mode: 'local' as const,
-    stage: 'backlog' as const,
-    provider: 'anthropic' as const,
-    permissionMode: 'default' as const,
-    model: 'claude-sonnet-4-5' as const,
-    cost: 0,
-    userId: 'user-1',
-    source: 'web' as const,
-    runtime: 'local' as const,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
-  };
-}
 
 describe('use-right-pane-target', () => {
   beforeEach(() => {
     useUIStore.setState({
       liveColumnsOpen: false,
       gridSelectedThreadId: null,
-    } as any);
-    useProjectStore.setState({
-      selectedProjectId: null,
-      projects: [],
-    } as any);
+    });
+    seedProjects([]);
+    useProjectStore.setState({ selectedProjectId: null });
     useThreadStore.setState(
       withThreadIndex({
         threadsById: {},
@@ -46,7 +25,7 @@ describe('use-right-pane-target', () => {
         selectedThreadId: null,
         threadDataById: {},
         activeThread: null,
-      } as any),
+      }),
     );
   });
 
@@ -54,20 +33,20 @@ describe('use-right-pane-target', () => {
     useUIStore.setState({
       liveColumnsOpen: true,
       gridSelectedThreadId: 't1',
-    } as any);
-    useProjectStore.setState({ selectedProjectId: 'stale-project' } as any);
+    });
+    useProjectStore.setState({ selectedProjectId: 'stale-project' });
     useThreadStore.setState(
       withThreadIndex({
         threadsById: {
-          t1: makeThread('t1', 'p1') as any,
-          t2: makeThread('t2', 'p2') as any,
+          t1: buildThread({ id: 't1', projectId: 'p1', title: 't1', status: 'idle' }),
+          t2: buildThread({ id: 't2', projectId: 'p2', title: 't2', status: 'idle' }),
         },
         threadIdsByProject: {
           p1: ['t1'],
           p2: ['t2'],
         },
         threadDataById: {},
-      } as any),
+      }),
     );
 
     const { result } = renderHook(() => ({
@@ -88,9 +67,9 @@ describe('use-right-pane-target', () => {
     useUIStore.setState({
       liveColumnsOpen: false,
       gridSelectedThreadId: 't1',
-    } as any);
-    useProjectStore.setState({ selectedProjectId: 'p-selected' } as any);
-    useThreadStore.setState({ selectedThreadId: 'url-thread' } as any);
+    });
+    useProjectStore.setState({ selectedProjectId: 'p-selected' });
+    useThreadStore.setState({ selectedThreadId: 'url-thread' });
 
     const { result } = renderHook(() => ({
       threadId: useRightPaneThreadId(),

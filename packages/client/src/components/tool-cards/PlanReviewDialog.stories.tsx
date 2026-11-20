@@ -116,11 +116,13 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const NO_COMMENTS: PlanComment[] = [];
+
 const DUMMY_ARGS = {
   open: false,
   onOpenChange: () => {},
   plan: SHORT_PLAN,
-  planComments: [] as PlanComment[],
+  planComments: NO_COMMENTS,
   onAddComment: () => {},
   onAddEmoji: () => {},
   onRemoveComment: () => {},

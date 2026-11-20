@@ -1,16 +1,18 @@
 import { screen, fireEvent, waitFor, type RenderResult } from '@testing-library/react';
-import { okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { PromptInput } from '@/components/PromptInput';
 import { withProjects } from '@/data/projects/testing';
 import { seedQueues } from '@/data/queue/testing';
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { api } from '@/lib/api';
 import { systemApi } from '@/lib/api/system';
 import { useAppStore } from '@/stores/app-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
+import { expectInstance } from '../helpers/builders-components';
 import { installTestDataLayer } from '../helpers/data-layer-harness';
 import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
@@ -243,7 +245,7 @@ beforeEach(() => {
   );
   useThreadStore.setState({
     threadDataById: {},
-  } as any);
+  });
   vi.clearAllMocks();
 });
 
@@ -359,7 +361,7 @@ describe('PromptInput', () => {
   test('navigates this thread’s sent-message history with the arrow keys', async () => {
     useThreadStore.setState({
       threadDataById: {
-        'thread-history': {
+        'thread-history': buildThreadWithMessages({
           id: 'thread-history',
           projectId: 'p1',
           mode: 'local',
@@ -388,12 +390,12 @@ describe('PromptInput', () => {
               timestamp: '2026-01-01T00:00:02.000Z',
             },
           ],
-        },
+        }),
       },
-    } as any);
+    });
 
     await renderPrompt(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-history' });
-    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    const textarea = expectInstance(screen.getByRole('textbox'), HTMLTextAreaElement);
 
     fireEvent.keyDown(textarea, { key: 'ArrowUp' });
     expect(textarea.value).toBe('latest prompt');
@@ -411,7 +413,7 @@ describe('PromptInput', () => {
   test('restores the draft after navigating back to the end of message history', async () => {
     useThreadStore.setState({
       threadDataById: {
-        'thread-history': {
+        'thread-history': buildThreadWithMessages({
           id: 'thread-history',
           projectId: 'p1',
           mode: 'local',
@@ -426,12 +428,12 @@ describe('PromptInput', () => {
               timestamp: '2026-01-01T00:00:00.000Z',
             },
           ],
-        },
+        }),
       },
-    } as any);
+    });
 
     await renderPrompt(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-history' });
-    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    const textarea = expectInstance(screen.getByRole('textbox'), HTMLTextAreaElement);
     fireEvent.change(textarea, { target: { value: 'unfinished draft' } });
 
     fireEvent.keyDown(textarea, { key: 'ArrowUp' });
@@ -459,7 +461,7 @@ describe('PromptInput', () => {
         selectedProjectId: 'p1',
         selectedThreadId: null,
         activeThread: null,
-      } as any),
+      }),
     );
     const onProviderChange = vi.fn();
 
@@ -504,7 +506,7 @@ describe('PromptInput', () => {
     );
     useThreadStore.setState({
       threadDataById: {
-        'old-thread': {
+        'old-thread': buildThreadWithMessages({
           id: 'old-thread',
           projectId: 'p-old',
           worktreePath: '/tmp/previous-project-worktree',
@@ -514,9 +516,9 @@ describe('PromptInput', () => {
           branch: 'old-branch',
           status: 'idle',
           messages: [],
-        },
+        }),
       },
-    } as any);
+    });
 
     await renderPrompt(<PromptInput onSubmit={vi.fn()} isNewThread projectId="p-new" />, {
       threadId: 'old-thread',
@@ -578,7 +580,7 @@ describe('PromptInput', () => {
     const onSubmit = vi.fn();
     await renderPrompt(<PromptInput onSubmit={onSubmit} />);
 
-    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    const textarea = expectInstance(screen.getByRole('textbox'), HTMLTextAreaElement);
     fireEvent.change(textarea, { target: { value: 'task' } });
     expect(textarea.value).toBe('task');
 
@@ -590,7 +592,7 @@ describe('PromptInput', () => {
     const onSubmit = vi.fn().mockResolvedValue(false);
     await renderPrompt(<PromptInput onSubmit={onSubmit} />);
 
-    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    const textarea = expectInstance(screen.getByRole('textbox'), HTMLTextAreaElement);
     fireEvent.change(textarea, { target: { value: 'my task' } });
     expect(textarea.value).toBe('my task');
 
@@ -735,7 +737,7 @@ describe('PromptInput', () => {
       }
       if (tid === 'thread-b') {
         // Defer B's fetch so we can observe the intermediate render state.
-        return new Promise(() => {}) as any;
+        return new ResultAsync(new Promise(() => {}));
       }
       return okAsync([]);
     });
@@ -767,7 +769,7 @@ describe('PromptInput', () => {
     // The queue row outlives the thread payload: with the payload unloaded
     // from threadDataById, the queue must still render when we come back.
     seedQueues({ 'thread-a': { count: 2 } });
-    useThreadStore.setState({ threadDataById: {} } as any);
+    useThreadStore.setState({ threadDataById: {} });
 
     vi.mocked(api.listQueue).mockReturnValue(
       okAsync([
@@ -799,7 +801,7 @@ describe('PromptInput', () => {
   });
 
   test('shows queued message preview while queue details are still loading', async () => {
-    vi.mocked(api.listQueue).mockReturnValueOnce(new Promise(() => {}) as any);
+    vi.mocked(api.listQueue).mockReturnValueOnce(new ResultAsync(new Promise(() => {})));
 
     seedQueues({ 'thread-a': { count: 1, next: 'mensaje pendiente despues del refresh' } });
     await renderPrompt(<PromptInput onSubmit={vi.fn()} />, {
@@ -828,7 +830,7 @@ describe('PromptInput', () => {
         ],
       },
     });
-    vi.mocked(api.listQueue).mockReturnValueOnce(new Promise(() => {}) as any);
+    vi.mocked(api.listQueue).mockReturnValueOnce(new ResultAsync(new Promise(() => {})));
 
     await renderPrompt(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-a',
@@ -870,22 +872,22 @@ describe('PromptInput', () => {
         selectedProjectId: 'p2',
         selectedThreadId: null,
         activeThread: null,
-      } as any),
+      }),
     );
 
     // …but the column's thread belongs to Alpha.
     useThreadStore.setState({
       threadDataById: {
-        'thread-alpha': {
+        'thread-alpha': buildThreadWithMessages({
           id: 'thread-alpha',
           projectId: 'p1',
           mode: 'local',
           branch: 'master',
           status: 'idle',
           messages: [],
-        },
+        }),
       },
-    } as any);
+    });
 
     await renderPrompt(<PromptInput onSubmit={vi.fn()} />, { threadId: 'thread-alpha' });
 
@@ -956,7 +958,7 @@ test('keeps the draft and attachments while the provider needs authentication', 
     />,
   );
   const attachment = screen.getByRole('img', { name: 'Attachment 1' });
-  const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+  const textarea = expectInstance(screen.getByRole('textbox'), HTMLTextAreaElement);
   fireEvent.change(textarea, { target: { value: 'keep my task' } });
   fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
   await screen.findByRole('dialog');
@@ -977,7 +979,7 @@ test('opens Pi setup before sending when the bundled SDK has no credentials', as
       threadOverride={{ provider: 'pi', model: 'default' }}
     />,
   );
-  const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+  const textarea = expectInstance(screen.getByRole('textbox'), HTMLTextAreaElement);
   fireEvent.change(textarea, { target: { value: 'Pi task' } });
   fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
   await screen.findByRole('dialog');

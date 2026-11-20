@@ -4,6 +4,7 @@ import { describe, expect, test } from 'vitest';
 
 import { createDataLayer } from '@/data/data-layer';
 import { getThreadsData } from '@/data/threads/store';
+import { buildThread } from '@/data/threads/testing';
 import { groupThreadsByStage } from '@/data/threads/views';
 
 /**
@@ -27,17 +28,19 @@ const STREAMING = 10;
 const FRAMES = 200;
 
 function makeThreads(): Thread[] {
-  return Array.from({ length: THREADS }, (_, i) => ({
-    id: `t${i}`,
-    projectId: `p${i % PROJECTS}`,
-    title: `thread ${i}`,
-    mode: 'local',
-    status: i < STREAMING ? 'running' : 'completed',
-    stage: (['backlog', 'planning', 'in_progress', 'review', 'done'] as const)[i % 5],
-    cost: 0,
-    createdAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
-    updatedAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
-  })) as Thread[];
+  return Array.from({ length: THREADS }, (_, i) =>
+    buildThread({
+      id: `t${i}`,
+      projectId: `p${i % PROJECTS}`,
+      title: `thread ${i}`,
+      mode: 'local',
+      status: i < STREAMING ? 'running' : 'completed',
+      stage: (['backlog', 'planning', 'in_progress', 'review', 'done'] as const)[i % 5],
+      cost: 0,
+      createdAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+      updatedAt: new Date(Date.UTC(2026, 0, 1, 0, i)).toISOString(),
+    }),
+  );
 }
 
 function frameUpdate(thread: Thread, frame: number): Thread {
@@ -76,7 +79,7 @@ function dataLayerRun(threads: Thread[]) {
               data.patchSynced(`t${i}`, (t) => frameUpdate(t, frame));
             }
           });
-          groupThreadsByStage(live.toArray.map((row) => data.fromRow(row as Thread)));
+          groupThreadsByStage(live.toArray.map((row) => data.fromRow(row)));
         }
       },
       teardown: () => {

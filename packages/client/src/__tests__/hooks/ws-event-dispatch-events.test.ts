@@ -19,26 +19,29 @@ const {
   mockToastError,
   mockShowAgentNotification,
   mockSetTabError,
-} = vi.hoisted(() => ({
-  mockNotifyDirty: vi.fn(),
-  mockFetchProjectBranches: vi.fn(),
-  mockSetRunnerStatus: vi.fn(),
-  mockEmitPtyData: vi.fn(),
-  mockAppendCommandOutput: vi.fn(),
-  mockMarkCommandExited: vi.fn(),
-  mockRemoveTab: vi.fn(),
-  mockDispatchTestEvent: vi.fn(),
-  mockDispatchBrowserSessionEvent: vi.fn(),
-  mockStartCommit: vi.fn(),
-  mockReplaceSteps: vi.fn(),
-  mockFinishCommit: vi.fn(),
-  mockSetFailedWorkflow: vi.fn(),
-  mockActiveCommits: {} as Record<string, { workflowId?: string }>,
-  mockToastSuccess: vi.fn(),
-  mockToastError: vi.fn(),
-  mockShowAgentNotification: vi.fn(),
-  mockSetTabError: vi.fn(),
-}));
+} = vi.hoisted(() => {
+  const mockActiveCommits: Record<string, { workflowId?: string }> = {};
+  return {
+    mockNotifyDirty: vi.fn(),
+    mockFetchProjectBranches: vi.fn(),
+    mockSetRunnerStatus: vi.fn(),
+    mockEmitPtyData: vi.fn(),
+    mockAppendCommandOutput: vi.fn(),
+    mockMarkCommandExited: vi.fn(),
+    mockRemoveTab: vi.fn(),
+    mockDispatchTestEvent: vi.fn(),
+    mockDispatchBrowserSessionEvent: vi.fn(),
+    mockStartCommit: vi.fn(),
+    mockReplaceSteps: vi.fn(),
+    mockFinishCommit: vi.fn(),
+    mockSetFailedWorkflow: vi.fn(),
+    mockActiveCommits,
+    mockToastSuccess: vi.fn(),
+    mockToastError: vi.fn(),
+    mockShowAgentNotification: vi.fn(),
+    mockSetTabError: vi.fn(),
+  };
+});
 
 vi.mock('@/stores/commit-progress-store', () => ({
   useCommitProgressStore: {
@@ -81,7 +84,10 @@ vi.mock('@/stores/terminal-store', () => ({
   },
 }));
 
-const gitActionOverrides = vi.hoisted(() => ({}) as Record<string, (...args: any[]) => unknown>);
+const gitActionOverrides = vi.hoisted(() => {
+  const overrides: Record<string, (...args: any[]) => unknown> = {};
+  return overrides;
+});
 vi.mock('@/data/git-status/actions', async (importOriginal) => {
   const real = await importOriginal<Record<string, (...args: any[]) => unknown>>();
   const wrapped: Record<string, (...args: any[]) => unknown> = {};
@@ -135,7 +141,7 @@ vi.mock('@/stores/thread-store-internals', async (importOriginal) => {
 import { readGitStatusMaps } from '@/data/git-status/read';
 import { seedGitStatus } from '@/data/git-status/testing';
 import { readThreadIndex } from '@/data/threads/read';
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildThread, buildThreadWithMessages, withThreadIndex } from '@/data/threads/testing';
 import {
   dispatchRealtimeEvent,
   clearWSDispatchState,
@@ -146,13 +152,11 @@ import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { getProjectIdForThread } from '@/stores/thread-store-internals';
 
+import { buildRecordingSocket, buildThreadEvent } from '../helpers/builders-stores';
+
 function captureHandlers() {
-  const handlers: Record<string, (e: any) => void> = {};
-  registerSocketIOHandlers({
-    on(event: string, handler: (e: any) => void) {
-      handlers[event] = handler;
-    },
-  } as any);
+  const { socket, handlers } = buildRecordingSocket();
+  registerSocketIOHandlers(socket);
   return handlers;
 }
 
@@ -178,15 +182,15 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
 
     useThreadStore.setState(
       withThreadIndex({
-        threadsById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
-        threadDataById: { t1: { id: 't1', permissionMode: 'ask' } } as any,
+        threadsById: { t1: buildThread({ permissionMode: 'ask' }) },
+        threadDataById: { t1: buildThreadWithMessages({ permissionMode: 'ask' }) },
         selectedThreadId: 't1',
-        activeThread: { id: 't1', permissionMode: 'ask' } as any,
-        handleWSStatus: ((tid: string, data: unknown) => {
+        activeThread: buildThreadWithMessages({ permissionMode: 'ask' }),
+        handleWSStatus: (tid: string, data: unknown) => {
           statusCalls.push({ tid, data });
-        }) as any,
-        refreshAllLoadedThreads: refreshAll as any,
-        refreshActiveThread: refreshActive as any,
+        },
+        refreshAllLoadedThreads: refreshAll,
+        refreshActiveThread: refreshActive,
       }),
     );
 
@@ -207,7 +211,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
   test('thread:updated archived flag triggers refreshAllLoadedThreads', async () => {
     const refreshAll = vi.fn();
     useThreadStore.setState({
-      refreshAllLoadedThreads: refreshAll as any,
+      refreshAllLoadedThreads: refreshAll,
     });
 
     captureHandlers()['thread:updated']({
@@ -222,7 +226,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     const refreshActive = vi.fn();
     useThreadStore.setState({
       selectedThreadId: 't1',
-      refreshActiveThread: refreshActive as any,
+      refreshActiveThread: refreshActive,
     });
     const handler = captureHandlers()['thread:updated'];
 
@@ -236,9 +240,9 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
   test('thread:stage-changed routes to handleWSStageChanged with mapped data', async () => {
     const stageCalls: Array<{ tid: string; data: unknown }> = [];
     useThreadStore.setState({
-      handleWSStageChanged: ((tid: string, data: unknown) => {
+      handleWSStageChanged: (tid, data) => {
         stageCalls.push({ tid, data });
-      }) as any,
+      },
     });
 
     captureHandlers()['thread:stage-changed']({
@@ -380,7 +384,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
 
   test('thread:created loads project threads when projectId is present', async () => {
     const loadProject = vi.fn();
-    useThreadStore.setState({ loadThreadsForProject: loadProject as any });
+    useThreadStore.setState({ loadThreadsForProject: loadProject });
 
     captureHandlers()['thread:created']({
       threadId: 't-new',
@@ -392,7 +396,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
 
   test('thread:created ignores scratch threads without projectId', async () => {
     const loadProject = vi.fn();
-    useThreadStore.setState({ loadThreadsForProject: loadProject as any });
+    useThreadStore.setState({ loadThreadsForProject: loadProject });
 
     captureHandlers()['thread:created']({
       threadId: 's1',
@@ -405,9 +409,9 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
   test('thread:event appends to active thread events without duplicates', async () => {
     useThreadStore.setState({
       activeThread: {
-        id: 't1',
-        threadEvents: [{ id: 'ev-1', type: 'note' }],
-      } as any,
+        ...buildThreadWithMessages(),
+        threadEvents: [buildThreadEvent({ id: 'ev-1' })],
+      },
     });
 
     captureHandlers()['thread:event']({
@@ -435,12 +439,12 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     const setupCalls: unknown[] = [];
     const completeCalls: unknown[] = [];
     useThreadStore.setState({
-      handleWSWorktreeSetup: ((tid: string, data: unknown) => {
+      handleWSWorktreeSetup: (tid, data) => {
         setupCalls.push({ tid, data });
-      }) as any,
-      handleWSWorktreeSetupComplete: ((tid: string, data: unknown) => {
+      },
+      handleWSWorktreeSetupComplete: (tid, data) => {
         completeCalls.push({ tid, data });
-      }) as any,
+      },
     });
 
     const handlers = captureHandlers();
@@ -499,8 +503,8 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
   test('thread:comment_deleted refreshes active thread when ids match', async () => {
     const refreshActive = vi.fn();
     useThreadStore.setState({
-      activeThread: { id: 't1' } as any,
-      refreshActiveThread: refreshActive as any,
+      activeThread: buildThreadWithMessages(),
+      refreshActiveThread: refreshActive,
     });
 
     captureHandlers()['thread:comment_deleted']({ threadId: 't1', data: {} });
@@ -526,7 +530,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
 
   test('clone:progress dispatches a window CustomEvent', async () => {
     const listener = vi.fn();
-    window.addEventListener('clone:progress', listener as EventListener);
+    window.addEventListener('clone:progress', listener);
 
     captureHandlers()['clone:progress']({
       threadId: 't1',
@@ -534,7 +538,7 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
     });
 
     expect(listener).toHaveBeenCalled();
-    window.removeEventListener('clone:progress', listener as EventListener);
+    window.removeEventListener('clone:progress', listener);
   });
 
   test('git:workflow_progress starts commit progress on started status', async () => {
@@ -735,15 +739,8 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
 
     useThreadStore.setState(
       withThreadIndex({
-        activeThread: {
-          id: 't1',
-          projectId: 'p1',
-          title: 'Fix bug',
-          branch: 'feat/x',
-        } as any,
-        threadsById: {
-          t1: { id: 't1', projectId: 'p1', title: 'Fix bug', branch: 'feat/x' } as any,
-        },
+        activeThread: buildThreadWithMessages({ title: 'Fix bug', branch: 'feat/x' }),
+        threadsById: { t1: buildThread({ title: 'Fix bug', branch: 'feat/x' }) },
       }),
     );
 
@@ -762,15 +759,11 @@ describe('ws-event-dispatch — thread/git/terminal events', () => {
   });
 
   test('unregisterSocketIOHandlers detaches captured handlers', () => {
-    const off = vi.fn();
-    const socket = {
-      on: vi.fn(),
-      off,
-    } as any;
+    const { socket, onCalls, offCalls } = buildRecordingSocket();
     registerSocketIOHandlers(socket);
-    expect(socket.on).toHaveBeenCalled();
+    expect(onCalls.length).toBeGreaterThan(0);
 
     unregisterSocketIOHandlers(socket);
-    expect(off).toHaveBeenCalled();
+    expect(offCalls.length).toBeGreaterThan(0);
   });
 });

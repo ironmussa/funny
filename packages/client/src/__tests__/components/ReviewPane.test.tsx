@@ -2,7 +2,7 @@ import { screen, waitFor } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ReviewPane } from '@/components/ReviewPane';
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildThread, buildThreadWithMessages, withThreadIndex } from '@/data/threads/testing';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -102,18 +102,16 @@ beforeEach(() => {
   useThreadStore.setState(
     withThreadIndex({
       selectedThreadId: 't1',
-      activeThread: {
+      activeThread: buildThreadWithMessages({
         id: 't1',
         projectId: 'p1',
         title: 'Test Thread',
         status: 'completed',
-        cost: 0,
         branch: 'feature/test',
         mode: 'worktree',
         baseBranch: 'main',
-        messages: [],
-      } as any,
-      threadsById: { t1: { id: 't1', projectId: 'p1', status: 'completed' } as any },
+      }),
+      threadsById: { t1: buildThread({ id: 't1', projectId: 'p1', status: 'completed' }) },
       threadIdsByProject: { p1: ['t1'] },
     }),
   );
@@ -130,9 +128,7 @@ beforeEach(() => {
 describe('ReviewPane', () => {
   test.skip('shows no changes message when diff is empty', async () => {
     const { okAsync: ok } = await import('neverthrow');
-    mockApi.getDiffSummary.mockReturnValueOnce(
-      ok({ files: [], total: 0, truncated: false } as any) as any,
-    );
+    mockApi.getDiffSummary.mockReturnValueOnce(ok({ files: [], total: 0, truncated: false }));
     renderWithProviders(<ReviewPane />);
 
     await waitFor(() => {
@@ -150,7 +146,7 @@ describe('ReviewPane', () => {
         ],
         total: 2,
         truncated: false,
-      } as any) as any,
+      }),
     );
 
     renderWithProviders(<ReviewPane />);
@@ -173,7 +169,7 @@ describe('ReviewPane', () => {
         files: [{ path: 'src/index.ts', status: 'modified', staged: false }],
         total: 1,
         truncated: false,
-      } as any) as any,
+      }),
     );
 
     renderWithProviders(<ReviewPane />);
@@ -194,9 +190,7 @@ describe('ReviewPane', () => {
 
   test.skip('shows header with title and close button', async () => {
     const { okAsync: ok } = await import('neverthrow');
-    mockApi.getDiffSummary.mockReturnValueOnce(
-      ok({ files: [], total: 0, truncated: false } as any) as any,
-    );
+    mockApi.getDiffSummary.mockReturnValueOnce(ok({ files: [], total: 0, truncated: false }));
     renderWithProviders(<ReviewPane />);
 
     await waitFor(() => {
@@ -213,9 +207,9 @@ describe('ReviewPane', () => {
         files: [{ path: 'src/index.ts', status: 'modified', staged: false }],
         total: 1,
         truncated: false,
-      } as any) as any,
+      }),
     );
-    mockApi.getFileDiff.mockReturnValueOnce(ok({ diff: '' } as any) as any);
+    mockApi.getFileDiff.mockReturnValueOnce(ok({ diff: '' }));
 
     renderWithProviders(<ReviewPane />);
 
@@ -237,7 +231,7 @@ describe('ReviewPane', () => {
         ],
         total: 2,
         truncated: false,
-      } as any) as any,
+      }),
     );
 
     renderWithProviders(<ReviewPane />);

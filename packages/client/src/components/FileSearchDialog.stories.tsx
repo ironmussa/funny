@@ -1,9 +1,9 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
 import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -36,17 +36,17 @@ function setupStores() {
     withProjects({
       selectedProjectId: 'proj-1',
       projects: [
-        {
+        buildProject({
           id: 'proj-1',
           name: 'my-project',
           path: '/home/user/project',
           userId: 'u1',
           createdAt: '2026-01-01T00:00:00Z',
-        },
-      ] as any,
+        }),
+      ],
     }),
   );
-  useThreadStore.setState({ activeThread: null } as any);
+  useThreadStore.setState({ activeThread: null });
 }
 
 /* ------------------------------------------------------------------ */
@@ -149,7 +149,7 @@ export const Loading: Story = {
       label="Search (loading)"
       setupMocks={() => {
         setupStores();
-        api.searchFiles = () => new Promise(() => {}) as never;
+        api.searchFiles = () => new ResultAsync(new Promise(() => {}));
       }}
     />
   ),

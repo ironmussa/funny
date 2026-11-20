@@ -1,13 +1,19 @@
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import { IssuesTab } from '@/components/IssuesTab';
+import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun, FactorySettings } from '@/lib/api/factory';
 import { useProjectStore } from '@/stores/project-store';
 
+import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
+
+// These tests render the whole tab and its dialogs; under the full parallel suite
+// (pre-push) a different one ran a little past the 5 s default on each run.
+vi.setConfig({ testTimeout: 15_000 });
 
 const apiMock = vi.hoisted(() => ({
   projectGetRemoteUrl: vi.fn(),
@@ -21,10 +27,19 @@ vi.mock('@/lib/client-logger', () => ({
 vi.mock('@/lib/api', () => ({ api: apiMock }));
 
 // The caller's issue factory (change factory-manual-queue): none by default.
-const factory = vi.hoisted(() => ({
-  settings: null as FactorySettings | null,
-  runs: [] as FactoryRun[],
-  blockers: [] as Array<{ issue: number; blockers: Array<{ issue: number; inFactory: boolean }> }>,
+interface FactoryMocks {
+  settings: FactorySettings | null;
+  runs: FactoryRun[];
+  blockers: Array<{ issue: number; blockers: Array<{ issue: number; inFactory: boolean }> }>;
+  canSteer: boolean;
+  send: Mock;
+  control: Mock;
+}
+
+const factory = vi.hoisted((): FactoryMocks => ({
+  settings: null,
+  runs: [],
+  blockers: [],
   canSteer: true,
   send: vi.fn(),
   control: vi.fn(),
@@ -80,7 +95,7 @@ describe('IssuesTab remote checks', () => {
     apiMock.githubIssuesEnriched.mockReturnValue(pending);
     const view = renderWithProviders(<IssuesTab visible />);
     await waitFor(() => expect(apiMock.githubIssuesEnriched).toHaveBeenCalled());
-    const signal = apiMock.githubIssuesEnriched.mock.calls[0][2] as AbortSignal;
+    const signal = expectInstance(apiMock.githubIssuesEnriched.mock.calls[0][2], AbortSignal);
     view.unmount();
     expect(signal.aborted).toBe(true);
     await act(async () => {
@@ -137,7 +152,7 @@ describe('IssuesTab remote checks', () => {
     const view = renderWithProviders(<IssuesTab visible />);
     expect(await screen.findByTestId('issue-item-1')).toHaveTextContent('Fix connection');
     await waitFor(() => expect(apiMock.githubIssuesEnriched).toHaveBeenCalled());
-    const signal = apiMock.githubIssuesEnriched.mock.calls[0][2] as AbortSignal;
+    const signal = expectInstance(apiMock.githubIssuesEnriched.mock.calls[0][2], AbortSignal);
     view.unmount();
     expect(signal.aborted).toBe(true);
   });
@@ -221,26 +236,17 @@ const factorySettings = (over: Partial<FactorySettings> = {}): FactorySettings =
   ...over,
 });
 
-const factoryRun = (over: Partial<FactoryRun>): FactoryRun => ({
-  id: 'r1',
-  factoryId: 'f1',
-  issueNumber: 1,
-  prUrl: null,
-  state: 'working',
-  currentStep: 'implement',
-  threadIds: ['t1'],
-  startedAt: '2026-11-16T00:00:00.000Z',
-  completedAt: null,
-  source: 'manual',
-  flowName: 'issue-to-merge',
-  queueOrder: null,
-  waitReason: null,
-  flowSteps: [],
-  failureReason: null,
-  admittedAt: null,
-  metrics: { ciRounds: 0, ciRed: 0, conflicts: 0, ciBlocked: 0, ciTimeouts: 0, agentFixes: 0 },
-  ...over,
-});
+const factoryRun = (over: Partial<FactoryRun>): FactoryRun =>
+  buildFactoryRun({
+    id: 'r1',
+    state: 'working',
+    currentStep: 'implement',
+    threadIds: ['t1'],
+    startedAt: '2026-11-16T00:00:00.000Z',
+    completedAt: null,
+    source: 'manual',
+    ...over,
+  });
 
 describe('IssuesTab and the issue factory', () => {
   beforeEach(() => {
@@ -360,7 +366,7 @@ describe('IssuesTab and the issue factory', () => {
     expect(screen.getByTestId('issue-select-51')).not.toBeChecked();
     expect(screen.getByTestId('issues-factory-limit')).toBeInTheDocument();
     fireEvent.click(screen.getByTestId('issues-factory-send'));
-    expect((factory.send.mock.calls[0][1] as number[]).length).toBe(50);
+    expect(factory.send.mock.calls[0][1]).toHaveLength(50);
     // 51 rows and 51 clicks: slow when the whole suite runs in parallel.
   }, 20_000);
 

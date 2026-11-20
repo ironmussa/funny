@@ -5,7 +5,9 @@ import { beforeEach, expect, test, vi } from 'vitest';
 import { PromptContextBar } from '@/components/prompt-input/PromptChrome';
 import { NewThreadContextBar } from '@/components/thread/NewThreadContextBar';
 import { TooltipProvider } from '@/components/ui/tooltip';
-import { seedProjects } from '@/data/projects/testing';
+import { buildProject, seedProjects } from '@/data/projects/testing';
+
+import { expectInstance } from '../helpers/builders-components';
 
 const remote = vi.hoisted(() => vi.fn());
 const branchState = vi.hoisted(() => ({
@@ -50,7 +52,9 @@ function bar(projectId?: string) {
 }
 
 beforeEach(() => {
-  seedProjects(['one', 'two'].map((id) => ({ id, name: id, path: '/mnt/windows/repo' }) as never));
+  seedProjects(
+    ['one', 'two'].map((id) => buildProject({ id, name: id, path: '/mnt/windows/repo' })),
+  );
   remote.mockReset();
   remote.mockReturnValue(okAsync({ remoteUrl: null }));
   ensureBranch.mockReset().mockResolvedValue(true);
@@ -66,7 +70,7 @@ test('loads a remote by project ID even outside HOME and cancels on unmount', as
     'https://github.com/acme/repo',
   );
   expect(remote).toHaveBeenCalledWith('one', expect.any(AbortSignal));
-  const signal = remote.mock.calls[0][1] as AbortSignal;
+  const signal = expectInstance(remote.mock.calls[0][1], AbortSignal);
   view.unmount();
   expect(signal.aborted).toBe(true);
 });
@@ -82,7 +86,7 @@ test('ignores a late response after changing project, including projects sharing
     ),
   );
   const view = render(bar('one'));
-  const signal = remote.mock.calls[0][1] as AbortSignal;
+  const signal = expectInstance(remote.mock.calls[0][1], AbortSignal);
   remote.mockReturnValue(okAsync({ remoteUrl: 'https://github.com/acme/two.git' }));
   view.rerender(bar('two'));
   expect(signal.aborted).toBe(true);

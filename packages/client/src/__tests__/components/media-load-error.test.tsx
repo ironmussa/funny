@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest';
 import { MediaLoadError } from '@/components/MediaLoadError';
 
 function mockFetchOnce(res: Partial<Response> & { json?: () => Promise<unknown> }) {
-  const fetchMock = vi.fn().mockResolvedValue(res as Response);
+  const fetchMock = vi.fn().mockResolvedValue(res);
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;
 }

@@ -18,7 +18,7 @@ function signedUrl(exp: number, tag: string): string {
 function mockSign(...urls: string[]) {
   const fetchMock = vi.fn();
   for (const url of urls) {
-    fetchMock.mockResolvedValueOnce({ ok: true, json: async () => ({ url }) } as Response);
+    fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ url })));
   }
   vi.stubGlobal('fetch', fetchMock);
   return fetchMock;

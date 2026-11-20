@@ -15,7 +15,7 @@ describe('buildVirtualRows turn-end bars', () => {
       {
         type: 'toolcall',
         tc: { id: 'tc1', name: 'Read', input: '{}', timestamp: '2026-10-30T20:00:05.000Z' },
-      } as RenderItem,
+      },
       message('a1', 'assistant', 'First answer', '2026-10-30T20:00:30.000Z'),
       message('u2', 'user', 'Second prompt', '2026-10-30T20:05:00.000Z'),
       message('a2', 'assistant', 'Second answer', '2026-10-30T20:05:10.000Z'),

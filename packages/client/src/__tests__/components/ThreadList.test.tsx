@@ -4,8 +4,8 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ThreadList } from '@/components/sidebar/ThreadList';
 import { seedGitStatus } from '@/data/git-status/testing';
-import { withProjects } from '@/data/projects/testing';
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
+import { buildThread, withThreadIndex } from '@/data/threads/testing';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -51,17 +51,12 @@ function getVisibleThreadRows() {
 }
 
 function makeThread(id: string, overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id,
-    projectId: 'p1',
     title: `Thread ${id}`,
-    status: 'completed',
-    cost: 0,
-    createdAt: '2026-01-01T00:00:00.000Z',
-    updatedAt: '2026-01-01T00:00:00.000Z',
     completedAt: '2026-01-02T00:00:00.000Z',
     ...overrides,
-  } as Thread;
+  });
 }
 
 function makeStatus(overrides: Partial<GitStatusInfo> = {}): GitStatusInfo {
@@ -91,7 +86,7 @@ describe('ThreadList', () => {
     vi.clearAllMocks();
     useProjectStore.setState(
       withProjects({
-        projects: [{ id: 'p1', name: 'My Project', path: '/repo' } as any],
+        projects: [buildProject({ id: 'p1', name: 'My Project', path: '/repo' })],
         expandedProjects: new Set(['p1']),
       }),
     );
@@ -101,15 +96,12 @@ describe('ThreadList', () => {
         scratchThreadIds: [],
         selectedThreadId: null,
         activeThread: null,
-      } as any),
+      }),
     );
     seedGitStatus({
       statusByBranch: {},
       threadToBranchKey: {},
-      loadingProjects: new Set(),
-      _loadingBranchKeys: new Set(),
-      _loadingProjectStatus: new Set(),
-    } as any);
+    });
   });
 
   test('shows empty state when no visible threads exist', () => {
@@ -119,7 +111,7 @@ describe('ThreadList', () => {
           p1: [makeThread('idle-1', { status: 'idle' })],
         }),
         scratchThreadIds: [],
-      } as any),
+      }),
     );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
@@ -138,7 +130,7 @@ describe('ThreadList', () => {
           ],
         }),
         scratchThreadIds: [],
-      } as any),
+      }),
     );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
@@ -163,7 +155,7 @@ describe('ThreadList', () => {
           p1: [...completed, makeThread('run-1', { status: 'running', title: 'Running' })],
         }),
         scratchThreadIds: [],
-      } as any),
+      }),
     );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
@@ -186,7 +178,7 @@ describe('ThreadList', () => {
         threadsById: { 'scratch-1': scratch },
         threadIdsByProject: {},
         scratchThreadIds: ['scratch-1'],
-      } as any),
+      }),
     );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
@@ -206,7 +198,7 @@ describe('ThreadList', () => {
         threadsById: { 'dupe-1': thread },
         threadIdsByProject: { p1: ['dupe-1'] },
         scratchThreadIds: ['dupe-1'],
-      } as any),
+      }),
     );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
@@ -226,7 +218,7 @@ describe('ThreadList', () => {
         ...seedThreads({ p1: [thread] }),
         scratchThreadIds: [],
         selectedThreadId: null,
-      } as any),
+      }),
     );
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
@@ -251,7 +243,7 @@ describe('ThreadList', () => {
         // reads selectedThreadId.
         selectedThreadId: 't-a',
         activeThread: null,
-      } as any),
+      }),
     );
 
     renderWithProviders(<ThreadList {...noopHandlers} />, {
@@ -278,12 +270,12 @@ describe('ThreadList', () => {
       withThreadIndex({
         ...seedThreads({ p1: [thread] }),
         scratchThreadIds: [],
-      } as any),
+      }),
     );
     seedGitStatus({
       statusByBranch: { [branchKey]: makeStatus({ branchKey }) },
       threadToBranchKey: { [thread.id]: branchKey },
-    } as any);
+    });
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
 
@@ -300,7 +292,7 @@ describe('ThreadList', () => {
           }),
         },
         threadToBranchKey: { [thread.id]: branchKey },
-      } as any);
+      });
     });
 
     await waitFor(() => {
@@ -320,7 +312,7 @@ describe('ThreadList', () => {
       withThreadIndex({
         ...seedThreads({ p1: [thread] }),
         scratchThreadIds: [],
-      } as any),
+      }),
     );
     seedGitStatus({
       statusByBranch: {
@@ -332,7 +324,7 @@ describe('ThreadList', () => {
         }),
       },
       threadToBranchKey: { [thread.id]: branchKey },
-    } as any);
+    });
 
     renderWithProviders(<ThreadList {...noopHandlers} />);
 

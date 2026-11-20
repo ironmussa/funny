@@ -79,9 +79,12 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const NO_COMMENTS: PlanComment[] = [];
+const NO_CHILDREN: React.ReactNode = null;
+
 const DUMMY_ARGS = {
-  children: null as React.ReactNode,
-  planComments: [] as PlanComment[],
+  children: NO_CHILDREN,
+  planComments: NO_COMMENTS,
   onAddComment: () => {},
   onAddEmoji: () => {},
   onRemoveComment: () => {},

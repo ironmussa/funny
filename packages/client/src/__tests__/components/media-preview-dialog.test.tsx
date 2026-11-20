@@ -4,6 +4,8 @@ import { afterEach, describe, expect, test } from 'vitest';
 
 import { MediaPreviewDialog } from '@/components/MediaPreviewDialog';
 
+import { expectInstance } from '../helpers/builders-components';
+
 afterEach(cleanup);
 
 function renderDialog(filePath: string) {
@@ -13,7 +15,10 @@ function renderDialog(filePath: string) {
 }
 
 function previewImg() {
-  return screen.getByTestId('media-preview-image').querySelector('img') as HTMLImageElement;
+  return expectInstance(
+    screen.getByTestId('media-preview-image').querySelector('img'),
+    HTMLImageElement,
+  );
 }
 
 describe('MediaPreviewDialog src resolution', () => {

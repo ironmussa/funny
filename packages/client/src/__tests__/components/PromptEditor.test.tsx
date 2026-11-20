@@ -42,12 +42,11 @@ beforeAll(() => {
   Object.defineProperties(Range.prototype, {
     getClientRects: {
       configurable: true,
-      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-      value: () => [] as unknown as DOMRectList,
+      value: () => [],
     },
     getBoundingClientRect: {
       configurable: true,
-      value: () => ({ bottom: 0, height: 0, left: 0, right: 0, top: 0, width: 0 }) as DOMRect,
+      value: () => ({ bottom: 0, height: 0, left: 0, right: 0, top: 0, width: 0 }),
     },
   });
 });
@@ -56,7 +55,7 @@ afterAll(() => {
   if (rangeGetClientRectsDescriptor) {
     Object.defineProperty(Range.prototype, 'getClientRects', rangeGetClientRectsDescriptor);
   } else {
-    delete (Range.prototype as Partial<Range>).getClientRects;
+    Reflect.deleteProperty(Range.prototype, 'getClientRects');
   }
   if (rangeGetBoundingClientRectDescriptor) {
     Object.defineProperty(
@@ -65,7 +64,7 @@ afterAll(() => {
       rangeGetBoundingClientRectDescriptor,
     );
   } else {
-    delete (Range.prototype as Partial<Range>).getBoundingClientRect;
+    Reflect.deleteProperty(Range.prototype, 'getBoundingClientRect');
   }
 });
 
@@ -221,6 +220,7 @@ describe('PromptEditor', () => {
     );
 
     await waitFor(() => expect(ref.current).not.toBeNull());
+    // SAFETY: TipTap attaches its Editor instance to the editor's DOM element as `editor`.
     const editorEl = screen.getByTestId('prompt-editor') as HTMLElement & {
       editor: { commands: { setTextSelection: (pos: number) => boolean } };
     };

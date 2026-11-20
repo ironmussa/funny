@@ -1,14 +1,25 @@
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
 import { MemoryRouter } from 'react-router-dom';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
+import { buildFactoryRun } from '@/data/factory/testing';
 import type { FactoryRun, FactorySettings } from '@/lib/api/factory';
 
-const mocks = vi.hoisted(() => ({
-  settings: null as FactorySettings | null,
+interface FactoryMocks {
+  settings: FactorySettings | null;
+  save: Mock;
+  runs: FactoryRun[];
+  control: Mock;
+  empty: Mock;
+  toastError: Mock;
+  canSteer: boolean;
+}
+
+const mocks = vi.hoisted((): FactoryMocks => ({
+  settings: null,
   save: vi.fn(),
-  runs: [] as FactoryRun[],
+  runs: [],
   control: vi.fn(),
   empty: vi.fn(),
   toastError: vi.fn(),
@@ -135,26 +146,18 @@ describe('ProjectFactorySetting', () => {
   });
 });
 
-const runOf = (over: Partial<FactoryRun>): FactoryRun => ({
-  id: 'r1',
-  factoryId: 'f1',
-  issueNumber: 7,
-  prUrl: null,
-  state: 'working',
-  currentStep: 'implement',
-  threadIds: ['t1'],
-  startedAt: '2026-11-16T00:00:00.000Z',
-  completedAt: null,
-  source: 'label',
-  flowName: null,
-  queueOrder: null,
-  waitReason: null,
-  flowSteps: [],
-  failureReason: null,
-  admittedAt: null,
-  metrics: { ciRounds: 0, ciRed: 0, conflicts: 0, ciBlocked: 0, ciTimeouts: 0, agentFixes: 0 },
-  ...over,
-});
+const runOf = (over: Partial<FactoryRun>): FactoryRun =>
+  buildFactoryRun({
+    id: 'r1',
+    issueNumber: 7,
+    state: 'working',
+    currentStep: 'implement',
+    threadIds: ['t1'],
+    startedAt: '2026-11-16T00:00:00.000Z',
+    completedAt: null,
+    flowName: null,
+    ...over,
+  });
 
 const renderRuns = () =>
   render(

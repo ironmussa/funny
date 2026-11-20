@@ -1,9 +1,9 @@
-import type { Project } from '@funny/shared';
 import type { ProjectRunnerSettingsResponse, RunnerInfo } from '@funny/shared/runner-protocol';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
 
+import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 
 const mockGet = vi.hoisted(() => vi.fn());
@@ -30,7 +30,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 import { ProjectRunnerSettings } from '@/components/settings/ProjectRunnerSettings';
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
 import { useProjectStore } from '@/stores/project-store';
 
 function runner(runnerId: string, role: 'general' | 'dedicated', online = true): RunnerInfo {
@@ -65,7 +65,7 @@ describe('ProjectRunnerSettings', () => {
     for (const m of [mockGet, mockUpdate, mockGrant, mockRevoke, mockSetGeneral]) m.mockReset();
     useProjectStore.setState(
       withProjects({
-        projects: [{ id: 'p1', name: 'P1' } as Project],
+        projects: [buildProject({ id: 'p1', name: 'P1' })],
         selectedProjectId: 'p1',
       }),
     );
@@ -119,7 +119,7 @@ describe('ProjectRunnerSettings', () => {
     fireEvent.change(input, { target: { value: 'ghp_x' } });
     fireEvent.click(screen.getByTestId('project-runner-github-token-save'));
     await waitFor(() => expect(mockUpdate).toHaveBeenCalledWith('p1', { githubToken: 'ghp_x' }));
-    await waitFor(() => expect((input as HTMLInputElement).value).toBe(''));
+    await waitFor(() => expect(expectInstance(input, HTMLInputElement).value).toBe(''));
     expect(screen.getByTestId('project-runner-github-token-clear')).toBeInTheDocument();
   });
 });

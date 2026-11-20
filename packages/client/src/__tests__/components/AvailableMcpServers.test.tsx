@@ -177,16 +177,16 @@ describe('AvailableMcpServers', () => {
     let nextIdleId = 1;
     vi.stubGlobal(
       'requestIdleCallback',
-      vi.fn((cb) => {
+      vi.fn((cb: (deadline: IdleDeadlineStub) => void) => {
         const id = nextIdleId++;
-        idleCallbacks.set(id, cb as (deadline: IdleDeadlineStub) => void);
+        idleCallbacks.set(id, cb);
         return id;
       }),
     );
     vi.stubGlobal(
       'cancelIdleCallback',
-      vi.fn((id) => {
-        canceled.add(id as number);
+      vi.fn((id: number) => {
+        canceled.add(id);
       }),
     );
     mockListMcpServers.mockReturnValue(
@@ -252,8 +252,8 @@ describe('AvailableMcpServers', () => {
     const idleCallbacks: Array<(deadline: IdleDeadlineStub) => void> = [];
     vi.stubGlobal(
       'requestIdleCallback',
-      vi.fn((cb) => {
-        idleCallbacks.push(cb as (deadline: IdleDeadlineStub) => void);
+      vi.fn((cb: (deadline: IdleDeadlineStub) => void) => {
+        idleCallbacks.push(cb);
         return idleCallbacks.length;
       }),
     );

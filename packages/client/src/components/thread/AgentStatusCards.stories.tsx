@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { useRef } from 'react';
+import { useRef, type ComponentProps } from 'react';
 import { fn } from 'storybook/test';
 
 import '@/i18n/config';
@@ -10,10 +10,22 @@ import { useTurnEndHover } from './use-turn-end-hover';
 
 const STARTED_AT = '2026-10-30T20:40:00.000Z';
 const COMPLETED_AT = '2026-10-30T20:41:44.000Z';
-const TURN = [
-  { id: 'u1', role: 'user', content: 'Fix the flaky test' },
-  { id: 'a1', role: 'assistant', content: 'Fixed by flushing the pending timer.' },
-] as any[];
+const TURN: ComponentProps<typeof AgentResultCard>['copyMessages'] = [
+  {
+    id: 'u1',
+    threadId: 'thread-1',
+    role: 'user',
+    content: 'Fix the flaky test',
+    timestamp: STARTED_AT,
+  },
+  {
+    id: 'a1',
+    threadId: 'thread-1',
+    role: 'assistant',
+    content: 'Fixed by flushing the pending timer.',
+    timestamp: COMPLETED_AT,
+  },
+];
 
 const meta = {
   title: 'Thread/AgentResultCard',
@@ -50,7 +62,7 @@ export const Failed: Story = {
   args: { status: 'failed', error: 'Process exited with code 1', onContinue: fn() },
 };
 
-function HoverRevealDemo(args: Story['args']) {
+function HoverRevealDemo(args: ComponentProps<typeof AgentResultCard>) {
   const ref = useRef<HTMLDivElement>(null);
   useTurnEndHover(ref);
   return (
@@ -59,7 +71,7 @@ function HoverRevealDemo(args: Story['args']) {
         Hover this answer to reveal its completion bar.
       </div>
       <div data-turn-section="u1">
-        <AgentResultCard {...(args as any)} revealForSection="u1" />
+        <AgentResultCard {...args} revealForSection="u1" />
       </div>
     </div>
   );

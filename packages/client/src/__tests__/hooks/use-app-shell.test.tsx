@@ -3,7 +3,8 @@ import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 import { expect, test, vi } from 'vitest';
 
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useAppShell } from '@/hooks/use-app-shell';
 import { useProjectStore } from '@/stores/project-store';
 import { getUrlThreadId, useThreadStore } from '@/stores/thread-store';
@@ -27,19 +28,14 @@ test('opening a thread URL loads its conversation without trying to switch branc
   const selectThread = vi.fn().mockImplementation(async (id: string) => {
     useThreadStore.setState({
       selectedThreadId: id,
-      activeThread: {
-        id,
-        projectId: 'p1',
-        mode: 'local',
-        branch: 'deleted-branch',
-      } as any,
+      activeThread: buildThreadWithMessages({ id, branch: 'deleted-branch' }),
     });
   });
   useProjectStore.setState(
     withProjects({
       initialized: true,
       selectedProjectId: 'p1',
-      projects: [{ id: 'p1', name: 'Deleted directory', path: '/missing/project' } as any],
+      projects: [buildProject({ name: 'Deleted directory', path: '/missing/project' })],
       loadProjects: vi.fn(),
     }),
   );

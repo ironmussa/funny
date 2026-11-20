@@ -1,4 +1,4 @@
-import type { ActionJob, ActionRun, CICheck, PRDetail } from '@funny/shared';
+import type { ActionJob, ActionRun, CICheck } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -15,6 +15,7 @@ import {
   runDurationMs,
 } from '@/lib/github-actions';
 
+import { buildPRDetail } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
@@ -37,7 +38,7 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-function check(id: number, status: string, conclusion: string | null): CICheck {
+function check(id: number, status: CICheck['status'], conclusion: CICheck['conclusion']): CICheck {
   return {
     id,
     name: `check-${id}`,
@@ -47,7 +48,7 @@ function check(id: number, status: string, conclusion: string | null): CICheck {
     started_at: null,
     completed_at: null,
     app_name: null,
-  } as CICheck;
+  };
 }
 
 const CHECKS = [
@@ -56,7 +57,7 @@ const CHECKS = [
   check(3, 'completed', 'failure'),
 ];
 
-const DETAIL = {
+const DETAIL = buildPRDetail({
   checks: CHECKS,
   checks_passed: 1,
   checks_failed: 1,
@@ -64,7 +65,7 @@ const DETAIL = {
   review_decision: null,
   mergeable_state: 'mergeable',
   merged: false,
-} as PRDetail;
+});
 
 function run(id: number, overrides: Partial<ActionRun> = {}): ActionRun {
   return {

@@ -1,4 +1,3 @@
-import type { AgentTemplate } from '@funny/shared';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
@@ -6,6 +5,8 @@ import { ModelSelect, ModeSelect, TemplateSelect } from '@/components/PromptSele
 import { BranchPicker, SearchablePicker } from '@/components/SearchablePicker';
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 import { TooltipProvider } from '@/components/ui/tooltip';
+
+import { buildAgentTemplate } from '../helpers/builders-components';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key }),
@@ -16,7 +17,7 @@ vi.mock('@/components/ProviderSetupDialog', () => ({
   ),
 }));
 
-const virtualizer = vi.hoisted(() => ({ heights: [] as number[] }));
+const virtualizer = vi.hoisted(() => ({ heights: new Array<number>() }));
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => {
     const size = estimateSize();
@@ -261,10 +262,10 @@ describe('mobile prompt selectors', () => {
 
   test('template grouping, selection and clearing preserve existing values', async () => {
     const templates = [
-      { id: 'mine', name: 'Personal' },
-      { id: 'team', name: 'Team', shared: true },
-      { id: '__builtin__review', name: 'Review' },
-    ] as AgentTemplate[];
+      buildAgentTemplate({ id: 'mine', name: 'Personal' }),
+      buildAgentTemplate({ id: 'team', name: 'Team', shared: true }),
+      buildAgentTemplate({ id: '__builtin__review', name: 'Review' }),
+    ];
     const onChange = vi.fn();
     render(<TemplateSelect value="mine" templates={templates} onChange={onChange} />);
     fireEvent.click(screen.getByTestId('prompt-template-select'));

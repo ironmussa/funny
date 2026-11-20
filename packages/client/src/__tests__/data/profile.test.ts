@@ -63,7 +63,7 @@ describe('profile query', () => {
 
   test('a failed load rejects and caches nothing, so a retry asks again', async () => {
     mockApi.getProfile.mockReturnValueOnce(
-      errAsync({ type: 'INTERNAL', message: 'down' } as DomainError),
+      errAsync({ type: 'INTERNAL', message: 'down' } satisfies DomainError),
     );
     await expect(loadProfile()).rejects.toThrow('down');
     expect(cached()).toBeUndefined();
@@ -94,7 +94,7 @@ describe('profile query', () => {
     await loadProfile();
 
     mockApi.updateProfile.mockReturnValue(
-      errAsync({ type: 'INTERNAL', message: 'nope' } as DomainError),
+      errAsync({ type: 'INTERNAL', message: 'nope' } satisfies DomainError),
     );
     const result = await updateProfile({ theme: 'one-light' });
 
@@ -117,7 +117,7 @@ describe('profile query', () => {
     expect(cached()?.theme).toBe('b');
 
     mockApi.getProfile.mockReturnValueOnce(
-      errAsync({ type: 'INTERNAL', message: 'down' } as DomainError),
+      errAsync({ type: 'INTERNAL', message: 'down' } satisfies DomainError),
     );
     await refreshProfile();
     expect(cached()?.theme).toBe('b');

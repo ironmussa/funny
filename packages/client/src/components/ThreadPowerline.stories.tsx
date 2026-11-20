@@ -2,25 +2,19 @@ import type { Thread, GitStatusInfo } from '@funny/shared';
 import type { Meta, StoryObj } from '@storybook/react-vite';
 
 import { ThreadPowerline } from '@/components/ThreadPowerline';
+import { buildThread } from '@/data/threads/testing';
 
 /** Minimal thread mock — only the fields ThreadPowerline reads. */
 function mockThread(overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id: 'thread-1',
     projectId: 'proj-1',
     userId: 'user-1',
     title: 'Test thread',
-    mode: 'local',
     status: 'idle',
-    stage: 'idle',
     provider: 'claude-sdk',
-    permissionMode: 'default',
-    model: 'sonnet',
-    cost: 0,
-    source: 'manual',
-    runtime: 'local',
     ...overrides,
-  } as Thread;
+  });
 }
 
 const gitDirty: GitStatusInfo = {

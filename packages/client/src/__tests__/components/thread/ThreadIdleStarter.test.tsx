@@ -1,9 +1,15 @@
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
-  promptProps: null as null | Record<string, any>,
+interface StarterMocks {
+  promptProps: null | Record<string, any>;
+  sendMessage: Mock;
+  appendOptimisticMessage: Mock;
+}
+
+const mocks = vi.hoisted((): StarterMocks => ({
+  promptProps: null,
   sendMessage: vi.fn(),
   appendOptimisticMessage: vi.fn(),
 }));
@@ -32,6 +38,7 @@ vi.mock('react-i18next', () => ({
 
 import { ThreadIdleStarter } from '@/components/thread/ThreadIdleStarter';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { buildThreadWithMessages } from '@/data/threads/testing';
 
 const MANIFEST =
   '<referenced-files>\n<file path="src/a.ts" />\n<folder path="docs"></folder>\n</referenced-files>\n\nReview these';
@@ -40,7 +47,12 @@ function renderStarter(initialPrompt: string) {
   render(
     <TooltipProvider>
       <ThreadIdleStarter
-        activeThread={{ id: 't-1', projectId: 'p-1', provider: 'claude', initialPrompt } as any}
+        activeThread={buildThreadWithMessages({
+          id: 't-1',
+          projectId: 'p-1',
+          provider: 'claude',
+          initialPrompt,
+        })}
       />
     </TooltipProvider>,
   );

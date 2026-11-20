@@ -6,10 +6,21 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { MissingProjectDirectoryDialog } from '@/components/MissingProjectDirectoryDialog';
 import { seedProjects } from '@/data/projects/testing';
 
+import { expectInstance } from '../helpers/builders-components';
+
 const mocks = vi.hoisted(() => ({
   listBranches: vi.fn(),
   state: {
-    projects: [{ id: 'p1', path: '/deleted/project' }],
+    projects: [
+      {
+        id: 'p1',
+        name: 'Project',
+        path: '/deleted/project',
+        userId: 'u1',
+        sortOrder: 0,
+        createdAt: '',
+      },
+    ],
     selectedProjectId: 'p1',
     revealNonce: 0,
   },
@@ -34,7 +45,7 @@ function View({ route = '/projects/p1' }: { route?: string }) {
 }
 
 beforeEach(() => {
-  seedProjects(mocks.state.projects as never);
+  seedProjects(mocks.state.projects);
   mocks.listBranches.mockReset();
   mocks.state.selectedProjectId = 'p1';
   mocks.state.revealNonce = 0;
@@ -83,7 +94,7 @@ describe('MissingProjectDirectoryDialog', () => {
       }),
     );
     const view = render(<View />);
-    const signal = mocks.listBranches.mock.calls[0][1] as AbortSignal;
+    const signal = expectInstance(mocks.listBranches.mock.calls[0][1], AbortSignal);
     mocks.state.selectedProjectId = '';
     view.rerender(<View />);
     expect(signal.aborted).toBe(true);

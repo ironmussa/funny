@@ -4,6 +4,8 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { GitHubProjectGate } from '@/components/GitHubProjectGate';
 
+import { expectInstance } from '../helpers/builders-components';
+
 const state = vi.hoisted(() => ({ projectId: 'one', remote: vi.fn() }));
 vi.mock('@/lib/api', () => ({ api: { projectGetRemoteUrl: state.remote } }));
 vi.mock('@/stores/project-store', () => ({
@@ -77,7 +79,7 @@ describe('GitHub project remote check', () => {
         <div>GitHub data</div>
       </GitHubProjectGate>,
     );
-    const oldSignal = state.remote.mock.calls[0][1] as AbortSignal;
+    const oldSignal = expectInstance(state.remote.mock.calls[0][1], AbortSignal);
     state.projectId = 'two';
     state.remote.mockReturnValue(okAsync({ remoteUrl: null }));
     view.rerender(

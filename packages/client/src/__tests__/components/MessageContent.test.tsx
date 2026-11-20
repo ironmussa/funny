@@ -2,7 +2,8 @@ import { screen, cleanup, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { MessageContent } from '@/components/thread/MessageContent';
-import { withProjects } from '@/data/projects/testing';
+import { buildProject, withProjects } from '@/data/projects/testing';
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -16,9 +17,9 @@ describe('MessageContent', () => {
     });
     useAppStore.setState(
       withProjects({
-        projects: [{ id: 'p1', name: 'funny', path: '/home/u/projects/funny' } as any],
+        projects: [buildProject({ id: 'p1', name: 'funny', path: '/home/u/projects/funny' })],
         selectedProjectId: 'p1',
-        activeThread: { id: 't1', projectId: 'p1', worktreePath: null } as any,
+        activeThread: buildThreadWithMessages({ id: 't1', projectId: 'p1' }),
       }),
     );
   });

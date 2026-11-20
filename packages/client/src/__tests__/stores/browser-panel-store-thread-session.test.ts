@@ -4,14 +4,22 @@
  * closes or the user switches threads, and attaches when the agent opens one.
  */
 
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
+interface BrowserPanelMocks {
+  open: Mock;
+  close: Mock;
+  navigate: Mock;
+  input: Mock;
+  urlThreadId: string | null;
+}
+
+const mocks = vi.hoisted((): BrowserPanelMocks => ({
   open: vi.fn(),
   close: vi.fn(),
   navigate: vi.fn(),
   input: vi.fn(),
-  urlThreadId: null as string | null,
+  urlThreadId: null,
 }));
 
 vi.mock('@/lib/browser-session-client', () => ({

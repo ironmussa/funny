@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 import { FrozenMessageStream } from '@/components/thread/FrozenMessageStream';
 import type { MessageStreamHandle } from '@/components/thread/message-stream-types';
 
+import { buildIntersectionEntry, expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 
 vi.mock('react-i18next', () => ({
@@ -46,12 +47,14 @@ function fireIntersect(target: Element | null) {
   if (!target) throw new Error('no target');
   for (const o of observers) {
     if (o.targets.includes(target)) {
-      o.cb([{ target, isIntersecting: true } as IntersectionObserverEntry], o.self);
+      o.cb([buildIntersectionEntry({ target, isIntersecting: true })], o.self);
     }
   }
 }
 
-function baseProps(overrides: Partial<Parameters<typeof FrozenMessageStream>[0]> = {}) {
+function baseProps(
+  overrides: Partial<Parameters<typeof FrozenMessageStream>[0]> = {},
+): Parameters<typeof FrozenMessageStream>[0] {
   return {
     threadId: 't1',
     status: 'idle',
@@ -60,7 +63,7 @@ function baseProps(overrides: Partial<Parameters<typeof FrozenMessageStream>[0]>
     ],
     onSend: () => {},
     ...overrides,
-  } as Parameters<typeof FrozenMessageStream>[0];
+  };
 }
 
 describe('FrozenMessageStream infinite scroll', () => {
@@ -139,7 +142,7 @@ describe('FrozenMessageStream infinite scroll', () => {
   test('exposes a scrollToBottom handle that pins the viewport', () => {
     const ref = createRef<MessageStreamHandle>();
     const { container } = render(<FrozenMessageStream {...baseProps({ ref })} />);
-    const viewport = container.firstElementChild as HTMLDivElement;
+    const viewport = expectInstance(container.firstElementChild, HTMLDivElement);
     Object.defineProperty(viewport, 'scrollHeight', { configurable: true, get: () => 5000 });
     Object.defineProperty(viewport, 'clientHeight', { configurable: true, get: () => 500 });
 

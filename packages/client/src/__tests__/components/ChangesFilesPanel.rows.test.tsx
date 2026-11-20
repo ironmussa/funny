@@ -1,6 +1,6 @@
 import type { FileDiffSummary } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
-import { type ComponentProps, type ReactNode } from 'react';
+import { type ComponentProps, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { TreeRow } from '@/components/FileTree';
@@ -193,10 +193,15 @@ function renderPanel(overrides: Partial<Props> = {}) {
   return { props, ...utils };
 }
 
+function isUpdater<T>(action: SetStateAction<T>): action is (prev: T) => T {
+  return action instanceof Function;
+}
+
 /** Apply a captured `setState` updater to a seed value. */
-function applyUpdater<T>(mockFn: unknown, seed: T): T {
-  const call = (mockFn as ReturnType<typeof vi.fn>).mock.calls.at(-1)!;
-  return (call[0] as (prev: T) => T)(seed);
+function applyUpdater<T>(setter: Dispatch<SetStateAction<T>>, seed: NoInfer<T>): T {
+  const action = vi.mocked(setter).mock.calls.at(-1)![0];
+  if (!isUpdater(action)) throw new Error('expected a setState updater');
+  return action(seed);
 }
 
 beforeEach(() => {
@@ -214,7 +219,7 @@ describe('ChangesFilesPanel markup', () => {
     expect(container.innerHTML).toMatchSnapshot();
   });
 
-  it.each([
+  it.each<[string, Partial<Props>]>([
     ['all checked', { checkedCount: 9, totalCount: 9 }],
     ['none checked, no folders', { checkedCount: 0, hasFolders: false }],
     ['all collapsed', { allFoldersCollapsed: true, collapsedFolders: new Set<string>() }],
@@ -223,7 +228,7 @@ describe('ChangesFilesPanel markup', () => {
     ['load error', { loadError: true, loadErrorMessage: 'nope' }],
     ['no changes', { summaries: [], filteredDiffs: [], treeRows: [] }],
     ['no matches', { filteredDiffs: [], treeRows: [] }],
-  ] as Array<[string, Partial<Props>]>)('renders header/list state: %s', (_name, overrides) => {
+  ])('renders header/list state: %s', (_name, overrides) => {
     const { container } = renderPanel(overrides);
     expect(container.innerHTML).toMatchSnapshot();
   });

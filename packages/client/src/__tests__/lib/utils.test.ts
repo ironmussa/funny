@@ -112,6 +112,12 @@ describe('resolveLocalThreadBranch', () => {
   });
 });
 
+/** A `DOMRect` at the left edge with the given vertical extent. */
+function rect(box: Pick<DOMRect, 'top' | 'bottom' | 'width' | 'height'>): DOMRect {
+  const full = { ...box, x: 0, y: box.top, left: 0, right: box.width };
+  return { ...full, toJSON: () => full };
+}
+
 describe('scrollSidebarItemIntoView', () => {
   test('scrolls item below the top inset when block is start', () => {
     const root = document.createElement('div');
@@ -120,10 +126,8 @@ describe('scrollSidebarItemIntoView', () => {
 
     const item = document.createElement('div');
     root.appendChild(item);
-    root.getBoundingClientRect = () =>
-      ({ top: 100, bottom: 500, left: 0, right: 200, width: 200, height: 400 }) as DOMRect;
-    item.getBoundingClientRect = () =>
-      ({ top: 180, bottom: 220, left: 0, right: 200, width: 200, height: 40 }) as DOMRect;
+    root.getBoundingClientRect = () => rect({ top: 100, bottom: 500, width: 200, height: 400 });
+    item.getBoundingClientRect = () => rect({ top: 180, bottom: 220, width: 200, height: 40 });
 
     scrollSidebarItemIntoView(root, item, 'start');
 

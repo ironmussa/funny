@@ -1,4 +1,4 @@
-import type { GitHubPR, GitStatusInfo, PRDetail, Thread } from '@funny/shared';
+import type { GitHubPR, GitStatusInfo, PRDetail, Thread, ThreadWithMessages } from '@funny/shared';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import { beforeEach, describe, expect, test, vi } from 'vitest';
@@ -7,13 +7,14 @@ import { PullRequestsTab } from '@/components/PullRequestsTab';
 import { createDataLayer } from '@/data/data-layer';
 import { readGitStatusMaps } from '@/data/git-status/read';
 import { seedGitStatus } from '@/data/git-status/testing';
-import { seedProjectCurrentBranches } from '@/data/projects/testing';
+import { seedProjectCurrentBranches, withProjects } from '@/data/projects/testing';
 import { replaceDataLayer } from '@/data/runtime';
-import { withThreadIndex } from '@/data/threads/testing';
+import { buildThreadWithMessages, withThreadIndex } from '@/data/threads/testing';
 import { useProjectStore } from '@/stores/project-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
+import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
@@ -51,21 +52,18 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-function makeThread(overrides: Partial<Thread> = {}): Thread {
-  return {
+function makeThread(overrides: Partial<Thread> = {}): ThreadWithMessages {
+  return buildThreadWithMessages({
     id: 'thread-pr',
     projectId: 'project-1',
     title: 'PR branch thread',
-    status: 'completed',
-    mode: 'local',
     branch: 'feature/pr-branch',
     baseBranch: 'qa',
     provider: 'codex',
-    cost: 0,
     createdAt: '2026-01-01T00:00:00.000Z',
     completedAt: '2026-01-01T00:01:00.000Z',
     ...overrides,
-  } as Thread;
+  });
 }
 
 function makeStatus(overrides: Partial<GitStatusInfo> = {}): GitStatusInfo {
@@ -163,22 +161,24 @@ describe('PullRequestsTab', () => {
 
     const thread = makeThread();
     seedProjectCurrentBranches({ 'project-1': 'qa' });
-    useProjectStore.setState({
-      projects: [
-        {
-          id: 'project-1',
-          name: 'goliiive-v2',
-          path: '/repo',
-          color: '#14b8a6',
-          userId: 'user-1',
-          sortOrder: 0,
-          defaultBranch: 'qa',
-          createdAt: '2026-01-01T00:00:00.000Z',
-        },
-      ],
-      selectedProjectId: 'project-1',
-      initialized: true,
-    } as any);
+    useProjectStore.setState(
+      withProjects({
+        projects: [
+          {
+            id: 'project-1',
+            name: 'goliiive-v2',
+            path: '/repo',
+            color: '#14b8a6',
+            userId: 'user-1',
+            sortOrder: 0,
+            defaultBranch: 'qa',
+            createdAt: '2026-01-01T00:00:00.000Z',
+          },
+        ],
+        selectedProjectId: 'project-1',
+        initialized: true,
+      }),
+    );
     useThreadStore.setState(
       withThreadIndex({
         threadDataById: { [thread.id]: thread },
@@ -186,16 +186,13 @@ describe('PullRequestsTab', () => {
         threadIdsByProject: { 'project-1': [thread.id] },
         selectedThreadId: thread.id,
         activeThread: thread,
-      } as any),
+      }),
     );
     seedGitStatus({
       statusByBranch: { 'project-1:feature/pr-branch': makeStatus() },
       threadToBranchKey: { [thread.id]: 'project-1:feature/pr-branch' },
       statusByProject: {},
-      loadingProjects: new Set(),
-      _loadingBranchKeys: new Set(),
-      _loadingProjectStatus: new Set(),
-    } as any);
+    });
   });
 
   test('does not log a request cancelled on unmount', async () => {
@@ -212,7 +209,7 @@ describe('PullRequestsTab', () => {
     apiMock.githubPRs.mockReturnValue(pending);
     const view = renderWithProviders(<PullRequestsTab visible />);
     await waitFor(() => expect(apiMock.githubPRs).toHaveBeenCalled());
-    const signal = apiMock.githubPRs.mock.calls[0][2] as AbortSignal;
+    const signal = expectInstance(apiMock.githubPRs.mock.calls[0][2], AbortSignal);
     view.unmount();
     expect(signal.aborted).toBe(true);
     await act(async () => {
@@ -247,7 +244,7 @@ describe('PullRequestsTab', () => {
     expect(apiMock.githubPRFilterOptions).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button', { name: 'Check again' }));
     await waitFor(() => expect(apiMock.githubPRs).toHaveBeenCalled());
-    const signal = apiMock.githubPRs.mock.calls[0][2] as AbortSignal;
+    const signal = expectInstance(apiMock.githubPRs.mock.calls[0][2], AbortSignal);
     view.unmount();
     expect(signal.aborted).toBe(true);
   });

@@ -20,6 +20,11 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+/** The part of a `MediaStream` the hook touches; `getUserMedia` is stubbed, so no DOM stream is needed. */
+interface MediaStreamStub {
+  getTracks: () => { stop: () => void }[];
+}
+
 class ConnectingWebSocket {
   static readonly OPEN = 1;
   static instances: ConnectingWebSocket[] = [];
@@ -45,12 +50,11 @@ describe('useDictation', () => {
   });
 
   test('stops a microphone stream that resolves after unmount', async () => {
-    const pendingStream = deferred<MediaStream>();
+    const pendingStream = deferred<MediaStreamStub>();
     const stop = vi.fn();
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const stream = {
       getTracks: () => [{ stop }],
-    } as unknown as MediaStream;
+    };
     const getUserMedia = vi.fn(() => pendingStream.promise);
     vi.stubGlobal('navigator', {
       ...navigator,
@@ -77,10 +81,9 @@ describe('useDictation', () => {
   });
 
   test('stop while still connecting cancels the start', async () => {
-    const pendingStream = deferred<MediaStream>();
+    const pendingStream = deferred<MediaStreamStub>();
     const stopTrack = vi.fn();
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
-    const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
+    const stream = { getTracks: () => [{ stop: stopTrack }] };
     vi.stubGlobal('navigator', {
       ...navigator,
       mediaDevices: { getUserMedia: vi.fn(() => pendingStream.promise) },
@@ -111,10 +114,9 @@ describe('useDictation', () => {
 
   test('closes a connecting WebSocket without reporting a stale error after unmount', async () => {
     const stop = vi.fn();
-    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const stream = {
       getTracks: () => [{ stop }],
-    } as unknown as MediaStream;
+    };
     vi.stubGlobal('navigator', {
       ...navigator,
       mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(stream) },

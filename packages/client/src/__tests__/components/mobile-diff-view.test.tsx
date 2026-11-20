@@ -51,7 +51,9 @@ function file(path: string): FileDiffSummary {
 
 const FILES = [file('a.ts'), file('b.ts'), file('c.ts')];
 
-function mobileProps(overrides: Partial<Parameters<typeof MobileDiffView>[0]> = {}) {
+function mobileProps(
+  overrides: Partial<Parameters<typeof MobileDiffView>[0]> = {},
+): Parameters<typeof MobileDiffView>[0] {
   const expandedFile = overrides.expandedFile ?? 'a.ts';
   return {
     expandedFile,
@@ -68,7 +70,7 @@ function mobileProps(overrides: Partial<Parameters<typeof MobileDiffView>[0]> = 
     requestFullDiff: vi.fn(),
     handleResolveConflict: vi.fn(),
     ...overrides,
-  } as Parameters<typeof MobileDiffView>[0];
+  };
 }
 
 afterEach(() => {
@@ -158,8 +160,8 @@ describe('MobileDiffView — prev/next navigation', () => {
 });
 
 describe('ExpandedDiffPresenter — viewport switch', () => {
-  // The presenter forwards a superset of props; cast keeps the test focused on
-  // the switch rather than reconstructing every DiffViewerModal prop.
+  // SAFETY: the presenter forwards a superset of props, and these tests only
+  // render its mobile/desktop switch, which reads the MobileDiffView subset.
   const presenterProps = () => mobileProps() as Parameters<typeof ExpandedDiffPresenter>[0];
 
   test('mobile viewport renders the full-screen overlay, not the desktop dialog', () => {

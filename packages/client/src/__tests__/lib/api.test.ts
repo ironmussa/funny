@@ -1,11 +1,11 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 // Mock fetch before importing api
-const mockFetch = vi.fn();
+const mockFetch = vi.fn<(input: string, init: RequestInit) => Promise<Response>>();
 vi.stubGlobal('fetch', mockFetch);
 
 // Ensure __TAURI_INTERNALS__ is absent so we use /api base (jsdom default)
-delete (window as any).__TAURI_INTERNALS__;
+Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
 
 // Now import after mocks are set up
 const { api } = await import('@/lib/api');
@@ -87,7 +87,7 @@ describe('API Client', () => {
       const [url, init] = mockFetch.mock.calls.at(-1)!;
       expect(url).toMatch(/\/api\/trpc\/projects\.remove$/);
       expect(init.method).toBe('POST');
-      expect(JSON.parse(init.body as string)).toEqual({ projectId: 'p1' });
+      expect(JSON.parse(String(init.body))).toEqual({ projectId: 'p1' });
     });
 
     test('listBranches calls GET /api/projects/:id/branches', async () => {
@@ -368,7 +368,7 @@ describe('API Client', () => {
       });
 
       const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1].body);
+      const body = JSON.parse(String(call[1].body));
       expect(body.model).toBe('opus');
       expect(body.permissionMode).toBe('plan');
       expect(body.baseBranch).toBe('feature/auth');
@@ -380,7 +380,7 @@ describe('API Client', () => {
       await api.stageFiles('t1', ['file1.ts', 'file2.ts', 'file3.ts']);
 
       const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1].body);
+      const body = JSON.parse(String(call[1].body));
       expect(body.paths).toEqual(['file1.ts', 'file2.ts', 'file3.ts']);
     });
 
@@ -390,7 +390,7 @@ describe('API Client', () => {
       await api.unstageFiles('t1', ['file.ts']);
 
       const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1].body);
+      const body = JSON.parse(String(call[1].body));
       expect(body.paths).toEqual(['file.ts']);
     });
 
@@ -400,7 +400,7 @@ describe('API Client', () => {
       await api.revertFiles('t1', ['file.ts']);
 
       const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1].body);
+      const body = JSON.parse(String(call[1].body));
       expect(body.paths).toEqual(['file.ts']);
     });
 
@@ -410,7 +410,7 @@ describe('API Client', () => {
       await api.createPR('t1', 'Fix auth bug', 'Detailed description of changes');
 
       const call = mockFetch.mock.calls[0];
-      const body = JSON.parse(call[1].body);
+      const body = JSON.parse(String(call[1].body));
       expect(body.title).toBe('Fix auth bug');
       expect(body.body).toBe('Detailed description of changes');
     });
@@ -430,7 +430,7 @@ describe('API Client', () => {
         phase: 'composer',
       });
       expect(result.isOk()).toBe(true);
-      const url = mockFetch.mock.calls[0][0] as string;
+      const url = mockFetch.mock.calls[0][0];
       expect(url).toContain('/skills/resources?');
       expect(url).toContain('provider=codex');
       expect(url).toContain('model=gpt-5.5');
@@ -445,7 +445,7 @@ describe('API Client', () => {
       );
 
       await api.listAgentResources({});
-      const url = mockFetch.mock.calls[0][0] as string;
+      const url = mockFetch.mock.calls[0][0];
       expect(url).toContain('/skills/resources');
       expect(url).not.toContain('?');
     });
@@ -458,7 +458,7 @@ describe('API Client', () => {
       const result = await api.listMcpServers('/tmp/p', 'claude', 'project-1');
 
       expect(result.isOk()).toBe(true);
-      const url = mockFetch.mock.calls[0][0] as string;
+      const url = mockFetch.mock.calls[0][0];
       expect(url).toContain('/mcp/servers?');
       expect(url).toContain('projectPath=%2Ftmp%2Fp');
       expect(url).toContain('provider=claude');

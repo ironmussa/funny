@@ -4,6 +4,7 @@ import { describe, expect, test, vi } from 'vitest';
 
 import { PromptTimeline } from '@/components/thread/PromptTimeline';
 
+import { expectInstance } from '../helpers/builders-components';
 import { renderWithProviders } from '../helpers/render';
 
 const ts = (offsetMin: number) => new Date(Date.now() - (60 - offsetMin) * 60_000).toISOString();
@@ -69,7 +70,7 @@ function renderTimeline(messages: any[], threadStatus?: ThreadStatus): Rendered[
   );
   return screen.getAllByRole('button').map((button, i) => {
     fireEvent.click(button);
-    const label = button.firstElementChild as HTMLElement;
+    const label = expectInstance(button.firstElementChild, HTMLElement);
     return {
       text: button.textContent ?? '',
       completed: label.className.includes('line-through'),

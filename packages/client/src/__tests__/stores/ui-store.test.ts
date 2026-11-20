@@ -1,14 +1,16 @@
-import type { Project } from '@funny/shared';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 
 // Use vi.hoisted() so these mocks are available when vi.mock factories run (which are hoisted)
 const { mockSelectProject, mockInvalidateSelectThread, mockClearThreadSelection, mockProjects } =
-  vi.hoisted(() => ({
-    mockSelectProject: vi.fn(),
-    mockInvalidateSelectThread: vi.fn(),
-    mockClearThreadSelection: vi.fn(),
-    mockProjects: [] as Array<{ id: string; needsSetup?: boolean }>,
-  }));
+  vi.hoisted(() => {
+    const mockProjects: Array<{ id: string; needsSetup?: boolean }> = [];
+    return {
+      mockSelectProject: vi.fn(),
+      mockInvalidateSelectThread: vi.fn(),
+      mockClearThreadSelection: vi.fn(),
+      mockProjects,
+    };
+  });
 
 vi.mock('@/stores/project-store', () => ({
   useProjectStore: {
@@ -17,9 +19,11 @@ vi.mock('@/stores/project-store', () => ({
 }));
 
 // The listener ui-store registers at import, so a test can fire it.
-const threadSelect = vi.hoisted(() => ({
-  listener: null as ((threadId: string | null) => void) | null,
-}));
+interface ThreadSelectHook {
+  listener: ((threadId: string | null) => void) | null;
+}
+
+const threadSelect = vi.hoisted((): ThreadSelectHook => ({ listener: null }));
 
 vi.mock('@/stores/thread-store-internals', () => ({
   invalidateSelectThread: mockInvalidateSelectThread,
@@ -29,7 +33,7 @@ vi.mock('@/stores/thread-store-internals', () => ({
   },
 }));
 
-import { seedProjects } from '@/data/projects/testing';
+import { buildProject, seedProjects } from '@/data/projects/testing';
 import { useUIStore } from '@/stores/ui-store';
 
 describe('useUIStore', () => {
@@ -499,7 +503,7 @@ describe('useUIStore', () => {
 
   describe('startNewThread guards', () => {
     test('does not open compose when project needs setup', () => {
-      seedProjects([{ id: 'p-setup', needsSetup: true } as Project]);
+      seedProjects([buildProject({ id: 'p-setup', needsSetup: true })]);
 
       useUIStore.getState().startNewThread('p-setup');
 

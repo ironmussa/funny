@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
-import { okAsync } from 'neverthrow';
+import { okAsync, ResultAsync } from 'neverthrow';
 import { useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -181,7 +181,7 @@ export const StatusLoading: Story = {
       target={BASE_TARGET}
       label="Delete (status loading)"
       setupMocks={() => {
-        api.worktreeStatus = () => new Promise(() => {}) as any;
+        api.worktreeStatus = () => new ResultAsync(new Promise(() => {}));
       }}
     />
   ),

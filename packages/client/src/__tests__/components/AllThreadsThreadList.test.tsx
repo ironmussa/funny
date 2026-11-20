@@ -5,6 +5,7 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AllThreadsThreadList } from '@/components/all-threads/AllThreadsThreadList';
 import { seedGitStatus } from '@/data/git-status/testing';
+import { buildThread } from '@/data/threads/testing';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -70,19 +71,15 @@ vi.mock('@/hooks/use-minute-tick', () => ({
 }));
 
 function makeThread(overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id: 'thread-1',
     projectId: 'project-1',
     title: 'Fix sidebar search result rows',
-    status: 'completed',
-    mode: 'local',
     branch: 'main',
     provider: 'claude-sdk',
-    cost: 0,
-    createdAt: '2026-01-01T00:00:00.000Z',
     completedAt: '2026-01-02T00:00:00.000Z',
     ...overrides,
-  } as Thread;
+  });
 }
 
 function makeList(
@@ -123,8 +120,7 @@ describe('AllThreadsThreadList', () => {
     seedGitStatus({
       statusByBranch: {},
       threadToBranchKey: {},
-      _loadingBranchKeys: new Set(),
-    } as any);
+    });
   });
 
   test('uses the sidebar ThreadItem layout with PR badge and menu actions', () => {
@@ -147,7 +143,7 @@ describe('AllThreadsThreadList', () => {
     seedGitStatus({
       statusByBranch: { 'project-1:main': gitStatus },
       threadToBranchKey: { [thread.id]: 'project-1:main' },
-    } as any);
+    });
 
     renderWithProviders(
       <AllThreadsThreadList
@@ -194,6 +190,7 @@ describe('AllThreadsThreadList', () => {
     const { rerender } = renderWithProviders(makeList([first, second], onSearchKeyDownRef));
 
     act(() => {
+      // SAFETY: the search key handler reads only `key` and calls `preventDefault`.
       // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       onSearchKeyDownRef.current?.({
         key: 'ArrowDown',

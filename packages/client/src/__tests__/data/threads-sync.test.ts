@@ -15,6 +15,7 @@ import {
   removeThreadLocally,
 } from '@/data/threads/loaders';
 import { getThreadsData } from '@/data/threads/store';
+import { buildThread } from '@/data/threads/testing';
 
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
@@ -27,13 +28,13 @@ const mockApi = vi.hoisted(() => ({
 }));
 vi.mock('@/lib/api', () => ({ api: mockApi }));
 
-const emitted = vi.hoisted(() => [] as unknown[]);
+const emitted = vi.hoisted((): unknown[] => []);
 vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects: { emit: (effect: unknown) => emitted.push(effect) } } },
 }));
 
 function thread(id: string, overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id,
     projectId: 'p1',
     title: id,
@@ -44,7 +45,7 @@ function thread(id: string, overrides: Partial<Thread> = {}): Thread {
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
-  } as Thread;
+  });
 }
 
 /** An API call whose response the test releases by hand. */

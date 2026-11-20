@@ -139,6 +139,7 @@ describe('WS event buffer', () => {
 
 describe('navigation ref', () => {
   beforeEach(() => {
+    // SAFETY: null is the ref's initial value; resetting to it lets the next test see "not set".
     setAppNavigate(null as any);
   });
 

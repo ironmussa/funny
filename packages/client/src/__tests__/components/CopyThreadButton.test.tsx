@@ -6,7 +6,10 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
 import { AgentResultCard, AgentStoppedCard } from '@/components/thread/AgentStatusCards';
 import { CopyThreadButton } from '@/components/thread/CopyThreadButton';
 import { TooltipProvider } from '@/components/ui/tooltip';
+import { buildThreadWithMessages } from '@/data/threads/testing';
 import { api } from '@/lib/api';
+
+import { buildMessage } from '../helpers/builders-components';
 
 const render = (ui: ReactElement) => rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
 
@@ -80,18 +83,21 @@ describe('completed thread actions', () => {
 
   test('copies only the latest prompt onwards, without tool cards', async () => {
     vi.mocked(api.getThread).mockReturnValue(
-      okAsync({
-        messages: [
-          { role: 'user', content: 'Older prompt' },
-          { role: 'assistant', content: 'Older answer' },
-          { role: 'user', content: 'Latest prompt' },
-          {
-            role: 'assistant',
-            content: 'Final answer',
-            toolCalls: [{ name: 'Read', input: '{}', output: 'File contents' }],
-          },
-        ],
-      } as any),
+      okAsync(
+        buildThreadWithMessages({
+          messages: [
+            buildMessage({ role: 'user', content: 'Older prompt' }),
+            buildMessage({ role: 'assistant', content: 'Older answer' }),
+            buildMessage({ role: 'user', content: 'Latest prompt' }),
+            {
+              ...buildMessage({ role: 'assistant', content: 'Final answer' }),
+              toolCalls: [
+                { id: 'tc1', messageId: 'm1', name: 'Read', input: '{}', output: 'File contents' },
+              ],
+            },
+          ],
+        }),
+      ),
     );
     render(<CopyThreadButton threadId="thread-1" />);
     fireEvent.click(screen.getByRole('button', { name: 'Copy latest prompt and response' }));
@@ -116,7 +122,7 @@ describe('completed thread actions', () => {
   });
 
   test('reports fetch failures without copying partial history', async () => {
-    vi.mocked(api.getThread).mockReturnValue(errAsync({ message: 'Offline' } as any));
+    vi.mocked(api.getThread).mockReturnValue(errAsync({ type: 'INTERNAL', message: 'Offline' }));
     render(<CopyThreadButton threadId="thread-1" />);
     fireEvent.click(screen.getByRole('button'));
     await waitFor(() => expect(showError).toHaveBeenCalled());
@@ -125,7 +131,7 @@ describe('completed thread actions', () => {
   });
 
   test('reports clipboard rejection without showing success', async () => {
-    vi.mocked(api.getThread).mockReturnValue(okAsync({ messages: [] } as any));
+    vi.mocked(api.getThread).mockReturnValue(okAsync(buildThreadWithMessages()));
     writeText.mockRejectedValueOnce(new Error('Clipboard denied'));
     render(<CopyThreadButton threadId="thread-1" />);
     fireEvent.click(screen.getByRole('button'));

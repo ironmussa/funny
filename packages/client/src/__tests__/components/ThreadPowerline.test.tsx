@@ -3,6 +3,7 @@ import { fireEvent, screen } from '@testing-library/react';
 import { describe, test, expect, vi } from 'vitest';
 
 import { ThreadPowerline } from '@/components/ThreadPowerline';
+import { buildThread } from '@/data/threads/testing';
 
 import { renderWithProviders } from '../helpers/render';
 
@@ -28,22 +29,15 @@ vi.mock('react-i18next', () => ({
 
 /** Minimal thread mock — only the fields ThreadPowerline reads. */
 function mockThread(overrides: Partial<Thread> = {}): Thread {
-  return {
+  return buildThread({
     id: 'thread-1',
     projectId: 'proj-1',
     userId: 'user-1',
     title: 'Test thread',
-    mode: 'local',
     status: 'idle',
-    stage: 'idle',
     provider: 'claude-sdk',
-    permissionMode: 'default',
-    model: 'sonnet',
-    cost: 0,
-    source: 'manual',
-    runtime: 'local',
     ...overrides,
-  } as Thread;
+  });
 }
 
 describe('ThreadPowerline', () => {

@@ -95,6 +95,7 @@ export { nullReporter } from './types.js';
 export {
   interpolate,
   interpolateObject,
+  templateVariables,
   TemplateInterpolationError,
   type TemplateScope,
   type InterpolateOptions,

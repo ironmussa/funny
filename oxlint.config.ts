@@ -195,6 +195,13 @@ const existing = {
         ...severity('shadcn', SHADCN_ERROR, 'error'),
         ...severity('shadcn', SHADCN_WARN, 'warn'),
         ...severity('shadcn', SHADCN_OFF, 'off'),
+        // Marker classes with no styles of their own: dockview's right-pane
+        // tabs and the PR detail conversation, which an inline <style> targets.
+        // An empty `@utility` would declare them, but it breaks the Tailwind build.
+        'shadcn/no-unknown-classes': [
+          'error',
+          { allow: ['dv-funny-right-tab', 'pr-detail-conversation'] },
+        ],
       },
     },
     {

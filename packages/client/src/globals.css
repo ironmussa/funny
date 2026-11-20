@@ -327,14 +327,6 @@ mark.md-search-match[data-active='true'] {
   }
 }
 
-@utility dv-funny-right-tab {
-  /* Marker class for dockview right-pane tab components. */
-}
-
-@utility pr-detail-conversation {
-  /* Scoping class for PR detail conversation; targeted by an inline <style>. */
-}
-
 @utility contain-layout {
   /* Layout containment to prevent cross-component layout recalculations */
   contain: layout;

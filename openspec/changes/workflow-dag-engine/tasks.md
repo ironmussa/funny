@@ -29,7 +29,7 @@
 
 ## 4. Other hosts
 
-- [ ] 4.1 Runtime pipeline manager, git workflow service, orchestrator, harness and scheduler use the in-memory gate and journal; verify their existing test suites pass unchanged
+- [x] 4.1 Runtime pipeline manager, git workflow service, orchestrator, harness and scheduler use the in-memory gate and journal; verify their existing test suites pass unchanged (they share `defaultConcurrencyGate`; the two runtime hosts pass their run id as `runId`; none passes a journal, since an in-memory one is never read and these hosts do not resume, which `runPipeline` treats the same as no journal)
 
 ## 5. Client and docs
 

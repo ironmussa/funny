@@ -425,7 +425,10 @@ export async function startPipelineRun(opts: {
   };
 
   // Fire-and-forget — run the YAML-loaded code-review pipeline
+  // The process-wide in-memory gate and no journal (a runtime run is not
+  // resumed after a restart); `runId` names this run in the gate's slot holders.
   runPipeline(codeReview.definition, initialCtx, {
+    runId,
     signal: abortController.signal,
     onStateChange: (change) => void onStateChange(change),
     maxIterations: pipeline.maxIterations,

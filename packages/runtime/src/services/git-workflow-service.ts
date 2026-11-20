@@ -208,7 +208,10 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
       });
     }
 
+    // The process-wide in-memory gate and no journal (a workflow is not resumed
+    // after a restart); `runId` names this workflow in the gate's slot holders.
     const pipelineOpts: PipelineRunOptions<GitPipelineContext> = {
+      runId: workflowId,
       signal: abortController.signal,
       maxIterations: pipelineConfig?.maxIterations,
     };

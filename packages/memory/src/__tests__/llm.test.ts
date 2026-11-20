@@ -40,7 +40,7 @@ describe('llm', () => {
       const call = vi.mocked(fetch).mock.calls[0];
       expect(call[0]).toBe('http://localhost:8317/v1/chat/completions');
 
-      const body = JSON.parse(call[1]!.body as string);
+      const body = JSON.parse(String(call[1]?.body));
       expect(body.model).toBe('test-model');
       expect(body.messages).toEqual([
         { role: 'system', content: 'system prompt' },
@@ -60,8 +60,8 @@ describe('llm', () => {
 
       await llmComplete(config, 'prompt');
 
-      const headers = vi.mocked(fetch).mock.calls[0][1]!.headers as Record<string, string>;
-      expect(headers['Authorization']).toBe('Bearer test-key-123');
+      const headers = new Headers(vi.mocked(fetch).mock.calls[0][1]?.headers);
+      expect(headers.get('Authorization')).toBe('Bearer test-key-123');
     });
 
     it('does not include Authorization when no apiKey', async () => {
@@ -73,8 +73,8 @@ describe('llm', () => {
 
       await llmComplete(baseConfig, 'prompt');
 
-      const headers = vi.mocked(fetch).mock.calls[0][1]!.headers as Record<string, string>;
-      expect(headers['Authorization']).toBeUndefined();
+      const headers = new Headers(vi.mocked(fetch).mock.calls[0][1]?.headers);
+      expect(headers.get('Authorization')).toBeNull();
     });
 
     it('sends only a user message when no system prompt is provided', async () => {
@@ -86,7 +86,7 @@ describe('llm', () => {
 
       await llmComplete(baseConfig, 'prompt');
 
-      const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+      const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
       expect(body.messages).toEqual([{ role: 'user', content: 'prompt' }]);
     });
 
@@ -146,7 +146,7 @@ describe('llm', () => {
 
       await llmComplete(config, 'prompt');
 
-      const body = JSON.parse(vi.mocked(fetch).mock.calls[0][1]!.body as string);
+      const body = JSON.parse(String(vi.mocked(fetch).mock.calls[0][1]?.body));
       expect(body.model).toBe('claude-haiku');
     });
   });

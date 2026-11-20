@@ -27,16 +27,17 @@ describe('buildApiRequest', () => {
     const { url, init } = buildApiRequest(connection, '/projects');
     expect(url).toBe('https://funny.example.com/api/v1/projects');
     expect(init.method).toBe('GET');
-    expect((init.headers as Record<string, string>).Authorization).toBe('Bearer funny_pat_abc');
+    const headers = new Headers(init.headers);
+    expect(headers.get('Authorization')).toBe('Bearer funny_pat_abc');
     expect(init.body).toBeUndefined();
-    expect((init.headers as Record<string, string>)['Content-Type']).toBeUndefined();
+    expect(headers.get('Content-Type')).toBeNull();
   });
 
   test('sends a JSON body', () => {
     const { init } = buildApiRequest(connection, 'threads', { method: 'POST', body: { a: 1 } });
     expect(init.method).toBe('POST');
     expect(init.body).toBe('{"a":1}');
-    expect((init.headers as Record<string, string>)['Content-Type']).toBe('application/json');
+    expect(new Headers(init.headers).get('Content-Type')).toBe('application/json');
   });
 
   test('refuses to call without a token', () => {
@@ -208,7 +209,8 @@ describe('settings helpers', () => {
   });
 
   test('projects from the public API have no defaults', () => {
-    expect(hasProjectDefaults({ id: 'p1' } as { defaultMode?: string })).toBe(false);
+    const publicProject: { id: string; defaultMode?: string } = { id: 'p1' };
+    expect(hasProjectDefaults(publicProject)).toBe(false);
     expect(hasProjectDefaults({ defaultMode: 'local' })).toBe(true);
     expect(hasProjectDefaults(undefined)).toBe(false);
   });

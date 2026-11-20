@@ -66,7 +66,7 @@ describe('sandbox intent', () => {
       },
       createSpawnFn(requestId) {
         calls.push(`spawn:${requestId}`);
-        return () => ({}) as any;
+        return () => ({});
       },
       async stopSandbox(requestId) {
         calls.push(`stop:${requestId}`);

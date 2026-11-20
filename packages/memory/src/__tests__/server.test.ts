@@ -72,14 +72,14 @@ describe('server HTTP endpoints (integration)', () => {
     app.patch('/v1/facts/:id/invalidate', async (c) => {
       const { updateFact, getFact } = await import('../storage.js');
       const factId = c.req.param('id');
-      const body = await c.req.json().catch(() => ({}));
+      const body: { reason?: string } = await c.req.json().catch(() => ({}));
 
       const factResult = await getFact(db, factId);
       if (factResult.isErr()) return c.json({ error: 'Not found' }, 404);
 
       await updateFact(db, factId, {
         invalid_at: new Date().toISOString(),
-        invalidated_by: (body as any).reason ?? null,
+        invalidated_by: body.reason ?? null,
       });
       return c.json({ ok: true });
     });
@@ -88,7 +88,7 @@ describe('server HTTP endpoints (integration)', () => {
     app.patch('/v1/facts/:id/evolve', async (c) => {
       const { updateFact, getFact } = await import('../storage.js');
       const factId = c.req.param('id');
-      const body = await c.req.json();
+      const body: { update?: string } = await c.req.json();
 
       const factResult = await getFact(db, factId);
       if (factResult.isErr()) return c.json({ error: 'Not found' }, 404);
@@ -96,7 +96,7 @@ describe('server HTTP endpoints (integration)', () => {
       const fact = factResult.value;
       if (fact.invalidAt) return c.json({ error: 'Cannot evolve invalidated fact' }, 400);
 
-      const newContent = `${fact.content}\n\n---\n_Updated: ${(body as any).update}_`;
+      const newContent = `${fact.content}\n\n---\n_Updated: ${body.update}_`;
       await updateFact(db, factId, {
         content: newContent,
         ingested_at: new Date().toISOString(),

@@ -14,6 +14,7 @@ import { PROVIDER_MANIFEST_SCHEMA_VERSION } from '@funny/shared/provider-manifes
 import { ACP_MANIFESTS } from '@funny/shared/provider-manifests';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
+import type { AgentProcessOptions } from '../agents/interfaces.js';
 import { defaultProcessFactory } from '../agents/process-factory.js';
 import {
   clearRunnerManifestsForTests,
@@ -51,12 +52,11 @@ function externalManifest(id: string): Record<string, any> {
 }
 
 const baseStartOpts = {
-  threadId: 't',
-  projectPath: '/tmp',
   prompt: 'hi',
+  cwd: '/tmp',
   model: 'default',
   permissionMode: 'autoEdit',
-} as const;
+} satisfies AgentProcessOptions;
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'funny-provider-ext-'));
@@ -80,14 +80,7 @@ describe('loadProviderExtensions', () => {
     expect(getRunnerManifest('myagent')?.id).toBe('myagent');
 
     // The registry resolves the external id to a GenericACPProcess subclass.
-    const proc = defaultProcessFactory.create({
-      provider: 'myagent',
-      threadId: 't',
-      projectPath: '/tmp',
-      prompt: 'hi',
-      model: 'default',
-      permissionMode: 'autoEdit',
-    } as any);
+    const proc = defaultProcessFactory.create({ provider: 'myagent', ...baseStartOpts });
     expect(proc).toBeInstanceOf(Object);
     expect(proc.constructor.name).not.toBe('SDKClaudeProcess');
   });
@@ -150,7 +143,7 @@ describe('live register / unregister (provider-install-ui §1)', () => {
     expect(getRunnerManifest('live-one')?.id).toBe('live-one');
     expect(getAdvertisedProviders().map((p) => p.id)).toContain('live-one');
 
-    const proc = defaultProcessFactory.create({ provider: 'live-one', ...baseStartOpts } as any);
+    const proc = defaultProcessFactory.create({ provider: 'live-one', ...baseStartOpts });
     expect(proc.constructor.name).not.toBe('SDKClaudeProcess');
   });
 
@@ -161,7 +154,7 @@ describe('live register / unregister (provider-install-ui §1)', () => {
     expect(unregisterProviderExtension('live-rm')).toBe(true);
     expect(getRunnerManifest('live-rm')).toBeUndefined();
     expect(getAdvertisedProviders().map((p) => p.id)).not.toContain('live-rm');
-    const proc = defaultProcessFactory.create({ provider: 'live-rm', ...baseStartOpts } as any);
+    const proc = defaultProcessFactory.create({ provider: 'live-rm', ...baseStartOpts });
     expect(proc.constructor.name).toBe('SDKClaudeProcess');
   });
 
@@ -217,7 +210,7 @@ describe('install / remove from a local path (provider-install-ui §2)', () => {
     if (!res.ok) throw new Error(res.error);
     expect(res.loaded.id).toBe('inst-1');
     expect(getRunnerManifest('inst-1')?.id).toBe('inst-1');
-    const proc = defaultProcessFactory.create({ provider: 'inst-1', ...baseStartOpts } as any);
+    const proc = defaultProcessFactory.create({ provider: 'inst-1', ...baseStartOpts });
     expect(proc.constructor.name).not.toBe('SDKClaudeProcess');
   });
 

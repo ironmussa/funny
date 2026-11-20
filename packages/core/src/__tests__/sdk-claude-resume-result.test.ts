@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { EMPTY_RESUME_RESULT_HOLD_MS, SDKClaudeProcess } from '../agents/sdk-claude.js';
-import type { ClaudeProcessOptions } from '../agents/types.js';
+import type { ClaudeProcessOptions, CLIMessage } from '../agents/types.js';
+import { sdkMessage, type SdkWireFields } from './helpers/test-helpers.js';
 
 // Regression (issue #343): resuming an interrupted session, the CLI closes the
 // dangling turn with a `success` result of 0 turns, then runs the queued prompt
@@ -34,13 +35,14 @@ const finalResult = { ...emptyResult, num_turns: 4, duration_ms: 39_342, total_c
 
 /** Drive a process the way the SDK query loop does; collect what reaches the runtime. */
 function stream(opts: Partial<ClaudeProcessOptions> = {}) {
-  const proc = new SDKClaudeProcess({ prompt: 'continue', cwd: '/tmp', ...opts }) as any;
-  const published: any[] = [];
-  proc.on('message', (m: any) => published.push(m));
-  const receive = (msg: unknown) => {
-    if (proc.screenResumeResult(msg)) return;
-    proc.trackInputLifetime(msg);
-    const cli = proc.translateMessage(msg);
+  const proc = new SDKClaudeProcess({ prompt: 'continue', cwd: '/tmp', ...opts });
+  const published: CLIMessage[] = [];
+  proc.on('message', (m: CLIMessage) => published.push(m));
+  const receive = <F extends SdkWireFields>(fields: F) => {
+    const msg = sdkMessage(fields);
+    if (proc['screenResumeResult'](msg)) return;
+    proc['trackInputLifetime'](msg);
+    const cli = proc['translateMessage'](msg);
     if (cli) proc.emit('message', cli);
   };
   const results = () => published.filter((m) => m.type === 'result');
@@ -57,14 +59,14 @@ describe('SDKClaudeProcess empty resume result', () => {
     receive(init);
     receive(emptyResult);
     expect(results()).toEqual([]);
-    expect(proc.inputClosed).toBe(false); // the queued prompt's tool calls still need the hook
+    expect(proc['inputClosed']).toBe(false); // the queued prompt's tool calls still need the hook
 
     receive(init);
     receive(assistant);
     receive(finalResult);
     expect(results()).toHaveLength(1);
     expect(results()[0]).toMatchObject({ num_turns: 4, total_cost_usd: 8.5 });
-    expect(proc.inputClosed).toBe(true);
+    expect(proc['inputClosed']).toBe(true);
   });
 
   test('publishes it once when the session goes idle instead', () => {
@@ -75,7 +77,7 @@ describe('SDKClaudeProcess empty resume result', () => {
     receive(idle);
     expect(results()).toHaveLength(1);
     expect(results()[0]).toMatchObject({ num_turns: 0, total_cost_usd: 6.6 });
-    expect(proc.inputClosed).toBe(true);
+    expect(proc['inputClosed']).toBe(true);
   });
 
   test('publishes it when nothing follows within the hold time', () => {
@@ -86,13 +88,13 @@ describe('SDKClaudeProcess empty resume result', () => {
     expect(results()).toEqual([]);
     vi.advanceTimersByTime(1);
     expect(results()).toHaveLength(1);
-    expect(proc.inputClosed).toBe(true);
+    expect(proc['inputClosed']).toBe(true);
   });
 
   test('publishes it when the query ends', () => {
     const { proc, receive, results } = stream({ sessionId: 's1' });
     receive(emptyResult);
-    proc.releaseResumeResult(); // the query loop's `finally`
+    proc['releaseResumeResult'](); // the query loop's `finally`
     expect(results()).toHaveLength(1);
   });
 
@@ -102,7 +104,7 @@ describe('SDKClaudeProcess empty resume result', () => {
     receive(emptyResult);
     await proc.kill();
     vi.advanceTimersByTime(EMPTY_RESUME_RESULT_HOLD_MS);
-    proc.releaseResumeResult();
+    proc['releaseResumeResult']();
     expect(results()).toEqual([]);
   });
 

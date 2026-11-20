@@ -6,17 +6,25 @@ import { describe, expect, test } from 'bun:test';
 
 import { errAsync, okAsync } from 'neverthrow';
 
-import { issueBlockers, openBlockers, type RepoGithub } from '../github-app/index.js';
+import {
+  createRepoGithub,
+  issueBlockers,
+  openBlockers,
+  type RepoGithub,
+} from '../github-app/index.js';
+import { fakeFetch } from './helpers/test-helpers.js';
 
+/** A RepoGithub over a fake GitHub that answers each page from `pages`. */
 function stubGithub(pages: unknown[][], calls: string[] = []): RepoGithub {
-  return {
-    json: <T>(_repo: string, _method: string, path: string) => {
+  return createRepoGithub({
+    tokenFor: () => okAsync('tok'),
+    fetch: fakeFetch(async (url) => {
+      const path = url.replace('https://api.github.com', '');
       calls.push(path);
-      const page = Number(new URL(`https://x${path}`).searchParams.get('page'));
-      return okAsync((pages[page - 1] ?? []) as T);
-    },
-    text: () => okAsync(''),
-  };
+      const page = Number(new URL(url).searchParams.get('page'));
+      return Response.json(pages[page - 1] ?? []);
+    }),
+  });
 }
 
 describe('issueBlockers', () => {

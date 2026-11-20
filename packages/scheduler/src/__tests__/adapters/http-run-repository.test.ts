@@ -7,6 +7,7 @@ import { describe, expect, test } from 'bun:test';
 
 import { HttpSchedulerClient } from '../../adapters/http-client.js';
 import { HttpSchedulerRunRepository } from '../../adapters/http-run-repository.js';
+import { fetchDouble } from '../test-helpers.js';
 
 interface FakeCall {
   method: string;
@@ -19,7 +20,7 @@ function fakeClient(responder: (call: FakeCall) => unknown): {
   calls: FakeCall[];
 } {
   const calls: FakeCall[] = [];
-  const fakeFetch = (async (input, init) => {
+  const fakeFetch = fetchDouble(async (input, init) => {
     const url = typeof input === 'string' ? input : input.toString();
     const u = new URL(url);
     const path = u.pathname + (u.search || '');
@@ -34,7 +35,7 @@ function fakeClient(responder: (call: FakeCall) => unknown): {
       status: result === undefined ? 204 : 200,
       headers: { 'content-type': 'application/json' },
     });
-  }) as typeof fetch;
+  });
   const client = new HttpSchedulerClient({
     baseUrl: 'http://srv',
     authSecret: 's',

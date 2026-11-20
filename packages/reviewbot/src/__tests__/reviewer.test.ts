@@ -4,6 +4,9 @@
  */
 
 import { describe, expect, it, mock, beforeEach } from 'bun:test';
+import { EventEmitter } from 'events';
+
+import type { IAgentProcess, IAgentProcessFactory } from '@funny/core/agents';
 
 import { PRReviewer } from '../reviewer.js';
 
@@ -43,33 +46,31 @@ mock.module('@funny/core/git', () => gitMocks);
 
 let mockProcessMessages: any[] = [];
 
-function createMockProcessFactory() {
+/** An agent process that plays `script` shortly after it starts, as a real process would emit asynchronously. */
+class ScriptedProcess extends EventEmitter implements IAgentProcess {
+  exited = false;
+  kill = mock(() => Promise.resolve());
+
+  constructor(private readonly script: (proc: ScriptedProcess) => void) {
+    super();
+  }
+
+  start(): void {
+    setTimeout(() => this.script(this), 10);
+  }
+}
+
+function processFactory(script: (proc: ScriptedProcess) => void) {
   return {
-    create: mock((_opts: any) => {
-      const listeners: Record<string, Function[]> = {};
-      return {
-        on(event: string, listener: Function) {
-          listeners[event] = listeners[event] || [];
-          listeners[event].push(listener);
-          return this;
-        },
-        removeAllListeners() {
-          return this;
-        },
-        start() {
-          // Emit messages async to simulate real process
-          setTimeout(() => {
-            for (const msg of mockProcessMessages) {
-              listeners['message']?.forEach((fn) => fn(msg));
-            }
-            listeners['exit']?.forEach((fn) => fn(0));
-          }, 10);
-        },
-        kill: mock(() => Promise.resolve()),
-        exited: false,
-      };
-    }),
-  };
+    create: mock((): IAgentProcess => new ScriptedProcess(script)),
+  } satisfies IAgentProcessFactory;
+}
+
+function createMockProcessFactory() {
+  return processFactory((proc) => {
+    for (const msg of mockProcessMessages) proc.emit('message', msg);
+    proc.emit('exit', 0);
+  });
 }
 
 function setMockLLMResponse(jsonResponse: Record<string, unknown>): void {
@@ -121,7 +122,7 @@ describe('PRReviewer', () => {
       findings: [],
     });
 
-    const reviewer = new PRReviewer({ processFactory: factory as any });
+    const reviewer = new PRReviewer({ processFactory: factory });
     const result = await reviewer.review('/repo', 42);
 
     expect(result.status).toBe('approved');
@@ -146,7 +147,7 @@ describe('PRReviewer', () => {
       ],
     });
 
-    const reviewer = new PRReviewer({ processFactory: factory as any });
+    const reviewer = new PRReviewer({ processFactory: factory });
     const result = await reviewer.review('/repo', 42);
 
     expect(result.status).toBe('changes_requested');
@@ -168,7 +169,7 @@ describe('PRReviewer', () => {
       ],
     });
 
-    const reviewer = new PRReviewer({ processFactory: factory as any });
+    const reviewer = new PRReviewer({ processFactory: factory });
     const result = await reviewer.review('/repo', 42);
 
     expect(result.status).toBe('commented');
@@ -179,7 +180,7 @@ describe('PRReviewer', () => {
     gitMocks = createGitMocks('');
     mock.module('@funny/core/git', () => gitMocks);
 
-    const reviewer = new PRReviewer({ processFactory: factory as any });
+    const reviewer = new PRReviewer({ processFactory: factory });
     const result = await reviewer.review('/repo', 42);
 
     expect(result.status).toBe('approved');
@@ -193,7 +194,7 @@ describe('PRReviewer', () => {
       findings: [],
     });
 
-    const reviewer = new PRReviewer({ processFactory: factory as any });
+    const reviewer = new PRReviewer({ processFactory: factory });
     await reviewer.review('/repo', 42, { post: false });
 
     expect(gitMocks.postPRReview).not.toHaveBeenCalled();
@@ -205,7 +206,7 @@ describe('PRReviewer', () => {
       findings: [],
     });
 
-    const reviewer = new PRReviewer({ processFactory: factory as any });
+    const reviewer = new PRReviewer({ processFactory: factory });
     await reviewer.review('/repo', 42, { provider: 'claude', model: 'opus' });
 
     expect(factory.create).toHaveBeenCalledWith(
@@ -230,7 +231,7 @@ describe('PRReviewer', () => {
       },
     ];
 
-    const reviewer = new PRReviewer({ processFactory: factory as any });
+    const reviewer = new PRReviewer({ processFactory: factory });
     const result = await reviewer.review('/repo', 42);
 
     expect(result.summary).toBe('Could not parse review output.');
@@ -239,31 +240,12 @@ describe('PRReviewer', () => {
   });
 
   it('handles process error gracefully', async () => {
-    const errorFactory = {
-      create: mock(() => {
-        const listeners: Record<string, Function[]> = {};
-        return {
-          on(event: string, listener: Function) {
-            listeners[event] = listeners[event] || [];
-            listeners[event].push(listener);
-            return this;
-          },
-          removeAllListeners() {
-            return this;
-          },
-          start() {
-            setTimeout(() => {
-              listeners['error']?.forEach((fn) => fn(new Error('LLM connection failed')));
-              listeners['exit']?.forEach((fn) => fn(1));
-            }, 10);
-          },
-          kill: mock(() => Promise.resolve()),
-          exited: false,
-        };
-      }),
-    };
+    const errorFactory = processFactory((proc) => {
+      proc.emit('error', new Error('LLM connection failed'));
+      proc.emit('exit', 1);
+    });
 
-    const reviewer = new PRReviewer({ processFactory: errorFactory as any });
+    const reviewer = new PRReviewer({ processFactory: errorFactory });
 
     await expect(reviewer.review('/repo', 42)).rejects.toThrow('LLM connection failed');
   });

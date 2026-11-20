@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
 
+import './browser-globals';
 import { expect, seedProject, test } from './fixtures';
 import {
   injectSocketIOEvent,
@@ -207,7 +208,7 @@ test.describe('J.14 Long thread history (500 messages)', () => {
         .poll(() =>
           page.evaluate(
             () =>
-              ((window as any).__playwright_ws_instances as WebSocket[] | undefined)?.some(
+              window.__playwright_ws_instances?.some(
                 (ws) => ws.readyState === WebSocket.OPEN && ws.url.includes('/socket.io/'),
               ) ?? false,
           ),

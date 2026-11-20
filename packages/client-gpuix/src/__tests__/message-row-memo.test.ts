@@ -1,10 +1,9 @@
 import { describe, expect, test } from 'bun:test';
 
-import type { Message } from '@funny/shared';
-
 import { areMessageRowsEqual } from '../app';
+import { buildMessage } from './helpers/fixtures';
 
-const message = { id: 'm1', threadId: 't1', role: 'assistant', content: 'hello' } as Message;
+const message = buildMessage({ id: 'm1', threadId: 't1', role: 'assistant', content: 'hello' });
 describe('native message-row memoization', () => {
   test('keeps unchanged heavy rows stable across unrelated workspace updates', () => {
     expect(

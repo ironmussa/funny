@@ -6,6 +6,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
 
+import type { Result } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { getDiffSummary, getStatusSummary, invalidateStatusCache } from '../git/index.js';
@@ -29,10 +30,10 @@ function initRepo(): string {
   return repoPath;
 }
 
-async function unwrap<T>(result: PromiseLike<{ isErr(): boolean; value?: T; error?: unknown }>) {
+async function unwrap<T, E>(result: PromiseLike<Result<T, E>>): Promise<T> {
   const r = await result;
   if (r.isErr()) throw new Error(String(r.error));
-  return r.value as T;
+  return r.value;
 }
 
 describe('git read coalescing', () => {

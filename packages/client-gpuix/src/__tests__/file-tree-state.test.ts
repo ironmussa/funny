@@ -7,24 +7,27 @@ import {
   NativeFileTreeService,
   resolveNativeFileTreeTarget,
 } from '../file-tree-state';
+import { buildProject, buildThread } from './helpers/fixtures';
 
-const project = { id: 'p1', path: '/repo' } as never;
+const project = buildProject({ id: 'p1', path: '/repo' });
 
 describe('native file tree state', () => {
   test('prefers worktrees, uses project roots, and has no target without a directory', () => {
     expect(
       resolveNativeFileTreeTarget(
-        { id: 't1', mode: 'worktree', worktreePath: '/worktrees/t1' } as never,
+        buildThread({ id: 't1', mode: 'worktree', worktreePath: '/worktrees/t1' }),
         project,
       ),
     ).toEqual({ path: '/worktrees/t1' });
     expect(
-      resolveNativeFileTreeTarget({ id: 'scratch', mode: 'local', isScratch: true } as never),
+      resolveNativeFileTreeTarget(
+        buildThread({ id: 'scratch', projectId: '', mode: 'local', isScratch: true }),
+      ),
     ).toBeNull();
     expect(
-      resolveNativeFileTreeTarget({ id: 't3', mode: 'worktree' } as never, project),
+      resolveNativeFileTreeTarget(buildThread({ id: 't3', mode: 'worktree' }), project),
     ).toBeNull();
-    expect(resolveNativeFileTreeTarget({ id: 't2', mode: 'local' } as never, project)).toEqual({
+    expect(resolveNativeFileTreeTarget(buildThread({ id: 't2', mode: 'local' }), project)).toEqual({
       path: '/repo',
     });
   });
@@ -51,7 +54,7 @@ describe('native file tree state', () => {
       clientOrigin: 'http://localhost:5173',
     });
 
-    await service.loadForThread({ id: 't2', mode: 'local' } as never, project);
+    await service.loadForThread(buildThread({ id: 't2', mode: 'local' }), project);
 
     expect(host.controls.requests[0]?.url).toContain(
       `/api/browse/files?path=%2Frepo&limit=${NATIVE_FILE_TREE_MAX_FILES}`,
@@ -72,7 +75,9 @@ describe('native file tree state', () => {
       clientOrigin: 'http://localhost:5173',
     });
 
-    await service.loadForThread({ id: 'scratch', mode: 'local', isScratch: true } as never);
+    await service.loadForThread(
+      buildThread({ id: 'scratch', projectId: '', mode: 'local', isScratch: true }),
+    );
 
     expect(host.controls.requests).toHaveLength(0);
     expect(service.state.getState()).toMatchObject({
@@ -96,7 +101,7 @@ describe('native file tree state', () => {
       clientOrigin: 'http://localhost:5173',
     });
 
-    await service.loadForThread({ id: 't2', mode: 'local' } as never, project);
+    await service.loadForThread(buildThread({ id: 't2', mode: 'local' }), project);
 
     expect(service.state.getState()).toMatchObject({
       loading: false,
@@ -123,7 +128,7 @@ describe('native file tree state', () => {
       clientOrigin: 'http://localhost:5173',
     });
 
-    await service.loadForThread({ id: 't2', mode: 'local' } as never, project);
+    await service.loadForThread(buildThread({ id: 't2', mode: 'local' }), project);
 
     expect(service.state.getState().files).toHaveLength(NATIVE_FILE_TREE_MAX_FILES);
     expect(service.state.getState().truncated).toBe(true);

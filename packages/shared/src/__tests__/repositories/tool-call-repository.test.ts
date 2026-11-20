@@ -232,10 +232,10 @@ describe('getTouchedFiles', () => {
     const statements: string[] = [];
     const tracked = createToolCallRepository({
       ...deps,
-      dbAll: ((query: { toSQL(): { sql: string } }) => {
+      dbAll: <T>(query: Parameters<typeof deps.dbAll>[0]) => {
         statements.push(query.toSQL().sql);
-        return deps.dbAll(query as never);
-      }) as typeof deps.dbAll,
+        return deps.dbAll<T>(query);
+      },
     });
     expect(await tracked.getTouchedFiles('t1')).toEqual(['/repo/big.ts']);
     expect(statements).toHaveLength(1);

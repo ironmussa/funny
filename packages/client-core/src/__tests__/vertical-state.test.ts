@@ -4,10 +4,11 @@ import type { Message, Project, SafeUser, Thread } from '@funny/shared';
 
 import { createAuthSessionStore } from '../stores/auth-session';
 import { createThreadNavigationStore, uniqueEntityIds } from '../stores/thread-navigation';
+import { buildProject, buildThread } from './test-helpers';
 
 const user: SafeUser = { id: 'u1', username: 'ada', displayName: 'Ada', role: 'user' };
-const project = (id: string): Project => ({ id, name: id }) as Project;
-const thread = (id: string, projectId = 'p1'): Thread => ({ id, projectId, title: id }) as Thread;
+const project = (id: string): Project => buildProject({ id, name: id });
+const thread = (id: string, projectId = 'p1'): Thread => buildThread({ id, projectId, title: id });
 const message = (id: string, content = id): Message => ({
   id,
   threadId: 't1',

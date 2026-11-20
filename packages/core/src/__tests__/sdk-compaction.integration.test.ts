@@ -116,7 +116,7 @@ suite('SDK slash-command pipeline (real SDK)', () => {
     let results = 0;
     let sentCompact = false;
 
-    for await (const m of query({ prompt: ch.gen(), options }) as AsyncIterable<any>) {
+    for await (const m of query({ prompt: ch.gen(), options })) {
       if (m.type === 'system' && m.subtype === 'init') {
         initSlashCommands = m.slash_commands;
       } else if (m.type === 'system' && m.subtype === 'compact_boundary') {

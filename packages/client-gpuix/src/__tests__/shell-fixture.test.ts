@@ -8,7 +8,7 @@ describe('native shell fixture parity', () => {
     const fixture = makeRendererBenchmarkFixtures().a;
     const store = createThreadWorkspaceStore();
     store.getState().replaceInitialPage(fixture.threadId, {
-      messages: fixture.messages as never,
+      messages: fixture.messages,
       hasMore: false,
       total: fixture.counts.messages,
       windowStart: 0,

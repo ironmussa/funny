@@ -1,11 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 
-import { Children, isValidElement, type ReactElement, type ReactNode } from 'react';
+import { Children, isValidElement, type ReactNode } from 'react';
 
 import {
   NATIVE_RENDERER_ERROR_PALETTE,
   NativeRendererFailureSurface,
 } from '../renderer-error-boundary';
+import { expectElement } from './helpers/fixtures';
 
 interface SurfaceProps {
   children: ReactNode;
@@ -20,9 +21,11 @@ interface TextProps {
 
 describe('native renderer failure surface', () => {
   test('uses an explicit high-contrast palette and actionable content', () => {
-    const surface = NativeRendererFailureSurface({
-      error: 'render exploded',
-    }) as ReactElement<SurfaceProps>;
+    const surface = expectElement<SurfaceProps>(
+      NativeRendererFailureSurface({
+        error: 'render exploded',
+      }),
+    );
     expect(surface.props.testId).toBe('native-renderer-error');
     expect(surface.props.style).toMatchObject({
       width: '100%',

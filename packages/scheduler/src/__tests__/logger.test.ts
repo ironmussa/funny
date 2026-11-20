@@ -2,32 +2,32 @@
  * Tests for the standalone console logger.
  */
 
-import { describe, expect, test } from 'bun:test';
+import { describe, expect, spyOn, test } from 'bun:test';
 
 import { createConsoleLogger } from '../logger.js';
 
 function captureStreams<T>(fn: () => T): { stdout: string[]; stderr: string[]; result: T } {
   const stdout: string[] = [];
   const stderr: string[] = [];
-  const origStdoutWrite = process.stdout.write.bind(process.stdout);
-  const origStderrWrite = process.stderr.write.bind(process.stderr);
-
-  process.stdout.write = ((chunk: string | Uint8Array) => {
-    stdout.push(String(chunk));
-    return true;
-  }) as typeof process.stdout.write;
-
-  process.stderr.write = ((chunk: string | Uint8Array) => {
-    stderr.push(String(chunk));
-    return true;
-  }) as typeof process.stderr.write;
+  const stdoutSpy = spyOn(process.stdout, 'write').mockImplementation(
+    (chunk: string | Uint8Array) => {
+      stdout.push(String(chunk));
+      return true;
+    },
+  );
+  const stderrSpy = spyOn(process.stderr, 'write').mockImplementation(
+    (chunk: string | Uint8Array) => {
+      stderr.push(String(chunk));
+      return true;
+    },
+  );
 
   try {
     const result = fn();
     return { stdout, stderr, result };
   } finally {
-    process.stdout.write = origStdoutWrite;
-    process.stderr.write = origStderrWrite;
+    stdoutSpy.mockRestore();
+    stderrSpy.mockRestore();
   }
 }
 

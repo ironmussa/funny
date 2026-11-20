@@ -2,6 +2,7 @@ import { describe, test, expect } from 'vitest';
 
 import { SDKClaudeProcess } from '../agents/sdk-claude.js';
 import type { ClaudeProcessOptions } from '../agents/types.js';
+import { sdkMessage, type SdkWireFields, sdkUserMessageText } from './helpers/test-helpers.js';
 
 // Regression: the SDK closes the CLI's stdin when the input channel ends.
 // With stdin closed the CLI can no longer reach our PreToolUse hook, so tool
@@ -20,8 +21,8 @@ const sys = (subtype: string, extra: Record<string, unknown> = {}) => ({
 
 /** Drain the seeded prompt, then report whether the channel has ended. */
 async function setup(opts: Partial<ClaudeProcessOptions> = {}) {
-  const proc = new SDKClaudeProcess({ ...baseOpts, ...opts }) as any;
-  const input = proc.buildPromptInput();
+  const proc = new SDKClaudeProcess({ ...baseOpts, ...opts });
+  const input = proc['buildPromptInput']();
   const it = input[Symbol.asyncIterator]();
   const first = await it.next();
   let ended = false;
@@ -32,7 +33,7 @@ async function setup(opts: Partial<ClaudeProcessOptions> = {}) {
   return {
     proc,
     first,
-    track: (msg: unknown) => proc.trackInputLifetime(msg),
+    track: <F extends SdkWireFields>(msg: F) => proc['trackInputLifetime'](sdkMessage(msg)),
     isClosed: async () => {
       await flush();
       return ended;
@@ -45,7 +46,7 @@ describe('SDKClaudeProcess input-channel lifetime', () => {
   test('non-steerable prompt is streamed, never a plain string (single-turn closes stdin early)', async () => {
     const { first } = await setup();
     expect(first.done).toBe(false);
-    expect((first.value as any).message.content[0].text).toBe('hi');
+    expect(sdkUserMessageText(first.value)).toBe('hi');
   });
 
   test('closes on result when no background task is running', async () => {
@@ -127,7 +128,7 @@ describe('SDKClaudeProcess input-channel lifetime', () => {
     ch.track(result);
     ch.track(sys('session_state_changed', { state: 'idle' }));
     expect(await ch.isClosed()).toBe(false);
-    ch.proc.closeInput();
+    ch.proc['closeInput']();
     expect(await ch.isClosed()).toBe(true);
   });
 });
@@ -135,10 +136,10 @@ describe('SDKClaudeProcess input-channel lifetime', () => {
 // Drive tracking and translation in the same order as the SDK query loop.
 // Only translated results reach the runtime and can mark the thread completed.
 function messageStream(opts: Partial<ClaudeProcessOptions> = {}) {
-  const proc = new SDKClaudeProcess({ ...baseOpts, ...opts }) as any;
-  return (msg: unknown) => {
-    proc.trackInputLifetime(msg);
-    return proc.translateMessage(msg);
+  const proc = new SDKClaudeProcess({ ...baseOpts, ...opts });
+  return <F extends SdkWireFields>(msg: F) => {
+    proc['trackInputLifetime'](sdkMessage(msg));
+    return proc['translateMessage'](sdkMessage(msg));
   };
 }
 

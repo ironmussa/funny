@@ -1,5 +1,6 @@
 import type { BrowserContext, Page } from '@playwright/test';
 
+import './browser-globals';
 import {
   createTempGitRepo,
   removeTempDir,
@@ -117,14 +118,11 @@ async function installLayoutShiftObserver(page: Page, viewer: Viewer) {
     ({ storageKey, selectedViewer }) => {
       localStorage.setItem(storageKey, selectedViewer);
       const entries: Array<{ value: number; hadRecentInput: boolean }> = [];
-      (window as any).threadViewerLayoutShifts = entries;
+      window.threadViewerLayoutShifts = entries;
       if (!PerformanceObserver.supportedEntryTypes?.includes('layout-shift')) return;
       new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          const layoutShift = entry as PerformanceEntry & {
-            value: number;
-            hadRecentInput: boolean;
-          };
+        for (const layoutShift of list.getEntries()) {
+          if (!(layoutShift instanceof LayoutShift)) continue;
           entries.push({
             value: layoutShift.value,
             hadRecentInput: layoutShift.hadRecentInput,
@@ -160,12 +158,12 @@ async function installStartupWebVitalsObserver(page: Page) {
       layoutShifts: Shift[];
       longTasks: Array<{ startTime: number; duration: number }>;
     } = { lcp: null, lcpElement: null, layoutShifts, longTasks };
-    (window as any).startupWebVitals = metrics;
+    window.startupWebVitals = metrics;
 
     const rect = (value: DOMRectReadOnly | undefined): Rect | null =>
       value ? { x: value.x, y: value.y, width: value.width, height: value.height } : null;
-    const source = (attribution: any): ShiftSource => {
-      const node = attribution.node as HTMLElement | null;
+    const source = (attribution: LayoutShiftAttribution): ShiftSource => {
+      const node = attribution.node instanceof Element ? attribution.node : null;
       return {
         tag: node?.tagName.toLowerCase() ?? 'unknown',
         className: typeof node?.className === 'string' ? node.className : '',
@@ -178,13 +176,10 @@ async function installStartupWebVitalsObserver(page: Page) {
     if (PerformanceObserver.supportedEntryTypes?.includes('largest-contentful-paint')) {
       new PerformanceObserver((list) => {
         const entries = list.getEntries();
-        const latest = entries[entries.length - 1] as PerformanceEntry & {
-          startTime: number;
-          element?: Element;
-        };
-        if (latest) {
+        const latest = entries[entries.length - 1];
+        if (latest instanceof LargestContentfulPaint) {
           metrics.lcp = latest.startTime;
-          const element = latest.element as HTMLElement | undefined;
+          const element = latest.element;
           metrics.lcpElement = element
             ? {
                 tag: element.tagName.toLowerCase(),
@@ -204,17 +199,13 @@ async function installStartupWebVitalsObserver(page: Page) {
     }
     if (PerformanceObserver.supportedEntryTypes?.includes('layout-shift')) {
       new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          const layoutShift = entry as PerformanceEntry & {
-            value: number;
-            hadRecentInput: boolean;
-            sources?: unknown[];
-          };
+        for (const layoutShift of list.getEntries()) {
+          if (!(layoutShift instanceof LayoutShift)) continue;
           layoutShifts.push({
             startTime: layoutShift.startTime,
             value: layoutShift.value,
             hadRecentInput: layoutShift.hadRecentInput,
-            sources: (layoutShift.sources ?? []).map(source),
+            sources: layoutShift.sources.map(source),
           });
         }
       }).observe({ type: 'layout-shift', buffered: true });
@@ -231,13 +222,17 @@ async function installKeyboardPaintObserver(page: Page) {
   await page.addInitScript(() => {
     const paints: KeyboardPaintMetric[] = [];
     const events: Array<{ name: string; duration: number }> = [];
-    (window as any).promptKeyboardPaints = paints;
-    (window as any).promptKeyboardEvents = events;
+    window.promptKeyboardPaints = paints;
+    window.promptKeyboardEvents = events;
 
     document.addEventListener(
       'keydown',
       (event) => {
-        if (!(event.target as Element | null)?.matches('[data-testid="prompt-editor"]')) return;
+        if (
+          !(event.target instanceof Element) ||
+          !event.target.matches('[data-testid="prompt-editor"]')
+        )
+          return;
         const start = performance.now();
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -250,8 +245,7 @@ async function installKeyboardPaintObserver(page: Page) {
 
     if (PerformanceObserver.supportedEntryTypes?.includes('event')) {
       new PerformanceObserver((list) => {
-        for (const entry of list.getEntries()) {
-          const event = entry as PerformanceEntry & { name: string; duration: number };
+        for (const event of list.getEntries()) {
           if (event.name === 'keydown' || event.name === 'keyup') {
             events.push({ name: event.name, duration: event.duration });
           }
@@ -263,17 +257,8 @@ async function installKeyboardPaintObserver(page: Page) {
 
 async function collectStartupWebVitals(page: Page): Promise<StartupWebVitals> {
   return page.evaluate(() => {
-    const metrics = (window as any).startupWebVitals as {
-      lcp: number | null;
-      lcpElement: StartupWebVitals['lcpElement'];
-      layoutShifts: Array<{
-        value: number;
-        startTime: number;
-        hadRecentInput: boolean;
-        sources: StartupWebVitals['layoutShifts'][number]['sources'];
-      }>;
-      longTasks: StartupWebVitals['longTasks'];
-    };
+    const metrics = window.startupWebVitals;
+    if (!metrics) throw new Error('Startup web vitals observer was not installed');
     const eligible = metrics.layoutShifts.filter((shift) => !shift.hadRecentInput);
     return {
       lcp: metrics.lcp,
@@ -341,10 +326,7 @@ async function collectViewerProfile(page: Page, viewer: Viewer): Promise<ViewerP
 
   return page.evaluate(
     ({ selectedViewer, heapBytes }) => {
-      const layoutShifts = ((window as any).threadViewerLayoutShifts ?? []) as Array<{
-        value: number;
-        hadRecentInput: boolean;
-      }>;
+      const layoutShifts = window.threadViewerLayoutShifts ?? [];
       const values = layoutShifts.map((entry) => entry.value);
       return {
         viewer: selectedViewer,
@@ -381,7 +363,7 @@ async function profileThreadViewer(
 
     // Exclude mount-time movement; the profile is specifically the scroll sweep.
     await page.evaluate(() => {
-      (window as any).threadViewerLayoutShifts = [];
+      window.threadViewerLayoutShifts = [];
     });
     await sweepThreadViewport(page);
     return await collectViewerProfile(page, viewer);
@@ -517,10 +499,7 @@ test.describe('J. Performance', () => {
     // Get initial memory usage
     const getMemory = async () => {
       return page.evaluate(() => {
-        if ((performance as any).memory) {
-          return (performance as any).memory.usedJSHeapSize;
-        }
-        return 0;
+        return performance.memory?.usedJSHeapSize ?? 0;
       });
     };
 
@@ -536,7 +515,7 @@ test.describe('J. Performance', () => {
 
     // Force GC if available
     await page.evaluate(() => {
-      if ((window as any).gc) (window as any).gc();
+      window.gc?.();
     });
     await page.waitForTimeout(1000);
 
@@ -725,11 +704,8 @@ test.describe('J. Performance', () => {
       await page.waitForTimeout(100);
 
       const metrics = await page.evaluate(() => {
-        const paints = (window as any).promptKeyboardPaints as KeyboardPaintMetric[];
-        const events = (window as any).promptKeyboardEvents as Array<{
-          name: string;
-          duration: number;
-        }>;
+        const paints = window.promptKeyboardPaints ?? [];
+        const events = window.promptKeyboardEvents ?? [];
         return {
           samples: paints.length,
           maxKeyboardToPaint: Math.max(0, ...paints.map((sample) => sample.duration)),

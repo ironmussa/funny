@@ -10,6 +10,7 @@ import { GpuixClientApp, THREAD_RETAINED_WINDOW_SIZE } from '../app';
 import { createNativeApplicationServices } from '../application';
 import { createNativeClientComposition } from '../platform/composition';
 import type { NativeHeaders } from '../platform/transport';
+import { buildMessage, buildProject, buildThread, buildToolCall } from './helpers/fixtures';
 
 const directories: string[] = [];
 afterEach(() => {
@@ -50,19 +51,21 @@ describe('native read-only shell', () => {
     });
     application.navigationState
       .getState()
-      .replaceProjects([{ id: 'p1', name: 'Project' } as never]);
+      .replaceProjects([buildProject({ id: 'p1', name: 'Project' })]);
     application.navigationState
       .getState()
-      .replaceProjectThreads('p1', [{ id: 't1', projectId: 'p1', title: 'Diagnostics' } as never]);
+      .replaceProjectThreads('p1', [
+        buildThread({ id: 't1', projectId: 'p1', title: 'Diagnostics' }),
+      ]);
     application.workspaceState.getState().selectThread('t1');
     application.workspaceState.getState().replaceInitialPage('t1', {
       messages: [
-        {
+        buildMessage({
           id: 'm1',
           threadId: 't1',
           role: 'assistant',
           content: 'Ready',
-        } as never,
+        }),
       ],
       hasMore: false,
     });
@@ -161,14 +164,14 @@ describe('native read-only shell', () => {
     });
     application.navigationState
       .getState()
-      .replaceProjects([{ id: 'p1', name: 'Project' } as never]);
+      .replaceProjects([buildProject({ id: 'p1', name: 'Project' })]);
     application.navigationState.getState().replaceProjectThreads('p1', [
-      {
+      buildThread({
         id: fixture.threadId,
         projectId: 'p1',
         title: 'Long thread',
         status: 'idle',
-      } as never,
+      }),
     ]);
     // Without a ready status the app stays on "Restoring session…".
     application.statusState.setState({ phase: 'ready', error: null });
@@ -188,18 +191,21 @@ describe('native read-only shell', () => {
       },
     ]);
     application.workspaceState.getState().replaceInitialPage(fixture.threadId, {
-      messages: fixture.messages as never,
+      messages: fixture.messages,
       hasMore: false,
       total: fixture.counts.messages,
       windowStart: 0,
     });
-    application.workspaceState.getState().upsertToolCall(fixture.threadId, {
-      id: 'large-output',
-      messageId: fixture.messages.at(-1)?.id,
-      name: 'Large result',
-      input: '{}',
-      output: `${'x'.repeat(1_000_000)}tail-marker`,
-    } as never);
+    application.workspaceState.getState().upsertToolCall(
+      fixture.threadId,
+      buildToolCall({
+        id: 'large-output',
+        messageId: fixture.messages[fixture.messages.length - 1].id,
+        name: 'Large result',
+        input: '{}',
+        output: `${'x'.repeat(1_000_000)}tail-marker`,
+      }),
+    );
     const root = createTestRoot({ width: 1440, height: 900 });
     root.render(<GpuixClientApp application={application} />);
     const virtualLists = root.renderer.findByType('virtual-list');

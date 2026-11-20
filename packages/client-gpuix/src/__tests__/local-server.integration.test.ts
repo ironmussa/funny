@@ -108,7 +108,7 @@ async function startServer(options: {
     }, SERVER_START_TIMEOUT_MS);
   } catch (error) {
     throw new Error(
-      `${(error as Error).message} while starting the Funny server. Server stderr:\n${stderrTail()}`,
+      `${error instanceof Error ? error.message : String(error)} while starting the Funny server. Server stderr:\n${stderrTail()}`,
       { cause: error },
     );
   }

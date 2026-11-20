@@ -22,10 +22,10 @@ describe('thread repository onStatusWrite', () => {
       dbAll,
       dbGet,
       dbRun,
-      commentRepo: createCommentRepository({ db, schema, dbAll, dbRun } as any),
-      stageHistoryRepo: createStageHistoryRepository({ db, schema, dbRun } as any),
+      commentRepo: createCommentRepository({ db, schema, dbAll, dbRun }),
+      stageHistoryRepo: createStageHistoryRepository({ db, schema, dbRun }),
       onStatusWrite: (write: Write) => writes.push(write),
-    } as any);
+    });
     seedProject(db, { id: 'p1', userId: 'u1' });
     seedThread(db, { id: 't1', projectId: 'p1', userId: 'u1', status: 'completed' });
   });
@@ -55,12 +55,12 @@ describe('thread repository onStatusWrite', () => {
       dbAll,
       dbGet,
       dbRun,
-      commentRepo: createCommentRepository({ db, schema, dbAll, dbRun } as any),
-      stageHistoryRepo: createStageHistoryRepository({ db, schema, dbRun } as any),
+      commentRepo: createCommentRepository({ db, schema, dbAll, dbRun }),
+      stageHistoryRepo: createStageHistoryRepository({ db, schema, dbRun }),
       onStatusWrite: () => {
         throw new Error('observer bug');
       },
-    } as any);
+    });
     seedProject(db, { id: 'p1', userId: 'u1' });
     seedThread(db, { id: 't1', projectId: 'p1', userId: 'u1', status: 'running' });
 
@@ -79,13 +79,13 @@ describe('thread repository onStatusWrite — failures', () => {
       schema,
       dbAll,
       // The first dbGet is the observer's lookup of the current status.
-      dbGet: (query: unknown) =>
-        lookups++ === 0 ? Promise.reject(new Error('db busy')) : dbGet(query as never),
+      dbGet: <T>(query: Parameters<typeof dbGet>[0]) =>
+        lookups++ === 0 ? Promise.reject(new Error('db busy')) : dbGet<T>(query),
       dbRun,
-      commentRepo: createCommentRepository({ db, schema, dbAll, dbRun } as any),
-      stageHistoryRepo: createStageHistoryRepository({ db, schema, dbRun } as any),
+      commentRepo: createCommentRepository({ db, schema, dbAll, dbRun }),
+      stageHistoryRepo: createStageHistoryRepository({ db, schema, dbRun }),
       onStatusWrite: () => {},
-    } as any);
+    });
     seedProject(db, { id: 'p1', userId: 'u1' });
     seedThread(db, { id: 't1', projectId: 'p1', userId: 'u1', status: 'running' });
 

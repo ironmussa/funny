@@ -280,7 +280,7 @@ export function createTestDb() {
     )
   `);
 
-  return { db: testDb as any, sqlite, schema, dbAll, dbGet, dbRun };
+  return { db: testDb, sqlite, schema, dbAll, dbGet, dbRun };
 }
 
 export function seedProject(db: any, overrides: Partial<typeof schema.projects.$inferInsert> = {}) {

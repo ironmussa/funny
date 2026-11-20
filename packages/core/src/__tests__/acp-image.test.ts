@@ -61,8 +61,8 @@ describe('toACPImageBlocks', () => {
 
   test('non-string data / mimeType are rejected', () => {
     const out = toACPImageBlocks([
-      { data: 123 as string, mimeType: 'image/png' },
-      { data: 'abc', mimeType: {} as string },
+      { data: 123, mimeType: 'image/png' },
+      { data: 'abc', mimeType: {} },
     ]);
     expect(out).toEqual([]);
   });

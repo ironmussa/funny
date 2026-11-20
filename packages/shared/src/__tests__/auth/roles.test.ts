@@ -18,7 +18,6 @@ import {
   roleToOrgRole,
   roleToThreadLevel,
   threadLevelToRole,
-  type Role,
 } from '../../auth/roles.js';
 
 describe('role lattice', () => {
@@ -107,7 +106,7 @@ describe('legacy org role aliases', () => {
   test('owner/admin/viewer pass through unchanged', () => {
     for (const r of ['owner', 'admin', 'viewer'] as const) {
       expect(orgRoleToRole(r)).toBe(r);
-      expect(roleToOrgRole(r as Role)).toBe(r);
+      expect(roleToOrgRole(r)).toBe(r);
     }
   });
 });

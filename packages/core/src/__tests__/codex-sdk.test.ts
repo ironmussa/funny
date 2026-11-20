@@ -294,12 +294,13 @@ process.stdin.on('end', () => {
     const messages: any[] = [];
     process.on('message', (message) => messages.push(message));
 
-    const handleEvent = (process as any).handleEvent.bind(process);
+    const handleEvent = process['handleEvent'].bind(process);
     await handleEvent({
       type: 'turn.completed',
       usage: {
         input_tokens: 186_000,
         cached_input_tokens: 180_000,
+        cache_write_input_tokens: 0,
         output_tokens: 500,
         reasoning_output_tokens: 0,
       },
@@ -315,7 +316,7 @@ process.stdin.on('end', () => {
     const messages: any[] = [];
     process.on('message', (message) => messages.push(message));
 
-    const handleEvent = (process as any).handleEvent.bind(process);
+    const handleEvent = process['handleEvent'].bind(process);
     await handleEvent({ type: 'thread.started', thread_id: 'thread-1' });
     await handleEvent({
       type: 'item.started',
@@ -354,8 +355,8 @@ process.stdin.on('end', () => {
     const messages: any[] = [];
     process.on('message', (message) => messages.push(message));
 
-    const handleEvent = (process as any).handleEvent.bind(process);
-    const beginTurn = (process as any).beginTurn.bind(process);
+    const handleEvent = process['handleEvent'].bind(process);
+    const beginTurn = process['beginTurn'].bind(process);
 
     // Turn 1 — Codex numbers its first message item ordinally.
     beginTurn();
@@ -385,7 +386,7 @@ process.stdin.on('end', () => {
     const messages: any[] = [];
     process.on('message', (message) => messages.push(message));
 
-    const handleEvent = (process as any).handleEvent.bind(process);
+    const handleEvent = process['handleEvent'].bind(process);
     await handleEvent({
       type: 'item.completed',
       item: {
@@ -420,7 +421,7 @@ process.stdin.on('end', () => {
     const messages: any[] = [];
     process.on('message', (message) => messages.push(message));
 
-    const handleEvent = (process as any).handleEvent.bind(process);
+    const handleEvent = process['handleEvent'].bind(process);
     await handleEvent({
       type: 'item.completed',
       item: {
@@ -457,6 +458,8 @@ process.stdin.on('end', () => {
       const process = new CodexSDKProcess({ ...options, cwd });
       const messages: any[] = [];
       process.on('message', (message) => messages.push(message));
+      // SAFETY: the event carries the legacy 'create' change kind, outside the SDK's
+      // PatchChangeKind; handleEvent still accepts it (isFileCreation in codex-sdk.ts).
       const handleEvent = (process as any).handleEvent.bind(process);
       await handleEvent({
         type: 'item.completed',
@@ -499,6 +502,8 @@ process.stdin.on('end', () => {
       const process = new CodexSDKProcess({ ...options, cwd });
       const messages: any[] = [];
       process.on('message', (message) => messages.push(message));
+      // SAFETY: the event carries the legacy 'create' change kind, outside the SDK's
+      // PatchChangeKind; handleEvent still accepts it (isFileCreation in codex-sdk.ts).
       const handleEvent = (process as any).handleEvent.bind(process);
       await handleEvent({
         type: 'item.completed',
@@ -559,7 +564,7 @@ process.stdin.on('end', () => {
       const process = new CodexSDKProcess({ ...options, cwd });
       const messages: any[] = [];
       process.on('message', (message) => messages.push(message));
-      const handleEvent = (process as any).handleEvent.bind(process);
+      const handleEvent = process['handleEvent'].bind(process);
       await handleEvent({
         type: 'item.completed',
         item: {
@@ -608,7 +613,7 @@ process.stdin.on('end', () => {
       const process = new CodexSDKProcess({ ...options, cwd });
       const messages: any[] = [];
       process.on('message', (message) => messages.push(message));
-      const handleEvent = (process as any).handleEvent.bind(process);
+      const handleEvent = process['handleEvent'].bind(process);
       await handleEvent({
         type: 'item.completed',
         item: {
@@ -655,8 +660,8 @@ process.stdin.on('end', () => {
       await writeFile(join(cwd, 'untracked.ts'), 'export const extra = true;\n');
 
       const process = new CodexSDKProcess({ ...options, cwd });
-      await expect((process as any).beginTurn()).resolves.toBeUndefined();
-      const snapshots: Map<string, Buffer> = (process as any).fileSnapshotsByPath;
+      await expect(process['beginTurn']()).resolves.toBeUndefined();
+      const snapshots: Map<string, Buffer> = process['fileSnapshotsByPath'];
       expect([...snapshots.keys()].sort()).toEqual(
         [join(cwd, 'config.ts'), join(cwd, 'untracked.ts')].sort(),
       );
@@ -681,11 +686,11 @@ process.stdin.on('end', () => {
       const process = new CodexSDKProcess({ ...options, cwd });
       const messages: any[] = [];
       process.on('message', (message) => messages.push(message));
-      await (process as any).beginTurn();
+      await process['beginTurn']();
 
       // …and Codex edits it back to HEAD, so `git diff` alone reports nothing.
       await writeFile(filePath, 'export const port = 3000;\n');
-      await (process as any).handleEvent({
+      await process['handleEvent']({
         type: 'item.completed',
         item: {
           id: 'restore-to-head',

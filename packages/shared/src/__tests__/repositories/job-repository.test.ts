@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 
 import { createJobRepository, type JobRow } from '../../repositories/job-repository.js';
+import type { JobStatus } from '../../types.js';
 import { createTestDb, seedProject, seedThread } from '../helpers/test-db.js';
 
 let deps: ReturnType<typeof createTestDb>;
@@ -93,7 +94,8 @@ describe('update — status writes follow the job machine', () => {
   test('a patch without a status applies; an unknown status is refused', async () => {
     await repo.insert(makeRow({ id: 'j1', status: 'running' }));
     expect(await repo.update('j1', { pid: 42 })).toBe(true);
-    expect(await repo.update('j1', { status: 'bogus' as never })).toBe(false);
+    // SAFETY: 'bogus' is deliberately not a JobStatus; the test checks the repository refuses it.
+    expect(await repo.update('j1', { status: 'bogus' as JobStatus })).toBe(false);
     expect(await repo.update('missing', { pid: 1 })).toBe(false);
   });
 });

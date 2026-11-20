@@ -32,9 +32,16 @@ describe('types', () => {
 
   describe('DEFAULT_DECAY_CLASS', () => {
     it('maps all fact types', () => {
-      const factTypes = ['decision', 'bug', 'pattern', 'convention', 'insight', 'context'];
+      const factTypes: Array<keyof typeof DEFAULT_DECAY_CLASS> = [
+        'decision',
+        'bug',
+        'pattern',
+        'convention',
+        'insight',
+        'context',
+      ];
       for (const t of factTypes) {
-        expect(DEFAULT_DECAY_CLASS[t as keyof typeof DEFAULT_DECAY_CLASS]).toBeDefined();
+        expect(DEFAULT_DECAY_CLASS[t]).toBeDefined();
       }
     });
 

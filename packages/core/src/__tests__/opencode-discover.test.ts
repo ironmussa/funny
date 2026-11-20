@@ -12,28 +12,23 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { discoverOpenCodeModels } from '../agents/opencode-discover.js';
 
-interface FakeChild extends EventEmitter {
-  stdin: Writable;
-  stdout: Readable;
-  stderr: Readable;
-  killed: boolean;
-  kill: (sig?: string) => boolean;
-}
-
-function makeFakeChild(): FakeChild {
-  const child = new EventEmitter() as FakeChild;
-  child.stdin = new Writable({
+class FakeChild extends EventEmitter {
+  stdin = new Writable({
     write(_c, _e, cb) {
       cb();
     },
   });
-  child.stdout = new Readable({ read() {} });
-  child.stderr = new Readable({ read() {} });
-  child.killed = false;
-  child.kill = vi.fn(() => {
-    child.killed = true;
+  stdout = new Readable({ read() {} });
+  stderr = new Readable({ read() {} });
+  killed = false;
+  kill = vi.fn((_sig?: string) => {
+    this.killed = true;
     return true;
   });
+}
+
+function makeFakeChild(): FakeChild {
+  const child = new FakeChild();
   process.nextTick(() => child.emit('spawn'));
   return child;
 }
@@ -64,7 +59,7 @@ vi.mock('@agentclientprotocol/sdk/unstable', () => {
     onRequest: () => app,
     connect: () => ({ agent, close: () => {} }),
   };
-  return { client: () => app, methods, ndJsonStream: () => ({}) as unknown };
+  return { client: () => app, methods, ndJsonStream: () => ({}) };
 });
 
 const ENVS = ['OPENCODE_BIN', 'ACP_OPENCODE_BIN', 'OPENCODE_ACP_USE_NPX'];

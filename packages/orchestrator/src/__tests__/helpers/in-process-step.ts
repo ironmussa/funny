@@ -65,7 +65,7 @@ function ghLikeOpener(
         }),
       });
       if (!res.ok) return { ok: false, error: `gh: HTTP ${res.status}` };
-      const body = (await res.json()) as { html_url: string };
+      const body: { html_url: string } = await res.json();
       return { ok: true, url: body.html_url };
     },
   };

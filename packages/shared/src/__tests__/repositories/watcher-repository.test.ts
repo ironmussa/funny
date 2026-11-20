@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 
 import { createWatcherRepository, type WatcherRow } from '../../repositories/watcher-repository.js';
+import type { WatcherStatus } from '../../types.js';
 import { createTestDb, seedProject, seedThread } from '../helpers/test-db.js';
 
 let deps: ReturnType<typeof createTestDb>;
@@ -160,7 +161,8 @@ describe('update — status writes follow the watcher machine', () => {
 
   test('an unknown status is refused', async () => {
     await repo.insert(makeRow({ id: 'w1', status: 'pending' }));
-    expect(await repo.update('w1', { status: 'bogus' as never })).toBe(false);
+    // SAFETY: 'bogus' is deliberately not a WatcherStatus; the test checks the repository refuses it.
+    expect(await repo.update('w1', { status: 'bogus' as WatcherStatus })).toBe(false);
     expect((await repo.getById('w1'))?.status).toBe('pending');
   });
 

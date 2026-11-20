@@ -30,8 +30,9 @@
  *   `all_success` dependents, so a failure skips everything downstream that
  *   needs it, while a node skipped by its `when` guard counts as done.
  * - **Failure.** A node failure with `onError: 'fail'` (the default) stops
- *   new nodes from starting; the scheduler waits for the running ones to
- *   settle and reports the failure. With `onError: 'continue'` the node is
+ *   new nodes from starting and aborts the nodes still running in other
+ *   branches; the scheduler waits for them to stop (up to `stopGraceMs`
+ *   each) and reports the first failure. Run cancellation does the same. With `onError: 'continue'` the node is
  *   marked failed and the joins decide.
  */
 
@@ -361,6 +362,8 @@ export async function runGraph<T>(
   };
 
   const running = new Map<GraphNode<T>, Promise<{ node: GraphNode<T>; result: TaskResult<T> }>>();
+  /** Each running node's own abort, so a failure can stop its siblings. */
+  const controllers = new Map<GraphNode<T>, AbortController>();
   let failure: { node: GraphNode<T>; error: string } | undefined;
   let lastRan: GraphNode<T> | undefined;
 
@@ -368,6 +371,7 @@ export async function runGraph<T>(
     node.state = 'running';
     lastRan = node;
     const controller = new AbortController();
+    controllers.set(node, controller);
     const abort = () => controller.abort();
     signal?.addEventListener('abort', abort, { once: true });
     const iteration = node.region?.visit ?? 1;
@@ -375,6 +379,7 @@ export async function runGraph<T>(
       signal: controller.signal,
       emit,
       iteration,
+      stopGraceMs: opts.stopGraceMs,
       loopRegion: loopOf.get(node),
     })
       .finally(() => signal?.removeEventListener('abort', abort))
@@ -404,7 +409,11 @@ export async function runGraph<T>(
   const fail = (node: GraphNode<T>, ctx: T, error: string) => {
     node.state = 'failed';
     node.out = ctx;
-    if ((node.def.onError ?? 'fail') === 'fail') failure ??= { node, error };
+    if ((node.def.onError ?? 'fail') === 'fail') {
+      failure ??= { node, error };
+      // The run has failed: stop the nodes still running in other branches.
+      for (const c of controllers.values()) c.abort();
+    }
     // A failed loop node ends its loop: there is no result to check.
     else closeLoopOf(node);
   };
@@ -478,6 +487,7 @@ export async function runGraph<T>(
   while (running.size > 0) {
     const { node, result } = await Promise.race(running.values());
     running.delete(node);
+    controllers.delete(node);
     apply(node, result);
     launchReady();
   }
@@ -508,6 +518,7 @@ async function runNodeTask<T>(
     signal: AbortSignal;
     emit: (c: PipelineStateChange<T>) => void;
     iteration: number;
+    stopGraceMs?: number;
     loopRegion?: Region<T>;
   },
 ): Promise<TaskResult<T>> {

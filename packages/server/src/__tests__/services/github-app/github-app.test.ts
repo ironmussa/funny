@@ -114,7 +114,7 @@ describe('GitHub App token issuer', () => {
     let clock = T0.getTime();
     const calls: Array<{ url: string; method: string; auth: string; body?: any }> = [];
     let minted = 0;
-    const fetchFake = (async (url: string, init: RequestInit) => {
+    const fetchFake = (async (url: string, init: RequestInit): Promise<Response> => {
       const headers = init.headers as Record<string, string>;
       const call = {
         url,
@@ -140,7 +140,7 @@ describe('GitHub App token issuer', () => {
         });
       }
       return json(500, {});
-    }) as unknown as typeof fetch;
+    }) as typeof fetch;
     const issuer = createGithubAppTokenIssuer({
       app: () =>
         okAsync({

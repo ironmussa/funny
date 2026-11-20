@@ -15,10 +15,7 @@ class TestResizeObserver {
   unobserve() {}
 
   resize(height: number) {
-    this.callback(
-      [{ contentRect: { height } } as unknown as ResizeObserverEntry],
-      this as unknown as ResizeObserver,
-    );
+    this.callback([{ contentRect: { height } } as ResizeObserverEntry], this as ResizeObserver);
   }
 }
 
@@ -41,7 +38,7 @@ describe('DiffMinimap', () => {
     const scrollTo = vi.fn(({ top }: ScrollToOptions) => {
       scrollElement.scrollTop = top ?? scrollElement.scrollTop;
     });
-    scrollElement.scrollTo = scrollTo as unknown as typeof scrollElement.scrollTo;
+    scrollElement.scrollTo = scrollTo as typeof scrollElement.scrollTo;
 
     render(
       <DiffMinimap

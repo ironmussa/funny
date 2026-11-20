@@ -22,6 +22,10 @@ import filesRoutes, { rawFileHeaders } from '../../routes/files.js';
 import type { RuntimeServiceProvider } from '../../services/service-provider.js';
 import { setServices, resetServices } from '../../services/service-registry.js';
 
+function stub<T>(p: Record<string, any>): T {
+  return p as T;
+}
+
 describe('files routes — symlink escape protection', () => {
   let projectDir: string;
   let outsideDir: string;
@@ -41,11 +45,11 @@ describe('files routes — symlink escape protection', () => {
     // A symlink inside the project that points OUTSIDE the project.
     symlinkSync(secretFile, join(projectDir, 'escape.txt'));
 
-    const fakeServices = {
+    const fakeServices = stub<RuntimeServiceProvider>({
       projects: {
         listProjects: async (_userId: string) => [{ id: 'p1', name: 'p', path: projectDir }],
       },
-    } as unknown as RuntimeServiceProvider;
+    });
 
     resetServices();
     setServices(fakeServices);
@@ -115,12 +119,12 @@ describe('files routes — per-user temp assets scope', () => {
     assetFile = join(assetsRoot, 'render.png');
     writeFileSync(assetFile, 'PNGBYTES', 'utf-8');
 
-    const fakeServices = {
+    const fakeServices = stub<RuntimeServiceProvider>({
       projects: {
         // No projects — proves the assets scope is independent of any project.
         listProjects: async (_userId: string) => [],
       },
-    } as unknown as RuntimeServiceProvider;
+    });
     resetServices();
     setServices(fakeServices);
 
@@ -242,11 +246,11 @@ describe('files routes — git blame', () => {
     writeFileSync(join(outsideDir, 'secret.txt'), 'TOP SECRET', 'utf-8');
     symlinkSync(join(outsideDir, 'secret.txt'), join(repoDir, 'escape.txt'));
 
-    const fakeServices = {
+    const fakeServices = stub<RuntimeServiceProvider>({
       projects: {
         listProjects: async (_userId: string) => [{ id: 'p1', name: 'repo', path: repoDir }],
       },
-    } as unknown as RuntimeServiceProvider;
+    });
 
     resetServices();
     setServices(fakeServices);
@@ -359,11 +363,11 @@ describe('files routes — /raw-signed (transport C)', () => {
     writeFileSync(insideFile, 'PNGBYTES', 'utf-8');
     writeFileSync(outsideFile, 'SECRET', 'utf-8');
 
-    const fakeServices = {
+    const fakeServices = stub<RuntimeServiceProvider>({
       projects: {
         listProjects: async (_userId: string) => [{ id: 'p1', name: 'p', path: projectDir }],
       },
-    } as unknown as RuntimeServiceProvider;
+    });
     resetServices();
     setServices(fakeServices);
 

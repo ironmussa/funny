@@ -13,6 +13,10 @@ import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { startWatching, stopWatching } from '../../services/git-watcher-service.js';
 import type { RuntimeServiceProvider } from '../../services/service-provider.js';
 import { resetServices, setServices } from '../../services/service-registry.js';
+
+function stub<T>(p: Record<string, any>): T {
+  return p as T;
+}
 import { threadEventBus } from '../../services/thread-event-bus.js';
 
 const nativeAvailable = getNativeGit() !== null;
@@ -51,9 +55,11 @@ describe.skipIf(!nativeAvailable)('git watcher fingerprint filtering', () => {
     git(MAIN, 'worktree', 'add', '-b', 'b', WB);
 
     resetServices();
-    setServices({
-      threads: { getThread: async () => ({ baseBranch: 'master' }) },
-    } as unknown as RuntimeServiceProvider);
+    setServices(
+      stub<RuntimeServiceProvider>({
+        threads: { getThread: async () => ({ baseBranch: 'master' }) },
+      }),
+    );
 
     startWatching(PROJECT, MAIN, 'thread-a', 'u1', WA);
     startWatching(PROJECT, MAIN, 'thread-b', 'u1', WB);

@@ -70,7 +70,7 @@ describe('MermaidBlock', () => {
     );
     fireEvent.click(screen.getByTestId('mermaid-download-svg'));
     await waitFor(() => expect(click).toHaveBeenCalled());
-    const anchor = click.mock.instances[0] as unknown as HTMLAnchorElement;
+    const anchor = click.mock.instances[0] as HTMLAnchorElement;
     expect(anchor.download).toBe('mermaid-diagram.svg');
     expect(downloaded?.type).toBe('image/svg+xml;charset=utf-8');
     const text = await downloaded!.text();

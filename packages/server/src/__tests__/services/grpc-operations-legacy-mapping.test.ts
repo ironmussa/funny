@@ -11,6 +11,10 @@ import type {
 } from '../../services/grpc/runner-grpc-server.js';
 import type { RunnerGrpcSessionRegistry } from '../../services/grpc/session-registry.js';
 
+function stub<T>(partial: unknown): T {
+  return partial as T;
+}
+
 const struct = { fields: { a: { kind: 'stringValue', stringValue: 'x' } } };
 
 const RICH_VALUE = {
@@ -67,7 +71,7 @@ async function mapViaHandler(
   });
   const handler = createOperationsHandler(
     resolveRunnerGrpcConfig({}),
-    { isActive: () => true } as unknown as RunnerGrpcSessionRegistry,
+    stub<RunnerGrpcSessionRegistry>({ isActive: () => true }),
     {
       execute: async (_context, operation) => {
         captured = operation.request;
@@ -87,7 +91,7 @@ async function mapViaHandler(
     method: 'operations',
     principal: { runnerId: 'runner-1', userId, tenantId: null },
   };
-  handler(call as unknown as RunnerGrpcCall, context);
+  handler(stub<RunnerGrpcCall>(call), context);
   call.emit('data', {
     ...request,
     session: { sessionEpoch: '1' },
@@ -345,13 +349,13 @@ async function respondVia(result: unknown): Promise<any> {
   });
   const handler = createOperationsHandler(
     resolveRunnerGrpcConfig({}),
-    { isActive: () => true } as unknown as RunnerGrpcSessionRegistry,
+    stub<RunnerGrpcSessionRegistry>({ isActive: () => true }),
     {
       execute: async () => result,
       idempotency: { cleanupExpired: async () => 0 } as any,
     },
   );
-  handler(call as unknown as RunnerGrpcCall, {
+  handler(stub<RunnerGrpcCall>(call), {
     correlationId: 'stream-1',
     method: 'operations',
     principal: { runnerId: 'runner-1', userId: 'user-1', tenantId: null },

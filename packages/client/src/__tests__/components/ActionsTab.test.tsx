@@ -64,7 +64,7 @@ const DETAIL = {
   review_decision: null,
   mergeable_state: 'mergeable',
   merged: false,
-} as unknown as PRDetail;
+} as PRDetail;
 
 function run(id: number, overrides: Partial<ActionRun> = {}): ActionRun {
   return {

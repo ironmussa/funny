@@ -23,6 +23,10 @@ import filesRoutes from '../../routes/files.js';
 import type { RuntimeServiceProvider } from '../../services/service-provider.js';
 import { resetServices, setServices } from '../../services/service-registry.js';
 
+function stub<T>(p: Record<string, any>): T {
+  return p as T;
+}
+
 describe('files routes — Claude home config', () => {
   let settingsPath: string;
   let app: Hono;
@@ -30,9 +34,9 @@ describe('files routes — Claude home config', () => {
   beforeAll(() => {
     settingsPath = join(FAKE_HOME, '.claude', 'settings.json');
 
-    const fakeServices = {
+    const fakeServices = stub<RuntimeServiceProvider>({
       projects: { listProjects: async (_userId: string) => [] },
-    } as unknown as RuntimeServiceProvider;
+    });
 
     resetServices();
     setServices(fakeServices);

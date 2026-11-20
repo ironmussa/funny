@@ -15,7 +15,7 @@ function plugin(id: string, fences: string[]): VisualizerPlugin {
 }
 
 function jsonResponse(body: unknown, ok = true, status = 200): Response {
-  return { ok, status, json: async () => body } as unknown as Response;
+  return { ok, status, json: async () => body } as Response;
 }
 
 beforeEach(() => {
@@ -34,7 +34,7 @@ describe('loadInstalledVisualizers', () => {
       default: url.includes('/a/') ? plugin('ext-a', ['aaa']) : plugin('ext-b', ['bbb']),
     }));
 
-    await loadInstalledVisualizers(fetchFn as unknown as typeof fetch, importFn);
+    await loadInstalledVisualizers(fetchFn as typeof fetch, importFn);
 
     expect(fetchFn).toHaveBeenCalledWith('/api/extensions');
     expect(getVisualizerForFence('aaa')?.id).toBe('ext-a');
@@ -55,7 +55,7 @@ describe('loadInstalledVisualizers', () => {
       return { default: plugin('good', ['ok']) };
     });
 
-    await loadInstalledVisualizers(fetchFn as unknown as typeof fetch, importFn);
+    await loadInstalledVisualizers(fetchFn as typeof fetch, importFn);
 
     expect(getVisualizerForFence('ok')?.id).toBe('good');
   });
@@ -65,7 +65,7 @@ describe('loadInstalledVisualizers', () => {
     const importFn = vi.fn();
 
     await expect(
-      loadInstalledVisualizers(fetchFn as unknown as typeof fetch, importFn),
+      loadInstalledVisualizers(fetchFn as typeof fetch, importFn),
     ).resolves.toBeUndefined();
     expect(importFn).not.toHaveBeenCalled();
   });
@@ -77,7 +77,7 @@ describe('loadInstalledVisualizers', () => {
     );
     const importFn = vi.fn(async () => ({ default: plugin('third-party-mermaid', ['mermaid']) }));
 
-    await loadInstalledVisualizers(fetchFn as unknown as typeof fetch, importFn);
+    await loadInstalledVisualizers(fetchFn as typeof fetch, importFn);
 
     expect(getVisualizerForFence('mermaid')?.id).toBe('third-party-mermaid');
   });

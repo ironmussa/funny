@@ -31,9 +31,14 @@ function makeProcess(): { proc: CursorACPProcess; messages: CLIMessage[] } {
   return { proc, messages };
 }
 
+type TestAccess = {
+  translateUpdate: (u: unknown) => void;
+  emitAcpPromptResponseUsage: (u: unknown) => void;
+  replayingHistory: boolean;
+};
+
 function translate(proc: CursorACPProcess, update: unknown): void {
-  // translateUpdate is private; tests reach in deliberately.
-  (proc as unknown as { translateUpdate: (u: unknown) => void }).translateUpdate(update);
+  (proc as CursorACPProcess & TestAccess).translateUpdate(update);
 }
 
 describe('CursorACPProcess.translateUpdate', () => {
@@ -525,9 +530,7 @@ describe('CursorACPProcess context usage', () => {
   test('emitAcpPromptResponseUsage maps ACP camelCase usage fields', () => {
     const { proc, messages } = makeProcess();
 
-    (
-      proc as unknown as { emitAcpPromptResponseUsage: (u: unknown) => void }
-    ).emitAcpPromptResponseUsage({
+    (proc as CursorACPProcess & TestAccess).emitAcpPromptResponseUsage({
       inputTokens: 100,
       outputTokens: 20,
       cachedReadTokens: 5_000,
@@ -548,7 +551,7 @@ describe('CursorACPProcess context usage', () => {
   test('usage_update is still emitted while replaying session history', () => {
     const { proc, messages } = makeProcess();
 
-    (proc as unknown as { replayingHistory: boolean }).replayingHistory = true;
+    (proc as CursorACPProcess & TestAccess).replayingHistory = true;
 
     translate(proc, {
       sessionUpdate: 'agent_message_chunk',

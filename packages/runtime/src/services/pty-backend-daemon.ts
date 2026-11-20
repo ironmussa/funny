@@ -341,7 +341,7 @@ export class DaemonPtyBackend implements PtyBackend {
     }
   }
 
-  private send(msg: object): void {
+  private send(msg: Record<string, unknown>): void {
     const line = JSON.stringify(msg) + '\n';
 
     if (this.connected && this.socket) {

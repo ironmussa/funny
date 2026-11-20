@@ -37,9 +37,12 @@ function toPlainThread(row: Thread): Thread {
   if (cached) return cached;
   const plain = {} as Record<string, unknown>;
   for (const key of Object.keys(row)) {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
     if (!key.startsWith('$')) plain[key] = (row as unknown as Record<string, unknown>)[key];
   }
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
   plainCopies.set(row, plain as unknown as Thread);
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
   return plain as unknown as Thread;
 }
 

@@ -15,7 +15,6 @@
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import type { Thread } from '@funny/shared';
 import { err, ok, type Result } from 'neverthrow';
 
 export type ThreadContextError =
@@ -26,6 +25,14 @@ export interface ResolveCwdProject {
   path: string;
 }
 
+export type ResolveThreadCwdInput = {
+  id: string;
+  isScratch?: boolean;
+  userId: string;
+  mode?: string | null;
+  worktreePath?: string | null;
+};
+
 /**
  * Resolve the working directory the agent should run in for the given thread.
  *
@@ -34,7 +41,7 @@ export interface ResolveCwdProject {
  * - Otherwise → `project.path`.
  */
 export function resolveThreadCwd(
-  thread: Pick<Thread, 'id' | 'isScratch' | 'userId' | 'mode' | 'worktreePath'>,
+  thread: ResolveThreadCwdInput,
   project: ResolveCwdProject | null,
 ): Result<string, ThreadContextError> {
   if (thread.isScratch) {
@@ -66,7 +73,7 @@ export function resolveThreadCwd(
  * Callers MUST use this helper rather than reading `thread.isScratch`
  * directly, so the rule stays in one place.
  */
-export function canDoGitOps(thread: Pick<Thread, 'isScratch'>): boolean {
+export function canDoGitOps(thread: { isScratch?: boolean }): boolean {
   return !thread.isScratch;
 }
 
@@ -85,7 +92,7 @@ export function runsInSandbox(thread: { runtime?: string | null }): boolean {
  * it on demand (scratch threads). Project and worktree directories must
  * already exist — never mkdir them.
  */
-export function hasLazyCwd(thread: Pick<Thread, 'isScratch'>): boolean {
+export function hasLazyCwd(thread: { isScratch?: boolean }): boolean {
   return !!thread.isScratch;
 }
 

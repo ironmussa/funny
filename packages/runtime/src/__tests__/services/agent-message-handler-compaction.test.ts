@@ -33,11 +33,15 @@ function makeHandler() {
   return { handler, state, emitted, wsBroker };
 }
 
+function stub<T>(p: Record<string, any>): T {
+  return p as T;
+}
+
 function assistantMsg(content: any[], usage: Record<string, number>): CLIMessage {
-  return {
+  return stub<CLIMessage>({
     type: 'assistant',
     message: { id: 'cli-1', content, usage },
-  } as unknown as CLIMessage;
+  });
 }
 
 describe('AgentMessageHandler — compaction summary usage', () => {

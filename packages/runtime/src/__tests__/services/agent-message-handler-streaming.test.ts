@@ -35,7 +35,9 @@ describe('AgentMessageHandler — streamed assistant updates', () => {
       const thread = { userId: 'user-1', projectId: 'proj-1', status, stage: 'review' };
       const threadManager = {
         getThread: vi.fn(async () => thread),
-        updateThread: vi.fn(async (_id: string, patch: object) => Object.assign(thread, patch)),
+        updateThread: vi.fn(async (_id: string, patch: Record<string, unknown>) =>
+          Object.assign(thread, patch),
+        ),
         insertMessage: vi.fn(async () => 'db-1'),
         updateMessage: vi.fn(async () => undefined),
       };

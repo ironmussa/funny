@@ -52,9 +52,7 @@ describe('browser.v1 idempotency', () => {
         return { kind: 'replayed' as const, outcome: storedOutcome };
       },
     };
-    const store = new DurableBrowserV1IdempotencyStore(
-      sql as unknown as SqlOperationIdempotencyStore,
-    );
+    const store = new DurableBrowserV1IdempotencyStore(sql as SqlOperationIdempotencyStore);
     let executions = 0;
     const input = {
       principalUserId: 'user-1',

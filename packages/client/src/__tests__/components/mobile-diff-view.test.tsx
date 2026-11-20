@@ -160,8 +160,7 @@ describe('MobileDiffView — prev/next navigation', () => {
 describe('ExpandedDiffPresenter — viewport switch', () => {
   // The presenter forwards a superset of props; cast keeps the test focused on
   // the switch rather than reconstructing every DiffViewerModal prop.
-  const presenterProps = () =>
-    mobileProps() as unknown as Parameters<typeof ExpandedDiffPresenter>[0];
+  const presenterProps = () => mobileProps() as Parameters<typeof ExpandedDiffPresenter>[0];
 
   test('mobile viewport renders the full-screen overlay, not the desktop dialog', () => {
     mockIsMobile = true;

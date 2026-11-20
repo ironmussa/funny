@@ -21,8 +21,8 @@ type ModuleExports = Record<string, unknown>;
  * Snapshot a module namespace. Bun updates already-imported namespaces in place
  * when a module is mocked, so take the copy BEFORE calling `mock.module`.
  */
-export function snapshotModule(ns: object): ModuleExports {
-  return { ...(ns as ModuleExports) };
+export function snapshotModule(ns: ModuleExports): ModuleExports {
+  return { ...ns };
 }
 
 /**

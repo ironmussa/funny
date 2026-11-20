@@ -625,7 +625,7 @@ export class CodexSDKProcess extends BaseAgentProcess {
           },
         ],
       },
-    } as unknown as CLIMessage);
+    } as CLIMessage);
   }
 
   private async buildInput(

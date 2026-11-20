@@ -229,6 +229,7 @@ async function startWithStatus(
     undefined,
     provider,
   );
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
   return mocks.orchestrator.startAgent.mock.calls.at(-1)?.[0] as unknown as Record<string, unknown>;
 }
 
@@ -691,6 +692,7 @@ describe('AgentLifecycleManager', () => {
 
       await manager.startAgent('thread-1', `look at this\n${secret}`, '/tmp/repo');
 
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       const calls = vi.mocked(log.info).mock.calls as unknown as [
         string,
         Record<string, unknown>,
@@ -944,6 +946,7 @@ describe('AgentLifecycleManager', () => {
 
       await manager.startAgent('thread-no-user', 'hello', '/tmp/repo');
 
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       const call = mocks.orchestrator.startAgent.mock.calls.at(-1)?.[0] as unknown as Record<
         string,
         unknown

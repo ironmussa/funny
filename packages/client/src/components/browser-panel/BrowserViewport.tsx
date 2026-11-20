@@ -257,7 +257,7 @@ function useBrowserInputHandlers(
   const onBrowseWheel = (e: React.WheelEvent<HTMLDivElement>) => {
     if (!canForwardInput) return;
     e.preventDefault();
-    const { x, y } = toViewportCoords(e as unknown as React.MouseEvent<HTMLDivElement>);
+    const { x, y } = toViewportCoords(e as React.MouseEvent<HTMLDivElement>);
     browserSessionClient.input(sessionId!, {
       kind: 'wheel',
       x,

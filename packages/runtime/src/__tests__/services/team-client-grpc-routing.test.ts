@@ -69,15 +69,18 @@ describe('team-client gRPC routing', () => {
     h.grpcOptions = undefined;
     process.env.RUNNER_AUTH_SECRET = 'test-secret';
     process.env.RUNNER_GRPC_ENDPOINT = 'grpc.example.test:50051';
-    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
-      if (String(input).endsWith('/api/runners/register')) {
-        return Response.json({ runnerId: 'runner-grpc', token: 'token-grpc' });
-      }
-      if (String(input).endsWith('/api/runners/heartbeat')) {
-        return Response.json({ success: true });
-      }
-      return new Response('not found', { status: 404 });
-    }) as unknown as typeof fetch;
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (String(input).endsWith('/api/runners/register')) {
+          return Response.json({ runnerId: 'runner-grpc', token: 'token-grpc' });
+        }
+        if (String(input).endsWith('/api/runners/heartbeat')) {
+          return Response.json({ success: true });
+        }
+        return new Response('not found', { status: 404 });
+      }),
+    );
   });
 
   afterEach(() => {

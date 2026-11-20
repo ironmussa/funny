@@ -26,6 +26,7 @@ const {
 } = await import('@/stores/thread-machine-bridge');
 
 function fakeThread(id: string): ThreadWithMessages {
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
   return {
     id,
     projectId: 'p1',
@@ -41,6 +42,7 @@ function fakeThreadWindow(
   count: number,
   total: number,
 ): ThreadWithMessages {
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
   return {
     ...fakeThread(id),
     messages: Array.from({ length: count }, (_, index) => {

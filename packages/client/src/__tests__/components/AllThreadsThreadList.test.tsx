@@ -194,6 +194,7 @@ describe('AllThreadsThreadList', () => {
     const { rerender } = renderWithProviders(makeList([first, second], onSearchKeyDownRef));
 
     act(() => {
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       onSearchKeyDownRef.current?.({
         key: 'ArrowDown',
         preventDefault: vi.fn(),

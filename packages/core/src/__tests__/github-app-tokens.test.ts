@@ -44,7 +44,7 @@ describe('installation token issuer', () => {
         });
       }
       return json(500, {});
-    }) as unknown as typeof fetch;
+    }) as typeof fetch;
     const issuer = createInstallationTokenIssuer({
       fetch: fetchFake,
       api: 'https://api.example',

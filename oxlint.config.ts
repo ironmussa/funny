@@ -6,19 +6,19 @@ import gdp from '@gdp-ts/core/lint/oxlint';
 // lands, and move to ERROR_* then.
 const ANTI_SLOP_ERROR = [
   'no-array-filter-map',
+  'no-chained-type-assertions',
   'no-conditional-empty-object-spread',
+  'no-object-parameters',
   'no-reduce-accumulator-copy',
   'no-reflect-apply',
   'no-reflect-get',
+  'no-shape-in-symbol-names',
   'no-unknown-type-aliases',
   'no-widen-then-assert',
 ];
 const ANTI_SLOP_WARN = [
-  'no-chained-type-assertions',
   'no-known-value-widening',
-  'no-object-parameters',
   'no-runtime-typeof',
-  'no-shape-in-symbol-names',
   'no-unknown-parameters',
   'no-unknown-returns',
   'no-unsafe-dictionary-type',

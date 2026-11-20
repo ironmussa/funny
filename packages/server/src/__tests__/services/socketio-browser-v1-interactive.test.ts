@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 
-import { create, type MessageInitShape } from '@bufbuild/protobuf';
+// oxlint-disable-next-line anti-slop/no-shape-in-symbol-names -- third-party type from @bufbuild/protobuf
+import { create, type MessageInitShape as MessageInit } from '@bufbuild/protobuf';
 import {
   BROWSER_V1_CARRIER_EVENTS,
   BROWSER_V1_SCHEMA_FINGERPRINT,
@@ -21,7 +22,7 @@ import { createMockSocket } from '../helpers/socketio-test-mocks.js';
 
 function wire(
   deliveryClass: DeliveryClass,
-  payload: MessageInitShape<typeof InteractiveEnvelopeSchema>['payload'],
+  payload: MessageInit<typeof InteractiveEnvelopeSchema>['payload'],
 ) {
   return encodeBrowserCarrier(
     create(CarrierEnvelopeSchema, {

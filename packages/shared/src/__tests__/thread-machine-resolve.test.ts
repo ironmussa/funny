@@ -50,6 +50,7 @@ describe('resolveThreadTransition', () => {
   });
 
   test('a row without a known status is treated as pending', () => {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- intentional: test behavior with an impossible runtime value
     const noStatus = undefined as unknown as ThreadStatus;
     expect(resolveThreadTransition(noStatus, { type: 'START' }).status).toBe('running');
     expect(resolveThreadTransition(noStatus, { type: 'SETUP_COMPLETE' }).status).toBe('pending');

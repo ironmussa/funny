@@ -269,6 +269,7 @@ function seedProject(currentBranch = 'master') {
  */
 function seedThreadOnBranch(branch: string) {
   seedProject('master');
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
   const thread = {
     id: 'thread-1',
     projectId: PROJECT_ID,

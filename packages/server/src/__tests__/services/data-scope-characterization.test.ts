@@ -37,7 +37,7 @@ const OUT_SCRATCH: DataScopeDecision = {
 };
 
 /** Each builder produces a request that references the `x` or `y` entity. */
-const REFERENCE_SHAPES: Array<[string, (s: 'x' | 'y') => any]> = [
+const REFERENCE_PAYLOADS: Array<[string, (s: 'x' | 'y') => any]> = [
   ['data.threadId', (s) => ({ type: 'data:get_thread', threadId: `t${s}` })],
   ['payload.threadId', (s) => ({ type: 'data:insert_message', payload: { threadId: `t${s}` } })],
   [
@@ -319,7 +319,7 @@ describe('assertRunnerDataScope characterization', () => {
   });
 
   describe('every reference shape resolves to the owning project', () => {
-    for (const [label, build] of REFERENCE_SHAPES) {
+    for (const [label, build] of REFERENCE_PAYLOADS) {
       test(label, async () => {
         expect(await assertRunnerDataScope('rx', build('x'))).toEqual(OK);
         expect(await assertRunnerDataScope('rx', build('y'))).toEqual(OUT_PY);

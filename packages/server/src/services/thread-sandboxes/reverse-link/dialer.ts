@@ -58,9 +58,10 @@ export function reverseLinkUrl(ingressUrl: string): string {
   return url.toString();
 }
 
-const defaultCreateWebSocket = (url: string, headers: Record<string, string>) =>
-  // Bun's WebSocket accepts request headers.
-  new WebSocket(url, { headers } as any) as unknown as ByteWebSocket;
+const defaultCreateWebSocket = (url: string, headers: Record<string, string>): ByteWebSocket => {
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Bun's WebSocket accepts request headers (non-standard); ByteWebSocket adds binary helpers
+  return new WebSocket(url, { headers } as any) as unknown as ByteWebSocket;
+};
 
 const defaultConnect: CarrierTcpConnect = ({ hostname, port, handlers }) =>
   Bun.connect({ hostname, port, socket: handlers });

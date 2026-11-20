@@ -42,6 +42,7 @@ beforeAll(() => {
   Object.defineProperties(Range.prototype, {
     getClientRects: {
       configurable: true,
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       value: () => [] as unknown as DOMRectList,
     },
     getBoundingClientRect: {

@@ -279,6 +279,7 @@ async function handleGrpcControl(
       images: input.images,
     });
     if (result.isErr()) throw new Error(result.error.message);
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
     return result.value as unknown as Record<string, unknown>;
   }
 

@@ -16,6 +16,7 @@ type Handler = (event: EventStreamEvent) => void;
 function fakeStream() {
   const handlers = new Map<string, Set<Handler>>();
   return {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with minimal surface
     stream: {
       subscribe(threadId: string, handler: Handler) {
         const set = handlers.get(threadId) ?? new Set<Handler>();
@@ -33,14 +34,14 @@ function fakeStream() {
 }
 
 const log = { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} };
-const thread = { id: 't1', userId: 'u1', title: 'do it' } as unknown as Thread;
+const thread = { id: 't1', userId: 'u1', title: 'do it' } as Thread;
 
 function dispatcher(
   events: ReturnType<typeof fakeStream>,
   post: (path: string) => Promise<unknown>,
 ) {
   return new HttpDispatcher({
-    client: { post } as unknown as HttpSchedulerClient,
+    client: { post } as HttpSchedulerClient,
     eventStream: events.stream,
     log: log as never,
   });

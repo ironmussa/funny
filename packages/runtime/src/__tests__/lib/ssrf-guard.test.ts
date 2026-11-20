@@ -9,11 +9,18 @@ vi.mock('dns/promises', () => ({
   lookup: vi.fn(),
 }));
 
+import type { LookupAddress } from 'dns';
 import { lookup } from 'dns/promises';
 
 import { assertSafeOutboundUrl, safeFetch, safeFetchUserUrl } from '../../lib/ssrf-guard.js';
 
-const mockLookup = lookup as unknown as ReturnType<typeof vi.fn>;
+// SAFETY: ssrf-guard calls lookup(hostname, { all: true }) which returns LookupAddress[],
+// but vi.mocked picks the single-result overload. Cast to allow array mock values.
+// oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
+const mockLookup = vi.mocked(lookup) as unknown as {
+  mockReset(): void;
+  mockResolvedValueOnce(value: LookupAddress[]): void;
+};
 
 describe('assertSafeOutboundUrl', () => {
   beforeEach(() => {

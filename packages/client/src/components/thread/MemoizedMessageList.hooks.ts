@@ -176,7 +176,8 @@ export function usePretextWarmup(groupedItems: RenderItem[], fontConfig: FontCon
     const idleId =
       typeof requestIdleCallback === 'function'
         ? requestIdleCallback(runPrepare, { timeout: 2000 })
-        : (setTimeout(runPrepare, 0) as unknown as number);
+        : // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
+          (setTimeout(runPrepare, 0) as unknown as number);
 
     return () => {
       cancelled = true;

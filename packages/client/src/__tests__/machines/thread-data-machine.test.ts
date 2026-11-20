@@ -244,6 +244,7 @@ describe('threadDataMachine', () => {
     // created without messages. Opening one via Activity / direct URL / Kanban
     // must hydrate the transcript — previously only the sidebar click did,
     // leaving the thread rendering just "Task completed" with no content.
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const shellThread = {
       id: 't1',
       projectId: 'p1',
@@ -255,6 +256,7 @@ describe('threadDataMachine', () => {
       messages: [],
     } as unknown as ThreadWithMessages;
 
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const hydratedThread = {
       ...shellThread,
       messages: [{ id: 'm1', role: 'user', content: 'hola' }],
@@ -303,6 +305,7 @@ describe('threadDataMachine', () => {
     });
 
     test('does not import for normal (non-shell) threads without messages', async () => {
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       const normalThread = {
         id: 't1',
         projectId: 'p1',

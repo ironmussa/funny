@@ -17,7 +17,7 @@ function parseSvg(svg: string): SVGSVGElement {
   tmpl.innerHTML = svg;
   const el = tmpl.content.querySelector('svg');
   if (!el) throw new Error('test fixture has no <svg>');
-  return el as unknown as SVGSVGElement;
+  return el as SVGSVGElement;
 }
 
 describe('sanitizeMermaidSvg', () => {

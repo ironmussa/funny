@@ -468,7 +468,7 @@ export function McpServerSettings() {
     recommendedLoadedRef.current = true;
     (async () => {
       const result = await api.getRecommendedMcpServers();
-      if (result.isOk()) setRecommended(result.value.servers as unknown as RecommendedServer[]);
+      if (result.isOk()) setRecommended(result.value.servers as RecommendedServer[]);
     })();
   }, []);
 

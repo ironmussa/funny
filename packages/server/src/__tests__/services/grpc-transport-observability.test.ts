@@ -39,9 +39,7 @@ describe('runner gRPC transport observability', () => {
         status: 'ok',
       },
     });
-    const logged = (
-      info.mock.calls as unknown as Array<[message: string, attributes: Record<string, unknown>]>
-    )[0]?.[1];
+    const logged = (info.mock.calls[0] as unknown[])?.[1] as Record<string, unknown> | undefined;
     expect(logged).toMatchObject({
       protocolVersion: 'runner.v2.0',
       sessionEpoch: '7',
@@ -69,9 +67,7 @@ describe('runner gRPC transport observability', () => {
     expect(warn).toHaveBeenCalledTimes(1);
     expect(addMetric).toHaveBeenCalledTimes(2);
     expect(addHistogram).toHaveBeenCalledTimes(1);
-    const logged = (
-      warn.mock.calls as unknown as Array<[message: string, attributes: Record<string, unknown>]>
-    )[0]?.[1];
+    const logged = (warn.mock.calls[0] as unknown[])?.[1] as Record<string, unknown> | undefined;
     expect(logged).toMatchObject({
       status: 'DEADLINE_EXCEEDED',
       reconnectReason: 'session-replaced',

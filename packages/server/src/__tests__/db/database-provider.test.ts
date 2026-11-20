@@ -28,6 +28,7 @@ function fakeProvider(name: string, dialect: DbDialect = 'sqlite') {
   return { provider, transactions };
 }
 
+// oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing test-injected `marker` property on the fake DB provider
 const marker = () => (database.db as unknown as { marker: string }).marker;
 
 afterEach(() => database.resetDatabaseForTests());

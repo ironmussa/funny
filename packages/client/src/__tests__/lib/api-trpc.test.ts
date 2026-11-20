@@ -22,7 +22,12 @@ function json(data: unknown, status = 200) {
   });
 }
 
-function trpcError(status: number, code: string, message: string, extra: object = {}) {
+function trpcError(
+  status: number,
+  code: string,
+  message: string,
+  extra: Record<string, unknown> = {},
+) {
   return json(
     { error: { message, code: -32000, ...extra, data: { code, httpStatus: status } } },
     status,

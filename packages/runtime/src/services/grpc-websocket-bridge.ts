@@ -53,6 +53,7 @@ type BunWebSocketConstructor = new (
   url: string,
   options?: { headers?: Record<string, string> },
 ) => BridgeWebSocket;
+// oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Bun extends the DOM WebSocket constructor with an options param; no shared base type exists
 const BunWebSocket = WebSocket as unknown as BunWebSocketConstructor;
 
 export function isWebSocketEndpoint(endpoint: string): boolean {

@@ -93,7 +93,7 @@ function useFilteredCommandItems(
 function usePaletteOpenTiming(open: boolean, projectCount: number) {
   useEffect(() => {
     if (!open) return;
-    const w = window as unknown as { __paletteOpenTs?: number };
+    const w = window as { __paletteOpenTs?: number };
     const t0 = w.__paletteOpenTs;
     if (t0 == null) return;
     const commitMs = performance.now() - t0;

@@ -104,7 +104,7 @@ describe('cursor-as-external provider parity (§5)', () => {
 
     // Both produce a synthetic Edit tool_use + a tool_result. Compare the
     // structural content (ids are random per emission).
-    const shape = (msgs: CLIMessage[]) =>
+    const messageLayout = (msgs: CLIMessage[]) =>
       msgs.map((m) =>
         // oxlint-disable-next-line anti-slop-effect/prefer-effect-match -- plain literal ternary, not an Effect tagged union
         m.type === 'assistant'
@@ -115,7 +115,7 @@ describe('cursor-as-external provider parity (§5)', () => {
       );
 
     expect(extMsgs.length).toBeGreaterThan(0);
-    expect(shape(extMsgs)).toEqual(shape(biMsgs));
+    expect(messageLayout(extMsgs)).toEqual(messageLayout(biMsgs));
 
     const extUse = extMsgs.find((m) => m.type === 'assistant');
     if (!extUse || extUse.type !== 'assistant') throw new Error('unreachable');

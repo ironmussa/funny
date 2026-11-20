@@ -59,6 +59,7 @@ describe('web client platform', () => {
     const stored = new Map([['funny:settings', '{"theme":"one-dark"}']]);
     let onStorage: ((event: StorageEvent) => void) | undefined;
     const stop = vi.fn();
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const storage = {
       getItem: (key: string) => stored.get(key) ?? null,
       setItem: (key: string, value: string) => stored.set(key, value),
@@ -94,6 +95,7 @@ describe('web client platform', () => {
 
     const denied = createBrowserStorageService(
       {
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
         storage: {
           getItem: () => {
             throw new Error('denied');
@@ -232,6 +234,7 @@ describe('web client platform', () => {
 
   test('keeps browser connectivity listeners at the web edge and disposes them', () => {
     const listeners = new Map<string, EventListener>();
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const win = {
       addEventListener: (name: string, listener: EventListener) => listeners.set(name, listener),
       removeEventListener: (name: string) => listeners.delete(name),

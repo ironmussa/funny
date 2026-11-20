@@ -1190,9 +1190,12 @@ export class AgentMessageHandler {
   }
 
   /** The thread's worktree, else its project directory; '' when neither is known. */
-  private async summaryCwd(data: object): Promise<string> {
-    const project = await this.getProject((data as unknown as { projectId: string }).projectId);
-    return (data as { worktreePath?: string | null }).worktreePath || project?.path || '';
+  private async summaryCwd(data: {
+    projectId?: string;
+    worktreePath?: string | null;
+  }): Promise<string> {
+    const project = data.projectId ? await this.getProject(data.projectId) : null;
+    return data.worktreePath || project?.path || '';
   }
 
   /** The working-tree diff taken when the run started, if the scan succeeded. */
@@ -1269,6 +1272,7 @@ export class AgentMessageHandler {
     await getServices().threadEvents.saveThreadEvent(
       threadId,
       'changed_files_summary',
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
       summary as unknown as Record<string, unknown>,
     );
 

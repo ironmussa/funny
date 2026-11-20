@@ -266,7 +266,7 @@ function worktreeWorkspace(
 ): RunWorkspace {
   const { paths, env, writer } = setup;
   /** One step: its spec in, the step runner, its exit marker out (a stale one removed first). */
-  const runStep = async (step: 'implement' | 'fix', spec: object) => {
+  const runStep = async (step: 'implement' | 'fix', spec: Record<string, unknown>) => {
     const full = { ...spec, eventsPath: request.eventsPath, exitMarkerPath: paths.exitMarker };
     await rm(paths.exitMarker, { force: true });
     await writeFile(paths.spec, `${JSON.stringify(full, null, 2)}\n`, { mode: 0o600 });

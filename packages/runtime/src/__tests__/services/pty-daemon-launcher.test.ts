@@ -60,6 +60,7 @@ beforeEach(() => {
     return true;
   }) as typeof process.kill);
   socket = { write: vi.fn(), end: vi.fn() };
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Bun.connect has complex overloads; simplified mock callback type is incompatible
   vi.spyOn(Bun, 'connect').mockImplementation(((opts: { socket: SocketHandlers }) => {
     handlers = opts.socket;
     handlers.open?.(socket);

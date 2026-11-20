@@ -34,6 +34,7 @@ async function loadLogger(): Promise<{
 }> {
   const mod = await import('./client-logger');
   return {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing test-injected global
     funnyLog: (window as unknown as { __funnyLog: FunnyLog }).__funnyLog,
     createClientLogger: mod.createClientLogger,
   };

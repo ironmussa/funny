@@ -164,10 +164,7 @@ export async function ensureThreadCwd(
     }
   }
 
-  const cwd = resolveThreadCwd(
-    thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-    project,
-  );
+  const cwd = resolveThreadCwd(thread, project);
   if (cwd.isErr()) return err(badRequest(cwd.error.message));
   if (hasLazyCwd(thread as { isScratch?: boolean })) {
     try {

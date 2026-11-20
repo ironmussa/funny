@@ -6,6 +6,7 @@
  */
 
 import { git, gitRead, type BranchPRInfo, type GitIdentityOptions } from '@funny/core/git';
+import type { GitStatusInfo } from '@funny/shared';
 import { badRequest, type DomainError } from '@funny/shared/errors';
 import type { Context } from 'hono';
 import { err, ok, type Result } from 'neverthrow';
@@ -40,11 +41,11 @@ export function emitPRUpdateForThread(opts: {
   userId: string;
   threadId: string;
   branchKey: string;
-  status: Record<string, unknown>;
+  status: GitStatusInfo;
   pr: BranchPRInfo | null;
 }): void {
   const { userId, threadId, branchKey, status, pr } = opts;
-  const merged = {
+  const merged: GitStatusInfo = {
     ...status,
     threadId,
     branchKey,
@@ -56,7 +57,7 @@ export function emitPRUpdateForThread(opts: {
     type: 'git:status',
     threadId,
     data: {
-      statuses: [merged as unknown as import('@funny/shared').GitStatusInfo],
+      statuses: [merged],
       prOnly: true,
     },
   });

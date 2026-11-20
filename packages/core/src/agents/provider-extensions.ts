@@ -34,13 +34,13 @@ import {
   type KindHandler,
 } from '../extensions/index.js';
 import { GenericACPProcess } from './generic-acp.js';
+import type { AgentProcessOptions } from './interfaces.js';
 import {
   getActiveBuiltinProviders,
   registerProvider,
   unregisterProvider,
   type ProcessConstructor,
 } from './process-factory.js';
-import type { ClaudeProcessOptions } from './types.js';
 
 const dlog = createDebugLogger('provider-extensions');
 
@@ -180,10 +180,10 @@ function parseProviderExtensionDir(dir: string, dirName: string): DirParse {
 /** Build a one-arg process ctor that binds an external manifest into GenericACPProcess. */
 function makeExternalProcessClass(manifest: ProviderManifest): ProcessConstructor {
   return class ExternalACPProcess extends GenericACPProcess {
-    constructor(opts: ClaudeProcessOptions) {
+    constructor(opts: AgentProcessOptions) {
       super(opts, manifest);
     }
-  } as unknown as ProcessConstructor;
+  } as ProcessConstructor;
 }
 
 /**

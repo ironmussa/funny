@@ -77,6 +77,6 @@ describe('killProcessTree', () => {
   });
 
   maybe('is a no-op when the child has no pid', () => {
-    expect(() => killProcessTree({ pid: undefined } as unknown as ChildProcess)).not.toThrow();
+    expect(() => killProcessTree({ pid: undefined } as ChildProcess)).not.toThrow();
   });
 });

@@ -11,7 +11,10 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 vi.mock('@/components/PromptInput', () => ({
-  PromptInput: (props: { loading?: boolean; onSubmit: (prompt: string, opts: object) => void }) => (
+  PromptInput: (props: {
+    loading?: boolean;
+    onSubmit: (prompt: string, opts: Record<string, unknown>) => void;
+  }) => (
     <button
       type="button"
       data-loading={String(Boolean(props.loading))}

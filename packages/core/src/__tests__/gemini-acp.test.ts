@@ -27,8 +27,7 @@ function makeProcess(): { proc: GeminiACPProcess; messages: CLIMessage[] } {
 }
 
 function translate(proc: GeminiACPProcess, update: unknown): void {
-  // translateUpdate is private; tests reach in deliberately.
-  (proc as unknown as { translateUpdate: (u: unknown) => void }).translateUpdate(update);
+  (proc as GeminiACPProcess & { translateUpdate: (u: unknown) => void }).translateUpdate(update);
 }
 
 describe('GeminiACPProcess.translateUpdate (regression)', () => {

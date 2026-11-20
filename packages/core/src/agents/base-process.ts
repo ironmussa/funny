@@ -436,7 +436,7 @@ export abstract class BaseAgentProcess extends EventEmitter {
           },
         ],
       },
-    } as unknown as CLIMessage);
+    } as CLIMessage);
   }
 
   /**

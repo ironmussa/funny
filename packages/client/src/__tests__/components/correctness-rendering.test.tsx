@@ -44,6 +44,7 @@ describe('correctness rendering regressions', () => {
   });
 
   it('does not render a stray zero for a numeric runtime size', () => {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const { container } = render(<AttachmentChip name="empty.txt" size={0 as unknown as string} />);
 
     expect(container).toHaveTextContent('empty.txt');

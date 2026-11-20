@@ -30,6 +30,7 @@ export function exportTemplate(template: AgentTemplate): void {
 
   // Strip undefined values
   for (const [k, v] of Object.entries(payload.template)) {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- stripping undefined keys before serialization
     if (v === undefined) delete (payload.template as unknown as Record<string, unknown>)[k];
   }
 
@@ -60,6 +61,7 @@ export function parseTemplateFromJson(json: string): CreateAgentTemplateRequest 
   const tpl = file.template as Record<string, unknown>;
   if (!tpl.name || typeof tpl.name !== 'string') return 'Template must have a name';
 
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- validated shape from parsed JSON
   return tpl as unknown as CreateAgentTemplateRequest;
 }
 

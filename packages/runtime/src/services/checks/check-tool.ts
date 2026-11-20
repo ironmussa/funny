@@ -97,10 +97,7 @@ async function threadCwd(threadId: string): Promise<string | null> {
   const project = thread.projectId
     ? await getServices().projects.getProject(thread.projectId)
     : null;
-  const cwd = resolveThreadCwd(
-    thread as unknown as Parameters<typeof resolveThreadCwd>[0],
-    project ? { path: project.path } : null,
-  );
+  const cwd = resolveThreadCwd(thread, project ? { path: project.path } : null);
   return cwd.isOk() ? cwd.value : null;
 }
 

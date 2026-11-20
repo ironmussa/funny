@@ -12,7 +12,8 @@ export function childAcpStream(
   child: ChildProcess,
   ndJsonStream: NdJsonStream,
 ): ReturnType<NdJsonStream> {
-  const outputStream = Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>;
+  const outputStream: WritableStream<Uint8Array> = Writable.toWeb(child.stdin!);
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- Node.js Readable.toWeb returns ReadableStream<any>
   const inputStream = Readable.toWeb(child.stdout!) as unknown as ReadableStream<Uint8Array>;
   return ndJsonStream(outputStream, inputStream);
 }

@@ -797,6 +797,7 @@ describe('MemoizedMessageList virtualization', () => {
     row.dataset.virtualRowKey = 'm0';
     row.getBoundingClientRect = vi.fn(() => ({ height: 10 }) as DOMRect);
 
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const height = virtualizerMockState.lastOptions.measureElement(row, {
       borderBoxSize: [{ blockSize: 88 }],
     } as unknown as ResizeObserverEntry);
@@ -890,6 +891,7 @@ describe('MemoizedMessageList virtualization', () => {
     );
 
     act(() => {
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       virtualizerMockState.lastOptions.measureElement(row, {
         borderBoxSize: [{ blockSize: 300 }],
       } as unknown as ResizeObserverEntry);
@@ -924,6 +926,7 @@ describe('MemoizedMessageList virtualization', () => {
     );
 
     act(() => {
+      // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
       virtualizerMockState.lastOptions.measureElement(row, {
         borderBoxSize: [{ blockSize: 40 }],
       } as unknown as ResizeObserverEntry);

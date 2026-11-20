@@ -13,7 +13,7 @@ function fakeWorker(): Worker & { terminated: boolean } {
       worker.terminated = true;
     },
   };
-  return worker as unknown as Worker & { terminated: boolean };
+  return worker as Worker & { terminated: boolean };
 }
 
 describe('worker diagnostics', () => {

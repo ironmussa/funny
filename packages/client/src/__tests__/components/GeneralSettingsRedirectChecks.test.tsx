@@ -16,7 +16,9 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-const updateProject = vi.fn((_id: string, data: object) => okAsync({ id: 'p1', ...data }));
+const updateProject = vi.fn((_id: string, data: Record<string, unknown>) =>
+  okAsync({ id: 'p1', ...data }),
+);
 
 function renderWith(project: Record<string, unknown>) {
   seedProjects([

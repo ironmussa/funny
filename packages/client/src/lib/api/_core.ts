@@ -80,7 +80,7 @@ export function request<T>(path: string, init?: RequestInit): ResultAsync<T, Dom
     body: typeof init?.body === 'string' ? init.body : undefined,
     cancellation: cancellationFromSignal(init?.signal),
   });
-  return ResultAsync.fromPromise(promise, (error) => error as ApiClientError as DomainError);
+  return ResultAsync.fromPromise(promise, (error) => error as DomainError);
 }
 
 // ─── Thread context ──────────────────────────────────────────────────────────

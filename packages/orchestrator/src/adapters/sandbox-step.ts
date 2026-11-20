@@ -103,7 +103,10 @@ export function sandboxRunWorkspace(
     }
   }
 
-  async function runStep(step: 'implement' | 'fix', spec: object): Promise<StepOutcome> {
+  async function runStep(
+    step: 'implement' | 'fix',
+    spec: Record<string, unknown>,
+  ): Promise<StepOutcome> {
     const full = { ...spec, eventsPath: p.events, exitMarkerPath: p.exitMarker };
     const started = await exec(
       record.handle,

@@ -155,7 +155,7 @@ export async function getFact(db: Client, factId: string): Promise<Result<Memory
       args: [factId],
     });
     if (result.rows.length === 0) return err(`Fact not found: ${factId}`);
-    return ok(rowToFact(result.rows[0] as unknown as FactRow));
+    return ok(rowToFact(result.rows[0] as FactRow));
   } catch (e) {
     return err(`Failed to get fact ${factId}: ${e}`);
   }
@@ -211,7 +211,7 @@ export async function listFacts(
     }
 
     const result = await db.execute({ sql, args });
-    return ok(result.rows.map((r) => rowToFact(r as unknown as FactRow)));
+    return ok(result.rows.map((r) => rowToFact(r as FactRow)));
   } catch (e) {
     return err(`Failed to list facts: ${e}`);
   }

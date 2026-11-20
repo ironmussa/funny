@@ -13,7 +13,7 @@ interface PreviewTab {
   label: string;
 }
 
-const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
+const isTauri = !!(window as { __TAURI_INTERNALS__?: unknown }).__TAURI_INTERNALS__;
 
 export function PreviewBrowser() {
   const [tabs, setTabs] = useState<PreviewTab[]>([]);

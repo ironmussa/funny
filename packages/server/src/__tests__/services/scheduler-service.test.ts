@@ -8,6 +8,7 @@
 
 import { describe, test, expect, beforeEach } from 'bun:test';
 
+import type { Thread } from '@funny/shared';
 import { dbAll, dbGet, dbRun } from '@funny/shared/db/connection';
 import { createSchedulerRunRepository } from '@funny/shared/repositories';
 import {
@@ -60,14 +61,13 @@ function makeMockDispatcher(): Dispatcher & {
   nextResult: DispatchResult | null;
 } {
   const handles: MockHandle[] = [];
-  return {
+  const dispatcher = {
     handles,
-    nextResult: null,
-    async dispatch(_thread): Promise<DispatchResult> {
-      const self = this as unknown as { nextResult: DispatchResult | null };
-      if (self.nextResult) {
-        const r = self.nextResult;
-        self.nextResult = null;
+    nextResult: null as DispatchResult | null,
+    async dispatch(_thread: Thread): Promise<DispatchResult> {
+      if (dispatcher.nextResult) {
+        const r = dispatcher.nextResult;
+        dispatcher.nextResult = null;
         return r;
       }
       let resolveFn!: MockHandle['resolve'];
@@ -89,6 +89,7 @@ function makeMockDispatcher(): Dispatcher & {
       return { ok: true, handle };
     },
   };
+  return dispatcher;
 }
 
 // ── Fixtures ──────────────────────────────────────────────────

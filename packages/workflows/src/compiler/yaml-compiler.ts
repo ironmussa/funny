@@ -484,12 +484,12 @@ function compileRetry(
           // synthesize a single-action node and dispatch it inline. The
           // previous error is exposed as `LAST_ERROR` and the failed
           // attempt number as `ATTEMPT` in the prompt scope.
-          const fakeNode: ParsedNode = {
+          const fakeNode = {
             id: `${yamlNode.id}-before-retry-${attempt}`,
             depends_on: [],
-            on_error: 'fail',
+            on_error: 'fail' as const,
             spawn_agent: cfg.before_retry,
-          } as unknown as ParsedNode;
+          } satisfies Partial<ParsedNode> as ParsedNode;
 
           const augmentedScope: YamlPipelineContext = {
             ...ctx,

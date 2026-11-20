@@ -6,6 +6,10 @@ import { Hono } from 'hono';
 import { ok } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
+function stub<T>(p: Record<string, any>): T {
+  return p as T;
+}
+
 /**
  * Regression (#179): POST /clone validated `destinationPath` against the
  * picker scope, then cloned into `join(destinationPath, name)` with an
@@ -72,14 +76,13 @@ describe('POST /clone directory name', () => {
     mocks.createProject.mockResolvedValue(ok({ id: 'p-1', name: 'widget', path: '' }));
     mocks.requirePickerPath.mockReset();
     mocks.requirePickerPath.mockResolvedValue(null);
-    spawn = vi.spyOn(Bun, 'spawn').mockImplementation(
-      () =>
-        ({
-          stdout: null,
-          stderr: null,
-          exited: Promise.resolve(0),
-          exitCode: 0,
-        }) as unknown as ReturnType<typeof Bun.spawn>,
+    spawn = vi.spyOn(Bun, 'spawn').mockImplementation(() =>
+      stub<ReturnType<typeof Bun.spawn>>({
+        stdout: null,
+        stderr: null,
+        exited: Promise.resolve(0),
+        exitCode: 0,
+      }),
     );
   });
 

@@ -39,11 +39,7 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
     return [];
   };
 
-  // Built loosely (the ACP schema's discriminated union is awkward to satisfy
-  // field-by-field); each entry matches one of McpServerStdio/Http/Sse exactly,
-  // validated by opencode/cursor/codex/gemini/pi at runtime. Cast at the return
-  // boundary so callers get the precise `McpServer[]` type.
-  const out: Array<Record<string, unknown>> = [];
+  const out: ACPMcpServer[] = [];
   for (const [name, raw] of Object.entries(mcpServers)) {
     if (!raw || typeof raw !== 'object') continue;
     const cfg = raw as Record<string, unknown>;
@@ -61,15 +57,15 @@ export function toACPMcpServers(mcpServers: Record<string, any> | undefined): AC
         name,
         url: String(cfg.url ?? ''),
         headers: recordToPairs(cfg.headers),
-      });
+      } as ACPMcpServer);
     } else {
       out.push({
         name,
         command: String(cfg.command ?? ''),
-        args: Array.isArray(cfg.args) ? (cfg.args as unknown[]).map(String) : [],
+        args: Array.isArray(cfg.args) ? (cfg.args as string[]).map(String) : [],
         env: recordToPairs(cfg.env),
-      });
+      } as ACPMcpServer);
     }
   }
-  return out as unknown as ACPMcpServer[];
+  return out;
 }

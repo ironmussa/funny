@@ -97,16 +97,16 @@ export function interpolate(
  */
 export function interpolateObject<T>(value: T, scope: TemplateScope, opts?: InterpolateOptions): T {
   if (value === null || value === undefined) return value;
-  if (typeof value === 'string') return interpolate(value, scope, opts) as unknown as T;
+  if (typeof value === 'string') return interpolate(value, scope, opts) as T & string;
   if (Array.isArray(value)) {
-    return value.map((v) => interpolateObject(v, scope, opts)) as unknown as T;
+    return value.map((v) => interpolateObject(v, scope, opts)) as T & unknown[];
   }
   if (typeof value === 'object') {
     const out: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
       out[k] = interpolateObject(v, scope, opts);
     }
-    return out as unknown as T;
+    return out as T & Record<string, unknown>;
   }
   return value;
 }

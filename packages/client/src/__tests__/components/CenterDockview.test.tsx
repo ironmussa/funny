@@ -150,7 +150,7 @@ function addPanelTo(
     position?: { direction?: string; referencePanel?: string };
   },
 ) {
-  (api.addPanel as unknown as (o: typeof options) => void)(options);
+  (api.addPanel as (o: typeof options) => void)(options);
 }
 
 function reviewTabs(): RightTabSpec[] {

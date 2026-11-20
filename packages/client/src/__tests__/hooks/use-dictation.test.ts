@@ -47,6 +47,7 @@ describe('useDictation', () => {
   test('stops a microphone stream that resolves after unmount', async () => {
     const pendingStream = deferred<MediaStream>();
     const stop = vi.fn();
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const stream = {
       getTracks: () => [{ stop }],
     } as unknown as MediaStream;
@@ -78,6 +79,7 @@ describe('useDictation', () => {
   test('stop while still connecting cancels the start', async () => {
     const pendingStream = deferred<MediaStream>();
     const stopTrack = vi.fn();
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const stream = { getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream;
     vi.stubGlobal('navigator', {
       ...navigator,
@@ -109,6 +111,7 @@ describe('useDictation', () => {
 
   test('closes a connecting WebSocket without reporting a stale error after unmount', async () => {
     const stop = vi.fn();
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     const stream = {
       getTracks: () => [{ stop }],
     } as unknown as MediaStream;

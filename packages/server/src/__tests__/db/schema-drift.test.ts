@@ -32,7 +32,7 @@ interface ColumnInfo {
   dataType: string;
 }
 
-type SchemaShape = Record<string, Record<string, ColumnInfo>>;
+type ColumnLayout = Record<string, Record<string, ColumnInfo>>;
 
 /** A `customType` column reports 'custom' — infer what it hands to JS instead. */
 function valueType(column: { dataType: string; mapFromDriverValue?: (v: unknown) => unknown }) {
@@ -44,8 +44,8 @@ function valueType(column: { dataType: string; mapFromDriverValue?: (v: unknown)
   }
 }
 
-function shapeOf(mod: Record<string, unknown>, dialect: 'sqlite' | 'pg'): SchemaShape {
-  const shape: SchemaShape = {};
+function layoutOf(mod: Record<string, unknown>, dialect: 'sqlite' | 'pg'): ColumnLayout {
+  const layout: ColumnLayout = {};
   for (const value of Object.values(mod)) {
     const config =
       dialect === 'pg'
@@ -56,14 +56,14 @@ function shapeOf(mod: Record<string, unknown>, dialect: 'sqlite' | 'pg'): Schema
           ? sqliteConfig(value)
           : null;
     if (!config) continue;
-    shape[config.name] = Object.fromEntries(
+    layout[config.name] = Object.fromEntries(
       config.columns.map((c) => [c.name, { dataType: valueType(c) }]),
     );
   }
-  return shape;
+  return layout;
 }
 
-function definitionDrift(a: SchemaShape, b: SchemaShape): string[] {
+function definitionDrift(a: ColumnLayout, b: ColumnLayout): string[] {
   const problems: string[] = [];
   for (const table of new Set([...Object.keys(a), ...Object.keys(b)])) {
     if (!a[table]) problems.push(`table ${table} only in Postgres definition`);
@@ -86,7 +86,7 @@ function definitionDrift(a: SchemaShape, b: SchemaShape): string[] {
   return problems.sort();
 }
 
-function liveDrift(definition: SchemaShape, live: Record<string, Set<string>>): string[] {
+function liveDrift(definition: ColumnLayout, live: Record<string, Set<string>>): string[] {
   const problems: string[] = [];
   for (const [table, columns] of Object.entries(definition)) {
     const liveColumns = live[table];
@@ -108,13 +108,13 @@ function liveDrift(definition: SchemaShape, live: Record<string, Set<string>>): 
 }
 
 const { dbDialect } = await import('../../db/index.js');
-const sqliteShape = shapeOf(sqliteSchema, 'sqlite');
-const pgShape = shapeOf(pgSchema, 'pg');
+const sqliteLayout = layoutOf(sqliteSchema, 'sqlite');
+const pgLayout = layoutOf(pgSchema, 'pg');
 
 describe('schema drift', () => {
   test('both definitions declare the same tables, columns and value types', () => {
-    expect(Object.keys(sqliteShape).length).toBeGreaterThan(40);
-    expect(definitionDrift(sqliteShape, pgShape)).toEqual([]);
+    expect(Object.keys(sqliteLayout).length).toBeGreaterThan(40);
+    expect(definitionDrift(sqliteLayout, pgLayout)).toEqual([]);
   });
 
   test.skipIf(dbDialect !== 'sqlite')(
@@ -127,13 +127,13 @@ describe('schema drift', () => {
       const { db } = await import('../../db/index.js');
 
       const live: Record<string, Set<string>> = {};
-      for (const table of Object.keys(sqliteShape)) {
+      for (const table of Object.keys(sqliteLayout)) {
         const rows = (db as any).all(sql.raw(`PRAGMA table_info("${table}")`)) as {
           name: string;
         }[];
         live[table] = new Set(rows.map((r) => r.name));
       }
-      expect(liveDrift(sqliteShape, live)).toEqual([]);
+      expect(liveDrift(sqliteLayout, live)).toEqual([]);
     },
   );
 
@@ -154,7 +154,7 @@ describe('schema drift', () => {
       )) as { table_name: string; column_name: string }[];
       const live: Record<string, Set<string>> = {};
       for (const r of rows) (live[r.table_name] ??= new Set()).add(r.column_name);
-      expect(liveDrift(pgShape, live)).toEqual([]);
+      expect(liveDrift(pgLayout, live)).toEqual([]);
     },
   );
 });

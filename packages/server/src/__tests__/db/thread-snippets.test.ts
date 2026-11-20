@@ -11,6 +11,7 @@ beforeAll(async () => {
   await initDatabase({ sqlitePath: ':memory:' });
   const { autoMigrate } = await import('../../db/migrate.js');
   await autoMigrate();
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing Drizzle ORM internal $client for raw SQLite test queries
   raw = (db as unknown as { $client: import('bun:sqlite').Database }).$client;
   const { repos } = await import('../../db/repos.js');
   listThreads = (opts) => repos.threads().listThreads(opts);

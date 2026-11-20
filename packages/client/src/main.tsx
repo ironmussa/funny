@@ -92,7 +92,7 @@ const SetupWizard = lazy(() =>
 );
 
 // The preview window sets this flag via Tauri's initialization_script
-const isPreviewWindow = !!(window as unknown as { __PREVIEW_MODE__: unknown }).__PREVIEW_MODE__;
+const isPreviewWindow = !!(window as { __PREVIEW_MODE__?: unknown }).__PREVIEW_MODE__;
 
 // Matches Tailwind's `md` breakpoint (768px)
 const mobileQuery = window.matchMedia('(max-width: 767px)');

@@ -98,6 +98,7 @@ export function TeamMembers() {
     try {
       const res = await authClient.organization.listMembers();
       if (res.data) {
+        // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
         setMembers(res.data as unknown as Member[]);
       }
     } catch (err) {
@@ -112,6 +113,7 @@ export function TeamMembers() {
       const res = await authClient.organization.listInvitations();
       if (res.data) {
         setInvitations(
+          // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- source and target types do not overlap, so TS needs the unknown step
           (res.data as unknown as PendingInvitation[]).filter((i) => i.status === 'pending'),
         );
       }

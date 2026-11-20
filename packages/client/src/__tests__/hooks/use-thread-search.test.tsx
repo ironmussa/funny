@@ -22,6 +22,7 @@ afterEach(() => {
 
 function setup() {
   const streamRef = {
+    // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- test stub with partial shape
     current: { scrollViewport: viewport, expandToItem: vi.fn() } as unknown as MessageStreamHandle,
   };
   return renderHook(() => useThreadSearchState(streamRef, 'thread'));

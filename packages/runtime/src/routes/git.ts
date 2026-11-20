@@ -32,7 +32,7 @@ gitRoutes.use('*', async (c, next) => {
   const threadId = c.req.query('threadId') ?? c.req.param('threadId');
   if (!threadId) return next();
   const thread = await tm.getThread(threadId);
-  if (thread && !canDoGitOps(thread as unknown as { isScratch: boolean })) {
+  if (thread && !canDoGitOps(thread)) {
     return c.json(
       {
         error: 'Git operations are not available for scratch threads',

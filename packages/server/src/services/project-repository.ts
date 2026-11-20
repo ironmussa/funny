@@ -96,6 +96,9 @@ function toProject(row: ProjectRow): Project {
     const urls = parseStoredJson(z.array(z.string()), source.urls as string, 'project urls');
     if (urls.ok) project.urls = urls.value;
   }
+  // SAFETY: `project` is built from a DB row with optional fields
+  // selectively restored above — structurally a Project.
+  // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- deliberate DB-row-to-domain mapping
   return project as unknown as Project;
 }
 

@@ -3,7 +3,6 @@
  */
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
-import { seedDbFor } from '../helpers/builders-services.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedProjectMember } from '../helpers/test-db.js';
 
@@ -18,7 +17,7 @@ describe('project-manager service', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/tmp/p1' });
   });
 
   describe('addMember / listMembers / isProjectMember', () => {
@@ -58,7 +57,7 @@ describe('project-manager service', () => {
 
   describe('removeMember', () => {
     test('removes an existing member', async () => {
-      seedProjectMember(seedDbFor(t.db), { projectId: 'p1', userId: 'user-2', role: 'member' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'user-2', role: 'member' });
 
       await pm.removeMember('p1', 'user-2');
       expect(await pm.isProjectMember('p1', 'user-2')).toBe(false);
@@ -67,7 +66,7 @@ describe('project-manager service', () => {
 
   describe('setMemberLocalPath / getMemberLocalPath', () => {
     test('updates localPath for an existing member', async () => {
-      seedProjectMember(seedDbFor(t.db), { projectId: 'p1', userId: 'user-1', role: 'admin' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'user-1', role: 'admin' });
 
       await pm.setMemberLocalPath('p1', 'user-1', '/home/user/p1');
       expect(await pm.getMemberLocalPath('p1', 'user-1')).toBe('/home/user/p1');
@@ -88,7 +87,7 @@ describe('project-manager service', () => {
     });
 
     test('updating the path keeps an existing role unchanged', async () => {
-      seedProjectMember(seedDbFor(t.db), { projectId: 'p1', userId: 'user-4', role: 'viewer' });
+      seedProjectMember(t.db, { projectId: 'p1', userId: 'user-4', role: 'viewer' });
 
       await pm.setMemberLocalPath('p1', 'user-4', '/home/user/p4');
 

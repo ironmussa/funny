@@ -5,8 +5,9 @@
 import { Database } from 'bun:sqlite';
 
 import { sql } from 'drizzle-orm';
-import { drizzle, type BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
 
+import type { AppDatabase } from '../../db/index.js';
 import * as schema from '../../db/schema.js';
 
 export function createTestDb() {
@@ -508,10 +509,12 @@ export async function installMemoryDatabase(): Promise<Database> {
 // ── Seed helpers ────────────────────────────────────────────
 
 /**
- * Any Drizzle SQLite handle over the server schema: the `createTestDb()` handle
- * or the app singleton (`TestApp.db`).
+ * The database a seed writes to. Every database the tests hold has this type:
+ * the `createTestDb()` handle, `createTestApp().db` and the server's `db`
+ * singleton (a proxy that forwards to the installed Drizzle instance), so
+ * tests pass whichever one they have, without a wrapper or a cast.
  */
-type SeedDb = BunSQLiteDatabase<typeof schema>;
+type SeedDb = AppDatabase;
 
 export function seedProject(
   db: SeedDb,

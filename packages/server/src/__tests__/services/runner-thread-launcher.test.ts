@@ -17,7 +17,6 @@ import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 
 import type { RunnerPresencePort, RunnerRequest } from '../../services/runner-ports.js';
 import { startThreadOnRunner } from '../../services/runner-thread-launcher.js';
-import { seedDbFor } from '../helpers/builders-services.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedRunner, seedRunnerProjectAssignment } from '../helpers/test-db.js';
 
@@ -56,11 +55,11 @@ describe('startThreadOnRunner', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(seedDbFor(t.db), { id: 'p1', userId: 'alice', path: '/repo' });
-    seedRunner(seedDbFor(t.db), { id: 'r-alice', userId: 'alice', token: 'tok-a' });
-    seedRunner(seedDbFor(t.db), { id: 'r-bob', userId: 'bob', token: 'tok-b' });
-    seedRunnerProjectAssignment(seedDbFor(t.db), { runnerId: 'r-alice', projectId: 'p1' });
-    seedRunnerProjectAssignment(seedDbFor(t.db), { runnerId: 'r-bob', projectId: 'p1' });
+    seedProject(t.db, { id: 'p1', userId: 'alice', path: '/repo' });
+    seedRunner(t.db, { id: 'r-alice', userId: 'alice', token: 'tok-a' });
+    seedRunner(t.db, { id: 'r-bob', userId: 'bob', token: 'tok-b' });
+    seedRunnerProjectAssignment(t.db, { runnerId: 'r-alice', projectId: 'p1' });
+    seedRunnerProjectAssignment(t.db, { runnerId: 'r-bob', projectId: 'p1' });
   });
 
   test("dispatches to the user's own runner", async () => {

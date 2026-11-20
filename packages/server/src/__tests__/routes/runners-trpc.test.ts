@@ -26,8 +26,8 @@ import { deriveRunnerForwardingKey } from '@funny/shared/auth/runner-keys';
 import type { RunnerRequestPort } from '../../services/runner-ports.js';
 import { __resetRunnerScopeCache, canRunnerAccessProject } from '../../services/runner-scope.js';
 import { stopProjectSessionsOnRunners } from '../../trpc/ports/project-runners.js';
-import { seedProject, seedRunner, seedThread } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
 
 describe('runners over tRPC', () => {
   let t: TestApp;

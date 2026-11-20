@@ -28,13 +28,13 @@ afterAll(() => {
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
+import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedOrgMember,
   seedProject,
   seedProjectMember,
   seedTeamProject,
-} from '../helpers/builders-routes.js';
-import { createTestApp, type TestApp } from '../helpers/test-app.js';
+} from '../helpers/test-db.js';
 
 describe('Team Projects Routes (Integration)', () => {
   let t: TestApp;

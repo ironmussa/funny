@@ -1,67 +1,10 @@
-/**
- * Typed fixtures for the route tests (`__tests__/routes/**`).
- *
- * The seed helpers in `test-db.ts` take the drizzle instance `createTestDb()`
- * returns (which carries `$client`), while `createTestApp()` hands out the
- * server's `AppDatabase` proxy. The wrappers below accept `AppDatabase` and
- * check at runtime that it is backed by a bun:sqlite client, so route tests
- * can seed `t.db` without casting it.
- */
-import { Database } from 'bun:sqlite';
-
+/** Typed fixtures for the route tests (`__tests__/routes/**`). */
 import type { Thread } from '@funny/shared';
 import type { RunnerInfo } from '@funny/shared/runner-protocol';
 import { z } from 'zod';
 
-import type { AppDatabase } from '../../db/index.js';
 import type * as runnerManager from '../../services/runner-manager.js';
 import type { RunnerRequest, RunnerRequestPort } from '../../services/runner-ports.js';
-import * as testDb from './test-db.js';
-
-type SeedDatabase = Parameters<typeof testDb.seedProject>[0];
-
-function hasSqliteClient(
-  db: AppDatabase & { $client?: unknown },
-): db is AppDatabase & { $client: Database } {
-  // Read through the `db` proxy's `get` trap, which forwards to the live drizzle instance.
-  return db.$client instanceof Database;
-}
-
-/** The test app's database, checked to be the bun:sqlite drizzle instance the seeds need. */
-export function seedDb(db: AppDatabase): SeedDatabase {
-  if (!hasSqliteClient(db)) {
-    throw new Error('test database is not backed by bun:sqlite');
-  }
-  return db;
-}
-
-function onAppDb<A extends readonly unknown[], R>(
-  seed: (db: SeedDatabase, ...args: A) => R,
-): (db: AppDatabase, ...args: A) => R {
-  return (db, ...args) => seed(seedDb(db), ...args);
-}
-
-export const seedProject = onAppDb(testDb.seedProject);
-export const seedThread = onAppDb(testDb.seedThread);
-export const seedPipeline = onAppDb(testDb.seedPipeline);
-export const seedRunner = onAppDb(testDb.seedRunner);
-export const seedRunnerProjectAssignment = onAppDb(testDb.seedRunnerProjectAssignment);
-export const seedTeamProject = onAppDb(testDb.seedTeamProject);
-export const seedMessage = onAppDb(testDb.seedMessage);
-export const seedThreadEvent = onAppDb(testDb.seedThreadEvent);
-export const seedProjectMember = onAppDb(testDb.seedProjectMember);
-export const seedOrgMember = onAppDb(testDb.seedOrgMember);
-export const seedResourceGrant = onAppDb(testDb.seedResourceGrant);
-export const seedMessageQueue = onAppDb(testDb.seedMessageQueue);
-export const seedStageHistory = onAppDb(testDb.seedStageHistory);
-export const seedInviteLink = onAppDb(testDb.seedInviteLink);
-export const seedSchedulerRun = onAppDb(testDb.seedSchedulerRun);
-export const seedAutomation = onAppDb(testDb.seedAutomation);
-export const seedAutomationRun = onAppDb(testDb.seedAutomationRun);
-export const seedPipelineRun = onAppDb(testDb.seedPipelineRun);
-export const seedThreadDependency = onAppDb(testDb.seedThreadDependency);
-export const seedToolCall = onAppDb(testDb.seedToolCall);
-export const seedRunnerTask = onAppDb(testDb.seedRunnerTask);
 
 // ── Response bodies ─────────────────────────────────────────
 
@@ -82,7 +25,7 @@ export const idRowsSchema = z.array(z.looseObject({ id: z.string() }));
 // ── Runners ─────────────────────────────────────────────────
 
 /** A connected runner as `runner-manager` reports it. */
-export function buildRunnerInfo(overrides: Partial<RunnerInfo> = {}): RunnerInfo {
+function buildRunnerInfo(overrides: Partial<RunnerInfo> = {}): RunnerInfo {
   const now = new Date().toISOString();
   return {
     runnerId: 'runner-1',

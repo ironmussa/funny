@@ -2,55 +2,19 @@
  * Typed fixtures and test doubles for the server service tests
  * (`__tests__/services/**`), so the tests do not need type assertions.
  */
-import { Database } from 'bun:sqlite';
-
 import type { WSEvent } from '@funny/shared';
 import type { StartAgentPayload } from '@funny/shared/runner-protocol';
 import { SANDBOX_STATES, type SandboxState } from '@funny/shared/sandbox-machine';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
 import { err, ok, type Result } from 'neverthrow';
 import type { Server as SocketIOServer } from 'socket.io';
 
-import type { AppDatabase } from '../../db/index.js';
-import * as schema from '../../db/schema.js';
 import type {
   RunnerPorts,
   StartThreadError,
   StartedThread,
-  startThreadOnRunner,
 } from '../../services/runner-thread-launcher.js';
 import type { ThreadSandboxRow } from '../../services/thread-sandboxes/thread-sandbox-store.js';
 import { FakeRunnerRequestPort } from './runner-port-fakes.js';
-import type { createTestDb } from './test-db.js';
-
-/** The database the `seed*` helpers of `test-db.ts` write to. */
-export type SeedDb = ReturnType<typeof createTestDb>['db'];
-
-/** The part of a Drizzle database that carries its driver. */
-interface DriverCarrier {
-  readonly select: AppDatabase['select'];
-  readonly $client?: unknown;
-}
-
-/**
- * The `bun:sqlite` connection behind a database. The server's `db` singleton
- * is a proxy that forwards `$client` to the active provider's Drizzle instance.
- */
-export function sqliteClientOf(db: DriverCarrier): Database {
-  const client = db.$client;
-  if (!(client instanceof Database)) {
-    throw new Error('sqliteClientOf: the database is not backed by bun:sqlite');
-  }
-  return client;
-}
-
-/**
- * A Drizzle instance over the same connection as `db` (the server singleton
- * or `createTestApp().db`), typed for the `seed*` helpers.
- */
-export function seedDbFor(db: DriverCarrier): SeedDb {
-  return drizzle(sqliteClientOf(db), { schema });
-}
 
 /**
  * `value`, checked to be an instance of `type` (instead of a cast to it).
@@ -64,9 +28,6 @@ export function expectInstance<V, T>(value: V, type: abstract new (...args: neve
 }
 
 // ── Thread launcher doubles ─────────────────────────────────────
-
-/** The launcher the automation scheduler and the factory watcher accept. */
-export type ThreadLauncher = typeof startThreadOnRunner;
 
 /** What a launcher answers. */
 export type LaunchResult = Result<StartedThread, StartThreadError>;

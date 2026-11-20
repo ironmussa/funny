@@ -20,15 +20,14 @@ import { user } from '@funny/shared/db/schema-sqlite';
 import { sql } from 'drizzle-orm';
 import { z } from 'zod';
 
+import { idRowsSchema, readJson } from '../helpers/builders-routes.js';
+import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedOrgMember,
   seedProject,
   seedProjectMember,
   seedTeamProject,
-  idRowsSchema,
-  readJson,
-} from '../helpers/builders-routes.js';
-import { createTestApp, type TestApp } from '../helpers/test-app.js';
+} from '../helpers/test-db.js';
 
 const membersResultSchema = z.object({
   result: z.object({

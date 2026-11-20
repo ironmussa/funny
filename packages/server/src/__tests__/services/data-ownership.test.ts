@@ -10,7 +10,6 @@ import {
   assertDataOwnership,
   forgetThreadOwnership,
 } from '../../services/data-ownership.js';
-import { seedDbFor, type SeedDb } from '../helpers/builders-services.js';
 import {
   seedMessage,
   seedMessageQueue,
@@ -25,7 +24,6 @@ const deny = (reason: string) => ({ ok: false as const, reason });
 
 describe('assertDataOwnership', () => {
   let db: (typeof import('../../db/index.js'))['db'];
-  let seedDb: SeedDb;
   let schema: typeof import('../../db/schema.js');
 
   beforeAll(async () => {
@@ -34,7 +32,6 @@ describe('assertDataOwnership', () => {
     const { autoMigrate } = await import('../../db/migrate.js');
     await autoMigrate();
     db = (await import('../../db/index.js')).db;
-    seedDb = seedDbFor(db);
     schema = await import('../../db/schema.js');
   });
 
@@ -57,16 +54,16 @@ describe('assertDataOwnership', () => {
         // ignore
       }
     }
-    seedProject(seedDb, { id: 'p1', userId: 'u1', path: '/tmp/p1' });
-    seedProject(seedDb, { id: 'p2', userId: 'u2', path: '/tmp/p2' });
-    seedThread(seedDb, { id: 't1', projectId: 'p1', userId: 'u1' });
-    seedThread(seedDb, { id: 't2', projectId: 'p2', userId: 'u2' });
-    seedMessage(seedDb, { id: 'm1', threadId: 't1' });
-    seedMessage(seedDb, { id: 'm2', threadId: 't2' });
-    seedToolCall(seedDb, { id: 'tc1', messageId: 'm1' });
-    seedToolCall(seedDb, { id: 'tc2', messageId: 'm2' });
-    seedMessageQueue(seedDb, { id: 'q1', threadId: 't1' });
-    seedMessageQueue(seedDb, { id: 'q2', threadId: 't2' });
+    seedProject(db, { id: 'p1', userId: 'u1', path: '/tmp/p1' });
+    seedProject(db, { id: 'p2', userId: 'u2', path: '/tmp/p2' });
+    seedThread(db, { id: 't1', projectId: 'p1', userId: 'u1' });
+    seedThread(db, { id: 't2', projectId: 'p2', userId: 'u2' });
+    seedMessage(db, { id: 'm1', threadId: 't1' });
+    seedMessage(db, { id: 'm2', threadId: 't2' });
+    seedToolCall(db, { id: 'tc1', messageId: 'm1' });
+    seedToolCall(db, { id: 'tc2', messageId: 'm2' });
+    seedMessageQueue(db, { id: 'q1', threadId: 't1' });
+    seedMessageQueue(db, { id: 'q2', threadId: 't2' });
   });
 
   afterAll(async () => {
@@ -80,7 +77,7 @@ describe('assertDataOwnership', () => {
     test('a missing thread is not cached, so it is allowed once it exists', async () => {
       const msg = { type: 'data:get_thread', threadId: 't-new' };
       expect(await check(msg)).toEqual(deny('thread t-new not found'));
-      seedThread(seedDb, { id: 't-new', projectId: 'p1', userId: 'u1' });
+      seedThread(db, { id: 't-new', projectId: 'p1', userId: 'u1' });
       expect(await check(msg)).toEqual(OK);
     });
 
@@ -264,7 +261,7 @@ describe('assertDataOwnership', () => {
     });
 
     test('foreign project passes for a project member', async () => {
-      seedProjectMember(seedDb, { projectId: 'p2', userId: 'u1' });
+      seedProjectMember(db, { projectId: 'p2', userId: 'u1' });
       expect(await check({ type: 'data:get_project', projectId: 'p2' })).toEqual(OK);
     });
 
@@ -345,7 +342,7 @@ describe('assertDataOwnership', () => {
     test('orphaned tool call is refused', async () => {
       db.run('PRAGMA foreign_keys = OFF');
       try {
-        seedToolCall(seedDb, { id: 'tc-orphan', messageId: 'no-such-message' });
+        seedToolCall(db, { id: 'tc-orphan', messageId: 'no-such-message' });
       } finally {
         db.run('PRAGMA foreign_keys = ON');
       }

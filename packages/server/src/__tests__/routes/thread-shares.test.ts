@@ -11,9 +11,9 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { sql } from 'drizzle-orm';
 
-import { seedProject, seedProjectMember, seedThread } from '../helpers/builders-routes.js';
 import { FakeBrowserEventSink } from '../helpers/runner-port-fakes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject, seedProjectMember, seedThread } from '../helpers/test-db.js';
 import { threadProcedures } from '../helpers/thread-procedures.js';
 
 const OWNER = 'owner-1';

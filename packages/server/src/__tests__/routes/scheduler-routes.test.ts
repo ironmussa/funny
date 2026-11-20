@@ -9,8 +9,8 @@ import { Hono } from 'hono';
 
 import type { ServerEnv } from '../../lib/types.js';
 import { schedulerRoutes } from '../../routes/scheduler.js';
-import { seedSchedulerRun, seedProject, seedThread } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedSchedulerRun, seedProject, seedThread } from '../helpers/test-db.js';
 
 function unauthenticatedSchedulerApp() {
   const app = new Hono<ServerEnv>();

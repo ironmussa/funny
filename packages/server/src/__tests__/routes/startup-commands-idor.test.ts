@@ -19,8 +19,8 @@ import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { z } from 'zod';
 
-import { seedProject } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject } from '../helpers/test-db.js';
 
 describe('Startup commands IDOR (security CR-6)', () => {
   let t: TestApp;

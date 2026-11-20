@@ -45,14 +45,9 @@ import * as runnerManager from '../../services/runner-manager.js';
 import * as runnerResolver from '../../services/runner-resolver.js';
 import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
 import * as threadRegistry from '../../services/thread-registry.js';
-import {
-  buildProjectRunnerMatch,
-  seedProject,
-  seedRunner,
-  seedThread,
-  seedResourceGrant,
-} from '../helpers/builders-routes.js';
+import { buildProjectRunnerMatch } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject, seedRunner, seedThread, seedResourceGrant } from '../helpers/test-db.js';
 
 describe('Thread routes — runner proxy', () => {
   let t: TestApp;

@@ -21,13 +21,13 @@ process.env.FUNNY_PROJECT_ROOT = '/tmp';
 import { describe, test, expect, beforeAll, beforeEach, afterAll, spyOn } from 'bun:test';
 
 import * as runnerManager from '../../services/runner-manager.js';
+import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedOrgMember,
   seedProject,
   seedTeamProject,
   seedProjectMember,
-} from '../helpers/builders-routes.js';
-import { createTestApp, type TestApp } from '../helpers/test-app.js';
+} from '../helpers/test-db.js';
 
 describe.serial('Project Routes (Integration)', () => {
   let t: TestApp;

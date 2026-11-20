@@ -31,8 +31,8 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { eq } from 'drizzle-orm';
 
-import { seedInviteLink, seedOrgMember } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedInviteLink, seedOrgMember } from '../helpers/test-db.js';
 
 const VALID_PASSWORD = 'Password1234';
 const orgId = 'org-acme';

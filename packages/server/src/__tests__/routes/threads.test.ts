@@ -17,6 +17,7 @@ import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
 import type { BrowserEventSink } from '../../services/runner-ports.js';
+import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedProject,
   seedThread,
@@ -25,8 +26,7 @@ import {
   seedThreadEvent,
   seedTeamProject,
   seedToolCall,
-} from '../helpers/builders-routes.js';
-import { createTestApp, type TestApp } from '../helpers/test-app.js';
+} from '../helpers/test-db.js';
 import { threadProcedures } from '../helpers/thread-procedures.js';
 
 const browserEvents: BrowserEventSink = {

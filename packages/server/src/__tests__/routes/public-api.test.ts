@@ -17,8 +17,8 @@ import { Hono } from 'hono';
 import { z } from 'zod';
 
 import type { ServerEnv } from '../../lib/types.js';
-import { seedProject, seedProjectMember } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject, seedProjectMember } from '../helpers/test-db.js';
 
 /** What this suite reads off a procedure's `_def` (its tRPC type omits `meta` and `output`). */
 const procedureDefSchema = z.looseObject({

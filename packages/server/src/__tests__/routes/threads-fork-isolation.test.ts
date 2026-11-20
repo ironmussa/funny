@@ -14,14 +14,14 @@ process.env.RUNNER_AUTH_SECRET = 'test-secret';
 import type { RunnerRequest } from '../../services/runner-ports.js';
 import { __resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
 import * as threadRegistry from '../../services/thread-registry.js';
+import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedOrgMember,
   seedProject,
   seedRunner,
   seedTeamProject,
   seedThread,
-} from '../helpers/builders-routes.js';
-import { createTestApp, type TestApp } from '../helpers/test-app.js';
+} from '../helpers/test-db.js';
 
 const RUNNER_OWNERS: Record<string, string> = {
   'u1-general': 'user-1',

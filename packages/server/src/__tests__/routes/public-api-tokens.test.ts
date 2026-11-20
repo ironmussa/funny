@@ -17,8 +17,8 @@ import { Hono } from 'hono';
 
 import * as auditModule from '../../lib/audit.js';
 import type { ServerEnv } from '../../lib/types.js';
-import { seedProject } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject } from '../helpers/test-db.js';
 
 const DAY = 24 * 60 * 60 * 1000;
 

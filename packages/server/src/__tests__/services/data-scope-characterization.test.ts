@@ -19,7 +19,6 @@ import {
   type DataScopeDecision,
 } from '../../services/data-scope.js';
 import { __resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
-import { seedDbFor, type SeedDb } from '../helpers/builders-services.js';
 import {
   seedMessage,
   seedMessageQueue,
@@ -209,7 +208,6 @@ const IGNORED_REFERENCES: Array<[string, any]> = [
 
 describe('assertRunnerDataScope characterization', () => {
   let db: (typeof import('../../db/index.js'))['db'];
-  let seedDb: SeedDb;
 
   beforeAll(async () => {
     const { initDatabase } = await import('../../db/index.js');
@@ -217,7 +215,6 @@ describe('assertRunnerDataScope characterization', () => {
     const { autoMigrate } = await import('../../db/migrate.js');
     await autoMigrate();
     db = (await import('../../db/index.js')).db;
-    seedDb = seedDbFor(db);
   });
 
   beforeEach(async () => {
@@ -242,17 +239,17 @@ describe('assertRunnerDataScope characterization', () => {
     __resetDataOwnershipCache();
     const now = new Date().toISOString();
     for (const s of ['x', 'y'] as const) {
-      seedProject(seedDb, { id: `p${s}`, userId: 'alice', path: `/${s}` });
-      seedThread(seedDb, {
+      seedProject(db, { id: `p${s}`, userId: 'alice', path: `/${s}` });
+      seedThread(db, {
         id: `t${s}`,
         projectId: `p${s}`,
         userId: 'alice',
         externalRequestId: `ext-${s}`,
         sessionId: `sess-${s}`,
       });
-      seedMessage(seedDb, { id: `m${s}`, threadId: `t${s}` });
-      seedToolCall(seedDb, { id: `tc${s}`, messageId: `m${s}` });
-      seedMessageQueue(seedDb, { id: `q${s}`, threadId: `t${s}` });
+      seedMessage(db, { id: `m${s}`, threadId: `t${s}` });
+      seedToolCall(db, { id: `tc${s}`, messageId: `m${s}` });
+      seedMessageQueue(db, { id: `q${s}`, threadId: `t${s}` });
       db.insert(schema.watchers)
         .values({
           id: `w${s}`,
@@ -289,15 +286,15 @@ describe('assertRunnerDataScope characterization', () => {
         })
         .run();
     }
-    seedThread(seedDb, {
+    seedThread(db, {
       id: 'ts',
       projectId: null,
       userId: 'alice',
       isScratch: 1,
     });
-    seedMessage(seedDb, { id: 'ms', threadId: 'ts' });
-    seedRunner(seedDb, { id: 'laptop', userId: 'alice', token: 'tok-l', hostname: 'l' });
-    seedRunner(seedDb, {
+    seedMessage(db, { id: 'ms', threadId: 'ts' });
+    seedRunner(db, { id: 'laptop', userId: 'alice', token: 'tok-l', hostname: 'l' });
+    seedRunner(db, {
       id: 'rx',
       userId: 'alice',
       token: 'tok-rx',

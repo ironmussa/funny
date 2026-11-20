@@ -36,8 +36,8 @@ afterAll(() => {
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
-import { seedProject } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject } from '../helpers/test-db.js';
 
 type Role = 'user' | 'admin';
 

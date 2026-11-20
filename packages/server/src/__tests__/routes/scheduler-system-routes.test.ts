@@ -65,6 +65,7 @@ import type { BrowserEventSink } from '../../services/runner-ports.js';
 import { uncacheThread } from '../../services/runner-resolver.js';
 import { __resetRunnerScopeCache, setProjectDedicatedRunner } from '../../services/runner-scope.js';
 import { getSchedulerEventBuffer } from '../../services/scheduler-event-buffer.js';
+import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedSchedulerRun,
   seedPipeline,
@@ -73,8 +74,7 @@ import {
   seedRunner,
   seedThread,
   seedThreadDependency,
-} from '../helpers/builders-routes.js';
-import { createTestApp, type TestApp } from '../helpers/test-app.js';
+} from '../helpers/test-db.js';
 
 const browserEvents: BrowserEventSink = {
   publish: () => {},

@@ -15,8 +15,8 @@ import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 import { BUILTIN_AGENT_TEMPLATES } from '@funny/shared';
 import { sql } from 'drizzle-orm';
 
-import { seedProject, seedThread } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject, seedThread } from '../helpers/test-db.js';
 
 const headersFor = (userId: string) => ({
   'X-Test-User-Id': userId,

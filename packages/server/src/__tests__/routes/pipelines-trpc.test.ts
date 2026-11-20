@@ -11,13 +11,8 @@ mockCoreGitRepoChecks();
 
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
-import {
-  seedPipeline,
-  seedPipelineRun,
-  seedProject,
-  seedThread,
-} from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedPipeline, seedPipelineRun, seedProject, seedThread } from '../helpers/test-db.js';
 
 const headersFor = (userId: string) => ({
   'X-Test-User-Id': userId,

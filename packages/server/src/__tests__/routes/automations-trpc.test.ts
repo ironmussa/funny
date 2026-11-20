@@ -15,13 +15,8 @@ import { Hono } from 'hono';
 import { csrf } from 'hono/csrf';
 
 import type { ServerEnv } from '../../lib/types.js';
-import {
-  seedAutomation,
-  seedAutomationRun,
-  seedProject,
-  seedThread,
-} from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedAutomation, seedAutomationRun, seedProject, seedThread } from '../helpers/test-db.js';
 
 const headersFor = (userId: string) => ({
   'X-Test-User-Id': userId,

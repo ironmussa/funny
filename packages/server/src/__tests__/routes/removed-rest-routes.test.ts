@@ -20,8 +20,8 @@ mockCoreGitRepoChecks();
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import { REMOVED_PROJECT_ROUTES } from '../../routes/projects.js';
-import { seedProject, seedProjectMember, seedRunner } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject, seedProjectMember, seedRunner } from '../helpers/test-db.js';
 
 describe('removed REST routes are refused, not proxied', () => {
   let t: TestApp;

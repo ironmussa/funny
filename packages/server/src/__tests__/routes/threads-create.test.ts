@@ -28,14 +28,9 @@ import type { RunnerRequest, RunnerResponse } from '../../services/runner-ports.
 import * as runnerResolver from '../../services/runner-resolver.js';
 import { __resetRunnerScopeCache } from '../../services/runner-scope.js';
 import * as threadRegistry from '../../services/thread-registry.js';
-import {
-  buildProjectRunnerMatch,
-  runnerRequestJson,
-  seedProject,
-  seedRunner,
-  seedThread,
-} from '../helpers/builders-routes.js';
+import { buildProjectRunnerMatch, runnerRequestJson } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
 
 const tunnelFetch = mock(
   async (_runnerId: string, _request: RunnerRequest): Promise<RunnerResponse> => ({

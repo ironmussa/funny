@@ -26,14 +26,14 @@ import { z } from 'zod';
 
 import type { ServerEnv } from '../../lib/types.js';
 import type { RunnerPresencePort, RunnerRequest } from '../../services/runner-ports.js';
+import { runnerRequestJson } from '../helpers/builders-routes.js';
+import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
-  runnerRequestJson,
   seedProject,
   seedProjectMember,
   seedRunner,
   seedRunnerProjectAssignment,
-} from '../helpers/builders-routes.js';
-import { createTestApp, type TestApp } from '../helpers/test-app.js';
+} from '../helpers/test-db.js';
 
 const RUNNER_OWNER: Record<string, string> = { 'r-alice': 'alice', 'r-bob': 'bob' };
 

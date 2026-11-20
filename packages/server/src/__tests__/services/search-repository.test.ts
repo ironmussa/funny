@@ -7,7 +7,6 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { normalizeSearchText } from '@funny/shared/lib/text-search';
 
-import { seedDbFor } from '../helpers/builders-services.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedMessage, seedProject, seedThread } from '../helpers/test-db.js';
 
@@ -20,11 +19,11 @@ beforeAll(async () => {
 });
 
 function seed(contents: Record<string, string>) {
-  seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/a' });
+  seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
   let n = 0;
   for (const [threadId, content] of Object.entries(contents)) {
-    seedThread(seedDbFor(t.db), { id: threadId, projectId: 'p1', userId: 'user-1' });
-    seedMessage(seedDbFor(t.db), {
+    seedThread(t.db, { id: threadId, projectId: 'p1', userId: 'user-1' });
+    seedMessage(t.db, {
       id: `m-${threadId}`,
       threadId,
       content,
@@ -84,8 +83,8 @@ describe('contentPrefilter (case-insensitive)', () => {
   test('keeps a message for every character that folds onto ASCII or is erased', () => {
     // Exhaustive: any such character inside an ASCII word must not hide the
     // word from SQL, since the JS check (normalizeSearchText) ignores it.
-    seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/a' });
-    seedThread(seedDbFor(t.db), { id: 't1', projectId: 'p1', userId: 'user-1' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
     const ids: string[] = [];
     const rows: (typeof t.schema.messages.$inferInsert)[] = [];
     for (let cp = 0x80; cp <= 0x10ffff; cp++) {
@@ -133,8 +132,8 @@ describe('search results', () => {
   });
 
   test('searchThreadMessages pages past the first batch without repeats', async () => {
-    seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/a' });
-    seedThread(seedDbFor(t.db), { id: 't1', projectId: 'p1', userId: 'user-1' });
+    seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/a' });
+    seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
     const rows = Array.from({ length: 1200 }, (_, i) => ({
       id: `m${String(i).padStart(4, '0')}`,
       threadId: 't1',

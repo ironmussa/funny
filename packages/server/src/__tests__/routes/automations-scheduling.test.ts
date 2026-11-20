@@ -17,13 +17,9 @@ import type {
   StartThreadInput,
   startThreadOnRunner,
 } from '../../services/runner-thread-launcher.js';
-import {
-  seedAutomation,
-  seedProject,
-  seedThread,
-  unreachableRunnerRequests,
-} from '../helpers/builders-routes.js';
+import { unreachableRunnerRequests } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedAutomation, seedProject, seedThread } from '../helpers/test-db.js';
 
 describe('automation procedures ↔ scheduler', () => {
   let t: TestApp;

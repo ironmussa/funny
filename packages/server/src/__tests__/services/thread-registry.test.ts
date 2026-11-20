@@ -5,7 +5,6 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
 import { eq } from 'drizzle-orm';
 
-import { seedDbFor } from '../helpers/builders-services.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedProject, seedRunner, seedThread } from '../helpers/test-db.js';
 
@@ -24,8 +23,8 @@ describe('thread-registry service', () => {
 
   describe('registerThread', () => {
     test('inserts a new project thread with defaults', async () => {
-      seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/repo' });
-      seedRunner(seedDbFor(t.db), { id: 'runner-1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/repo' });
+      seedRunner(t.db, { id: 'runner-1', userId: 'user-1' });
 
       await tr.registerThread({
         id: 't-new',
@@ -54,10 +53,10 @@ describe('thread-registry service', () => {
     });
 
     test('upserts on conflict and updates runner metadata', async () => {
-      seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/repo' });
-      seedRunner(seedDbFor(t.db), { id: 'runner-1', userId: 'user-1', token: 'tok-runner-1' });
-      seedRunner(seedDbFor(t.db), { id: 'runner-2', userId: 'user-1', token: 'tok-runner-2' });
-      seedThread(seedDbFor(t.db), {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/repo' });
+      seedRunner(t.db, { id: 'runner-1', userId: 'user-1', token: 'tok-runner-1' });
+      seedRunner(t.db, { id: 'runner-2', userId: 'user-1', token: 'tok-runner-2' });
+      seedThread(t.db, {
         id: 't-upsert',
         projectId: 'p1',
         userId: 'user-1',
@@ -89,7 +88,7 @@ describe('thread-registry service', () => {
     });
 
     test('registers scratch threads with null projectId', async () => {
-      seedRunner(seedDbFor(t.db), { id: 'runner-1', userId: 'user-1' });
+      seedRunner(t.db, { id: 'runner-1', userId: 'user-1' });
 
       await tr.registerThread({
         id: 't-scratch',
@@ -114,13 +113,13 @@ describe('thread-registry service', () => {
 
   describe('getRunnerForThread', () => {
     test('returns the runner identity when thread belongs to the user', async () => {
-      seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/repo' });
-      seedRunner(seedDbFor(t.db), {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/repo' });
+      seedRunner(t.db, {
         id: 'runner-1',
         userId: 'user-1',
         httpUrl: 'http://127.0.0.1:3003',
       });
-      seedThread(seedDbFor(t.db), {
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
@@ -132,9 +131,9 @@ describe('thread-registry service', () => {
     });
 
     test('returns null for cross-tenant lookup', async () => {
-      seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-2', path: '/repo' });
-      seedRunner(seedDbFor(t.db), { id: 'runner-2', userId: 'user-2' });
-      seedThread(seedDbFor(t.db), {
+      seedProject(t.db, { id: 'p1', userId: 'user-2', path: '/repo' });
+      seedRunner(t.db, { id: 'runner-2', userId: 'user-2' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-2',
@@ -145,8 +144,8 @@ describe('thread-registry service', () => {
     });
 
     test('returns null when thread has no runner', async () => {
-      seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/repo' });
-      seedThread(seedDbFor(t.db), {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/repo' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
@@ -159,8 +158,8 @@ describe('thread-registry service', () => {
 
   describe('updateThreadStatus', () => {
     test('updates status and optional stage', async () => {
-      seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/repo' });
-      seedThread(seedDbFor(t.db), {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/repo' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
@@ -182,8 +181,8 @@ describe('thread-registry service', () => {
     });
 
     test('sets completedAt when status is terminal', async () => {
-      seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/repo' });
-      seedThread(seedDbFor(t.db), {
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/repo' });
+      seedThread(t.db, {
         id: 't1',
         projectId: 'p1',
         userId: 'user-1',
@@ -205,11 +204,11 @@ describe('thread-registry service', () => {
 
   describe('listThreadsForProject', () => {
     test('returns lightweight metadata for threads in a project', async () => {
-      seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/repo' });
-      seedProject(seedDbFor(t.db), { id: 'p2', userId: 'user-1', path: '/other' });
-      seedThread(seedDbFor(t.db), { id: 't1', projectId: 'p1', userId: 'user-1', title: 'One' });
-      seedThread(seedDbFor(t.db), { id: 't2', projectId: 'p1', userId: 'user-1', title: 'Two' });
-      seedThread(seedDbFor(t.db), { id: 't3', projectId: 'p2', userId: 'user-1', title: 'Other' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/repo' });
+      seedProject(t.db, { id: 'p2', userId: 'user-1', path: '/other' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1', title: 'One' });
+      seedThread(t.db, { id: 't2', projectId: 'p1', userId: 'user-1', title: 'Two' });
+      seedThread(t.db, { id: 't3', projectId: 'p2', userId: 'user-1', title: 'Other' });
 
       const rows = await tr.listThreadsForProject('p1');
       expect(rows.map((r) => r.id).sort()).toEqual(['t1', 't2']);
@@ -225,8 +224,8 @@ describe('thread-registry service', () => {
 
   describe('unregisterThread', () => {
     test('removes the thread row', async () => {
-      seedProject(seedDbFor(t.db), { id: 'p1', userId: 'user-1', path: '/repo' });
-      seedThread(seedDbFor(t.db), { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedProject(t.db, { id: 'p1', userId: 'user-1', path: '/repo' });
+      seedThread(t.db, { id: 't1', projectId: 'p1', userId: 'user-1' });
 
       await tr.unregisterThread('t1');
 

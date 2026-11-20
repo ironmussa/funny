@@ -12,8 +12,8 @@ mockCoreGitRepoChecks();
 import { beforeAll, beforeEach, describe, expect, test } from 'bun:test';
 
 import type { FactoryRunState } from '../../services/factory/factory-runs.js';
-import { seedProject, seedProjectMember } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject, seedProjectMember } from '../helpers/test-db.js';
 
 describe('factory over tRPC', () => {
   let t: TestApp;

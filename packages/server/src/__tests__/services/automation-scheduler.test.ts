@@ -26,7 +26,6 @@ import {
   expectInstance,
   launchedThread,
   runnerOffline,
-  seedDbFor,
   unusedRunnerPorts,
   type LaunchResult,
 } from '../helpers/builders-services.js';
@@ -75,8 +74,7 @@ describe('automation scheduler', () => {
     return row;
   };
   const runs = () => t.db.select().from(schema.automationRuns).all();
-  const register = (id: string) =>
-    seedThread(seedDbFor(t.db), { id, projectId: 'p1', userId: 'alice' });
+  const register = (id: string) => seedThread(t.db, { id, projectId: 'p1', userId: 'alice' });
 
   beforeAll(async () => {
     t = await createTestApp();
@@ -84,15 +82,15 @@ describe('automation scheduler', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(seedDbFor(t.db), { id: 'p1', userId: 'alice', path: '/repo' });
+    seedProject(t.db, { id: 'p1', userId: 'alice', path: '/repo' });
   });
 
   afterEach(() => stopAutomationScheduler());
 
   describe('scheduling', () => {
     test('schedules enabled automations only, and records nextRunAt', async () => {
-      seedAutomation(seedDbFor(t.db), { id: 'on', projectId: 'p1', schedule: '0 9 * * *' });
-      seedAutomation(seedDbFor(t.db), {
+      seedAutomation(t.db, { id: 'on', projectId: 'p1', schedule: '0 9 * * *' });
+      seedAutomation(t.db, {
         id: 'off',
         projectId: 'p1',
         schedule: '0 10 * * *',
@@ -111,7 +109,7 @@ describe('automation scheduler', () => {
     });
 
     test('does not run anything on start (no catch-up)', async () => {
-      seedAutomation(seedDbFor(t.db), {
+      seedAutomation(t.db, {
         id: 'on',
         projectId: 'p1',
         lastRunAt: '2020-01-01T00:00:00Z',
@@ -128,7 +126,7 @@ describe('automation scheduler', () => {
     });
 
     test('a tick starts a run for the automation owner', async () => {
-      seedAutomation(seedDbFor(t.db), {
+      seedAutomation(t.db, {
         id: 'on',
         projectId: 'p1',
         userId: 'alice',
@@ -148,7 +146,7 @@ describe('automation scheduler', () => {
     // #185: croner's `protect` only skips a tick while the previous one's
     // promise is pending; `void fire(id)` made every tick look finished at once.
     test('a tick settles only once its run is recorded, so protect can skip overlaps', async () => {
-      seedAutomation(seedDbFor(t.db), {
+      seedAutomation(t.db, {
         id: 'on',
         projectId: 'p1',
         userId: 'alice',
@@ -177,7 +175,7 @@ describe('automation scheduler', () => {
     });
 
     test('a failing tick is logged and never becomes an unhandled rejection', async () => {
-      seedAutomation(seedDbFor(t.db), { id: 'on', projectId: 'p1', schedule: '0 9 * * *' });
+      seedAutomation(t.db, { id: 'on', projectId: 'p1', schedule: '0 9 * * *' });
       const cron = fakeCron();
       const launch = async (): Promise<LaunchResult> => {
         throw new Error('db down');
@@ -218,7 +216,7 @@ describe('automation scheduler', () => {
     describe('a tick while the previous run is still going', () => {
       const ago = (ms: number) => new Date(Date.now() - ms).toISOString();
       const start = async () => {
-        seedAutomation(seedDbFor(t.db), {
+        seedAutomation(t.db, {
           id: 'on',
           projectId: 'p1',
           userId: 'alice',
@@ -234,8 +232,8 @@ describe('automation scheduler', () => {
         return { tick: () => cron.live.get('0 9 * * *')!.onTick(), launcher };
       };
       const previousRun = (status: string, startedAt: string) => {
-        seedThread(seedDbFor(t.db), { id: 'prev', projectId: 'p1', userId: 'alice' });
-        seedAutomationRun(seedDbFor(t.db), {
+        seedThread(t.db, { id: 'prev', projectId: 'p1', userId: 'alice' });
+        seedAutomationRun(t.db, {
           id: 'r-prev',
           automationId: 'on',
           threadId: 'prev',
@@ -287,7 +285,7 @@ describe('automation scheduler', () => {
     });
 
     test('a tick for an automation disabled since scheduling does nothing', async () => {
-      seedAutomation(seedDbFor(t.db), { id: 'on', projectId: 'p1', schedule: '0 9 * * *' });
+      seedAutomation(t.db, { id: 'on', projectId: 'p1', schedule: '0 9 * * *' });
       const cron = fakeCron();
       const launcher = fakeLauncher();
       await startAutomationScheduler({ ports, createJob: cron.createJob, launch: launcher.launch });
@@ -300,7 +298,7 @@ describe('automation scheduler', () => {
     });
 
     test('reschedule follows a schedule change; disabling clears nextRunAt', async () => {
-      seedAutomation(seedDbFor(t.db), { id: 'a', projectId: 'p1', schedule: '0 9 * * *' });
+      seedAutomation(t.db, { id: 'a', projectId: 'p1', schedule: '0 9 * * *' });
       const cron = fakeCron();
       await startAutomationScheduler({
         ports,
@@ -321,7 +319,7 @@ describe('automation scheduler', () => {
     });
 
     test('unschedule stops a deleted automation from firing', async () => {
-      seedAutomation(seedDbFor(t.db), { id: 'a', projectId: 'p1', schedule: '0 9 * * *' });
+      seedAutomation(t.db, { id: 'a', projectId: 'p1', schedule: '0 9 * * *' });
       const cron = fakeCron();
       await startAutomationScheduler({
         ports,
@@ -336,8 +334,8 @@ describe('automation scheduler', () => {
     });
 
     test('an invalid schedule is skipped without breaking the others', async () => {
-      seedAutomation(seedDbFor(t.db), { id: 'bad', projectId: 'p1', schedule: 'not a cron' });
-      seedAutomation(seedDbFor(t.db), { id: 'good', projectId: 'p1', schedule: '0 9 * * *' });
+      seedAutomation(t.db, { id: 'bad', projectId: 'p1', schedule: 'not a cron' });
+      seedAutomation(t.db, { id: 'good', projectId: 'p1', schedule: '0 9 * * *' });
 
       await startAutomationScheduler({
         ports,
@@ -351,7 +349,7 @@ describe('automation scheduler', () => {
 
   describe('run bookkeeping', () => {
     test('a dispatched run is recorded as running and the thread is read-only', async () => {
-      seedAutomation(seedDbFor(t.db), {
+      seedAutomation(t.db, {
         id: 'a',
         projectId: 'p1',
         userId: 'alice',
@@ -386,7 +384,7 @@ describe('automation scheduler', () => {
     });
 
     test("owner's runner offline → failed run in history with the reason", async () => {
-      seedAutomation(seedDbFor(t.db), { id: 'a', projectId: 'p1', userId: 'alice' });
+      seedAutomation(t.db, { id: 'a', projectId: 'p1', userId: 'alice' });
       await startAutomationScheduler({
         ports,
         createJob: fakeCron().createJob,
@@ -408,9 +406,9 @@ describe('automation scheduler', () => {
     });
 
     test('runs stuck in running for over a day are failed on start', async () => {
-      seedAutomation(seedDbFor(t.db), { id: 'a', projectId: 'p1' });
-      seedThread(seedDbFor(t.db), { id: 'old', projectId: 'p1' });
-      seedThread(seedDbFor(t.db), { id: 'fresh', projectId: 'p1' });
+      seedAutomation(t.db, { id: 'a', projectId: 'p1' });
+      seedThread(t.db, { id: 'old', projectId: 'p1' });
+      seedThread(t.db, { id: 'fresh', projectId: 'p1' });
       const at = (ms: number) => new Date(Date.now() - ms).toISOString();
       t.db
         .insert(schema.automationRuns)
@@ -443,8 +441,8 @@ describe('automation scheduler', () => {
     });
 
     test('runs that go stale while the server is up are failed by the periodic sweep (#198)', async () => {
-      seedAutomation(seedDbFor(t.db), { id: 'a', projectId: 'p1', userId: 'alice' });
-      seedThread(seedDbFor(t.db), { id: 'lost', projectId: 'p1' });
+      seedAutomation(t.db, { id: 'a', projectId: 'p1', userId: 'alice' });
+      seedThread(t.db, { id: 'lost', projectId: 'p1' });
       let sweep: (() => Promise<void>) | null = null;
       let sweepStopped = false;
       let clock = new Date('2030-01-01T00:00:00.000Z');

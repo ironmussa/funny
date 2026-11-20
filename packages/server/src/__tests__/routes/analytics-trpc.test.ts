@@ -6,8 +6,8 @@
  */
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
-import { seedProject, seedStageHistory, seedThread } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedProject, seedStageHistory, seedThread } from '../helpers/test-db.js';
 
 describe('analytics over tRPC (integration)', () => {
   let t: TestApp;

@@ -12,8 +12,8 @@ import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
 
-import { seedMessage, seedProject, seedThread } from '../helpers/builders-routes.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
+import { seedMessage, seedProject, seedThread } from '../helpers/test-db.js';
 import { threadProcedures } from '../helpers/thread-procedures.js';
 
 /** Columns the server keeps to itself; the detail view exposes `initInfo` instead. */

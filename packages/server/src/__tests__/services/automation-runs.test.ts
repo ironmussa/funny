@@ -5,7 +5,6 @@ import { eq } from 'drizzle-orm';
 
 import * as schema from '../../db/schema.js';
 import { onAutomationThreadTerminal } from '../../services/automation-runs.js';
-import { seedDbFor } from '../helpers/builders-services.js';
 import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import { seedAutomation, seedMessage, seedProject, seedThread } from '../helpers/test-db.js';
 
@@ -27,7 +26,7 @@ describe('onAutomationThreadTerminal', () => {
   };
 
   function seedRun(id: string, threadId: string, status = 'running', startedAt?: string) {
-    seedThread(seedDbFor(t.db), { id: threadId, projectId: 'p1', userId: 'alice' });
+    seedThread(t.db, { id: threadId, projectId: 'p1', userId: 'alice' });
     t.db
       .insert(schema.automationRuns)
       .values({
@@ -46,19 +45,19 @@ describe('onAutomationThreadTerminal', () => {
 
   beforeEach(() => {
     t.cleanup();
-    seedProject(seedDbFor(t.db), { id: 'p1', userId: 'alice', path: '/repo' });
-    seedAutomation(seedDbFor(t.db), { id: 'a', projectId: 'p1', userId: 'alice' });
+    seedProject(t.db, { id: 'p1', userId: 'alice', path: '/repo' });
+    seedAutomation(t.db, { id: 'a', projectId: 'p1', userId: 'alice' });
   });
 
   test('completed → completed with findings and a summary from the last reply, pending review', async () => {
     seedRun('r1', 't1');
-    seedMessage(seedDbFor(t.db), {
+    seedMessage(t.db, {
       threadId: 't1',
       role: 'assistant',
       content: 'first',
       timestamp: '2026-01-01T00:00:00Z',
     });
-    seedMessage(seedDbFor(t.db), {
+    seedMessage(t.db, {
       id: 'm2',
       threadId: 't1',
       role: 'assistant',
@@ -115,7 +114,7 @@ describe('onAutomationThreadTerminal', () => {
   });
 
   test('a thread that is not an automation run is ignored', async () => {
-    seedThread(seedDbFor(t.db), { id: 'plain', projectId: 'p1', userId: 'alice' });
+    seedThread(t.db, { id: 'plain', projectId: 'p1', userId: 'alice' });
 
     await onAutomationThreadTerminal('plain', 'completed');
 

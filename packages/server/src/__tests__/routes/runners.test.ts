@@ -13,14 +13,14 @@ process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';
 
+import { createTestApp, type TestApp } from '../helpers/test-app.js';
 import {
   seedRunner,
   seedProject,
   seedRunnerProjectAssignment,
   seedRunnerTask,
   seedThread,
-} from '../helpers/builders-routes.js';
-import { createTestApp, type TestApp } from '../helpers/test-app.js';
+} from '../helpers/test-db.js';
 
 describe('Runner Routes (Integration)', () => {
   let t: TestApp;

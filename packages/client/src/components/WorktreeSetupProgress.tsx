@@ -57,7 +57,8 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
   }
 
   const stepElapsed = getStepElapsed(focalStep.id);
-  const Icon = STEP_STYLE[focalStep.status].Icon;
+  const style = STEP_STYLE[focalStep.status];
+  const StepIcon = style.Icon;
 
   return (
     <div
@@ -78,27 +79,11 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
           >
             {/* Icon */}
             <div className="shrink-0">
-              <Icon
-                className={cn(
-                  'size-6',
-                  focalStep.status === 'running' && 'text-primary animate-spin',
-                  focalStep.status === 'completed' && 'text-status-success',
-                  focalStep.status === 'failed' && 'text-destructive',
-                  focalStep.status === 'pending' && 'text-muted-foreground/40',
-                )}
-              />
+              <StepIcon className={style.icon} />
             </div>
 
             {/* Label */}
-            <span
-              className={cn(
-                'text-center text-sm font-normal',
-                focalStep.status === 'running' && 'text-foreground',
-                focalStep.status === 'completed' && 'text-status-success',
-                focalStep.status === 'failed' && 'text-destructive',
-                focalStep.status === 'pending' && 'text-muted-foreground/60',
-              )}
-            >
+            <span className={cn('text-center text-sm font-normal', style.label)}>
               {focalStep.label}
             </span>
 

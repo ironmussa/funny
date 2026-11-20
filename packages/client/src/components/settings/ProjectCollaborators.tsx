@@ -26,18 +26,40 @@ import { useProjectById } from '@/data/projects/hooks';
 import { api } from '@/lib/api';
 import type { ProjectMemberEntry, ProjectMemberRole, UserSearchResult } from '@/lib/api/projects';
 import { createClientLogger } from '@/lib/client-logger';
-import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 
 const log = createClientLogger('project-collaborators');
 
-const ROLE_COLORS: Record<string, string> = {
-  owner: 'bg-status-violet/15 text-status-violet',
-  admin: 'bg-status-info/15 text-status-info',
-  member: 'bg-status-success/15 text-status-success',
-  viewer: 'bg-muted text-muted-foreground',
-};
+/** A member's role badge, tinted per role with the theme's status tokens. */
+function RoleBadge({ role }: { role: string }) {
+  switch (role) {
+    case 'owner':
+      return (
+        <Badge variant="secondary" className="bg-status-violet/15 text-status-violet">
+          {role}
+        </Badge>
+      );
+    case 'admin':
+      return (
+        <Badge variant="secondary" className="bg-status-info/15 text-status-info">
+          {role}
+        </Badge>
+      );
+    case 'member':
+      return (
+        <Badge variant="secondary" className="bg-status-success/15 text-status-success">
+          {role}
+        </Badge>
+      );
+    default:
+      return (
+        <Badge variant="secondary" className="bg-muted text-muted-foreground">
+          {role}
+        </Badge>
+      );
+  }
+}
 
 /** Assignable project roles (owner is the creator, not assignable here). */
 const PROJECT_ROLES: { value: ProjectMemberRole; label: string; hint: string }[] = [
@@ -248,19 +270,7 @@ export function ProjectCollaborators() {
                       {isSelf && <span className="text-muted-foreground ml-1 text-xs">(you)</span>}
                     </p>
                     {isOwner || isSelf ? (
-                      <Badge
-                        variant="secondary"
-                        className={cn(
-                          isOwner && 'bg-status-violet/15 text-status-violet',
-                          !isOwner && m.role === 'admin' && 'bg-status-info/15 text-status-info',
-                          !isOwner &&
-                            m.role === 'member' &&
-                            'bg-status-success/15 text-status-success',
-                          !isOwner && m.role === 'viewer' && 'bg-muted text-muted-foreground',
-                        )}
-                      >
-                        {isOwner ? 'owner' : m.role}
-                      </Badge>
+                      <RoleBadge role={isOwner ? 'owner' : m.role} />
                     ) : (
                       <Select
                         value={
@@ -288,7 +298,7 @@ export function ProjectCollaborators() {
                     {!m.localPath && !isOwner && (
                       <Badge
                         variant="secondary"
-                        className="bg-status-warning/15 text-status-warning dark:text-status-warning"
+                        className="bg-status-warning/15 text-status-warning"
                       >
                         needs setup
                       </Badge>

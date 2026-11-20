@@ -744,10 +744,12 @@ function applyGraph(
     })),
   );
   setEdges(
-    (graph.edges as Edge[]).map((edge) => ({
+    // SAFETY: both graph sources are built by workflowToGraph, whose edges carry `kind`.
+    (graph.edges as Array<Edge & { kind?: string }>).map(({ kind, ...edge }) => ({
       ...edge,
-      animated: edge.label === 'loop',
-      type: edge.label === 'loop' ? 'smoothstep' : undefined,
+      // The label of a loop edge carries its max iterations, so match on the kind.
+      animated: kind === 'loop',
+      type: kind === 'loop' ? 'smoothstep' : undefined,
     })),
   );
 }

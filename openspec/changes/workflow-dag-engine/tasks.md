@@ -16,7 +16,7 @@
 - [x] 2.1 Schema: `trigger_rule`, `concurrency: { group, limit }`, `loop` allowed on several nodes; verify with schema tests for valid and invalid values
 - [x] 2.2 Validation: `back_to` is the node or an ancestor; loop regions nested or disjoint (error names both loops); a concurrency group template refers only to `inputs`; host `validate(parsed)` hook; verify with tests for each refusal
 - [x] 2.3 Compiler: map the new fields, remove the single-loop refusal, pass `resume` to actions; verify with compiler tests and the existing `issue-to-merge` / `code-review` tests
-- [ ] 2.4 `graph.ts`: loop edges per region, join rule and group on nodes; verify with graph tests and the flow editor story
+- [x] 2.4 `graph.ts`: loop edges per region, join rule and group on nodes; verify with graph tests and the flow editor story
 
 ## 3. Server host
 

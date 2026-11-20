@@ -390,7 +390,11 @@ export function getStatusSummary(
     statusCache.get(statusCacheKey(worktreeCwd, baseBranch, projectCwd), {
       lookup,
       onChanged: options?.onChanged,
-      version: getGitWriteGeneration(),
+      // A merge or checkout in the project checkout changes this worktree's
+      // ahead/behind and merged state, so it counts too.
+      version:
+        getGitWriteGeneration(worktreeCwd) +
+        (projectCwd && projectCwd !== worktreeCwd ? getGitWriteGeneration(projectCwd) : 0),
     }),
   );
 }

@@ -457,7 +457,7 @@ export function getDiffSummary(
             (error) => err(processError(String(error), 1, '')),
           ),
         onChanged,
-        version: getGitWriteGeneration(),
+        version: getGitWriteGeneration(cwd),
       }),
     );
   }
@@ -468,7 +468,7 @@ export function getDiffSummary(
   }
 
   const key = `${cwd}|${exclude.join(',')}|${maxFiles}`;
-  const generation = getGitWriteGeneration();
+  const generation = getGitWriteGeneration(cwd);
   const existing = diffSummaryInFlight.get(key);
   if (existing && existing.generation === generation) {
     return ResultAsync.fromPromise(existing.promise, (error) => processError(String(error), 1, ''));
@@ -489,8 +489,8 @@ const diffSummaryInFlight = new Map<
 
 // Stale-while-revalidate for route callers (`onChanged`): a working tree whose
 // scan takes seconds serves its last file list at once instead of holding the
-// request open. A git write made through this process bumps the generation and
-// forces a wait for a new scan.
+// request open. A git write made through this process in the same directory
+// bumps its generation and forces a wait for a new scan.
 const diffSummaryCache = createStaleWhileRevalidate<DiffSummaryResponse, DomainError>({
   freshMs: 1_000,
   maxStaleMs: 5 * 60_000,

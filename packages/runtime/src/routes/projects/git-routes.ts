@@ -67,7 +67,7 @@ projectGitRoutes.get('/:id/branches', async (c) => {
         threadId: '',
         data: { projectId: project.id, changed: ['branches'] },
       }),
-    version: getGitWriteGeneration(),
+    version: getGitWriteGeneration(project.path),
   });
   // The lookup never fails (each part falls back on its own); a defect throws.
   if (listing.isErr()) throw listing.error;

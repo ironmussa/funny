@@ -329,6 +329,8 @@ export const factoryRuns = sqliteTable('factory_runs', {
   flowSteps: text('flow_steps'),
   /** Why the run failed (the flow's error), or null; cleared when it is retried. */
   failureReason: text('failure_reason'),
+  /** JSON counters of the run's integration (`FactoryRunMetrics`), or null before any. */
+  metrics: text('metrics'),
 });
 
 export const watchers = sqliteTable('watchers', {

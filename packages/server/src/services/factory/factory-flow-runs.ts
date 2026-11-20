@@ -346,6 +346,7 @@ export function createFactoryFlowRuns(deps: FactoryFlowRunsDeps) {
       scope,
       threadIds: job.run.threadIds,
       prUrl: job.run.prUrl,
+      metrics: job.run.metrics,
       launchStartedAt: job.run.launchStartedAt,
       findLaunched: (titlePrefix, since) => findLaunchedThread(scope, titlePrefix, since),
       abandon: async (threadId) => deps.stopThreads?.(scope.userId, [threadId]),

@@ -2058,6 +2058,14 @@ const migrations: Migration[] = [
       await ctx().addColumn('factory_runs', 'failure_reason', 'TEXT');
     },
   },
+  {
+    // Integration metrics per run (CI looks, red verdicts, conflicts, agent fixes):
+    // a JSON object of counters, so new counters need no migration.
+    name: '102_factory_runs_metrics',
+    async up() {
+      await ctx().addColumn('factory_runs', 'metrics', 'TEXT');
+    },
+  },
 ];
 
 /**

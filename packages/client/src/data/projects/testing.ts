@@ -62,3 +62,16 @@ export function seedProjectCurrentBranches(
     });
   }
 }
+
+/** A complete `Project` for tests and stories; overrides win. */
+export function buildProject(overrides: Partial<Project> = {}): Project {
+  return {
+    id: 'p1',
+    name: 'Project',
+    path: '/repo',
+    userId: 'u1',
+    sortOrder: 0,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}

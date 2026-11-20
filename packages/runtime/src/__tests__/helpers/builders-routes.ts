@@ -5,7 +5,7 @@
 import type { WSEvent } from '@funny/shared';
 
 /** True when `event` is the `type` variant of the `WSEvent` union. */
-export function isEventOfType<T extends WSEvent['type']>(
+function isEventOfType<T extends WSEvent['type']>(
   event: WSEvent,
   type: T,
 ): event is Extract<WSEvent, { type: T }> {

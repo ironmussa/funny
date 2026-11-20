@@ -66,7 +66,7 @@ export function fakeBrowserHost(members: Partial<BrowserHost> = {}): BrowserHost
 }
 
 /** A Playwright `Page` exposing only `members`; the code under test must not reach others. */
-export function fakePage(members: Partial<Page> = {}): Page {
+function fakePage(members: Partial<Page> = {}): Page {
   // SAFETY: Playwright's Page is a large live-browser interface; these tests only
   // store the page on a tab and never drive it beyond the members passed in.
   return members as Page;

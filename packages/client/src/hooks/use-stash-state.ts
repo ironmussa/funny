@@ -58,6 +58,8 @@ export interface UseStashStateResult {
   stashFiles: StashFile[];
   stashTreeFiles: FileDiffSummary[];
   stashFilesLoading: boolean;
+  /** True while the stash list itself is being re-read. */
+  stashListLoading: boolean;
   stashDialogFile: string | null;
   stashDialogDiff: string | null;
   stashDialogDiffLoading: boolean;
@@ -100,6 +102,7 @@ export function useStashState({
   const [selectedStashIndex, setSelectedStashIndex] = useState<string | null>(null);
   const [stashFiles, setStashFiles] = useState<StashFile[]>([]);
   const [stashFilesLoading, setStashFilesLoading] = useState(false);
+  const [stashListLoading, setStashListLoading] = useState(false);
   const [stashDialogFile, setStashDialogFile] = useState<string | null>(null);
   const [stashDialogDiff, setStashDialogDiff] = useState<string | null>(null);
   const [stashDialogDiffLoading, setStashDialogDiffLoading] = useState(false);
@@ -134,11 +137,16 @@ export function useStashState({
   const refreshStashList = useCallback(async () => {
     if (!hasGitContext) return;
     const signal = abortRef.current?.signal;
-    const result = effectiveThreadId
-      ? await gitApi.stashList(effectiveThreadId, signal)
-      : await gitApi.projectStashList(projectModeId!, signal);
-    if (result.isOk() && !signal?.aborted) {
-      setStashEntries(result.value.entries);
+    setStashListLoading(true);
+    try {
+      const result = effectiveThreadId
+        ? await gitApi.stashList(effectiveThreadId, signal)
+        : await gitApi.projectStashList(projectModeId!, signal);
+      if (result.isOk() && !signal?.aborted) {
+        setStashEntries(result.value.entries);
+      }
+    } finally {
+      setStashListLoading(false);
     }
   }, [hasGitContext, effectiveThreadId, projectModeId, abortRef]);
 
@@ -316,6 +324,7 @@ export function useStashState({
     stashFiles,
     stashTreeFiles,
     stashFilesLoading,
+    stashListLoading,
     stashDialogFile,
     stashDialogDiff,
     stashDialogDiffLoading,

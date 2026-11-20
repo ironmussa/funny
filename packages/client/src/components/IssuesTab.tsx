@@ -22,6 +22,7 @@ import {
   TabToolbarRefresh,
   TabToolbarSpacer,
 } from '@/components/review-pane/TabToolbar';
+import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LoadingState } from '@/components/ui/loading-state';
@@ -128,6 +129,7 @@ function IssuesContent({ visible }: IssuesTabProps) {
         state={state}
         onStateChange={setState}
         repoInfo={repoInfo}
+        count={list.items.length}
       />
       <IssuesBody
         projectId={projectId}
@@ -161,12 +163,14 @@ function IssuesToolbar({
   state,
   onStateChange,
   repoInfo,
+  count,
 }: {
   loading: boolean;
   onRefresh: () => void;
   state: IssueState;
   onStateChange: (state: IssueState) => void;
   repoInfo: { owner: string; repo: string } | null;
+  count: number;
 }) {
   const { t } = useTranslation();
   const stateLabel = (s: IssueState): string =>
@@ -175,6 +179,14 @@ function IssuesToolbar({
   return (
     <TabToolbar data-testid="issues-toolbar">
       <TabToolbarRefresh loading={loading} onRefresh={onRefresh} data-testid="issues-refresh" />
+
+      {repoInfo && (
+        <TabToolbarExternalLink
+          href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues`}
+          label={t('review.issues.openOnGithub', 'Open issues on GitHub')}
+          data-testid="issues-open-github"
+        />
+      )}
 
       <Select value={state} onValueChange={(v) => onStateChange(v as IssueState)}>
         <SelectTrigger size="xs" className="w-auto gap-1" data-testid="issues-state-trigger">
@@ -191,14 +203,7 @@ function IssuesToolbar({
       </Select>
 
       <TabToolbarSpacer />
-
-      {repoInfo && (
-        <TabToolbarExternalLink
-          href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues`}
-          label={t('review.issues.openOnGithub', 'Open issues on GitHub')}
-          data-testid="issues-open-github"
-        />
-      )}
+      <ToolbarCount label={t('review.toolbarCount.issues', { count })} testId="issues-count" />
     </TabToolbar>
   );
 }

@@ -23,6 +23,9 @@ import {
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
+import { TabToolbar, TabToolbarRefresh, TabToolbarSpacer } from './TabToolbar';
+import { ToolbarCount } from './ToolbarCount';
+
 interface StashTabProps {
   stash: UseStashStateResult;
   currentBranch: string | undefined;
@@ -54,8 +57,10 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
     setStashFileSearchCaseSensitive,
     stashPopInProgress,
     stashDropInProgress,
+    stashListLoading,
     handleStashPop,
     loadStashFileDiff,
+    refreshStashList,
   } = stash;
 
   const noStashesTitle = currentBranch
@@ -65,8 +70,21 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
       })
     : t('review.noStashes', 'No stashed changes');
 
+  const toolbar = (
+    <StashToolbar
+      loading={stashListLoading}
+      count={stashEntries.length}
+      onRefresh={() => void refreshStashList()}
+    />
+  );
+
   if (stashEntries.length === 0) {
-    return <EmptyState icon={Archive} title={noStashesTitle} />;
+    return (
+      <div className="flex min-h-0 flex-1 flex-col">
+        {toolbar}
+        <EmptyState icon={Archive} title={noStashesTitle} />
+      </div>
+    );
   }
 
   const rowProps = {
@@ -80,7 +98,8 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
   };
 
   return (
-    <>
+    <div className="flex min-h-0 flex-1 flex-col">
+      {toolbar}
       <ScrollArea className="flex min-h-0 flex-1 flex-col">
         {filteredStashEntries.length > 0 ? (
           <div className="divide-sidebar-border flex flex-col divide-y">
@@ -253,7 +272,27 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
           )}
         </DialogContent>
       </Dialog>
-    </>
+    </div>
+  );
+}
+
+/** Refresh first, then the stash count at the right end. */
+function StashToolbar({
+  loading,
+  count,
+  onRefresh,
+}: {
+  loading: boolean;
+  count: number;
+  onRefresh: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <TabToolbar data-testid="stash-toolbar">
+      <TabToolbarRefresh loading={loading} onRefresh={onRefresh} data-testid="stash-refresh" />
+      <TabToolbarSpacer />
+      <ToolbarCount label={t('review.toolbarCount.stashes', { count })} testId="stash-count" />
+    </TabToolbar>
   );
 }
 

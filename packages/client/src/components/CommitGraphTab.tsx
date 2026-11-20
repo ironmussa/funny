@@ -39,6 +39,7 @@ import {
   TabToolbarRefresh,
   TabToolbarSpacer,
 } from '@/components/review-pane/TabToolbar';
+import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
@@ -1105,12 +1106,13 @@ function GraphToolbar({
         onLoadMoreAuthors={onLoadMoreAuthors}
       />
       <TabToolbarSpacer />
-      <span className="text-muted-foreground text-2xs">
-        {t('graph.commitCount', {
+      <ToolbarCount
+        label={t('graph.commitCount', {
           count: commitCount,
           defaultValue: `${commitCount} commits`,
         })}
-      </span>
+        testId="graph-count"
+      />
     </TabToolbar>
   );
 }

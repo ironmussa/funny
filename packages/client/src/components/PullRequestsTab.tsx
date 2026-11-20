@@ -21,6 +21,7 @@ import {
   TabToolbarRefresh,
   TabToolbarSpacer,
 } from '@/components/review-pane/TabToolbar';
+import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { LabelBadge } from '@/components/ui/label-badge';
@@ -135,6 +136,7 @@ function PullRequestsToolbar({
   state,
   onStateChange,
   repoInfo,
+  count,
 }: {
   loading: boolean;
   onRefresh: () => void;
@@ -145,12 +147,21 @@ function PullRequestsToolbar({
   state: PRState;
   onStateChange: (state: PRState) => void;
   repoInfo: { owner: string; repo: string } | null;
+  count: number;
 }) {
   const { t } = useTranslation();
 
   return (
     <TabToolbar data-testid="prs-toolbar">
       <TabToolbarRefresh loading={loading} onRefresh={onRefresh} data-testid="prs-refresh" />
+
+      {repoInfo ? (
+        <TabToolbarExternalLink
+          href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/pulls`}
+          label={t('review.pullRequests.openOnGithub', 'Open pull requests on GitHub')}
+          data-testid="prs-open-github"
+        />
+      ) : null}
 
       <PRFilterBar
         value={filters}
@@ -166,13 +177,7 @@ function PullRequestsToolbar({
 
       <TabToolbarSpacer />
 
-      {repoInfo ? (
-        <TabToolbarExternalLink
-          href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/pulls`}
-          label={t('review.pullRequests.openOnGithub', 'Open pull requests on GitHub')}
-          data-testid="prs-open-github"
-        />
-      ) : null}
+      <ToolbarCount label={t('review.toolbarCount.pullRequests', { count })} testId="prs-count" />
     </TabToolbar>
   );
 }
@@ -521,6 +526,7 @@ function PullRequestsProjectContent({ visible }: PullRequestsTabProps) {
         state={state}
         onStateChange={list.setState}
         repoInfo={list.repoInfo}
+        count={list.items.length}
       />
 
       <PullRequestsContent

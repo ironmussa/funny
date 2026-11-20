@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { BranchBadge } from '@/components/BranchBadge';
 import { CommitHash } from '@/components/CommitHash';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/ui/empty-state';
 import { Input } from '@/components/ui/input';
@@ -324,6 +325,10 @@ export function WorktreeSettings({
     return <EmptyState icon={GitFork} title={t('worktreeSettings.noProject')} />;
   }
 
+  const createLabel = showCreate
+    ? t('worktreeSettings.cancel')
+    : t('worktreeSettings.createWorktree');
+
   return (
     <div className="flex h-full min-h-0 w-full flex-col text-xs">
       {/* Error banner */}
@@ -339,13 +344,7 @@ export function WorktreeSettings({
 
       {/* Worktree list */}
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="border-sidebar-border flex shrink-0 items-center gap-1.5 border-b px-2 py-1.5">
-          <h3 className="text-muted-foreground text-compact flex min-w-0 flex-1 items-center gap-1.5 px-1">
-            {t('worktreeSettings.worktrees')}
-            <span className="bg-sidebar-accent text-2xs rounded px-1.5 tabular-nums">
-              {worktrees.length}
-            </span>
-          </h3>
+        <div className="border-sidebar-border flex shrink-0 items-center gap-1 border-b px-2 py-1">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -363,20 +362,31 @@ export function WorktreeSettings({
             <TooltipContent side="bottom">{t('worktreeSettings.refresh')}</TooltipContent>
           </Tooltip>
           {!readOnly && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setShowCreate(!showCreate)}
-              className="text-muted-foreground text-compact h-6 shrink-0 px-2"
-            >
-              {showCreate ? (
-                <ChevronUp className="icon-xs mr-1" />
-              ) : (
-                <Plus className="icon-xs mr-1" />
-              )}
-              {showCreate ? t('worktreeSettings.cancel') : t('worktreeSettings.createWorktree')}
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setShowCreate(!showCreate)}
+                  aria-label={createLabel}
+                  aria-expanded={showCreate}
+                  className="text-muted-foreground shrink-0"
+                  data-testid="worktree-settings-create"
+                >
+                  {showCreate ? (
+                    <ChevronUp className="icon-base" />
+                  ) : (
+                    <Plus className="icon-base" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{createLabel}</TooltipContent>
+            </Tooltip>
           )}
+          <ToolbarCount
+            label={t('review.toolbarCount.worktrees', { count: worktrees.length })}
+            testId="worktree-settings-count"
+          />
         </div>
 
         <ScrollArea className="min-h-0 flex-1" viewportProps={{ className: '[&>div]:h-full' }}>

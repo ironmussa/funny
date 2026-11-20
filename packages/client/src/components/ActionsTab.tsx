@@ -13,6 +13,7 @@ import {
   TabToolbarRefresh,
   TabToolbarSpacer,
 } from '@/components/review-pane/TabToolbar';
+import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -97,6 +98,7 @@ export function ActionsTab({
     if (prNumber) void fetchPRDetail(projectId, prNumber, { force: true });
   };
   const runs = page?.runs ?? [];
+  const actionsUrl = repoActionsUrl(runs);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col" data-testid="actions-tab">
@@ -106,32 +108,24 @@ export function ActionsTab({
           onRefresh={handleRefresh}
           data-testid="actions-refresh"
         />
-        <ToggleGroup
-          type="single"
-          size="sm"
-          value={branch ? 'branch' : 'all'}
-          onValueChange={(value) => value && setScope(value as Scope)}
-          className="h-6"
-        >
-          <ToggleGroupItem
-            value="branch"
-            disabled={!currentBranch}
-            className="h-6 max-w-40 truncate px-2 text-xs"
-            title={currentBranch}
-            data-testid="actions-scope-branch"
-          >
-            {currentBranch ? (
-              <BranchBadge branch={currentBranch} size="xs" variant="plain" />
-            ) : (
-              t('review.actions.thisBranch', 'This branch')
-            )}
-          </ToggleGroupItem>
-          <ToggleGroupItem value="all" className="h-6 px-2 text-xs" data-testid="actions-scope-all">
-            {t('review.actions.allBranches', 'All branches')}
-          </ToggleGroupItem>
-        </ToggleGroup>
+        {actionsUrl && (
+          <TabToolbarExternalLink
+            href={actionsUrl}
+            label={t('review.actions.openOnGithub', 'Open Actions on GitHub')}
+            data-testid="actions-open-github"
+          />
+        )}
+        <ScopeToggle
+          scope={branch ? 'branch' : 'all'}
+          currentBranch={currentBranch}
+          onScopeChange={setScope}
+        />
         <TabToolbarSpacer />
-        <ActionsToolbarEnd rateLimited={rateLimited} actionsUrl={repoActionsUrl(runs)} />
+        {rateLimited && <RateLimitedNotice />}
+        <ToolbarCount
+          label={t('review.toolbarCount.runs', { count: runs.length })}
+          testId="actions-count"
+        />
       </TabToolbar>
 
       {prNumber ? (
@@ -550,35 +544,55 @@ function JobLog({ projectId, jobId }: { projectId: string; jobId: number }) {
 
 // ── Toolbar ─────────────────────────────────────────────────
 
-function ActionsToolbarEnd({
-  rateLimited,
-  actionsUrl,
+/** Lists the runs of the pane's branch, or of every branch. */
+function ScopeToggle({
+  scope,
+  currentBranch,
+  onScopeChange,
 }: {
-  rateLimited: boolean;
-  actionsUrl: string | null;
+  scope: Scope;
+  currentBranch?: string;
+  onScopeChange: (scope: Scope) => void;
 }) {
   const { t } = useTranslation();
   return (
-    <>
-      {rateLimited && (
-        <Tooltip>
-          <TooltipTrigger>
-            <span className="text-status-warning">
-              {t('review.ci.rateLimited', 'Rate limited')}
-            </span>
-          </TooltipTrigger>
-          <TooltipContent>
-            {t('review.ci.rateLimitedHint', 'GitHub API rate limit reached. Polling paused.')}
-          </TooltipContent>
-        </Tooltip>
-      )}
-      {actionsUrl && (
-        <TabToolbarExternalLink
-          href={actionsUrl}
-          label={t('review.actions.openOnGithub', 'Open Actions on GitHub')}
-          data-testid="actions-open-github"
-        />
-      )}
-    </>
+    <ToggleGroup
+      type="single"
+      size="sm"
+      value={scope}
+      onValueChange={(value) => value && onScopeChange(value as Scope)}
+      className="h-6"
+    >
+      <ToggleGroupItem
+        value="branch"
+        disabled={!currentBranch}
+        className="h-6 max-w-40 truncate px-2 text-xs"
+        title={currentBranch}
+        data-testid="actions-scope-branch"
+      >
+        {currentBranch ? (
+          <BranchBadge branch={currentBranch} size="xs" variant="plain" />
+        ) : (
+          t('review.actions.thisBranch', 'This branch')
+        )}
+      </ToggleGroupItem>
+      <ToggleGroupItem value="all" className="h-6 px-2 text-xs" data-testid="actions-scope-all">
+        {t('review.actions.allBranches', 'All branches')}
+      </ToggleGroupItem>
+    </ToggleGroup>
+  );
+}
+
+function RateLimitedNotice() {
+  const { t } = useTranslation();
+  return (
+    <Tooltip>
+      <TooltipTrigger>
+        <span className="text-status-warning">{t('review.ci.rateLimited', 'Rate limited')}</span>
+      </TooltipTrigger>
+      <TooltipContent>
+        {t('review.ci.rateLimitedHint', 'GitHub API rate limit reached. Polling paused.')}
+      </TooltipContent>
+    </Tooltip>
   );
 }

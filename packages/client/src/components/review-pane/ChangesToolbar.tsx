@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import { PullFetchButtons } from '@/components/pull-fetch-buttons';
 import { PushButton } from '@/components/push-button';
+import { ToolbarCount } from '@/components/review-pane/ToolbarCount';
 import { Button } from '@/components/ui/button';
 import { CountBadge } from '@/components/ui/count-badge';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -127,6 +128,10 @@ export function ChangesToolbar({
           </TooltipTrigger>
           <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
         </Tooltip>
+        <ToolbarCount
+          label={t('review.toolbarCount.files', { count: summaries.length })}
+          testId="review-count"
+        />
       </div>
     );
   }
@@ -379,6 +384,10 @@ export function ChangesToolbar({
           </TooltipContent>
         </Tooltip>
       )}
+      <ToolbarCount
+        label={t('review.toolbarCount.files', { count: summaries.length })}
+        testId="review-count"
+      />
     </div>
   );
 }

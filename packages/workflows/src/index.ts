@@ -13,9 +13,19 @@ export {
   type ParsedInputDef,
   type ParsedRetry,
   type ParsedLoop,
+  type ParsedConcurrency,
+  type TriggerRuleName,
+  TRIGGER_RULES,
 } from './schema.js';
 
-export { parseWorkflowYaml, formatParseError, type ParseResult, type ParseError } from './parse.js';
+export {
+  parseWorkflowYaml,
+  formatParseError,
+  type ParseResult,
+  type ParseError,
+  type ParseOptions,
+  type WorkflowIssue,
+} from './parse.js';
 
 export { serializeWorkflow, normalizeWorkflowForYaml } from './serialize.js';
 

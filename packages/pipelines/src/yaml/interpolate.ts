@@ -142,3 +142,30 @@ function resolvePath(scope: TemplateScope, path: string): unknown {
   }
   return current;
 }
+
+/**
+ * Every variable a template reads (sections included), as written:
+ * `templateVariables('merge-{{repo}}-{{#a}}{{b.c}}{{/a}}')` is `['repo', 'a', 'b.c']`.
+ * Throws `TemplateInterpolationError` when the template does not parse.
+ */
+export function templateVariables(template: string): string[] {
+  let tokens: unknown[];
+  try {
+    tokens = Mustache.parse(template);
+  } catch (err) {
+    throw new TemplateInterpolationError(
+      `Template does not parse: ${err instanceof Error ? err.message : String(err)}`,
+      template,
+    );
+  }
+  return namesIn(tokens);
+}
+
+function namesIn(tokens: unknown[]): string[] {
+  return (tokens as MustacheToken[]).flatMap((tok) => {
+    const [type, key] = tok;
+    const own = ['name', '&', '#', '^'].includes(type) ? [key] : [];
+    // Sections keep their children at index 4.
+    return [...own, ...(Array.isArray(tok[4]) ? namesIn(tok[4]) : [])];
+  });
+}

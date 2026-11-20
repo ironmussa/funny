@@ -23,6 +23,8 @@
 
 import { z } from 'zod';
 
+import { graphIssues } from './validate.js';
+
 // ── Action option schemas ───────────────────────────────────
 
 const spawnAgentAction = z
@@ -203,12 +205,56 @@ const loopConfig = z
     until: z.string(),
     max_iterations: z.number().int().positive().default(10),
     /**
-     * Optional id of an earlier node to jump back to on each iteration.
+     * The first node of the loop's region: this node or one it depends on
+     * (directly or not). Every node on a path from it to this node runs again.
      * Default: re-runs the current node only.
      */
     back_to: z.string().optional(),
   })
   .strict();
+
+/** A duration: milliseconds, or a number with a unit (`500ms`, `60s`, `5m`, `1h`). */
+const DURATION_UNITS_MS = { ms: 1, s: 1_000, m: 60_000, h: 3_600_000 } as const;
+const duration = z.union([
+  z.number().int().nonnegative(),
+  z
+    .string()
+    .regex(/^\d+(ms|s|m|h)$/, { message: 'Use a duration like 500ms, 60s, 5m or 1h' })
+    .transform((raw) => {
+      const [, amount, unit] = /^(\d+)(ms|s|m|h)$/.exec(raw)!;
+      return Number(amount) * DURATION_UNITS_MS[unit as keyof typeof DURATION_UNITS_MS];
+    }),
+]);
+
+/**
+ * Limit a node across every run that shares the host: at most `limit`
+ * executions of nodes in `group` at once. `group` is a Mustache template
+ * over the run's inputs only (never node outputs), e.g. `merge-{{repo}}`.
+ * With `batch`, one execution serves up to `max` waiting runs.
+ */
+const concurrencyConfig = z
+  .object({
+    group: z.string().min(1),
+    limit: z.number().int().positive(),
+    batch: z
+      .object({
+        /** Most runs in one batch, the leader included. */
+        max: z.number().int().min(2),
+        /** How long the leader waits for more runs before it starts. */
+        wait: duration,
+      })
+      .strict()
+      .optional(),
+  })
+  .strict()
+  .superRefine((val, ctx) => {
+    if (val.batch && val.limit !== 1) {
+      ctx.addIssue({ code: 'custom', message: 'A batching concurrency group must have limit 1' });
+    }
+  });
+
+/** How a node joins its dependencies. */
+export const TRIGGER_RULES = ['all_success', 'all_done', 'one_success'] as const;
 
 // ── Action keys (one of) ────────────────────────────────────
 
@@ -253,6 +299,15 @@ const pipelineNodeFields = z
     /** IDs of nodes that must complete before this one starts (DAG). */
     depends_on: z.array(z.string()).default([]),
     /**
+     * When the node starts, given its dependencies (default `all_success`):
+     *   - 'all_success' — no dependency failed (a skipped one counts as done)
+     *   - 'all_done' — every dependency finished, whatever the result
+     *   - 'one_success' — as soon as one dependency succeeded
+     * A node whose rule can no longer be met is skipped.
+     */
+    trigger_rule: z.enum(TRIGGER_RULES).optional(),
+    concurrency: concurrencyConfig.optional(),
+    /**
      * JSONata predicate. If it evaluates to false, the node is skipped.
      * Evaluated against the full workflow scope (inputs + node outputs).
      */
@@ -260,7 +315,9 @@ const pipelineNodeFields = z
     /**
      * What to do if this node fails:
      *   - 'fail' (default) — the workflow fails
-     *   - 'continue' — the failure is logged but the pipeline continues
+     *   - 'continue' — the node is marked failed and the run goes on; its
+     *     dependents follow their `trigger_rule` (with the default
+     *     `all_success` they are skipped; `all_done` runs them anyway)
      *   - 'retry' — apply the `retry:` config below
      */
     on_error: z.enum(['fail', 'continue', 'retry']).default('fail'),
@@ -322,35 +379,7 @@ export const workflowSchema = z
   })
   .strict()
   .superRefine((val, ctx) => {
-    const ids = new Set<string>();
-    for (const n of val.nodes) {
-      if (ids.has(n.id)) {
-        ctx.addIssue({ code: 'custom', message: `Duplicate node id: "${n.id}"` });
-      }
-      ids.add(n.id);
-    }
-    for (const n of val.nodes) {
-      for (const dep of n.depends_on) {
-        if (!ids.has(dep)) {
-          ctx.addIssue({
-            code: 'custom',
-            message: `Node "${n.id}" depends_on unknown node "${dep}"`,
-          });
-        }
-        if (dep === n.id) {
-          ctx.addIssue({
-            code: 'custom',
-            message: `Node "${n.id}" cannot depend on itself`,
-          });
-        }
-      }
-      if (n.loop?.back_to && !ids.has(n.loop.back_to)) {
-        ctx.addIssue({
-          code: 'custom',
-          message: `Node "${n.id}" loop.back_to references unknown node "${n.loop.back_to}"`,
-        });
-      }
-    }
+    for (const message of graphIssues(val)) ctx.addIssue({ code: 'custom', message });
   });
 
 // ── Inferred types ──────────────────────────────────────────
@@ -360,3 +389,5 @@ export type ParsedNode = z.infer<typeof pipelineNode>;
 export type ParsedInputDef = z.infer<typeof inputDef>;
 export type ParsedRetry = z.infer<typeof retryConfig>;
 export type ParsedLoop = z.infer<typeof loopConfig>;
+export type ParsedConcurrency = z.infer<typeof concurrencyConfig>;
+export type TriggerRuleName = (typeof TRIGGER_RULES)[number];

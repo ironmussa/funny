@@ -13,9 +13,16 @@
 // executed a changed source (scripts/test-impact.ts; `fetch` downloads the
 // maps CI builds).
 //
+// The suites run against the pushed commit, not the checkout's files: when the
+// checkout is not that commit or has uncommitted changes (another agent's work
+// in progress in a shared checkout), they run in a temporary worktree of it.
+//
 // Set FUNNY_PREPUSH_ALL=1 to run every suite anyway.
 
 import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 import { changedDependencies, type DependencySnapshot } from './lockfile-changes';
 import {
@@ -125,28 +132,96 @@ export function changedDependenciesOfPush(
   return all;
 }
 
+/** Where the pushed commit's suites run, and how to clean it up. */
+export interface TestCheckout {
+  root: string;
+  dispose: () => void;
+  /** Why the suites run somewhere other than the pushed commit, if they do. */
+  warning?: string;
+}
+
+function installDependencies(root: string): boolean {
+  // --ignore-scripts: the root `prepare` script installs git hooks.
+  const result = spawnSync('bun', ['install', '--frozen-lockfile', '--ignore-scripts'], {
+    cwd: root,
+    stdio: ['ignore', 'ignore', 'inherit'],
+    env: testSuiteEnv(process.env),
+  });
+  return result.status === 0;
+}
+
+/**
+ * The checkout to test `heads` in. The checkout itself when it is exactly the
+ * one pushed commit with nothing uncommitted; otherwise a temporary worktree
+ * at that commit, so another agent's unfinished edits in a shared checkout
+ * cannot fail (or pass) the push. Several pushed commits run in place.
+ */
+export function testCheckout(
+  heads: readonly string[],
+  cwd = process.cwd(),
+  install: (root: string) => boolean = installDependencies,
+): TestCheckout {
+  const inPlace = (warning?: string): TestCheckout => ({ root: cwd, dispose: () => {}, warning });
+  if (heads.length !== 1) {
+    return inPlace(
+      heads.length > 1 ? 'several commits pushed; testing the checkout as it is' : undefined,
+    );
+  }
+  const head = heads[0];
+  const clean = git(cwd, ['status', '--porcelain']) === '';
+  if (clean && git(cwd, ['rev-parse', 'HEAD']) === head) return inPlace();
+
+  const dir = mkdtempSync(join(tmpdir(), 'funny-prepush-'));
+  const dispose = () => {
+    git(cwd, ['worktree', 'remove', '--force', dir]);
+    rmSync(dir, { recursive: true, force: true });
+    git(cwd, ['worktree', 'prune']);
+  };
+  if (git(cwd, ['worktree', 'add', '--detach', dir, head]) === null || !install(dir)) {
+    dispose();
+    return inPlace('could not prepare a worktree at the pushed commit; testing the checkout');
+  }
+  return { root: dir, dispose };
+}
+
 if (import.meta.main) {
-  const packages = discoverPackages();
   const stdin = await Bun.stdin.text();
+  const heads = pushedHeads(stdin) ?? [];
+  const checkout = testCheckout(heads);
+  if (checkout.warning) console.log(`pre-push: ${checkout.warning}`);
+  else if (checkout.root !== process.cwd()) {
+    console.log(`pre-push: testing the pushed commit in ${checkout.root}`);
+  }
+  let code = 0;
+  try {
+    code = await testPush(stdin, heads, checkout.root);
+  } finally {
+    checkout.dispose();
+  }
+  process.exit(code);
+}
+
+async function testPush(stdin: string, heads: readonly string[], root: string): Promise<number> {
+  const packages = discoverPackages(root);
   const files = process.env.FUNNY_PREPUSH_ALL ? null : changedFiles(stdin);
   const runs =
     files === null
-      ? planTests([], packages, null)
+      ? planTests([], packages, null, root)
       : planTests(
           files,
           packages,
           changedDependenciesOfPush(stdin, declaredExternalDeps(packages)),
-          undefined,
-          impactNarrower(pushedHeads(stdin) ?? []),
+          root,
+          impactNarrower(heads, root),
         );
 
   if (runs.length === 0) {
     console.log('pre-push: no package test suite is affected by this push');
-    process.exit(0);
+    return 0;
   }
   console.log(`pre-push: testing ${runs.map(runLabel).join(', ')}`);
   for (const run of runs) {
     if (run.note) console.log(`pre-push: ${run.pkg.name} runs whole (${run.note})`);
   }
-  process.exit(await runTests(runs));
+  return runTests(runs, root);
 }

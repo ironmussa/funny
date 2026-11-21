@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Project, Thread } from '@funny/shared';
 import { DEFAULT_MODEL } from '@funny/shared/models';
@@ -12,12 +12,12 @@ import { renderWithProviders } from '../helpers/render';
 
 const toastErrorMock = (() => vi.fn())();
 
-vi.mock('@atlaskit/pragmatic-drag-and-drop/element/adapter', () => ({
+mock.module('@atlaskit/pragmatic-drag-and-drop/element/adapter', () => ({
   draggable: vi.fn(() => () => {}),
   dropTargetForElements: vi.fn(() => () => {}),
 }));
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -27,7 +27,7 @@ vi.mock('react-i18next', () => ({
 
 const gitActionOverrides = ((): Record<string, (...args: any[]) => unknown> => ({}))();
 const actualDataGitStatusActions = { ...(await import('@/data/git-status/actions')) };
-vi.mock('@/data/git-status/actions', () => {
+mock.module('@/data/git-status/actions', () => {
   const real = actualDataGitStatusActions;
   const wrapped: Record<string, (...args: any[]) => unknown> = {};
   for (const [name, fn] of Object.entries(real)) {
@@ -36,11 +36,11 @@ vi.mock('@/data/git-status/actions', () => {
   return wrapped;
 });
 
-vi.mock('@/hooks/use-minute-tick', () => ({
+mock.module('@/hooks/use-minute-tick', () => ({
   useMinuteTick: () => {},
 }));
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     listExternalClaudeSessions: vi.fn(),
     importExternalClaudeSession: vi.fn(),
@@ -49,7 +49,7 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-vi.mock('@/lib/toast-error', () => ({
+mock.module('@/lib/toast-error', () => ({
   toastError: toastErrorMock,
 }));
 

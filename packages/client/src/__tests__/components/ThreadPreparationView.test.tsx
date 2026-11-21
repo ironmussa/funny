@@ -1,15 +1,15 @@
-import { describe, expect, test, setSystemTime, vi } from 'bun:test';
+import { describe, expect, test, setSystemTime, vi, mock } from 'bun:test';
 
 import { screen } from '@testing-library/react';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
-vi.mock('@/components/PromptInput', () => ({
+mock.module('@/components/PromptInput', () => ({
   PromptInput: (props: {
     loading?: boolean;
     onSubmit: (prompt: string, opts: Record<string, unknown>) => void;

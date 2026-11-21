@@ -3,7 +3,7 @@
  * so several sessions can stream different tabs of one browser.
  */
 
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, mock } from 'bun:test';
 
 const mocks = (() => {
   const connectArgs: unknown[] = [];
@@ -32,7 +32,7 @@ const mocks = (() => {
   return { CDP, connectArgs };
 })();
 
-vi.mock('chrome-remote-interface', () => ({ default: mocks.CDP }));
+mock.module('chrome-remote-interface', () => ({ default: mocks.CDP }));
 
 import { ChromeSession } from '../chrome/chrome-session.js';
 

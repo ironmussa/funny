@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 
-vi.mock('../git/process.js', () => ({
+mock.module('../git/process.js', () => ({
   execute: vi.fn(),
   ProcessExecutionError: class ProcessExecutionError extends Error {},
 }));

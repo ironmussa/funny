@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, vi, mock } from 'bun:test';
 
 const { mockSelectProject, mockInvalidateSelectThread, mockClearThreadSelection, mockProjects } =
   (() => {
@@ -11,7 +11,7 @@ const { mockSelectProject, mockInvalidateSelectThread, mockClearThreadSelection,
     };
   })();
 
-vi.mock('@/stores/project-store', () => ({
+mock.module('@/stores/project-store', () => ({
   useProjectStore: {
     getState: () => ({ selectProject: mockSelectProject, projects: mockProjects }),
   },
@@ -24,7 +24,7 @@ interface ThreadSelectHook {
 
 const threadSelect = ((): ThreadSelectHook => ({ listener: null }))();
 
-vi.mock('@/stores/thread-store-internals', () => ({
+mock.module('@/stores/thread-store-internals', () => ({
   invalidateSelectThread: mockInvalidateSelectThread,
   clearThreadSelection: mockClearThreadSelection,
   setThreadSelectListener: (fn: (threadId: string | null) => void) => {

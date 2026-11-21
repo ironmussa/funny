@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const h = (() => ({ readdir: vi.fn() }))();
-vi.mock('fs/promises', () => ({ readdir: h.readdir }));
-vi.mock('@funny/core/git', () => ({ getNativeGit: vi.fn(), gitRead: vi.fn() }));
-vi.mock('../../lib/logger.js', () => ({ log: { warn: vi.fn() } }));
-vi.mock('../../lib/telemetry.js', () => ({
+mock.module('fs/promises', () => ({ readdir: h.readdir }));
+mock.module('@funny/core/git', () => ({ getNativeGit: vi.fn(), gitRead: vi.fn() }));
+mock.module('../../lib/logger.js', () => ({ log: { warn: vi.fn() } }));
+mock.module('../../lib/telemetry.js', () => ({
   startSpan: () => ({ attributes: {}, end: vi.fn() }),
 }));
 

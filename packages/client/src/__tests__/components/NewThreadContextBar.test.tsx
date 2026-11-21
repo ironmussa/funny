@@ -1,4 +1,4 @@
-import { beforeEach, expect, test, vi } from 'bun:test';
+import { beforeEach, expect, test, vi, mock } from 'bun:test';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync, ResultAsync } from 'neverthrow';
@@ -21,7 +21,7 @@ const branchState = (() => ({
   setSelectedBranch: vi.fn(),
 }))();
 const ensureBranch = (() => vi.fn())();
-vi.mock('@tanstack/react-virtual', () => ({
+mock.module('@tanstack/react-virtual', () => ({
   useVirtualizer: () => ({
     measure: vi.fn(),
     scrollToIndex: vi.fn(),
@@ -29,18 +29,18 @@ vi.mock('@tanstack/react-virtual', () => ({
     getVirtualItems: () => [],
   }),
 }));
-vi.mock('@/lib/api', () => ({ api: { projectGetRemoteUrl: remote } }));
-vi.mock('@/hooks/use-branch-switch', () => ({
+mock.module('@/lib/api', () => ({ api: { projectGetRemoteUrl: remote } }));
+mock.module('@/hooks/use-branch-switch', () => ({
   useBranchSwitch: () => ({ ensureBranch, branchSwitchDialog: null }),
 }));
-vi.mock('@/components/PromptInputUI', async () => await import('@/lib/git-remote-url'));
-vi.mock('@/stores/project-store', () => ({
+mock.module('@/components/PromptInputUI', async () => await import('@/lib/git-remote-url'));
+mock.module('@/stores/project-store', () => ({
   useProjectStore: (selector: (state: unknown) => unknown) =>
     selector({
       projects: ['one', 'two'].map((id) => ({ id, name: id, path: '/mnt/windows/repo' })),
     }),
 }));
-vi.mock('@/stores/branch-picker-store', () => ({
+mock.module('@/stores/branch-picker-store', () => ({
   useBranchPickerStore: (selector: (state: unknown) => unknown) => selector(branchState),
 }));
 

@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { QueuedMessage } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { mocked } from '@funny/test-kit';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
-vi.mock('@/lib/api/threads', () => ({
+mock.module('@/lib/api/threads', () => ({
   threadsApi: {
     listQueue: vi.fn(),
     updateQueuedMessage: vi.fn(),

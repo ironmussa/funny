@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, vi, mock } from 'bun:test';
 
 import { okAsync, errAsync } from 'neverthrow';
 
@@ -8,9 +8,9 @@ const { getThread, createAndStartThread } = (() => ({
   createAndStartThread: vi.fn(),
 }))();
 
-vi.mock('../../services/thread-manager.js', () => ({ getThread }));
-vi.mock('../../services/thread-service/create.js', () => ({ createAndStartThread }));
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({ getThread }));
+mock.module('../../services/thread-service/create.js', () => ({ createAndStartThread }));
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 

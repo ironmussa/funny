@@ -3,11 +3,11 @@
  * are rejected for both IP literals and resolved hostnames.
  */
 
-import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, type Mock, mock } from 'bun:test';
 
 import { mocked, stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
-vi.mock('dns/promises', () => ({
+mock.module('dns/promises', () => ({
   lookup: vi.fn(),
 }));
 

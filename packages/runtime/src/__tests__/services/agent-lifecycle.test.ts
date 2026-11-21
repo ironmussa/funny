@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
 
 import type { IAgentProcess, ProcessOptionsSnapshot, StartAgentOptions } from '@funny/core/agents';
 import type { Project, ResolvedAgentExecutionProfileResponse } from '@funny/shared';
@@ -90,40 +90,40 @@ const mocks = (() => ({
   ),
 }))();
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../lib/telemetry.js', () => ({
+mock.module('../../lib/telemetry.js', () => ({
   startSpan: (...args: unknown[]) => mocks.startSpan(...args),
   clearThreadTrace: (...args: unknown[]) => mocks.clearThreadTrace(...args),
   setThreadTrace: (...args: unknown[]) => mocks.setThreadTrace(...args),
   metric: (...args: unknown[]) => mocks.metric(...args),
 }));
 
-vi.mock('node:fs', () => ({
+mock.module('node:fs', () => ({
   mkdirSync: (...args: unknown[]) => mocks.mkdirSync(...args),
 }));
 
-vi.mock('@funny/core/ports', () => ({
+mock.module('@funny/core/ports', () => ({
   syncClaudeProjectAssets: (...args: unknown[]) => mocks.syncClaudeProjectAssets(...args),
 }));
 
-vi.mock('../../services/agent-startup/recover-context.js', () => ({
+mock.module('../../services/agent-startup/recover-context.js', () => ({
   recoverThreadContext: (opts: any) => mocks.recoverThreadContext(opts),
 }));
 
-vi.mock('../../services/agent-startup/load-mcp-servers.js', () => ({
+mock.module('../../services/agent-startup/load-mcp-servers.js', () => ({
   loadProjectMcpServers: (...args: unknown[]) => mocks.loadProjectMcpServers(...args),
 }));
 
 const actualThreadContext = { ...(await import('../../services/thread-context.js')) };
-vi.mock('../../services/thread-context.js', () => ({
+mock.module('../../services/thread-context.js', () => ({
   ...actualThreadContext,
   resolveThreadCwd: (...args: unknown[]) => mocks.resolveThreadCwd(...args),
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { getProject: mocks.getProject },
     profile: {
@@ -136,47 +136,47 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('../../services/thread-event-bus.js', () => ({
+mock.module('../../services/thread-event-bus.js', () => ({
   threadEventBus: {
     emit: (...args: unknown[]) => mocks.threadEventBusEmit(...args),
     on: (...args: unknown[]) => mocks.threadEventBusOn(...args),
   },
 }));
 
-vi.mock('../../services/remote-thread-data-client.js', () => ({
+mock.module('../../services/remote-thread-data-client.js', () => ({
   remoteGetAgentTemplate: (...args: unknown[]) => mocks.remoteGetAgentTemplate(...args),
 }));
 
-vi.mock('../../services/permission-rules-client.js', () => ({
+mock.module('../../services/permission-rules-client.js', () => ({
   findPermissionRule: (...args: unknown[]) => mocks.findPermissionRule(...args),
 }));
 
-vi.mock('../../services/sensitive-path-bypass.js', () => ({
+mock.module('../../services/sensitive-path-bypass.js', () => ({
   runSensitivePathBypass: (...args: unknown[]) => mocks.runSensitivePathBypass(...args),
 }));
 
-vi.mock('../../services/remote-project-identity-client.js', () => ({
+mock.module('../../services/remote-project-identity-client.js', () => ({
   remoteGetProjectSecrets: (threadId: string) => mocks.getProjectSecrets(threadId),
 }));
 
-vi.mock('../../services/git-checkpoints.js', () => ({
+mock.module('../../services/git-checkpoints.js', () => ({
   captureGitCheckpoint: (...args: unknown[]) => mocks.captureGitCheckpoint(...args),
 }));
 
 // startAgent loads these lazily (agent MCP servers, the browser bridge). Loading
 // the real modules costs ~2.5 s inside the first test that starts an agent, which
 // times out under load; no test here asserts on them.
-vi.mock('../../services/agent-watch-tool.js', () => ({ FUNNY_MCP_SERVER: { name: 'funny' } }));
-vi.mock('../../services/agent-mcp-http.js', () => ({
+mock.module('../../services/agent-watch-tool.js', () => ({ FUNNY_MCP_SERVER: { name: 'funny' } }));
+mock.module('../../services/agent-mcp-http.js', () => ({
   grantAgentMcpHttp: (server: { name: string }) => ({
     type: 'http',
     url: `http://mcp/${server.name}`,
   }),
 }));
-vi.mock('../../services/browser-automation/browser-mcp-server.js', () => ({
+mock.module('../../services/browser-automation/browser-mcp-server.js', () => ({
   BROWSER_MCP_SERVER: { name: 'funny-browser' },
 }));
-vi.mock('../../services/browser-automation/open-url-bridge.js', () => ({
+mock.module('../../services/browser-automation/open-url-bridge.js', () => ({
   browserOpenEnv: () => ({}),
 }));
 

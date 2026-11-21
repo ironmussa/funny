@@ -1,10 +1,10 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const mocks = (() => ({
   remoteListProjectThreads: vi.fn(),
 }))();
 
-vi.mock('../../services/remote-project-identity-client.js', () => ({
+mock.module('../../services/remote-project-identity-client.js', () => ({
   remoteListProjectThreads: mocks.remoteListProjectThreads,
 }));
 

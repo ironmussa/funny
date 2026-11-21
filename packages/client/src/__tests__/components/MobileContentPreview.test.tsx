@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen, within } from '@testing-library/react';
 
@@ -8,8 +8,8 @@ import {
 } from '@/components/tool-cards/MobileContentPreview';
 
 const viewport = (() => ({ mobile: true }))();
-vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => viewport.mobile }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+mock.module('@/hooks/use-mobile', () => ({ useIsMobile: () => viewport.mobile }));
+mock.module('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
 beforeEach(() => {
   viewport.mobile = true;

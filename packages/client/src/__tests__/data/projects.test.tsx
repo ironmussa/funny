@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Project } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
@@ -25,10 +25,10 @@ const api = (() => ({
   deleteProject: vi.fn(),
   reorderProjects: vi.fn(),
 }))();
-vi.mock('@/lib/api/projects', () => ({ projectsApi: api }));
+mock.module('@/lib/api/projects', () => ({ projectsApi: api }));
 
 const effects = (() => ({ emit: vi.fn() }))();
-vi.mock('@/platform/client-composition', () => ({
+mock.module('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));
 

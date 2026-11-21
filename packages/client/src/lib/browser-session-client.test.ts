@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const send = (() => vi.fn())();
-vi.mock('@/lib/realtime/browser-session-realtime', () => ({
+mock.module('@/lib/realtime/browser-session-realtime', () => ({
   sendBrowserSessionRealtime: send,
 }));
 

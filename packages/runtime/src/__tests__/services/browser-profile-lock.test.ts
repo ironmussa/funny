@@ -1,6 +1,6 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, mock } from 'bun:test';
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 

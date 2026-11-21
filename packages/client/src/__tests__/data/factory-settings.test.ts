@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { advanceTimersByTimeAsync, waitFor } from '@funny/test-kit';
 import { act, renderHook } from '@testing-library/react';
@@ -10,7 +10,7 @@ import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-
 
 // Not hoisted under bun test: mock first, then load the modules that read the API.
 const api = { getSettings: vi.fn() };
-vi.mock('@/lib/api/factory', () => ({ factoryApi: { getSettings: api.getSettings } }));
+mock.module('@/lib/api/factory', () => ({ factoryApi: { getSettings: api.getSettings } }));
 
 const { retryFactorySettings } = await import('@/data/factory/actions');
 const { useFactorySettings, useFactorySettingsFailed } = await import('@/data/factory/hooks');

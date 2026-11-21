@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'bun:test';
+import { describe, test, expect, vi, mock } from 'bun:test';
 
 import type { GitStatusInfo, Thread } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
@@ -8,7 +8,7 @@ import { buildThread } from '@/data/threads/testing';
 
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, values?: Record<string, string>) => {
       const templates: Record<string, string> = {

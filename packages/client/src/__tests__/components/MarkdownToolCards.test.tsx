@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 
 import { fireEvent, screen } from '@testing-library/react';
 
@@ -7,7 +7,7 @@ import { WriteFileCard } from '@/components/tool-cards/WriteFileCard';
 
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('@/components/thread/MessageContent', () => ({
+mock.module('@/components/thread/MessageContent', () => ({
   MessageContent: ({ content }: { content: string }) => (
     <article data-testid="rendered-markdown">{content}</article>
   ),

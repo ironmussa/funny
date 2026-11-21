@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { ok } from 'neverthrow';
 
@@ -15,22 +15,22 @@ function savedEvent(n = 0): [string, string, any] {
   return mocks.saveThreadEvent.mock.calls[n];
 }
 
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   getDiffSummary: mocks.getDiffSummary,
   getIgnoredFileStats: mocks.getIgnoredFileStats,
   getStatusSummary: vi.fn(),
   deriveGitSyncState: vi.fn(),
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ threadEvents: { saveThreadEvent: mocks.saveThreadEvent } }),
 }));
 
-vi.mock('../../services/team-client.js', () => ({
+mock.module('../../services/team-client.js', () => ({
   flushPendingMessageUpdates: vi.fn(),
 }));
 

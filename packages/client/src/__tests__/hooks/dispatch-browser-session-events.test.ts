@@ -1,7 +1,7 @@
-import { afterEach, describe, expect, setSystemTime, test, vi } from 'bun:test';
+import { afterEach, describe, expect, setSystemTime, test, vi, mock } from 'bun:test';
 
 const clientCalls = (() => ({ close: vi.fn(), open: vi.fn() }))();
-vi.mock('@/lib/browser-session-client', () => ({ browserSessionClient: clientCalls }));
+mock.module('@/lib/browser-session-client', () => ({ browserSessionClient: clientCalls }));
 
 import {
   dispatchBrowserSessionEvent,

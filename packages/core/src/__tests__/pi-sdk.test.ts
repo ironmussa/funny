@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -13,7 +13,7 @@ const { availableModels } = (() => ({
   ],
 }))();
 
-vi.mock('@earendil-works/pi-coding-agent', () => ({
+mock.module('@earendil-works/pi-coding-agent', () => ({
   getAgentDir: () => '/tmp/pi-agent',
   ModelRuntime: {
     create: async () => ({

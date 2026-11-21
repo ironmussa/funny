@@ -135,9 +135,10 @@ try {
     const file = join(sandbox, fixture.path);
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, fixture.code);
+    // `bun lint` reads oxlint.config.ts and answers with oxlint's JSON report.
     const result = spawnSync(
-      join(root, 'node_modules/.bin/oxlint'),
-      ['--format', 'json', fixture.path],
+      process.execPath,
+      ['lint', '--no-script', '--format', 'json', fixture.path],
       { cwd: sandbox, encoding: 'utf8' },
     );
     const report = JSON.parse(result.stdout);

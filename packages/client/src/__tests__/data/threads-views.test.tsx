@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Thread, ThreadStage } from '@funny/shared';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -30,8 +30,8 @@ const mockApi = (() => ({
   archiveThread: vi.fn(),
   updateThreadStage: vi.fn(),
 }))();
-vi.mock('@/lib/api', () => ({ api: mockApi }));
-vi.mock('@/platform/client-composition', () => ({
+mock.module('@/lib/api', () => ({ api: mockApi }));
+mock.module('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects: { emit: vi.fn() } } },
 }));
 

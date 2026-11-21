@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { DomainError } from '@funny/shared/errors';
 
@@ -11,15 +11,15 @@ const { toastErrorMock, logWarnMock, tMock } = (() => ({
   }),
 }))();
 
-vi.mock('sonner', () => ({
+mock.module('sonner', () => ({
   toast: { error: (...args: unknown[]) => toastErrorMock(...args) },
 }));
 
-vi.mock('@/lib/client-logger', () => ({
+mock.module('@/lib/client-logger', () => ({
   createClientLogger: () => ({ warn: logWarnMock }),
 }));
 
-vi.mock('@/i18n/config', () => ({
+mock.module('@/i18n/config', () => ({
   default: {
     t: (key: string, opts?: { defaultValue?: string; message?: string }) => tMock(key, opts),
   },

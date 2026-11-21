@@ -34,6 +34,7 @@
     "packages/runtime/src/services/checks/vitest-progress-reporter.mjs",
     "packages/runtime/src/services/checks/run-cli.ts",
     "packages/client/src/__tests__/dom-environment.ts",
-    "scripts/coverage-gate.ts"
+    "scripts/coverage-gate.ts",
+    "oxlint.config.ts"
   ]
 }

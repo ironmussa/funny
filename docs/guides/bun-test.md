@@ -38,7 +38,12 @@ What `bun:test` lacks from vitest: `stubGlobal` / `unstubAllGlobals`, `stubEnv` 
 
 **Module mocks**
 
-- `mock.module` (and `vi.mock`) is not hoisted. Static imports run first, so a module that
+- Use `mock.module` (import `mock` from `bun:test`), never `vi.mock`. From Bun 1.4.6,
+  `vi.mock` is hoisted above the file's imports and top-level variables, as in vitest, so a
+  factory that reads a variable declared before it throws "Cannot access 'x' before
+  initialization"; on 1.4.4 it is not hoisted. `mock.module` is not hoisted on either, so a
+  test means the same on both. `bun run lint` refuses `vi.mock`.
+- `mock.module` is not hoisted. Static imports run first, so a module that
   does work at import time (creates a store or logger, reads `DATA_DIR`, captures an API)
   sees the real dependency. Mock first, then load the module under test, and every module
   that must see the mocks, with `await import()`.

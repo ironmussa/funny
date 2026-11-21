@@ -3,14 +3,14 @@
  * panel-owned vs thread-bound reaping, detach, and thread deletion.
  */
 
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const mocks = (() => ({ emitToUser: vi.fn() }))();
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mocks.emitToUser } }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: mocks.emitToUser } }));
 
 import {
   browserSessionManager,

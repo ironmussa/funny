@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
@@ -6,7 +6,7 @@ import { BackgroundCard } from '@/components/tool-cards/BackgroundCard';
 import { codeFieldLanguage } from '@/components/tool-cards/code-input';
 import { GenericToolCard } from '@/components/tool-cards/GenericToolCard';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
     i18n: { language: 'en' },

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
@@ -9,17 +9,17 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 
 import { buildAgentTemplate } from '../helpers/builders-components';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key }),
 }));
-vi.mock('@/components/ProviderSetupDialog', () => ({
+mock.module('@/components/ProviderSetupDialog', () => ({
   ProviderSetupDialog: ({ label }: { label: string }) => (
     <div role="dialog" aria-label={`Setup ${label}`} />
   ),
 }));
 
 const virtualizer = (() => ({ heights: new Array<number>() }))();
-vi.mock('@tanstack/react-virtual', () => ({
+mock.module('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => {
     const size = estimateSize();
     virtualizer.heights.push(size);

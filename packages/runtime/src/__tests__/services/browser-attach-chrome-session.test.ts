@@ -4,7 +4,7 @@
  * switch / tab restore leaks the previous CDP WebSocket to Chromium.
  */
 
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const mocks = (() => ({
   connect: vi.fn(),
@@ -12,12 +12,12 @@ const mocks = (() => ({
   disconnect: vi.fn(async () => {}),
 }))();
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
 
-vi.mock('@funny/core/chrome', () => ({
+mock.module('@funny/core/chrome', () => ({
   ChromeSession: class {
     on = vi.fn();
     connect = mocks.connect;

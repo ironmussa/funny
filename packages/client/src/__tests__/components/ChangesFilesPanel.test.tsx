@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'bun:test';
+import { describe, expect, it, vi, mock } from 'bun:test';
 
 import type { FileDiffSummary } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -6,7 +6,7 @@ import { type ComponentProps, type ReactNode } from 'react';
 
 import { ChangesFilesPanel } from '@/components/review-pane/ChangesFilesPanel';
 
-vi.mock('@tanstack/react-virtual', () => ({
+mock.module('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
     getTotalSize: () => count * 24,
     getVirtualItems: () =>
@@ -19,7 +19,7 @@ vi.mock('@tanstack/react-virtual', () => ({
   }),
 }));
 
-vi.mock('@/components/ui/tooltip', () => ({
+mock.module('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => children,
   TooltipTrigger: ({ children }: { children: ReactNode }) => children,
   TooltipContent: ({ children }: { children: ReactNode }) => children,

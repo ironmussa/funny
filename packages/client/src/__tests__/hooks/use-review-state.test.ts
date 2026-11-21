@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { renderHook, waitFor } from '@testing-library/react';
 
@@ -10,7 +10,7 @@ const { refreshSpy, abortSpy } = (() => ({
   abortSpy: vi.fn(),
 }))();
 
-vi.mock('@/hooks/use-diff-data', () => ({
+mock.module('@/hooks/use-diff-data', () => ({
   useDiffData: () => ({
     diffCache: new Map(),
     loadingDiff: null,
@@ -29,7 +29,7 @@ vi.mock('@/hooks/use-diff-data', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-commit-draft', () => ({
+mock.module('@/hooks/use-commit-draft', () => ({
   useCommitDraft: () => ({
     commitTitle: '',
     commitBody: '',
@@ -40,7 +40,7 @@ vi.mock('@/hooks/use-commit-draft', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-generate-commit-msg', () => ({
+mock.module('@/hooks/use-generate-commit-msg', () => ({
   useGenerateCommitMsg: () => ({
     generatingMsg: false,
     handleGenerateCommitMsg: vi.fn(),
@@ -48,7 +48,7 @@ vi.mock('@/hooks/use-generate-commit-msg', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-publish-state', () => ({
+mock.module('@/hooks/use-publish-state', () => ({
   usePublishState: () => ({
     remoteUrl: null,
     publishDialogOpen: false,
@@ -57,7 +57,7 @@ vi.mock('@/hooks/use-publish-state', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-file-tree-state', () => ({
+mock.module('@/hooks/use-file-tree-state', () => ({
   useFileTreeState: () => ({
     filteredDiffs: [],
     collapsedFolders: new Set(),
@@ -76,11 +76,11 @@ vi.mock('@/hooks/use-file-tree-state', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-stash-state', () => ({
+mock.module('@/hooks/use-stash-state', () => ({
   useStashState: () => ({ stashEntries: [], refreshStashList: vi.fn() }),
 }));
 
-vi.mock('@/hooks/use-commit-workflow', () => ({
+mock.module('@/hooks/use-commit-workflow', () => ({
   useCommitWorkflow: () => ({
     selectedAction: 'commit',
     setSelectedAction: vi.fn(),
@@ -107,7 +107,7 @@ vi.mock('@/hooks/use-commit-workflow', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-review-actions', () => ({
+mock.module('@/hooks/use-review-actions', () => ({
   useReviewActions: () => ({}),
 }));
 

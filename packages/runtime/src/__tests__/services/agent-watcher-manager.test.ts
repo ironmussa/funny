@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, vi, mock } from 'bun:test';
 
 import { advanceTimersByTimeAsync, mocked } from '@funny/test-kit';
 
@@ -58,13 +58,13 @@ const { rows, fakeWatchers, emitToUser } = (() => {
   return { rows, fakeWatchers, emitToUser: vi.fn() };
 })();
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ watchers: fakeWatchers }),
 }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser } }));
-vi.mock('../../services/agent-runner-control.js', () => ({ isAgentRunning: () => false }));
-vi.mock('../../services/thread-service/messaging.js', () => ({ sendMessage: vi.fn() }));
-vi.mock('../../services/shutdown-manager.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser } }));
+mock.module('../../services/agent-runner-control.js', () => ({ isAgentRunning: () => false }));
+mock.module('../../services/thread-service/messaging.js', () => ({ sendMessage: vi.fn() }));
+mock.module('../../services/shutdown-manager.js', () => ({
   shutdownManager: { register: vi.fn() },
   ShutdownPhase: { SERVICES: 'services' },
 }));

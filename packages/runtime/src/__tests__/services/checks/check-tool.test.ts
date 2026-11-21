@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -14,16 +14,16 @@ const { getThread, getProject, emitToUser, spawnJob, assets } = (() => ({
   assets: { dir: '' },
 }))();
 
-vi.mock('../../../services/service-registry.js', () => ({
+mock.module('../../../services/service-registry.js', () => ({
   getServices: () => ({ threads: { getThread }, projects: { getProject } }),
 }));
-vi.mock('../../../services/ws-broker.js', () => ({ wsBroker: { emitToUser } }));
-vi.mock('../../../services/agent-job-manager.js', () => ({ spawnJob }));
-vi.mock('../../../lib/logger.js', () => ({
+mock.module('../../../services/ws-broker.js', () => ({ wsBroker: { emitToUser } }));
+mock.module('../../../services/agent-job-manager.js', () => ({ spawnJob }));
+mock.module('../../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 const actualThreadContext = { ...(await import('../../../services/thread-context.js')) };
-vi.mock('../../../services/thread-context.js', () => ({
+mock.module('../../../services/thread-context.js', () => ({
   ...actualThreadContext,
   tmpAssetsPathFor: () => assets.dir,
 }));

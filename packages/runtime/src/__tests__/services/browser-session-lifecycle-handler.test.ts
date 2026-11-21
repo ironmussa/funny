@@ -1,8 +1,8 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, mock } from 'bun:test';
 
 const mocks = (() => ({ closeForThread: vi.fn(async () => {}) }))();
 
-vi.mock('../../services/browser-session-manager.js', () => ({
+mock.module('../../services/browser-session-manager.js', () => ({
   browserSessionManager: { closeForThread: mocks.closeForThread },
 }));
 

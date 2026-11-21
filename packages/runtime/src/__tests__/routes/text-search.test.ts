@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 import { ok, okAsync } from 'neverthrow';
@@ -18,21 +18,21 @@ const mocks = (() => ({
   diagnostics: vi.fn(),
 }))();
 
-vi.mock('node:fs', () => ({ mkdirSync: mocks.mkdirSync }));
+mock.module('node:fs', () => ({ mkdirSync: mocks.mkdirSync }));
 
-vi.mock('../../services/project-search-registry.js', () => ({
+mock.module('../../services/project-search-registry.js', () => ({
   projectSearchRegistry: { acquire: mocks.acquire, diagnostics: mocks.diagnostics },
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: { getProject: mocks.getProject } }),
 }));
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
 }));
 
-vi.mock('../../utils/path-scope.js', () => ({
+mock.module('../../utils/path-scope.js', () => ({
   requireProjectPath: mocks.requireProjectPath,
 }));
 

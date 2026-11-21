@@ -1,29 +1,29 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, render } from '@testing-library/react';
 import { ResultAsync } from 'neverthrow';
 
 const mockLoadInbox = (() => vi.fn())();
 
-vi.mock('react-router-dom', () => ({
+mock.module('react-router-dom', () => ({
   useNavigate: () => vi.fn(),
 }));
 
-vi.mock('@/components/ui/nav-item', () => ({
+mock.module('@/components/ui/nav-item', () => ({
   NavItem: () => null,
 }));
 
-vi.mock('@/stores/auth-store', () => ({
+mock.module('@/stores/auth-store', () => ({
   useAuthStore: (selector: (state: { isAuthenticated: boolean }) => unknown) =>
     selector({ isAuthenticated: true }),
 }));
 
-vi.mock('@/data/automations/hooks', () => ({
+mock.module('@/data/automations/hooks', () => ({
   useAutomationInbox: () => ({ inbox: [], pendingCount: 0 }),
 }));
-vi.mock('@/data/automations/loaders', () => ({ loadInbox: mockLoadInbox }));
+mock.module('@/data/automations/loaders', () => ({ loadInbox: mockLoadInbox }));
 
-vi.mock('@/stores/ui-store', () => ({
+mock.module('@/stores/ui-store', () => ({
   useUIStore: (selector: (state: { automationInboxOpen: boolean }) => unknown) =>
     selector({ automationInboxOpen: false }),
 }));

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { stubGlobal } from '@funny/test-kit';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -12,7 +12,7 @@ import { mockT } from '../helpers/mock-i18n';
 
 const mockListMcpServers = (() => vi.fn())();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -20,7 +20,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     listMcpServers: mockListMcpServers,
   },

@@ -6,7 +6,7 @@ import { replaceDataLayer } from '@/data/runtime';
 /**
  * Test harness for the client data layer.
  *
- * Mock API modules the usual way (`vi.mock('@/lib/api/threads', …)` returning
+ * Mock API modules the usual way (`mock.module('@/lib/api/threads', …)` returning
  * `okAsync`/`errAsync`), then install a fresh layer per test so no collection
  * or cached query leaks between tests:
  *

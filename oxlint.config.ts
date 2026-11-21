@@ -95,6 +95,17 @@ const existing = {
     'no-constant-condition': 'warn',
     'no-constant-binary-expression': 'warn',
     'react-hooks/exhaustive-deps': 'warn',
+    // Bun 1.4.6 hoists vi.mock above imports and top-level variables (1.4.4 does
+    // not), so the same test would mean two things. mock.module is never hoisted.
+    'no-restricted-properties': [
+      'error',
+      {
+        object: 'vi',
+        property: 'mock',
+        message:
+          "Use mock.module from 'bun:test': vi.mock is hoisted from Bun 1.4.6 only (docs/guides/bun-test.md).",
+      },
+    ],
     // Only names we do not choose are allowed; our own private members use `#x`
     // or a plain name instead of a leading underscore.
     'no-underscore-dangle': [

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { AgentTemplate } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
@@ -12,11 +12,11 @@ import { flushAsyncUpdates } from '../helpers/render';
 
 const actions = (() => ({ duplicateTemplate: vi.fn() }))();
 const actualDataTemplatesActions = { ...(await import('@/data/templates/actions')) };
-vi.mock('@/data/templates/actions', () => ({
+mock.module('@/data/templates/actions', () => ({
   ...actualDataTemplatesActions,
   duplicateTemplate: actions.duplicateTemplate,
 }));
-vi.mock('@/lib/api/agent-templates', () => ({
+mock.module('@/lib/api/agent-templates', () => ({
   agentTemplatesApi: { getAgentTemplateUsageStats: () => okAsync({ 'template-1': 2 }) },
 }));
 

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 import { okAsync } from 'neverthrow';
@@ -27,7 +27,7 @@ const {
   mockToggleMcpServer: vi.fn(),
 }))();
 
-vi.mock('../../services/mcp-service.js', () => ({
+mock.module('../../services/mcp-service.js', () => ({
   addMcpServer: mockAddMcpServer,
   listMcpServers: mockListMcpServers,
   removeMcpServer: mockRemoveMcpServer,
@@ -35,7 +35,7 @@ vi.mock('../../services/mcp-service.js', () => ({
   RECOMMENDED_SERVERS: [],
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: {
     info: vi.fn(),
     warn: vi.fn(),
@@ -43,12 +43,12 @@ vi.mock('../../lib/logger.js', () => ({
   },
 }));
 
-vi.mock('../../services/mcp-oauth.js', () => ({
+mock.module('../../services/mcp-oauth.js', () => ({
   handleOAuthCallback: mockHandleOAuthCallback,
   startOAuthFlow: mockStartOAuthFlow,
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     agentProfiles: {
       resolveEffectiveProfile: mockResolveEffectiveProfile,
@@ -56,7 +56,7 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('../../utils/path-scope.js', () => ({
+mock.module('../../utils/path-scope.js', () => ({
   requireProjectPath: mockRequireProjectPath,
 }));
 

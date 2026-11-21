@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach, type Mock } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, type Mock, mock } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -19,7 +19,7 @@ const mocks = (() => ({
   requirePickerPath: vi.fn(async (_path: string): Promise<Response | null> => null),
 }))();
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: {
       createProject: mocks.createProject,
@@ -28,20 +28,20 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('../../routes/github/helpers.js', () => ({
+mock.module('../../routes/github/helpers.js', () => ({
   githubApiFetch: vi.fn(),
   resolveGithubToken: vi.fn(async () => null),
 }));
 
-vi.mock('../../utils/path-scope.js', () => ({
+mock.module('../../utils/path-scope.js', () => ({
   requirePickerPath: mocks.requirePickerPath,
 }));
 
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: { emitToUser: vi.fn() },
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 

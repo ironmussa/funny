@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'bun:test';
+import { describe, test, expect, mock } from 'bun:test';
 
 import type { ThreadStatus } from '@funny/shared';
 import { screen } from '@testing-library/react';
@@ -7,7 +7,7 @@ import { StatusBadge } from '@/components/StatusBadge';
 
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string) => key,
     i18n: { language: 'en' },

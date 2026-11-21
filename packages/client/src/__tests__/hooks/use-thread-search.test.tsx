@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, renderHook, waitFor } from '@testing-library/react';
@@ -6,7 +6,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { MessageStreamHandle } from '@/components/thread/MessageStream';
 import { useThreadSearchState } from '@/hooks/use-thread-search';
 
-vi.mock('@/stores/thread-store', () => ({ useThreadStore: { getState: vi.fn() } }));
+mock.module('@/stores/thread-store', () => ({ useThreadStore: { getState: vi.fn() } }));
 
 let viewport: HTMLDivElement;
 beforeEach(() => {

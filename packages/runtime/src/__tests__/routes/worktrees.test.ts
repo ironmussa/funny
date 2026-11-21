@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 import { ok, err, okAsync } from 'neverthrow';
@@ -19,7 +19,7 @@ const {
   mockInvalidateSearch: vi.fn(),
 }))();
 
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   listWorktrees: mockListWorktrees,
   createWorktree: mockCreateWorktree,
   removeWorktree: mockRemoveWorktree,
@@ -34,11 +34,11 @@ const { mockRequireProject } = (() => ({
   mockRequireProject: vi.fn(),
 }))();
 
-vi.mock('../../utils/route-helpers.js', () => ({
+mock.module('../../utils/route-helpers.js', () => ({
   requireProject: mockRequireProject,
 }));
 
-vi.mock('../../services/project-search-registry.js', () => ({
+mock.module('../../services/project-search-registry.js', () => ({
   projectSearchRegistry: { invalidate: mockInvalidateSearch },
 }));
 

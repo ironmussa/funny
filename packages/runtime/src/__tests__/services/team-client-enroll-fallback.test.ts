@@ -11,7 +11,7 @@
  * This drives initTeamMode end-to-end with a mocked gRPC transport, fetch, enrollment
  * client, and credentials store.
  */
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
@@ -42,31 +42,31 @@ const h = (() => {
 // loadRunnerCredentials is referenced via h in the vi.mock factory below.
 const { enrollRunner, saveRunnerCredentials, clearRunnerCredentials } = h;
 
-vi.mock('../../services/runner-enrollment.js', () => ({ enrollRunner: h.enrollRunner }));
-vi.mock('../../services/runner-credentials.js', () => ({
+mock.module('../../services/runner-enrollment.js', () => ({ enrollRunner: h.enrollRunner }));
+mock.module('../../services/runner-credentials.js', () => ({
   saveRunnerCredentials: h.saveRunnerCredentials,
   loadRunnerCredentials: h.loadRunnerCredentials,
   clearRunnerCredentials: h.clearRunnerCredentials,
 }));
 
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: { onEvent: vi.fn(() => () => {}) },
 }));
 // Runner-installed provider extensions are loaded from DATA_DIR on connect;
 // keep the developer's ~/.funny/extensions out of the test.
 const actualDataDir = { ...(await import('../../lib/data-dir.js')) };
-vi.mock('../../lib/data-dir.js', () => ({
+mock.module('../../lib/data-dir.js', () => ({
   ...actualDataDir,
   DATA_DIR: '/nonexistent/funny-team-client-test',
 }));
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: { listProjects: vi.fn(async () => []) } }),
 }));
 
-vi.mock('../../services/grpc-team-transport.js', () => ({
+mock.module('../../services/grpc-team-transport.js', () => ({
   GrpcTeamTransport: class {
     start = vi.fn();
     shutdown = vi.fn();

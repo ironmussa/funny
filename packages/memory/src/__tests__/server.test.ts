@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll, vi } from 'bun:test';
+import { describe, it, expect, beforeAll, afterAll, vi, mock } from 'bun:test';
 
 import type { Client } from '@libsql/client';
 import { Hono } from 'hono';
@@ -7,7 +7,7 @@ import { createDb, initSchema, insertFact, listFacts } from '../storage.js';
 import { makeFact } from './helpers.js';
 
 // Mock the embedding provider
-vi.mock('../embedding.js', () => ({
+mock.module('../embedding.js', () => ({
   createEmbeddingProvider: vi.fn().mockResolvedValue({
     embed: vi.fn().mockResolvedValue(new Float32Array(0)),
     embedBatch: vi

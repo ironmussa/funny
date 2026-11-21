@@ -1,19 +1,19 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 const mocks = (() => ({ input: vi.fn(), heartbeat: vi.fn() }))();
-vi.mock('@/lib/browser-session-client', () => ({ browserSessionClient: mocks }));
-vi.mock('@/components/browser-panel/BrowserSessionCanvas', () => ({
+mock.module('@/lib/browser-session-client', () => ({ browserSessionClient: mocks }));
+mock.module('@/components/browser-panel/BrowserSessionCanvas', () => ({
   BrowserSessionCanvas: () => <canvas />,
 }));
-vi.mock('@/components/browser-panel/tools/PinTool', () => ({ PinTool: () => null }));
-vi.mock('@/components/browser-panel/tools/RegionTool', () => ({ RegionTool: () => null }));
-vi.mock('@/components/browser-panel/tools/DrawTool', () => ({
+mock.module('@/components/browser-panel/tools/PinTool', () => ({ PinTool: () => null }));
+mock.module('@/components/browser-panel/tools/RegionTool', () => ({ RegionTool: () => null }));
+mock.module('@/components/browser-panel/tools/DrawTool', () => ({
   DrawTool: () => <canvas data-testid="draft-canvas" />,
 }));
-vi.mock('@/components/browser-panel/TestIdOverlay', () => ({ TestIdOverlay: () => null }));
-vi.mock('@/components/browser-panel/InspectOverlay', () => ({ InspectOverlay: () => null }));
+mock.module('@/components/browser-panel/TestIdOverlay', () => ({ TestIdOverlay: () => null }));
+mock.module('@/components/browser-panel/InspectOverlay', () => ({ InspectOverlay: () => null }));
 
 import { BrowserViewport } from '@/components/browser-panel/BrowserViewport';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';

@@ -7,7 +7,7 @@ description: >
   the release CDN does not fail CI.
 inputs:
   bun-version:
-    description: Exact Bun version to install.
+    description: Exact Bun version to install, or `canary`.
     required: true
 runs:
   using: composite

@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 
 const pushMocks = (() => ({ hasPushSubscription: vi.fn(), testWebPush: vi.fn() }))();
-vi.mock('@/lib/web-push', () => pushMocks);
+mock.module('@/lib/web-push', () => pushMocks);
 
-vi.mock('@/stores/settings-store', () => ({
+mock.module('@/stores/settings-store', () => ({
   useSettingsStore: {
     getState: () => ({
       notificationsEnabled: true,

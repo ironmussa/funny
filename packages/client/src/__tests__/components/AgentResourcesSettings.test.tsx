@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { AgentResource } from '@funny/shared';
 import { render, screen, waitFor } from '@testing-library/react';
@@ -8,16 +8,16 @@ import { mockT } from '../helpers/mock-i18n';
 
 const mockListAgentResources = (() => vi.fn())();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: { listAgentResources: mockListAgentResources },
 }));
 
-vi.mock('@/stores/app-store', () => ({
+mock.module('@/stores/app-store', () => ({
   useAppStore: (sel: (s: unknown) => unknown) =>
     sel({ projects: [{ id: 'p1', path: '/repo' }], selectedProjectId: 'p1' }),
 }));

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, setSystemTime, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, setSystemTime, vi, mock } from 'bun:test';
 
 import type { PRDetail } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
@@ -11,14 +11,14 @@ import { replaceDataLayer } from '@/data/runtime';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('@/lib/api/github', () => ({
+mock.module('@/lib/api/github', () => ({
   githubApi: {
     githubPRDetail: vi.fn(),
     githubPRThreads: vi.fn(),
   },
 }));
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },

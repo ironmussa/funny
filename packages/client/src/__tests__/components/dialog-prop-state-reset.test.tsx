@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 
@@ -7,7 +7,7 @@ import { WorktreeDeleteDialog } from '@/components/WorktreeDeleteDialog';
 
 const worktreeStatus = (() => vi.fn())();
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: { worktreeStatus },
 }));
 

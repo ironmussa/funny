@@ -4,20 +4,20 @@
  * servers; unknown servers and foreign tokens are refused.
  */
 
-import { afterAll, describe, expect, test, vi } from 'bun:test';
+import { afterAll, describe, expect, test, vi, mock } from 'bun:test';
 
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/service-registry.js', () => ({ getServices: vi.fn() }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
-vi.mock('../../services/agent-job-manager.js', () => ({ spawnJob: vi.fn() }));
-vi.mock('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
-vi.mock('../../services/thread-manager.js', () => ({ getThread: vi.fn() }));
-vi.mock('../../services/thread-service/create.js', () => ({ createAndStartThread: vi.fn() }));
+mock.module('../../services/service-registry.js', () => ({ getServices: vi.fn() }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
+mock.module('../../services/agent-job-manager.js', () => ({ spawnJob: vi.fn() }));
+mock.module('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
+mock.module('../../services/thread-manager.js', () => ({ getThread: vi.fn() }));
+mock.module('../../services/thread-service/create.js', () => ({ createAndStartThread: vi.fn() }));
 
 import { stopAgentMcpHttp } from '../../services/agent-mcp-http.js';
 import {

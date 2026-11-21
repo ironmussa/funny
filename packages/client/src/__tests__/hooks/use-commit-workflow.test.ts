@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, renderHook } from '@testing-library/react';
 import { ok } from 'neverthrow';
@@ -8,18 +8,20 @@ const { gitApi, refreshAllLoadedThreads } = (() => ({
   refreshAllLoadedThreads: vi.fn(),
 }))();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: unknown) => (typeof fallback === 'string' ? fallback : key),
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
-vi.mock('@/lib/toast-error', () => ({ toastError: vi.fn() }));
-vi.mock('@/lib/api/git', () => ({ gitApi }));
-vi.mock('@/lib/api/projects', () => ({ projectsApi: { listBranches: vi.fn() } }));
-vi.mock('@/stores/draft-store', () => ({ useDraftStore: () => ({ clearCommitDraft: vi.fn() }) }));
-vi.mock('@/stores/thread-store', () => ({
+mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('@/lib/toast-error', () => ({ toastError: vi.fn() }));
+mock.module('@/lib/api/git', () => ({ gitApi }));
+mock.module('@/lib/api/projects', () => ({ projectsApi: { listBranches: vi.fn() } }));
+mock.module('@/stores/draft-store', () => ({
+  useDraftStore: () => ({ clearCommitDraft: vi.fn() }),
+}));
+mock.module('@/stores/thread-store', () => ({
   useThreadStore: {
     getState: () => ({ refreshActiveThread: vi.fn(), refreshAllLoadedThreads }),
   },

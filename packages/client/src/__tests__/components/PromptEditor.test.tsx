@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, test, vi } from 'bun:test';
+import { afterAll, beforeAll, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { Schema } from '@tiptap/pm/model';
@@ -8,7 +8,7 @@ import { createRef, StrictMode } from 'react';
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
 
 const actualLibApi = { ...(await import('@/lib/api')) };
-vi.mock('@/lib/api', () => {
+mock.module('@/lib/api', () => {
   const actual = actualLibApi;
   return {
     ...actual,

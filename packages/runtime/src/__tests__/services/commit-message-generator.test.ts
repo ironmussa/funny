@@ -1,10 +1,12 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const h = (() => ({ query: vi.fn() }))();
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({ query: h.query }));
-vi.mock('@funny/core/agents', () => ({ resolveSDKCliPath: () => '/sdk/cli.js' }));
-vi.mock('../../lib/logger.js', () => ({ log: { error: vi.fn() } }));
-vi.mock('../../services/pipeline-prompts.js', () => ({ COMMIT_MESSAGE_SYSTEM_PROMPT: 'system' }));
+mock.module('@anthropic-ai/claude-agent-sdk', () => ({ query: h.query }));
+mock.module('@funny/core/agents', () => ({ resolveSDKCliPath: () => '/sdk/cli.js' }));
+mock.module('../../lib/logger.js', () => ({ log: { error: vi.fn() } }));
+mock.module('../../services/pipeline-prompts.js', () => ({
+  COMMIT_MESSAGE_SYSTEM_PROMPT: 'system',
+}));
 
 import { generateCommitMessage } from '../../services/commit-message-generator.js';
 

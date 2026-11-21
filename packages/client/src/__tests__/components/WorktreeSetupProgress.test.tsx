@@ -1,10 +1,10 @@
-import { describe, expect, it, vi } from 'bun:test';
+import { describe, expect, it, mock } from 'bun:test';
 
 import { render, screen } from '@testing-library/react';
 
 import { WorktreeSetupProgress } from '@/components/WorktreeSetupProgress';
 
-vi.mock('@/components/GitProgressModal', () => ({
+mock.module('@/components/GitProgressModal', () => ({
   useStepTimers: () => () => 5,
   useTotalFromSteps: () => 12,
   formatElapsed: (seconds: number) => `${seconds}s`,

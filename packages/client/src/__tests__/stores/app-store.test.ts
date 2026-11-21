@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { DomainError } from '@funny/shared/errors';
 import { okAsync, errAsync } from 'neverthrow';
@@ -31,11 +31,11 @@ const { mockProjectsApi, mockThreadsApi } = (() => ({
   },
 }))();
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: { ...mockProjectsApi, ...mockThreadsApi },
 }));
-vi.mock('@/lib/api/projects', () => ({ projectsApi: mockProjectsApi }));
-vi.mock('@/lib/api/threads', () => ({ threadsApi: mockThreadsApi }));
+mock.module('@/lib/api/projects', () => ({ projectsApi: mockProjectsApi }));
+mock.module('@/lib/api/threads', () => ({ threadsApi: mockThreadsApi }));
 
 const mockApi = { ...mockProjectsApi, ...mockThreadsApi };
 

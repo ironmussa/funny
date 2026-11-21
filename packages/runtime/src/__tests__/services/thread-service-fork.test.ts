@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 const mocks = (() => ({
   tm: {
@@ -21,36 +21,36 @@ const mocks = (() => ({
   copyGitCheckpoint: vi.fn(async () => true),
 }))();
 
-vi.mock('nanoid', () => ({ nanoid: () => 'fork-thread-id' }));
+mock.module('nanoid', () => ({ nanoid: () => 'fork-thread-id' }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../lib/telemetry.js', () => ({
+mock.module('../../lib/telemetry.js', () => ({
   metric: vi.fn(),
   startSpan: vi.fn(() => ({ end: vi.fn() })),
 }));
 
-vi.mock('../../services/thread-manager.js', () => mocks.tm);
+mock.module('../../services/thread-manager.js', () => mocks.tm);
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: mocks.projects }),
 }));
 
-vi.mock('../../services/thread-event-bus.js', () => ({
+mock.module('../../services/thread-event-bus.js', () => ({
   threadEventBus: mocks.threadEventBus,
 }));
 
-vi.mock('../../services/git-checkpoints.js', () => ({
+mock.module('../../services/git-checkpoints.js', () => ({
   copyGitCheckpoint: mocks.copyGitCheckpoint,
 }));
 
-vi.mock('../../services/git-checkpoints.js', () => ({
+mock.module('../../services/git-checkpoints.js', () => ({
   copyGitCheckpoint: mocks.copyGitCheckpoint,
 }));
 
-vi.mock('@anthropic-ai/claude-agent-sdk', () => ({
+mock.module('@anthropic-ai/claude-agent-sdk', () => ({
   getSessionMessages: mocks.getSessionMessages,
   forkSession: mocks.forkSession,
 }));

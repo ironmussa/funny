@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { FileDiffSummary } from '@funny/shared';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
@@ -9,7 +9,7 @@ import { renderWithProviders } from '../helpers/render';
 
 // ── Mocks ───────────────────────────────────────────────────────
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallbackOrOpts?: string | Record<string, any>) => {
       if (typeof fallbackOrOpts === 'string') return fallbackOrOpts;
@@ -26,7 +26,7 @@ vi.mock('react-i18next', () => ({
 
 const revertFiles = vi.fn();
 const getFileDiff = vi.fn();
-vi.mock('@/lib/api', async () => {
+mock.module('@/lib/api', async () => {
   const { okAsync } = await import('neverthrow');
   return {
     api: {
@@ -42,7 +42,7 @@ vi.mock('@/lib/api', async () => {
   };
 });
 
-vi.mock('sonner', () => ({
+mock.module('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 

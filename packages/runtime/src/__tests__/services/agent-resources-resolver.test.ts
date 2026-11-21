@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { AgentResource, McpServer } from '@funny/shared';
 import { okAsync } from 'neverthrow';
@@ -14,11 +14,11 @@ const { listSkillResourcesForProvider, listCustomCommandResourcesForProvider, li
     listMcpServers: vi.fn(),
   }))();
 
-vi.mock('../../services/skills-service.js', () => ({
+mock.module('../../services/skills-service.js', () => ({
   listSkillResourcesForProvider,
   listCustomCommandResourcesForProvider,
 }));
-vi.mock('../../services/mcp-service.js', () => ({ listMcpServers }));
+mock.module('../../services/mcp-service.js', () => ({ listMcpServers }));
 
 import { resolveAgentResources } from '../../services/agent-resources/resolver.js';
 

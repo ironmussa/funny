@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, renderHook } from '@testing-library/react';
 
@@ -12,7 +12,7 @@ const reviewPaneState = ((): ReviewPaneMockState => ({
   dirtyThreadId: undefined,
 }))();
 
-vi.mock('@/stores/review-pane-store', () => ({
+mock.module('@/stores/review-pane-store', () => ({
   useReviewPaneStore: (selector: (state: typeof reviewPaneState) => unknown) =>
     selector(reviewPaneState),
 }));

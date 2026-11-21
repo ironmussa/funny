@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, mock } from 'bun:test';
 
 import { render, screen, fireEvent } from '@testing-library/react';
 import { useEffect } from 'react';
@@ -19,7 +19,7 @@ import { useUIStore } from '@/stores/ui-store';
 // path and leaves the overlay flag untouched (route-sync, not mounted here, owns
 // closing it).
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: string) => fallback ?? key,
     i18n: { language: 'en' },

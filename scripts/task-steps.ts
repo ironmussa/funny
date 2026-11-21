@@ -1,5 +1,5 @@
 // The tasks `run-steps.ts` knows, built from the root package.json scripts so
-// they stay the single source of truth: `lint` is `oxlint . && bun run
+// they stay the single source of truth: `lint` is `bun scripts/bun-lint.ts . && bun run
 // fitness:layering && …`, and each `&&` part becomes one step. Steps of a task
 // are independent checks, so the runner may run them side by side, except in
 // a `sequential` task (build: later packages may read earlier outputs).

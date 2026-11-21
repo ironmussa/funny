@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { GitStatusInfo, Thread } from '@funny/shared';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
@@ -17,7 +17,7 @@ import { seedThreads } from '../helpers/seed-thread-state';
 const mockNavigate = vi.fn();
 const mockEnsureBranch = vi.fn().mockResolvedValue(true);
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -25,22 +25,22 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/hooks/use-stable-navigate', () => ({
+mock.module('@/hooks/use-stable-navigate', () => ({
   useStableNavigate: () => mockNavigate,
 }));
 
-vi.mock('@/hooks/use-branch-switch', () => ({
+mock.module('@/hooks/use-branch-switch', () => ({
   useBranchSwitch: () => ({
     ensureBranch: mockEnsureBranch,
     branchSwitchDialog: null,
   }),
 }));
 
-vi.mock('@/hooks/use-minute-tick', () => ({
+mock.module('@/hooks/use-minute-tick', () => ({
   useMinuteTick: () => {},
 }));
 
-vi.mock('@atlaskit/pragmatic-drag-and-drop/element/adapter', () => ({
+mock.module('@atlaskit/pragmatic-drag-and-drop/element/adapter', () => ({
   draggable: vi.fn(() => () => {}),
 }));
 

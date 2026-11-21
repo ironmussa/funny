@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, mock } from 'bun:test';
 
 import type { GitStatusInfo, Thread } from '@funny/shared';
 import { act, fireEvent, screen } from '@testing-library/react';
@@ -17,7 +17,7 @@ import { buildJob, buildWatcher } from '../../helpers/builders-lib';
 import { mockT } from '../../helpers/mock-i18n';
 import { renderWithProviders } from '../../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },

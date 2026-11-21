@@ -1,7 +1,7 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 import { EventEmitter } from 'node:events';
 
-vi.mock('node:child_process', () => ({
+mock.module('node:child_process', () => ({
   spawn: () => {
     const child = Object.assign(new EventEmitter(), {
       stdout: new EventEmitter(),

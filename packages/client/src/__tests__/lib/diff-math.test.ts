@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'bun:test';
+import { describe, test, expect, vi, mock } from 'bun:test';
 
 import {
   annotateConflicts,
@@ -13,7 +13,7 @@ import {
   type DiffLine,
 } from '@/lib/diff-math';
 
-vi.mock('@/lib/telemetry', () => ({
+mock.module('@/lib/telemetry', () => ({
   metric: vi.fn(),
   startSpan: vi.fn(() => ({ end: vi.fn() })),
 }));

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Thread } from '@funny/shared';
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
@@ -7,16 +7,16 @@ import { act, render, screen } from '@testing-library/react';
 import { KanbanColumn } from '@/components/kanban/KanbanColumn';
 import { buildThread } from '@/data/threads/testing';
 
-vi.mock('@atlaskit/pragmatic-drag-and-drop-auto-scroll/element', () => ({
+mock.module('@atlaskit/pragmatic-drag-and-drop-auto-scroll/element', () => ({
   autoScrollForElements: () => vi.fn(),
 }));
-vi.mock('@atlaskit/pragmatic-drag-and-drop/element/adapter', () => ({
+mock.module('@atlaskit/pragmatic-drag-and-drop/element/adapter', () => ({
   dropTargetForElements: () => vi.fn(),
 }));
-vi.mock('@/components/kanban/AddThreadButton', () => ({
+mock.module('@/components/kanban/AddThreadButton', () => ({
   AddThreadButton: () => null,
 }));
-vi.mock('@/components/kanban/KanbanCard', () => ({
+mock.module('@/components/kanban/KanbanCard', () => ({
   KanbanCard: ({ thread }: { thread: Thread }) => (
     <div data-testid="kanban-test-card">{thread.id}</div>
   ),

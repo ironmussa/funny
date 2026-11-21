@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, it, vi, mock } from 'bun:test';
 
 import type { Project } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
@@ -10,7 +10,7 @@ import { buildProject } from '@/data/projects/testing';
 import { useProjectSearch } from '@/hooks/use-project-search';
 import { projectsApi } from '@/lib/api/projects';
 
-vi.mock('@/lib/api/projects', () => ({ projectsApi: { listProjects: vi.fn() } }));
+mock.module('@/lib/api/projects', () => ({ projectsApi: { listProjects: vi.fn() } }));
 const list = mocked(projectsApi.listProjects);
 const project = buildProject({ id: 'broncos', name: 'goliive-broncos', path: '/repos/broncos' });
 async function tick(ms = 250) {

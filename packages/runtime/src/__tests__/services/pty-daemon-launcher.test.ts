@@ -6,7 +6,7 @@
  * fake timers instead of a real daemon.
  */
 
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 import { rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
@@ -19,8 +19,8 @@ const dataDir = await (async () => {
   return mkdtempSync(join(tmpdir(), 'pty-daemon-launcher-'));
 })();
 
-vi.mock('../../lib/data-dir.js', () => ({ DATA_DIR: dataDir }));
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/data-dir.js', () => ({ DATA_DIR: dataDir }));
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 

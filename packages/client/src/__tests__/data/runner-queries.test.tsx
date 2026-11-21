@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
@@ -13,8 +13,8 @@ import {
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
 const api = (() => ({ getProviders: vi.fn(), listInfraConnections: vi.fn() }))();
-vi.mock('@/lib/api/system', () => ({ systemApi: { getProviders: api.getProviders } }));
-vi.mock('@/lib/api/infra', () => ({
+mock.module('@/lib/api/system', () => ({ systemApi: { getProviders: api.getProviders } }));
+mock.module('@/lib/api/infra', () => ({
   infraApi: { listInfraConnections: api.listInfraConnections },
 }));
 

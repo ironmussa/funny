@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, expect, test, vi, mock } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,8 +6,8 @@ import { join } from 'node:path';
 import { ok } from 'neverthrow';
 
 const mocks = (() => ({ requireProject: vi.fn(), branches: vi.fn(), fetch: vi.fn() }))();
-vi.mock('../../utils/route-helpers.js', () => ({ requireProject: mocks.requireProject }));
-vi.mock('@funny/core/git', () => ({
+mock.module('../../utils/route-helpers.js', () => ({ requireProject: mocks.requireProject }));
+mock.module('@funny/core/git', () => ({
   getCurrentBranch: vi.fn(async () => ok('main')),
   getDefaultBranch: vi.fn(async () => ok('main')),
   listBranchesDetailed: mocks.branches,
@@ -17,13 +17,13 @@ vi.mock('@funny/core/git', () => ({
   getGitWriteGeneration: vi.fn(() => 0),
   stash: vi.fn(),
 }));
-vi.mock('../../middleware/tracing.js', () => ({ requestSpan: () => ({ end: vi.fn() }) }));
-vi.mock('../../services/git-runtime-service.js', () => ({
+mock.module('../../middleware/tracing.js', () => ({ requestSpan: () => ({ end: vi.fn() }) }));
+mock.module('../../services/git-runtime-service.js', () => ({
   gitRuntimeService: { scheduleBackgroundFetch: mocks.fetch },
 }));
-vi.mock('../../services/git-service.js', () => ({ resolveIdentity: vi.fn() }));
-vi.mock('../../services/thread-manager.js', () => ({ updateThread: vi.fn() }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
+mock.module('../../services/git-service.js', () => ({ resolveIdentity: vi.fn() }));
+mock.module('../../services/thread-manager.js', () => ({ updateThread: vi.fn() }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
 
 import { projectGitRoutes } from '../../routes/projects/git-routes.js';
 

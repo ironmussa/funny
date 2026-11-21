@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { ThreadComment } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
@@ -22,11 +22,11 @@ const threadsApi = (() => ({
   createThreadComment: vi.fn(),
   deleteThreadComment: vi.fn(),
 }))();
-vi.mock('@/lib/api/threads', () => ({ threadsApi }));
+mock.module('@/lib/api/threads', () => ({ threadsApi }));
 const schedulerApi = (() => ({ listSchedulerRuns: vi.fn(), refreshScheduler: vi.fn() }))();
-vi.mock('@/lib/api', () => ({ api: schedulerApi }));
+mock.module('@/lib/api', () => ({ api: schedulerApi }));
 const effects = (() => ({ emit: vi.fn() }))();
-vi.mock('@/platform/client-composition', () => ({
+mock.module('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));
 

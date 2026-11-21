@@ -1,11 +1,11 @@
-import { afterEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, render, screen, cleanup } from '@testing-library/react';
 
 import { ProjectListView } from '@/components/mobile/ProjectListView';
 
-vi.mock('@/components/mobile/MobileNotifications', () => ({ MobileNotifications: () => null }));
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+mock.module('@/components/mobile/MobileNotifications', () => ({ MobileNotifications: () => null }));
+mock.module('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 afterEach(cleanup);
 
 describe('mobile add project', () => {

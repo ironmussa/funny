@@ -1,4 +1,4 @@
-import { describe, expect, test, vi, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, mock } from 'bun:test';
 
 import { okAsync, errAsync } from 'neverthrow';
 
@@ -7,16 +7,16 @@ const mocks = (() => ({
   createAndStartThread: vi.fn(),
 }))();
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
 }));
 
-vi.mock('../../services/thread-service/create.js', () => ({
+mock.module('../../services/thread-service/create.js', () => ({
   createAndStartThread: mocks.createAndStartThread,
 }));
 
 // Logger is noisy and hits Abbacchio transport — stub it.
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 

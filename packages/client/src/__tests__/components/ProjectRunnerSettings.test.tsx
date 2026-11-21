@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { ProjectRunnerSettingsResponse, RunnerInfo } from '@funny/shared/runner-protocol';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -13,14 +13,14 @@ const mockGrant = (() => vi.fn())();
 const mockRevoke = (() => vi.fn())();
 const mockSetGeneral = (() => vi.fn())();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     getProjectRunnerSettings: mockGet,
     updateProjectRunnerSettings: mockUpdate,

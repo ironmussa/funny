@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 
 /**
  * A workflow node on the flow and run canvases (change workflow-dag-engine,
@@ -15,7 +15,7 @@ import {
   type WorkflowNode,
 } from '@/components/workflows/WorkflowNodeView';
 
-vi.mock('@xyflow/react', () => ({
+mock.module('@xyflow/react', () => ({
   Handle: () => null,
   Position: { Left: 'left', Right: 'right' },
 }));

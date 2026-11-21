@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { Project } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
@@ -10,7 +10,7 @@ import { useProjectStore } from '@/stores/project-store';
 
 import { renderWithProviders } from '../helpers/render';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: string) => fallback ?? key,
     i18n: { language: 'en' },

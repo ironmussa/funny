@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeAll, afterAll, afterEach, vi } from 'bun:test';
+import { describe, test, expect, beforeAll, afterAll, afterEach, vi, mock } from 'bun:test';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -15,15 +15,17 @@ const { fakeJobs } = (() => ({
 
 // Mock the heavy service deps so importing the manager is cheap; deriveStatus
 // itself only touches fs + process.kill, none of these.
-vi.mock('../../services/agent-runner-control.js', () => ({
+mock.module('../../services/agent-runner-control.js', () => ({
   isAgentRunning: () => false,
   startAgent: vi.fn(async () => undefined),
 }));
-vi.mock('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
-vi.mock('../../services/service-registry.js', () => ({ getServices: () => ({ jobs: fakeJobs }) }));
-vi.mock('../../services/thread-service/messaging.js', () => ({ sendMessage: vi.fn() }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
-vi.mock('../../services/shutdown-manager.js', () => ({
+mock.module('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
+mock.module('../../services/service-registry.js', () => ({
+  getServices: () => ({ jobs: fakeJobs }),
+}));
+mock.module('../../services/thread-service/messaging.js', () => ({ sendMessage: vi.fn() }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
+mock.module('../../services/shutdown-manager.js', () => ({
   shutdownManager: { register: vi.fn() },
   ShutdownPhase: { SERVICES: 'services' },
 }));

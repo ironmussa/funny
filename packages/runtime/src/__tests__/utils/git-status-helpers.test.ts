@@ -1,8 +1,8 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   invalidateStatusCache: vi.fn(),
   getPRForBranch: vi.fn(async () => null),
   getCurrentBranch: vi.fn(),

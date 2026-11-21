@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, renderHook } from '@testing-library/react';
 import { err, ok } from 'neverthrow';
@@ -30,14 +30,14 @@ const { api, toastSuccess, toastErrorFn, fetchForThread, fetchProjectStatus } = 
   fetchProjectStatus: vi.fn(),
 }))();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: (_key: string, fallback?: string) => fallback ?? _key }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
-vi.mock('sonner', () => ({ toast: { success: toastSuccess } }));
-vi.mock('@/lib/toast-error', () => ({ toastError: toastErrorFn }));
-vi.mock('@/data/git-status/actions', () => ({ fetchForThread, fetchProjectStatus }));
-vi.mock('@/lib/api', () => ({ api }));
+mock.module('sonner', () => ({ toast: { success: toastSuccess } }));
+mock.module('@/lib/toast-error', () => ({ toastError: toastErrorFn }));
+mock.module('@/data/git-status/actions', () => ({ fetchForThread, fetchProjectStatus }));
+mock.module('@/lib/api', () => ({ api }));
 
 beforeEach(() => {
   vi.clearAllMocks();

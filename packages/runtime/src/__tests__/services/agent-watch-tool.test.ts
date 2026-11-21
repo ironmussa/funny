@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, vi, mock } from 'bun:test';
 
 import { okAsync, errAsync } from 'neverthrow';
 
@@ -8,16 +8,16 @@ const { getThread, createAndStartThread, remoteSearchThreads } = (() => ({
   remoteSearchThreads: vi.fn(),
 }))();
 
-vi.mock('../../services/thread-manager.js', () => ({ getThread }));
-vi.mock('../../services/thread-service/create.js', () => ({ createAndStartThread }));
-vi.mock('../../services/remote-thread-data-client.js', () => ({ remoteSearchThreads }));
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({ getThread }));
+mock.module('../../services/thread-service/create.js', () => ({ createAndStartThread }));
+mock.module('../../services/remote-thread-data-client.js', () => ({ remoteSearchThreads }));
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 // These are imported at module load but only used by the other tools; stub them
 // so the import graph stays light and isolated.
-vi.mock('../../services/agent-job-manager.js', () => ({ spawnJob: vi.fn() }));
-vi.mock('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
+mock.module('../../services/agent-job-manager.js', () => ({ spawnJob: vi.fn() }));
+mock.module('../../services/agent-watcher-manager.js', () => ({ createOrReschedule: vi.fn() }));
 
 import { watchToolDefinitions } from '../../services/agent-watch-tool.js';
 

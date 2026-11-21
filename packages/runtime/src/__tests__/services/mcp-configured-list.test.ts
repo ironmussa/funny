@@ -1,11 +1,14 @@
-import { describe, expect, test, vi, beforeEach } from 'bun:test';
+import { describe, expect, test, vi, beforeEach, mock } from 'bun:test';
 
 const fsMocks = (() => ({ readFile: vi.fn(), writeFile: vi.fn() }))();
-vi.mock('node:fs/promises', () => ({ readFile: fsMocks.readFile, writeFile: fsMocks.writeFile }));
+mock.module('node:fs/promises', () => ({
+  readFile: fsMocks.readFile,
+  writeFile: fsMocks.writeFile,
+}));
 
 const { execute } = (() => ({ execute: vi.fn() }))();
 const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   ...actualFunnyCoreGit,
   execute,
 }));

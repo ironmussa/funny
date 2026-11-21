@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
@@ -27,19 +27,19 @@ const mocks = ((): FactoryMocks => ({
   canSteer: true,
 }))();
 
-vi.mock('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
+mock.module('@/data/projects/hooks', () => ({ useCanSteerProject: () => mocks.canSteer }));
 
-vi.mock('@/data/factory/hooks', () => ({
+mock.module('@/data/factory/hooks', () => ({
   useFactorySettings: () => mocks.settings,
   useFactoryRuns: () => mocks.runs,
 }));
-vi.mock('@/data/factory/actions', () => ({
+mock.module('@/data/factory/actions', () => ({
   saveFactorySettings: (input: unknown) => mocks.save(input),
   controlFactoryRun: (...args: unknown[]) => mocks.control(...args),
   emptyFactory: (...args: unknown[]) => mocks.empty(...args),
 }));
-vi.mock('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
-vi.mock('react-i18next', () => ({
+mock.module('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (_k: string, fallback?: string, vars?: Record<string, unknown>) =>
       (fallback ?? _k).replace(/\{\{(\w+)\}\}/g, (_m, name) => String(vars?.[name] ?? '')),

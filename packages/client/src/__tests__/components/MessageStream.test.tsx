@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, fireEvent, render, screen } from '@testing-library/react';
@@ -20,7 +20,7 @@ class MockIntersectionObserver {
   disconnect() {}
 }
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -54,7 +54,7 @@ const memoizedMessageListLifecycle = ((): MessageListLifecycle => ({
   hasHiddenItems: false,
 }))();
 
-vi.mock('@/components/thread/MemoizedMessageList', () => ({
+mock.module('@/components/thread/MemoizedMessageList', () => ({
   EMPTY_MESSAGES: [],
   MemoizedMessageList: function MockMemoizedMessageList({
     messages,
@@ -102,11 +102,11 @@ vi.mock('@/components/thread/MemoizedMessageList', () => ({
   },
 }));
 
-vi.mock('@/components/thread/FrozenMessageList', () => ({
+mock.module('@/components/thread/FrozenMessageList', () => ({
   FrozenMessageList: () => <div data-testid="frozen-message-list-mock" />,
 }));
 
-vi.mock('@/components/thread/AgentStatusCards', () => ({
+mock.module('@/components/thread/AgentStatusCards', () => ({
   AgentResultCard: () => null,
   AgentInterruptedCard: ({ onContinue }: { onContinue: () => void }) => (
     <button type="button" onClick={onContinue}>
@@ -116,7 +116,7 @@ vi.mock('@/components/thread/AgentStatusCards', () => ({
   AgentStoppedCard: () => null,
 }));
 
-vi.mock('@/components/thread/WaitingCards', () => ({
+mock.module('@/components/thread/WaitingCards', () => ({
   WaitingActions: () => null,
   PermissionApprovalCard: () => null,
   ProviderErrorCard: () => null,
@@ -124,7 +124,7 @@ vi.mock('@/components/thread/WaitingCards', () => ({
   PermissionContinuationLostCard: () => null,
 }));
 
-vi.mock('@/components/D4CAnimation', () => ({
+mock.module('@/components/D4CAnimation', () => ({
   D4CAnimation: () => null,
 }));
 

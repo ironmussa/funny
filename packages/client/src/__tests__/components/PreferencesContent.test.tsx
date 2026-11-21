@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
@@ -16,7 +16,7 @@ const mocks = (() => ({
   isAdmin: true,
 }))();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en', options: { resources: { en: {} } }, changeLanguage: vi.fn() },
@@ -24,9 +24,9 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     getProfile: mocks.getProfile,
     getSmtpSettings: mocks.getSmtpSettings,
@@ -37,11 +37,11 @@ vi.mock('@/lib/api', () => ({
 }));
 
 // Provider keys come from the profile query, which calls profileApi directly.
-vi.mock('@/lib/api/profile', () => ({
+mock.module('@/lib/api/profile', () => ({
   profileApi: { getProfile: mocks.getProfile, updateProfile: mocks.updateProfile },
 }));
 
-vi.mock('@/stores/auth-store', () => ({
+mock.module('@/stores/auth-store', () => ({
   useAuthStore: (sel: (s: unknown) => unknown) =>
     sel({ user: { role: mocks.isAdmin ? 'admin' : 'user' } }),
 }));

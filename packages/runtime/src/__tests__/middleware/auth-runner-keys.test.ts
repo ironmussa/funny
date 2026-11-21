@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 /**
  * Security H1 + H7 regressions — runtime auth middleware.
@@ -36,7 +36,7 @@ await (async () => {
   }
 })();
 
-vi.mock('../../lib/auth.js', () => ({
+mock.module('../../lib/auth.js', () => ({
   auth: { api: { getSession: vi.fn().mockResolvedValue(null) } },
 }));
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, test, expect, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, test, expect, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { fireEvent, render } from '@testing-library/react';
@@ -12,13 +12,13 @@ import { makeLongThread } from '@/test-fixtures/long-thread-fixture';
 import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   Trans: ({ i18nKey }: { i18nKey: string }) => mockT(i18nKey),
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/hooks/use-pretext', () => ({
+mock.module('@/hooks/use-pretext', () => ({
   getCachedPrepared: () => null,
   isPretextReady: () => false,
   layoutSync: () => ({ height: 0 }),
@@ -30,7 +30,7 @@ vi.mock('@/hooks/use-pretext', () => ({
 }));
 
 const actualStoresSettingsStore = { ...(await import('@/stores/settings-store')) };
-vi.mock('@/stores/settings-store', () => {
+mock.module('@/stores/settings-store', () => {
   const actual = actualStoresSettingsStore;
   return {
     ...actual,
@@ -42,17 +42,17 @@ vi.mock('@/stores/settings-store', () => {
   };
 });
 
-vi.mock('@/components/ToolCallCard', () => ({
+mock.module('@/components/ToolCallCard', () => ({
   ToolCallCard: ({ name }: any) => <div data-testid="tool-call-card">{name}</div>,
 }));
-vi.mock('@/components/ToolCallGroup', () => ({
+mock.module('@/components/ToolCallGroup', () => ({
   ToolCallGroup: ({ name }: any) => <div data-testid="tool-call-group">{name}</div>,
 }));
-vi.mock('@/components/thread/MessageContent', () => ({
+mock.module('@/components/thread/MessageContent', () => ({
   MessageContent: ({ content }: any) => <div>{content}</div>,
   CopyButton: () => null,
 }));
-vi.mock('@/components/thread/UserMessageCard', () => ({
+mock.module('@/components/thread/UserMessageCard', () => ({
   UserMessageCard: ({ content, ...props }: any) => <div {...props}>{content}</div>,
 }));
 

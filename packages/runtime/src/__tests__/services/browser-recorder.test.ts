@@ -4,16 +4,16 @@
  * profiles (it used to share that prefix and lost its frames mid-recording).
  */
 
-import { afterAll, describe, expect, test, vi } from 'bun:test';
+import { afterAll, describe, expect, test, vi, mock } from 'bun:test';
 import { execFileSync } from 'child_process';
 import { existsSync, mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
 
 import { hasFfmpeg, ViewportRecorder } from '../../services/browser-automation/recorder.js';
 import { browserSessionManager } from '../../services/browser-session-manager.js';

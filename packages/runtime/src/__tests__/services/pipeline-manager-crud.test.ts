@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 const mocks = (() => ({
   pipelines: {
@@ -11,7 +11,7 @@ const mocks = (() => ({
   },
 }))();
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ pipelines: mocks.pipelines }),
 }));
 

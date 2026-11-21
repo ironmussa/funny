@@ -1,4 +1,4 @@
-import { beforeAll, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeAll, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { GitHubPR } from '@funny/shared';
 import { screen, waitFor } from '@testing-library/react';
@@ -15,11 +15,11 @@ const apiMock = (() => ({
   githubPRConversation: vi.fn(),
 }))();
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: apiMock,
 }));
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },

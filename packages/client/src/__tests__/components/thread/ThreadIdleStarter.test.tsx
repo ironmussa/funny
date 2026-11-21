@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, type Mock, mock } from 'bun:test';
 
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
@@ -15,16 +15,16 @@ const mocks = ((): StarterMocks => ({
   appendOptimisticMessage: vi.fn(),
 }))();
 
-vi.mock('@/components/PromptInput', () => ({
+mock.module('@/components/PromptInput', () => ({
   PromptInput: (props: Record<string, any>) => {
     mocks.promptProps = props;
     return <div data-testid="prompt-input-stub" />;
   },
 }));
-vi.mock('@/components/AvailableMcpServers', () => ({ AvailableMcpServers: () => null }));
-vi.mock('@/lib/api', () => ({ api: { sendMessage: mocks.sendMessage } }));
-vi.mock('@/stores/thread-context', () => ({ useThreadMessages: () => [] }));
-vi.mock('@/stores/thread-store', () => ({
+mock.module('@/components/AvailableMcpServers', () => ({ AvailableMcpServers: () => null }));
+mock.module('@/lib/api', () => ({ api: { sendMessage: mocks.sendMessage } }));
+mock.module('@/stores/thread-context', () => ({ useThreadMessages: () => [] }));
+mock.module('@/stores/thread-store', () => ({
   useThreadStore: {
     getState: () => ({
       appendOptimisticMessage: mocks.appendOptimisticMessage,
@@ -32,7 +32,7 @@ vi.mock('@/stores/thread-store', () => ({
     }),
   },
 }));
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
   initReactI18next: { type: '3rdParty', init: () => undefined },
 }));

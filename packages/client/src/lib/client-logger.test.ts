@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'bun:test';
+import { beforeEach, describe, expect, it, vi, mock } from 'bun:test';
 
 const interceptConsole = vi.fn();
 const isConsoleIntercepted = vi.fn(() => true);
@@ -7,7 +7,7 @@ const setLevel = vi.fn();
 /** Records every `setLevel` call made on a namespaced child logger. */
 const childSetLevels: Array<{ namespace: string; level: string }> = [];
 
-vi.mock('@abbacchio/browser-transport', () => ({
+mock.module('@abbacchio/browser-transport', () => ({
   createLogger: () => ({
     setLevel,
     child: (bindings: Record<string, unknown>) => {

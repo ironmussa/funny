@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, renderHook } from '@testing-library/react';
 
@@ -11,22 +11,22 @@ const mockEnsureBranch = vi.fn().mockResolvedValue(false);
 const mockDeleteThread = vi.fn().mockResolvedValue(undefined);
 const mockDeleteScratchThread = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, opts?: { title?: string }) => (opts?.title ? `${key}:${opts.title}` : key),
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('sonner', () => ({
+mock.module('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@/hooks/use-stable-navigate', () => ({
+mock.module('@/hooks/use-stable-navigate', () => ({
   useStableNavigate: () => mockNavigate,
 }));
 
-vi.mock('@/hooks/use-branch-switch', () => ({
+mock.module('@/hooks/use-branch-switch', () => ({
   useBranchSwitch: () => ({
     ensureBranch: mockEnsureBranch,
     branchSwitchDialog: null,
@@ -37,7 +37,7 @@ const mockArchiveThread = vi.fn().mockResolvedValue(undefined);
 const mockRenameThread = vi.fn().mockResolvedValue(undefined);
 const mockPinThread = vi.fn().mockResolvedValue(undefined);
 
-vi.mock('@/stores/project-store', () => {
+mock.module('@/stores/project-store', () => {
   const projectStore = {
     renameProject: vi.fn(),
     deleteProject: vi.fn(),
@@ -54,7 +54,7 @@ vi.mock('@/stores/project-store', () => {
 });
 
 const { mockRemoveWorktree } = (() => ({ mockRemoveWorktree: vi.fn() }))();
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     removeWorktree: mockRemoveWorktree,
   },

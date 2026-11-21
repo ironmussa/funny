@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -10,7 +10,7 @@ const virtualizer = (() => ({
   scrollToIndex: vi.fn(),
 }))();
 
-vi.mock('@tanstack/react-virtual', () => ({
+mock.module('@tanstack/react-virtual', () => ({
   useVirtualizer: () => ({
     ...virtualizer,
     getTotalSize: () => 0,

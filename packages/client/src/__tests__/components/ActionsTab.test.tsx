@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { ActionJob, ActionRun, CICheck } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
@@ -28,16 +28,16 @@ const api = (() => ({
   githubRerunFailedJobs: vi.fn(),
 }))();
 
-vi.mock('@/lib/api/github', () => ({
+mock.module('@/lib/api/github', () => ({
   githubApi: { ...api, githubPRThreads: vi.fn() },
 }));
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
+mock.module('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 
 function check(id: number, status: CICheck['status'], conclusion: CICheck['conclusion']): CICheck {
   return {

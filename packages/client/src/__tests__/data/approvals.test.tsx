@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type {
   WSPipelineApprovalRequestedData,
@@ -19,9 +19,9 @@ import {
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
 const api = (() => ({ respondToApproval: vi.fn() }))();
-vi.mock('@/lib/api/pipelines', () => ({ pipelinesApi: api }));
+mock.module('@/lib/api/pipelines', () => ({ pipelinesApi: api }));
 const effects = (() => ({ emit: vi.fn() }))();
-vi.mock('@/platform/client-composition', () => ({
+mock.module('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));
 

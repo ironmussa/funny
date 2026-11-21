@@ -1,10 +1,10 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import type { ToolPermission } from '@funny/shared';
 
 // Mock the profile API so syncToServer calls don't reach the network
 // (the store saves through data/profile/actions → profileApi).
-vi.mock('@/lib/api/profile', async () => {
+mock.module('@/lib/api/profile', async () => {
   const { okAsync } = await import('neverthrow');
   return {
     profileApi: {

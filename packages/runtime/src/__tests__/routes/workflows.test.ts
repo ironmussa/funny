@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -18,7 +18,7 @@ const mocks = (() => ({
   abort: vi.fn(),
 }))();
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: {
       getProject: mocks.getProject,
@@ -28,11 +28,11 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
 }));
 
-vi.mock('../../services/scheduler-pipeline-bootstrap.js', () => ({
+mock.module('../../services/scheduler-pipeline-bootstrap.js', () => ({
   getSchedulerPipelineDispatcher: () => ({
     dispatch: mocks.dispatch,
     getActive: mocks.getActive,

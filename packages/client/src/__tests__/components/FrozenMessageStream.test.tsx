@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, render } from '@testing-library/react';
@@ -9,21 +9,21 @@ import type { MessageStreamHandle } from '@/components/thread/message-stream-typ
 import { buildIntersectionEntry, expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/lib/telemetry', () => ({
+mock.module('@/lib/telemetry', () => ({
   metric: () => {},
   startSpan: () => ({ end: () => {} }),
 }));
 
-vi.mock('@/components/thread/FrozenMessageList', () => ({
+mock.module('@/components/thread/FrozenMessageList', () => ({
   FrozenMessageList: () => <div data-testid="frozen-message-list-mock" />,
 }));
 
-vi.mock('@/components/thread/MessageStreamStatusTail', () => ({
+mock.module('@/components/thread/MessageStreamStatusTail', () => ({
   MessageStreamStatusTail: () => null,
 }));
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -21,23 +21,25 @@ const mocks = (() => ({
 
 // bun has no importOriginal: copy the real module before mocking it.
 const actualGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   ...actualGit,
   cloneRepository: mocks.cloneRepository,
 }));
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { createProject: mocks.createProject, projectNameExists: async () => false },
   }),
 }));
-vi.mock('../../routes/github/helpers.js', () => ({
+mock.module('../../routes/github/helpers.js', () => ({
   githubApiFetch: vi.fn(),
   resolveGithubToken: vi.fn(async () => ({ token: 'ghp_secret' })),
 }));
-vi.mock('../../utils/path-scope.js', () => ({ requirePickerPath: vi.fn(async () => null) }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
-vi.mock('../../services/remote-data-channel.js', () => ({ sendRemoteData: mocks.sendRemoteData }));
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../utils/path-scope.js', () => ({ requirePickerPath: vi.fn(async () => null) }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
+mock.module('../../services/remote-data-channel.js', () => ({
+  sendRemoteData: mocks.sendRemoteData,
+}));
+mock.module('../../lib/logger.js', () => ({
   log: { warn: vi.fn(), error: vi.fn(), info: vi.fn(), debug: vi.fn() },
 }));
 

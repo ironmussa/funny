@@ -1,6 +1,6 @@
-import { describe, test, expect, beforeEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, vi, mock } from 'bun:test';
 
-vi.mock('@/lib/api', () => ({ api: { openInEditor: vi.fn() } }));
+mock.module('@/lib/api', () => ({ api: { openInEditor: vi.fn() } }));
 
 import { hasEditorUri, toEditorUri, toEditorUriWithLine, getEditorLabel } from '@/lib/editor-utils';
 import { useSettingsStore } from '@/stores/settings-store';

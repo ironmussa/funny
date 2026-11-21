@@ -1,11 +1,11 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { errAsync, okAsync } from 'neverthrow';
 
 const mocks = (() => ({ request: vi.fn(), getWorker: vi.fn() }))();
-vi.mock('@/lib/api/_core', () => ({ request: mocks.request }));
-vi.mock('@/lib/notification-worker', () => ({ getNotificationWorker: mocks.getWorker }));
+mock.module('@/lib/api/_core', () => ({ request: mocks.request }));
+mock.module('@/lib/notification-worker', () => ({ getNotificationWorker: mocks.getWorker }));
 import {
   disableWebPush,
   dropWebPushSubscription,

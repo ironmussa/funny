@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, describe, expect, test, vi, mock } from 'bun:test';
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -22,7 +22,7 @@ const mocks = (() => {
 })();
 
 const actualGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => {
+mock.module('@funny/core/git', () => {
   const actual = actualGit;
   mocks.execute.mockImplementation((command, args, options) =>
     mocks.psOverride && command === 'ps'
@@ -33,11 +33,11 @@ vi.mock('@funny/core/git', () => {
 });
 
 // No-op logger: winston schedules its own timers, which would pollute vi.getTimerCount().
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: {
       getProject: vi.fn().mockResolvedValue({ id: 'project-a', userId: 'user-a' }),
@@ -45,13 +45,13 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: {
     emitToUser: mocks.emitToUser,
   },
 }));
 
-vi.mock('../../services/shutdown-manager.js', () => ({
+mock.module('../../services/shutdown-manager.js', () => ({
   ShutdownPhase: { SERVICES: 'services' },
   shutdownManager: {
     register: vi.fn(),

@@ -1,10 +1,10 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, vi, mock } from 'bun:test';
 
 import { render, screen } from '@testing-library/react';
 
 const presenceState = (() => ({ mounts: 0, unmounts: 0 }))();
 
-vi.mock('motion/react', async () => {
+mock.module('motion/react', async () => {
   const React = await import('react');
   const MotionDiv = React.forwardRef<
     HTMLDivElement,
@@ -29,13 +29,13 @@ vi.mock('motion/react', async () => {
   };
 });
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
 const actualComponentsToolCardsUtils = { ...(await import('@/components/tool-cards/utils')) };
-vi.mock('@/components/tool-cards/utils', () => {
+mock.module('@/components/tool-cards/utils', () => {
   const actual = actualComponentsToolCardsUtils;
   return {
     ...actual,
@@ -45,7 +45,7 @@ vi.mock('@/components/tool-cards/utils', () => {
   };
 });
 
-vi.mock('@/hooks/use-dictation', () => ({
+mock.module('@/hooks/use-dictation', () => ({
   useDictation: () => ({
     isRecording: false,
     isConnecting: false,
@@ -55,15 +55,15 @@ vi.mock('@/hooks/use-dictation', () => ({
   }),
 }));
 
-vi.mock('@/hooks/use-push-to-talk', () => ({ usePushToTalk: vi.fn() }));
-vi.mock('@/hooks/use-slash-skills', () => ({
+mock.module('@/hooks/use-push-to-talk', () => ({ usePushToTalk: vi.fn() }));
+mock.module('@/hooks/use-slash-skills', () => ({
   useSlashSkills: () => ({
     slashSkills: [],
     slashSkillsLoading: false,
     ensureSlashSkills: vi.fn(),
   }),
 }));
-vi.mock('@/data/profile/hooks', () => ({ useProfile: () => undefined }));
+mock.module('@/data/profile/hooks', () => ({ useProfile: () => undefined }));
 
 // Imported after the mocks, which bun does not hoist.
 const { AskQuestionCard } = await import('@/components/tool-cards/AskQuestionCard');

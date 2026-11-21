@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { AgentExecutionProfileResponse } from '@funny/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
@@ -13,16 +13,16 @@ const mockDeleteAgentExecutionProfile = (() => vi.fn())();
 const mockGetProjectAgentProfileBinding = (() => vi.fn())();
 const mockUpdateProjectAgentProfileBinding = (() => vi.fn())();
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('sonner', () => ({
+mock.module('sonner', () => ({
   toast: { success: vi.fn(), error: vi.fn() },
 }));
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     listAgentExecutionProfiles: mockListAgentExecutionProfiles,
     createAgentExecutionProfile: mockCreateAgentExecutionProfile,

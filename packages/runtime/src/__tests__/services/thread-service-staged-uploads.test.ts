@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
 import {
   existsSync,
   mkdirSync,
@@ -15,15 +15,15 @@ import { join } from 'node:path';
 // bun's mock.module reads a getter once, so each test re-mocks DATA_DIR with its
 // own directory (a repeated mock.module call updates the live binding).
 function mockDataDir(path: string): void {
-  vi.mock('../../lib/data-dir.js', () => ({ DATA_DIR: path }));
+  mock.module('../../lib/data-dir.js', () => ({ DATA_DIR: path }));
 }
 mockDataDir(join(tmpdir(), 'funny-staging-unset'));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../utils/route-helpers.js', () => ({ requireThreadCwd: vi.fn() }));
+mock.module('../../utils/route-helpers.js', () => ({ requireThreadCwd: vi.fn() }));
 
 // Imported after the mocks, so the module binds the mocked DATA_DIR getter.
 const { adoptStagedUploads, copyThreadUploads, releaseStagedUploads, stageUpload } =

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { checkInputKey } from '@funny/shared/checks';
 import { screen, waitFor } from '@testing-library/react';
@@ -10,7 +10,7 @@ import { useCheckRunsStore } from '@/stores/check-runs-store';
 import { renderWithProviders } from '../helpers/render';
 
 const apiMock = (() => ({ readFile: vi.fn() }))();
-vi.mock('@/lib/api', () => ({ api: apiMock }));
+mock.module('@/lib/api', () => ({ api: apiMock }));
 
 // Imported after the Vite `?url` plugin is registered (dispatch reaches
 // use-dictation's `pcm-worklet.js?url`).

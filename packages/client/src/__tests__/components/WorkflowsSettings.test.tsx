@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type {
   WorkflowDefinitionResponse,
@@ -17,11 +17,11 @@ const apiMocks = (() => ({
   cancelWorkflowRun: vi.fn(),
 }))();
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: apiMocks,
 }));
 
-vi.mock('@/stores/app-store', () => ({
+mock.module('@/stores/app-store', () => ({
   useAppStore: (selector: (state: unknown) => unknown) =>
     selector({
       selectedProjectId: 'project-1',
@@ -31,7 +31,7 @@ vi.mock('@/stores/app-store', () => ({
 }));
 
 const actualWorkflowsBrowser = { ...(await import('@funny/workflows/browser')) };
-vi.mock('@funny/workflows/browser', () => ({
+mock.module('@funny/workflows/browser', () => ({
   ...actualWorkflowsBrowser,
   serializeWorkflow: (workflow: { name: string }) => `name: ${workflow.name}\nnodes: []\n`,
   workflowToGraph: () => ({
@@ -57,7 +57,7 @@ vi.mock('@funny/workflows/browser', () => ({
   }),
 }));
 
-vi.mock('@xyflow/react', () => {
+mock.module('@xyflow/react', () => {
   return {
     ReactFlowProvider: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
     ReactFlow: ({

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 import { renderHook } from '@testing-library/react';
@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
 
 // getTerminalScope drives which project's terminal the Ctrl+` shortcut targets.
-vi.mock('@/hooks/use-terminal-scope', () => ({
+mock.module('@/hooks/use-terminal-scope', () => ({
   getTerminalScope: vi.fn(() => ({
     scopeId: 'p1',
     scratchThreadId: null,

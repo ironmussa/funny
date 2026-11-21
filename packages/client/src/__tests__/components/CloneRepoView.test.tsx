@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, expect, test, vi, mock } from 'bun:test';
 
 import type { WSCloneProgressData } from '@funny/shared';
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
@@ -29,7 +29,7 @@ const mocks = (() => ({
   toastFailure: vi.fn(),
 }))();
 
-vi.mock('@/lib/api', () => ({ api: mocks.api }));
+mock.module('@/lib/api', () => ({ api: mocks.api }));
 interface AppStoreSlice {
   loadProjects: typeof mocks.loadProjects;
   setAddProjectOpen: typeof mocks.setAddProjectOpen;
@@ -37,23 +37,23 @@ interface AppStoreSlice {
 interface UIStoreSlice {
   generalSettingsOpen: boolean;
 }
-vi.mock('@/stores/app-store', () => ({
+mock.module('@/stores/app-store', () => ({
   useAppStore: (select: (s: AppStoreSlice) => unknown) =>
     select({ loadProjects: mocks.loadProjects, setAddProjectOpen: mocks.setAddProjectOpen }),
 }));
-vi.mock('@/stores/ui-store', () => ({
+mock.module('@/stores/ui-store', () => ({
   useUIStore: (select: (s: UIStoreSlice) => unknown) => select({ generalSettingsOpen: false }),
 }));
-vi.mock('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
-vi.mock('sonner', () => ({
+mock.module('@/lib/toast-error', () => ({ toastError: mocks.toastError }));
+mock.module('sonner', () => ({
   toast: { error: mocks.toastFailure, success: mocks.toastSuccess },
 }));
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({ t: (key: string) => key }),
   Trans: () => null,
 }));
-vi.mock('@/lib/url', () => ({ buildPath: (path: string) => path }));
-vi.mock('@/components/FolderPicker', () => ({ FolderPicker: () => null }));
+mock.module('@/lib/url', () => ({ buildPath: (path: string) => path }));
+mock.module('@/components/FolderPicker', () => ({ FolderPicker: () => null }));
 
 const REPO = {
   id: 7,

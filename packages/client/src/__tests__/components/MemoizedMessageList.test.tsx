@@ -1,4 +1,4 @@
-import { beforeEach, describe, test, expect, vi } from 'bun:test';
+import { beforeEach, describe, test, expect, vi, mock } from 'bun:test';
 
 import { act, fireEvent, render, waitFor } from '@testing-library/react';
 import { createRef, useMemo, useRef, type RefObject } from 'react';
@@ -10,7 +10,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { buildRect, expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   Trans: ({ i18nKey }: { i18nKey: string }) => mockT(i18nKey),
   useTranslation: () => ({
     t: mockT,
@@ -19,7 +19,7 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/hooks/use-pretext', () => ({
+mock.module('@/hooks/use-pretext', () => ({
   getCachedPrepared: () => null,
   isPretextReady: () => false,
   layoutSync: () => ({ height: 0 }),
@@ -31,7 +31,7 @@ vi.mock('@/hooks/use-pretext', () => ({
 }));
 
 const actualStoresSettingsStore = { ...(await import('@/stores/settings-store')) };
-vi.mock('@/stores/settings-store', () => {
+mock.module('@/stores/settings-store', () => {
   const actual = actualStoresSettingsStore;
   return {
     ...actual,
@@ -43,32 +43,32 @@ vi.mock('@/stores/settings-store', () => {
   };
 });
 
-vi.mock('@/components/ToolCallCard', () => ({
+mock.module('@/components/ToolCallCard', () => ({
   ToolCallCard: ({ name }: any) => <div data-testid="tool-call-card">{name}</div>,
 }));
 
-vi.mock('@/components/ToolCallGroup', () => ({
+mock.module('@/components/ToolCallGroup', () => ({
   ToolCallGroup: ({ name }: any) => <div data-testid="tool-call-group">{name}</div>,
 }));
 
-vi.mock('@/components/thread/MessageContent', () => ({
+mock.module('@/components/thread/MessageContent', () => ({
   MessageContent: ({ content }: any) => <div>{content}</div>,
   CopyButton: () => null,
 }));
 
-vi.mock('@/components/thread/UserMessageCard', () => ({
+mock.module('@/components/thread/UserMessageCard', () => ({
   UserMessageCard: ({ content, ...props }: any) => <div {...props}>{content}</div>,
 }));
 
-vi.mock('@/components/thread/GitEventCard', () => ({
+mock.module('@/components/thread/GitEventCard', () => ({
   GitEventCard: () => null,
 }));
 
-vi.mock('@/components/thread/CompactionEventCard', () => ({
+mock.module('@/components/thread/CompactionEventCard', () => ({
   CompactionEventCard: () => null,
 }));
 
-vi.mock('@/components/thread/WorkflowEventGroup', () => ({
+mock.module('@/components/thread/WorkflowEventGroup', () => ({
   WorkflowEventGroup: () => null,
 }));
 
@@ -96,7 +96,7 @@ const virtualizerMockState = ((): VirtualizerMockState => ({
   scrollToOffsetCalls: [],
 }))();
 
-vi.mock('@tanstack/react-virtual', () => ({
+mock.module('@tanstack/react-virtual', () => ({
   // Mirrors the real adapter: ONE stable instance per component whose
   // scrollOffset reflects the live scroll position (getter into mock state)
   // even between React renders.

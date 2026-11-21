@@ -1,12 +1,12 @@
-import { describe, test, expect, beforeEach, afterEach, vi, type Mock } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, vi, type Mock, mock } from 'bun:test';
 
 import type { WSEvent } from '@funny/shared';
 import type { ServerWebSocket } from 'bun';
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
-vi.mock('../../lib/telemetry.js', () => ({
+mock.module('../../lib/telemetry.js', () => ({
   metric: vi.fn(),
 }));
 

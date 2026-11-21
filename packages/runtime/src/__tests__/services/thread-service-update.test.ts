@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { waitFor } from '@funny/test-kit';
 
@@ -38,24 +38,24 @@ const mocks = (() => ({
   killPtysUnderPath: vi.fn(() => 0),
 }))();
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../services/thread-manager.js', () => mocks.tm);
+mock.module('../../services/thread-manager.js', () => mocks.tm);
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: mocks.projects,
     messageQueue: mocks.messageQueue,
   }),
 }));
 
-vi.mock('../../services/thread-event-bus.js', () => ({
+mock.module('../../services/thread-event-bus.js', () => ({
   threadEventBus: mocks.threadEventBus,
 }));
 
-vi.mock('../../services/agent-runner-control.js', () => ({
+mock.module('../../services/agent-runner-control.js', () => ({
   startAgent: mocks.startAgent,
   stopAgent: mocks.stopAgent,
   isAgentRunning: mocks.isAgentRunning,
@@ -63,7 +63,7 @@ vi.mock('../../services/agent-runner-control.js', () => ({
 }));
 
 const { isSafeGitRefArg } = await import('@funny/core/git');
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   isSafeGitRefArg,
   createWorktree: mocks.createWorktree,
   configuredWorktreeRoot: () => null,
@@ -74,35 +74,35 @@ vi.mock('@funny/core/git', () => ({
   git: mocks.git,
 }));
 
-vi.mock('@funny/core/ports', () => ({
+mock.module('@funny/core/ports', () => ({
   setupWorktree: mocks.setupWorktree,
 }));
 
-vi.mock('../../services/command-runner.js', () => ({
+mock.module('../../services/command-runner.js', () => ({
   stopCommandsByCwd: vi.fn(async () => undefined),
 }));
 
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: mocks.wsBroker,
 }));
 
-vi.mock('../../services/podman-service.js', () => ({
+mock.module('../../services/podman-service.js', () => ({
   stopContainer: mocks.stopContainer,
 }));
 
-vi.mock('../../services/thread-service/staged-uploads.js', () => ({
+mock.module('../../services/thread-service/staged-uploads.js', () => ({
   copyThreadUploads: mocks.copyThreadUploads,
 }));
 
-vi.mock('../../utils/file-mentions.js', () => ({
+mock.module('../../utils/file-mentions.js', () => ({
   hydrateReferencedFiles: mocks.hydrateReferencedFiles,
 }));
 
-vi.mock('../../services/pty-manager.js', () => ({
+mock.module('../../services/pty-manager.js', () => ({
   killPtysUnderPath: mocks.killPtysUnderPath,
 }));
 
-vi.mock('../../services/project-search-registry.js', () => ({
+mock.module('../../services/project-search-registry.js', () => ({
   projectSearchRegistry: { invalidate: mocks.invalidateSearch },
 }));
 

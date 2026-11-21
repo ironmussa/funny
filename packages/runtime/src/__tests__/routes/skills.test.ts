@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { Hono } from 'hono';
 import { okAsync } from 'neverthrow';
@@ -35,7 +35,7 @@ const {
   ],
 }))();
 
-vi.mock('../../services/skills-service.js', () => ({
+mock.module('../../services/skills-service.js', () => ({
   listSkills: mockListSkills,
   listProjectSkills: mockListProjectSkills,
   listProjectCommands: mockListProjectCommands,
@@ -46,11 +46,11 @@ vi.mock('../../services/skills-service.js', () => ({
   RECOMMENDED_SKILLS: MOCK_RECOMMENDED,
 }));
 
-vi.mock('../../services/agent-resources/resolver.js', () => ({
+mock.module('../../services/agent-resources/resolver.js', () => ({
   resolveAgentResources: mockResolveAgentResources,
 }));
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     agentProfiles: {
       resolveEffectiveProfile: mockResolveEffectiveProfile,
@@ -60,7 +60,7 @@ vi.mock('../../services/service-registry.js', () => ({
 
 // Bypass path-scope authorization in unit tests — it requires a running
 // RuntimeServiceProvider which is covered in integration tests.
-vi.mock('../../utils/path-scope.js', () => ({
+mock.module('../../utils/path-scope.js', () => ({
   requireProjectPath: vi.fn(async () => null),
   requirePickerPath: vi.fn(async () => null),
   isUnder: vi.fn(() => true),

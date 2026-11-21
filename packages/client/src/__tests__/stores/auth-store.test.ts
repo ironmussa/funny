@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { advanceTimersByTimeAsync } from '@funny/test-kit';
 
@@ -9,7 +9,7 @@ const mockAuth = (() => ({
   listOrgs: vi.fn(),
 }))();
 
-vi.mock('@/lib/auth-client', () => ({
+mock.module('@/lib/auth-client', () => ({
   authClient: {
     getSession: mockAuth.getSession,
     signIn: { username: mockAuth.signIn },
@@ -20,23 +20,23 @@ vi.mock('@/lib/auth-client', () => ({
   },
 }));
 
-vi.mock('@/lib/url-state', () => ({
+mock.module('@/lib/url-state', () => ({
   setActiveOrgSlug: vi.fn(),
 }));
 
-vi.mock('@/lib/api/auth-events', () => ({
+mock.module('@/lib/api/auth-events', () => ({
   onUnauthorized: vi.fn(),
 }));
 
 const mockReload = (() => vi.fn())();
 const actualLibLogoutCleanup = { ...(await import('@/lib/logout-cleanup')) };
-vi.mock('@/lib/logout-cleanup', () => ({
+mock.module('@/lib/logout-cleanup', () => ({
   ...actualLibLogoutCleanup,
   reloadAfterLogout: mockReload,
 }));
 
 const mockDropPush = (() => vi.fn())();
-vi.mock('@/lib/web-push', () => ({ dropWebPushSubscription: mockDropPush }));
+mock.module('@/lib/web-push', () => ({ dropWebPushSubscription: mockDropPush }));
 
 const { setActiveOrgSlug } = await import('@/lib/url-state');
 const { useAuthStore } = await import('@/stores/auth-store');

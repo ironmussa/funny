@@ -1,7 +1,7 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 const { getThreadWithMessages } = (() => ({ getThreadWithMessages: vi.fn() }))();
-vi.mock('../../services/thread-manager.js', () => ({ getThreadWithMessages }));
+mock.module('../../services/thread-manager.js', () => ({ getThreadWithMessages }));
 
 import { buildThreadContext } from '../../services/thread-context-builder.js';
 

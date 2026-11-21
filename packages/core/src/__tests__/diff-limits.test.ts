@@ -1,11 +1,11 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 
-vi.mock('../git/process.js', () => ({
+mock.module('../git/process.js', () => ({
   gitRead: vi.fn(),
 }));
-vi.mock('../git/native.js', () => ({
+mock.module('../git/native.js', () => ({
   getNativeGit: () => null,
 }));
 

@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { ThreadWithMessages } from '@funny/shared';
 import { renderHook } from '@testing-library/react';
@@ -10,7 +10,7 @@ import { MemoryRouter } from 'react-router-dom';
 const { mockNavigate } = (() => ({ mockNavigate: vi.fn() }))();
 
 const actualReactRouterDom = { ...(await import('react-router-dom')) };
-vi.mock('react-router-dom', () => {
+mock.module('react-router-dom', () => {
   const actual = actualReactRouterDom;
   return { ...actual, useNavigate: () => mockNavigate };
 });

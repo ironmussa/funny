@@ -1,4 +1,4 @@
-import { describe, test, expect, vi } from 'bun:test';
+import { describe, test, expect, mock } from 'bun:test';
 
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
@@ -7,11 +7,11 @@ import { MemoryRouter } from 'react-router-dom';
 // settings, and Back from settings must return to the thread list. This locks
 // in the gear button → settings screen → back wiring in MobilePage.
 
-vi.mock('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
+mock.module('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
 
-vi.mock('@/hooks/use-ws', () => ({ useWS: () => {} }));
+mock.module('@/hooks/use-ws', () => ({ useWS: () => {} }));
 
-vi.mock('@/stores/app-store', () => ({
+mock.module('@/stores/app-store', () => ({
   useAppStore: (selector: (s: any) => any) =>
     selector({
       loadProjects: () => Promise.resolve(),
@@ -19,19 +19,19 @@ vi.mock('@/stores/app-store', () => ({
     }),
 }));
 
-vi.mock('@/stores/thread-context', () => ({
+mock.module('@/stores/thread-context', () => ({
   ThreadProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
 }));
 
-vi.mock('@/components/ui/sonner', () => ({ Toaster: () => null }));
+mock.module('@/components/ui/sonner', () => ({ Toaster: () => null }));
 
-vi.mock('@/components/mobile/ProjectListView', () => ({
+mock.module('@/components/mobile/ProjectListView', () => ({
   ProjectListView: ({ onSelect }: { onSelect: (id: string) => void }) => (
     <button data-testid="select-project" onClick={() => onSelect('p1')} />
   ),
 }));
 
-vi.mock('@/components/mobile/ThreadListView', () => ({
+mock.module('@/components/mobile/ThreadListView', () => ({
   ThreadListView: ({ onSettings }: { onSettings: () => void }) => (
     <div data-testid="screen-threads">
       <button data-testid="open-settings" onClick={onSettings} />
@@ -39,7 +39,7 @@ vi.mock('@/components/mobile/ThreadListView', () => ({
   ),
 }));
 
-vi.mock('@/components/mobile/ProjectSettingsView', () => ({
+mock.module('@/components/mobile/ProjectSettingsView', () => ({
   ProjectSettingsView: ({ projectId, onBack }: { projectId: string; onBack: () => void }) => (
     <div data-testid="screen-settings" data-project={projectId}>
       <button data-testid="settings-back" onClick={onBack} />
@@ -47,9 +47,9 @@ vi.mock('@/components/mobile/ProjectSettingsView', () => ({
   ),
 }));
 
-vi.mock('@/components/mobile/SearchView', () => ({ SearchView: () => null }));
-vi.mock('@/components/mobile/NewThreadView', () => ({ NewThreadView: () => null }));
-vi.mock('@/components/mobile/ChatView', () => ({ ChatView: () => null }));
+mock.module('@/components/mobile/SearchView', () => ({ SearchView: () => null }));
+mock.module('@/components/mobile/NewThreadView', () => ({ NewThreadView: () => null }));
+mock.module('@/components/mobile/ChatView', () => ({ ChatView: () => null }));
 
 // Imported after the mocks, which bun does not hoist.
 const { MobilePage } = await import('@/components/MobilePage');

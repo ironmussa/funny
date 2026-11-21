@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 import { screen, waitFor } from '@testing-library/react';
@@ -17,7 +17,7 @@ const promptInputMock = vi.fn((props: any) => (
   <div data-testid="external-prompt-input">{props.placeholder}</div>
 ));
 
-vi.mock('react-i18next', () => ({
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: mockT,
     i18n: { language: 'en' },
@@ -25,15 +25,15 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/components/thread/MessageStream', () => ({
+mock.module('@/components/thread/MessageStream', () => ({
   MessageStream: (props: any) => messageStreamMock(props),
 }));
 
-vi.mock('@/components/PromptInput', () => ({
+mock.module('@/components/PromptInput', () => ({
   PromptInput: (props: any) => promptInputMock(props),
 }));
 
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     getExternalClaudeTranscript: vi.fn(),
   },

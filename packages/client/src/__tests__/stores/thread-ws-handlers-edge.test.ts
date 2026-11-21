@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { ContextBreakdown } from '@funny/shared';
 import { mocked } from '@funny/test-kit';
@@ -26,7 +26,7 @@ const mockWsEventToMachine = (() =>
     status: data.status,
   })))();
 
-vi.mock('@/stores/thread-machine-bridge', () => ({
+mock.module('@/stores/thread-machine-bridge', () => ({
   invalidateThreadData: mockInvalidate,
   transitionThreadStatus: vi.fn(
     (_id: string, evt: { status?: string }, current: string) => evt.status ?? current,
@@ -34,11 +34,11 @@ vi.mock('@/stores/thread-machine-bridge', () => ({
   wsEventToMachineEvent: mockWsEventToMachine,
 }));
 
-vi.mock('@/stores/thread-read-store', () => ({
+mock.module('@/stores/thread-read-store', () => ({
   useThreadReadStore: { getState: () => ({ markRead: mockMarkRead }) },
 }));
 
-vi.mock('@/stores/thread-store-internals', () => ({
+mock.module('@/stores/thread-store-internals', () => ({
   bufferWSEvent: mockBuffer,
   getNavigate: vi.fn(() => vi.fn()),
   getProjectIdForThread: vi.fn(() => null),
@@ -47,7 +47,7 @@ vi.mock('@/stores/thread-store-internals', () => ({
   setUrlThreadId: vi.fn(),
 }));
 
-vi.mock('sonner', () => ({
+mock.module('sonner', () => ({
   toast: {
     success: vi.fn(),
     error: mockToastError,

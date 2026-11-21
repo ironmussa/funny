@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import type { AgentTemplate } from '@funny/shared';
 import { BUILTIN_AGENT_TEMPLATES } from '@funny/shared';
@@ -27,10 +27,10 @@ const api = (() => ({
   duplicateAgentTemplate: vi.fn(),
   getAgentTemplateUsageStats: vi.fn(),
 }))();
-vi.mock('@/lib/api/agent-templates', () => ({ agentTemplatesApi: api }));
+mock.module('@/lib/api/agent-templates', () => ({ agentTemplatesApi: api }));
 
 const effects = (() => ({ emit: vi.fn() }))();
-vi.mock('@/platform/client-composition', () => ({
+mock.module('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));
 

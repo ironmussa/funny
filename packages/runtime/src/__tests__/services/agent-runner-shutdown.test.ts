@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeAll, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeAll, afterEach, mock } from 'bun:test';
 
 import { clearGlobal, readGlobal } from '../helpers/builders.js';
 
@@ -25,7 +25,7 @@ interface ShutdownCapture {
 
 const shutdownCapture = ((): ShutdownCapture => ({ handler: null }))();
 
-vi.mock('../../services/shutdown-manager.js', () => ({
+mock.module('../../services/shutdown-manager.js', () => ({
   shutdownManager: {
     register: (name: string, fn: (mode: 'hotReload' | 'hard') => Promise<void>) => {
       if (name === 'agent-runner') shutdownCapture.handler = fn;
@@ -34,13 +34,13 @@ vi.mock('../../services/shutdown-manager.js', () => ({
   ShutdownPhase: { SERVICES: 1 },
 }));
 
-vi.mock('../../services/agent-lifecycle.js', () => ({
+mock.module('../../services/agent-lifecycle.js', () => ({
   AgentLifecycleManager: vi.fn(function AgentLifecycleManager() {
     return lifecycleMock;
   }),
 }));
 
-vi.mock('../../services/agent-event-router.js', () => ({
+mock.module('../../services/agent-event-router.js', () => ({
   AgentEventRouter: vi.fn(function AgentEventRouter() {
     return {
       setSpanContext: vi.fn(),
@@ -48,31 +48,31 @@ vi.mock('../../services/agent-event-router.js', () => ({
   }),
 }));
 
-vi.mock('../../services/agent-message-handler.js', () => ({
+mock.module('../../services/agent-message-handler.js', () => ({
   AgentMessageHandler: vi.fn(function AgentMessageHandler() {
     return {};
   }),
 }));
 
-vi.mock('../../services/agent-state.js', () => ({
+mock.module('../../services/agent-state.js', () => ({
   AgentStateTracker: vi.fn(function AgentStateTracker() {
     return { startAutoSweep: vi.fn() };
   }),
 }));
 
-vi.mock('../../services/remote-thread-manager.js', () => ({
+mock.module('../../services/remote-thread-manager.js', () => ({
   createRemoteThreadManager: () => ({}),
 }));
 
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: { emit: vi.fn(), emitToUser: vi.fn() },
 }));
 
-vi.mock('@funny/core', () => ({
+mock.module('@funny/core', () => ({
   setLogSink: vi.fn(),
 }));
 
-vi.mock('@funny/core/agents', () => ({
+mock.module('@funny/core/agents', () => ({
   AgentOrchestrator: vi.fn(function AgentOrchestrator() {
     return {};
   }),

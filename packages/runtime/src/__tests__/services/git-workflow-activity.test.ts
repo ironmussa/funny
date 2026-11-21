@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { waitFor } from '@funny/test-kit';
 
@@ -13,16 +13,20 @@ const mocks = (() => ({
   sendRemoteData: vi.fn(async (_type: string, _payload: Record<string, any>) => ({ ok: true })),
 }))();
 
-vi.mock('@funny/pipelines', () => ({ runPipeline: mocks.runPipeline }));
-vi.mock('../../services/git-pipelines.js', () => ({
+mock.module('@funny/pipelines', () => ({ runPipeline: mocks.runPipeline }));
+mock.module('../../services/git-pipelines.js', () => ({
   getActionPipeline: () => ({ nodes: [] }),
   deriveSteps: () => [{ id: 'push', label: 'Pushing to origin', status: 'pending' }],
 }));
-vi.mock('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
-vi.mock('../../services/pipeline-manager.js', () => ({ getPipelineForProject: async () => null }));
-vi.mock('../../services/project-hooks-service.js', () => ({ listHooks: () => [] }));
-vi.mock('../../services/workflow-event-helpers.js', () => ({ emitWorkflowEvent: vi.fn() }));
-vi.mock('../../services/remote-data-channel.js', () => ({ sendRemoteData: mocks.sendRemoteData }));
+mock.module('../../services/ws-broker.js', () => ({ wsBroker: { emitToUser: vi.fn() } }));
+mock.module('../../services/pipeline-manager.js', () => ({
+  getPipelineForProject: async () => null,
+}));
+mock.module('../../services/project-hooks-service.js', () => ({ listHooks: () => [] }));
+mock.module('../../services/workflow-event-helpers.js', () => ({ emitWorkflowEvent: vi.fn() }));
+mock.module('../../services/remote-data-channel.js', () => ({
+  sendRemoteData: mocks.sendRemoteData,
+}));
 
 import { executeWorkflow } from '../../services/git-workflow-service.js';
 

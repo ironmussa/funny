@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
 
 import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { Hono } from 'hono';
@@ -19,7 +19,7 @@ const mocks = (() => ({
   getRemoteUrl: vi.fn(),
 }))();
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: {
       getProject: mocks.getProject,
@@ -31,7 +31,7 @@ vi.mock('../../services/service-registry.js', () => ({
 }));
 
 const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   ...actualFunnyCoreGit,
   getRemoteUrl: mocks.getRemoteUrl,
 }));

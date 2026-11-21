@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { okAsync, ResultAsync } from 'neverthrow';
 
@@ -6,7 +6,7 @@ import { useBranchPickerStore } from '@/stores/branch-picker-store';
 
 const mockListBranches = (() => vi.fn())();
 
-vi.mock('@/lib/api/projects', () => ({
+mock.module('@/lib/api/projects', () => ({
   projectsApi: {
     listBranches: mockListBranches,
   },

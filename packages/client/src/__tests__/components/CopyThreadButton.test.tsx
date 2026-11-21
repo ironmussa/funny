@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
@@ -15,8 +15,8 @@ import { buildMessage } from '../helpers/builders-components';
 
 const render = (ui: ReactElement) => rtlRender(<TooltipProvider>{ui}</TooltipProvider>);
 
-vi.mock('@/lib/api', () => ({ api: { getThread: vi.fn() } }));
-vi.mock('react-i18next', () => ({
+mock.module('@/lib/api', () => ({ api: { getThread: vi.fn() } }));
+mock.module('react-i18next', () => ({
   useTranslation: () => ({
     t: (key: string, fallback?: unknown) => (typeof fallback === 'string' ? fallback : key),
   }),
@@ -27,7 +27,7 @@ vi.mock('react-i18next', () => ({
   ),
 }));
 const { showError } = (() => ({ showError: vi.fn() }))();
-vi.mock('sonner', () => ({ toast: { error: showError, success: vi.fn() } }));
+mock.module('sonner', () => ({ toast: { error: showError, success: vi.fn() } }));
 const writeText = vi.fn();
 
 beforeEach(() => {

@@ -1,16 +1,16 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 
 import { fireEvent, render, screen } from '@testing-library/react';
 
-vi.mock('@/components/PipelineProgressBanner', () => ({
+mock.module('@/components/PipelineProgressBanner', () => ({
   PipelineProgressBanner: () => null,
 }));
 
-vi.mock('@/components/thread/PromptTimeline', () => ({
+mock.module('@/components/thread/PromptTimeline', () => ({
   PromptTimeline: () => null,
 }));
 
-vi.mock('@/components/thread/ThreadConversation', () => ({
+mock.module('@/components/thread/ThreadConversation', () => ({
   ThreadConversation: ({ searchBar }: { searchBar: React.ReactNode }) => (
     <div>
       <button data-testid="thread-content">Thread content</button>
@@ -19,16 +19,16 @@ vi.mock('@/components/thread/ThreadConversation', () => ({
   ),
 }));
 
-vi.mock('@/components/thread/ThreadSearchBar', () => ({
+mock.module('@/components/thread/ThreadSearchBar', () => ({
   ThreadSearchBar: ({ open }: { open: boolean }) =>
     open ? <div data-testid="thread-search-bar">Search</div> : null,
 }));
 
-vi.mock('@/stores/thread-context', () => ({
+mock.module('@/stores/thread-context', () => ({
   useThreadMessages: () => [],
 }));
 
-vi.mock('@/stores/ui-store', () => ({
+mock.module('@/stores/ui-store', () => ({
   useUIStore: (
     selector: (state: { timelineVisible: boolean; pendingThreadSearch: null }) => unknown,
   ) => selector({ timelineVisible: false, pendingThreadSearch: null }),

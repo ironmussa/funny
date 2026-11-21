@@ -1,13 +1,13 @@
-import { afterEach, expect, test, setSystemTime, vi } from 'bun:test';
+import { afterEach, expect, test, setSystemTime, vi, mock } from 'bun:test';
 
 import { act, cleanup, render, screen, within } from '@testing-library/react';
 
 import { TeamMembers } from '@/components/settings/TeamMembers';
 import { TooltipProvider } from '@/components/ui/tooltip';
 
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
-vi.mock('@/stores/auth-store', () => ({ useAuthStore: () => null }));
-vi.mock('@/lib/auth-client', () => ({
+mock.module('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
+mock.module('@/stores/auth-store', () => ({ useAuthStore: () => null }));
+mock.module('@/lib/auth-client', () => ({
   authClient: {
     organization: {
       listMembers: async () => ({ data: [] }),
@@ -15,7 +15,7 @@ vi.mock('@/lib/auth-client', () => ({
     },
   },
 }));
-vi.mock('@/lib/api', () => ({
+mock.module('@/lib/api', () => ({
   api: {
     getSmtpSettings: async () => ({ isOk: () => true, value: { configured: true } }),
     listInviteLinks: async () => ({

@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, mock, vi } from 'bun:test'
 import { stubGlobal, unstubAllGlobals, waitFor } from '@funny/test-kit';
 
 const { parse } = (() => ({ parse: vi.fn() }))();
-vi.mock('gpu-lexer', () => ({ parse }));
+mock.module('gpu-lexer', () => ({ parse }));
 
 // vitest used vi.resetModules() for fresh module state per test. bun has no
 // module reset: load fresh instances with a query string instead, and point

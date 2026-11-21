@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+import { afterEach, beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
@@ -16,8 +16,8 @@ const api = (() => ({
   saveProjectSandbox: vi.fn(),
   clearProjectSandbox: vi.fn(),
 }))();
-vi.mock('@/lib/api/system', () => ({ systemApi: { getProviders: vi.fn() } }));
-vi.mock('@/lib/api/infra', () => ({ infraApi: api }));
+mock.module('@/lib/api/system', () => ({ systemApi: { getProviders: vi.fn() } }));
+mock.module('@/lib/api/infra', () => ({ infraApi: api }));
 
 const connection = {
   id: 'c1',

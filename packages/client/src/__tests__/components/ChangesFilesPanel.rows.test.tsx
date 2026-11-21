@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'bun:test';
+import { beforeEach, describe, expect, it, vi, mock } from 'bun:test';
 
 import type { FileDiffSummary } from '@funny/shared';
 import { mocked } from '@funny/test-kit';
@@ -11,7 +11,7 @@ import type { TreeRow } from '@/components/FileTree';
 // file list: they pin the exact markup and per-row behavior so splitting the
 // rows into subcomponents stays a pure refactor.
 
-vi.mock('@tanstack/react-virtual', () => ({
+mock.module('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count }: { count: number }) => ({
     getTotalSize: () => count * 24,
     getVirtualItems: () =>
@@ -24,7 +24,7 @@ vi.mock('@tanstack/react-virtual', () => ({
   }),
 }));
 
-vi.mock('@/components/ui/tooltip', () => ({
+mock.module('@/components/ui/tooltip', () => ({
   Tooltip: ({ children }: { children: ReactNode }) => children,
   TooltipTrigger: ({ children }: { children: ReactNode }) => children,
   TooltipContent: ({ children }: { children: ReactNode }) => (
@@ -34,7 +34,7 @@ vi.mock('@/components/ui/tooltip', () => ({
 
 // Render dropdown menus inline so every menu item is in the DOM. The menu
 // root exposes a "close" button that fires `onOpenChange(false)`.
-vi.mock('@/components/ui/dropdown-menu', () => {
+mock.module('@/components/ui/dropdown-menu', () => {
   const pass = (name: string) =>
     function Mock({ children, ...props }: { children?: ReactNode; [k: string]: any }) {
       return (
@@ -72,11 +72,11 @@ vi.mock('@/components/ui/dropdown-menu', () => {
 });
 
 const toastError = vi.fn();
-vi.mock('sonner', () => ({ toast: { error: (...a: unknown[]) => toastError(...a) } }));
+mock.module('sonner', () => ({ toast: { error: (...a: unknown[]) => toastError(...a) } }));
 
 const openExternal = vi.fn();
 const openInternal = vi.fn();
-vi.mock('@/lib/editor-utils', () => ({
+mock.module('@/lib/editor-utils', () => ({
   getEditorLabel: () => 'VS Code',
   openFileInExternalEditor: (p: string) => openExternal(p),
   openFileInInternalEditor: (p: string) => openInternal(p),

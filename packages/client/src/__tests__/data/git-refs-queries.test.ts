@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'bun:test';
+import { beforeEach, describe, expect, test, vi, mock } from 'bun:test';
 
 import { errAsync, okAsync } from 'neverthrow';
 
@@ -15,8 +15,8 @@ import { replaceDataLayer, getDataLayer } from '@/data/runtime';
 const mockListBranches = (() => vi.fn())();
 const mockPRDetail = (() => vi.fn())();
 
-vi.mock('@/lib/api/projects', () => ({ projectsApi: { listBranches: mockListBranches } }));
-vi.mock('@/lib/api/github', () => ({
+mock.module('@/lib/api/projects', () => ({ projectsApi: { listBranches: mockListBranches } }));
+mock.module('@/lib/api/github', () => ({
   githubApi: { githubPRDetail: mockPRDetail, githubPRThreads: vi.fn() },
 }));
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
 
 import { advanceTimersByTimeAsync, mocked } from '@funny/test-kit';
 
@@ -10,15 +10,15 @@ const mocks = (() => ({
   },
 }))();
 
-vi.mock('../../utils/git-status-helpers.js', () => ({
+mock.module('../../utils/git-status-helpers.js', () => ({
   emitGitStatusForThread: mocks.emitGitStatusForThread,
 }));
 
-vi.mock('../../services/thread-event-bus.js', () => ({
+mock.module('../../services/thread-event-bus.js', () => ({
   threadEventBus: mocks.threadEventBus,
 }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 

@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
 
 import type { GitStatusInfo } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
@@ -7,7 +7,7 @@ import { okAsync, errAsync, ResultAsync } from 'neverthrow';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-vi.mock('@/lib/api/git', () => ({
+mock.module('@/lib/api/git', () => ({
   gitApi: {
     getGitStatuses: vi.fn(),
     getGitStatus: vi.fn(),

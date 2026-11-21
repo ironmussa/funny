@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, mock } from 'bun:test';
 
 import { mocked } from '@funny/test-kit';
 /**
@@ -20,12 +20,12 @@ const serviceMocks = (() => ({
   getProject: vi.fn(),
 }))();
 
-vi.mock('bun:sqlite', () => ({ Database: vi.fn() }));
-vi.mock('nanoid', () => {
+mock.module('bun:sqlite', () => ({ Database: vi.fn() }));
+mock.module('nanoid', () => {
   let counter = 0;
   return { nanoid: () => `mock-id-${++counter}` };
 });
-vi.mock('../../db/index.js', () => ({
+mock.module('../../db/index.js', () => ({
   db: {
     select: vi.fn(() => ({
       from: vi.fn(() => ({
@@ -55,16 +55,16 @@ vi.mock('../../db/index.js', () => ({
   },
   dbRun: vi.fn(),
 }));
-vi.mock('../../services/thread-service/create.js', () => ({
+mock.module('../../services/thread-service/create.js', () => ({
   createAndStartThread: vi.fn(),
 }));
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: {
     emitToUser: (...args: any[]) => mockEmitToUser(...args),
     broadcast: vi.fn(),
   },
 }));
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({
     pipelines: {
       createRun: serviceMocks.createRun,
@@ -87,7 +87,7 @@ vi.mock('../../services/service-registry.js', () => ({
     },
   }),
 }));
-vi.mock('../../services/pipeline-adapter.js', () => {
+mock.module('../../services/pipeline-adapter.js', () => {
   return {
     RuntimeActionProvider: class {
       spawnAgent = vi.fn().mockResolvedValue({ ok: true, output: '' });
@@ -106,7 +106,7 @@ vi.mock('../../services/pipeline-adapter.js', () => {
     },
   };
 });
-vi.mock('../../services/agent-registry.js', () => ({
+mock.module('../../services/agent-registry.js', () => ({
   BUILTIN_AGENTS: {
     reviewer: {
       name: 'reviewer',
@@ -129,29 +129,29 @@ vi.mock('../../services/agent-registry.js', () => ({
   resolveSystemPrompt: (agent: any) =>
     typeof agent.systemPrompt === 'function' ? agent.systemPrompt({}) : agent.systemPrompt,
 }));
-vi.mock('../../services/thread-manager.js', () => ({
+mock.module('../../services/thread-manager.js', () => ({
   getThread: vi.fn(),
   getThreadWithMessages: vi.fn(),
   updateThread: vi.fn(),
 }));
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('../../services/agent-runner-control.js', () => ({
+mock.module('../../services/agent-runner-control.js', () => ({
   startAgent: vi.fn(),
   isAgentRunning: vi.fn(() => false),
 }));
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   gitRead: vi.fn(),
   gitWrite: vi.fn(),
   removeWorktree: vi.fn().mockReturnValue(okAsync(undefined)),
   removeBranch: vi.fn().mockReturnValue(okAsync(undefined)),
 }));
-vi.mock('../../services/git-service.js', () => ({
+mock.module('../../services/git-service.js', () => ({
   commitChanges: vi.fn(),
   resolveIdentity: vi.fn(),
 }));
-vi.mock('../../services/thread-event-bus.js', () => ({
+mock.module('../../services/thread-event-bus.js', () => ({
   threadEventBus: {
     on: vi.fn(),
     removeListener: vi.fn(),
@@ -159,7 +159,7 @@ vi.mock('../../services/thread-event-bus.js', () => ({
 }));
 // Mock git-pipelines.ts — startPipelineRun lazy-imports reviewFixSubPipeline from it.
 // Provide a trivial pipeline that completes immediately.
-vi.mock('../../services/git-pipelines.js', () => {
+mock.module('../../services/git-pipelines.js', () => {
   // Inline a minimal pipeline definition so we don't import the real one
   return {
     reviewFixSubPipeline: {

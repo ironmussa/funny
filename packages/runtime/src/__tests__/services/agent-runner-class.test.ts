@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, afterEach, vi } from 'bun:test';
+import { describe, test, expect, beforeEach, afterEach, mock } from 'bun:test';
 import { EventEmitter } from 'events';
 
 import type {
@@ -20,7 +20,7 @@ import { buildProject, createServiceProviderFake } from '../helpers/builders.js'
 
 // Agent start asks the server for the project's secrets (project-secrets);
 // these tests have no gRPC transport, so the project has none.
-vi.mock('../../services/remote-project-identity-client.js', () => ({
+mock.module('../../services/remote-project-identity-client.js', () => ({
   remoteGetProjectSecrets: async () => ({ secrets: [] }),
 }));
 

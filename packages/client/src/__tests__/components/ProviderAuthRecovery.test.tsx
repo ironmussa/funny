@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from 'bun:test';
+import { afterEach, describe, expect, it, mock } from 'bun:test';
 
 import type { ThreadWithMessages } from '@funny/shared';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
@@ -18,10 +18,10 @@ interface ThreadStoreState {
 const state = ((): ThreadStoreState => ({
   threadDataById: {},
 }))();
-vi.mock('@/stores/thread-store', () => ({
+mock.module('@/stores/thread-store', () => ({
   useThreadStore: (select: (s: typeof state) => unknown) => select(state),
 }));
-vi.mock('@/components/ProviderSetupDialog', () => ({
+mock.module('@/components/ProviderSetupDialog', () => ({
   ProviderSetupDialog: ({ provider, projectId, reauthenticate, onClose }: any) => (
     <div
       role="dialog"

@@ -38,8 +38,8 @@ This runs `scripts/fitness/check-typecheck.ts`, which invokes `bun check` for ea
 ## Lint, format, and architecture guardrails
 
 ```bash
-bun run lint            # oxlint . + all fitness:*-validation checks below
-bun run lint:fix        # oxlint --fix .
+bun run lint            # bun lint . + all fitness:*-validation checks below
+bun run lint:fix        # bun lint --fix .
 bun run format           # oxfmt --write .      (NOT prettier — no config here, wrong defaults)
 bun run format:check     # oxfmt --check .
 ```

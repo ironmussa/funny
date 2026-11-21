@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+import { describe, test, expect, vi, beforeEach, afterEach, mock } from 'bun:test';
 
 import { advanceTimersByTimeAsync, mocked } from '@funny/test-kit';
 
@@ -30,29 +30,29 @@ const mocks = (() => ({
   getRemoteUrl: vi.fn(),
 }))();
 
-vi.mock('nanoid', () => ({ nanoid: () => 'ingest-thread-id' }));
+mock.module('nanoid', () => ({ nanoid: () => 'ingest-thread-id' }));
 
-vi.mock('../../lib/logger.js', () => ({
+mock.module('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 
-vi.mock('../../services/thread-manager.js', () => mocks.tm);
+mock.module('../../services/thread-manager.js', () => mocks.tm);
 
-vi.mock('../../services/service-registry.js', () => ({
+mock.module('../../services/service-registry.js', () => ({
   getServices: () => ({ projects: mocks.projects }),
 }));
 
-vi.mock('../../services/ws-broker.js', () => ({
+mock.module('../../services/ws-broker.js', () => ({
   wsBroker: mocks.wsBroker,
 }));
 
-vi.mock('../../services/shutdown-manager.js', () => ({
+mock.module('../../services/shutdown-manager.js', () => ({
   shutdownManager: { register: vi.fn() },
   ShutdownPhase: { SERVICES: 'services' },
 }));
 
 const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
-vi.mock('@funny/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   getWorktreeBasePaths: actualFunnyCoreGit.getWorktreeBasePaths,
   getCurrentBranch: mocks.getCurrentBranch,
   getRemoteUrl: mocks.getRemoteUrl,

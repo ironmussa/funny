@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'bun:test';
+import { describe, expect, test, mock } from 'bun:test';
 
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
@@ -7,7 +7,7 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { getNavigate, getUrlThreadId } from '@/stores/thread-store-internals';
 
-vi.mock('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
+mock.module('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
 
 function setup(route = '/') {
   return renderHook(

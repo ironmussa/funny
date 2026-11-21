@@ -20,6 +20,16 @@ export function useFactorySettings(projectId: string): FactorySettings | null | 
   return useDataQuery(factorySettingsQuery(projectId)).data;
 }
 
+/**
+ * Whether reading the caller's factory settings failed and there is nothing to
+ * show: unlike `null` (never configured), the factory may well exist. The read
+ * is retried while shown (`factorySettingsQuery`).
+ */
+export function useFactorySettingsFailed(projectId: string): boolean {
+  const { isError, data } = useDataQuery(factorySettingsQuery(projectId));
+  return isError && data === undefined;
+}
+
 /** The caller's factory runs for a project, newest first; `undefined` while loading. */
 export function useFactoryRuns(projectId: string): FactoryRun[] | undefined {
   return useDataQuery(factoryRunsQuery(projectId)).data;

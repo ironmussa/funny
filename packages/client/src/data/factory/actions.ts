@@ -12,7 +12,20 @@ import {
 
 import type { DataLayer } from '../data-layer';
 import { getDataLayer } from '../runtime';
-import { refreshFactoryRuns, writeFactoryRun, writeFactorySettings } from './queries';
+import {
+  refetchFactorySettings,
+  refreshFactoryRuns,
+  writeFactoryRun,
+  writeFactorySettings,
+} from './queries';
+
+/** Try the caller's factory settings again after a failed read. */
+export function retryFactorySettings(
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): Promise<void> {
+  return refetchFactorySettings(projectId, layer);
+}
 
 /**
  * Save the caller's factory settings for a project. Not optimistic: the panel

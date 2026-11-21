@@ -1686,6 +1686,7 @@
     "sendBlockers": "Enviar {{blockers}}",
     "cancelQueued": "Tirar da fila",
     "pausedSend": "O factory está pausado. Retome-o nas configurações do projeto.",
+    "settingsUnavailable": "Não foi possível carregar seu issue factory, então ainda não dá para selecionar issues para ele.",
     "send": "Enviar ao factory",
     "blockerWarning": "Depende de {{blockers}}, que não está no factory: essas issues vão esperar por ela.",
     "sent_one": "{{count}} issue enviada ao factory",

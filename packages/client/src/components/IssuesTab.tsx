@@ -11,6 +11,7 @@ import {
   canSendIssue,
   IssueFactoryStatus,
   IssuesFactoryBar,
+  IssuesFactoryUnavailable,
   IssueSelectToggle,
   useIssueFactory,
   type IssueFactory,
@@ -316,6 +317,7 @@ function IssuesList({
 
   return (
     <>
+      {factory.unavailable && <IssuesFactoryUnavailable projectId={projectId} />}
       {factory.settings && sendable.length > 0 && (
         <IssuesFactoryBar
           projectId={projectId}

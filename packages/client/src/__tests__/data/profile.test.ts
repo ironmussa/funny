@@ -1,7 +1,9 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { UserProfile } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
+import { mocked } from '@funny/test-kit';
 import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@/lib/api/profile', () => ({
   profileApi: {
@@ -18,7 +20,7 @@ import { profileApi } from '@/lib/api/profile';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const mockApi = vi.mocked(profileApi);
+const mockApi = mocked(profileApi);
 
 function makeProfile(overrides: Partial<UserProfile> = {}): UserProfile {
   return {

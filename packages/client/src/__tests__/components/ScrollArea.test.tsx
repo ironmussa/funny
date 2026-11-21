@@ -1,6 +1,7 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import { createRef } from 'react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 

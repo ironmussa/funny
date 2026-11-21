@@ -1,7 +1,9 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { QueuedMessage } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
+import { mocked } from '@funny/test-kit';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@/lib/api/threads', () => ({
   threadsApi: {
@@ -26,7 +28,7 @@ import { threadsApi } from '@/lib/api/threads';
 
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const mockApi = vi.mocked(threadsApi);
+const mockApi = mocked(threadsApi);
 
 const msg = (id: string, content: string, sortOrder = 0): QueuedMessage => ({
   id,

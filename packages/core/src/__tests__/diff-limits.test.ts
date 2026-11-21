@@ -1,4 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 
 vi.mock('../git/process.js', () => ({
   gitRead: vi.fn(),
@@ -10,7 +12,7 @@ vi.mock('../git/native.js', () => ({
 import { getDiff } from '../git/diff.js';
 import { gitRead } from '../git/process.js';
 
-const mockedGitRead = vi.mocked(gitRead);
+const mockedGitRead = mocked(gitRead);
 
 /** Helper to build a fake git command result */
 function gitResult(stdout: string, exitCode = 0) {

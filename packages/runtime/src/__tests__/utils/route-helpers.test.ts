@@ -1,22 +1,23 @@
+import { describe, test, expect, vi, beforeEach, afterAll } from 'bun:test';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { ok, err } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach, afterAll } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getThread: vi.fn(),
   getThreadWithMessages: vi.fn(),
   getProject: vi.fn(),
   isProjectInOrg: vi.fn(),
   resolveProjectPath: vi.fn(),
   home: '',
-}));
+}))();
 
 // Scratch directories live under the home dir — point it at a temp dir.
-vi.mock('node:os', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:os')>()),
+const actualNodeOs = { ...(await import('node:os')) };
+vi.mock('node:os', () => ({
+  ...actualNodeOs,
   homedir: () => mocks.home,
 }));
 
@@ -176,7 +177,7 @@ describe('route-helpers', () => {
 
     expect(result.isOk()).toBe(true);
     if (result.isOk()) {
-      expect(result.value).toEqual(project);
+      expect<unknown>(result.value).toEqual(project);
     }
   });
 
@@ -236,7 +237,7 @@ describe('route-helpers', () => {
     });
 
     expect(result.isOk()).toBe(true);
-    if (result.isOk()) expect(result.value).toEqual(thread);
+    if (result.isOk()) expect<unknown>(result.value).toEqual(thread);
     // Authorized off the signed claim — no org lookup needed.
     expect(mocks.isProjectInOrg).not.toHaveBeenCalled();
   });

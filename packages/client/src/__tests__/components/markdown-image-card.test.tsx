@@ -1,6 +1,7 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+
 import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { createElement } from 'react';
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { MarkdownImageCard } from '@/components/MarkdownImageCard';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';

@@ -1,8 +1,6 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
-import { ThreadChatView } from '@/components/thread/ThreadChatView';
-import { buildThread } from '@/data/threads/testing';
+import { fireEvent, render, screen } from '@testing-library/react';
 
 vi.mock('@/components/PipelineProgressBanner', () => ({
   PipelineProgressBanner: () => null,
@@ -35,6 +33,9 @@ vi.mock('@/stores/ui-store', () => ({
     selector: (state: { timelineVisible: boolean; pendingThreadSearch: null }) => unknown,
   ) => selector({ timelineVisible: false, pendingThreadSearch: null }),
 }));
+
+const { ThreadChatView } = await import('@/components/thread/ThreadChatView');
+const { buildThread } = await import('@/data/threads/testing');
 
 describe('ThreadChatView in-thread search', () => {
   test('Escape closes an open search when focus is elsewhere in the thread', () => {

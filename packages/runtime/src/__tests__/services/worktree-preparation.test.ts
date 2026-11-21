@@ -1,6 +1,8 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+import { waitFor } from '@funny/test-kit';
+
+const mocks = (() => ({
   createWorktree: vi.fn(),
   setupWorktree: vi.fn(),
   emitToUser: vi.fn(),
@@ -13,7 +15,7 @@ const mocks = vi.hoisted(() => ({
   }>,
   histograms: [] as Array<{ name: string; attributes?: Record<string, unknown> }>,
   sendRemoteData: vi.fn(async (_type: string, _payload: Record<string, any>) => ({ ok: true })),
-}));
+}))();
 
 vi.mock('../../services/remote-data-channel.js', () => ({ sendRemoteData: mocks.sendRemoteData }));
 
@@ -119,8 +121,9 @@ describe('prepareWorktree', () => {
       'worktree.root_configured': true,
       'post_create.errors': 1,
     });
-    expect(root.attributes).toHaveProperty('create.ms');
-    expect(root.attributes).toHaveProperty('post_create.ms');
+    // An array path: bun reads a dotted string as a nested path, never as one key.
+    expect(root.attributes).toHaveProperty(['create.ms']);
+    expect(root.attributes).toHaveProperty(['post_create.ms']);
     // Phases and steps hang off the root span.
     const children = mocks.spans.filter((s) => s.name !== 'worktree.prepare');
     expect(children.every((s) => s.parentSpanId === 's1')).toBe(true);
@@ -166,7 +169,7 @@ describe('prepareWorktree', () => {
     const reports = (type: string) =>
       mocks.sendRemoteData.mock.calls.filter(([t]) => t === type).map(([, p]) => p);
     const terminal = () =>
-      vi.waitFor(() => {
+      waitFor(() => {
         const last = reports('data:activity_update').find((p) => p.patch.status);
         expect(last).toBeDefined();
         return last!.patch;

@@ -1,23 +1,16 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 import { screen, fireEvent, waitFor, type RenderResult } from '@testing-library/react';
 import { okAsync, ResultAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-
-import { PromptInput } from '@/components/PromptInput';
-import { withProjects } from '@/data/projects/testing';
-import { seedQueues } from '@/data/queue/testing';
-import { buildThreadWithMessages } from '@/data/threads/testing';
-import { api } from '@/lib/api';
-import { systemApi } from '@/lib/api/system';
-import { useAppStore } from '@/stores/app-store';
-import { ThreadProvider } from '@/stores/thread-context';
-import { useThreadStore } from '@/stores/thread-store';
 
 import { expectInstance } from '../helpers/builders-components';
 import { installTestDataLayer } from '../helpers/data-layer-harness';
 import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
-vi.mock('@/lib/api/system', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/api/system')>();
+const actualLibApiSystem = { ...(await import('@/lib/api/system')) };
+vi.mock('@/lib/api/system', () => {
+  const actual = actualLibApiSystem;
   return {
     ...actual,
     systemApi: {
@@ -52,8 +45,9 @@ vi.mock('@/lib/api/infra', () => ({
 vi.mock('@/lib/api/profile', () => ({
   profileApi: { getProfile: vi.fn(() => okAsync({})), updateProfile: vi.fn(() => okAsync({})) },
 }));
-vi.mock('@/lib/api/projects', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/api/projects')>();
+const actualLibApiProjects = { ...(await import('@/lib/api/projects')) };
+vi.mock('@/lib/api/projects', () => {
+  const actual = actualLibApiProjects;
   return {
     projectsApi: {
       ...actual.projectsApi,
@@ -74,40 +68,35 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/lib/api', async () => {
-  const { okAsync } = await import('neverthrow');
-  return {
-    api: {
-      listBranches: vi
-        .fn()
-        .mockReturnValue(okAsync({ branches: [], defaultBranch: 'main', currentBranch: 'main' })),
-      listWorktrees: vi.fn().mockReturnValue(okAsync([])),
-      listSkills: vi.fn().mockReturnValue(okAsync({ skills: [] })),
-      listAgentResources: vi.fn().mockReturnValue(okAsync({ resources: [] })),
-      listWorkflows: vi.fn().mockReturnValue(okAsync({ workflows: [], warnings: [] })),
-      remoteUrl: vi.fn().mockReturnValue(okAsync({ url: '' })),
-      browseFiles: vi.fn().mockReturnValue(okAsync({ entries: [] })),
-      getProfile: vi.fn().mockReturnValue(okAsync({ hasAssemblyaiKey: false })),
-      listQueue: vi.fn().mockReturnValue(okAsync([])),
-      updateQueuedMessage: vi
-        .fn()
-        .mockImplementation((_threadId: string, messageId: string, content: string) =>
-          okAsync({
-            ok: true,
-            queuedCount: 1,
-            message: { id: messageId, threadId: 't1', content },
-          }),
-        ),
-      cancelQueuedMessage: vi.fn().mockReturnValue(okAsync({ ok: true, queuedCount: 0 })),
-    },
-  };
-});
+// One api mock object, shared with the threadsApi mock below.
+const apiMock = {
+  listBranches: vi
+    .fn()
+    .mockReturnValue(okAsync({ branches: [], defaultBranch: 'main', currentBranch: 'main' })),
+  listWorktrees: vi.fn().mockReturnValue(okAsync([])),
+  listSkills: vi.fn().mockReturnValue(okAsync({ skills: [] })),
+  listAgentResources: vi.fn().mockReturnValue(okAsync({ resources: [] })),
+  listWorkflows: vi.fn().mockReturnValue(okAsync({ workflows: [], warnings: [] })),
+  remoteUrl: vi.fn().mockReturnValue(okAsync({ url: '' })),
+  browseFiles: vi.fn().mockReturnValue(okAsync({ entries: [] })),
+  getProfile: vi.fn().mockReturnValue(okAsync({ hasAssemblyaiKey: false })),
+  listQueue: vi.fn().mockReturnValue(okAsync([])),
+  updateQueuedMessage: vi
+    .fn()
+    .mockImplementation((_threadId: string, messageId: string, content: string) =>
+      okAsync({
+        ok: true,
+        queuedCount: 1,
+        message: { id: messageId, threadId: 't1', content },
+      }),
+    ),
+  cancelQueuedMessage: vi.fn().mockReturnValue(okAsync({ ok: true, queuedCount: 0 })),
+};
+
+vi.mock('@/lib/api', () => ({ api: apiMock }));
 
 // The queue data layer calls threadsApi directly; route it to the mocked api.
-vi.mock('@/lib/api/threads', async () => {
-  const { api } = await import('@/lib/api');
-  return { threadsApi: api };
-});
+vi.mock('@/lib/api/threads', () => ({ threadsApi: apiMock }));
 
 vi.mock('@/components/ImageLightbox', () => ({
   ImageLightbox: () => null,
@@ -199,6 +188,16 @@ vi.mock('@/components/prompt-editor/serialize', () => ({
   },
 }));
 
+const { PromptInput } = await import('@/components/PromptInput');
+const { withProjects } = await import('@/data/projects/testing');
+const { seedQueues } = await import('@/data/queue/testing');
+const { buildThreadWithMessages } = await import('@/data/threads/testing');
+const { api } = await import('@/lib/api');
+const { systemApi } = await import('@/lib/api/system');
+const { useAppStore } = await import('@/stores/app-store');
+const { ThreadProvider } = await import('@/stores/thread-context');
+const { useThreadStore } = await import('@/stores/thread-store');
+
 // ── Setup ───────────────────────────────────────────────────────
 
 /**
@@ -216,7 +215,7 @@ async function renderPrompt(
 
 beforeEach(() => {
   installTestDataLayer();
-  vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+  mocked(systemApi.providerSetupStatus).mockReturnValue(
     okAsync({
       provider: 'claude',
       state: 'installed',
@@ -634,7 +633,7 @@ describe('PromptInput', () => {
   });
 
   test('shows all queued messages above the prompt', async () => {
-    vi.mocked(api.listQueue).mockReturnValueOnce(
+    mocked(api.listQueue).mockReturnValueOnce(
       okAsync([
         {
           id: 'q1',
@@ -665,7 +664,7 @@ describe('PromptInput', () => {
   });
 
   test('can edit a queued message', async () => {
-    vi.mocked(api.listQueue).mockReturnValueOnce(
+    mocked(api.listQueue).mockReturnValueOnce(
       okAsync([
         { id: 'q1', threadId: 'thread-1', content: 'Texto original', sortOrder: 0, createdAt: '' },
       ]),
@@ -691,7 +690,7 @@ describe('PromptInput', () => {
   });
 
   test('can delete a queued message', async () => {
-    vi.mocked(api.listQueue).mockReturnValueOnce(
+    mocked(api.listQueue).mockReturnValueOnce(
       okAsync([
         {
           id: 'q1',
@@ -714,7 +713,7 @@ describe('PromptInput', () => {
 
     await waitFor(() => {
       expect(api.cancelQueuedMessage).toHaveBeenCalledWith('thread-1', 'q1');
-      expect(screen.queryByText('Borrar este mensaje')).toBeNull();
+      expect(screen.queryByText('Borrar este mensaje')).not.toBeInTheDocument();
     });
   });
 
@@ -723,7 +722,7 @@ describe('PromptInput', () => {
     // render under thread B's input bar while B's fetch is in flight.
     seedQueues({ 'thread-a': { count: 1 }, 'thread-b': { count: 1 } });
 
-    vi.mocked(api.listQueue).mockImplementation((tid: string) => {
+    mocked(api.listQueue).mockImplementation((tid: string) => {
       if (tid === 'thread-a') {
         return okAsync([
           {
@@ -762,7 +761,7 @@ describe('PromptInput', () => {
     // messages must NOT remain visible during the transition.
     rerender(<Host threadId="thread-b" />);
 
-    await waitFor(() => expect(screen.queryByText('mensaje SOLO de A')).toBeNull());
+    await waitFor(() => expect(screen.queryByText('mensaje SOLO de A')).not.toBeInTheDocument());
   });
 
   test('regression bug 1: queue stays visible after switching away and back to a thread', async () => {
@@ -771,7 +770,7 @@ describe('PromptInput', () => {
     seedQueues({ 'thread-a': { count: 2 } });
     useThreadStore.setState({ threadDataById: {} });
 
-    vi.mocked(api.listQueue).mockReturnValue(
+    mocked(api.listQueue).mockReturnValue(
       okAsync([
         {
           id: 'qa1',
@@ -801,7 +800,7 @@ describe('PromptInput', () => {
   });
 
   test('shows queued message preview while queue details are still loading', async () => {
-    vi.mocked(api.listQueue).mockReturnValueOnce(new ResultAsync(new Promise(() => {})));
+    mocked(api.listQueue).mockReturnValueOnce(new ResultAsync(new Promise(() => {})));
 
     seedQueues({ 'thread-a': { count: 1, next: 'mensaje pendiente despues del refresh' } });
     await renderPrompt(<PromptInput onSubmit={vi.fn()} />, {
@@ -830,7 +829,7 @@ describe('PromptInput', () => {
         ],
       },
     });
-    vi.mocked(api.listQueue).mockReturnValueOnce(new ResultAsync(new Promise(() => {})));
+    mocked(api.listQueue).mockReturnValueOnce(new ResultAsync(new Promise(() => {})));
 
     await renderPrompt(<PromptInput onSubmit={vi.fn()} />, {
       threadId: 'thread-a',
@@ -935,7 +934,7 @@ describe('PromptInput', () => {
 });
 
 test('keeps the draft and attachments while the provider needs authentication', async () => {
-  vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+  mocked(systemApi.providerSetupStatus).mockReturnValue(
     okAsync({
       provider: 'claude',
       state: 'installed',
@@ -968,7 +967,7 @@ test('keeps the draft and attachments while the provider needs authentication', 
 });
 
 test('opens Pi setup before sending when the bundled SDK has no credentials', async () => {
-  vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+  mocked(systemApi.providerSetupStatus).mockReturnValue(
     okAsync({ provider: 'pi', state: 'bundled', auth: 'required', installable: true, login: 'pi' }),
   );
   const onSubmit = vi.fn();

@@ -1,5 +1,7 @@
+import { describe, test, expect, beforeEach, afterEach, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { Hono } from 'hono';
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { _resetGithubCache } from '../../routes/github/github-cache.js';
 import { fetchRepoIssues, parseGithubOwnerRepo } from '../../routes/github/helpers.js';
@@ -92,12 +94,12 @@ describe('GitHub Routes', () => {
     });
 
     afterEach(() => {
-      vi.unstubAllGlobals();
+      unstubAllGlobals();
     });
 
     function stubFetch(impl: (url: string) => { ok: boolean; body: unknown }) {
       const calls: string[] = [];
-      vi.stubGlobal('fetch', async (url: string) => {
+      stubGlobal('fetch', async (url: string) => {
         calls.push(url);
         const { ok, body } = impl(url);
         return new Response(JSON.stringify(body), { status: ok ? 200 : 500 });

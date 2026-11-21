@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
 import { loadInstalledVisualizers } from '@/lib/visualizer-loader';
 import {

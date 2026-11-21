@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('@/components/ui/dropdown-menu', () => ({
   DropdownMenu: ({ children }: { children: ReactNode }) => <div>{children}</div>,

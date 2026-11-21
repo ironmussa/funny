@@ -1,8 +1,7 @@
+import { afterEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-
-import { afterEach, describe, expect, test } from 'vitest';
 
 import {
   checkoutProjectIntoSandbox,

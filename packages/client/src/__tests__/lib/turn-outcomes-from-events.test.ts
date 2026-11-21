@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import type { ThreadEvent, ThreadEventType } from '@funny/shared';
-import { describe, expect, test } from 'vitest';
 
 import { turnOutcomesFromEvents } from '@/lib/turn-outcomes-from-events';
 

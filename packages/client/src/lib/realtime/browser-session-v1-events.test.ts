@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'bun:test';
+
 import { create, fromBinary, toBinary } from '@bufbuild/protobuf';
 import {
   BrowserSessionController,
@@ -5,7 +7,6 @@ import {
   BrowserSessionPointerKind,
   type BrowserSessionMessage,
 } from '@funny/shared/browser-v1/interactive';
-import { describe, expect, test } from 'vitest';
 
 import { browserSessionEventFromV1 } from './browser-session-v1-events';
 

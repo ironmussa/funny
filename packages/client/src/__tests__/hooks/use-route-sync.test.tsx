@@ -1,7 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useRouteSync } from '@/hooks/use-route-sync';

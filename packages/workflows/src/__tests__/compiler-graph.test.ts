@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'bun:test';
+
 /**
  * The compiler maps the graph fields of the DAG engine: trigger_rule,
  * several loops, concurrency groups, LOOP_ITERATION and the execution
@@ -10,7 +12,6 @@ import {
   runPipeline,
   type PipelineRunOptions,
 } from '@funny/pipelines';
-import { describe, expect, test } from 'vitest';
 
 import type { ActionProvider, ActionResult, SpawnAgentOpts } from '../compiler/action-provider.js';
 import { compileYamlPipeline, type YamlPipelineContext } from '../compiler/yaml-compiler.js';

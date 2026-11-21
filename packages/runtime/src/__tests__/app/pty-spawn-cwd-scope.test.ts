@@ -9,20 +9,23 @@
  * before rejecting, otherwise freshly-created projects fail with
  * "Access denied: directory not in a registered project".
  */
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { describe, expect, test, vi, beforeEach } from 'bun:test';
+
+import { waitFor } from '@funny/test-kit';
 
 const { mockSpawnPty, mockGetLocalProjects, mockListProjects, mockGetThread, mockMkdir, mockStat } =
-  vi.hoisted(() => ({
+  (() => ({
     mockSpawnPty: vi.fn(),
     mockGetLocalProjects: vi.fn(),
     mockListProjects: vi.fn(),
     mockGetThread: vi.fn(),
     mockMkdir: vi.fn(),
     mockStat: vi.fn(),
-  }));
+  }))();
 
-vi.mock('node:fs', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('node:fs')>()),
+const actualNodeFs = { ...(await import('node:fs')) };
+vi.mock('node:fs', () => ({
+  ...actualNodeFs,
   mkdirSync: mockMkdir,
   statSync: mockStat,
 }));
@@ -98,7 +101,7 @@ describe('pty:spawn cwd scoping', () => {
       vi.fn(),
     );
 
-    await vi.waitFor(() => expect(mockSpawnPty).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockSpawnPty).toHaveBeenCalledTimes(1));
     expect(mockGetThread).toHaveBeenCalledWith('scratch-1');
     expect(mockMkdir).toHaveBeenCalledWith('/tmp/scratch/user-1/scratch-1', { recursive: true });
     expect(mockSpawnPty).toHaveBeenCalledWith(
@@ -133,7 +136,7 @@ describe('pty:spawn cwd scoping', () => {
       send,
     );
 
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(send).toHaveBeenCalledWith({
         type: 'pty:error',
         data: { ptyId: 'pty-1', error: 'Access denied: scratch thread not found' },
@@ -152,7 +155,7 @@ describe('pty:spawn cwd scoping', () => {
         throw Object.assign(new Error('missing'), { code: 'ENOENT' });
       });
       const send = spawn();
-      await vi.waitFor(() =>
+      await waitFor(() =>
         expect(send).toHaveBeenCalledWith({
           type: 'pty:error',
           data: {
@@ -173,7 +176,7 @@ describe('pty:spawn cwd scoping', () => {
 
     spawn();
 
-    await vi.waitFor(() => expect(mockSpawnPty).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockSpawnPty).toHaveBeenCalledTimes(1));
     expect(mockListProjects).toHaveBeenCalledWith('user-1');
   });
 
@@ -183,7 +186,7 @@ describe('pty:spawn cwd scoping', () => {
 
     spawn();
 
-    await vi.waitFor(() => expect(mockSpawnPty).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mockSpawnPty).toHaveBeenCalledTimes(1));
     expect(mockListProjects).not.toHaveBeenCalled();
   });
 
@@ -193,7 +196,7 @@ describe('pty:spawn cwd scoping', () => {
 
     const send = spawn();
 
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(send).toHaveBeenCalledWith(
         expect.objectContaining({
           type: 'pty:error',

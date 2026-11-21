@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { act, fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
 
 import { VirtualDiff } from '@/components/VirtualDiff';
 

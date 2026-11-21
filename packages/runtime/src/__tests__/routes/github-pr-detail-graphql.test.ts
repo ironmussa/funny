@@ -3,7 +3,7 @@
  * branch's check runs (not this PR's). It is now one GraphQL request; these
  * tests pin its mapping to the `PRDetail` the summary card and CI tab read.
  */
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import {
   deriveReviewDecision,

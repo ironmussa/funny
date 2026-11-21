@@ -1,10 +1,11 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { Hono } from 'hono';
 import { ok, okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { HonoEnv } from '../../types/hono-env.js';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   acquire: vi.fn(),
   getProject: vi.fn(),
   getThread: vi.fn(),
@@ -15,7 +16,7 @@ const mocks = vi.hoisted(() => ({
   searchText: vi.fn(),
   trackSelection: vi.fn(),
   diagnostics: vi.fn(),
-}));
+}))();
 
 vi.mock('node:fs', () => ({ mkdirSync: mocks.mkdirSync }));
 
@@ -109,7 +110,7 @@ describe('text search routes', () => {
     const response = await makeApp().request('/search/health');
 
     expect(response.status).toBe(200);
-    expect(mocks.diagnostics).toHaveBeenCalledOnce();
+    expect(mocks.diagnostics).toHaveBeenCalledTimes(1);
     expect(mocks.acquire).not.toHaveBeenCalled();
     await expect(response.json()).resolves.toMatchObject({
       native: { available: true, version: '0.10.6' },
@@ -138,7 +139,7 @@ describe('text search routes', () => {
     expect(mocks.acquire).toHaveBeenCalledWith(projectPath);
     expect(mocks.searchFiles).toHaveBeenCalledWith('flt', 25);
     expect(mocks.trackSelection).not.toHaveBeenCalled();
-    expect(mocks.release).toHaveBeenCalledOnce();
+    expect(mocks.release).toHaveBeenCalledTimes(1);
     await expect(res.json()).resolves.toEqual({
       matches: [{ path: 'src/flowchart.ts', score: 42, indices: [4, 5, 6] }],
       total: 2,
@@ -164,7 +165,7 @@ describe('text search routes', () => {
     expect(mocks.requireProjectPath).toHaveBeenCalledWith(projectPath, 'user-1');
     expect(mocks.acquire).toHaveBeenCalledWith(projectPath);
     expect(mocks.trackSelection).toHaveBeenCalledWith('flt', 'src/flowchart.ts');
-    expect(mocks.release).toHaveBeenCalledOnce();
+    expect(mocks.release).toHaveBeenCalledTimes(1);
     await expect(res.json()).resolves.toEqual({ ok: true });
   });
 
@@ -263,7 +264,7 @@ describe('text search routes', () => {
     expect(mocks.requireProjectPath).toHaveBeenCalledWith(projectPath, 'user-1');
     expect(mocks.acquire).toHaveBeenCalledWith(projectPath);
     expect(mocks.searchText).toHaveBeenCalledWith(expect.objectContaining({ query: 'flowchart' }));
-    expect(mocks.release).toHaveBeenCalledOnce();
+    expect(mocks.release).toHaveBeenCalledTimes(1);
     const body = await res.json();
     expect(body.basePath).toBe(projectPath);
     expect(body.totalMatches).toBe(1);

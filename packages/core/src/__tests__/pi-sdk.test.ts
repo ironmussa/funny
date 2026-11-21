@@ -1,18 +1,17 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
-
 import type { CLIMessage } from '../agents/types.js';
 import { firstContentBlock, firstTextAt } from './helpers/test-helpers.js';
 
-const { availableModels } = vi.hoisted(() => ({
+const { availableModels } = (() => ({
   availableModels: [
     { provider: 'anthropic', id: 'claude-opus-4-5', name: 'Claude Opus 4.5' },
     { provider: 'openai-codex', id: 'gpt-5.5', name: 'GPT-5.5' },
   ],
-}));
+}))();
 
 vi.mock('@earendil-works/pi-coding-agent', () => ({
   getAgentDir: () => '/tmp/pi-agent',

@@ -1,11 +1,12 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ArchivedThreadsSettings } from '@/components/ArchivedThreadsSettings';
 import { withProjects } from '@/data/projects/testing';
 import { useAppStore } from '@/stores/app-store';
 
-const listArchivedThreads = vi.hoisted(() => vi.fn());
+const listArchivedThreads = (() => vi.fn())();
 
 vi.mock('@/lib/api', () => ({ api: { listArchivedThreads } }));
 vi.mock('@/components/ThreadPowerline', () => ({ ThreadPowerline: () => null }));

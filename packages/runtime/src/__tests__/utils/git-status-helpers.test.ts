@@ -1,4 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 
 vi.mock('@funny/core/git', () => ({
   invalidateStatusCache: vi.fn(),
@@ -109,7 +111,7 @@ describe('computeBranchKey', () => {
 
 describe('emitGitStatusForThread', () => {
   beforeEach(() => {
-    vi.mocked(getCurrentBranch).mockResolvedValue(ok('main'));
+    mocked(getCurrentBranch).mockResolvedValue(ok('main'));
   });
 
   test('returns early when cwd is missing', async () => {
@@ -140,7 +142,7 @@ describe('emitGitStatusForThread', () => {
   });
 
   test('updates branch when drift detection finds a checkout change', async () => {
-    vi.mocked(getCurrentBranch).mockResolvedValue(ok('feature/checkout'));
+    mocked(getCurrentBranch).mockResolvedValue(ok('feature/checkout'));
     const ctx = makeCtx({
       getThread: vi.fn(async () => ({
         id: 't-1',

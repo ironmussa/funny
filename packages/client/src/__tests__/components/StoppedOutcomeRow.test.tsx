@@ -1,14 +1,15 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
+
 import type { Thread, ThreadEvent } from '@funny/shared';
 import { screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
-
-import { VirtualRowContent } from '@/components/thread/MemoizedMessageList.renderers';
-import { getThreadsData } from '@/data/threads/store';
-import { buildThread, buildThreadWithMessages } from '@/data/threads/testing';
-import { useThreadStore } from '@/stores/thread-store';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 import { renderWithProviders } from '../helpers/render';
+
+const { VirtualRowContent } = await import('@/components/thread/MemoizedMessageList.renderers');
+const { getThreadsData } = await import('@/data/threads/store');
+const { buildThread, buildThreadWithMessages } = await import('@/data/threads/testing');
+const { useThreadStore } = await import('@/stores/thread-store');
 
 const stopEvent: ThreadEvent = {
   id: 'ev-stop',

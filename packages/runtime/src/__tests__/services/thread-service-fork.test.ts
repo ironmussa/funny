@@ -1,6 +1,6 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   tm: {
     getThread: vi.fn(),
     getThreadWithMessages: vi.fn(),
@@ -19,7 +19,7 @@ const mocks = vi.hoisted(() => ({
   getSessionMessages: vi.fn(),
   forkSession: vi.fn(),
   copyGitCheckpoint: vi.fn(async () => true),
-}));
+}))();
 
 vi.mock('nanoid', () => ({ nanoid: () => 'fork-thread-id' }));
 

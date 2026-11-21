@@ -1,5 +1,6 @@
+import { beforeEach, describe, expect, test } from 'bun:test';
+
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, test } from 'vitest';
 
 import { seedProjects } from '@/data/projects/testing';
 import { buildThread, withThreadIndex } from '@/data/threads/testing';

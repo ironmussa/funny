@@ -2,7 +2,7 @@
  * Schema fields and graph rules for the DAG engine: trigger_rule,
  * concurrency, several loops, and host validation.
  */
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { parseWorkflowYaml } from '../parse.js';
 

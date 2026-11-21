@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { Hono } from 'hono';
-import { describe, expect, test } from 'vitest';
 import { z } from 'zod';
 
 import { parseJsonBody, parseQuery, queryBoolean, queryList } from '../../validation/request.js';

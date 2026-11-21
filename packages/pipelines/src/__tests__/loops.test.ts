@@ -1,7 +1,7 @@
 /**
  * Loop regions declared on nodes: repeat, nesting, overlap refusal, exhaustion.
  */
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import {
   definePipeline,

@@ -1,6 +1,6 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
-const revertOptimisticRun = vi.hoisted(() => vi.fn());
+const revertOptimisticRun = (() => vi.fn())();
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), info: vi.fn(), success: vi.fn() } }));
 vi.mock('@/stores/thread-store', () => ({
   useThreadStore: { getState: () => ({ revertOptimisticRun }) },

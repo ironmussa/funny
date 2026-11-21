@@ -1,6 +1,7 @@
+import { describe, expect, it, vi } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
 import type { ReactNode } from 'react';
-import { describe, expect, it, vi } from 'vitest';
 
 import { ProjectUrlPatterns } from '@/components/general-settings-project/project-section-rows';
 import { AttachmentChip } from '@/components/ui/chip';

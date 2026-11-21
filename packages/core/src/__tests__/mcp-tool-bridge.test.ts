@@ -5,11 +5,11 @@
  * skipped; in-process servers are ignored.
  */
 
+import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { createServer, type Server } from 'node:http';
 
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
-import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { z } from 'zod';
 
 import { connectMcpTools, mcpInstructionsBlock } from '../agents/mcp-tool-bridge.js';

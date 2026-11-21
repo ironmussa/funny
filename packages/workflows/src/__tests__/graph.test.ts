@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { getWorkflowNodeAction, graphToWorkflow, workflowToGraph } from '../graph.js';
 import { parseWorkflowYaml } from '../parse.js';

@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'bun:test';
+
 import type { ThreadEvent } from '@funny/shared';
-import { describe, test, expect } from 'vitest';
 
 import { sessionChangesFromEvents } from '@/lib/session-changes-from-events';
 
@@ -22,7 +23,7 @@ describe('sessionChangesFromEvents', () => {
       summaryEvent('e2', 'u2', [{ ...FILE, path: 'src/b.ts' }]),
     ]);
     expect([...map.keys()]).toEqual(['u1', 'u2']);
-    expect(map.get('u1')).toEqual([FILE]);
+    expect<unknown>(map.get('u1')).toEqual([FILE]);
     expect(map.get('u2')![0].path).toBe('src/b.ts');
   });
 

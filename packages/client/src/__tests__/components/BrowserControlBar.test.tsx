@@ -1,5 +1,6 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, fireEvent, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { BrowserControlBar } from '@/components/browser-panel/BrowserControlBar';
 import { useBrowserPanelStore } from '@/stores/browser-panel-store';

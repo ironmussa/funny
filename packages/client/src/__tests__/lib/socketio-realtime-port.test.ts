@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'bun:test';
+
 import { create } from '@bufbuild/protobuf';
 import {
   BROWSER_V1_CARRIER_EVENTS,
@@ -29,7 +31,6 @@ import {
   OperationRequestSchema,
 } from '@funny/shared/browser-v1/operations';
 import { CarrierEnvelopeSchema } from '@funny/shared/browser-v1/transport';
-import { describe, expect, test } from 'vitest';
 
 import { SocketIoClientRealtimePort } from '@/lib/realtime/socketio-realtime-port';
 

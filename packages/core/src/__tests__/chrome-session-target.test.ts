@@ -3,9 +3,9 @@
  * so several sessions can stream different tabs of one browser.
  */
 
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => {
+const mocks = (() => {
   const connectArgs: unknown[] = [];
   const stubDomain = new Proxy(
     {},
@@ -30,7 +30,7 @@ const mocks = vi.hoisted(() => {
     },
   );
   return { CDP, connectArgs };
-});
+})();
 
 vi.mock('chrome-remote-interface', () => ({ default: mocks.CDP }));
 

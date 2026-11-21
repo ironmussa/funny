@@ -1,11 +1,12 @@
-import { okAsync, errAsync } from 'neverthrow';
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, vi } from 'bun:test';
 
-const { getThread, createAndStartThread, remoteSearchThreads } = vi.hoisted(() => ({
+import { okAsync, errAsync } from 'neverthrow';
+
+const { getThread, createAndStartThread, remoteSearchThreads } = (() => ({
   getThread: vi.fn(),
   createAndStartThread: vi.fn(),
   remoteSearchThreads: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/thread-manager.js', () => ({ getThread }));
 vi.mock('../../services/thread-service/create.js', () => ({ createAndStartThread }));

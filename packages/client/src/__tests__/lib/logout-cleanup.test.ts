@@ -1,5 +1,6 @@
+import { beforeEach, describe, expect, test } from 'bun:test';
+
 import { PREFERENCE_KEYS } from '@funny/client-core';
-import { beforeEach, describe, expect, test } from 'vitest';
 
 import { clearUserClientState } from '@/lib/logout-cleanup';
 

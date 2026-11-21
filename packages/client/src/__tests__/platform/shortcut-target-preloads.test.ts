@@ -1,4 +1,7 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+// Window events must go through jsdom (see the helper).
+import { runAllTimersAsync } from '@funny/test-kit';
 
 const loaded: string[] = [];
 
@@ -35,7 +38,7 @@ describe('scheduleShortcutTargetPreloads', () => {
 
     expect(loaded).toEqual([]);
     window.dispatchEvent(new Event('load'));
-    await vi.runAllTimersAsync();
+    await runAllTimersAsync();
 
     expect(loaded).toEqual(['command-palette', 'file-search', 'all-threads', 'text-search']);
   });

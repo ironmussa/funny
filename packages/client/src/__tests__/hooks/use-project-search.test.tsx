@@ -1,19 +1,21 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
+
 import type { Project } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
+import { advanceTimersByTimeAsync, mocked } from '@funny/test-kit';
 import { act, renderHook } from '@testing-library/react';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { buildProject } from '@/data/projects/testing';
 import { useProjectSearch } from '@/hooks/use-project-search';
 import { projectsApi } from '@/lib/api/projects';
 
 vi.mock('@/lib/api/projects', () => ({ projectsApi: { listProjects: vi.fn() } }));
-const list = vi.mocked(projectsApi.listProjects);
+const list = mocked(projectsApi.listProjects);
 const project = buildProject({ id: 'broncos', name: 'goliive-broncos', path: '/repos/broncos' });
 async function tick(ms = 250) {
   await act(async () => {
-    await vi.advanceTimersByTimeAsync(ms);
+    await advanceTimersByTimeAsync(ms);
   });
 }
 beforeEach(() => {

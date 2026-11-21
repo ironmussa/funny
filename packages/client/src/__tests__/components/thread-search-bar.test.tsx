@@ -1,5 +1,6 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 
@@ -29,6 +30,6 @@ describe('ThreadSearchBar', () => {
       target: { value: 'no-match' },
     });
 
-    expect(onClearHighlights).toHaveBeenCalledOnce();
+    expect(onClearHighlights).toHaveBeenCalledTimes(1);
   });
 });

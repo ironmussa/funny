@@ -1,5 +1,6 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { buildThread, withThreadIndex } from '@/data/threads/testing';
 import { useSidebarActions } from '@/hooks/use-sidebar-actions';
@@ -52,7 +53,7 @@ vi.mock('@/stores/project-store', () => {
   return { useProjectStore };
 });
 
-const { mockRemoveWorktree } = vi.hoisted(() => ({ mockRemoveWorktree: vi.fn() }));
+const { mockRemoveWorktree } = (() => ({ mockRemoveWorktree: vi.fn() }))();
 vi.mock('@/lib/api', () => ({
   api: {
     removeWorktree: mockRemoveWorktree,

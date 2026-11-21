@@ -1,8 +1,10 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
+import { stubGlobal } from '@funny/test-kit';
 
 // Mock fetch before importing api
 const mockFetch = vi.fn<(input: string, init: RequestInit) => Promise<Response>>();
-vi.stubGlobal('fetch', mockFetch);
+stubGlobal('fetch', mockFetch);
 
 // Ensure __TAURI_INTERNALS__ is absent so we use /api base (jsdom default)
 Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
@@ -58,7 +60,7 @@ describe('API Client', () => {
       );
 
       const result = await api.listProjects(null, 'te');
-      expect(result._unsafeUnwrap()).toEqual([{ id: 'p1', name: 'Test' }]);
+      expect<unknown>(result._unsafeUnwrap()).toEqual([{ id: 'p1', name: 'Test' }]);
       const [url] = mockFetch.mock.calls.at(-1)!;
       expect(url).toContain('/api/trpc/projects.list?input=');
       expect(JSON.parse(decodeURIComponent(url.split('?input=')[1]))).toEqual({
@@ -72,7 +74,7 @@ describe('API Client', () => {
 
       const result = await api.createProject('New', '/path');
       expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toEqual({ id: 'new', name: 'New' });
+      expect<unknown>(result._unsafeUnwrap()).toEqual({ id: 'new', name: 'New' });
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/projects'),
         expect.objectContaining({ method: 'POST' }),
@@ -95,7 +97,7 @@ describe('API Client', () => {
 
       const result = await api.listBranches('p1');
       expect(result.isOk()).toBe(true);
-      expect(result._unsafeUnwrap()).toEqual(['main', 'dev']);
+      expect<unknown>(result._unsafeUnwrap()).toEqual(['main', 'dev']);
     });
   });
 

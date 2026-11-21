@@ -1,4 +1,4 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
 import { createLatestFrameFetcher } from './latest-frame-fetcher';
 
@@ -55,7 +55,7 @@ describe('createLatestFrameFetcher', () => {
     frames.push('s1', '/next');
     await tick();
     await tick();
-    expect(onError).toHaveBeenCalledOnce();
+    expect(onError).toHaveBeenCalledTimes(1);
     expect(deliver).toHaveBeenCalledWith('s1', 'ok');
   });
 });

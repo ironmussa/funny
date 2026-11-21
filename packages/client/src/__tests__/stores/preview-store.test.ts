@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach } from 'bun:test';
 
 import { usePreviewStore } from '@/stores/preview-store';
 import type { PreviewTab } from '@/stores/preview-store';

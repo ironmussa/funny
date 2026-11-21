@@ -334,19 +334,21 @@ app.get('/status', async (c) => {
 
 ```typescript
 // tests/utils/process.test.ts
-import { vi, describe, it, expect } from 'vitest';
+import { describe, expect, it, mock, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 
 import { execute } from '../src/utils/process';
 
 // Mock execa for testing
-vi.mock('execa', () => ({
+mock.module('execa', () => ({
   execa: vi.fn(),
 }));
 
 describe('process execution', () => {
   it('should execute command successfully', async () => {
     const { execa } = await import('execa');
-    vi.mocked(execa).mockResolvedValue({
+    mocked(execa).mockResolvedValue({
       stdout: 'success',
       stderr: '',
       exitCode: 0,

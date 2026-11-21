@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
 import { applyThreadDataPatch, setThreadData, clearThreadData } from '@/stores/thread-mutations';

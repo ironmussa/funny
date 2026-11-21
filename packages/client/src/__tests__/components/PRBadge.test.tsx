@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { screen } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
 
 import { PRBadge } from '@/components/PRBadge';
 

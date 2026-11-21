@@ -1,7 +1,8 @@
+import { describe, expect, test } from 'bun:test';
+
 import { desktopParityFixture } from '@funny/ui-contracts/fixtures';
 import { referenceDark } from '@funny/ui-contracts/tokens';
 import { render, screen } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
 
 import { VisualParityFixtureHost } from '@/components/visual-parity/VisualParityFixtureHost';
 

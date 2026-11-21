@@ -1,6 +1,7 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import type { ThreadEvent } from '@funny/shared';
 import { screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { SandboxErrorCard } from '@/components/thread/SandboxErrorCard';
 

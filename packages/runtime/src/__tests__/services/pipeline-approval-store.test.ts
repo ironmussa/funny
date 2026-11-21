@@ -6,7 +6,7 @@
  * approval-response endpoint (consumer).
  */
 
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import { pipelineApprovalStore } from '../../services/pipeline-approval-store.js';
 

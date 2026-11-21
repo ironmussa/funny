@@ -1,7 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { DomainError } from '@funny/shared/errors';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { SchedulerView } from '@/components/SchedulerView';
 import { buildThread, seedProjectThreads } from '@/data/threads/testing';
@@ -9,7 +10,7 @@ import { buildThread, seedProjectThreads } from '@/data/threads/testing';
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 import { renderWithProviders } from '../helpers/render';
 
-const api = vi.hoisted(() => ({ listSchedulerRuns: vi.fn(), refreshScheduler: vi.fn() }));
+const api = (() => ({ listSchedulerRuns: vi.fn(), refreshScheduler: vi.fn() }))();
 vi.mock('@/lib/api', () => ({ api }));
 
 const failure: DomainError = { type: 'INTERNAL', message: 'scheduler offline' };

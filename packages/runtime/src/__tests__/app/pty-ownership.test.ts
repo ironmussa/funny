@@ -4,7 +4,7 @@
  * user. Without the gate, any authenticated user who learned another
  * tenant's `ptyId` could inject keystrokes into their running shell.
  */
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { describe, expect, test, vi, beforeEach } from 'bun:test';
 
 // Mock pty-manager BEFORE importing the handler so its `import * as
 // ptyManager` resolves to the stubs.
@@ -16,7 +16,7 @@ const {
   mockSignalPty,
   mockCapturePaneAsync,
   mockSpawnPty,
-} = vi.hoisted(() => ({
+} = (() => ({
   mockAssertSessionAccess: vi.fn(),
   mockWritePty: vi.fn(),
   mockKillPty: vi.fn(),
@@ -24,7 +24,7 @@ const {
   mockSignalPty: vi.fn(),
   mockCapturePaneAsync: vi.fn(),
   mockSpawnPty: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/pty-manager.js', () => ({
   assertSessionAccess: mockAssertSessionAccess,

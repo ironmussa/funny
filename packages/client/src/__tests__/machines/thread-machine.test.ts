@@ -1,4 +1,5 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
+
 import { createActor } from 'xstate';
 
 import { threadMachine, wsEventToMachineEvent } from '@/machines/thread-machine';

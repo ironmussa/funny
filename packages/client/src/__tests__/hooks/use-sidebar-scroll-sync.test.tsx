@@ -1,16 +1,16 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { mocked, stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useSidebarScrollSync } from '@/hooks/use-sidebar-scroll-sync';
 import { useProjectStore } from '@/stores/project-store';
 
 // Spy on the scroll helper; keep the rest of utils real.
-vi.mock('@/lib/utils', async (orig) => {
-  const actual = await orig<typeof import('@/lib/utils')>();
-  return { ...actual, scrollSidebarItemIntoView: vi.fn() };
-});
+const actualUtils = { ...(await import('@/lib/utils')) };
+vi.mock('@/lib/utils', () => ({ ...actualUtils, scrollSidebarItemIntoView: vi.fn() }));
 import { scrollSidebarItemIntoView } from '@/lib/utils';
 
 function wrapperFor(route: string) {
@@ -33,11 +33,11 @@ function makeScrollRoot() {
 describe('useSidebarScrollSync — scroll target follows the URL', () => {
   beforeEach(() => {
     // Run rAF synchronously so the first scroll attempt fires within the test.
-    vi.stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
+    stubGlobal('requestAnimationFrame', (cb: FrameRequestCallback) => {
       cb(0);
       return 1;
     });
-    vi.stubGlobal('cancelAnimationFrame', () => {});
+    stubGlobal('cancelAnimationFrame', () => {});
     useProjectStore.setState({
       expandedProjects: new Set(['p1']),
       revealNonce: 0,
@@ -47,7 +47,7 @@ describe('useSidebarScrollSync — scroll target follows the URL', () => {
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
     vi.restoreAllMocks();
   });
 
@@ -63,7 +63,7 @@ describe('useSidebarScrollSync — scroll target follows the URL', () => {
       { wrapper: wrapperFor('/projects/p1/threads/t-b') },
     );
 
-    const calls = vi.mocked(scrollSidebarItemIntoView).mock.calls;
+    const calls = mocked(scrollSidebarItemIntoView).mock.calls;
     expect(calls.length).toBeGreaterThan(0);
     const scrolledEl = calls[calls.length - 1][1];
     expect(scrolledEl.getAttribute('data-testid')).toBe('thread-item-t-b');
@@ -81,7 +81,7 @@ describe('useSidebarScrollSync — scroll target follows the URL', () => {
       { wrapper: wrapperFor('/projects/p1/threads/t-a') },
     );
 
-    const calls = vi.mocked(scrollSidebarItemIntoView).mock.calls;
+    const calls = mocked(scrollSidebarItemIntoView).mock.calls;
     const scrolledEl = calls[calls.length - 1][1];
     expect(scrolledEl.getAttribute('data-testid')).toBe('thread-item-t-a');
   });

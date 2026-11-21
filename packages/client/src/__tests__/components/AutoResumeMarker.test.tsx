@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { render, screen } from '@testing-library/react';
-import { describe, expect, test } from 'vitest';
 
 import { AutoResumeMarker } from '@/components/thread/AutoResumeMarker';
 import { TooltipProvider } from '@/components/ui/tooltip';

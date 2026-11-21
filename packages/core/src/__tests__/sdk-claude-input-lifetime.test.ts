@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import { SDKClaudeProcess } from '../agents/sdk-claude.js';
 import type { ClaudeProcessOptions } from '../agents/types.js';

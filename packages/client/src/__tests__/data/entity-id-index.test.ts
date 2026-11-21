@@ -1,5 +1,6 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
 import { createLiveQueryCollection, eq } from '@tanstack/db';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { createEntityStore } from '@/data/entities';
 import { getThreadsData } from '@/data/threads/store';

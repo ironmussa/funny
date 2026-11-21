@@ -1,7 +1,8 @@
+import { expect, test, vi } from 'bun:test';
+
 import { renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { expect, test, vi } from 'vitest';
 
 import { buildProject, withProjects } from '@/data/projects/testing';
 import { buildThreadWithMessages } from '@/data/threads/testing';

@@ -1,10 +1,11 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { internal, type DomainError } from '@funny/shared/errors';
+import { unstubAllEnvs, waitFor } from '@funny/test-kit';
 import { errAsync, ok, ResultAsync, type Result } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type {
   ProjectSearchHealth,
@@ -28,7 +29,7 @@ beforeEach(() => {
 afterEach(async () => {
   await Promise.all(registries.splice(0).map((registry) => registry.disposeAll()));
   rmSync(root, { recursive: true, force: true });
-  vi.unstubAllEnvs();
+  unstubAllEnvs();
   vi.restoreAllMocks();
 });
 
@@ -88,7 +89,7 @@ describe('ProjectSearchRegistry', () => {
     await registry.invalidate(cwd);
     expect(dispose).not.toHaveBeenCalled();
     lease.release();
-    expect(dispose).toHaveBeenCalledOnce();
+    expect(dispose).toHaveBeenCalledTimes(1);
   });
 
   test('canonicalizes cwd and shares one concurrent initialization', async () => {
@@ -105,7 +106,7 @@ describe('ProjectSearchRegistry', () => {
 
     const first = registry.acquire(cwd);
     const second = registry.acquire(alias);
-    await vi.waitFor(() => expect(factory).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(factory).toHaveBeenCalledTimes(1));
     pending.resolve(ok(provider));
 
     const [firstResult, secondResult] = await Promise.all([first, second]);
@@ -152,13 +153,13 @@ describe('ProjectSearchRegistry', () => {
     now = 3;
     const third = (await registry.acquire(thirdCwd))._unsafeUnwrap();
 
-    expect(providers.get(firstCwd)?.dispose).toHaveBeenCalledOnce();
+    expect(providers.get(firstCwd)?.dispose).toHaveBeenCalledTimes(1);
     expect(providers.get(secondCwd)?.dispose).not.toHaveBeenCalled();
     third.release();
     now = 100;
     registry.evictIdle();
-    expect(providers.get(secondCwd)?.dispose).toHaveBeenCalledOnce();
-    expect(providers.get(thirdCwd)?.dispose).toHaveBeenCalledOnce();
+    expect(providers.get(secondCwd)?.dispose).toHaveBeenCalledTimes(1);
+    expect(providers.get(thirdCwd)?.dispose).toHaveBeenCalledTimes(1);
     expect(registry.stats().residentEntries).toBe(0);
   });
 
@@ -187,7 +188,7 @@ describe('ProjectSearchRegistry', () => {
     expect(provider.dispose).not.toHaveBeenCalled();
 
     lease.release();
-    expect(provider.dispose).toHaveBeenCalledOnce();
+    expect(provider.dispose).toHaveBeenCalledTimes(1);
     expect(registry.stats().residentEntries).toBe(0);
   });
 
@@ -214,9 +215,9 @@ describe('ProjectSearchRegistry', () => {
     lease.release();
 
     expect((await registry.refreshExisting(cwd, 'git-status'))._unsafeUnwrap()).toBe(true);
-    expect(provider.refreshGitStatus).toHaveBeenCalledOnce();
+    expect(provider.refreshGitStatus).toHaveBeenCalledTimes(1);
     expect((await registry.refreshExisting(cwd, 'rescan'))._unsafeUnwrap()).toBe(true);
-    expect(provider.rescan).toHaveBeenCalledOnce();
+    expect(provider.rescan).toHaveBeenCalledTimes(1);
     expect((await registry.refreshExisting(absent, 'rescan'))._unsafeUnwrap()).toBe(false);
   });
 
@@ -264,8 +265,8 @@ describe('ProjectSearchRegistry', () => {
     await registry.disposeAll();
 
     expect(providers).toHaveLength(2);
-    expect(providers[0]?.dispose).toHaveBeenCalledOnce();
-    expect(providers[1]?.dispose).toHaveBeenCalledOnce();
+    expect(providers[0]?.dispose).toHaveBeenCalledTimes(1);
+    expect(providers[1]?.dispose).toHaveBeenCalledTimes(1);
     expect(registry.stats().residentEntries).toBe(0);
   });
 
@@ -342,7 +343,7 @@ describe('ProjectSearchRegistry', () => {
     const registry = createRegistry({ providerFactory: factory });
 
     const acquisition = registry.acquire(cwd);
-    await vi.waitFor(() => expect(factory).toHaveBeenCalledOnce());
+    await waitFor(() => expect(factory).toHaveBeenCalledTimes(1));
 
     expect(registry.diagnostics()).toMatchObject({
       residentEntries: 1,
@@ -359,7 +360,7 @@ describe('ProjectSearchRegistry', () => {
         },
       ],
     });
-    expect(factory).toHaveBeenCalledOnce();
+    expect(factory).toHaveBeenCalledTimes(1);
 
     pending.resolve(ok(provider));
     const lease = (await acquisition)._unsafeUnwrap();

@@ -1,5 +1,6 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { PlanReviewDialog } from '@/components/tool-cards/PlanReviewDialog';
 import { TooltipProvider } from '@/components/ui/tooltip';

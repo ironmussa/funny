@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 /**
  * safe.directory bookkeeping: every created worktree registers itself in the
  * global git config, so removal (and a startup prune for older leftovers) must
@@ -6,8 +7,6 @@
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { executeSync } from '../git/process.js';
 import {

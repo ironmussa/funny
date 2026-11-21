@@ -1,6 +1,5 @@
+import { describe, expect, test } from 'bun:test';
 import { join } from 'path';
-
-import { describe, expect, test } from 'vitest';
 
 import { resolveClaudeHomeConfigScope } from '../../utils/claude-config-paths.js';
 

@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 
 import { buttonVariants } from '@/components/ui/button';
 import { FIELD_SIZE, type ControlSize } from '@/components/ui/control-size';

@@ -1,7 +1,7 @@
 /**
  * Batch groups: one execution of a node for several waiting runs.
  */
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { definePipeline, node, runPipeline, type NodeRunInfo } from '../engine.js';
 import { createMemoryConcurrencyGate, type ConcurrencyGate } from '../gate.js';

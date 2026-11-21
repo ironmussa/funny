@@ -9,7 +9,9 @@
  * 5. Drains forced queues (non-queue modes) and scratch threads (no project)
  * 6. Does nothing if the queue is empty
  */
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 
 import { agentCompletedQueueHandler } from '../../services/handlers/agent-completed-queue-handler.js';
 import type { HandlerServiceContext } from '../../services/handlers/types.js';
@@ -124,8 +126,8 @@ describe('agentCompletedQueueHandler', () => {
 
       expect(ctx.dequeueMessage).toHaveBeenCalledWith('t-1');
       expect(ctx.startAgent).toHaveBeenCalledTimes(1);
-      expect(vi.mocked(ctx.startAgent).mock.calls[0][1]).toBe('Forced follow-up');
-      expect(vi.mocked(ctx.startAgent).mock.calls[0][2]).toBe('/test');
+      expect(mocked(ctx.startAgent).mock.calls[0][1]).toBe('Forced follow-up');
+      expect(mocked(ctx.startAgent).mock.calls[0][2]).toBe('/test');
     },
   );
 
@@ -183,7 +185,7 @@ describe('agentCompletedQueueHandler', () => {
     await agentCompletedQueueHandler.action(makeEvent({ projectId: '' }), ctx);
 
     expect(ctx.startAgent).toHaveBeenCalledTimes(1);
-    const [, prompt, cwd] = vi.mocked(ctx.startAgent).mock.calls[0];
+    const [, prompt, cwd] = mocked(ctx.startAgent).mock.calls[0];
     expect(prompt).toBe('Scratch follow-up');
     expect(cwd).toBe(scratchPathFor('u-1', 't-1'));
   });
@@ -245,7 +247,7 @@ describe('agentCompletedQueueHandler', () => {
 
     // cwd (3rd arg) should be worktreePath, not project.path
     expect(ctx.startAgent).toHaveBeenCalled();
-    const callArgs = vi.mocked(ctx.startAgent).mock.calls[0];
+    const callArgs = mocked(ctx.startAgent).mock.calls[0];
     expect(callArgs[2]).toBe('/tmp/worktree-1');
   });
 

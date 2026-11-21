@@ -1,6 +1,7 @@
+import { describe, test, expect, vi } from 'bun:test';
+
 import type { GitStatusInfo, Thread } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
-import { describe, test, expect, vi } from 'vitest';
 
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { buildThread } from '@/data/threads/testing';

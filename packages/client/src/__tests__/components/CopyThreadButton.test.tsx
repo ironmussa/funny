@@ -1,7 +1,9 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 import { fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
 import type { ReactElement, ReactNode } from 'react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AgentResultCard, AgentStoppedCard } from '@/components/thread/AgentStatusCards';
 import { CopyThreadButton } from '@/components/thread/CopyThreadButton';
@@ -24,7 +26,7 @@ vi.mock('react-i18next', () => ({
     </>
   ),
 }));
-const { showError } = vi.hoisted(() => ({ showError: vi.fn() }));
+const { showError } = (() => ({ showError: vi.fn() }))();
 vi.mock('sonner', () => ({ toast: { error: showError, success: vi.fn() } }));
 const writeText = vi.fn();
 
@@ -82,7 +84,7 @@ describe('completed thread actions', () => {
   });
 
   test('copies only the latest prompt onwards, without tool cards', async () => {
-    vi.mocked(api.getThread).mockReturnValue(
+    mocked(api.getThread).mockReturnValue(
       okAsync(
         buildThreadWithMessages({
           messages: [
@@ -122,7 +124,7 @@ describe('completed thread actions', () => {
   });
 
   test('reports fetch failures without copying partial history', async () => {
-    vi.mocked(api.getThread).mockReturnValue(errAsync({ type: 'INTERNAL', message: 'Offline' }));
+    mocked(api.getThread).mockReturnValue(errAsync({ type: 'INTERNAL', message: 'Offline' }));
     render(<CopyThreadButton threadId="thread-1" />);
     fireEvent.click(screen.getByRole('button'));
     await waitFor(() => expect(showError).toHaveBeenCalled());
@@ -131,7 +133,7 @@ describe('completed thread actions', () => {
   });
 
   test('reports clipboard rejection without showing success', async () => {
-    vi.mocked(api.getThread).mockReturnValue(okAsync(buildThreadWithMessages()));
+    mocked(api.getThread).mockReturnValue(okAsync(buildThreadWithMessages()));
     writeText.mockRejectedValueOnce(new Error('Clipboard denied'));
     render(<CopyThreadButton threadId="thread-1" />);
     fireEvent.click(screen.getByRole('button'));

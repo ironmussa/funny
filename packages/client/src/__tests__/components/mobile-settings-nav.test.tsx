@@ -1,8 +1,7 @@
+import { describe, test, expect, vi } from 'bun:test';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, test, expect, vi } from 'vitest';
-
-import { MobilePage } from '@/components/MobilePage';
 
 // On mobile, the project thread list must expose a way into the project's
 // settings, and Back from settings must return to the thread list. This locks
@@ -51,6 +50,9 @@ vi.mock('@/components/mobile/ProjectSettingsView', () => ({
 vi.mock('@/components/mobile/SearchView', () => ({ SearchView: () => null }));
 vi.mock('@/components/mobile/NewThreadView', () => ({ NewThreadView: () => null }));
 vi.mock('@/components/mobile/ChatView', () => ({ ChatView: () => null }));
+
+// Imported after the mocks, which bun does not hoist.
+const { MobilePage } = await import('@/components/MobilePage');
 
 describe('MobilePage threads → settings → back', () => {
   test('the gear opens project settings and Back returns to the thread list', async () => {

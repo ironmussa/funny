@@ -10,6 +10,7 @@ import {
   runLabel,
   runTests,
   selectAffectedPackages,
+  testCommand,
   workersPerSuite,
 } from '../run-tests';
 
@@ -96,47 +97,27 @@ describe('selectAffectedPackages with changed dependencies', () => {
 
 describe('planTests', () => {
   beforeEach(() => {
-    pkg('web', '@x/web', { '@x/shared': 'workspace:*', react: '^19' }, 'vitest run --project unit');
-    pkg('api', '@x/api', { '@x/core': 'workspace:*' }, 'bun --bun vitest run');
-    for (const file of ['shared/src/a.ts', 'core/src/b.ts', 'web/src/c.tsx']) {
-      mkdirSync(join(root, 'packages', file, '..'), { recursive: true });
-      writeFileSync(join(root, 'packages', file), '');
-    }
+    pkg('web', '@x/web', { '@x/shared': 'workspace:*', react: '^19' }, 'bun test --parallel');
+    pkg('api', '@x/api', { '@x/core': 'workspace:*' }, 'bun test');
   });
 
   const plan = (files: string[], changedDeps?: Set<string> | null) =>
     Object.fromEntries(
       planTests(files, discoverPackages(root), changedDeps, root).map((run) => [
         run.pkg.name,
-        run.related?.map((path) => path.slice(root.length + 1)) ?? 'whole',
+        run.testFiles ?? 'whole',
       ]),
     );
 
-  test('a vitest suite selected by source changes runs only the related tests', () => {
+  test('without a narrower, a source change runs the affected suites whole', () => {
     expect(plan(['packages/shared/src/a.ts', 'packages/core/src/b.ts'])).toMatchObject({
-      '@x/web': ['packages/shared/src/a.ts', 'packages/core/src/b.ts'],
-      '@x/api': ['packages/shared/src/a.ts', 'packages/core/src/b.ts'],
+      '@x/web': 'whole',
+      '@x/api': 'whole',
       '@x/shared': 'whole',
     });
   });
 
-  test('deleted files are not passed to vitest related', () => {
-    expect(plan(['packages/web/src/gone.tsx', 'packages/web/src/c.tsx'])['@x/web']).toEqual([
-      'packages/web/src/c.tsx',
-    ]);
-  });
-
-  test('a config, manifest or setup change runs the suite whole', () => {
-    for (const file of [
-      'packages/web/vitest.config.ts',
-      'packages/web/package.json',
-      'packages/web/src/__tests__/setup.ts',
-    ]) {
-      expect(plan([file])['@x/web']).toBe('whole');
-    }
-  });
-
-  test('a suite input upstream runs the dependents whole too', () => {
+  test('a suite input upstream selects the dependents', () => {
     expect(plan(['packages/core/package.json'])['@x/api']).toBe('whole');
   });
 
@@ -155,7 +136,7 @@ describe('planTests', () => {
 describe('planTests with a test-impact narrower', () => {
   beforeEach(() => {
     pkg('server', '@x/server', { '@x/core': 'workspace:*' }, 'bun test --isolate');
-    pkg('web', '@x/web', { '@x/shared': 'workspace:*' }, 'vitest run');
+    pkg('web', '@x/web', { '@x/shared': 'workspace:*' }, 'npm test');
     mkdirSync(join(root, 'packages/shared/src'), { recursive: true });
     writeFileSync(join(root, 'packages/shared/src/a.ts'), '');
   });
@@ -174,8 +155,9 @@ describe('planTests with a test-impact narrower', () => {
     expect(asked).toEqual(['@x/server']);
     expect(runs['@x/server'].testFiles).toEqual(['./src/a.test.ts']);
     expect(runLabel(runs['@x/server'])).toBe('@x/server (1 test files)');
-    // vitest and plain suites are not narrowed by the map.
-    expect(runs['@x/web'].related).not.toBeNull();
+    // Suites that are not `bun test` are not narrowed by the map.
+    expect(asked).not.toContain('@x/web');
+    expect(runs['@x/web'].testFiles).toBeUndefined();
     expect(runs['@x/shared'].testFiles).toBeUndefined();
   });
 
@@ -192,7 +174,15 @@ describe('planTests with a test-impact narrower', () => {
   });
 
   test('suite inputs and changed dependencies bypass the narrower', () => {
-    expect(plan(['packages/server/bunfig.toml'], { tests: [] }).asked).toEqual([]);
+    for (const file of [
+      'packages/server/bunfig.toml',
+      'packages/server/package.json',
+      'packages/server/src/__tests__/setup.ts',
+    ]) {
+      const { asked, runs } = plan([file], { tests: [] });
+      expect(asked).toEqual([]);
+      expect(runs['@x/server'].testFiles).toBeUndefined();
+    }
     const deps = plan(['bun.lock'], { tests: [] }, new Set(['hono']));
     expect(deps.asked).toEqual([]);
   });
@@ -205,7 +195,7 @@ describe('workersPerSuite', () => {
     expect(workersPerSuite(4, 2)).toBe(1);
   });
 
-  test('leaves a suite running alone to vitest', () => {
+  test('leaves a suite running alone to bun', () => {
     expect(workersPerSuite(1, 20)).toBeUndefined();
   });
 });
@@ -236,21 +226,18 @@ describe('runTests', () => {
     expect(peak).toBe(2);
   });
 
-  test('caps a vitest suite to its share of the cores when suites run side by side', async () => {
+  test('caps a bun test --parallel suite to its share of the cores when suites run side by side', async () => {
+    // A fake `bun` on PATH records its arguments.
     mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
-    const log = join(root, 'vitest-args');
-    writeFileSync(
-      join(root, 'node_modules', '.bin', 'vitest'),
-      `#!/bin/sh\necho "$@" > '${log}'\n`,
-      {
-        mode: 0o755,
-      },
-    );
-    pkg('web', '@x/web', {}, 'vitest run --project unit');
+    const log = join(root, 'bun-args');
+    writeFileSync(join(root, 'node_modules', '.bin', 'bun'), `#!/bin/sh\necho "$@" > '${log}'\n`, {
+      mode: 0o755,
+    });
+    pkg('web', '@x/web', {}, 'bun test --parallel --timeout 20000');
     const suites = discoverPackages(root).filter((p) => ['@x/web', '@x/shared'].includes(p.name));
 
     expect(await runTests(suites, root, 2)).toBe(0);
-    expect(await Bun.file(log).text()).toMatch(/^run --maxWorkers=\d+ --project unit/);
+    expect(await Bun.file(log).text()).toMatch(/^test --parallel=\d+ --timeout 20000\n$/);
   });
 
   test('a narrowed bun test run appends the selected files to the test script', async () => {
@@ -258,7 +245,7 @@ describe('runTests', () => {
     writeFileSync(join(root, 'packages/server/record.sh'), 'echo "$@" > args\n');
     const server = discoverPackages(root).find((p) => p.name === '@x/server')!;
     const code = await runTests(
-      [{ pkg: server, related: null, testFiles: ['./src/a.test.ts', "./src/it's.test.ts"] }],
+      [{ pkg: server, testFiles: ['./src/a.test.ts', "./src/it's.test.ts"] }],
       root,
     );
     expect(code).toBe(0);
@@ -266,25 +253,35 @@ describe('runTests', () => {
       "./src/a.test.ts ./src/it's.test.ts\n",
     );
   });
+});
 
-  test('a related run replaces `vitest run` with `vitest related` and passes the files', async () => {
-    // A fake `vitest` on PATH records its arguments.
-    mkdirSync(join(root, 'node_modules', '.bin'), { recursive: true });
-    const log = join(root, 'vitest-args');
-    writeFileSync(
-      join(root, 'node_modules', '.bin', 'vitest'),
-      `#!/bin/sh\necho "$@" > '${log}'\n`,
-      {
-        mode: 0o755,
-      },
-    );
-    pkg('web', '@x/web', {}, 'vitest run --project unit');
-    const web = discoverPackages(root).find((p) => p.name === '@x/web')!;
+describe('testCommand', () => {
+  const suite = (testScript: string) => ({
+    name: '@x/a',
+    dir: 'packages/a',
+    deps: [],
+    externalDeps: [],
+    hasTest: true,
+    testScript,
+  });
 
-    const code = await runTests([{ pkg: web, related: ["/repo/it's here.ts"] }], root);
-    expect(code).toBe(0);
-    expect(await Bun.file(log).text()).toBe(
-      "related --run --passWithNoTests --project unit /repo/it's here.ts\n",
-    );
+  test('runs the package script when nothing narrows or caps it', () => {
+    expect(testCommand({ pkg: suite('bun test --parallel') })).toEqual(['bun', 'run', 'test']);
+    expect(testCommand({ pkg: suite('bun test') }, 4)).toEqual(['bun', 'run', 'test']);
+  });
+
+  test('caps --parallel only when it has no worker count yet', () => {
+    expect(testCommand({ pkg: suite('bun test --parallel --timeout 1') }, 4)).toEqual([
+      'sh',
+      '-c',
+      'bun test --parallel=4 --timeout 1',
+    ]);
+    expect(testCommand({ pkg: suite('bun test --parallel=2') }, 4)).toEqual(['bun', 'run', 'test']);
+  });
+
+  test('appends narrowed test files, quoted', () => {
+    expect(
+      testCommand({ pkg: suite('bun test --parallel'), testFiles: ["./it's.test.ts"] }, 3),
+    ).toEqual(['sh', '-c', "bun test --parallel=3 './it'\\''s.test.ts'"]);
   });
 });

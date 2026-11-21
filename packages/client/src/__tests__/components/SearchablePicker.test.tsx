@@ -1,12 +1,14 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { SearchablePicker } from '@/components/SearchablePicker';
 
-const virtualizer = vi.hoisted(() => ({
+const virtualizer = (() => ({
   measure: vi.fn(),
   scrollToIndex: vi.fn(),
-}));
+}))();
 
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: () => ({
@@ -18,13 +20,13 @@ vi.mock('@tanstack/react-virtual', () => ({
 
 describe('SearchablePicker', () => {
   afterEach(() => {
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
     vi.clearAllMocks();
   });
 
   test('measures and scrolls the selected item when opened, then selects from the keyboard', async () => {
     const frames: FrameRequestCallback[] = [];
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       frames.push(callback);
       return frames.length;
     });
@@ -52,7 +54,7 @@ describe('SearchablePicker', () => {
       frames.splice(0).forEach((callback) => callback(0));
     });
 
-    expect(virtualizer.measure).toHaveBeenCalledOnce();
+    expect(virtualizer.measure).toHaveBeenCalledTimes(1);
     expect(virtualizer.scrollToIndex).toHaveBeenCalledWith(0, { align: 'center' });
 
     fireEvent.change(input, { target: { value: 'develop' } });

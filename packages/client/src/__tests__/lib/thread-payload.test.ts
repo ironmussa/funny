@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'bun:test';
+
 import type { ToolPermission } from '@funny/shared';
-import { describe, test, expect } from 'vitest';
 
 import {
   buildRuntimeModes,

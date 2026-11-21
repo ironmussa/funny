@@ -1,16 +1,17 @@
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+
 import type { ThreadWithMessages } from '@funny/shared';
 import { okAsync, errAsync, ResultAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
 import { saveThreadScrollPosition } from '@/lib/thread-scroll-position';
 
 import { buildMessage } from '../helpers/builders-stores';
 
-const { mockGetThread, mockGetThreadEvents } = vi.hoisted(() => ({
+const { mockGetThread, mockGetThreadEvents } = (() => ({
   mockGetThread: vi.fn(),
   mockGetThreadEvents: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api', () => ({
   api: {

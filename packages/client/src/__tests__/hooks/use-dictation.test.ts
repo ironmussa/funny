@@ -1,16 +1,23 @@
+import { afterEach, describe, expect, mock, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
-const apiMocks = vi.hoisted(() => ({
+const apiMocks = (() => ({
   getTranscribeToken: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api', () => ({
   api: apiMocks,
 }));
 
-import { useDictation } from '@/hooks/use-dictation';
+// Vite turns `./pcm-worklet.js?url` into the asset's URL; bun loads the module
+// itself, which has no default export. Give the hook a URL instead, and import
+// it after the mock so its import sees it.
+mock.module('@/hooks/pcm-worklet.js?url', () => ({ default: '/pcm-worklet.js' }));
+
+const { useDictation } = await import('@/hooks/use-dictation');
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -45,7 +52,7 @@ class ConnectingWebSocket {
 describe('useDictation', () => {
   afterEach(() => {
     ConnectingWebSocket.instances = [];
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
     vi.clearAllMocks();
   });
 
@@ -56,7 +63,7 @@ describe('useDictation', () => {
       getTracks: () => [{ stop }],
     };
     const getUserMedia = vi.fn(() => pendingStream.promise);
-    vi.stubGlobal('navigator', {
+    stubGlobal('navigator', {
       ...navigator,
       mediaDevices: { getUserMedia },
     });
@@ -67,7 +74,7 @@ describe('useDictation', () => {
     act(() => {
       startPromise = result.current.start();
     });
-    expect(getUserMedia).toHaveBeenCalledOnce();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
 
     unmount();
     await act(async () => {
@@ -75,7 +82,7 @@ describe('useDictation', () => {
       await startPromise;
     });
 
-    expect(stop).toHaveBeenCalledOnce();
+    expect(stop).toHaveBeenCalledTimes(1);
     expect(apiMocks.getTranscribeToken).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
   });
@@ -84,7 +91,7 @@ describe('useDictation', () => {
     const pendingStream = deferred<MediaStreamStub>();
     const stopTrack = vi.fn();
     const stream = { getTracks: () => [{ stop: stopTrack }] };
-    vi.stubGlobal('navigator', {
+    stubGlobal('navigator', {
       ...navigator,
       mediaDevices: { getUserMedia: vi.fn(() => pendingStream.promise) },
     });
@@ -107,7 +114,7 @@ describe('useDictation', () => {
     });
 
     expect(result.current.isRecording).toBe(false);
-    expect(stopTrack).toHaveBeenCalledOnce(); // the late stream is released
+    expect(stopTrack).toHaveBeenCalledTimes(1); // the late stream is released
     expect(apiMocks.getTranscribeToken).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
   });
@@ -117,11 +124,11 @@ describe('useDictation', () => {
     const stream = {
       getTracks: () => [{ stop }],
     };
-    vi.stubGlobal('navigator', {
+    stubGlobal('navigator', {
       ...navigator,
       mediaDevices: { getUserMedia: vi.fn().mockResolvedValue(stream) },
     });
-    vi.stubGlobal('WebSocket', ConnectingWebSocket);
+    stubGlobal('WebSocket', ConnectingWebSocket);
     apiMocks.getTranscribeToken.mockReturnValue(okAsync({ token: 'temporary-token' }));
     const onError = vi.fn();
     const { result, unmount } = renderHook(() => useDictation({ onError }));
@@ -146,8 +153,8 @@ describe('useDictation', () => {
       await startPromise;
     });
 
-    expect(socket.close).toHaveBeenCalledOnce();
-    expect(stop).toHaveBeenCalledOnce();
+    expect(socket.close).toHaveBeenCalledTimes(1);
+    expect(stop).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();
   });
 });

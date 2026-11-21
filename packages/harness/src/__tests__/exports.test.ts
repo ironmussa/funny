@@ -1,7 +1,6 @@
+import { describe, expect, test } from 'bun:test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-
-import { describe, expect, test } from 'vitest';
 
 import {
   createAgent,

@@ -1,6 +1,5 @@
+import { describe, expect, test, vi } from 'bun:test';
 import { EventEmitter } from 'node:events';
-
-import { describe, expect, test, vi } from 'vitest';
 
 vi.mock('node:child_process', () => ({
   spawn: () => {

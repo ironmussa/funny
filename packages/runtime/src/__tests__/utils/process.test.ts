@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'bun:test';
+
 import { ProcessExecutionError, execute, executeSync, executeWithLogging } from '@funny/core/git';
-import { describe, test, expect } from 'vitest';
 
 import { expectInstance } from '../helpers/builders.js';
 

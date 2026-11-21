@@ -1,11 +1,12 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import type { McpServer } from '@funny/shared';
 import { okAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
-const { listMcpServers, listConfiguredClaudeMcpServers } = vi.hoisted(() => ({
+const { listMcpServers, listConfiguredClaudeMcpServers } = (() => ({
   listMcpServers: vi.fn(),
   listConfiguredClaudeMcpServers: vi.fn(),
-}));
+}))();
 vi.mock('../../services/mcp-service.js', () => ({
   listMcpServers,
   listConfiguredClaudeMcpServers,

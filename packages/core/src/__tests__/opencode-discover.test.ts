@@ -5,10 +5,9 @@
  * `@agentclientprotocol/sdk/unstable` so every branch is exercised without shelling out.
  */
 
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { EventEmitter } from 'events';
 import { Readable, Writable } from 'stream';
-
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { discoverOpenCodeModels } from '../agents/opencode-discover.js';
 
@@ -33,11 +32,11 @@ function makeFakeChild(): FakeChild {
   return child;
 }
 
-const { spawnMock, mockInitialize, mockNewSession } = vi.hoisted(() => ({
+const { spawnMock, mockInitialize, mockNewSession } = (() => ({
   spawnMock: vi.fn(),
   mockInitialize: vi.fn(),
   mockNewSession: vi.fn(),
-}));
+}))();
 
 vi.mock('child_process', () => ({ spawn: spawnMock }));
 vi.mock('@agentclientprotocol/sdk/unstable', () => {

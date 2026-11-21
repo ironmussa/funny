@@ -1,19 +1,16 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Project, Thread } from '@funny/shared';
 import { DEFAULT_MODEL } from '@funny/shared/models';
+import { mocked } from '@funny/test-kit';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
 import { useLocation } from 'react-router-dom';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
-
-import { ProjectItem } from '@/components/sidebar/ProjectItem';
-import { resetExternalClaudeSessionsForTests } from '@/hooks/use-external-claude-sessions';
-import { api } from '@/lib/api';
-import { useThreadStore } from '@/stores/thread-store';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-const toastErrorMock = vi.hoisted(() => vi.fn());
+const toastErrorMock = (() => vi.fn())();
 
 vi.mock('@atlaskit/pragmatic-drag-and-drop/element/adapter', () => ({
   draggable: vi.fn(() => () => {}),
@@ -28,9 +25,10 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-const gitActionOverrides = vi.hoisted((): Record<string, (...args: any[]) => unknown> => ({}));
-vi.mock('@/data/git-status/actions', async (importOriginal) => {
-  const real = await importOriginal<Record<string, (...args: any[]) => unknown>>();
+const gitActionOverrides = ((): Record<string, (...args: any[]) => unknown> => ({}))();
+const actualDataGitStatusActions = { ...(await import('@/data/git-status/actions')) };
+vi.mock('@/data/git-status/actions', () => {
+  const real = actualDataGitStatusActions;
   const wrapped: Record<string, (...args: any[]) => unknown> = {};
   for (const [name, fn] of Object.entries(real)) {
     wrapped[name] = (...args) => (gitActionOverrides[name] ?? fn)(...args);
@@ -54,6 +52,12 @@ vi.mock('@/lib/api', () => ({
 vi.mock('@/lib/toast-error', () => ({
   toastError: toastErrorMock,
 }));
+
+const { ProjectItem } = await import('@/components/sidebar/ProjectItem');
+const { resetExternalClaudeSessionsForTests } =
+  await import('@/hooks/use-external-claude-sessions');
+const { api } = await import('@/lib/api');
+const { useThreadStore } = await import('@/stores/thread-store');
 
 const project: Project = {
   id: 'project-1',
@@ -118,15 +122,15 @@ describe('ProjectItem external Claude sessions', () => {
     for (const name of Object.keys(gitActionOverrides)) delete gitActionOverrides[name];
     resetExternalClaudeSessionsForTests();
     vi.clearAllMocks();
-    vi.mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
-    vi.mocked(api.importExternalClaudeSession).mockReturnValue(
+    mocked(api.listExternalClaudeSessions).mockReturnValue(okAsync({ sessions: [] }));
+    mocked(api.importExternalClaudeSession).mockReturnValue(
       okAsync({
         imported: true,
         thread: { id: 'thread-imported', projectId: 'project-1' },
       }),
     );
-    vi.mocked(api.dismissExternalClaudeSession).mockReturnValue(okAsync({ ok: true }));
-    vi.mocked(api.openDirectory).mockReturnValue(okAsync({ ok: true }));
+    mocked(api.dismissExternalClaudeSession).mockReturnValue(okAsync({ ok: true }));
+    mocked(api.openDirectory).mockReturnValue(okAsync({ ok: true }));
   });
 
   test('renders synced external Claude shells as normal threads and selects on click', async () => {
@@ -322,7 +326,7 @@ describe('ProjectItem external Claude sessions', () => {
       type: 'PROCESS_ERROR' as const,
       message: 'xdg-open exited with code 3',
     };
-    vi.mocked(api.openDirectory).mockReturnValue(errAsync(error));
+    mocked(api.openDirectory).mockReturnValue(errAsync(error));
 
     renderWithProviders(
       <ProjectItem

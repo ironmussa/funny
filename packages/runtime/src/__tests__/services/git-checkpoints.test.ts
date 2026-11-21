@@ -1,9 +1,8 @@
+import { afterEach, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-
-import { afterEach, describe, expect, test } from 'vitest';
 
 import {
   captureGitCheckpoint,

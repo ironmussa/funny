@@ -9,8 +9,9 @@
  * ActionProvider. Those layers are exercised in later phases.
  */
 
+import { describe, expect, test } from 'bun:test';
+
 import { definePipeline, node, runPipeline, type PipelineStateChange } from '@funny/pipelines';
-import { describe, expect, test } from 'vitest';
 
 interface SmokeCtx {
   count: number;

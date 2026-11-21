@@ -2,7 +2,9 @@
  * Every finished run records how the latest user turn ended (`turn_outcome`),
  * so a stopped turn still reads as stopped after later turns or a reload.
  */
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
+import { waitFor } from '@funny/test-kit';
 
 import { AgentEventRouter } from '../../services/agent-event-router.js';
 import { AgentStateTracker } from '../../services/agent-state.js';
@@ -13,7 +15,7 @@ import {
   createWsBrokerFake,
 } from '../helpers/builders.js';
 
-const saveThreadEvent = vi.hoisted(() => vi.fn(async () => undefined));
+const saveThreadEvent = (() => vi.fn(async () => undefined))();
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
     projects: { getProject: vi.fn(async () => ({ id: 'p-1', path: '/tmp/proj' })) },
@@ -48,7 +50,7 @@ describe('AgentEventRouter turn outcome', () => {
 
     await router.emitAgentCompleted('t-1', { projectId: 'p-1', userId: 'u-1' }, 'stopped');
 
-    await vi.waitFor(() => expect(saveThreadEvent).toHaveBeenCalled());
+    await waitFor(() => expect(saveThreadEvent).toHaveBeenCalled());
     expect(saveThreadEvent).toHaveBeenCalledWith(
       't-1',
       'turn_outcome',

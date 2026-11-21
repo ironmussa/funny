@@ -1,6 +1,8 @@
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { Hono } from 'hono';
 import { err, ok } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 /**
  * Regression: the GitHub routes used to load the project by id with no access
@@ -10,12 +12,12 @@ import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
  * and a foreign project is indistinguishable from a missing one (404).
  */
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getProject: vi.fn(),
   isProjectInOrg: vi.fn(),
   resolveProjectPath: vi.fn(),
   getRemoteUrl: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
@@ -28,8 +30,9 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('@funny/core/git', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@funny/core/git')>()),
+const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => ({
+  ...actualFunnyCoreGit,
   getRemoteUrl: mocks.getRemoteUrl,
 }));
 
@@ -86,11 +89,11 @@ describe('GitHub + tests routes project access', () => {
     mocks.isProjectInOrg.mockResolvedValue(false);
     mocks.resolveProjectPath.mockResolvedValue(err({ type: 'NOT_FOUND', message: 'no member' }));
     mocks.getRemoteUrl.mockResolvedValue(ok('https://github.com/acme/repo.git'));
-    vi.stubGlobal('fetch', fetchSpy);
+    stubGlobal('fetch', fetchSpy);
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
   });
 
   test.each(GET_ROUTES)(

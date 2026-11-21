@@ -1,7 +1,9 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import type { ThreadWithMessages } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
+import { mocked } from '@funny/test-kit';
 import { okAsync, errAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { createActor, fromPromise, waitFor } from 'xstate';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
@@ -261,8 +263,8 @@ describe('threadDataMachine', () => {
 
     beforeEach(() => {
       vi.clearAllMocks();
-      vi.mocked(api.getThreadEvents).mockReturnValue(okAsync({ events: [] }));
-      vi.mocked(api.importExternalClaudeSession).mockReturnValue(
+      mocked(api.getThreadEvents).mockReturnValue(okAsync({ events: [] }));
+      mocked(api.importExternalClaudeSession).mockReturnValue(
         okAsync({ imported: true, thread: { id: 't1' } }),
       );
     });
@@ -275,7 +277,7 @@ describe('threadDataMachine', () => {
     }
 
     test('imports and refetches when shell has no messages', async () => {
-      vi.mocked(api.getThread)
+      mocked(api.getThread)
         .mockReturnValueOnce(okAsync(shellThread))
         .mockReturnValueOnce(okAsync(hydratedThread));
 
@@ -291,7 +293,7 @@ describe('threadDataMachine', () => {
     });
 
     test('does not import when the shell already has messages', async () => {
-      vi.mocked(api.getThread).mockReturnValue(okAsync(hydratedThread));
+      mocked(api.getThread).mockReturnValue(okAsync(hydratedThread));
 
       const actor = startRealActor();
       await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
@@ -303,7 +305,7 @@ describe('threadDataMachine', () => {
 
     test('does not import for normal (non-shell) threads without messages', async () => {
       const normalThread = buildThreadWithMessages({ title: 'normal' });
-      vi.mocked(api.getThread).mockReturnValue(okAsync(normalThread));
+      mocked(api.getThread).mockReturnValue(okAsync(normalThread));
 
       const actor = startRealActor();
       await waitFor(actor, (s) => s.matches('loaded'), { timeout: 1000 });
@@ -313,8 +315,8 @@ describe('threadDataMachine', () => {
     });
 
     test('still loads the shell when the import fails', async () => {
-      vi.mocked(api.getThread).mockReturnValue(okAsync(shellThread));
-      vi.mocked(api.importExternalClaudeSession).mockReturnValue(
+      mocked(api.getThread).mockReturnValue(okAsync(shellThread));
+      mocked(api.importExternalClaudeSession).mockReturnValue(
         errAsync({ type: 'INTERNAL', message: 'runner offline' } satisfies DomainError),
       );
 

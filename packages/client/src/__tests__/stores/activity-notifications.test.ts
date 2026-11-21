@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 
 import { applyActivityUpdated } from '@/data/activities/apply-event';
 import { loadActivities } from '@/data/activities/loaders';
@@ -8,10 +8,10 @@ import { useActivityPanelStore } from '@/stores/activity-panel-store';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const sonner = vi.hoisted(() => ({ error: vi.fn() }));
+const sonner = (() => ({ error: vi.fn() }))();
 vi.mock('sonner', () => ({ toast: { error: sonner.error } }));
 
-const api = vi.hoisted(() => ({ listActivities: vi.fn() }));
+const api = (() => ({ listActivities: vi.fn() }))();
 vi.mock('@/lib/api/activities', () => ({ activitiesApi: api }));
 
 beforeEach(() => {

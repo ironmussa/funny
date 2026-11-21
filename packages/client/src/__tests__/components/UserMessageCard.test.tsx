@@ -1,7 +1,9 @@
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 import { UserMessageCard } from '@/components/thread/UserMessageCard';
 
@@ -314,7 +316,7 @@ describe('UserMessageCard', () => {
 
     expect(copyButton.querySelector('.lucide-check')).toHaveClass('text-status-success');
     expect(writeText).toHaveBeenCalledWith('Copy this text');
-    expect(vi.mocked(toast.success)).toHaveBeenCalledWith('Copied');
+    expect(mocked(toast.success)).toHaveBeenCalledWith('Copied');
     await waitFor(() => expect(copyButton).toHaveAccessibleName('Copy content'), { timeout: 3000 });
     expect(copyButton.querySelector('.lucide-copy')).toBeInTheDocument();
   });

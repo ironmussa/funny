@@ -1,6 +1,5 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, readFileSync } from 'node:fs';
-
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { executeShellEscape } from '../../services/thread-service/shell-escape.js';
 
@@ -28,7 +27,7 @@ function isAlive(pid: number): boolean {
   }
 }
 
-describe.runIf(posix)('executeShellEscape', () => {
+describe.if(posix)('executeShellEscape', () => {
   const saved = { SHELL: process.env.SHELL, secret: process.env.RUNNER_AUTH_SECRET };
 
   beforeEach(() => {

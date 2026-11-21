@@ -1,8 +1,9 @@
+import { afterEach, beforeEach, describe, test, expect, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { fireEvent, render } from '@testing-library/react';
 import { createRef, useRef, type RefObject } from 'react';
-import { afterEach, beforeEach, describe, test, expect, vi } from 'vitest';
 
-import { FrozenMessageList } from '@/components/thread/FrozenMessageList';
 import type { MemoizedMessageListHandle } from '@/components/thread/MemoizedMessageList.types';
 import { useTurnEndHover } from '@/components/thread/use-turn-end-hover';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -23,11 +24,14 @@ vi.mock('@/hooks/use-pretext', () => ({
   layoutSync: () => ({ height: 0 }),
   prepareBatch: () => {},
   makeProseFont: () => '14px sans-serif',
+  makeMonoFont: () => '14px monospace',
+  preloadPretext: () => {},
   ensurePretextLoaded: () => new Promise(() => {}),
 }));
 
-vi.mock('@/stores/settings-store', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/stores/settings-store')>();
+const actualStoresSettingsStore = { ...(await import('@/stores/settings-store')) };
+vi.mock('@/stores/settings-store', () => {
+  const actual = actualStoresSettingsStore;
   return {
     ...actual,
     useSettingsStore: Object.assign(
@@ -51,6 +55,9 @@ vi.mock('@/components/thread/MessageContent', () => ({
 vi.mock('@/components/thread/UserMessageCard', () => ({
   UserMessageCard: ({ content, ...props }: any) => <div {...props}>{content}</div>,
 }));
+
+// Imported after the mocks, which bun does not hoist.
+const { FrozenMessageList } = await import('@/components/thread/FrozenMessageList');
 
 function Harness({
   handleRef,
@@ -98,12 +105,12 @@ describe('FrozenMessageList', () => {
     // jsdom does not implement scrollIntoView.
     Element.prototype.scrollIntoView = vi.fn();
     // FrozenMessage (assistant rows) observes intersection to freeze offscreen.
-    vi.stubGlobal('IntersectionObserver', NoopIntersectionObserver);
-    vi.stubGlobal('requestAnimationFrame', () => 0);
-    vi.stubGlobal('cancelAnimationFrame', () => {});
+    stubGlobal('IntersectionObserver', NoopIntersectionObserver);
+    stubGlobal('requestAnimationFrame', () => 0);
+    stubGlobal('cancelAnimationFrame', () => {});
   });
   afterEach(() => {
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
   });
 
   test('reveals completion over the section gap and switches off for the next turn', () => {

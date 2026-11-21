@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
-import { describe, test, expect } from 'vitest';
 
 import { buildThread } from '@/data/threads/testing';
 import { arraysEqual, threadsVisuallyEqual } from '@/lib/shallow-compare';

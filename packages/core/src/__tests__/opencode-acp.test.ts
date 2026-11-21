@@ -8,8 +8,9 @@
  * buffered reasoning (Think), plan→TodoWrite, and usage.
  */
 
+import { describe, expect, test } from 'bun:test';
+
 import type { SessionUpdate } from '@agentclientprotocol/sdk/unstable';
-import { describe, expect, test } from 'vitest';
 
 import { OpenCodeACPProcess } from '../agents/opencode-acp.js';
 import type { CLIMessage } from '../agents/types.js';

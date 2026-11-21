@@ -1,11 +1,13 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const mockAuth = vi.hoisted(() => ({
+import { advanceTimersByTimeAsync } from '@funny/test-kit';
+
+const mockAuth = (() => ({
   getSession: vi.fn(),
   signIn: vi.fn(),
   signOut: vi.fn(),
   listOrgs: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: {
@@ -26,17 +28,18 @@ vi.mock('@/lib/api/auth-events', () => ({
   onUnauthorized: vi.fn(),
 }));
 
-const mockReload = vi.hoisted(() => vi.fn());
-vi.mock('@/lib/logout-cleanup', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logout-cleanup')>()),
+const mockReload = (() => vi.fn())();
+const actualLibLogoutCleanup = { ...(await import('@/lib/logout-cleanup')) };
+vi.mock('@/lib/logout-cleanup', () => ({
+  ...actualLibLogoutCleanup,
   reloadAfterLogout: mockReload,
 }));
 
-const mockDropPush = vi.hoisted(() => vi.fn());
+const mockDropPush = (() => vi.fn())();
 vi.mock('@/lib/web-push', () => ({ dropWebPushSubscription: mockDropPush }));
 
-import { setActiveOrgSlug } from '@/lib/url-state';
-import { useAuthStore } from '@/stores/auth-store';
+const { setActiveOrgSlug } = await import('@/lib/url-state');
+const { useAuthStore } = await import('@/stores/auth-store');
 
 describe('auth-store', () => {
   beforeEach(() => {
@@ -133,7 +136,7 @@ describe('auth-store', () => {
         .mockResolvedValue({ data: { user: { id: 'u3', username: 'late', name: 'Late' } } });
 
       const login = useAuthStore.getState().login('late', 'secret');
-      await vi.advanceTimersByTimeAsync(80 * 2);
+      await advanceTimersByTimeAsync(80 * 2);
       await login;
 
       expect(mockAuth.getSession).toHaveBeenCalledTimes(3);
@@ -150,9 +153,11 @@ describe('auth-store', () => {
       mockAuth.getSession.mockResolvedValue({ data: null });
 
       const login = useAuthStore.getState().login('ghost', 'secret');
-      const assertion = expect(login).rejects.toThrow('Session was not stored in the browser');
-      await vi.advanceTimersByTimeAsync(80 * 10);
-      await assertion;
+      // bun's `rejects` waits for the promise where it is written, so assert
+      // after the timers have run; until then, mark the rejection as handled.
+      login.catch(() => {});
+      await advanceTimersByTimeAsync(80 * 10);
+      await expect(login).rejects.toThrow('Session was not stored in the browser');
 
       expect(mockAuth.getSession).toHaveBeenCalledTimes(11);
       expect(useAuthStore.getState().isAuthenticated).toBe(false);

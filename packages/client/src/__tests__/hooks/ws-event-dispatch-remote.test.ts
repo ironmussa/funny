@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals, waitFor } from '@funny/test-kit';
 
 import {
   clearWSDispatchState,
@@ -31,7 +33,7 @@ describe('ws-event-dispatch — remote WebSocket', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     MockWebSocket.instances = [];
-    vi.stubGlobal('WebSocket', MockWebSocket);
+    stubGlobal('WebSocket', MockWebSocket);
     setWSStopped(false);
   });
 
@@ -39,7 +41,7 @@ describe('ws-event-dispatch — remote WebSocket', () => {
     disconnectAllRemote();
     clearWSDispatchState();
     setWSStopped(true);
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
   });
 
   test('connectRemoteWS opens ws:// URL for valid http container origin', () => {
@@ -81,7 +83,7 @@ describe('ws-event-dispatch — remote WebSocket', () => {
       }),
     );
 
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(calls).toEqual([{ tid: 'remote-1', data: { model: 'sonnet' } }]);
     });
   });

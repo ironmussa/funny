@@ -1,10 +1,11 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import { waitFor } from '@funny/test-kit';
 import { Hono } from 'hono';
 import { errAsync, ok, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 /**
  * POST /clone is tracked as a background activity (track-background-activities):
@@ -12,14 +13,16 @@ import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
  * created project or `failed` with git's error, and never records a token.
  */
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   createProject: vi.fn(),
   cloneRepository: vi.fn(),
   sendRemoteData: vi.fn(async (_type: string, _payload: Record<string, any>) => ({ ok: true })),
-}));
+}))();
 
-vi.mock('@funny/core/git', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@funny/core/git')>()),
+// bun has no importOriginal: copy the real module before mocking it.
+const actualGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => ({
+  ...actualGit,
   cloneRepository: mocks.cloneRepository,
 }));
 vi.mock('../../services/service-registry.js', () => ({
@@ -59,7 +62,7 @@ const reports = (type: string) =>
   mocks.sendRemoteData.mock.calls.filter(([t]) => t === type).map(([, p]) => p);
 
 async function settle() {
-  await vi.waitFor(() =>
+  await waitFor(() =>
     expect(reports('data:activity_update').some((p) => p.patch.status)).toBe(true),
   );
 }

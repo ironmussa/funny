@@ -1,4 +1,9 @@
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { advanceTimersByTimeAsync, waitFor } from '@funny/test-kit';
 import { z } from 'zod';
 
 import type { IWSBroker } from '../../services/server-interfaces.js';
@@ -6,7 +11,7 @@ import type { IWSBroker } from '../../services/server-interfaces.js';
 type Execute = typeof import('@funny/core/git').execute;
 type PsOverride = (args: string[]) => Promise<{ stdout: string; stderr: string; exitCode: number }>;
 
-const mocks = vi.hoisted(() => {
+const mocks = (() => {
   const noOverride = (): PsOverride | null => null;
   return {
     emitToUser: vi.fn<IWSBroker['emitToUser']>(),
@@ -14,10 +19,11 @@ const mocks = vi.hoisted(() => {
     psOverride: noOverride(),
     execute: vi.fn<Execute>(),
   };
-});
+})();
 
-vi.mock('@funny/core/git', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@funny/core/git')>();
+const actualGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => {
+  const actual = actualGit;
   mocks.execute.mockImplementation((command, args, options) =>
     mocks.psOverride && command === 'ps'
       ? mocks.psOverride(args)
@@ -140,8 +146,8 @@ describe.skipIf(process.platform === 'win32')('command metrics timer lifecycle',
     await start('cmd-metrics-b');
     mocks.execute.mockClear();
 
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS + 100);
-    await vi.waitFor(() => expect(metricsEvents()).toHaveLength(2));
+    await advanceTimersByTimeAsync(INTERVAL_MS + 100);
+    await waitFor(() => expect(metricsEvents()).toHaveLength(2));
 
     expect(psCalls()).toHaveLength(1);
     const [args] = psCalls();
@@ -160,10 +166,10 @@ describe.skipIf(process.platform === 'win32')('command metrics timer lifecycle',
     vi.useFakeTimers();
     await start('cmd-metrics-real');
 
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS + 100);
+    await advanceTimersByTimeAsync(INTERVAL_MS + 100);
     // `ps` is real child-process I/O; let it complete outside the fake clock.
     vi.useRealTimers();
-    await vi.waitFor(() => expect(metricsEvents()).toHaveLength(1), {
+    await waitFor(() => expect(metricsEvents()).toHaveLength(1), {
       timeout: 5_000,
     });
 
@@ -177,8 +183,8 @@ describe.skipIf(process.platform === 'win32')('command metrics timer lifecycle',
     cannedPs(() => 2048);
     await start('cmd-metrics-stop');
 
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS + 100);
-    await vi.waitFor(() => expect(psCalls()).toHaveLength(1));
+    await advanceTimersByTimeAsync(INTERVAL_MS + 100);
+    await waitFor(() => expect(psCalls()).toHaveLength(1));
 
     expect(vi.getTimerCount()).toBeGreaterThan(0);
     await stopCommand('cmd-metrics-stop');
@@ -188,7 +194,7 @@ describe.skipIf(process.platform === 'win32')('command metrics timer lifecycle',
     mocks.execute.mockClear();
     mocks.emitToUser.mockClear();
 
-    await vi.advanceTimersByTimeAsync(3 * INTERVAL_MS);
+    await advanceTimersByTimeAsync(3 * INTERVAL_MS);
     expect(psCalls()).toHaveLength(0);
     expect(metricsEvents()).toHaveLength(0);
   });
@@ -205,7 +211,7 @@ describe.skipIf(process.platform === 'win32')('command metrics timer lifecycle',
     mocks.execute.mockClear();
     mocks.emitToUser.mockClear();
 
-    await vi.advanceTimersByTimeAsync(3 * INTERVAL_MS);
+    await advanceTimersByTimeAsync(3 * INTERVAL_MS);
     expect(psCalls()).toHaveLength(0);
     expect(metricsEvents()).toHaveLength(0);
   });
@@ -218,16 +224,16 @@ describe.skipIf(process.platform === 'win32')('command metrics timer lifecycle',
 
     await stopCommand('cmd-metrics-keep-a');
     mocks.execute.mockClear();
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS + 100);
-    await vi.waitFor(() => expect(psCalls()).toHaveLength(1));
+    await advanceTimersByTimeAsync(INTERVAL_MS + 100);
+    await waitFor(() => expect(psCalls()).toHaveLength(1));
     expect(psCalls()[0][3].split(',')).toHaveLength(1);
 
     await stopCommand('cmd-metrics-keep-b');
     await start('cmd-metrics-keep-c');
     mocks.execute.mockClear();
     mocks.emitToUser.mockClear();
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS + 100);
-    await vi.waitFor(() => expect(metricsEvents()).toHaveLength(1));
+    await advanceTimersByTimeAsync(INTERVAL_MS + 100);
+    await waitFor(() => expect(metricsEvents()).toHaveLength(1));
     expect(metricsEvents()[0]).toMatchObject({
       commandId: 'cmd-metrics-keep-c',
       memoryUsageKB: 4096,
@@ -246,14 +252,14 @@ describe.skipIf(process.platform === 'win32')('command metrics timer lifecycle',
     await start('cmd-metrics-fail');
     mocks.execute.mockClear();
 
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS + 100);
-    await vi.waitFor(() => expect(metricsEvents()).toHaveLength(1));
+    await advanceTimersByTimeAsync(INTERVAL_MS + 100);
+    await waitFor(() => expect(metricsEvents()).toHaveLength(1));
     // readRssByPid swallowed the failure — previous sample (0) is kept.
     expect(metricsEvents()[0].memoryUsageKB).toBe(0);
 
     fail = false;
-    await vi.advanceTimersByTimeAsync(INTERVAL_MS);
-    await vi.waitFor(() => expect(metricsEvents()).toHaveLength(2));
+    await advanceTimersByTimeAsync(INTERVAL_MS);
+    await waitFor(() => expect(metricsEvents()).toHaveLength(2));
     expect(metricsEvents()[1].memoryUsageKB).toBe(777);
     expect(psCalls()).toHaveLength(2);
   });
@@ -266,8 +272,8 @@ describe.skipIf(process.platform === 'win32')('command metrics timer lifecycle',
     });
     try {
       await start('cmd-metrics-emit-fail');
-      await vi.advanceTimersByTimeAsync(INTERVAL_MS + 100);
-      await vi.waitFor(() =>
+      await advanceTimersByTimeAsync(INTERVAL_MS + 100);
+      await waitFor(() =>
         expect(log.warn).toHaveBeenCalledWith(
           'Command metrics emit failed',
           expect.objectContaining({ commandId: 'cmd-metrics-emit-fail', error: 'socket gone' }),
@@ -278,3 +284,42 @@ describe.skipIf(process.platform === 'win32')('command metrics timer lifecycle',
     }
   });
 });
+
+describe.skipIf(process.platform === 'win32')('stopping a command', () => {
+  test('also stops the processes the command started', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'command-runner-stop-'));
+    const pidFile = join(dir, 'child.pid');
+    try {
+      // `sh -c` stays the parent here (a background job), so the child is a separate process.
+      const result = await startCommand(
+        'cmd-stop-tree',
+        `sleep 30 & echo $! > '${pidFile}'; wait`,
+        process.cwd(),
+        'project-a',
+        'cmd-stop-tree',
+      );
+      expect(result.isOk()).toBe(true);
+      const childPid = await waitFor(() => {
+        const pid = Number(readFileSync(pidFile, 'utf-8').trim());
+        expect(pid).toBeGreaterThan(0);
+        return pid;
+      });
+
+      await stopCommand('cmd-stop-tree');
+
+      await waitFor(() => expect(isAlive(childPid)).toBe(false), { timeout: 3_000 });
+    } finally {
+      await stopAllCommands();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+function isAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}

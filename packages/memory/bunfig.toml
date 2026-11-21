@@ -1,5 +1,0 @@
-# This package's tests run on vitest (`bun run test`). `bun test` would use
-# Bun's native runner, which ignores the vitest config and can hang forever;
-# the preload stops it at once with the right command.
-[test]
-preload = ["../../scripts/guards/vitest-only.ts"]

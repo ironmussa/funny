@@ -1,3 +1,6 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 /**
  * Characterization tests for the PromptInputUI submit pipeline. They pin the
  * exact `onSubmit` payload and the early-exit branches of `handleSubmit` so the
@@ -6,13 +9,8 @@
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
 import { toast } from 'sonner';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-import { PromptInputUI, type PromptInputUIProps } from '@/components/PromptInputUI';
-import { seedTemplates } from '@/data/templates/testing';
-import { buildThread } from '@/data/threads/testing';
-import { systemApi } from '@/lib/api/system';
-import { threadsApi } from '@/lib/api/threads';
+import type { PromptInputUIProps } from '@/components/PromptInputUI';
 
 import { buildAgentTemplate, expectInstance } from '../helpers/builders-components';
 import { renderWithProviders } from '../helpers/render';
@@ -23,8 +21,9 @@ vi.mock('@/hooks/use-codex-commands', () => ({
   useCodexCommands: () => executeCodexCommand,
 }));
 
-vi.mock('@/lib/api/system', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/api/system')>();
+const actualLibApiSystem = { ...(await import('@/lib/api/system')) };
+vi.mock('@/lib/api/system', () => {
+  const actual = actualLibApiSystem;
   return {
     ...actual,
     systemApi: { ...actual.systemApi, providerSetupStatus: vi.fn() },
@@ -107,13 +106,19 @@ vi.mock('@/components/prompt-editor/serialize', () => ({
   }),
 }));
 
+const { PromptInputUI } = await import('@/components/PromptInputUI');
+const { seedTemplates } = await import('@/data/templates/testing');
+const { buildThread } = await import('@/data/threads/testing');
+const { systemApi } = await import('@/lib/api/system');
+const { threadsApi } = await import('@/lib/api/threads');
+
 const IMAGE = {
   type: 'image' as const,
   source: { type: 'base64' as const, media_type: 'image/png' as const, data: 'ZmFrZQ==' },
 };
 
 function renderUI(props: Partial<PromptInputUIProps> = {}) {
-  const onSubmit = vi.mocked(props.onSubmit ?? vi.fn<PromptInputUIProps['onSubmit']>());
+  const onSubmit = mocked(props.onSubmit ?? vi.fn<PromptInputUIProps['onSubmit']>());
   renderWithProviders(
     <PromptInputUI
       unifiedModel="claude:opus"
@@ -149,7 +154,7 @@ async function attachTextFile(name: string, content: string) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+  mocked(systemApi.providerSetupStatus).mockReturnValue(
     okAsync({
       provider: 'claude',
       state: 'installed',
@@ -411,7 +416,7 @@ describe('PromptInputUI submit', () => {
   });
 
   test('provider setup lookup errors are toasted and block submit', async () => {
-    vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+    mocked(systemApi.providerSetupStatus).mockReturnValue(
       errAsync({ type: 'INTERNAL', message: 'offline' }),
     );
     const { onSubmit, editor } = renderUI({ projectId: 'p1' });
@@ -422,7 +427,7 @@ describe('PromptInputUI submit', () => {
   });
 
   test('bundled claude without configured auth opens provider setup', async () => {
-    vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+    mocked(systemApi.providerSetupStatus).mockReturnValue(
       okAsync({
         provider: 'claude',
         state: 'bundled',
@@ -439,7 +444,7 @@ describe('PromptInputUI submit', () => {
   });
 
   test('a new sandbox thread skips the project-runner provider check', async () => {
-    vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+    mocked(systemApi.providerSetupStatus).mockReturnValue(
       okAsync({
         provider: 'claude',
         state: 'installed',
@@ -466,7 +471,7 @@ describe('PromptInputUI submit', () => {
   });
 
   test('a follow-up on a sandbox thread skips the project-runner provider check', async () => {
-    vi.mocked(systemApi.providerSetupStatus).mockReturnValue(
+    mocked(systemApi.providerSetupStatus).mockReturnValue(
       okAsync({
         provider: 'claude',
         state: 'installed',

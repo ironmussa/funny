@@ -1,5 +1,7 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { renderHook, waitFor, cleanup, act } from '@testing-library/react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import {
   __cacheSignedMediaForTests,
@@ -20,13 +22,13 @@ function mockSign(...urls: string[]) {
   for (const url of urls) {
     fetchMock.mockResolvedValueOnce(new Response(JSON.stringify({ url })));
   }
-  vi.stubGlobal('fetch', fetchMock);
+  stubGlobal('fetch', fetchMock);
   return fetchMock;
 }
 
 afterEach(() => {
   cleanup();
-  vi.unstubAllGlobals();
+  unstubAllGlobals();
   __resetDirectMediaForTests();
 });
 

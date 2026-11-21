@@ -4,7 +4,7 @@
  * Tests the core pipeline engine: node execution, guards, loops,
  * cancellation, state changes, compose, and subPipeline.
  */
-import { describe, test, expect, vi } from 'vitest';
+import { describe, test, expect, vi } from 'bun:test';
 
 import { definePipeline, node, runPipeline, compose, subPipeline } from '../engine.js';
 

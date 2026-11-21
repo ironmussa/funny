@@ -1,12 +1,13 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import {
   MobileContentPreview,
   ToolContentArea,
 } from '@/components/tool-cards/MobileContentPreview';
 
-const viewport = vi.hoisted(() => ({ mobile: true }));
+const viewport = (() => ({ mobile: true }))();
 vi.mock('@/hooks/use-mobile', () => ({ useIsMobile: () => viewport.mobile }));
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }));
 
@@ -48,7 +49,7 @@ describe('mobile thread content', () => {
       </MobileContentPreview>,
     );
     fireEvent.click(screen.getByRole('button', { name: 'View full diff' }));
-    expect(onExpand).toHaveBeenCalledOnce();
+    expect(onExpand).toHaveBeenCalledTimes(1);
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 

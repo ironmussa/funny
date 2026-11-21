@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { CHECK_TOOL, checkRedirectReason } from '../agents/check-redirect.js';
 import { SDKClaudeProcess } from '../agents/sdk-claude.js';

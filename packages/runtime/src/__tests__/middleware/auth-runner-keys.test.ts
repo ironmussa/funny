@@ -1,3 +1,5 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 /**
  * Security H1 + H7 regressions — runtime auth middleware.
  *
@@ -10,9 +12,8 @@
  * (without even calling the server) while the owner is unknown.
  */
 import { Hono } from 'hono';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
-await vi.hoisted(async () => {
+await (async () => {
   process.env.TEAM_SERVER_URL = 'http://server.test';
   process.env.WS_TUNNEL_ONLY = 'false';
   const cryptoMod = await import('crypto');
@@ -33,7 +34,7 @@ await vi.hoisted(async () => {
       },
     });
   }
-});
+})();
 
 vi.mock('../../lib/auth.js', () => ({
   auth: { api: { getSession: vi.fn().mockResolvedValue(null) } },

@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, test } from 'bun:test';
 import { execFileSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
 import { existsSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
@@ -5,7 +6,6 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { err, ok } from 'neverthrow';
-import { afterEach, describe, expect, test } from 'vitest';
 
 import {
   createGithubTokenWriter,

@@ -1,4 +1,3 @@
-import { Hono } from 'hono';
 /**
  * Security ME-7 regression — runtime session cache.
  *
@@ -7,44 +6,24 @@ import { Hono } from 'hono';
  * round-trip so a stale (post-logout / post-revoke) session can't perform
  * destructive writes during the 15-second cache window.
  */
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 
-// Set env BEFORE the middleware module is imported. Vitest hoists imports
-// AND vi.mock calls above top-level statements, so a bare assignment to
-// process.env would run AFTER the middleware's module-scope reads. The
-// vi.hoisted callback runs before import resolution.
-await vi.hoisted(async () => {
-  process.env.TEAM_SERVER_URL = 'http://server.test';
-  process.env.WS_TUNNEL_ONLY = 'false';
-  // Polyfill Bun.CryptoHasher — the middleware uses it for the cookie hash
-  // key, but vitest runs under Node so the global doesn't exist.
-  const cryptoMod = await import('crypto');
-  if (!('Bun' in globalThis)) {
-    Reflect.set(globalThis, 'Bun', {
-      CryptoHasher: class {
-        private hasher: ReturnType<typeof cryptoMod.createHash>;
-        constructor(algo: string) {
-          this.hasher = cryptoMod.createHash(algo);
-        }
-        update(data: string | Buffer) {
-          this.hasher.update(data);
-          return this;
-        }
-        digest(encoding: 'hex') {
-          return this.hasher.digest(encoding);
-        }
-      },
-    });
-  }
-});
+import { Hono } from 'hono';
+
+// Set env BEFORE the middleware module is imported: it reads TEAM_SERVER_URL
+// and WS_TUNNEL_ONLY at module scope. Static imports run before this file's
+// body, so the middleware is imported dynamically below, after the env and
+// the mock are in place.
+process.env.TEAM_SERVER_URL = 'http://server.test';
+process.env.WS_TUNNEL_ONLY = 'false';
 
 // Stub the lib/auth.js dynamic import so Better Auth doesn't initialise.
 vi.mock('../../lib/auth.js', () => ({
   auth: { api: { getSession: vi.fn().mockResolvedValue(null) } },
 }));
 
-import { configureRunnerKeys } from '../../lib/runner-keys.js';
-import { authMiddleware } from '../../middleware/auth.js';
+const { configureRunnerKeys } = await import('../../lib/runner-keys.js');
+const { authMiddleware } = await import('../../middleware/auth.js');
 
 const sessionPayload = {
   user: { id: 'user-1', role: 'user' },

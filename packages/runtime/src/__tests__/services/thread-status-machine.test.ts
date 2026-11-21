@@ -1,4 +1,4 @@
-import { describe, test, expect, afterEach } from 'vitest';
+import { describe, test, expect, afterEach } from 'bun:test';
 
 import {
   transitionStatus,

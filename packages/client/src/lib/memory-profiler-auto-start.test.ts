@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'bun:test';
 
 import { AUTO_MEMORY_PROFILE_OPTIONS, autoStartMemoryProfiler } from './memory-profiler-auto-start';
 
@@ -22,7 +22,7 @@ describe('autoStartMemoryProfiler', () => {
     const start = vi.fn(() => status);
 
     expect(autoStartMemoryProfiler({ start }, 'true')).toBe(status);
-    expect(start).toHaveBeenCalledOnce();
+    expect(start).toHaveBeenCalledTimes(1);
     expect(start).toHaveBeenCalledWith(AUTO_MEMORY_PROFILE_OPTIONS);
   });
 });

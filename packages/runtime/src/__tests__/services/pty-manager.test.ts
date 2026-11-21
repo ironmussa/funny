@@ -12,7 +12,7 @@
  *   4. Kill cleanup
  */
 
-import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, vi, afterEach } from 'bun:test';
 
 // ── Scrollback ring buffer (extracted from pty-manager.ts) ──────────
 

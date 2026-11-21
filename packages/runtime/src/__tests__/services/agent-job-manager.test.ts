@@ -1,16 +1,17 @@
+import { describe, test, expect, beforeAll, afterAll, afterEach, vi } from 'bun:test';
 import { mkdtempSync, writeFileSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { describe, test, expect, beforeAll, afterAll, afterEach, vi } from 'vitest';
+import { advanceTimersByTimeAsync } from '@funny/test-kit';
 
-const { fakeJobs } = vi.hoisted(() => ({
+const { fakeJobs } = (() => ({
   fakeJobs: {
     listRunningJobs: vi.fn<() => Promise<Array<{ pid: number; exitPath: string }>>>(async () => []),
     getJob: vi.fn<(id: string) => Promise<Record<string, unknown> | undefined>>(),
     updateJob: vi.fn<(id: string, patch: Record<string, unknown>) => Promise<boolean>>(),
   },
-}));
+}))();
 
 // Mock the heavy service deps so importing the manager is cheap; deriveStatus
 // itself only touches fs + process.kill, none of these.
@@ -92,10 +93,10 @@ describe('job scanner lifecycle', () => {
     vi.useFakeTimers();
 
     startAgentJobs();
-    await vi.runAllTicks();
+    await flushMicrotasks();
 
     expect(fakeJobs.listRunningJobs).toHaveBeenCalledTimes(1);
-    await vi.advanceTimersByTimeAsync(60_000);
+    await advanceTimersByTimeAsync(60_000);
     expect(fakeJobs.listRunningJobs).toHaveBeenCalledTimes(1);
   });
 
@@ -106,10 +107,10 @@ describe('job scanner lifecycle', () => {
     ]);
 
     startAgentJobs();
-    await vi.runAllTicks();
+    await flushMicrotasks();
     expect(fakeJobs.listRunningJobs).toHaveBeenCalledTimes(1);
 
-    await vi.advanceTimersByTimeAsync(5_000);
+    await advanceTimersByTimeAsync(5_000);
     expect(fakeJobs.listRunningJobs).toHaveBeenCalledTimes(2);
   });
 });
@@ -144,3 +145,8 @@ describe('cancelJob', () => {
     expect(await cancelJob('j1', 'u1')).toBeNull();
   });
 });
+
+/** Stand-in for vitest's `vi.runAllTicks()`: let pending promise callbacks run. */
+async function flushMicrotasks(): Promise<void> {
+  for (let i = 0; i < 10; i++) await Promise.resolve();
+}

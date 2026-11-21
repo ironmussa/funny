@@ -1,8 +1,8 @@
+import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
 import { resolve, dirname } from 'path';
 
 import { executeSync } from '@funny/core/git';
-import { describe, test, expect, beforeAll, afterAll } from 'vitest';
 
 import { testPath } from '../helpers/test-dirname.js';
 

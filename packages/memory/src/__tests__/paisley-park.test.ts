@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'bun:test';
 
 import { PaisleyPark, destroyAllInstances, getPaisleyPark } from '../index.js';
 import type { StorageConfig } from '../types.js';
@@ -280,7 +280,7 @@ describe('PaisleyPark (integration)', () => {
     it('cleans up without error', async () => {
       const pp = new PaisleyPark(config);
       await pp.init();
-      await expect(pp.destroy()).resolves.not.toThrow();
+      await expect(pp.destroy()).resolves.toBeUndefined();
     });
   });
 });

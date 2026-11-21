@@ -1,4 +1,6 @@
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
+import { waitFor } from '@funny/test-kit';
 
 import { getApprovalsData } from '@/data/approvals/store';
 import { getRunsData } from '@/data/automations/store';
@@ -64,8 +66,8 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     expect(jobs.collection.size + watchers.collection.size).toBe(0);
     dispatchRealtimeEvent('watcher:fired', 't1', { watcher: { id: 'w1' } });
     dispatchRealtimeEvent('job:exited', 't1', { job: { id: 'j1' } });
-    expect(watchers.getSynced('w1')).toEqual({ id: 'w1' });
-    expect(jobs.getSynced('j1')).toEqual({ id: 'j1' });
+    expect<unknown>(watchers.getSynced('w1')).toEqual({ id: 'w1' });
+    expect<unknown>(jobs.getSynced('j1')).toEqual({ id: 'j1' });
   });
 
   test('pipeline, approval and workflow events route to their stores', async () => {
@@ -86,7 +88,7 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     dispatchRealtimeEvent('pipeline:approval_resolved', 't1', { approvalId: 'ap1' });
     expect(getApprovalsData().getSynced('ap1')).toBeUndefined();
     dispatchRealtimeEvent('workflow:node_state', 't1', { c: 1 });
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(p.handlePipelineStarted).toHaveBeenCalledWith({ a: 1 });
       expect(p.handlePipelineStageUpdate).toHaveBeenCalledWith({ a: 2 });
       expect(p.handlePipelineCompleted).toHaveBeenCalledWith({ a: 3 });
@@ -116,7 +118,7 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     dispatchRealtimeEvent('presence:sync', 't1', {});
     dispatchRealtimeEvent('presence:join', 't1', { viewer: { clientId: 'c1' } });
     dispatchRealtimeEvent('presence:leave', 't1', { clientId: 'c1' });
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(s.setRoster).toHaveBeenCalledWith('t1', []);
       expect(s.upsertViewer).toHaveBeenCalledWith('t1', { clientId: 'c1' });
       expect(s.removeViewer).toHaveBeenCalledWith('t1', 'c1');
@@ -133,7 +135,7 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     dispatchRealtimeEvent('thread:share-granted', 't2', {});
     expect(thread.handleShareRevoked).toHaveBeenCalledWith('t1');
     expect(thread.loadSharedThreads).toHaveBeenCalledTimes(1);
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(presence.clearThread).toHaveBeenCalledWith('t1');
     });
   });
@@ -152,7 +154,7 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     dispatchRealtimeEvent('thread:deleted', 't-open', { projectId: 'p1' });
     expect(thread.handleThreadDeleted).toHaveBeenCalledWith('t-open');
     expect(navigate).toHaveBeenCalledWith(expect.stringContaining('/projects/p1'));
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(presence.clearThread).toHaveBeenCalledWith('t-open');
     });
   });
@@ -176,7 +178,7 @@ describe('ws-event-dispatch — lazily-imported store routing', () => {
     const s = spyActions(useNativeGitStore, ['appendBuildOutput', 'setBuildStatus']);
     dispatchRealtimeEvent('native-git:build_output', '', { text: 'compiling' });
     dispatchRealtimeEvent('native-git:build_status', '', { status: 'done', exitCode: 0 });
-    await vi.waitFor(() => {
+    await waitFor(() => {
       expect(s.appendBuildOutput).toHaveBeenCalledWith('compiling');
       expect(s.setBuildStatus).toHaveBeenCalledWith('done', 0);
     });

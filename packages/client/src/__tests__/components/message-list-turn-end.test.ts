@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { buildVirtualRows } from '@/components/thread/MemoizedMessageList.virtualRows';
 import type { RenderItem } from '@/lib/render-items';

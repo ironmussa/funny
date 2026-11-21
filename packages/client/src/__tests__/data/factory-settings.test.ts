@@ -1,16 +1,20 @@
-import { act, renderHook, waitFor } from '@testing-library/react';
-import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 
-import { retryFactorySettings } from '@/data/factory/actions';
-import { useFactorySettings, useFactorySettingsFailed } from '@/data/factory/hooks';
-import { FACTORY_SETTINGS_RETRY_MS } from '@/data/factory/queries';
+import { advanceTimersByTimeAsync, waitFor } from '@funny/test-kit';
+import { act, renderHook } from '@testing-library/react';
+import { errAsync, okAsync } from 'neverthrow';
+
 import type { FactorySettings } from '@/lib/api/factory';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const api = vi.hoisted(() => ({ getSettings: vi.fn() }));
+// Not hoisted under bun test: mock first, then load the modules that read the API.
+const api = { getSettings: vi.fn() };
 vi.mock('@/lib/api/factory', () => ({ factoryApi: { getSettings: api.getSettings } }));
+
+const { retryFactorySettings } = await import('@/data/factory/actions');
+const { useFactorySettings, useFactorySettingsFailed } = await import('@/data/factory/hooks');
+const { FACTORY_SETTINGS_RETRY_MS } = await import('@/data/factory/queries');
 
 const settings: FactorySettings = {
   projectId: 'p1',
@@ -47,23 +51,23 @@ describe('factory settings read', () => {
   });
 
   test('regression: a failed read is retried while shown, without remounting', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.useFakeTimers();
     api.getSettings.mockReturnValueOnce(down()).mockReturnValue(okAsync(settings));
     const { result } = renderHook(() => useSettingsState());
     await waitFor(() => expect(result.current.failed).toBe(true));
 
-    await act(() => vi.advanceTimersByTimeAsync(FACTORY_SETTINGS_RETRY_MS));
+    await act(() => advanceTimersByTimeAsync(FACTORY_SETTINGS_RETRY_MS));
     await waitFor(() => expect(result.current.settings).toEqual(settings));
     expect(result.current.failed).toBe(false);
   });
 
   test('a successful read does not poll', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
+    vi.useFakeTimers();
     api.getSettings.mockReturnValue(okAsync(null));
     const { result } = renderHook(() => useSettingsState());
     await waitFor(() => expect(result.current.settings).toBeNull());
 
-    await act(() => vi.advanceTimersByTimeAsync(FACTORY_SETTINGS_RETRY_MS * 3));
+    await act(() => advanceTimersByTimeAsync(FACTORY_SETTINGS_RETRY_MS * 3));
     expect(api.getSettings).toHaveBeenCalledTimes(1);
   });
 

@@ -10,6 +10,8 @@
  *   - message accepts a function-of-context
  */
 
+import { describe, test, expect, vi } from 'bun:test';
+
 import { runPipeline, definePipeline, nullReporter, node } from '@funny/pipelines';
 import {
   approvalNode,
@@ -17,7 +19,6 @@ import {
   type ApprovalCapturedOutputs,
 } from '@funny/workflows/compiler';
 import type { ActionProvider, ApprovalDecision, PipelineContext } from '@funny/workflows/compiler';
-import { describe, test, expect, vi } from 'vitest';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -70,7 +71,7 @@ describe('approvalNode', () => {
     const result = await runPipeline(pipeline, baseCtx(provider));
 
     expect(result.outcome).toBe('completed');
-    expect(after).toHaveBeenCalledOnce();
+    expect(after).toHaveBeenCalledTimes(1);
     expect(provider.requestApproval).toHaveBeenCalledWith(
       expect.objectContaining({ gateId: 'confirm', message: 'proceed?' }),
     );

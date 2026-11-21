@@ -1,4 +1,6 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
+
+import { waitFor } from '@funny/test-kit';
 
 import {
   createBrowserTransportService,
@@ -24,7 +26,7 @@ describe('browser request lifetime', () => {
       lifetime.signal,
     );
     const pending = transport.request({ url: '/api/projects' });
-    await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(fetcher).toHaveBeenCalledTimes(1));
     target.dispatchEvent(new Event('pagehide'));
     await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
     await expect(transport.request({ url: '/api/threads' })).rejects.toMatchObject({

@@ -13,7 +13,7 @@
  * math that feeds that path.
  */
 
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import { parseByteRange } from '../../routes/files.js';
 

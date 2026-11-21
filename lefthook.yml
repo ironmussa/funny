@@ -12,13 +12,13 @@ glob_matcher: doublestar
 pre-commit:
   jobs:
     # Format first (and re-stage), so format issues never block the checks below.
-    # Markdown too: CI's format:check covers every file oxfmt formats, and
-    # openspec specs once reached master unformatted (63 of them).
+    # `bun fmt` reads .oxfmtrc.json. Markdown too: CI's format:check covers every
+    # file it formats, and openspec specs once reached master unformatted (63).
     - name: format
       glob: '**/*.{ts,tsx,js,jsx,md}'
       exclude:
         - '.claude/**'
-      run: bunx oxfmt --write {staged_files}
+      run: bun fmt {staged_files}
       stage_fixed: true
 
     - name: checks

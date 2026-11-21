@@ -22,7 +22,7 @@ grouped weekly PR.
    ```bash
    bun run lint
    bun run typecheck
-   bunx oxfmt --check .
+   bun fmt --check .
    bun run test                              # every package except the client
    bun run --cwd packages/client test        # client unit tests
    bun run build
@@ -30,7 +30,7 @@ grouped weekly PR.
    ```
 
 5. Fix what broke, in the same branch. Keep formatter-only output from an
-   `oxfmt` bump in its own commit.
+   upgrade of Bun (which ships `bun fmt`) in its own commit.
 6. Open one PR. CI also runs GPUIX on macOS and Windows, e2e, and the format
    check as CI sees it. Merge once it is green.
 
@@ -44,5 +44,3 @@ grouped weekly PR.
   `THIRD_PARTY.md` describes.
 - **`deepagents-acp`** pins `@agentclientprotocol/sdk` 1.x and keeps its own
   nested copy. Check that it still resolves after an ACP SDK bump.
-- **Tailwind class order** in `packages/evflow/viewer` can differ between local
-  and CI `oxfmt`. CI is the reference.

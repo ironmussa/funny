@@ -203,10 +203,11 @@ export const waitForSandboxRunner = (
   fromResult((signal) =>
     pollUntil(
       () =>
-        ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(threadId)).map(async (runnerId) =>
-          runnerId && deps.presence && (await deps.presence.isAvailable(runnerId))
-            ? runnerId
-            : null,
+        ResultAsync.fromSafePromise(deps.sandboxRunnerIdForThread(threadId)).map(
+          async (runnerId) =>
+            runnerId && deps.presence && (await deps.presence.isAvailable(runnerId))
+              ? runnerId
+              : null,
         ),
       {
         what,

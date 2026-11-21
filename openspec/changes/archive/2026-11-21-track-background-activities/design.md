@@ -163,7 +163,7 @@ progress line for a value nobody needs after the operation ends.
 
 `runtime/src/services/activity-tracker.ts` exposes one function:
 
-```ts
+```text
 trackActivity({ id?, kind, userId, projectId?, threadId?, title, input }, (activity) => ResultAsync<T, E>)
 ```
 

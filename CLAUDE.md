@@ -237,15 +237,17 @@ A project keeps named secret values on the server and hands them to its agents a
 
 ## TypeScript
 
-**Always use `bun` for type checking instead of `tsc`.** This project uses Bun as its runtime and Bun includes a built-in TypeScript type checker. Do not install or use `tsc` / `typescript` CLI directly.
+**Use `bun` for type checking, not `tsc`.** Bun includes a TypeScript type checker (`bun check`).
 
 ```bash
-# Type check a specific package
-cd packages/runtime && bun --check src/index.ts
+# The whole repository (baseline diff + remote-connector + proofs)
+bun run typecheck
 
-# Or use bunx to check files
-bunx tsc --noEmit
+# One project
+bun check -p packages/runtime/tsconfig.json
 ```
+
+**One exception: the server's gdp-ts proofs stay on `tsc`** (`bun run typecheck:proofs`, which checks `packages/server/type-tests/` and then the whole server). `bun check` does not keep a name from one generic callback (`withRunnerFor`, `withForkInputs`, …) distinct from a name of another call, so using a proof outside its scope type-checks under it. Do not move `typecheck:proofs` to `bun check` while `bun check -p packages/server/tsconfig.proofs.json` reports unused `@ts-expect-error` directives.
 
 ## Key Patterns
 
@@ -332,7 +334,7 @@ When resolving a bug or problem, always propose adding a test that covers the ca
 
 ## Formatting
 
-Format with **oxfmt** (`bun run format`, or `bunx oxfmt --write <files>`), never prettier — the repo has no prettier config, so prettier silently rewrites files to its own defaults. The pre-commit hook (`lefthook.yml`) re-formats staged files with oxfmt.
+Format with **`bun fmt`** (`bun run format`, or `bun fmt <files>`; `bun fmt --check` to check), never prettier — the repo has no prettier config, so prettier silently rewrites files to its own defaults. `bun fmt` reads the oxfmt config, `.oxfmtrc.json` (print width, quotes, import and Tailwind class sorting, ignores). The pre-commit hook (`lefthook.yml`) re-formats staged files with it.
 
 ## Agent Safety Rules
 
@@ -344,11 +346,11 @@ To verify your changes compile correctly, use build or type-check commands inste
 # Check that the client builds without errors
 bun run build
 
-# Type-check a specific file
-bun --check packages/runtime/src/index.ts
+# Type-check one project
+bun check -p packages/runtime/tsconfig.json
 
 # Type-check the whole project
-bunx tsc --noEmit
+bun run typecheck
 ```
 
 ## UI Rules

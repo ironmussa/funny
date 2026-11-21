@@ -24,7 +24,7 @@ const ANTI_SLOP_WARN = [
   'no-unsafe-dictionary-type',
   'require-safety-comment-for-type-assertion',
 ];
-// Off on purpose: oxfmt owns blank lines (require-readable-spacing), and the
+// Off on purpose: the formatter (bun fmt) owns blank lines (require-readable-spacing), and the
 // tests mock modules with vi.mock by design (no-module-mocking).
 const ANTI_SLOP_OFF = ['require-readable-spacing', 'no-module-mocking'];
 const ANTI_SLOP_EFFECT_ERROR = [

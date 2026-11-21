@@ -1,3 +1,8 @@
+// Checked with tsc, NOT bun check (`bun run typecheck:proofs`). bun check
+// (1.4.4 to 1.4.6 canary) lets a name from one generic callback stand for a
+// name from another call, so the cross-scope @ts-expect-error cases below
+// would pass: 7 "unused @ts-expect-error" errors. Do not move this to bun check
+// until it reports none of them.
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {

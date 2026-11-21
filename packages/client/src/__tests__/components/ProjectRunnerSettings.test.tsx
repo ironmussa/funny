@@ -1,16 +1,17 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { ProjectRunnerSettingsResponse, RunnerInfo } from '@funny/shared/runner-protocol';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 
-const mockGet = vi.hoisted(() => vi.fn());
-const mockUpdate = vi.hoisted(() => vi.fn());
-const mockGrant = vi.hoisted(() => vi.fn());
-const mockRevoke = vi.hoisted(() => vi.fn());
-const mockSetGeneral = vi.hoisted(() => vi.fn());
+const mockGet = (() => vi.fn())();
+const mockUpdate = (() => vi.fn())();
+const mockGrant = (() => vi.fn())();
+const mockRevoke = (() => vi.fn())();
+const mockSetGeneral = (() => vi.fn())();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),

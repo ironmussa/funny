@@ -1,15 +1,20 @@
+import { describe, test, expect, vi } from 'bun:test';
+
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
-import { describe, test, expect, vi } from 'vitest';
 
-import { MobilePage } from '@/components/MobilePage';
 import { getNavigate } from '@/stores/thread-store-internals';
 
 // Store-driven actions must update the mobile route and open the target thread.
 
 vi.mock('@/hooks/use-org-auto-switch', () => ({ useOrgAutoSwitch: () => {} }));
 
-vi.mock('@/hooks/use-ws', () => ({ useWS: () => {} }));
+vi.mock('@/hooks/use-ws', () => ({
+  useWS: () => {},
+  getActiveWS: () => null,
+  subscribeActiveWS: () => () => {},
+  sendTerminalRealtime: () => {},
+}));
 
 vi.mock('@/stores/app-store', () => ({
   useAppStore: (selector: (s: any) => any) =>
@@ -38,6 +43,9 @@ vi.mock('@/components/mobile/ChatView', () => ({
     <div data-testid={`screen-chat-${projectId}-${threadId}`} />
   ),
 }));
+
+// Imported after the mocks, which bun does not hoist.
+const { MobilePage } = await import('@/components/MobilePage');
 
 describe('MobilePage navigate seam', () => {
   test('store navigate to a thread route opens the chat view', async () => {

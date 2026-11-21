@@ -1,8 +1,7 @@
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, vi } from 'bun:test';
 
-// Use vi.hoisted() so these mocks are available when vi.mock factories run (which are hoisted)
 const { mockSelectProject, mockInvalidateSelectThread, mockClearThreadSelection, mockProjects } =
-  vi.hoisted(() => {
+  (() => {
     const mockProjects: Array<{ id: string; needsSetup?: boolean }> = [];
     return {
       mockSelectProject: vi.fn(),
@@ -10,7 +9,7 @@ const { mockSelectProject, mockInvalidateSelectThread, mockClearThreadSelection,
       mockClearThreadSelection: vi.fn(),
       mockProjects,
     };
-  });
+  })();
 
 vi.mock('@/stores/project-store', () => ({
   useProjectStore: {
@@ -23,7 +22,7 @@ interface ThreadSelectHook {
   listener: ((threadId: string | null) => void) | null;
 }
 
-const threadSelect = vi.hoisted((): ThreadSelectHook => ({ listener: null }));
+const threadSelect = ((): ThreadSelectHook => ({ listener: null }))();
 
 vi.mock('@/stores/thread-store-internals', () => ({
   invalidateSelectThread: mockInvalidateSelectThread,
@@ -34,7 +33,10 @@ vi.mock('@/stores/thread-store-internals', () => ({
 }));
 
 import { buildProject, seedProjects } from '@/data/projects/testing';
-import { useUIStore } from '@/stores/ui-store';
+
+// Imported after the mocks: ui-store registers its thread-select listener at
+// import time, and bun's mock.module is not hoisted.
+const { useUIStore } = await import('@/stores/ui-store');
 
 describe('useUIStore', () => {
   beforeEach(() => {

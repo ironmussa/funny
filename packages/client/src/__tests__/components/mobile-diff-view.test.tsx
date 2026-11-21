@@ -1,7 +1,8 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
 import type { FileDiffSummary } from '@funny/shared';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { FileCode } from 'lucide-react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

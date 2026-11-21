@@ -1,8 +1,10 @@
+import { afterEach, beforeEach, expect, test, vi } from 'bun:test';
+
 import type { WSCloneProgressData } from '@funny/shared';
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { err, ok } from 'neverthrow';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
 import { CloneRepoView } from '@/components/CloneRepoView';
 
@@ -13,7 +15,7 @@ import { CloneRepoView } from '@/components/CloneRepoView';
  * finishes on the clone's last `clone:progress` event.
  */
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   api: {
     githubStatus: vi.fn(),
     githubUser: vi.fn(),
@@ -25,7 +27,7 @@ const mocks = vi.hoisted(() => ({
   toastError: vi.fn(),
   toastSuccess: vi.fn(),
   toastFailure: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api', () => ({ api: mocks.api }));
 interface AppStoreSlice {
@@ -97,7 +99,7 @@ function progress(data: WSCloneProgressData) {
 beforeEach(() => {
   vi.clearAllMocks();
   // jsdom has no IntersectionObserver (the repo list's infinite scroll).
-  vi.stubGlobal(
+  stubGlobal(
     'IntersectionObserver',
     class {
       observe() {}
@@ -112,7 +114,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
-  vi.unstubAllGlobals();
+  unstubAllGlobals();
 });
 
 test('sends its cloneId and waits for the done event to open the project', async () => {

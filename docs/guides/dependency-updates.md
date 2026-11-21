@@ -12,7 +12,7 @@ grouped weekly PR.
    other work.
 2. Bump the versions: `bun update --latest`, or edit the `package.json` files.
    Move packages that must match together:
-   - the whole `vitest` / `@vitest/*` family;
+   - the whole `vitest` / `@vitest/*` family (the client's Storybook tests);
    - `@tanstack/db` with `@tanstack/react-db`.
 3. `bun install`. In a new worktree, also build or copy the native git module
    (`bun run build:native`).

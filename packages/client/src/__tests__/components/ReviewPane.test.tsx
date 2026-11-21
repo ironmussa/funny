@@ -1,5 +1,7 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 import { screen, waitFor } from '@testing-library/react';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ReviewPane } from '@/components/ReviewPane';
 import { buildThread, buildThreadWithMessages, withThreadIndex } from '@/data/threads/testing';
@@ -91,7 +93,7 @@ vi.mock('@tanstack/react-virtual', () => ({
 }));
 
 import { api } from '@/lib/api';
-const mockApi = vi.mocked(api);
+const mockApi = mocked(api);
 
 // ── Setup ───────────────────────────────────────────────────────
 

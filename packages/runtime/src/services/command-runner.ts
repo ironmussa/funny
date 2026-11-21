@@ -25,8 +25,10 @@ const IS_WINDOWS = process.platform === 'win32';
 const METRICS_INTERVAL_MS = 10_000;
 
 /**
- * Kill a process tree on Windows using taskkill /T /F.
- * On Unix, proc.kill() already sends signals to the process group.
+ * Kill a command and everything it started.
+ * Windows: taskkill /T /F. Unix: the command runs in its own process group
+ * (`detached` at spawn), so the signal goes to the whole group. `proc.kill()`
+ * alone signals only the `sh -c` wrapper and leaves its children running.
  */
 function killProcessTree(proc: ReturnType<typeof Bun.spawn>, signal?: number): void {
   if (IS_WINDOWS) {
@@ -37,9 +39,14 @@ function killProcessTree(proc: ReturnType<typeof Bun.spawn>, signal?: number): v
     }
   } else {
     try {
-      proc.kill(signal);
+      process.kill(-proc.pid, signal ?? 'SIGTERM');
     } catch {
-      // Best-effort
+      // The group is gone (or was never created): fall back to the process itself.
+      try {
+        proc.kill(signal);
+      } catch {
+        // Best-effort
+      }
     }
   }
 }
@@ -135,6 +142,8 @@ async function startCommandImpl(
     stdout: 'pipe',
     stderr: 'pipe',
     env: buildChildEnv({ FORCE_COLOR: '1' }),
+    // Its own process group, so stopCommand can signal the command's children too.
+    detached: !IS_WINDOWS,
   });
 
   const entry: RunningCommand = {

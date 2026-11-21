@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const pushMocks = vi.hoisted(() => ({ hasPushSubscription: vi.fn(), testWebPush: vi.fn() }));
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
+
+const pushMocks = (() => ({ hasPushSubscription: vi.fn(), testWebPush: vi.fn() }))();
 vi.mock('@/lib/web-push', () => pushMocks);
 
 vi.mock('@/stores/settings-store', () => ({
@@ -15,7 +17,7 @@ vi.mock('@/stores/settings-store', () => ({
 import { isNotificationsSupported, showAgentNotification } from '@/hooks/use-notifications';
 
 describe('use-notifications', () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => unstubAllGlobals());
 
   beforeEach(() => {
     vi.restoreAllMocks();
@@ -87,8 +89,8 @@ describe('use-notifications', () => {
   test('uses the service worker on phones and includes the target thread URL', async () => {
     const showNotification = vi.fn().mockResolvedValue(undefined);
     const register = vi.fn().mockResolvedValue({ active: {}, showNotification });
-    vi.stubGlobal('navigator', { serviceWorker: { register } });
-    vi.stubGlobal(
+    stubGlobal('navigator', { serviceWorker: { register } });
+    stubGlobal(
       'Notification',
       Object.assign(
         vi.fn(() => {
@@ -110,10 +112,10 @@ describe('use-notifications', () => {
   });
 
   test('reports service worker delivery failures', async () => {
-    vi.stubGlobal('navigator', {
+    stubGlobal('navigator', {
       serviceWorker: { register: vi.fn().mockRejectedValue(new Error('Registration failed')) },
     });
-    vi.stubGlobal('Notification', { permission: 'granted' });
+    stubGlobal('Notification', { permission: 'granted' });
     expect(
       await showAgentNotification('Finished', 'Agent finished', { force: true }),
     ).toMatchObject({ ok: false, reason: 'error' });
@@ -122,11 +124,11 @@ describe('use-notifications', () => {
 
 test('suppresses local delivery when the browser already subscribes to push', async () => {
   Object.defineProperty(document, 'hidden', { configurable: true, value: true });
-  vi.stubGlobal('Notification', Object.assign(vi.fn(), { permission: 'granted' }));
+  stubGlobal('Notification', Object.assign(vi.fn(), { permission: 'granted' }));
   pushMocks.hasPushSubscription.mockResolvedValue(true);
   expect(await showAgentNotification('funny', 'Finished')).toEqual({
     ok: false,
     reason: 'push-enabled',
   });
-  vi.unstubAllGlobals();
+  unstubAllGlobals();
 });

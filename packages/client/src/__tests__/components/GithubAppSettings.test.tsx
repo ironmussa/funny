@@ -1,13 +1,14 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getGithubAppStatus: vi.fn(),
   getGithubAppAccounts: vi.fn(),
   startGithubAppManifest: vi.fn(),
   disconnectGithubApp: vi.fn(),
-}));
+}))();
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({ api: mocks }));

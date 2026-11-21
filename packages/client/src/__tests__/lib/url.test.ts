@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach } from 'bun:test';
 
 import { buildPath, stripOrgPrefix } from '@/lib/url';
 import { setActiveOrgSlug } from '@/lib/url-state';

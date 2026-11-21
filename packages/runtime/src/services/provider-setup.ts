@@ -111,6 +111,8 @@ function loginCommand(id: ProviderId, binary: string, profileEnv?: Record<string
     : `export PATH=${path}; ${profilePrelude}${prelude}NO_BROWSER=1 NO_OPEN_BROWSER=1 ${command}`;
 }
 
+// Its test loads this module with `import('…?fresh=N')`, which fallow cannot follow.
+// fallow-ignore-next-line unused-export
 export async function checkProviderAuth(
   id: ProviderId,
   binary: string | null,

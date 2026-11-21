@@ -1,3 +1,5 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 /**
  * A workflow node on the flow and run canvases (change workflow-dag-engine,
  * task 5.1): loop regions, join rules, concurrency groups and the
@@ -6,7 +8,6 @@
 import type { WorkflowNodeRunState } from '@funny/shared/types/workflows';
 import { parseWorkflowYaml, workflowToGraph } from '@funny/workflows/browser';
 import { render, screen, within } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
 
 import {
   decorateGraph,

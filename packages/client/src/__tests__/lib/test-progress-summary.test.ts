@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import type { TestProgress, TestProgressSuite } from '@funny/shared/test-progress';
-import { describe, expect, test } from 'vitest';
 
 import { SLOW_ITEMS, summarizeTestProgress } from '@/lib/test-progress-summary';
 

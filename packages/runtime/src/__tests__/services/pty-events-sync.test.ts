@@ -7,11 +7,11 @@
  * the server doesn't forward.
  */
 
+import { describe, test, expect } from 'bun:test';
 import { readFileSync } from 'fs';
 import { resolve } from 'path';
 
 import { BROWSER_PTY_FORWARD_EVENTS } from '@funny/shared/socket-events';
-import { describe, test, expect } from 'vitest';
 
 const MONOREPO_ROOT = resolve(import.meta.dirname ?? __dirname, '../../../../..');
 const APP_PATH = resolve(MONOREPO_ROOT, 'packages/runtime/src/app/pty-message-handler.ts');

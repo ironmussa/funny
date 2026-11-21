@@ -3,8 +3,9 @@
  * Covers backoff, stall, priority, eligibility, and the planner.
  */
 
+import { describe, expect, test } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
-import { describe, expect, test } from 'vitest';
 
 import {
   checkEligibility,

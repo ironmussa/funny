@@ -1,8 +1,9 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { ThreadComment } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useThreadComments } from '@/data/comments/hooks';
 import {
@@ -16,15 +17,15 @@ import { applyRunClaimed } from '@/data/scheduler/store';
 
 import { installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const threadsApi = vi.hoisted(() => ({
+const threadsApi = (() => ({
   getThreadComments: vi.fn(),
   createThreadComment: vi.fn(),
   deleteThreadComment: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api/threads', () => ({ threadsApi }));
-const schedulerApi = vi.hoisted(() => ({ listSchedulerRuns: vi.fn(), refreshScheduler: vi.fn() }));
+const schedulerApi = (() => ({ listSchedulerRuns: vi.fn(), refreshScheduler: vi.fn() }))();
 vi.mock('@/lib/api', () => ({ api: schedulerApi }));
-const effects = vi.hoisted(() => ({ emit: vi.fn() }));
+const effects = (() => ({ emit: vi.fn() }))();
 vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects } },
 }));

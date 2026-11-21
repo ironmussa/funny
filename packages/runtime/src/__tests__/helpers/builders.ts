@@ -6,8 +6,9 @@
  * test never has to cast a partial literal.
  */
 
+import { expect, vi, type Mock } from 'bun:test';
+
 import type { Project } from '@funny/shared';
-import { expect, vi, type Mock } from 'vitest';
 
 import type {
   IAgentExecutionProfileService,

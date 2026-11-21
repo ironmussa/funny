@@ -1,6 +1,5 @@
+import { describe, expect, test } from 'bun:test';
 import { EventEmitter } from 'node:events';
-
-import { describe, expect, test } from 'vitest';
 
 import { createLocalRuntime } from '../adapters/local-runtime.js';
 import { createAgent, createSession, sandbox } from '../index.js';

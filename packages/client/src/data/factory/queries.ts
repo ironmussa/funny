@@ -1,4 +1,5 @@
 import type {
+  FactoryFlowDefinition,
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryRun,
@@ -6,10 +7,13 @@ import type {
 } from '@funny/shared/contracts/factory';
 
 import { factoryApi } from '@/lib/api/factory';
+import { createClientLogger } from '@/lib/client-logger';
 
 import type { DataLayer } from '../data-layer';
-import { unwrapResult } from '../query-client';
+import { unwrapResult, type QueryStatusView } from '../query-client';
 import { getDataLayer } from '../runtime';
+
+const log = createClientLogger('factory');
 
 /**
  * The caller's issue factory settings for one project, as a session query. It
@@ -21,12 +25,38 @@ import { getDataLayer } from '../runtime';
 
 const factorySettingsKey = (projectId: string) => ['factory', 'settings', projectId] as const;
 
+/** How often a failed settings read is tried again while something shows it. */
+export const FACTORY_SETTINGS_RETRY_MS = 15_000;
+
+/**
+ * Retries are off in the data layer, and a failed read leaves no settings,
+ * which reads as "no factory": the Issues tab would hide its checkboxes until
+ * something else refetched. So a reader polls only while the read has failed.
+ */
 export function factorySettingsQuery(projectId: string) {
   return {
     queryKey: factorySettingsKey(projectId),
-    queryFn: (): Promise<FactorySettings | null> => unwrapResult(factoryApi.getSettings(projectId)),
+    queryFn: (): Promise<FactorySettings | null> =>
+      unwrapResult(factoryApi.getSettings(projectId)).catch((error: unknown) => {
+        log.warn('failed to load factory settings', {
+          projectId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        throw error;
+      }),
     staleTime: 30_000,
+    refetchInterval: (query: QueryStatusView) =>
+      query.state.status === 'error' ? FACTORY_SETTINGS_RETRY_MS : false,
   };
+}
+
+/** Read the settings again now (the Issues tab's retry after a failed read). */
+export function refetchFactorySettings(
+  projectId: string,
+  layer: DataLayer = getDataLayer(),
+): Promise<void> {
+  if (layer.disposed) return Promise.resolve();
+  return layer.queryClient.refetchQueries({ queryKey: factorySettingsKey(projectId), exact: true });
 }
 
 const factoryRunsKey = (projectId: string) => ['factory', 'runs', projectId] as const;
@@ -84,6 +114,20 @@ export function factoryFlowsQuery(projectId: string) {
     queryKey: ['factory', 'flows', projectId] as const,
     queryFn: (): Promise<FactoryFlowOption[]> => unwrapResult(factoryApi.listFlows(projectId)),
     staleTime: 5 * 60_000,
+  };
+}
+
+/**
+ * One flow's YAML (the settings page's viewer). Read only while a flow is
+ * chosen; like the flow list, it changes only with the default branch.
+ */
+export function factoryFlowDefinitionQuery(projectId: string, flowName: string | null) {
+  return {
+    queryKey: ['factory', 'flow-definition', projectId, flowName] as const,
+    queryFn: (): Promise<FactoryFlowDefinition> =>
+      unwrapResult(factoryApi.getFlowDefinition(projectId, flowName ?? '')),
+    staleTime: 5 * 60_000,
+    enabled: !!flowName,
   };
 }
 

@@ -10,7 +10,7 @@
  * exactly the failure mode we just fixed.
  */
 
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, beforeEach, vi } from 'bun:test';
 
 vi.mock('@/lib/client-logger', () => ({
   createClientLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() }),
@@ -74,6 +74,6 @@ describe('useRunnerStatusStore', () => {
     });
     useRunnerStatusStore.getState().setStatus('online');
     unsub();
-    expect(observed).toBe('online');
+    expect<unknown>(observed).toBe('online');
   });
 });

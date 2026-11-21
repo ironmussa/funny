@@ -1,5 +1,7 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, renderHook } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -7,12 +9,16 @@ describe('useIsMobile', () => {
   let matches: boolean;
   let listeners: Set<() => void>;
 
+  afterEach(() => {
+    unstubAllGlobals();
+  });
+
   beforeEach(() => {
     matches = false;
     listeners = new Set();
-    Object.defineProperty(window, 'matchMedia', {
-      configurable: true,
-      value: vi.fn((query: string) => ({
+    stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({
         matches,
         media: query,
         onchange: null,
@@ -22,7 +28,7 @@ describe('useIsMobile', () => {
         removeListener: vi.fn(),
         dispatchEvent: vi.fn(),
       })),
-    });
+    );
   });
 
   it('tracks the mobile media query and unsubscribes on unmount', () => {

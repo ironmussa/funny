@@ -1,3 +1,4 @@
+import { describe, test, expect } from 'bun:test';
 /**
  * Static-analysis regression guards for the runner connect/enrollment wiring.
  *
@@ -23,8 +24,6 @@
  */
 import { readFileSync } from 'fs';
 import { join } from 'path';
-
-import { describe, test, expect } from 'vitest';
 
 // Anchor to the repo root from this file's location so the guards work
 // regardless of the cwd vitest runs under (root vs. packages/runtime).

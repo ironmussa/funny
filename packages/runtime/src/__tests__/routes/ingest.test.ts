@@ -1,8 +1,10 @@
+import { describe, test, expect, vi, beforeEach, afterAll } from 'bun:test';
+
 import { Hono } from 'hono';
-import { describe, test, expect, vi, beforeEach, afterAll } from 'vitest';
 
 // Mock the ingest mapper
-const mockHandleIngestEvent = vi.fn(() => ({ threadId: 'test-thread-1' }));
+const defaultHandleIngestEvent = () => ({ threadId: 'test-thread-1' });
+const mockHandleIngestEvent = vi.fn(defaultHandleIngestEvent);
 vi.mock('../../services/ingest-mapper.js', () => ({
   handleIngestEvent: mockHandleIngestEvent,
 }));
@@ -29,7 +31,9 @@ describe('Ingest Routes', () => {
   });
 
   beforeEach(() => {
+    // bun's mockReset drops the vi.fn(impl) implementation (vitest restored it).
     mockHandleIngestEvent.mockReset();
+    mockHandleIngestEvent.mockImplementation(defaultHandleIngestEvent);
     app = new Hono();
     app.route('/ingest', ingestRoutes);
   });

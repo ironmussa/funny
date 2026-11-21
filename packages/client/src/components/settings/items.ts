@@ -12,6 +12,8 @@ import {
   Workflow,
   UserPlus,
   Cpu,
+  Factory,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -39,10 +41,17 @@ export const settingsItems = baseSettingsItems;
  */
 export const routableSettingsIds: ReadonlySet<string> = new Set<string>([
   ...baseSettingsItems.map((i) => i.id),
+  'factory',
+  'security',
   'collaborators',
   'runner',
 ]);
-export type SettingsItemId = (typeof baseSettingsItems)[number]['id'] | 'collaborators' | 'runner';
+export type SettingsItemId =
+  | (typeof baseSettingsItems)[number]['id']
+  | 'factory'
+  | 'security'
+  | 'collaborators'
+  | 'runner';
 
 export interface SettingsNavItem {
   id: SettingsItemId;
@@ -77,6 +86,16 @@ export function buildSettingsItems(opts: {
   let items: SettingsNavItem[] = [...baseSettingsItems];
 
   if (selectedProjectId) {
+    // The issue factory and the project's secrets are per-member (each one has
+    // their own factory and personal secrets), so every member gets the pages;
+    // the pages themselves gate what a viewer may change.
+    const afterPipelines = items.findIndex((item) => item.id === 'pipelines') + 1;
+    items.splice(
+      afterPipelines,
+      0,
+      { id: 'factory', label: 'Factory', icon: Factory },
+      { id: 'security', label: 'Security', icon: ShieldCheck },
+    );
     if (!isProjectAdmin) {
       // Collaborators may freely configure their OWN runner/checkout (worktrees,
       // hooks, MCP, skills, .funny.json all proxy to their personal runner).
@@ -104,6 +123,8 @@ export const settingsLabelKeys: Record<string, string> = {
   automations: 'settings.automations',
   pipelines: 'settings.pipelines',
   'archived-threads': 'settings.archivedThreads',
+  factory: 'settings.factory',
+  security: 'settings.security',
   collaborators: 'Collaborators',
   runner: 'projectRunner.title',
 };

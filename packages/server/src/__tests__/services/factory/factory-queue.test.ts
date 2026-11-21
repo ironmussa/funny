@@ -43,6 +43,10 @@ interface Script {
   blockers?: Record<number, IssueBlocker[] | 'unreadable'>;
   /** The repository's `.funny/workflows` file names. */
   repoFlows?: string[];
+  /** Default-branch file contents by path. */
+  repoFiles?: Record<string, string>;
+  /** Reading a default-branch file fails (GitHub cannot be reached). */
+  repoUnreadable?: boolean;
   /** The repository cannot be resolved (the runner is offline). */
   noRepo?: boolean;
   /** No GitHub App token can be minted. */
@@ -83,7 +87,10 @@ function fakeGithub(script: Script = {}): FakeGithub {
         : okAsync(blockers);
     },
     listDefaultBranchDir: () => okAsync(script.repoFlows ?? []),
-    readDefaultBranchFile: () => okAsync(null),
+    readDefaultBranchFile: (_reader: unknown, path: string) =>
+      script.repoUnreadable
+        ? errAsync({ message: 'GitHub answered 500', status: 500 })
+        : okAsync(script.repoFiles?.[path] ?? null),
     findPullRequest: () => okAsync({ number: 9, url: 'https://github.com/o/r/pull/9' }),
     pullRequests: {
       prState: () => okAsync('open' as const),
@@ -311,6 +318,42 @@ describe('sending issues', () => {
       { name: 'custom', source: 'repository' },
       { name: 'issue-to-pr', source: 'repository' },
     ]);
+  });
+
+  test("a flow's YAML: the repository copy replaces the built-in of its name", async () => {
+    const yaml = 'name: issue-to-pr\n';
+    const { factoryId, queue } = await setUp({
+      script: { repoFiles: { '.funny/workflows/issue-to-pr.yaml': yaml } },
+    });
+
+    const definition = (await queue.flowDefinition(factoryId, 'issue-to-pr'))._unsafeUnwrap();
+
+    expect(definition).toEqual({
+      name: 'issue-to-pr',
+      source: 'repository',
+      path: '.funny/workflows/issue-to-pr.yaml',
+      yaml,
+    });
+  });
+
+  test("a flow's YAML falls back to the built-in when the repository cannot be read", async () => {
+    const { factoryId, queue } = await setUp({ script: { repoUnreadable: true } });
+
+    const definition = (await queue.flowDefinition(factoryId, 'issue-to-merge'))._unsafeUnwrap();
+
+    expect(definition.source).toBe('built-in');
+    expect(definition.path).toBeNull();
+  });
+
+  test("a flow's YAML without a factory: built-ins only", async () => {
+    const queue = createFactoryQueue({ wake: async () => {} });
+
+    expect((await queue.flowDefinition(null, 'issue-to-pr'))._unsafeUnwrap().source).toBe(
+      'built-in',
+    );
+    expect((await queue.flowDefinition(null, 'custom'))._unsafeUnwrapErr().kind).toBe(
+      'invalid-flow',
+    );
   });
 });
 

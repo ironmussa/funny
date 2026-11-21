@@ -6,7 +6,7 @@
  * surfacing on invalid expressions.
  */
 
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { compilePredicate, evaluatePredicate, PredicateError } from '../../yaml/predicates.js';
 

@@ -1,7 +1,9 @@
-import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({ request: vi.fn(), getWorker: vi.fn() }));
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
+import { errAsync, okAsync } from 'neverthrow';
+
+const mocks = (() => ({ request: vi.fn(), getWorker: vi.fn() }))();
 vi.mock('@/lib/api/_core', () => ({ request: mocks.request }));
 vi.mock('@/lib/notification-worker', () => ({ getNotificationWorker: mocks.getWorker }));
 import {
@@ -24,8 +26,8 @@ const manager = { getSubscription: vi.fn(), subscribe: vi.fn() };
 const registration = { pushManager: manager };
 beforeEach(() => {
   vi.resetAllMocks();
-  vi.stubGlobal('PushManager', function () {});
-  vi.stubGlobal('navigator', {
+  stubGlobal('PushManager', function () {});
+  stubGlobal('navigator', {
     serviceWorker: { getRegistration: vi.fn().mockResolvedValue(registration) },
   });
   manager.subscribe.mockResolvedValue(subscription);
@@ -35,7 +37,7 @@ beforeEach(() => {
     trpcOk(path.startsWith('/trpc/push.config') ? { publicKey: 'AQID' } : { ok: true }),
   );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => unstubAllGlobals());
 
 // The push calls go through tRPC (`/trpc/push.*`), whose link sends them with `request`.
 const trpcOk = (data: unknown) => okAsync({ result: { data } });

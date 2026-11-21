@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import type { SDKControlGetContextUsageResponse } from '@anthropic-ai/claude-agent-sdk';
-import { describe, expect, test } from 'vitest';
 
 import { toContextBreakdown } from '../agents/context-breakdown.js';
 

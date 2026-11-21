@@ -19,6 +19,7 @@
 
 import type { GithubCallError } from '@funny/core/github-app';
 import type { PipelineDefinition } from '@funny/pipelines';
+import type { FactoryFlowDefinition } from '@funny/shared/contracts/factory';
 import {
   formatParseError,
   loadWorkflowCatalog,
@@ -129,13 +130,26 @@ async function repositoryCopy(
   return ok(null);
 }
 
-export async function loadFactoryFlow(
+/** Where a flow's YAML was found, before it is compiled. */
+interface FoundFlow {
+  source: FactoryFlow['source'];
+  /** What parse errors name: the repository path, or the built-in's file. */
+  origin: string;
+  /** The repository path; null for a built-in (its server path is not shown). */
+  path: string | null;
+  yaml: string;
+}
+
+async function findFactoryFlow(
   flowName: string,
   deps: LoadFactoryFlowDeps,
-): Promise<Result<FactoryFlow, FactoryFlowError>> {
+): Promise<Result<FoundFlow, FactoryFlowError>> {
   const copy = await repositoryCopy(flowName, deps);
   if (copy.isErr()) return err(copy.error);
-  if (copy.value) return compile(copy.value.yaml, copy.value.path, 'repository');
+  if (copy.value) {
+    const { path, yaml } = copy.value;
+    return ok({ source: 'repository', origin: path, path, yaml });
+  }
 
   if (WORKSPACE_ONLY_FLOWS.has(flowName)) {
     return err({
@@ -151,7 +165,28 @@ export async function loadFactoryFlow(
       message: `No flow named "${flowName}": add .funny/workflows/${flowName}.yaml to the default branch or pick a built-in flow.`,
     });
   }
-  return compile(builtIn.yaml, builtIn.filePath, 'built-in');
+  return ok({ source: 'built-in', origin: builtIn.filePath, path: null, yaml: builtIn.yaml });
+}
+
+export async function loadFactoryFlow(
+  flowName: string,
+  deps: LoadFactoryFlowDeps,
+): Promise<Result<FactoryFlow, FactoryFlowError>> {
+  const found = await findFactoryFlow(flowName, deps);
+  return found.andThen((flow) => compile(flow.yaml, flow.origin, flow.source));
+}
+
+/**
+ * The YAML of a flow as `loadFactoryFlow` would find it, for reading: the
+ * repository's default-branch copy, else the built-in. Not compiled, so an
+ * invalid repository copy can still be read.
+ */
+export async function readFactoryFlowDefinition(
+  flowName: string,
+  deps: LoadFactoryFlowDeps,
+): Promise<Result<FactoryFlowDefinition, FactoryFlowError>> {
+  const found = await findFactoryFlow(flowName, deps);
+  return found.map(({ source, path, yaml }) => ({ name: flowName, source, path, yaml }));
 }
 
 /** The built-in flows written for a server-run factory (they push and open a pull request). */

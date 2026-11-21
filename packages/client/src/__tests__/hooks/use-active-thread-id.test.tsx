@@ -1,7 +1,8 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter } from 'react-router-dom';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useActiveThreadId } from '@/hooks/use-active-thread-id';

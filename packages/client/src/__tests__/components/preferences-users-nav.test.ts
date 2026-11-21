@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 
 import { ADMIN_ONLY_PREFERENCES, PREFERENCES_NAV_ITEMS } from '@/components/PreferencesPanel';
 import { buildSettingsItems, routableSettingsIds } from '@/components/settings/items';

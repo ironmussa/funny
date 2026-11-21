@@ -1,0 +1,17 @@
+{
+  "name": "@funny/test-kit",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Test helpers for bun test that bun:test does not provide (global/env stubs, waitFor, async fake timers).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "typecheck": "bun check -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.0"
+  }
+}

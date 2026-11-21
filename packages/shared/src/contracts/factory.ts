@@ -197,6 +197,21 @@ export interface FactoryFlowOption {
   source: 'built-in' | 'repository';
 }
 
+/** One flow of the caller's factory, by name (its YAML). */
+export const factoryFlowInput = z.object({ projectId, flowName }).strict();
+
+/**
+ * The YAML a flow runs: the repository's copy on its default branch, or the
+ * built-in of that name, as the factory would load it.
+ */
+export interface FactoryFlowDefinition {
+  name: string;
+  source: FactoryFlowOption['source'];
+  /** The file in the repository (`.funny/workflows/<name>.yaml`); null for a built-in. */
+  path: string | null;
+  yaml: string;
+}
+
 /** The open blockers of some issues (the send bar's warning). */
 export const factoryBlockersInput = z
   .object({ projectId, issueNumbers: z.array(issueNumber).min(1).max(MAX_ISSUES_PER_SEND) })

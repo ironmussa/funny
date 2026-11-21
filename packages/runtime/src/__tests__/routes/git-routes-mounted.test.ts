@@ -1,18 +1,19 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 import { existsSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 
 import { badRequest } from '@funny/shared/errors';
+import { mocked } from '@funny/test-kit';
 import { Hono } from 'hono';
 import { errAsync, okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { HonoEnv } from '../../types/hono-env.js';
 
-const realFs = await vi.importActual<typeof import('node:fs')>('node:fs');
+const realFs = { ...(await import('node:fs')) };
 /** Real `Stats` for a directory, so the mocked statSync answers like the real one. */
 const DIRECTORY_STATS = realFs.statSync(tmpdir());
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getThread: vi.fn(),
   listThreads: vi.fn(),
   getProject: vi.fn(),
@@ -59,10 +60,11 @@ const mocks = vi.hoisted(() => ({
   gitServiceStash: vi.fn(),
   gitServicePopStash: vi.fn(),
   gitServiceDropStash: vi.fn(),
-}));
+}))();
 
-vi.mock('fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('fs')>();
+const actualFs = { ...(await import('fs')) };
+vi.mock('fs', () => {
+  const actual = actualFs;
   return {
     ...actual,
     existsSync: vi.fn(() => true),
@@ -85,8 +87,9 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('@funny/core/git', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@funny/core/git')>();
+const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => {
+  const actual = actualFunnyCoreGit;
   return {
     ...actual,
     stageFiles: mocks.stageFiles,
@@ -121,8 +124,9 @@ vi.mock('@funny/core/git', async (importOriginal) => {
   };
 });
 
-vi.mock('../../routes/git/helpers.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../routes/git/helpers.js')>();
+const actualRoutesGitHelpers = { ...(await import('../../routes/git/helpers.js')) };
+vi.mock('../../routes/git/helpers.js', () => {
+  const actual = actualRoutesGitHelpers;
   return {
     ...actual,
     getCachedPR: mocks.getCachedPR,
@@ -138,8 +142,9 @@ vi.mock('../../services/git-workflow-service.js', () => ({
   isWorkflowActive: mocks.isWorkflowActive,
 }));
 
-vi.mock('../../services/git-service.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../services/git-service.js')>();
+const actualServicesGitService = { ...(await import('../../services/git-service.js')) };
+vi.mock('../../services/git-service.js', () => {
+  const actual = actualServicesGitService;
   const resolveIdentity = vi.fn(async (_userId: string, _projectId?: string) => undefined);
   return {
     ...actual,
@@ -187,7 +192,7 @@ function makeApp() {
 
 describe('gitRoutes (mounted)', () => {
   beforeEach(() => {
-    vi.mocked(statSync).mockReturnValue(DIRECTORY_STATS);
+    mocked(statSync).mockReturnValue(DIRECTORY_STATS);
     vi.clearAllMocks();
     mocks.stageFiles.mockReturnValue(okAsync(undefined));
     mocks.gitServiceStage.mockReturnValue(okAsync(undefined));
@@ -300,7 +305,7 @@ describe('gitRoutes (mounted)', () => {
     mocks.gitServiceStash.mockReturnValue(okAsync('thread stash saved'));
     mocks.gitServicePopStash.mockReturnValue(okAsync('popped stash@{0}'));
     mocks.gitServiceDropStash.mockReturnValue(okAsync('dropped stash@{0}'));
-    vi.mocked(resolveIdentity).mockResolvedValue(undefined);
+    mocked(resolveIdentity).mockResolvedValue(undefined);
     mocks.listThreads.mockResolvedValue({ threads: [] });
     mocks.isProjectInOrg.mockResolvedValue(false);
     mocks.resolveProjectPath.mockReturnValue(errAsync(badRequest('no collaborator path')));
@@ -314,7 +319,7 @@ describe('gitRoutes (mounted)', () => {
   test.each(['remote-url', 'reflog-events', 'log'])(
     'GET project/%s explains a missing folder without running Git',
     async (endpoint) => {
-      vi.mocked(statSync).mockImplementation(() => {
+      mocked(statSync).mockImplementation(() => {
         throw Object.assign(new Error('missing'), { code: 'ENOENT' });
       });
       const res = await makeApp().request(`/api/git/project/p1/${endpoint}`);
@@ -353,7 +358,7 @@ describe('gitRoutes (mounted)', () => {
 
     beforeEach(() => {
       mocks.getThread.mockResolvedValue(removedWorktree);
-      vi.mocked(existsSync).mockImplementation((path) => String(path) !== '/wt/gone/.git');
+      mocked(existsSync).mockImplementation((path) => String(path) !== '/wt/gone/.git');
     });
 
     test.each(['log', 'graph-log', 'diff/summary', 'status'])(
@@ -378,7 +383,7 @@ describe('gitRoutes (mounted)', () => {
     });
 
     test('a worktree whose .git is present passes through', async () => {
-      vi.mocked(existsSync).mockReturnValue(true);
+      mocked(existsSync).mockReturnValue(true);
       mocks.getThread.mockResolvedValue({ ...removedWorktree, worktreePath: '/wt/thread' });
 
       const res = await makeApp().request('/api/git/t-gone/diff');
@@ -744,7 +749,7 @@ describe('gitRoutes (mounted)', () => {
   });
 
   test('POST /api/git/project/:projectId/publish creates GitHub repo', async () => {
-    vi.mocked(resolveIdentity).mockResolvedValueOnce({
+    mocked(resolveIdentity).mockResolvedValueOnce({
       githubToken: 'ghp_publish',
     });
     const app = makeApp();
@@ -768,7 +773,7 @@ describe('gitRoutes (mounted)', () => {
   });
 
   test('GET /api/git/project/:projectId/gh-orgs lists orgs when token present', async () => {
-    vi.mocked(resolveIdentity).mockResolvedValueOnce({
+    mocked(resolveIdentity).mockResolvedValueOnce({
       githubToken: 'ghp_orgs',
     });
     const app = makeApp();
@@ -1312,8 +1317,8 @@ describe('gitRoutes (mounted)', () => {
   });
 
   test('GET /api/git/project/:projectId/graph-log annotates branch refs with cached PR metadata', async () => {
-    vi.mocked(resolveIdentity).mockResolvedValue({ githubToken: 'ghs_test' });
-    vi.mocked(getCachedPR).mockReturnValue({
+    mocked(resolveIdentity).mockResolvedValue({ githubToken: 'ghs_test' });
+    mocked(getCachedPR).mockReturnValue({
       prNumber: 42,
       prUrl: 'https://github.com/acme/repo/pull/42',
       prState: 'OPEN',
@@ -1375,7 +1380,7 @@ describe('gitRoutes (mounted)', () => {
   });
 
   test('GET /api/git/project/:projectId/graph-log schedules uncached PR lookups only for visible rows', async () => {
-    vi.mocked(resolveIdentity).mockResolvedValue({ githubToken: 'ghs_test' });
+    mocked(resolveIdentity).mockResolvedValue({ githubToken: 'ghs_test' });
     mocks.getGraphLog.mockReturnValueOnce(
       okAsync([
         {

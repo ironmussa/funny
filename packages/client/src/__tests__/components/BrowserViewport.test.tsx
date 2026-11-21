@@ -1,7 +1,8 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({ input: vi.fn(), heartbeat: vi.fn() }));
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
+
+const mocks = (() => ({ input: vi.fn(), heartbeat: vi.fn() }))();
 vi.mock('@/lib/browser-session-client', () => ({ browserSessionClient: mocks }));
 vi.mock('@/components/browser-panel/BrowserSessionCanvas', () => ({
   BrowserSessionCanvas: () => <canvas />,

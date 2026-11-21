@@ -1,10 +1,12 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { advanceTimersByTimeAsync } from '@funny/test-kit';
 import { act, renderHook } from '@testing-library/react';
 import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { useRankedFileSearch } from '@/hooks/use-ranked-file-search';
 
-const { searchFiles } = vi.hoisted(() => ({ searchFiles: vi.fn() }));
+const { searchFiles } = (() => ({ searchFiles: vi.fn() }))();
 
 vi.mock('@/lib/api', () => ({ api: { searchFiles } }));
 
@@ -39,7 +41,7 @@ describe('useRankedFileSearch', () => {
 
     expect(result.current.searching).toBe(true);
     expect(searchFiles).not.toHaveBeenCalled();
-    await act(async () => vi.advanceTimersByTimeAsync(100));
+    await act(async () => advanceTimersByTimeAsync(100));
 
     expect(searchFiles).toHaveBeenCalledWith(
       { path: '/repo' },
@@ -70,12 +72,12 @@ describe('useRankedFileSearch', () => {
       { initialProps: { query: 'first' } },
     );
 
-    await act(async () => vi.advanceTimersByTimeAsync(100));
+    await act(async () => advanceTimersByTimeAsync(100));
     expect(signals[0]?.aborted).toBe(false);
 
     rerender({ query: 'second' });
     expect(signals[0]?.aborted).toBe(true);
-    await act(async () => vi.advanceTimersByTimeAsync(100));
+    await act(async () => advanceTimersByTimeAsync(100));
 
     expect(searchFiles).toHaveBeenLastCalledWith(
       { threadId: 'thread-1' },
@@ -100,7 +102,7 @@ describe('useRankedFileSearch', () => {
       }),
     );
 
-    await act(async () => vi.advanceTimersByTimeAsync(100));
+    await act(async () => advanceTimersByTimeAsync(100));
 
     expect(result.current).toEqual({
       response: null,

@@ -1,4 +1,5 @@
 import type {
+  FactoryFlowDefinition,
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryRun,
@@ -10,6 +11,7 @@ import {
   activeFactoryRunsQuery,
   NO_ACTIVE_FACTORY_RUNS,
   factoryBlockersQuery,
+  factoryFlowDefinitionQuery,
   factoryFlowsQuery,
   factoryRunsQuery,
   factorySettingsQuery,
@@ -18,6 +20,16 @@ import {
 /** The caller's factory settings for a project; `null` when never configured, `undefined` while loading. */
 export function useFactorySettings(projectId: string): FactorySettings | null | undefined {
   return useDataQuery(factorySettingsQuery(projectId)).data;
+}
+
+/**
+ * Whether reading the caller's factory settings failed and there is nothing to
+ * show: unlike `null` (never configured), the factory may well exist. The read
+ * is retried while shown (`factorySettingsQuery`).
+ */
+export function useFactorySettingsFailed(projectId: string): boolean {
+  const { isError, data } = useDataQuery(factorySettingsQuery(projectId));
+  return isError && data === undefined;
 }
 
 /** The caller's factory runs for a project, newest first; `undefined` while loading. */
@@ -57,6 +69,15 @@ export function useActiveFactoryRunForThread(thread: {
 /** The flows a send may pick; `undefined` while loading. */
 export function useFactoryFlows(projectId: string): FactoryFlowOption[] | undefined {
   return useDataQuery(factoryFlowsQuery(projectId)).data;
+}
+
+/** One flow's YAML while `flowName` is set; `undefined` while loading or none is chosen. */
+export function useFactoryFlowDefinition(
+  projectId: string,
+  flowName: string | null,
+): { definition: FactoryFlowDefinition | undefined; error: Error | null } {
+  const { data, error } = useDataQuery(factoryFlowDefinitionQuery(projectId, flowName));
+  return { definition: data, error: error ?? null };
 }
 
 /** The open blockers of `issueNumbers`; empty while none are selected. */

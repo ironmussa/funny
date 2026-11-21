@@ -1,6 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Job, ThreadComment } from '@funny/shared';
 import { okAsync, ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { cancelJob } from '@/data/background/actions';
 import { loadJobs } from '@/data/background/loaders';
@@ -12,9 +13,9 @@ import { getDataLayer } from '@/data/runtime';
 import { buildJob } from '../helpers/builders-lib';
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const jobsApi = vi.hoisted(() => ({ listJobs: vi.fn(), cancelJob: vi.fn() }));
+const jobsApi = (() => ({ listJobs: vi.fn(), cancelJob: vi.fn() }))();
 vi.mock('@/lib/api/jobs', () => ({ jobsApi }));
-const threadsApi = vi.hoisted(() => ({ getThreadComments: vi.fn() }));
+const threadsApi = (() => ({ getThreadComments: vi.fn() }))();
 vi.mock('@/lib/api/threads', () => ({ threadsApi }));
 
 const job = (status: Job['status']) => buildJob({ id: 'j1', threadId: 't1', status });

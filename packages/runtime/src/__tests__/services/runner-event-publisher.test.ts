@@ -1,6 +1,7 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import type { WSEvent } from '@funny/shared';
 import { EventDurability } from '@funny/shared/runner-v2/events';
-import { describe, expect, test, vi } from 'vitest';
 
 import { GrpcEventReplayStore } from '../../services/grpc-event-replay-store.js';
 import {

@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { oneDark, referenceDark } from '@funny/ui-contracts/tokens';
-import { describe, expect, test } from 'vitest';
 
 import { createVisualCssVariables } from './visual-theme-adapter';
 

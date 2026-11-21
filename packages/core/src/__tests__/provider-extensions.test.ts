@@ -6,13 +6,13 @@
  * others.
  */
 
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
 import { PROVIDER_MANIFEST_SCHEMA_VERSION } from '@funny/shared/provider-manifest-schema';
 import { ACP_MANIFESTS } from '@funny/shared/provider-manifests';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import type { AgentProcessOptions } from '../agents/interfaces.js';
 import { defaultProcessFactory } from '../agents/process-factory.js';

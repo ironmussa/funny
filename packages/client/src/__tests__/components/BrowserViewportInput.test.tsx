@@ -3,10 +3,11 @@
  * Shift, Backspace…) and mouse events carry modifiers and held buttons.
  */
 
-import { fireEvent, render, screen } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const input = vi.hoisted(() => vi.fn());
+import { fireEvent, render, screen } from '@testing-library/react';
+
+const input = (() => vi.fn())();
 vi.mock('@/lib/browser-session-client', () => ({
   browserSessionClient: { input, heartbeat: vi.fn() },
 }));

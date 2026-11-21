@@ -1,6 +1,7 @@
+import { describe, test, expect, beforeEach, afterEach, vi, type Mock } from 'bun:test';
+
 import type { WSEvent } from '@funny/shared';
 import type { ServerWebSocket } from 'bun';
-import { describe, test, expect, beforeEach, afterEach, vi, type Mock } from 'vitest';
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },

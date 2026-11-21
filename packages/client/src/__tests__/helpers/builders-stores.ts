@@ -1,6 +1,7 @@
+import { vi } from 'bun:test';
+
 import type { Message, ThreadEvent, ToolCall } from '@funny/shared';
 import { io, type Socket } from 'socket.io-client';
-import { vi } from 'vitest';
 
 /**
  * Typed builders for the hook and store tests: complete fixtures with a
@@ -61,15 +62,18 @@ export function buildRecordingSocket(): RecordingSocket {
   const handlers: Record<string, FrameHandler> = {};
   const onCalls: RecordingSocket['onCalls'] = [];
   const offCalls: RecordingSocket['offCalls'] = [];
-  vi.spyOn(socket, 'on').mockImplementation((event: string, handler: FrameHandler) => {
+  // socket.io types `on` / `off` per reserved event; the recorder takes any frame.
+  const on = (event: string, handler: FrameHandler) => {
     handlers[event] = handler;
     onCalls.push({ event, handler });
     return socket;
-  });
-  vi.spyOn(socket, 'off').mockImplementation((event?: string, handler?: FrameHandler) => {
+  };
+  const off = (event?: string, handler?: FrameHandler) => {
     if (event && handler) offCalls.push({ event, handler });
     return socket;
-  });
+  };
+  Reflect.set(socket, 'on', vi.fn(on));
+  Reflect.set(socket, 'off', vi.fn(off));
   return { socket, handlers, onCalls, offCalls };
 }
 

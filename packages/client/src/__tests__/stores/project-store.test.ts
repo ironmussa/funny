@@ -1,6 +1,7 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import type { DomainError } from '@funny/shared/errors';
 import { okAsync, errAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 /** The thread rows the mocked bridge treats as loaded, keyed by project. */
 interface LoadedThreadsRef {
@@ -17,7 +18,7 @@ const {
   mockThreadsApi,
   mockBatchUpdateThreads,
   mockFetchGitStatusForProject,
-} = vi.hoisted(() => {
+} = (() => {
   const mockThreadsByProject: LoadedThreadsRef = { current: {} };
   return {
     mockLoadThreadsForProject: vi.fn().mockResolvedValue(undefined),
@@ -41,7 +42,7 @@ const {
     mockBatchUpdateThreads: vi.fn(),
     mockFetchGitStatusForProject: vi.fn(),
   };
-});
+})();
 
 // Mock the API barrel (for any leftover consumers) and the specific sub-modules
 // the store now imports directly.

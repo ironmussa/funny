@@ -1,6 +1,7 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { cloneElement } from 'react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { PowerlineBar } from '@/components/ui/powerline-bar';
 
@@ -44,7 +45,7 @@ describe.each(['arrow', 'chips', 'plain'] as const)('PowerlineBar %s', (variant)
       />,
     );
     fireEvent.click(screen.getByRole('button', { name: 'main' }));
-    expect(open).toHaveBeenCalledOnce();
+    expect(open).toHaveBeenCalledTimes(1);
   });
 });
 

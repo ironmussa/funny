@@ -1,4 +1,4 @@
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual';
 import {
   AlertTriangle,
   ArrowDownCircle,
@@ -25,7 +25,7 @@ import { toast } from 'sonner';
 
 import { CommitActionsMenu } from '@/components/commit-graph/CommitActionsMenu';
 import { GraphGutter, initialsOf, LANE_WIDTH } from '@/components/commit-graph/GraphGutter';
-import { GraphRefChips } from '@/components/commit-graph/GraphRefChips';
+import { GraphRefChips, isThreadBranchRef } from '@/components/commit-graph/GraphRefChips';
 import {
   DEFAULT_GRAPH_BRANCH_SCOPE,
   HistoryFilters,
@@ -104,7 +104,11 @@ import { useThreadById } from '@/lib/thread-selectors';
 import { shortTimeAgo } from '@/lib/thread-utils';
 import { canLoadGitHistory } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
-import { useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
+import {
+  useThreadProjectId,
+  useThreadSelector,
+  useThreadViewSelect,
+} from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('commit-graph');
@@ -197,6 +201,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   const threadProjectId = useThreadProjectId();
   const lightThread = useThreadById(effectiveThreadId);
   const threadIsScratch = useThreadSelector((t) => t?.isScratch);
+  const threadBranchField = useThreadViewSelect(effectiveThreadId, (t) => t?.branch ?? null);
   const gitThread = effectiveThreadId
     ? {
         projectId: threadProjectId ?? lightThread?.projectId ?? '',
@@ -636,6 +641,19 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
     [branchSummaries],
   );
 
+  // The branch the open thread works on: its own branch, or (a local thread
+  // with no recorded branch) the branch checked out where it runs.
+  const threadBranch = effectiveThreadId
+    ? threadBranchField || branchSummaries.find((b) => b.isCurrent)?.branch || null
+    : null;
+  useScrollToThreadBranch({
+    threadId: effectiveThreadId,
+    threadBranch,
+    entries: displayEntries,
+    visible: !!visible,
+    virtualizer,
+  });
+
   const { branchActionInProgress, pushBranch, pullCurrentBranch } = useBranchActions({
     hasGitContext,
     effectiveThreadId,
@@ -752,14 +770,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
             }}
           >
             <RebaseCopyLinksOverlay
-              renderedRange={
-                virtualItems.length > 0
-                  ? {
-                      start: virtualItems[0].index,
-                      end: virtualItems[virtualItems.length - 1].index,
-                    }
-                  : null
-              }
+              renderedRange={renderedRangeOf(virtualItems)}
               links={rebaseCopyLinks}
               entries={displayEntries}
               layoutRows={layout.rows}
@@ -829,6 +840,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
                   unpulled={unpulled.has(entry.hash) || inferredUnpulled.has(entry.hash)}
                   connectToWip={!!wipStatus && virtualRow.index === 0}
                   searchQuery={searchQuery}
+                  threadBranch={threadBranch}
                   transform={virtualRow.start}
                   rowHeight={rowHeightFor(entry)}
                   onSelect={() => setSelectedHash(selectedHash === entry.hash ? null : entry.hash)}
@@ -875,6 +887,49 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
   );
 }
 
+/** Index of the row whose chips include the local branch `branch`, or -1. */
+export function findThreadBranchRowIndex(
+  entries: readonly Pick<GraphEntry, 'refs' | 'headBranch'>[],
+  branch: string | null,
+): number {
+  if (!branch) return -1;
+  return entries.findIndex((entry) =>
+    foldGraphRefs(entry.refs, entry.headBranch).some((ref) => isThreadBranchRef(ref, branch)),
+  );
+}
+
+/**
+ * Brings the open thread's branch tip into view once per thread (and again if
+ * its branch changes), so selecting a thread shows where it sits in the
+ * history. Later scrolling by the user is left alone.
+ */
+function useScrollToThreadBranch({
+  threadId,
+  threadBranch,
+  entries,
+  visible,
+  virtualizer,
+}: {
+  threadId: string | undefined;
+  threadBranch: string | null;
+  entries: readonly GraphEntry[];
+  visible: boolean;
+  virtualizer: Pick<Virtualizer<HTMLDivElement, Element>, 'scrollToIndex'>;
+}) {
+  const scrolledKeyRef = useRef<string | null>(null);
+  const index = useMemo(
+    () => findThreadBranchRowIndex(entries, threadBranch),
+    [entries, threadBranch],
+  );
+  useEffect(() => {
+    if (!visible || !threadId || !threadBranch || index < 0) return;
+    const key = `${threadId}::${threadBranch}`;
+    if (scrolledKeyRef.current === key) return;
+    scrolledKeyRef.current = key;
+    virtualizer.scrollToIndex(index, { align: 'center' });
+  }, [visible, threadId, threadBranch, index, virtualizer]);
+}
+
 function nodeYForRow(entry: Pick<GraphEntry, 'refs' | 'headBranch'>, rowHeight: number): number {
   if (entry.refs.length === 0) return rowHeight / 2;
   const chipLineH = META_PX + 5;
@@ -882,6 +937,71 @@ function nodeYForRow(entry: Pick<GraphEntry, 'refs' | 'headBranch'>, rowHeight: 
   const count = foldGraphRefs(entry.refs, entry.headBranch).length;
   const refsContentH = count * chipLineH + (count - 1) * 4 + 6 + titleLineH;
   return (rowHeight - refsContentH) / 2 + chipLineH / 2;
+}
+
+interface RowRange {
+  start: number;
+  end: number;
+}
+
+interface RebaseLinkRow {
+  index: number;
+  top: number;
+  nodeY: number;
+  lane: number;
+}
+
+/** First and last row index the virtualizer rendered, or null before it has rendered any. */
+function renderedRangeOf(virtualItems: ReadonlyArray<{ index: number }>): RowRange | null {
+  if (virtualItems.length === 0) return null;
+  return { start: virtualItems[0].index, end: virtualItems[virtualItems.length - 1].index };
+}
+
+/** Each laid-out row's position, by commit hash, and the height of the whole list. */
+function layoutRebaseLinkRows(
+  entries: GraphEntry[],
+  layoutRows: GraphRow[],
+  rowHeightFor: (entry: GraphEntry) => number,
+): { rowsByHash: Map<string, RebaseLinkRow>; totalHeight: number } {
+  let totalHeight = 0;
+  const rowsByHash = new Map<string, RebaseLinkRow>();
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const row = layoutRows[index];
+    const height = rowHeightFor(entry);
+    if (row) {
+      rowsByHash.set(entry.hash, {
+        index,
+        top: totalHeight,
+        nodeY: nodeYForRow(entry, height),
+        lane: row.commitLane,
+      });
+    }
+    totalHeight += height;
+  }
+  return { rowsByHash, totalHeight };
+}
+
+/**
+ * The links whose rows are both laid out and that cross a rendered row: one
+ * between two off-screen rows would be drawn with nothing around it.
+ */
+function rebaseLinksInRange(
+  links: RebaseCopyLink[],
+  rowsByHash: Map<string, RebaseLinkRow>,
+  range: RowRange,
+): Array<{ link: RebaseCopyLink; source: RebaseLinkRow; target: RebaseLinkRow }> {
+  const visible: Array<{ link: RebaseCopyLink; source: RebaseLinkRow; target: RebaseLinkRow }> = [];
+  for (const link of links) {
+    const source = rowsByHash.get(link.sourceHash);
+    const target = rowsByHash.get(link.targetHash);
+    if (!source || !target) continue;
+    const first = Math.min(source.index, target.index);
+    const last = Math.max(source.index, target.index);
+    if (last < range.start || first > range.end) continue;
+    visible.push({ link, source, target });
+  }
+  return visible;
 }
 
 export function RebaseCopyLinksOverlay({
@@ -900,7 +1020,7 @@ export function RebaseCopyLinksOverlay({
    * links are laid out for the whole list, so without this gate they would
    * paint on an otherwise empty list until the rows arrive a frame later.
    */
-  renderedRange: { start: number; end: number } | null;
+  renderedRange: RowRange | null;
   links: RebaseCopyLink[];
   entries: GraphEntry[];
   layoutRows: GraphRow[];
@@ -912,47 +1032,8 @@ export function RebaseCopyLinksOverlay({
   const markerId = useId();
   if (links.length === 0 || !renderedRange) return null;
 
-  let nextTop = 0;
-  const rowsByHash = new Map<
-    string,
-    {
-      index: number;
-      top: number;
-      nodeY: number;
-      lane: number;
-    }
-  >();
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
-    const row = layoutRows[index];
-    const height = rowHeightFor(entry);
-    if (row) {
-      rowsByHash.set(entry.hash, {
-        index,
-        top: nextTop,
-        nodeY: nodeYForRow(entry, height),
-        lane: row.commitLane,
-      });
-    }
-    nextTop += height;
-  }
-
-  const visibleLinks: Array<{
-    link: RebaseCopyLink;
-    source: { top: number; nodeY: number; lane: number };
-    target: { top: number; nodeY: number; lane: number };
-  }> = [];
-  for (const link of links) {
-    const source = rowsByHash.get(link.sourceHash);
-    const target = rowsByHash.get(link.targetHash);
-    if (!source || !target) continue;
-    // Only links that cross a rendered row: one between two off-screen rows
-    // would be drawn with nothing around it.
-    const first = Math.min(source.index, target.index);
-    const last = Math.max(source.index, target.index);
-    if (last < renderedRange.start || first > renderedRange.end) continue;
-    visibleLinks.push({ link, source, target });
-  }
+  const { rowsByHash, totalHeight } = layoutRebaseLinkRows(entries, layoutRows, rowHeightFor);
+  const visibleLinks = rebaseLinksInRange(links, rowsByHash, renderedRange);
   if (visibleLinks.length === 0) return null;
 
   const maxRailLane = visibleLinks.reduce((maxLane, { source, target }) => {
@@ -971,18 +1052,18 @@ export function RebaseCopyLinksOverlay({
   return (
     <div
       className="pointer-events-none absolute top-0 left-0 z-20 overflow-hidden"
-      style={{ width: 12 + graphViewportWidth, height: nextTop }}
+      style={{ width: 12 + graphViewportWidth, height: totalHeight }}
       data-testid="graph-rebase-copy-links"
     >
       <svg
         style={{
           width,
-          height: nextTop,
+          height: totalHeight,
           overflow: 'visible',
           transform: `translateX(-${graphScrollLeft}px)`,
         }}
         width={width}
-        height={nextTop}
+        height={totalHeight}
         aria-hidden="true"
       >
         <defs>
@@ -1418,6 +1499,7 @@ function GraphCommitRow({
   unpulled,
   connectToWip,
   searchQuery,
+  threadBranch,
   transform,
   rowHeight,
   onSelect,
@@ -1452,6 +1534,8 @@ function GraphCommitRow({
   connectToWip: boolean;
   /** Active filter query — highlights matching substrings in the title & refs. */
   searchQuery: string;
+  /** Branch the open thread works on; its chip gets an arrow marker. */
+  threadBranch: string | null;
   transform: number;
   rowHeight: number;
   onSelect: () => void;
@@ -1750,6 +1834,7 @@ function GraphCommitRow({
                 actionInProgress={branchActionInProgress}
                 color={lanePastel}
                 searchQuery={searchQuery}
+                threadBranch={threadBranch}
                 onPushBranch={onPushBranch}
                 onPullCurrentBranch={onPullCurrentBranch}
               />

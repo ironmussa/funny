@@ -1,7 +1,6 @@
-import { screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, setSystemTime, vi } from 'bun:test';
 
-import { ThreadPreparationView } from '@/components/thread/ThreadPreparationView';
+import { screen } from '@testing-library/react';
 
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
@@ -25,11 +24,13 @@ vi.mock('@/components/PromptInput', () => ({
   ),
 }));
 
+const { ThreadPreparationView } = await import('@/components/thread/ThreadPreparationView');
+
 describe('ThreadPreparationView', () => {
   test('shows the time elapsed since the prompt was sent while preparing', () => {
     vi.useFakeTimers();
     try {
-      vi.setSystemTime(new Date('2026-11-17T10:00:07.000Z'));
+      setSystemTime(new Date('2026-11-17T10:00:07.000Z'));
       renderWithProviders(
         <ThreadPreparationView
           prompt="hola"

@@ -1,5 +1,6 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { FailureCode } from '@funny/shared/runner-v2/common';
-import { describe, expect, test, vi } from 'vitest';
 
 import { RunnerControlDispatcher } from '../../services/runner-control-dispatcher.js';
 

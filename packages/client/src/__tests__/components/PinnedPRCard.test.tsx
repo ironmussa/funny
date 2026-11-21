@@ -1,7 +1,8 @@
+import { beforeAll, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { GitHubPR } from '@funny/shared';
 import { screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { PinnedPRCard } from '@/components/PinnedPRCard';
 
@@ -9,10 +10,10 @@ import { mockT } from '../helpers/mock-i18n';
 import { MARKDOWN_PRELOAD_TIMEOUT_MS, preloadMarkdownPipeline } from '../helpers/preload-markdown';
 import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
-const apiMock = vi.hoisted(() => ({
+const apiMock = (() => ({
   githubPRThreads: vi.fn(),
   githubPRConversation: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api', () => ({
   api: apiMock,

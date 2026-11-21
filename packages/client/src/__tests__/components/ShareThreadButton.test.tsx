@@ -1,13 +1,14 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Thread, ThreadRuntime } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 interface ThreadRef {
   current: Partial<Thread>;
 }
 
-const thread = vi.hoisted((): ThreadRef => ({ current: {} }));
+const thread = ((): ThreadRef => ({ current: {} }))();
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }));
 vi.mock('@/lib/api', () => ({
@@ -16,14 +17,15 @@ vi.mock('@/lib/api', () => ({
 vi.mock('@/lib/api/threads', () => ({
   threadsApi: { listThreadShares: () => okAsync([]) },
 }));
-vi.mock('@/stores/thread-context', async (importOriginal) => ({
-  ...(await importOriginal<object>()),
+const actualStoresThreadContext = { ...(await import('@/stores/thread-context')) };
+vi.mock('@/stores/thread-context', () => ({
+  ...actualStoresThreadContext,
   useThreadSelector: (selector: (t: unknown) => unknown) => selector(thread.current),
 }));
 
-import { ShareThreadButton } from '@/components/thread/header/ShareThreadButton';
-import { useAuthStore } from '@/stores/auth-store';
-import { useUIStore } from '@/stores/ui-store';
+const { ShareThreadButton } = await import('@/components/thread/header/ShareThreadButton');
+const { useAuthStore } = await import('@/stores/auth-store');
+const { useUIStore } = await import('@/stores/ui-store');
 
 import { renderWithProviders } from '../helpers/render';
 

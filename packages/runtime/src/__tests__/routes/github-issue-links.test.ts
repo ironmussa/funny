@@ -1,3 +1,5 @@
+import { describe, expect, test } from 'bun:test';
+
 /**
  * The Issues panel showed the PR badge only when a LOCAL branch carried the
  * issue number and an OPEN PR came from that branch. A PR that says
@@ -5,7 +7,6 @@
  * the issue without a badge.
  */
 import type { GitHubIssue } from '@funny/shared';
-import { describe, expect, test } from 'vitest';
 
 import {
   closingReferences,

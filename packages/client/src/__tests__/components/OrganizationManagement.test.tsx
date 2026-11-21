@@ -1,13 +1,14 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { OrganizationManagement } from '@/components/settings/OrganizationManagement';
 
-const auth = vi.hoisted(() => ({
+const auth = (() => ({
   getSession: vi.fn(),
   list: vi.fn(),
   create: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/auth-client', () => ({
   authClient: {
@@ -40,7 +41,7 @@ describe('OrganizationManagement create form', () => {
     expect(slug).toHaveValue('custom-slug');
 
     fireEvent.click(screen.getByTestId('org-create-submit'));
-    await waitFor(() => expect(auth.create).toHaveBeenCalledOnce());
+    await waitFor(() => expect(auth.create).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(name).toHaveValue(''));
 
     fireEvent.change(name, { target: { value: 'Second Org' } });

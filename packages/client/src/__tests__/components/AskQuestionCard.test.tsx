@@ -1,7 +1,8 @@
-import { render, screen } from '@testing-library/react';
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
-const presenceState = vi.hoisted(() => ({ mounts: 0, unmounts: 0 }));
+import { render, screen } from '@testing-library/react';
+
+const presenceState = (() => ({ mounts: 0, unmounts: 0 }))();
 
 vi.mock('motion/react', async () => {
   const React = await import('react');
@@ -33,8 +34,9 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
 
-vi.mock('@/components/tool-cards/utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/components/tool-cards/utils')>();
+const actualComponentsToolCardsUtils = { ...(await import('@/components/tool-cards/utils')) };
+vi.mock('@/components/tool-cards/utils', () => {
+  const actual = actualComponentsToolCardsUtils;
   return {
     ...actual,
     useCurrentProjectId: () => undefined,
@@ -63,7 +65,8 @@ vi.mock('@/hooks/use-slash-skills', () => ({
 }));
 vi.mock('@/data/profile/hooks', () => ({ useProfile: () => undefined }));
 
-import { AskQuestionCard } from '@/components/tool-cards/AskQuestionCard';
+// Imported after the mocks, which bun does not hoist.
+const { AskQuestionCard } = await import('@/components/tool-cards/AskQuestionCard');
 
 const parsed = {
   questions: [

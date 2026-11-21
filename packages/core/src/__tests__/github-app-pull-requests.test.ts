@@ -1,5 +1,6 @@
+import { describe, expect, test } from 'bun:test';
+
 import { errAsync, okAsync } from 'neverthrow';
-import { describe, expect, test } from 'vitest';
 
 import { createPullRequestCi, createRepoGithub } from '../github-app/index.js';
 import { fakeFetch } from './helpers/test-helpers.js';

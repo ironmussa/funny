@@ -1,6 +1,7 @@
+import { describe, expect, test } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
 import { createLiveQueryCollection, inArray } from '@tanstack/db';
-import { describe, expect, test } from 'vitest';
 
 import { createDataLayer } from '@/data/data-layer';
 import { getThreadsData } from '@/data/threads/store';
@@ -90,7 +91,7 @@ function dataLayerRun(threads: Thread[]) {
   };
 }
 
-describe.runIf(process.env.FUNNY_BENCH === '1')(
+describe.if(process.env.FUNNY_BENCH === '1')(
   'thread update cost (500 threads, 10 streaming)',
   () => {
     test('data layer stays well inside one frame', () => {

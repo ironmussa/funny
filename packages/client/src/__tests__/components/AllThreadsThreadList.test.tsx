@@ -1,7 +1,8 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { GitStatusInfo, Thread } from '@funny/shared';
 import { act, screen } from '@testing-library/react';
 import type { KeyboardEvent, MutableRefObject } from 'react';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { AllThreadsThreadList } from '@/components/all-threads/AllThreadsThreadList';
 import { seedGitStatus } from '@/data/git-status/testing';

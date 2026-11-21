@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import { analyzeMarkdown } from '@/lib/markdown-to-plaintext';
 

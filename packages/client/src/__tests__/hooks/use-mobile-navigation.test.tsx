@@ -1,7 +1,8 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom';
-import { describe, expect, test, vi } from 'vitest';
 
 import { useMobileNavigation } from '@/hooks/use-mobile-navigation';
 import { getNavigate, getUrlThreadId } from '@/stores/thread-store-internals';
@@ -35,7 +36,7 @@ describe('mobile URL navigation', () => {
     ['/', 'projects'],
   ])('restores %s on a fresh mount', (route, screen) => {
     const { result } = setup(route);
-    expect(result.current.view.screen).toBe(screen);
+    expect<unknown>(result.current.view.screen).toBe(screen);
     expect(result.current.location.pathname + result.current.location.search).toBe(route);
   });
 

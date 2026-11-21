@@ -27,6 +27,11 @@ export function createDataQueryClient(): QueryClient {
   });
 }
 
+/** The part of a query a `refetchInterval` function reads (any `Query` has it). */
+export interface QueryStatusView {
+  state: { status: 'pending' | 'error' | 'success' };
+}
+
 /** Rejection reason for a query whose API call returned `err`. Carries the original `DomainError`. */
 export class DataRequestError extends Error {
   readonly domainError: DomainError;

@@ -1,3 +1,5 @@
+import { describe, test, expect, beforeEach, vi } from 'bun:test';
+
 /**
  * Reproducción del bug observado en Abbacchio (11 warnings "invariant re-select"
  * en sesiones recientes): la URL cambia al hilo B pero el store sigue en A.
@@ -13,14 +15,13 @@
  * es un no-op aunque no haya fetch en vuelo.
  */
 import { okAsync } from 'neverthrow';
-import { describe, test, expect, beforeEach, vi } from 'vitest';
 
-const { mockGetThread, mockGetThreadEvents, mockListThreads, mockStartSpan } = vi.hoisted(() => ({
+const { mockGetThread, mockGetThreadEvents, mockListThreads, mockStartSpan } = (() => ({
   mockGetThread: vi.fn(),
   mockGetThreadEvents: vi.fn(),
   mockListThreads: vi.fn(),
   mockStartSpan: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api/threads', () => ({
   threadsApi: {
@@ -74,13 +75,11 @@ vi.mock('@/stores/thread-ws-handlers', () => ({
 // internals reales para que `getSelectingThreadId` / `nextSelectGeneration`
 // se comporten exactamente como en producción.
 
-import { buildThreadWithMessages, withThreadIndex } from '@/data/threads/testing';
-import { useThreadStore } from '@/stores/thread-store';
-import {
-  setSelectingThreadId,
-  getSelectingThreadId,
-  setThreadSelectListener,
-} from '@/stores/thread-store-internals';
+// Imported after the mocks (bun's mock.module is not hoisted).
+const { buildThreadWithMessages, withThreadIndex } = await import('@/data/threads/testing');
+const { useThreadStore } = await import('@/stores/thread-store');
+const { setSelectingThreadId, getSelectingThreadId, setThreadSelectListener } =
+  await import('@/stores/thread-store-internals');
 
 const threadA = {
   ...buildThreadWithMessages({ id: 'thread-A', projectId: 'proj-1', title: 'A' }),
@@ -254,5 +253,21 @@ describe('selectThread — stuck selectingThreadId (reproduces "invariant re-sel
     expect(state.selectedThreadId).toBe(threadB.id);
     expect(state.activeThread?.id).toBe(threadB.id);
     expect(getSelectingThreadId()).toBeNull();
+  });
+  test('a failed load records the thread so the view can stop waiting', async () => {
+    const { errAsync } = await import('neverthrow');
+    mockGetThread.mockReturnValue(errAsync({ type: 'NOT_FOUND', message: 'Thread not found' }));
+    mockGetThreadEvents.mockReturnValue(errAsync({ type: 'NOT_FOUND', message: 'not found' }));
+
+    await useThreadStore.getState().selectThread('thread-gone');
+
+    expect(useThreadStore.getState().threadLoadFailedId).toBe('thread-gone');
+    expect(useThreadStore.getState().activeThread).toBeNull();
+
+    // The next selection clears it.
+    mockGetThread.mockReturnValue(okAsync(threadB));
+    mockGetThreadEvents.mockReturnValue(okAsync({ events: [] }));
+    await useThreadStore.getState().selectThread(threadB.id);
+    expect(useThreadStore.getState().threadLoadFailedId).toBeNull();
   });
 });

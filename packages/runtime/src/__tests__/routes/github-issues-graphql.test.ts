@@ -4,7 +4,7 @@
  * lists. These tests pin the mapping to the REST shape the client reads and
  * the PR links handed to `linkIssues`.
  */
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { linkIssues } from '../../routes/github/issue-links.js';
 import {

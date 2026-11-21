@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'bun:test';
+
 import type { ThreadEvent, ThreadEventType } from '@funny/shared';
-import { describe, test, expect } from 'vitest';
 
 import { GIT_TIMELINE_EVENT_TYPES } from '@/lib/git-timeline-events';
 import {

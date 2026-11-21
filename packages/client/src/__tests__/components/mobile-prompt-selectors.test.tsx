@@ -1,5 +1,6 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ModelSelect, ModeSelect, TemplateSelect } from '@/components/PromptSelectors';
 import { BranchPicker, SearchablePicker } from '@/components/SearchablePicker';
@@ -17,7 +18,7 @@ vi.mock('@/components/ProviderSetupDialog', () => ({
   ),
 }));
 
-const virtualizer = vi.hoisted(() => ({ heights: new Array<number>() }));
+const virtualizer = (() => ({ heights: new Array<number>() }))();
 vi.mock('@tanstack/react-virtual', () => ({
   useVirtualizer: ({ count, estimateSize }: { count: number; estimateSize: () => number }) => {
     const size = estimateSize();
@@ -34,6 +35,7 @@ vi.mock('@tanstack/react-virtual', () => ({
 
 let viewport = 390;
 const listeners = new Set<() => void>();
+const originalMatchMedia = window.matchMedia;
 const originalScrollIntoView = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
   'scrollIntoView',
@@ -52,19 +54,24 @@ beforeEach(() => {
   });
   viewport = 390;
   virtualizer.heights.length = 0;
-  vi.stubGlobal('matchMedia', (query: string) => ({
-    get matches() {
-      return query === '(max-width: 767px)' && viewport < 768;
-    },
-    media: query,
-    addEventListener: (_: string, listener: () => void) => listeners.add(listener),
-    removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
-  }));
+  // setup.ts defines a writable but non-configurable `matchMedia` on the
+  // global (which is `window`), so stubGlobal's defineProperty cannot replace
+  // it with new attributes: replace only its value, restored in afterEach.
+  Object.defineProperty(window, 'matchMedia', {
+    value: (query: string) => ({
+      get matches() {
+        return query === '(max-width: 767px)' && viewport < 768;
+      },
+      media: query,
+      addEventListener: (_: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_: string, listener: () => void) => listeners.delete(listener),
+    }),
+  });
 });
 afterEach(() => {
   cleanup();
   listeners.clear();
-  vi.unstubAllGlobals();
+  Object.defineProperty(window, 'matchMedia', { value: originalMatchMedia });
   if (originalScrollIntoView)
     Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', originalScrollIntoView);
   else Reflect.deleteProperty(HTMLElement.prototype, 'scrollIntoView');
@@ -154,7 +161,8 @@ describe('mobile prompt selectors', () => {
       'true',
     );
     fireEvent.click(within(drawer).getByRole('button', { name: 'Auto' }));
-    expect(onChange).toHaveBeenCalledExactlyOnceWith('auto');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('auto');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await waitFor(() => expect(trigger).toHaveFocus());
   });
@@ -192,8 +200,10 @@ describe('mobile prompt selectors', () => {
     expect(onEffortChange).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('prompt-model-option-codex:gpt-5.5'));
     fireEvent.click(screen.getByTestId('prompt-effort-option-codex:gpt-5.5-high'));
-    expect(onChange).toHaveBeenCalledExactlyOnceWith('codex:gpt-5.5');
-    expect(onEffortChange).toHaveBeenCalledExactlyOnceWith('high');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('codex:gpt-5.5');
+    expect(onEffortChange).toHaveBeenCalledTimes(1);
+    expect(onEffortChange).toHaveBeenCalledWith('high');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
@@ -247,7 +257,8 @@ describe('mobile prompt selectors', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Unavailable' }));
     expect(onChange).not.toHaveBeenCalled();
     fireEvent.click(screen.getByTestId('prompt-model-option-codex:gpt-5.5'));
-    expect(onChange).toHaveBeenCalledExactlyOnceWith('codex:gpt-5.5');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('codex:gpt-5.5');
   });
 
   test('provider setup closes the selection panel', async () => {
@@ -273,7 +284,8 @@ describe('mobile prompt selectors', () => {
     for (const label of ['My templates', 'Shared', 'Built-in'])
       expect(within(drawer).getByRole('region', { name: label })).toBeInTheDocument();
     fireEvent.click(within(drawer).getByRole('button', { name: 'Team' }));
-    expect(onChange).toHaveBeenCalledExactlyOnceWith('team');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('team');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     fireEvent.click(screen.getByTestId('prompt-template-select'));
     fireEvent.click(await screen.findByRole('button', { name: 'No template' }));
@@ -303,7 +315,8 @@ describe('mobile prompt selectors', () => {
     expect(screen.getByText('No branches match')).toBeInTheDocument();
     fireEvent.change(input, { target: { value: 'develop' } });
     fireEvent.click(within(drawer).getByRole('button', { name: 'develop' }));
-    expect(onChange).toHaveBeenCalledExactlyOnceWith('develop');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('develop');
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
@@ -327,7 +340,8 @@ describe('mobile prompt selectors', () => {
       target: { value: 'feature mobile' },
     });
     fireEvent.click(screen.getByTestId('branch-new-confirm'));
-    expect(onChange).toHaveBeenCalledExactlyOnceWith('feature-mobile');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('feature-mobile');
   });
 
   test('shared pickers outside prompt retain popover autofocus on mobile', async () => {
@@ -433,8 +447,10 @@ describe('desktop cascading model selector', () => {
     expect(onChange).not.toHaveBeenCalled();
     expect(onEffortChange).not.toHaveBeenCalled();
     fireEvent.click(high);
-    expect(onChange).toHaveBeenCalledExactlyOnceWith('codex:gpt-5.5');
-    expect(onEffortChange).toHaveBeenCalledExactlyOnceWith('high');
+    expect(onChange).toHaveBeenCalledTimes(1);
+    expect(onChange).toHaveBeenCalledWith('codex:gpt-5.5');
+    expect(onEffortChange).toHaveBeenCalledTimes(1);
+    expect(onEffortChange).toHaveBeenCalledWith('high');
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
   });
 

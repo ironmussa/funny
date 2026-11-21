@@ -1,7 +1,8 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { ActionJob, ActionRun, CICheck } from '@funny/shared';
 import { fireEvent, screen } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { ActionsTab } from '@/components/ActionsTab';
 import { createDataLayer } from '@/data/data-layer';
@@ -19,13 +20,13 @@ import { buildPRDetail } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 import { flushAsyncUpdates, renderWithProviders } from '../helpers/render';
 
-const api = vi.hoisted(() => ({
+const api = (() => ({
   githubPRDetail: vi.fn(),
   githubActionRuns: vi.fn(),
   githubActionJobs: vi.fn(),
   githubActionJobLog: vi.fn(),
   githubRerunFailedJobs: vi.fn(),
-}));
+}))();
 
 vi.mock('@/lib/api/github', () => ({
   githubApi: { ...api, githubPRThreads: vi.fn() },
@@ -167,7 +168,7 @@ describe('ActionsTab', () => {
 
     expect(api.githubActionRuns).toHaveBeenCalledWith('project-1', { branch: 'feat/x' });
     // A successful answer lifts the pause.
-    expect(getDataLayer().queryClient.getQueryData(['github-rate-limited'])).toBe(false);
+    expect<unknown>(getDataLayer().queryClient.getQueryData(['github-rate-limited'])).toBe(false);
   });
 
   test("a hidden tab does not fetch an expanded run's jobs", async () => {

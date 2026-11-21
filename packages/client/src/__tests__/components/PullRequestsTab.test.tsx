@@ -1,35 +1,25 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { GitHubPR, GitStatusInfo, PRDetail, Thread, ThreadWithMessages } from '@funny/shared';
 import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
-
-import { PullRequestsTab } from '@/components/PullRequestsTab';
-import { createDataLayer } from '@/data/data-layer';
-import { readGitStatusMaps } from '@/data/git-status/read';
-import { seedGitStatus } from '@/data/git-status/testing';
-import { seedProjectCurrentBranches, withProjects } from '@/data/projects/testing';
-import { replaceDataLayer } from '@/data/runtime';
-import { buildThreadWithMessages, withThreadIndex } from '@/data/threads/testing';
-import { useProjectStore } from '@/stores/project-store';
-import { ThreadProvider } from '@/stores/thread-context';
-import { useThreadStore } from '@/stores/thread-store';
 
 import { expectInstance } from '../helpers/builders-components';
 import { mockT } from '../helpers/mock-i18n';
 import { renderWithProviders } from '../helpers/render';
 
-const apiMock = vi.hoisted(() => ({
+const apiMock = (() => ({
   githubStatus: vi.fn(),
   projectGetRemoteUrl: vi.fn(),
   githubPRFilterOptions: vi.fn(),
   githubPRs: vi.fn(),
   githubPRsSearch: vi.fn(),
-}));
-const githubApiMock = vi.hoisted(() => ({
+}))();
+const githubApiMock = (() => ({
   githubPRDetail: vi.fn(),
-}));
+}))();
 
-const logError = vi.hoisted(() => vi.fn());
+const logError = (() => vi.fn())();
 vi.mock('@/lib/client-logger', () => ({
   createClientLogger: () => ({ error: logError, warn: vi.fn(), info: vi.fn(), debug: vi.fn() }),
 }));
@@ -51,6 +41,17 @@ vi.mock('react-i18next', () => ({
   }),
   initReactI18next: { type: '3rdParty', init: () => {} },
 }));
+
+const { PullRequestsTab } = await import('@/components/PullRequestsTab');
+const { createDataLayer } = await import('@/data/data-layer');
+const { readGitStatusMaps } = await import('@/data/git-status/read');
+const { seedGitStatus } = await import('@/data/git-status/testing');
+const { seedProjectCurrentBranches, withProjects } = await import('@/data/projects/testing');
+const { replaceDataLayer } = await import('@/data/runtime');
+const { buildThreadWithMessages, withThreadIndex } = await import('@/data/threads/testing');
+const { useProjectStore } = await import('@/stores/project-store');
+const { ThreadProvider } = await import('@/stores/thread-context');
+const { useThreadStore } = await import('@/stores/thread-store');
 
 function makeThread(overrides: Partial<Thread> = {}): ThreadWithMessages {
   return buildThreadWithMessages({

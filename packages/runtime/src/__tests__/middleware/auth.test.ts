@@ -1,5 +1,6 @@
+import { describe, test, expect, beforeEach, vi } from 'bun:test';
+
 import { Hono } from 'hono';
-import { describe, test, expect, beforeEach, vi } from 'vitest';
 
 import type { HonoEnv } from '../../types/hono-env.js';
 

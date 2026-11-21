@@ -6,7 +6,8 @@
  * asserted as call counts — no WebSocket touched. Time is controlled with
  * vitest fake timers since the machine uses xstate's named delays.
  */
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { createActor } from 'xstate';
 
 import {

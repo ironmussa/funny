@@ -1,6 +1,6 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const h = vi.hoisted(() => ({ query: vi.fn() }));
+const h = (() => ({ query: vi.fn() }))();
 vi.mock('@anthropic-ai/claude-agent-sdk', () => ({ query: h.query }));
 vi.mock('@funny/core/agents', () => ({ resolveSDKCliPath: () => '/sdk/cli.js' }));
 vi.mock('../../lib/logger.js', () => ({ log: { error: vi.fn() } }));

@@ -192,6 +192,9 @@ export function PromptFooterBar(props: PromptFooterBarProps) {
             breakdown={props.contextBreakdown}
             onCompact={props.onCompact ? props.onRequestCompact : undefined}
             disabled={!props.onCompact}
+            threadId={props.powerlineThread?.id}
+            agentProfileId={props.powerlineThread?.agentProfileId}
+            agentProfileName={props.powerlineThread?.agentProfileName}
           />
         </div>
       )}

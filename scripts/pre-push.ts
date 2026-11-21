@@ -8,9 +8,8 @@
 // breakage early, in seconds rather than minutes.
 //
 // A change to `bun.lock` or the root `package.json` selects only the packages
-// declaring an external dependency it touches (see lockfile-changes.ts), and a
-// vitest suite selected by source changes runs only the tests related to them.
-// A `bun test` suite with a test-impact map runs only the test files that
+// declaring an external dependency it touches (see lockfile-changes.ts). A
+// `bun test` suite with a test-impact map runs only the test files that
 // executed a changed source (scripts/test-impact.ts; `fetch` downloads the
 // maps CI builds).
 //

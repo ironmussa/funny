@@ -1,11 +1,13 @@
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
+
 import type { IAgentProcess, ProcessOptionsSnapshot, StartAgentOptions } from '@funny/core/agents';
 import type { Project, ResolvedAgentExecutionProfileResponse } from '@funny/shared';
+import { mocked } from '@funny/test-kit';
 import { err, ok } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const noResolvedProfile: ResolvedAgentExecutionProfileResponse = { profile: null, env: {} };
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   orchestrator: {
     startAgent: vi.fn(async (_opts: StartAgentOptions) => undefined),
     stopAgent: vi.fn(async () => undefined),
@@ -86,7 +88,7 @@ const mocks = vi.hoisted(() => ({
       message?: string;
     } | null> => ({ secrets: [] }),
   ),
-}));
+}))();
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -115,13 +117,11 @@ vi.mock('../../services/agent-startup/load-mcp-servers.js', () => ({
   loadProjectMcpServers: (...args: unknown[]) => mocks.loadProjectMcpServers(...args),
 }));
 
-vi.mock('../../services/thread-context.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../../services/thread-context.js')>();
-  return {
-    ...actual,
-    resolveThreadCwd: (...args: unknown[]) => mocks.resolveThreadCwd(...args),
-  };
-});
+const actualThreadContext = { ...(await import('../../services/thread-context.js')) };
+vi.mock('../../services/thread-context.js', () => ({
+  ...actualThreadContext,
+  resolveThreadCwd: (...args: unknown[]) => mocks.resolveThreadCwd(...args),
+}));
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
@@ -744,7 +744,7 @@ describe('AgentLifecycleManager', () => {
 
       await manager.startAgent('thread-1', `look at this\n${secret}`, '/tmp/repo');
 
-      const calls: unknown[][] = vi.mocked(log.info).mock.calls;
+      const calls: unknown[][] = mocked(log.info).mock.calls;
       const call = calls.find(([message]) => message === 'startAgent called');
       expect(call).toBeDefined();
       const meta = call?.[1];

@@ -1,7 +1,7 @@
 /**
  * Ready-queue scheduler: behaviour the level-by-level mode could not give.
  */
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test, vi } from 'bun:test';
 
 import { definePipeline, node, runPipeline } from '../engine.js';
 

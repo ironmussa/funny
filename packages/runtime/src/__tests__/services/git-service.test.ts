@@ -1,20 +1,20 @@
+import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 import { okAsync } from 'neverthrow';
-import { afterAll, beforeAll, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { testPath } from '../helpers/test-dirname.js';
 
 const REPO = testPath(import.meta, '..', '..', '..', '.test-tmp-git-service');
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getThread: vi.fn(),
   getGitIdentity: vi.fn(),
   getGithubToken: vi.fn(),
   stageFiles: vi.fn(),
   emit: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/thread-manager.js', () => ({
   getThread: mocks.getThread,
@@ -29,8 +29,9 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('@funny/core/git', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@funny/core/git')>();
+const actualGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => {
+  const actual = actualGit;
   return {
     ...actual,
     stageFiles: mocks.stageFiles,

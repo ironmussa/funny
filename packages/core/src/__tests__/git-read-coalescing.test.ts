@@ -2,12 +2,12 @@
 // the CLI path so the tests behave the same with or without the native module.
 process.env.FUNNY_DISABLE_NATIVE_GIT = '1';
 
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
 
 import type { Result } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { getDiffSummary, getStatusSummary, invalidateStatusCache } from '../git/index.js';
 import { executeSync, getGitWriteGeneration, gitWrite } from '../git/process.js';

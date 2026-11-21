@@ -1,9 +1,9 @@
-import { describe, expect, test, vi, beforeEach } from 'vitest';
+import { describe, expect, test, vi, beforeEach } from 'bun:test';
 
-const fsMocks = vi.hoisted(() => ({
+const fsMocks = (() => ({
   readFile: vi.fn(),
   writeFile: vi.fn(),
-}));
+}))();
 
 vi.mock('node:fs/promises', () => ({
   readFile: fsMocks.readFile,
@@ -77,7 +77,7 @@ describe('toggleMcpServer', () => {
     });
 
     expect(result.isOk()).toBe(true);
-    expect(mockWriteFile).toHaveBeenCalledOnce();
+    expect(mockWriteFile).toHaveBeenCalledTimes(1);
 
     const written = JSON.parse(String(mockWriteFile.mock.calls[0][1]));
     expect(written.projects[PROJECT].disabledMcpServers).toEqual(['codegraph']);

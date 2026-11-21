@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { RECOMMENDED_SERVERS } from '../../services/mcp-service.js';
 

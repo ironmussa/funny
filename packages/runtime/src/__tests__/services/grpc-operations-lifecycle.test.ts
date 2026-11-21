@@ -1,5 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { FailureCode } from '@funny/shared/runner-v2/common';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { advanceTimersByTimeAsync, expectRejection } from '@funny/test-kit';
 
 vi.mock('../../services/grpc-operation-outbox.js', () => ({
   GrpcOperationOutbox: class {
@@ -36,12 +38,13 @@ describe('GrpcOperationsAdapter request lifecycle', () => {
 
   test('expires disconnected reads after 30 seconds and removes them from reconnect', async () => {
     send.mockReturnValue(false);
-    const result = expect(adapter.request('data:get_thread', { threadId: 't1' })).rejects.toThrow(
+    const result = expectRejection(
+      adapter.request('data:get_thread', { threadId: 't1' }),
       'timed out waiting for runner connection',
     );
-    await vi.advanceTimersByTimeAsync(29_999);
+    await advanceTimersByTimeAsync(29_999);
     expect(vi.getTimerCount()).toBe(1);
-    await vi.advanceTimersByTimeAsync(1);
+    await advanceTimersByTimeAsync(1);
     await result;
     adapter.activated();
     expect(send).toHaveBeenCalledTimes(1);
@@ -50,17 +53,18 @@ describe('GrpcOperationsAdapter request lifecycle', () => {
 
   test('restarts the 15-second response deadline on each successful delivery', async () => {
     send.mockReturnValue(false);
-    const result = expect(adapter.request('data:get_thread', {})).rejects.toThrow(
+    const result = expectRejection(
+      adapter.request('data:get_thread', {}),
       'Data request timed out (data:get_thread)',
     );
-    await vi.advanceTimersByTimeAsync(29_000);
+    await advanceTimersByTimeAsync(29_000);
     send.mockReturnValue(true);
     adapter.activated();
-    await vi.advanceTimersByTimeAsync(14_000);
+    await advanceTimersByTimeAsync(14_000);
     adapter.activated();
-    await vi.advanceTimersByTimeAsync(14_999);
+    await advanceTimersByTimeAsync(14_999);
     expect(vi.getTimerCount()).toBe(1);
-    await vi.advanceTimersByTimeAsync(1);
+    await advanceTimersByTimeAsync(1);
     await result;
     adapter.activated();
     expect(send).toHaveBeenCalledTimes(3);
@@ -102,27 +106,24 @@ describe('GrpcOperationsAdapter request lifecycle', () => {
   });
 
   test('shutdown rejects every pending request and clears all timers', async () => {
-    const first = expect(adapter.request('data:get_thread', {})).rejects.toThrow(
-      'transport shut down',
-    );
-    const second = expect(adapter.request('data:get_project', {})).rejects.toThrow(
-      'transport shut down',
-    );
+    const first = expectRejection(adapter.request('data:get_thread', {}), 'transport shut down');
+    const second = expectRejection(adapter.request('data:get_project', {}), 'transport shut down');
     adapter.shutdown();
     await Promise.all([first, second]);
     expect(vi.getTimerCount()).toBe(0);
-    expect(outbox.close).toHaveBeenCalledOnce();
+    expect(outbox.close).toHaveBeenCalledTimes(1);
   });
 
   test('discards timed-out mutations so a reconnect never replays them', async () => {
-    const result = expect(
+    const result = expectRejection(
       adapter.request('data:update_thread', {
         threadId: 't1',
         updates: { status: 'completed' },
       }),
-    ).rejects.toThrow('Data request timed out');
+      'Data request timed out',
+    );
     const key = send.mock.calls[0][1].metadata.idempotencyKey;
-    await vi.advanceTimersByTimeAsync(15_000);
+    await advanceTimersByTimeAsync(15_000);
     await result;
     expect(outbox.discard).toHaveBeenCalledWith(key);
     adapter.activated();
@@ -131,12 +132,13 @@ describe('GrpcOperationsAdapter request lifecycle', () => {
   });
 
   test('shutdown leaves pending mutations in the outbox for the next process', async () => {
-    const result = expect(
+    const result = expectRejection(
       adapter.request('data:update_thread', { threadId: 't1', updates: {} }),
-    ).rejects.toThrow('transport shut down');
+      'transport shut down',
+    );
     adapter.shutdown();
     await result;
     expect(outbox.discard).not.toHaveBeenCalled();
-    expect(outbox.close).toHaveBeenCalledOnce();
+    expect(outbox.close).toHaveBeenCalledTimes(1);
   });
 });

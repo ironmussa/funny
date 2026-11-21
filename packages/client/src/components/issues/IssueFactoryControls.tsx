@@ -6,7 +6,7 @@
  */
 import { MAX_ISSUES_PER_SEND } from '@funny/shared/contracts/factory';
 import type { TFunction } from 'i18next';
-import { Send, X } from 'lucide-react';
+import { RotateCw, Send, X } from 'lucide-react';
 import { useMemo, useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Link } from 'react-router-dom';
@@ -17,12 +17,17 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { controlFactoryRun, sendIssuesToFactory } from '@/data/factory/actions';
+import {
+  controlFactoryRun,
+  retryFactorySettings,
+  sendIssuesToFactory,
+} from '@/data/factory/actions';
 import {
   useFactoryBlockers,
   useFactoryFlows,
   useFactoryRuns,
   useFactorySettings,
+  useFactorySettingsFailed,
 } from '@/data/factory/hooks';
 import { useCanSteerProject } from '@/data/projects/hooks';
 import type { FactoryRun, FactorySettings, FactorySubmitResult } from '@/lib/api/factory';
@@ -40,6 +45,11 @@ export interface IssueFactory {
   /** The caller may send issues (steer + a configured factory). */
   active: boolean;
   settings: FactorySettings | null;
+  /**
+   * Reading the settings failed: the factory may exist, but its checkboxes
+   * stay off until a retry reads it (not the same as "no factory").
+   */
+  unavailable: boolean;
   /** The latest run of each issue in the caller's factory. */
   latestRun: ReadonlyMap<number, FactoryRun>;
   /** 1-based position of each waiting issue in the queue. */
@@ -50,6 +60,7 @@ export interface IssueFactory {
 export function useIssueFactory(projectId: string): IssueFactory {
   const canSteer = useCanSteerProject(projectId);
   const settings = useFactorySettings(projectId) ?? null;
+  const settingsFailed = useFactorySettingsFailed(projectId);
   const runs = useFactoryRuns(projectId);
   return useMemo(() => {
     const latestRun = new Map<number, FactoryRun>();
@@ -62,8 +73,14 @@ export function useIssueFactory(projectId: string): IssueFactory {
         .sort((a, b) => (a.queueOrder ?? 0) - (b.queueOrder ?? 0))
         .map((run, index) => [run.issueNumber, index + 1] as const),
     );
-    return { active: canSteer && settings !== null, settings, latestRun, queuePosition };
-  }, [canSteer, settings, runs]);
+    return {
+      active: canSteer && settings !== null,
+      settings,
+      unavailable: canSteer && settingsFailed,
+      latestRun,
+      queuePosition,
+    };
+  }, [canSteer, settings, settingsFailed, runs]);
 }
 
 /** Whether an issue can be selected for a send: open, and not already in the factory. */
@@ -213,6 +230,43 @@ export function IssueFactoryStatus({
         </Button>
       )}
     </span>
+  );
+}
+
+/**
+ * Shown instead of the checkboxes when the factory settings could not be read:
+ * says why they are missing, and reads them again on demand (they are also
+ * retried on their own while shown).
+ */
+export function IssuesFactoryUnavailable({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
+  const [retrying, setRetrying] = useState(false);
+  const retry = () => {
+    setRetrying(true);
+    void retryFactorySettings(projectId).finally(() => setRetrying(false));
+  };
+  return (
+    <div
+      className="border-sidebar-border bg-sidebar text-muted-foreground flex items-center gap-1.5 border-b px-2 py-1 text-xs"
+      data-testid="issues-factory-unavailable"
+    >
+      <span className="min-w-0 flex-1">
+        {t(
+          'factory.settingsUnavailable',
+          "Couldn't load your issue factory, so issues can't be selected for it yet.",
+        )}
+      </span>
+      <Button
+        variant="ghost"
+        size="xs"
+        onClick={retry}
+        disabled={retrying}
+        data-testid="issues-factory-retry"
+      >
+        <RotateCw className={cn('icon-xs', retrying && 'animate-spin')} />
+        {t('common.retry', 'Retry')}
+      </Button>
+    </div>
   );
 }
 

@@ -13,7 +13,10 @@
  *   - active map: handles are tracked and cleaned up on settle
  */
 
+import { describe, expect, test, vi } from 'bun:test';
+
 import { node, type PipelineDefinition, type ProgressReporter } from '@funny/pipelines';
+import { waitFor } from '@funny/test-kit';
 import {
   SchedulerPipelineDispatcher,
   type ContextBuilder,
@@ -24,7 +27,6 @@ import {
 } from '@funny/thread-scheduler';
 import type { ActionProvider } from '@funny/workflows/compiler';
 import type { YamlPipelineContext } from '@funny/workflows/compiler';
-import { describe, expect, test, vi } from 'vitest';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -338,7 +340,7 @@ describe('SchedulerPipelineDispatcher', () => {
     const first = await dispatcher.dispatch(baseInput());
     const second = await dispatcher.dispatch(baseInput({ threadId: 't2' }));
     if (!first.ok || !second.ok) throw new Error('dispatch failed');
-    await vi.waitFor(() =>
+    await waitFor(() =>
       expect(reported).toContainEqual([
         'merge',
         { status: 'pending', metadata: { workflowStatus: 'waiting_slot' } },

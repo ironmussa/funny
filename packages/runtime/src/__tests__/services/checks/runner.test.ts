@@ -1,3 +1,4 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -5,7 +6,6 @@ import { join } from 'node:path';
 import { TEST_EVENT_PREFIX } from '@funny/shared/checks';
 import { parseTaskProgress } from '@funny/shared/task-progress';
 import { parseTestProgress } from '@funny/shared/test-progress';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import {
   checkEnv,

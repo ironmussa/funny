@@ -1,6 +1,7 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import { Hono } from 'hono';
 import { ok } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 /**
  * GET /pr-detail: project / token checks, the single GraphQL request it makes,
@@ -12,12 +13,12 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
  * commit's checks and is gone.
  */
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   getProject: vi.fn(),
   getGithubToken: vi.fn(),
   githubGraphQL: vi.fn(),
   getRemoteUrl: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/service-registry.js', () => ({
   getServices: () => ({
@@ -26,13 +27,15 @@ vi.mock('../../services/service-registry.js', () => ({
   }),
 }));
 
-vi.mock('../../routes/github/helpers.js', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../routes/github/helpers.js')>()),
+const actualRoutesGithubHelpers = { ...(await import('../../routes/github/helpers.js')) };
+vi.mock('../../routes/github/helpers.js', () => ({
+  ...actualRoutesGithubHelpers,
   githubGraphQL: mocks.githubGraphQL,
 }));
 
-vi.mock('@funny/core/git', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@funny/core/git')>()),
+const actualFunnyCoreGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => ({
+  ...actualFunnyCoreGit,
   getRemoteUrl: mocks.getRemoteUrl,
   // The `gh auth token` fallback must never see the host's real gh CLI.
   execute: vi.fn(async () => ({ stdout: '', stderr: '', exitCode: 1 })),

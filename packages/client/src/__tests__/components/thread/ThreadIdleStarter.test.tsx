@@ -1,18 +1,19 @@
+import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
 import { act, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 interface StarterMocks {
   promptProps: null | Record<string, any>;
-  sendMessage: Mock;
-  appendOptimisticMessage: Mock;
+  sendMessage: Mock<(...args: any[]) => any>;
+  appendOptimisticMessage: Mock<(...args: any[]) => any>;
 }
 
-const mocks = vi.hoisted((): StarterMocks => ({
+const mocks = ((): StarterMocks => ({
   promptProps: null,
   sendMessage: vi.fn(),
   appendOptimisticMessage: vi.fn(),
-}));
+}))();
 
 vi.mock('@/components/PromptInput', () => ({
   PromptInput: (props: Record<string, any>) => {
@@ -36,9 +37,9 @@ vi.mock('react-i18next', () => ({
   initReactI18next: { type: '3rdParty', init: () => undefined },
 }));
 
-import { ThreadIdleStarter } from '@/components/thread/ThreadIdleStarter';
-import { TooltipProvider } from '@/components/ui/tooltip';
-import { buildThreadWithMessages } from '@/data/threads/testing';
+const { ThreadIdleStarter } = await import('@/components/thread/ThreadIdleStarter');
+const { TooltipProvider } = await import('@/components/ui/tooltip');
+const { buildThreadWithMessages } = await import('@/data/threads/testing');
 
 const MANIFEST =
   '<referenced-files>\n<file path="src/a.ts" />\n<folder path="docs"></folder>\n</referenced-files>\n\nReview these';

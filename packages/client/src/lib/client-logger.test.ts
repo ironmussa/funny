@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'bun:test';
 
 const interceptConsole = vi.fn();
 const isConsoleIntercepted = vi.fn(() => true);
@@ -28,11 +28,18 @@ type FunnyLog = {
   clear: () => void;
 };
 
+let freshImport = 0;
+
 async function loadLogger(): Promise<{
   funnyLog: FunnyLog;
   createClientLogger: (namespace: string) => unknown;
 }> {
-  const mod = await import('./client-logger');
+  // A fresh module instance per test (vitest used vi.resetModules()): the
+  // query string makes bun load the module again with empty logger caches.
+  freshImport += 1;
+  const mod = (await import(
+    `./client-logger?fresh=${freshImport}`
+  )) as typeof import('./client-logger');
   return {
     // oxlint-disable-next-line anti-slop/no-chained-type-assertions -- accessing test-injected global
     funnyLog: (window as unknown as { __funnyLog: FunnyLog }).__funnyLog,
@@ -46,7 +53,6 @@ describe('__funnyLog level control', () => {
     childSetLevels.length = 0;
     isConsoleIntercepted.mockReturnValue(true);
     localStorage.clear();
-    vi.resetModules();
   });
 
   it('retunes console capture as well as the namespaced loggers', async () => {

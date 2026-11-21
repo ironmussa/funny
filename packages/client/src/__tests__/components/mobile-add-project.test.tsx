@@ -1,5 +1,6 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
 import { fireEvent, render, screen, cleanup } from '@testing-library/react';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { ProjectListView } from '@/components/mobile/ProjectListView';
 

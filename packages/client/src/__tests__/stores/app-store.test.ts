@@ -1,6 +1,7 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import type { DomainError } from '@funny/shared/errors';
 import { okAsync, errAsync } from 'neverthrow';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { readProjects } from '@/data/projects/read';
 import { buildProject } from '@/data/projects/testing';
@@ -14,7 +15,7 @@ import { readProjectThreads, seedThreads } from '../helpers/seed-thread-state';
 
 // project-store and thread-store now import the specific api/* modules
 // directly (not the barrel). Mock those plus the barrel for legacy callers.
-const { mockProjectsApi, mockThreadsApi } = vi.hoisted(() => ({
+const { mockProjectsApi, mockThreadsApi } = (() => ({
   mockProjectsApi: {
     listProjects: vi.fn(),
     listBranches: vi
@@ -28,7 +29,7 @@ const { mockProjectsApi, mockThreadsApi } = vi.hoisted(() => ({
     archiveThread: vi.fn(),
     getGitStatuses: vi.fn().mockReturnValue({ isOk: () => false, isErr: () => true }),
   },
-}));
+}))();
 
 vi.mock('@/lib/api', () => ({
   api: { ...mockProjectsApi, ...mockThreadsApi },

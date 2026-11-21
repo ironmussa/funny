@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'bun:test';
 
 import { buildLogTail, MAX_TAIL_CHARS } from '../../services/job-log-tail.js';
 

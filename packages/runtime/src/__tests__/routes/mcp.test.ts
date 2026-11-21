@@ -1,6 +1,7 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import { Hono } from 'hono';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import type { HonoEnv } from '../../types/hono-env.js';
 
@@ -15,7 +16,7 @@ const {
   mockResolveEffectiveProfile,
   mockStartOAuthFlow,
   mockToggleMcpServer,
-} = vi.hoisted(() => ({
+} = (() => ({
   mockAddMcpServer: vi.fn(),
   mockHandleOAuthCallback: vi.fn(),
   mockListMcpServers: vi.fn(),
@@ -24,7 +25,7 @@ const {
   mockResolveEffectiveProfile: vi.fn(),
   mockStartOAuthFlow: vi.fn(),
   mockToggleMcpServer: vi.fn(),
-}));
+}))();
 
 vi.mock('../../services/mcp-service.js', () => ({
   addMcpServer: mockAddMcpServer,

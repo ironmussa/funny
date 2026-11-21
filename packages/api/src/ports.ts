@@ -54,6 +54,7 @@ import type {
 } from '@funny/shared/contracts/automations';
 import type { CreateDesignBody } from '@funny/shared/contracts/designs';
 import type {
+  FactoryFlowDefinition,
   FactoryFlowOption,
   FactoryIssueBlockers,
   FactoryQueueClearResult,
@@ -453,6 +454,12 @@ export interface FactoryPort {
   ): PortResult<FactorySubmitResult>;
   /** The flows a send may pick: the built-ins, plus the repository's when it can be read. */
   flows(userId: string, projectId: string): PortResult<FactoryFlowOption[]>;
+  /** The YAML of one flow, as the caller's factory would load it (repository copy or built-in). */
+  flowDefinition(
+    userId: string,
+    projectId: string,
+    flowName: string,
+  ): PortResult<FactoryFlowDefinition>;
   /** The open blockers of some issues, and whether the caller's factory has each. */
   blockers(
     userId: string,

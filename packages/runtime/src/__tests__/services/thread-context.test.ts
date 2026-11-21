@@ -1,7 +1,6 @@
+import { describe, test, expect } from 'bun:test';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-
-import { describe, test, expect } from 'vitest';
 
 import { resolveThreadCwd, canDoGitOps, scratchPathFor } from '../../services/thread-context.js';
 

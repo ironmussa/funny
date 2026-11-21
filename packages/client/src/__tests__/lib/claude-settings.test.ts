@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { CLAUDE_SETTINGS_DEFAULT, claudeSettingsPathFromHome } from '@/lib/claude-settings';
 

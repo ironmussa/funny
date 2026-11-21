@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { isLightTheme, THEME_CLASSES, THEMES } from './theme';
 

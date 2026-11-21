@@ -1,7 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { Thread, ThreadStage } from '@funny/shared';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { okAsync, ResultAsync } from 'neverthrow';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { moveThreadStage, archiveThread } from '@/data/threads/actions';
 import {
@@ -24,11 +25,11 @@ import {
 
 import { deferred, installTestDataLayer, resetTestDataLayer } from '../helpers/data-layer-harness';
 
-const mockApi = vi.hoisted(() => ({
+const mockApi = (() => ({
   listThreads: vi.fn(),
   archiveThread: vi.fn(),
   updateThreadStage: vi.fn(),
-}));
+}))();
 vi.mock('@/lib/api', () => ({ api: mockApi }));
 vi.mock('@/platform/client-composition', () => ({
   clientComposition: { platform: { effects: { emit: vi.fn() } } },

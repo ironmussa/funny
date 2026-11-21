@@ -4,12 +4,11 @@
  * profiles (it used to share that prefix and lost its frames mid-recording).
  */
 
+import { afterAll, describe, expect, test, vi } from 'bun:test';
 import { execFileSync } from 'child_process';
 import { existsSync, mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-
-import { afterAll, describe, expect, test, vi } from 'vitest';
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

@@ -1,5 +1,6 @@
+import { describe, expect, test, vi } from 'bun:test';
+
 import { TERMINAL_SESSION_UNAVAILABLE } from '@funny/shared/socket-events';
-import { describe, expect, test, vi } from 'vitest';
 
 import { GrpcTerminalReplayStore } from '../../services/grpc-terminal-replay-store.js';
 import { RunnerTerminalAdapter } from '../../services/runner-terminal-adapter.js';

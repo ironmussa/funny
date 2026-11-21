@@ -1,11 +1,11 @@
+import { afterEach, beforeEach, expect, test, vi } from 'bun:test';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { ok } from 'neverthrow';
-import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ requireProject: vi.fn(), branches: vi.fn(), fetch: vi.fn() }));
+const mocks = (() => ({ requireProject: vi.fn(), branches: vi.fn(), fetch: vi.fn() }))();
 vi.mock('../../utils/route-helpers.js', () => ({ requireProject: mocks.requireProject }));
 vi.mock('@funny/core/git', () => ({
   getCurrentBranch: vi.fn(async () => ok('main')),
@@ -67,5 +67,5 @@ test('preserves branch data when the directory exists', async () => {
     defaultBranch: 'main',
     currentBranch: 'main',
   });
-  expect(mocks.fetch).toHaveBeenCalledOnce();
+  expect(mocks.fetch).toHaveBeenCalledTimes(1);
 });

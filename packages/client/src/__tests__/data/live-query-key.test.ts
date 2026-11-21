@@ -1,6 +1,7 @@
+import { afterEach, describe, expect, test } from 'bun:test';
+
 import type { Thread } from '@funny/shared';
 import { act, renderHook } from '@testing-library/react';
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { createDataLayer } from '@/data/data-layer';
 import { liveQueryKey } from '@/data/live-query-key';

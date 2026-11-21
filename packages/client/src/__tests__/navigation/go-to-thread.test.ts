@@ -1,5 +1,6 @@
+import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
 import type { NavigateFunction } from 'react-router-dom';
-import { afterEach, beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
 import { goToThread } from '@/navigation/go-to-thread';

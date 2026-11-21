@@ -1,15 +1,18 @@
-import { ResultAsync, okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+import { waitFor } from '@funny/test-kit';
+import { ResultAsync, okAsync } from 'neverthrow';
+
+const mocks = (() => ({
   fetchRemote: vi.fn(),
   gitRead: vi.fn(),
   invalidateStatusCache: vi.fn(),
   getThread: vi.fn(),
-}));
+}))();
 
-vi.mock('@funny/core/git', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@funny/core/git')>();
+const actualGit = { ...(await import('@funny/core/git')) };
+vi.mock('@funny/core/git', () => {
+  const actual = actualGit;
   return {
     ...actual,
     fetchRemote: mocks.fetchRemote,
@@ -51,7 +54,7 @@ describe('git-runtime-service', () => {
       onFetched,
     });
     expect(scheduled).toBe(true);
-    await vi.waitFor(() => expect(mocks.gitRead).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.gitRead).toHaveBeenCalledTimes(2));
     await new Promise((resolve) => setTimeout(resolve, 0));
     return onFetched;
   }
@@ -103,7 +106,7 @@ describe('git-runtime-service', () => {
 
     expect(first).toBe(true);
     expect(second).toBe(false);
-    await vi.waitFor(() => expect(mocks.fetchRemote).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(mocks.fetchRemote).toHaveBeenCalledTimes(1));
 
     resolveFetch(true);
   });

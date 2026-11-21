@@ -1,6 +1,8 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { lazy, Suspense } from 'react';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
 
@@ -11,7 +13,7 @@ describe('ErrorBoundary', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
   });
 
   it.each([
@@ -40,10 +42,10 @@ describe('ErrorBoundary', () => {
     expect(screen.queryByTestId('error-boundary-app')).not.toBeInTheDocument();
 
     const reload = vi.fn();
-    vi.stubGlobal('window', { location: { reload } });
+    stubGlobal('window', { location: { reload } });
     fireEvent.click(reloadButton);
-    expect(reload).toHaveBeenCalledOnce();
-    expect(load).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(load).toHaveBeenCalledTimes(1);
   });
 
   it('can retry an ordinary render failure without reloading', () => {

@@ -1,3 +1,4 @@
+import { describe, test, expect, beforeEach, afterEach, vi } from 'bun:test';
 import { EventEmitter } from 'events';
 
 import type {
@@ -10,7 +11,6 @@ import type {
   CLIUserMessage,
 } from '@funny/core/agents';
 import type { ResolvedAgentExecutionProfileResponse, WSEvent } from '@funny/shared';
-import { describe, test, expect, beforeEach, afterEach, vi } from 'vitest';
 
 import { AgentRunner } from '../../services/agent-runner.js';
 import type { IThreadManager, IWSBroker } from '../../services/server-interfaces.js';

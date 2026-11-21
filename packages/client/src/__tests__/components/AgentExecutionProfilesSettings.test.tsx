@@ -1,16 +1,17 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
 import type { AgentExecutionProfileResponse } from '@funny/shared';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { okAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { mockT } from '../helpers/mock-i18n';
 
-const mockListAgentExecutionProfiles = vi.hoisted(() => vi.fn());
-const mockCreateAgentExecutionProfile = vi.hoisted(() => vi.fn());
-const mockUpdateAgentExecutionProfile = vi.hoisted(() => vi.fn());
-const mockDeleteAgentExecutionProfile = vi.hoisted(() => vi.fn());
-const mockGetProjectAgentProfileBinding = vi.hoisted(() => vi.fn());
-const mockUpdateProjectAgentProfileBinding = vi.hoisted(() => vi.fn());
+const mockListAgentExecutionProfiles = (() => vi.fn())();
+const mockCreateAgentExecutionProfile = (() => vi.fn())();
+const mockUpdateAgentExecutionProfile = (() => vi.fn())();
+const mockDeleteAgentExecutionProfile = (() => vi.fn())();
+const mockGetProjectAgentProfileBinding = (() => vi.fn())();
+const mockUpdateProjectAgentProfileBinding = (() => vi.fn())();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: mockT, i18n: { language: 'en' } }),

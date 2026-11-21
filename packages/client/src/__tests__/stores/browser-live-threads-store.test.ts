@@ -1,7 +1,8 @@
-import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, describe, expect, test, vi } from 'bun:test';
 
-const liveThreads = vi.hoisted(() => vi.fn());
+import { errAsync, okAsync } from 'neverthrow';
+
+const liveThreads = (() => vi.fn())();
 vi.mock('@/lib/api/browser-sessions', () => ({ browserSessionsApi: { liveThreads } }));
 
 import {

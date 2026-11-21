@@ -1,5 +1,7 @@
+import { beforeEach, describe, expect, test, vi, type Mock } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { beforeEach, describe, expect, test, vi, type Mock } from 'vitest';
 
 import { EditFileCard } from '@/components/tool-cards/EditFileCard';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -12,20 +14,20 @@ import {
 
 interface IntersectionObserverState {
   callback: IntersectionObserverCallback | null;
-  observe: Mock;
-  disconnect: Mock;
+  observe: Mock<(...args: any[]) => any>;
+  disconnect: Mock<(...args: any[]) => any>;
 }
 
-const intersectionObserverState = vi.hoisted((): IntersectionObserverState => ({
+const intersectionObserverState = ((): IntersectionObserverState => ({
   callback: null,
   observe: vi.fn(),
   disconnect: vi.fn(),
-}));
+}))();
 
-const apiMocks = vi.hoisted(() => ({
+const apiMocks = (() => ({
   getFileDiff: vi.fn(),
   readFile: vi.fn(() => Promise.resolve({ isErr: () => true })),
-}));
+}))();
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -102,7 +104,7 @@ describe('EditFileCard', () => {
       takeRecords = () => [];
     }
 
-    vi.stubGlobal('IntersectionObserver', MockIntersectionObserver);
+    stubGlobal('IntersectionObserver', MockIntersectionObserver);
   });
 
   test('keeps the inline diff slot height stable while lazy-mounting the diff', async () => {
@@ -171,11 +173,11 @@ describe('EditFileCard', () => {
   });
 
   test('mounts a visible diff when IntersectionObserver does not notify', async () => {
-    vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+    stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
       callback(0);
       return 1;
     });
-    vi.stubGlobal('cancelAnimationFrame', vi.fn());
+    stubGlobal('cancelAnimationFrame', vi.fn());
     vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
       x: 0,
       y: 24,
@@ -201,7 +203,7 @@ describe('EditFileCard', () => {
     );
 
     expect(await screen.findByTestId('edit-file-inline-diff')).toBeInTheDocument();
-    vi.unstubAllGlobals();
+    unstubAllGlobals();
     vi.restoreAllMocks();
   });
 

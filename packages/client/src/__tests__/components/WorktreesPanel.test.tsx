@@ -1,6 +1,8 @@
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 import { screen, waitFor } from '@testing-library/react';
 import { okAsync, ResultAsync } from 'neverthrow';
-import { beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { WorktreesPanel } from '@/components/review-pane/panels/WorktreesPanel';
 import { buildSettingsItems, routableSettingsIds } from '@/components/settings/items';
@@ -16,11 +18,11 @@ interface ReviewPaneContextMock {
   basePath: string;
 }
 
-const context = vi.hoisted((): ReviewPaneContextMock => ({
+const context = ((): ReviewPaneContextMock => ({
   remoteCheckProjectId: 'p2',
   viewerReadOnly: false,
   basePath: '/second/feature',
-}));
+}))();
 vi.mock('@/components/review-pane/ReviewPaneStateContext', () => ({
   useReviewPaneContext: () => context,
 }));
@@ -42,12 +44,12 @@ beforeEach(() => {
       ],
     }),
   );
-  vi.mocked(api.listWorktrees).mockReturnValue(
+  mocked(api.listWorktrees).mockReturnValue(
     okAsync([
       { path: '/second/feature', branch: 'feature/test', commit: 'abcdef12', isMain: false },
     ]),
   );
-  vi.mocked(api.listBranches).mockReturnValue(
+  mocked(api.listBranches).mockReturnValue(
     okAsync({
       branches: ['main'],
       remoteBranches: [],
@@ -90,7 +92,7 @@ describe('Worktrees sidebar', () => {
   });
 
   test('uses a full-height centered loading state', async () => {
-    vi.mocked(api.listWorktrees).mockReturnValue(
+    mocked(api.listWorktrees).mockReturnValue(
       ResultAsync.fromSafePromise(new Promise<never>(() => {})),
     );
     renderWithProviders(<WorktreesPanel />);
@@ -105,7 +107,7 @@ describe('Worktrees sidebar', () => {
   });
 
   test('lets the empty message fill the available panel height', async () => {
-    vi.mocked(api.listWorktrees).mockReturnValue(okAsync([]));
+    mocked(api.listWorktrees).mockReturnValue(okAsync([]));
     renderWithProviders(<WorktreesPanel />);
     expect(await screen.findByTestId('worktree-settings-empty')).toHaveClass(
       'flex-1',
@@ -115,7 +117,7 @@ describe('Worktrees sidebar', () => {
   });
 
   test('distinguishes the main checkout from the active linked worktree', async () => {
-    vi.mocked(api.listWorktrees).mockReturnValue(
+    mocked(api.listWorktrees).mockReturnValue(
       okAsync([
         { path: '/second', branch: 'main', commit: 'abcdef12', isMain: true },
         { path: '/second/feature', branch: 'feature/test', commit: 'abcdef12', isMain: false },

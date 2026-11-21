@@ -1,5 +1,6 @@
+import { describe, test, expect } from 'bun:test';
+
 import type { CodeReviewFinding } from '@funny/shared';
-import { describe, test, expect } from 'vitest';
 
 import { decideReviewEvent, formatReviewBody } from '../agents/reviewer/formatter.js';
 

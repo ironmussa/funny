@@ -1,8 +1,10 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
+import { stubGlobal } from '@funny/test-kit';
 
 // Mock fetch before importing the API, like api.test.ts.
 const mockFetch = vi.fn<(input: string, init: RequestInit) => Promise<Response>>();
-vi.stubGlobal('fetch', mockFetch);
+stubGlobal('fetch', mockFetch);
 Reflect.deleteProperty(window, '__TAURI_INTERNALS__');
 
 const { automationsApi } = await import('@/lib/api/automations');
@@ -51,7 +53,7 @@ describe('tRPC procedure calls (automations)', () => {
 
     const result = await automationsApi.listAutomations('p1');
 
-    expect(result._unsafeUnwrap()).toEqual([{ id: 'a1' }]);
+    expect<unknown>(result._unsafeUnwrap()).toEqual([{ id: 'a1' }]);
     const [url, init] = lastCall();
     expect(url).toContain('/api/trpc/automations.list?input=');
     expect(decodeURIComponent(url.split('?input=')[1])).toBe('{"projectId":"p1"}');
@@ -63,7 +65,7 @@ describe('tRPC procedure calls (automations)', () => {
 
     const result = await automationsApi.updateAutomation('a1', { enabled: false });
 
-    expect(result._unsafeUnwrap()).toEqual({ id: 'a1', enabled: false });
+    expect<unknown>(result._unsafeUnwrap()).toEqual({ id: 'a1', enabled: false });
     const [url, init] = lastCall();
     expect(url).toMatch(/\/api\/trpc\/automations\.update$/);
     expect(init.method).toBe('POST');
@@ -159,7 +161,7 @@ describe('tRPC procedure calls (pipelines)', () => {
 
     const result = await pipelinesApi.listPipelines('p1');
 
-    expect(result._unsafeUnwrap()).toEqual([{ id: 'pl1' }]);
+    expect<unknown>(result._unsafeUnwrap()).toEqual([{ id: 'pl1' }]);
     const [url] = lastCall();
     expect(url).toContain('/api/trpc/pipelines.list?input=');
     expect(decodeURIComponent(url.split('?input=')[1])).toBe('{"projectId":"p1"}');
@@ -188,7 +190,7 @@ describe('tRPC procedure calls (threads)', () => {
 
     const result = await threadsApi.getThread('t1', 30, controller.signal, { messageProgress: 1 });
 
-    expect(result._unsafeUnwrap()).toEqual({ id: 't1', messages: [] });
+    expect<unknown>(result._unsafeUnwrap()).toEqual({ id: 't1', messages: [] });
     const [url, init] = lastCall();
     expect(url).toContain('/api/trpc/threads.get?input=');
     expect(JSON.parse(decodeURIComponent(url.split('?input=')[1]))).toEqual({
@@ -285,7 +287,7 @@ describe('tRPC procedure calls (personal tokens)', () => {
 
     const result = await personalTokensApi.listPersonalTokens();
 
-    expect(result._unsafeUnwrap()).toEqual([{ id: 'k1' }]);
+    expect<unknown>(result._unsafeUnwrap()).toEqual([{ id: 'k1' }]);
     const [url, init] = lastCall();
     expect(url).toMatch(/\/api\/trpc\/personalTokens\.list$/);
     expect(init.method).toBe('GET');

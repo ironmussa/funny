@@ -1,4 +1,6 @@
-import { beforeEach, describe, expect, test, vi } from 'vitest';
+import { beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { waitFor } from '@funny/test-kit';
 
 /**
  * A thread's git workflow is tracked as a `git.workflow` activity
@@ -6,10 +8,10 @@ import { beforeEach, describe, expect, test, vi } from 'vitest';
  * message and a created PR ends `succeeded` with its URL.
  */
 
-const mocks = vi.hoisted(() => ({
+const mocks = (() => ({
   runPipeline: vi.fn(),
   sendRemoteData: vi.fn(async (_type: string, _payload: Record<string, any>) => ({ ok: true })),
-}));
+}))();
 
 vi.mock('@funny/pipelines', () => ({ runPipeline: mocks.runPipeline }));
 vi.mock('../../services/git-pipelines.js', () => ({
@@ -28,7 +30,7 @@ const reports = (type: string) =>
   mocks.sendRemoteData.mock.calls.filter(([t]) => t === type).map(([, p]) => p);
 
 const terminal = () =>
-  vi.waitFor(() => {
+  waitFor(() => {
     const end = reports('data:activity_update').find((p) => p.patch.status);
     expect(end).toBeDefined();
     return end!;

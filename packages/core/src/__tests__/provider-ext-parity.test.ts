@@ -10,6 +10,7 @@
  * install.
  */
 
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
@@ -17,7 +18,6 @@ import { join } from 'path';
 import type { SessionUpdate } from '@agentclientprotocol/sdk/unstable';
 import { PROVIDER_MANIFEST_SCHEMA_VERSION } from '@funny/shared/provider-manifest-schema';
 import { ACP_MANIFESTS } from '@funny/shared/provider-manifests';
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { CursorACPProcess } from '../agents/cursor-acp.js';
 import { GenericACPProcess } from '../agents/generic-acp.js';

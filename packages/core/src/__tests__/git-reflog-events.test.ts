@@ -1,16 +1,15 @@
 // Reflog parsing always uses the CLI path.
 process.env.FUNNY_DISABLE_NATIVE_GIT = '1';
 
+import { afterEach, beforeEach, describe, expect, it, mock } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-
 // Count the `git patch-id` runs: one per computation of the commit pairs.
-const patchIdRuns = vi.hoisted(() => ({ count: 0 }));
-vi.mock('../git/process.js', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('../git/process.js')>();
+const patchIdRuns = { count: 0 };
+const actual = { ...(await import('../git/process.js')) };
+mock.module('../git/process.js', () => {
   return {
     ...actual,
     execute: (...args: Parameters<typeof actual.execute>) => {

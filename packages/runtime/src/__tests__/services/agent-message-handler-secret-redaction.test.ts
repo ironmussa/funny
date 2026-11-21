@@ -2,9 +2,10 @@
 // or the live stream as is (openspec project-secrets): message text, tool
 // input and tool output all carry `[secret:NAME]`, the same in both places.
 
+import { describe, expect, test, vi } from 'bun:test';
+
 import type { CLIMessage } from '@funny/core/agents';
 import { createSecretRedactor } from '@funny/shared/project-secrets';
-import { describe, expect, test, vi } from 'vitest';
 
 import { AgentMessageHandler } from '../../services/agent-message-handler.js';
 import { AgentStateTracker } from '../../services/agent-state.js';

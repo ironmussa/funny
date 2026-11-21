@@ -1,3 +1,4 @@
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
 import {
   existsSync,
   mkdirSync,
@@ -11,15 +12,12 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
-
-const dataDir = vi.hoisted(() => ({ path: '' }));
-
-vi.mock('../../lib/data-dir.js', () => ({
-  get DATA_DIR() {
-    return dataDir.path;
-  },
-}));
+// bun's mock.module reads a getter once, so each test re-mocks DATA_DIR with its
+// own directory (a repeated mock.module call updates the live binding).
+function mockDataDir(path: string): void {
+  vi.mock('../../lib/data-dir.js', () => ({ DATA_DIR: path }));
+}
+mockDataDir(join(tmpdir(), 'funny-staging-unset'));
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -27,12 +25,9 @@ vi.mock('../../lib/logger.js', () => ({
 
 vi.mock('../../utils/route-helpers.js', () => ({ requireThreadCwd: vi.fn() }));
 
-import {
-  adoptStagedUploads,
-  copyThreadUploads,
-  releaseStagedUploads,
-  stageUpload,
-} from '../../services/thread-service/staged-uploads.js';
+// Imported after the mocks, so the module binds the mocked DATA_DIR getter.
+const { adoptStagedUploads, copyThreadUploads, releaseStagedUploads, stageUpload } =
+  await import('../../services/thread-service/staged-uploads.js');
 
 const b64 = (text: string) => Buffer.from(text).toString('base64');
 
@@ -42,7 +37,7 @@ describe('staged uploads', () => {
   beforeEach(() => {
     dataPath = mkdtempSync(join(tmpdir(), 'funny-staging-data-'));
     cwd = mkdtempSync(join(tmpdir(), 'funny-staging-cwd-'));
-    dataDir.path = dataPath;
+    mockDataDir(dataPath);
   });
 
   afterEach(() => {

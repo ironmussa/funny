@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, test } from 'vitest';
+import { afterEach, describe, expect, test } from 'bun:test';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
 import { threadContextHeaders, urlInThread } from '@/lib/api/_core';

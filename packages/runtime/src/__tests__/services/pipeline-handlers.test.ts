@@ -4,7 +4,9 @@
  * Tests that pipeline handlers are correctly registered in the
  * handler-registry and respond to the expected events.
  */
-import { beforeEach, describe, test, expect, vi } from 'vitest';
+import { beforeEach, describe, test, expect, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 
 // ── Mocks ────────────────────────────────────────────────────
 
@@ -130,9 +132,9 @@ describe('pipelineTriggerHandler workflow guard', () => {
   };
 
   beforeEach(() => {
-    vi.mocked(startPipelineRun).mockClear();
-    vi.mocked(getPipelineForProject).mockResolvedValue(buildPipelineConfig({ id: 'pipe-1' }));
-    vi.mocked(isWorkflowActive).mockReturnValue(false);
+    mocked(startPipelineRun).mockClear();
+    mocked(getPipelineForProject).mockResolvedValue(buildPipelineConfig({ id: 'pipe-1' }));
+    mocked(isWorkflowActive).mockReturnValue(false);
   });
 
   test('starts a pipeline run when no workflow is active', async () => {
@@ -143,13 +145,13 @@ describe('pipelineTriggerHandler workflow guard', () => {
   });
 
   test('skips when a workflow is active for the thread', async () => {
-    vi.mocked(isWorkflowActive).mockImplementation((id) => id === 't-1');
+    mocked(isWorkflowActive).mockImplementation((id) => id === 't-1');
     await pipelineTriggerHandler.action(event, createHandlerContext());
     expect(startPipelineRun).not.toHaveBeenCalled();
   });
 
   test('skips when a workflow is active for the project', async () => {
-    vi.mocked(isWorkflowActive).mockImplementation((id) => id === 'proj-1');
+    mocked(isWorkflowActive).mockImplementation((id) => id === 'proj-1');
     await pipelineTriggerHandler.action(event, createHandlerContext());
     expect(startPipelineRun).not.toHaveBeenCalled();
   });

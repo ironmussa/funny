@@ -1,11 +1,10 @@
 // listWorktrees: the gitoxide path must match `git worktree list`, and a
 // failed listing must never make pruneOrphanWorktrees delete live worktrees.
 
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { existsSync, mkdirSync, renameSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { getNativeGit } from '../git/native.js';
 import { executeSync } from '../git/process.js';

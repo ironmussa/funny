@@ -1,5 +1,8 @@
+import { afterEach, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
+// Window events must go through jsdom (see the helper).
 import { act, render, screen } from '@testing-library/react';
-import { afterEach, expect, test, vi } from 'vitest';
 
 import { APP_SCROLL_LOCK_CLASS } from '@/hooks/use-app-scroll-lock';
 import { useMobileViewport } from '@/hooks/use-mobile-viewport';
@@ -9,11 +12,11 @@ function Shell() {
   return <div ref={ref} data-testid="viewport" />;
 }
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => unstubAllGlobals());
 
 test('tracks keyboard height and browser panning, then releases listeners and scroll lock', () => {
   const viewport = Object.assign(new EventTarget(), { height: 800, offsetTop: 0, scale: 1 });
-  vi.stubGlobal('visualViewport', viewport);
+  stubGlobal('visualViewport', viewport);
   const removeListener = vi.spyOn(viewport, 'removeEventListener');
   const { unmount } = render(<Shell />);
   const shell = screen.getByTestId('viewport');
@@ -45,12 +48,12 @@ test('tracks keyboard height and browser panning, then releases listeners and sc
 });
 
 test('uses window height when VisualViewport is unavailable', () => {
-  vi.stubGlobal('visualViewport', undefined);
-  vi.stubGlobal('innerHeight', 700);
+  stubGlobal('visualViewport', undefined);
+  stubGlobal('innerHeight', 700);
   render(<Shell />);
   expect(screen.getByTestId('viewport')).toHaveStyle({ height: '700px', top: '0px' });
   act(() => {
-    vi.stubGlobal('innerHeight', 400);
+    stubGlobal('innerHeight', 400);
     window.dispatchEvent(new Event('resize'));
   });
   expect(screen.getByTestId('viewport')).toHaveStyle({ height: '400px' });

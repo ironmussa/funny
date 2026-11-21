@@ -1,9 +1,9 @@
+import { afterEach, describe, expect, test } from 'bun:test';
 import { existsSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { EventDurability } from '@funny/shared/runner-v2/events';
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { GrpcEventReplayStore } from '../../services/grpc-event-replay-store.js';
 

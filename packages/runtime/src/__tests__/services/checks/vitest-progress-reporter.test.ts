@@ -1,7 +1,7 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
 import { join } from 'node:path';
 
 import { createOutputParser, TEST_EVENT_PREFIX } from '@funny/shared/checks';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import ProgressReporter, {
   TEST_EVENT_PREFIX as REPORTER_PREFIX,

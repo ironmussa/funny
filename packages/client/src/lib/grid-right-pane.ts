@@ -24,14 +24,20 @@ export function effectiveThreadId(
  * Normally it's hidden under any full-screen view. The grid is full-screen too,
  * but it hosts the right pane in a sibling dockview slot, so let it through when
  * the grid is open AND a thread is selected.
+ *
+ * Outside the grid it also needs something to show: a thread or a selected
+ * project (`hasContext`). With neither, every tab would be an empty state.
  */
 export function isRightPaneVisible(
   reviewPaneOpen: boolean,
   isFullScreenView: boolean,
   liveColumnsOpen: boolean,
   gridSelectedThreadId: string | null,
+  hasContext: boolean,
 ): boolean {
-  return reviewPaneOpen && (!isFullScreenView || (liveColumnsOpen && !!gridSelectedThreadId));
+  if (!reviewPaneOpen) return false;
+  if (isFullScreenView) return liveColumnsOpen && !!gridSelectedThreadId;
+  return hasContext;
 }
 
 /**

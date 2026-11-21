@@ -1,5 +1,6 @@
+import { afterEach, describe, expect, test, vi } from 'bun:test';
+
 import { errAsync, okAsync } from 'neverthrow';
-import { afterEach, describe, expect, test, vi } from 'vitest';
 
 import { createDataLayer, layerRequestSignal } from '@/data/data-layer';
 import { DataRequestError, toDomainError, unwrapResult } from '@/data/query-client';

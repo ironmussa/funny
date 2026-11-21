@@ -1,4 +1,6 @@
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { mocked } from '@funny/test-kit';
 
 import { getContextUsageStore } from '@/data/context-usage/store';
 import { seedContextUsage } from '@/data/context-usage/testing';
@@ -9,20 +11,19 @@ import {
 } from '@/data/threads/testing';
 import { loadContextUsage } from '@/lib/context-usage-storage';
 
-const { mockInvalidate, mockBuffer, mockMarkRead, mockToastError } = vi.hoisted(() => ({
+const { mockInvalidate, mockBuffer, mockMarkRead, mockToastError } = (() => ({
   mockInvalidate: vi.fn(),
   mockBuffer: vi.fn(),
   mockMarkRead: vi.fn(),
   mockToastError: vi.fn(),
-}));
+}))();
 
-const mockWsEventToMachine = vi.hoisted(() =>
+const mockWsEventToMachine = (() =>
   // Returns null for an event the machine does not know, like the real mapper.
   vi.fn((_kind: string, data: any): { type: string; status: string } | null => ({
     type: 'SET_STATUS',
     status: data.status,
-  })),
-);
+  })))();
 
 vi.mock('@/stores/thread-machine-bridge', () => ({
   invalidateThreadData: mockInvalidate,
@@ -326,7 +327,7 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
 
     handleWSResult(get, set, THREAD_ID, { status: 'completed', cost: 0.02, duration: 5 });
 
-    expect(vi.mocked(toast.success)).toHaveBeenCalledWith(
+    expect(mocked(toast.success)).toHaveBeenCalledWith(
       expect.stringContaining('completed'),
       expect.objectContaining({ id: `result-${THREAD_ID}` }),
     );
@@ -354,7 +355,7 @@ describe('thread-ws-handlers — error, context, and refresh edge cases', () => 
       errorReason: 'error_max_budget_usd',
     });
 
-    expect(vi.mocked(toast.error)).toHaveBeenCalledWith(
+    expect(mocked(toast.error)).toHaveBeenCalledWith(
       expect.stringContaining('Budget limit exceeded'),
       expect.objectContaining({ id: `result-${THREAD_ID}` }),
     );

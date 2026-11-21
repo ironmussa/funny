@@ -1,8 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { fetchRemote } from '../git/branch.js';
 import { executeSync, getGitWriteGeneration, gitNetwork, gitWrite } from '../git/process.js';

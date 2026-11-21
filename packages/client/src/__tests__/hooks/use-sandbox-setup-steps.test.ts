@@ -1,4 +1,4 @@
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 import { sandboxSetupSteps } from '@/hooks/use-sandbox-setup-steps';
 

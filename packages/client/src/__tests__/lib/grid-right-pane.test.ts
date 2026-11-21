@@ -1,4 +1,4 @@
-import { describe, test, expect } from 'vitest';
+import { describe, test, expect } from 'bun:test';
 
 import { effectiveThreadId, isRightPaneVisible, rightPaneProjectId } from '@/lib/grid-right-pane';
 
@@ -21,28 +21,32 @@ describe('effectiveThreadId', () => {
 
 describe('isRightPaneVisible', () => {
   test('hidden when the review pane flag is off', () => {
-    expect(isRightPaneVisible(false, false, false, null)).toBe(false);
+    expect(isRightPaneVisible(false, false, false, null, true)).toBe(false);
   });
 
   test('visible in the normal (non-full-screen) view', () => {
-    expect(isRightPaneVisible(true, false, false, null)).toBe(true);
+    expect(isRightPaneVisible(true, false, false, null, true)).toBe(true);
+  });
+
+  test('hidden when there is no thread and no selected project', () => {
+    expect(isRightPaneVisible(true, false, false, null, false)).toBe(false);
   });
 
   test('hidden under a non-grid full-screen view', () => {
     // e.g. settings/analytics open — isFullScreenView true, grid not open.
-    expect(isRightPaneVisible(true, true, false, null)).toBe(false);
+    expect(isRightPaneVisible(true, true, false, null, true)).toBe(false);
   });
 
   test('visible in the grid when a thread is selected', () => {
-    expect(isRightPaneVisible(true, true, true, 'grid-thread')).toBe(true);
+    expect(isRightPaneVisible(true, true, true, 'grid-thread', false)).toBe(true);
   });
 
   test('hidden in the grid when nothing is selected', () => {
-    expect(isRightPaneVisible(true, true, true, null)).toBe(false);
+    expect(isRightPaneVisible(true, true, true, null, true)).toBe(false);
   });
 
   test('still gated on the review pane flag even in the grid', () => {
-    expect(isRightPaneVisible(false, true, true, 'grid-thread')).toBe(false);
+    expect(isRightPaneVisible(false, true, true, 'grid-thread', true)).toBe(false);
   });
 });
 

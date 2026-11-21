@@ -1,3 +1,4 @@
+import { afterEach, describe, expect, test } from 'bun:test';
 /**
  * Regression (#181): the clone used to put the GitHub token in the clone URL,
  * so it showed up in the `git clone` argv (`ps`) and in `.git/config`. The
@@ -9,8 +10,6 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs';
 import { createServer, type Server, type Socket } from 'net';
 import { tmpdir } from 'os';
 import { join } from 'path';
-
-import { afterEach, describe, expect, test } from 'vitest';
 
 import { cloneAuthEnv, cloneRepository } from '../git/clone.js';
 import { execute, executeSync } from '../git/process.js';

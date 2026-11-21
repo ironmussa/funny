@@ -4,9 +4,10 @@
  * servers; unknown servers and foreign tokens are refused.
  */
 
+import { afterAll, describe, expect, test, vi } from 'bun:test';
+
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
-import { afterAll, describe, expect, test, vi } from 'vitest';
 
 vi.mock('../../lib/logger.js', () => ({
   log: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
@@ -81,7 +82,9 @@ describe('funny MCP servers over HTTP', () => {
 
   test('the funny server is an always-loaded HTTP entry with its tools', async () => {
     const servers = expectDefined(await withWatchMcpServer('t1', 'u1', undefined));
-    expect(servers.funny).toMatchObject({
+    // A copy: bun's toMatchObject writes the asymmetric matchers into the object
+    // it checks, which would replace `url` before listTools reads it.
+    expect({ ...servers.funny }).toMatchObject({
       type: 'http',
       url: expect.stringMatching(/^http:\/\/127\.0\.0\.1:\d+\/mcp\/funny$/),
       alwaysLoad: true,

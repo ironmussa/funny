@@ -1,7 +1,8 @@
+import { beforeEach, describe, expect, test } from 'bun:test';
+
 import { act, renderHook, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { MemoryRouter, useNavigate } from 'react-router-dom';
-import { beforeEach, describe, expect, test } from 'vitest';
 
 import { buildThreadWithMessages } from '@/data/threads/testing';
 import { useDisplayThreadId } from '@/hooks/use-display-thread-id';

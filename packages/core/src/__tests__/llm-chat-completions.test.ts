@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
+import { afterEach, describe, expect, it, vi, type MockInstance } from 'bun:test';
+
 import { z } from 'zod';
 
 import type { AgentContext, AgentRole } from '../agents/llm/agent-context.js';

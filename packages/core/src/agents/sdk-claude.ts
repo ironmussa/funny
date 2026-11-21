@@ -11,6 +11,7 @@ import { consumeAsync } from '@funny/shared/async';
 import { scrubSensitiveEnv } from '@funny/shared/lib/child-env';
 
 import { createDebugLogger } from '../debug.js';
+import { toAgentAccountInfo, toAgentPlanUsage } from './account-usage.js';
 import { BaseAgentProcess } from './base-process.js';
 import { checkRedirectReason } from './check-redirect.js';
 import { toContextBreakdown } from './context-breakdown.js';
@@ -107,8 +108,27 @@ export function isThinkingBlockError(text: string): boolean {
   return /(?:thinking|redacted_thinking)[\s\S]*?cannot be modified/i.test(text);
 }
 
-/** Upper bound on the end-of-turn `getContextUsage` request before the turn's result is released. */
+/**
+ * Upper bound on each end-of-turn snapshot request (`getContextUsage`, account
+ * usage) before the turn's result is released.
+ */
 const CONTEXT_BREAKDOWN_TIMEOUT_MS = 3_000;
+
+/** Bound on the account snapshot taken while the session starts. */
+const ACCOUNT_AT_START_TIMEOUT_MS = 30_000;
+
+/** `promise`'s value, or null once `ms` passes. The promise must not reject. */
+async function nullAfter<T>(promise: Promise<T | null>, ms: number): Promise<T | null> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), ms);
+  });
+  try {
+    return await Promise.race([promise, timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * How long a held empty resume result (see `screenResumeResult`) waits for the
@@ -465,6 +485,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     });
     const gen = query({ prompt: promptInput, options: sdkOptions });
     this.activeQuery = gen;
+    // Show the account as soon as the session is up; `accountInfo()` waits for
+    // the CLI's initialize, hence the longer bound.
+    void this.captureAccount(gen, ACCOUNT_AT_START_TIMEOUT_MS);
 
     try {
       let msgCount = 0;
@@ -484,7 +507,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
           if (this.screenResumeResult(sdkMsg)) return;
           // Before trackInputLifetime: it may close the input channel on this
           // very result, and the breakdown request needs the CLI's stdin.
-          await this.captureContextBreakdown(sdkMsg);
+          await this.captureTurnEndSnapshots(sdkMsg);
           this.trackInputLifetime(sdkMsg);
 
           if (this.handleSyntheticError(sdkMsg)) return;
@@ -616,6 +639,17 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   }
 
   /**
+   * End-of-turn snapshots that need the CLI's stdin (context breakdown and
+   * account usage), requested together so the result waits for one timeout
+   * at most.
+   */
+  private async captureTurnEndSnapshots(sdkMsg: { type: string }): Promise<void> {
+    const q = this.activeQuery;
+    if (sdkMsg.type !== 'result' || !q || this.isAborted || this.inputClosed) return;
+    await Promise.all([this.captureContextBreakdown(sdkMsg), this.captureAccount(q)]);
+  }
+
+  /**
    * Ask the live session for its per-category context usage and emit it as a
    * `context_breakdown` message. `summary` detail answers from the last
    * response's usage plus local estimates — no token-count API calls. Best
@@ -625,20 +659,51 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   private async captureContextBreakdown(sdkMsg: { type: string }): Promise<void> {
     const q = this.activeQuery;
     if (sdkMsg.type !== 'result' || !q || this.isAborted || this.inputClosed) return;
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<null>((resolve) => {
-      timer = setTimeout(() => resolve(null), CONTEXT_BREAKDOWN_TIMEOUT_MS);
-    });
-    const res = await Promise.race([
+    const res = await nullAfter(
       q.getContextUsage({ detail: 'summary' }).catch((err: unknown) => {
         dlog.debug('getContextUsage failed', { error: String(err) });
         return null;
       }),
-      timeout,
-    ]);
-    clearTimeout(timer);
+      CONTEXT_BREAKDOWN_TIMEOUT_MS,
+    );
     if (!res || this.isAborted) return;
     this.emit('message', { type: 'context_breakdown', breakdown: toContextBreakdown(res) });
+  }
+
+  /**
+   * Ask the session which account it is logged in with and how much of the
+   * plan it has used, and emit both as an `account` message (shown above the
+   * context usage). `accountInfo()` answers from the CLI's initialize; the
+   * usage is one request to the claude.ai usage endpoint, skipping the local
+   * transcript scan. Best effort, bounded like the context breakdown: a
+   * failure only means the hover card shows less.
+   */
+  private async captureAccount(q: Query, timeoutMs = CONTEXT_BREAKDOWN_TIMEOUT_MS): Promise<void> {
+    const ask = <T>(what: string, call: () => Promise<T>): Promise<T | null> =>
+      nullAfter(
+        Promise.resolve()
+          .then(call)
+          .catch((err: unknown) => {
+            dlog.debug(`${what} failed`, { error: String(err) });
+            return null;
+          }),
+        timeoutMs,
+      );
+    const info = await ask('accountInfo', () => q.accountInfo());
+    if (!info || this.isAborted) return;
+    // Plan limits only exist for a claude.ai login.
+    const planLimitsApply = !info.apiProvider || info.apiProvider === 'firstParty';
+    const usage = planLimitsApply
+      ? await ask('usage', () =>
+          q.usage_EXPERIMENTAL_MAY_CHANGE_DO_NOT_RELY_ON_THIS_API_YET({ skipBehaviors: true }),
+        )
+      : null;
+    if (this.isAborted) return;
+    this.emit('message', {
+      type: 'account',
+      info: toAgentAccountInfo(info),
+      usage: usage ? toAgentPlanUsage(usage) : undefined,
+    });
   }
 
   // ── Prompt building ─────────────────────────────────────────────

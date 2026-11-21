@@ -1,6 +1,7 @@
+import { describe, expect, setSystemTime, test, vi } from 'bun:test';
+
 import { act, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 import type { ReactElement } from 'react';
-import { describe, expect, test, vi } from 'vitest';
 
 import { MessageStreamStatusTail } from '@/components/thread/MessageStreamStatusTail';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -198,7 +199,7 @@ describe('MessageStreamStatusTail', () => {
   test('shows the seconds elapsed since the turn started while the agent works', () => {
     vi.useFakeTimers();
     try {
-      vi.setSystemTime(new Date('2026-11-17T10:00:12.000Z'));
+      setSystemTime(new Date('2026-11-17T10:00:12.000Z'));
       render(
         <MessageStreamStatusTail
           {...baseProps}
@@ -215,6 +216,7 @@ describe('MessageStreamStatusTail', () => {
       expect(screen.getByTestId('agent-working-elapsed')).toHaveTextContent('(15s)');
     } finally {
       vi.useRealTimers();
+      setSystemTime();
     }
   });
 });

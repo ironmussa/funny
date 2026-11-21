@@ -1,14 +1,15 @@
-import type { DomainError } from '@funny/shared/errors';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
 
-const { toastErrorMock, logWarnMock, tMock } = vi.hoisted(() => ({
+import type { DomainError } from '@funny/shared/errors';
+
+const { toastErrorMock, logWarnMock, tMock } = (() => ({
   toastErrorMock: vi.fn(),
   logWarnMock: vi.fn(),
   tMock: vi.fn((key: string, opts?: { defaultValue?: string; message?: string }) => {
     if (opts?.defaultValue === '') return '';
     return opts?.defaultValue ?? key;
   }),
-}));
+}))();
 
 vi.mock('sonner', () => ({
   toast: { error: (...args: unknown[]) => toastErrorMock(...args) },
@@ -24,7 +25,8 @@ vi.mock('@/i18n/config', () => ({
   },
 }));
 
-import { toastError } from '@/lib/toast-error';
+// Imported after the mocks: the module creates its logger at import time.
+const { toastError } = await import('@/lib/toast-error');
 
 describe('toastError', () => {
   beforeEach(() => {

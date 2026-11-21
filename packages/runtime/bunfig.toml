@@ -1,5 +1,6 @@
-# This package's tests run on vitest (`bun run test`). `bun test` would use
-# Bun's native runner, which ignores the vitest config and can hang forever;
-# the preload stops it at once with the right command.
+# Tests run on `bun test --parallel` (`bun run test`): every file in a fresh
+# global and module registry, so module mocks do not leak between files.
 [test]
-preload = ["../../scripts/guards/vitest-only.ts"]
+root = "./src"
+# Each test process gets its own FUNNY_DATA_DIR (see the file), never ~/.funny.
+preload = ["./src/__tests__/isolate-data-dir.ts"]

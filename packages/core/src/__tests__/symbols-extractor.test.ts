@@ -1,8 +1,9 @@
-import { describe, expect, test, vi } from 'vitest';
+import { describe, expect, test } from 'bun:test';
 
 describe('symbols extractor', () => {
+  // First in the file: bun test runs each file with fresh modules (--isolate /
+  // --parallel), so this is the extractor's first TS extraction.
   test('handles concurrent first-time TS extraction', async () => {
-    vi.resetModules();
     const { extractSymbols } = await import('../symbols/index.js');
 
     const results = await Promise.all(

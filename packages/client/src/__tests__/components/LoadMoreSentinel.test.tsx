@@ -1,5 +1,7 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
+
+import { stubGlobal, unstubAllGlobals } from '@funny/test-kit';
 import { act, render, screen } from '@testing-library/react';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
 import { LoadMoreSentinel } from '@/components/LoadMoreSentinel';
 
@@ -29,9 +31,9 @@ function scrollIntoView(isIntersecting = true) {
 describe('LoadMoreSentinel', () => {
   beforeEach(() => {
     observers = [];
-    vi.stubGlobal('IntersectionObserver', FakeIntersectionObserver);
+    stubGlobal('IntersectionObserver', FakeIntersectionObserver);
   });
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => unstubAllGlobals());
 
   test('loads the next page once when it scrolls into view', () => {
     const onLoadMore = vi.fn();

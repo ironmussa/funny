@@ -1,7 +1,8 @@
+import { afterEach, beforeEach, describe, expect, test, vi } from 'bun:test';
 import { EventEmitter } from 'node:events';
 
 import { RUNNER_GRPC_MAX_MESSAGE_BYTES } from '@funny/shared/runner-protocol';
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import { advanceTimersByTimeAsync } from '@funny/test-kit';
 
 import {
   runnerGrpcChannelOptions,
@@ -244,7 +245,7 @@ describe('RunnerGrpcClient', () => {
     control.emit('error', new Error('offline'));
     client.shutdown();
     control.emit('close');
-    await vi.advanceTimersByTimeAsync(60_000);
+    await advanceTimersByTimeAsync(60_000);
     expect(factory).toHaveBeenCalledTimes(1);
     expect(transport.closed).toBe(true);
     expect(vi.getTimerCount()).toBe(0);
@@ -268,18 +269,18 @@ describe('RunnerGrpcClient', () => {
         const control = transports.at(-1)!.streams.get('control')!;
         control.emit('error', new Error('offline'));
         control.emit('close');
-        await vi.advanceTimersByTimeAsync(delay - 1);
+        await advanceTimersByTimeAsync(delay - 1);
         expect(factory).toHaveBeenCalledTimes(calls);
-        await vi.advanceTimersByTimeAsync(1);
+        await advanceTimersByTimeAsync(1);
         expect(factory).toHaveBeenCalledTimes(calls + 1);
       }
       const control = transports.at(-1)!.streams.get('control')!;
       control.emit('data', { hello: { sessionEpoch: '42' } });
       control.emit('error', new Error('offline again'));
       const calls = factory.mock.calls.length;
-      await vi.advanceTimersByTimeAsync(99);
+      await advanceTimersByTimeAsync(99);
       expect(factory).toHaveBeenCalledTimes(calls);
-      await vi.advanceTimersByTimeAsync(1);
+      await advanceTimersByTimeAsync(1);
       expect(factory).toHaveBeenCalledTimes(calls + 1);
     } finally {
       client.shutdown();

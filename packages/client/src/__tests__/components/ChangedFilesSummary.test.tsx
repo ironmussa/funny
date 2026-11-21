@@ -1,6 +1,7 @@
+import { describe, test, expect, vi, beforeEach } from 'bun:test';
+
 import type { FileDiffSummary } from '@funny/shared';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { ChangedFilesSummary } from '@/components/thread/ChangedFilesSummary';
 

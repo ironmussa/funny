@@ -3,11 +3,10 @@
 // upstream counting, base-branch fallback, and merge detection is exercised.
 process.env.FUNNY_DISABLE_NATIVE_GIT = '1';
 
+import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
-
-import { afterEach, beforeEach, describe, expect, test } from 'vitest';
 
 import { getStatusSummary, invalidateStatusCache } from '../git/index.js';
 import { executeSync } from '../git/process.js';

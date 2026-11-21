@@ -1,12 +1,14 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach, afterEach } from 'bun:test';
 
-const mocks = vi.hoisted(() => ({
+import { advanceTimersByTimeAsync, mocked } from '@funny/test-kit';
+
+const mocks = (() => ({
   emitGitStatusForThread: vi.fn(async () => undefined),
   threadEventBus: {
     on: vi.fn(),
     removeListener: vi.fn(),
   },
-}));
+}))();
 
 vi.mock('../../utils/git-status-helpers.js', () => ({
   emitGitStatusForThread: mocks.emitGitStatusForThread,
@@ -193,13 +195,13 @@ describe('stageTransitionOnAgentStartHandler', () => {
       ),
     ).toBe(true);
 
-    vi.mocked(ctx.getThread).mockResolvedValue({
+    mocked(ctx.getThread).mockImplementation(async () => ({
       id: 't-1',
       projectId: 'p-1',
       userId: 'u-1',
       status: 'running',
       stage: 'in_progress',
-    });
+    }));
     expect(
       await stageTransitionOnAgentStartHandler.filter!(
         { threadId: 't-1', userId: 'u-1', projectId: 'p-1' },
@@ -207,13 +209,13 @@ describe('stageTransitionOnAgentStartHandler', () => {
       ),
     ).toBe(false);
 
-    vi.mocked(ctx.getThread).mockResolvedValue({
+    mocked(ctx.getThread).mockImplementation(async () => ({
       id: 't-1',
       projectId: 'p-1',
       userId: 'u-1',
       status: 'completed',
       stage: 'review',
-    });
+    }));
     expect(
       await stageTransitionOnAgentStartHandler.filter!(
         { threadId: 't-1', userId: 'u-1', projectId: 'p-1' },
@@ -311,7 +313,7 @@ describe('gitStatusHandler', () => {
 
     expect(emitGitStatusForThread).not.toHaveBeenCalled();
 
-    await vi.advanceTimersByTimeAsync(500);
+    await advanceTimersByTimeAsync(500);
 
     expect(emitGitStatusForThread).toHaveBeenCalledTimes(1);
     expect(emitGitStatusForThread).toHaveBeenCalledWith(
@@ -327,7 +329,7 @@ describe('gitStatusHandler', () => {
       { threadId: 't-1', userId: 'u-1', projectId: 'p-1', cwd: '/tmp', toolName: 'Bash' },
       ctx,
     );
-    await vi.advanceTimersByTimeAsync(500);
+    await advanceTimersByTimeAsync(500);
 
     expect(emitGitStatusForThread).toHaveBeenCalledWith(
       expect.objectContaining({ detectBranchDrift: true }),

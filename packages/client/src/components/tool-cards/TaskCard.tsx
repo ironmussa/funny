@@ -134,8 +134,9 @@ export const TaskCard = memo(function TaskCard({
 
   return (
     <div
+      data-expanded={expanded}
       data-testid="task-card"
-      className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm"
+      className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm data-[expanded=true]:border"
     >
       <button
         type="button"

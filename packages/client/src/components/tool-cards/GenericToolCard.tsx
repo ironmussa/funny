@@ -75,7 +75,10 @@ export function GenericToolCard({
   }, [output, expanded]);
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm">
+    <div
+      data-expanded={expanded}
+      className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm data-[expanded=true]:border"
+    >
       <div className="hover:bg-accent/30 relative w-full rounded-md text-left">
         <button
           type="button"

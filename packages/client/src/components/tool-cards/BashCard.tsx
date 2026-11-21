@@ -40,7 +40,10 @@ export function BashCard({
   const command = useMemo(() => commandToText(parsed.command), [parsed.command]);
 
   return (
-    <div className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm">
+    <div
+      data-expanded={expanded}
+      className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm data-[expanded=true]:border"
+    >
       <button
         type="button"
         aria-expanded={expanded}

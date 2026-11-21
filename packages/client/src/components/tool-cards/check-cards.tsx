@@ -210,7 +210,7 @@ export function CheckRunCard({
 
   return (
     <div
-      className="border-border max-w-full overflow-hidden rounded-lg border-[length:var(--tool-card-border-width)] text-sm"
+      className="border-border max-w-full overflow-hidden rounded-lg border text-sm"
       data-testid="check-run-card"
     >
       <CheckHeader

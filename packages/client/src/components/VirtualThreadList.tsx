@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { BranchBadge } from '@/components/BranchBadge';
 import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
+import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { LoadingState } from '@/components/ui/loading-state';
 import { ThreadListEmptyState } from '@/components/ui/thread-list-empty-state';
@@ -169,13 +170,16 @@ export function VirtualThreadList({
               />
 
               <div className="min-w-0 flex-1">
-                <ThreadTitle
-                  title={thread.title}
-                  search={search}
-                  className="block text-sm font-medium"
-                  badgeTestId={`virtual-thread-item-attachments-${thread.id}`}
-                  stopBadgePropagation
-                />
+                <div className="flex min-w-0 items-center gap-1.5">
+                  <ThreadTitle
+                    title={thread.title}
+                    search={search}
+                    className="block text-sm font-medium"
+                    badgeTestId={`virtual-thread-item-attachments-${thread.id}`}
+                    stopBadgePropagation
+                  />
+                  <ThreadWatcherIndicator threadId={thread.id} />
+                </div>
                 {contentSnippets?.get(thread.id) &&
                   search &&
                   !normalize(thread.title).includes(normalize(search)) && (

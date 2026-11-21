@@ -2,7 +2,6 @@ import type { Thread } from '@funny/shared';
 import { Clock, Loader2, Pin, PinOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
-import { ThreadWatcherIndicator } from '@/components/thread/ThreadWatcherIndicator';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   threadActivityTooltip,
@@ -87,56 +86,55 @@ export function ThreadStatusPin({
     );
 
   return (
-    <span className="inline-flex shrink-0 items-center gap-1">
-      <span className={cn('relative size-3.5 shrink-0', className)}>
-        {showPinRest ? (
-          <button
-            type="button"
-            aria-label={t('thread.unpin', 'Unpin thread')}
-            className={cn(
-              'absolute inset-0 flex items-center justify-center p-0 text-muted-foreground',
-              hideOnHover,
-            )}
-            onClick={(event) => {
-              event.stopPropagation();
-              onPin(false);
-            }}
-          >
-            <Pin className="icon-sm" />
-          </button>
-        ) : showUnreadDot ? (
-          <span
-            className={cn('absolute inset-0 flex items-center justify-center', hideOnHover)}
-            data-testid={`thread-unread-dot-${thread.id}`}
-          >
-            <span className="bg-status-info block size-2 rounded-full" />
-          </span>
-        ) : (
-          <span className={cn('absolute inset-0 flex items-center justify-center', hideOnHover)}>
-            {statusIcon}
-          </span>
-        )}
-        {canPin && (
-          <button
-            type="button"
-            aria-label={
-              thread.pinned ? t('thread.unpin', 'Unpin thread') : t('thread.pin', 'Pin thread')
-            }
-            className={cn(
-              'absolute inset-0 hidden cursor-pointer items-center justify-center p-0 text-muted-foreground hover:text-foreground',
-              showOnHover,
-            )}
-            onClick={(e) => {
-              e.stopPropagation();
-              onPin!(!thread.pinned);
-            }}
-            data-testid={`thread-pin-toggle-${thread.id}`}
-          >
-            {thread.pinned ? <PinOff className="icon-sm" /> : <Pin className="icon-sm" />}
-          </button>
-        )}
-      </span>
-      <ThreadWatcherIndicator threadId={thread.id} />
+    // inline-flex, not a bare inline span: an inline span ignores `size-3.5`, so
+    // the box collapses to 0×0 and the absolutely positioned icon disappears.
+    <span className={cn('relative inline-flex size-3.5 shrink-0', className)}>
+      {showPinRest ? (
+        <button
+          type="button"
+          aria-label={t('thread.unpin', 'Unpin thread')}
+          className={cn(
+            'absolute inset-0 flex items-center justify-center p-0 text-muted-foreground',
+            hideOnHover,
+          )}
+          onClick={(event) => {
+            event.stopPropagation();
+            onPin(false);
+          }}
+        >
+          <Pin className="icon-sm" />
+        </button>
+      ) : showUnreadDot ? (
+        <span
+          className={cn('absolute inset-0 flex items-center justify-center', hideOnHover)}
+          data-testid={`thread-unread-dot-${thread.id}`}
+        >
+          <span className="bg-status-info block size-2 rounded-full" />
+        </span>
+      ) : (
+        <span className={cn('absolute inset-0 flex items-center justify-center', hideOnHover)}>
+          {statusIcon}
+        </span>
+      )}
+      {canPin && (
+        <button
+          type="button"
+          aria-label={
+            thread.pinned ? t('thread.unpin', 'Unpin thread') : t('thread.pin', 'Pin thread')
+          }
+          className={cn(
+            'absolute inset-0 hidden cursor-pointer items-center justify-center p-0 text-muted-foreground hover:text-foreground',
+            showOnHover,
+          )}
+          onClick={(e) => {
+            e.stopPropagation();
+            onPin!(!thread.pinned);
+          }}
+          data-testid={`thread-pin-toggle-${thread.id}`}
+        >
+          {thread.pinned ? <PinOff className="icon-sm" /> : <Pin className="icon-sm" />}
+        </button>
+      )}
     </span>
   );
 }

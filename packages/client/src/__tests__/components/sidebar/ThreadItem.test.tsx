@@ -4,6 +4,7 @@ import type { GitStatusInfo, Thread } from '@funny/shared';
 import { act, fireEvent, screen } from '@testing-library/react';
 
 import { ThreadItem } from '@/components/sidebar/ThreadItem';
+import { seedBackgroundActivity } from '@/data/background/testing';
 import { activeFactoryRunsQuery } from '@/data/factory/queries';
 import { buildFactoryRun } from '@/data/factory/testing';
 import { getDataLayer } from '@/data/runtime';
@@ -12,6 +13,7 @@ import type { FactoryRun } from '@/lib/api/factory';
 import { useBrowserLiveThreadsStore } from '@/stores/browser-live-threads-store';
 import { useThreadActiveToolStore } from '@/stores/thread-active-tool-store';
 
+import { buildJob, buildWatcher } from '../../helpers/builders-lib';
 import { mockT } from '../../helpers/mock-i18n';
 import { renderWithProviders } from '../../helpers/render';
 
@@ -367,6 +369,49 @@ describe('ThreadItem', () => {
       renderThread({ source: 'web' });
       expect(screen.queryByTestId('thread-factory-activity-t-factory')).not.toBeInTheDocument();
       expect(screen.getByText('2m')).toBeInTheDocument();
+    });
+  });
+  describe('background activity', () => {
+    test('a running job and a pending watcher each show their own icon, right of the title', () => {
+      seedBackgroundActivity({
+        jobs: [buildJob({ id: 'j1', threadId: 'scratch-1', status: 'running' })],
+        watchers: [buildWatcher({ id: 'w1', threadId: 'scratch-1', status: 'pending' })],
+      });
+      renderWithProviders(
+        <ThreadItem
+          thread={makeThread({ status: 'idle' })}
+          projectPath=""
+          isSelected={false}
+          onSelect={vi.fn()}
+          onPin={vi.fn()}
+        />,
+      );
+
+      const row = screen.getByTestId('thread-item-scratch-1');
+      const job = screen.getByTestId('thread-job-indicator-scratch-1');
+      const watcher = screen.getByTestId('thread-watcher-indicator-scratch-1');
+      // Inside the title button (after the title), not beside the status pin.
+      expect(row).toContainElement(job);
+      expect(row).toContainElement(watcher);
+      const title = screen.getByText('Try a regex');
+      expect(title.compareDocumentPosition(job) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(job.querySelector('svg')?.getAttribute('class')).not.toBe(
+        watcher.querySelector('svg')?.getAttribute('class'),
+      );
+      act(() => seedBackgroundActivity({}));
+    });
+
+    test('shows nothing without running jobs or pending watchers', () => {
+      seedBackgroundActivity({
+        jobs: [buildJob({ id: 'j1', threadId: 'scratch-1', status: 'exited' })],
+      });
+      renderWithProviders(
+        <ThreadItem thread={makeThread()} projectPath="" isSelected={false} onSelect={vi.fn()} />,
+      );
+
+      expect(screen.queryByTestId('thread-job-indicator-scratch-1')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('thread-watcher-indicator-scratch-1')).not.toBeInTheDocument();
+      act(() => seedBackgroundActivity({}));
     });
   });
 });

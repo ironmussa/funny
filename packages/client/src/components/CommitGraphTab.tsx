@@ -752,14 +752,7 @@ export function CommitGraphTab({ visible }: CommitGraphTabProps) {
             }}
           >
             <RebaseCopyLinksOverlay
-              renderedRange={
-                virtualItems.length > 0
-                  ? {
-                      start: virtualItems[0].index,
-                      end: virtualItems[virtualItems.length - 1].index,
-                    }
-                  : null
-              }
+              renderedRange={renderedRangeOf(virtualItems)}
               links={rebaseCopyLinks}
               entries={displayEntries}
               layoutRows={layout.rows}
@@ -884,6 +877,71 @@ function nodeYForRow(entry: Pick<GraphEntry, 'refs' | 'headBranch'>, rowHeight: 
   return (rowHeight - refsContentH) / 2 + chipLineH / 2;
 }
 
+interface RowRange {
+  start: number;
+  end: number;
+}
+
+interface RebaseLinkRow {
+  index: number;
+  top: number;
+  nodeY: number;
+  lane: number;
+}
+
+/** First and last row index the virtualizer rendered, or null before it has rendered any. */
+function renderedRangeOf(virtualItems: ReadonlyArray<{ index: number }>): RowRange | null {
+  if (virtualItems.length === 0) return null;
+  return { start: virtualItems[0].index, end: virtualItems[virtualItems.length - 1].index };
+}
+
+/** Each laid-out row's position, by commit hash, and the height of the whole list. */
+function layoutRebaseLinkRows(
+  entries: GraphEntry[],
+  layoutRows: GraphRow[],
+  rowHeightFor: (entry: GraphEntry) => number,
+): { rowsByHash: Map<string, RebaseLinkRow>; totalHeight: number } {
+  let totalHeight = 0;
+  const rowsByHash = new Map<string, RebaseLinkRow>();
+  for (let index = 0; index < entries.length; index += 1) {
+    const entry = entries[index];
+    const row = layoutRows[index];
+    const height = rowHeightFor(entry);
+    if (row) {
+      rowsByHash.set(entry.hash, {
+        index,
+        top: totalHeight,
+        nodeY: nodeYForRow(entry, height),
+        lane: row.commitLane,
+      });
+    }
+    totalHeight += height;
+  }
+  return { rowsByHash, totalHeight };
+}
+
+/**
+ * The links whose rows are both laid out and that cross a rendered row: one
+ * between two off-screen rows would be drawn with nothing around it.
+ */
+function rebaseLinksInRange(
+  links: RebaseCopyLink[],
+  rowsByHash: Map<string, RebaseLinkRow>,
+  range: RowRange,
+): Array<{ link: RebaseCopyLink; source: RebaseLinkRow; target: RebaseLinkRow }> {
+  const visible: Array<{ link: RebaseCopyLink; source: RebaseLinkRow; target: RebaseLinkRow }> = [];
+  for (const link of links) {
+    const source = rowsByHash.get(link.sourceHash);
+    const target = rowsByHash.get(link.targetHash);
+    if (!source || !target) continue;
+    const first = Math.min(source.index, target.index);
+    const last = Math.max(source.index, target.index);
+    if (last < range.start || first > range.end) continue;
+    visible.push({ link, source, target });
+  }
+  return visible;
+}
+
 export function RebaseCopyLinksOverlay({
   renderedRange,
   links,
@@ -900,7 +958,7 @@ export function RebaseCopyLinksOverlay({
    * links are laid out for the whole list, so without this gate they would
    * paint on an otherwise empty list until the rows arrive a frame later.
    */
-  renderedRange: { start: number; end: number } | null;
+  renderedRange: RowRange | null;
   links: RebaseCopyLink[];
   entries: GraphEntry[];
   layoutRows: GraphRow[];
@@ -912,47 +970,8 @@ export function RebaseCopyLinksOverlay({
   const markerId = useId();
   if (links.length === 0 || !renderedRange) return null;
 
-  let nextTop = 0;
-  const rowsByHash = new Map<
-    string,
-    {
-      index: number;
-      top: number;
-      nodeY: number;
-      lane: number;
-    }
-  >();
-  for (let index = 0; index < entries.length; index += 1) {
-    const entry = entries[index];
-    const row = layoutRows[index];
-    const height = rowHeightFor(entry);
-    if (row) {
-      rowsByHash.set(entry.hash, {
-        index,
-        top: nextTop,
-        nodeY: nodeYForRow(entry, height),
-        lane: row.commitLane,
-      });
-    }
-    nextTop += height;
-  }
-
-  const visibleLinks: Array<{
-    link: RebaseCopyLink;
-    source: { top: number; nodeY: number; lane: number };
-    target: { top: number; nodeY: number; lane: number };
-  }> = [];
-  for (const link of links) {
-    const source = rowsByHash.get(link.sourceHash);
-    const target = rowsByHash.get(link.targetHash);
-    if (!source || !target) continue;
-    // Only links that cross a rendered row: one between two off-screen rows
-    // would be drawn with nothing around it.
-    const first = Math.min(source.index, target.index);
-    const last = Math.max(source.index, target.index);
-    if (last < renderedRange.start || first > renderedRange.end) continue;
-    visibleLinks.push({ link, source, target });
-  }
+  const { rowsByHash, totalHeight } = layoutRebaseLinkRows(entries, layoutRows, rowHeightFor);
+  const visibleLinks = rebaseLinksInRange(links, rowsByHash, renderedRange);
   if (visibleLinks.length === 0) return null;
 
   const maxRailLane = visibleLinks.reduce((maxLane, { source, target }) => {
@@ -971,18 +990,18 @@ export function RebaseCopyLinksOverlay({
   return (
     <div
       className="pointer-events-none absolute top-0 left-0 z-20 overflow-hidden"
-      style={{ width: 12 + graphViewportWidth, height: nextTop }}
+      style={{ width: 12 + graphViewportWidth, height: totalHeight }}
       data-testid="graph-rebase-copy-links"
     >
       <svg
         style={{
           width,
-          height: nextTop,
+          height: totalHeight,
           overflow: 'visible',
           transform: `translateX(-${graphScrollLeft}px)`,
         }}
         width={width}
-        height={nextTop}
+        height={totalHeight}
         aria-hidden="true"
       >
         <defs>

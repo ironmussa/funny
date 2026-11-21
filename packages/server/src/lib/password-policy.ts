@@ -39,3 +39,33 @@ export function validatePasswordStrength(password: unknown): PasswordPolicyResul
   }
   return { ok: true };
 }
+
+/**
+ * Better Auth endpoints that set a password, and the body field carrying it.
+ * Better Auth itself checks only its own minimum length on some of these, and
+ * none on `/admin/create-user` (issue #201), so `lib/auth.ts` runs the policy
+ * above on every one of them in a `before` hook. Add an endpoint here when a
+ * new plugin or route can set a password.
+ */
+const PASSWORD_FIELD_BY_AUTH_PATH: Record<string, string> = {
+  '/sign-up/email': 'password',
+  '/change-password': 'newPassword',
+  '/reset-password': 'newPassword',
+  '/set-password': 'newPassword',
+  '/admin/create-user': 'password',
+  '/admin/set-user-password': 'newPassword',
+};
+
+/**
+ * Checks the password a Better Auth request would set. Returns `{ ok: true }`
+ * for endpoints that set no password, and for `/admin/create-user` without a
+ * password (a user with no credential account).
+ */
+export function validateAuthRequestPassword(path: string, body: unknown): PasswordPolicyResult {
+  const field = PASSWORD_FIELD_BY_AUTH_PATH[path];
+  if (!field) return { ok: true };
+  const value =
+    body && typeof body === 'object' ? (body as Record<string, unknown>)[field] : undefined;
+  if (path === '/admin/create-user' && value === undefined) return { ok: true };
+  return validatePasswordStrength(value);
+}
